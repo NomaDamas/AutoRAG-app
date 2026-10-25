@@ -74,7 +74,17 @@ foreach ($entry in [ConsoleWatch]::Scan()) { [void]$known.Add($entry.Split(' ')[
 while ($true) {
 	foreach ($entry in [ConsoleWatch]::Scan()) {
 		$handle = $entry.Split(' ')[0]
-		if ($known.Add($handle)) { [Console]::Out.WriteLine('HIT ' + $entry); [Console]::Out.Flush() }
+		if ($known.Add($handle)) {
+			$owner = [int]$entry.Split(' ')[2]
+			$detail = 'gone'
+			$process = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $owner) -ErrorAction SilentlyContinue
+			if ($process) {
+				$parent = Get-CimInstance Win32_Process -Filter ('ProcessId=' + $process.ParentProcessId) -ErrorAction SilentlyContinue
+				$detail = $process.Name + ' [' + $process.CommandLine + '] <- ' + $parent.Name + ' [' + $parent.CommandLine + ']'
+			}
+			[Console]::Out.WriteLine('HIT ' + $entry + ' ' + $detail)
+			[Console]::Out.Flush()
+		}
 	}
 	Start-Sleep -Milliseconds 5
 }
@@ -98,7 +108,7 @@ async function startWatcher(dir) {
 		buffer = lines.pop() ?? "";
 		for (const line of lines) {
 			if (line === "READY") ready = true;
-			else if (line.startsWith("HIT ")) hits.push(line.slice(4));
+			else if (line.startsWith("HIT ")) hits.push({ at: Date.now(), text: line.slice(4) });
 		}
 	});
 	child.stderr.on("data", (chunk) => {
@@ -132,17 +142,21 @@ try {
 		control.unref();
 		const seenBy = Date.now() + 5000;
 		while (watcher.hits.length === 0 && Date.now() < seenBy) await sleep(50);
-		check("the watcher sees a console window that is not hidden", watcher.hits.length > 0, watcher.hits.join("; "));
+		check("the watcher sees a console window that is not hidden", watcher.hits.length > 0, watcher.hits.map((hit) => hit.text).join("; "));
 		await sleep(4000);
 	} else {
 		console.log("SKIP  console window watch: only Windows shows console windows for helper processes");
 	}
 	const controlHits = watcher?.hits.length ?? 0;
+	const hitsText = (from, to = Number.POSITIVE_INFINITY) => (watcher?.hits.slice(controlHits) ?? []).filter((hit) => hit.at >= from && hit.at < to).map((hit) => hit.text);
+	const launchedAt = Date.now();
 
 	app = await launchFinder({ env: homeEnv(home) });
 	const page = await finderWindow(app, 30_000);
 	await page.waitForSelector('[role="row"]', { timeout: 30_000 });
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
+	await page.locator('[role="row"]').filter({ hasText: "dir-1" }).first().waitFor({ timeout: 30_000 });
+	const navigationStart = Date.now();
 
 	for (let round = 0; round < 2; round += 1) {
 		for (let folder = 1; folder <= FOLDERS; folder += 1) {
@@ -170,7 +184,9 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "documents.png") });
 
 	if (watcher !== undefined) {
-		const flashes = watcher.hits.slice(controlHits);
+		const startup = hitsText(launchedAt, navigationStart);
+		check("starting the app flashed no console window", startup.length === 0, startup.join("; "));
+		const flashes = hitsText(navigationStart);
 		check("entering and leaving folders flashed no console window", flashes.length === 0, flashes.join("; "));
 	}
 } catch (error) {

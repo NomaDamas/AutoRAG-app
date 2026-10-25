@@ -902,6 +902,14 @@ option, and the `no-console-flash` lane (`run-qa-finder-no-console-flash.mjs`)
 double-clicks in and out of folders while a watcher process polls for visible
 console windows, after proving the watcher catches a deliberately unhidden one.
 
+`windowsHide` cannot reach a process a native module starts itself. With no
+backend named, `@parcel/watcher` runs `popen("watchman ...")` on every
+subscribe, which starts `cmd.exe` and flashed a console window each time a
+folder was opened. `src/main/watch-backend.ts` therefore names the native
+`windows` backend on Windows (`test/watch-backend.test.ts`). Any new native
+module that shells out needs the same check; the `no-console-flash` lane is
+what catches it.
+
 ## Releases and installers
 
 Publishing a GitHub release builds `Dazzi-<version>-arm64.dmg` and
