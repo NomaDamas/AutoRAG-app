@@ -36,6 +36,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder, openAiSearch } from "./launch-finder.mjs";
+import { chord, cssAttr } from ".\/platform.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-file-ops");
@@ -87,7 +88,7 @@ const check = (name, pass, detail) => {
 };
 
 /** Rows are addressed by their absolute path, so a fixture name can never alias another row. */
-const row = (page, path) => page.locator(`[data-path="${path}"]`);
+const row = (page, path) => page.locator(`[data-path="${cssAttr(path)}"]`);
 const waitForRow = (page, path, present = true) =>
 	row(page, path).first().waitFor({ state: present ? "visible" : "detached", timeout: 15_000 });
 const listNames = (dir) => readdirSync(dir).sort();
@@ -119,13 +120,13 @@ function domDrag(page, paths, targetPath, alt) {
 			new Promise((resolve) => {
 				const data = new DataTransfer();
 				data.setData("application/x-autorag-finder-entries", JSON.stringify(payload));
-				const over = document.querySelector(`[data-path="${target}"]`);
+				const over = document.querySelector(`[data-path="${CSS.escape(target)}"]`);
 				over?.dispatchEvent(new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: data, altKey }));
 				window.setTimeout(() => {
 					const highlighted =
-						document.querySelector(`[data-path="${target}"]`)?.className.includes("accent-drop-hover") ?? false;
+						document.querySelector(`[data-path="${CSS.escape(target)}"]`)?.className.includes("accent-drop-hover") ?? false;
 					document
-						.querySelector(`[data-path="${target}"]`)
+						.querySelector(`[data-path="${CSS.escape(target)}"]`)
 						?.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: data, altKey }));
 					resolve(highlighted);
 				}, 250);
@@ -151,10 +152,10 @@ try {
 
 	/* ------------------------------------------------------ 1. ⌘C / ⌘V copy */
 	await row(page, COPIES).click();
-	await page.keyboard.press("Meta+c");
+	await page.keyboard.press(chord("c"));
 	await row(page, dirB).dblclick();
 	await atTitle(page, "B");
-	await page.keyboard.press("Meta+v");
+	await page.keyboard.press(chord("v"));
 	await waitForRow(page, join(dirB, "copy-me.txt"));
 	check(
 		"⌘C then ⌘V copies into another folder",
@@ -166,7 +167,7 @@ try {
 	/* ------------------------------------------- 2. paste in the same folder */
 	await page.locator("nav.pathbar .path-seg", { hasText: "qa-file-ops" }).first().click();
 	await atTitle(page, "qa-file-ops");
-	await page.keyboard.press("Meta+v");
+	await page.keyboard.press(chord("v"));
 	await page.waitForTimeout(800);
 	check(
 		"⌘V in the row's own folder writes nothing",
@@ -176,10 +177,10 @@ try {
 
 	/* ------------------------------------------------------ 3. ⌘X / ⌘V move */
 	await row(page, MOVES).click();
-	await page.keyboard.press("Meta+x");
+	await page.keyboard.press(chord("x"));
 	await row(page, dirB).dblclick();
 	await atTitle(page, "B");
-	await page.keyboard.press("Meta+v");
+	await page.keyboard.press(chord("v"));
 	await waitForRow(page, join(dirB, "move-me.txt"));
 	check(
 		"⌘X then ⌘V moves into another folder",
@@ -215,7 +216,7 @@ try {
 	);
 
 	/* ------------------------------------------------- 6. drag onto a tab */
-	await page.keyboard.press("Meta+t");
+	await page.keyboard.press(chord("t"));
 	await page.waitForFunction(() => document.querySelectorAll(".tab").length === 2);
 	await row(page, dirB).dblclick();
 	await atTitle(page, "B");
@@ -262,7 +263,7 @@ try {
 		springSwitched = (await page.locator(".toolbar-title").textContent()) === "B";
 	}
 	// The rows are still held: drop them into a folder inside the tab we adopted.
-	await page.waitForSelector(`[data-path="${sub}"]`, { timeout: 15_000 });
+	await page.waitForSelector(`[data-path="${cssAttr(sub)}"]`, { timeout: 15_000 });
 	const subBox = await row(page, sub).boundingBox();
 	await page.mouse.move(subBox.x + subBox.width / 2, subBox.y + subBox.height / 2, { steps: 8 });
 	await page.mouse.move(subBox.x + subBox.width / 2 + 3, subBox.y + subBox.height / 2, { steps: 1 });
@@ -331,7 +332,7 @@ try {
 
 	/* --------------------------------------- 10. orphaned drag overlay watchdog */
 	// The overlay belongs to the visible AI Search panel: show one in a new tab.
-	await page.keyboard.press("Meta+t");
+	await page.keyboard.press(chord("t"));
 	await openAiSearch(page);
 	await page.evaluate((mime) => {
 		const data = new DataTransfer();
@@ -356,17 +357,17 @@ try {
 	);
 
 	/* ------------------------------------ 11. ⌘Z undoes the last transfer */
-	await page.keyboard.press("Meta+w");
+	await page.keyboard.press(chord("w"));
 	await page.locator(".tab").first().click();
 	await atTitle(page, "qa-file-ops");
 	await waitForRow(page, UNDO_COPIES);
 	await row(page, UNDO_COPIES).click();
-	await page.keyboard.press("Meta+c");
+	await page.keyboard.press(chord("c"));
 	await page.locator(".tab").nth(1).click();
 	await atTitle(page, "B");
-	await page.keyboard.press("Meta+v");
+	await page.keyboard.press(chord("v"));
 	await waitForRow(page, join(dirB, "alpha-restore.txt"));
-	await page.keyboard.press("Meta+z");
+	await page.keyboard.press(chord("z"));
 	await page.screenshot({ path: join(EVIDENCE, "10-undo-copy.png") });
 	await waitForRow(page, join(dirB, "alpha-restore.txt"), false);
 	check(
@@ -379,13 +380,13 @@ try {
 	await atTitle(page, "qa-file-ops");
 	await waitForRow(page, UNDO_MOVES);
 	await row(page, UNDO_MOVES).click();
-	await page.keyboard.press("Meta+x");
+	await page.keyboard.press(chord("x"));
 	await page.locator(".tab").nth(1).click();
 	await atTitle(page, "B");
-	await page.keyboard.press("Meta+v");
+	await page.keyboard.press(chord("v"));
 	await waitForRow(page, join(dirB, "bravo-restore.txt"));
 	await waitForRow(page, UNDO_MOVES, false);
-	await page.keyboard.press("Meta+z");
+	await page.keyboard.press(chord("z"));
 	const undoMoveDeadline = Date.now() + 10_000;
 	while (!existsSync(UNDO_MOVES) && Date.now() < undoMoveDeadline) await page.waitForTimeout(150);
 	await page.screenshot({ path: join(EVIDENCE, "11-undo-move.png") });
@@ -400,7 +401,7 @@ try {
 	const snapshot = () => JSON.stringify([top, dirA, dirB, sub].map((dir) => listNames(dir)));
 	const afterUndo = snapshot();
 	await page.waitForTimeout(800);
-	await page.keyboard.press("Meta+z");
+	await page.keyboard.press(chord("z"));
 	const secondDeadline = Date.now() + 10_000;
 	while (snapshot() === afterUndo && Date.now() < secondDeadline) await page.waitForTimeout(150);
 	check(
@@ -414,10 +415,10 @@ try {
 	const sideSearch = page.locator(".side-search input");
 	await sideSearch.click();
 	await page.keyboard.type("copy");
-	await page.keyboard.press("Meta+a");
-	await page.keyboard.press("Meta+c");
-	await page.keyboard.press("Meta+v");
-	await page.keyboard.press("Meta+z");
+	await page.keyboard.press(chord("a"));
+	await page.keyboard.press(chord("c"));
+	await page.keyboard.press(chord("v"));
+	await page.keyboard.press(chord("z"));
 	await page.waitForTimeout(600);
 	await page.keyboard.press("Escape");
 	check(

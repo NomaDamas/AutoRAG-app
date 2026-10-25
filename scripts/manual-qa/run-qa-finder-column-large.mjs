@@ -34,7 +34,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord, sleep } from "./platform.mjs";
+import { chord, sleep, cssAttr } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-column-large");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -104,10 +104,10 @@ try {
 				);
 
 			await page.locator(".sidebar__item", { hasText: "QA" }).click();
-			await page.locator(`[data-path="${BIG}"]`).first().waitFor();
+			await page.locator(`[data-path="${cssAttr(BIG)}"]`).first().waitFor();
 			await page.keyboard.press(chord("3"));
 			await page.waitForSelector(".column");
-			const folderRow = page.locator(`.column-row[data-path="${BIG}"]`);
+			const folderRow = page.locator(`.column-row[data-path="${cssAttr(BIG)}"]`);
 			await folderRow.waitFor();
 			await sleep(3000);
 

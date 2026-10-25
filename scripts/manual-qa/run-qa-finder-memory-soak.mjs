@@ -41,7 +41,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { finderWindow, fsWorkerDiagnostics, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord, sleep } from "./platform.mjs";
+import { chord, sleep, cssAttr } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-memory-soak");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -298,16 +298,16 @@ try {
 	// The view toggle's labels are localized; its order is fixed (Toolbar VIEW_OPTIONS).
 	const viewButton = (mode) => page.locator(".seg__button").nth(["icons", "list", "columns"].indexOf(mode));
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
-	await page.waitForSelector(`[data-path="${join(QA_ROOT, FOLDERS[0])}"]`);
+	await page.waitForSelector(`[data-path="${cssAttr(join(QA_ROOT, FOLDERS[0]))}"]`);
 	await viewButton("list").click();
 
 	const rows = page.locator('[role="row"]');
 	const openFolder = async (folder) => {
 		await page.locator(".sidebar__item", { hasText: "QA" }).click();
-		const row = page.locator(`[data-path="${join(QA_ROOT, folder)}"]`).first();
+		const row = page.locator(`[data-path="${cssAttr(join(QA_ROOT, folder))}"]`).first();
 		await row.waitFor();
 		await row.dblclick();
-		await page.locator(`[data-path="${join(QA_ROOT, folder, `${folder}-0000.txt`)}"]`).first().waitFor();
+		await page.locator(`[data-path="${cssAttr(join(QA_ROOT, folder, `${folder}-0000.txt`))}"]`).first().waitFor();
 	};
 	const cycle = async () => {
 		for (const folder of FOLDERS) {
@@ -353,8 +353,8 @@ try {
 	// Finder metadata lands while the list scrolls; renderer script time and
 	// long tasks over the phase are what that costs.
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
-	await page.locator(`[data-path="${join(QA_ROOT, IMAGES)}"]`).first().dblclick();
-	const lastImage = page.locator(`[data-path="${join(QA_ROOT, IMAGES, `img-${String(IMAGE_COUNT - 1).padStart(4, "0")}.png`)}"]`).first();
+	await page.locator(`[data-path="${cssAttr(join(QA_ROOT, IMAGES))}"]`).first().dblclick();
+	const lastImage = page.locator(`[data-path="${cssAttr(join(QA_ROOT, IMAGES, `img-${String(IMAGE_COUNT - 1).padStart(4, "0")}.png`))}"]`).first();
 	await page.locator(`[data-path="${join(QA_ROOT, IMAGES, "img-0000.png")}"]`).first().waitFor();
 	await page.evaluate(() => {
 		globalThis.__soakLongTasks = [];

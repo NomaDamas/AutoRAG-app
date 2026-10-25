@@ -39,7 +39,7 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { sleep } from "./platform.mjs";
+import { sleep, cssAttr } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-large-folder");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -210,7 +210,7 @@ try {
 			};
 			const viewButton = (mode) => page.locator(".seg__button").nth(["icons", "list", "columns"].indexOf(mode));
 			await page.locator(".sidebar__item", { hasText: "QA" }).click();
-			const folderRow = page.locator(`[data-path="${BIG}"]`).first();
+			const folderRow = page.locator(`[data-path="${cssAttr(BIG)}"]`).first();
 			await folderRow.waitFor();
 			await viewButton("list").click();
 			// Startup work (version-family scan of the QA root, locations) settles first.

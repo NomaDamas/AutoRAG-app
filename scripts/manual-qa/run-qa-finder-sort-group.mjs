@@ -89,7 +89,7 @@ try {
 	await sortMenu.getByRole("menuitemradio", { name: "Size", exact: true }).click();
 	await page.waitForTimeout(250);
 	check("Sort menu closes after selecting Size", await page.getByRole("menu", { name: "Sort" }).count(), 0);
-	const sortedNames = await page.locator('[role="row"]').evaluateAll((rows) => rows.map((row) => row.getAttribute("data-path")?.split("/").pop() ?? ""));
+	const sortedNames = await page.locator('[role="row"]').evaluateAll((rows) => rows.map((row) => row.getAttribute("data-path")?.split(/[\\/]/u).pop() ?? ""));
 	check("Size descending moves the largest fixture first", sortedNames[0], "table-11.csv");
 	await page.locator('[role="row"]').first().click();
 	await page.keyboard.press("ArrowDown");
