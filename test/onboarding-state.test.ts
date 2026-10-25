@@ -55,6 +55,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	approvalMode: "auto",
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {

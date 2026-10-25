@@ -70,6 +70,9 @@ export interface AnswerPhase {
 
 export type AnswerPhaseName = "quick" | "deep";
 
+/** What the person can do about a run's error, when the main process knows: `open-plan` goes to Settings → Subscription & Usage. */
+export type SearchErrorAction = "open-plan";
+
 export type SearchStreamEvent =
 	| { readonly type: "progress"; readonly searchId: string; readonly text: string }
 	| { readonly type: "thinking"; readonly searchId: string; readonly phase: AnswerPhaseName }
@@ -77,7 +80,8 @@ export type SearchStreamEvent =
 	| { readonly type: "deep-draft"; readonly searchId: string; readonly text: string }
 	| { readonly type: "quick"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
 	| { readonly type: "deep"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
-	| { readonly type: "error"; readonly searchId: string; readonly message: string }
+	/** `action` accompanies an error the person can act on (the weekly credits are used up). */
+	| { readonly type: "error"; readonly searchId: string; readonly message: string; readonly action?: SearchErrorAction }
 	| { readonly type: "cancelled"; readonly searchId: string }
 	/** A model request of the run took every steer sent so far. */
 	| { readonly type: "steer-delivered"; readonly searchId: string }

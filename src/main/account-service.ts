@@ -118,6 +118,7 @@ function parseAccount(body: unknown): AccountSnapshot | null {
 		creditsUsedCents: readNumber(credits.used_cents, 0),
 		creditsLimitCents: readNumber(credits.limit_cents, 0),
 		creditPeriod: typeof credits.period === "string" ? credits.period : "",
+		creditsResetsAt: typeof credits.resets_at === "string" && !Number.isNaN(Date.parse(credits.resets_at)) ? credits.resets_at : null,
 		// Older servers omit the flag; embeddings were always Pro-and-up.
 		embeddings: typeof body.embeddings === "boolean" ? body.embeddings : plan === "pro" || plan === "max",
 		requestsPerMinute: readNumber(limits.requests_per_minute, 0),
@@ -234,7 +235,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				trialing: account.trialing,
 				cancel_scheduled: account.cancelScheduled,
 				period_end: account.periodEnd,
-				credits: { used_cents: account.creditsUsedCents, limit_cents: account.creditsLimitCents, period: account.creditPeriod },
+				credits: { used_cents: account.creditsUsedCents, limit_cents: account.creditsLimitCents, period: account.creditPeriod, ...(account.creditsResetsAt === null ? {} : { resets_at: account.creditsResetsAt }) },
 				embeddings: account.embeddings,
 				limits: { requests_per_minute: account.requestsPerMinute },
 				billing: account.billing,

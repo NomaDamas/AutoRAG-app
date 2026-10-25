@@ -93,6 +93,7 @@ attached to it.
 | minsync, jikji, dupey, kordoc, mailcrawl, rhwp, rclone, lark-cli | MIT |
 | discrawl, telecrawl, wacrawl, slacrawl, notcrawl | MIT |
 | himalaya, clawgallery | Apache-2.0 |
+| filee-cli (NomaDamas' redistribution of KnifeLemon/Filee's command line; see below) | MIT |
 | lazykatok (macOS only) | MIT |
 | Everything and ES (Windows only; shipped inside `@autorag/librarian`) | MIT (+ PCRE BSD) |
 | fsearch-cli from fsearch-mac (macOS only) and its libraries glib, pango, harfbuzz, ICU, PCRE2, freetype, ... | GPL-2.0-or-later (fsearch-cli); LGPL-2.1+, MIT, ICU, BSD (libraries) |
@@ -146,6 +147,26 @@ https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 `mailcrawl` uses Kiwi through the `kiwi-nlp` npm package (WebAssembly). Version
 0.23.x of that package is LGPL-2.1-or-later and is not linked into `mailcrawl`'s
 own code; it is a separate package loaded at run time.
+
+### filee-cli
+
+`convert_files` runs `filee-cli`, NomaDamas' CLI-only redistribution of the
+command line of [Filee](https://github.com/KnifeLemon/Filee). It is **MIT**:
+Copyright (c) 2026 Myeonggu Kim (KnifeLemon) and Filee contributors for Filee,
+and Copyright (c) 2026 NomaDamas for the build and packaging scripts,
+documentation and CI of filee-cli. Dazzi ships it unmodified, pinned to the
+version the librarian itself would download (`FILEE_CLI_VERSION`), as a separate
+program started by the librarian; the app links nothing into it. Source:
+https://github.com/NomaDamas/filee-cli — an **unofficial redistribution** of
+upstream `v2.0.0` (commit `799e3948`) plus the single patch its `UPSTREAM.md`
+lists, built from `src/Filee.Cli` with `Filee.Core` and `Filee.Engines` and
+nothing else. Its `LICENSE` and `THIRD-PARTY-NOTICES.md` (the dotnet runtime and
+every NuGet library it carries, with their license texts, including LGPL 7-Zip
+and ImageMagick delegates in separate replaceable files) are installed in
+`resources/tools/licenses/filee-cli`. `filee-cli`'s own conversion engines
+(LibreOffice, Pandoc, FFmpeg, Ghostscript, calibre) are **not** included: it
+downloads one from the vendor's own site the first time a conversion needs one,
+as a separate program it starts with command-line arguments.
 
 ## Quick Look data viewers
 

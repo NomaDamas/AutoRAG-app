@@ -16,9 +16,12 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
+	SearchErrorAction,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
+import type { InteractionRequest } from "../../../shared/interaction-contract";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
+import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
@@ -38,6 +41,9 @@ import { enterKeyLabel, formatShortcut } from "../lib/shortcuts";
 import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, PlusIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
+import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
+import { InteractionDock } from "./InteractionDock";
+import { RunErrorNotice } from "./RunErrorNotice";
 
 const autorag = window.autorag;
 
@@ -85,6 +91,8 @@ export interface AiSearchPanelProps {
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
 	readonly language: SummaryLanguage;
+	/** Goes to Settings → Subscription & Usage: the weekly credits are used up and the error offers the way there. */
+	readonly onOpenPlan: () => void;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -99,7 +107,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenPlan },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -119,6 +127,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setSearchIdState(value);
 	};
 	const [error, setError] = useState<string | null>(null);
+	/** The action the main process attached to `error` (shown only while that same message is on screen). */
+	const [errorAction, setErrorAction] = useState<{ readonly message: string; readonly action: SearchErrorAction } | null>(null);
+	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
+	/** The agent's open requests, oldest first, across every search this panel hosts. */
+	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
 	const [stopped, setStopped] = useState(false);
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
 	const [submittedAttachments, setSubmittedAttachments] = useState<readonly ChatAttachment[]>([]);
@@ -149,6 +162,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLInputElement | null>(null);
+	/** The request the dock shows right now; the submit guard and Escape read it. */
+	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
 	const historySeq = useRef(0);
 	const historyDebounce = useRef<number | null>(null);
@@ -197,6 +212,24 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		[],
 	);
 
+	// The agent's open requests. `pending()` covers a request that opened before
+	// this panel subscribed (a tab switch or reload); the stream keeps it current.
+	useEffect(() => {
+		const bridge = autorag?.interaction;
+		if (bridge === undefined) return;
+		let alive = true;
+		void bridge.pending().then((requests) => {
+			if (alive) setInteractionQueue((current) => mergePending(current, requests));
+		});
+		const offRequest = bridge.onRequest((request) => setInteractionQueue((current) => openRequest(current, request)));
+		const offClosed = bridge.onClosed((event) => setInteractionQueue((current) => closeRequest(current, event.id)));
+		return () => {
+			alive = false;
+			offRequest();
+			offClosed();
+		};
+	}, []);
+
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
 			if (event.searchId !== searchIdRef.current) return;
@@ -233,6 +266,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					break;
 				case "error":
 					setError(event.message);
+					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
 					setProgress("");
 					setSteers(settleSteers);
 					setSearchId(null);
@@ -315,6 +349,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			}
 			if (historyOpen) return;
 			if (event.key === "Escape" && searchIdRef.current !== null) {
+				// The dock owns Escape while it is open: it dismisses the request (cancel
+				// or deny), not the run.
+				if (visibleRequestRef.current !== null) return;
 				event.preventDefault();
 				void stop();
 				return;
@@ -414,6 +451,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 	function submit(event: FormEvent<HTMLFormElement>): void {
 		event.preventDefault();
+		// The dock replaces the composer while the agent waits; a stray Enter there
+		// must never send the drafted text as a steer.
+		if (visibleRequestRef.current !== null) return;
 		send(false);
 	}
 
@@ -671,11 +711,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
 	const searching = searchId !== null;
-	const { skeleton, thinking } = answerViewState({
-		pending: searching,
-		quickReady,
-		deepReady,
-	});
+	// While the agent waits on a request, the dock replaces the composer. Only the
+	// panel of that run shows it: another tab's panel has a different run id.
+	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
+	visibleRequestRef.current = interactionRequest;
+	const { shimmer } = answerViewState({ pending: searching, deepReady });
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
@@ -823,7 +863,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					)}
 
-					{error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{error}</div>}
+					{error === null ? null : <RunErrorNotice message={error} action={errorAction?.message === error ? errorAction.action : null} onOpenPlan={onOpenPlan} />}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
@@ -846,17 +886,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										imageActions={imageActions}
 									/>
 								</div>
-							) : skeleton ? (
-								<div className="flex flex-col gap-8">
-									<span className="skeleton block h-8 w-[85%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
-									<span className="skeleton block h-8 w-[65%] rounded-4 bg-[linear-gradient(90deg,var(--bg-input),var(--bg-window),var(--bg-input))] bg-[length:200%_100%] animate-shimmer" />
-								</div>
 							) : null}
 
 							{steersAfterQuick.map((steer) => (
 								<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 							))}
-							{thinking ? (
+							{shimmer ? (
 								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
 									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
 										{progress === "" ? t("aiSearch.thinking") : progress}
@@ -915,6 +950,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			</div>
 
 			<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
+				{interactionRequest !== null ? (
+					<div className={CENTERED}>
+						<InteractionDock key={interactionRequest.id} request={interactionRequest} onStop={() => void stop()} />
+					</div>
+				) : (
 				<div className={CENTERED}>
 					{attachments.length > 0 ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
@@ -945,6 +985,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					) : null}
 					<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
+						<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
 						<input
 							ref={inputRef}
 							value={query}
@@ -993,6 +1034,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					</div>
 					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
+				)}
 			</form>
 
 			{dragActive ? (

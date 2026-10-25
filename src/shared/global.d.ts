@@ -6,6 +6,7 @@ import type { AutoRagBridge } from "./bridge";
 import type { ConversionBridge } from "./conversion-contract";
 import type { FsBridge } from "./fs-contract";
 import type { IndexActivityBridge } from "./index-activity-contract";
+import type { InteractionBridge } from "./interaction-contract";
 import type { IndexProblemBridge } from "./index-problem-contract";
 import type { LiveBridge } from "./live-contract";
 import type { ModelDownloadBridge } from "./model-download-contract";
@@ -29,6 +30,7 @@ declare global {
 			readonly automations: AutomationBridge;
 			readonly conversion: ConversionBridge;
 			readonly indexActivity: IndexActivityBridge;
+			readonly interaction: InteractionBridge;
 			readonly indexProblem: IndexProblemBridge;
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;

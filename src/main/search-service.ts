@@ -24,11 +24,18 @@ import type {
 	ChatRecord,
 	ChatMessageUser,
 	SearchBridge,
+	SearchErrorAction,
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
-import { AttachmentContextAgent, buildAttachmentContext } from "./attachment-context";
+import { buildAttachmentContext } from "./attachment-context";
+import { InteractiveSearchAgent } from "./interactive-search-agent";
+import { createAgentInteraction } from "./agent-interaction";
+import type { RunInteraction } from "./host-ui";
+import type { InteractionHub } from "./interaction-hub";
+import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "../shared/interaction-contract";
 import type { ChatStore } from "./chat-store";
+import { t } from "../shared/i18n/core";
 import { durationBucket, type Analytics } from "./analytics-core";
 
 /**
@@ -65,6 +72,10 @@ type SearchAgent = {
 	/** Correct the running search; false when it no longer takes steers. */
 	readonly steer?: (text: string) => boolean;
 	readonly createChatSession?: (options: { readonly systemPrompt: string }) => ChatSession;
+	/** Names the run the agent's questions and approvals belong to; `undefined` once it ended. */
+	readonly bindRun?: (run: RunInteraction | undefined) => void;
+	/** Applies the approval mode to this agent's file-change gate. */
+	readonly setApprovalMode?: (mode: ApprovalMode) => void;
 };
 
 export interface SearchServiceDeps {
@@ -76,6 +87,22 @@ export interface SearchServiceDeps {
 	readonly attachmentContext?: (attachments: readonly ChatAttachment[]) => Promise<string>;
 	/** Usage analytics; absent (tests, a build with no project key) means nothing is reported. */
 	readonly analytics?: Pick<Analytics, "track">;
+	/** Where the agent's questions and approvals reach the person. Absent: the agent has nobody to ask. */
+	readonly interaction?: InteractionHub;
+	/** The approval mode in force, read when a chat's agent is built. Absent: {@link DEFAULT_APPROVAL_MODE}. */
+	readonly approvalMode?: () => Promise<ApprovalMode>;
+	/**
+	 * Asked before a run builds its agent or sends anything to a model: a refusal (its message already in the person's
+	 * language, and the action the panel offers for it) stops the run and is shown as its error, null lets it go.
+	 * A preflight that throws never stops a run.
+	 */
+	readonly preflight?: () => Promise<SearchRefusal | null>;
+}
+
+/** Why a run was not started, as the person is told. */
+export interface SearchRefusal {
+	readonly message: string;
+	readonly action?: SearchErrorAction;
 }
 
 interface SearchRun {
@@ -201,6 +228,18 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 	};
 }
 
+/**
+ * The one progress sentence the librarian writes itself (`searchDocumentsStream` opens every run with it, in English).
+ * Every other `progress` text is the model's: the intent it gave a tool call, or what it said before calling one, in the
+ * language it answers in. The panel shows the translated sentence from the moment a run starts, so the English one must
+ * not replace it.
+ */
+const LIBRARIAN_OPENING_NOTE = "Reviewing the query.";
+
+function progressText(text: string): string {
+	return text === LIBRARIAN_OPENING_NOTE ? t("aiSearch.reviewing") : text;
+}
+
 function errorText(error: unknown): string {
 	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
@@ -235,7 +274,13 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 /** Chats whose agent stays alive for follow-ups. */
 const MAX_CHAT_AGENTS = 8;
 
-export function createSearchService(deps: SearchServiceDeps): SearchBridge {
+/** The search bridge plus what the main process drives itself. */
+export interface SearchService extends SearchBridge {
+	/** Applies the approval mode to every chat's agent, running or built later. */
+	setApprovalMode(mode: ApprovalMode): void;
+}
+
+export function createSearchService(deps: SearchServiceDeps): SearchService {
 	const now = deps.now ?? (() => new Date());
 	const active = new Map<string, SearchRun>();
 
@@ -246,6 +291,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	 * a new chat id, and with it a new agent. Oldest chats are evicted past the cap.
 	 */
 	const agents = new Map<string, SearchAgent>();
+	/** The mode the person last chose; agents built after that start in it. */
+	let chosenMode: ApprovalMode | undefined;
 	async function agentFor(chatId: string): Promise<SearchAgent> {
 		const cached = agents.get(chatId);
 		if (cached !== undefined) {
@@ -255,6 +302,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			return cached;
 		}
 		const built = await deps.agentFactory();
+		const initialMode = deps.approvalMode === undefined ? DEFAULT_APPROVAL_MODE : await deps.approvalMode();
+		built.setApprovalMode?.(chosenMode ?? initialMode);
 		agents.set(chatId, built);
 		for (const stale of [...agents.keys()].slice(0, Math.max(0, agents.size - MAX_CHAT_AGENTS))) agents.delete(stale);
 		return built;
@@ -327,11 +376,13 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
 			if (run.cancelled) return;
 			agent.setAttachmentContext(context);
+			const hub = deps.interaction;
+			agent.bindRun?.(hub === undefined ? undefined : { open: (body, signal) => hub.open(run.searchId, body, signal) });
 			for await (const event of agent.searchDocumentsStream(query)) {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
-						emit({ type: "progress", searchId: run.searchId, text: event.text });
+						emit({ type: "progress", searchId: run.searchId, text: progressText(event.text) });
 						break;
 					case "preliminary": {
 						run.sessionId = event.response.sessionId;
@@ -373,6 +424,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			}
 		} finally {
 			unsubscribe?.();
+			// Nobody is asked once the run is over: a question still open closes, and its tool call is already unblocked.
+			agent.bindRun?.(undefined);
+			deps.interaction?.closeRun(run.searchId, "ended");
 			run.ended = true;
 			if (!run.cancelled) {
 				emit({ type: "done", searchId: run.searchId });
@@ -385,6 +439,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 	}
 
 	return {
+		setApprovalMode: (mode) => {
+			chosenMode = mode;
+			for (const agent of agents.values()) agent.setApprovalMode?.(mode);
+		},
 		start: async (searchId, chatId, query, attachments) => {
 
 			let resolveFinish = (): void => undefined;
@@ -429,6 +487,22 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 				updatedAt: at,
 				messages: [...(existing?.messages ?? []), userMessage],
 			});
+			let refusal: SearchRefusal | null = null;
+			try {
+				refusal = (await deps.preflight?.()) ?? null;
+			} catch {
+				// Not knowing is not a reason to refuse: the run goes ahead and the model's server has the last word.
+			}
+			if (refusal !== null) {
+				active.delete(searchId);
+				if (!run.cancelled) {
+					reportFinished(run, "failed");
+					emit({ type: "error", searchId, message: refusal.message, ...(refusal.action === undefined ? {} : { action: refusal.action }) });
+					emit({ type: "done", searchId });
+				}
+				run.resolveFinish();
+				return;
+			}
 			let agent: SearchAgent;
 			try {
 				// A bad config (e.g. a search root that no longer exists) throws
@@ -468,6 +542,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchBridge {
 			if (run === undefined || run.cancelled) return;
 			run.cancelled = true;
 			reportFinished(run, "stopped");
+			// A question or approval the run is waiting on closes with Stop, so nothing keeps the stopped run alive.
+			deps.interaction?.closeRun(searchId, "cancelled");
 			run.agent?.abort?.();
 			emit({ type: "cancelled", searchId });
 			await saveRunMessage(run, true);
@@ -584,7 +660,7 @@ export function createDefaultAgentFactory(): () => Promise<SearchAgent> {
 			...(thinking !== undefined ? { thinking } : {}),
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
-		const agent = new AttachmentContextAgent(agentOptionsForSemantic(options, semantic));
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(options, semantic), createAgentInteraction());
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));

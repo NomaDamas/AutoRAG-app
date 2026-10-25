@@ -11,6 +11,7 @@ import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
+import { createInteractionBridge } from "./interaction-bridge";
 import { createIndexProblemBridge } from "./index-problem-bridge";
 import { createLiveBridge } from "./live-bridge";
 import { createModelDownloadBridge } from "./model-download-bridge";
@@ -47,6 +48,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	automations: createAutomationBridge(ipcRenderer),
 	conversion: createConversionBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
+	interaction: createInteractionBridge(ipcRenderer),
 	indexProblem: createIndexProblemBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),

@@ -7,6 +7,8 @@ import {
 } from "../shared/actions-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
+import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
+import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
@@ -114,6 +116,25 @@ export function registerServicesIpcHandlers(service: ServicesService): void {
 		if (typeof id !== "string" || !isServiceRunRequest(id, paths)) throw new Error(t("main.ipc.invalidServiceRequest"));
 		return service.run(id, paths);
 	});
+}
+
+export interface InteractionIpcDeps {
+	readonly hub: InteractionHub;
+	getMode(): Promise<ApprovalMode>;
+	setMode(mode: ApprovalMode): Promise<ApprovalMode>;
+}
+
+export function registerInteractionIpcHandlers(deps: InteractionIpcDeps): void {
+	ipcMain.handle(INTERACTION_CHANNELS.getMode, () => deps.getMode());
+	ipcMain.handle(INTERACTION_CHANNELS.setMode, (_event, mode: unknown) => {
+		if (!isApprovalMode(mode)) throw new TypeError("interaction:setMode expects ask, auto or full");
+		return deps.setMode(mode);
+	});
+	ipcMain.handle(INTERACTION_CHANNELS.pending, () => deps.hub.pending());
+	// The hub checks the answer against the request it names; an id or shape it does not know is just refused.
+	ipcMain.handle(INTERACTION_CHANNELS.answer, (_event, id: unknown, answer: unknown) =>
+		typeof id === "string" ? deps.hub.answer(id, answer) : false,
+	);
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {

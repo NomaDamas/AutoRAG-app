@@ -5,6 +5,8 @@
  * Persistence lives in the main process under Electron's userData dir.
  */
 
+import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "./interaction-contract";
+
 export const SETTINGS_CHANNELS = {
 	get: "settings:get",
 	set: "settings:set",
@@ -81,6 +83,12 @@ export interface AppSettings {
 	readonly dupeyScanIntervalMinutes: number;
 	/** The OS file-menu entries ("Ask AutoRAG", "Show in AutoRAG") are installed: macOS Quick Actions, Windows Explorer verbs. */
 	readonly osMenuIntegration: boolean;
+	/**
+	 * How much the AI Search agent may do to existing files without asking (librarian v2.12 permission modes):
+	 * `ask` approves every shell/write/edit call, `auto` lets Jev approve what the request covers and asks about the
+	 * rest, `full` never asks. Chosen in the AI Search message box; applies to every agent, running or later.
+	 */
+	readonly approvalMode: ApprovalMode;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -94,6 +102,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
+	approvalMode: DEFAULT_APPROVAL_MODE,
 };
 
 /** Whether the backend a datasource needs is present on this machine. */

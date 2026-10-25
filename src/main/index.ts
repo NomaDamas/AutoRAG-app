@@ -56,6 +56,7 @@ import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
 import { terminateMinSyncChildren } from "./minsync-watchdog";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
 import { createAccountService } from "./account-service";
+import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { detectSources } from "./onboarding-sources";
 import { FS_CHANNELS } from "../shared/fs-contract";
@@ -76,6 +77,8 @@ import { migrateLegacyEmbedding } from "./embedding-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
+import { createInteractionHub } from "./interaction-hub";
+import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
 import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
@@ -92,6 +95,7 @@ import {
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerInteractionIpcHandlers,
 	registerIndexProblemIpcHandlers,
 	registerModelDownloadIpcHandlers,
 	registerOnboardingIpcHandlers,
@@ -544,13 +548,44 @@ app.whenReady().then(async () => {
 	const applyScanInterval = (minutes: number): void => {
 		void workerHost.client.call("setScanInterval", [minutes]).catch((error: unknown) => console.error("[fs-worker] scan interval:", error));
 	};
+	const interactionHub = createInteractionHub({
+		emitRequest: (request) => sendToMainWindow(INTERACTION_CHANNELS.request, request),
+		emitClosed: (event) => sendToMainWindow(INTERACTION_CHANNELS.closed, event),
+	});
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory(),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
 		send: sendToMainWindow,
 		analytics,
+		interaction: interactionHub,
+		// The settings service is built further down; an agent is only built long after startup.
+		approvalMode: async () => (await settingsService.get()).approvalMode,
+		// A run on the Dazzi plan's model with the week's credits used up is not sent: the server would refuse every request of it.
+		preflight: async () => {
+			const block = await quotaBlock({
+				modelProvider: async () => {
+					const configPath = autoragConfigPath();
+					const model = existsSync(configPath) ? readRawConfigObject(configPath).model : undefined;
+					return isJsonObject(model) && typeof model.provider === "string" ? model.provider : undefined;
+				},
+				account: accountService,
+				now: () => new Date(),
+			});
+			return block === null
+				? null
+				: {
+						message: t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) }),
+						action: "open-plan",
+					};
+		},
 	});
 	registerSearchIpcHandlers(searchService);
+	registerInteractionIpcHandlers({
+		hub: interactionHub,
+		getMode: async () => (await settingsService.get()).approvalMode,
+		setMode: async (mode) => (await settingsService.set({ approvalMode: mode })).approvalMode,
+	});
+	let appliedApprovalMode: ApprovalMode | null = null;
 	let previousSettings: AppSettings | null = null;
 	const applyAppearance = (appearance: AppAppearance): void => {
 		currentAppearance = appearance;
@@ -737,6 +772,11 @@ app.whenReady().then(async () => {
 			analytics.setEnabled(settings.usageAnalytics);
 			if (previousSettings !== null) for (const change of settingChangeEvents(previousSettings, settings)) analytics.track("settings_changed", change);
 			previousSettings = settings;
+			if (appliedApprovalMode !== settings.approvalMode) {
+				appliedApprovalMode = settings.approvalMode;
+				searchService.setApprovalMode(settings.approvalMode);
+				sendToAllWindows(INTERACTION_CHANNELS.modeChanged, settings.approvalMode);
+			}
 			setErrorReportingEnabled(settings.errorReporting);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);

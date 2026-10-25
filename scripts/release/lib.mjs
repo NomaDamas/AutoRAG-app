@@ -225,6 +225,27 @@ export function pruneDeadWeight(root) {
 }
 
 /**
+ * How a staged tool that ships as a folder — filee-cli's self-contained .NET
+ * publish output, an apphost next to its sibling assemblies and native engines —
+ * reaches `tools/bin`, the directory the app puts first on `PATH`:
+ *
+ *   - `symlink` (POSIX): keep the folder whole at `<tools>/<name>/` and link
+ *     `<tools>/bin/<binary>` to it. .NET resolves its base directory through the
+ *     real path, so the siblings are still found, and `spawn` follows the link.
+ *   - `flatten` (Windows): copy the folder's files straight into `<tools>/bin`.
+ *     Windows has no dependable file symlink (electron-builder can only create
+ *     directory junctions there) and the librarian needs a real `<binary>` in the
+ *     `PATH` directory, not a `.cmd` shim Node cannot spawn.
+ *
+ * `linkTarget` is relative so the link keeps resolving after electron-builder
+ * copies `tools/` into the app's `resources/`.
+ */
+export function folderToolLayout(platform, name, binary) {
+	if (platform === "win32") return { mode: "flatten" };
+	return { mode: "symlink", folder: name, linkTarget: join("..", name, binary) };
+}
+
+/**
  * Rename every non-ASCII name under `root` to its decomposed (NFD) form, deepest entries first, and
  * return how many were renamed. macOS must see the names in the code seal byte for byte, and Finder
  * writes names decomposed when it copies an app out of the dmg (measured on macOS 26.6: kordoc's

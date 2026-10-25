@@ -159,6 +159,24 @@ describe("createSettingsService", () => {
 		expect((await reloaded.get()).showHiddenFiles).toBe(true);
 	});
 
+	it("starts the approval mode on auto, persists a choice, and never keeps a value that is not a mode", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-approval-"));
+		directories.push(directory);
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect((await service.get()).approvalMode).toBe("auto");
+
+		await service.set({ approvalMode: "ask" });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect((await reloaded.get()).approvalMode).toBe("ask");
+
+		// A patch or a stored file carrying anything else leaves the last good mode (or the default for a bad file).
+		await reloaded.set({ approvalMode: "yolo" as never });
+		expect((await reloaded.get()).approvalMode).toBe("ask");
+		await writeFile(join(directory, "settings-state.json"), JSON.stringify({ settings: { approvalMode: "yolo" }, permissions: {} }));
+		const corrupted = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		expect((await corrupted.get()).approvalMode).toBe("auto");
+	});
+
 	it("defaults to light appearance and persists the global dark choice", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-appearance-"));
 		directories.push(directory);

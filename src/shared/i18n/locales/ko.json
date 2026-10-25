@@ -248,6 +248,7 @@
     "generatingDeep": "정밀 답변 작성 중…",
     "askDazzi": "Dazzi에게 물어보기",
     "stop": "중지",
+    "openPlan": "구독 및 사용량 열기",
     "thinking": "생각하는 중…",
     "workedFor": "{{time}} 동안 답변 생성",
     "reviewing": "질문 검토 중…",
@@ -271,6 +272,58 @@
       "last30Days": "지난 30일",
       "older": "그 이전"
     }
+  },
+  "interaction": {
+    "mode": {
+      "menuLabel": "파일 변경 승인",
+      "triggerAria": "파일 변경 승인 모드",
+      "ask": {
+        "label": "묻기",
+        "desc": "모든 shell·쓰기·편집 호출 전에 물어봅니다. 승인 없이는 아무것도 실행되지 않으며, 읽기와 검색은 묻지 않습니다."
+      },
+      "auto": {
+        "label": "자동",
+        "desc": "Dazzi의 판단 모델이 안전한 변경은 통과시키고, 기존 파일을 바꾸는 확신 없는 변경만 물어봅니다."
+      },
+      "full": {
+        "label": "전체 허용",
+        "desc": "묻지 않고 파일을 바꿉니다."
+      }
+    },
+    "stop": "중지",
+    "skip": "건너뛰기",
+    "submit": "보내기",
+    "next": "다음",
+    "back": "이전",
+    "step": "{{current}} / {{total}}",
+    "answeredCount": "{{answered}} / {{total}} 답변함",
+    "showMore": "더 보기",
+    "showLess": "접기",
+    "writeOwn": "직접 답변 작성",
+    "answerPlaceholder": "답변을 입력하세요",
+    "questionAria": "Dazzi의 질문",
+    "approval": {
+      "headlineChange": "Dazzi가 파일을 바꾸려고 해요 — 허용할까요?",
+      "headlineRun": "Dazzi가 실행하려고 해요 — 허용할까요?"
+    },
+    "category": {
+      "delete": "삭제",
+      "move": "이동",
+      "rename": "이름 변경",
+      "overwrite": "덮어쓰기",
+      "edit": "수정",
+      "unclear": "실행 확인 불가"
+    },
+    "allowOnce": "한 번만 허용",
+    "allowSession": {
+      "categories": "이 세션에서는 이런 변경을 모두 허용",
+      "unclassified": "이 세션에서는 분류되지 않은 호출을 모두 허용",
+      "all": "이 세션에서는 이런 호출을 모두 허용"
+    },
+    "deny": "거부",
+    "denyWithNote": "거부하고 모델에게 알려주기…",
+    "notePlaceholder": "대신 어떻게 할까요? (예: 복사본에서 작업)",
+    "sendNote": "보내기"
   },
   "automations": {
     "list": "자동화 규칙",
@@ -1267,6 +1320,13 @@
     }
   },
   "main": {
+    "interaction": {
+      "yes": "예",
+      "no": "아니요"
+    },
+    "search": {
+      "quotaExhausted": "이번 주 Dazzi 크레딧을 모두 사용해서 요청을 보내지 않았습니다. {{date}}에 다시 채워집니다. 플랜을 올리거나 설정에서 다른 모델 제공자를 선택하면 계속 사용할 수 있습니다."
+    },
     "action": {
       "unsupportedResize": "이 형식은 크기 조절을 지원하지 않습니다",
       "unsupportedOptimize": "이 형식은 용량 최적화를 지원하지 않습니다",

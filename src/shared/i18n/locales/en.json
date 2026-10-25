@@ -248,6 +248,7 @@
     "generatingDeep": "Generating deep answer…",
     "askDazzi": "Ask Dazzi",
     "stop": "Stop",
+    "openPlan": "Open Subscription & Usage",
     "thinking": "Thinking…",
     "workedFor": "Worked for {{time}}",
     "reviewing": "Reviewing the query.",
@@ -271,6 +272,58 @@
       "last30Days": "Previous 30 days",
       "older": "Earlier"
     }
+  },
+  "interaction": {
+    "mode": {
+      "menuLabel": "File change approval",
+      "triggerAria": "File change approval mode",
+      "ask": {
+        "label": "Ask",
+        "desc": "Asks before every shell, write, or edit call. Nothing runs without approval; reading and searching never ask."
+      },
+      "auto": {
+        "label": "Auto",
+        "desc": "Dazzi's judgment model lets safe changes through and asks only about changes to existing files it is unsure about."
+      },
+      "full": {
+        "label": "Full",
+        "desc": "Changes files without asking."
+      }
+    },
+    "stop": "Stop",
+    "skip": "Skip",
+    "submit": "Send",
+    "next": "Next",
+    "back": "Back",
+    "step": "{{current}} / {{total}}",
+    "answeredCount": "{{answered}} / {{total}} answered",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "writeOwn": "Write your own answer",
+    "answerPlaceholder": "Type your answer",
+    "questionAria": "Question from Dazzi",
+    "approval": {
+      "headlineChange": "Dazzi wants to change your files — allow this?",
+      "headlineRun": "Dazzi wants to run this — allow?"
+    },
+    "category": {
+      "delete": "Delete",
+      "move": "Move",
+      "rename": "Rename",
+      "overwrite": "Overwrite",
+      "edit": "Edit",
+      "unclear": "Couldn't classify"
+    },
+    "allowOnce": "Allow once",
+    "allowSession": {
+      "categories": "Allow all of this kind this session",
+      "unclassified": "Allow all unclassified calls this session",
+      "all": "Allow every such call this session"
+    },
+    "deny": "Deny",
+    "denyWithNote": "Deny and tell the model…",
+    "notePlaceholder": "What should it do instead? (e.g. work on a copy)",
+    "sendNote": "Send"
   },
   "automations": {
     "list": "Automation rules",
@@ -1267,6 +1320,13 @@
     }
   },
   "main": {
+    "interaction": {
+      "yes": "Yes",
+      "no": "No"
+    },
+    "search": {
+      "quotaExhausted": "This week's Dazzi credits are used up, so nothing was sent. They come back on {{date}}. Upgrade your plan, or choose another model provider in Settings, to keep asking."
+    },
     "action": {
       "unsupportedResize": "This format cannot be resized.",
       "unsupportedOptimize": "This format cannot be size-optimized.",
