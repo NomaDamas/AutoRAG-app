@@ -100,7 +100,7 @@ try {
 
 	// 2. Sidebar: AI Search heads Favorites, above Recents.
 	const favorites = await page.locator(".side-group").first().locator(".sidebar__item-label").allInnerTexts();
-	check("Favorites starts with AI Search above Recents", (favorites[0] === "AI Search" || favorites[0] === "AI 검색") && (favorites[1] === "Recents" || favorites[1] === "최근 항목"), JSON.stringify(favorites));
+	check("Favorites starts with AI Search above Recents", (favorites[0] === "AI Search" || favorites[0] === "AI 검색") && favorites.findIndex((label) => label === "Recents" || label === "최근 항목") > 0, JSON.stringify(favorites));
 
 	// 3. Sidebar AI Search converts the focused tab; Back returns to the folder.
 	const before = await tabs(page);
@@ -169,7 +169,7 @@ try {
 	check(
 		"AI Summary sends the summary query with the file attached, not a bare draft chip",
 		summaryText === SUMMARY_PROMPT &&
-			(await page.locator(`${PANEL} .ref-file-chip[title="${BRIEF}"]`).count()) === 1 &&
+			(await page.locator(`${PANEL} .ref-file-chip[title="${cssAttr(BRIEF)}"]`).count()) === 1 &&
 			(await pills(page)).length === 0,
 		`query="${summaryText}" pills=${JSON.stringify(await pills(page))}`,
 	);

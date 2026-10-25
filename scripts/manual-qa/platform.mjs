@@ -183,3 +183,16 @@ export function writeMinsyncStub(binDir) {
 	copyFileSync(cached, stub);
 	return stub;
 }
+
+/**
+ * Re-encode (and optionally resize) an image for a fixture: `sips` on macOS, `ffmpeg` elsewhere. The output
+ * format follows `to`'s extension in both.
+ */
+export function convertImage(from, to, size) {
+	if (isMac) {
+		const format = /\.jpe?g$/iu.test(to) ? ["-s", "format", "jpeg"] : [];
+		execFileSync("sips", [...(size === undefined ? [] : ["-z", String(size.height), String(size.width)]), ...format, from, "--out", to], { stdio: "ignore" });
+		return;
+	}
+	execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", from, ...(size === undefined ? [] : ["-vf", `scale=${size.width}:${size.height}`]), to], { stdio: "ignore" });
+}

@@ -132,7 +132,7 @@ try {
 			await page.screenshot({ path: join(EVIDENCE, `open-${run + 1}.png`) });
 
 			// Arrow keys: focus the first row, then step down KEYS times.
-			await pane(page).locator(`.column-row[aria-label="${FIRST}"]`).click();
+			await pane(page).locator(`.column-row[aria-label="${cssAttr(FIRST)}"]`).click();
 			await frames();
 			const keysBefore = await metric("TaskDuration");
 			for (let key = 0; key < KEYS; key += 1) {
@@ -147,17 +147,17 @@ try {
 				element.scrollTop = element.scrollHeight;
 			});
 			await frames(3);
-			const lastMounted = (await pane(page).locator(`.column-row[aria-label="${LAST}"]`).count()) === 1;
+			const lastMounted = (await pane(page).locator(`.column-row[aria-label="${cssAttr(LAST)}"]`).count()) === 1;
 			const mountedAtEnd = await pane(page).locator(".column-row").count();
 
 			// Reveal: focus the last row, scroll the pane back to the top (focus is
 			// not mounted), then ArrowUp must bring the new focus into view.
-			await pane(page).locator(`.column-row[aria-label="${LAST}"]`).click();
+			await pane(page).locator(`.column-row[aria-label="${cssAttr(LAST)}"]`).click();
 			await pane(page).evaluate((element) => {
 				element.scrollTop = 0;
 			});
 			await frames(3);
-			const focusUnmounted = (await pane(page).locator(`.column-row[aria-label="${LAST}"]`).count()) === 0;
+			const focusUnmounted = (await pane(page).locator(`.column-row[aria-label="${cssAttr(LAST)}"]`).count()) === 0;
 			await page.keyboard.press("ArrowUp");
 			await frames(3);
 			const revealed = await page.evaluate((dir) => {
