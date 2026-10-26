@@ -85,7 +85,10 @@ const service = createFsWorkerService({
 			openPath: (path) => host.call("openPath", [path]),
 			openExternal: (url) => host.call("openExternal", [url]),
 		},
-		clipboard: { writeText: (text) => void host.call("writeText", [text]) },
+		clipboard: {
+			writeText: (text) => void host.call("writeText", [text]),
+			writeFiles: async (paths) => void (await host.call("writeFiles", [paths])),
+		},
 		icons: {
 			async icons(targets: readonly IconTarget[]) {
 				return new Map(await host.call<[string, string][]>("icons", [targets]));
