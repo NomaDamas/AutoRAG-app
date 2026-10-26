@@ -382,20 +382,40 @@ describe("createOsKindResolver on Windows", () => {
 
 const runPowerShell = promisify(execFile);
 
+/** The lookup as it was before batching: one `Registry::` provider chain per extension. The batch must answer identically. */
+async function providerKind(extension: string): Promise<string | null> {
+	const script = [
+		"[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+		`$ext = '${extension}'`,
+		"$progId = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $ext) -ErrorAction SilentlyContinue).'(default)'",
+		"if ([string]::IsNullOrEmpty($progId)) { return }",
+		"$typeName = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $progId) -ErrorAction SilentlyContinue).'(default)'",
+		"if (-not [string]::IsNullOrEmpty($typeName)) { [Console]::Out.Write($typeName) }",
+	].join("; ");
+	const { stdout } = await runPowerShell("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true });
+	return parseKindStdout(stdout);
+}
+
 describe.skipIf(process.platform !== "win32")("the Windows registry lookup, on a real Windows", () => {
-	it("returns the Explorer type name per extension and an empty line for an unknown one", async () => {
-		const query = windowsKindQuery([".txt", ".zzz-no-such-extension", ".png"]);
+	const extensions = [".zip", ".png", ".pdf", ".txt", ".exe", ".dll", ".hwp", ".mp4", ".json", ".zzz-no-such-extension"];
+
+	it("answers every extension exactly as the one-process-per-extension lookup did", async () => {
+		const expected = await Promise.all(extensions.map(providerKind));
+		const query = windowsKindQuery(extensions);
 		const { stdout } = await runPowerShell(query.command, [...query.args], { encoding: "utf8", windowsHide: true });
 
-		const [txt, unknown] = parseWindowsKindStdout(stdout, 3);
-		expect(txt).toMatch(/\S/);
-		expect(unknown).toBeNull();
+		expect(parseWindowsKindStdout(stdout, extensions.length)).toEqual(expected);
+		// The comparison is only meaningful if Windows knows some of them and not the made-up one.
+		expect(expected.some((kind) => kind !== null)).toBe(true);
+		expect(expected.at(-1)).toBeNull();
 	});
 
-	it("resolves one process's worth of files end to end through the default runner", async () => {
+	it("resolves files end to end through the default runner, extensionless files without a process", async () => {
 		const resolver = createOsKindResolver();
-		const [txt, none] = await Promise.all([resolver.kindFor("C:\\x\\note.txt", "txt"), resolver.kindFor("C:\\x\\Makefile", "")]);
-		expect(txt).toMatch(/\S/);
-		expect(none).toBeNull();
+		const files = ["C:\\x\\a.zip", "C:\\x\\b.exe", "C:\\x\\c.json", "C:\\x\\d.ZIP", "C:\\x\\Makefile"];
+		const kinds = await Promise.all(files.map((file) => resolver.kindFor(file, file.includes(".") ? file.split(".").pop()?.toLowerCase() ?? "" : "")));
+		const expected = await Promise.all([".zip", ".exe", ".json", ".zip"].map(providerKind));
+
+		expect(kinds).toEqual([...expected, null]);
 	});
 });

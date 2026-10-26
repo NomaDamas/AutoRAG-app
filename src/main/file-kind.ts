@@ -59,14 +59,20 @@ export function windowsRegistryExtension(path: string): string {
 	return name.slice(dot).toLowerCase();
 }
 
-/** One PowerShell process that prints the Explorer type name of each extension, one line each, empty when unknown. */
+/**
+ * One PowerShell process that prints the Explorer type name of each extension, one line each, empty when unknown.
+ * It reads the registry through .NET rather than the `Registry::` provider: the provider costs ~28 ms per
+ * `Get-ItemProperty` (1.7 s for 60 extensions), the .NET call 0.3 ms, with identical answers.
+ */
 export function windowsKindQuery(extensions: readonly string[]): KindQuery {
 	const list = extensions.map((extension) => `'${extension.replace(/'/g, "''")}'`).join(",");
 	const script = [
 		POWERSHELL_UTF8_OUTPUT,
+		"$root = [Microsoft.Win32.Registry]::ClassesRoot",
+		"function Get-Default([string]$name) { try { $key = $root.OpenSubKey($name); if ($null -eq $key) { return '' }; try { return [string]$key.GetValue('') } finally { $key.Close() } } catch { return '' } }",
 		`foreach ($ext in @(${list})) { $line = ''`,
-		"$progId = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $ext) -ErrorAction SilentlyContinue).'(default)'",
-		"if (-not [string]::IsNullOrEmpty($progId)) { $typeName = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $progId) -ErrorAction SilentlyContinue).'(default)'; if (-not [string]::IsNullOrEmpty($typeName)) { $line = $typeName -replace '[\\r\\n]+', ' ' } }",
+		"$progId = Get-Default $ext",
+		"if (-not [string]::IsNullOrEmpty($progId)) { $line = (Get-Default $progId) -replace '[\\r\\n]+', ' ' }",
 		"[Console]::Out.WriteLine($line) }",
 	].join("; ");
 	return { command: "powershell.exe", args: ["-NoProfile", "-NonInteractive", "-Command", script], extensions };
