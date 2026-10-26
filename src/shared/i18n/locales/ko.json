@@ -1004,9 +1004,6 @@
       "gateTitlePc": "Dazzi를 종료하거나 PC를 끄지 마세요",
       "gateDetailMac": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원 어댑터를 연결하고 덮개를 열어 두세요.",
       "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
-      "gateLocked": "완료되면 열 수 있어요",
-      "open": "Dazzi 열기",
-      "startInBackground": "백그라운드에서 계속하고 바로 시작하기",
       "skipped": "{{count}}개 파일은 건너뛰었어요",
       "gateOkDetailPartial": "나머지는 모두 검색할 수 있어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
       "pause": {
@@ -1043,8 +1040,7 @@
           "resumeDisk": "공간 확보했어요, 이어서 받기",
           "changeEmbedding": "임베딩 방식 바꾸기",
           "exclude": "‘{{folder}}’ 빼고 계속",
-          "excludeMany": "읽을 수 없는 폴더 빼고 계속",
-          "openAnyway": "일단 Dazzi 열기"
+          "excludeMany": "읽을 수 없는 폴더 빼고 계속"
         },
         "line": {
           "retrying": "다시 시도하는 중이에요",

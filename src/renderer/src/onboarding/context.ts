@@ -105,8 +105,6 @@ export interface OnboardingCtx {
 	changeEmbedding(): void;
 	/** Leaves the given (unreadable) folders out of the index and starts it again; with none left it goes back to choosing folders. */
 	excludeFolders(paths: readonly string[]): void;
-	finish(): void;
-	finishInBackground(): void;
 	setTipIndex(index: number): void;
 
 	dragApp(): void;

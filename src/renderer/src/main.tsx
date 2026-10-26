@@ -1,21 +1,21 @@
 import "./lib/error-reporting";
-import { StrictMode, useCallback, useState, type ReactElement } from "react";
+import { StrictMode, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import "../styles/app.css";
 import { App } from "./App";
 import { Onboarding } from "./onboarding/Onboarding";
 import { applyInterfaceLanguage } from "./lib/interface-language";
 
+/** Onboarding found nothing left to do: this window has no other purpose, so it goes away. */
+const closeWindow = (): void => window.close();
+
 /**
- * The first-run gate: show the onboarding flow while this window is pending,
- * then mount the Finder in the same window (no reload). `pending` is the
- * preload's read of the launch argument; onboarding's `load()` is authoritative
- * and completes immediately when the stored state says onboarding is done.
+ * First-run onboarding and the Finder are separate windows. The main process opens the onboarding one with a
+ * launch argument (`pending`), so it shows the flow and nothing else, and every other window is the Finder.
+ * Onboarding's `load()` is authoritative and closes the window at once when the stored state says it is done.
  */
 function Root(): ReactElement {
-	const [pending, setPending] = useState(() => window.autorag.onboarding.pending);
-	const handleComplete = useCallback(() => setPending(false), []);
-	return pending ? <Onboarding onComplete={handleComplete} /> : <App />;
+	return window.autorag.onboarding.pending ? <Onboarding onComplete={closeWindow} /> : <App />;
 }
 
 const container = document.getElementById("root");

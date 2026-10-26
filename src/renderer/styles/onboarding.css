@@ -3268,39 +3268,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	color: #c9f5d4;
 }
 
-.onb .ix-open-btn {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 0 20px;
-	border: 0;
-	border-radius: 11px;
-	background: #fff;
-	color: #0a0a0c;
-	font-size: 13px;
-	font-weight: 600;
-	white-space: nowrap;
-	box-shadow: 0 0 0 1px rgba(255,255,255,.25),0 10px 30px rgba(48,209,88,.32),0 0 60px rgba(48,209,88,.2);
-	animation: onb-ixpop .55s cubic-bezier(.2,1.5,.4,1);
-}
-
-.onb .ix-open-btn:hover {
-	background: #eafff0;
-}
-
-.onb .ix-open-btn .kbd {
-	margin-left: 2px;
-}
-
-.onb .ix-open-btn:disabled {
-	border: 1px dashed rgba(255,255,255,.16);
-	background: transparent;
-	color: rgba(255,255,255,.38);
-	box-shadow: none;
-	animation: none;
-	cursor: not-allowed;
-}
-
 @keyframes onb-ixpop {
 	from {
 		opacity: 0;
@@ -3749,23 +3716,6 @@ html[data-appearance="light"] .onb .ix-notice.ok small {
 	color: #4d7659;
 }
 
-html[data-appearance="light"] .onb .ix-open-btn {
-	background: #0a64d8;
-	color: #fff;
-	box-shadow: 0 0 0 1px rgba(10,100,216,.15),0 10px 25px rgba(10,100,216,.25),0 0 48px rgba(10,100,216,.12);
-}
-
-html[data-appearance="light"] .onb .ix-open-btn:hover {
-	background: #007aff;
-}
-
-html[data-appearance="light"] .onb .ix-open-btn:disabled {
-	border-color: #cbd5e1;
-	background: rgba(255,255,255,.45);
-	color: #8795a8;
-	box-shadow: none;
-}
-
 html[data-appearance="light"] .onb .ix-tip {
 	border-color: #dbe3ee;
 	background: linear-gradient(180deg,rgba(255,255,255,.94),rgba(247,250,253,.88));
@@ -3881,14 +3831,6 @@ html[data-appearance="light"] .onb .ix-cite {
 	.onb .ix {
 		padding: 80px 20px 26px;
 	}
-	.onb .ix-gate {
-		flex-direction: column;
-		align-items: stretch;
-	}
-	.onb .ix-open-btn {
-		justify-content: center;
-		height: 40px;
-	}
 	.onb .ix-tip {
 		grid-template-columns: 1fr;
 	}
@@ -3904,39 +3846,6 @@ html[data-appearance="light"] .onb .ix-cite {
  * States the prototype has no design for. Kept at the end, scoped under `.onb`,
  * using the existing `--onb-*` variables.
  * ------------------------------------------------------------------------ */
-
-/* Subtle bottom link on the indexing screen to continue in the background and open the app immediately. */
-.onb .ix-bg-start {
-	margin-top: 14px;
-	padding: 2px 6px;
-	border: 0;
-	border-radius: 4px;
-	background: transparent;
-	color: rgba(255, 255, 255, 0.34);
-	font-size: 11px;
-	font-weight: 400;
-	line-height: 1.4;
-	letter-spacing: -0.01em;
-	text-decoration: underline;
-	text-decoration-color: rgba(255, 255, 255, 0.16);
-	text-underline-offset: 3px;
-	transition: color 0.15s ease, text-decoration-color 0.15s ease;
-}
-
-.onb .ix-bg-start:hover {
-	color: rgba(255, 255, 255, 0.68);
-	text-decoration-color: rgba(255, 255, 255, 0.42);
-}
-
-html[data-appearance="light"] .onb .ix-bg-start {
-	color: rgba(82, 98, 122, 0.56);
-	text-decoration-color: rgba(82, 98, 122, 0.24);
-}
-
-html[data-appearance="light"] .onb .ix-bg-start:hover {
-	color: #172033;
-	text-decoration-color: rgba(23, 32, 51, 0.45);
-}
 
 /* ------------------------------------------------------------------------
  * First-index pause (#283). A run that stopped is the same indexing screen with the

@@ -1004,9 +1004,6 @@
       "gateTitlePc": "请勿退出 Dazzi 或关闭电脑",
       "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
       "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
-      "gateLocked": "完成后即可打开",
-      "open": "打开 Dazzi",
-      "startInBackground": "在后台继续并立即开始使用",
       "skipped": "已跳过 {{count}} 个文件",
       "gateOkDetailPartial": "其余文件均可搜索。新更改的文件会在后台继续读取。",
       "pause": {
@@ -1043,8 +1040,7 @@
           "resumeDisk": "已腾出空间，继续下载",
           "changeEmbedding": "更改嵌入方式",
           "exclude": "跳过“{{folder}}”继续",
-          "excludeMany": "跳过无法读取的文件夹继续",
-          "openAnyway": "先打开 Dazzi"
+          "excludeMany": "跳过无法读取的文件夹继续"
         },
         "line": {
           "retrying": "正在重试",
