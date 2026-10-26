@@ -59,6 +59,14 @@ export const PREVIEW_CHANNELS = {
 	textEntry: "preview:text-entry",
 } as const;
 
+/** Structured content decoded from an Apple pointer, archive, clipping, or directory package. */
+export type NativePreview =
+	| { readonly kind: "webloc"; readonly title: string; readonly url: string }
+	| { readonly kind: "webarchive"; readonly html: string }
+	| { readonly kind: "rtfd"; readonly rtf: Uint8Array; readonly attachments: readonly string[] }
+	| { readonly kind: "iconset"; readonly icons: readonly { readonly name: string; readonly bytes: Uint8Array }[] }
+	| { readonly kind: "textclipping"; readonly text: string };
+
 /**
  * One file the preview can render. `bytes` is null when the viewer streams
  * the custom protocol instead, or when the file is over the byte cap.
@@ -84,6 +92,10 @@ export interface PreviewDocument {
 	 * pointer file (`.gdoc`, ...); null for every other document.
 	 */
 	readonly thumbnail: string | null;
+	/** Decoded native content; absent for every ordinary document. */
+	readonly native?: NativePreview | null;
+	/** Directory packages have no single-file byte size to display. */
+	readonly package?: boolean;
 	/**
 	 * True while Keynote is drawing a deck's slides at full size; `pages` then
 	 * still holds the package's 356px renders. False for every other document.
@@ -371,6 +383,16 @@ export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
 	return value.slides.every((entry: unknown) => isRecord(entry) && Number.isInteger(entry.index) && (entry.index as number) >= 0 && entry.bytes instanceof Uint8Array);
 }
 
+function isNativePreview(value: unknown): value is NativePreview {
+	if (!isRecord(value) || typeof value.kind !== "string") return false;
+	if (value.kind === "webloc") return typeof value.title === "string" && typeof value.url === "string";
+	if (value.kind === "webarchive") return typeof value.html === "string";
+	if (value.kind === "textclipping") return typeof value.text === "string";
+	if (value.kind === "rtfd") return value.rtf instanceof Uint8Array && Array.isArray(value.attachments) && value.attachments.every((name) => typeof name === "string");
+	if (value.kind === "iconset") return Array.isArray(value.icons) && value.icons.every((icon: unknown) => isRecord(icon) && typeof icon.name === "string" && icon.bytes instanceof Uint8Array);
+	return false;
+}
+
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (!isRecord(value)) return false;
 	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.ext !== "string") return false;
@@ -379,6 +401,8 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
 	if (value.office !== null && !isOfficePage(value.office)) return false;
 	if (value.thumbnail !== null && typeof value.thumbnail !== "string") return false;
+	if (value.native !== undefined && value.native !== null && !isNativePreview(value.native)) return false;
+	if (value.package !== undefined && typeof value.package !== "boolean") return false;
 	if (typeof value.slidesRendering !== "boolean") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }

@@ -51,6 +51,11 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	markdown: true,
 	html: true,
 	text: true,
+	webloc: true,
+	webarchive: true,
+	rtfd: true,
+	iconset: true,
+	textclipping: true,
 	data: true,
 	jsonl: true,
 	plist: true,
@@ -272,7 +277,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	const material = bridge.platform === "darwin" ? "glass" : "solid";
 	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
 	const { document, folder, bundle } = load;
-	const meta = document === null ? describeExtension(extensionOf(load.name)) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
+	const meta = document === null ? describeExtension(extensionOf(load.name)) : document.package === true ? describeExtension(document.ext) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
 
 	function onMediaEvent(event: SyntheticEvent<HTMLElement>): void {
 		if (MEDIA[kind] !== true) return;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createIconProvider, isNativeThumbnailExtension } from "../src/main/file-icon";
-import { driveThumbnail } from "../src/preview/node/google-drive";
+import { driveThumbnail, nativeThumbnail } from "../src/preview/node/google-drive";
 import { isPreviewDocument } from "../src/preview/shared/contract";
 import { GOOGLE_DRIVE_EXTENSIONS, isGoogleDriveExtension, readGoogleDrivePointer } from "../src/preview/shared/google-drive";
 import { byteNeed, describeExtension, viewerForExtension } from "../src/preview/shared/registry";
@@ -153,5 +153,16 @@ describe("driveThumbnail", () => {
 		const failing = { cachedPreview: () => null, preview: async (): Promise<string | null> => { throw new Error("xpc"); } };
 		expect(await driveThumbnail(target, failing, 50)).toBeNull();
 		expect(await driveThumbnail(target, null, 50)).toBeNull();
+	});
+
+	it("applies the same cache and time budget to native-only document thumbnails", async () => {
+		const targetPict = { path: "/docs/Picture.pict", ext: "pict", mtimeMs: 5 };
+		const cached = { cachedPreview: () => "autorag-thumb://cached", preview: async () => "autorag-thumb://fresh" };
+		expect(await nativeThumbnail(targetPict, cached, 20)).toBe("autorag-thumb://cached");
+		const slow = Promise.withResolvers<string | null>();
+		const started = Date.now();
+		expect(await nativeThumbnail(targetPict, { cachedPreview: () => null, preview: () => slow.promise }, 20)).toBeNull();
+		expect(Date.now() - started).toBeLessThan(1000);
+		slow.resolve("autorag-thumb://late");
 	});
 });

@@ -1588,6 +1588,12 @@
     "contents": {
       "title": "内容"
     },
+    "native": {
+      "readFailed": "この書類を読み込めませんでした",
+      "attachments": "添付ファイル",
+      "noAttachments": "添付ファイルなし",
+      "emptyIconset": "このセットにはPNGアイコンがありません"
+    },
     "code": {
       "wrap": "行を折り返す",
       "copy": "コードをコピー",

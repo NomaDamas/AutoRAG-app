@@ -5,7 +5,7 @@ import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import type { IconPreviewCache } from "../../main/file-icon";
 import { listArchive } from "../../main/archive-list";
-import { isAppBundle } from "../../main/fs-entry";
+import { isAppBundle, isPackageDirectory } from "../../main/fs-entry";
 import {
 	app,
 	BrowserWindow,
@@ -49,8 +49,9 @@ import { isGoogleDriveExtension } from "../shared/google-drive";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { readNativeDocument } from "./apple";
 import { previewData } from "./data";
-import { driveThumbnail } from "./google-drive";
+import { driveThumbnail, nativeThumbnail } from "./google-drive";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
@@ -355,6 +356,7 @@ async function readFolder(path: string): Promise<TargetContent> {
  */
 async function readDocument(path: string): Promise<PreviewDocument> {
 	const kind = viewerForExtension(extname(path).slice(1));
+	if (kind === "webloc" || kind === "webarchive" || kind === "rtfd" || kind === "iconset" || kind === "textclipping") return readNativeDocument(path);
 	if (kind === "legacyDoc" || kind === "legacyPpt") {
 		// The whole file for the text reader. What macOS draws for it arrives
 		// separately (`openOfficePage`): the panel must not wait for it.
@@ -405,6 +407,9 @@ async function readTarget(target: QuickLookTarget): Promise<TargetContent> {
 			// one app: the panel shows the app, never its `Contents/`.
 			if (isAppBundle(basename(target.path), true, process.platform)) {
 				return { document: null, folder: null, bundle: await summarizeBundle(target.path, iconSource), error: null };
+			}
+			if (isPackageDirectory(basename(target.path), true, process.platform)) {
+				return { document: await readNativeDocument(target.path), folder: null, bundle: null, error: null };
 			}
 			return readFolder(target.path);
 		}
@@ -475,6 +480,17 @@ async function withDriveThumbnail(target: QuickLookTarget, content: TargetConten
 	return { ...content, document: { ...document, thumbnail } };
 }
 
+const NATIVE_ONLY_PREVIEWS = new Set(["pvt", "lpdf", "prefpane", "pict", "pct", "pic", "pictclipping"]);
+
+/** macOS-only formats keep the OS rendering; elsewhere the ordinary info panel remains. */
+async function withNativeThumbnail(content: TargetContent): Promise<TargetContent> {
+	const document = content.document;
+	if (process.platform !== "darwin" || document === null || !NATIVE_ONLY_PREVIEWS.has(document.ext)) return content;
+	const { mtimeMs } = await stat(document.path);
+	const thumbnail = await nativeThumbnail({ path: document.path, ext: document.ext, mtimeMs }, iconSource);
+	return { ...content, document: { ...document, thumbnail } };
+}
+
 async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
 	state.typing = false;
@@ -487,7 +503,9 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	if (seq !== state.seq || !live(state.window)) return;
 	const withDrive = await withDriveThumbnail(target, withOfficePage);
 	if (seq !== state.seq || !live(state.window)) return;
-	const content = await withKeynote(state, seq, target, withDrive);
+	const withNative = await withNativeThumbnail(withDrive);
+	if (seq !== state.seq || !live(state.window)) return;
+	const content = await withKeynote(state, seq, target, withNative);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
 	// An app bundle is launched by the Open button itself, so there is no

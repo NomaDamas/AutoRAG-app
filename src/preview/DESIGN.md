@@ -151,6 +151,19 @@ still has the previous file's size when they lay out.
   cold, none empty), unlike `.docx`/`.xlsx`/`.pptx`, which stay letter tiles.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
+- **Apple locations, archives, clippings, and packages** — `.webloc` and
+  `.inetloc` show an inert title and URL; the existing Open action hands the
+  pointer to the OS. `.webarchive` is parsed in-process (XML or binary plist),
+  its archived images and style sheets are inlined, and `standaloneOfficeHtml`
+  plus a `sandbox=""` frame removes or blocks scripts, event handlers,
+  navigation directives, frames, and every network fetch. `.textclipping`
+  accepts plist, plain UTF-8, and classic `TEXT`/`utf8`/`utxt` resource forks.
+  `.rtfd` renders `TXT.rtf` through the RTF text converter and lists attachments
+  without opening them; `.iconset` draws its PNGs as a grid. These directory
+  packages, plus `.pvt`, `.lpdf`, and `.prefpane`, are file rows rather than
+  folders to browse into. The latter three and `.pict`/`.pct`/`.pic`/
+  `.pictclipping` use macOS Quick Look thumbnails in the Other panel and keep
+  the ordinary information panel on other platforms.
 - **Code** — numbered lines on the paper material with the reference's Xcode
   palette (highlight.js, plus call and constant classes the grammars leave
   out), wrap and copy in the toolbar, and a footer with language, encoding

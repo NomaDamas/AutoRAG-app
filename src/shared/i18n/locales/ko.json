@@ -1588,6 +1588,12 @@
     "contents": {
       "title": "포함된 항목"
     },
+    "native": {
+      "readFailed": "이 문서를 읽지 못했습니다",
+      "attachments": "첨부 파일",
+      "noAttachments": "첨부 파일 없음",
+      "emptyIconset": "이 세트에는 PNG 아이콘이 없습니다"
+    },
     "code": {
       "wrap": "줄 바꿈",
       "copy": "코드 복사",

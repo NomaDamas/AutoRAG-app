@@ -94,6 +94,9 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.
 	"app",
+	// Native macOS packages and legacy QuickDraw pictures. Other platforms keep
+	// the document's type icon; no cross-platform decoder is claimed.
+	"pvt", "lpdf", "prefpane", "pict", "pct", "pic", "pictclipping",
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
 	const key = ext.toLowerCase().replace(/^\./, "");
