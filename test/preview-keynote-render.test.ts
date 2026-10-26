@@ -168,6 +168,47 @@ describe("Keynote slide rendering", () => {
 		expect((await stat(dir)).isDirectory()).toBe(true);
 	});
 
+
+	it("numbers each slide by its file name, even when later slides are written before earlier ones", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let wrote: () => void = () => undefined;
+		const lateWritten = new Promise<void>((resolve) => {
+			wrote = resolve;
+		});
+		const slides = cache({
+			export: async (job) => {
+				// A parallel rasterizer finishes the second batch first: slide 3 exists, slides 1 and 2 do not yet.
+				await writeFile(join(job.outDir, "slides.003.jpeg"), slide(3));
+				wrote();
+				await gate;
+				await writeFile(join(job.outDir, "slides.001.jpeg"), slide(1));
+				await writeFile(join(job.outDir, "slides.002.jpeg"), slide(2));
+			},
+		});
+		const heard: Array<[number, number]> = [];
+		let first: () => void = () => undefined;
+		const watcherSawIt = new Promise<void>((resolve) => {
+			first = resolve;
+		});
+		const running = slides.render(FILE, 3, (index, bytes) => {
+			heard.push([index, bytes[2]!]);
+			first();
+		});
+		await lateWritten;
+		// Wait for the folder watcher to read slides.003 before the earlier slides appear.
+		await watcherSawIt;
+		release();
+		expect(await running).not.toBeNull();
+		// Every slide arrived at the position its file name gives it, whatever order the files appeared in.
+		expect(heard.sort((a, b) => a[0] - b[0])).toEqual([
+			[0, 1],
+			[1, 2],
+			[2, 3],
+		]);
+	});
 	it("reports each finished slide to the caller, and replays them to a caller that joins a running render", async () => {
 		let release: () => void = () => undefined;
 		const gate = new Promise<void>((resolve) => {

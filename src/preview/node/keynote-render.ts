@@ -78,7 +78,10 @@ export async function exportWithQuickLook(job: { readonly path: string; readonly
 				await mkdir(raw);
 				await run("/usr/bin/sips", ["-s", "format", "jpeg", "-s", "formatOptions", "85", ...[...new Set(names)].map((name) => join(pack, name)), "--out", raw], { timeoutMs: SIPS_TIMEOUT_MS });
 				for (const [offset, name] of names.entries()) {
-					await copyFile(join(raw, `${name.slice(0, -4)}.jpg`), join(job.outDir, `slides.${String(start + offset + 1).padStart(3, "0")}.jpeg`));
+					// Written under a name the watcher ignores, then renamed: a slide file is whole the moment it exists.
+					const slide = join(job.outDir, `slides.${String(start + offset + 1).padStart(3, "0")}.jpeg`);
+					await copyFile(join(raw, `${name.slice(0, -4)}.jpg`), `${slide}.part`);
+					await rename(`${slide}.part`, slide);
 				}
 			}
 		};
@@ -125,12 +128,13 @@ function watchSlides(folder: string, pollMs: number, emit: SlideListener): () =>
 			.map((name) => ({ name, index: SLIDE_FILE.exec(name)?.[1] }))
 			.filter((entry): entry is { name: string; index: string } => entry.index !== undefined)
 			.sort((a, b) => Number(a.index) - Number(b.index));
-		for (const [position, { name }] of names.entries()) {
+		for (const { name, index } of names) {
 			if (done.has(name)) continue;
 			const bytes = await readFile(join(folder, name));
-			if (!isWholeJpeg(bytes)) break;
+			if (!isWholeJpeg(bytes)) continue;
 			done.add(name);
-			emit(position, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+			// The slide's position is the number in its name, not its place among the files present: rasterizer runs finish in any order.
+			emit(Number(index) - 1, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
 		}
 	};
 	const loop = (async () => {
