@@ -137,7 +137,7 @@ describe("iWork packages", () => {
 
 describe("PreviewDocument with pages", () => {
 	function documentWith(pages: unknown): Record<string, unknown> {
-		return { name: "a.key", path: "/tmp/a.key", ext: "key", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: JPEG, pages, office: null };
+		return { name: "a.key", path: "/tmp/a.key", ext: "key", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: JPEG, pages, office: null, thumbnail: null };
 	}
 
 	it("accepts null pages and an array of byte arrays", () => {

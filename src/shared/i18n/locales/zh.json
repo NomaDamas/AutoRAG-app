@@ -1658,6 +1658,10 @@
       "noPreview": "此文档没有预览图片",
       "page": "第 {{count}} 页"
     },
+    "gdrive": {
+      "account": "Google 账号：{{email}}",
+      "notPointer": "此文件不是有效的 Google 云端硬盘快捷方式"
+    },
     "media": {
       "imageOpenFailed": "无法打开图片",
       "imageReadFailed": "无法读取图片",

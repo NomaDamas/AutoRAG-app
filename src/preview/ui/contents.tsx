@@ -39,6 +39,7 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	msg: "bg-ql-badge-doc",
 	contact: "bg-ql-badge-doc",
 	calendar: "bg-ql-badge-doc",
+	gdrive: "bg-ql-badge-doc",
 	fallback: "bg-ql-badge-other",
 };
 

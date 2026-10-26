@@ -1,4 +1,5 @@
 import { assertNever } from "./assert";
+import { GOOGLE_DRIVE_EXTENSIONS } from "./google-drive";
 
 export const VIEWER_KINDS = [
 	"image",
@@ -31,6 +32,7 @@ export const VIEWER_KINDS = [
 	"msg",
 	"contact",
 	"calendar",
+	"gdrive",
 	"fallback",
 ] as const;
 
@@ -87,6 +89,9 @@ assign("mail", ["eml", "emlx", "mbox"]);
 assign("msg", ["msg"]);
 assign("contact", ["vcf", "vcard"]);
 assign("calendar", ["ics", "ical", "ifb"]);
+// Drive for desktop's Google-native files are pointers to a cloud document; the
+// panel shows the thumbnail Drive's file provider draws for the OS.
+assign("gdrive", GOOGLE_DRIVE_EXTENSIONS);
 
 export function viewerForExtension(ext: string): ViewerKind {
 	const key = ext.toLowerCase().replace(/^\./, "");
@@ -124,6 +129,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "mail":
 		case "contact":
 		case "calendar":
+		case "gdrive":
 			return "prefix";
 		case "docx":
 		case "legacyDoc":
@@ -264,6 +270,16 @@ const LABELS: Readonly<Record<string, string>> = {
 	iso: "Disc Image",
 	pkg: "Installer Package",
 	app: "Application",
+	gdoc: "Google Docs document",
+	gsheet: "Google Sheets spreadsheet",
+	gslides: "Google Slides presentation",
+	gform: "Google Forms form",
+	gdraw: "Google Drawings drawing",
+	gmap: "Google My Maps map",
+	gsite: "Google Sites site",
+	gjam: "Google Jamboard board",
+	gtable: "Google Tables table",
+	gscript: "Google Apps Script project",
 	py: "Python Source",
 	html: "HTML Document",
 	htm: "HTML Document",
