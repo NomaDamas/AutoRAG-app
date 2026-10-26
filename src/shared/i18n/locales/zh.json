@@ -1681,6 +1681,63 @@
       "rendering": "正在生成高清幻灯片…",
       "page": "第 {{count}} 页"
     },
+    "certificate": {
+      "subject": "使用者",
+      "issuer": "颁发者",
+      "serial": "序列号",
+      "notBefore": "生效时间",
+      "notAfter": "到期时间",
+      "signature": "签名",
+      "publicKey": "公钥",
+      "altNames": "备用名称",
+      "keyUsage": "密钥用法",
+      "extendedKeyUsage": "扩展密钥用法",
+      "ca": "CA",
+      "status": {
+        "expired": "已过期",
+        "notYetValid": "尚未生效"
+      },
+      "usage": {
+        "digitalSignature": "数字签名",
+        "contentCommitment": "不可否认",
+        "keyEncipherment": "密钥加密",
+        "dataEncipherment": "数据加密",
+        "keyAgreement": "密钥协商",
+        "keyCertSign": "证书签名",
+        "cRLSign": "CRL 签名",
+        "encipherOnly": "仅加密",
+        "decipherOnly": "仅解密"
+      },
+      "eku": {
+        "serverAuth": "TLS Web 服务器身份验证",
+        "clientAuth": "TLS Web 客户端身份验证",
+        "codeSigning": "代码签名",
+        "emailProtection": "电子邮件保护",
+        "timeStamping": "时间戳",
+        "ocspSigning": "OCSP 签名"
+      },
+      "keyHidden": "私钥 — 内容已隐藏",
+      "keyEncrypted": "已加密",
+      "keyPlain": "未加密",
+      "unreadableBlock": "无法读取此证书",
+      "countOne": "1 个证书",
+      "countMany": "{{count}} 个证书",
+      "omitted": "另有 {{count}} 个未显示",
+      "truncated": "仅显示文件的前一部分",
+      "readFailed": "无法读取此文件",
+      "container": {
+        "pkcs12": "PKCS #12 捆绑包包含证书和私钥并受密码保护，因此不显示其内容。",
+        "keychain": "Apple 钥匙串是加密存储，此处不会读取或解密。"
+      },
+      "notContainer": {
+        "pkcs12": "这不是有效的 PKCS #12 捆绑包",
+        "keychain": "这不是有效的 Apple 钥匙串"
+      },
+      "unreadable": {
+        "empty": "此文件为空",
+        "notCertificate": "在此文件中未找到证书"
+      }
+    },
     "gdrive": {
       "account": "Google 账号：{{email}}",
       "notPointer": "此文件不是有效的 Google 云端硬盘快捷方式"

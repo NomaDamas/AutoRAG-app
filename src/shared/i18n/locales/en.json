@@ -1681,6 +1681,63 @@
       "rendering": "Sharpening slides…",
       "page": "Page {{count}}"
     },
+    "certificate": {
+      "subject": "Subject",
+      "issuer": "Issuer",
+      "serial": "Serial number",
+      "notBefore": "Valid from",
+      "notAfter": "Valid until",
+      "signature": "Signature",
+      "publicKey": "Public key",
+      "altNames": "Alternative names",
+      "keyUsage": "Key usage",
+      "extendedKeyUsage": "Extended usage",
+      "ca": "CA",
+      "status": {
+        "expired": "Expired",
+        "notYetValid": "Not yet valid"
+      },
+      "usage": {
+        "digitalSignature": "Digital Signature",
+        "contentCommitment": "Non-Repudiation",
+        "keyEncipherment": "Key Encipherment",
+        "dataEncipherment": "Data Encipherment",
+        "keyAgreement": "Key Agreement",
+        "keyCertSign": "Certificate Signing",
+        "cRLSign": "CRL Signing",
+        "encipherOnly": "Encipher Only",
+        "decipherOnly": "Decipher Only"
+      },
+      "eku": {
+        "serverAuth": "TLS Web Server Authentication",
+        "clientAuth": "TLS Web Client Authentication",
+        "codeSigning": "Code Signing",
+        "emailProtection": "Email Protection",
+        "timeStamping": "Time Stamping",
+        "ocspSigning": "OCSP Signing"
+      },
+      "keyHidden": "Private key — contents hidden",
+      "keyEncrypted": "Encrypted",
+      "keyPlain": "Not encrypted",
+      "unreadableBlock": "This certificate could not be read",
+      "countOne": "1 certificate",
+      "countMany": "{{count}} certificates",
+      "omitted": "{{count}} more not shown",
+      "truncated": "Showing the first part of the file",
+      "readFailed": "Couldn’t read this file",
+      "container": {
+        "pkcs12": "A PKCS #12 bundle holds certificates and private keys and is password-protected, so its contents are not shown.",
+        "keychain": "An Apple keychain is an encrypted store; it is not read or decrypted here."
+      },
+      "notContainer": {
+        "pkcs12": "This file isn’t a valid PKCS #12 bundle",
+        "keychain": "This file isn’t a valid Apple keychain"
+      },
+      "unreadable": {
+        "empty": "This file is empty",
+        "notCertificate": "No certificate was found in this file"
+      }
+    },
     "gdrive": {
       "account": "Google account: {{email}}",
       "notPointer": "This file is not a valid Google Drive shortcut"

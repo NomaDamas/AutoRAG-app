@@ -26,6 +26,7 @@ const bridge: QuickLookWindowBridge = {
 	audioMetadata: never,
 	dataPreview: never,
 	archivePreview: never,
+	certificatePreview: never,
 	share: never,
 	copyText: never,
 };
@@ -87,6 +88,7 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
 	gdrive: strToU8('{"doc_id":"1abc","resource_key":"","email":"me@gmail.com"}'),
 	raster: png,
+	certificate: new Uint8Array(),
 };
 
 const extForKind: Readonly<Record<ViewerKind, string>> = {
@@ -123,6 +125,7 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	calendar: "ics",
 	gdrive: "gdoc",
 	raster: "psd",
+	certificate: "pem",
 	fallback: "bin",
 };
 

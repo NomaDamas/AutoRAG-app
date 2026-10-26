@@ -1681,6 +1681,63 @@
       "rendering": "スライドを鮮明にしています…",
       "page": "{{count}}ページ"
     },
+    "certificate": {
+      "subject": "サブジェクト",
+      "issuer": "発行者",
+      "serial": "シリアル番号",
+      "notBefore": "有効期間の開始",
+      "notAfter": "有効期間の終了",
+      "signature": "署名",
+      "publicKey": "公開鍵",
+      "altNames": "別名",
+      "keyUsage": "鍵の用途",
+      "extendedKeyUsage": "拡張鍵用途",
+      "ca": "CA",
+      "status": {
+        "expired": "期限切れ",
+        "notYetValid": "まだ有効ではありません"
+      },
+      "usage": {
+        "digitalSignature": "デジタル署名",
+        "contentCommitment": "否認防止",
+        "keyEncipherment": "鍵の暗号化",
+        "dataEncipherment": "データの暗号化",
+        "keyAgreement": "鍵合意",
+        "keyCertSign": "証明書の署名",
+        "cRLSign": "CRL の署名",
+        "encipherOnly": "暗号化のみ",
+        "decipherOnly": "復号のみ"
+      },
+      "eku": {
+        "serverAuth": "TLS Web サーバー認証",
+        "clientAuth": "TLS Web クライアント認証",
+        "codeSigning": "コード署名",
+        "emailProtection": "メール保護",
+        "timeStamping": "タイムスタンプ",
+        "ocspSigning": "OCSP 署名"
+      },
+      "keyHidden": "秘密鍵 — 内容は表示しません",
+      "keyEncrypted": "暗号化済み",
+      "keyPlain": "暗号化なし",
+      "unreadableBlock": "この証明書を読み取れませんでした",
+      "countOne": "証明書 1 件",
+      "countMany": "証明書 {{count}} 件",
+      "omitted": "ほか {{count}} 件は表示していません",
+      "truncated": "ファイルの先頭部分のみ表示しています",
+      "readFailed": "このファイルを読み取れませんでした",
+      "container": {
+        "pkcs12": "PKCS #12 バンドルは証明書と秘密鍵を含みパスワードで保護されているため、内容は表示しません。",
+        "keychain": "Apple キーチェーンは暗号化されたストアのため、ここでは読み取りも復号も行いません。"
+      },
+      "notContainer": {
+        "pkcs12": "有効な PKCS #12 バンドルではありません",
+        "keychain": "有効な Apple キーチェーンではありません"
+      },
+      "unreadable": {
+        "empty": "このファイルは空です",
+        "notCertificate": "このファイルに証明書が見つかりませんでした"
+      }
+    },
     "gdrive": {
       "account": "Google アカウント: {{email}}",
       "notPointer": "有効な Google ドライブのショートカットファイルではありません"

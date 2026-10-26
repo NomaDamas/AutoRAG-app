@@ -61,6 +61,7 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	calendar: true,
 	fallback: true,
 	gdrive: true,
+	certificate: true,
 	folder: true,
 	bundle: true,
 	error: true,
