@@ -4069,3 +4069,61 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 		animation: none;
 	}
 }
+
+/* Windows permissions step: centred heading over a list of plain rows (Figma 02 · permissions). */
+.onb .screen.permissions-screen {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 36px;
+}
+
+.onb .permissions-head {
+	width: 100%;
+	max-width: 345px;
+	text-align: center;
+}
+
+.onb .permissions-head h1 {
+	margin: 0 0 16px;
+	font-weight: 700;
+}
+
+.onb .permissions-head p {
+	margin: 0;
+	color: var(--onb-muted);
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .permissions-screen .permission-list {
+	width: 100%;
+	max-width: 658px;
+}
+
+.onb .permissions-screen .permission-row {
+	min-height: 62px;
+	border-color: transparent;
+}
+
+.onb .permissions-screen .permission-icon {
+	background: var(--onb-bg-stage);
+}
+
+.onb .permissions-screen .permission-desc {
+	margin-top: 2px;
+	font-size: 11px;
+	line-height: 16px;
+}
+
+.onb .permissions-screen .row-action .secondary {
+	height: 34px;
+	padding: 0 14px;
+	border-color: var(--onb-divider);
+	border-radius: 7px;
+	background: var(--onb-bg-stage);
+	font-size: 12px;
+	font-weight: 500;
+	white-space: nowrap;
+}
