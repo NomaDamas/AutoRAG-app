@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
-import { cp, link, lstat, mkdir, mkdtemp, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, sep, win32 } from "node:path";
 import {
@@ -33,6 +33,7 @@ import { newFileContents } from "./file-templates";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createFinderTags, type FinderTags } from "./finder-tags";
 import { createIconProvider, type IconProvider } from "./file-icon";
+import { copyTree } from "./copy-tree";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, onDiskPath, pathExists, resolveCopyName } from "./fs-entry";
@@ -228,7 +229,7 @@ async function movePath(source: string, target: string): Promise<void> {
 	} catch (error) {
 		// Cross-device move: copy the tree, then remove the source.
 		if (!hasErrorCode(error, "EXDEV")) throw error;
-		await cp(source, target, { recursive: true });
+		await copyTree(source, target);
 		await rm(source, { recursive: true, force: true });
 	}
 }
@@ -378,7 +379,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				/* cross-device or unsupported: fall back to copy */
 			}
 		}
-		await cp(sourcePath, targetPath, { recursive: true, dereference: true });
+		await copyTree(sourcePath, targetPath, { dereference: true });
 	}
 
 	async function createEvidenceFolder(paths: readonly string[], folderName?: string): Promise<string> {
@@ -943,7 +944,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			}
 			const targetName = await resolveCopyName(destDir, desiredName, isDirectory);
 			const target = join(destDir, targetName);
-			await cp(sourcePath, target, { recursive: true, dereference: isSymlink });
+			await copyTree(sourcePath, target, { dereference: isSymlink });
 			steps.push({ kind: "created", path: target, make: { kind: "copy", from: isSymlink ? await realpath(sourcePath).catch(() => sourcePath) : sourcePath } });
 		});
 		if (steps.length > 0) record("copy", steps);
@@ -963,7 +964,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				}
 				const targetStat = await stat(preserved.targetPath);
 				const target = join(destDir, await resolveCopyName(destDir, preserved.name, targetStat.isDirectory()));
-				await cp(preserved.targetPath, target, { recursive: true, dereference: true });
+				await copyTree(preserved.targetPath, target, { dereference: true });
 				steps.push({ kind: "created", path: target, make: { kind: "copy", from: preserved.targetPath } });
 				return;
 			}
@@ -971,7 +972,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				const effectiveStat = await stat(source).catch(() => sourceStat);
 				const realTarget = await realpath(source).catch(() => source);
 				const target = join(destDir, await resolveCopyName(destDir, basename(source), effectiveStat.isDirectory()));
-				await cp(source, target, { recursive: true, dereference: true });
+				await copyTree(source, target, { dereference: true });
 				await rm(source, { recursive: true, force: true });
 				steps.push({ kind: "created", path: target, make: { kind: "copy", from: realTarget } });
 				return;
@@ -994,7 +995,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			if (await pathExists(path)) {
 				throw new Error(t("main.fs.renameCollision", { name: basename(path) }));
 			}
-			await cp(make.from, path, { recursive: true });
+			await copyTree(make.from, path);
 		}
 	}
 
@@ -1074,7 +1075,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			const dir = dirname(source);
 			const targetName = await resolveCopyName(dir, basename(source), effectiveStat.isDirectory());
 			const target = join(dir, targetName);
-			await cp(source, target, { recursive: true, dereference: isSymlink });
+			await copyTree(source, target, { dereference: isSymlink });
 			steps.push({ kind: "created", path: target, make: { kind: "copy", from: isSymlink ? await realpath(source).catch(() => source) : source } });
 		});
 		if (steps.length > 0) record("duplicate", steps);
