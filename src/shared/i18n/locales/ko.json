@@ -44,8 +44,6 @@
     "showInspector": "정보 보기",
     "hideInspector": "정보 가리기",
     "toggleInspector": "정보 창 토글",
-    "showAiSearch": "AI 검색 보기",
-    "aiSearchShortcut": "AI 검색 ({{shortcut}})",
     "share": "공유",
     "putBack": "원래 위치로 복원",
     "emptyTrash": "휴지통 비우기"

@@ -43,7 +43,6 @@ try {
 		titles: [...document.querySelectorAll("[title]")].map((node) => node.getAttribute("title") ?? ""),
 		ariaLabels: [...document.querySelectorAll("[aria-label]")].map((node) => node.getAttribute("aria-label") ?? ""),
 		newTab: document.querySelector('[aria-label^="New tab"]')?.getAttribute("aria-label") ?? "",
-		aiSearch: document.querySelector('[title^="AI Search"]')?.getAttribute("title") ?? "",
 	}));
 
 	const allText = [...observed.keycapTexts, ...observed.titles, ...observed.ariaLabels];
@@ -75,11 +74,6 @@ try {
 		closeTab,
 	);
 	allText.push(closeTab);
-	check(
-		isMac ? "the AI Search title is ⌘K" : "the AI Search title is Ctrl+K",
-		observed.aiSearch === (isMac ? "AI Search (⌘K)" : "AI Search (Ctrl+K)"),
-		observed.aiSearch,
-	);
 	// Context-menu keycaps: the row menu carries the clipboard and trash chords.
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
 	const row = page.locator('[role="row"]').first();

@@ -709,11 +709,6 @@ export function App(): ReactElement {
 						onSetGrouping={(key) => finder?.setGrouping(key)}
 						inspectorVisible={inspectorVisible}
 						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
-						aiActive={aiTabActive}
-						onShowAi={() => {
-							finder?.focusAiSearch();
-							deliverToAi({});
-						}}
 						shareAvailable={shareControl.shown}
 						canShare={shareControl.enabled}
 						onShare={(anchor) => {

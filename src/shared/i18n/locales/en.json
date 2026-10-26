@@ -44,8 +44,6 @@
     "showInspector": "Show inspector",
     "hideInspector": "Hide inspector",
     "toggleInspector": "Toggle inspector",
-    "showAiSearch": "Show AI Search",
-    "aiSearchShortcut": "AI Search ({{shortcut}})",
     "share": "Share",
     "putBack": "Put Back",
     "emptyTrash": "Empty Trash"

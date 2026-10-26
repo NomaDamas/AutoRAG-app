@@ -134,7 +134,8 @@ try {
 	// 8. Toolbar inspector / AI / Share cluster.
 	await page.locator('[aria-label="Toggle inspector"]').waitFor({ timeout: 5000 });
 	check("the toolbar exposes the inspector toggle", (await page.locator('[aria-label="Toggle inspector"]').count()) === 1);
-	check("the toolbar exposes the AI Search button", (await page.locator('[aria-label="Show AI Search"]').count()) === 1);
+	const cluster = await page.locator(".toolbar .tgroup button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
+	check("the toolbar's right cluster has no AI Search button", JSON.stringify(cluster) === JSON.stringify(isMac ? ["Toggle inspector", "Share"] : ["Toggle inspector"]), JSON.stringify(cluster));
 	// The Share item opens the OS share sheet, so it is shown on macOS only.
 	const share = page.locator('.toolbar [aria-label="Share"]');
 	check("the toolbar exposes Share on macOS only", (await share.count()) === (isMac ? 1 : 0), `count=${await share.count()}`);

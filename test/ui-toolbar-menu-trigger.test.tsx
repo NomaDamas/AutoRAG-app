@@ -22,7 +22,7 @@ afterEach(() => {
 	host.remove();
 });
 
-function renderToolbar(onApplySort = vi.fn()): void {
+function renderToolbar(onApplySort = vi.fn(), shareAvailable = false): void {
 	act(() =>
 		root.render(
 			<Toolbar
@@ -39,9 +39,7 @@ function renderToolbar(onApplySort = vi.fn()): void {
 				onSetGrouping={() => {}}
 				inspectorVisible={false}
 				onToggleInspector={() => {}}
-				aiActive={false}
-				onShowAi={() => {}}
-				shareAvailable={false}
+				shareAvailable={shareAvailable}
 				canShare={false}
 				onShare={() => {}}
 				trashActive={false}
@@ -90,5 +88,23 @@ describe("Toolbar Sort/Group menu", () => {
 		} finally {
 			window.removeEventListener("error", onError);
 		}
+	});
+});
+
+describe("Toolbar right cluster", () => {
+	// AI Search is reached from the sidebar and ⌘K; the toolbar carries no toggle for it.
+	const clusterLabels = (): (string | null)[] =>
+		[...host.querySelectorAll(".tgroup button")].map((button) => button.getAttribute("aria-label"));
+
+	it("holds the inspector toggle and Share, and no AI Search toggle", () => {
+		renderToolbar(vi.fn(), true);
+		expect(clusterLabels()).toEqual(["Toggle inspector", "Share"]);
+		expect(host.querySelector('[aria-label="Show AI Search"]')).toBeNull();
+		expect(host.querySelector('[title^="AI Search"]')).toBeNull();
+	});
+
+	it("holds only the inspector toggle where the OS has no share sheet", () => {
+		renderToolbar();
+		expect(clusterLabels()).toEqual(["Toggle inspector"]);
 	});
 });

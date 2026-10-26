@@ -16,7 +16,6 @@ import {
 	ListRowsIcon,
 	PanelLeftIcon,
 	ShareIcon,
-	SparklesIcon,
 	SortIcon,
 	PutBackIcon,
 	EmptyTrashIcon,
@@ -36,7 +35,7 @@ const NAV_BUTTON =
  * Toolbar (v7 handoff): back/forward, the folder title, the view segmented
  * control, the Sort and Group pop-ups (issue #47), and the top-right cluster —
  * Put Back and 휴지통 비우기 while the folder is the Trash (issue #86), the
- * inspector toggle, the AI Search toggle, and Share (the OS share sheet for the
+ * inspector toggle, and Share (the OS share sheet for the
  * focused row; hidden where the platform has none). Instant search lives in
  * the sidebar now (`SidebarSearch`), so this bar holds no search field.
  */
@@ -54,8 +53,6 @@ export function Toolbar({
 	onSetGrouping,
 	inspectorVisible,
 	onToggleInspector,
-	aiActive,
-	onShowAi,
 	shareAvailable,
 	canShare,
 	onShare,
@@ -81,10 +78,6 @@ export function Toolbar({
 	readonly onSetGrouping: (key: GroupKey) => void;
 	readonly inspectorVisible: boolean;
 	readonly onToggleInspector: () => void;
-	/** The focused tab is AI Search. */
-	readonly aiActive: boolean;
-	/** Show the nearest AI Search tab (⌘K), or open one. */
-	readonly onShowAi: () => void;
 	/** The OS has a share sheet, so the Share item is shown at all. */
 	readonly shareAvailable: boolean;
 	/** A row is focused, so the shown Share item is enabled. */
@@ -235,19 +228,6 @@ export function Toolbar({
 					onClick={onToggleInspector}
 				>
 					<InfoIcon size={18} />
-				</button>
-				<button
-					type="button"
-					className={[
-						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-						aiActive ? "bg-transparent text-accent" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
-					].join(" ")}
-					title={t("toolbar.aiSearchShortcut", { shortcut: formatShortcut({ key: "K" }) })}
-					aria-label={t("toolbar.showAiSearch")}
-					aria-pressed={aiActive}
-					onClick={onShowAi}
-				>
-					<SparklesIcon size={18} />
 				</button>
 				{shareAvailable ? (
 					<button
