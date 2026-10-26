@@ -23,7 +23,7 @@ export interface OfficeRenderDeps {
 	readonly maxBytes?: number;
 }
 
-const defaultRun: OfficeRun = (command, args, { timeoutMs }) =>
+export const defaultRun: OfficeRun = (command, args, { timeoutMs }) =>
 	new Promise<void>((resolve, reject) => {
 		execFile(command, [...args], { timeout: timeoutMs }, (error, _stdout, stderr) => {
 			if (error === null) resolve();

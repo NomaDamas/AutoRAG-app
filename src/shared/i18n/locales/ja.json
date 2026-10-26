@@ -1661,6 +1661,7 @@
       "slideMissing": "このスライドには画像がありません",
       "drawFailed": "スライドを描画できませんでした",
       "noPreview": "この文書にはプレビュー画像がありません",
+      "rendering": "スライドを鮮明にしています…",
       "page": "{{count}}ページ"
     },
     "gdrive": {

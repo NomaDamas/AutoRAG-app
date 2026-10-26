@@ -234,8 +234,8 @@ still has the previous file's size when they lay out.
   the show's slide order is recovered from the IWA container (snappy +
   protobuf) in `Index/Document.iwa` (`shared/iwork-slides.ts`), and each
   following slide is the app's own 356px `Data/st-*` render — the first slide
-  keeps the full-quality `preview.jpg`, so the other cards are visibly lower
-  resolution than the first. A deck whose order cannot be read (an older or
+  keeps the full-quality `preview.jpg`, so until the full-size upgrade below
+  lands (or when it cannot run) the other cards are visibly lower resolution. A deck whose order cannot be read (an older or
   newer format, or a corrupt file) falls back to the single first-page image
   with a warning. `byteNeed` is `extract`: the main process reads only the
   central directory, `Index/Document.iwa`, and the slide images
@@ -244,6 +244,31 @@ still has the previous file's size when they lay out.
   Finder's tile and Inspector thumbnails ask macOS Quick Look for the same
   extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
   the type icon.
+
+  **Full-size slides (macOS)** — the package holds no larger per-slide image,
+  so the panel asks the OS for one the way Finder's preview pane gets it:
+  macOS's own iWork Quick Look generator (`node/keynote-render.ts`,
+  `withKeynote` in `node/window.ts`). `qlmanage -p -o` writes one
+  full-resolution vector PDF per slide plus a `Preview.html` that lists them in
+  show order (the PDFs are named by creation order, so only the page gives the
+  order; about 2s for 16 slides, 9s for 140), and `sips` rasterizes them to
+  JPEG at their native size (1920x1080 for 16:9), 8 slides per run and 4 runs
+  at once so the top of the deck comes first. No Keynote app is launched and no
+  document is opened. The panel opens at once on the stored slides with
+  `PreviewDocument.slidesRendering` true (a "Sharpening slides…" badge over the
+  paged view). The export folder is watched while it is written (a JPEG counts
+  once its end marker is on disk) and each finished slide goes out on the
+  `slides` channel with its index. The pictures arrive in a burst, so the window
+  paces them (`ui/slide-sweep.ts`): top to bottom, at most one step per 60ms
+  and at most 20 steps per burst, so the deck sharpens from the top instead of
+  flipping at once; the badge ends after the last slide. `PagedView` redraws
+  only a card whose `revisions` entry changed, swapping the picture in place
+  once drawn. A deck whose slide count differs from the slide tree's (a hidden
+  slide, an unreadable file) keeps the stored slides. The result is kept per
+  deck version (path + mtime + size) under `<userData>/keynote-slides`, a 1GB
+  LRU, so an unchanged deck is not drawn again. Exports run one at a time. A
+  deck Quick Look fails on keeps the stored slides and is not retried until it
+  changes or the app restarts. On other systems nothing changes.
 - **Google Drive documents** — `.gdoc`, `.gsheet`, `.gslides`, `.gform` (and
   `.gdraw`, `.gmap`, `.gsite`, `.gjam`, `.gtable`, `.gscript`) are the ~170 byte
   JSON pointers Drive for desktop shows instead of a cloud-only document

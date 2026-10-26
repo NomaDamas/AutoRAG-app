@@ -6,6 +6,7 @@ import {
 	isQuickLookApp,
 	isQuickLookOffice,
 	isQuickLookLoad,
+	isQuickLookSlides,
 	isQuickLookZoom,
 	PREVIEW_CHANNELS,
 	type ArchivePreview,
@@ -67,6 +68,10 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		onOffice: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.office, (update) => {
 				if (isQuickLookOffice(update)) listener(update);
+			}),
+		onSlides: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.slides, (update) => {
+				if (isQuickLookSlides(update)) listener(update);
 			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
 		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),

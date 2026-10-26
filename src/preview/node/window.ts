@@ -1,5 +1,5 @@
 import { stat } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, extname, join } from "node:path";
 import { t } from "../../shared/i18n/core";
 import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
@@ -36,6 +36,7 @@ import {
 	type QuickLookApp,
 	type QuickLookLoad,
 	type QuickLookOffice,
+	type QuickLookSlides,
 	type QuickLookReady,
 	type QuickLookTarget,
 	type QuickLookZoom,
@@ -57,6 +58,7 @@ import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readTiffPreview } from "./tiff";
 import { readIworkPreview } from "./iwork";
+import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } from "./keynote-render";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
@@ -125,6 +127,8 @@ let quitting = false;
 let iconSource: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null;
 /** The Office pages macOS drew, rendered ahead of Space when the Finder selects a legacy Office file. */
 let officePages: OfficeRenderCache = createOfficeRenderCache();
+/** Full-size Keynote slides drawn by macOS Quick Look; null in unit tests and before `registerQuickLookIpc` runs. */
+let keynoteSlides: KeynoteSlideCache | null = null;
 
 function live(window: BrowserWindow): boolean {
 	return !window.isDestroyed();
@@ -438,6 +442,27 @@ async function withOffice(state: Session, seq: number, target: QuickLookTarget, 
 }
 
 /**
+ * A Keynote deck opens on the package's stored slides at once, upgraded in
+ * place to full-size ones drawn by macOS Quick Look (see {@link openKeynoteSlides}):
+ * from disk if drawn before, else on the `slides` channel.
+ */
+async function withKeynote(state: Session, seq: number, target: QuickLookTarget, content: TargetContent): Promise<TargetContent> {
+	const document = content.document;
+	const stored = document?.pages ?? null;
+	if (document === null || keynoteSlides === null || document.ext !== "key" || stored === null || stored.length < 2) return content;
+	const info = await stat(target.path);
+	const opened = await openKeynoteSlides({ path: target.path, mtimeMs: info.mtimeMs, size: info.size }, stored.length, {
+		cache: keynoteSlides,
+		publish: (next) => {
+			const update: QuickLookSlides = { seq, slides: next.slides, rendering: next.rendering };
+			if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.slides, update);
+		},
+		current: () => seq === state.seq && live(state.window),
+	});
+	return { ...content, document: { ...document, pages: opened.pages ?? stored, slidesRendering: opened.rendering } };
+}
+
+/**
  * A Google Drive pointer opens with the picture Drive for desktop's file
  * provider drew for it (the one thing Quick Look can show of a cloud-only
  * document); every other document passes through untouched.
@@ -460,7 +485,9 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	if (seq !== state.seq || !live(state.window)) return;
 	const withOfficePage = await withOffice(state, seq, target, read);
 	if (seq !== state.seq || !live(state.window)) return;
-	const content = await withDriveThumbnail(target, withOfficePage);
+	const withDrive = await withDriveThumbnail(target, withOfficePage);
+	if (seq !== state.seq || !live(state.window)) return;
+	const content = await withKeynote(state, seq, target, withDrive);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
 	// An app bundle is launched by the Open button itself, so there is no
@@ -653,6 +680,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 
 export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
 	iconSource = icons;
+	keynoteSlides = createKeynoteSlideCache({ dir: join(app.getPath("userData"), "keynote-slides") });
 	app.on("before-quit", () => {
 		quitting = true;
 	});

@@ -1661,6 +1661,7 @@
       "slideMissing": "This slide has no image",
       "drawFailed": "Couldn’t draw the slide",
       "noPreview": "This document has no preview image",
+      "rendering": "Sharpening slides…",
       "page": "Page {{count}}"
     },
     "gdrive": {

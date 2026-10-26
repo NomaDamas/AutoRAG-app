@@ -37,6 +37,8 @@ export const PREVIEW_CHANNELS = {
 	app: "preview:app",
 	/** Main -> preview window: the Office page macOS drew landed (first-page image, then the whole page). */
 	office: "preview:office",
+	/** Main -> preview window: Keynote finished drawing a deck's slides at full size (or could not). */
+	slides: "preview:slides",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -82,6 +84,11 @@ export interface PreviewDocument {
 	 * pointer file (`.gdoc`, ...); null for every other document.
 	 */
 	readonly thumbnail: string | null;
+	/**
+	 * True while Keynote is drawing a deck's slides at full size; `pages` then
+	 * still holds the package's 356px renders. False for every other document.
+	 */
+	readonly slidesRendering: boolean;
 }
 
 /**
@@ -103,6 +110,17 @@ export interface OfficePage {
 export interface QuickLookOffice {
 	readonly seq: number;
 	readonly office: OfficePage;
+}
+
+/**
+ * Main -> preview window: Keynote finished drawing some slides of the open deck
+ * at full size. Each entry replaces the stored slide at `index`; `rendering`
+ * goes false with the last update (which may carry no slides).
+ */
+export interface QuickLookSlides {
+	readonly seq: number;
+	readonly slides: readonly { readonly index: number; readonly bytes: Uint8Array }[];
+	readonly rendering: boolean;
 }
 
 /** What the Finder knows of a selected file; the same identity keys the rendered-page cache. */
@@ -315,6 +333,7 @@ export interface QuickLookWindowBridge {
 	onZoom(listener: (zoom: QuickLookZoom) => void): () => void;
 	onApp(listener: (app: QuickLookApp) => void): () => void;
 	onOffice(listener: (update: QuickLookOffice) => void): () => void;
+	onSlides(listener: (update: QuickLookSlides) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -347,6 +366,11 @@ export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
 }
 
+export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
+	if (!isRecord(value) || typeof value.seq !== "number" || typeof value.rendering !== "boolean" || !Array.isArray(value.slides)) return false;
+	return value.slides.every((entry: unknown) => isRecord(entry) && Number.isInteger(entry.index) && (entry.index as number) >= 0 && entry.bytes instanceof Uint8Array);
+}
+
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (!isRecord(value)) return false;
 	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.ext !== "string") return false;
@@ -355,6 +379,7 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
 	if (value.office !== null && !isOfficePage(value.office)) return false;
 	if (value.thumbnail !== null && typeof value.thumbnail !== "string") return false;
+	if (typeof value.slidesRendering !== "boolean") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }
 
