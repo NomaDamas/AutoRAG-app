@@ -12,8 +12,9 @@
  */
 
 import type { FsFinderMetadata } from "../../../shared/fs-contract";
+import { t } from "../../../shared/i18n/core";
 import { formatModified, formatSize } from "./format";
-import { type FileKind, kindFromExtension, kindMeta } from "./kinds";
+import { type FileKind, isKnownExtension, kindFromExtension, kindMeta } from "./kinds";
 import { dirname } from "./paths";
 
 /**
@@ -54,9 +55,12 @@ export function fileKindOf(entry: SortableEntry): FileKind {
 	return entry.kind === "folder" ? "folder" : kindFromExtension(entry.ext);
 }
 
-/** Finder's Kind column: the OS-reported kind wins; the extension map is the fallback. */
+/** Finder's Kind column: the OS-reported kind wins; the extension map is the fallback, then "<EXT> File". */
 export function kindLabelOf(entry: SortableEntry): string {
-	return entry.osKind ?? kindMeta(fileKindOf(entry)).label;
+	if (entry.osKind !== undefined) return entry.osKind;
+	// An extension the map does not know (.json, .py on a PC whose registry has no name for it) would read "Markdown".
+	if (entry.fixture === undefined && entry.kind !== "folder" && entry.ext !== "" && !isKnownExtension(entry.ext)) return t("finderState.kindByExtension", { ext: entry.ext.toUpperCase() });
+	return kindMeta(fileKindOf(entry)).label;
 }
 
 /** The Date Modified cell, e.g. "Sep 13, 16:48". */

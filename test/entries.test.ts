@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { entryFromFs } from "../src/renderer/src/data/entries";
 import { fileKindOf, kindLabelOf, sizeLabelOf } from "../src/renderer/src/state/entry-values";
+import { t } from "../src/shared/i18n/core";
 import type { FsEntry } from "../src/shared/fs-contract";
 
 const STAMP = Date.parse("2026-09-30T00:00:00.000Z");
@@ -57,6 +58,11 @@ describe("kindLabelOf", () => {
 
 	it("falls back to the extension map when the OS reported no kind", () => {
 		expect(kindLabelOf(entryFromFs(fsEntry({ name: "a.pdf", ext: "pdf" })))).toBe("PDF Document");
+	});
+
+	it("names an extension the map does not know instead of calling it Markdown", () => {
+		expect(kindLabelOf(entryFromFs(fsEntry({ name: "a.json", ext: "json" })))).toBe(t("finderState.kindByExtension", { ext: "JSON" }));
+		expect(t("finderState.kindByExtension", { ext: "JSON" })).toContain("JSON");
 	});
 
 	it("labels folders Folder", () => {
