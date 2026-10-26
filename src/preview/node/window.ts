@@ -4,6 +4,7 @@ import { t } from "../../shared/i18n/core";
 import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import type { IconPreviewCache } from "../../main/file-icon";
+import { listArchive } from "../../main/archive-list";
 import { isAppBundle } from "../../main/fs-entry";
 import {
 	app,
@@ -684,6 +685,10 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
 		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
 		return previewData(shownPath(event, path).path, table);
+	});
+	ipc.handle(PREVIEW_CHANNELS.archive, (event, path: unknown) => {
+		const shown = shownPath(event, path);
+		return listArchive(shown.path, { stopped: () => shown.state.current?.path !== shown.path });
 	});
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
