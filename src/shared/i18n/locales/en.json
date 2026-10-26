@@ -614,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "Back",
     "step": {
       "welcome": "Intro",
       "permissions": "Permissions",
