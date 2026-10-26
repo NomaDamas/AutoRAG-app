@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { getDocument, GlobalWorkerOptions, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist";
+import { getDocument, GlobalWorkerOptions, PasswordResponses, type PDFDocumentProxy, type RenderTask } from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { previewStreamUrl, type PreviewDocument } from "../shared/contract";
 import type { Size } from "../shared/fit";
 import { locateMarks, pdfRuns, type TextRun } from "../shared/text-marks";
 import { FallbackView, Status } from "./fallback";
 import { PagedView, type DrawPage, type EvidenceMarks } from "./paged";
+import { ChromeProvider, useChrome } from "./chrome";
+import { PasswordView } from "./password";
 
 let workerReady = false;
 
@@ -14,6 +16,18 @@ function ensurePdfWorker(): void {
 	if (workerReady) return;
 	GlobalWorkerOptions.workerSrc = workerUrl;
 	workerReady = true;
+}
+
+/**
+ * The password prompt already sized the window. The pages that replace it send the
+ * size they want through `resize`, since only a load's first `report` counts.
+ */
+function ResizeOnReport({ children }: { readonly children: ReactNode }): ReactElement {
+	const chrome = useChrome();
+	const { resize } = chrome;
+	const report = useCallback((size: Size) => resize(size), [resize]);
+	const value = useMemo(() => ({ ...chrome, report }), [chrome, report]);
+	return <ChromeProvider value={value}>{children}</ChromeProvider>;
 }
 
 /** Every page's text runs. pdf.js fetches the ranges it needs; auto-fetch stays off for the drawing. */
@@ -38,15 +52,27 @@ export function PdfView({ file, anchor = null }: { readonly file: PreviewDocumen
 	const [opened, setOpened] = useState<{ readonly pdf: PDFDocumentProxy; readonly boxes: readonly Size[] } | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [evidence, setEvidence] = useState<EvidenceMarks | null>(null);
+	// An encrypted PDF asks pdf.js for the password; `attempt` remounts the prompt so a refused one starts clean.
+	const [prompt, setPrompt] = useState<{ readonly attempt: number; readonly incorrect: boolean; readonly unlock: (password: string) => void } | null>(null);
+	const [asked, setAsked] = useState(false);
 
 	useEffect(() => {
 		ensurePdfWorker();
 		let cancelled = false;
+		let attempts = 0;
 		const task = getDocument({ url: previewStreamUrl(file.path), disableAutoFetch: true });
+		task.onPassword = (unlock: (password: string) => void, reason: number) => {
+			attempts += 1;
+			if (!cancelled) {
+				setAsked(true);
+				setPrompt({ attempt: attempts, incorrect: reason === PasswordResponses.INCORRECT_PASSWORD, unlock });
+			}
+		};
 		void task.promise
 			.then(async (loaded) => {
 				const first = (await loaded.getPage(1)).getViewport({ scale: 1 });
 				if (cancelled) return;
+				setPrompt(null);
 				const box = { width: first.width, height: first.height };
 				setOpened({ pdf: loaded, boxes: Array.from({ length: loaded.numPages }, () => box) });
 			})
@@ -105,6 +131,8 @@ export function PdfView({ file, anchor = null }: { readonly file: PreviewDocumen
 	);
 
 	if (error !== null) return <FallbackView file={file} note={error} />;
+	if (prompt !== null) return <PasswordView key={prompt.attempt} file={file} incorrect={prompt.incorrect} onSubmit={prompt.unlock} />;
 	if (opened === null) return <Status>{t("quickLook.status.loading")}</Status>;
-	return <PagedView file={file} boxes={opened.boxes} draw={draw} evidence={evidence} />;
+	const pages = <PagedView file={file} boxes={opened.boxes} draw={draw} evidence={evidence} />;
+	return asked ? <ResizeOnReport>{pages}</ResizeOnReport> : pages;
 }

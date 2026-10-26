@@ -1705,6 +1705,14 @@
     "pdf": {
       "openFailed": "PDF를 열 수 없습니다"
     },
+    "password": {
+      "locked": "암호로 보호된 문서입니다",
+      "label": "암호",
+      "placeholder": "암호 입력",
+      "unlock": "잠금 해제",
+      "checking": "확인하는 중…",
+      "incorrect": "암호가 맞지 않습니다. 다시 입력해 주세요."
+    },
     "pptx": {
       "openFailed": "프레젠테이션을 열지 못했습니다",
       "noSlides": "슬라이드가 없습니다",

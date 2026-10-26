@@ -1705,6 +1705,14 @@
     "pdf": {
       "openFailed": "无法打开 PDF"
     },
+    "password": {
+      "locked": "此文档受密码保护",
+      "label": "密码",
+      "placeholder": "输入密码",
+      "unlock": "解锁",
+      "checking": "正在验证…",
+      "incorrect": "密码不正确，请重试。"
+    },
     "pptx": {
       "openFailed": "无法打开演示文稿",
       "noSlides": "没有幻灯片",

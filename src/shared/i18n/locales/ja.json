@@ -1705,6 +1705,14 @@
     "pdf": {
       "openFailed": "PDFを開けませんでした"
     },
+    "password": {
+      "locked": "パスワードで保護された文書です",
+      "label": "パスワード",
+      "placeholder": "パスワードを入力",
+      "unlock": "ロック解除",
+      "checking": "確認中…",
+      "incorrect": "パスワードが正しくありません。もう一度入力してください。"
+    },
     "pptx": {
       "openFailed": "プレゼンテーションを開けませんでした",
       "noSlides": "スライドがありません",

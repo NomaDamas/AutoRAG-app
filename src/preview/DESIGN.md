@@ -78,6 +78,11 @@ still has the previous file's size when they lay out.
   is located (`shared/locate.ts` + `shared/text-marks.ts`), and its boxes are
   drawn over the pages (`--ql-evidence-mark`) with the panel scrolled to the
   first match.
+  An encrypted PDF opens a password prompt (`PasswordView`, `password.tsx`) instead
+  of the Other panel: pdf.js reports `onPassword` (needed, then incorrect), the
+  typed password goes straight back to it, and the pages draw in place once it
+  accepts. The password lives only in that component's state and is asked again
+  on the next preview.
 - **HWP / HWPX** — the same `PagedView`, drawn by rhwp (`@rhwp/core`, the
   Rust + WebAssembly engine alhangeul-macos builds on). rhwp parses HWP 5,
   HWPX, and some HWP 3 documents, paginates them when the file opens, and
@@ -386,6 +391,12 @@ focus. Arrow Up/Down move the Finder selection and retarget the preview.
 When the preview window itself has focus, the main process intercepts Up/Down,
 Space, and Escape in `before-input-event`, so a focused control still closes
 and navigates. Left/Right stay with the page, where media seeks.
+
+A text field in the page (the PDF password prompt) reports focus through
+`bridge.textEntry`. While it has focus, the main process keeps the field's
+Space and Up/Down out of the shortcuts (`quickLookKeyAction(input, typing)`);
+Escape still closes. The panel opens without focus, so the report also focuses
+the preview window; closing hands focus back to the Finder (`hide`).
 
 An evidence title in the right sidebar opens the panel with no Finder row to
 toggle, and the title button keeps focus. The Finder's keydown handler
