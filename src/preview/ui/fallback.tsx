@@ -96,9 +96,10 @@ function Details({ file }: { readonly file: PreviewDocument }): ReactElement {
  * The "Other" panel for files nothing can render: a large page glyph with the
  * file's name, kind, size, and date, and a disclosure for creation date,
  * location, checksum, and what a binary is. Viewers that fail fall back to it
- * with `note` saying why.
+ * with `note` saying why. `art` replaces the page glyph with the file's own
+ * picture (a Google Drive document's thumbnail).
  */
-export function FallbackView({ file, note }: { readonly file: PreviewDocument; readonly note?: string }): ReactElement {
+export function FallbackView({ file, note, art }: { readonly file: PreviewDocument; readonly note?: string | undefined; readonly art?: ReactNode }): ReactElement {
 	const { t } = useTranslation();
 	useHiddenTitle();
 	const attach = usePanelHeight(OTHER_WIDTH);
@@ -107,7 +108,7 @@ export function FallbackView({ file, note }: { readonly file: PreviewDocument; r
 	return (
 		<div ref={attach} className="ql-other flex flex-col w-full pb-12">
 			<div className="flex flex-none items-center gap-34 h-232 pt-4 pr-40 pl-44 box-border">
-				<FileGlyph label={label} />
+				{art ?? <FileGlyph label={label} />}
 				<div className="flex flex-col flex-1 gap-3 min-w-0">
 					<div className="ql-other__name mb-4 overflow-hidden text-[22px] font-bold tracking-[-0.01em] text-ellipsis whitespace-nowrap select-text">{file.name}</div>
 					<div className="text-[14px] text-ql-ink-secondary">{describeExtension(file.ext)}</div>

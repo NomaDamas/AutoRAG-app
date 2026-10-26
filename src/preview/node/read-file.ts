@@ -69,5 +69,6 @@ export async function readPreviewFile(filePath: string, limit: number, whole = f
 		bytes,
 		pages: null,
 		office: null,
+		thumbnail: null,
 	};
 }

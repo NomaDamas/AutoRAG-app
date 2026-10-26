@@ -43,10 +43,12 @@ import { looksLikeText } from "../shared/text-sample";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
 import { sniffLegacyContainer } from "../shared/legacy-office";
+import { isGoogleDriveExtension } from "../shared/google-drive";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
 import { previewData } from "./data";
+import { driveThumbnail } from "./google-drive";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
@@ -417,6 +419,19 @@ async function withOffice(state: Session, seq: number, target: QuickLookTarget, 
 	return { ...content, document: { ...document, office } };
 }
 
+/**
+ * A Google Drive pointer opens with the picture Drive for desktop's file
+ * provider drew for it (the one thing Quick Look can show of a cloud-only
+ * document); every other document passes through untouched.
+ */
+async function withDriveThumbnail(target: QuickLookTarget, content: TargetContent): Promise<TargetContent> {
+	const document = content.document;
+	if (document === null || !isGoogleDriveExtension(document.ext)) return content;
+	const { mtimeMs } = await stat(target.path);
+	const thumbnail = await driveThumbnail({ path: target.path, ext: document.ext, mtimeMs }, iconSource);
+	return { ...content, document: { ...document, thumbnail } };
+}
+
 async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
 	const seq = state.seq;
@@ -424,7 +439,9 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	state.origin = origin;
 	const [read] = await Promise.all([readTarget(target), state.loaded]);
 	if (seq !== state.seq || !live(state.window)) return;
-	const content = await withOffice(state, seq, target, read);
+	const withOfficePage = await withOffice(state, seq, target, read);
+	if (seq !== state.seq || !live(state.window)) return;
+	const content = await withDriveThumbnail(target, withOfficePage);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
 	// An app bundle is launched by the Open button itself, so there is no

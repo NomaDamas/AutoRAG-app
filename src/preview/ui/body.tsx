@@ -11,6 +11,7 @@ import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
 import { DataView } from "./data";
 import { DocxView, RtfView, SheetView } from "./documents";
 import { FallbackView } from "./fallback";
+import { GoogleDriveView } from "./google-drive";
 import { MailView } from "./mail";
 import { MarkdownView } from "./markdown";
 import { HwpView } from "./hwp";
@@ -92,6 +93,8 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <ContactView file={file} />;
 		case "calendar":
 			return <CalendarView file={file} />;
+		case "gdrive":
+			return <GoogleDriveView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} anchor={anchor} />;
 			return <FallbackView file={file} />;

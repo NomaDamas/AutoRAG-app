@@ -45,6 +45,7 @@ function documentFor(ext: string, bytes: Uint8Array): PreviewDocument {
 		bytes,
 		pages: null,
 		office: null,
+		thumbnail: null,
 	};
 }
 
@@ -80,6 +81,7 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	contact: strToU8("BEGIN:VCARD\nFN:Kim\nEND:VCARD"),
 	calendar: strToU8("BEGIN:VEVENT\nSUMMARY:Lunch\nEND:VEVENT"),
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
+	gdrive: strToU8('{"doc_id":"1abc","resource_key":"","email":"me@gmail.com"}'),
 };
 
 const extForKind: Readonly<Record<ViewerKind, string>> = {
@@ -113,6 +115,7 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	msg: "msg",
 	contact: "vcf",
 	calendar: "ics",
+	gdrive: "gdoc",
 	fallback: "bin",
 };
 
@@ -124,5 +127,28 @@ describe("preview families", () => {
 			const markup = renderToStaticMarkup(createElement(ChromeProvider, { value: chrome }, createElement(PreviewBody, { file: documentFor(ext, bytesForKind[kind]) })));
 			expect(markup.length).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe("Google Drive pointer panel", () => {
+	const pointer = strToU8('{"doc_id":"1abc","resource_key":"","email":"me@gmail.com"}');
+	const render = (file: PreviewDocument): string =>
+		renderToStaticMarkup(createElement(ChromeProvider, { value: chrome }, createElement(PreviewBody, { file })));
+
+	it("shows the thumbnail Drive drew in place of the page glyph", () => {
+		const markup = render({ ...documentFor("gdoc", pointer), thumbnail: "autorag-thumb://local/?path=a.gdoc&mtime=1&size=640" });
+		expect(markup).toContain('src="autorag-thumb://local/?path=a.gdoc&amp;mtime=1&amp;size=640"');
+		expect(markup).toContain("quickLook.gdrive.account");
+		expect(markup).not.toContain('viewBox="0 0 176 214"');
+	});
+
+	it("keeps the page glyph when Drive has drawn nothing yet", () => {
+		const markup = render(documentFor("gsheet", pointer));
+		expect(markup).not.toContain("<img");
+		expect(markup).toContain('viewBox="0 0 176 214"');
+	});
+
+	it("says so when the file is not a Drive pointer", () => {
+		expect(render(documentFor("gform", strToU8("not json")))).toContain("quickLook.gdrive.notPointer");
 	});
 });
