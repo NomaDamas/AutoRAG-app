@@ -1035,6 +1035,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const footer =
 		draft.stepId === "indexing" ? null : (
 			<>
+				<button type="button" className="back-btn" disabled={footerIndex <= 0} onClick={back}>
+					<Icon name="chevron-left" size={15} />
+				</button>
 				<div className="progress-dashes">
 					{flow.map((id, index) => (
 						<span
@@ -1044,16 +1047,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 						/>
 					))}
 				</div>
-				<div className="footer-actions">
-					<button type="button" className="footer-btn" disabled={footerIndex <= 0} onClick={back}>
-						{t("onboarding.footerBack")}
-						<Icon name="backspace" size={16} />
-					</button>
-					<button type="button" className="footer-btn" disabled={!currentAdvance()} onClick={next}>
-						{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))}
-						<Icon name="corner-down-left" size={16} />
-					</button>
-				</div>
+				<button type="button" className="primary" disabled={!currentAdvance()} onClick={next}>
+					{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))} <span className="kbd">↵</span>
+				</button>
 			</>
 		);
 

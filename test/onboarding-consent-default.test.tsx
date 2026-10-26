@@ -75,7 +75,7 @@ async function openWelcome(): Promise<void> {
 
 const consents = (): HTMLInputElement[] => [...host.querySelectorAll<HTMLInputElement>(".onb .usage-consent input[type=checkbox]")];
 const continueButton = (): HTMLButtonElement => {
-	const element = host.querySelector<HTMLButtonElement>(".onb .footer .footer-actions button:last-child");
+	const element = host.querySelector<HTMLButtonElement>(".onb .footer button.primary");
 	if (element === null) throw new Error("no continue button");
 	return element;
 };

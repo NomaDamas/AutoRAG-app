@@ -191,7 +191,7 @@ try {
 
 	// welcome
 	check("welcome headline", (await heading()).includes("파일에게"));
-	check("back is disabled on the first step", await page.locator(".onb .footer-btn >> nth=0").isDisabled());
+	check("back is disabled on the first step", await page.locator(".onb .back-btn").isDisabled());
 	await shot("01-welcome");
 	await page.keyboard.press("Enter");
 

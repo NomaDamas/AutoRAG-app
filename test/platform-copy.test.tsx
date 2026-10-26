@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { platformKey } from "../src/renderer/src/lib/platform-copy";
+import { AccountStep } from "../src/renderer/src/onboarding/steps/Account";
 import { FoldersStep } from "../src/renderer/src/onboarding/steps/Folders";
 import { resources, SUPPORTED_LANGUAGES, type LocaleKey } from "../src/shared/i18n";
 import { BASE_DRAFT, onboardingCtx } from "./support/onboarding-ctx";
@@ -62,6 +63,14 @@ describe("copy that names the machine", () => {
 		for (const key of ["settingsCore.embedding.apiKeyHint", "settingsCore.ai.server.bodyLocal", "onboarding.account.lead", "onboarding.folders.localEta"]) {
 			expect(lookup("en", key), key).toMatch(/Mac/u);
 		}
+	});
+
+	it("the account step says where files are stored in PC words on Windows, Mac words elsewhere", () => {
+		act(() => root.render(<AccountStep ctx={onboardingCtx({ platform: "win32" })} />));
+		expect(shown()).toContain("onboarding.account.leadPc");
+		act(() => root.render(<AccountStep ctx={onboardingCtx({ platform: "darwin" })} />));
+		expect(shown()).toContain("onboarding.account.lead");
+		expect(shown()).not.toContain("onboarding.account.leadPc");
 	});
 
 	it("the folders step estimates the local run in PC words on Windows, Mac words elsewhere", () => {
