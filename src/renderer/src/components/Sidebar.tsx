@@ -6,7 +6,7 @@ import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { GearIcon } from "./icons";
+import { EyeIcon, GearIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 import { StatusDot } from "./primitives/StatusDot";
@@ -55,6 +55,8 @@ export function Sidebar({
 	onSearchBlur,
 	onSubmitSearch,
 	aiSearchDrop,
+	tagColorsDenied = false,
+	onGrantTagColors,
 }: {
 	readonly groups: readonly NavGroup[];
 	/** Path of the row that owns the current folder. */
@@ -81,6 +83,9 @@ export function Sidebar({
 		readonly onDragLeave: () => void;
 		readonly onDrop: (event: DragEvent<HTMLButtonElement>) => void;
 	};
+	/** macOS refused the app Finder's tag registry: the Tags group offers the Full Disk Access grant. */
+	readonly tagColorsDenied?: boolean;
+	readonly onGrantTagColors?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const localizedGroupLabel = (label: string): string => {
@@ -197,6 +202,18 @@ export function Sidebar({
 								</div>
 							);
 						})}
+						{group.label === TAGS_GROUP_LABEL && tagColorsDenied ? (
+							<button
+								type="button"
+								data-action="grant-tag-colors"
+								className="flex w-full items-start gap-8 px-8 py-4 border-0 rounded-6 bg-transparent text-ink-muted text-badge text-left cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover"
+								title={t("places.tagColorsDeniedHint")}
+								onClick={onGrantTagColors}
+							>
+								<EyeIcon className="flex-none text-ink-muted" />
+								<span className="min-w-0">{t("places.tagColorsDenied")}</span>
+							</button>
+						) : null}
 					</div>
 				))}
 			</div>

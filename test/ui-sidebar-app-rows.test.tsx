@@ -76,3 +76,60 @@ describe("Sidebar app rows", () => {
 		expect(onNavigate).not.toHaveBeenCalledWith(expect.objectContaining({ path: AI_SEARCH_PATH }));
 	});
 });
+
+describe("Sidebar tag colours without Full Disk Access", () => {
+	const TAGS = [
+		{ name: "Research", color: 0 as const, sidebar: true },
+		{ name: "Career", color: 0 as const, sidebar: true },
+	];
+
+	function renderTags(denied: boolean, onGrantTagColors = vi.fn()): ReturnType<typeof vi.fn> {
+		const drop = { hovered: false, onDragOver: vi.fn(), onDragLeave: vi.fn(), onDrop: vi.fn() };
+		act(() =>
+			root.render(
+				<Sidebar
+					groups={navGroups([], TAGS)}
+					activePath={null}
+					settingsActive={false}
+					showHotkeys={false}
+					onNavigate={vi.fn()}
+					onEject={vi.fn()}
+					onHideSidebar={vi.fn()}
+					onOpenIndexing={vi.fn()}
+					tagColorsDenied={denied}
+					onGrantTagColors={onGrantTagColors}
+					searchQuery=""
+					searchRef={createRef()}
+					searchFocused={false}
+					onSearchFocus={vi.fn()}
+					onSearchBlur={vi.fn()}
+					onSubmitSearch={vi.fn()}
+					aiSearchDrop={drop}
+				/>,
+			),
+		);
+		return onGrantTagColors;
+	}
+
+	it.each([
+		["ko", "태그 색상 보기"],
+		["en", "Show tag colors"],
+		["ja", "タグの色を表示"],
+		["zh", "显示标签颜色"],
+	] as const)("offers the Full Disk Access grant under the Tags group in %s, and hands the click to the shell", async (language, label) => {
+		await act(() => setAppLanguage(language));
+		const onGrant = renderTags(true);
+		const button = host.querySelector<HTMLButtonElement>('[data-action="grant-tag-colors"]');
+		expect(button?.textContent).toContain(label);
+		// It sits inside the Tags group, after the tag rows.
+		const group = button?.closest(".side-group");
+		expect(group?.querySelectorAll(".tag-dot")).toHaveLength(2);
+		act(() => button?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onGrant).toHaveBeenCalledTimes(1);
+	});
+
+	it("shows no grant row when the colours are readable", () => {
+		renderTags(false);
+		expect(host.querySelector('[data-action="grant-tag-colors"]')).toBeNull();
+	});
+});
