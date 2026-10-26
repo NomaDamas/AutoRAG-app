@@ -1681,6 +1681,63 @@
       "rendering": "슬라이드를 선명하게 만드는 중…",
       "page": "{{count}}페이지"
     },
+    "certificate": {
+      "subject": "주체",
+      "issuer": "발급자",
+      "serial": "일련 번호",
+      "notBefore": "유효 시작",
+      "notAfter": "유효 종료",
+      "signature": "서명",
+      "publicKey": "공개 키",
+      "altNames": "대체 이름",
+      "keyUsage": "키 사용",
+      "extendedKeyUsage": "확장 키 사용",
+      "ca": "CA",
+      "status": {
+        "expired": "만료됨",
+        "notYetValid": "아직 유효하지 않음"
+      },
+      "usage": {
+        "digitalSignature": "디지털 서명",
+        "contentCommitment": "부인 방지",
+        "keyEncipherment": "키 암호화",
+        "dataEncipherment": "데이터 암호화",
+        "keyAgreement": "키 합의",
+        "keyCertSign": "인증서 서명",
+        "cRLSign": "CRL 서명",
+        "encipherOnly": "암호화 전용",
+        "decipherOnly": "복호화 전용"
+      },
+      "eku": {
+        "serverAuth": "TLS 웹 서버 인증",
+        "clientAuth": "TLS 웹 클라이언트 인증",
+        "codeSigning": "코드 서명",
+        "emailProtection": "이메일 보호",
+        "timeStamping": "타임스탬프",
+        "ocspSigning": "OCSP 서명"
+      },
+      "keyHidden": "개인 키 — 내용은 표시하지 않습니다",
+      "keyEncrypted": "암호화됨",
+      "keyPlain": "암호화되지 않음",
+      "unreadableBlock": "이 인증서를 읽을 수 없습니다",
+      "countOne": "인증서 1개",
+      "countMany": "인증서 {{count}}개",
+      "omitted": "{{count}}개는 표시하지 않음",
+      "truncated": "파일의 앞부분만 표시합니다",
+      "readFailed": "이 파일을 읽을 수 없습니다",
+      "container": {
+        "pkcs12": "PKCS #12 번들은 인증서와 개인 키를 담고 암호로 보호되어 있어 내용을 표시하지 않습니다.",
+        "keychain": "Apple 키체인은 암호화된 저장소라서 여기서는 읽거나 복호화하지 않습니다."
+      },
+      "notContainer": {
+        "pkcs12": "올바른 PKCS #12 번들이 아닙니다",
+        "keychain": "올바른 Apple 키체인이 아닙니다"
+      },
+      "unreadable": {
+        "empty": "비어 있는 파일입니다",
+        "notCertificate": "이 파일에서 인증서를 찾지 못했습니다"
+      }
+    },
     "gdrive": {
       "account": "Google 계정: {{email}}",
       "notPointer": "올바른 Google Drive 바로가기 파일이 아닙니다"

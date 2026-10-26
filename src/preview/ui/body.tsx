@@ -10,6 +10,7 @@ import { ContactView } from "./contact";
 import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
 import { DataView } from "./data";
 import { DocxView, RtfView, SheetView } from "./documents";
+import { CertificateView } from "./certificate";
 import { FallbackView } from "./fallback";
 import { GoogleDriveView } from "./google-drive";
 import { MailView } from "./mail";
@@ -100,6 +101,8 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <GoogleDriveView file={file} />;
 		case "raster":
 			return <RasterView file={file} />;
+		case "certificate":
+			return <CertificateView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} anchor={anchor} />;
 			return <FallbackView file={file} />;

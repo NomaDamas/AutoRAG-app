@@ -31,6 +31,7 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		audioMetadata: never,
 		dataPreview: never,
 		archivePreview: answer,
+		certificatePreview: never,
 		share: never,
 		copyText: never,
 		textEntry: () => undefined,

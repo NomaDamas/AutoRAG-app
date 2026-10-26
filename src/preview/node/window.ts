@@ -49,6 +49,7 @@ import { isGoogleDriveExtension } from "../shared/google-drive";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { previewCertificate } from "./certificate";
 import { previewData } from "./data";
 import { driveThumbnail } from "./google-drive";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
@@ -745,6 +746,7 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		const shown = shownPath(event, path);
 		return listArchive(shown.path, { stopped: () => shown.state.current?.path !== shown.path });
 	});
+	ipc.handle(PREVIEW_CHANNELS.certificate, (event, path: unknown) => previewCertificate(shownPath(event, path).path));
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || state.current === null || process.platform !== "darwin") return;

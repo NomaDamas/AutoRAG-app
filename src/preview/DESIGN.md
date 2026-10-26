@@ -285,6 +285,24 @@ still has the previous file's size when they lay out.
   Inspector and panel show it enlarged. Where Drive has drawn nothing the OS
   type icon (macOS) or the page glyph stays.
 
+- **Certificates and key files** — `.pem`, `.crt`, `.cer`, `.der`, `.p12`,
+  `.pfx`, `.keychain`, `.keychain-db` (`certificate` viewer, `byteNeed`
+  `query`) send no file bytes to the page. `preview:certificate` reads only the
+  first 256KB in the main process (`node/certificate.ts`; the page never parses)
+  and decodes with `node:crypto`'s `X509Certificate`: no dependency, no network
+  (no OCSP/CRL), so it works the same on macOS, Windows and Linux. The type
+  comes from the bytes (`shared/certificate.ts`), not the name: PEM by its
+  `-----BEGIN` armour (a bundle lists up to 20 certificates and counts the
+  rest), DER by its leading SEQUENCE. Each certificate shows subject, issuer,
+  serial, validity (an `expired` or `not yet valid` badge), signature and key
+  algorithm, SAN, key usage (read from the DER keyUsage extension), extended
+  usage, and the SHA-256 and SHA-1 fingerprints. **A private key block is
+  reduced to its label and whether it is passphrase-protected before anything
+  is returned**; its body never reaches the page or the IPC. PKCS #12 and
+  Apple keychains are encrypted stores: they get a labelled panel (name, kind,
+  size, date, one sentence) and are never parsed or decrypted. No pure-JS
+  PKCS #12 reader is bundled, so there is no password prompt for them.
+
 - **Databases and data files** — `.sqlite`, `.sqlite3`, `.db`, and `.parquet`
   (`data` viewer, `byteNeed` `query`) send no file bytes to the page. The
   `preview:data` call opens the file in the main process (`node/data.ts`) and
