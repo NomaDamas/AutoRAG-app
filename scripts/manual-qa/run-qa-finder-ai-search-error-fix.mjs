@@ -351,7 +351,7 @@ const needsUserSteps = () => [
 			nextSteps: ["Pick the folder that holds your documents."],
 			actions: [
 				{ kind: "settings", target: "scope", label: "Pick the search folder again" },
-				{ kind: "folder", target: DOCS, label: "Look at the Documents folder" },
+				{ kind: "folder", target: DOCS, label: "A folder is no longer a kind of button" },
 				{ kind: "settings", target: "nowhere", label: "A page that does not exist" },
 			],
 		},
@@ -365,20 +365,46 @@ const needsText = await dialog.innerText();
 check("the dialog lists what the person has to do", needsText.includes("Pick the folder that holds your documents."));
 check("there is no 'Search again' when nothing was fixed", (await dialog.getByRole("button", { name: "Search again" }).count()) === 0);
 const buttonNames = await dialog.locator("button").allInnerTexts();
-check("the AI's buttons carry the labels the AI wrote, and the one with a page that does not exist was dropped", buttonNames.includes("Pick the search folder again") && buttonNames.includes("Look at the Documents folder") && !buttonNames.includes("A page that does not exist"), JSON.stringify(buttonNames));
+check("the AI's button carries the label the AI wrote; a folder and a page that does not exist were dropped", buttonNames.includes("Pick the search folder again") && !buttonNames.includes("A folder is no longer a kind of button") && !buttonNames.includes("A page that does not exist"), JSON.stringify(buttonNames));
 await shot("11-fix-needs-user");
-await dialog.getByRole("button", { name: "Look at the Documents folder", exact: true }).click();
-await page.locator(".path-bar, [data-path-bar], .pathbar").first().waitFor({ state: "attached", timeout: 10_000 }).catch(() => undefined);
-check("the folder button closed the dialog and opened a Finder tab on that folder", (await page.getByRole("dialog").count()) === 0 && (await page.locator(`[data-tab-id]`, { hasText: "Documents" }).count()) >= 1, await page.locator("[data-tab-id]").allInnerTexts().then((names) => JSON.stringify(names)));
-await shot("11b-folder-button-opened-a-tab");
-await backToAiSearch();
-script(needsUserSteps());
-await fixButton("Fix with AI").click();
-await waitInDialog(dialog.getByText("There is something you need to do"));
 await dialog.getByRole("button", { name: "Pick the search folder again", exact: true }).click();
 await pageTitle("Search Scope");
-check("the settings button opens the Settings page the AI named", true);
+check("the settings button opens the Settings page the AI named, and the dialog closed", (await page.getByRole("dialog").count()) === 0);
 await backToAiSearch();
+
+// An answer with no button at all: the cause is outside the app, so there is nowhere to send the person.
+script([
+	{ tool: "diagnose", args: {} },
+	{ tool: "report_result", args: { status: "cannot-fix", summary: "Nothing in your settings explains this, and I could not reach the cause from here. It looks temporary.", nextSteps: ["Try the question again in a few minutes."] } },
+	{ text: "done" },
+]);
+await fixButton("Fix with AI").click();
+await waitInDialog(dialog.getByText("Couldn’t fix it", { exact: true }));
+const noButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "");
+check("an answer with no destination shows no button but Close", JSON.stringify(noButtons) === JSON.stringify(["Close"]), JSON.stringify(noButtons));
+await shot("11c-fix-no-button");
+await page.keyboard.press("Escape");
+await dialog.waitFor({ state: "detached" });
+
+// A data source's own page, for an app-connection problem: the alias comes from the config.
+const withSource = { ...configWith([GONE]), datasources: { kakao: { instanceId: "default", connector: {} } } };
+writeFileSync(CONFIG, `${JSON.stringify(withSource, null, 2)}\n`);
+script([
+	{ tool: "diagnose", args: {} },
+	{ tool: "report_result", args: { status: "needs-user", summary: "The KakaoTalk connection has to be checked.", actions: [{ kind: "source", target: "kakao", label: "Open the KakaoTalk connection" }, { kind: "source", target: "no-such-app", label: "A connection that is not there" }] } },
+	{ text: "done" },
+]);
+await fixButton("Fix with AI").click();
+await waitInDialog(dialog.getByText("There is something you need to do"));
+const sourceButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "" && label !== "Close");
+check("a data source button is kept and one for a source that is not configured is dropped", JSON.stringify(sourceButtons) === JSON.stringify(["Open the KakaoTalk connection"]), JSON.stringify(sourceButtons));
+await shot("11d-fix-source-button");
+await dialog.getByRole("button", { name: "Open the KakaoTalk connection", exact: true }).click();
+await page.locator('[data-source-alias="kakao"].is-active, .settings-nav-item--source.is-active').first().waitFor({ timeout: 10_000 });
+check("the data source button opens that source's own page in Settings", true);
+await shot("11e-source-page");
+await backToAiSearch();
+writeConfig([GONE]);
 
 // ── 4b. The rest of the endings, for the report. ─────────────────────────
 script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "The folder is gone and nothing nearby looks like it, so I could not repair it.", nextSteps: ["Restore the folder, or choose another one in Search Scope."], actions: [{ kind: "settings", target: "scope", label: "Choose another folder" }] } }, { text: "done" }]);

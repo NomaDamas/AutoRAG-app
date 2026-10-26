@@ -327,7 +327,6 @@
       "unset": "없음",
       "backup": "바꾸기 전 설정을 {{path}} 에 백업해 두었어요.",
       "openSettings": "‘{{page}}’ 설정 열기",
-      "openFolder": "‘{{name}}’ 폴더 열기",
       "openSource": "‘{{name}}’ 연결 열기",
       "retrySearch": "다시 검색",
       "failedTitle": "AI로 고치지 못했어요",

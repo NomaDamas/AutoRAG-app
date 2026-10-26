@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createErrorFixToolkit, errorFixProfile, type ErrorFixToolkit, type ErrorFixToolkitDeps } from "../src/main/agents/profiles/error-fix";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import type { ConfigRefreshResult } from "../src/shared/settings-contract";
-import type { ErrorFixStep } from "../src/shared/error-fix-contract";
+import { ERROR_FIX_SETTINGS_PAGES, type ErrorFixStep } from "../src/shared/error-fix-contract";
 
 let root: string;
 let configPath: string;
@@ -76,6 +76,40 @@ describe("the error-fix profile", () => {
 		expect(prompt).toContain("Japanese");
 		expect(prompt).toContain("report_result");
 		expect(prompt).toMatch(/never (?:change|touch|edit)[^.]*model/iu);
+	});
+
+	it("tells the agent what each Settings page holds, so it can pick the page that really has the setting", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		for (const page of ERROR_FIX_SETTINGS_PAGES) expect(prompt, page).toMatch(new RegExp(`\\b${page}\\b`, "u"));
+		expect(prompt).toMatch(/scope[^\n]*folders/iu);
+		expect(prompt).toMatch(/indexing[^\n]*(?:progress|refresh)/iu);
+		expect(prompt).toMatch(/plan[^\n]*(?:subscription|usage)/iu);
+		expect(prompt).toMatch(/ai[^\n]*model/iu);
+	});
+
+	it("sends the agent to the page where a folder is chosen, not the page that only shows indexing progress", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		expect(prompt).toMatch(/choose[^\n]*folder[^\n]*scope|scope[^\n]*choose[^\n]*folder/iu);
+	});
+
+	it("says a button is optional, and that there is no button to a folder", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		expect(prompt).toMatch(/no button|without a button|only when/iu);
+		expect(prompt).toMatch(/there is no button to a folder/iu);
+		expect(prompt).not.toMatch(/kind \\?"folder\\?"/iu);
+	});
+
+	it("requires every button label in the reply language, as a short natural phrase for what the button does", () => {
+		for (const [language, name] of [["ko", "Korean"], ["en", "English"], ["ja", "Japanese"], ["zh", "Simplified Chinese"]] as const) {
+			const prompt = errorFixProfile({ message: "x", surface: "ai-search", language, toolkit: toolkit() }).systemPrompt;
+
+			expect(prompt, language).toMatch(new RegExp(`label[^\\n]*${name}`, "iu"));
+		}
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "ko", toolkit: toolkit() }).systemPrompt;
+		expect(prompt).toMatch(/not (?:a )?(?:word-for-word|literal)|natural/iu);
 	});
 
 	it("cuts a very long error before it reaches the prompt", () => {
@@ -322,7 +356,7 @@ describe("report_result", () => {
 		});
 	});
 
-	it("lets the agent send the person to a Settings page, a data source's own page, or a folder, each with its own label", async () => {
+	it("lets the agent send the person to a Settings page or to a data source's own page, each with its own label", async () => {
 		await writeConfig({
 			searchPaths: [join(root, "Docs")],
 			workspacePath: join(root, "ws"),
@@ -336,16 +370,31 @@ describe("report_result", () => {
 			summary: "Two things need you.",
 			actions: [
 				{ kind: "source", target: "kakao", label: "Open the KakaoTalk connection" },
-				{ kind: "folder", target: join(root, "Documents"), label: "Look at the Documents folder" },
 				{ kind: "settings", target: "indexing", label: "See indexing" },
 			],
 		});
 
 		expect(kit.result()?.actions).toEqual([
 			{ kind: "source", target: "kakao", label: "Open the KakaoTalk connection" },
-			{ kind: "folder", target: join(root, "Documents"), label: "Look at the Documents folder" },
 			{ kind: "settings", target: "indexing", label: "See indexing" },
 		]);
+	});
+
+	it("has no button to a folder: nothing that goes wrong in the app is cured by looking inside one", async () => {
+		const kit = toolkit();
+
+		const text = await call(kit, "report_result", { status: "needs-user", summary: "Look there.", actions: [{ kind: "folder", target: join(root, "Documents"), label: "Open the folder" }] });
+
+		expect(kit.result()?.actions).toEqual([]);
+		expect(text).toMatch(/dropped/iu);
+	});
+
+	it("may give no button at all: an answer that only explains, or a cause that is nowhere in the app, has nowhere to send the person", async () => {
+		const kit = toolkit();
+
+		await call(kit, "report_result", { status: "cannot-fix", summary: "The provider is down. Try again later.", nextSteps: ["Try again in a few minutes."] });
+
+		expect(kit.result()).toMatchObject({ status: "cannot-fix", actions: [] });
 	});
 
 	it("drops a destination the app cannot take the person to, and says so, so the agent can correct it", async () => {
@@ -357,16 +406,14 @@ describe("report_result", () => {
 			actions: [
 				{ kind: "settings", target: "../../etc", label: "Bad page" },
 				{ kind: "source", target: "no-such-source", label: "Bad source" },
-				{ kind: "folder", target: join(root, "missing"), label: "Missing folder" },
-				{ kind: "folder", target: join(root, "note.txt"), label: "A file, not a folder" },
-				{ kind: "folder", target: "Documents", label: "Relative" },
+				{ kind: "folder", target: join(root, "Documents"), label: "A folder" },
 				{ kind: "shell", target: "rm -rf /", label: "Not a kind" },
 				{ kind: "settings", target: "scope", label: "Good" },
 			],
 		});
 
 		expect(kit.result()?.actions).toEqual([{ kind: "settings", target: "scope", label: "Good" }]);
-		for (const bad of ["../../etc", "no-such-source", "missing", "note.txt", "Documents", "shell"]) expect(text).toContain(bad);
+		for (const bad of ["../../etc", "no-such-source", "folder", "shell"]) expect(text).toContain(bad);
 		expect(text).toMatch(/dropped/iu);
 	});
 

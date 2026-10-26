@@ -327,7 +327,6 @@
       "unset": "none",
       "backup": "The settings from before the change are saved at {{path}}.",
       "openSettings": "Open ‘{{page}}’ settings",
-      "openFolder": "Open the ‘{{name}}’ folder",
       "openSource": "Open the ‘{{name}}’ connection",
       "retrySearch": "Search again",
       "failedTitle": "Couldn’t fix it with AI",

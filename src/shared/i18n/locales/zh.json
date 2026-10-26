@@ -327,7 +327,6 @@
       "unset": "无",
       "backup": "更改前的设置已备份到 {{path}}。",
       "openSettings": "打开“{{page}}”设置",
-      "openFolder": "打开“{{name}}”文件夹",
       "openSource": "打开“{{name}}”连接",
       "retrySearch": "重新搜索",
       "failedTitle": "AI 未能修复",

@@ -23,8 +23,6 @@ export interface ErrorFixDialogProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Opens the Settings page of one configured data source, by its alias. */
 	readonly onOpenSource: (alias: string) => void;
-	/** Opens a folder in a Finder tab. */
-	readonly onOpenFolder: (path: string) => void;
 	/** Asks the question again; offered once something was fixed. */
 	readonly onRetry: () => void;
 }
@@ -89,7 +87,7 @@ function ResultBody({ result }: { readonly result: ErrorFixResult }): ReactEleme
 	);
 }
 
-export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource, onOpenFolder, onRetry }: ErrorFixDialogProps): ReactElement {
+export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource, onRetry }: ErrorFixDialogProps): ReactElement {
 	const { t } = useTranslation();
 	const [run, setRun] = useState<ErrorFixRun>(initialErrorFixRun);
 	const [attempt, setAttempt] = useState(0);
@@ -128,8 +126,7 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource,
 	/** Takes the person where the AI's button says, and closes the dialog: they are leaving for it. */
 	const go = (action: ErrorFixAction): void => {
 		if (action.kind === "settings") onOpenSettings(action.target);
-		else if (action.kind === "source") onOpenSource(action.target);
-		else onOpenFolder(action.target);
+		else onOpenSource(action.target);
 		onClose();
 	};
 	const settingsButton = (id: ErrorActionId, label: string, primary: boolean): ReactElement | null =>

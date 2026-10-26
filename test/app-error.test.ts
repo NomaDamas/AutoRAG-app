@@ -42,6 +42,9 @@ const CASES: readonly (readonly [string, AppErrorKind])[] = [
 	["The AI ended without reporting which folders to exclude.", "other"],
 	["Config error: minSync.embedder.dimension must be a positive integer", "other"],
 	["", "other"],
+	["Error: disk quota exceeded writing the index", "other"],
+	["ENOSPC: no space left on device, write", "other"],
+	["The search index could not be opened: the lock file is held by another program", "other"],
 ];
 
 describe("classifyAppError", () => {

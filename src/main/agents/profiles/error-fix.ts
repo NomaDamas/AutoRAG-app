@@ -177,7 +177,7 @@ function shortLabel(label: string | undefined): string {
 }
 
 /** The action when its destination is one the app can take the person to, else why not (said to the agent, so it can correct itself). */
-async function checkAction(proposed: ProposedAction, sources: ReadonlySet<string>): Promise<{ readonly action: ErrorFixAction } | { readonly dropped: string }> {
+function checkAction(proposed: ProposedAction, sources: ReadonlySet<string>): { readonly action: ErrorFixAction } | { readonly dropped: string } {
 	const label = shortLabel(proposed.label);
 	if (proposed.kind === "settings") {
 		const page = settingsPage(proposed.target);
@@ -186,13 +186,26 @@ async function checkAction(proposed: ProposedAction, sources: ReadonlySet<string
 	if (proposed.kind === "source") {
 		return sources.has(proposed.target) ? { action: { kind: "source", target: proposed.target, label } } : { dropped: `${proposed.target} (no configured data source has this alias; diagnose lists them)` };
 	}
-	if (proposed.kind === "folder") {
-		if (!isAbsolute(proposed.target)) return { dropped: `${proposed.target} (a folder must be an absolute path)` };
-		const entry = await stat(proposed.target).catch(() => null);
-		return entry?.isDirectory() === true ? { action: { kind: "folder", target: proposed.target, label } } : { dropped: `${proposed.target} (not an existing folder)` };
-	}
-	return { dropped: `${proposed.kind} (not a kind of button; use settings, source or folder)` };
+	return { dropped: `${proposed.kind} (not a kind of button; use settings or source)` };
 }
+
+/**
+ * What each page the agent may point to holds, in the words the pages use themselves, so the agent picks the page that has
+ * the setting. Kept beside the list of ids (`ERROR_FIX_SETTINGS_PAGES`); a test fails when a page has no line.
+ */
+const SETTINGS_PAGE_GUIDE: readonly string[] = [
+	"scope: choose the folders Dazzi reads and searches, and what to leave out of them (use it when a search folder is gone, moved or must be changed)",
+	"indexing: only the progress of the index and the refresh schedule of the folders and connected apps; no folder is chosen here",
+	"apps: all connected apps (messengers, mail, cloud); a single app's page is a `source` button with its alias",
+	"reading: the languages used to read and search documents",
+	"duplicates: cleanup of the same content showing up twice in results",
+	"web: using internet search results in answers",
+	"mcp: connecting Dazzi to other agents and external MCP servers",
+	"ai: AI services and the model for each role (also the embedding choice)",
+	"plan: the subscription and AI usage",
+	"account: the Dazzi account and sign-in",
+	"general: appearance and startup behaviour",
+];
 
 interface Answer {
 	readonly status: ErrorFixStatus;
@@ -364,7 +377,7 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		name: "report_result",
 		label: "Report result",
 		description:
-			"Give your answer, once, when you are done. status is \"fixed\" (you changed something and the cause is gone; refused when you changed nothing), \"needs-user\" (only the person can act) or \"cannot-fix\". summary: one to three sentences in the reply language, saying what was wrong and what you did. nextSteps: short steps for the person, only when they must act. actions: up to three buttons that take the person where they have to act, each with a short label in the reply language. kind \"settings\" goes to a Settings page (target one of: " + ERROR_FIX_SETTINGS_PAGES.join(", ") + "), kind \"source\" to one configured data source's own page (target its alias from diagnose), kind \"folder\" to an existing folder (target its absolute path). A button whose destination does not exist is dropped and you are told, so you can correct it.",
+			"Give your answer, once, when you are done. status is \"fixed\" (you changed something and the cause is gone; refused when you changed nothing), \"needs-user\" (only the person can act) or \"cannot-fix\". summary: one to three sentences in the reply language, saying what was wrong and what you did. nextSteps: short steps for the person, only when they must act. actions: optional, and usually left out; up to three buttons that take the person to the place in the app where they have to act, each with a short label in the reply language. kind \"settings\" goes to a Settings page (target one of: " + ERROR_FIX_SETTINGS_PAGES.join(", ") + "), kind \"source\" to one configured data source's own page (target its alias from diagnose). A button whose destination does not exist is dropped and you are told, so you can correct it.",
 		parameters: Type.Object({
 			status: Type.Union([Type.Literal("fixed"), Type.Literal("needs-user"), Type.Literal("cannot-fix")]),
 			summary: Type.String(),
@@ -390,7 +403,7 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 			const kept: ErrorFixAction[] = [];
 			const dropped: string[] = [];
 			for (const proposed of params.actions ?? []) {
-				const checked = await checkAction(proposed, sources);
+				const checked = checkAction(proposed, sources);
 				if ("dropped" in checked) dropped.push(checked.dropped);
 				else if (!kept.some((action) => action.kind === checked.action.kind && action.target === checked.action.target)) kept.push(checked.action);
 			}
@@ -411,6 +424,14 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 	};
 }
 
+/** A natural button label in each reply language, so the model has a model of the tone: what the button does, in the person's own words. */
+const LABEL_EXAMPLE: Readonly<Record<ReplyLanguage, string>> = {
+	ko: "\"검색할 폴더 다시 고르기\"",
+	en: "\"Choose the search folder again\"",
+	ja: "「検索するフォルダを選び直す」",
+	zh: "“重新选择搜索文件夹”",
+};
+
 export function errorFixPrompt(input: { readonly message: string; readonly surface: ErrorFixSurface; readonly language: ReplyLanguage }): string {
 	const message = input.message.length > MAX_MESSAGE_CHARS ? `${input.message.slice(0, MAX_MESSAGE_CHARS)}…` : input.message;
 	const where = input.surface === "ai-search" ? "AI Search (the chat that answers questions from the person's own documents)" : input.surface;
@@ -427,7 +448,7 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		"",
 		"How to work:",
 		"1. Call diagnose first. It shows the config, whether it loads, which paths in it do not exist, the chosen model, the data sources and the index state.",
-		"2. Match what it shows to the error. A search folder or data source path that no longer exists is the common case: use check_path to see whether the folder moved or was renamed (the listing of the closest folder that still exists, and of the folder above it, usually shows where it went), and repoint it only when the new place is clearly the same folder (same name or the same contents). Stay near the broken path: its parent and the folder above it, a few looks at most. Never go looking through the rest of the machine (the home folder, the app's own folders, temporary folders). If you do not find it there, or are not sure, do not guess: report needs-user and give the person buttons to the places where they can pick the folder (the Settings page that holds the setting, and an existing folder that looks close if there is one).",
+		"2. Match what it shows to the error. A search folder or data source path that no longer exists is the common case: use check_path to see whether the folder moved or was renamed (the listing of the closest folder that still exists, and of the folder above it, usually shows where it went), and repoint it only when the new place is clearly the same folder (same name or the same contents). Stay near the broken path: its parent and the folder above it, a few looks at most. Never go looking through the rest of the machine (the home folder, the app's own folders, temporary folders). If you do not find it there, or are not sure, do not guess: report needs-user and send the person to the page where they choose the folders (scope), not to the one that only shows indexing progress.",
 		"3. Change as little as possible: only the setting the error points at. Never remove a folder or a data source just to make an error go away.",
 		"4. If you repointed a search folder or a data source, call refresh_index once so the new place gets indexed (a long run goes on in the background; do not wait for it). Then call diagnose once more to confirm the cause is gone. Only then report fixed.",
 		"5. Finish with report_result, once.",
@@ -435,11 +456,14 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		"",
 		"Limits you must respect:",
 		"- Never change the AI model, a sign-in, a subscription, a key or a token. If the error is about any of them (no model, wrong key, plan used up, model gone), report cannot-fix and give a button to Settings: target \"ai\" for the model, \"plan\" for the subscription.",
-		"- When the person has to act, give them the way there instead of only describing it: a button to the Settings page or the data source's page that holds the setting, or to the folder they have to look at. Put each button's label in their language, as what it does (\"검색 폴더 다시 고르기\"), not as a page name.",
+		"- A button is optional, and most answers need none: give one only when the person has to change something in a particular place in the app, and say so in `nextSteps`. An error from the network, a provider outage, a bug, or a cause you already repaired needs no button; write the answer without `actions`. Never invent a place to send them. Buttons go only to the Settings pages below or to one data source's page; there is no button to a folder.",
 		"- You cannot fix the network, a provider outage, or a bug in the app. Say so honestly with cannot-fix and what the person can try; do not claim a repair you did not make.",
 		"- Do not change anything when the config is fine and the cause is outside it.",
 		"",
-		`Write summary and nextSteps in ${LANGUAGE_NAME[input.language]}, in plain words for someone who is not technical: no stack traces, no jargon, file paths only where they help. Do not reply with prose; the report_result call is your answer.`,
+		"What each Settings page (target) holds, so you pick the one that really has the setting:",
+		...SETTINGS_PAGE_GUIDE.map((line) => `- ${line}`),
+		"",
+		`Write summary and nextSteps in ${LANGUAGE_NAME[input.language]}, in plain words for someone who is not technical: no stack traces, no jargon, file paths only where they help. Write each button's label in ${LANGUAGE_NAME[input.language]} too, as a short, natural phrase for what the button does, the way a person who speaks it would say it (not a word-for-word translation of a page name; for example: ${LABEL_EXAMPLE[input.language]}). Do not reply with prose; the report_result call is your answer.`,
 	].join("\n");
 }
 

@@ -64,6 +64,9 @@ const SUBSCRIPTION = new RegExp(
 	"iu",
 );
 
+/** The machine's own storage running out: the word "quota" there is a disk quota, not the plan's. */
+const LOCAL_STORAGE = /\bdisk\b[^.\n]{0,20}\bquota\b|\bquota\b[^.\n]{0,20}\bdisk\b|\bENOSPC\b|\bno space left\b|\bnot enough (?:disk )?space\b/iu;
+
 const CREDENTIALS = new RegExp(
 	[
 		String.raw`\bunauthori[sz]ed\b`,
@@ -92,7 +95,7 @@ const STATUS_5XX = new RegExp(`${status(503).source}|${status(529).source}`, "iu
 export function classifyAppError(message: string): AppErrorKind {
 	const text = message.replace(PATH, " ");
 	if (MISSING.test(text)) return "model-missing";
-	if (SUBSCRIPTION.test(text) || STATUS_402.test(text)) return "model-subscription";
+	if (!LOCAL_STORAGE.test(text) && (SUBSCRIPTION.test(text) || STATUS_402.test(text))) return "model-subscription";
 	if (CREDENTIALS.test(text) || STATUS_401.test(text) || STATUS_403.test(text)) return "model-credentials";
 	if (NOT_FOUND.test(text)) return "model-not-found";
 	if (RATE_LIMIT.test(text) || STATUS_429.test(text) || STATUS_5XX.test(text)) return "rate-limit";

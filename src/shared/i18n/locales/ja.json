@@ -327,7 +327,6 @@
       "unset": "なし",
       "backup": "変更前の設定を {{path}} にバックアップしました。",
       "openSettings": "「{{page}}」設定を開く",
-      "openFolder": "「{{name}}」フォルダを開く",
       "openSource": "「{{name}}」の接続を開く",
       "retrySearch": "もう一度検索",
       "failedTitle": "AIでは修正できませんでした",

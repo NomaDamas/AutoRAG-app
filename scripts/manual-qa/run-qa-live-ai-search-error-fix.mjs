@@ -250,6 +250,8 @@ try {
 	// The plan allows a few requests a minute and the scenarios before this one used them: a 429 is the plan, not the feature, so wait a minute and try again.
 	let handOver = "";
 	for (let attempt = 1; attempt <= 3; attempt += 1) {
+		// The run is over when its Stop button has appeared and then gone: before it first renders it is "not there" too.
+		await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "visible", timeout: 30_000 });
 		await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 280_000 });
 		handOver = await dialog.innerText();
 		if (!handOver.includes("Too many requests right now")) break;
@@ -261,16 +263,53 @@ try {
 	const buttonLabels = (await dialog.locator("button").allInnerTexts()).filter((label) => !["Close", "Retry", "Search again", "Show details", "Hide details", ""].includes(label));
 	console.log(`buttons the real AI put in its answer: ${JSON.stringify(buttonLabels)}`);
 	check("the real AI did not claim a repair it could not make", !handOver.includes("Fixed"), handOver.replace(/\s+/g, " ").slice(0, 200));
-	check("the real AI gave the person at least one button to go and act", buttonLabels.length >= 1, JSON.stringify(buttonLabels));
-	check("every one of those buttons is labelled in words, not as a bare page id", buttonLabels.every((label) => label.length > 2 && !/^(scope|ai|plan|indexing|apps)$/u.test(label)), JSON.stringify(buttonLabels));
+	check("the real AI gave the person a button to go and choose the folder", buttonLabels.length >= 1, JSON.stringify(buttonLabels));
+	check("every button is labelled in words, not as a bare page id", buttonLabels.every((label) => label.length > 2 && !/^(scope|ai|plan|indexing|apps)$/u.test(label)), JSON.stringify(buttonLabels));
 	check("the config was not touched when nothing could be repaired", JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === GONE_FOR_GOOD);
 	await shot("07-ai-handed-buttons");
 	if (buttonLabels[0] !== undefined) {
 		await dialog.getByRole("button", { name: buttonLabels[0], exact: true }).click();
 		await page.waitForTimeout(800);
-		check("the first button of the real AI took the person somewhere and closed the dialog", (await page.getByRole("dialog").count()) === 0);
+		check("the first button of the real AI closed the dialog", (await page.getByRole("dialog").count()) === 0);
+		const pageHeading = await page.locator("h1.linear-title").first().innerText().catch(() => "");
+		console.log(`the page the real AI's first button opened: ${pageHeading}`);
+		check("it opened the page where the search folders are chosen (Search Scope), not the indexing progress page", /Search scope/iu.test(pageHeading), pageHeading);
 		await shot("08-after-the-ai-button");
+		await backToAiSearch();
 	}
+
+	// ── 5. A cause outside the app's settings: the real AI must say so and must not invent a place to send the person. ──
+	// The settings are fine here; the error is one only something outside the app can cause, and the app still classifies it as its own (so the fix is offered).
+	writeFileSync(CONFIG, `${JSON.stringify({ ...baseConfig([REPORTS]), model: cfg.model }, null, 2)}\n`);
+	const outsideMessage = "EACCES: permission denied, open '/Library/Application Support/com.apple.TCC/TCC.db' (the operating system refused access to a protected file)";
+	const askFixer = (text) =>
+		page.evaluate(
+			(message) =>
+				new Promise((resolve) => {
+					const runId = crypto.randomUUID();
+					const events = [];
+					window.autorag.errorFix.onEvent((event) => {
+						if (event.runId !== runId) return;
+						events.push(event);
+						if (event.type === "result" || event.type === "error" || event.type === "cancelled") resolve(events);
+					});
+					void window.autorag.errorFix.start(runId, { message, surface: "ai-search" });
+				}),
+			text,
+		);
+	let outsideEnd;
+	// The plan allows a few requests a minute and the scenarios above used them: a 429 is the plan, not the feature, so wait it out and ask again.
+	for (let attempt = 1; attempt <= 4; attempt += 1) {
+		outsideEnd = (await askFixer(outsideMessage)).at(-1);
+		if (!(outsideEnd?.type === "error" && /Too many requests|\(429\)|rate_limit/iu.test(outsideEnd.message))) break;
+		console.log(`attempt ${attempt} hit the plan's rate limit; waiting before the next`);
+		await page.waitForTimeout(70_000);
+	}
+	console.log(`what the real AI answered for a cause outside the app: ${JSON.stringify(outsideEnd).slice(0, 700)}`);
+	check("the real AI answered (not an error)", outsideEnd?.type === "result", JSON.stringify(outsideEnd).slice(0, 200));
+	check("the real AI did not claim a repair for a cause it cannot reach", outsideEnd?.type === "result" && outsideEnd.result.status !== "fixed", outsideEnd?.type === "result" ? outsideEnd.result.status : "");
+	check("the real AI gave no button: there is nowhere in the app to send the person", outsideEnd?.type === "result" && outsideEnd.result.actions.length === 0, outsideEnd?.type === "result" ? JSON.stringify(outsideEnd.result.actions) : "");
+	check("the real AI changed nothing in the config", JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === REPORTS && outsideEnd?.type === "result" && outsideEnd.result.changes.length === 0);
 } finally {
 	await app.close().catch(() => undefined);
 	service.close();

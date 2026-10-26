@@ -17,8 +17,6 @@ export interface RunErrorNoticeProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source (an AI fix button names it by alias). */
 	readonly onOpenSource: (alias: string) => void;
-	/** Opens a folder in a Finder tab (an AI fix button names it by path). */
-	readonly onOpenFolder: (path: string) => void;
 	/**
 	 * Offers "AI로 고치기" when present; `onRetry` asks the question again once the AI fixed something.
 	 * Absent for the error of an earlier turn, which is history, not something to repair now.
@@ -34,7 +32,7 @@ const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-c
  * be used says so and leads to its settings and the subscription; an error in the
  * app's own setup carries "AI로 고치기".
  */
-export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, onOpenFolder, fix }: RunErrorNoticeProps): ReactElement {
+export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, fix }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
 	const [fixing, setFixing] = useState(false);
 	const view = describeAppError(message, action, t);
@@ -71,7 +69,7 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 			)}
 			{fixing && fix !== null
 				? createPortal(
-						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} onOpenFolder={onOpenFolder} onRetry={fix.onRetry} />,
+						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} onRetry={fix.onRetry} />,
 						document.body,
 					)
 				: null}

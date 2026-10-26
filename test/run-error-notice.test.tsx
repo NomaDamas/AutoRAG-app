@@ -71,7 +71,7 @@ const FIXED: ErrorFixResult = {
 
 function render(
 	message: string,
-	props: { action?: "open-plan" | null; fix?: { onRetry: () => void } | null; onOpenSettings?: (page: string) => void; onOpenSource?: (alias: string) => void; onOpenFolder?: (path: string) => void } = {},
+	props: { action?: "open-plan" | null; fix?: { onRetry: () => void } | null; onOpenSettings?: (page: string) => void; onOpenSource?: (alias: string) => void } = {},
 ): void {
 	act(() =>
 		root.render(
@@ -80,7 +80,6 @@ function render(
 				action={props.action ?? null}
 				onOpenSettings={props.onOpenSettings ?? vi.fn()}
 				onOpenSource={props.onOpenSource ?? vi.fn()}
-				onOpenFolder={props.onOpenFolder ?? vi.fn()}
 				fix={props.fix === undefined ? { onRetry: vi.fn() } : props.fix}
 			/>,
 		),
@@ -238,18 +237,16 @@ describe("the AI fix dialog", () => {
 		expect(dialog()).toBeNull();
 	});
 
-	it("takes each kind of button to its own place: a Settings page, a data source's page, a folder", () => {
+	it("takes each kind of button to its own place: a Settings page, a data source's page", () => {
 		const onOpenSettings = vi.fn();
 		const onOpenSource = vi.fn();
-		const onOpenFolder = vi.fn();
-		const result = { status: "needs-user" as const, summary: "세 가지가 필요해요.", nextSteps: [], changes: [], backupPath: null };
+		const result = { status: "needs-user" as const, summary: "두 가지가 필요해요.", nextSteps: [], changes: [], backupPath: null };
 		const actions = [
 			{ kind: "source" as const, target: "kakao", label: "카카오톡 연결 열기" },
-			{ kind: "folder" as const, target: "/Users/me/Documents", label: "문서 폴더 보기" },
 			{ kind: "settings" as const, target: "indexing" as const, label: "인덱싱 보기" },
 		];
 		for (const action of actions) {
-			render("Search root /Users/me/Docs does not exist", { onOpenSettings, onOpenSource, onOpenFolder });
+			render("Search root /Users/me/Docs does not exist", { onOpenSettings, onOpenSource });
 			press(t("appError.fixAction"));
 			emit({ type: "result", runId: runId(), result: { ...result, actions } });
 			expect(labels()).toEqual(expect.arrayContaining(actions.map((entry) => entry.label)));
@@ -257,7 +254,6 @@ describe("the AI fix dialog", () => {
 		}
 
 		expect(onOpenSource).toHaveBeenCalledExactlyOnceWith("kakao");
-		expect(onOpenFolder).toHaveBeenCalledExactlyOnceWith("/Users/me/Documents");
 		expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("indexing");
 	});
 
@@ -268,10 +264,22 @@ describe("the AI fix dialog", () => {
 		emit({
 			type: "result",
 			runId: runId(),
-			result: { status: "needs-user", summary: "x", nextSteps: [], actions: [{ kind: "settings", target: "scope", label: "" }, { kind: "folder", target: "/Users/me/Documents", label: "" }], changes: [], backupPath: null },
+			result: { status: "needs-user", summary: "x", nextSteps: [], actions: [{ kind: "settings", target: "scope", label: "" }, { kind: "source", target: "kakao", label: "" }], changes: [], backupPath: null },
 		});
 
-		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }), t("appError.fix.openFolder", { name: "Documents" })]));
+		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }), t("appError.fix.openSource", { name: "kakao" })]));
+	});
+
+	it("shows only Close when the answer has no button: an explanation with nowhere to send the person is a complete answer", () => {
+		render("Search root /Users/me/Docs does not exist");
+		press(t("appError.fixAction"));
+
+		emit({ type: "result", runId: runId(), result: { status: "cannot-fix", summary: "제공자 서버가 응답하지 않아요. 잠시 뒤에 다시 해 보세요.", nextSteps: ["몇 분 뒤에 다시 시도하세요."], actions: [], changes: [], backupPath: null } });
+
+		const text = dialog()?.textContent ?? "";
+		expect(text).toContain(t("appError.fix.status.cannotFix"));
+		expect(text).toContain("제공자 서버가 응답하지 않아요.");
+		expect([...(dialog()?.querySelectorAll("button") ?? [])].map((button) => button.textContent).filter((label) => label !== "")).toEqual([t("common.close")]);
 	});
 
 	it("explains a model that stopped working during the fix the same way as any other model error", () => {
