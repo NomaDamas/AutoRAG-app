@@ -614,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "返回",
     "step": {
       "welcome": "介绍",
       "permissions": "权限",
