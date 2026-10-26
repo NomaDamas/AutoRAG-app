@@ -1297,7 +1297,21 @@
       "stars": "별 {{count}}개",
       "star": "별 1개"
     },
-    "kindByExtension": "{{ext}} 파일"
+    "kindByExtension": "{{ext}} 파일",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop 문서",
+      "illustrator": "Adobe Illustrator 문서",
+      "eps": "EPS 이미지",
+      "jpegxl": "JPEG XL 이미지",
+      "icns": "Apple 아이콘 이미지",
+      "targa": "TGA 이미지",
+      "openexr": "OpenEXR 이미지",
+      "gimp": "GIMP 이미지",
+      "sketch": "Sketch 문서",
+      "figma": "Figma 문서",
+      "raw": "{{maker}} RAW 이미지",
+      "rawGeneric": "RAW 이미지"
+    }
   },
   "main": {
     "interaction": {
@@ -1823,6 +1837,9 @@
       "openFailed": "프레젠테이션을 열 수 없습니다",
       "noSlides": "슬라이드가 없습니다",
       "noPreview": "이 문서에는 미리보기 이미지가 없습니다"
+    },
+    "raster": {
+      "noPreview": "이 파일에서 미리보기 이미지를 만들 수 없습니다"
     },
     "evidence": {
       "searching": "근거 위치 찾는 중…",

@@ -9,13 +9,19 @@ export interface EmbeddedThumbnail {
 	readonly mime: "image/png" | "image/jpeg";
 }
 
-/** Entry names tried in order, per extension. ODF stores a PNG; an OOXML template stores a JPEG. */
+/**
+ * Entry names tried in order, per extension. ODF stores a PNG; an OOXML template
+ * stores a JPEG; Sketch writes the canvas as `previews/preview.png`; a Figma
+ * `.fig` saved from the app is a ZIP whose `thumbnail.png` is the file's cover.
+ */
 const THUMBNAIL_ENTRIES: Readonly<Record<string, readonly string[]>> = {
 	odt: ["Thumbnails/thumbnail.png"],
 	ods: ["Thumbnails/thumbnail.png"],
 	odp: ["Thumbnails/thumbnail.png"],
 	odg: ["Thumbnails/thumbnail.png"],
 	potx: ["docProps/thumbnail.jpeg", "docProps/thumbnail.jpg"],
+	sketch: ["previews/preview.png"],
+	fig: ["thumbnail.png"],
 };
 
 /** Extensions whose package embeds a first-page image the Finder tile can show without Quick Look. */

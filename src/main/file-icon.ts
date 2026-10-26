@@ -33,8 +33,10 @@
 
 import { extname } from "node:path";
 import { realpath } from "node:fs/promises";
-import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail } from "../preview/node/odf";
+import { EMBEDDED_IMAGE_EXTENSIONS, readEmbeddedImage } from "../preview/node/embedded-image";
+import { EMBEDDED_THUMBNAIL_EXTENSIONS } from "../preview/node/odf";
 import { GOOGLE_DRIVE_EXTENSIONS } from "../preview/shared/google-drive";
+import { RAW_PHOTO_EXTENSIONS } from "../preview/shared/raster-formats";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { extractVideoFrame, isVideoFrameExtension } from "./video-frame";
@@ -90,6 +92,13 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	// for desktop's file provider answers the OS thumbnailer with the document's
 	// first page. Where it has none the type icon (Docs, Sheets, ...) stands in.
 	...GOOGLE_DRIVE_EXTENSIONS,
+	// Photoshop, Illustrator (a PDF), JPEG XL, Apple icons, Targa and OpenEXR are
+	// drawn by Quick Look; so is every camera RAW macOS can decode. A RAW it
+	// renders blank (a Samsung DNG with no preview) is detected and read from the
+	// file instead. EPS and XCF are absent on purpose: Quick Look answers them
+	// with a generic icon (qlmanage hangs on them), so a tile for them needs an
+	// embedded image (`embedded-image.ts`) or stays on the type icon.
+	"psd", "ai", "jxl", "icns", "tga", "exr", ...RAW_PHOTO_EXTENSIONS,
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.
@@ -97,8 +106,15 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 ]);
 export function isNativeThumbnailExtension(ext: string): boolean {
 	const key = ext.toLowerCase().replace(/^\./, "");
-	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || EMBEDDED_THUMBNAIL_EXTENSIONS.has(key);
+	return NATIVE_THUMBNAIL_EXTENSIONS.has(key) || EMBEDDED_IMAGE_EXTENSIONS.has(key);
 }
+
+/**
+ * Files whose only real picture is the one they embed: the OS draws nothing
+ * for them (Quick Look answers an EPS, Sketch or Figma file with a generic
+ * icon), so the thumbnailer is never asked and the embedded image comes first.
+ */
+const EMBEDDED_ONLY_EXTENSIONS: ReadonlySet<string> = new Set([...EMBEDDED_THUMBNAIL_EXTENSIONS, "eps"]);
 
 export interface IconTarget {
 	/** Absolute OS path. */
@@ -159,6 +175,12 @@ export interface IconProviderDeps {
 	readonly platform?: NodeJS.Platform;
 	/** Native thumbnail PNG bytes at the requested tier edge, or null; defaults to Electron nativeImage.createThumbnailFromPath on macOS/Windows. */
 	readonly thumbnail?: (path: string, size: number) => Promise<Uint8Array | null>;
+	/**
+	 * The picture a file embeds of itself (a camera's preview JPEG, a PSD
+	 * thumbnail, a Sketch preview) as PNG bytes within `size` px; null when it
+	 * has none. Defaults to `readEmbeddedImage` re-encoded by Electron.
+	 */
+	readonly embeddedImage?: (path: string, ext: string, size: number) => Promise<Uint8Array | null>;
 	/** OS type icon PNG bytes, or null; defaults to Electron app.getFileIcon. */
 	readonly systemIcon?: (path: string) => Promise<Uint8Array | null>;
 	/**
@@ -258,18 +280,30 @@ class IconCache {
 	}
 }
 
-async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
-	// An OpenDocument package or a PowerPoint template carries its own first
-	// page; Quick Look would only answer with a generic type icon for it. The
-	// icon cache serves PNG, so a JPEG thumbnail is re-encoded.
-	const ext = extname(path).slice(1).toLowerCase();
-	if (EMBEDDED_THUMBNAIL_EXTENSIONS.has(ext)) {
-		const embedded = await readEmbeddedThumbnail(path, ext);
-		if (embedded === null || embedded.mime === "image/png") return embedded?.bytes ?? null;
-		const { nativeImage } = await import("electron");
-		const image = nativeImage.createFromBuffer(Buffer.from(embedded.bytes));
-		return image.isEmpty() ? null : image.toPNG();
+const RAW_PHOTO_SET: ReadonlySet<string> = new Set(RAW_PHOTO_EXTENSIONS);
+
+/**
+ * True when the pixels (BGRA, as `toBitmap()` returns them) show nothing: no
+ * visible pixel at all, or every visible pixel one colour. Quick Look answers a
+ * RAW it cannot develop (a Samsung DNG with no preview) with a black picture
+ * on a transparent square instead of with nothing, which would hide the
+ * embedded preview and the type icon behind it. Stops at the first pixel that
+ * differs, so a real picture costs a few reads.
+ */
+export function isBlankBitmap(bitmap: Uint8Array): boolean {
+	let first = -1;
+	for (let at = 0; at + 3 < bitmap.length; at += 4) {
+		if (bitmap[at + 3] === 0) continue;
+		if (first < 0) {
+			first = at;
+			continue;
+		}
+		if (bitmap[at] !== bitmap[first] || bitmap[at + 1] !== bitmap[first + 1] || bitmap[at + 2] !== bitmap[first + 2]) return false;
 	}
+	return true;
+}
+
+async function defaultThumbnail(path: string, size: number): Promise<Uint8Array | null> {
 	// Dynamic: `electron` is a main-process-only module and is not importable when
 	// this file is loaded outside Electron (unit tests inject `thumbnail` instead).
 	const [{ nativeImage }, resolved] = await Promise.all([
@@ -277,7 +311,42 @@ async function defaultThumbnail(path: string, size: number): Promise<Uint8Array 
 		realpath(path).catch(() => path),
 	]);
 	const image = await nativeImage.createThumbnailFromPath(resolved, { width: size, height: size });
-	return image.isEmpty() ? null : image.toPNG();
+	if (image.isEmpty()) return null;
+	if (RAW_PHOTO_SET.has(extname(path).slice(1).toLowerCase()) && isBlankBitmap(image.toBitmap())) return null;
+	return image.toPNG();
+}
+
+/** Longest side from a PNG's IHDR, or null when the bytes do not start like a PNG. */
+function pngLongestSide(bytes: Uint8Array): number | null {
+	if (bytes.length < 24 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47) return null;
+	const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+	return Math.max(view.getUint32(16), view.getUint32(20));
+}
+
+/**
+ * The picture a file embeds of itself, as PNG bytes no larger than `size` on
+ * the long side: the embedded reader picks the smallest image that is big
+ * enough, and a JPEG (a camera's preview, a PSD thumbnail) is decoded and
+ * re-encoded because the icon cache serves PNG. A PNG already inside the tier
+ * is kept byte for byte.
+ */
+async function defaultEmbeddedImage(path: string, ext: string, size: number): Promise<Uint8Array | null> {
+	const embedded = await readEmbeddedImage(path, ext, { want: size });
+	if (embedded === null) return null;
+	if (embedded.mime === "image/png") {
+		const side = pngLongestSide(embedded.bytes);
+		if (side === null || side <= size) return embedded.bytes;
+	}
+	const { nativeImage } = await import("electron");
+	const image = nativeImage.createFromBuffer(Buffer.from(embedded.bytes));
+	if (image.isEmpty()) return null;
+	const { width, height } = image.getSize();
+	const longest = Math.max(width, height);
+	const fitted =
+		longest > size
+			? image.resize({ width: Math.max(1, Math.round((width * size) / longest)), height: Math.max(1, Math.round((height * size) / longest)), quality: "best" })
+			: image;
+	return fitted.toPNG();
 }
 
 async function defaultSystemIcon(path: string): Promise<Uint8Array | null> {
@@ -297,6 +366,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	// macOS/Windows; other platforms keep the OS's per-type icon.
 	const usesNativeThumbnails = platform === "darwin" || platform === "win32";
 	const thumbnail = deps.thumbnail ?? defaultThumbnail;
+	const embeddedImage = deps.embeddedImage ?? defaultEmbeddedImage;
 	const systemIcon = deps.systemIcon ?? defaultSystemIcon;
 	const videoFrame = deps.videoFrame ?? extractVideoFrame;
 	const limit = Math.max(0, Math.floor(deps.limit ?? ICON_LIMIT));
@@ -359,10 +429,48 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	}
 
 	/**
-	 * macOS/Windows: in-process Quick Look thumbnails first, then the OS type
-	 * icon for every file the thumbnail API produced nothing for (Windows has no
+	 * The picture a file embeds of itself, on the same bounded lane as a native
+	 * thumbnail. Null for a format that embeds nothing (without taking a permit),
+	 * a file with no usable image, or a failure (logged verbatim): the chain moves on.
+	 */
+	async function generateEmbedded(target: IconTarget, gate: PriorityGate, priority: number): Promise<Uint8Array | null> {
+		const ext = target.ext.toLowerCase();
+		if (!EMBEDDED_IMAGE_EXTENSIONS.has(ext)) return null;
+		await gate.acquire(priority);
+		try {
+			return await withTimeout(embeddedImage(target.path, ext, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "embedded image");
+		} catch (error) {
+			warn(`file-icon: embedded image for ${target.path} failed: ${errorMessage(error)}`);
+			return null;
+		} finally {
+			gate.release();
+		}
+	}
+
+	/** One bounded native thumbnail call; a failure or deadline degrades to "no thumbnail" and is logged. */
+	async function generateNative(target: IconTarget, gate: PriorityGate, priority: number): Promise<Uint8Array | null> {
+		await gate.acquire(priority);
+		try {
+			return await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
+		} catch (error) {
+			// One unreadable/timed-out file must not cost the rest of the batch.
+			warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
+			return null;
+		} finally {
+			gate.release();
+		}
+	}
+
+	/**
+	 * macOS/Windows: a decoded video frame where the OS has no decoder, then the
+	 * file's own embedded picture and the in-process Quick Look thumbnail, then
+	 * the OS type icon for every file those produced nothing for (Windows has no
 	 * native thumbnail for most documents, so without the fallback those rows
-	 * would be left with a letter tile). Bounded and individually fault-tolerant.
+	 * would be left with a letter tile). The embedded picture goes first where
+	 * the OS draws nothing for the format (EPS, Sketch, Figma, ODF) and on
+	 * Windows, whose thumbnailer may have no codec for a RAW or PSD; macOS asks
+	 * Quick Look first, which draws the real page, and reads the file only when
+	 * it answers nothing. Bounded and individually fault-tolerant.
 	 */
 	async function runThumbnails(
 		targets: readonly IconTarget[],
@@ -377,24 +485,18 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 					resolve(cacheKey(target), bytes);
 					return;
 				}
-				await gate.acquire(priority);
-				try {
-					bytes = await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
-				} catch (error) {
-					// One unreadable/timed-out file must not cost the rest of the batch.
-					warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);
-				} finally {
-					gate.release();
-				}
-				if (bytes === null) {
-					bytes = await generateSystemIcon(target, priority);
-				}
+				const embeddedOnly = EMBEDDED_ONLY_EXTENSIONS.has(target.ext.toLowerCase());
+				const embeddedFirst = embeddedOnly || platform !== "darwin";
+				if (embeddedFirst) bytes = await generateEmbedded(target, gate, priority);
+				if (bytes === null && !embeddedOnly) bytes = await generateNative(target, gate, priority);
+				if (bytes === null && !embeddedFirst) bytes = await generateEmbedded(target, gate, priority);
+				if (bytes === null) bytes = await generateSystemIcon(target, priority);
 				resolve(cacheKey(target), bytes);
 			}),
 		);
 	}
 
-	/** Other platforms: Electron `getFileIcon` per file, bounded and individually fault-tolerant. */
+	/** Other platforms: the embedded picture, else Electron `getFileIcon` per file, bounded and individually fault-tolerant. */
 	async function runSystem(
 		targets: readonly IconTarget[],
 		resolve: (key: string, bytes: Uint8Array | null) => void,
@@ -403,8 +505,8 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 	): Promise<void> {
 		await Promise.all(
 			targets.map(async (target): Promise<void> => {
-				const frame = await generateVideoFrame(target, gate, priority);
-				resolve(cacheKey(target), frame ?? (await generateSystemIcon(target, priority)));
+				const picture = (await generateVideoFrame(target, gate, priority)) ?? (await generateEmbedded(target, gate, priority));
+				resolve(cacheKey(target), picture ?? (await generateSystemIcon(target, priority)));
 			}),
 		);
 	}
@@ -431,11 +533,7 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 			cache.set(key, bytes);
 			resolvers.get(key)?.(bytes);
 		};
-		// Other platforms use the OS icon, except for packages that embed a
-		// first page (OpenDocument, `.potx`), which is read the same way everywhere.
-		const thumbnailed = usesNativeThumbnails ? missing : missing.filter((target) => EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
-		const systemOnly = usesNativeThumbnails ? [] : missing.filter((target) => !EMBEDDED_THUMBNAIL_EXTENSIONS.has(target.ext.toLowerCase()));
-		const generation = Promise.all([runThumbnails(thumbnailed, resolve, gate, priority), runSystem(systemOnly, resolve, priority, gate)]).then(() => undefined);
+		const generation = usesNativeThumbnails ? runThumbnails(missing, resolve, gate, priority) : runSystem(missing, resolve, priority, gate);
 		void generation.catch((error: unknown) => {
 			// Pool-level failure: the whole batch degrades to "no icon".
 			warn(`file-icon: icon generation failed for ${missing.length} file(s): ${errorMessage(error)}`);

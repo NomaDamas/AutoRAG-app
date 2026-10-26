@@ -1,5 +1,6 @@
 import { assertNever } from "./assert";
 import { GOOGLE_DRIVE_EXTENSIONS } from "./google-drive";
+import { RASTER_EXTENSIONS } from "./raster-formats";
 
 export const VIEWER_KINDS = [
 	"image",
@@ -34,6 +35,7 @@ export const VIEWER_KINDS = [
 	"contact",
 	"calendar",
 	"gdrive",
+	"raster",
 	"fallback",
 ] as const;
 
@@ -45,12 +47,14 @@ function assign(kind: ViewerKind, extensions: readonly string[]): void {
 	for (const extension of extensions) viewers[extension] = kind;
 }
 
-assign("image", ["png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "gif", "webp", "bmp", "svg", "avif", "ico", "apng"]);
+// JPEG XL: Chromium decodes it when the `JXLImageFormat` feature is enabled (src/main/index.ts).
+assign("image", ["png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "gif", "webp", "bmp", "svg", "avif", "ico", "apng", "jxl"]);
 assign("tiff", ["tif", "tiff"]);
 assign("heic", ["heic", "heif"]);
 assign("video", ["mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg", "mpe", "3gp", "3gpp"]);
 assign("audio", ["mp3", "wav", "wave", "m4a", "aac", "flac", "opus", "ogg", "oga", "aiff", "aif", "weba", "mid", "midi"]);
-assign("pdf", ["pdf"]);
+// A current Illustrator file is a PDF with Illustrator's own data appended.
+assign("pdf", ["pdf", "ai"]);
 assign("docx", ["docx", "docm", "dotx"]);
 assign("legacyDoc", ["doc", "dot"]);
 assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "xlt", "csv", "tsv", "ods"]);
@@ -96,6 +100,9 @@ assign("calendar", ["ics", "ical", "ifb"]);
 // Drive for desktop's Google-native files are pointers to a cloud document; the
 // panel shows the thumbnail Drive's file provider draws for the OS.
 assign("gdrive", GOOGLE_DRIVE_EXTENSIONS);
+// Camera RAW, Photoshop, EPS, icns, tga, exr and the design tools' packages are
+// drawn from an image the main process produces (see node/raster.ts).
+assign("raster", RASTER_EXTENSIONS);
 
 export function viewerForExtension(ext: string): ViewerKind {
 	const key = ext.toLowerCase().replace(/^\./, "");
@@ -153,6 +160,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 			return "query";
 		case "heic":
 		case "tiff":
+		case "raster":
 			return "decode";
 		case "iwork":
 		case "odg":
@@ -174,6 +182,7 @@ const MIME: Readonly<Record<string, string>> = {
 	bmp: "image/bmp",
 	svg: "image/svg+xml",
 	avif: "image/avif",
+	jxl: "image/jxl",
 	ico: "image/x-icon",
 	mp4: "video/mp4",
 	m4v: "video/mp4",
@@ -297,6 +306,24 @@ const LABELS: Readonly<Record<string, string>> = {
 	gjam: "Google Jamboard board",
 	gtable: "Google Tables table",
 	gscript: "Google Apps Script project",
+	psd: "Photoshop document",
+	ai: "Illustrator artwork",
+	eps: "Encapsulated PostScript",
+	jxl: "JPEG XL image",
+	icns: "Apple icon image",
+	tga: "Targa image",
+	exr: "OpenEXR image",
+	xcf: "GIMP image",
+	sketch: "Sketch document",
+	fig: "Figma document",
+	cr2: "Canon RAW image",
+	cr3: "Canon RAW image",
+	nef: "Nikon RAW image",
+	arw: "Sony RAW image",
+	dng: "DNG RAW image",
+	orf: "Olympus RAW image",
+	rw2: "Panasonic RAW image",
+	raw: "RAW image",
 	py: "Python Source",
 	html: "HTML Document",
 	htm: "HTML Document",

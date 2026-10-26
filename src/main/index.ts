@@ -401,6 +401,9 @@ async function listMacDatalessPaths(root: string): Promise<ReadonlySet<string>> 
 	}
 }
 
+// Chromium decodes JPEG XL only behind this feature, which the Quick Look image viewer relies on for `.jxl`.
+// Merged with any `--enable-features` the app was launched with, because appendSwitch replaces a value.
+app.commandLine.appendSwitch("enable-features", [app.commandLine.getSwitchValue("enable-features"), "JXLImageFormat"].filter((value) => value !== "").join(","));
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
 // A menu request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.

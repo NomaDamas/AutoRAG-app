@@ -21,6 +21,7 @@ import { IworkView } from "./iwork";
 import { EpubView } from "./packages";
 import { OdfImageView, OdpView, OdtView } from "./odf";
 import { PptxView } from "./pptx";
+import { RasterView } from "./raster";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 
@@ -97,6 +98,8 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <CalendarView file={file} />;
 		case "gdrive":
 			return <GoogleDriveView file={file} />;
+		case "raster":
+			return <RasterView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} anchor={anchor} />;
 			return <FallbackView file={file} />;
