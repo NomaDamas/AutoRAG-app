@@ -6,29 +6,29 @@ const failure = (reason: IndexFailureReason, folders: readonly string[] = []): I
 const fresh: PauseHistory = { manualRepeats: 0, autoAttempts: 0 };
 
 describe("pauseSpec", () => {
-	it("gives every reason a screen with a way on: the button is a real exit and Dazzi can always be opened", () => {
+	it("gives every reason a screen with a way on, and never a way to skip past the first index: the Finder is already open", () => {
 		for (const reason of INDEX_FAILURE_REASONS) {
 			const spec = pauseSpec(failure(reason, reason === "folder-unreadable" ? ["/Volumes/Work/Projects"] : []));
 			expect(spec.exits.length).toBeGreaterThan(0);
-			expect(spec.exits).toContain("openAnyway");
+			expect(spec.exits).not.toContain("openAnyway");
 			expect(spec.exits).toContain("retry");
 			expect(new Set(spec.exits).size).toBe(spec.exits.length);
 		}
 	});
 
 	it("sends a refused embedder to the embedding choice first, because retrying cannot change the answer", () => {
-		expect(pauseSpec(failure("embedder-config")).exits).toEqual(["changeEmbedding", "retry", "openAnyway"]);
+		expect(pauseSpec(failure("embedder-config")).exits).toEqual(["changeEmbedding", "retry"]);
 	});
 
 	it("retries an offline embedder by itself, every 8 seconds up to 6 times", () => {
 		const spec = pauseSpec(failure("embedder-offline"));
-		expect(spec.exits).toEqual(["retry", "openAnyway"]);
+		expect(spec.exits).toEqual(["retry", "changeEmbedding"]);
 		expect(spec.auto).toEqual({ everySeconds: 8, max: 6 });
 	});
 
 	it("looks at an unreadable folder again every 3 seconds without giving up, and offers to leave it out", () => {
 		const spec = pauseSpec(failure("folder-unreadable", ["/Volumes/Work/Projects"]));
-		expect(spec.exits).toEqual(["retry", "excludeFolders", "openAnyway"]);
+		expect(spec.exits).toEqual(["retry", "excludeFolders"]);
 		expect(spec.auto).toEqual({ everySeconds: 3, max: null });
 	});
 
@@ -57,18 +57,18 @@ describe("pauseSpec", () => {
 describe("pauseExits", () => {
 	it("keeps the designed order until something repeats", () => {
 		const spec = pauseSpec(failure("unknown"));
-		expect(pauseExits(spec, fresh)).toEqual(["retry", "changeEmbedding", "openAnyway"]);
+		expect(pauseExits(spec, fresh)).toEqual(["retry", "changeEmbedding"]);
 	});
 
 	it("moves the button off 'retry' when a retry from this screen failed again", () => {
 		const spec = pauseSpec(failure("unknown"));
-		expect(pauseExits(spec, { manualRepeats: 1, autoAttempts: 0 })).toEqual(["changeEmbedding", "retry", "openAnyway"]);
+		expect(pauseExits(spec, { manualRepeats: 1, autoAttempts: 0 })).toEqual(["changeEmbedding", "retry"]);
 	});
 
 	it("keeps an automatically retried reason on 'retry' while attempts remain, and moves on once they are used up", () => {
 		const spec = pauseSpec(failure("embedder-offline"));
 		expect(pauseExits(spec, { manualRepeats: 0, autoAttempts: 5 })[0]).toBe("retry");
-		expect(pauseExits(spec, { manualRepeats: 0, autoAttempts: 6 })).toEqual(["openAnyway", "retry"]);
+		expect(pauseExits(spec, { manualRepeats: 0, autoAttempts: 6 })).toEqual(["changeEmbedding", "retry"]);
 	});
 
 	it("never turns an unbounded automatic reason's attempts into a repeat", () => {

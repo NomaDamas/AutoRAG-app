@@ -1002,9 +1002,6 @@
       "gateTitlePc": "Dazziを終了したりPCの電源を切らないでください",
       "gateDetailMac": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源アダプターを接続し、フタを開けたままにしてください。",
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
-      "gateLocked": "完了すると開けます",
-      "open": "Dazziを開く",
-      "startInBackground": "バックグラウンドで続けてすぐに始める",
       "skipped": "{{count}}ファイルはスキップしました",
       "gateOkDetailPartial": "それ以外はすべて検索できます。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
       "pause": {
@@ -1041,8 +1038,7 @@
           "resumeDisk": "空き容量を確保しました、再開",
           "changeEmbedding": "埋め込み方式を変更",
           "exclude": "「{{folder}}」を除いて続行",
-          "excludeMany": "読み取れないフォルダを除いて続行",
-          "openAnyway": "とりあえずDazziを開く"
+          "excludeMany": "読み取れないフォルダを除いて続行"
         },
         "line": {
           "retrying": "再試行しています",

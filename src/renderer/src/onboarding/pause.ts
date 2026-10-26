@@ -5,12 +5,13 @@
  *
  * The screen has five things at most: an icon, a title, one reason line, one
  * button, and up to two quiet links. `exits[0]` is the button; Enter presses it.
- * "Open Dazzi anyway" is always among the exits, so no reason can trap the user.
+ * There is no exit that skips the index: the Finder is already open beside this
+ * window, and closing the window on a stopped run ends onboarding.
  */
 
 import type { IndexFailure, IndexFailureReason } from "../../../shared/index-failure";
 
-export type PauseExit = "retry" | "changeEmbedding" | "excludeFolders" | "openAnyway";
+export type PauseExit = "retry" | "changeEmbedding" | "excludeFolders";
 
 /** A run that starts again by itself: every `everySeconds`, at most `max` times (`null`: for as long as the screen is open). */
 export interface PauseAuto {
@@ -63,7 +64,7 @@ const DESIGNS: Readonly<Record<Exclude<IndexFailureReason, "folder-unreadable">,
 		title: text("config.title"),
 		line: text("config.line"),
 		retryLabel: text("exit.retry"),
-		exits: ["changeEmbedding", "retry", "openAnyway"],
+		exits: ["changeEmbedding", "retry"],
 		auto: null,
 	},
 	"embedder-offline": {
@@ -71,7 +72,7 @@ const DESIGNS: Readonly<Record<Exclude<IndexFailureReason, "folder-unreadable">,
 		title: text("offline.title"),
 		line: text("offline.line"),
 		retryLabel: text("exit.retryNow"),
-		exits: ["retry", "openAnyway"],
+		exits: ["retry", "changeEmbedding"],
 		auto: { everySeconds: 8, max: 6 },
 	},
 	"model-download": {
@@ -79,7 +80,7 @@ const DESIGNS: Readonly<Record<Exclude<IndexFailureReason, "folder-unreadable">,
 		title: text("model.title"),
 		line: text("model.line"),
 		retryLabel: text("exit.resume"),
-		exits: ["retry", "changeEmbedding", "openAnyway"],
+		exits: ["retry", "changeEmbedding"],
 		auto: { everySeconds: 8, max: 6 },
 	},
 	"disk-full": {
@@ -87,7 +88,7 @@ const DESIGNS: Readonly<Record<Exclude<IndexFailureReason, "folder-unreadable">,
 		title: text("disk.title"),
 		line: text("disk.line"),
 		retryLabel: text("exit.resumeDisk"),
-		exits: ["retry", "changeEmbedding", "openAnyway"],
+		exits: ["retry", "changeEmbedding"],
 		auto: null,
 	},
 	unknown: {
@@ -95,7 +96,7 @@ const DESIGNS: Readonly<Record<Exclude<IndexFailureReason, "folder-unreadable">,
 		title: text("unknown.title"),
 		line: text("unknown.line"),
 		retryLabel: text("exit.retry"),
-		exits: ["retry", "changeEmbedding", "openAnyway"],
+		exits: ["retry", "changeEmbedding"],
 		auto: null,
 	},
 };
@@ -110,7 +111,7 @@ export function pauseSpec(failure: IndexFailure): PauseSpec {
 		line: text("folder.line"),
 		retryLabel: text("exit.recheck"),
 		excludeLabel: many || first === undefined ? text("exit.excludeMany") : text("exit.exclude", { folder: folderName(first) }),
-		exits: ["retry", "excludeFolders", "openAnyway"],
+		exits: ["retry", "excludeFolders"],
 		auto: { everySeconds: 3, max: null },
 	};
 }

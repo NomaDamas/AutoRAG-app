@@ -1002,9 +1002,6 @@
       "gateTitlePc": "Don't quit Dazzi or turn off your PC",
       "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
-      "gateLocked": "Opens once it's done",
-      "open": "Open Dazzi",
-      "startInBackground": "Continue in background and start right away",
       "skipped": "{{count}} files were skipped",
       "gateOkDetailPartial": "Everything else is searchable. Newly changed files continue to be read in the background.",
       "pause": {
@@ -1041,8 +1038,7 @@
           "resumeDisk": "I freed up space, resume",
           "changeEmbedding": "Change embedding",
           "exclude": "Continue without “{{folder}}”",
-          "excludeMany": "Continue without the unreadable folders",
-          "openAnyway": "Open Dazzi anyway"
+          "excludeMany": "Continue without the unreadable folders"
         },
         "line": {
           "retrying": "Trying again…",
