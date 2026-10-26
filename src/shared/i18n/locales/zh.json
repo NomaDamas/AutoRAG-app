@@ -1572,7 +1572,14 @@
       "tarListFailed": "无法读取 tar 列表",
       "readFailed": "无法读取归档",
       "empty": "空的归档",
-      "order": "修改日期"
+      "order": "修改日期",
+      "unreadable": {
+        "encrypted": "此归档受密码保护，无法列出其内容",
+        "corrupt": "无法列出此归档。它可能已损坏、受密码保护，或只压缩了一个文件",
+        "tooLarge": "此归档太大，无法列出，改为显示其信息",
+        "tooManyEntries": "此归档包含的项目过多，无法列出，改为显示其信息",
+        "tooSlow": "列出此归档耗时过长，仅显示其信息"
+      }
     },
     "folder": {
       "kind": "文件夹",

@@ -17,6 +17,7 @@ export const VIEWER_KINDS = [
 	"html",
 	"text",
 	"archive",
+	"archiveList",
 	"iwork",
 	"odt",
 	"odp",
@@ -72,6 +73,9 @@ assign("text", [
 	"diff", "patch", "rst", "tex", "lock",
 ]);
 assign("archive", ["zip", "jar", "war", "apk", "ipa", "vsix", "crx", "tar", "gz", "gzip", "tgz"]);
+// Containers libarchive's wasm build (or Node's zstd and the deb/rpm wrappers) read in
+// the main process; the page gets only the capped top level, like a database.
+assign("archiveList", ["rar", "7z", "bz2", "tbz", "tbz2", "xz", "txz", "zst", "tzst", "iso", "deb", "rpm", "cab"]);
 // Apple's iWork packages are ZIPs whose `preview.jpg` is the first page, sheet,
 // or slide; the listing of their `Index/*.iwa` protobufs would say nothing.
 assign("iwork", ["numbers", "pages", "key"]);
@@ -145,6 +149,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "msg":
 			return "whole";
 		case "data":
+		case "archiveList":
 			return "query";
 		case "heic":
 		case "tiff":
@@ -269,6 +274,18 @@ const LABELS: Readonly<Record<string, string>> = {
 	dmg: "Disk Image",
 	iso: "Disc Image",
 	pkg: "Installer Package",
+	rar: "RAR archive",
+	"7z": "7-Zip archive",
+	bz2: "Bzip2 archive",
+	tbz: "Bzip2 archive",
+	tbz2: "Bzip2 archive",
+	xz: "XZ archive",
+	txz: "XZ archive",
+	zst: "Zstandard archive",
+	tzst: "Zstandard archive",
+	deb: "Debian package",
+	rpm: "RPM package",
+	cab: "Cabinet archive",
 	app: "Application",
 	gdoc: "Google Docs document",
 	gsheet: "Google Sheets spreadsheet",
