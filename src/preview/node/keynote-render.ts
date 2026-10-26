@@ -1,21 +1,24 @@
-import { execFile } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, realpath, rename, rm, stat, utimes } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, utimes } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
+import { defaultRun, type OfficeRun } from "./office-render";
 
-/** Keynote's bundle ids, the one that ships with macOS-era iWork first, then the Creator Studio one. */
-const KEYNOTE_BUNDLE_IDS = ["com.apple.iWork.Keynote", "com.apple.Keynote"] as const;
-/** A deck opens, draws every slide, and closes in seconds; this bounds a hung dialog (a password, a missing-font sheet). */
-const EXPORT_TIMEOUT_MS = 180_000;
+/** `qlmanage` lays a 140-slide deck out in about 9s; this bounds a hung generator. */
+const QUICK_LOOK_TIMEOUT_MS = 120_000;
+const SIPS_TIMEOUT_MS = 60_000;
+/** Slides rasterized per `sips` run, and how many runs go at once: a run costs a process start, so slides are batched, and the first batch is the top of the deck. */
+const SIPS_BATCH = 8;
+const SIPS_PARALLEL = 4;
 /** Every slide of a deck together may not exceed this, so a huge deck degrades instead of filling memory. */
 const DECK_BYTE_CAP = 256 * 1024 * 1024;
-/** Keynote writes a slide every few hundred milliseconds; the panel hears of each within this. */
+/** The panel hears of a finished slide within this. */
 const SLIDE_POLL_MS = 150;
 /** Disk the exported slides may use; the least recently shown decks go first. */
 const CACHE_BYTES = 1024 * 1024 * 1024;
 /** A scratch folder this old belongs to a run that died. */
 const SCRATCH_MAX_AGE_MS = 60 * 60 * 1000;
-/** Keynote writes `<folder>.001.jpeg`, `<folder>.002.jpeg`, ... into the folder it is given. */
+/** Slide files are named `slides.001.jpeg`, `slides.002.jpeg`, ... */
 const SLIDE_FILE = /\.(\d+)\.jpe?g$/i;
 
 /** What identifies one version of a deck: a changed deck must never be served stale slides. */
@@ -25,144 +28,65 @@ export interface KeynoteFileIdentity {
 	readonly size: number;
 }
 
-/** One Keynote run: open `path`, write every slide as a JPEG into the existing folder `outDir`, leave Keynote as it was. */
+/** One export: write every slide of `path` as `slides.NNN.jpeg` (show order) into the existing folder `outDir`. */
 export interface KeynoteExport {
-	(job: { readonly path: string; readonly outDir: string; readonly bundleId: string }): Promise<void>;
+	(job: { readonly path: string; readonly outDir: string }): Promise<void>;
 }
 
-/** Spotlight's answer for one bundle id: the matching apps, one path per line. */
-export type FindApps = (bundleId: string) => Promise<string>;
-
-const defaultFindApps: FindApps = (bundleId) =>
-	new Promise((resolve, reject) => {
-		execFile("mdfind", [`kMDItemCFBundleIdentifier == '${bundleId}'`], { timeout: 10_000 }, (error, stdout) => (error === null ? resolve(stdout) : reject(error)));
-	});
+const SLIDE_PDF = /^Attachment[\w.-]*\.pdf$/;
 
 /**
- * The bundle id of an installed Keynote, or null. Only macOS has Keynote, and
- * only Spotlight is asked: addressing an app that is not installed would make
- * AppleScript show a "Where is Keynote?" dialog.
+ * The slide PDFs of Quick Look's `Preview.html`, in the order the page draws
+ * them (a slide used twice is listed twice). The generator names them by
+ * creation order, not show order, so the page is the only source of the order.
  */
-export async function findInstalledKeynote(platform: NodeJS.Platform, findApps: FindApps = defaultFindApps): Promise<string | null> {
-	if (platform !== "darwin") return null;
-	for (const bundleId of KEYNOTE_BUNDLE_IDS) {
-		const found = await findApps(bundleId).catch(() => "");
-		if (found.trim().length > 0) return bundleId;
+export function quickLookSlideOrder(html: string): string[] {
+	const names: string[] = [];
+	for (const tag of html.match(/<img\b[^>]*>/gi) ?? []) {
+		const src = /\bsrc="([^"]*)"/i.exec(tag)?.[1];
+		if (src !== undefined && SLIDE_PDF.test(src)) names.push(src);
 	}
-	return null;
+	return names;
 }
 
 /**
- * The AppleScript behind {@link exportWithKeynote}. A deck the user already has
- * open is exported as it is and stays open; a deck this run opened is closed
- * without saving. The failure is raised only after that cleanup.
+ * Draws every slide of a Keynote deck with macOS's own iWork Quick Look
+ * generator, the one Finder's preview pane uses: `qlmanage -p` writes one
+ * full-resolution vector PDF per slide (about 2s for 16 slides, 9s for 140) and
+ * `sips` rasterizes them to JPEG at their native size (1920x1080 for a 16:9
+ * deck). No application is launched and no document is opened. The scratch
+ * folder is always removed.
  */
-function exportScript(bundleId: string): string[] {
-	const app = `application id "${bundleId}"`;
-	return [
-		"on run argv",
-		"set thePath to item 1 of argv",
-		"set theFile to POSIX file thePath",
-		"set outDir to POSIX file (item 2 of argv)",
-		`set wasRunning to ${app} is running`,
-		`tell ${app}`,
-		"set theDoc to missing value",
-		"set weOpened to false",
-		"set failure to missing value",
-		"try",
-		"if wasRunning then",
-		"repeat with candidate in documents",
-		"try",
-		"if (POSIX path of (file of candidate as alias)) is thePath then",
-		"set theDoc to contents of candidate",
-		"exit repeat",
-		"end if",
-		"end try",
-		"end repeat",
-		"end if",
-		"if theDoc is missing value then",
-		"set theDoc to open theFile",
-		"set weOpened to true",
-		"end if",
-		"export theDoc to outDir as slide images with properties {image format:JPEG, skipped slides:true, compression factor:0.85}",
-		"on error errMsg number errNum",
-		"set failure to {errMsg, errNum}",
-		"end try",
-		"if weOpened then",
-		"try",
-		"close theDoc saving no",
-		"end try",
-		"end if",
-		"end tell",
-		"if failure is not missing value then error (item 1 of failure) number (item 2 of failure)",
-		"end run",
-	];
-}
-
-/** Quits Keynote only while it has no document: never takes down a deck the user opened meanwhile. */
-function quitIfIdleScript(bundleId: string): string[] {
-	const app = `application id "${bundleId}"`;
-	return [`if ${app} is running then`, `tell ${app}`, "if (count of documents) is 0 then quit", "end tell", "end if"];
-}
-
-function osascript(lines: readonly string[], args: readonly string[], timeoutMs: number): Promise<string> {
-	return new Promise((resolve, reject) => {
-		execFile("osascript", [...lines.flatMap((line) => ["-e", line]), ...args], { timeout: timeoutMs }, (error, stdout, stderr) => {
-			if (error === null) return resolve(stdout.trim());
-			reject(new Error(stderr.trim().length > 0 ? stderr.trim() : error.message));
-		});
-	});
-}
-
-const isRunning = async (bundleId: string): Promise<boolean> =>
-	(await osascript([`application id "${bundleId}" is running`], [], 10_000).catch(() => "false")) === "true";
-
-const QUIT_ATTEMPTS = 3;
-const QUIT_RETRY_MS = 1000;
-
-function lsappinfo(args: readonly string[]): Promise<string> {
-	return new Promise((resolve, reject) => {
-		execFile("lsappinfo", args, { timeout: 10_000 }, (error, stdout) => (error === null ? resolve(stdout) : reject(error)));
-	});
-}
-
-/** The process id of the running Keynote with this bundle id, or null. */
-async function keynotePid(bundleId: string): Promise<number | null> {
-	const asn = (await lsappinfo(["find", `bundleid=${bundleId}`]).catch(() => "")).trim();
-	if (asn.length === 0) return null;
-	const pid = /"pid"=(\d+)/.exec(await lsappinfo(["info", "-only", "pid", asn]).catch(() => ""))?.[1];
-	return pid === undefined ? null : Number(pid);
-}
-
-/**
- * Leaves Keynote as this run found it. A Keynote this run launched is quit once
- * it holds no document. A deck it cannot open makes Keynote raise an alert a
- * moment after the failed `open`, and a Keynote showing its document picker or
- * such an alert ignores `quit` for good; one that is still running after a few
- * tries with no document open holds nothing to lose and is terminated, so the
- * user is never left with an invisible Keynote that will not launch again.
- */
-async function quitLaunchedKeynote(bundleId: string): Promise<void> {
-	for (let attempt = 0; attempt < QUIT_ATTEMPTS; attempt += 1) {
-		await osascript(quitIfIdleScript(bundleId), [], 15_000).catch(() => undefined);
-		await new Promise((resolve) => setTimeout(resolve, QUIT_RETRY_MS));
-		if (!(await isRunning(bundleId))) return;
-	}
-	const count = await osascript([`tell application id "${bundleId}" to count documents`], [], 15_000).catch(() => "unknown");
-	const pid = count === "0" ? await keynotePid(bundleId) : null;
-	if (pid !== null) process.kill(pid, "SIGTERM");
-}
-
-/** Draws every slide of a deck through the Keynote app (a GUI launch: seconds per deck). */
-export const exportWithKeynote: KeynoteExport = async ({ path, outDir, bundleId }) => {
-	const real = await realpath(path);
-	const wasRunning = await isRunning(bundleId);
+export async function exportWithQuickLook(job: { readonly path: string; readonly outDir: string }, deps: { readonly run?: OfficeRun } = {}): Promise<void> {
+	const run = deps.run ?? defaultRun;
+	const scratch = await mkdtemp(join(tmpdir(), "autorag-keynote-"));
 	try {
-		await osascript(exportScript(bundleId), [real, outDir], EXPORT_TIMEOUT_MS);
+		await run("/usr/bin/qlmanage", ["-p", job.path, "-o", scratch], { timeoutMs: QUICK_LOOK_TIMEOUT_MS });
+		const pack = join(scratch, `${basename(job.path)}.qlpreview`);
+		const html = await readFile(join(pack, "Preview.html"), "utf8").catch(() => null);
+		if (html === null) throw new Error("Quick Look drew no page for this deck");
+		const order = quickLookSlideOrder(html);
+		if (order.length === 0) throw new Error("Quick Look drew no slides for this deck");
+		const batches: number[] = [];
+		for (let start = 0; start < order.length; start += SIPS_BATCH) batches.push(start);
+		let next = 0;
+		const worker = async (): Promise<void> => {
+			for (let turn = next++; turn < batches.length; turn = next++) {
+				const start = batches[turn]!;
+				const names = order.slice(start, start + SIPS_BATCH);
+				const raw = join(scratch, `raw-${turn}`);
+				await mkdir(raw);
+				await run("/usr/bin/sips", ["-s", "format", "jpeg", "-s", "formatOptions", "85", ...[...new Set(names)].map((name) => join(pack, name)), "--out", raw], { timeoutMs: SIPS_TIMEOUT_MS });
+				for (const [offset, name] of names.entries()) {
+					await copyFile(join(raw, `${name.slice(0, -4)}.jpg`), join(job.outDir, `slides.${String(start + offset + 1).padStart(3, "0")}.jpeg`));
+				}
+			}
+		};
+		await Promise.all(Array.from({ length: Math.min(SIPS_PARALLEL, batches.length) }, worker));
 	} finally {
-		if (!wasRunning) await quitLaunchedKeynote(bundleId);
+		await rm(scratch, { recursive: true, force: true });
 	}
-};
+}
 
 /** The slide JPEGs in `folder` in show order (numeric, not lexical), or null when they exceed the byte cap. */
 async function readSlides(folder: string): Promise<Uint8Array[] | null> {
@@ -234,8 +158,8 @@ async function folderBytes(folder: string): Promise<number> {
 export interface KeynoteSlideCacheDeps {
 	/** Where the rendered decks live; created on first use. */
 	readonly dir: string;
-	/** The bundle id of the installed Keynote, or null. Defaults to asking Spotlight once. */
-	readonly installed?: () => Promise<string | null>;
+	/** Whether this system can draw slides. Defaults to macOS, whose Quick Look has the iWork generator. */
+	readonly supported?: () => Promise<boolean>;
 	readonly export?: KeynoteExport;
 	/** Bytes of slides kept on disk. Defaults to 1GB. */
 	readonly maxBytes?: number;
@@ -274,11 +198,11 @@ function identityKey(file: KeynoteFileIdentity): string {
 export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSlideCache {
 	const warn = deps.warn ?? ((message: string) => console.warn(message));
 	const maxBytes = deps.maxBytes ?? CACHE_BYTES;
-	const run = deps.export ?? exportWithKeynote;
-	let found: Promise<string | null> | null = null;
-	const installed = (): Promise<string | null> => {
-		found ??= (deps.installed ?? (() => findInstalledKeynote(process.platform)))();
-		return found;
+	const run = deps.export ?? exportWithQuickLook;
+	let known: Promise<boolean> | null = null;
+	const supported = (): Promise<boolean> => {
+		known ??= (deps.supported ?? (async () => process.platform === "darwin"))();
+		return known;
 	};
 	const pollMs = deps.pollMs ?? SLIDE_POLL_MS;
 	const running = new Map<string, { readonly promise: Promise<Uint8Array[] | null>; readonly delivered: Map<number, Uint8Array>; readonly listeners: Set<SlideListener> }>();
@@ -316,14 +240,13 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 		}
 	};
 
-	/** Decks Keynote failed on this session: asking again would only launch it for another alert. */
+	/** Decks Quick Look failed on this session: asking again would only repeat the wait. */
 	const failed = new Set<string>();
 	const draw = async (file: KeynoteFileIdentity, expected: number, emit: SlideListener): Promise<Uint8Array[] | null> => {
 		const cached = await lookup(file, expected);
 		if (cached !== null) return cached;
 		if (failed.has(identityKey(file))) return null;
-		const bundleId = await installed();
-		if (bundleId === null) return null;
+		if (!(await supported())) return null;
 		const key = identityKey(file);
 		await mkdir(deps.dir, { recursive: true });
 		const scratch = join(deps.dir, `.tmp-${randomBytes(6).toString("hex")}`);
@@ -332,7 +255,7 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 		try {
 			await mkdir(outDir, { recursive: true });
 			stopWatching = watchSlides(outDir, pollMs, emit);
-			await run({ path: file.path, outDir, bundleId });
+			await run({ path: file.path, outDir });
 			await stopWatching();
 			stopWatching = null;
 			const slides = await readSlides(outDir);
@@ -358,7 +281,7 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 	};
 
 	return {
-		available: async (file) => (await installed()) !== null && !failed.has(identityKey(file)),
+		available: async (file) => (await supported()) && !failed.has(identityKey(file)),
 		lookup,
 		render(file, expected, onSlide) {
 			const key = identityKey(file);

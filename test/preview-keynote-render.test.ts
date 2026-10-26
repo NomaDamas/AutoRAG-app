@@ -1,13 +1,13 @@
-import { mkdir, mkdtemp, readdir, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { setImmediate as nextTurn } from "node:timers/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createKeynoteSlideCache, findInstalledKeynote, openKeynoteSlides, type KeynoteExport, type KeynoteFileIdentity } from "../src/preview/node/keynote-render";
+import { createKeynoteSlideCache, exportWithQuickLook, openKeynoteSlides, quickLookSlideOrder, type KeynoteExport, type KeynoteFileIdentity } from "../src/preview/node/keynote-render";
+import type { OfficeRun } from "../src/preview/node/office-render";
 import { isPreviewDocument, isQuickLookSlides, type QuickLookSlides } from "../src/preview/shared/contract";
 
 const FILE: KeynoteFileIdentity = { path: "/decks/a.key", mtimeMs: 1000, size: 50 };
-const BUNDLE = "com.apple.iWork.Keynote";
 
 /** JPEG-looking bytes whose first byte after the SOI tells slides apart. */
 function slide(tag: number): Uint8Array {
@@ -32,10 +32,10 @@ afterEach(async () => {
 	await rm(dir, { recursive: true, force: true });
 });
 
-function cache(deps: { readonly export?: KeynoteExport | undefined; readonly installed?: string | null | undefined; readonly maxBytes?: number | undefined; readonly warn?: ((message: string) => void) | undefined } = {}) {
+function cache(deps: { readonly export?: KeynoteExport | undefined; readonly supported?: boolean | undefined; readonly maxBytes?: number | undefined; readonly warn?: ((message: string) => void) | undefined } = {}) {
 	return createKeynoteSlideCache({
 		dir,
-		installed: async () => (deps.installed === undefined ? BUNDLE : deps.installed),
+		supported: async () => deps.supported ?? true,
 		export: deps.export ?? fakeExport(3),
 		...(deps.maxBytes === undefined ? {} : { maxBytes: deps.maxBytes }),
 		pollMs: 2,
@@ -119,9 +119,9 @@ describe("Keynote slide rendering", () => {
 		expect(peak).toBe(1);
 	});
 
-	it("never starts Keynote when it is not installed", async () => {
+	it("never runs Quick Look when the system cannot draw slides", async () => {
 		const log: string[] = [];
-		const slides = cache({ export: fakeExport(3, log), installed: null });
+		const slides = cache({ export: fakeExport(3, log), supported: false });
 		expect(await slides.available(FILE)).toBe(false);
 		expect(await slides.render(FILE, 3)).toBeNull();
 		expect(log).toEqual([]);
@@ -213,14 +213,14 @@ describe("Keynote slide rendering", () => {
 
 describe("openKeynoteSlides", () => {
 	type Published = { slides: ReadonlyArray<{ index: number; bytes: Uint8Array }>; rendering: boolean };
-	function harness(options: { readonly export?: KeynoteExport; readonly installed?: string | null; readonly current?: () => boolean } = {}) {
+	function harness(options: { readonly export?: KeynoteExport; readonly supported?: boolean; readonly current?: () => boolean } = {}) {
 		const published: Published[] = [];
 		let announce: () => void = () => undefined;
 		/** Resolves when the last update (rendering false) is published. */
 		const finished = new Promise<void>((resolve) => {
 			announce = resolve;
 		});
-		const slides = cache({ export: options.export, installed: options.installed });
+		const slides = cache({ export: options.export, supported: options.supported });
 		const open = () =>
 			openKeynoteSlides(FILE, 3, {
 				cache: slides,
@@ -314,8 +314,8 @@ describe("openKeynoteSlides", () => {
 		expect(published).toEqual([]);
 	});
 
-	it("changes nothing when Keynote is not installed", async () => {
-		const { published, open } = harness({ installed: null });
+	it("changes nothing when Quick Look cannot draw slides on this system", async () => {
+		const { published, open } = harness({ supported: false });
 		expect(await open()).toEqual({ pages: null, rendering: false });
 		await nextTurn();
 		expect(published).toEqual([]);
@@ -343,29 +343,84 @@ describe("openKeynoteSlides", () => {
 	});
 });
 
-describe("finding Keynote", () => {
-	it("is only looked for on macOS", async () => {
-		let asked = 0;
-		const mdfind = async () => {
-			asked += 1;
-			return "/Applications/Keynote.app\n";
-		};
-		expect(await findInstalledKeynote("win32", mdfind)).toBeNull();
-		expect(await findInstalledKeynote("linux", mdfind)).toBeNull();
-		expect(asked).toBe(0);
+/** A fake `qlmanage` + `sips`: qlmanage writes the `.qlpreview` pack, sips rasterizes each PDF it is given into `--out`. */
+function fakeQuickLook(options: { readonly html?: string | null; readonly pdfs?: readonly string[]; readonly fail?: "qlmanage" | "sips" } = {}) {
+	const calls: string[][] = [];
+	const pdfs = options.pdfs ?? ["Attachment6.pdf", "Attachment3.pdf", "Attachment16.pdf"];
+	const html = options.html === undefined ? `<html><body>${pdfs.map((name) => `<div class=""><img src="${name}" width="100%"></div>`).join("\n")}</body></html>` : options.html;
+	const run: OfficeRun = async (command, args) => {
+		calls.push([command, ...args]);
+		if (command.endsWith("qlmanage")) {
+			if (options.fail === "qlmanage") throw new Error("qlmanage failed");
+			const out = args[args.indexOf("-o") + 1]!;
+			const pack = join(out, `${args[1]!.split("/").pop()}.qlpreview`);
+			await mkdir(pack, { recursive: true });
+			if (html !== null) await writeFile(join(pack, "Preview.html"), html);
+			for (const name of pdfs) await writeFile(join(pack, name), `%PDF ${name}`);
+			return;
+		}
+		if (options.fail === "sips") throw new Error("sips failed");
+		const out = args[args.indexOf("--out") + 1]!;
+		for (const input of args.slice(args.indexOf("formatOptions") + 2, args.indexOf("--out"))) {
+			const stem = input.split("/").pop()!.replace(/\.pdf$/, "");
+			// Like the real sips, the output keeps the input's name with a .jpg extension. The JPEG's tag byte is the attachment number, so the test can see which PDF became which slide.
+			await writeFile(join(out, `${stem}.jpg`), slide(Number(stem.replace("Attachment", ""))));
+		}
+	};
+	return { run, calls };
+}
+
+describe("Quick Look slide order", () => {
+	it("lists the slide PDFs in the order the page draws them, not by attachment number", () => {
+		const html = `<body><div><img src="Attachment6.pdf" width="100%"></div><div><img src="Attachment3.pdf" width="100%"></div><div><img src="Attachment16.pdf" width="100%"></div></body>`;
+		expect(quickLookSlideOrder(html)).toEqual(["Attachment6.pdf", "Attachment3.pdf", "Attachment16.pdf"]);
 	});
 
-	it("takes the first known Keynote Spotlight lists, iWork before the Creator Studio one", async () => {
-		const asked: string[] = [];
-		const both = async (bundleId: string) => {
-			asked.push(bundleId);
-			return "/Applications/X.app\n";
-		};
-		expect(await findInstalledKeynote("darwin", both)).toBe("com.apple.iWork.Keynote");
-		const onlyStudio = async (bundleId: string) => (bundleId === "com.apple.Keynote" ? "/Applications/Keynote Creator Studio.app\n" : "");
-		expect(await findInstalledKeynote("darwin", onlyStudio)).toBe("com.apple.Keynote");
-		expect(await findInstalledKeynote("darwin", async () => "")).toBeNull();
-		expect(await findInstalledKeynote("darwin", async () => Promise.reject(new Error("no mdfind")))).toBeNull();
+	it("keeps a slide that appears twice twice, and ignores pictures that are not attachment PDFs", () => {
+		const html = `<img src="Attachment2.pdf"><img src="https://example.com/x.pdf"><img src="../Attachment9.pdf"><img src="Attachment2.pdf"><img src="Attachment4.png">`;
+		expect(quickLookSlideOrder(html)).toEqual(["Attachment2.pdf", "Attachment2.pdf"]);
+	});
+});
+
+describe("exportWithQuickLook", () => {
+	const sortedTags = async (): Promise<number[]> => Promise.all((await readdir(dir)).sort().map(async (name) => (await readFile(join(dir, name)))[2]!));
+
+	it("writes one numbered JPEG per slide in show order, without starting any app", async () => {
+		const { run, calls } = fakeQuickLook();
+		await exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run });
+		expect((await readdir(dir)).sort()).toEqual(["slides.001.jpeg", "slides.002.jpeg", "slides.003.jpeg"]);
+		expect(await sortedTags()).toEqual([6, 3, 16]);
+		expect(new Set(calls.map((call) => call[0]))).toEqual(new Set(["/usr/bin/qlmanage", "/usr/bin/sips"]));
+	});
+
+	it("rasterizes a large deck in several runs and still numbers every slide by position", async () => {
+		const pdfs = Array.from({ length: 30 }, (_, index) => `Attachment${index + 1}.pdf`).reverse();
+		const { run, calls } = fakeQuickLook({ pdfs });
+		await exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run });
+		const tags = await sortedTags();
+		expect(tags).toEqual(Array.from({ length: 30 }, (_, index) => 30 - index));
+		expect(calls.filter((call) => call[0]?.endsWith("sips")).length).toBeGreaterThan(1);
+	});
+
+	it("writes a slide used twice twice", async () => {
+		const { run } = fakeQuickLook({ pdfs: ["Attachment1.pdf", "Attachment2.pdf"], html: `<img src="Attachment1.pdf"><img src="Attachment2.pdf"><img src="Attachment1.pdf">` });
+		await exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run });
+		expect(await sortedTags()).toEqual([1, 2, 1]);
+	});
+
+	it("fails when Quick Look draws no page or no slides, and when a tool fails", async () => {
+		await expect(exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run: fakeQuickLook({ html: null }).run })).rejects.toThrow(/no page/i);
+		await expect(exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run: fakeQuickLook({ html: "<p>text only</p>" }).run })).rejects.toThrow(/no slides/i);
+		await expect(exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run: fakeQuickLook({ fail: "qlmanage" }).run })).rejects.toThrow("qlmanage failed");
+		await expect(exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run: fakeQuickLook({ fail: "sips" }).run })).rejects.toThrow("sips failed");
+	});
+
+	it("removes its scratch folder, success or failure", async () => {
+		const scratch = async () => (await readdir(tmpdir())).filter((name) => name.startsWith("autorag-keynote-") && name !== basename(dir));
+		const before = await scratch();
+		await exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run: fakeQuickLook().run });
+		await exportWithQuickLook({ path: "/decks/a.key", outDir: dir }, { run: fakeQuickLook({ fail: "sips" }).run }).catch(() => undefined);
+		expect(await scratch()).toEqual(before);
 	});
 });
 

@@ -124,7 +124,7 @@ let quitting = false;
 let iconSource: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null;
 /** The Office pages macOS drew, rendered ahead of Space when the Finder selects a legacy Office file. */
 let officePages: OfficeRenderCache = createOfficeRenderCache();
-/** Full-size Keynote slides drawn by the Keynote app; null in unit tests and before `registerQuickLookIpc` runs. */
+/** Full-size Keynote slides drawn by macOS Quick Look; null in unit tests and before `registerQuickLookIpc` runs. */
 let keynoteSlides: KeynoteSlideCache | null = null;
 
 function live(window: BrowserWindow): boolean {
@@ -425,8 +425,8 @@ async function withOffice(state: Session, seq: number, target: QuickLookTarget, 
 
 /**
  * A Keynote deck opens on the package's stored slides at once, upgraded in
- * place to full-size ones drawn by the Keynote app (see {@link openKeynoteSlides})
- * when it is installed: from disk if drawn before, else on the `slides` channel.
+ * place to full-size ones drawn by macOS Quick Look (see {@link openKeynoteSlides}):
+ * from disk if drawn before, else on the `slides` channel.
  */
 async function withKeynote(state: Session, seq: number, target: QuickLookTarget, content: TargetContent): Promise<TargetContent> {
 	const document = content.document;

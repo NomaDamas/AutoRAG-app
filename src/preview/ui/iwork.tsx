@@ -9,8 +9,8 @@ import { PagedView, type DrawPage } from "./paged";
  * Numbers, Pages, and Keynote files. Numbers and Pages show the first sheet or
  * page Apple stored in the package. A Keynote deck shows every slide in the
  * PDF panel's paged layout: the quality first-page image from `preview.jpg`,
- * then the app's own 356px render of each following slide. When the Keynote app
- * is installed those are upgraded in place to full-size slides it draws
+ * then the app's own 356px render of each following slide. On macOS those are
+ * upgraded in place to the full-size slides Quick Look's iWork generator draws
  * (`slidesRendering` shows a badge until they land). A package without a
  * page image gets the "Other" panel.
  */

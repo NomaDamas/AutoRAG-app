@@ -1656,7 +1656,7 @@
       "slideMissing": "此幻灯片没有图片",
       "drawFailed": "无法绘制幻灯片",
       "noPreview": "此文档没有预览图片",
-      "rendering": "正在用 Keynote 生成高清幻灯片…",
+      "rendering": "正在生成高清幻灯片…",
       "page": "第 {{count}} 页"
     },
     "gdrive": {

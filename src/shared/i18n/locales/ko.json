@@ -1656,7 +1656,7 @@
       "slideMissing": "이 슬라이드의 이미지가 없습니다",
       "drawFailed": "슬라이드를 그리지 못했습니다",
       "noPreview": "이 문서에는 미리보기 이미지가 없습니다",
-      "rendering": "Keynote로 선명한 슬라이드를 만드는 중…",
+      "rendering": "슬라이드를 선명하게 만드는 중…",
       "page": "{{count}}페이지"
     },
     "gdrive": {
