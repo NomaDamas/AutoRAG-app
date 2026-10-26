@@ -1656,6 +1656,7 @@
       "slideMissing": "This slide has no image",
       "drawFailed": "Couldn’t draw the slide",
       "noPreview": "This document has no preview image",
+      "rendering": "Drawing sharp slides with Keynote…",
       "page": "Page {{count}}"
     },
     "gdrive": {

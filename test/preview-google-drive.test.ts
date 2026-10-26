@@ -108,7 +108,7 @@ describe("Google Drive row tile before any thumbnail arrives", () => {
 });
 
 describe("PreviewDocument.thumbnail", () => {
-	const base = { name: "a.gdoc", path: "/a.gdoc", ext: "gdoc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/json", truncated: false, bytes: null, pages: null, office: null };
+	const base = { name: "a.gdoc", path: "/a.gdoc", ext: "gdoc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/json", truncated: false, bytes: null, pages: null, office: null, slidesRendering: false };
 
 	it("is an autorag-thumb URL or null, and is required", () => {
 		expect(isPreviewDocument({ ...base, thumbnail: null })).toBe(true);

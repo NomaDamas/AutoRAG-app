@@ -130,7 +130,7 @@ describe("renderOfficeHtml", () => {
 });
 
 describe("PreviewDocument.office", () => {
-	const base = { name: "a.doc", path: "/a.doc", ext: "doc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: null, pages: null, thumbnail: null };
+	const base = { name: "a.doc", path: "/a.doc", ext: "doc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: null, pages: null, thumbnail: null, slidesRendering: false };
 
 	it("is an office state or null", () => {
 		expect(isPreviewDocument({ ...base, office: null })).toBe(true);

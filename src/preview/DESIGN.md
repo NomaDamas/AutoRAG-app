@@ -214,8 +214,8 @@ still has the previous file's size when they lay out.
   the show's slide order is recovered from the IWA container (snappy +
   protobuf) in `Index/Document.iwa` (`shared/iwork-slides.ts`), and each
   following slide is the app's own 356px `Data/st-*` render — the first slide
-  keeps the full-quality `preview.jpg`, so the other cards are visibly lower
-  resolution than the first. A deck whose order cannot be read (an older or
+  keeps the full-quality `preview.jpg`, so until the full-size upgrade below
+  lands (or when it cannot run) the other cards are visibly lower resolution. A deck whose order cannot be read (an older or
   newer format, or a corrupt file) falls back to the single first-page image
   with a warning. `byteNeed` is `extract`: the main process reads only the
   central directory, `Index/Document.iwa`, and the slide images
@@ -224,6 +224,26 @@ still has the previous file's size when they lay out.
   Finder's tile and Inspector thumbnails ask macOS Quick Look for the same
   extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
   the type icon.
+
+  **Full-size slides (macOS with Keynote installed)** — the package holds no
+  larger per-slide image, so the panel asks the Keynote app itself
+  (`node/keynote-render.ts`, `withKeynote` in `node/window.ts`). The panel
+  opens at once on the stored slides with `PreviewDocument.slidesRendering`
+  true (a "Drawing sharp slides with Keynote…" badge over the paged view);
+  `osascript` opens the deck, exports every slide as a ~1920px JPEG (skipped
+  slides included, so the count matches the slide tree), and the result is sent
+  on the `slides` channel; `PagedView` swaps each card's picture in place once
+  drawn. The export is kept per deck version (path + mtime + size) under
+  `<userData>/keynote-slides`, a 1GB LRU, so an unchanged deck never launches
+  Keynote again. Exports run one at a time. A deck the user already has open is
+  exported as is and left open; a deck the run opened is closed without saving,
+  and Keynote is quit when the run launched it and it holds no document (a
+  Keynote that ignores `quit` while showing an alert for an unopenable deck is
+  terminated once it holds no document, so it never lingers invisibly). With
+  no Keynote (other OS, or not installed) nothing changes. A deck Keynote fails
+  on keeps the stored slides and is not retried until it changes or the app
+  restarts; one that hangs in a dialog (a password sheet) is given up on after
+  3 minutes, and the document it left open is not closed.
 - **Google Drive documents** — `.gdoc`, `.gsheet`, `.gslides`, `.gform` (and
   `.gdraw`, `.gmap`, `.gsite`, `.gjam`, `.gtable`, `.gscript`) are the ~170 byte
   JSON pointers Drive for desktop shows instead of a cloud-only document

@@ -9,7 +9,9 @@ import { PagedView, type DrawPage } from "./paged";
  * Numbers, Pages, and Keynote files. Numbers and Pages show the first sheet or
  * page Apple stored in the package. A Keynote deck shows every slide in the
  * PDF panel's paged layout: the quality first-page image from `preview.jpg`,
- * then the app's own 356px render of each following slide. A package without a
+ * then the app's own 356px render of each following slide. When the Keynote app
+ * is installed those are upgraded in place to full-size slides it draws
+ * (`slidesRendering` shows a badge until they land). A package without a
  * page image gets the "Other" panel.
  */
 export function IworkView({ file }: { readonly file: PreviewDocument }): ReactElement {
@@ -87,8 +89,17 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 		// The stage centers single pictures, which would shrink the paged column
 		// to fit; stretching the wrapper keeps the rail and the paper cards full width.
 		return (
-			<div className="ql__iwork-pages flex flex-1 self-stretch min-w-0 min-h-0">
+			<div className="ql__iwork-pages relative flex flex-1 self-stretch min-w-0 min-h-0">
 				<PagedView file={file} boxes={pages.map(() => box)} draw={draw} />
+				{file.slidesRendering ? (
+					<div
+						role="status"
+						className="ql__iwork-rendering pointer-events-none absolute top-12 left-[calc((100%-128px)/2)] -translate-x-1/2 flex items-center gap-6 rounded-full bg-ql-panel-solid px-12 py-6 text-[12px] text-ql-ink shadow-ql-panel"
+					>
+						<span aria-hidden="true" className="size-12 animate-spin rounded-full border-2 border-current border-t-transparent" />
+						{t("quickLook.iwork.rendering")}
+					</div>
+				) : null}
 			</div>
 		);
 	}

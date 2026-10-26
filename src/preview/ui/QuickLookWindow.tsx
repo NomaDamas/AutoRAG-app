@@ -195,6 +195,14 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			if (update.seq !== seqRef.current) return;
 			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, office: update.office } }));
 		});
+		const offSlides = bridge.onSlides((update) => {
+			if (update.seq !== seqRef.current) return;
+			setLoad((current) => {
+				if (current === null || current.document === null) return current;
+				const pages = update.pages ?? current.document.pages;
+				return { ...current, document: { ...current.document, pages, slidesRendering: update.rendering } };
+			});
+		});
 		const offUnload = bridge.onUnload(() => {
 			seqRef.current = -1;
 			setLoad(null);
@@ -203,6 +211,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			offLoad();
 			offApp();
 			offOffice();
+			offSlides();
 			offUnload();
 		};
 	}, [bridge]);
