@@ -307,6 +307,18 @@ only Electron's main process can do and the worker asks for over its host
 port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
 opening files and URLs, and the clipboard.
 
+The worker never imports `@autorag/librarian` on its own thread: loading it takes
+~2 s, and folder listings are answered on that thread. The one importer is a
+`worker_thread` inside the worker (`src/fs-worker/librarian-thread.ts`, built as an
+extra main-bundle entry like the archive workers). `src/fs-worker/librarian-client.ts`
+starts it on the first call that needs the librarian (a file-name search, the dupey
+scan, the index badges) and the worker asks for it once at launch, after the first
+folder renders; the contract is `librarian-contract.ts`. Quitting sends the thread a
+`shutdown` first, which stops the file-name index daemon (the Everything process on
+Windows, which otherwise keeps the profile folder locked) and raises the process
+`exit` event the librarian ends its MinSync children on, then terminates the thread.
+The client waits 1.8 s for that: main kills the worker 2 s after the quit.
+
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
 re-watches its folders. Unanswered reads are re-sent to the new worker; a

@@ -1428,7 +1428,10 @@
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
-      "invalidUrl": "网址无效。"
+      "invalidUrl": "网址无效。",
+      "librarianExited": "索引辅助进程意外停止（代码 {{code}}）。",
+      "librarianFailed": "索引辅助进程失败：{{message}}",
+      "librarianStopped": "索引辅助进程已关闭，无法处理请求。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",

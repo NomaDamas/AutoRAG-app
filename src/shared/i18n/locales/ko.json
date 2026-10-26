@@ -1428,7 +1428,10 @@
     },
     "worker": {
       "unknownFormat": "알 수 없는 파일 형식입니다: {{format}}",
-      "invalidUrl": "웹 주소가 올바르지 않습니다"
+      "invalidUrl": "웹 주소가 올바르지 않습니다",
+      "librarianExited": "색인 도우미가 예기치 않게 멈췄습니다(코드 {{code}}).",
+      "librarianFailed": "색인 도우미가 실패했습니다: {{message}}",
+      "librarianStopped": "색인 도우미가 종료되어 요청을 처리할 수 없습니다."
     },
     "fs": {
       "restoreTempFailed": "{{message}} (임시 이름 {{name}}에서 되돌리지 못했습니다: {{detail}})",

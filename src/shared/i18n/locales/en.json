@@ -1428,7 +1428,10 @@
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",
-      "invalidUrl": "The web address is invalid."
+      "invalidUrl": "The web address is invalid.",
+      "librarianExited": "The indexing helper stopped unexpectedly (code {{code}}).",
+      "librarianFailed": "The indexing helper failed: {{message}}",
+      "librarianStopped": "The indexing helper has shut down and cannot take requests."
     },
     "fs": {
       "restoreTempFailed": "{{message}} (could not restore from the temporary name {{name}}: {{detail}})",
