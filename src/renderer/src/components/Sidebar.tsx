@@ -5,7 +5,7 @@ import type { FsLocationIcon } from "../../../shared/fs-contract";
 import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
-import { formatShortcut } from "../lib/shortcuts";
+import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { GearIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
@@ -95,6 +95,9 @@ export function Sidebar({
 	const localizedItemLabel = (item: NavItem): string => {
 		if (item.view === "aiSearch") return t("places.aiSearch", item.label);
 		if (item.view === "automations") return t("places.automations", item.label);
+		// Windows calls these folders Videos and Recycle Bin; the other keys read the same everywhere.
+		if (item.kind === "movies" && hostPlatform() === "win32") return t("places.moviesWindows", item.label);
+		if (item.kind === "trash" && hostPlatform() === "win32") return t("places.trashWindows", item.label);
 		if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
 		return item.label;
 	};

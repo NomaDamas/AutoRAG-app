@@ -27,7 +27,9 @@
     "pictures": "图像",
     "trash": "废纸篓",
     "eject": "推出的“{{name}}”",
-    "automations": "自动化"
+    "automations": "自动化",
+    "moviesWindows": "视频",
+    "trashWindows": "回收站"
   },
   "toolbar": {
     "back": "返回",
@@ -1865,7 +1867,7 @@
       "appLanguage": "应用语言",
       "appLanguageHint": "菜单和设置使用的语言。",
       "finderTitle": "Finder",
-      "finderDesc": "Mac 文件浏览界面的行为。",
+      "finderDesc": "文件浏览界面的行为。",
       "showHiddenFiles": "显示隐藏文件",
       "showHiddenFilesHint": "在 Finder 中显示以点(.)开头的系统文件。",
       "launchTitle": "启动与更新",

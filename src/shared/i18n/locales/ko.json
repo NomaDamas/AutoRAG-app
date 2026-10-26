@@ -27,7 +27,9 @@
     "pictures": "사진",
     "trash": "휴지통",
     "eject": "\"{{name}}\" 추출",
-    "automations": "자동화"
+    "automations": "자동화",
+    "moviesWindows": "동영상",
+    "trashWindows": "휴지통"
   },
   "toolbar": {
     "back": "뒤로",
@@ -1865,7 +1867,7 @@
       "appLanguage": "앱 언어",
       "appLanguageHint": "메뉴와 설정에 사용할 언어입니다.",
       "finderTitle": "Finder",
-      "finderDesc": "Mac 파일 탐색 화면의 동작입니다.",
+      "finderDesc": "파일 탐색 화면의 동작입니다.",
       "showHiddenFiles": "숨김 파일 보기",
       "showHiddenFilesHint": "점(.)으로 시작하는 시스템 파일을 Finder에 표시합니다.",
       "launchTitle": "시작 및 업데이트",
