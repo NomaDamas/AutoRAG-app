@@ -39,6 +39,7 @@ import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, onDiskPath, path
 import { createPlaces, type Places } from "./places";
 import { isRecycleBinDir, readRecycleBinName, readRecycleBinRecord } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
+import { isInsideSystemFolder, isSystemFolderName } from "./system-folders";
 import { createTrashStore, type TrashStore } from "./trash-store";
 
 /** Subset of Electron's shell used by the service (injected for testability). */
@@ -253,6 +254,8 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 	}
 	for (const dirent of dirents) {
 		if (context.results.length >= SEARCH_MAX_RESULTS) return;
+		// System folders are neither results nor walked; a symlink named like one is the user's own link.
+		if (dirent.isDirectory() && isSystemFolderName(dirent.name)) continue;
 		const fullPath = join(dir, dirent.name);
 		// macOS stores Hangul names decomposed (NFD); compare in one form so a typed (NFC) query matches.
 		if (dirent.name.normalize("NFC").toLowerCase().includes(context.needle)) {
@@ -653,7 +656,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		if (backend !== undefined) {
 			try {
 				const paths = await backend.search(query, scope);
-				if (paths !== null) return indexedHits(paths);
+				if (paths !== null) return indexedHits(paths, scope);
 			} catch (error) {
 				console.warn(`fs:search index failed, walking instead: ${errorMessage(error)}`);
 			}
@@ -661,12 +664,16 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		return walkSearch(needle, scope, signal);
 	}
 
-	/** Turn index paths into rows, attributing each to its location by longest prefix. */
-	async function indexedHits(paths: readonly string[]): Promise<readonly FsSearchResult[]> {
+	/**
+	 * Turn index paths into rows, attributing each to its location by longest prefix.
+	 * The index knows nothing of system folders, so hits inside one are dropped here.
+	 */
+	async function indexedHits(paths: readonly string[], scope: string | undefined): Promise<readonly FsSearchResult[]> {
 		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
 		const results: FsSearchResult[] = [];
 		for (const path of paths) {
 			if (results.length >= SEARCH_MAX_RESULTS) break;
+			if (isInsideSystemFolder(path, scope)) continue;
 			try {
 				results.push({ entry: await buildFsEntry(path, platform), location: searchLocation(path, known) });
 			} catch (error) {

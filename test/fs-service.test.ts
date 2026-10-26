@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -1341,6 +1341,98 @@ describe("search", () => {
 		const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report");
 
 		expect(results.map((hit) => hit.entry.name)).toEqual(["report.txt"]);
+	});
+
+	describe("system folders", () => {
+		/** A Google Drive domain the way the File Provider lays it out: user content next to provider-internal folders. */
+		async function cloudHome(name: string): Promise<{ readonly home: string; readonly domain: string }> {
+			const home = join(root, name);
+			const domain = join(home, "Library", "CloudStorage", "GoogleDrive-me@example.com");
+			await mkdir(join(domain, "My Drive"), { recursive: true });
+			await writeFile(join(domain, "My Drive", "report-mine.txt"), "m");
+			for (const internal of [".tmp", ".Trash", ".shortcut-targets-by-id", ".file-revisions-by-id"]) {
+				await mkdir(join(domain, internal), { recursive: true });
+				await writeFile(join(domain, internal, "report-internal.txt"), "i");
+			}
+			return { home, domain };
+		}
+
+		it("does not enter a cloud mount's provider-internal folders, so an unreadable one logs nothing", async () => {
+			// Given a Drive mount whose `.tmp` is unreadable, as the provider ships it
+			const { home, domain } = await cloudHome("home-cloud-internal");
+			await chmod(join(domain, ".tmp"), 0o000);
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+			try {
+				// When searching a name that also exists inside every internal folder
+				const results = await createFsService(makeDeps(home).deps).search("report");
+
+				// Then only the user's own file comes back and no folder was reported as skipped
+				expect(results.map((hit) => hit.entry.path)).toEqual([join(domain, "My Drive", "report-mine.txt")]);
+				expect(warn).not.toHaveBeenCalled();
+			} finally {
+				await chmod(join(domain, ".tmp"), 0o700);
+				warn.mockRestore();
+			}
+		});
+
+		it("never returns a system folder as a result, whatever the platform names it", async () => {
+			// Given system folders from macOS, Windows, and a cloud provider inside a searched place
+			const home = join(root, "home-system-names");
+			const names = [".Trashes", ".Spotlight-V100", ".fseventsd", "$Recycle.Bin", "System Volume Information", ".tmp", ".TMP"];
+			for (const name of names) await mkdir(join(home, "Documents", name), { recursive: true });
+			await mkdir(join(home, "Documents", "tmp-notes"), { recursive: true });
+
+			// When searching for fragments of those names
+			const service = createFsService(makeDeps(home).deps);
+			const hits = [
+				...(await service.search("trash")),
+				...(await service.search("spotlight")),
+				...(await service.search("fseventsd")),
+				...(await service.search("recycle")),
+				...(await service.search("volume")),
+				...(await service.search("tmp")),
+			];
+
+			// Then only the user's own folder matches
+			expect(hits.map((hit) => hit.entry.name)).toEqual(["tmp-notes"]);
+		});
+
+		it("filters index hits that sit inside a system folder", async () => {
+			// Given an index that reports a hit inside a system folder next to a real one
+			const { home, domain } = await cloudHome("home-index-system");
+			const fileNameSearch: FileNameSearchBackend = {
+				search: async () => [join(domain, ".tmp", "report-internal.txt"), join(domain, "My Drive", "report-mine.txt")],
+				ensureDaemon: async () => {},
+				stop: async () => {},
+			};
+
+			// When searching through the index
+			const results = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report");
+
+			// Then the system-folder hit is dropped
+			expect(results.map((hit) => hit.entry.path)).toEqual([join(domain, "My Drive", "report-mine.txt")]);
+		});
+
+		it("still searches inside a system folder the user chose as the scope", async () => {
+			// Given the user browsing their Trash and searching within it
+			const home = join(root, "home-scope-trash");
+			await mkdir(join(home, ".Trash"), { recursive: true });
+			await writeFile(join(home, ".Trash", "report-deleted.txt"), "d");
+			const fileNameSearch: FileNameSearchBackend = {
+				search: async () => [join(home, ".Trash", "report-deleted.txt")],
+				ensureDaemon: async () => {},
+				stop: async () => {},
+			};
+			const scope = join(home, ".Trash");
+
+			// When searching with that folder as scope, via the index and via the walk
+			const indexed = await createFsService({ ...makeDeps(home).deps, fileNameSearch }).search("report", { scope });
+			const walked = await createFsService(makeDeps(home).deps).search("report", { scope });
+
+			// Then the scope's own name is not treated as a skipped system folder
+			expect(indexed.map((hit) => hit.entry.name)).toEqual(["report-deleted.txt"]);
+			expect(walked.map((hit) => hit.entry.name)).toEqual(["report-deleted.txt"]);
+		});
 	});
 });
 
