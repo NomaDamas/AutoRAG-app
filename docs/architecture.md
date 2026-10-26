@@ -808,13 +808,30 @@ and kept for the chat's life:
   the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
   (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
   00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+- **An index that is not ready.** A question Jev routes to the `local` branch (or any run with no Jev route that goes on to search
+  the index) reads only what the index holds. The librarian does not announce the branch in its stream, so
+  `src/main/local-track.ts` reads it from the progress tracker the agent keeps for its terminal widget (the private
+  `searchProgress` field, reached by name like `userRequests`): the `route` step ending in `local`, or any step only the local
+  branch runs (`datasource-select`, `minsync`, `jikji`, `datasource:*`, `fast`); a turn answered from the conversation (`answer`) and
+  the `organize`, `extra` and `config` branches never trigger it. The search service then asks `indexReadiness`
+  (`src/main/index-readiness.ts`) beside the run and sends an `index-notice` event (`IndexNotice`: `indexing` | `failed` | `empty` |
+  `few`, with the document count) before the answer: `indexing` when the index activity shows a run in progress (any origin), `failed` when the
+  index problem holds a stopped run, else `empty` / `few` from the documents the folder mirror holds plus the enabled sources
+  that report an index (`FEW_INDEXED_DOCUMENTS` = 10 is the line; a size that could not be read is never called small, a
+  readiness that throws warns about nothing). The panel's `IndexNoticeBanner` words it in the interface language and its
+  button opens Settings on Indexing (`requestSettingsCategory("indexing")`); the warning belongs to the latest run and is not kept
+  in the chat history. If a librarian release renames `searchProgress` the warning goes quiet and the real-agent test in
+  `test/interactive-search-agent.test.ts` fails first.
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
 answer path, files on disk, what the model receives), `run-qa-finder-ai-search-conversation.mjs` (scripted model
 that records every request: a follow-up carries the chat's earlier turns, the same after quitting and starting the
 app again, the approval card on a resumed chat, a chat without a session file seeded from its turns, New chat sends
 nothing of another, clearing history deletes the files) and `run-qa-live-ai-search-interaction.mjs` (a real model
-through the Dazzi account decides to ask and to delete, remembers a codeword across questions, and after a restart).
+through the Dazzi account decides to ask and to delete, remembers a codeword across questions, and after a restart),
+`run-qa-finder-ai-search-index-notice.mjs` (scripted model, real index states: the warning for an empty index, a stopped run, three
+documents and a run in progress, none for fifteen, English and Korean, and its button opening Settings on Indexing) and
+`run-qa-live-ai-search-index-notice.mjs` (the live Jev routes the question; the warning shows exactly when it picks the local branch).
 
 ## File automations
 

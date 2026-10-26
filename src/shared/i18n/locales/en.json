@@ -249,6 +249,13 @@
     "askDazzi": "Ask Dazzi",
     "stop": "Stop",
     "openPlan": "Open Subscription & Usage",
+    "indexNotice": {
+      "indexing": "Indexing isn't finished yet, so this search may not work well. It can't find documents that aren't indexed yet.",
+      "failed": "The last indexing run stopped before it finished, so this search may not work well.",
+      "empty": "No documents are indexed, so this search may not work well.",
+      "few": "Only {{count}} documents are indexed, so this search may not work well.",
+      "manage": "Manage indexing"
+    },
     "thinking": "Thinking…",
     "workedFor": "Worked for {{time}}",
     "reviewing": "Reviewing the query.",

@@ -6,6 +6,7 @@ import type { ApprovalMode } from "../shared/interaction-contract";
 import type { AgentInteraction } from "./agent-interaction";
 import { AttachmentContextAgent } from "./attachment-context";
 import type { RunInteraction } from "./host-ui";
+import { watchLocalTrack } from "./local-track";
 
 /**
  * The AI Search agent for one chat: the librarian agent with attachment context, able to ask the person, and holding
@@ -178,6 +179,11 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 		const session = this.#runtime?.runtime.session;
 		if (context === "" || session === undefined || !session.messages.some((message) => message.role === "assistant")) return;
 		await session.sendCustomMessage({ customType: "dazzi.attachments", content: [{ type: "text", text: context }], display: false }, { triggerTurn: false });
+	}
+
+	/** Calls `listener` once per run, when the run takes the local track (see {@link watchLocalTrack}); returns the stop function. */
+	onLocalTrack(listener: () => void): () => void {
+		return watchLocalTrack(this, listener);
 	}
 
 	/** The run the next dialogs belong to; `undefined` once it ended. */

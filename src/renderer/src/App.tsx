@@ -775,6 +775,10 @@ export function App(): ReactElement {
 													requestSettingsCategory("plan");
 													finder?.openSettings();
 												}}
+												onOpenIndexing={() => {
+													requestSettingsCategory("indexing");
+													finder?.openSettings();
+												}}
 											/>
 										</div>
 									);

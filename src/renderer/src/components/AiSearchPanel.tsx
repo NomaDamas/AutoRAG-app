@@ -16,6 +16,7 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
+	IndexNotice,
 	SearchErrorAction,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
@@ -45,6 +46,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { InteractionDock } from "./InteractionDock";
+import { IndexNoticeBanner } from "./IndexNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
 
 const autorag = window.autorag;
@@ -95,6 +97,8 @@ export interface AiSearchPanelProps {
 	readonly language: SummaryLanguage;
 	/** Goes to Settings → Subscription & Usage: the weekly credits are used up and the error offers the way there. */
 	readonly onOpenPlan: () => void;
+	/** Goes to Settings → Indexing: a search over an index that is unfinished, stopped, empty or small offers the way to manage it. */
+	readonly onOpenIndexing: () => void;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -109,7 +113,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenPlan },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenPlan, onOpenIndexing },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -131,6 +135,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [error, setError] = useState<string | null>(null);
 	/** The action the main process attached to `error` (shown only while that same message is on screen). */
 	const [errorAction, setErrorAction] = useState<{ readonly message: string; readonly action: SearchErrorAction } | null>(null);
+	/** The warning that the index this run searches is not ready; belongs to the latest run and ends with the next question. */
+	const [indexNotice, setIndexNotice] = useState<IndexNotice | null>(null);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
 	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
@@ -238,6 +244,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			switch (event.type) {
 				case "progress":
 					setProgress(event.text);
+					break;
+				case "index-notice":
+					setIndexNotice(event.notice);
 					break;
 				case "thinking":
 					// The reasoning text never crosses IPC; the panel's own pending
@@ -429,6 +438,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQuickDraft("");
 		setDeepDraft("");
 		setError(null);
+		setIndexNotice(null);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
@@ -550,6 +560,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQuickDraft("");
 		setDeepDraft("");
 		setError(null);
+		setIndexNotice(null);
 		setStopped(false);
 		setProgress("");
 		setEvidenceSource(null);
@@ -598,6 +609,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQueued([]);
 		setStopped(assistant?.stopped ?? false);
 		setError(null);
+		setIndexNotice(null);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
@@ -866,6 +878,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					)}
 
 					{error === null ? null : <RunErrorNotice message={error} action={errorAction?.message === error ? errorAction.action : null} onOpenPlan={onOpenPlan} />}
+
+					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={onOpenIndexing} />}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />

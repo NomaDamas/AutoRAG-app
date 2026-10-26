@@ -44,6 +44,7 @@ import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from 
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { createIndexProblemService } from "./index-problem-service";
 import { modelDownloadFailure } from "./index-failure";
+import { createIndexReadiness } from "./index-readiness";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import type { RefreshLockHolder } from "./refresh-lock";
 import { schedulePaths, withRefreshLock } from "./refresh-schedule";
@@ -565,6 +566,8 @@ app.whenReady().then(async () => {
 		interaction: interactionHub,
 		// The settings service is built further down; an agent is only built long after startup.
 		approvalMode: async () => (await settingsService.get()).approvalMode,
+		// A run that searches the index while it is unfinished, stopped, empty or small says so; the readiness is built further down with the index services it reads.
+		indexReadiness: () => indexReadiness(),
 		// A run on the Dazzi plan's model with the week's credits used up is not sent: the server would refuse every request of it.
 		preflight: async () => {
 			const block = await quotaBlock({
@@ -808,6 +811,12 @@ app.whenReady().then(async () => {
 		ownPids: () => [workerHost.status().pid],
 	});
 	registerIndexActivityIpcHandlers(indexActivity);
+	// Read by AI Search the moment a run takes the local track: the same activity, problem and source counts Settings → Indexing shows.
+	const indexReadiness = createIndexReadiness({
+		activity: () => indexActivity.snapshot(),
+		problem: () => indexProblem.get(),
+		sources: () => dataSources.list(),
+	});
 	const stopIndexActivity = indexActivity.start((snapshot) => {
 		sendToMainWindow(INDEX_ACTIVITY_CHANNELS.changed, snapshot);
 		// The OS-scheduled job finished a clean local refresh: whatever stopped the first index is over.
