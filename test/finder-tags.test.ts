@@ -112,7 +112,7 @@ describe("the tag catalog", () => {
 	it("reports nothing off macOS, without spawning a helper", async () => {
 		const mac = fakeMac();
 		const catalog = await createFinderTags({ platform: "win32", run: mac.run }).catalog();
-		expect(catalog).toEqual({ supported: false, tags: [], colorNames: [] });
+		expect(catalog).toEqual({ supported: false, tags: [], colorNames: [], colorsDenied: false });
 		expect(mac.calls).toEqual([]);
 	});
 
@@ -140,6 +140,33 @@ describe("the tag catalog", () => {
 		const catalog = await tags(mac).catalog();
 		expect(catalog.tags.map((tag) => tag.name)).toEqual(["Red", "Orange", "Yellow", "Green", "Blue", "Purple", "Gray"]);
 		expect(catalog.tags.every((tag) => tag.sidebar)).toBe(true);
+	});
+
+	it("reports the colours as denied when macOS refuses the app the registry (no Full Disk Access)", async () => {
+		const mac = fakeMac();
+		const sqliteDenied: TagCommandRunner = (command, args, input) =>
+			command === "/usr/bin/sqlite3"
+				? Promise.reject(new Error('unable to open database "/home/kvs.sqlite": authorization denied'))
+				: mac.run(command, args, input);
+		const catalog = await tags(mac, { run: sqliteDenied }).catalog();
+		// The names still come from Finder's preferences, but every custom tag has lost its colour.
+		expect(catalog.tags.filter((tag) => tag.sidebar).map((tag) => [tag.name, tag.color])).toEqual([["Research", 0], ["Career", 0]]);
+		expect(catalog.colorsDenied).toBe(true);
+	});
+
+	it("reports the colours as denied when the registry folder cannot even be listed", async () => {
+		const listDenied = async (): Promise<readonly string[]> => {
+			throw Object.assign(new Error("EPERM: operation not permitted, scandir '/home/Library/Daemon Containers'"), { code: "EPERM" });
+		};
+		const catalog = await tags(fakeMac(), { registryFiles: listDenied }).catalog();
+		expect(catalog.colorsDenied).toBe(true);
+		expect(catalog.tags.filter((tag) => tag.sidebar).map((tag) => tag.name)).toEqual(["Research", "Career"]);
+	});
+
+	it("does not blame permissions when the registry is merely absent or readable", async () => {
+		expect((await tags(fakeMac({ registry: null })).catalog()).colorsDenied).toBe(false);
+		expect((await tags(fakeMac()).catalog()).colorsDenied).toBe(false);
+		expect((await createFinderTags({ platform: "win32" }).catalog()).colorsDenied).toBe(false);
 	});
 });
 
