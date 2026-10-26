@@ -1297,7 +1297,21 @@
       "stars": "星{{count}}つ",
       "star": "星1つ"
     },
-    "kindByExtension": "{{ext}} ファイル"
+    "kindByExtension": "{{ext}} ファイル",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop ドキュメント",
+      "illustrator": "Adobe Illustrator ドキュメント",
+      "eps": "EPS 画像",
+      "jpegxl": "JPEG XL 画像",
+      "icns": "Apple アイコン画像",
+      "targa": "TGA 画像",
+      "openexr": "OpenEXR 画像",
+      "gimp": "GIMP 画像",
+      "sketch": "Sketch ドキュメント",
+      "figma": "Figma ドキュメント",
+      "raw": "{{maker}} RAW 画像",
+      "rawGeneric": "RAW 画像"
+    }
   },
   "main": {
     "interaction": {

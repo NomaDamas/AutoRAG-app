@@ -418,6 +418,18 @@ still has the previous file's size when they lay out.
   - **JPEG XL** (`.jxl`) joins the image viewer: Chromium decodes it behind the
     `JXLImageFormat` feature, which `src/main/index.ts` enables, so there is no
     wasm decoder to ship.
+  - **Kind column and grouping**: macOS reports an extension no installed app
+    registered (`.xcf`, `.sketch`, `.fig`) as the generic "Document" (its content
+    type is a `dyn.*` identifier), and Windows has no registry entry, so Group by
+    Kind put all three in one "Document" section. `file-kind.ts` reads the
+    content type beside the kind (one `mdls`, not two) and, for an unregistered
+    type whose extension `shared/extension-kind-names.ts` can name, answers
+    nothing; the Finder then shows its own translated name (GIMP image, Sketch
+    document, Figma document; also Photoshop, Illustrator, EPS, JPEG XL, icns,
+    TGA, OpenEXR and `{{maker}} RAW image` where the OS has none). A type macOS
+    does register keeps macOS's own kind ("Adobe Photoshop document"), and an
+    extension nobody names keeps "Document", as Finder shows it. The tile look
+    these formats borrow from the image family never supplies the words.
   `run-qa-quick-look-raster.mjs` drives every format on the production build.
 
 Images, TIFF, HEIC, fonts, Word, sheets, slides, and EPUB keep their existing

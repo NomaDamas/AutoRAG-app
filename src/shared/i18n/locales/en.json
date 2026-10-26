@@ -1297,7 +1297,21 @@
       "stars": "{{count}} Stars",
       "star": "1 Star"
     },
-    "kindByExtension": "{{ext}} File"
+    "kindByExtension": "{{ext}} File",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop document",
+      "illustrator": "Adobe Illustrator document",
+      "eps": "EPS image",
+      "jpegxl": "JPEG XL image",
+      "icns": "Apple icon image",
+      "targa": "TGA image",
+      "openexr": "OpenEXR image",
+      "gimp": "GIMP image",
+      "sketch": "Sketch document",
+      "figma": "Figma document",
+      "raw": "{{maker}} RAW image",
+      "rawGeneric": "RAW image"
+    }
   },
   "main": {
     "interaction": {

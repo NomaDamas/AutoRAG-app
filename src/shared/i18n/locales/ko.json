@@ -1297,7 +1297,21 @@
       "stars": "별 {{count}}개",
       "star": "별 1개"
     },
-    "kindByExtension": "{{ext}} 파일"
+    "kindByExtension": "{{ext}} 파일",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop 문서",
+      "illustrator": "Adobe Illustrator 문서",
+      "eps": "EPS 이미지",
+      "jpegxl": "JPEG XL 이미지",
+      "icns": "Apple 아이콘 이미지",
+      "targa": "TGA 이미지",
+      "openexr": "OpenEXR 이미지",
+      "gimp": "GIMP 이미지",
+      "sketch": "Sketch 문서",
+      "figma": "Figma 문서",
+      "raw": "{{maker}} RAW 이미지",
+      "rawGeneric": "RAW 이미지"
+    }
   },
   "main": {
     "interaction": {
