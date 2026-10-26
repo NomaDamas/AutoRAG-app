@@ -77,7 +77,6 @@ describe("the first-index pause screen", () => {
 		expect(buttons().map((button) => button.textContent?.replace("↵", "").trim())).toEqual([
 			`${PAUSE}.exit.changeEmbedding`,
 			`${PAUSE}.exit.retry`,
-			`${PAUSE}.exit.openAnyway`,
 		]);
 		expect(host.querySelectorAll(".ix-cta")).toHaveLength(1);
 		// #283: a stopped run has no ETA, no phase strip, no locked gate.
@@ -94,14 +93,11 @@ describe("the first-index pause screen", () => {
 		expect(changeEmbedding).toHaveBeenCalledOnce();
 	});
 
-	it("lets the user into Dazzi from every kind of stop", () => {
+	it("offers no way to open Dazzi early from any kind of stop: the Finder is already open beside it", () => {
 		for (const reason of ["embedder-config", "embedder-offline", "model-download", "disk-full", "folder-unreadable", "unknown"] as const) {
-			const finishInBackground = vi.fn();
-			render({ indexStatus: stopped(failure(reason, reason === "folder-unreadable" ? ["/Volumes/Work/Projects"] : [])), finishInBackground });
-			const open = buttons().find((button) => button.textContent?.includes("exit.openAnyway"));
-			expect(open, reason).toBeDefined();
-			click(open as HTMLElement);
-			expect(finishInBackground, reason).toHaveBeenCalledOnce();
+			render({ indexStatus: stopped(failure(reason, reason === "folder-unreadable" ? ["/Volumes/Work/Projects"] : [])) });
+			expect(buttons().some((button) => button.textContent?.includes("exit.openAnyway")), reason).toBe(false);
+			expect(host.textContent, reason).not.toContain("onboarding.indexing.startInBackground");
 		}
 	});
 
@@ -190,7 +186,7 @@ describe("the first-index pause screen", () => {
 		expect(line()).toBe(`${PAUSE}.line.exhausted`);
 		act(() => vi.advanceTimersByTime(60_000));
 		expect(startIndexing).toHaveBeenCalledTimes(6);
-		expect(cta().textContent).toContain("exit.openAnyway");
+		expect(cta().textContent).toContain("exit.changeEmbedding");
 	});
 
 	it("never retries by itself for a refused embedder or a full disk", () => {
@@ -221,5 +217,24 @@ describe("a first index that finished with files left out", () => {
 	it("shows no skipped line when nothing was skipped", () => {
 		render({ indexStatus: status({ state: "success", progress: 100, totalFiles: 120, skipped: 0, finishedAt: "2026-10-24T05:40:00.000Z" }) });
 		expect(host.querySelector(".ix-skippill")).toBeNull();
+	});
+});
+
+describe("the first-index screen has no way to open Dazzi", () => {
+	const OPEN_KEYS = ["onboarding.indexing.open", "onboarding.indexing.startInBackground", "onboarding.indexing.gateLocked"];
+
+	it("shows no open, background-start, or locked button while the index runs", () => {
+		render({ indexStatus: status({ state: "running", phase: "parsed", progress: 12 }) });
+		expect(host.querySelector(".ix-open-btn, .ix-bg-start")).toBeNull();
+		for (const key of OPEN_KEYS) expect(host.textContent, key).not.toContain(key);
+		expect(host.querySelector(".ix-phases")).not.toBeNull();
+	});
+
+	it("shows no open button once the index is done, only the result", () => {
+		render({ indexStatus: status({ state: "success", progress: 100, totalFiles: 120, skipped: 0, finishedAt: "2026-10-24T05:40:00.000Z" }) });
+		expect(host.querySelector(".ix-open-btn, .ix-bg-start")).toBeNull();
+		expect(host.querySelector(".ix-gate button")).toBeNull();
+		expect(host.textContent).toContain("onboarding.indexing.gateOkTitle");
+		for (const key of OPEN_KEYS) expect(host.textContent, key).not.toContain(key);
 	});
 });

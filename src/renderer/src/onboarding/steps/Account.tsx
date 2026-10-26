@@ -29,7 +29,7 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					<h1>
 						<Multiline text={t("onboarding.account.title")} />
 					</h1>
-					<p>{t("onboarding.account.lead")}</p>
+					<p>{ctx.platform === "win32" ? t("onboarding.account.leadPc") : t("onboarding.account.lead")}</p>
 					<div className="micro-note">
 						<Icon name="external-link" size={14} />
 						<span>{t("onboarding.account.note")}</span>

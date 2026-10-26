@@ -715,7 +715,8 @@
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
       "agreeUse": "受け入れ可能な利用ポリシー",
-      "planLabel": "{{plan}} プラン"
+      "planLabel": "{{plan}} プラン",
+      "leadPc": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのPCに保存されます。"
     },
     "permissions": {
       "eyebrow": "権限",
@@ -779,7 +780,8 @@
       "summaryNote": "node_modules · .git · 50 MiBを超えるファイルは自動的に除外されます。",
       "localEta": "ローカル（このMac）約{{minutes}}分",
       "cloudEta": "リモート 約{{minutes}}分",
-      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。"
+      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。",
+      "localEtaPc": "ローカル（このPC）約{{minutes}}分"
     },
     "smartScope": {
       "policy": {
@@ -1002,9 +1004,6 @@
       "gateTitlePc": "Dazziを終了したりPCの電源を切らないでください",
       "gateDetailMac": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源アダプターを接続し、フタを開けたままにしてください。",
       "gateDetailWindows": "最初のインデックス作成は時間がかかります。終了すると進行が止まります。電源に接続したままにしてください。",
-      "gateLocked": "完了すると開けます",
-      "open": "Dazziを開く",
-      "startInBackground": "バックグラウンドで続けてすぐに始める",
       "skipped": "{{count}}ファイルはスキップしました",
       "gateOkDetailPartial": "それ以外はすべて検索できます。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
       "pause": {
@@ -1041,8 +1040,7 @@
           "resumeDisk": "空き容量を確保しました、再開",
           "changeEmbedding": "埋め込み方式を変更",
           "exclude": "「{{folder}}」を除いて続行",
-          "excludeMany": "読み取れないフォルダを除いて続行",
-          "openAnyway": "とりあえずDazziを開く"
+          "excludeMany": "読み取れないフォルダを除いて続行"
         },
         "line": {
           "retrying": "再試行しています",
@@ -1574,7 +1572,14 @@
       "tarListFailed": "tarの一覧を読み込めませんでした",
       "readFailed": "アーカイブを読み込めませんでした",
       "empty": "空のアーカイブ",
-      "order": "変更日の新しい順"
+      "order": "変更日の新しい順",
+      "unreadable": {
+        "encrypted": "パスワードで保護されたアーカイブのため、内容を一覧表示できません",
+        "corrupt": "アーカイブの一覧を読み込めませんでした。破損しているか、パスワードで保護されているか、1つのファイルだけを圧縮したものの可能性があります",
+        "tooLarge": "このアーカイブは大きすぎるため、一覧の代わりに情報を表示します",
+        "tooManyEntries": "このアーカイブは項目が多すぎるため、一覧の代わりに情報を表示します",
+        "tooSlow": "一覧の読み込みに時間がかかりすぎたため、情報のみ表示します"
+      }
     },
     "folder": {
       "kind": "フォルダ",
@@ -1700,6 +1705,14 @@
     },
     "pdf": {
       "openFailed": "PDFを開けませんでした"
+    },
+    "password": {
+      "locked": "パスワードで保護された文書です",
+      "label": "パスワード",
+      "placeholder": "パスワードを入力",
+      "unlock": "ロック解除",
+      "checking": "確認中…",
+      "incorrect": "パスワードが正しくありません。もう一度入力してください。"
     },
     "pptx": {
       "openFailed": "プレゼンテーションを開けませんでした",
@@ -2051,7 +2064,8 @@
         "baseUrl": "サーバーアドレス",
         "apiKeyOptional": "API キー (任意)",
         "optionalPlaceholder": "任意",
-        "saved": "{{name}} を保存しました。"
+        "saved": "{{name}} を保存しました。",
+        "bodyLocalPc": "Ollama、LM Studio のようにこのPCで実行中のサーバーのみ接続できます。"
       },
       "loginModal": {
         "openManually": "ブラウザが開かない場合は、以下のアドレスを直接開いてください。",
@@ -2083,7 +2097,8 @@
       "apiKeyPlaceholder": "空のままにすると保存済みのキーを使います",
       "apiKeyHint": "キーはこの Mac の安全なキーチェーンに保存され、設定ファイルには書き込まれません。",
       "consentRemote": "文書の内容がこのコンピューターの外のサーバーに送信されることに同意します",
-      "signInNote": "Dazzi クラウドには Dazzi アカウントへのサインインが必要です。先にアカウント設定でサインインしてください。"
+      "signInNote": "Dazzi クラウドには Dazzi アカウントへのサインインが必要です。先にアカウント設定でサインインしてください。",
+      "apiKeyHintPc": "キーはこのPCの安全な資格情報ストアに保存され、設定ファイルには書き込まれません。"
     },
     "language": {
       "remove": "{{name}} を削除",

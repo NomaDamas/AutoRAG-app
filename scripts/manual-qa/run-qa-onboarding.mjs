@@ -1,6 +1,12 @@
 // Drives first-run onboarding end to end in the built app: every step, the real
 // Full Disk Access probe, folder pre-scan, the shared-config write, a real first
-// index (local embedder), and the hand-off to the Finder.
+// index (local embedder), and the end of onboarding.
+//
+// A first run now opens TWO windows: the Finder (usable at once) and the
+// onboarding window beside it (1120×720). This lane drives the onboarding
+// window, checks the Finder stays interactive and untouched while it runs, and
+// checks the index finishing ends onboarding by itself — the onboarding window
+// is then closed the way a user closes it.
 
 // AUTORAG_HOME and AUTORAG_CONFIG point inside a temp dir, so the user's own
 // config and index are never touched. Electron resolves the home folder from
@@ -13,10 +19,10 @@ import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { homeDir, rmRetry } from "./platform.mjs";
+import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
+import { homeDir, isWindows, rmRetry } from "./platform.mjs";
 
-const EVIDENCE = join(ROOT, ".omo/evidence/onboarding");
+const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding");
 mkdirSync(EVIDENCE, { recursive: true });
 const WORK = mkdtempSync(join(tmpdir(), "autorag-onboarding-"));
 const FIXTURES = join(WORK, "fixtures");
@@ -107,26 +113,69 @@ const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
 const errors = [];
 try {
-	const page = await finderWindow(app, 20_000);
+	const page = await onboardingWindow(app, 20_000);
+	const finder = await finderWindow(app, 20_000);
 	page.on("pageerror", (error) => errors.push(error.message));
 	page.on("console", (message) => {
 		if (message.type() === "error") errors.push(message.text());
 	});
 	await page.waitForSelector(".onb .screen", { timeout: 20_000 });
-	// macOS clamps a window to the display's work area (a portrait monitor is 1080 wide).
-	const windowSize = () =>
-		app.evaluate(({ BrowserWindow, screen }) => {
-			const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
-			const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
-			return { content: window.getContentSize(), min: window.getMinimumSize(), work: [work.width, work.height] };
-		});
+	// Both windows load /index.html, so they are told apart the way `onboardingWindow`/`finderWindow` do:
+	// by the launch argument the preload reads. A Quick Look panel is not one of them.
+	const windowInfo = (onboarding, focus = false) =>
+		app.evaluate(
+			async ({ BrowserWindow, screen }, [wantOnboarding, wantFocus]) => {
+				for (const window of BrowserWindow.getAllWindows()) {
+					if (!window.webContents.getURL().endsWith("/index.html")) continue;
+					const pending = await window.webContents.executeJavaScript("window.autorag?.onboarding?.pending === true").catch(() => null);
+					if (pending !== wantOnboarding) continue;
+					if (wantFocus) window.focus();
+					const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
+					return { visible: window.isVisible(), content: window.getContentSize(), min: window.getMinimumSize(), work: [work.width, work.height] };
+				}
+				return null;
+			},
+			[onboarding, focus],
+		);
+	const windowSize = () => windowInfo(true);
+	/** `focus: true` brings the Finder to the front first, the way clicking its window does, before real input is sent to it. */
+	const finderWindowSize = (focus = false) => windowInfo(false, focus);
 	// Windows reports the content size inside the frame and title bar, so it can be smaller than the clamped window: allow that chrome (up to 40 px a side, 140 px tall).
-	const fits = ({ content, work }, [width, height]) => {
-		const [wantW, wantH] = [Math.min(width, work[0]), Math.min(height, work[1])];
-		return process.platform === "win32" ? content[0] <= wantW && wantW - content[0] <= 40 && content[1] <= wantH && wantH - content[1] <= 140 : content[0] === wantW && content[1] === wantH;
+	const fits = (info, [width, height]) => {
+		if (info === null) return false;
+		const [wantW, wantH] = [Math.min(width, info.work[0]), Math.min(height, info.work[1])];
+		return process.platform === "win32" ? info.content[0] <= wantW && wantW - info.content[0] <= 40 && info.content[1] <= wantH && wantH - info.content[1] <= 140 : info.content[0] === wantW && info.content[1] === wantH;
 	};
+	// Closing the window the way a user does: the traffic light, not `page.close()` (which speaks the debugging protocol).
+	const closeOnboardingWindow = () =>
+		app.evaluate(async ({ BrowserWindow }) => {
+			for (const window of BrowserWindow.getAllWindows()) {
+				if (!window.webContents.getURL().endsWith("/index.html")) continue;
+				const pending = await window.webContents.executeJavaScript("window.autorag?.onboarding?.pending === true").catch(() => null);
+				if (pending !== true) continue;
+				window.close();
+				return true;
+			}
+			return false;
+		});
+	// macOS clamps a window to the display's work area (a portrait monitor is 1080 wide).
 	const size = await windowSize();
-	check("onboarding window opens at the onboarding size", fits(size, [1120, 720]) && size.min[0] === 960, JSON.stringify(size));
+	const finderSize = await finderWindowSize();
+	check("both windows open at launch: the Finder and onboarding", size !== null && finderSize !== null, JSON.stringify({ onboarding: size, finder: finderSize }));
+	check("both windows are visible at launch", size?.visible === true && finderSize?.visible === true, JSON.stringify({ onboarding: size?.visible, finder: finderSize?.visible }));
+	check("onboarding window opens at the onboarding size", fits(size, [1120, 720]) && size?.min[0] === 960, JSON.stringify(size));
+	check("the Finder window opens at its own default size", fits(finderSize, [1440, 900]) && finderSize?.min[0] === Math.min(1360, finderSize.work[0]), JSON.stringify(finderSize));
+	// The Finder is a window of its own now: it paints its normal UI and takes real
+	// input while onboarding is still on its first step.
+	await finder.waitForSelector(".sidebar__item", { timeout: 20_000 });
+	// Real input lands in the window in front, so bring the Finder forward the way clicking it would.
+	await finderWindowSize(true);
+	const sidebarSearch = finder.locator(".side-search input");
+	await sidebarSearch.click();
+	await sidebarSearch.pressSequentially("qa");
+	check("the Finder takes real input while onboarding shows its welcome step", (await sidebarSearch.inputValue()) === "qa", await sidebarSearch.inputValue());
+	await sidebarSearch.fill("");
+	await finder.screenshot({ path: join(EVIDENCE, "01b-finder-at-launch.png") });
 	// Every screenshot also checks the footer: the progress dashes sit on the window's centre line whatever the width of the back and primary buttons.
 	const shot = async (name) => {
 		const offset = await page.evaluate(() => {
@@ -169,6 +218,9 @@ try {
 	check("account step", (await heading()).includes("계정"));
 	check("signing in is gated until an account exists", await primary.isDisabled());
 	await shot("03-account");
+	// Where the files live is said in the machine's own words: "이 Mac" on a Mac, "이 PC" on Windows.
+	const accountLead = await page.locator(".onb .screen-copy p").first().innerText();
+	check("the account step names this machine, not another OS's", isWindows ? accountLead.includes("이 PC") && !accountLead.includes("Mac") : accountLead.includes("이 Mac"), accountLead);
 	await page.locator(".onb .auth-card .action-row button.secondary").click();
 
 	// model: BYOK connects its model before any folder is scanned, because the smart scan runs on it.
@@ -224,6 +276,8 @@ try {
 	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
 	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
 	await shot("04-folders");
+	const etaText = await page.locator(".onb .eta-row").first().innerText();
+	check("the local ETA names this machine, not another OS's", isWindows ? etaText.includes("이 PC") && !etaText.includes("Mac") : etaText.includes("이 Mac"), etaText);
 	await primary.click();
 
 	// smart scan: the AI looks through the folders just chosen, on the model connected before them.
@@ -336,10 +390,17 @@ try {
 	await shot("07d-roles");
 	await primary.click();
 
-	// indexing: real first index; gate opens only on success, while subtle bottom button allows background start.
+	// indexing: real first index. The Finder is already open and usable beside this window, so the
+	// screen offers no way out of onboarding: no open button, no background start, no button in the gate.
 	await page.waitForSelector(".onb.immersive .ix-bar", { timeout: 10_000 });
-	check("open button disabled while indexing", await page.locator(".onb .ix-open-btn").first().isDisabled().catch(() => true));
-	check("subtle background-start button is visible while indexing", await page.locator(".onb .ix-bg-start").isVisible());
+	check("the indexing screen has no open button", (await page.locator(".onb .ix-open-btn").count()) === 0);
+	check("the indexing screen has no background-start button", (await page.locator(".onb .ix-bg-start").count()) === 0);
+	check("the indexing gate holds no button", (await page.locator(".onb .ix-gate button").count()) === 0);
+	check(
+		"the gate holds a notice instead of a button",
+		(await page.locator(".onb .ix-gate .ix-notice").count()) === 1,
+		await page.locator(".onb .ix-gate").innerText(),
+	);
 	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
 	check(
 		EMBED === "none"
@@ -350,16 +411,15 @@ try {
 	);
 	await shot("08-indexing");
 	await page.waitForFunction(
-		() => {
-			const button = document.querySelector(".onb .ix-open-btn");
-			return (button instanceof HTMLButtonElement && !button.disabled) || document.querySelector(".onb .ix.paused") !== null;
-		},
+		() => document.querySelector(".onb .ix.done") !== null || document.querySelector(".onb .ix.paused") !== null,
 		null,
 		{ timeout: 600_000 },
 	);
 	const failed = await page.locator(".onb .ix.paused").count();
 	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix.paused").innerText() : "");
-	check("subtle background-start button hides once indexing finishes", (await page.locator(".onb .ix-bg-start").count()) === 0);
+	check("the done screen shows the ok notice in the gate", (await page.locator(".onb .ix.done .ix-gate .ix-notice.ok").count()) === 1, await page.locator(".onb .ix-gate").innerText().catch(() => ""));
+	check("the done screen still offers neither open nor background-start button", (await page.locator(".onb .ix-open-btn, .onb .ix-bg-start").count()) === 0);
+	check("the done screen's gate holds no button", (await page.locator(".onb .ix-gate button").count()) === 0);
 	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check(
 		"the connected model survived the first index, with its base URL and no key in the config",
@@ -390,53 +450,76 @@ try {
 		JSON.stringify(final),
 	);
 	check("recent folder resolves through the realpath", final.recentFolder === "회의" || final.recentFolder === "reports", String(final.recentFolder));
+	// Nothing is clicked from here on: a first index that succeeded ends onboarding by itself.
+	const stateDeadline = Date.now() + 30_000;
+	let completed = false;
+	while (Date.now() < stateDeadline) {
+		try {
+			completed = JSON.parse(readFileSync(join(userDataDir, "onboarding", "state.json"), "utf8")).completed === true;
+		} catch {
+			completed = false;
+		}
+		if (completed) break;
+		await page.waitForTimeout(250);
+	}
+	check("onboarding completed by itself once the index succeeded, with no click", completed);
 	await shot("09-indexing-done");
-	if (failed === 0) {
-		await page.locator(".onb .ix-open-btn").click();
-		await page.waitForSelector(".onb", { state: "detached", timeout: 10_000 });
-		const finder = await windowSize();
-		check("AutoRAG opens the Finder at full size", fits(finder, [1440, 900]) && finder.min[0] === Math.min(1360, finder.work[0]), JSON.stringify(finder));
-		const state = JSON.parse(readFileSync(join(userDataDir, "onboarding", "state.json"), "utf8"));
-		check("onboarding marked completed", state.completed === true);
-		if (requestedSource.length > 0) {
-			const completedAt = Date.parse(final.finishedAt ?? final.startedAt ?? new Date().toISOString()) - 2_000;
-			const deadline = Date.now() + 120_000;
-			let matching = [];
-			while (Date.now() < deadline) {
-				const { activity, snapshot } = await page.evaluate(async () => ({
-					activity: await window.autorag.indexActivity.get(),
-					snapshot: await window.autorag.settings.sourcesList(),
-				}));
-				matching = snapshot.sources.filter(
-					(row) => row.id === requestedSource || row.type === requestedSource || row.id.startsWith(`${requestedSource}-`),
-				);
-				const done =
-					activity.state !== "running" &&
-					matching.length > 0 &&
-					matching.every(
-						(row) =>
-							row.status === "ready" &&
-							(row.index.state === "indexed" || row.index.state === "empty") &&
-							(row.index.indexedAt === null || Date.parse(row.index.indexedAt) >= completedAt),
-					);
-				if (done) break;
-				await page.waitForTimeout(1_000);
-			}
-			await page.waitForFunction(() => document.querySelector('.sidebar__activity[data-tone="run"]') === null, null, { timeout: 5_000 });
-			check(
-				`${requestedSource} datasource finishes indexing in the background`,
-				matching.length > 0 && matching.every((row) => row.index.state === "indexed" && (row.index.chunkCount ?? 0) > 0),
-				JSON.stringify(matching.map((row) => ({ id: row.id, status: row.status, index: row.index }))),
+	// Both windows are still there: onboarding on its done screen at its own size, the Finder untouched.
+	const doneSize = await windowSize();
+	const finderDoneSize = await finderWindowSize();
+	check("the onboarding window stays open on the done screen", doneSize !== null && doneSize.visible === true, JSON.stringify(doneSize));
+	check("the onboarding window keeps the onboarding size", fits(doneSize, [1120, 720]), JSON.stringify(doneSize));
+	check(
+		"the finished index left the Finder window untouched",
+		finderSize !== null && fits(finderDoneSize, [1440, 900]) && finderDoneSize.content.join("x") === finderSize.content.join("x"),
+		JSON.stringify(finderDoneSize),
+	);
+	await finder.screenshot({ path: join(EVIDENCE, "10-finder-beside-onboarding.png") });
+	await page.locator(".onb").screenshot({ path: join(EVIDENCE, "10-onboarding-beside-finder.png") });
+	// Leaving the done screen is the user's own act: close the window (the OS close button, not `page.close()`).
+	check("the onboarding window closes the way a user closes it", (await closeOnboardingWindow()) === true);
+	await page.waitForEvent("close", { timeout: 10_000 }).catch(() => undefined);
+	check("the onboarding page detaches when its window closes", page.isClosed());
+	const finderAfter = await finderWindowSize();
+	check("the Finder stays open after the onboarding window closes", finderAfter !== null && finderAfter.visible === true, JSON.stringify(finderAfter));
+	check("the Finder keeps its size after the onboarding window closes", fits(finderAfter, [1440, 900]), JSON.stringify(finderAfter));
+	check("the Finder still answers after the onboarding window closes", await finder.locator(".side-search input").isEditable());
+	await finder.screenshot({ path: join(EVIDENCE, "11-finder-after.png") });
+	if (requestedSource.length > 0) {
+		const completedAt = Date.parse(final.finishedAt ?? final.startedAt ?? new Date().toISOString()) - 2_000;
+		const deadline = Date.now() + 120_000;
+		let matching = [];
+		while (Date.now() < deadline) {
+			const { activity, snapshot } = await finder.evaluate(async () => ({
+				activity: await window.autorag.indexActivity.get(),
+				snapshot: await window.autorag.settings.sourcesList(),
+			}));
+			matching = snapshot.sources.filter(
+				(row) => row.id === requestedSource || row.type === requestedSource || row.id.startsWith(`${requestedSource}-`),
 			);
+			const done =
+				activity.state !== "running" &&
+				matching.length > 0 &&
+				matching.every(
+					(row) =>
+						row.status === "ready" &&
+						(row.index.state === "indexed" || row.index.state === "empty") &&
+						(row.index.indexedAt === null || Date.parse(row.index.indexedAt) >= completedAt),
+				);
+			if (done) break;
+			await finder.waitForTimeout(1_000);
 		}
-		await page.screenshot({ path: join(EVIDENCE, "10-finder.png") });
-		if (requestedSource.length > 0) {
-			await page.locator(".sidebar__item--settings").click();
-			await page.waitForSelector(".settings-sidebar", { timeout: 10_000 });
-			await page.locator(".settings-sidebar .settings-nav-item", { hasText: "인덱싱" }).click();
-			await page.waitForSelector(".settings-sync-row", { timeout: 10_000 });
-			await page.screenshot({ path: join(EVIDENCE, "11-settings-indexing.png") });
-		}
+		await finder.waitForFunction(() => document.querySelector('.sidebar__activity[data-tone="run"]') === null, null, { timeout: 5_000 });
+		check(
+			`${requestedSource} datasource finishes indexing in the background`,
+			matching.length > 0 && matching.every((row) => row.index.state === "indexed" && (row.index.chunkCount ?? 0) > 0),
+			JSON.stringify(matching.map((row) => ({ id: row.id, status: row.status, index: row.index }))),
+		);
+		await finder.locator(".sidebar__item--settings").click();
+		await finder.waitForSelector(".settings-sidebar", { timeout: 10_000 });
+		await finder.locator(".settings-sidebar .settings-nav-item", { hasText: "인덱싱" }).click();
+		await finder.waitForSelector(".settings-sync-row", { timeout: 10_000 });
+		await finder.screenshot({ path: join(EVIDENCE, "12-settings-indexing.png") });
 	}
 	check("no renderer errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (error) {

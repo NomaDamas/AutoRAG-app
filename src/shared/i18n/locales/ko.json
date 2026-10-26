@@ -715,7 +715,8 @@
       "agreeTerms": "이용약관",
       "agreePrivacy": "개인정보처리방침",
       "agreeUse": "수용 가능한 사용 정책",
-      "planLabel": "{{plan}} 플랜"
+      "planLabel": "{{plan}} 플랜",
+      "leadPc": "플랜과 사용량은 계정에 연결됩니다. 파일과 검색 인덱스는 이 PC에 저장됩니다."
     },
     "permissions": {
       "eyebrow": "권한",
@@ -779,7 +780,8 @@
       "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
       "localEta": "로컬 (이 Mac) 약 {{minutes}}분",
       "cloudEta": "원격 약 {{minutes}}분",
-      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
+      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다.",
+      "localEtaPc": "로컬 (이 PC) 약 {{minutes}}분"
     },
     "smartScope": {
       "policy": {
@@ -1002,9 +1004,6 @@
       "gateTitlePc": "Dazzi를 종료하거나 PC를 끄지 마세요",
       "gateDetailMac": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원 어댑터를 연결하고 덮개를 열어 두세요.",
       "gateDetailWindows": "첫 인덱싱은 오래 걸립니다. 종료하면 진행이 멈춰요. 전원을 연결해 두세요.",
-      "gateLocked": "완료되면 열 수 있어요",
-      "open": "Dazzi 열기",
-      "startInBackground": "백그라운드에서 계속하고 바로 시작하기",
       "skipped": "{{count}}개 파일은 건너뛰었어요",
       "gateOkDetailPartial": "나머지는 모두 검색할 수 있어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
       "pause": {
@@ -1041,8 +1040,7 @@
           "resumeDisk": "공간 확보했어요, 이어서 받기",
           "changeEmbedding": "임베딩 방식 바꾸기",
           "exclude": "‘{{folder}}’ 빼고 계속",
-          "excludeMany": "읽을 수 없는 폴더 빼고 계속",
-          "openAnyway": "일단 Dazzi 열기"
+          "excludeMany": "읽을 수 없는 폴더 빼고 계속"
         },
         "line": {
           "retrying": "다시 시도하는 중이에요",
@@ -1574,7 +1572,14 @@
       "tarListFailed": "tar 목록을 읽지 못했습니다",
       "readFailed": "압축 파일을 읽지 못했습니다",
       "empty": "비어 있는 압축 파일",
-      "order": "최근 수정 순"
+      "order": "최근 수정 순",
+      "unreadable": {
+        "encrypted": "암호로 보호된 압축 파일이라 목록을 볼 수 없습니다",
+        "corrupt": "목록을 읽지 못했습니다. 손상되었거나 암호로 보호되어 있거나 파일 하나만 압축한 파일일 수 있습니다",
+        "tooLarge": "이 압축 파일은 너무 커서 목록 대신 정보만 보여 줍니다",
+        "tooManyEntries": "압축 파일의 항목이 너무 많아 목록 대신 정보만 보여 줍니다",
+        "tooSlow": "목록을 읽는 데 너무 오래 걸려 정보만 보여 줍니다"
+      }
     },
     "folder": {
       "kind": "폴더",
@@ -1700,6 +1705,14 @@
     },
     "pdf": {
       "openFailed": "PDF를 열 수 없습니다"
+    },
+    "password": {
+      "locked": "암호로 보호된 문서입니다",
+      "label": "암호",
+      "placeholder": "암호 입력",
+      "unlock": "잠금 해제",
+      "checking": "확인하는 중…",
+      "incorrect": "암호가 맞지 않습니다. 다시 입력해 주세요."
     },
     "pptx": {
       "openFailed": "프레젠테이션을 열지 못했습니다",
@@ -2051,7 +2064,8 @@
         "baseUrl": "서버 주소",
         "apiKeyOptional": "API 키 (선택)",
         "optionalPlaceholder": "선택 사항",
-        "saved": "{{name}}을(를) 저장했습니다."
+        "saved": "{{name}}을(를) 저장했습니다.",
+        "bodyLocalPc": "Ollama, LM Studio처럼 이 PC에서 실행 중인 서버만 연결할 수 있습니다."
       },
       "loginModal": {
         "openManually": "브라우저가 열리지 않으면 아래 주소를 직접 여세요.",
@@ -2083,7 +2097,8 @@
       "apiKeyPlaceholder": "비워 두면 저장된 키를 사용합니다",
       "apiKeyHint": "키는 이 Mac의 보안 키체인에 저장되며 설정 파일에는 기록되지 않습니다.",
       "consentRemote": "문서 내용이 이 컴퓨터 밖의 서버로 전송되는 것에 동의합니다",
-      "signInNote": "Dazzi 클라우드는 Dazzi 계정 로그인이 필요합니다. 계정 설정에서 먼저 로그인하세요."
+      "signInNote": "Dazzi 클라우드는 Dazzi 계정 로그인이 필요합니다. 계정 설정에서 먼저 로그인하세요.",
+      "apiKeyHintPc": "키는 이 PC의 안전한 자격 증명 저장소에 보관되며 설정 파일에는 기록되지 않습니다."
     },
     "language": {
       "remove": "{{name}} 제거",

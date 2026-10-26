@@ -18,7 +18,6 @@ import {
 	protocol,
 	safeStorage,
 	ShareMenu,
-	screen,
 	shell,
 	type OpenDialogOptions,
 } from "electron";
@@ -58,6 +57,7 @@ import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./
 import { createAccountService } from "./account-service";
 import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
+import { closeDecision, completesOnClose } from "./onboarding-window";
 import { detectSources } from "./onboarding-sources";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
@@ -214,17 +214,17 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 	}
 }
 
-function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, pending: boolean): BrowserWindow {
+function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, phase: WindowPhase): BrowserWindow {
 	const window = new BrowserWindow({
 		// Onboarding uses the prototype's 1120×720 canvas; the Finder keeps its own size.
-		...(pending
+		...(phase === "onboarding"
 			? { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true }
 			: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 }),
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
 		// The native title strip is gone on every OS (see `window-chrome.ts`): macOS keeps its traffic lights, Windows/Linux get the window controls only.
-		...mainWindowChrome(process.platform, appearance, pending ? "onboarding" : "finder"),
+		...mainWindowChrome(process.platform, appearance, phase),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			contextIsolation: true,
@@ -233,7 +233,7 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 			additionalArguments: [
 				...(devLabel === null ? [] : [`--autorag-dev-label=${JSON.stringify(devLabel)}`]),
 				`--autorag-appearance=${appearance}`,
-				...(pending ? [ONBOARDING_PENDING_FLAG] : []),
+				...(phase === "onboarding" ? [ONBOARDING_PENDING_FLAG] : []),
 			],
 		},
 	});
@@ -248,31 +248,41 @@ function createMainWindow(devLabel: DevLabel | null, appearance: AppAppearance, 
 	});
 
 	loadRendererPage(window, "index.html");
-	attachQuickLook(window, {
-		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
-		appearance,
-		language: currentLanguage,
-		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
-		// Spawning osascript blocks the caller for the fork; the worker pays it.
-		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
-	});
+	// Only the Finder previews files; the onboarding window has nothing to preview.
+	if (phase === "finder") {
+		attachQuickLook(window, {
+			preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+			appearance,
+			language: currentLanguage,
+			loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+			// Spawning osascript blocks the caller for the fork; the worker pays it.
+			defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
+		});
+	}
 	return window;
 }
 
 let fsWorker: FsWorkerHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
+/** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
+/** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
+let onboardingWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
-/** What the main window's page shows now; the window-controls overlay is as tall as that page's top bar. */
-let windowPhase: WindowPhase = "finder";
+/** The app's own windows that are still open (never a Quick Look panel). */
+function appWindows(): BrowserWindow[] {
+	return [mainWindow, onboardingWindow].filter((window): window is BrowserWindow => window !== null && !window.isDestroyed());
+}
+/** The window-controls overlay of each window is as tall as that page's top bar. */
 function syncWindowControls(): void {
-	if (!hasInWindowMenuBar(process.platform) || mainWindow === null || mainWindow.isDestroyed()) return;
-	mainWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, windowPhase));
+	if (!hasInWindowMenuBar(process.platform)) return;
+	if (mainWindow !== null && !mainWindow.isDestroyed()) mainWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, "finder"));
+	if (onboardingWindow !== null && !onboardingWindow.isDestroyed()) onboardingWindow.setTitleBarOverlay(windowControlsOverlay(currentAppearance, "onboarding"));
 }
 let currentLanguage: AppSettings["language"] = "ko";
+/** One push to every window of the app: the Finder and, during first-run onboarding, the onboarding window. */
 function sendToMainWindow(channel: string, payload: unknown): void {
-	if (mainWindow === null || mainWindow.isDestroyed()) return;
-	mainWindow.webContents.send(channel, payload);
+	for (const window of appWindows()) window.webContents.send(channel, payload);
 }
 
 function sendToAllWindows(channel: string, payload: unknown): void {
@@ -1017,7 +1027,7 @@ app.whenReady().then(async () => {
 		},
 		appBundlePath: resolveAppBundlePath,
 		startDrag: (path) => {
-			const target = mainWindow;
+			const target = onboardingWindow ?? mainWindow;
 			if (target === null || target.isDestroyed()) return;
 			void app.getFileIcon(path).then(
 				(icon) => {
@@ -1034,7 +1044,8 @@ app.whenReady().then(async () => {
 				buttonLabel: t("main.dialogs.addButton"),
 				properties: ["openDirectory", "multiSelections", "createDirectory"],
 			};
-			const result = mainWindow === null ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(mainWindow, options);
+			const parent = onboardingWindow ?? mainWindow;
+			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
 			return result.canceled ? [] : result.filePaths;
 		},
 		showNotification: showSystemNotification,
@@ -1048,61 +1059,63 @@ app.whenReady().then(async () => {
 		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
 		onComplete: () => {
 			analytics.track("onboarding_completed", {});
-			const window = mainWindow;
-			if (window === null || window.isDestroyed()) return;
-			windowPhase = "finder";
-			syncWindowControls();
-			// Centering can move a border-spanning window onto another display.
-			// Apply the target size both before and after centering so the Finder
-			// hand-off uses the display where the window actually ended up.
-			const resizeToWorkArea = (): void => {
-				const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
-				window.setMinimumSize(Math.min(1360, work.width), Math.min(820, work.height));
-				window.setSize(Math.min(1440, work.width), Math.min(900, work.height));
-			};
-			resizeToWorkArea();
-			window.center();
-			resizeToWorkArea();
-			window.center();
 		},
 	});
 	registerOnboardingIpcHandlers(onboardingService);
-	const openMainWindow = (): BrowserWindow => {
-		windowPhase = onboardingService.pending() ? "onboarding" : "finder";
-		const window = createMainWindow(devLabel, currentAppearance, onboardingService.pending());
+	/** Closing the last window while the first index runs would stop it, so that close asks first. */
+	const confirmLastClose = (window: BrowserWindow, event: Electron.Event): void => {
+		const decision = closeDecision({ pending: onboardingService.pending(), indexing: onboardingService.isIndexing(), windowsOpen: appWindows().length });
+		if (decision === "allow") return;
+		event.preventDefault();
+		void dialog
+			.showMessageBox(window, {
+				type: "warning",
+				buttons: [t("main.dialogs.quitButton"), t("main.dialogs.continueButton")],
+				defaultId: 1,
+				cancelId: 1,
+				message: t("main.dialogs.indexingInProgress"),
+				detail: t("main.dialogs.indexingQuitDetail"),
+			})
+			.then((result) => {
+				if (result.response === 0 && !window.isDestroyed()) window.destroy();
+			});
+	};
+	const openFinderWindow = (): BrowserWindow => {
+		const window = createAppWindow(devLabel, currentAppearance, "finder");
 		const clearWatchSet = (): void => {
 			void workerHost.client.call("setWatchSet", [[]]);
 		};
 		window.webContents.on("render-process-gone", clearWatchSet);
 		window.webContents.on("destroyed", clearWatchSet);
-		window.on("close", (event) => {
-			if (!onboardingService.pending() || !onboardingService.isIndexing()) return;
-			event.preventDefault();
-			void dialog
-				.showMessageBox(window, {
-					type: "warning",
-					buttons: [t("main.dialogs.quitButton"), t("main.dialogs.continueButton")],
-					defaultId: 1,
-					cancelId: 1,
-					message: t("main.dialogs.indexingInProgress"),
-					detail: t("main.dialogs.indexingQuitDetail"),
-				})
-				.then((result) => {
-					if (result.response === 0 && !window.isDestroyed()) window.destroy();
-				});
+		window.on("close", (event) => confirmLastClose(window, event));
+		return window;
+	};
+	const openOnboardingWindow = (): BrowserWindow => {
+		const window = createAppWindow(devLabel, currentAppearance, "onboarding");
+		window.on("close", (event) => confirmLastClose(window, event));
+		window.on("closed", () => {
+			onboardingWindow = null;
+			// Closed on a first index that stopped: that ends onboarding and gives the Finder its keyword index.
+			void onboardingService.indexStatus().then(({ state }) => {
+				if (completesOnClose({ pending: onboardingService.pending(), state })) void onboardingService.complete();
+			});
 		});
 		return window;
 	};
-	mainWindow = openMainWindow();
+	/** Open whatever the app needs on screen: the Finder, and the onboarding window while onboarding is unfinished. */
+	const openWindows = (): void => {
+		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
+		if (onboardingService.pending() && (onboardingWindow === null || onboardingWindow.isDestroyed())) onboardingWindow = openOnboardingWindow();
+	};
+	openWindows();
+	// A Dock click only brings windows back when none is left; a closed onboarding window is not forced open again.
 	app.on("activate", () => {
-		if (mainWindow === null || mainWindow.isDestroyed()) {
-			mainWindow = openMainWindow();
-		}
+		if (appWindows().length === 0) openWindows();
 	});
 	// Menu requests: queue the cold-start request, then serve the ones the running app receives.
 	onOsRequestQueued = () => {
 		if (mainWindow === null || mainWindow.isDestroyed()) {
-			mainWindow = openMainWindow();
+			mainWindow = openFinderWindow();
 		} else {
 			if (mainWindow.isMinimized()) mainWindow.restore();
 			mainWindow.show();

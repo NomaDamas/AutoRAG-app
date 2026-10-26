@@ -294,8 +294,11 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   and class names, so the port needs no restyling. The prototype's drawn
   traffic lights are omitted: the real window's native ones sit over the 42px
   drag bar.
-- The window opens at the prototype's 1120×720 canvas (min 960×680) and grows
-  to the Finder size when onboarding completes.
+- On a first run the app opens two windows: the Finder, usable at once and never
+  resized, and this onboarding window at the prototype's 1120×720 canvas (min
+  960×680). The screens have no button that opens Dazzi. A finished first index
+  completes onboarding by itself and leaves the done screen up until the user
+  closes the window.
 - Prototype simulations are replaced by real state: the indexing screen shows
   real progress (no 30-minute minimum), folder cards show "세는 중…" until their
   pre-scan finishes, and a stopped index is the same screen held still (see
@@ -303,8 +306,9 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 - **A first index that stops (issue #283)** is not a separate failure screen but
   the indexing screen paused: the scene stops, one amber light replaces the blue,
   and the screen carries only an icon, a one-line title, one reason line, one
-  button (Enter presses it) and at most two quiet links. "Open Dazzi anyway" is
-  always one of the links. The raw error and its code never appear (they stay in
+  button (Enter presses it) and at most two quiet links. There is no link that
+  skips the index: the Finder is already open, and closing this window on a
+  stopped run ends onboarding. The raw error and its code never appear (they stay in
   the app log); a stopped run shows no estimate, no phase strip and no locked
   gate. The reason decides the button: a refused embedder opens the embedding
   choice, an offline embedder or model download retries by itself (8 s, up to 6

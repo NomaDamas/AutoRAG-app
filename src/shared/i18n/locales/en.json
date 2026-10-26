@@ -715,7 +715,8 @@
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
       "agreeUse": "Acceptable Use",
-      "planLabel": "{{plan}} plan"
+      "planLabel": "{{plan}} plan",
+      "leadPc": "Your plan and usage are tied to your account. Your files and search index are stored on this PC."
     },
     "permissions": {
       "eyebrow": "Permissions",
@@ -779,7 +780,8 @@
       "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
       "localEta": "Local (this Mac) · ~{{minutes}} min",
       "cloudEta": "Remote · ~{{minutes}} min",
-      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner."
+      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
+      "localEtaPc": "Local (this PC) · ~{{minutes}} min"
     },
     "smartScope": {
       "policy": {
@@ -1002,9 +1004,6 @@
       "gateTitlePc": "Don't quit Dazzi or turn off your PC",
       "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
-      "gateLocked": "Opens once it's done",
-      "open": "Open Dazzi",
-      "startInBackground": "Continue in background and start right away",
       "skipped": "{{count}} files were skipped",
       "gateOkDetailPartial": "Everything else is searchable. Newly changed files continue to be read in the background.",
       "pause": {
@@ -1041,8 +1040,7 @@
           "resumeDisk": "I freed up space, resume",
           "changeEmbedding": "Change embedding",
           "exclude": "Continue without “{{folder}}”",
-          "excludeMany": "Continue without the unreadable folders",
-          "openAnyway": "Open Dazzi anyway"
+          "excludeMany": "Continue without the unreadable folders"
         },
         "line": {
           "retrying": "Trying again…",
@@ -1574,7 +1572,14 @@
       "tarListFailed": "Couldn’t read the tar listing",
       "readFailed": "Couldn’t read the archive",
       "empty": "Empty archive",
-      "order": "Date Modified"
+      "order": "Date Modified",
+      "unreadable": {
+        "encrypted": "This archive is password-protected, so its contents can’t be listed",
+        "corrupt": "Couldn’t list this archive. It may be damaged, password-protected, or hold just one compressed file",
+        "tooLarge": "This archive is too large to list; showing its details instead",
+        "tooManyEntries": "This archive holds too many items to list; showing its details instead",
+        "tooSlow": "Listing this archive took too long; showing its details instead"
+      }
     },
     "folder": {
       "kind": "Folder",
@@ -1700,6 +1705,14 @@
     },
     "pdf": {
       "openFailed": "Couldn’t open the PDF"
+    },
+    "password": {
+      "locked": "This document is password protected",
+      "label": "Password",
+      "placeholder": "Enter password",
+      "unlock": "Unlock",
+      "checking": "Checking…",
+      "incorrect": "The password is incorrect. Try again."
     },
     "pptx": {
       "openFailed": "Couldn’t open the presentation",
@@ -2051,7 +2064,8 @@
         "baseUrl": "Server URL",
         "apiKeyOptional": "API Key (optional)",
         "optionalPlaceholder": "Optional",
-        "saved": "Saved {{name}}."
+        "saved": "Saved {{name}}.",
+        "bodyLocalPc": "You can only connect servers running on this PC, such as Ollama or LM Studio."
       },
       "loginModal": {
         "openManually": "If the browser doesn't open, open the address below yourself.",
@@ -2083,7 +2097,8 @@
       "apiKeyPlaceholder": "Leave empty to use the stored key",
       "apiKeyHint": "The key is stored in this Mac's secure keychain and never written to the config file.",
       "consentRemote": "I agree that document text is sent to a server off this computer",
-      "signInNote": "The Dazzi cloud needs a Dazzi account sign-in. Sign in from the account settings first."
+      "signInNote": "The Dazzi cloud needs a Dazzi account sign-in. Sign in from the account settings first.",
+      "apiKeyHintPc": "The key is stored in this PC's secure credential store and never written to the config file."
     },
     "language": {
       "remove": "Remove {{name}}",

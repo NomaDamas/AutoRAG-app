@@ -25,6 +25,7 @@ const bridge: QuickLookWindowBridge = {
 	folderSize: never,
 	audioMetadata: never,
 	dataPreview: never,
+	archivePreview: never,
 	share: never,
 	copyText: never,
 };
@@ -67,6 +68,7 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	html: strToU8("<p>Hello</p>"),
 	text: strToU8("hello preview\n"),
 	archive: zipSync({ "notes/a.txt": strToU8("hi") }),
+	archiveList: new Uint8Array([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]),
 	iwork: png,
 	odt: zipSync({ "content.xml": strToU8("<office:document-content/>") }),
 	odp: zipSync({ "content.xml": strToU8("<office:document-content/>") }),
@@ -102,6 +104,7 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	html: "html",
 	text: "txt",
 	archive: "zip",
+	archiveList: "7z",
 	iwork: "numbers",
 	odt: "odt",
 	odp: "odp",

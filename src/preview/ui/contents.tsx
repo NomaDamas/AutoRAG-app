@@ -24,6 +24,7 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	html: "bg-ql-badge-html",
 	text: "bg-ql-badge-code",
 	archive: "bg-ql-badge-archive",
+	archiveList: "bg-ql-badge-archive",
 	iwork: "bg-ql-badge-doc",
 	odt: "bg-ql-badge-doc",
 	odp: "bg-ql-badge-slides",

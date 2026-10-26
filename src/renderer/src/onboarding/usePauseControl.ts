@@ -101,9 +101,6 @@ export function usePauseControl(ctx: OnboardingCtx): PauseControl {
 			case "excludeFolders":
 				ctx.excludeFolders(shownFailure?.folders ?? []);
 				return;
-			case "openAnyway":
-				ctx.finishInBackground();
-				return;
 		}
 	};
 

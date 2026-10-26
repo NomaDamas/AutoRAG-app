@@ -4,6 +4,7 @@ import { t } from "../../shared/i18n/core";
 import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import type { IconPreviewCache } from "../../main/file-icon";
+import { listArchive } from "../../main/archive-list";
 import { isAppBundle } from "../../main/fs-entry";
 import {
 	app,
@@ -108,6 +109,8 @@ interface Session {
 	opening: { readonly id: number; bounds: Bounds } | null;
 	/** A close zoom is running: the content must stay until the panel has shrunk away. */
 	closing: boolean;
+	/** A text field in the page has focus (the PDF password prompt): Space and the arrows are its own. */
+	typing: boolean;
 	readonly waiters: Map<string, () => void>;
 	readonly defaultApps: DefaultAppCache;
 	detach: () => void;
@@ -214,6 +217,7 @@ async function zoomIn(state: Session, bounds: Bounds): Promise<void> {
 	await zoomStep(state, id, "prepared", ZOOM_PREPARE_MS);
 	if (!current(state, id)) return;
 	window.showInactive();
+	focusTextEntry(state);
 	sendZoom(state, { id, phase: "run" });
 	await zoomStep(state, id, "done", ZOOM_DONE_TIMEOUT_MS);
 	if (!current(state, id)) return;
@@ -245,6 +249,18 @@ async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
 	sendZoom(state, { id, phase: "settle" });
 }
 
+/**
+ * The panel opens without taking focus; a text field in it (the PDF password prompt) needs it
+ * to receive keys. Closing hands focus back to the Finder (see {@link hide}). A window that is not
+ * visible yet is focused by the show that follows.
+ */
+function focusTextEntry(state: Session): void {
+	const { window } = state;
+	if (!state.typing || !live(window) || !window.isVisible()) return;
+	window.focus();
+	window.webContents.focus();
+}
+
 function present(state: Session, report: QuickLookReady): void {
 	clearDeadline(state);
 	const { window } = state;
@@ -270,10 +286,12 @@ function present(state: Session, report: QuickLookReady): void {
 	state.shown = true;
 	float(state, true);
 	window.showInactive();
+	focusTextEntry(state);
 }
 
 function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = state.origin): void {
 	state.seq += 1;
+	state.typing = false;
 	state.current = null;
 	clearDeadline(state);
 	const { window, owner } = state;
@@ -459,6 +477,7 @@ async function withDriveThumbnail(target: QuickLookTarget, content: TargetConten
 
 async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
+	state.typing = false;
 	const seq = state.seq;
 	state.current = target;
 	state.origin = origin;
@@ -605,6 +624,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		zoom: 0,
 		opening: null,
 		closing: false,
+		typing: false,
 		waiters: new Map(),
 		defaultApps: createDefaultAppCache(options.defaultApp),
 		detach: () => undefined,
@@ -627,7 +647,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	// consume Space and arrows, so a page keydown listener never sees them.
 	const onInput = (event: Electron.Event, input: Electron.Input): void => {
 		if (input.type !== "keyDown") return;
-		const action = quickLookKeyAction(input);
+		const action = quickLookKeyAction(input, state.typing);
 		if (action === null) return;
 		event.preventDefault();
 		if (action === "close" && input.isAutoRepeat) return;
@@ -686,6 +706,12 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		if (state === null || !isQuickLookZoomed(report)) return;
 		state.waiters.get(`${report.id}:${report.phase}`)?.();
 	});
+	ipc.on(PREVIEW_CHANNELS.textEntry, (event, active: unknown) => {
+		const state = fromPreview(event);
+		if (state === null || typeof active !== "boolean") return;
+		state.typing = active && state.current !== null;
+		focusTextEntry(state);
+	});
 	ipc.on(PREVIEW_CHANNELS.ready, (event, report: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || !isQuickLookReady(report) || report.seq !== state.seq) return;
@@ -712,6 +738,10 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
 		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
 		return previewData(shownPath(event, path).path, table);
+	});
+	ipc.handle(PREVIEW_CHANNELS.archive, (event, path: unknown) => {
+		const shown = shownPath(event, path);
+		return listArchive(shown.path, { stopped: () => shown.state.current?.path !== shown.path });
 	});
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);

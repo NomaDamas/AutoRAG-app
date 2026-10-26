@@ -4,7 +4,7 @@ import { assertNever } from "../shared/assert";
 import type { PreviewDocument } from "../shared/contract";
 import { viewerForExtension } from "../shared/registry";
 import { looksLikeText } from "../shared/text-sample";
-import { ArchiveView } from "./archive";
+import { ArchiveListView, ArchiveView } from "./archive";
 import { CalendarView } from "./calendar";
 import { ContactView } from "./contact";
 import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
@@ -80,6 +80,8 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <PlistView file={file} />;
 		case "archive":
 			return <ArchiveView file={file} />;
+		case "archiveList":
+			return <ArchiveListView file={file} />;
 		case "iwork":
 			return <IworkView file={file} />;
 		case "epub":

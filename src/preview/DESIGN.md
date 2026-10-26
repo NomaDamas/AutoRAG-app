@@ -78,6 +78,11 @@ still has the previous file's size when they lay out.
   is located (`shared/locate.ts` + `shared/text-marks.ts`), and its boxes are
   drawn over the pages (`--ql-evidence-mark`) with the panel scrolled to the
   first match.
+  An encrypted PDF opens a password prompt (`PasswordView`, `password.tsx`) instead
+  of the Other panel: pdf.js reports `onPassword` (needed, then incorrect), the
+  typed password goes straight back to it, and the pages draw in place once it
+  accepts. The password lives only in that component's state and is asked again
+  on the next preview.
 - **HWP / HWPX** — the same `PagedView`, drawn by rhwp (`@rhwp/core`, the
   Rust + WebAssembly engine alhangeul-macos builds on). rhwp parses HWP 5,
   HWPX, and some HWP 3 documents, paginates them when the file opens, and
@@ -208,6 +213,21 @@ still has the previous file's size when they lay out.
   and each child is as new as its newest member. Both panels draw the strip
   with `ui/contents.tsx`, so they stay identical. A gzip of one text file shows
   the text instead.
+- **Archive listing (main process)** — `.7z`, `.rar`, `.tar.bz2`/`.tbz2`/`.tbz`,
+  `.tar.xz`/`.txz`, `.tar.zst`/`.tzst`, `.iso`, `.deb`, `.rpm`, and `.cab` need
+  an engine the page does not have (`archiveList` viewer, `byteNeed` `query`).
+  `preview:archive` runs `src/main/archive-list.ts`, which reads the file on a
+  worker thread (`archive-list-worker.mjs`, the libarchive wasm build the
+  extractor uses, header scan only — no member data is read) and answers with
+  one entry per top-level child (`collapseToTopLevel`), so the page draws the
+  same panel as a zip through `summarizeArchive`. The wrappers libarchive cannot
+  open are undone in the worker: a `.deb`'s `data.tar.*` member, an `.rpm`'s
+  payload after its lead and two headers, and any zstd layer (Node's `zlib`).
+  RAR is listed, never extracted. The listing is bounded: an archive over 256MB
+  is not read, a zstd layer stops at 512MB, a listing stops at 100,000 entries or
+  30s. A password-protected, damaged, or over-limit archive keeps the info panel
+  and says why (`quickLook.archive.unreadable.*`). `.dmg`, `.pkg`, and `.lz4`
+  have no reader and keep the info panel.
 - **iWork** — `.numbers`, `.pages`, and `.key` are ZIPs whose `preview.jpg` is
   the first sheet, page, or slide as the app drew it. Numbers and Pages show
   that image. A Keynote deck shows every slide in the PDF panel's `PagedView`:
@@ -366,8 +386,8 @@ HEIC as the JPEG macOS's own `sips` decodes from it (`node/heic.ts`, about
 0.2s on a 24MP iPhone photo even on a spinning disk; the viewer's wasm decoder
 never finished one, and remains only where `sips` is absent or fails); and
 a 64KB sniff of an unknown file, read on as text only when it looks like text.
-The detail calls (details, SHA-256, folder size, audio tags, data rows) answer only for the
-path the window is showing, and the hash and folder walk stop when the preview
+The detail calls (details, SHA-256, folder size, audio tags, data rows, archive listings) answer only for the
+path the window is showing, and the hash, folder walk, and archive listing stop when the preview
 moves on.
 
 Electron honours only one `registerSchemesAsPrivileged` call, so the preview
@@ -396,6 +416,12 @@ focus. Arrow Up/Down move the Finder selection and retarget the preview.
 When the preview window itself has focus, the main process intercepts Up/Down,
 Space, and Escape in `before-input-event`, so a focused control still closes
 and navigates. Left/Right stay with the page, where media seeks.
+
+A text field in the page (the PDF password prompt) reports focus through
+`bridge.textEntry`. While it has focus, the main process keeps the field's
+Space and Up/Down out of the shortcuts (`quickLookKeyAction(input, typing)`);
+Escape still closes. The panel opens without focus, so the report also focuses
+the preview window; closing hands focus back to the Finder (`hide`).
 
 An evidence title in the right sidebar opens the panel with no Finder row to
 toggle, and the title button keeps focus. The Finder's keydown handler
