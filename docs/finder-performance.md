@@ -183,6 +183,19 @@ This avoids sending large plain-text folders through Quick Look, where macOS
 can wait for the full 4 s deadline without producing a useful thumbnail. The
 provider still caches successful and negative visual lookups by path + mtime.
 
+Photoshop, Illustrator, camera RAW (`cr2 cr3 nef arw dng orf rw2 raw`), JPEG XL,
+icns, tga and exr (issue #141) join that list on macOS: Quick Look answered each
+with a real picture through `createThumbnailFromPath` in 20-100 ms (a 24MP CR3
+and a 21MB ARW included, 640px tier). Two did not hold up: it draws an EPS or
+an XCF as a generic icon (and `qlmanage -t` hangs on them for minutes), so
+they are left off the list, and it answered a Samsung phone DNG with a black
+square in 13 ms, which `isBlankBitmap` rejects so the chain moves on. The file's
+own picture is the second source on macOS and the first elsewhere and for
+formats the OS draws nothing for (EPS, Sketch, Figma): a RAW's embedded JPEG
+is chosen by size from its directory tables (the 160px thumbnail for a 128px
+tile, the camera's preview for the Inspector), so a tile never decodes a
+24-megapixel JPEG, and each read touches a few KB beyond that JPEG.
+
 This removes the qlmanage process pool, its temp dirs, the 4 s `execFile`
 timeout, and the Dock-tile/orphan leak with them.
 `scripts/manual-qa/benchmark-thumbnails.mjs` drives the built app over three

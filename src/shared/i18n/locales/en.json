@@ -1824,6 +1824,9 @@
       "noSlides": "No slides",
       "noPreview": "This document has no preview image"
     },
+    "raster": {
+      "noPreview": "No preview image could be made from this file"
+    },
     "evidence": {
       "searching": "Finding the cited passage…",
       "found": "Cited passage highlighted",

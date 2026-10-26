@@ -372,6 +372,54 @@ still has the previous file's size when they lay out.
   35MB TIFF, past the old 32MB whole-file cap and never shown, opens in 0.27s.
   `run-qa-quick-look-tiff.mjs` drives this on the production build.
 
+- **Camera RAW, Photoshop, EPS, icns, tga, exr, Sketch, Figma** (`raster` viewer,
+  `byteNeed` `decode`; `node/raster.ts`) — the page gets one PNG or JPEG
+  (`PreviewDocument.mime`) the main process made without reading the file
+  whole. Each format has an ordered route (`ROUTES`): the picture the file
+  embeds of itself (`node/embedded-image.ts`), the OS decode (`sips`, 2048px
+  on the long side, never scaled up), or both. A file neither can draw arrives
+  with no bytes and gets the "Other" panel with a note.
+  - **RAW** (`cr2 cr3 nef arw dng orf rw2 raw`, `node/raw-preview.ts`): the
+    camera's own JPEG, chosen from IFD0, IFD1, SubIFDs and the Nikon, Olympus,
+    Sony and Panasonic (`JpgFromRaw`) maker notes, or from the CR3 `PRVW`/`THMB`
+    boxes and full-size JPEG track. Only the directory tables and that JPEG's
+    byte range are read (a 64MB test file reads a few KB), a candidate must be
+    a displayable JPEG (baseline/extended/progressive SOF, never the lossless
+    SOF3 sensor data in CR2), and a preview that carries no Exif gets the RAW's
+    Orientation tag written in so a portrait shot is not sideways. Measured on
+    real camera files: 1-5ms to the preview and 0.25-2.8MB of reads, where
+    `sips` develops the sensor data in 0.4-4s (ARW 4.1s, CR2 2.2s). `exifr`
+    cannot do this: it returns only the 160px IFD1 thumbnail, throws on CR2/CR3
+    and finds nothing in RW2. A RAW with no preview (a Samsung phone DNG is
+    uncompressed sensor data only) falls to `sips`, which keeps the source's
+    Orientation tag in the JPEG it writes, so Chromium turns it upright.
+  - **Photoshop** (`node/psd-preview.ts`): macOS draws the composite through
+    `sips`. Elsewhere the file's own image: the composite (the layer section is
+    skipped by its length, the merged image data is decoded by `ag-psd` from a
+    synthetic layerless buffer, at most 96MB of it, shrunk to 2048px and
+    encoded to PNG by `node/png-encode.ts`), or the thumbnail resource 1036.
+    A composite of one colour (a file saved without Maximize Compatibility)
+    is not trusted and the thumbnail is used instead.
+  - **EPS** (`node/xmp-thumbnail.ts`): macOS has no PostScript renderer
+    (`qlmanage` hangs on one for minutes and Quick Look answers with a generic
+    icon), so an EPS shows the `xmpGImg:image` JPEG Adobe's apps write into the
+    XMP packet, read from the first and last 2MB. An EPS without one stays on
+    its type icon. The same reader serves Illustrator tiles off macOS.
+  - **icns** (`node/icns-preview.ts`): the largest PNG entry; **Sketch**
+    (`previews/preview.png`) and **Figma** (`thumbnail.png` in the ZIP a
+    `.fig` save produces) are read through `node/zip-read.ts` like the ODF
+    first-page image.
+  - **tga, exr**: only the OS can decode them (macOS); elsewhere the Other panel.
+  - **xcf** (GIMP) is not supported: macOS draws a generic icon for it, it
+    carries no preview, and decoding its layers needs a library of its own.
+  - **Illustrator** (`.ai`) is a PDF, so it opens in the PDF panel; an old
+    PostScript-based `.ai` that pdf.js cannot open falls to the same message
+    a damaged PDF gets.
+  - **JPEG XL** (`.jxl`) joins the image viewer: Chromium decodes it behind the
+    `JXLImageFormat` feature, which `src/main/index.ts` enables, so there is no
+    wasm decoder to ship.
+  `run-qa-quick-look-raster.mjs` drives every format on the production build.
+
 Images, TIFF, HEIC, fonts, Word, sheets, slides, and EPUB keep their existing
 viewers inside the new chrome.
 

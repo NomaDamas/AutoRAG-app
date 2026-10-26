@@ -57,6 +57,7 @@ import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readTiffPreview } from "./tiff";
+import { readRasterPreview } from "./raster";
 import { readIworkPreview } from "./iwork";
 import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } from "./keynote-render";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
@@ -369,6 +370,7 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
 		case "decode":
+			if (kind === "raster") return readRasterPreview(path);
 			return kind === "tiff" ? readTiffPreview(path) : readHeicPreview(path);
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {

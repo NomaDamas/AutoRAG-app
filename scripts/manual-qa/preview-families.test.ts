@@ -86,6 +86,7 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	calendar: strToU8("BEGIN:VEVENT\nSUMMARY:Lunch\nEND:VEVENT"),
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
 	gdrive: strToU8('{"doc_id":"1abc","resource_key":"","email":"me@gmail.com"}'),
+	raster: png,
 };
 
 const extForKind: Readonly<Record<ViewerKind, string>> = {
@@ -121,6 +122,7 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	contact: "vcf",
 	calendar: "ics",
 	gdrive: "gdoc",
+	raster: "psd",
 	fallback: "bin",
 };
 

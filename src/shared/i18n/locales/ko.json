@@ -1824,6 +1824,9 @@
       "noSlides": "슬라이드가 없습니다",
       "noPreview": "이 문서에는 미리보기 이미지가 없습니다"
     },
+    "raster": {
+      "noPreview": "이 파일에서 미리보기 이미지를 만들 수 없습니다"
+    },
     "evidence": {
       "searching": "근거 위치 찾는 중…",
       "found": "근거 위치 표시됨",

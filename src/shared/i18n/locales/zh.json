@@ -1824,6 +1824,9 @@
       "noSlides": "没有幻灯片",
       "noPreview": "此文档没有预览图像"
     },
+    "raster": {
+      "noPreview": "无法从此文件生成预览图像"
+    },
     "evidence": {
       "searching": "正在查找引用段落…",
       "found": "已高亮引用段落",
