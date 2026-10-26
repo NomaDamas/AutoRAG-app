@@ -722,7 +722,8 @@
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
       "agreeUse": "受け入れ可能な利用ポリシー",
-      "planLabel": "{{plan}} プラン"
+      "planLabel": "{{plan}} プラン",
+      "leadPc": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのPCに保存されます。"
     },
     "permissions": {
       "eyebrow": "権限",
@@ -786,7 +787,8 @@
       "summaryNote": "node_modules · .git · 50 MiBを超えるファイルは自動的に除外されます。",
       "localEta": "ローカル（このMac）約{{minutes}}分",
       "cloudEta": "リモート 約{{minutes}}分",
-      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。"
+      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。",
+      "localEtaPc": "ローカル（このPC）約{{minutes}}分"
     },
     "smartScope": {
       "policy": {
@@ -2053,7 +2055,8 @@
         "baseUrl": "サーバーアドレス",
         "apiKeyOptional": "API キー (任意)",
         "optionalPlaceholder": "任意",
-        "saved": "{{name}} を保存しました。"
+        "saved": "{{name}} を保存しました。",
+        "bodyLocalPc": "Ollama、LM Studio のようにこのPCで実行中のサーバーのみ接続できます。"
       },
       "loginModal": {
         "openManually": "ブラウザが開かない場合は、以下のアドレスを直接開いてください。",
@@ -2085,7 +2088,8 @@
       "apiKeyPlaceholder": "空のままにすると保存済みのキーを使います",
       "apiKeyHint": "キーはこの Mac の安全なキーチェーンに保存され、設定ファイルには書き込まれません。",
       "consentRemote": "文書の内容がこのコンピューターの外のサーバーに送信されることに同意します",
-      "signInNote": "Dazzi クラウドには Dazzi アカウントへのサインインが必要です。先にアカウント設定でサインインしてください。"
+      "signInNote": "Dazzi クラウドには Dazzi アカウントへのサインインが必要です。先にアカウント設定でサインインしてください。",
+      "apiKeyHintPc": "キーはこのPCの安全な資格情報ストアに保存され、設定ファイルには書き込まれません。"
     },
     "language": {
       "remove": "{{name}} を削除",
