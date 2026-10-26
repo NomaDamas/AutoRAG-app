@@ -333,6 +333,15 @@ Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
 
+The Windows file-name index daemon (Everything, one per profile) is started through
+`launchTiedToParent` (`src/main/tied-launch.ts`), not detached: Windows ends a
+non-detached child with its parent however the parent ends, so a force-killed or
+crashed app no longer leaves an `everything.exe` pinning its profile folder. The quit
+path still stops it first. The fsearch daemon on macOS and Linux stays detached on
+purpose (restarting it re-scans every watched folder). QA lane:
+`scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
+`taskkill /F` on main alone).
+
 ## Error reports (Sentry)
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
