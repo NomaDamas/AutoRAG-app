@@ -436,7 +436,7 @@ async function withKeynote(state: Session, seq: number, target: QuickLookTarget,
 	const opened = await openKeynoteSlides({ path: target.path, mtimeMs: info.mtimeMs, size: info.size }, stored.length, {
 		cache: keynoteSlides,
 		publish: (next) => {
-			const update: QuickLookSlides = { seq, pages: next.pages, rendering: next.rendering };
+			const update: QuickLookSlides = { seq, slides: next.slides, rendering: next.rendering };
 			if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.slides, update);
 		},
 		current: () => seq === state.seq && live(state.window),

@@ -107,10 +107,14 @@ export interface QuickLookOffice {
 	readonly office: OfficePage;
 }
 
-/** Main -> preview window: the full-size slides of the open Keynote deck (null: Keynote could not draw them). */
+/**
+ * Main -> preview window: Keynote finished drawing some slides of the open deck
+ * at full size. Each entry replaces the stored slide at `index`; `rendering`
+ * goes false with the last update (which may carry no slides).
+ */
 export interface QuickLookSlides {
 	readonly seq: number;
-	readonly pages: readonly Uint8Array[] | null;
+	readonly slides: readonly { readonly index: number; readonly bytes: Uint8Array }[];
 	readonly rendering: boolean;
 }
 
@@ -346,8 +350,8 @@ export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 }
 
 export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
-	if (!isRecord(value) || typeof value.seq !== "number" || typeof value.rendering !== "boolean") return false;
-	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
+	if (!isRecord(value) || typeof value.seq !== "number" || typeof value.rendering !== "boolean" || !Array.isArray(value.slides)) return false;
+	return value.slides.every((entry: unknown) => isRecord(entry) && Number.isInteger(entry.index) && (entry.index as number) >= 0 && entry.bytes instanceof Uint8Array);
 }
 
 export function isPreviewDocument(value: unknown): value is PreviewDocument {

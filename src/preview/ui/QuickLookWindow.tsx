@@ -13,6 +13,7 @@ import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "./icons";
+import { createSlideSweep } from "./slide-sweep";
 import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
 
@@ -183,8 +184,19 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	useZoom(bridge);
 
 	useEffect(() => {
+		const sweep = createSlideSweep((update) => {
+			setLoad((current) => {
+				if (current === null || current.document === null) return current;
+				const stored = current.document.pages;
+				if (stored === null) return current;
+				const pages = stored.slice();
+				for (const { index, bytes } of update.slides) if (index < pages.length) pages[index] = bytes;
+				return { ...current, document: { ...current.document, pages, slidesRendering: update.rendering } };
+			});
+		});
 		const offLoad = bridge.onLoad((next) => {
 			seqRef.current = next.seq;
+			sweep.clear();
 			setLoad(next);
 			setApp(next.app);
 		});
@@ -196,14 +208,10 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, office: update.office } }));
 		});
 		const offSlides = bridge.onSlides((update) => {
-			if (update.seq !== seqRef.current) return;
-			setLoad((current) => {
-				if (current === null || current.document === null) return current;
-				const pages = update.pages ?? current.document.pages;
-				return { ...current, document: { ...current.document, pages, slidesRendering: update.rendering } };
-			});
+			if (update.seq === seqRef.current) sweep.push(update);
 		});
 		const offUnload = bridge.onUnload(() => {
+			sweep.clear();
 			seqRef.current = -1;
 			setLoad(null);
 		});
@@ -212,6 +220,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			offApp();
 			offOffice();
 			offSlides();
+			sweep.clear();
 			offUnload();
 		};
 	}, [bridge]);

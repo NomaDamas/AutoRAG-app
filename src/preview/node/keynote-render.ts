@@ -9,6 +9,8 @@ const KEYNOTE_BUNDLE_IDS = ["com.apple.iWork.Keynote", "com.apple.Keynote"] as c
 const EXPORT_TIMEOUT_MS = 180_000;
 /** Every slide of a deck together may not exceed this, so a huge deck degrades instead of filling memory. */
 const DECK_BYTE_CAP = 256 * 1024 * 1024;
+/** Keynote writes a slide every few hundred milliseconds; the panel hears of each within this. */
+const SLIDE_POLL_MS = 150;
 /** Disk the exported slides may use; the least recently shown decks go first. */
 const CACHE_BYTES = 1024 * 1024 * 1024;
 /** A scratch folder this old belongs to a run that died. */
@@ -179,6 +181,50 @@ async function readSlides(folder: string): Promise<Uint8Array[] | null> {
 	return slides;
 }
 
+/** A JPEG whose end-of-image marker is on disk: Keynote is done writing it. */
+function isWholeJpeg(bytes: Uint8Array): boolean {
+	const end = bytes.byteLength;
+	return end > 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[end - 2] === 0xff && bytes[end - 1] === 0xd9;
+}
+
+/**
+ * Reports each slide file in `folder` once it is whole, while Keynote is still
+ * writing the rest. Returns the stop function, which waits for the scan in
+ * progress. Files the scan misses are the caller's to read once the export ends.
+ */
+function watchSlides(folder: string, pollMs: number, emit: SlideListener): () => Promise<void> {
+	let stopped = false;
+	let wake: () => void = () => undefined;
+	const done = new Set<string>();
+	const scan = async (): Promise<void> => {
+		const names = (await readdir(folder))
+			.map((name) => ({ name, index: SLIDE_FILE.exec(name)?.[1] }))
+			.filter((entry): entry is { name: string; index: string } => entry.index !== undefined)
+			.sort((a, b) => Number(a.index) - Number(b.index));
+		for (const [position, { name }] of names.entries()) {
+			if (done.has(name)) continue;
+			const bytes = await readFile(join(folder, name));
+			if (!isWholeJpeg(bytes)) break;
+			done.add(name);
+			emit(position, new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength));
+		}
+	};
+	const loop = (async () => {
+		while (!stopped) {
+			await scan().catch(() => undefined);
+			if (!stopped) await new Promise<void>((resolve) => {
+				wake = resolve;
+				setTimeout(resolve, pollMs);
+			});
+		}
+	})();
+	return async () => {
+		stopped = true;
+		wake();
+		await loop;
+	};
+}
+
 async function folderBytes(folder: string): Promise<number> {
 	let total = 0;
 	for (const name of await readdir(folder)) total += (await stat(join(folder, name))).size;
@@ -193,16 +239,26 @@ export interface KeynoteSlideCacheDeps {
 	readonly export?: KeynoteExport;
 	/** Bytes of slides kept on disk. Defaults to 1GB. */
 	readonly maxBytes?: number;
+	/** How often the export folder is scanned for finished slides. Defaults to 150ms. */
+	readonly pollMs?: number;
 	readonly warn?: (message: string) => void;
 }
+
+/** Called once per slide, in the order Keynote finishes them: `index` is the slide's position in the deck. */
+export type SlideListener = (index: number, bytes: Uint8Array) => void;
 
 export interface KeynoteSlideCache {
 	/** Whether {@link render} can produce slides for this deck: Keynote is installed and has not already failed on this version of it. */
 	available(file: KeynoteFileIdentity): Promise<boolean>;
 	/** The full-size slides already on disk for this version of the deck; never starts Keynote. */
 	lookup(file: KeynoteFileIdentity, expected: number): Promise<Uint8Array[] | null>;
-	/** {@link lookup}, else a Keynote export (one at a time; a run for the same deck is joined). Null when Keynote cannot draw all `expected` slides. Never rejects. */
-	render(file: KeynoteFileIdentity, expected: number): Promise<Uint8Array[] | null>;
+	/**
+	 * {@link lookup}, else a Keynote export (one at a time; a run for the same
+	 * deck is joined). `onSlide` hears each slide as Keynote finishes writing it
+	 * (a joiner first hears those already finished). Null when Keynote cannot
+	 * draw all `expected` slides. Never rejects.
+	 */
+	render(file: KeynoteFileIdentity, expected: number, onSlide?: SlideListener): Promise<Uint8Array[] | null>;
 }
 
 function identityKey(file: KeynoteFileIdentity): string {
@@ -224,7 +280,8 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 		found ??= (deps.installed ?? (() => findInstalledKeynote(process.platform)))();
 		return found;
 	};
-	const running = new Map<string, Promise<Uint8Array[] | null>>();
+	const pollMs = deps.pollMs ?? SLIDE_POLL_MS;
+	const running = new Map<string, { readonly promise: Promise<Uint8Array[] | null>; readonly delivered: Map<number, Uint8Array>; readonly listeners: Set<SlideListener> }>();
 	let queue: Promise<unknown> = Promise.resolve();
 
 	const lookup = async (file: KeynoteFileIdentity, expected: number): Promise<Uint8Array[] | null> => {
@@ -261,7 +318,7 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 
 	/** Decks Keynote failed on this session: asking again would only launch it for another alert. */
 	const failed = new Set<string>();
-	const draw = async (file: KeynoteFileIdentity, expected: number): Promise<Uint8Array[] | null> => {
+	const draw = async (file: KeynoteFileIdentity, expected: number, emit: SlideListener): Promise<Uint8Array[] | null> => {
 		const cached = await lookup(file, expected);
 		if (cached !== null) return cached;
 		if (failed.has(identityKey(file))) return null;
@@ -271,15 +328,20 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 		await mkdir(deps.dir, { recursive: true });
 		const scratch = join(deps.dir, `.tmp-${randomBytes(6).toString("hex")}`);
 		const outDir = join(scratch, "slides");
+		let stopWatching: (() => Promise<void>) | null = null;
 		try {
 			await mkdir(outDir, { recursive: true });
+			stopWatching = watchSlides(outDir, pollMs, emit);
 			await run({ path: file.path, outDir, bundleId });
+			await stopWatching();
+			stopWatching = null;
 			const slides = await readSlides(outDir);
 			if (slides === null || slides.length !== expected) {
 				warn(`quick-look: Keynote drew ${slides === null ? "too much" : `${slides.length} slide(s)`} for ${file.path}, expected ${expected}; keeping the stored slides`);
 				failed.add(key);
 				return null;
 			}
+			slides.forEach((bytes, index) => emit(index, bytes));
 			const folder = join(deps.dir, key);
 			await rm(folder, { recursive: true, force: true });
 			await rename(outDir, folder);
@@ -290,6 +352,7 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 			failed.add(key);
 			return null;
 		} finally {
+			await stopWatching?.();
 			await rm(scratch, { recursive: true, force: true });
 		}
 	};
@@ -297,28 +360,47 @@ export function createKeynoteSlideCache(deps: KeynoteSlideCacheDeps): KeynoteSli
 	return {
 		available: async (file) => (await installed()) !== null && !failed.has(identityKey(file)),
 		lookup,
-		render(file, expected) {
+		render(file, expected, onSlide) {
 			const key = identityKey(file);
 			const known = running.get(key);
-			if (known !== undefined) return known;
-			const job = queue.then(() => draw(file, expected)).finally(() => running.delete(key));
-			queue = job.catch(() => undefined);
-			running.set(key, job);
-			return job;
+			if (known !== undefined) {
+				if (onSlide !== undefined) {
+					known.listeners.add(onSlide);
+					for (const [index, bytes] of known.delivered) onSlide(index, bytes);
+				}
+				return known.promise;
+			}
+			const delivered = new Map<number, Uint8Array>();
+			const listeners = new Set<SlideListener>(onSlide === undefined ? [] : [onSlide]);
+			const emit: SlideListener = (index, bytes) => {
+				if (delivered.has(index)) return;
+				delivered.set(index, bytes);
+				for (const listener of listeners) listener(index, bytes);
+			};
+			const promise = queue.then(() => draw(file, expected, emit)).finally(() => running.delete(key));
+			queue = promise.catch(() => undefined);
+			running.set(key, { promise, delivered, listeners });
+			return promise;
 		},
 	};
 }
 
-/** What the panel shows of a Keynote deck: the full-size slides when known, and whether Keynote is still drawing them. */
+/** What the panel shows of a Keynote deck when it opens: the full-size slides if drawn before, and whether Keynote is drawing them now. */
 export interface KeynoteSlidesState {
 	readonly pages: readonly Uint8Array[] | null;
+	readonly rendering: boolean;
+}
+
+/** A later state of an open: slides Keynote finished since the last update; `rendering` is false once nothing more will come. */
+export interface KeynoteSlidesUpdate {
+	readonly slides: readonly { readonly index: number; readonly bytes: Uint8Array }[];
 	readonly rendering: boolean;
 }
 
 export interface OpenKeynoteDeps {
 	readonly cache: Pick<KeynoteSlideCache, "available" | "lookup" | "render">;
 	/** Sends a later state of this open to the preview window. */
-	readonly publish: (update: KeynoteSlidesState) => void;
+	readonly publish: (update: KeynoteSlidesUpdate) => void;
 	/** False once the preview has moved on to another file; nothing more is published then. */
 	readonly current: () => boolean;
 }
@@ -326,16 +408,26 @@ export interface OpenKeynoteDeps {
 /**
  * The state to open a Keynote deck with. A deck drawn before opens with its
  * full-size slides. Otherwise, when Keynote is installed, the panel opens at
- * once on the stored 356px slides (`rendering`) and `publish` delivers the
- * full-size ones when Keynote is done, or `pages: null` when it could not draw
- * them. Without Keynote nothing changes and nothing is published.
+ * once on the stored 356px slides (`rendering`) and `publish` delivers each
+ * full-size slide as Keynote finishes it, top to bottom, then a last update
+ * that ends the wait (with whatever slides were not delivered yet). Without
+ * Keynote nothing changes and nothing is published.
  */
 export async function openKeynoteSlides(file: KeynoteFileIdentity, expected: number, deps: OpenKeynoteDeps): Promise<KeynoteSlidesState> {
 	const cached = await deps.cache.lookup(file, expected);
 	if (cached !== null) return { pages: cached, rendering: false };
 	if (!(await deps.cache.available(file))) return { pages: null, rendering: false };
-	void deps.cache.render(file, expected).then((pages) => {
-		if (deps.current()) deps.publish({ pages, rendering: false });
-	});
+	const delivered = new Set<number>();
+	void deps.cache
+		.render(file, expected, (index, bytes) => {
+			if (!deps.current()) return;
+			delivered.add(index);
+			deps.publish({ slides: [{ index, bytes }], rendering: true });
+		})
+		.then((pages) => {
+			if (!deps.current()) return;
+			const rest = pages === null ? [] : pages.flatMap((bytes, index) => (delivered.has(index) ? [] : [{ index, bytes }]));
+			deps.publish({ slides: rest, rendering: false });
+		});
 	return { pages: null, rendering: true };
 }

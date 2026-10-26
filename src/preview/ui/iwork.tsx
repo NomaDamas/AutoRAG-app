@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { PreviewDocument } from "../shared/contract";
 import type { Size } from "../shared/fit";
@@ -20,20 +20,46 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 	const pages = file.pages ?? null;
 	const paged = pages !== null && pages.length > 1;
 	const [url, setUrl] = useState<string | null>(null);
-	const [urls, setUrls] = useState<readonly string[] | null>(null);
+	const [firstUrl, setFirstUrl] = useState<string | null>(null);
+	const [revisions, setRevisions] = useState<readonly number[]>([]);
 	const [box, setBox] = useState<Size | null>(null);
 	const [failed, setFailed] = useState(false);
+	/** One object URL per slide's bytes: a slide whose bytes did not change keeps its URL (and its drawn card). */
+	const urlByBytes = useRef(new Map<Uint8Array, string>());
+	const urlsRef = useRef<readonly string[]>([]);
 
 	useEffect(() => {
 		if (!paged || pages === null) return;
-		const next = pages.map((page) => URL.createObjectURL(new Blob([new Uint8Array(page)], { type: "image/jpeg" })));
+		const known = urlByBytes.current;
+		const keep = new Set<Uint8Array>(pages);
+		for (const [entry, source] of known) {
+			if (keep.has(entry)) continue;
+			URL.revokeObjectURL(source);
+			known.delete(entry);
+		}
+		const next = pages.map((page) => {
+			let source = known.get(page);
+			if (source === undefined) {
+				source = URL.createObjectURL(new Blob([new Uint8Array(page)], { type: "image/jpeg" }));
+				known.set(page, source);
+			}
+			return source;
+		});
+		const before = urlsRef.current;
+		urlsRef.current = next;
 		setFailed(false);
-		setUrls(next);
-		return () => {
-			for (const entry of next) URL.revokeObjectURL(entry);
-			setUrls(null);
-		};
+		setFirstUrl(next[0] ?? null);
+		setRevisions((current) => next.map((source, index) => (source === before[index] ? (current[index] ?? 0) : (current[index] ?? 0) + 1)));
 	}, [paged, pages]);
+
+	useEffect(() => {
+		const known = urlByBytes.current;
+		return () => {
+			for (const source of known.values()) URL.revokeObjectURL(source);
+			known.clear();
+			urlsRef.current = [];
+		};
+	}, []);
 
 	useEffect(() => {
 		if (paged || bytes === null) return;
@@ -48,8 +74,7 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 
 	// Every slide shares the deck's aspect ratio, so the first image sizes them all.
 	useEffect(() => {
-		const source = urls?.[0];
-		if (source === undefined) return;
+		if (firstUrl === null) return;
 		let cancelled = false;
 		const image = new Image();
 		image.onload = () => {
@@ -58,17 +83,18 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 		image.onerror = () => {
 			if (!cancelled) setFailed(true);
 		};
-		image.src = source;
+		image.src = firstUrl;
 		return () => {
 			cancelled = true;
 			image.onload = null;
 			image.onerror = null;
 		};
-	}, [urls]);
+	}, [firstUrl]);
 
+	// Stable across upgrades: a sharper slide redraws only its own card (`revisions`).
 	const draw = useCallback<DrawPage>(
 		(index) => {
-			const source = urls?.[index];
+			const source = urlsRef.current[index];
 			if (source === undefined) throw new Error(t("quickLook.iwork.slideMissing"));
 			const image = new Image();
 			image.alt = t("quickLook.iwork.page", { count: index + 1 });
@@ -80,7 +106,7 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 			image.src = source;
 			return { done, cancel: () => image.removeAttribute("src") };
 		},
-		[urls, t],
+		[t],
 	);
 
 	if (bytes === null || failed) return <FallbackView file={file} note={t("quickLook.iwork.noPreview")} />;
@@ -90,7 +116,7 @@ export function IworkView({ file }: { readonly file: PreviewDocument }): ReactEl
 		// to fit; stretching the wrapper keeps the rail and the paper cards full width.
 		return (
 			<div className="ql__iwork-pages relative flex flex-1 self-stretch min-w-0 min-h-0">
-				<PagedView file={file} boxes={pages.map(() => box)} draw={draw} />
+				<PagedView file={file} boxes={pages.map(() => box)} draw={draw} revisions={revisions} />
 				{file.slidesRendering ? (
 					<div
 						role="status"

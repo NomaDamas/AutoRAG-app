@@ -231,9 +231,15 @@ still has the previous file's size when they lay out.
   opens at once on the stored slides with `PreviewDocument.slidesRendering`
   true (a "Drawing sharp slides with Keynote…" badge over the paged view);
   `osascript` opens the deck, exports every slide as a ~1920px JPEG (skipped
-  slides included, so the count matches the slide tree), and the result is sent
-  on the `slides` channel; `PagedView` swaps each card's picture in place once
-  drawn. The export is kept per deck version (path + mtime + size) under
+  slides included, so the count matches the slide tree). The export folder is
+  watched while Keynote writes it (a JPEG counts once its end marker is on
+  disk) and each finished slide goes out on the `slides` channel with its
+  index. Keynote writes a small deck in one burst, so the window paces what
+  arrives (`ui/slide-sweep.ts`): top to bottom, at most one step per 60ms and
+  at most 20 steps per burst, so the deck sharpens from the top instead of
+  flipping at once; the badge ends after the last slide. `PagedView` redraws
+  only a card whose `revisions` entry changed, swapping the picture in place
+  once drawn. The export is kept per deck version (path + mtime + size) under
   `<userData>/keynote-slides`, a 1GB LRU, so an unchanged deck never launches
   Keynote again. Exports run one at a time. A deck the user already has open is
   exported as is and left open; a deck the run opened is closed without saving,

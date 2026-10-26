@@ -38,6 +38,7 @@ function cache(deps: { readonly export?: KeynoteExport | undefined; readonly ins
 		installed: async () => (deps.installed === undefined ? BUNDLE : deps.installed),
 		export: deps.export ?? fakeExport(3),
 		...(deps.maxBytes === undefined ? {} : { maxBytes: deps.maxBytes }),
+		pollMs: 2,
 		warn: deps.warn ?? (() => undefined),
 	});
 }
@@ -166,14 +167,57 @@ describe("Keynote slide rendering", () => {
 		expect((await readdir(dir)).filter((name) => name.startsWith(".tmp-"))).toEqual([]);
 		expect((await stat(dir)).isDirectory()).toBe(true);
 	});
+
+	it("reports each finished slide to the caller, and replays them to a caller that joins a running render", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let wrote: () => void = () => undefined;
+		const firstWritten = new Promise<void>((resolve) => {
+			wrote = resolve;
+		});
+		const slides = cache({
+			export: async (job) => {
+				await writeFile(join(job.outDir, "out.001.jpeg"), slide(1));
+				wrote();
+				await gate;
+				await writeFile(join(job.outDir, "out.002.jpeg"), slide(2));
+				await writeFile(join(job.outDir, "out.003.jpeg"), slide(3));
+			},
+		});
+		const first: Array<[number, number]> = [];
+		const second: Array<[number, number]> = [];
+		let firstHeard: () => void = () => undefined;
+		const heard = new Promise<void>((resolve) => {
+			firstHeard = resolve;
+		});
+		const running = slides.render(FILE, 3, (index, bytes) => {
+			first.push([index, bytes[2]!]);
+			firstHeard();
+		});
+		await firstWritten;
+		await heard;
+		const joined = slides.render(FILE, 3, (index, bytes) => second.push([index, bytes[2]!]));
+		expect(second).toEqual([[0, 1]]);
+		release();
+		await Promise.all([running, joined]);
+		expect(first).toEqual([
+			[0, 1],
+			[1, 2],
+			[2, 3],
+		]);
+		expect(second).toEqual(first);
+	});
 });
 
 describe("openKeynoteSlides", () => {
+	type Published = { slides: ReadonlyArray<{ index: number; bytes: Uint8Array }>; rendering: boolean };
 	function harness(options: { readonly export?: KeynoteExport; readonly installed?: string | null; readonly current?: () => boolean } = {}) {
-		const published: Array<{ pages: readonly Uint8Array[] | null; rendering: boolean }> = [];
+		const published: Published[] = [];
 		let announce: () => void = () => undefined;
-		/** Resolves when the first update is published. */
-		const firstPublish = new Promise<void>((resolve) => {
+		/** Resolves when the last update (rendering false) is published. */
+		const finished = new Promise<void>((resolve) => {
 			announce = resolve;
 		});
 		const slides = cache({ export: options.export, installed: options.installed });
@@ -182,21 +226,83 @@ describe("openKeynoteSlides", () => {
 				cache: slides,
 				publish: (update) => {
 					published.push(update);
-					announce();
+					if (!update.rendering) announce();
 				},
 				current: options.current ?? (() => true),
 			});
-		return { published, slides, open, firstPublish };
+		/** Every slide delivered so far, by index. */
+		const delivered = () => new Map(published.flatMap((update) => update.slides.map((entry) => [entry.index, entry.bytes[2]] as const)));
+		return { published, slides, open, finished, delivered };
 	}
 
-	it("opens on the stored slides at once and upgrades them when Keynote is done", async () => {
-		const { published, open, firstPublish } = harness();
+	it("opens on the stored slides at once and upgrades every slide, ending with rendering false", async () => {
+		const { published, open, finished, delivered } = harness();
 		const state = await open();
 		expect(state).toEqual({ pages: null, rendering: true });
-		await firstPublish;
-		expect(published.length).toBe(1);
-		expect(published[0]!.rendering).toBe(false);
-		expect(published[0]!.pages?.map((bytes) => bytes[2])).toEqual([1, 2, 3]);
+		await finished;
+		expect([...delivered()]).toEqual([
+			[0, 1],
+			[1, 2],
+			[2, 3],
+		]);
+		expect(published.at(-1)!.rendering).toBe(false);
+		expect(published.slice(0, -1).every((update) => update.rendering)).toBe(true);
+	});
+
+	it("hands over each slide as Keynote writes it, before the export is over", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let seen: () => void = () => undefined;
+		const firstSeen = new Promise<void>((resolve) => {
+			seen = resolve;
+		});
+		const { published, open, finished, delivered } = harness({
+			export: async (job) => {
+				await writeFile(join(job.outDir, "out.001.jpeg"), slide(1));
+				await gate;
+				await writeFile(join(job.outDir, "out.002.jpeg"), slide(2));
+				await writeFile(join(job.outDir, "out.003.jpeg"), slide(3));
+			},
+		});
+		await open();
+		const watcher = setInterval(() => {
+			if (delivered().has(0)) seen();
+		}, 1);
+		await firstSeen;
+		clearInterval(watcher);
+		expect([...delivered()]).toEqual([[0, 1]]);
+		expect(published.every((update) => update.rendering)).toBe(true);
+		release();
+		await finished;
+		expect([...delivered()].map(([index]) => index)).toEqual([0, 1, 2]);
+	});
+
+	it("never hands over a slide whose file is still being written", async () => {
+		let release: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		let partialWritten: () => void = () => undefined;
+		const partial = new Promise<void>((resolve) => {
+			partialWritten = resolve;
+		});
+		const { open, finished, delivered } = harness({
+			export: async (job) => {
+				await writeFile(join(job.outDir, "out.001.jpeg"), Uint8Array.from([0xff, 0xd8, 1, 2, 3]));
+				partialWritten();
+				await gate;
+				await fakeExport(3)(job);
+			},
+		});
+		await open();
+		await partial;
+		for (let turn = 0; turn < 20; turn += 1) await nextTurn();
+		expect(delivered().size).toBe(0);
+		release();
+		await finished;
+		expect([...delivered()].map(([index]) => index)).toEqual([0, 1, 2]);
 	});
 
 	it("opens already upgraded, without publishing, when the deck was rendered before", async () => {
@@ -216,14 +322,14 @@ describe("openKeynoteSlides", () => {
 	});
 
 	it("ends the wait with the stored slides when Keynote cannot render the deck", async () => {
-		const { published, open, firstPublish } = harness({
+		const { published, open, finished } = harness({
 			export: async () => {
 				throw new Error("boom");
 			},
 		});
 		expect((await open()).rendering).toBe(true);
-		await firstPublish;
-		expect(published).toEqual([{ pages: null, rendering: false }]);
+		await finished;
+		expect(published).toEqual([{ slides: [], rendering: false }]);
 	});
 
 	it("publishes nothing once the preview moved on to another file", async () => {
@@ -274,12 +380,15 @@ describe("slide upgrade contract", () => {
 		expect(isPreviewDocument(without)).toBe(false);
 	});
 
-	it("accepts an update only with a sequence, slide bytes or null, and a rendering flag", () => {
-		const good: QuickLookSlides = { seq: 1, pages: [slide(1)], rendering: false };
+	it("accepts an update only with a sequence, indexed slide bytes, and a rendering flag", () => {
+		const good: QuickLookSlides = { seq: 1, slides: [{ index: 0, bytes: slide(1) }], rendering: true };
 		expect(isQuickLookSlides(good)).toBe(true);
-		expect(isQuickLookSlides({ seq: 1, pages: null, rendering: false })).toBe(true);
-		expect(isQuickLookSlides({ seq: "1", pages: null, rendering: false })).toBe(false);
-		expect(isQuickLookSlides({ seq: 1, pages: [1], rendering: false })).toBe(false);
-		expect(isQuickLookSlides({ seq: 1, pages: null })).toBe(false);
+		expect(isQuickLookSlides({ seq: 1, slides: [], rendering: false })).toBe(true);
+		expect(isQuickLookSlides({ seq: "1", slides: [], rendering: false })).toBe(false);
+		expect(isQuickLookSlides({ seq: 1, slides: [{ index: 0, bytes: [1] }], rendering: false })).toBe(false);
+		expect(isQuickLookSlides({ seq: 1, slides: [{ index: -1, bytes: slide(1) }], rendering: false })).toBe(false);
+		expect(isQuickLookSlides({ seq: 1, slides: [{ index: 0.5, bytes: slide(1) }], rendering: false })).toBe(false);
+		expect(isQuickLookSlides({ seq: 1, slides: null, rendering: false })).toBe(false);
+		expect(isQuickLookSlides({ seq: 1, slides: [] })).toBe(false);
 	});
 });
