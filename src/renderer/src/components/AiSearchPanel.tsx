@@ -96,6 +96,10 @@ export interface AiSearchPanelProps {
 	readonly language: SummaryLanguage;
 	/** Goes to a Settings page: an error leads to the model settings, or to Subscription & Usage when the plan is the problem. */
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
+	/** Goes to the Settings page of one configured data source, by its alias (a button of the AI fix). */
+	readonly onOpenSource: (alias: string) => void;
+	/** Opens a folder in a Finder tab (a button of the AI fix). */
+	readonly onOpenFolder: (path: string) => void;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -110,7 +114,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onOpenFolder },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -859,6 +863,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							steerLabels={steerLabels}
 							imageActions={imageActions}
 							onOpenSettings={onOpenSettings}
+							onOpenSource={onOpenSource}
+							onOpenFolder={onOpenFolder}
 						/>
 					))}
 
@@ -882,6 +888,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							message={error}
 							action={errorAction?.message === error ? errorAction.action : null}
 							onOpenSettings={onOpenSettings}
+							onOpenSource={onOpenSource}
+							onOpenFolder={onOpenFolder}
 							fix={{ onRetry: retryLastQuestion }}
 						/>
 					)}
@@ -1162,6 +1170,8 @@ function PastTurnView({
 	steerLabels,
 	imageActions,
 	onOpenSettings,
+	onOpenSource,
+	onOpenFolder,
 }: {
 	readonly turn: PastTurn;
 	readonly turnIndex: number;
@@ -1171,6 +1181,8 @@ function PastTurnView({
 	readonly steerLabels: Record<SteerItem["status"], string>;
 	readonly imageActions: ImageActions;
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
+	readonly onOpenSource: (alias: string) => void;
+	readonly onOpenFolder: (path: string) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
@@ -1204,7 +1216,7 @@ function PastTurnView({
 					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{turn.question}</div>
 				</div>
 			</div>
-			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} fix={null} />}
+			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} onOpenFolder={onOpenFolder} fix={null} />}
 			{before.map((steer) => (
 				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 			))}

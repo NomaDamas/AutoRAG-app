@@ -4,7 +4,7 @@
  */
 
 import type { TFunction } from "i18next";
-import type { ErrorFixChange, ErrorFixEvent, ErrorFixResult, ErrorFixSettingsPage, ErrorFixStep } from "../../../shared/error-fix-contract";
+import type { ErrorFixAction, ErrorFixChange, ErrorFixEvent, ErrorFixResult, ErrorFixSettingsPage, ErrorFixStep } from "../../../shared/error-fix-contract";
 import type { LocaleKey } from "../../../shared/i18n";
 
 /** The dialog lists what the agent did; a runaway run keeps only the latest. */
@@ -68,4 +68,26 @@ const PAGE_KEY: Readonly<Record<ErrorFixSettingsPage, LocaleKey>> = {
 /** The Settings page's own name, as the sidebar of Settings shows it. */
 export function settingsPageLabel(page: ErrorFixSettingsPage, t: TFunction): string {
 	return t(PAGE_KEY[page]);
+}
+
+/** The last name of a path, either kind of separator ("/Users/me/Documents" → "Documents"). */
+function lastName(path: string): string {
+	const parts = path.split(/[\\/]/u).filter((part) => part !== "");
+	return parts.at(-1) ?? path;
+}
+
+/**
+ * What a button of the AI's answer says: the AI's own label (written in the interface language, as what the button
+ * does), or, when it gave none, a name made from where it goes, so a button is never blank.
+ */
+export function actionLabel(action: ErrorFixAction, t: TFunction): string {
+	if (action.label !== "") return action.label;
+	switch (action.kind) {
+		case "settings":
+			return t("appError.fix.openSettings", { page: settingsPageLabel(action.target, t) });
+		case "source":
+			return t("appError.fix.openSource", { name: action.target });
+		case "folder":
+			return t("appError.fix.openFolder", { name: lastName(action.target) });
+	}
 }

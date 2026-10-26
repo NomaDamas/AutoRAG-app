@@ -276,6 +276,8 @@
   "appError": {
     "fixAction": "AIで修正",
     "openModelSettings": "モデル設定を開く",
+    "showDetails": "詳細を表示",
+    "hideDetails": "詳細を閉じる",
     "other": {
       "title": "問題が発生しました",
       "hint": "AIが原因を調べて、直せるか試します。"
@@ -325,6 +327,8 @@
       "unset": "なし",
       "backup": "変更前の設定を {{path}} にバックアップしました。",
       "openSettings": "「{{page}}」設定を開く",
+      "openFolder": "「{{name}}」フォルダを開く",
+      "openSource": "「{{name}}」の接続を開く",
       "retrySearch": "もう一度検索",
       "failedTitle": "AIでは修正できませんでした",
       "stopped": "中断しました。"

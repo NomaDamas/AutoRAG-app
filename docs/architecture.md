@@ -826,6 +826,12 @@ and kept for the chat's life:
   or check the connection. Everything else is the app's own setup and gets **AI로 고치기** on the right of the box. The main process's
   own `open-plan` action (the weekly credits are used up) outranks the wording. An error of an earlier turn is shown as history, with
   its explanation and settings buttons but no fix.
+- **Technical text stays behind "자세히 보기"** (`ErrorDetails`, `splitErrorDetails` in `state/app-error.ts`). The person reads the plain
+  title and hint; the original message is split into a readable line and the rest (a provider's status and JSON body, a stack trace, a
+  very long text, internal setup instructions such as `autorag tui` or a `config.toml` path), and the rest opens only with the button,
+  selectable and in full for a bug report. A short plain message (a folder that does not exist, with its path) is shown as it is, with
+  no button. A leftover that is only a status code ("401") is dropped from the line: the title already says it. The box and both
+  places of the AI fix dialog use the same component.
 - **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `ErrorFixDialog`). A helper-agent run on the AI Search
   model (`resolveConfiguredSessionModel`), thinking `medium`, three minutes at most. It has no pi file or shell tool: it sees and
   changes only through `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data
@@ -834,10 +840,16 @@ and kept for the chat's life:
   `model` key, secret-looking keys and the paths AutoRAG manages are refused; a change the validator rejects writes nothing),
   `refresh_index`, and `report_result`, which is the answer and refuses `fixed` unless something was really changed. The dialog
   lists the agent's steps as they happen and, whatever the ending (result, failure, Stop), the config changes it made and where the
-  old config is kept. A change to the config resets the idle chat agents (`SearchService.resetAgents`) so the next question,
-  including "다시 검색", is answered on the new config and resumes from the chat's file. A model that fails during the run is
-  explained exactly like the same error in the box. Pinned by `test/app-error.test.ts`, `error-fix-profile.test.ts`,
-  `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
+  old config is kept. The buttons of a `needs-user` or `cannot-fix` answer are the agent's own: `report_result` takes up to three
+  `actions`, each `{kind, target, label}`: `settings` (a Settings page id), `source` (the alias of a configured data source, which
+  opens `source:<alias>` in Settings) or `folder` (an existing absolute folder, opened in a Finder tab). The agent only names a
+  destination and writes the label in the person's language; the toolkit checks every one (a page the app has, an alias that is in
+  the config, a path that is a folder), drops the rest and tells the agent which were dropped so it can correct them, removes
+  duplicates, and shortens the label; the renderer does the going (`onOpenSettings` / `onOpenSource` / `onOpenFolder`), and a button
+  with no label is named after its destination. A change to the config resets the idle chat agents (`SearchService.resetAgents`) so
+  the next question, including "다시 검색", is answered on the new config and resumes from the chat's file. A model that fails during
+  the run is explained exactly like the same error in the box. Pinned by `test/app-error.test.ts`, `app-error-details.test.ts`,
+  `error-fix-profile.test.ts`, `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
   `scripts/manual-qa/run-qa-finder-ai-search-error-fix.mjs` (scripted model) and `run-qa-live-ai-search-error-fix.mjs` (a real model).
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and

@@ -775,6 +775,11 @@ export function App(): ReactElement {
 													requestSettingsCategory(page);
 													finder?.openSettings();
 												}}
+												onOpenSource={(alias) => {
+													requestSettingsCategory(`source:${alias}`);
+													finder?.openSettings();
+												}}
+												onOpenFolder={(path) => finder?.openFolder(path)}
 											/>
 										</div>
 									);

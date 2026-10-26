@@ -64,15 +64,25 @@ const FIXED: ErrorFixResult = {
 	status: "fixed",
 	summary: "검색 폴더를 Documents로 바꿨어요.",
 	nextSteps: [],
-	openSettings: null,
+	actions: [],
 	changes: [{ path: "searchPaths", before: '["/old"]', after: '["/new"]' }],
 	backupPath: "/cfg/config.json.bak-1-before-error-fix",
 };
 
-function render(message: string, props: { action?: "open-plan" | null; fix?: { onRetry: () => void } | null; onOpenSettings?: (page: string) => void } = {}): void {
+function render(
+	message: string,
+	props: { action?: "open-plan" | null; fix?: { onRetry: () => void } | null; onOpenSettings?: (page: string) => void; onOpenSource?: (alias: string) => void; onOpenFolder?: (path: string) => void } = {},
+): void {
 	act(() =>
 		root.render(
-			<RunErrorNotice message={message} action={props.action ?? null} onOpenSettings={props.onOpenSettings ?? vi.fn()} fix={props.fix === undefined ? { onRetry: vi.fn() } : props.fix} />,
+			<RunErrorNotice
+				message={message}
+				action={props.action ?? null}
+				onOpenSettings={props.onOpenSettings ?? vi.fn()}
+				onOpenSource={props.onOpenSource ?? vi.fn()}
+				onOpenFolder={props.onOpenFolder ?? vi.fn()}
+				fix={props.fix === undefined ? { onRetry: vi.fn() } : props.fix}
+			/>,
 		),
 	);
 }
@@ -121,6 +131,52 @@ describe("RunErrorNotice", () => {
 
 		expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("plan");
 	});
+
+	describe("technical details", () => {
+		const RAW = 'dazzi API error (401): {"message":"Invalid or revoked API key.","type":"invalid_request_error","code":"invalid_api_key"}';
+
+		it("hides codes and JSON behind a details button: the person sees the plain title and hint, not the provider's body", () => {
+			render(RAW);
+
+			expect(host.textContent).toContain(t("appError.modelCredentials.title"));
+			expect(host.textContent).not.toContain("invalid_request_error");
+			expect(host.textContent).not.toContain("invalid_api_key");
+			expect(labels()).toContain(t("appError.showDetails"));
+		});
+
+		it("shows the original message in full when the details are opened, and hides it again", () => {
+			render(RAW);
+
+			press(t("appError.showDetails"));
+			expect(host.textContent).toContain(RAW);
+			expect(labels()).toContain(t("appError.hideDetails"));
+
+			press(t("appError.hideDetails"));
+			expect(host.textContent).not.toContain("invalid_request_error");
+		});
+
+		it("gives the details button no place among the actions: it is a quiet link under the message, and the action buttons are unchanged", () => {
+			render(RAW);
+
+			const actions = [...host.querySelectorAll("button")].filter((button) => button.textContent !== t("appError.showDetails")).map((button) => button.textContent);
+			expect(actions).toEqual([t("appError.openModelSettings"), t("aiSearch.openPlan")]);
+		});
+
+		it("shows no details button for a short plain message, which is shown as it is", () => {
+			render("Search root /Users/me/Docs does not exist");
+
+			expect(host.textContent).toContain("Search root /Users/me/Docs does not exist");
+			expect(labels()).not.toContain(t("appError.showDetails"));
+		});
+
+		it("keeps the details of an earlier turn's error behind the button too", () => {
+			render(RAW, { fix: null });
+
+			expect(host.textContent).not.toContain("invalid_api_key");
+			press(t("appError.showDetails"));
+			expect(host.textContent).toContain("invalid_api_key");
+		});
+	});
 });
 
 describe("the AI fix dialog", () => {
@@ -160,21 +216,62 @@ describe("the AI fix dialog", () => {
 		expect(dialog()).toBeNull();
 	});
 
-	it("tells the person what to do when only they can, with a button to the Settings page that helps", () => {
+	it("tells the person what to do when only they can, with the buttons the AI chose, labelled the way the AI wrote them", () => {
 		const onOpenSettings = vi.fn();
 		render("Search root /Users/me/Docs does not exist", { onOpenSettings });
 		press(t("appError.fixAction"));
 
-		emit({ type: "result", runId: runId(), result: { status: "needs-user", summary: "폴더가 옮겨진 것 같아요.", nextSteps: ["새 폴더를 골라 주세요."], openSettings: "scope", changes: [], backupPath: null } });
+		emit({
+			type: "result",
+			runId: runId(),
+			result: { status: "needs-user", summary: "폴더가 옮겨진 것 같아요.", nextSteps: ["새 폴더를 골라 주세요."], actions: [{ kind: "settings", target: "scope", label: "검색 폴더 다시 고르기" }], changes: [], backupPath: null },
+		});
 
 		const text = dialog()?.textContent ?? "";
 		expect(text).toContain(t("appError.fix.status.needsUser"));
 		expect(text).toContain("새 폴더를 골라 주세요.");
 		expect(labels()).not.toContain(t("appError.fix.retrySearch"));
 
-		press(t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }));
+		press("검색 폴더 다시 고르기");
 
 		expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("scope");
+		expect(dialog()).toBeNull();
+	});
+
+	it("takes each kind of button to its own place: a Settings page, a data source's page, a folder", () => {
+		const onOpenSettings = vi.fn();
+		const onOpenSource = vi.fn();
+		const onOpenFolder = vi.fn();
+		const result = { status: "needs-user" as const, summary: "세 가지가 필요해요.", nextSteps: [], changes: [], backupPath: null };
+		const actions = [
+			{ kind: "source" as const, target: "kakao", label: "카카오톡 연결 열기" },
+			{ kind: "folder" as const, target: "/Users/me/Documents", label: "문서 폴더 보기" },
+			{ kind: "settings" as const, target: "indexing" as const, label: "인덱싱 보기" },
+		];
+		for (const action of actions) {
+			render("Search root /Users/me/Docs does not exist", { onOpenSettings, onOpenSource, onOpenFolder });
+			press(t("appError.fixAction"));
+			emit({ type: "result", runId: runId(), result: { ...result, actions } });
+			expect(labels()).toEqual(expect.arrayContaining(actions.map((entry) => entry.label)));
+			press(action.label);
+		}
+
+		expect(onOpenSource).toHaveBeenCalledExactlyOnceWith("kakao");
+		expect(onOpenFolder).toHaveBeenCalledExactlyOnceWith("/Users/me/Documents");
+		expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("indexing");
+	});
+
+	it("names a button without a label after where it goes, so it is never blank", () => {
+		render("Search root /Users/me/Docs does not exist");
+		press(t("appError.fixAction"));
+
+		emit({
+			type: "result",
+			runId: runId(),
+			result: { status: "needs-user", summary: "x", nextSteps: [], actions: [{ kind: "settings", target: "scope", label: "" }, { kind: "folder", target: "/Users/me/Documents", label: "" }], changes: [], backupPath: null },
+		});
+
+		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }), t("appError.fix.openFolder", { name: "Documents" })]));
 	});
 
 	it("explains a model that stopped working during the fix the same way as any other model error", () => {
@@ -203,6 +300,24 @@ describe("the AI fix dialog", () => {
 
 		expect(start).toHaveBeenCalledTimes(2);
 		expect(dialog()?.textContent).toContain(t("appError.fix.running"));
+	});
+
+	it("keeps a provider's JSON out of the dialog until the details are opened, both for the error being fixed and for a failure of the fix", () => {
+		const raw = 'dazzi API error (429): {"message":"Too many requests","type":"rate_limit_error","code":"rate_limit_exceeded"}';
+		// An error of the app's own setup with a long technical tail: the AI fix is offered.
+		render("Error: boom\n    at run (/app/out/main/index.js:1:1)");
+		press(t("appError.fixAction"));
+		const toggles = (): HTMLButtonElement[] => [...(dialog()?.querySelectorAll("button") ?? [])].filter((button) => button.textContent === t("appError.showDetails"));
+
+		expect(dialog()?.textContent).not.toContain("/app/out/main/index.js");
+		act(() => toggles()[0]?.click());
+		expect(dialog()?.textContent).toContain("/app/out/main/index.js");
+
+		emit({ type: "error", runId: runId(), message: raw, changes: [], backupPath: null });
+		expect(dialog()?.textContent).not.toContain("rate_limit_exceeded");
+		act(() => toggles().at(-1)?.click());
+
+		expect(dialog()?.textContent).toContain("rate_limit_exceeded");
 	});
 
 	it("does not hide a change made before the run failed", () => {

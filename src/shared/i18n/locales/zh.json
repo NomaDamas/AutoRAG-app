@@ -276,6 +276,8 @@
   "appError": {
     "fixAction": "用 AI 修复",
     "openModelSettings": "打开模型设置",
+    "showDetails": "查看详情",
+    "hideDetails": "收起详情",
     "other": {
       "title": "出现了问题",
       "hint": "AI 可以查找原因并尝试为你修复。"
@@ -325,6 +327,8 @@
       "unset": "无",
       "backup": "更改前的设置已备份到 {{path}}。",
       "openSettings": "打开“{{page}}”设置",
+      "openFolder": "打开“{{name}}”文件夹",
+      "openSource": "打开“{{name}}”连接",
       "retrySearch": "重新搜索",
       "failedTitle": "AI 未能修复",
       "stopped": "已停止。"

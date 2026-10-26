@@ -61,13 +61,33 @@ export interface ErrorFixTrace {
 	readonly backupPath: string | null;
 }
 
+/**
+ * A button the agent puts in its answer: where the app takes the person, and what the button says (the agent writes
+ * the label, in the interface language). The agent only names a destination; the app checks it before it becomes a
+ * button (a Settings page it has, a data source that is configured, a folder that exists) and the renderer, not the
+ * agent, does the going.
+ */
+export type ErrorFixAction =
+	/** A Settings page. */
+	| { readonly kind: "settings"; readonly target: ErrorFixSettingsPage; readonly label: string }
+	/** The Settings page of one configured data source (its alias). */
+	| { readonly kind: "source"; readonly target: string; readonly label: string }
+	/** An existing folder (absolute path), opened in a Finder tab. */
+	| { readonly kind: "folder"; readonly target: string; readonly label: string };
+
+export type ErrorFixActionKind = ErrorFixAction["kind"];
+/** The most buttons an answer carries. */
+export const MAX_ERROR_FIX_ACTIONS = 3;
+export const MAX_ERROR_FIX_LABEL_CHARS = 60;
+
 export interface ErrorFixResult extends ErrorFixTrace {
 	readonly status: ErrorFixStatus;
 	/** The agent's own account, in the interface language. */
 	readonly summary: string;
 	/** Short steps for the person, in the interface language; empty when `fixed`. */
 	readonly nextSteps: readonly string[];
-	readonly openSettings: ErrorFixSettingsPage | null;
+	/** Where the person can go from here, in the agent's order; every destination was checked. */
+	readonly actions: readonly ErrorFixAction[];
 }
 
 export type ErrorFixEvent =

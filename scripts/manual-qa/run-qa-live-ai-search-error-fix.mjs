@@ -235,6 +235,42 @@ try {
 	check("the dialog explains the model problem instead of a bare failure", /can’t be used|subscription|usage limit|No AI model|can’t be found/.test(downText), downText.replace(/\s+/g, " ").slice(0, 200));
 	check("the config was left alone", JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === MOVED_FROM);
 	await shot("06-fix-model-rejected");
+	await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
+	await backToAiSearch();
+
+	// ── 4. The folder is really gone: the real AI cannot repair it and must hand the person the way there. ──
+	badKey = false;
+	const GONE_FOR_GOOD = join(WORK, "Archive-2019");
+	const other = join(WORK, "Projects");
+	mkdirSync(other, { recursive: true });
+	writeFileSync(CONFIG, `${JSON.stringify({ ...baseConfig([GONE_FOR_GOOD]), model: cfg.model }, null, 2)}\n`);
+	await ask("What is in a.txt?");
+	await notice.waitFor({ timeout: 120_000 });
+	await panel.getByRole("button", { name: "Fix with AI", exact: true }).click();
+	// The plan allows a few requests a minute and the scenarios before this one used them: a 429 is the plan, not the feature, so wait a minute and try again.
+	let handOver = "";
+	for (let attempt = 1; attempt <= 3; attempt += 1) {
+		await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 280_000 });
+		handOver = await dialog.innerText();
+		if (!handOver.includes("Too many requests right now")) break;
+		console.log(`attempt ${attempt} hit the plan's rate limit; waiting before the next`);
+		await page.waitForTimeout(65_000);
+		await dialog.getByRole("button", { name: "Retry", exact: true }).click();
+	}
+	console.log(`dialog when the real AI cannot repair it:\n${handOver}`);
+	const buttonLabels = (await dialog.locator("button").allInnerTexts()).filter((label) => !["Close", "Retry", "Search again", "Show details", "Hide details", ""].includes(label));
+	console.log(`buttons the real AI put in its answer: ${JSON.stringify(buttonLabels)}`);
+	check("the real AI did not claim a repair it could not make", !handOver.includes("Fixed"), handOver.replace(/\s+/g, " ").slice(0, 200));
+	check("the real AI gave the person at least one button to go and act", buttonLabels.length >= 1, JSON.stringify(buttonLabels));
+	check("every one of those buttons is labelled in words, not as a bare page id", buttonLabels.every((label) => label.length > 2 && !/^(scope|ai|plan|indexing|apps)$/u.test(label)), JSON.stringify(buttonLabels));
+	check("the config was not touched when nothing could be repaired", JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === GONE_FOR_GOOD);
+	await shot("07-ai-handed-buttons");
+	if (buttonLabels[0] !== undefined) {
+		await dialog.getByRole("button", { name: buttonLabels[0], exact: true }).click();
+		await page.waitForTimeout(800);
+		check("the first button of the real AI took the person somewhere and closed the dialog", (await page.getByRole("dialog").count()) === 0);
+		await shot("08-after-the-ai-button");
+	}
 } finally {
 	await app.close().catch(() => undefined);
 	service.close();

@@ -276,6 +276,8 @@
   "appError": {
     "fixAction": "Fix with AI",
     "openModelSettings": "Open model settings",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
     "other": {
       "title": "Something went wrong",
       "hint": "The AI can look for the cause and try to fix it for you."
@@ -325,6 +327,8 @@
       "unset": "none",
       "backup": "The settings from before the change are saved at {{path}}.",
       "openSettings": "Open ‘{{page}}’ settings",
+      "openFolder": "Open the ‘{{name}}’ folder",
+      "openSource": "Open the ‘{{name}}’ connection",
       "retrySearch": "Search again",
       "failedTitle": "Couldn’t fix it with AI",
       "stopped": "Stopped."

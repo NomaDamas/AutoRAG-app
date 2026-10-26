@@ -4,7 +4,7 @@ import { dirname, isAbsolute, join } from "node:path";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { AgentProfile } from "@autorag/librarian/profiles";
-import { ERROR_FIX_SETTINGS_PAGES, type ErrorFixChange, type ErrorFixResult, type ErrorFixSettingsPage, type ErrorFixStatus, type ErrorFixStep, type ErrorFixSurface, type ErrorFixTrace } from "../../../shared/error-fix-contract";
+import { ERROR_FIX_SETTINGS_PAGES, MAX_ERROR_FIX_ACTIONS, MAX_ERROR_FIX_LABEL_CHARS, type ErrorFixAction, type ErrorFixChange, type ErrorFixResult, type ErrorFixSettingsPage, type ErrorFixStatus, type ErrorFixStep, type ErrorFixSurface, type ErrorFixTrace } from "../../../shared/error-fix-contract";
 import type { AppSettings, AutoRagConfigUpdate, ConfigRefreshResult } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { isJsonValue, isSecretKey, type AutoRagConfigService } from "../../autorag-config-service";
@@ -40,6 +40,8 @@ const MAX_VALUE_CHARS = 300;
 const MAX_SUMMARY_CHARS = 1500;
 const MAX_STEP_CHARS = 300;
 const MAX_STEPS = 6;
+/** How many paths `check_path` may look at in one run: enough to follow a moved folder, not to comb the machine for one that is gone. */
+const MAX_LOOKS = 6;
 /** How long `refresh_index` waits for an index run: a first index of a big folder takes far longer than the agent should stand by. */
 const DEFAULT_REFRESH_WAIT_MS = 90_000;
 
@@ -163,11 +165,40 @@ function settingsPage(value: string | undefined): ErrorFixSettingsPage | null {
 	return ERROR_FIX_SETTINGS_PAGES.find((page) => page === value) ?? null;
 }
 
+/** What the agent proposes for a button, before the app has checked where it goes. */
+interface ProposedAction {
+	readonly kind: string;
+	readonly target: string;
+	readonly label?: string | undefined;
+}
+
+function shortLabel(label: string | undefined): string {
+	return (label ?? "").trim().slice(0, MAX_ERROR_FIX_LABEL_CHARS);
+}
+
+/** The action when its destination is one the app can take the person to, else why not (said to the agent, so it can correct itself). */
+async function checkAction(proposed: ProposedAction, sources: ReadonlySet<string>): Promise<{ readonly action: ErrorFixAction } | { readonly dropped: string }> {
+	const label = shortLabel(proposed.label);
+	if (proposed.kind === "settings") {
+		const page = settingsPage(proposed.target);
+		return page === null ? { dropped: `${proposed.target} (no such Settings page; use one of ${ERROR_FIX_SETTINGS_PAGES.join(", ")})` } : { action: { kind: "settings", target: page, label } };
+	}
+	if (proposed.kind === "source") {
+		return sources.has(proposed.target) ? { action: { kind: "source", target: proposed.target, label } } : { dropped: `${proposed.target} (no configured data source has this alias; diagnose lists them)` };
+	}
+	if (proposed.kind === "folder") {
+		if (!isAbsolute(proposed.target)) return { dropped: `${proposed.target} (a folder must be an absolute path)` };
+		const entry = await stat(proposed.target).catch(() => null);
+		return entry?.isDirectory() === true ? { action: { kind: "folder", target: proposed.target, label } } : { dropped: `${proposed.target} (not an existing folder)` };
+	}
+	return { dropped: `${proposed.kind} (not a kind of button; use settings, source or folder)` };
+}
+
 interface Answer {
 	readonly status: ErrorFixStatus;
 	readonly summary: string;
 	readonly nextSteps: readonly string[];
-	readonly openSettings: ErrorFixSettingsPage | null;
+	readonly actions: readonly ErrorFixAction[];
 }
 
 export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolkit {
@@ -237,6 +268,9 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		},
 	});
 
+	/** How many paths `check_path` has looked at in this run. */
+	let looks = 0;
+
 	const checkPath = defineTool({
 		name: "check_path",
 		label: "Check path",
@@ -245,6 +279,8 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		parameters: Type.Object({ path: Type.String({ description: "Absolute path." }) }),
 		execute: async (_toolCallId, params) => {
 			if (!isAbsolute(params.path)) return text("Refused: the path must be absolute.");
+			if (looks >= MAX_LOOKS) return text(`Refused: you have looked at ${MAX_LOOKS} paths already. Do not search the machine for the folder; report with report_result what you found and give the person buttons to act.`);
+			looks += 1;
 			deps.onStep({ tool: "check_path", detail: params.path });
 			return text(JSON.stringify(await inspectPath(params.path), null, 1));
 		},
@@ -328,12 +364,20 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		name: "report_result",
 		label: "Report result",
 		description:
-			"Give your answer, once, when you are done. status is \"fixed\" (you changed something and the cause is gone; refused when you changed nothing), \"needs-user\" (only the person can act) or \"cannot-fix\". summary: one to three sentences in the reply language, saying what was wrong and what you did. nextSteps: short steps for the person, only when they must act. openSettings: the Settings page that helps, if one does.",
+			"Give your answer, once, when you are done. status is \"fixed\" (you changed something and the cause is gone; refused when you changed nothing), \"needs-user\" (only the person can act) or \"cannot-fix\". summary: one to three sentences in the reply language, saying what was wrong and what you did. nextSteps: short steps for the person, only when they must act. actions: up to three buttons that take the person where they have to act, each with a short label in the reply language. kind \"settings\" goes to a Settings page (target one of: " + ERROR_FIX_SETTINGS_PAGES.join(", ") + "), kind \"source\" to one configured data source's own page (target its alias from diagnose), kind \"folder\" to an existing folder (target its absolute path). A button whose destination does not exist is dropped and you are told, so you can correct it.",
 		parameters: Type.Object({
 			status: Type.Union([Type.Literal("fixed"), Type.Literal("needs-user"), Type.Literal("cannot-fix")]),
 			summary: Type.String(),
 			nextSteps: Type.Optional(Type.Array(Type.String())),
-			openSettings: Type.Optional(Type.String({ description: `One of: ${ERROR_FIX_SETTINGS_PAGES.join(", ")}.` })),
+			actions: Type.Optional(
+				Type.Array(
+					Type.Object({
+						kind: Type.String({ description: "settings, source or folder." }),
+						target: Type.String({ description: "A Settings page id, a data source alias, or an absolute folder path." }),
+						label: Type.Optional(Type.String({ description: "The button's text, short, in the reply language." })),
+					}),
+				),
+			),
 		}),
 		execute: async (_toolCallId, params) => {
 			const summary = params.summary.trim().slice(0, MAX_SUMMARY_CHARS);
@@ -341,13 +385,22 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 			if (params.status === "fixed" && changes.size === 0 && !indexRebuilt) {
 				return text("Refused: you report \"fixed\" but changed nothing. Change the cause with update_config or refresh_index, or report \"needs-user\" or \"cannot-fix\" and explain.");
 			}
+			const snapshot = await deps.config.get();
+			const sources = new Set(isJsonObject(snapshot.config.datasources) ? Object.keys(snapshot.config.datasources) : []);
+			const kept: ErrorFixAction[] = [];
+			const dropped: string[] = [];
+			for (const proposed of params.actions ?? []) {
+				const checked = await checkAction(proposed, sources);
+				if ("dropped" in checked) dropped.push(checked.dropped);
+				else if (!kept.some((action) => action.kind === checked.action.kind && action.target === checked.action.target)) kept.push(checked.action);
+			}
 			answer = {
 				status: params.status,
 				summary,
 				nextSteps: (params.nextSteps ?? []).map((step) => step.trim().slice(0, MAX_STEP_CHARS)).filter((step) => step !== "").slice(0, MAX_STEPS),
-				openSettings: settingsPage(params.openSettings),
+				actions: kept.slice(0, MAX_ERROR_FIX_ACTIONS),
 			};
-			return text("Recorded. Stop now; do not write anything else.");
+			return text(dropped.length === 0 ? "Recorded. Stop now; do not write anything else." : `Recorded, but these buttons were dropped: ${dropped.join("; ")}. Call report_result again with corrected actions if they matter.`);
 		},
 	});
 
@@ -374,14 +427,15 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		"",
 		"How to work:",
 		"1. Call diagnose first. It shows the config, whether it loads, which paths in it do not exist, the chosen model, the data sources and the index state.",
-		"2. Match what it shows to the error. A search folder or data source path that no longer exists is the common case: use check_path to see whether the folder moved or was renamed (the listing of the closest folder that still exists, and of the folder above it, usually shows where it went), and repoint it only when the new place is clearly the same folder (same name or the same contents). If you are not sure, do not guess: report needs-user and say which folder to pick.",
+		"2. Match what it shows to the error. A search folder or data source path that no longer exists is the common case: use check_path to see whether the folder moved or was renamed (the listing of the closest folder that still exists, and of the folder above it, usually shows where it went), and repoint it only when the new place is clearly the same folder (same name or the same contents). Stay near the broken path: its parent and the folder above it, a few looks at most. Never go looking through the rest of the machine (the home folder, the app's own folders, temporary folders). If you do not find it there, or are not sure, do not guess: report needs-user and give the person buttons to the places where they can pick the folder (the Settings page that holds the setting, and an existing folder that looks close if there is one).",
 		"3. Change as little as possible: only the setting the error points at. Never remove a folder or a data source just to make an error go away.",
 		"4. If you repointed a search folder or a data source, call refresh_index once so the new place gets indexed (a long run goes on in the background; do not wait for it). Then call diagnose once more to confirm the cause is gone. Only then report fixed.",
 		"5. Finish with report_result, once.",
 		"6. Be economical: every tool call is one request to the AI model, and some plans allow only a few requests a minute. Call independent tools together in one turn, never repeat a check you already have the answer to, and set a list (such as searchPaths) whole in a single update_config instead of one position at a time.",
 		"",
 		"Limits you must respect:",
-		"- Never change the AI model, a sign-in, a subscription, a key or a token. If the error is about any of them (no model, wrong key, plan used up, model gone), report cannot-fix and set openSettings to \"ai\" (or \"plan\" for the subscription).",
+		"- Never change the AI model, a sign-in, a subscription, a key or a token. If the error is about any of them (no model, wrong key, plan used up, model gone), report cannot-fix and give a button to Settings: target \"ai\" for the model, \"plan\" for the subscription.",
+		"- When the person has to act, give them the way there instead of only describing it: a button to the Settings page or the data source's page that holds the setting, or to the folder they have to look at. Put each button's label in their language, as what it does (\"검색 폴더 다시 고르기\"), not as a page name.",
 		"- You cannot fix the network, a provider outage, or a bug in the app. Say so honestly with cannot-fix and what the person can try; do not claim a repair you did not make.",
 		"- Do not change anything when the config is fine and the cause is outside it.",
 		"",

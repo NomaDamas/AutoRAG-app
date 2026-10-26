@@ -5,6 +5,7 @@ import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import type { SearchErrorAction } from "../../../shared/search-contract";
 import { describeAppError, type ErrorAction } from "../state/app-error";
 import { cn } from "../lib/cn";
+import { ErrorDetails } from "./ErrorDetails";
 import { ErrorFixDialog } from "./ErrorFixDialog";
 import { SparklesIcon } from "./icons";
 
@@ -14,6 +15,10 @@ export interface RunErrorNoticeProps {
 	readonly action: SearchErrorAction | null;
 	/** Goes to a Settings page: the model settings, or Subscription & Usage. */
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
+	/** Goes to the Settings page of one configured data source (an AI fix button names it by alias). */
+	readonly onOpenSource: (alias: string) => void;
+	/** Opens a folder in a Finder tab (an AI fix button names it by path). */
+	readonly onOpenFolder: (path: string) => void;
 	/**
 	 * Offers "AI로 고치기" when present; `onRetry` asks the question again once the AI fixed something.
 	 * Absent for the error of an earlier turn, which is history, not something to repair now.
@@ -29,7 +34,7 @@ const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-c
  * be used says so and leads to its settings and the subscription; an error in the
  * app's own setup carries "AI로 고치기".
  */
-export function RunErrorNotice({ message, action, onOpenSettings, fix }: RunErrorNoticeProps): ReactElement {
+export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, onOpenFolder, fix }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
 	const [fixing, setFixing] = useState(false);
 	const view = describeAppError(message, action, t);
@@ -47,9 +52,7 @@ export function RunErrorNotice({ message, action, onOpenSettings, fix }: RunErro
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
 				{view.title === null ? null : <strong className="font-semibold">{view.title}</strong>}
 				{hint === null ? null : <span className="text-meta leading-normal">{hint}</span>}
-				<span className={cn("select-text whitespace-pre-wrap break-words", view.title !== null && "line-clamp-4 text-meta opacity-80")} title={message}>
-					{message}
-				</span>
+				<ErrorDetails message={message} className={cn(view.title !== null && "text-meta opacity-80")} />
 			</div>
 			{entries.length === 0 ? null : (
 				<div className="flex flex-none flex-col items-stretch gap-6">
@@ -68,7 +71,7 @@ export function RunErrorNotice({ message, action, onOpenSettings, fix }: RunErro
 			)}
 			{fixing && fix !== null
 				? createPortal(
-						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onRetry={fix.onRetry} />,
+						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} onOpenFolder={onOpenFolder} onRetry={fix.onRetry} />,
 						document.body,
 					)
 				: null}

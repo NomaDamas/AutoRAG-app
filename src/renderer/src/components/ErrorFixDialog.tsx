@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { isModelProblem } from "../../../shared/app-error";
-import type { ErrorFixChange, ErrorFixResult, ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
+import type { ErrorFixAction, ErrorFixChange, ErrorFixResult, ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import { describeAppError, type ErrorActionId } from "../state/app-error";
-import { describeFixStep, initialErrorFixRun, reduceErrorFixRun, settingsPageLabel, startErrorFixRun, type ErrorFixRun } from "../state/error-fix";
+import { actionLabel, describeFixStep, initialErrorFixRun, reduceErrorFixRun, startErrorFixRun, type ErrorFixRun } from "../state/error-fix";
 import { cn } from "../lib/cn";
+import { ErrorDetails } from "./ErrorDetails";
 import { CheckIcon, CloseIcon, SparklesIcon } from "./icons";
 
 /**
@@ -20,6 +21,10 @@ export interface ErrorFixDialogProps {
 	readonly message: string;
 	readonly onClose: () => void;
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
+	/** Opens the Settings page of one configured data source, by its alias. */
+	readonly onOpenSource: (alias: string) => void;
+	/** Opens a folder in a Finder tab. */
+	readonly onOpenFolder: (path: string) => void;
 	/** Asks the question again; offered once something was fixed. */
 	readonly onRetry: () => void;
 }
@@ -84,7 +89,7 @@ function ResultBody({ result }: { readonly result: ErrorFixResult }): ReactEleme
 	);
 }
 
-export function ErrorFixDialog({ message, onClose, onOpenSettings, onRetry }: ErrorFixDialogProps): ReactElement {
+export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource, onOpenFolder, onRetry }: ErrorFixDialogProps): ReactElement {
 	const { t } = useTranslation();
 	const [run, setRun] = useState<ErrorFixRun>(initialErrorFixRun);
 	const [attempt, setAttempt] = useState(0);
@@ -120,6 +125,13 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onRetry }: Er
 		onOpenSettings(page);
 		onClose();
 	};
+	/** Takes the person where the AI's button says, and closes the dialog: they are leaving for it. */
+	const go = (action: ErrorFixAction): void => {
+		if (action.kind === "settings") onOpenSettings(action.target);
+		else if (action.kind === "source") onOpenSource(action.target);
+		else onOpenFolder(action.target);
+		onClose();
+	};
 	const settingsButton = (id: ErrorActionId, label: string, primary: boolean): ReactElement | null =>
 		id === "fix" ? null : (
 			<Button key={id} primary={primary} onClick={() => openSettings(id === "open-plan" ? "plan" : "ai")}>
@@ -135,15 +147,14 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onRetry }: Er
 		actions = <Button onClick={stop}>{t("aiSearch.stop")}</Button>;
 	} else if (run.status === "done") {
 		const { result } = run;
-		const page = result.openSettings;
 		body = <ResultBody result={result} />;
 		actions = (
 			<>
-				{page === null ? null : (
-					<Button primary={result.status === "needs-user"} onClick={() => openSettings(page)}>
-						{t("appError.fix.openSettings", { page: settingsPageLabel(page, t) })}
+				{result.actions.map((action, index) => (
+					<Button key={`${action.kind}:${action.target}`} primary={result.status === "needs-user" && index === 0} onClick={() => go(action)}>
+						{actionLabel(action, t)}
 					</Button>
-				)}
+				))}
 				{result.status === "fixed" ? (
 					<Button
 						primary
@@ -165,9 +176,7 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onRetry }: Er
 				<div className="flex flex-col gap-4">
 					<strong className="text-body font-semibold text-danger-text">{view.kind === "other" ? t("appError.fix.failedTitle") : view.title}</strong>
 					{view.kind === "other" ? null : <span className="text-meta leading-normal text-ink-body">{view.hint}</span>}
-					<span className="line-clamp-4 break-words text-meta text-ink-muted" title={run.message}>
-						{run.message}
-					</span>
+					<ErrorDetails message={run.message} className="line-clamp-4 text-meta text-ink-muted" />
 				</div>
 				<ChangeList changes={run.changes} backupPath={run.backupPath} />
 			</>
@@ -225,9 +234,7 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onRetry }: Er
 				</div>
 				<div className="flex flex-col gap-2 rounded-6 bg-danger-bg-soft px-10 py-8 text-meta">
 					<span className="font-semibold text-danger-text">{t("appError.fix.errorLabel")}</span>
-					<span className="line-clamp-3 break-words text-ink-body" title={message}>
-						{message}
-					</span>
+					<ErrorDetails message={message} className="line-clamp-3 text-ink-body" />
 				</div>
 				{run.status === "running" ? <div className="flex items-center gap-6 text-body font-medium text-ink"><span className="animate-pulse">{t("appError.fix.running")}</span></div> : null}
 				{body}

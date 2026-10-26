@@ -128,7 +128,7 @@ describe("error-fix service", () => {
 			fauxAssistantMessage(fauxToolCall("report_result", { status: "fixed", summary: "all good" })),
 			(context) => {
 				fed.push(toolResultTexts(context.messages));
-				return fauxAssistantMessage(fauxToolCall("report_result", { status: "needs-user", summary: "Pick the new folder.", nextSteps: ["Choose the folder"], openSettings: "scope" }));
+				return fauxAssistantMessage(fauxToolCall("report_result", { status: "needs-user", summary: "Pick the new folder.", nextSteps: ["Choose the folder"], actions: [{ kind: "settings", target: "scope", label: "Pick the folder" }] }));
 			},
 			fauxAssistantMessage("done"),
 		]);
@@ -136,7 +136,7 @@ describe("error-fix service", () => {
 		await serviceFor(registration).start("run-3", REQUEST);
 
 		expect(fed[0]?.join("\n")).toContain("Refused");
-		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "needs-user", openSettings: "scope", nextSteps: ["Choose the folder"], changes: [] } });
+		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "needs-user", actions: [{ kind: "settings", target: "scope", label: "Pick the folder" }], nextSteps: ["Choose the folder"], changes: [] } });
 	});
 
 	it("reports an error when no model can be resolved, in the model's own words", async () => {

@@ -3,7 +3,7 @@ import { describeFixStep, initialErrorFixRun, reduceErrorFixRun, startErrorFixRu
 import type { ErrorFixEvent, ErrorFixResult } from "../src/shared/error-fix-contract";
 import { setAppLanguage, t } from "../src/shared/i18n";
 
-const RESULT: ErrorFixResult = { status: "fixed", summary: "ok", nextSteps: [], openSettings: null, changes: [], backupPath: null };
+const RESULT: ErrorFixResult = { status: "fixed", summary: "ok", nextSteps: [], actions: [], changes: [], backupPath: null };
 
 beforeEach(async () => {
 	await setAppLanguage("ko");

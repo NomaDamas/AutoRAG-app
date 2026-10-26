@@ -161,6 +161,27 @@ describe("check_path", () => {
 		expect(parsed).toHaveProperty("entries.length", 100);
 		expect(parsed).toMatchObject({ more: 200 });
 	});
+
+	it("allows a bounded number of looks per run and then tells the agent to report, so a missing folder is never searched for across the whole machine", async () => {
+		const kit = toolkit();
+		const answers: string[] = [];
+
+		for (let index = 0; index < 8; index += 1) answers.push(await call(kit, "check_path", { path: join(root, `nowhere-${index}`) }));
+
+		expect(answers.slice(0, 6).every((text) => !text.startsWith("Refused"))).toBe(true);
+		expect(answers[6]).toMatch(/^Refused.*report_result/su);
+		expect(answers[7]).toMatch(/^Refused/u);
+		// Only the looks that were allowed are announced to the person.
+		expect(steps.filter((step) => step.tool === "check_path")).toHaveLength(6);
+	});
+
+	it("does not count a refused relative path as a look", async () => {
+		const kit = toolkit();
+
+		for (let index = 0; index < 10; index += 1) await call(kit, "check_path", { path: "relative" });
+
+		expect(await call(kit, "check_path", { path: root })).not.toMatch(/^Refused/u);
+	});
 });
 
 describe("update_config", () => {
@@ -285,21 +306,96 @@ describe("refresh_index", () => {
 });
 
 describe("report_result", () => {
-	it("is the agent's answer: status, summary in its own words, next steps and a settings page", async () => {
+	it("is the agent's answer: status, summary in its own words, next steps and the buttons it chose", async () => {
 		const kit = toolkit();
 
-		const text = await call(kit, "report_result", { status: "needs-user", summary: "  The folder was moved.  ", nextSteps: ["Pick the new folder", " "], openSettings: "scope" });
+		const text = await call(kit, "report_result", { status: "needs-user", summary: "  The folder was moved.  ", nextSteps: ["Pick the new folder", " "], actions: [{ kind: "settings", target: "scope", label: "Pick the folder" }] });
 
 		expect(text).toContain("Recorded");
-		expect(kit.result()).toEqual({ status: "needs-user", summary: "The folder was moved.", nextSteps: ["Pick the new folder"], openSettings: "scope", changes: [], backupPath: null });
+		expect(kit.result()).toEqual({
+			status: "needs-user",
+			summary: "The folder was moved.",
+			nextSteps: ["Pick the new folder"],
+			actions: [{ kind: "settings", target: "scope", label: "Pick the folder" }],
+			changes: [],
+			backupPath: null,
+		});
 	});
 
-	it("drops a settings page it does not know", async () => {
+	it("lets the agent send the person to a Settings page, a data source's own page, or a folder, each with its own label", async () => {
+		await writeConfig({
+			searchPaths: [join(root, "Docs")],
+			workspacePath: join(root, "ws"),
+			memoryPath: join(root, "memory.json"),
+			datasources: { kakao: { connector: { configPath: join(root, "Docs") } } },
+		});
 		const kit = toolkit();
 
-		await call(kit, "report_result", { status: "cannot-fix", summary: "Nothing I can reach.", openSettings: "../../etc" });
+		await call(kit, "report_result", {
+			status: "needs-user",
+			summary: "Two things need you.",
+			actions: [
+				{ kind: "source", target: "kakao", label: "Open the KakaoTalk connection" },
+				{ kind: "folder", target: join(root, "Documents"), label: "Look at the Documents folder" },
+				{ kind: "settings", target: "indexing", label: "See indexing" },
+			],
+		});
 
-		expect(kit.result()?.openSettings).toBeNull();
+		expect(kit.result()?.actions).toEqual([
+			{ kind: "source", target: "kakao", label: "Open the KakaoTalk connection" },
+			{ kind: "folder", target: join(root, "Documents"), label: "Look at the Documents folder" },
+			{ kind: "settings", target: "indexing", label: "See indexing" },
+		]);
+	});
+
+	it("drops a destination the app cannot take the person to, and says so, so the agent can correct it", async () => {
+		const kit = toolkit();
+
+		const text = await call(kit, "report_result", {
+			status: "needs-user",
+			summary: "Go there.",
+			actions: [
+				{ kind: "settings", target: "../../etc", label: "Bad page" },
+				{ kind: "source", target: "no-such-source", label: "Bad source" },
+				{ kind: "folder", target: join(root, "missing"), label: "Missing folder" },
+				{ kind: "folder", target: join(root, "note.txt"), label: "A file, not a folder" },
+				{ kind: "folder", target: "Documents", label: "Relative" },
+				{ kind: "shell", target: "rm -rf /", label: "Not a kind" },
+				{ kind: "settings", target: "scope", label: "Good" },
+			],
+		});
+
+		expect(kit.result()?.actions).toEqual([{ kind: "settings", target: "scope", label: "Good" }]);
+		for (const bad of ["../../etc", "no-such-source", "missing", "note.txt", "Documents", "shell"]) expect(text).toContain(bad);
+		expect(text).toMatch(/dropped/iu);
+	});
+
+	it("keeps at most three buttons, trims and shortens a label, and gives a button without one no empty name", async () => {
+		const kit = toolkit();
+
+		await call(kit, "report_result", {
+			status: "needs-user",
+			summary: "Many.",
+			actions: [
+				{ kind: "settings", target: "scope", label: `  ${"x".repeat(200)}  ` },
+				{ kind: "settings", target: "ai", label: "   " },
+				{ kind: "settings", target: "plan", label: "Plan" },
+				{ kind: "settings", target: "web", label: "Fourth" },
+			],
+		});
+
+		const actions = kit.result()?.actions ?? [];
+		expect(actions.map((action) => action.target)).toEqual(["scope", "ai", "plan"]);
+		expect(actions[0]?.label.length).toBeLessThanOrEqual(60);
+		expect(actions[1]?.label).toBe("");
+	});
+
+	it("lets the same destination appear once", async () => {
+		const kit = toolkit();
+
+		await call(kit, "report_result", { status: "needs-user", summary: "Twice.", actions: [{ kind: "settings", target: "scope", label: "A" }, { kind: "settings", target: "scope", label: "B" }] });
+
+		expect(kit.result()?.actions).toEqual([{ kind: "settings", target: "scope", label: "A" }]);
 	});
 
 	it("refuses 'fixed' when nothing was changed, since an explanation is not a repair", async () => {

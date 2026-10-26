@@ -279,9 +279,13 @@ for (const entry of modelCases) {
 	const text = await notice.innerText();
 	log(`${entry.label} → message shown: ${text.replace(/\s+/g, " ").slice(0, 260)}`);
 	check(`${entry.label}: the notice says plainly what is wrong`, text.includes(entry.title), text.replace(/\s+/g, " ").slice(0, 200));
-	const names = await panel.locator('[role="alert"] button').allInnerTexts();
+	const names = (await panel.locator('[role="alert"] button').allInnerTexts()).filter((name) => name !== "Show details");
 	check(`${entry.label}: the buttons are ${entry.buttons.join(" + ")} and there is no AI fix`, JSON.stringify(names) === JSON.stringify(entry.buttons), JSON.stringify(names));
+	check(`${entry.label}: the provider's code and JSON stay out of sight until "Show details"`, !text.includes(entry.body.error.code) && !text.includes("{"), text.replace(/\s+/g, " ").slice(0, 200));
 	await shot(`05-${index}-${entry.label.replaceAll(" ", "-")}`);
+	await panel.getByRole("button", { name: "Show details", exact: true }).first().click();
+	check(`${entry.label}: "Show details" shows the provider's own words`, (await notice.innerText()).includes(entry.body.error.code), entry.body.error.code);
+	await shot(`05b-${index}-${entry.label.replaceAll(" ", "-")}-details`);
 }
 
 failWith(401, { error: { message: "Incorrect API key provided: qa-key." } });
@@ -337,27 +341,50 @@ await shot("10-fix-stopped");
 await dialog.getByRole("button", { name: "Close", exact: true }).first().click();
 check("closing leaves the original error in place", (await notice.count()) === 1);
 
-script([
+const needsUserSteps = () => [
 	{ tool: "diagnose", args: {} },
-	{ tool: "report_result", args: { status: "needs-user", summary: "The Documents-old folder no longer exists and I could not tell where it went.", nextSteps: ["Open Search Scope and pick the folder that holds your documents."], openSettings: "scope" } },
+	{
+		tool: "report_result",
+		args: {
+			status: "needs-user",
+			summary: "The Documents-old folder no longer exists and I could not tell where it went.",
+			nextSteps: ["Pick the folder that holds your documents."],
+			actions: [
+				{ kind: "settings", target: "scope", label: "Pick the search folder again" },
+				{ kind: "folder", target: DOCS, label: "Look at the Documents folder" },
+				{ kind: "settings", target: "nowhere", label: "A page that does not exist" },
+			],
+		},
+	},
 	{ text: "done" },
-]);
+];
+script(needsUserSteps());
 await fixButton("Fix with AI").click();
 await waitInDialog(dialog.getByText("There is something you need to do"));
 const needsText = await dialog.innerText();
-check("the dialog lists what the person has to do", needsText.includes("Open Search Scope and pick the folder"));
+check("the dialog lists what the person has to do", needsText.includes("Pick the folder that holds your documents."));
 check("there is no 'Search again' when nothing was fixed", (await dialog.getByRole("button", { name: "Search again" }).count()) === 0);
+const buttonNames = await dialog.locator("button").allInnerTexts();
+check("the AI's buttons carry the labels the AI wrote, and the one with a page that does not exist was dropped", buttonNames.includes("Pick the search folder again") && buttonNames.includes("Look at the Documents folder") && !buttonNames.includes("A page that does not exist"), JSON.stringify(buttonNames));
 await shot("11-fix-needs-user");
-await dialog.getByRole("button", { name: /^Open ‘.+’ settings$/ }).click();
+await dialog.getByRole("button", { name: "Look at the Documents folder", exact: true }).click();
+await page.locator(".path-bar, [data-path-bar], .pathbar").first().waitFor({ state: "attached", timeout: 10_000 }).catch(() => undefined);
+check("the folder button closed the dialog and opened a Finder tab on that folder", (await page.getByRole("dialog").count()) === 0 && (await page.locator(`[data-tab-id]`, { hasText: "Documents" }).count()) >= 1, await page.locator("[data-tab-id]").allInnerTexts().then((names) => JSON.stringify(names)));
+await shot("11b-folder-button-opened-a-tab");
+await backToAiSearch();
+script(needsUserSteps());
+await fixButton("Fix with AI").click();
+await waitInDialog(dialog.getByText("There is something you need to do"));
+await dialog.getByRole("button", { name: "Pick the search folder again", exact: true }).click();
 await pageTitle("Search Scope");
-check("the button opens the Settings page the agent named", true);
+check("the settings button opens the Settings page the AI named", true);
 await backToAiSearch();
 
 // ── 4b. The rest of the endings, for the report. ─────────────────────────
-script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "The folder is gone and nothing nearby looks like it, so I could not repair it.", nextSteps: ["Restore the folder, or choose another one in Search Scope."], openSettings: "scope" } }, { text: "done" }]);
+script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "The folder is gone and nothing nearby looks like it, so I could not repair it.", nextSteps: ["Restore the folder, or choose another one in Search Scope."], actions: [{ kind: "settings", target: "scope", label: "Choose another folder" }] } }, { text: "done" }]);
 await fixButton("Fix with AI").click();
 await waitInDialog(dialog.getByText("Couldn’t fix it", { exact: true }));
-check("a 'cannot fix' result says so and still leads to the page that helps", (await dialog.getByRole("button", { name: /^Open ‘.+’ settings$/ }).count()) === 1);
+check("a 'cannot fix' result says so and still leads where the AI pointed", (await dialog.getByRole("button", { name: "Choose another folder", exact: true }).count()) === 1);
 await shot("15-fix-cannot-fix");
 await page.keyboard.press("Escape");
 await dialog.waitFor({ state: "detached" });

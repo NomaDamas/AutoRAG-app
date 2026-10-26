@@ -276,6 +276,8 @@
   "appError": {
     "fixAction": "AI로 고치기",
     "openModelSettings": "모델 설정 열기",
+    "showDetails": "자세히 보기",
+    "hideDetails": "자세히 닫기",
     "other": {
       "title": "문제가 생겼어요",
       "hint": "AI가 원인을 찾아 직접 고쳐 볼 수 있어요."
@@ -325,6 +327,8 @@
       "unset": "없음",
       "backup": "바꾸기 전 설정을 {{path}} 에 백업해 두었어요.",
       "openSettings": "‘{{page}}’ 설정 열기",
+      "openFolder": "‘{{name}}’ 폴더 열기",
+      "openSource": "‘{{name}}’ 연결 열기",
       "retrySearch": "다시 검색",
       "failedTitle": "AI로 고치지 못했어요",
       "stopped": "중단했어요."
