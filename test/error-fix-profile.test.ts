@@ -102,6 +102,19 @@ describe("the error-fix profile", () => {
 		expect(prompt).not.toMatch(/kind \\?"folder\\?"/iu);
 	});
 
+	it("says a button must lead to a setting in the app that the person has to change, and that a cause outside the app, even one only the person can fix, gets none", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		// A button is for a setting in Dazzi itself that a Settings page holds.
+		expect(prompt).toMatch(/give one only when the fix is a setting in Dazzi/iu);
+		// A cause outside Dazzi gets none, even when only the person can fix it, and the example given is the operating system's own permission.
+		expect(prompt).toMatch(/cause outside Dazzi does not need a button, even when only the person can fix it/iu);
+		expect(prompt).toMatch(/operating system refused/iu);
+		expect(prompt).toMatch(/leave `actions` out/iu);
+		// A wrong page is worse than none.
+		expect(prompt).toMatch(/does not hold the setting is worse than no button/iu);
+	});
+
 	it("requires every button label in the reply language, as a short natural phrase for what the button does", () => {
 		for (const [language, name] of [["ko", "Korean"], ["en", "English"], ["ja", "Japanese"], ["zh", "Simplified Chinese"]] as const) {
 			const prompt = errorFixProfile({ message: "x", surface: "ai-search", language, toolkit: toolkit() }).systemPrompt;

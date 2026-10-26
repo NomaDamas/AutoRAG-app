@@ -297,19 +297,28 @@ try {
 				}),
 			text,
 		);
-	let outsideEnd;
-	// The plan allows a few requests a minute and the scenarios above used them: a 429 is the plan, not the feature, so wait it out and ask again.
-	for (let attempt = 1; attempt <= 4; attempt += 1) {
-		outsideEnd = (await askFixer(outsideMessage)).at(-1);
-		if (!(outsideEnd?.type === "error" && /Too many requests|\(429\)|rate_limit/iu.test(outsideEnd.message))) break;
-		console.log(`attempt ${attempt} hit the plan's rate limit; waiting before the next`);
-		await page.waitForTimeout(70_000);
+	// Each one is a cause outside Dazzi that the app still classifies as its own (so the fix is offered), with nothing to change in a Dazzi setting.
+	const outsideCases = [
+		{ label: "the operating system refused a permission", message: outsideMessage },
+		{ label: "a file held by another program", message: "EBUSY: resource busy or locked, open '/Users/me/Documents/ledger.xlsx' (another program has the file open)" },
+		{ label: "the provider's service is down", message: 'The answer service returned an error: {"status":"unavailable","detail":"The upstream search provider is not responding"}' },
+	];
+	for (const outside of outsideCases) {
+		let outsideEnd;
+		// The plan allows a limited number of requests a minute: a 429 is the plan, not the feature, so wait it out and ask again.
+		for (let attempt = 1; attempt <= 4; attempt += 1) {
+			outsideEnd = (await askFixer(outside.message)).at(-1);
+			if (!(outsideEnd?.type === "error" && /Too many requests|\(429\)|rate_limit/iu.test(outsideEnd.message))) break;
+			console.log(`attempt ${attempt} hit the plan's rate limit; waiting before the next`);
+			await page.waitForTimeout(70_000);
+		}
+		console.log(`what the real AI answered (${outside.label}): ${JSON.stringify(outsideEnd).slice(0, 900)}`);
+		const answered = outsideEnd?.type === "result";
+		check(`${outside.label}: the real AI answered (not an error)`, answered, JSON.stringify(outsideEnd).slice(0, 200));
+		check(`${outside.label}: the real AI did not claim a repair for a cause it cannot reach`, answered && outsideEnd.result.status !== "fixed", answered ? outsideEnd.result.status : "");
+		check(`${outside.label}: the real AI gave no button, since no Dazzi setting is the fix`, answered && outsideEnd.result.actions.length === 0, answered ? JSON.stringify(outsideEnd.result.actions) : "");
+		check(`${outside.label}: the real AI changed nothing in the config`, JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === REPORTS && answered && outsideEnd.result.changes.length === 0);
 	}
-	console.log(`what the real AI answered for a cause outside the app: ${JSON.stringify(outsideEnd).slice(0, 700)}`);
-	check("the real AI answered (not an error)", outsideEnd?.type === "result", JSON.stringify(outsideEnd).slice(0, 200));
-	check("the real AI did not claim a repair for a cause it cannot reach", outsideEnd?.type === "result" && outsideEnd.result.status !== "fixed", outsideEnd?.type === "result" ? outsideEnd.result.status : "");
-	check("the real AI gave no button: there is nowhere in the app to send the person", outsideEnd?.type === "result" && outsideEnd.result.actions.length === 0, outsideEnd?.type === "result" ? JSON.stringify(outsideEnd.result.actions) : "");
-	check("the real AI changed nothing in the config", JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === REPORTS && outsideEnd?.type === "result" && outsideEnd.result.changes.length === 0);
 } finally {
 	await app.close().catch(() => undefined);
 	service.close();
