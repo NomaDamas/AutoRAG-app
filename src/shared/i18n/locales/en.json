@@ -1579,7 +1579,14 @@
       "tarListFailed": "Couldn’t read the tar listing",
       "readFailed": "Couldn’t read the archive",
       "empty": "Empty archive",
-      "order": "Date Modified"
+      "order": "Date Modified",
+      "unreadable": {
+        "encrypted": "This archive is password-protected, so its contents can’t be listed",
+        "corrupt": "Couldn’t list this archive. It may be damaged, password-protected, or hold just one compressed file",
+        "tooLarge": "This archive is too large to list; showing its details instead",
+        "tooManyEntries": "This archive holds too many items to list; showing its details instead",
+        "tooSlow": "Listing this archive took too long; showing its details instead"
+      }
     },
     "folder": {
       "kind": "Folder",

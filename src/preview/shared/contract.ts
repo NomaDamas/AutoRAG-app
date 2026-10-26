@@ -1,5 +1,6 @@
 import type { AppSettings } from "../../shared/settings-contract";
 import type { BinaryKind } from "./binary-kind";
+import type { ArchiveEntry } from "./archive-items";
 import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
 
@@ -46,6 +47,8 @@ export const PREVIEW_CHANNELS = {
 	audioMetadata: "preview:audio-metadata",
 	/** Preview window -> main (invoke): tables and first rows of the shown database or Parquet file. */
 	data: "preview:data",
+	/** Preview window -> main (invoke): the top-level children of the shown 7z, RAR, ISO, deb, rpm, CAB, or tar.bz2/xz/zst. */
+	archive: "preview:archive",
 	/** Preview window -> main (invoke): the macOS share menu, anchored under a toolbar rect. */
 	share: "preview:share",
 	/** Preview window -> main (invoke): put text on the system clipboard. */
@@ -262,6 +265,14 @@ export type DataPreview =
 	  }
 	| { readonly kind: "unreadable"; readonly reason: DataUnreadable };
 
+/** Why an archive shows a note instead of its items. */
+export type ArchiveUnreadable = "encrypted" | "corrupt" | "tooLarge" | "tooManyEntries" | "tooSlow";
+
+/** An archive's top level as the main process read it: one entry per child (folders end in "/"). */
+export type ArchivePreview =
+	| { readonly kind: "entries"; readonly entries: readonly ArchiveEntry[] }
+	| { readonly kind: "unreadable"; readonly reason: ArchiveUnreadable };
+
 export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal";
 
 export type NavigateDelta = 1 | -1;
@@ -312,6 +323,8 @@ export interface QuickLookWindowBridge {
 	audioMetadata(path: string): Promise<AudioMetadata>;
 	/** Database tables and first rows, or a Parquet file's schema and first rows. `table` picks a database table (null: the first). */
 	dataPreview(path: string, table: string | null): Promise<DataPreview>;
+	/** The top-level children of a 7z, RAR, tar.bz2/xz/zst, ISO, deb, rpm, or CAB; the page has no engine to read them itself. */
+	archivePreview(path: string): Promise<ArchivePreview>;
 	/** `anchor` is the share button's rect in page CSS pixels. macOS only. */
 	share(anchor: Bounds): Promise<void>;
 	copyText(text: string): Promise<void>;

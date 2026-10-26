@@ -79,6 +79,7 @@ const LANES = [
 	{ name: "quick-look-legacy-office", script: "run-qa-quick-look-legacy-office.mjs", timeout: 240 },
 	{ name: "quick-look-sheet-large", script: "run-qa-quick-look-sheet-large.mjs", timeout: 240 },
 	{ name: "quick-look-csv-korean", script: "run-qa-quick-look-csv-korean.mjs", timeout: 240 },
+	{ name: "quick-look-archive-formats", script: "run-qa-quick-look-archive-formats.mjs", timeout: 240 },
 	{ name: "fs-worker-crash", script: "run-qa-finder-fs-worker-crash.mjs", timeout: 180 },
 	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
 	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 },

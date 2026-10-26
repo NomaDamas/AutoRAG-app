@@ -10,6 +10,7 @@ import { type ArchiveLimits } from "../src/main/archive-common";
 import { extractWithLibarchive } from "../src/main/libarchive-reader";
 import { ArchiveError } from "../src/main/archive-guard.mjs";
 import { t } from "../src/shared/i18n/core";
+import { RAR4_TREE, RAR5_ENCRYPTED, RAR5_STORED } from "./archive-fixtures";
 
 let root: string;
 
@@ -42,16 +43,6 @@ function service(archiveLimits?: ArchiveLimits): ActionService {
 }
 
 const LIMITS: ArchiveLimits = { maxTotalBytes: 20 * 1024 ** 3, maxEntries: 100_000, maxEngineBytes: 1024 ** 3 };
-
-/** libarchive's test_read_format_rar.rar: test.txt, a symlink, testdir/test.txt, and two directories. */
-const RAR4_TREE =
-	"UmFyIRoHAM+QcwAADQAAAAAAAACEUnQgkDIAFAAAABQAAAADQqLIvrd22j4UMAgApIEAAHRlc3QudHh0gAi3dto+t3baPnRlc3QgdGV4dCBkb2N1bWVudA0KnS90IJAyAAgAAAAIAAAAA3tEybbRTNg+FDAIAP+hAAB0ZXN0bGlua8AI0UzYPlBf2j50ZXN0LnR4dM3gdCCQOgAUAAAAFAAAAANCosi+Y3faPhQwEACkgQAAdGVzdGRpclx0ZXN0LnR4dMDMY3faPmN32j50ZXN0IHRleHQgZG9jdW1lbnQNCqHIdOCQMQAAAAAAAAAAAAMAAAAAY3faPhQwBwDtQQAAdGVzdGRpcsDMY3faPmR32j7m53TgkDYAAAAAAAAAAAADAAAAAJ2r1T4UMAwA7UEAAHRlc3RlbXB0eWRpcoDMnavVPsVd2j7EPXsAQAcA";
-/** libarchive's test_read_format_rar5_stored.rar: one stored member, helloworld.txt. */
-const RAR5_STORED =
-	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA4MAZjLAIDC50ABJ0ApIMCtEOglYAAAQ5oZWxsb3dvcmxkLnR4dAoDE34Oq1tW6Q4aaGVsbG8gbGliYXJjaGl2ZSB0ZXN0IHN1aXRlIQodd1ZRAwUEAA==";
-/** libarchive's test_read_format_rar5_encrypted.rar: four members behind a password. */
-const RAR5_ENCRYPTED =
-	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA1/zIeHwIDCxIEEiBVblrugAAABWEudHh0CgMCfCGEo4J82gFUaGlzIGlzIGZyb20gYS50eHR6QXGzUAIDPDAEEiAYRaMCgAMABWIudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN+jTfBqtdBdSTB3cPHY6AU+o1Zx1w8S1La5wanAoDAnJlmKaCfNoBY7pUstAQpUlftLrTwGmoOxu8uzgn14eTeHMvfJPi0ijEAN7+psA7fmxn1AVQANz4jXzxZh8CAwsSBBIgNT2alIAAAAVjLnR4dAoDAj5I6a6CfNoBVGhpcyBpcyBmcm9tIGMudHh07P3wXVICAzygAASSACDD32MSgAMABWQudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN883Wsxy0W6d8rDZYjrMOaYNM1EjpFevWrHe3owoDAnvFKfSPfNoB22ly9PZWjqb9GWXplbM2hTQ39Sqg0yeHsvXBAjLYql4dd1ZRAwUEAA==";
 
 /** A source tree with a wrapper folder, a nested file, and an empty directory. */
 async function docsSource(): Promise<string> {
