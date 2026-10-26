@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown } from "lucide-react";
 import type { EmbeddingChangeRequest, EmbeddingChangeResult, EmbeddingSettingsSnapshot, EmbeddingSourceStatus } from "../../../../shared/settings-contract";
+import { platformKey } from "../../lib/platform-copy";
 import { localModelNeeded, useModelDownload } from "../../state/model-download";
 import { ModelDownloadPanel } from "../ModelDownloadPanel";
 import { ModalActions, ModalShell, Note, Row, StatusDot } from "./SettingsKit";
@@ -189,7 +190,7 @@ export function EmbeddingPicker(): ReactElement {
 								</select>
 							</label>
 							<label>{t("settingsCore.embedding.apiKey")}<input name="embedding-api-key" type="password" autoComplete="off" value={byok.apiKey} placeholder={t("settingsCore.embedding.apiKeyPlaceholder")} onChange={(event) => setByok((prev) => ({ ...prev, apiKey: event.target.value }))} /></label>
-							<Note>{t("settingsCore.embedding.apiKeyHint")}</Note>
+							<Note>{t(platformKey("settingsCore.embedding.apiKeyHint"))}</Note>
 						</>
 					) : null}
 					{needsConsent ? (
