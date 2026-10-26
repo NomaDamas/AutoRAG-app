@@ -543,8 +543,16 @@ resumes at the same step.
   the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
   background once local indexing and onboarding complete. A config still pointing its
   `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
-  The Finder opens once the first index succeeds or the user chooses to continue
-  in the background.
+  The Finder is open from the first launch, in its own window beside onboarding
+  (`openWindows` in `src/main/index.ts`; the onboarding window carries the
+  `ONBOARDING_PENDING_FLAG` launch argument, so the renderer shows only the flow).
+  The indexing screen has no button to open Dazzi: a successful first index
+  completes onboarding by itself (the renderer calls `onboarding.complete()`), and
+  the window stays on its done screen until it is closed. Closing it on a run that
+  failed completes onboarding too (`completesOnClose`, `src/main/onboarding-window.ts`);
+  closing it before the index ran or while it runs keeps onboarding for the next
+  launch. Closing the last window during a running first index asks before quitting
+  (`closeDecision`). Main pushes index and activity events to both windows.
   The status the screen shows has one writer for its final state: the poll tick
   (every second, reading `refresh-progress.json`, the parsed mirror and MinSync's
   `progress.jsonl`) reads first and applies its snapshot only if its run is still
@@ -635,7 +643,7 @@ screen. Files a run left out are counted from `files-left-out` and `parse-killed
 automatic retry (offline embedder or model download: every 8 s, up to 6 times;
 unreadable folder: every 3 s while the screen is open). Fixing the embedding from a
 pause sets `draft.resumeAt = "indexing"`, so leaving that step returns straight to
-the index. "Open Dazzi anyway" after a failed first run starts a keyword-only refresh
+the index. Closing the onboarding window after a failed first run starts a keyword-only refresh
 (`parsed`, `jikji`; no embedder) so the app is not empty.
 
 After onboarding, `index-problem-service.ts` keeps the last run's failure and skipped

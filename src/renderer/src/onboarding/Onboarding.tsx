@@ -463,30 +463,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 	}, []);
 
-	const indexStatusRef = useRef<IndexingStatus | null>(null);
+	// The Finder is already open in its own window, so a first index that finished only has to be recorded as the end of onboarding.
+	const indexSucceeded = indexStatus?.state === "success";
 	useEffect(() => {
-		indexStatusRef.current = indexStatus;
-	}, [indexStatus]);
-
-	const finish = useCallback((): void => {
-		if (indexStatusRef.current?.state !== "success") {
-			showToast(t("onboarding.toast.notIndexed"));
+		if (!indexSucceeded) {
 			return;
 		}
 		if (saveTimer.current !== null) {
 			window.clearTimeout(saveTimer.current);
 			saveTimer.current = null;
 		}
-		void bridge.complete().then(onComplete);
-	}, [onComplete, showToast, t]);
-
-	const finishInBackground = useCallback((): void => {
-		if (saveTimer.current !== null) {
-			window.clearTimeout(saveTimer.current);
-			saveTimer.current = null;
-		}
-		void bridge.complete().then(onComplete);
-	}, [onComplete]);
+		void bridge.complete().catch((error: unknown) => showToast(ipcMessage(error)));
+	}, [indexSucceeded, showToast]);
 
 	const changeEmbedding = useCallback((): void => {
 		const current = draftRef.current;
@@ -657,8 +645,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId, startIndexing]);
 
 	// Keyboard: Enter advances, Escape closes an overlay, arrows page the tips.
-	const keyboard = useRef({ next, finish, currentAdvance, setTipIndex, overlay: null as OverlayKind | null, stepId });
-	keyboard.current = { next, finish, currentAdvance, setTipIndex, overlay, stepId };
+	const keyboard = useRef({ next, currentAdvance, setTipIndex, overlay: null as OverlayKind | null, stepId });
+	keyboard.current = { next, currentAdvance, setTipIndex, overlay, stepId };
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent): void => {
 			const active = document.activeElement as HTMLElement | null;
@@ -669,10 +657,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return;
 			}
 			if (event.key === "Enter" && !typing) {
-				if (keyboard.current.stepId === "indexing") {
-					// A stopped run's button takes Enter itself (the pause screen); only a finished or running one is handled here.
-					if (indexStatusRef.current?.state !== "failed") keyboard.current.finish();
-				} else if (keyboard.current.currentAdvance()) {
+				// The indexing screen has no button of its own to press: a stopped run's pause screen takes Enter itself.
+				if (keyboard.current.stepId !== "indexing" && keyboard.current.currentAdvance()) {
 					keyboard.current.next();
 				}
 				return;
@@ -994,8 +980,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		startIndexing,
 		changeEmbedding,
 		excludeFolders,
-		finish,
-		finishInBackground,
 		setTipIndex,
 		dragApp: () => bridge.dragApp(),
 		relaunch: () => {

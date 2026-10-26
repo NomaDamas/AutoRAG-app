@@ -117,6 +117,10 @@ const EXTENSION_KINDS: Readonly<Record<string, FileKind>> = {
 	rar: "zip",
 	"7z": "zip",
 	eml: "mail",
+	gdoc: "docx",
+	gsheet: "xlsx",
+	gslides: "pptx",
+	gform: "docx",
 };
 
 /** Whether the extension has its own entry; the rest fall back to the md tile. */

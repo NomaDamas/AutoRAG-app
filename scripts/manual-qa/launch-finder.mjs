@@ -61,19 +61,27 @@ export async function launchFinder({
 }
 
 /**
- * The Finder renderer page. The pre-warmed Quick Look window can register
- * with Playwright before the main window, so poll for the /index.html page
- * instead of trusting `firstWindow()`.
+ * One of the app's two renderer pages: the first-run onboarding window (`onboarding: true`) or the Finder
+ * (`false`). Both load /index.html, so the preload's launch argument tells them apart. The pre-warmed Quick
+ * Look window can register with Playwright before either, so poll instead of trusting `firstWindow()`.
  */
-export async function finderWindow(app, timeoutMs = 6000) {
+export async function appWindow(app, onboarding, timeoutMs = 6000) {
 	const deadline = Date.now() + timeoutMs;
 	for (;;) {
-		const page = (await app.windows()).find((candidate) => candidate.url().endsWith("/index.html"));
-		if (page !== undefined) return page;
-		if (Date.now() >= deadline) throw new Error("Finder index window did not open");
+		for (const page of (await app.windows()).filter((candidate) => candidate.url().endsWith("/index.html"))) {
+			const pending = await page.evaluate(() => window.autorag?.onboarding?.pending === true).catch(() => null);
+			if (pending === onboarding) return page;
+		}
+		if (Date.now() >= deadline) throw new Error(`${onboarding ? "Onboarding" : "Finder"} index window did not open`);
 		await new Promise((resolve) => setTimeout(resolve, 100));
 	}
 }
+
+/** The Finder renderer page (never the onboarding window that opens beside it on a first run). */
+export const finderWindow = (app, timeoutMs = 6000) => appWindow(app, false, timeoutMs);
+
+/** The first-run onboarding renderer page. */
+export const onboardingWindow = (app, timeoutMs = 6000) => appWindow(app, true, timeoutMs);
 
 /**
  * The fs worker's diagnostics (pid, restarts, per-op request counts, recent

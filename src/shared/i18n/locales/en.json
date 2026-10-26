@@ -649,9 +649,9 @@
       "eyebrow": "Pro 7-day free trial",
       "title": "Ask your\nfiles",
       "lead": "You don't have to dig through folders. Dazzi reads what's inside your documents and answers with sources.",
-      "note": "Local by default. When remote processing is needed, we show you exactly what will be sent first.",
-      "usageStats": "Send anonymous usage statistics to help improve Dazzi. No files, searches or document content are included, and you can turn it off anytime in Settings.",
-      "errorReports": "Send error reports when the app crashes or indexing fails, to help fix problems. File paths, file names and document content are never included, and you can change this anytime in Settings.",
+      "note": "Local by default. Some features send content to Dazzi's servers or model providers when you use them; see the Privacy Policy.",
+      "usageStats": "Send anonymous usage statistics to help improve Dazzi. They are not designed to include files, searches or document content, and you can turn it off anytime in Settings.",
+      "errorReports": "Send error reports when the app crashes or indexing fails, to help fix problems. They are not designed to include file paths, file names or document content, and you can change this anytime in Settings.",
       "usageStatsPolicy": "Privacy Policy",
       "chat": {
         "user": "Why did last quarter's costs go down?",
@@ -704,7 +704,7 @@
     "account": {
       "eyebrow": "Account",
       "title": "Start with\nyour account",
-      "lead": "Only your plan and usage are tied to your account. Your files and index stay on this Mac.",
+      "lead": "Your plan and usage are tied to your account. Your files and search index are stored on this Mac.",
       "note": "You sign in in your browser and come back to this app automatically. You never enter your password in the app.",
       "signedIn": "Signed in",
       "signedInNote": "Moving to the next step",
@@ -938,7 +938,7 @@
           "name": "Max",
           "price": "$200",
           "note": "$200/mo · cancel anytime",
-          "tag": "10x Pro's quota"
+          "tag": "For heavy, all-day use"
         },
         "byok": {
           "name": "BYOK",
@@ -1009,9 +1009,6 @@
       "gateTitlePc": "Don't quit Dazzi or turn off your PC",
       "gateDetailMac": "The first index takes a while. Quitting stops progress. Plug in the power adapter and keep the lid open.",
       "gateDetailWindows": "The first index takes a while. Quitting stops progress. Keep it plugged in.",
-      "gateLocked": "Opens once it's done",
-      "open": "Open Dazzi",
-      "startInBackground": "Continue in background and start right away",
       "skipped": "{{count}} files were skipped",
       "gateOkDetailPartial": "Everything else is searchable. Newly changed files continue to be read in the background.",
       "pause": {
@@ -1048,8 +1045,7 @@
           "resumeDisk": "I freed up space, resume",
           "changeEmbedding": "Change embedding",
           "exclude": "Continue without “{{folder}}”",
-          "excludeMany": "Continue without the unreadable folders",
-          "openAnyway": "Open Dazzi anyway"
+          "excludeMany": "Continue without the unreadable folders"
         },
         "line": {
           "retrying": "Trying again…",
@@ -1314,7 +1310,7 @@
       "no": "No"
     },
     "search": {
-      "quotaExhausted": "This week's Dazzi credits are used up, so nothing was sent. They come back on {{date}}. Upgrade your plan, or choose another model provider in Settings, to keep asking."
+      "quotaExhausted": "Your Dazzi credits are used up, so nothing was sent. They come back on {{date}}. Upgrade your plan, or choose another model provider in Settings, to keep asking."
     },
     "action": {
       "unsupportedResize": "This format cannot be resized.",
@@ -1440,7 +1436,7 @@
         },
         "local": {
           "label": "This computer (MinSync local server)",
-          "description": "Dazzi runs the MinSync embedding server on this computer while it is open. Documents never leave this computer."
+          "description": "Dazzi runs the MinSync embedding server on this computer while it is open, so documents are not sent anywhere for embedding."
         },
         "dazzi": {
           "label": "Dazzi cloud",
@@ -1664,6 +1660,10 @@
       "drawFailed": "Couldn’t draw the slide",
       "noPreview": "This document has no preview image",
       "page": "Page {{count}}"
+    },
+    "gdrive": {
+      "account": "Google account: {{email}}",
+      "notPointer": "This file is not a valid Google Drive shortcut"
     },
     "media": {
       "imageOpenFailed": "Couldn’t open the image",
@@ -1922,17 +1922,15 @@
       "managedName": "Use Managed Models",
       "managedHint": "Use this account's models for AI search.",
       "useManaged": "Use Account Models",
-      "planDescription": "Your current plan and this week's AI usage.",
+      "planDescription": "Your current plan and AI usage.",
       "currentPlan": "Current Plan",
       "trialing": " · Trialing",
       "cancelScheduled": "Cancellation is scheduled. You can use the current plan until {{date}}.",
       "pastDue": "Payment failed. Check your payment method in the billing portal.",
-      "usageTitle": "This Week's Usage",
+      "usageTitle": "Usage",
       "usageName": "AI usage",
-      "usageMeterAria": "Weekly credit usage",
+      "usageMeterAria": "Credit usage",
       "usageUnavailable": "Could not load usage",
-      "requestLimit": "Request Limit",
-      "requestsPerMinute": "{{count}}/min",
       "legal": {
         "title": "Terms & Policies",
         "terms": "Terms of Service",
@@ -2068,7 +2066,7 @@
     },
     "embedding": {
       "title": "Document Understanding Model",
-      "hint": "Analyzes the meaning of documents. If you pick this computer, documents never leave it.",
+      "hint": "Analyzes the meaning of documents. If you pick this computer, documents are not sent anywhere for embedding.",
       "body": "Choose where the embedding model that analyzes document meaning runs. The model is fixed to Qwen3 Embedding 0.6B, and any choice that sends document text off this computer needs your consent.",
       "dimension": "{{count}}d",
       "applied": "Applied.",
@@ -2581,7 +2579,7 @@
     "file": "Downloading {{file}}",
     "keepOpen": "Keep Dazzi open until it finishes. If it stops, it can continue where it left off.",
     "ready": "Model ready",
-    "readyDetail": "The model is on this computer. Your documents never leave it.",
+    "readyDetail": "The model is on this computer, so documents are not sent anywhere for embedding.",
     "failed": "The download stopped",
     "indexingTitle": "Downloading the embedding model",
     "indexingNote": "The first index starts by itself when the download is done."
