@@ -181,7 +181,8 @@ describe("the librarian agent's manage_automations tool", () => {
 		return toolResults;
 	}
 
-	it("tests a rule's command with node, not with the app's own binary", async () => {
+	// The stand-in node is a POSIX shell script; Windows cannot execute one (covered by the QA automations lane there).
+	it.skipIf(process.platform === "win32")("tests a rule's command with node, not with the app's own binary", async () => {
 		const { directory, home, watched, recorded, fakeNode, script } = await fixture();
 		const results = await runModelThatCalls(directory, home, { action: "run", id: "node-rule", events: [{ type: "create", path: join(watched, "a.txt") }] }, fakeNode);
 

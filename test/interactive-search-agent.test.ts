@@ -93,7 +93,9 @@ function toolThenFinish(toolName: string, args: Parameters<typeof fauxToolCall>[
 	];
 }
 
-const removeFile = (path: string) => toolThenFinish("bash", { command: `rm ${path}` });
+// The model's shell is bash, where unquoted backslashes in a Windows path are escapes.
+const shellPath = (path: string): string => path.replaceAll("\\", "/");
+const removeFile = (path: string) => toolThenFinish("bash", { command: `rm ${shellPath(path)}` });
 
 describe("file-change gate through the app's interaction hub", () => {
 	it("ask mode: the person is asked before the shell runs, and Deny keeps the file", async () => {
@@ -104,7 +106,7 @@ describe("file-change gate through the app's interaction hub", () => {
 		await t.agent.searchDocuments("delete the report");
 
 		expect(t.requests).toHaveLength(1);
-		expect(t.requests[0]).toMatchObject({ kind: "approval", searchId: "run-1", call: `rm ${file}`, sessionScope: "all", categories: [] });
+		expect(t.requests[0]).toMatchObject({ kind: "approval", searchId: "run-1", call: `rm ${shellPath(file)}`, sessionScope: "all", categories: [] });
 		expect(existsSync(file)).toBe(true);
 		expect(t.results.find((result) => result.toolName === "bash")?.text).toMatch(/denied/i);
 	});

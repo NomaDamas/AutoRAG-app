@@ -171,7 +171,7 @@ describe("defaultLinkDirs", () => {
 		expect(defaultLinkDirs("/Users/me")).toEqual([
 			{ dir: "/opt/homebrew/bin", create: false, onPath: true },
 			{ dir: "/usr/local/bin", create: false, onPath: true },
-			{ dir: "/Users/me/.local/bin", create: true, onPath: false },
+			{ dir: join("/Users/me", ".local", "bin"), create: true, onPath: false },
 		]);
 	});
 });

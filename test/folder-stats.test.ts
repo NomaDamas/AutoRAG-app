@@ -199,7 +199,8 @@ describe("a folder with very many subfolders", () => {
 		} finally {
 			await rm(base, { recursive: true, force: true });
 		}
-	});
+		// 520 directories plus a survey of each: well over the 5 s default on NTFS.
+	}, 30_000);
 
 	it("counts every subfolder the report names as surveyed, so any of them can be proposed", async () => {
 		const base = await manySubfolders(120);
@@ -233,7 +234,8 @@ describe("folder_survey report", () => {
 
 	it("gives no verdict: nothing in the report says a folder should be left out", async () => {
 		const report = await createFolderSurvey([root], OPTIONS).report(root, LIVE);
-		const text = report.ok ? report.text : "";
+		// The report names the folder by path, and a temp directory on Windows lives under "AppData".
+		const text = (report.ok ? report.text : "").replaceAll(root, "<root>");
 
 		expect(text).not.toMatch(/criteria|series|sparse|appData|verdict|exclude|leave out/iu);
 	});
