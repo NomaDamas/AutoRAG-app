@@ -86,6 +86,10 @@ const server = createServer((req, res) => {
 			return;
 		}
 		const step = queue.shift() ?? { text: "(nothing scripted)" };
+		if (step.httpStatus) {
+			res.writeHead(step.httpStatus, { "content-type": "application/json" }).end(JSON.stringify(step.body));
+			return;
+		}
 		void (async () => {
 			res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
 			if (step.delayMs) await sleep(step.delayMs);
@@ -349,6 +353,49 @@ await pageTitle("Search Scope");
 check("the button opens the Settings page the agent named", true);
 await backToAiSearch();
 
+// ── 4b. The rest of the endings, for the report. ─────────────────────────
+script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "The folder is gone and nothing nearby looks like it, so I could not repair it.", nextSteps: ["Restore the folder, or choose another one in Search Scope."], openSettings: "scope" } }, { text: "done" }]);
+await fixButton("Fix with AI").click();
+await waitInDialog(dialog.getByText("Couldn’t fix it", { exact: true }));
+check("a 'cannot fix' result says so and still leads to the page that helps", (await dialog.getByRole("button", { name: /^Open ‘.+’ settings$/ }).count()) === 1);
+await shot("15-fix-cannot-fix");
+await page.keyboard.press("Escape");
+await dialog.waitFor({ state: "detached" });
+
+script([{ tool: "diagnose", args: {} }, { text: "I think it is fine." }]);
+await fixButton("Fix with AI").click();
+await waitInDialog(dialog.getByText("Couldn’t fix it with AI"));
+check("an agent that ends without an answer is a failure with a retry", (await dialog.getByRole("button", { name: "Retry" }).count()) === 1);
+await shot("16-fix-no-result");
+script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "Second try: nothing I can reach explains it.", nextSteps: [] } }, { text: "done" }]);
+await dialog.getByRole("button", { name: "Retry" }).click();
+await waitInDialog(dialog.getByText("Second try", { exact: false }));
+await shot("17-fix-retry-result");
+await page.keyboard.press("Escape");
+await dialog.waitFor({ state: "detached" });
+
+// The model goes down AFTER the agent already changed the config: the change is not hidden.
+script([
+	{ tool: "update_config", args: { updates: [{ path: ["searchPaths"], value: [DOCS] }] } },
+	{ httpStatus: 401, body: { error: { message: "Incorrect API key provided: qa-key." } } },
+]);
+await fixButton("Fix with AI").click();
+await waitInDialog(dialog.getByText("sign-in or key was rejected"));
+check("a change made before the model went down is still shown", (await dialog.innerText()).includes("searchPaths"));
+await shot("18-fix-changed-then-model-down");
+await page.keyboard.press("Escape");
+await dialog.waitFor({ state: "detached" });
+writeConfig([GONE]);
+
+// No model is chosen at all.
+const withoutModel = { ...configWith([DOCS]) };
+delete withoutModel.model;
+writeFileSync(CONFIG, `${JSON.stringify(withoutModel, null, 2)}\n`);
+await ask("question without any model");
+await notice.waitFor({ timeout: 90_000 });
+log(`no model → message shown: ${(await notice.innerText()).replace(/\s+/g, " ").slice(0, 300)}`);
+await shot("19-no-model");
+writeConfig([GONE]);
 // ── 5. The same screens in the other interface languages. ────────────────
 for (const [language, fixLabel, titleText] of [
 	["ko", "AI로 고치기", "문제가 생겼어요"],
