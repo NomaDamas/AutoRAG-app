@@ -34,6 +34,7 @@
 import { extname } from "node:path";
 import { realpath } from "node:fs/promises";
 import { EMBEDDED_THUMBNAIL_EXTENSIONS, readEmbeddedThumbnail } from "../preview/node/odf";
+import { GOOGLE_DRIVE_EXTENSIONS } from "../preview/shared/google-drive";
 import { errorMessage } from "./fs-entry";
 import { ICON_SIZE, iconUrl } from "./icon-protocol";
 import { extractVideoFrame, isVideoFrameExtension } from "./video-frame";
@@ -85,6 +86,10 @@ const NATIVE_THUMBNAIL_EXTENSIONS = new Set([
 	"doc", "dot", "ppt", "pps", "pot", "xls", "xlt",
 	// OpenDocument packages and `.potx` are not rendered by Quick Look; their
 	// tile is the first-page image the package embeds (`odf.ts`), on every platform.
+	// Google Drive's pointer files (.gdoc, .gsheet, .gslides, .gform, ...): Drive
+	// for desktop's file provider answers the OS thumbnailer with the document's
+	// first page. Where it has none the type icon (Docs, Sheets, ...) stands in.
+	...GOOGLE_DRIVE_EXTENSIONS,
 	// A macOS application bundle is a directory on disk, but Quick Look renders
 	// the app's own icon for it — at the listing tier and at the Inspector's
 	// 640px tier — so it takes this lane exactly like a document does.

@@ -72,6 +72,11 @@ export interface PreviewDocument {
 	readonly pages: readonly Uint8Array[] | null;
 	/** What macOS draws for a legacy Office file; null for every other document. */
 	readonly office: OfficePage | null;
+	/**
+	 * `autorag-thumb://` URL of the picture the OS drew for a Google Drive
+	 * pointer file (`.gdoc`, ...); null for every other document.
+	 */
+	readonly thumbnail: string | null;
 }
 
 /**
@@ -332,6 +337,7 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (typeof value.truncated !== "boolean") return false;
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
 	if (value.office !== null && !isOfficePage(value.office)) return false;
+	if (value.thumbnail !== null && typeof value.thumbnail !== "string") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }
 

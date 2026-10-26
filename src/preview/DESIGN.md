@@ -224,6 +224,21 @@ still has the previous file's size when they lay out.
   Finder's tile and Inspector thumbnails ask macOS Quick Look for the same
   extensions (`file-icon.ts`); Windows has no thumbnailer for them and shows
   the type icon.
+- **Google Drive documents** — `.gdoc`, `.gsheet`, `.gslides`, `.gform` (and
+  `.gdraw`, `.gmap`, `.gsite`, `.gjam`, `.gtable`, `.gscript`) are the ~170 byte
+  JSON pointers Drive for desktop shows instead of a cloud-only document
+  (`shared/google-drive.ts`: `doc_id`, `email`). The content is not on disk, so
+  the only picture is the thumbnail Drive's file provider draws for the OS:
+  the listing tile, the Inspector paper and the panel all ask the OS
+  thumbnailer for it (`file-icon.ts`), and the panel's main process attaches it
+  as `PreviewDocument.thumbnail` (`node/google-drive.ts`: the cached tier an
+  earlier selection made, else a fresh one, given up on after 2 s so Space never
+  waits on the network). The `gdrive` viewer is the "Other" panel with that
+  picture in place of the page glyph and "Google account: <email>" as its note;
+  the toolbar's Open hands the pointer to Drive, which opens the document in
+  the browser. Drive supplies a 128px square whatever size is asked, so the
+  Inspector and panel show it enlarged. Where Drive has drawn nothing the OS
+  type icon (macOS) or the page glyph stays.
 
 - **Databases and data files** — `.sqlite`, `.sqlite3`, `.db`, and `.parquet`
   (`data` viewer, `byteNeed` `query`) send no file bytes to the page. The

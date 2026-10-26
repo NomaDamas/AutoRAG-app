@@ -171,9 +171,6 @@ export function PlanPage(): ReactElement {
 				<Row name={t("settingsCore.account.resetsAt")}>
 					<span className="settings-value">{account === null ? t("settingsCore.common.unknown") : reset.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>
 				</Row>
-				<Row name={t("settingsCore.account.requestLimit")}>
-					<span className="settings-value">{account === null ? t("settingsCore.common.unknown") : t("settingsCore.account.requestsPerMinute", { count: account.requestsPerMinute })}</span>
-				</Row>
 			</Section>
 		</>
 	);

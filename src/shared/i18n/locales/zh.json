@@ -642,9 +642,9 @@
       "eyebrow": "Pro 7 天免费试用",
       "title": "直接向\n文件提问",
       "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
-      "note": "默认在本地处理。需要远程处理时，我们会先显示哪些内容将被发送。",
-      "usageStats": "发送匿名使用统计以帮助改进 Dazzi。不包含文件、搜索词或文档内容，可随时在设置中关闭。",
-      "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。不包含文件路径、文件名和文档内容，可随时在设置中更改。",
+      "note": "默认在本地处理。部分功能在使用时，内容可能会发送到 Dazzi 服务器或模型提供方。详情请参阅隐私政策。",
+      "usageStats": "发送匿名使用统计以帮助改进 Dazzi。统计在设计上不包含文件、搜索词或文档内容，可随时在设置中关闭。",
+      "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。报告在设计上不包含文件路径、文件名和文档内容，可随时在设置中更改。",
       "usageStatsPolicy": "隐私政策",
       "chat": {
         "user": "上一季度的成本为什么下降了？",
@@ -697,7 +697,7 @@
     "account": {
       "eyebrow": "账户",
       "title": "用账户\n开始使用",
-      "lead": "只有套餐和用量与账户关联。文件和索引保留在这台 Mac 上。",
+      "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
       "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
       "signedIn": "已登录",
       "signedInNote": "正在进入下一步",
@@ -931,7 +931,7 @@
           "name": "Max",
           "price": "$200",
           "note": "每月 $200 · 随时取消",
-          "tag": "Pro 的 10 倍额度"
+          "tag": "适合重度使用"
         },
         "byok": {
           "name": "BYOK",
@@ -1303,7 +1303,7 @@
       "no": "否"
     },
     "search": {
-      "quotaExhausted": "本周的 Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。"
+      "quotaExhausted": "Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。"
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
@@ -1429,7 +1429,7 @@
         },
         "local": {
           "label": "本机(MinSync 本地服务器)",
-          "description": "Dazzi 运行期间,在本机运行 MinSync 嵌入服务器。文档不会离开本机。"
+          "description": "Dazzi 运行期间,在本机运行 MinSync 嵌入服务器。嵌入时不会将文档发送到外部。"
         },
         "dazzi": {
           "label": "Dazzi 云",
@@ -1653,6 +1653,10 @@
       "drawFailed": "无法绘制幻灯片",
       "noPreview": "此文档没有预览图片",
       "page": "第 {{count}} 页"
+    },
+    "gdrive": {
+      "account": "Google 账号：{{email}}",
+      "notPointer": "此文件不是有效的 Google 云端硬盘快捷方式"
     },
     "media": {
       "imageOpenFailed": "无法打开图片",
@@ -1911,17 +1915,15 @@
       "managedName": "使用托管模型",
       "managedHint": "AI 搜索使用此账户的模型。",
       "useManaged": "设为账户模型",
-      "planDescription": "当前套餐和本周 AI 用量。",
+      "planDescription": "当前套餐和 AI 用量。",
       "currentPlan": "当前套餐",
       "trialing": " · 试用中",
       "cancelScheduled": "已预约取消。在 {{date}} 之前仍可使用当前套餐。",
       "pastDue": "支付失败。请在结算门户中检查支付方式。",
-      "usageTitle": "本周用量",
+      "usageTitle": "用量",
       "usageName": "AI 用量",
-      "usageMeterAria": "每周额度使用量",
+      "usageMeterAria": "额度使用量",
       "usageUnavailable": "无法加载用量",
-      "requestLimit": "请求上限",
-      "requestsPerMinute": "每分钟 {{count}} 次",
       "legal": {
         "title": "条款与政策",
         "terms": "服务条款",
@@ -2057,7 +2059,7 @@
     },
     "embedding": {
       "title": "文档理解模型",
-      "hint": "分析文档含义。选择本机时,文档不会离开本机。",
+      "hint": "分析文档含义。选择本机时,嵌入时不会将文档发送到外部。",
       "body": "选择分析文档含义的嵌入模型在哪里运行。模型固定为 Qwen3 Embedding 0.6B,任何会将文档内容发送到本机之外的选择都需要您同意。",
       "dimension": "{{count}} 维",
       "applied": "已应用。",
@@ -2570,7 +2572,7 @@
     "file": "正在下载 {{file}}",
     "keepOpen": "下载完成前请保持 Dazzi 打开。即使中断,也可以从中断处继续。",
     "ready": "模型已就绪",
-    "readyDetail": "模型已在这台电脑上。你的文档不会离开这台电脑。",
+    "readyDetail": "模型已在这台电脑上。嵌入时不会将文档发送到外部。",
     "failed": "下载已中断",
     "indexingTitle": "正在下载嵌入模型",
     "indexingNote": "下载完成后会自动开始首次建立索引。"
