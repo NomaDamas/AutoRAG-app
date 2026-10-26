@@ -715,7 +715,8 @@
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
       "agreeUse": "Acceptable Use",
-      "planLabel": "{{plan}} plan"
+      "planLabel": "{{plan}} plan",
+      "leadPc": "Your plan and usage are tied to your account. Your files and search index are stored on this PC."
     },
     "permissions": {
       "eyebrow": "Permissions",
@@ -779,7 +780,8 @@
       "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
       "localEta": "Local (this Mac) · ~{{minutes}} min",
       "cloudEta": "Remote · ~{{minutes}} min",
-      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner."
+      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
+      "localEtaPc": "Local (this PC) · ~{{minutes}} min"
     },
     "smartScope": {
       "policy": {
@@ -2046,7 +2048,8 @@
         "baseUrl": "Server URL",
         "apiKeyOptional": "API Key (optional)",
         "optionalPlaceholder": "Optional",
-        "saved": "Saved {{name}}."
+        "saved": "Saved {{name}}.",
+        "bodyLocalPc": "You can only connect servers running on this PC, such as Ollama or LM Studio."
       },
       "loginModal": {
         "openManually": "If the browser doesn't open, open the address below yourself.",
@@ -2078,7 +2081,8 @@
       "apiKeyPlaceholder": "Leave empty to use the stored key",
       "apiKeyHint": "The key is stored in this Mac's secure keychain and never written to the config file.",
       "consentRemote": "I agree that document text is sent to a server off this computer",
-      "signInNote": "The Dazzi cloud needs a Dazzi account sign-in. Sign in from the account settings first."
+      "signInNote": "The Dazzi cloud needs a Dazzi account sign-in. Sign in from the account settings first.",
+      "apiKeyHintPc": "The key is stored in this PC's secure credential store and never written to the config file."
     },
     "language": {
       "remove": "Remove {{name}}",

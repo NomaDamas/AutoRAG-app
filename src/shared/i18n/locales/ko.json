@@ -715,7 +715,8 @@
       "agreeTerms": "이용약관",
       "agreePrivacy": "개인정보처리방침",
       "agreeUse": "수용 가능한 사용 정책",
-      "planLabel": "{{plan}} 플랜"
+      "planLabel": "{{plan}} 플랜",
+      "leadPc": "플랜과 사용량은 계정에 연결됩니다. 파일과 검색 인덱스는 이 PC에 저장됩니다."
     },
     "permissions": {
       "eyebrow": "권한",
@@ -779,7 +780,8 @@
       "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
       "localEta": "로컬 (이 Mac) 약 {{minutes}}분",
       "cloudEta": "원격 약 {{minutes}}분",
-      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다."
+      "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다.",
+      "localEtaPc": "로컬 (이 PC) 약 {{minutes}}분"
     },
     "smartScope": {
       "policy": {
@@ -2046,7 +2048,8 @@
         "baseUrl": "서버 주소",
         "apiKeyOptional": "API 키 (선택)",
         "optionalPlaceholder": "선택 사항",
-        "saved": "{{name}}을(를) 저장했습니다."
+        "saved": "{{name}}을(를) 저장했습니다.",
+        "bodyLocalPc": "Ollama, LM Studio처럼 이 PC에서 실행 중인 서버만 연결할 수 있습니다."
       },
       "loginModal": {
         "openManually": "브라우저가 열리지 않으면 아래 주소를 직접 여세요.",
@@ -2078,7 +2081,8 @@
       "apiKeyPlaceholder": "비워 두면 저장된 키를 사용합니다",
       "apiKeyHint": "키는 이 Mac의 보안 키체인에 저장되며 설정 파일에는 기록되지 않습니다.",
       "consentRemote": "문서 내용이 이 컴퓨터 밖의 서버로 전송되는 것에 동의합니다",
-      "signInNote": "Dazzi 클라우드는 Dazzi 계정 로그인이 필요합니다. 계정 설정에서 먼저 로그인하세요."
+      "signInNote": "Dazzi 클라우드는 Dazzi 계정 로그인이 필요합니다. 계정 설정에서 먼저 로그인하세요.",
+      "apiKeyHintPc": "키는 이 PC의 안전한 자격 증명 저장소에 보관되며 설정 파일에는 기록되지 않습니다."
     },
     "language": {
       "remove": "{{name}} 제거",

@@ -20,7 +20,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
-import { homeDir, rmRetry } from "./platform.mjs";
+import { homeDir, isWindows, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -218,6 +218,9 @@ try {
 	check("account step", (await heading()).includes("계정"));
 	check("signing in is gated until an account exists", await primary.isDisabled());
 	await shot("03-account");
+	// Where the files live is said in the machine's own words: "이 Mac" on a Mac, "이 PC" on Windows.
+	const accountLead = await page.locator(".onb .screen-copy p").first().innerText();
+	check("the account step names this machine, not another OS's", isWindows ? accountLead.includes("이 PC") && !accountLead.includes("Mac") : accountLead.includes("이 Mac"), accountLead);
 	await page.locator(".onb .auth-card .action-row button.secondary").click();
 
 	// model: BYOK connects its model before any folder is scanned, because the smart scan runs on it.
@@ -273,6 +276,8 @@ try {
 	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
 	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
 	await shot("04-folders");
+	const etaText = await page.locator(".onb .eta-row").first().innerText();
+	check("the local ETA names this machine, not another OS's", isWindows ? etaText.includes("이 PC") && !etaText.includes("Mac") : etaText.includes("이 Mac"), etaText);
 	await primary.click();
 
 	// smart scan: the AI looks through the folders just chosen, on the model connected before them.

@@ -715,7 +715,8 @@
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
       "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐"
+      "planLabel": "{{plan}} 套餐",
+      "leadPc": "套餐和用量与账户关联。文件和搜索索引保存在这台电脑上。"
     },
     "permissions": {
       "eyebrow": "权限",
@@ -779,7 +780,8 @@
       "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
       "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
       "cloudEta": "远程 约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。"
+      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
+      "localEtaPc": "本地 (此电脑) 约 {{minutes}} 分钟"
     },
     "smartScope": {
       "policy": {
@@ -2046,7 +2048,8 @@
         "baseUrl": "服务器地址",
         "apiKeyOptional": "API 密钥 (可选)",
         "optionalPlaceholder": "可选",
-        "saved": "已保存 {{name}}。"
+        "saved": "已保存 {{name}}。",
+        "bodyLocalPc": "只能连接在此电脑上运行的服务器，例如 Ollama、LM Studio。"
       },
       "loginModal": {
         "openManually": "如果浏览器没有打开，请手动打开下面的地址。",
@@ -2078,7 +2081,8 @@
       "apiKeyPlaceholder": "留空则使用已保存的密钥",
       "apiKeyHint": "密钥保存在本机的安全钥匙串中,不会写入配置文件。",
       "consentRemote": "我同意将文档内容发送到本机之外的服务器",
-      "signInNote": "Dazzi 云需要登录 Dazzi 账户。请先在账户设置中登录。"
+      "signInNote": "Dazzi 云需要登录 Dazzi 账户。请先在账户设置中登录。",
+      "apiKeyHintPc": "密钥保存在这台电脑的安全凭据存储中，不会写入配置文件。"
     },
     "language": {
       "remove": "移除 {{name}}",
