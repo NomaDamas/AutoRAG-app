@@ -25,7 +25,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, delimiter } from "node:path";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
 
 const REAL_API = "https://api.dazziapp.com";
@@ -126,7 +126,7 @@ const env = {
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
 	ELECTRON_RENDERER_URL: "",
 	AUTORAG_PERMISSION_MODE: "",
-	PATH: `${join(AUTORAG_HOME, "bin")}:${process.env.PATH ?? ""}`,
+	PATH: `${join(AUTORAG_HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
 	OPENROUTER_API_KEY: OPENROUTER_MODEL === "" ? "" : TOKEN,
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",

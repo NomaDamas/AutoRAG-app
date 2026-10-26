@@ -151,7 +151,7 @@ try {
 			},
 			[width, height],
 		);
-		await page.waitForFunction(([w]) => Math.abs(window.outerWidth - w) <= 1, [width], { timeout: 5000 });
+		await page.waitForFunction(([w]) => Math.abs(window.innerWidth - w) <= 1, [width], { timeout: 5000 });
 		await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 	};
 

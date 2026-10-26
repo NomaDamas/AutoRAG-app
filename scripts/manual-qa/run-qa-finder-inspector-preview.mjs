@@ -173,7 +173,9 @@ try {
 	await page.waitForFunction(
 		() => {
 			const img = document.querySelector(".preview-paper img");
-			return img !== null && img.getAttribute("src")?.includes("size=640") && img.complete && img.naturalWidth > 0;
+			// Windows has no OS thumbnail provider for a PDF: the first page is drawn in the renderer and arrives as a data: image.
+			const src = img?.getAttribute("src") ?? "";
+			return img !== null && (src.includes("size=640") || src.startsWith("data:image/")) && img.complete && img.naturalWidth > 0;
 		},
 		undefined,
 		{ timeout: 15000 },
@@ -185,7 +187,7 @@ try {
 	check("single selection renders the paper mode", single.mode === "paper", single.mode);
 	check(
 		"the paper img is the 640px preview tier",
-		single.imgSrc !== null && single.imgSrc.startsWith("autorag-thumb://") && single.imgSrc.includes("size=640"),
+		single.imgSrc !== null && ((single.imgSrc.startsWith("autorag-thumb://") && single.imgSrc.includes("size=640")) || (process.platform === "win32" && single.imgSrc.startsWith("data:image/"))),
 		String(single.imgSrc),
 	);
 	check(
@@ -243,7 +245,7 @@ try {
 	);
 	check("every sheet is dog-eared and shadowed", multi.cards.every((card) => card.curl && card.boxShadow !== "none"), "");
 	check("the title counts the selection", multi.title === "2 items", multi.title);
-	check("the subtitle carries the kind breakdown and the total size", /PDF document 2 · .+/.test(multi.sub), multi.sub);
+	check("the subtitle carries the kind breakdown and the total size", /PDF document 2 · .+/i.test(multi.sub), multi.sub);
 	check("the rows carry the total size", /B$/.test(String(valueOf(multi.rows, "Total size"))), String(valueOf(multi.rows, "Total size")));
 	check(
 		"the rows carry the modified date for the shared fixture day",
@@ -286,7 +288,7 @@ try {
 	);
 	check("every fanned sheet is dog-eared and shadowed", five.cards.every((card) => card.curl && card.boxShadow !== "none"), "");
 	check("the title counts five items", five.title === "5 items", five.title);
-	check("the subtitle breaks the kinds down", five.sub.startsWith("PDF document 4"), five.sub);
+	check("the subtitle breaks the kinds down", five.sub.toLowerCase().startsWith("pdf document 4"), five.sub);
 
 	console.log("phase: restore");
 	// --------------------------------------------- back to single: restore

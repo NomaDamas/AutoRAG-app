@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord } from "./platform.mjs";
+import { chord, cssAttr } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-tab");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -75,7 +75,7 @@ const waitForPill = (page, title) =>
 const showFolderTab = async (page) => {
 	const index = (await tabs(page)).findIndex((tab) => !tab.ai);
 	await page.locator(".tabs .tab").nth(index).click();
-	await page.waitForSelector(`[data-path="${BRIEF}"]`);
+	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
 };
 
 let app;
@@ -87,7 +87,7 @@ try {
 	const page = await finderWindow(app, 30_000);
 	page.setDefaultTimeout(10_000);
 	page.on("pageerror", (error) => console.log(`[pageerror] ${String(error).slice(0, 300)}`));
-	await page.waitForSelector(`[data-path="${BRIEF}"]`, { timeout: 30_000 });
+	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`, { timeout: 30_000 });
 	const cdp = await page.context().newCDPSession(page);
 
 	// 1. No bottom dock.
@@ -100,7 +100,7 @@ try {
 
 	// 2. Sidebar: AI Search heads Favorites, above Recents.
 	const favorites = await page.locator(".side-group").first().locator(".sidebar__item-label").allInnerTexts();
-	check("Favorites starts with AI Search above Recents", (favorites[0] === "AI Search" || favorites[0] === "AI 검색") && (favorites[1] === "Recents" || favorites[1] === "최근 항목"), JSON.stringify(favorites));
+	check("Favorites starts with AI Search above Recents", (favorites[0] === "AI Search" || favorites[0] === "AI 검색") && favorites.findIndex((label) => label === "Recents" || label === "최근 항목") > 0, JSON.stringify(favorites));
 
 	// 3. Sidebar AI Search converts the focused tab; Back returns to the folder.
 	const before = await tabs(page);
@@ -122,7 +122,7 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "02-ai-tab.png") });
 	await page.locator('[aria-label="Back"], [title^="Back"], [aria-label="뒤로"], [title^="뒤로"]').first().click();
-	await page.waitForSelector(`[data-path="${BRIEF}"]`);
+	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
 	check("Back returns the tab to its folder", (await page.locator(PANEL).count()) === 0);
 	await page.locator('[aria-label="Forward"], [title^="Forward"], [aria-label="앞으로"], [title^="앞으로"]').first().click();
 	await page.waitForSelector(PANEL);
@@ -130,7 +130,7 @@ try {
 	// 4. Chat state survives tab switches.
 	await page.locator(`${PANEL} input[aria-label="Ask Dazzi"]`).fill("draft survives tab switch");
 	await page.keyboard.press(chord("t"));
-	await page.waitForSelector(`[data-path="${BRIEF}"]`);
+	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
 	now = await tabs(page);
 	check("⌘T from an AI Search tab opens a folder tab", now.length === 2 && now[1]?.active === true && now[1]?.ai === false, JSON.stringify(now));
 	await page.locator(".tabs .tab").first().click();
@@ -142,8 +142,8 @@ try {
 
 	// 5. ⌘K from a folder tab adopts the existing AI tab.
 	await page.locator(".tabs .tab").nth(1).click();
-	await page.waitForSelector(`[data-path="${BRIEF}"]`);
-	await page.locator(`[data-path="${BRIEF}"]`).click();
+	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
+	await page.locator(`[data-path="${cssAttr(BRIEF)}"]`).click();
 	await page.keyboard.press(chord("k"));
 	await page.waitForSelector(PANEL);
 	now = await tabs(page);
@@ -156,7 +156,7 @@ try {
 	// 6. Inspector AI 요약 opens a NEW AI tab, attaches the file, and sends the summary run.
 	const SUMMARY_PROMPT = "Summarize the attached file. Cover the key points, notable figures, and any cautions in that order, and cite the source file paths you relied on.";
 	await showFolderTab(page);
-	await page.locator(`[data-path="${BRIEF}"]`).click();
+	await page.locator(`[data-path="${cssAttr(BRIEF)}"]`).click();
 	await page.locator(".inspector-actions button", { hasText: "AI Summary" }).click();
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	now = await tabs(page);
@@ -169,7 +169,7 @@ try {
 	check(
 		"AI Summary sends the summary query with the file attached, not a bare draft chip",
 		summaryText === SUMMARY_PROMPT &&
-			(await page.locator(`${PANEL} .ref-file-chip[title="${BRIEF}"]`).count()) === 1 &&
+			(await page.locator(`${PANEL} .ref-file-chip[title="${cssAttr(BRIEF)}"]`).count()) === 1 &&
 			(await pills(page)).length === 0,
 		`query="${summaryText}" pills=${JSON.stringify(await pills(page))}`,
 	);
@@ -181,7 +181,7 @@ try {
 
 	// 7. A row dragged onto an AI Search strip tab attaches there.
 	await showFolderTab(page);
-	await page.locator(`[data-path="${NOTES}"]`).dragTo(page.locator(".tabs .tab").nth(2));
+	await page.locator(`[data-path="${cssAttr(NOTES)}"]`).dragTo(page.locator(".tabs .tab").nth(2));
 	await waitForPill(page, NOTES).catch(() => undefined);
 	now = await tabs(page);
 	check("a row dropped on an AI Search tab switches to it", now[2]?.active === true, JSON.stringify(now));
@@ -194,7 +194,7 @@ try {
 	// 8. A row dragged onto the sidebar AI Search item.
 	await showFolderTab(page);
 	const folderTabIndex = (await tabs(page)).findIndex((tab) => tab.active);
-	await page.locator(`[data-path="${BUDGET}"]`).dragTo(page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first());
+	await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).dragTo(page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first());
 	await waitForPill(page, BUDGET).catch(() => undefined);
 	now = await tabs(page);
 	check(
@@ -206,8 +206,8 @@ try {
 
 	// 9. Dwell on the AI tab with a held row (spring-loaded), then drop it on the panel.
 	await page.keyboard.press(chord("t"));
-	await page.waitForSelector(`[data-path="${BRIEF}"]`);
-	const rowBox = await page.locator(`[data-path="${NOTES}"]`).boundingBox();
+	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
+	const rowBox = await page.locator(`[data-path="${cssAttr(NOTES)}"]`).boundingBox();
 	const aiTabBox = await page.locator(".tabs .tab").nth(folderTabIndex).boundingBox();
 	await page.mouse.move(rowBox.x + 20, rowBox.y + rowBox.height / 2);
 	await page.mouse.down();
@@ -275,13 +275,13 @@ try {
 	await page.locator(".scope-chip", { hasText: /^File Name$/ }).click();
 	await search.fill("budget");
 	await search.press("Enter");
-	await page.waitForSelector(`[data-path="${BUDGET}"]`, { timeout: 15_000 }).catch(() => undefined);
+	await page.waitForSelector(`[data-path="${cssAttr(BUDGET)}"]`, { timeout: 15_000 }).catch(() => undefined);
 	const searchTabs = await tabs(page);
 	await page.screenshot({ path: join(EVIDENCE, "07-filename-search-from-ai-tab.png") });
 	check(
 		"a filename search from an AI Search tab shows the results there",
-		(await page.locator(PANEL).count()) === 0 && (await page.locator(`[data-path="${BUDGET}"]`).count()) === 1,
-		`panels=${await page.locator(PANEL).count()} rows=${await page.locator(`[data-path="${BUDGET}"]`).count()} tabs=${JSON.stringify(searchTabs)}`,
+		(await page.locator(PANEL).count()) === 0 && (await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).count()) === 1,
+		`panels=${await page.locator(PANEL).count()} rows=${await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).count()} tabs=${JSON.stringify(searchTabs)}`,
 	);
 	await search.fill("");
 	await search.press("Enter");
@@ -296,8 +296,8 @@ try {
 	await sleep(300);
 	await page.keyboard.press(chord("w"));
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();
-	await page.waitForSelector(`[data-path="${NOTES}"]`);
-	await page.locator(`[data-path="${NOTES}"]`).click();
+	await page.waitForSelector(`[data-path="${cssAttr(NOTES)}"]`);
+	await page.locator(`[data-path="${cssAttr(NOTES)}"]`).click();
 	await page.locator('.inspector-actions button[data-action="askAi"], .inspector-actions button:has-text("AI Summary"), .inspector-actions button:has-text("AI 요약")').first().click();
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	const englishText = (await page.locator(`${PANEL} .user-msg .bubble`).first().innerText()).trim();

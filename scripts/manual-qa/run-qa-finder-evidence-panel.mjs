@@ -71,7 +71,8 @@ process.on("exit", () => sweep(false));
 
 mkdirSync(join(USER_DATA, "chat-history"), { recursive: true });
 mkdirSync(DOCS, { recursive: true });
-writeFileSync(POLICY.normalize("NFD"), "## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 임원 승인이 필요합니다.\n비고: 긴급 예외도 승인 생략 불가.\n");
+// Only the file name is decomposed (macOS stores NFD names); normalizing the whole path would also rewrite a Hangul home folder.
+writeFileSync(join(DOCS, basename(POLICY).normalize("NFD")), "## 승인 규칙\n1. 일반 환불은 5영업일 내 처리합니다.\n2. 예외는 임원 승인이 필요합니다.\n비고: 긴급 예외도 승인 생략 불가.\n");
 const memoPdf = await PDFDocument.create();
 const memoFont = await memoPdf.embedFont(StandardFonts.Helvetica);
 memoPdf.addPage([600, 800]).drawText("Cover page — general overview of the approval process.", { x: 72, y: 700, size: 14, font: memoFont });

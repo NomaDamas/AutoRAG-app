@@ -53,6 +53,9 @@ export async function launchFinder({
 			...process.env,
 			...(onboarding ? {} : { AUTORAG_SKIP_ONBOARDING: "1" }),
 			...env,
+			// Windows resolves the home from USERPROFILE, not HOME: a lane that sets only HOME would
+			// otherwise drive the real profile's folders.
+			...(process.platform === "win32" && env?.HOME !== undefined && env.USERPROFILE === undefined ? { USERPROFILE: env.HOME } : {}),
 		},
 	});
 }

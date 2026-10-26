@@ -15,6 +15,7 @@ import { basename, join } from "node:path";
 import { deflateSync } from "node:zlib";
 import { zipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { convertImage } from "./platform.mjs";
 
 const EVIDENCE = process.argv[2] ?? "/tmp/autorag-quicklook-keynote";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -94,7 +95,7 @@ const jpegs = SLIDES.map(({ digit, background }, index) => {
 	const pngPath = join(root, `slide${index + 1}.png`);
 	const jpegPath = join(root, `slide${index + 1}.jpg`);
 	writeFileSync(pngPath, slidePng(digit, background));
-	execFileSync("sips", ["-s", "format", "jpeg", pngPath, "--out", jpegPath], { stdio: "ignore" });
+	convertImage(pngPath, jpegPath);
 	rmSync(pngPath);
 	return new Uint8Array(readFileSync(jpegPath));
 });

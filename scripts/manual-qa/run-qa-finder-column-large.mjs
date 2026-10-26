@@ -34,7 +34,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord, sleep } from "./platform.mjs";
+import { chord, sleep, cssAttr } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-column-large");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -64,7 +64,7 @@ const check = (label, ok, detail) => {
 	console.log(`${ok ? "PASS" : "FAIL"}  ${label}${detail === undefined ? "" : ` :: ${detail}`}`);
 };
 
-const pane = (page) => page.locator(`.column[data-path="${BIG.replaceAll('"', '\\"')}"]`);
+const pane = (page) => page.locator(`.column[data-path="${cssAttr(BIG)}"]`);
 
 const runs = [];
 try {
@@ -104,10 +104,10 @@ try {
 				);
 
 			await page.locator(".sidebar__item", { hasText: "QA" }).click();
-			await page.locator(`[data-path="${BIG}"]`).first().waitFor();
+			await page.locator(`[data-path="${cssAttr(BIG)}"]`).first().waitFor();
 			await page.keyboard.press(chord("3"));
 			await page.waitForSelector(".column");
-			const folderRow = page.locator(`.column-row[data-path="${BIG}"]`);
+			const folderRow = page.locator(`.column-row[data-path="${cssAttr(BIG)}"]`);
 			await folderRow.waitFor();
 			await sleep(3000);
 
@@ -132,7 +132,7 @@ try {
 			await page.screenshot({ path: join(EVIDENCE, `open-${run + 1}.png`) });
 
 			// Arrow keys: focus the first row, then step down KEYS times.
-			await pane(page).locator(`.column-row[aria-label="${FIRST}"]`).click();
+			await pane(page).locator(`.column-row[aria-label="${cssAttr(FIRST)}"]`).click();
 			await frames();
 			const keysBefore = await metric("TaskDuration");
 			for (let key = 0; key < KEYS; key += 1) {
@@ -147,17 +147,17 @@ try {
 				element.scrollTop = element.scrollHeight;
 			});
 			await frames(3);
-			const lastMounted = (await pane(page).locator(`.column-row[aria-label="${LAST}"]`).count()) === 1;
+			const lastMounted = (await pane(page).locator(`.column-row[aria-label="${cssAttr(LAST)}"]`).count()) === 1;
 			const mountedAtEnd = await pane(page).locator(".column-row").count();
 
 			// Reveal: focus the last row, scroll the pane back to the top (focus is
 			// not mounted), then ArrowUp must bring the new focus into view.
-			await pane(page).locator(`.column-row[aria-label="${LAST}"]`).click();
+			await pane(page).locator(`.column-row[aria-label="${cssAttr(LAST)}"]`).click();
 			await pane(page).evaluate((element) => {
 				element.scrollTop = 0;
 			});
 			await frames(3);
-			const focusUnmounted = (await pane(page).locator(`.column-row[aria-label="${LAST}"]`).count()) === 0;
+			const focusUnmounted = (await pane(page).locator(`.column-row[aria-label="${cssAttr(LAST)}"]`).count()) === 0;
 			await page.keyboard.press("ArrowUp");
 			await frames(3);
 			const revealed = await page.evaluate((dir) => {

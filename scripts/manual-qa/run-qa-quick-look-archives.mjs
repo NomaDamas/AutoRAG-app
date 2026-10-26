@@ -14,6 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { strToU8, zipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { convertImage } from "./platform.mjs";
 
 const EVIDENCE = process.argv[2] ?? "/tmp/autorag-quicklook-archives";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -23,7 +24,7 @@ const root = mkdtempSync(join(tmpdir(), "autorag-ql-archives-"));
 const seedPath = join(root, "seed.png");
 const jpegPath = join(root, "page.jpg");
 writeFileSync(seedPath, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
-execFileSync("sips", ["-z", "360", "640", "-s", "format", "jpeg", seedPath, "--out", jpegPath], { stdio: "ignore" });
+convertImage(seedPath, jpegPath, { width: 640, height: 360 });
 const page = new Uint8Array(readFileSync(jpegPath));
 rmSync(seedPath);
 rmSync(jpegPath);
@@ -115,7 +116,7 @@ try {
 	await open("bundle.zip", () => document.querySelector(".ql-archive__name")?.textContent === "bundle.zip");
 	check("zip shows the folder-style header", ((await preview.locator(".ql-archive").textContent()) ?? "").includes("ZIP archive"));
 	const zipCount = (await preview.locator(".ql-archive__count").textContent()) ?? "";
-	check("zip counts top-level items, not every entry", zipCount.startsWith("6 items, "), zipCount);
+	check("zip counts top-level items, not every entry", /^6(\s?items|개 항목),? /u.test(zipCount), zipCount);
 	const zipItems = await texts(".ql-archive__items > div > span");
 	check("zip lists newest top-level children first, forks hidden", JSON.stringify(zipItems) === JSON.stringify(["src", "README.md", "photo.png", "data.csv", "report.pdf", "notes.txt"]), JSON.stringify(zipItems));
 	const zipBounds = (await bounds())?.bounds;

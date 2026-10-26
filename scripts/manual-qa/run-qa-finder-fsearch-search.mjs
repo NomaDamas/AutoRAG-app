@@ -19,6 +19,11 @@ import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
  *
  * Run `bun run build` first. Evidence lands in the ignored `.omo/` tree.
  */
+
+if (process.platform === "win32") {
+	console.log("SKIP fsearch-cli instant search is the macOS/Linux name index; Windows uses Everything");
+	process.exit(0);
+}
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-fsearch-search");
 mkdirSync(EVIDENCE, { recursive: true });
 

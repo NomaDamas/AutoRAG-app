@@ -25,7 +25,7 @@
  */
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { cssAttr } from "./platform.mjs";
 
@@ -123,7 +123,7 @@ async function launch(language, name) {
 			AUTORAG_QA_ROOT: QA_ROOT,
 			AUTORAG_SKIP_DUPEY_CHECK: "1",
 			ELECTRON_RENDERER_URL: "",
-			PATH: `${join(HOME, "bin")}:${process.env.PATH ?? ""}`,
+			PATH: `${join(HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
 		},
 	});
 	const page = await finderWindow(app, 30_000);

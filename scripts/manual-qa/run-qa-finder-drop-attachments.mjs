@@ -21,7 +21,7 @@ import { appendFileSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFile
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
-import { chord, isMac } from "./platform.mjs";
+import { chord, isMac, cssAttr } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo", "evidence", "ai-finder-app", "qa-drop-attachments");
 const RUN_TIMEOUT_MS = 240_000;
@@ -109,7 +109,7 @@ async function pills(page) {
 /** Show the folder tab, so the Finder rows are on screen to drag. */
 async function showRows(page) {
 	await page.locator(FOLDER_TAB).first().click();
-	await page.waitForSelector(`[data-path="${SECRET}"]`);
+	await page.waitForSelector(`[data-path="${cssAttr(SECRET)}"]`);
 }
 
 async function clearPills(page) {
@@ -146,15 +146,15 @@ try {
 	});
 	const page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
-	await page.waitForSelector(`[data-path="${SECRET}"]`, { timeout: 30_000 });
+	await page.waitForSelector(`[data-path="${cssAttr(SECRET)}"]`, { timeout: 30_000 });
 	const cdp = await page.context().newCDPSession(page);
 	// One AI Search tab beside the folder tab: AI Search, then ⌘T back to rows.
 	await openAiSearch(page);
 	await page.keyboard.press(chord("t"));
-	await page.waitForSelector(`[data-path="${SECRET}"]`);
+	await page.waitForSelector(`[data-path="${cssAttr(SECRET)}"]`);
 
 	// 1. One Finder row dragged onto the AI Search strip tab.
-	await page.locator(`[data-path="${SECRET}"]`).dragTo(page.locator(AI_TAB));
+	await page.locator(`[data-path="${cssAttr(SECRET)}"]`).dragTo(page.locator(AI_TAB));
 	await waitForPill(page, SECRET).catch(() => undefined);
 	let current = await pills(page);
 	check("finder row drag onto the AI Search tab attaches its path", current.some((pill) => pill.title === SECRET), JSON.stringify(current));
@@ -163,9 +163,9 @@ try {
 	// 2. A two-row selection dragged by one of its rows onto the sidebar item carries both.
 	await clearPills(page);
 	await showRows(page);
-	await page.click(`[data-path="${SECRET}"]`);
-	await page.click(`[data-path="${NOTES}"]`, { modifiers: ["Meta"] });
-	await page.locator(`[data-path="${NOTES}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Search" }));
+	await page.click(`[data-path="${cssAttr(SECRET)}"]`);
+	await page.click(`[data-path="${cssAttr(NOTES)}"]`, { modifiers: ["Meta"] });
+	await page.locator(`[data-path="${cssAttr(NOTES)}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Search" }));
 	await waitForPill(page, NOTES).catch(() => undefined);
 	current = await pills(page);
 	check(

@@ -28,7 +28,7 @@
 import { spawnSync } from "node:child_process";
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, delimiter } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { cssAttr, homeEnv } from "./platform.mjs";
 
@@ -213,7 +213,7 @@ const app = await launchFinder({
 		FASTEMBED_CACHE_DIR: MODEL_CACHE,
 		AUTORAG_SKIP_DUPEY_CHECK: "1",
 		ELECTRON_RENDERER_URL: "",
-		PATH: `${join(HOME, "bin")}:${process.env.PATH ?? ""}`,
+		PATH: `${join(HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
 		OPENROUTER_API_KEY: "",
 		OPENAI_API_KEY: "",
 		ANTHROPIC_API_KEY: "",

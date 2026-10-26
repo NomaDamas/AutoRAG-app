@@ -16,9 +16,9 @@
  *     no-op where the macOS tool does not exist
  */
 
-import { execSync } from "node:child_process";
-import { copyFileSync, rmSync, symlinkSync } from "node:fs";
-import { homedir } from "node:os";
+import { execFileSync, execSync } from "node:child_process";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { basename, delimiter, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -157,4 +157,42 @@ export function isolatedToolPath(binDir) {
 	else symlinkSync(found, target);
 	const system = isWindows ? [join(process.env.SystemRoot ?? "C:\\Windows", "System32"), process.env.SystemRoot ?? "C:\\Windows"] : ["/usr/bin", "/bin", "/usr/sbin", "/sbin"];
 	return [binDir, ...system].join(delimiter);
+}
+
+/**
+ * A `minsync` that does nothing and exits 0, in `binDir`, for lanes that must keep the index out of the way
+ * (the librarian refuses to run without a MinSync binary). Where the binary is a shell script on POSIX, the
+ * librarian only resolves `minsync.exe` on Windows, so there the stub is a tiny executable compiled once by Bun
+ * and cached in the temp directory.
+ */
+export function writeMinsyncStub(binDir) {
+	mkdirSync(binDir, { recursive: true });
+	if (!isWindows) {
+		const stub = join(binDir, "minsync");
+		writeFileSync(stub, "#!/bin/sh\nexit 0\n");
+		chmodSync(stub, 0o755);
+		return stub;
+	}
+	const cached = join(tmpdir(), "dazzi-qa-minsync-stub.exe");
+	if (!existsSync(cached)) {
+		const source = join(tmpdir(), "dazzi-qa-minsync-stub.mjs");
+		writeFileSync(source, "process.exit(0);\n");
+		execFileSync(process.execPath, ["build", "--compile", source, "--outfile", cached], { stdio: "ignore" });
+	}
+	const stub = join(binDir, "minsync.exe");
+	copyFileSync(cached, stub);
+	return stub;
+}
+
+/**
+ * Re-encode (and optionally resize) an image for a fixture: `sips` on macOS, `ffmpeg` elsewhere. The output
+ * format follows `to`'s extension in both.
+ */
+export function convertImage(from, to, size) {
+	if (isMac) {
+		const format = /\.jpe?g$/iu.test(to) ? ["-s", "format", "jpeg"] : [];
+		execFileSync("sips", [...(size === undefined ? [] : ["-z", String(size.height), String(size.width)]), ...format, from, "--out", to], { stdio: "ignore" });
+		return;
+	}
+	execFileSync("ffmpeg", ["-y", "-loglevel", "error", "-i", from, ...(size === undefined ? [] : ["-vf", `scale=${size.width}:${size.height}`]), to], { stdio: "ignore" });
 }

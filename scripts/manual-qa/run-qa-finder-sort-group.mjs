@@ -13,9 +13,10 @@
 import { mkdirSync, mkdtempSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 
-const ROOT = new URL("../../", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("../../", import.meta.url)).replace(/[\\/]$/, "");
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sort-group");
 mkdirSync(EVIDENCE, { recursive: true });
 
@@ -49,7 +50,8 @@ let app;
 try {
 	app = await launchFinder({ userDataDir, env: { HOME: home } });
 	const page = await finderWindow(app);
-	await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
+	// Windows applies the emulated 1500px viewport to a 1440px window, which slides the Inspector resize handle over the Group button.
+	if (process.platform !== "win32") await page.setViewportSize({ width: 1500, height: 900 }).catch(() => {});
 	await page.waitForSelector(".toolbar-title", { timeout: 30000 });
 	await page.getByRole("group", { name: "View" }).getByRole("button", { name: "List" }).click();
 	await page.getByLabel("Places").getByRole("button", { name: "Documents", exact: true }).click();
@@ -88,7 +90,7 @@ try {
 	await sortMenu.getByRole("menuitemradio", { name: "Size", exact: true }).click();
 	await page.waitForTimeout(250);
 	check("Sort menu closes after selecting Size", await page.getByRole("menu", { name: "Sort" }).count(), 0);
-	const sortedNames = await page.locator('[role="row"]').evaluateAll((rows) => rows.map((row) => row.getAttribute("data-path")?.split("/").pop() ?? ""));
+	const sortedNames = await page.locator('[role="row"]').evaluateAll((rows) => rows.map((row) => row.getAttribute("data-path")?.split(/[\\/]/u).pop() ?? ""));
 	check("Size descending moves the largest fixture first", sortedNames[0], "table-11.csv");
 	await page.locator('[role="row"]').first().click();
 	await page.keyboard.press("ArrowDown");

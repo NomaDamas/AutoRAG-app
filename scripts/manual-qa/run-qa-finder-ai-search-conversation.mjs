@@ -21,9 +21,9 @@
 import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, delimiter } from "node:path";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
-import { rmRetry } from "./platform.mjs";
+import { rmRetry, writeMinsyncStub } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-conversation");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -50,9 +50,7 @@ mkdirSync(DOCS, { recursive: true });
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
 mkdirSync(AGENT_DIR, { recursive: true });
-const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
-writeFileSync(minsyncStub, "#!/bin/sh\nexit 0\n");
-chmodSync(minsyncStub, 0o755);
+writeMinsyncStub(join(AUTORAG_HOME, "bin"));
 const stale = join(DOCS, "old-draft.txt");
 writeFileSync(stale, "stale draft\n");
 
@@ -139,7 +137,7 @@ const APP_ENV = {
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
 	ELECTRON_RENDERER_URL: "",
 	QA_API_KEY: "qa-key",
-	PATH: `${join(AUTORAG_HOME, "bin")}:${process.env.PATH ?? ""}`,
+	PATH: `${join(AUTORAG_HOME, "bin")}${delimiter}${process.env.PATH ?? ""}`,
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",

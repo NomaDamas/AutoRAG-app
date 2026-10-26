@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { strToU8, unzipSync, zipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { convertImage } from "./platform.mjs";
 
 const EVIDENCE = process.argv[2] ?? "/tmp/autorag-quicklook-pptx";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -81,7 +82,7 @@ const TABLE =
 const seedPath = join(root, "seed.png");
 const shotPath = join(root, "photo.png");
 writeFileSync(seedPath, Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==", "base64"));
-execFileSync("sips", ["-z", "200", "320", seedPath, "--out", shotPath], { stdio: "ignore" });
+convertImage(seedPath, shotPath, { width: 320, height: 200 });
 const photo = new Uint8Array(readFileSync(shotPath));
 
 const PICTURE =

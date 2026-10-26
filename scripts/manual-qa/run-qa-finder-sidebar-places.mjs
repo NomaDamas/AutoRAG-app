@@ -16,6 +16,11 @@
  * Run from the repo root:  bun scripts/manual-qa/run-qa-finder-sidebar-places.mjs
  * Prereq: bun run build
  */
+
+if (process.platform === "win32") {
+	console.log("SKIP the iCloud / CloudStorage / /Volumes sidebar groups are macOS-specific");
+	process.exit(0);
+}
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";

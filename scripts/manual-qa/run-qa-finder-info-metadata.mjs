@@ -152,7 +152,14 @@ try {
 		window.setMinimumSize(600, 420);
 		window.setSize(1500, 560);
 	});
-	await page.waitForFunction(() => Math.abs(window.outerHeight - 560) <= 2, undefined, { timeout: 5000 });
+	// The window's own content height, read in main: the page's outerHeight includes Windows' invisible frame.
+	for (const deadline = Date.now() + 5000; ; await new Promise((resolve) => setTimeout(resolve, 100))) {
+		const height = await app.evaluate(({ BrowserWindow }) =>
+			BrowserWindow.getAllWindows().find((candidate) => candidate.webContents.getURL().endsWith("/index.html")).getContentSize()[1],
+		);
+		if (Math.abs(height - 560) <= 2) break;
+		if (Date.now() > deadline) throw new Error(`the window never reached 560px (content height ${height})`);
+	}
 	await new Promise((resolve) => setTimeout(resolve, 200));
 	const tall = await probe(page);
 	check("the panel overflows at a short window height", tall.scrollHeight > tall.clientHeight, `scroll=${tall.scrollHeight} client=${tall.clientHeight}`);
