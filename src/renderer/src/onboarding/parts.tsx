@@ -132,7 +132,7 @@ interface PermissionRowProps {
 	readonly name: string;
 	readonly tag?: string;
 	readonly tagTone?: string;
-	readonly desc?: string;
+	readonly desc?: ReactNode;
 	readonly action: ReactNode;
 }
 

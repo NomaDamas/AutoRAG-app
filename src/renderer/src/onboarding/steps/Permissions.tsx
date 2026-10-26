@@ -1,9 +1,49 @@
-/** Step 2 — macOS Full Disk Access / Windows network, notifications and launch at login. */
+/** Step 2 — macOS Full Disk Access, notifications and launch at login; Windows network, notifications and launch at login. */
 
 import type { ReactElement, ReactNode } from "react";
-import { Icon } from "../marks";
-import { Eyebrow, Multiline, PermissionRow, SplitScreen, Switch } from "../parts";
+import { Multiline, PermissionRow, Switch } from "../parts";
 import type { OnboardingCtx } from "../context";
+
+interface PermissionsScreenProps {
+	readonly title: string;
+	readonly lead: string;
+	readonly children: ReactNode;
+	readonly after?: ReactNode;
+}
+
+/** The step's shared layout: a centred heading over a list of plain rows (Figma 02 · permissions). */
+function PermissionsScreen({ title, lead, children, after }: PermissionsScreenProps): ReactElement {
+	return (
+		<section className="screen permissions-screen">
+			<div className="permissions-head">
+				<h1>{title}</h1>
+				<p>
+					<Multiline text={lead} />
+				</p>
+			</div>
+			<div className="permission-list">{children}</div>
+			{after}
+		</section>
+	);
+}
+
+function LaunchAtLoginRow({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
+	const { t, draft } = ctx;
+	return (
+		<PermissionRow
+			icon="power"
+			name={t("onboarding.permissions.login.name")}
+			desc={t("onboarding.permissions.login.desc")}
+			action={
+				<Switch
+					on={draft.launchAtLogin}
+					label={t("onboarding.permissions.login.name")}
+					onClick={() => ctx.setLaunchAtLogin(!draft.launchAtLogin)}
+				/>
+			}
+		/>
+	);
+}
 
 function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft, permissions, fdaPending } = ctx;
@@ -30,134 +70,83 @@ function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement 
 	}
 
 	return (
-		<>
-			<div className="permission-list">
-				<PermissionRow
-					icon="hard-drive"
-					tone="blue"
-					name={t("onboarding.permissions.fda.name")}
-					tag={t("onboarding.permissions.required")}
-					tagTone="req"
-					desc={t("onboarding.permissions.fda.desc")}
-					action={fdaAction}
-				/>
-				<PermissionRow
-					icon="bell"
-					tone="orange"
-					name={t("onboarding.permissions.notifications.name")}
-					tag={t("onboarding.permissions.optional")}
-					action={
-						draft.notifications ? (
-							<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
-						) : (
-							<button type="button" className="secondary" onClick={ctx.requestNotifications}>
-								{t("onboarding.permissions.notifications.allow")}
-							</button>
-						)
-					}
-				/>
-				<PermissionRow
-					icon="power"
-					name={t("onboarding.permissions.login.name")}
-					tag={t("onboarding.permissions.setting")}
-					desc={t("onboarding.permissions.login.desc")}
-					action={
-						<Switch
-							on={draft.launchAtLogin}
-							label={t("onboarding.permissions.login.name")}
-							onClick={() => ctx.setLaunchAtLogin(!draft.launchAtLogin)}
-						/>
-					}
-				/>
-			</div>
-			{granted ? null : (
-				<div className="permission-footnote">
-					<Icon name="triangle-alert" size={14} />
-					<span>{t("onboarding.permissions.footnote")}</span>
-				</div>
-			)}
-		</>
+		<PermissionsScreen
+			title={t("onboarding.permissions.title")}
+			lead={t("onboarding.permissions.leadMac")}
+			after={
+				<button type="button" className="inline-link permissions-why" onClick={() => ctx.openOverlay("fda")}>
+					{t("onboarding.permissions.fda.why")}
+				</button>
+			}
+		>
+			<PermissionRow
+				icon="hard-drive"
+				tone="blue"
+				name={t("onboarding.permissions.fda.name")}
+				tag={t("onboarding.permissions.required")}
+				tagTone="req"
+				desc={<Multiline text={t("onboarding.permissions.fda.desc")} />}
+				action={fdaAction}
+			/>
+			<PermissionRow
+				icon="bell"
+				tone="orange"
+				name={t("onboarding.permissions.notifications.name")}
+				desc={t("onboarding.permissions.notifications.desc")}
+				action={
+					draft.notifications ? (
+						<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
+					) : (
+						<button type="button" className="secondary" onClick={ctx.requestNotifications}>
+							{t("onboarding.permissions.notifications.allow")}
+						</button>
+					)
+				}
+			/>
+			<LaunchAtLoginRow ctx={ctx} />
+		</PermissionsScreen>
 	);
 }
 
 function WindowsPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft } = ctx;
 	return (
-		<section className="screen permissions-screen">
-			<div className="permissions-head">
-				<h1>{t("onboarding.permissions.titleWindows")}</h1>
-				<p>
-					<Multiline text={t("onboarding.permissions.leadWindows")} />
-				</p>
-			</div>
-			<div className="permission-list">
-				<PermissionRow
-					icon="shield"
-					tone="blue"
-					name={t("onboarding.permissions.network.name")}
-					desc={t("onboarding.permissions.network.desc")}
-					action={
-						draft.network ? (
-							<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
-						) : (
-							<button type="button" className="secondary" onClick={ctx.checkNetwork}>
-								{t("onboarding.permissions.network.allow")}
-							</button>
-						)
-					}
-				/>
-				<PermissionRow
-					icon="bell"
-					tone="orange"
-					name={t("onboarding.permissions.notifications.name")}
-					desc={t("onboarding.permissions.notifications.desc")}
-					action={
-						draft.notifications ? (
-							<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
-						) : (
-							<button type="button" className="secondary" onClick={ctx.openNotificationSettings}>
-								{t("onboarding.permissions.notifications.openWindows")}
-							</button>
-						)
-					}
-				/>
-				<PermissionRow
-					icon="power"
-					name={t("onboarding.permissions.login.name")}
-					desc={t("onboarding.permissions.login.descWindows")}
-					action={
-						<Switch
-							on={draft.launchAtLogin}
-							label={t("onboarding.permissions.login.name")}
-							onClick={() => ctx.setLaunchAtLogin(!draft.launchAtLogin)}
-						/>
-					}
-				/>
-			</div>
-		</section>
+		<PermissionsScreen title={t("onboarding.permissions.titleWindows")} lead={t("onboarding.permissions.leadWindows")}>
+			<PermissionRow
+				icon="shield"
+				tone="blue"
+				name={t("onboarding.permissions.network.name")}
+				desc={t("onboarding.permissions.network.desc")}
+				action={
+					draft.network ? (
+						<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
+					) : (
+						<button type="button" className="secondary" onClick={ctx.checkNetwork}>
+							{t("onboarding.permissions.network.allow")}
+						</button>
+					)
+				}
+			/>
+			<PermissionRow
+				icon="bell"
+				tone="orange"
+				name={t("onboarding.permissions.notifications.name")}
+				desc={t("onboarding.permissions.notifications.desc")}
+				action={
+					draft.notifications ? (
+						<span className="state ok">✓ {t("onboarding.permissions.granted")}</span>
+					) : (
+						<button type="button" className="secondary" onClick={ctx.openNotificationSettings}>
+							{t("onboarding.permissions.notifications.openWindows")}
+						</button>
+					)
+				}
+			/>
+			<LaunchAtLoginRow ctx={ctx} />
+		</PermissionsScreen>
 	);
 }
 
 export function PermissionsStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
-	const { t, platform } = ctx;
-	if (platform === "win32") return <WindowsPermissions ctx={ctx} />;
-	return (
-		<SplitScreen
-			copy={
-				<>
-					<Eyebrow icon="shield-check">{t("onboarding.permissions.eyebrow")}</Eyebrow>
-					<h1>
-						<Multiline text={t("onboarding.permissions.title")} />
-					</h1>
-					<p>{t("onboarding.permissions.leadMac")}</p>
-					<div className="micro-note">
-						<Icon name="lock" size={14} />
-						<span>{t("onboarding.permissions.note")}</span>
-					</div>
-				</>
-			}
-		>
-			<MacPermissions ctx={ctx} />
-		</SplitScreen>
-	);
+	return ctx.platform === "win32" ? <WindowsPermissions ctx={ctx} /> : <MacPermissions ctx={ctx} />;
 }

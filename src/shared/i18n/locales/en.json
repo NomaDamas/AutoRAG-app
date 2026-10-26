@@ -723,8 +723,8 @@
     },
     "permissions": {
       "eyebrow": "Permissions",
-      "title": "Allow access so we\ncan read properly",
-      "leadMac": "macOS asks for your permission before an app can access documents and protected app data. Permissions and indexing scope are different things.",
+      "title": "Check the permissions",
+      "leadMac": "macOS asks for your permission before an app can read protected files.\nEven after you allow it, you choose the folders to search in the next step.",
       "leadWindows": "Review only the permissions you need first.\nEvery item can be skipped and changed later in Settings.",
       "titleWindows": "Check the permissions",
       "note": "Dazzi never modifies your files. You pick exactly which folders to index in the next step.",
@@ -738,7 +738,8 @@
       "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Needed for Dazzi to work properly."
+        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder.",
+        "why": "Why is Full Disk Access needed?"
       },
       "notifications": {
         "name": "Notifications",
@@ -748,8 +749,7 @@
       },
       "login": {
         "name": "Launch at login",
-        "desc": "Keeps the index up to date in the background when files change.",
-        "descWindows": "Dazzi starts automatically when you turn on your computer. You can turn it off in Settings any time."
+        "desc": "Dazzi starts automatically when you turn on your computer. You can turn it off in Settings any time."
       },
       "network": {
         "name": "Network",
