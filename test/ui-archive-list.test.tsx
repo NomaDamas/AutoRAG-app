@@ -21,6 +21,7 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		onZoom: () => () => undefined,
 		onApp: () => () => undefined,
 		onOffice: () => () => undefined,
+		onSlides: () => () => undefined,
 		ready: () => undefined,
 		zoomed: () => undefined,
 		request: never,
@@ -49,6 +50,7 @@ function fileAt(path: string): PreviewDocument {
 		pages: null,
 		office: null,
 		thumbnail: null,
+		slidesRendering: false,
 	};
 }
 
