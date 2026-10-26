@@ -273,6 +273,63 @@
       "older": "Earlier"
     }
   },
+  "appError": {
+    "fixAction": "Fix with AI",
+    "openModelSettings": "Open model settings",
+    "other": {
+      "title": "Something went wrong",
+      "hint": "The AI can look for the cause and try to fix it for you."
+    },
+    "modelMissing": {
+      "title": "No AI model is set up",
+      "hint": "Choose a model or sign in and it works right away. Check the model, your sign-in and your subscription in the model settings."
+    },
+    "modelCredentials": {
+      "title": "The AI model can’t be used — sign-in or key was rejected",
+      "hint": "Your API key or sign-in may have expired or be wrong. Sign in again or check the key in the model settings, and check that your subscription is active."
+    },
+    "modelSubscription": {
+      "title": "Your subscription or usage limit is blocking the AI model",
+      "hint": "The subscription may have expired or the usage may be used up. Check Subscription & Usage, or pick another model in the model settings."
+    },
+    "modelNotFound": {
+      "title": "The selected AI model can’t be found",
+      "hint": "The model may have been retired or renamed. Pick another model in the model settings."
+    },
+    "rateLimit": {
+      "title": "Too many requests right now",
+      "hint": "Try again in a moment. If it keeps happening, pick another model in the model settings."
+    },
+    "network": {
+      "title": "Can’t reach the AI model’s server",
+      "hint": "Check your internet connection and try again. If the connection is fine and it keeps failing, check the model settings."
+    },
+    "fix": {
+      "title": "Fix with AI",
+      "intro": "The AI reads the error, looks at your settings and the folders they point to, and tries to fix it. It never changes your model, sign-in or keys.",
+      "errorLabel": "Error",
+      "running": "Looking for the cause…",
+      "steps": {
+        "diagnose": "Checking settings and status",
+        "checkPath": "Checking path",
+        "updateConfig": "Changing setting",
+        "refreshIndex": "Rebuilding the index"
+      },
+      "status": {
+        "fixed": "Fixed",
+        "needsUser": "There is something you need to do",
+        "cannotFix": "Couldn’t fix it"
+      },
+      "nextStepsLabel": "What to do",
+      "changesTitle": "Changed settings",
+      "unset": "none",
+      "backup": "The settings from before the change are saved at {{path}}.",
+      "openSettings": "Open ‘{{page}}’ settings",
+      "retrySearch": "Search again",
+      "failedTitle": "Couldn’t fix it with AI",
+      "stopped": "Stopped."
+    }
+  },
   "interaction": {
     "mode": {
       "menuLabel": "File change approval",

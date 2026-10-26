@@ -771,8 +771,8 @@ export function App(): ReactElement {
 												onPublish={publishEvidence}
 												imageActions={imageActions}
 												language={language}
-												onOpenPlan={() => {
-													requestSettingsCategory("plan");
+												onOpenSettings={(page) => {
+													requestSettingsCategory(page);
 													finder?.openSettings();
 												}}
 											/>

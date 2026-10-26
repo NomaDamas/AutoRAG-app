@@ -20,6 +20,7 @@ import type {
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import type { InteractionRequest } from "../../../shared/interaction-contract";
+import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
 import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
@@ -93,8 +94,8 @@ export interface AiSearchPanelProps {
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
 	readonly language: SummaryLanguage;
-	/** Goes to Settings → Subscription & Usage: the weekly credits are used up and the error offers the way there. */
-	readonly onOpenPlan: () => void;
+	/** Goes to a Settings page: an error leads to the model settings, or to Subscription & Usage when the plan is the problem. */
+	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -109,7 +110,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenPlan },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -194,6 +195,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	stoppedRef.current = stopped;
 	const errorRef = useRef(error);
 	errorRef.current = error;
+	const errorActionRef = useRef(errorAction);
+	errorActionRef.current = errorAction;
 	const deepElapsedRef = useRef(deepElapsed);
 	deepElapsedRef.current = deepElapsed;
 
@@ -402,6 +405,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		};
 	}, [visible]);
 
+	/** Asks the question the error answered once more, in the same chat; the AI fix offers it after repairing something. */
+	function retryLastQuestion(): void {
+		const question = submittedQueryRef.current;
+		if (question !== null) void runSearch(question, submittedAttachmentsRef.current);
+	}
+
 	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
 		if (searchIdRef.current !== null) return;
 		// Only New chat starts a new chat; any other question continues the current one.
@@ -418,6 +427,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				deepText: deepRef.current?.answer ?? deepDraftRef.current,
 				stopped: stoppedRef.current,
 				error: errorRef.current,
+				errorAction: errorRef.current !== null && errorActionRef.current?.message === errorRef.current ? errorActionRef.current.action : null,
 				deepElapsed: deepElapsedRef.current,
 			};
 			setPastTurns((current) => [...current, finished]);
@@ -584,6 +594,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				deepText: turn.assistant?.deep?.answer ?? "",
 				stopped: turn.assistant?.stopped ?? false,
 				error: null,
+				errorAction: null,
 				deepElapsed: null,
 			})),
 		);
@@ -847,6 +858,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							onCitation={selectPhaseCitation}
 							steerLabels={steerLabels}
 							imageActions={imageActions}
+							onOpenSettings={onOpenSettings}
 						/>
 					))}
 
@@ -865,7 +877,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					)}
 
-					{error === null ? null : <RunErrorNotice message={error} action={errorAction?.message === error ? errorAction.action : null} onOpenPlan={onOpenPlan} />}
+					{error === null ? null : (
+						<RunErrorNotice
+							message={error}
+							action={errorAction?.message === error ? errorAction.action : null}
+							onOpenSettings={onOpenSettings}
+							fix={{ onRetry: retryLastQuestion }}
+						/>
+					)}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
@@ -1130,6 +1149,7 @@ interface PastTurn {
 	readonly deepText: string;
 	readonly stopped: boolean;
 	readonly error: string | null;
+	readonly errorAction: SearchErrorAction | null;
 	readonly deepElapsed: number | null;
 }
 
@@ -1141,6 +1161,7 @@ function PastTurnView({
 	onCitation,
 	steerLabels,
 	imageActions,
+	onOpenSettings,
 }: {
 	readonly turn: PastTurn;
 	readonly turnIndex: number;
@@ -1149,6 +1170,7 @@ function PastTurnView({
 	readonly onCitation: (turnIndex: number, phase: "quick" | "deep", number: number) => void;
 	readonly steerLabels: Record<SteerItem["status"], string>;
 	readonly imageActions: ImageActions;
+	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
@@ -1182,7 +1204,7 @@ function PastTurnView({
 					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{turn.question}</div>
 				</div>
 			</div>
-			{turn.error === null ? null : <div className="rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text">{turn.error}</div>}
+			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} fix={null} />}
 			{before.map((steer) => (
 				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 			))}

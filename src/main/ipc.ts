@@ -10,6 +10,7 @@ import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
 import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isPaidPlanId } from "../shared/account-contract";
@@ -37,6 +38,7 @@ import type { OnboardingService } from "./onboarding-service";
 import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
 import type { SmartIndexingService } from "./smart-indexing-service";
+import type { ErrorFixService } from "./error-fix-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -135,6 +137,14 @@ export function registerInteractionIpcHandlers(deps: InteractionIpcDeps): void {
 	ipcMain.handle(INTERACTION_CHANNELS.answer, (_event, id: unknown, answer: unknown) =>
 		typeof id === "string" ? deps.hub.answer(id, answer) : false,
 	);
+}
+
+export function registerErrorFixIpcHandlers(service: ErrorFixService): void {
+	ipcMain.handle(ERROR_FIX_CHANNELS.start, (_event, runId: unknown, request: unknown) => {
+		if (typeof runId !== "string" || !isErrorFixRequest(request)) throw new TypeError("errorFix:start expects a run id and a request with a message and a surface");
+		return service.start(runId, request);
+	});
+	ipcMain.handle(ERROR_FIX_CHANNELS.cancel, (_event, runId: unknown) => (typeof runId === "string" ? service.cancel(runId) : undefined));
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {

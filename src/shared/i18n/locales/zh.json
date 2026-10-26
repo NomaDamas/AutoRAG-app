@@ -273,6 +273,63 @@
       "older": "更早"
     }
   },
+  "appError": {
+    "fixAction": "用 AI 修复",
+    "openModelSettings": "打开模型设置",
+    "other": {
+      "title": "出现了问题",
+      "hint": "AI 可以查找原因并尝试为你修复。"
+    },
+    "modelMissing": {
+      "title": "尚未设置可用的 AI 模型",
+      "hint": "选择模型或登录后即可使用。请在模型设置中检查模型、登录状态和订阅。"
+    },
+    "modelCredentials": {
+      "title": "无法使用 AI 模型：认证失败",
+      "hint": "API 密钥或登录可能已过期或不正确。请在模型设置中重新登录或检查密钥，并确认订阅是否有效。"
+    },
+    "modelSubscription": {
+      "title": "订阅或用量额度导致无法使用 AI 模型",
+      "hint": "订阅可能已到期，或用量已用完。请查看订阅与用量，或在模型设置中选择其他模型。"
+    },
+    "modelNotFound": {
+      "title": "找不到所选的 AI 模型",
+      "hint": "该模型可能已下线或已改名。请在模型设置中选择其他模型。"
+    },
+    "rateLimit": {
+      "title": "请求过多，暂时受限",
+      "hint": "请稍后再试。如果持续出现，请在模型设置中选择其他模型。"
+    },
+    "network": {
+      "title": "无法连接到 AI 模型的服务器",
+      "hint": "请检查网络连接后重试。如果网络正常仍反复失败，请检查模型设置。"
+    },
+    "fix": {
+      "title": "用 AI 修复",
+      "intro": "AI 会阅读错误信息，检查你的设置及其指向的文件夹，并尝试直接修复。它不会更改你的模型、登录或密钥。",
+      "errorLabel": "错误",
+      "running": "正在查找原因…",
+      "steps": {
+        "diagnose": "正在检查设置和状态",
+        "checkPath": "正在检查路径",
+        "updateConfig": "正在修改设置",
+        "refreshIndex": "正在重建索引"
+      },
+      "status": {
+        "fixed": "已修复",
+        "needsUser": "需要你来处理",
+        "cannotFix": "无法修复"
+      },
+      "nextStepsLabel": "需要你做的事",
+      "changesTitle": "已更改的设置",
+      "unset": "无",
+      "backup": "更改前的设置已备份到 {{path}}。",
+      "openSettings": "打开“{{page}}”设置",
+      "retrySearch": "重新搜索",
+      "failedTitle": "AI 未能修复",
+      "stopped": "已停止。"
+    }
+  },
   "interaction": {
     "mode": {
       "menuLabel": "文件更改审批",

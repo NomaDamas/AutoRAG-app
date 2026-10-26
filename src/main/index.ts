@@ -26,6 +26,7 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -85,6 +86,7 @@ import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
+import { createErrorFixService } from "./error-fix-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
@@ -97,6 +99,7 @@ import {
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerErrorFixIpcHandlers,
 	registerInteractionIpcHandlers,
 	registerIndexProblemIpcHandlers,
 	registerModelDownloadIpcHandlers,
@@ -888,6 +891,30 @@ app.whenReady().then(async () => {
 			env: process.env,
 			language: () => currentLanguage,
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
+		}),
+	);
+	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	registerErrorFixIpcHandlers(
+		createErrorFixService({
+			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			agentDir: getAgentDir(),
+			env: process.env,
+			cwd: process.cwd(),
+			language: () => currentLanguage,
+			config: autoRagConfig,
+			diagnostics: async () => {
+				const [model, sources] = await Promise.all([settingsService.modelsResolve(), dataSources.list()]);
+				return {
+					model: model.error !== null ? { error: model.error } : model.model === null ? null : { provider: model.model.provider, id: model.model.modelId, signedIn: model.model.auth.present },
+					sources: sources.error !== null ? { error: sources.error } : sources.sources.map((source) => ({ id: source.id, type: source.type, enabled: source.enabled, install: source.install.state, index: source.index.state, indexDetail: source.index.detail })),
+					localIndex: sources.local,
+					indexProblem: indexProblem.get(),
+				};
+			},
+			refreshIndex: () => runLocalIndex("manual-refresh", undefined, busyResult(undefined), recordLocalRun),
+			// An open chat's agent was built on the old config; the next question rebuilds it and resumes the conversation.
+			onConfigChanged: () => void searchService.resetAgents(),
 		}),
 	);
 	const accountService = createAccountService({

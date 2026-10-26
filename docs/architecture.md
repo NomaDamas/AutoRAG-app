@@ -723,7 +723,8 @@ agent dir or the working directory, and the user's own pi settings never apply.
 A profile session never reads or writes AutoRAG's retrieval memory.
 App profiles live in `src/main/agents/profiles/`; the first is smart indexing
 (thinking `low`; looks only through `folder_survey` and `list_folder`, answers
-only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
+only through a `propose_exclusions` tool that validates paths). The second is the error-fix helper behind
+"AI로 고치기" (see "An error in AI Search"). A new profile adds one file there and, if it needs
 a UI, its own service and bridge. The factory's own tests (what the model is
 offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
@@ -816,6 +817,28 @@ and kept for the chat's life:
   the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
   (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
   00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+- **An error in AI Search** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
+  `classifyAppError` reads what the person can do from the wording (HTTP statuses only in the shapes the SDKs use, and never inside a
+  path): no model or key (`model-missing`), a rejected key or login (`model-credentials`), a spent plan or billing problem
+  (`model-subscription`), a retired model (`model-not-found`), a rate limit, a lost connection, or anything else. The first four mean
+  the model itself cannot be used: the box says so in plain words, offers **no** AI fix (the AI is what is down), and leads to the
+  model settings and, where the subscription may be the cause, to Subscription & Usage. A rate limit and a lost connection say to wait
+  or check the connection. Everything else is the app's own setup and gets **AI로 고치기** on the right of the box. The main process's
+  own `open-plan` action (the weekly credits are used up) outranks the wording. An error of an earlier turn is shown as history, with
+  its explanation and settings buttons but no fix.
+- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `ErrorFixDialog`). A helper-agent run on the AI Search
+  model (`resolveConfiguredSessionModel`), thinking `medium`, three minutes at most. It has no pi file or shell tool: it sees and
+  changes only through `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data
+  sources, the index state), `check_path` (names only; for a gone path the nearest folder that exists), `update_config` (the same
+  validating service the Settings pages use; it first copies `config.json` to `config.json.bak-<stamp>-before-error-fix`; the
+  `model` key, secret-looking keys and the paths AutoRAG manages are refused; a change the validator rejects writes nothing),
+  `refresh_index`, and `report_result`, which is the answer and refuses `fixed` unless something was really changed. The dialog
+  lists the agent's steps as they happen and, whatever the ending (result, failure, Stop), the config changes it made and where the
+  old config is kept. A change to the config resets the idle chat agents (`SearchService.resetAgents`) so the next question,
+  including "다시 검색", is answered on the new config and resumes from the chat's file. A model that fails during the run is
+  explained exactly like the same error in the box. Pinned by `test/app-error.test.ts`, `error-fix-profile.test.ts`,
+  `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
+  `scripts/manual-qa/run-qa-finder-ai-search-error-fix.mjs` (scripted model) and `run-qa-live-ai-search-error-fix.mjs` (a real model).
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
 answer path, files on disk, what the model receives), `run-qa-finder-ai-search-conversation.mjs` (scripted model

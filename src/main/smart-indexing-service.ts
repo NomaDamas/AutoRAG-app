@@ -6,6 +6,7 @@ import { createProfileSession, type ProfileModel } from "@autorag/librarian/prof
 import { createFolderSurvey } from "./agents/profiles/folder-stats";
 import { createProposalCollector, type ExclusionProposal, type ReplyLanguage, smartIndexingProfile } from "./agents/profiles/smart-indexing";
 import { type FolderScanOptions, scanFolder } from "./onboarding-scan";
+import { errorText, modelFailure } from "./agents/session-failure";
 
 /**
  * Runs the smart-indexing agent (`agents/profiles/smart-indexing.ts`) over the
@@ -62,20 +63,6 @@ async function existingFolders(candidates: readonly unknown[]): Promise<string[]
 		if (await stat(candidate).then((entry) => entry.isDirectory(), () => false)) folders.push(candidate);
 	}
 	return folders;
-}
-
-/** The provider's error when the last model request failed; pi reports it on the message instead of throwing. */
-function modelFailure(session: AgentSession): string | null {
-	for (let index = session.messages.length - 1; index >= 0; index -= 1) {
-		const message = session.messages[index];
-		if (message?.role !== "assistant") continue;
-		return message.stopReason === "error" ? (message.errorMessage ?? "The model request failed.") : null;
-	}
-	return null;
-}
-
-function errorText(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
 }
 
 export function createSmartIndexingService(deps: SmartIndexingServiceDeps): SmartIndexingService {
