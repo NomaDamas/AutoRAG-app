@@ -85,7 +85,7 @@ Fresh windows start with the sidebar at its minimum 180px width and the inspecto
 ### 1.3a AI Search tabs
 AI Search is a tab view like Settings (`AI_SEARCH_PATH`, `src/renderer/src/state/tabs.ts`). Each AI Search tab owns its chat; the panel stays mounted while its tab is in the background or browses a folder, and unmounts when the tab closes. Entry points:
 - **Sidebar → Favorites → AI Search**: the *focused* tab becomes AI Search (a navigation, so Back returns to the folder).
-- **`⌘K`** and the toolbar sparkles: the nearest open AI Search tab, else a new one; the composer is focused.
+- **`⌘K`**: the nearest open AI Search tab, else a new one; the composer is focused. The toolbar has no AI Search control.
 - **Inspector "AI 요약"** and the sidebar search's **내용** chip: always a *new* AI Search tab, with the file attached or the query sent.
 - **Drops**: Finder rows, OS files, and links attach when dropped on the AI Search panel, on an AI Search strip tab (it switches to that tab; dwelling springs it open), or on the sidebar AI Search item (the focused tab becomes AI Search). A Finder row dropped on an AI Search tab is attached, never moved.
 

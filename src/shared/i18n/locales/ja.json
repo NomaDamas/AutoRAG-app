@@ -44,8 +44,6 @@
     "showInspector": "情報パネルを表示",
     "hideInspector": "情報パネルを非表示",
     "toggleInspector": "情報パネルの切り替え",
-    "showAiSearch": "AI 検索を表示",
-    "aiSearchShortcut": "AI 検索 ({{shortcut}})",
     "share": "共有",
     "putBack": "元に戻す",
     "emptyTrash": "ゴミ箱を空にする"
