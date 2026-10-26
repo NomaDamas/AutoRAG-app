@@ -185,8 +185,8 @@ provider still caches successful and negative visual lookups by path + mtime.
 
 Photoshop, Illustrator, camera RAW (`cr2 cr3 nef arw dng orf rw2 raw`), JPEG XL,
 icns, tga and exr (issue #141) join that list on macOS: Quick Look answered each
-with a real picture through `createThumbnailFromPath` in 20-100 ms (a 24MP CR3
-and a 21MB ARW included, 640px tier). Two did not hold up: it draws an EPS or
+with a real picture through `createThumbnailFromPath` in 20-250 ms (a 24MP CR3
+and a 21MB ARW included, 640px tier; the 250 ms was the first call of the run). Two did not hold up: it draws an EPS or
 an XCF as a generic icon (and `qlmanage -t` hangs on them for minutes), so
 they are left off the list, and it answered a Samsung phone DNG with a black
 square in 13 ms, which `isBlankBitmap` rejects so the chain moves on. The file's
