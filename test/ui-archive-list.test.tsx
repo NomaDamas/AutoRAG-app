@@ -32,6 +32,7 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		archivePreview: answer,
 		share: never,
 		copyText: never,
+		textEntry: () => undefined,
 	};
 }
 

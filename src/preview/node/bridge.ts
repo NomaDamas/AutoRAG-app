@@ -85,5 +85,6 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		copyText: async (text) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.copyText, text);
 		},
+		textEntry: (active) => ipcRenderer.send(PREVIEW_CHANNELS.textEntry, active),
 	};
 }

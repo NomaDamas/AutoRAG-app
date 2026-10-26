@@ -53,6 +53,8 @@ export const PREVIEW_CHANNELS = {
 	share: "preview:share",
 	/** Preview window -> main (invoke): put text on the system clipboard. */
 	copyText: "preview:copy-text",
+	/** Preview window -> main (send): a text field took or gave up focus; Space and the arrows stay with it while it has focus. */
+	textEntry: "preview:text-entry",
 } as const;
 
 /**
@@ -328,6 +330,8 @@ export interface QuickLookWindowBridge {
 	/** `anchor` is the share button's rect in page CSS pixels. macOS only. */
 	share(anchor: Bounds): Promise<void>;
 	copyText(text: string): Promise<void>;
+	/** A viewer that shows a text field (the PDF password prompt) reports whether it has one, so the window takes focus and Space and the arrows reach the field. */
+	textEntry(active: boolean): void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

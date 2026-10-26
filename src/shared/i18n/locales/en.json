@@ -1705,6 +1705,14 @@
     "pdf": {
       "openFailed": "Couldn’t open the PDF"
     },
+    "password": {
+      "locked": "This document is password protected",
+      "label": "Password",
+      "placeholder": "Enter password",
+      "unlock": "Unlock",
+      "checking": "Checking…",
+      "incorrect": "The password is incorrect. Try again."
+    },
     "pptx": {
       "openFailed": "Couldn’t open the presentation",
       "noSlides": "No slides",
