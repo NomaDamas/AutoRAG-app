@@ -4,7 +4,14 @@
 // disappears and comes back; a workspace that cannot be written. Each scenario
 // starts a fresh profile that resumes onboarding at the indexing step (the state a
 // relaunch restores), so the walk to the stop is the app's own: preflight, the
-// refresh, the classification, the paused screen, then every way out of it.
+// refresh, the classification, the pause screen, and the ways on it offers.
+//
+// On a first run the app opens two windows: the Finder, usable at once, and the
+// onboarding window beside it that runs the first index. The pause screen has no
+// exit into the app, so a scenario that wants the Finder's side of a stop closes
+// the onboarding window the way a user does: a stop then ends onboarding (the
+// Finder gets its keyword index and the problem banner), while a run still going
+// is left for the next launch.
 //
 // AUTORAG_HOME and AUTORAG_CONFIG point inside a temp dir, so the user's own config
 // and index are never touched. Screenshots go to QA_OUT (or .omo/evidence/).
@@ -14,7 +21,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { saveMirrorIndex } from "@autorag/librarian";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
 import { homeDir, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding-failure");
@@ -145,12 +152,77 @@ function profile({ embed, embedder, docs = true, home }) {
 	};
 }
 
-async function start(state, { language = "ko", env = {} } = {}) {
+/**
+ * Launch the app on the profile and hand back the onboarding window, with the Finder it opened beside it on
+ * `state.finder` (a run still unfinished on a relaunch brings the onboarding window back; `onboarding: false`
+ * says this launch is expected to have none).
+ */
+async function start(state, { language = "ko", env = {}, onboarding = true } = {}) {
 	state.app = await launchFinder({ userDataDir: state.userDataDir, env: { ...state.env, ...env }, onboarding: true, language });
-	state.page = await finderWindow(state.app, 30_000);
+	state.finder = await finderWindow(state.app, 30_000);
+	state.onboarding = onboarding ? await onboardingWindow(state.app, 30_000) : null;
 	state.errors = [];
-	state.page.on("pageerror", (error) => state.errors.push(error.message));
-	return state.page;
+	for (const page of [state.finder, state.onboarding]) page?.on("pageerror", (error) => state.errors.push(error.message));
+	return state.onboarding ?? state.finder;
+}
+
+/**
+ * The app's own index windows that are open (the Finder, and during a first run the onboarding window):
+ * a pre-warmed Quick Look page is not one of them.
+ */
+async function indexWindows(state) {
+	const pages = await state.app.windows();
+	return pages.filter((page) => !page.isClosed() && page.url().endsWith("/index.html"));
+}
+
+/**
+ * `onboarding/state.json` as main wrote it: what the next launch resumes from.
+ */
+function onboardingState(state) {
+	const file = join(state.userDataDir, "onboarding", "state.json");
+	if (!existsSync(file)) return null;
+	try {
+		return JSON.parse(readFileSync(file, "utf8"));
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Close the onboarding window the way a user does — its close button, or Cmd/Ctrl+W. Main owns what that
+ * means (`onboarding-window.ts`): a first index that stopped ends onboarding there and gives the Finder its
+ * keyword index, one that is still running is left for the next launch, and while the Finder is open the
+ * close is never the last window, so no quit confirmation stands in the way.
+ */
+async function closeOnboarding(state) {
+	const page = state.onboarding;
+	if (page === null) throw new Error("no onboarding window to close");
+	const closed = await state.app.evaluate(async ({ BrowserWindow }) => {
+		for (const window of BrowserWindow.getAllWindows()) {
+			if (window.isDestroyed() || !window.webContents.getURL().endsWith("/index.html")) continue;
+			const onboarding = await window.webContents.executeJavaScript("window.autorag?.onboarding?.pending === true").catch(() => false);
+			if (onboarding === true) {
+				window.close();
+				return true;
+			}
+		}
+		return false;
+	});
+	if (!closed) throw new Error("the onboarding window was not found in main");
+	if (!page.isClosed()) await page.waitForEvent("close", { timeout: 20_000 }).catch(() => undefined);
+	state.onboarding = null;
+}
+
+/**
+ * The end of a run that recovered: onboarding completes itself, so the done screen has nothing left to press.
+ * The window stays on it until the user closes the window.
+ */
+async function completedByItself(state, page, label) {
+	check(`${label}: the done screen has no button and no links`, (await page.locator(".onb .ix-cta, .onb .ix-links button, .onb .ix-open-btn, .onb .ix-bg-start").count()) === 0);
+	check(`${label}: the done screen still says the index finished`, (await page.locator(".onb .ix-notice.ok").count()) === 1);
+	await until(() => onboardingState(state)?.completed === true, 20_000, "onboarding to record itself as completed");
+	const stored = onboardingState(state);
+	check(`${label}: onboarding completed by itself, without opening Dazzi`, stored?.completed === true, JSON.stringify(stored?.completed));
 }
 
 async function stop(state) {
@@ -208,6 +280,7 @@ async function checkPausedShape(page, label, { button, link }) {
 	check(`${label}: the one button is "${button}"`, cta === button, cta);
 	const others = await links(page);
 	check(`${label}: the links are ${JSON.stringify(link)}`, JSON.stringify(others) === JSON.stringify(link), JSON.stringify(others));
+	check(`${label}: no exit into the app is left on the screen`, (await page.locator(".onb .ix-open-btn, .onb .ix-bg-start").count()) === 0 && !(await text(page, ".onb")).includes("Dazzi 열기"));
 	check(`${label}: no phases, meta, locked gate or tips`, (await page.locator(".onb .ix-phases, .onb .ix-meta, .onb .ix-gate, .onb .ix-tip").count()) === 0);
 	const body = await text(page, ".onb");
 	check(`${label}: no "calculating the remaining time"`, !body.includes("계산 중") && !body.includes("남았어요") && !body.includes("남은 시간"), body.slice(0, 200));
@@ -265,7 +338,7 @@ await scenario("a refused embedder: change the embedding and the index goes on b
 		const page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
 		await paused(page);
 		check("title says the embedding cannot be used", (await text(page, ".onb .ix-title")).includes("임베딩을 쓸 수 없어요"), await text(page, ".onb .ix-title"));
-		await checkPausedShape(page, "config", { button: "임베딩 방식 바꾸기", link: ["다시 시도", "일단 Dazzi 열기"] });
+		await checkPausedShape(page, "config", { button: "임베딩 방식 바꾸기", link: ["다시 시도"] });
 		const run = await status(page);
 		check("the app classified it from its own diagnostic", run.state === "failed" && run.failure?.reason === "embedder-config" && run.failure?.code === "embedder-preflight-failed" && run.remainingMinutes === null, JSON.stringify(run.failure));
 		check("a refusal is not retried by itself", !(await text(page, ".onb .ix-sub")).includes("자동으로"), await text(page, ".onb .ix-sub"));
@@ -280,28 +353,29 @@ await scenario("a refused embedder: change the embedding and the index goes on b
 		await page.waitForSelector(".onb .ix.done", { timeout: 120_000 });
 		check("choosing again starts the index again and it finishes without leaving the flow", true);
 		await shot(page, "03-config-recovered-done");
-		await page.locator(".onb .ix-open-btn").click();
-		await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+		await completedByItself(state, page, "config recovery");
+		// Nothing to press: the user closes the window, and the Finder is already open with nothing left over.
+		await closeOnboarding(state);
 		await sleep(1500);
-		const after = await problem(page);
+		const after = await problem(state.finder);
 		check("a finished run leaves nothing behind in the app", after.failure === null && after.skipped === 0, JSON.stringify(after));
-		check("no banner in the Finder", (await page.locator('[role="alert"]').count()) === 0);
+		check("no banner in the Finder", (await state.finder.locator('[role="alert"]').count()) === 0);
 		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
 	} finally {
 		await server.close();
 	}
 });
 
-// 2. The embedder cannot be reached: retried by itself with a countdown; "open Dazzi anyway" lands in the app
-// with the problem still in front of the user (banner, sidebar, Settings), through a relaunch, and the keyword
-// index has started so the app is not empty.
-await scenario("an offline embedder: it retries itself, and opening Dazzi anyway keeps the problem in view", async (state) => {
+// 2. The embedder cannot be reached: retried by itself with a countdown; closing the onboarding window on the
+// stop ends onboarding with the problem still in front of the user (banner, sidebar, Settings), through a
+// relaunch, and the keyword index has started so the app is not empty.
+await scenario("an offline embedder: it retries itself, and closing the window keeps the problem in view", async (state) => {
 	const port = await closedPort();
 	Object.assign(state, profile({ embed: "local", embedder: { id: EMBED_ID, dimension: 1024, baseUrl: `http://127.0.0.1:${port}`, apiKeyEnv: "OPENAI_API_KEY" } }));
 	const page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
 	await paused(page);
 	check("title says the connection is gone", (await text(page, ".onb .ix-title")).includes("연결이 끊겼어요"), await text(page, ".onb .ix-title"));
-	await checkPausedShape(page, "offline", { button: "지금 다시 시도", link: ["일단 Dazzi 열기"] });
+	await checkPausedShape(page, "offline", { button: "지금 다시 시도", link: ["임베딩 방식 바꾸기"] });
 	const first = (await status(page)).finishedAt;
 	const line = await text(page, ".onb .ix-sub");
 	check("the reason line counts down to the next automatic try", /\d+초 뒤 자동으로 다시 시도해요/u.test(line), line);
@@ -310,34 +384,39 @@ await scenario("an offline embedder: it retries itself, and opening Dazzi anyway
 	check("it tried again by itself without a click", retried === true);
 	check("the pause screen stayed up through the retry", (await page.locator(".onb .ix.paused").count()) === 1);
 
-	await page.locator(".onb .ix-links button", { hasText: "일단 Dazzi 열기" }).click();
-	await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
-	await page.waitForSelector('[role="alert"]', { timeout: 20_000 });
-	const banner = await text(page, '[role="alert"]');
+	// The user closes the window the way the screen leaves them to: a stopped first run ends onboarding there.
+	await closeOnboarding(state);
+	const finder = state.finder;
+	await finder.waitForSelector('[role="alert"]', { timeout: 20_000 });
+	const banner = await text(finder, '[role="alert"]');
 	check("the banner says it plainly, with the one button", banner.includes("연결을 기다리는 중이에요") && banner.includes("지금 다시 시도"), banner);
-	const block = await until(async () => page.locator('.sidebar__activity[data-tone="error"]').first().innerText().catch(() => null), 20_000, "the sidebar block");
+	const block = await until(async () => finder.locator('.sidebar__activity[data-tone="error"]').first().innerText().catch(() => null), 90_000, "the sidebar block");
 	check("the sidebar keeps a block that does not expire", block.includes("연결 기다리는 중"), block);
-	const kept = await problem(page);
+	const kept = await problem(finder);
 	check("the problem record is the same fact the screen showed", kept.failure?.reason === "embedder-offline", JSON.stringify(kept));
-	await bothAppearances(page, "05-offline-in-app");
+	await bothAppearances(finder, "05-offline-in-app");
 	const mirror = join(state.autoragHome, "workspace", ".autorag", "parsed", "index.json");
 	await until(() => existsSync(mirror) && readFileSync(mirror, "utf8").includes("note.md"), 90_000, "the keyword index to read the folder");
-	check("opening anyway started the keyword index, so the app is not empty", true);
+	check("closing on the stop started the keyword index, so the app is not empty", true);
+	check("onboarding is over for good", onboardingState(state)?.completed === true);
 
 	// The banner's button retries; the embedder is still gone, so the problem stays (and the clock moves).
-	const before = (await problem(page)).at;
-	await page.locator('[role="alert"] button', { hasText: "지금 다시 시도" }).click();
+	const before = (await problem(finder)).at;
+	await finder.locator('[role="alert"] button', { hasText: "지금 다시 시도" }).click();
 	await until(async () => {
-		const now = await problem(page);
+		const now = await problem(finder);
 		return !now.retrying && now.at !== before;
 	}, 60_000, "the retry from the banner to end");
-	check("a retry that fails again leaves the problem in place", (await problem(page)).failure?.reason === "embedder-offline");
+	check("a retry that fails again leaves the problem in place", (await problem(finder)).failure?.reason === "embedder-offline");
 
-	// A relaunch brings it back: it is on disk, not in memory.
+	// A relaunch brings it back: it is on disk, not in memory. Onboarding is over, so this launch has no
+	// onboarding window at all.
 	await stop(state);
-	const again = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
+	await start(state, { env: { OPENAI_API_KEY: "sk-qa" }, onboarding: false });
+	const again = state.finder;
 	await again.waitForSelector('[role="alert"]', { timeout: 30_000 });
 	check("after a relaunch the banner is still there", (await text(again, '[role="alert"]')).includes("연결을 기다리는 중이에요"));
+	check("a completed onboarding opens no onboarding window", (await indexWindows(state)).length === 1);
 	await again.locator(".sidebar__activity").first().click();
 	await again.waitForSelector(".settings-sidebar", { timeout: 10_000 });
 	await shot(again, "06-offline-settings-card");
@@ -374,7 +453,7 @@ await scenario("an unreadable folder: it goes on by itself when the folder retur
 	await paused(page);
 	const title = await text(page, ".onb .ix-title");
 	check("the title names the folder", title.includes("‘Projects’") && title.includes("읽을 수 없어요"), title);
-	await checkPausedShape(page, "folder", { button: "다시 확인", link: ["‘Projects’ 빼고 계속", "일단 Dazzi 열기"] });
+	await checkPausedShape(page, "folder", { button: "다시 확인", link: ["‘Projects’ 빼고 계속"] });
 	const run = await status(page);
 	check("classified as an unreadable folder, naming it", run.failure?.reason === "folder-unreadable" && run.failure.folders.some((folder) => folder.endsWith("Projects")), JSON.stringify(run.failure));
 	await bothAppearances(page, "07-folder-paused");
@@ -383,6 +462,12 @@ await scenario("an unreadable folder: it goes on by itself when the folder retur
 	await page.waitForSelector(".onb .ix.done", { timeout: 90_000 });
 	check("the folder came back and the index finished by itself", true);
 	await shot(page, "08-folder-recovered-done");
+	await completedByItself(state, page, "folder recovery");
+	await closeOnboarding(state);
+	await sleep(1500);
+	const after = await problem(state.finder);
+	check("the recovered run leaves no problem in the Finder", after.failure === null && after.skipped === 0, JSON.stringify(after));
+	check("no banner in the Finder", (await state.finder.locator('[role="alert"]').count()) === 0);
 	check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
 });
 
@@ -420,7 +505,7 @@ await scenario("an unknown cause: a second stop moves the button to the embeddin
 	const page = await start(state);
 	await paused(page);
 	check("title is the generic one", (await text(page, ".onb .ix-title")).includes("임베딩이 멈췄어요"), await text(page, ".onb .ix-title"));
-	await checkPausedShape(page, "unknown", { button: "다시 시도", link: ["임베딩 방식 바꾸기", "일단 Dazzi 열기"] });
+	await checkPausedShape(page, "unknown", { button: "다시 시도", link: ["임베딩 방식 바꾸기"] });
 	const run = await status(page);
 	check("an unclassified stop is called unknown, with no guess", run.failure?.reason === "unknown", JSON.stringify(run.failure));
 	await shot(page, "10-unknown-paused-first");
@@ -441,7 +526,7 @@ await scenario("a model that cannot be downloaded: retried by itself, one way on
 	const run = await status(page);
 	check("a failed model download is its own reason", run.failure?.reason === "model-download", JSON.stringify(run.failure));
 	check("title says the model could not be downloaded", (await text(page, ".onb .ix-title")).includes("모델을 받지 못했어요"), await text(page, ".onb .ix-title"));
-	await checkPausedShape(page, "model", { button: "이어서 받기", link: ["임베딩 방식 바꾸기", "일단 Dazzi 열기"] });
+	await checkPausedShape(page, "model", { button: "이어서 받기", link: ["임베딩 방식 바꾸기"] });
 	await shot(page, "12-model-paused");
 });
 
@@ -449,7 +534,7 @@ await scenario("a model that cannot be downloaded: retried by itself, one way on
 // screens have to notice and carry on without the user redoing anything.
 
 // The embedder is back during the pause: it retries by itself, the pause ends, the index finishes through the
-// restored server, and the app opens with nothing left over.
+// restored server, and onboarding is over by itself with nothing left over.
 await scenario("recovery: the embedder comes back during the pause and the index finishes by itself", async (state) => {
 	const port = await closedPort();
 	Object.assign(state, profile({ embed: "local", embedder: { id: EMBED_ID, dimension: 1024, baseUrl: `http://127.0.0.1:${port}`, apiKeyEnv: "OPENAI_API_KEY" } }));
@@ -465,26 +550,27 @@ await scenario("recovery: the embedder comes back during the pause and the index
 		const run = await status(page);
 		check("the run ended as a success with nothing recorded as failed", run.state === "success" && run.failure === null, JSON.stringify({ state: run.state, failure: run.failure }));
 		await shot(page, "16-recovery-offline-back-done");
-		await page.locator(".onb .ix-open-btn").click();
-		await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+		await completedByItself(state, page, "offline recovery");
+		await closeOnboarding(state);
 		await sleep(1500);
-		const after = await problem(page);
+		const after = await problem(state.finder);
 		check("nothing is left behind in the app", after.failure === null && after.skipped === 0, JSON.stringify(after));
-		check("no banner in the Finder", (await page.locator('[role="alert"]').count()) === 0);
+		check("no banner in the Finder", (await state.finder.locator('[role="alert"]').count()) === 0);
 		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
 	} finally {
 		await server.close();
 	}
 });
 
-// The user opened the app anyway; the embedder comes back later; the banner's one button puts everything right.
+// The user closed the onboarding window on the stop, which ends onboarding; the embedder comes back later; the
+// banner's one button puts everything right.
 await scenario("recovery: the banner's button fixes it once the embedder is back", async (state) => {
 	const port = await closedPort();
 	Object.assign(state, profile({ embed: "local", embedder: { id: EMBED_ID, dimension: 1024, baseUrl: `http://127.0.0.1:${port}`, apiKeyEnv: "OPENAI_API_KEY" } }));
-	const page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
+	let page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
 	await paused(page);
-	await page.locator(".onb .ix-links button", { hasText: "일단 Dazzi 열기" }).click();
-	await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+	await closeOnboarding(state);
+	page = state.finder; // the Finder that was open all along, now the app's only window
 	await page.waitForSelector('[role="alert"]', { timeout: 20_000 });
 	// What a user sees: the keyword index runs first (the sidebar shows progress), then the problem block returns.
 	await until(async () => (await page.locator('.sidebar__activity[data-tone="error"]').count()) === 1, 90_000, "the problem block after the keyword index");
@@ -533,7 +619,7 @@ await scenario("a real full disk: told apart from every other download failure, 
 		const run = await status(page);
 		check("a volume that is really full is classified as a full disk", run.failure?.reason === "disk-full" && run.failure?.code === "embedding-model-download-failed", JSON.stringify(run.failure));
 		check("title says there is not enough storage", (await text(page, ".onb .ix-title")).includes("저장 공간이 부족해요"), await text(page, ".onb .ix-title"));
-		await checkPausedShape(page, "disk", { button: "공간 확보했어요, 이어서 받기", link: ["임베딩 방식 바꾸기", "일단 Dazzi 열기"] });
+		await checkPausedShape(page, "disk", { button: "공간 확보했어요, 이어서 받기", link: ["임베딩 방식 바꾸기"] });
 		check("a full disk is not retried by itself", !/\d+초 뒤/u.test(await text(page, ".onb .ix-sub")), await text(page, ".onb .ix-sub"));
 		await shot(page, "21-disk-full-paused");
 		// The way on that needs no space: keyword-only search.
@@ -546,6 +632,7 @@ await scenario("a real full disk: told apart from every other download failure, 
 		await page.waitForSelector(".onb .ix.done", { timeout: 120_000 });
 		check("choosing keyword-only finishes the index on the same full disk", true);
 		await shot(page, "23-disk-full-keyword-done");
+		await completedByItself(state, page, "disk-full recovery");
 		check("no renderer errors", state.errors.length === 0, state.errors.slice(0, 3).join(" | "));
 	} finally {
 		await stop(state);
@@ -553,8 +640,8 @@ await scenario("a real full disk: told apart from every other download failure, 
 	}
 });
 
-// A model whose download was never finished: the pause says so, Dazzi opens anyway, and the banner's
-// "resume" completes the model and runs the real on-device embedding.
+// A model whose download was never finished: the pause says so, the user closes the onboarding window, and the
+// banner's "resume" completes the model and runs the real on-device embedding.
 await scenario("recovery: an unfinished model is completed from the banner and the real local index runs", async (state) => {
 	const cached = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homeDir(), ".cache", "minsync", "models");
 	if (!existsSync(join(cached, "models--Qwen--Qwen3-Embedding-0.6B", "refs", "main"))) throw new Error(`no cached model at ${cached}; the runner copies the host's cache into the guest`);
@@ -564,14 +651,14 @@ await scenario("recovery: an unfinished model is completed from the banner and t
 	const refs = join(models, "models--Qwen--Qwen3-Embedding-0.6B", "refs");
 	rmSync(join(refs, "main"));
 	chmodSync(refs, 0o555);
-	const page = await start(state, { env: { FASTEMBED_CACHE_DIR: models } });
+	let page = await start(state, { env: { FASTEMBED_CACHE_DIR: models } });
 	try {
 		await paused(page, 300_000);
 		const run = await status(page);
 		check("a model that cannot be completed is a model-download stop", run.failure?.reason === "model-download", JSON.stringify(run.failure));
 		check("title says the model could not be downloaded", (await text(page, ".onb .ix-title")).includes("모델을 받지 못했어요"), await text(page, ".onb .ix-title"));
-		await page.locator(".onb .ix-links button", { hasText: "일단 Dazzi 열기" }).click();
-		await page.waitForSelector(".onb", { state: "detached", timeout: 15_000 });
+		await closeOnboarding(state);
+		page = state.finder; // the Finder that was open all along, now the app's only window
 		await page.waitForSelector('[role="alert"]', { timeout: 20_000 });
 		check("the banner offers to resume the download", (await text(page, '[role="alert"]')).includes("이어서 받기"), await text(page, '[role="alert"]'));
 		await until(async () => (await page.locator('.sidebar__activity[data-tone="error"]').count()) === 1, 120_000, "the problem block after the keyword index");
@@ -599,6 +686,36 @@ await scenario("recovery: an unfinished model is completed from the banner and t
 		} catch {
 			// The folder may already be gone.
 		}
+	}
+});
+
+// 7. A run still going when the window closes: with the Finder open this is not the last window, so the close
+// asks nothing and the index keeps going in main — and because it never finished, onboarding is unfinished
+// again on the next launch, the same run resumed.
+await scenario("a first index still running: closing the onboarding window leaves onboarding for the next launch", async (state) => {
+	// An embedder that accepts the connection and never answers holds the run open, so the window can be closed
+	// while the index is really going.
+	const holding = await listen(() => undefined);
+	Object.assign(state, profile({ embed: "local", embedder: { id: EMBED_ID, dimension: 1024, baseUrl: holding.url, apiKeyEnv: "OPENAI_API_KEY" } }));
+	try {
+		const page = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
+		await until(async () => (await status(page))?.state === "running", 120_000, "the first index to start running");
+		check("the run is going, not stopped", (await page.locator(".onb .ix.paused").count()) === 0);
+		const atClose = await status(page);
+		await closeOnboarding(state);
+		await sleep(2000);
+		check("the index was still running when the window closed", atClose.state === "running", atClose.state);
+		check("closing it left the Finder, not a quit", (await indexWindows(state)).length === 1 && !state.finder.isClosed());
+		check("the Finder window is still the app's own window", (await state.finder.locator(".sidebar").count()) === 1);
+		check("a run that never finished leaves onboarding unfinished", onboardingState(state)?.completed === false, JSON.stringify(onboardingState(state)?.completed));
+		// The next launch is the one the unfinished first run was kept for: the window comes back on it.
+		await stop(state);
+		const again = await start(state, { env: { OPENAI_API_KEY: "sk-qa" } });
+		await again.waitForSelector(".onb .ix", { timeout: 120_000 });
+		check("the next launch brings the onboarding window back on the same run", true);
+		check("and onboarding is still unfinished there", onboardingState(state)?.completed === false);
+	} finally {
+		await holding.close();
 	}
 });
 

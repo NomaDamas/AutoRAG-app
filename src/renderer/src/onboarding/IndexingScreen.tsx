@@ -355,35 +355,21 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 			</div>
 			<div className="ix-gate">
 				{success ? (
-					<>
-						<div className="ix-notice ok">
-							<Icon name="circle-check" size={18} />
-							<span>
-								<strong>{t("onboarding.indexing.gateOkTitle")}</strong>
-								<small>{skipped > 0 ? t("onboarding.indexing.gateOkDetailPartial") : t("onboarding.indexing.gateOkDetail", { files: readFiles.toLocaleString() })}</small>
-							</span>
-						</div>
-						<button type="button" className="ix-open-btn" onClick={ctx.finish}>
-							{t("onboarding.indexing.open")} <span className="kbd">↵</span>
-						</button>
-					</>
+					<div className="ix-notice ok">
+						<Icon name="circle-check" size={18} />
+						<span>
+							<strong>{t("onboarding.indexing.gateOkTitle")}</strong>
+							<small>{skipped > 0 ? t("onboarding.indexing.gateOkDetailPartial") : t("onboarding.indexing.gateOkDetail", { files: readFiles.toLocaleString() })}</small>
+						</span>
+					</div>
 				) : (
-					<>
-						<div className="ix-notice">
-							<Icon name="triangle-alert" size={18} />
-							<span>
-								<strong>
-									{platform === "win32" ? t("onboarding.indexing.gateTitlePc") : t("onboarding.indexing.gateTitleMac")}
-								</strong>
-								<small>
-									{platform === "win32" ? t("onboarding.indexing.gateDetailWindows") : t("onboarding.indexing.gateDetailMac")}
-								</small>
-							</span>
-						</div>
-						<button type="button" className="ix-open-btn" disabled>
-							<Icon name="lock" size={13} /> {t("onboarding.indexing.gateLocked")}
-						</button>
-					</>
+					<div className="ix-notice">
+						<Icon name="triangle-alert" size={18} />
+						<span>
+							<strong>{platform === "win32" ? t("onboarding.indexing.gateTitlePc") : t("onboarding.indexing.gateTitleMac")}</strong>
+							<small>{platform === "win32" ? t("onboarding.indexing.gateDetailWindows") : t("onboarding.indexing.gateDetailMac")}</small>
+						</span>
+					</div>
 				)}
 			</div>
 			{success && skipped > 0 ? (
@@ -395,11 +381,6 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 			) : (
 				<TipCard ctx={ctx} />
 			)}
-			{!success ? (
-				<button type="button" className="ix-bg-start" onClick={ctx.finishInBackground}>
-					{t("onboarding.indexing.startInBackground")}
-				</button>
-			) : null}
 		</section>
 	);
 }

@@ -14,7 +14,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
 import { rmRetry } from "./platform.mjs";
 
 if (process.platform !== "darwin" && process.platform !== "win32") {
@@ -86,7 +86,8 @@ for (const { os, lang: injected } of CASES) {
 		writeFileSync(join(userDataDir, "onboarding", "state.json"), `${JSON.stringify({ completed: false, draft: draft(step) })}\n`);
 		const app = await launchFinder({ userDataDir, env, onboarding: true, language: null, args: injected === null ? [] : ["-AppleLanguages", `(${os})`] });
 		try {
-			const page = await finderWindow(app, 20_000);
+			// The first run opens the Finder and the onboarding window side by side; the copy under test is onboarding's.
+			const page = await onboardingWindow(app, 20_000);
 			await page.waitForSelector(".onb .screen", { timeout: 20_000 });
 			const lang = injected ?? resolve(await app.evaluate(({ app: electron }) => electron.getPreferredSystemLanguages()));
 			const headline = HEADLINES[lang];
