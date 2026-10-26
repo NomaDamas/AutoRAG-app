@@ -614,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "Back",
     "step": {
       "welcome": "Intro",
       "permissions": "Permissions",
@@ -714,6 +715,14 @@
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
       "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
+      "getStarted": "Get started",
+      "continueGoogle": "Continue with Google",
+      "continueApple": "Continue with Apple",
+      "or": "or",
+      "emailLabel": "Email",
+      "emailPlaceholder": "name@example.com",
+      "continueEmail": "Continue with email",
+      "guest": "Continue as guest",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",

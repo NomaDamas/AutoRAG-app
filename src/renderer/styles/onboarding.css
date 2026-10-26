@@ -306,29 +306,46 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 
 /* Back | progress | primary: the outer columns are equal, so the progress stays on the window's centre line whatever the primary's label is. */
 .onb .footer {
-	display: grid;
-	grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+	position: relative;
+	display: flex;
 	align-items: center;
-	gap: 16px;
+	justify-content: flex-end;
 	padding: 0 17px;
 	border-top: 1px solid var(--onb-divider);
 	background: var(--onb-bg-window);
 }
 
-.onb .back-btn {
-	display: grid;
-	justify-self: start;
-	place-items: center;
-	width: 30px;
-	height: 30px;
-	border: 1px solid var(--onb-border);
-	border-radius: 50%;
-	background: var(--onb-bg-card);
-	color: var(--onb-body);
+.onb .footer .progress-dashes {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
 }
 
-.onb .back-btn:disabled {
-	opacity: .35;
+.onb .footer-actions {
+	display: flex;
+	gap: 12px;
+}
+
+.onb .footer-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-width: 104px;
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid #a1a1a6;
+	border-radius: 7px;
+	background: var(--onb-bg-card);
+	color: var(--onb-body);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.onb .footer-btn:disabled {
+	border-color: var(--onb-border);
+	background: var(--onb-bg-input);
+	color: var(--onb-faint);
 	cursor: not-allowed;
 }
 
@@ -4126,4 +4143,138 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-size: 12px;
 	font-weight: 500;
 	white-space: nowrap;
+
+/* Account step: one centred column (Figma 03 · account). */
+.onb .screen.account-screen {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.onb .account-column {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 20px;
+	width: 100%;
+	max-width: 375px;
+}
+
+.onb .account-brand {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+}
+
+.onb .account-logo {
+	display: block;
+	width: 77px;
+	height: 77px;
+}
+
+.onb .account-logo .app-logo {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.onb .account-brand h1 {
+	margin: 0;
+	font-weight: 700;
+	text-align: center;
+}
+
+.onb .account-panel {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	width: 100%;
+	margin-top: 10px;
+}
+
+.onb .account-providers {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.onb .account-btn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	width: 100%;
+	height: 40px;
+	border: 1px solid var(--onb-border);
+	border-radius: 8px;
+	font-size: 12px;
+	font-weight: 500;
+	cursor: pointer;
+}
+
+.onb .account-btn.google {
+	background: var(--onb-bg-card);
+	color: var(--onb-ink);
+}
+
+.onb .account-btn.apple {
+	border-color: #000;
+	background: #000;
+	color: #fff;
+}
+
+.onb .account-btn.email {
+	height: 38px;
+	border-radius: 7px;
+	border-color: var(--onb-bg-input);
+	background: var(--onb-bg-input);
+	color: var(--onb-ink);
+}
+
+.onb .account-divider {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	color: var(--onb-muted);
+	font-size: 10px;
+}
+
+.onb .account-divider:before,
+.onb .account-divider:after {
+	content: "";
+	height: 1px;
+	flex: 1;
+	background: var(--onb-divider);
+}
+
+.onb .account-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: -4px;
+	color: var(--onb-ink);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.onb .account-input {
+	height: 36px;
+	padding: 0 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 7px;
+	background: transparent;
+	color: var(--onb-body);
+	font-size: 12px;
+	font-weight: 400;
+}
+
+.onb .account-guest {
+	border: 0;
+	background: none;
+	color: var(--onb-body);
+	font-size: 11px;
+	text-decoration: underline;
+	cursor: pointer;
 }
