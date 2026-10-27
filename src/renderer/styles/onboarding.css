@@ -2260,32 +2260,44 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	transform: translateX(-50%);
 	box-sizing: border-box;
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	justify-content: space-between;
-	gap: 16px;
-	width: 456px;
+	justify-content: center;
+	gap: 6px;
+	width: 320px;
 	max-width: 100%;
-	padding: 16px;
+	padding: 12px 16px;
 	border-radius: 8px;
 	background: var(--onb-bg-card);
 	filter: drop-shadow(0 0 2px rgba(0,0,0,.12));
 	color: var(--onb-body);
 	font-size: 12px;
-	font-weight: 500;
+	font-weight: 400;
 	line-height: 16px;
+	text-align: center;
 	cursor: pointer;
+	animation: onb-consent-pop .22s ease-out;
 }
 
+/* The exit is the entrance played backwards, so the card leaves the way it arrived. */
 .onb .em-consent.closing {
 	pointer-events: none;
-	animation: onb-consent-out .22s ease-in forwards;
+	animation: onb-consent-pop .22s ease-out reverse forwards;
 }
 
-@keyframes onb-consent-out {
-	to {
+@keyframes onb-consent-pop {
+	from {
 		opacity: 0;
-		transform: translateX(-50%) translateY(-6px);
+		transform: translateX(-50%) translateY(6px) scale(.96);
 	}
+	to {
+		opacity: 1;
+		transform: translateX(-50%);
+	}
+}
+
+.onb .em-consent-text strong {
+	font-weight: 500;
 }
 
 .onb .em-consent-check {
@@ -2293,6 +2305,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	align-items: center;
 	flex: none;
 	gap: 8px;
+	font-weight: 500;
 	white-space: nowrap;
 }
 
@@ -2333,6 +2346,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 }
 
 @media (prefers-reduced-motion: reduce) {
+	.onb .em-consent,
 	.onb .em-consent.closing {
 		animation-duration: 1ms;
 	}

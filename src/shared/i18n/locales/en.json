@@ -837,13 +837,13 @@
         },
         "cloud": {
           "name": "Analyze on Dazzi's server",
-          "line": "Document contents are sent to Dazzi's server for analysis."
+          "line": "It is analyzed on a server, so it works even on a slower computer."
         },
         "local": {
           "nameMac": "Analyze on my Mac",
           "namePc": "Analyze on my PC",
-          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
-          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
+          "lineMac": "Analysis runs on this Mac, and your documents are never sent outside it.",
+          "linePc": "Analysis runs on this PC, and your documents are never sent outside it."
         }
       },
       "meter": {
@@ -860,8 +860,9 @@
       "minutes": "{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
-      "cloudConsent": "Document text is sent to Dazzi's server for processing.",
-      "cloudConsentCheck": "Got it",
+      "cloudConsentRequired": "(Required)",
+      "cloudConsent": "I agree that the document text is sent to the server.",
+      "cloudConsentCheck": "I agree",
       "pausedNotice": {
         "config": "Indexing stopped because the chosen embedding isn't available",
         "disk": "Not enough storage space to download the model",

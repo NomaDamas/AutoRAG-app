@@ -5,7 +5,7 @@
  * the same two meters, and the cloud consent under the grid).
  */
 
-import { useRef, useState, type KeyboardEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactElement } from "react";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { localSpecMessage } from "../../../../shared/local-embedding-spec";
@@ -41,10 +41,16 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	});
 	const selected = resolveEmbed(draft.embed, cloudAvailable, localEmbeddingAllowed(embedding === null ? null : embedding.localSpec));
 	const listRef = useRef<HTMLDivElement | null>(null);
-	// The consent card stays mounted while it fades out after the box is ticked, then goes.
-	const [consentClosing, setConsentClosing] = useState(false);
+	// The consent card pops in when the cloud card is chosen and pops out again when the box is ticked or
+	// another card is chosen: it stays mounted while the exit plays (`closing`), then goes.
 	const consented = draft.cloudConsent === true;
-	const showConsent = selected === "cloud" && (!consented || consentClosing);
+	const wantConsent = selected === "cloud" && !consented;
+	const [consentMounted, setConsentMounted] = useState(wantConsent);
+	useEffect(() => {
+		if (wantConsent) setConsentMounted(true);
+	}, [wantConsent]);
+	const consentClosing = consentMounted && !wantConsent;
+	const showConsent = wantConsent || consentMounted;
 	// Until main answers the first status read the size is unknown; the embedding info already carries it.
 	const reported = ctx.modelDownload.status;
 	const modelStatus =
@@ -180,20 +186,19 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 				</div>
 				{showConsent ? (
 					<label
-						className={cn("em-consent", consented && consentClosing && "closing")}
+						className={cn("em-consent", consentClosing && "closing")}
 						onAnimationEnd={(event) => {
-							if (event.animationName === "onb-consent-out") setConsentClosing(false);
+							if (event.animationName === "onb-consent-pop" && consentClosing) setConsentMounted(false);
 						}}
 					>
-						<span className="em-consent-text">{t("onboarding.embedding.cloudConsent")}</span>
+						<span className="em-consent-text">
+							<strong>{t("onboarding.embedding.cloudConsentRequired")}</strong> {t("onboarding.embedding.cloudConsent")}
+						</span>
 						<span className="em-consent-check">
 							<input
 								type="checkbox"
 								checked={consented}
-								onChange={(event) => {
-									setConsentClosing(event.target.checked);
-									ctx.setCloudConsent(event.target.checked);
-								}}
+								onChange={(event) => ctx.setCloudConsent(event.target.checked)}
 							/>
 							<span className="em-box" aria-hidden="true">
 								<Icon name="check" size={10} />

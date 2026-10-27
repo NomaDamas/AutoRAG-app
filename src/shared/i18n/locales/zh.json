@@ -837,13 +837,13 @@
         },
         "cloud": {
           "name": "在 Dazzi 服务器上分析",
-          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
+          "line": "由服务器进行分析，电脑性能较低也可以使用。"
         },
         "local": {
           "nameMac": "在我的 Mac 上分析",
           "namePc": "在我的 PC 上分析",
-          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
-          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
+          "lineMac": "分析在这台 Mac 内处理，文档不会发送到外部。",
+          "linePc": "分析在这台 PC 内处理，文档不会发送到外部。"
         }
       },
       "meter": {
@@ -860,8 +860,9 @@
       "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "cloudConsent": "文档正文会发送到 Dazzi 服务器进行处理。",
-      "cloudConsentCheck": "我已了解",
+      "cloudConsentRequired": "（必填）",
+      "cloudConsent": "我同意将文档正文发送到服务器。",
+      "cloudConsentCheck": "我同意",
       "pausedNotice": {
         "config": "所选嵌入方式不可用，已暂停",
         "disk": "存储空间不足，无法下载模型",
