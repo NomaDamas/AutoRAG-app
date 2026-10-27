@@ -10,10 +10,12 @@ import { ContactView } from "./contact";
 import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
 import { DataView } from "./data";
 import { DocxView, RtfView, SheetView } from "./documents";
+import { CertificateView } from "./certificate";
 import { FallbackView } from "./fallback";
 import { GoogleDriveView } from "./google-drive";
 import { MailView } from "./mail";
 import { MarkdownView } from "./markdown";
+import { IconsetView, RtfdView, TextClippingView, WebarchiveView, WeblocView } from "./native";
 import { HwpView } from "./hwp";
 import { LegacyDocView, LegacyPptView } from "./legacy-office";
 import { FontView, HeicView, ImageView, TiffView } from "./media";
@@ -29,7 +31,7 @@ import { AudioView, VideoView } from "./player";
 export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDocument; readonly anchor?: readonly string[] | null }): ReactElement {
 	const { t } = useTranslation();
 	const kind = viewerForExtension(file.ext);
-	if (file.size === 0) return <FallbackView file={file} note={t("quickLook.body.emptyFile")} />;
+	if (file.size === 0 && file.native == null && file.package !== true) return <FallbackView file={file} note={t("quickLook.body.emptyFile")} />;
 	// Only whole-file viewers arrive truncated without bytes; streamed and prefix viewers always have what they need.
 	if (file.truncated && file.bytes === null) {
 		return <FallbackView file={file} note={t("quickLook.body.tooLarge")} />;
@@ -73,6 +75,16 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <TextView file={file} anchor={anchor} />;
 		case "rtf":
 			return <RtfView file={file} />;
+		case "webloc":
+			return <WeblocView file={file} />;
+		case "webarchive":
+			return <WebarchiveView file={file} />;
+		case "rtfd":
+			return <RtfdView file={file} />;
+		case "iconset":
+			return <IconsetView file={file} />;
+		case "textclipping":
+			return <TextClippingView file={file} />;
 		case "data":
 			return <DataView file={file} />;
 		case "jsonl":
@@ -100,9 +112,11 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <GoogleDriveView file={file} />;
 		case "raster":
 			return <RasterView file={file} />;
+		case "certificate":
+			return <CertificateView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} anchor={anchor} />;
-			return <FallbackView file={file} />;
+			return <FallbackView file={file} art={file.thumbnail === null ? undefined : <img className="ql-native-thumbnail flex-none size-176 object-contain" src={file.thumbnail} alt="" draggable={false} />} />;
 		default:
 			return assertNever(kind);
 	}

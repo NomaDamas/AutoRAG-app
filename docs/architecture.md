@@ -305,7 +305,23 @@ hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
 owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what
 only Electron's main process can do and the worker asks for over its host
 port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
-opening files and URLs, and the clipboard.
+opening files and URLs, and the clipboard. ⌘C / ⌘X also put the selected files
+on the OS clipboard as copied files (`src/main/os-clipboard.ts`, Electron's
+`text/uri-list`, mapped to the platform's "copied files" format), so a browser,
+chat window, or Finder pastes the files themselves; the in-app clipboard still
+owns copy-vs-cut and the in-app paste.
+
+The worker never imports `@autorag/librarian` on its own thread: loading it takes
+~2 s, and folder listings are answered on that thread. The one importer is a
+`worker_thread` inside the worker (`src/fs-worker/librarian-thread.ts`, built as an
+extra main-bundle entry like the archive workers). `src/fs-worker/librarian-client.ts`
+starts it on the first call that needs the librarian (a file-name search, the dupey
+scan, the index badges) and the worker asks for it once at launch, after the first
+folder renders; the contract is `librarian-contract.ts`. Quitting sends the thread a
+`shutdown` first, which stops the file-name index daemon (the Everything process on
+Windows, which otherwise keeps the profile folder locked) and raises the process
+`exit` event the librarian ends its MinSync children on, then terminates the thread.
+The client waits 1.8 s for that: main kills the worker 2 s after the quit.
 
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
@@ -316,6 +332,15 @@ message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+
+The Windows file-name index daemon (Everything, one per profile) is started through
+`launchTiedToParent` (`src/main/tied-launch.ts`), not detached: Windows ends a
+non-detached child with its parent however the parent ends, so a force-killed or
+crashed app no longer leaves an `everything.exe` pinning its profile folder. The quit
+path still stops it first. The fsearch daemon on macOS and Linux stays detached on
+purpose (restarting it re-scans every watched folder). QA lane:
+`scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
+`taskkill /F` on main alone).
 
 ## Error reports (Sentry)
 

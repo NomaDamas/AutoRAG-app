@@ -120,6 +120,14 @@ export function isAppBundle(name: string, isDirectory: boolean, platform: NodeJS
 	return lower.length > APP_BUNDLE_EXTENSION.length && lower.endsWith(APP_BUNDLE_EXTENSION);
 }
 
+/** Directory packages that open as one document rather than a browsable folder. */
+const PACKAGE_DIRECTORY_EXTENSIONS = new Set(["rtfd", "iconset", "pvt", "lpdf", "prefpane"]);
+
+/** Application bundles on macOS plus document packages on every platform. */
+export function isPackageDirectory(name: string, isDirectory: boolean, platform: NodeJS.Platform): boolean {
+	return isAppBundle(name, isDirectory, platform) || (isDirectory && PACKAGE_DIRECTORY_EXTENSIONS.has(extensionOf(name)));
+}
+
 /**
  * Build the contract entry for one on-disk path. Symlinks are reported with
  * the target's metadata when resolvable, else with the link's own metadata.
@@ -141,8 +149,8 @@ export async function buildFsEntry(path: string, platform: NodeJS.Platform = pro
 	}
 	const isDirectory = effective.isDirectory();
 	const name = basename(path);
-	const isBundle = isAppBundle(name, isDirectory, platform);
-	const isFolder = isDirectory && !isBundle;
+	const isPackage = isPackageDirectory(name, isDirectory, platform);
+	const isFolder = isDirectory && !isPackage;
 	const entry = {
 		name,
 		path,

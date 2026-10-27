@@ -151,6 +151,21 @@ still has the previous file's size when they lay out.
   cold, none empty), unlike `.docx`/`.xlsx`/`.pptx`, which stay letter tiles.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
+- **Apple locations, archives, clippings, and packages** — `.webloc` and
+  `.inetloc` show an inert title and URL; the existing Open action hands the
+  pointer to the OS. `.webarchive` is parsed in-process (XML or binary plist),
+  its archived images and style sheets are inlined, and `standaloneOfficeHtml`
+  plus a `sandbox=""` frame removes or blocks scripts, event handlers,
+  navigation directives, frames, and every network fetch. `.textclipping`
+  accepts plist, plain UTF-8, and classic `TEXT`/`utf8`/`utxt` resource forks.
+  `.rtfd` renders `TXT.rtf` through the RTF text converter and lists attachments
+  without opening them; `.iconset` draws its PNGs as a grid. These directory
+  packages, plus `.pvt`, `.lpdf`, and `.prefpane`, are file rows rather than
+  folders to browse into. The latter three and `.pict`/`.pct`/`.pic`/
+  `.pictclipping` use macOS Quick Look thumbnails in the Other panel and keep
+  the ordinary information panel on other platforms. The panel opens with the
+  cached thumbnail (or the information glyph) immediately; a slow Quick Look
+  render arrives afterward on the thumbnail channel instead of holding Space.
 - **Code** — numbered lines on the paper material with the reference's Xcode
   palette (highlight.js, plus call and constant classes the grammars leave
   out), wrap and copy in the toolbar, and a footer with language, encoding
@@ -284,6 +299,24 @@ still has the previous file's size when they lay out.
   the browser. Drive supplies a 128px square whatever size is asked, so the
   Inspector and panel show it enlarged. Where Drive has drawn nothing the OS
   type icon (macOS) or the page glyph stays.
+
+- **Certificates and key files** — `.pem`, `.crt`, `.cer`, `.der`, `.p12`,
+  `.pfx`, `.keychain`, `.keychain-db` (`certificate` viewer, `byteNeed`
+  `query`) send no file bytes to the page. `preview:certificate` reads only the
+  first 256KB in the main process (`node/certificate.ts`; the page never parses)
+  and decodes with `node:crypto`'s `X509Certificate`: no dependency, no network
+  (no OCSP/CRL), so it works the same on macOS, Windows and Linux. The type
+  comes from the bytes (`shared/certificate.ts`), not the name: PEM by its
+  `-----BEGIN` armour (a bundle lists up to 20 certificates and counts the
+  rest), DER by its leading SEQUENCE. Each certificate shows subject, issuer,
+  serial, validity (an `expired` or `not yet valid` badge), signature and key
+  algorithm, SAN, key usage (read from the DER keyUsage extension), extended
+  usage, and the SHA-256 and SHA-1 fingerprints. **A private key block is
+  reduced to its label and whether it is passphrase-protected before anything
+  is returned**; its body never reaches the page or the IPC. PKCS #12 and
+  Apple keychains are encrypted stores: they get a labelled panel (name, kind,
+  size, date, one sentence) and are never parsed or decrypted. No pure-JS
+  PKCS #12 reader is bundled, so there is no password prompt for them.
 
 - **Databases and data files** — `.sqlite`, `.sqlite3`, `.db`, and `.parquet`
   (`data` viewer, `byteNeed` `query`) send no file bytes to the page. The

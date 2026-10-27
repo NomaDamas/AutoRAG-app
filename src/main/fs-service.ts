@@ -55,6 +55,8 @@ export interface FsShell {
 /** Subset of Electron's clipboard used by the service (injected for testability). */
 export interface FsOsClipboard {
 	writeText(text: string): void;
+	/** Put the files themselves on the OS clipboard, so other apps paste them as files. */
+	writeFiles(paths: readonly string[]): Promise<void>;
 }
 
 /** OS-native file-kind lookup: Finder's kind on macOS, Explorer's type on Windows. */
@@ -1223,6 +1225,9 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		clipboardSet: async (clipboard) => {
 			inAppClipboard = { op: clipboard.op, paths: [...clipboard.paths] };
 			await rememberClipboardTargets(clipboard.paths);
+			// The in-app clipboard keeps cut/copy and symlink targets; the OS clipboard only lets other apps paste the files.
+			// A failed OS write must not break in-app copy/paste, so it is logged, not thrown.
+			await deps.clipboard.writeFiles(clipboard.paths).catch((error: unknown) => console.error("[clipboard] OS file clipboard:", error));
 		},
 		clipboardGet: async () => inAppClipboard,
 		copyPathsToClipboard: async (paths) => {
