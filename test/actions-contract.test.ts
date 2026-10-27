@@ -16,8 +16,11 @@ describe("isActionRequest compress", () => {
 });
 
 describe("isActionRequest reduceSize", () => {
-	it("accepts the bare request and no longer knows the image-only optimize", () => {
+	it("accepts a bare request or a cancellation handle, and rejects empty handles and optimizeImage", () => {
 		expect(isActionRequest({ kind: "reduceSize" })).toBe(true);
+		expect(isActionRequest({ kind: "reduceSize", id: "job-1" })).toBe(true);
+		expect(isActionRequest({ kind: "reduceSize", id: "" })).toBe(false);
+		expect(isActionRequest({ kind: "reduceSize", id: 7 })).toBe(false);
 		expect(isActionRequest({ kind: "optimizeImage" })).toBe(false);
 	});
 });

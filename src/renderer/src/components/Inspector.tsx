@@ -78,6 +78,15 @@ import {
 } from "./icons";
 import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
+import { ProgressBar } from "./primitives/ProgressBar";
+
+/** An in-flight `reduceSize` job, shown in the Inspector's bottom-right bar until it settles or is cancelled. */
+export interface RunningReduction {
+	readonly path: string;
+	readonly name: string;
+	/** 0–99 while ffmpeg reports progress; null when indeterminate (PDF, sips, or before Duration arrives). */
+	readonly percent: number | null;
+}
 
 export interface InspectorFamilyMember {
 	readonly path: string;
@@ -108,6 +117,10 @@ export interface InspectorProps {
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	/** The applications the OS registers for `entry`'s type, default first. */
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
+	/** The currently running size reduction, or null when idle. */
+	readonly runningReduction?: RunningReduction | null | undefined;
+	/** Stop the running size reduction. */
+	readonly onCancelReduction?: (() => void) | undefined;
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
@@ -172,6 +185,8 @@ export function Inspector({
 	actionCapabilities,
 	onAction,
 	loadOpenWithApplications,
+	runningReduction = null,
+	onCancelReduction,
 	family,
 	onOpenMember,
 	view,
@@ -218,6 +233,8 @@ export function Inspector({
 					actionCapabilities={actionCapabilities}
 					onAction={onAction}
 					loadOpenWithApplications={loadOpenWithApplications}
+					runningReduction={runningReduction}
+					onCancelReduction={onCancelReduction}
 					automations={automations}
 					folderInView={folderInView}
 				/>
@@ -238,6 +255,8 @@ function InfoHalf({
 	actionCapabilities,
 	onAction,
 	loadOpenWithApplications,
+	runningReduction,
+	onCancelReduction,
 	automations,
 	folderInView,
 }: {
@@ -252,6 +271,8 @@ function InfoHalf({
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
+	readonly runningReduction: RunningReduction | null;
+	readonly onCancelReduction?: (() => void) | undefined;
 	readonly automations?: InspectorProps["automations"];
 	readonly folderInView: boolean;
 }): ReactElement {
@@ -365,7 +386,15 @@ function InfoHalf({
 			)}
 
 			{entry === null ? null : (
-				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} loadOpenWithApplications={loadOpenWithApplications} />
+				<ActionBar
+					entry={entry}
+					capabilities={actionCapabilities}
+					onAction={onAction}
+					onAskAi={onAskAi}
+					loadOpenWithApplications={loadOpenWithApplications}
+					runningReduction={runningReduction}
+					onCancelReduction={onCancelReduction}
+				/>
 			)}
 		</div>
 	);
@@ -627,16 +656,21 @@ function ActionBar({
 	onAction,
 	onAskAi,
 	loadOpenWithApplications,
+	runningReduction,
+	onCancelReduction,
 }: {
 	readonly entry: FinderEntry;
 	readonly capabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
+	readonly runningReduction: RunningReduction | null;
+	readonly onCancelReduction?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const actions = suggestedActions(entry, capabilities);
 	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
+	const reducing = runningReduction !== null;
 	function run(target: FileActionTarget, anchor: ActionAnchor): void {
 		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
 		if (target.kind === "askAi") onAskAi(entry);
@@ -651,6 +685,36 @@ function ActionBar({
 
 	return (
 		<div className="inspector-actions flex-none border-t border-border bg-chrome px-10 pt-10 pb-12">
+			{runningReduction === null ? null : (
+				<div
+					className="inspector-reduce-progress mb-8 flex flex-col gap-6 rounded-8 border border-border bg-window px-10 py-8"
+					role="status"
+					aria-live="polite"
+				>
+					<div className="flex items-center justify-between gap-8 text-meta">
+						<span className="min-w-0 flex-1 truncate font-medium text-ink">
+							{t("inspector.actions.reducing", { name: runningReduction.name })}
+						</span>
+						{runningReduction.percent !== null ? (
+							<span className="flex-none tabular-nums text-ink-muted">{runningReduction.percent}%</span>
+						) : null}
+						{onCancelReduction === undefined ? null : (
+							<button
+								type="button"
+								className="flex-none border-0 bg-transparent p-0 text-meta font-medium text-accent-text cursor-pointer hover:underline"
+								onClick={onCancelReduction}
+							>
+								{t("common.cancel")}
+							</button>
+						)}
+					</div>
+					<ProgressBar
+						percent={runningReduction.percent}
+						tone="run"
+						label={t("inspector.actions.reduceProgressAria", { name: runningReduction.name })}
+					/>
+				</div>
+			)}
 			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
 				{actions.map((action) => {
 					const Icon = ACTION_ICONS[action.icon];
@@ -673,6 +737,7 @@ function ActionBar({
 						<ActionButton
 							key={action.id}
 							actionId={action.id}
+							disabled={action.id === "reduceSize" && reducing}
 							icon={<Icon size={18} />}
 							label={localizedLabel(action.id, action.label)}
 							onClick={(event) => {
@@ -725,18 +790,21 @@ function ActionButton({
 	icon,
 	label,
 	actionId,
+	disabled = false,
 	onClick,
 }: {
 	readonly icon: ReactElement;
 	readonly label: string;
-	readonly actionId?: string;
+	readonly actionId?: string | undefined;
+	readonly disabled?: boolean | undefined;
 	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
 	return (
 		<button
 			type="button"
 			data-action={actionId}
-			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink"
+			disabled={disabled}
+			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
 			onClick={onClick}
 		>
 			{icon}

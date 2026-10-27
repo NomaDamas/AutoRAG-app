@@ -15,12 +15,13 @@
  * by chunk without ever holding the whole archive or its contents.
  */
 
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
 import { lstat, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
 import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { PDFDocument } from "pdf-lib";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
 import { formatByteSize, reductionKindOf, REDUCIBLE_EXTENSIONS, extensionOfName } from "../shared/size-reduction";
@@ -32,6 +33,7 @@ import {
 	type ActionAnchor,
 	type ActionCapabilities,
 	type ActionOutcome,
+	type ActionProgressEvent,
 	type ActionRequest,
 	type ImageFormat,
 	type OpenWithApplication,
@@ -48,10 +50,17 @@ export interface CommandResult {
 }
 
 /** Runs an external command; rejects with the program's own message on failure. */
+export interface CommandRunOptions {
+	readonly timeoutMs?: number;
+	readonly signal?: AbortSignal;
+	readonly onStdout?: (chunk: string) => void;
+	readonly onStderr?: (chunk: string) => void;
+}
+
 export type CommandRunner = (
 	command: string,
 	args: readonly string[],
-	options?: { readonly timeoutMs?: number },
+	options?: CommandRunOptions,
 ) => Promise<CommandResult>;
 
 /** The "Open with" chooser for applications outside the OS's suggestions; injected so the service never imports `dialog`. */
@@ -79,12 +88,16 @@ export interface ActionServiceDeps {
 	readonly archiveLimits?: ArchiveLimits;
 	/** Shrinks PDFs (Filee's Compress PDF); absent means PDFs are not offered. */
 	readonly pdf?: PdfReducer;
+	/** Live progress callback for long-running jobs (`reduceSize` with an `id`). */
+	readonly onProgress?: (event: ActionProgressEvent, window: BrowserWindow | null) => void;
 }
 
 /** The Inspector action surface the IPC layer registers. */
 export interface ActionService {
 	capabilities(): Promise<ActionCapabilities>;
 	run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
+	/** Stop a running cancellable action (`reduceSize`) identified by `id`. */
+	cancel(id: string): Promise<void>;
 	/** Applications the OS registers for `path`'s type, default first (macOS; empty elsewhere). */
 	openWithApplications(path: string): Promise<readonly OpenWithApplication[]>;
 	share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
@@ -214,23 +227,64 @@ const FASTSTART_EXTENSIONS: readonly string[] = ["mp4", "m4v", "mov"];
 export function defaultRun(
 	command: string,
 	args: readonly string[],
-	options?: { readonly timeoutMs?: number },
+	options?: CommandRunOptions,
 ): Promise<CommandResult> {
-	const { promise, resolve, reject } = Promise.withResolvers<CommandResult>();
-	execFile(
-		command,
-		[...args],
-		{ timeout: options?.timeoutMs ?? COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_BUFFER, windowsHide: true },
-		(error, stdout, stderr) => {
-			if (error !== null) {
-				const detail = stderr.trim();
-				reject(new Error(detail.length > 0 ? detail : errorMessage(error)));
+	const signal = options?.signal;
+	if (signal?.aborted) return Promise.reject(new Error("aborted"));
+	return new Promise<CommandResult>((resolve, reject) => {
+		const child = spawn(command, [...args], {
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
+		});
+		const stdout: Buffer[] = [];
+		const stderr: Buffer[] = [];
+		let bytes = 0;
+		let settled = false;
+		const finish = (fn: () => void): void => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", onAbort);
+			fn();
+		};
+		const killChild = (): void => {
+			try {
+				child.kill("SIGTERM");
+			} catch {
+				// Already gone.
+			}
+		};
+		const timer = setTimeout(() => {
+			killChild();
+			finish(() => reject(new Error(`${command} timed out`)));
+		}, options?.timeoutMs ?? COMMAND_TIMEOUT_MS);
+		const onAbort = (): void => {
+			killChild();
+			finish(() => reject(new Error("aborted")));
+		};
+		signal?.addEventListener("abort", onAbort, { once: true });
+		child.stdout.on("data", (chunk: Buffer) => {
+			bytes += chunk.byteLength;
+			if (bytes <= COMMAND_MAX_BUFFER) stdout.push(chunk);
+			options?.onStdout?.(chunk.toString("utf8"));
+		});
+		child.stderr.on("data", (chunk: Buffer) => {
+			bytes += chunk.byteLength;
+			if (bytes <= COMMAND_MAX_BUFFER) stderr.push(chunk);
+			options?.onStderr?.(chunk.toString("utf8"));
+		});
+		child.once("error", (error) => finish(() => reject(new Error(errorMessage(error)))));
+		child.once("close", (code) => {
+			const out = Buffer.concat(stdout).toString("utf8");
+			const err = Buffer.concat(stderr).toString("utf8");
+			if (code !== 0) {
+				const detail = err.trim();
+				finish(() => reject(new Error(detail.length > 0 ? detail : `${command} exited with code ${code ?? -1}`)));
 				return;
 			}
-			resolve({ stdout, stderr });
-		},
-	);
-	return promise;
+			finish(() => resolve({ stdout: out, stderr: err }));
+		});
+	});
 }
 
 /** The file name without its final extension. */
@@ -461,9 +515,9 @@ function videoReduceCodecs(extension: string): { readonly video: string; readonl
 	return extension === "webm" ? { video: "libvpx-vp9", audio: "libopus" } : { video: "libx264", audio: "aac" };
 }
 
-function ffmpegReduceVideoArgs(source: string, target: string, extension: string): readonly string[] {
+function ffmpegReduceVideoArgs(source: string, target: string, extension: string, reportProgress = false): readonly string[] {
 	const { video, audio } = videoReduceCodecs(extension);
-	const args = ["-y", "-i", source, "-map", "0:v:0", "-map", "0:a?", "-c:v", video];
+	const args = ["-y", ...(reportProgress ? ["-progress", "pipe:1", "-nostats"] : []), "-i", source, "-map", "0:v:0", "-map", "0:a?", "-c:v", video];
 	// Even dimensions: yuv420p encoders refuse an odd width or height.
 	args.push("-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-pix_fmt", "yuv420p");
 	if (video === "libvpx-vp9") args.push("-crf", REDUCE_VP9_CRF, "-b:v", "0");
@@ -474,13 +528,62 @@ function ffmpegReduceVideoArgs(source: string, target: string, extension: string
 	return args;
 }
 
-function ffmpegReduceAudioArgs(source: string, target: string, extension: string): readonly string[] {
+function ffmpegReduceAudioArgs(source: string, target: string, extension: string, reportProgress = false): readonly string[] {
 	const codec = AUDIO_ENCODERS[extension] ?? "aac";
-	const args = ["-y", "-i", source, "-map", "0:a:0"];
+	const args = ["-y", ...(reportProgress ? ["-progress", "pipe:1", "-nostats"] : []), "-i", source, "-map", "0:a:0"];
 	if (AUDIO_WITH_COVER.includes(extension)) args.push("-map", "0:v:0?", "-c:v", "copy");
 	if (extension === "m4a") args.push("-disposition:v:0", "attached_pic");
 	args.push("-c:a", codec, "-b:a", codec === "libopus" ? REDUCE_OPUS_BITRATE : REDUCE_AUDIO_BITRATE, "-map_metadata", "0", target);
 	return args;
+}
+
+/** Parses ffmpeg's `Duration: HH:MM:SS.xx` header and `out_time_us=...` lines into monotonic 1–99% steps. */
+function createFfmpegProgressTracker(emit: (percent: number) => void): {
+	readonly onStdout: (chunk: string) => void;
+	readonly onStderr: (chunk: string) => void;
+} {
+	let durationUs: number | null = null;
+	let lastPercent = 0;
+	let stderrTail = "";
+	let stdoutTail = "";
+	return {
+		onStderr(chunk) {
+			if (durationUs !== null) return;
+			stderrTail = (stderrTail + chunk).slice(-2048);
+			const match = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderrTail);
+			if (match === null) return;
+			const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+			if (Number.isFinite(seconds) && seconds > 0) durationUs = seconds * 1_000_000;
+		},
+		onStdout(chunk) {
+			if (durationUs === null) return;
+			const combined = stdoutTail + chunk;
+			const lines = combined.split(/\r?\n/);
+			stdoutTail = lines.pop() ?? "";
+			for (const line of lines) {
+				const match = /^out_time_us=(\d+)$/.exec(line.trim());
+				if (match === null) continue;
+				const currentUs = Number(match[1]);
+				const percent = Math.min(99, Math.max(1, Math.floor((currentUs / durationUs) * 100)));
+				if (percent > lastPercent) {
+					lastPercent = percent;
+					emit(percent);
+				}
+			}
+		},
+	};
+}
+
+/**
+ * Digital-only PDFs with uncompressed xref tables and loose indirect objects are
+ * left untouched by raster-focused presets. Re-saving with PDF 1.5 object streams
+ * deflates them losslessly while keeping every page, font, link, and vector intact.
+ */
+async function compactPdfObjects(source: string, output: string): Promise<void> {
+	const bytes = await readFile(source);
+	const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+	const saved = await doc.save({ useObjectStreams: true });
+	if (saved.byteLength < bytes.byteLength) await writeFile(output, saved);
 }
 
 /**
@@ -650,62 +753,102 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return { before, after };
 	}
 
-	async function reduceWithFfmpeg(source: string, extension: string, target: string): Promise<void> {
+	const running = new Map<string, AbortController>();
+
+	async function reduceMediaInto(
+		source: string,
+		extension: string,
+		stagedTarget: string,
+		signal: AbortSignal,
+		emitProgress: ((percent: number) => void) | null,
+	): Promise<void> {
 		const kind = reductionKindOf(source);
 		if (kind === "video") {
-			await run("ffmpeg", ffmpegReduceVideoArgs(source, target, extension));
+			const tracker = emitProgress === null ? undefined : createFfmpegProgressTracker(emitProgress);
+			await run("ffmpeg", ffmpegReduceVideoArgs(source, stagedTarget, extension, emitProgress !== null), {
+				signal,
+				timeoutMs: 60 * 60 * 1000,
+				...(tracker === undefined ? {} : tracker),
+			});
 		} else if (kind === "audio") {
-			await run("ffmpeg", ffmpegReduceAudioArgs(source, target, extension));
+			const tracker = emitProgress === null ? undefined : createFfmpegProgressTracker(emitProgress);
+			await run("ffmpeg", ffmpegReduceAudioArgs(source, stagedTarget, extension, emitProgress !== null), {
+				signal,
+				...(tracker === undefined ? {} : tracker),
+			});
 		} else {
 			const format = imageFormatOf(source);
 			if (format === null) throw new Error(t("main.action.unsupportedReduce"));
 			const sips = platform === "darwin" && (format === "jpeg" || format === "heic");
-			if (sips) await run("sips", sipsOptimizeArgs(source, target, format));
-			else await run("ffmpeg", ffmpegReduceImageArgs(source, target, format, (await probeFfmpegImages()).avifEncoder));
+			if (sips) await run("sips", sipsOptimizeArgs(source, stagedTarget, format), { signal });
+			else await run("ffmpeg", ffmpegReduceImageArgs(source, stagedTarget, format, (await probeFfmpegImages()).avifEncoder), { signal });
 		}
 	}
 
 	/**
 	 * Same format, fewer bytes: the result is `<name>-reduced.<ext>` next to the
-	 * original, which is never touched. Lossy re-encodes, so it is a copy by
-	 * design; a result that is not smaller is deleted and reported.
+	 * original, which is never touched. Every family writes into a hidden staging
+	 * folder first so the folder watcher never lists a 0-byte or half-encoded file,
+	 * and cancelling stops the child process and removes the staging whole.
 	 */
-	async function reduceSize(source: string): Promise<ActionOutcome> {
-		const extension = extensionOfName(source);
-		if (!(await reducibleExtensions()).includes(extension)) throw new Error(t("main.action.unsupportedReduce"));
-		if (await isAnimatedImage(source)) throw new Error(t("main.action.animatedReduce"));
-		const directory = dirname(source);
-		const finalName = `${stemOf(source)}-reduced${extname(source)}`;
-		let target: string;
-		if (extension === "pdf") {
-			if (pdf === null) throw new Error(t("main.action.unsupportedReduce"));
-			const staging = await mkdtemp(join(directory, REDUCE_STAGING_PREFIX));
-			try {
-				const produced = await pdf.reduce(source, staging);
-				target = await uniqueChild(directory, finalName);
-				await rename(produced, target);
-			} finally {
-				await rm(staging, { recursive: true, force: true });
-			}
-		} else {
-			target = await uniqueChild(directory, finalName);
-			try {
-				await reduceWithFfmpeg(source, extension, target);
-			} catch (error) {
-				await rm(target, { force: true });
-				throw error;
-			}
-		}
-		const { before, after } = await keepIfSmaller(source, target);
-		return {
-			output: target,
-			note: t("main.action.reduced", {
-				name: basename(target),
-				before: formatByteSize(before),
-				after: formatByteSize(after),
-				percent: Math.floor((1 - after / before) * 100),
-			}),
+	async function reduceSize(source: string, id: string | undefined, window: BrowserWindow | null): Promise<ActionOutcome> {
+		const name = basename(source);
+		const controller = new AbortController();
+		if (id !== undefined) running.set(id, controller);
+		const { signal } = controller;
+		const throwIfCancelled = (): void => {
+			if (signal.aborted) throw new Error(t("main.action.reduceCancelled", { name }));
 		};
+		let staging: string | null = null;
+		try {
+			const extension = extensionOfName(source);
+			if (!(await reducibleExtensions()).includes(extension)) throw new Error(t("main.action.unsupportedReduce"));
+			throwIfCancelled();
+			if (await isAnimatedImage(source)) throw new Error(t("main.action.animatedReduce"));
+			throwIfCancelled();
+			const beforeSize = (await lstat(source)).size;
+			const directory = dirname(source);
+			const finalName = `${stemOf(source)}-reduced${extname(source)}`;
+			staging = await mkdtemp(join(directory, REDUCE_STAGING_PREFIX));
+			throwIfCancelled();
+
+			let produced: string;
+			if (extension === "pdf") {
+				if (pdf === null) throw new Error(t("main.action.unsupportedReduce"));
+				produced = await pdf.reduce(source, staging, signal);
+				throwIfCancelled();
+				// Digital-only PDFs Filee could not shrink still gain from lossless object-stream compaction.
+				if ((await lstat(produced)).size >= beforeSize) {
+					await compactPdfObjects(source, produced).catch(() => undefined);
+				}
+			} else {
+				produced = join(staging, finalName);
+				const emit =
+					id !== undefined && deps.onProgress !== undefined
+						? (percent: number): void => deps.onProgress?.({ id, percent }, window)
+						: null;
+				await reduceMediaInto(source, extension, produced, signal, emit);
+			}
+			throwIfCancelled();
+			const { before, after } = await keepIfSmaller(source, produced);
+			const target = await uniqueChild(directory, finalName);
+			await rename(produced, target);
+			return {
+				output: target,
+				note: t("main.action.reduced", {
+					name: basename(target),
+					before: formatByteSize(before),
+					after: formatByteSize(after),
+					percent: Math.floor((1 - after / before) * 100),
+				}),
+			};
+		} catch (error) {
+			if (signal.aborted) throw new Error(t("main.action.reduceCancelled", { name }));
+			throw error;
+		} finally {
+			if (id !== undefined) running.delete(id);
+			if (staging !== null) await rm(staging, { recursive: true, force: true });
+		}
 	}
 
 	/**
@@ -866,7 +1009,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					return { output, note: t("main.action.resized", { name: basename(output) }) };
 				}
 				case "reduceSize":
-					return reduceSize(sole());
+					return reduceSize(sole(), request.id, window);
 				case "convertVideo": {
 					if (!(await hasFfmpeg())) throw new Error(t("main.action.videoNeedsFfmpeg"));
 					const path = sole();
@@ -875,6 +1018,10 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					return { output: target, note: t("main.action.containerConverted", { name: basename(target) }) };
 				}
 			}
+		},
+
+		async cancel(id: string): Promise<void> {
+			running.get(id)?.abort();
 		},
 
 		async share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {

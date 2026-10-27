@@ -88,6 +88,10 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (!isActionAnchor(anchor)) throw new Error(t("main.ipc.invalidAnchor"));
 		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
 	});
+	ipcMain.handle(ACTIONS_CHANNELS.cancel, (_event, id: unknown) => {
+		if (typeof id !== "string" || id.length === 0) throw new Error(t("main.ipc.unknownAction"));
+		return service.cancel(id);
+	});
 }
 
 /** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */

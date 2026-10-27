@@ -20,6 +20,7 @@ const live = filee !== undefined && hasFfmpeg;
 
 let root: string;
 let service: ActionService;
+const progressEvents: { id: string; percent: number }[] = [];
 
 function ffmpeg(...args: string[]): void {
 	const result = spawnSync("ffmpeg", ["-y", "-loglevel", "error", ...args]);
@@ -32,6 +33,7 @@ beforeAll(async () => {
 	service = createActionService({
 		applications: { pick: async () => null },
 		pdf: createFileePdfReducer(settings),
+		onProgress: (event) => progressEvents.push(event),
 	});
 });
 afterAll(async () => {
@@ -90,8 +92,10 @@ describe.runIf(live)("reduceSize against the real tools", () => {
 	it("shrinks MP4 and MP3, keeping the container and a playable stream", async () => {
 		const mp4 = join(root, "clip.mp4");
 		ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=640x480:r=24", "-f", "lavfi", "-i", "sine=f=440:d=3", "-t", "3", "-c:v", "libx264", "-crf", "10", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "320k", mp4);
-		const reducedMp4 = (await service.run([mp4], { kind: "reduceSize" }, null)).output ?? "";
+		progressEvents.length = 0;
+		const reducedMp4 = (await service.run([mp4], { kind: "reduceSize", id: "live-mp4" }, null)).output ?? "";
 		expect(reducedMp4).toBe(join(root, "clip-reduced.mp4"));
+		expect(progressEvents.some((event) => event.id === "live-mp4" && event.percent > 0 && event.percent <= 99)).toBe(true);
 		expect(await size(reducedMp4)).toBeLessThan(await size(mp4));
 		const probe = spawnSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0", reducedMp4]).stdout.toString();
 		expect(probe).toContain("h264");
@@ -111,4 +115,38 @@ describe.runIf(live)("reduceSize against the real tools", () => {
 		await expect(service.run([apng], { kind: "reduceSize" }, null)).rejects.toThrow();
 		expect((await readdir(root)).length).toBe(before);
 	}, 60_000);
+
+	it("shrinks a digital-only PDF whose objects were uncompressed", async () => {
+		const doc = await PDFDocument.create();
+		const font = await doc.embedFont(StandardFonts.Helvetica);
+		for (let page = 0; page < 15; page += 1) {
+			const added = doc.addPage([595, 842]);
+			for (let line = 0; line < 40; line += 1) {
+				added.drawText(`Page ${page} line ${line}: digital text document stream 1234567890`, { x: 40, y: 800 - line * 16, size: 10, font });
+			}
+		}
+		const digital = join(root, "digital.pdf");
+		await writeFile(digital, await doc.save({ useObjectStreams: false }));
+		const before = await size(digital);
+		const outcome = await service.run([digital], { kind: "reduceSize" }, null);
+		expect(outcome.output).toBe(join(root, "digital-reduced.pdf"));
+		expect(await size(outcome.output ?? "")).toBeLessThan(before);
+		expect((await PDFDocument.load(await readFile(outcome.output ?? ""))).getPageCount()).toBe(15);
+	}, 60_000);
+
+	it("cancels a slow real video reduction, kills ffmpeg, and leaves no partial file or staging", async () => {
+		const slow = join(root, "live-slow.mp4");
+		ffmpeg("-f", "lavfi", "-i", "testsrc2=s=1920x1080:r=30:d=60", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", slow);
+		progressEvents.length = 0;
+		const running = service.run([slow], { kind: "reduceSize", id: "live-cancel" }, null);
+		const deadline = Date.now() + 30_000;
+		while (Date.now() < deadline && !progressEvents.some((event) => event.id === "live-cancel")) {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+		await service.cancel("live-cancel");
+		await expect(running).rejects.toThrow();
+		const names = await readdir(root);
+		expect(names).not.toContain("live-slow-reduced.mp4");
+		expect(names.filter((name) => name.startsWith(".dazzi-reduce-"))).toEqual([]);
+	}, 120_000);
 });

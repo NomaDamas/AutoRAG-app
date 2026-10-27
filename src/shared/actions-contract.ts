@@ -17,6 +17,8 @@ export const ACTIONS_CHANNELS = {
 	run: "actions:run",
 	share: "actions:share",
 	openWithApplications: "actions:open-with-applications",
+	cancel: "actions:cancel",
+	progress: "actions:progress",
 } as const;
 
 export type ActionsChannel = (typeof ACTIONS_CHANNELS)[keyof typeof ACTIONS_CHANNELS];
@@ -45,7 +47,7 @@ export type ActionRequest =
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
 	| { readonly kind: "resizeImage"; readonly maxEdge: number }
-	| { readonly kind: "reduceSize" }
+	| { readonly kind: "reduceSize"; readonly id?: string }
 	| { readonly kind: "convertVideo"; readonly container: VideoContainer };
 
 /**
@@ -92,6 +94,12 @@ export interface ActionOutcome {
 	readonly note: string;
 }
 
+
+/** Live progress of a running action identified by `id` (0–99 while encoding). */
+export interface ActionProgressEvent {
+	readonly id: string;
+	readonly percent: number;
+}
 /** Share-sheet anchor: the button's rect in window CSS pixels. */
 export interface ActionAnchor {
 	readonly x: number;
@@ -107,6 +115,10 @@ export interface ActionAnchor {
 export interface ActionsBridge {
 	capabilities(): Promise<ActionCapabilities>;
 	run(paths: readonly string[], request: ActionRequest): Promise<ActionOutcome>;
+	/** Stop a running cancellable action identified by `id`. */
+	cancel?(id: string): Promise<void>;
+	/** Subscribe to live progress updates for running actions. */
+	onProgress?(listener: (event: ActionProgressEvent) => void): () => void;
 	/**
 	 * Applications the OS registers for `path`'s type, default first. Empty
 	 * where the platform cannot enumerate them (the chooser is then the only way).
@@ -130,8 +142,9 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 		case "compress":
 			return !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
 		case "extract":
-		case "reduceSize":
 			return true;
+		case "reduceSize":
+			return !("id" in value) || (typeof value.id === "string" && value.id.length > 0);
 		case "convertImage":
 			return "format" in value && typeof value.format === "string" && IMAGE_FORMATS.includes(value.format);
 		case "resizeImage":

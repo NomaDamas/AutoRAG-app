@@ -258,16 +258,21 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 - **용량 줄이기** is one flat button (`reduceSize`), shown only when the file's
   extension is in `capabilities.reducibleExtensions`. It keeps the format — a
   smaller `.pdf` is still a `.pdf` — and writes `<name>-reduced.<ext>` next to the
-  original (numbered by `uniqueChild`), never touching the source. PDF goes through
-  Filee's `compress-pdf` preset (`src/main/pdf-reducer.ts`, staged in a hidden
-  `.dazzi-reduce-` folder); JPEG/HEIC through `sips` on macOS and `ffmpeg`
-  elsewhere; PNG (max deflate) and WebP through `ffmpeg`; MP4/M4V/MOV/MKV through
-  x264 + AAC (`-crf 28`), WebM through VP9 + Opus; MP3/M4A/AAC/Opus at 128 k
-  (64 k Opus), keeping cover art. Each is offered only when `-encoders` lists
-  the codec it needs, and the extension table is `src/shared/size-reduction.ts`.
-  Animated PNG/WebP are refused (a one-frame re-encode would flatten them), and
-  a result that is not smaller is deleted and reported rather than kept. The
-  toast reports `before → after (N% smaller)`.
+  original (numbered by `uniqueChild`), never touching the source. Every family
+  writes into a hidden `.dazzi-reduce-` staging folder first so no half-written
+  file ever appears in the listing. PDF goes through Filee's `compress-pdf`
+  preset (`src/main/pdf-reducer.ts`) with a lossless PDF 1.5 object-stream
+  compaction fallback for digital-only documents; JPEG/HEIC through `sips` on
+  macOS and `ffmpeg` elsewhere; PNG (max deflate) and WebP through `ffmpeg`;
+  MP4/M4V/MOV/MKV through x264 + AAC (`-crf 28`), WebM through VP9 + Opus;
+  MP3/M4A/AAC/Opus at 128 k (64 k Opus), keeping cover art. While running, the
+  Inspector action bar shows a progress card (`ProgressBar` — determinate `%`
+  from `ffmpeg -progress pipe:1` on video/audio, indeterminate shimmer on PDF
+  and stills) and a Cancel button (or Esc) that kills the child process tree via
+  `actions:cancel` and removes staging cleanly. Animated PNG/WebP are refused
+  (a one-frame re-encode would flatten them), and a result that is not smaller
+  is deleted and reported rather than kept. Completing in a folder selects and
+  flashes the new `-reduced` row, and the toast reports `before → after (N% smaller)`.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

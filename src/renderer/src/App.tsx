@@ -803,6 +803,8 @@ export function App(): ReactElement {
 								actionCapabilities={finder?.actionCapabilities ?? NO_CAPABILITIES}
 								onAction={runInspectorAction}
 								loadOpenWithApplications={(entry) => finder?.loadOpenWithApplications(entry) ?? Promise.resolve([])}
+								runningReduction={finder?.runningReduction ?? null}
+								onCancelReduction={() => finder?.cancelReduction()}
 								family={inspectorFamily}
 								onOpenMember={openMemberEntry}
 								view={aiTabActive ? "evidence" : "info"}

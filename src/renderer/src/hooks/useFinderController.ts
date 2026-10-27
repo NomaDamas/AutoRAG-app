@@ -231,6 +231,10 @@ export interface FinderController {
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
 	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
 	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
+	/** The currently running `reduceSize` job on this pane, or null when idle. */
+	readonly runningReduction: { readonly id: string; readonly path: string; readonly name: string; readonly percent: number | null } | null;
+	/** Stop the currently running `reduceSize` job. */
+	cancelReduction(): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -449,6 +453,12 @@ export function useFinderController(
 	const [pathEditingCount, setPathEditingCount] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
+	const [runningReduction, setRunningReduction] = useState<{
+		readonly id: string;
+		readonly path: string;
+		readonly name: string;
+		readonly percent: number | null;
+	} | null>(null);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
@@ -505,11 +515,20 @@ export function useFinderController(
 		};
 	}, [source]);
 
+	useEffect(() => {
+		if (source.actions.onProgress === undefined) return;
+		return source.actions.onProgress((event) => {
+			setRunningReduction((current) =>
+				current !== null && current.id === event.id ? { ...current, percent: event.percent } : current,
+			);
+		});
+	}, [source]);
+
 	const showToast = useLatestCallback((message: string) => toastRef.current?.(message));
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
-		(error: unknown) => toastRef.current?.(error instanceof Error ? error.message : String(error)),
+		(error: unknown) => toastRef.current?.(conversionErrorMessage(error)),
 		[],
 	);
 
@@ -1276,7 +1295,31 @@ export function useFinderController(
 					}
 					source.actions.share([entry.path], anchor).catch(reportError);
 					return;
-				case "request":
+				case "request": {
+					if (target.request.kind === "reduceSize") {
+						if (runningReduction !== null) return;
+						const id = crypto.randomUUID();
+						setRunningReduction({ id, path: entry.path, name: entry.name, percent: null });
+						source.actions
+							.run([entry.path], { kind: "reduceSize", id })
+							.then((outcome) => {
+								showToast(outcome.note);
+								if (outcome.output !== null) {
+									recordActionOutput("reduceSize", outcome.output);
+									refresh();
+									if (!searchingRef.current && pathRef.current === locationOf(entry)) {
+										scrollTarget.current = outcome.output;
+										patchSelection(single(outcome.output));
+										setFlashPath(outcome.output);
+									}
+								}
+							})
+							.catch(reportError)
+							.finally(() => {
+								setRunningReduction((current) => (current?.id === id ? null : current));
+							});
+						return;
+					}
 					source.actions
 						.run([entry.path], target.request)
 						.then((outcome) => {
@@ -1288,6 +1331,7 @@ export function useFinderController(
 						})
 						.catch(reportError);
 					return;
+				}
 				case "openWith":
 				case "askAi":
 					// Both open UI the caller owns (the application menu, the composer).
@@ -1297,6 +1341,12 @@ export function useFinderController(
 
 	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
 		source.actions.openWithApplications(entry.path));
+
+	const cancelReduction = useLatestCallback(() => {
+		const current = runningReduction;
+		if (current === null) return;
+		void source.actions.cancel?.(current.id).catch(reportError);
+	});
 
 	const dragEntries = useLatestCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
@@ -1841,6 +1891,10 @@ export function useFinderController(
 			cancelConvertRename();
 			return;
 		}
+		if (runningReduction !== null) {
+			cancelReduction();
+			return;
+		}
 		if (closingEvidenceTabId !== null) {
 			setClosingEvidenceTabId(null);
 			return;
@@ -2144,6 +2198,8 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		loadOpenWithApplications,
+		runningReduction,
+		cancelReduction,
 		dragEntries,
 		copySelection,
 		cutSelection,

@@ -13,7 +13,7 @@ export interface PdfReducer {
 	/** Whether a reduction can be attempted now: Filee is enabled and present, or may be downloaded on first use. */
 	available(): Promise<boolean>;
 	/** Writes the reduced copy into `outputDir` and returns its path. Rejects with Filee's own reason. */
-	reduce(source: string, outputDir: string): Promise<string>;
+	reduce(source: string, outputDir: string, signal?: AbortSignal): Promise<string>;
 }
 
 /** The Filee preset that compresses a PDF. */
@@ -88,10 +88,14 @@ export function createFileePdfReducer(settings: () => FileeSettings): PdfReducer
 			}
 		},
 
-		async reduce(source, outputDir) {
-			const options = await resolveFileeOptions(baseOptions());
+		async reduce(source, outputDir, signal) {
+			const options = await resolveFileeOptions({
+				...baseOptions(),
+				...(signal === undefined ? {} : { signal }),
+			});
 			const executable = options.executable ?? "filee";
 			const run = await runFileeProcess(executable, ["convert", source, "--preset", PDF_PRESET, "-o", outputDir, "--json"], {
+				...(signal === undefined ? {} : { signal }),
 				...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
 				...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
 			});

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
 import { unzipSync, zipSync } from "fflate";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActionAnchor } from "../src/shared/actions-contract";
 import {
@@ -874,6 +875,93 @@ describe("reduceSize", () => {
 		expect((await win.service.capabilities()).reducibleExtensions).toEqual([]);
 		const winPdf = makeService({ platform: "win32", ffmpeg: false, pdf: fakePdf(1, false) });
 		expect((await winPdf.service.capabilities()).reducibleExtensions).toEqual([]);
+	});
+
+	it("streams determinate ffmpeg progress for the job id and hides the half-written file until done", async () => {
+		const progress: { id: string; percent: number }[] = [];
+		let duringRun: string[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			onProgress: (event) => progress.push({ id: event.id, percent: event.percent }),
+			run: async (command, args, options) => {
+				if (command === "ffmpeg" && args[0] === "-version") return { stdout: "ffmpeg version 9", stderr: "" };
+				if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: MEDIA_ENCODERS, stderr: "" };
+				if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+				if (command === "sips") return { stdout: SIPS_FORMATS_LISTING, stderr: "" };
+				duringRun = (await readdir(root)).filter((name) => !name.startsWith("."));
+				options?.onStderr?.("  Duration: 00:00:04.00, start: 0.000000\n");
+				options?.onStdout?.("out_time_us=1000000\n");
+				options?.onStdout?.("out_time_us=3000000\nprogress=end\n");
+				const target = args.at(-1);
+				if (target !== undefined) await writeFile(target, "s");
+				return { stdout: "", stderr: "" };
+			},
+		});
+		const clip = join(root, "clip.mp4");
+		await writeFile(clip, "x".repeat(4096));
+		const outcome = await service.run([clip], { kind: "reduceSize", id: "job-mp4" }, null);
+		expect(duringRun).toEqual(["clip.mp4"]);
+		expect(outcome.output).toBe(join(root, "clip-reduced.mp4"));
+		expect(progress).toEqual([
+			{ id: "job-mp4", percent: 25 },
+			{ id: "job-mp4", percent: 75 },
+		]);
+	});
+
+	it("cancels a running PDF or video reduction, cleans staging, and rejects as cancelled", async () => {
+		let started!: () => void;
+		const entered = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const pdf: PdfReducer = {
+			available: async () => true,
+			reduce: (_source, _out, signal) =>
+				new Promise((_resolve, reject) => {
+					started();
+					signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+				}),
+		};
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			pdf,
+			run: async () => ({ stdout: "", stderr: "" }),
+		});
+		const scan = join(root, "scan.pdf");
+		await writeFile(scan, Buffer.alloc(4096));
+		const running = service.run([scan], { kind: "reduceSize", id: "job-pdf" }, null);
+		await entered;
+		await service.cancel("job-pdf");
+		await expect(running).rejects.toThrow(t("main.action.reduceCancelled", { name: "scan.pdf" }));
+		expect(await readdir(root)).toEqual(["scan.pdf"]);
+	});
+
+	it("falls back to object-stream compaction when Filee left a digital PDF unshrunk", async () => {
+		const doc = await PDFDocument.create();
+		const font = await doc.embedFont(StandardFonts.Helvetica);
+		for (let i = 0; i < 12; i += 1) {
+			const page = doc.addPage([595, 842]);
+			for (let line = 0; line < 35; line += 1) {
+				page.drawText(`Section ${i}.${line}: digital PDF text line 1234567890`, { x: 40, y: 800 - line * 16, size: 10, font });
+			}
+		}
+		const digital = join(root, "digital.pdf");
+		const uncompacted = await doc.save({ useObjectStreams: false });
+		await writeFile(digital, uncompacted);
+		// Filee copies a digital-only PDF byte-for-byte ("Couldn't make it smaller, so it was copied as it is").
+		const copyPdf: PdfReducer = {
+			available: async () => true,
+			reduce: async (source, outputDir) => {
+				const out = join(outputDir, "digital_compressed.pdf");
+				await writeFile(out, await readFile(source));
+				return out;
+			},
+		};
+		const { service } = makeService({ pdf: copyPdf });
+		const outcome = await service.run([digital], { kind: "reduceSize" }, null);
+		expect(outcome.output).toBe(join(root, "digital-reduced.pdf"));
+		expect((await stat(outcome.output ?? "")).size).toBeLessThan(uncompacted.byteLength);
 	});
 });
 

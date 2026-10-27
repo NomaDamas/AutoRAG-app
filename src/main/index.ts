@@ -27,6 +27,7 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -527,6 +528,10 @@ app.whenReady().then(async () => {
 	registerActionsIpcHandlers(
 		createActionService({
 			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
+			onProgress: (event, window) => {
+				if (window !== null && !window.isDestroyed()) window.webContents.send(ACTIONS_CHANNELS.progress, event);
+				else sendToMainWindow(ACTIONS_CHANNELS.progress, event);
+			},
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {

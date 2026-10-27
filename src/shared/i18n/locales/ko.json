@@ -220,7 +220,9 @@
       "videoConvert": "동영상 변환",
       "convertTo": "{{format}}로 변환",
       "maxEdge": "최대 {{edge}}px",
-      "reduceSize": "용량 줄이기"
+      "reduceSize": "용량 줄이기",
+      "reducing": "‘{{name}}’ 용량 줄이는 중…",
+      "reduceProgressAria": "{{name}} 용량 줄이기 진행 중"
     },
     "versionRelations": {
       "exact": "동일본",
@@ -1356,7 +1358,8 @@
       "shareUnsupported": "이 플랫폼은 시스템 공유를 지원하지 않습니다",
       "unsupportedReduce": "이 파일은 형식을 유지한 채 용량을 줄일 수 없습니다",
       "animatedReduce": "움직이는 이미지는 용량을 줄이면 애니메이션이 사라져 지원하지 않습니다",
-      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)"
+      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)",
+      "reduceCancelled": "{{name}} 용량 줄이기를 취소했습니다"
     },
     "indexStatus": {
       "outside": "Dazzi 검색 경로 밖의 파일",
