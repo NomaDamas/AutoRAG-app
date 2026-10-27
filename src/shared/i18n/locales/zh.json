@@ -1620,6 +1620,12 @@
     "contents": {
       "title": "包含内容"
     },
+    "native": {
+      "readFailed": "无法读取此文稿",
+      "attachments": "附件",
+      "noAttachments": "无附件",
+      "emptyIconset": "此图标集中没有 PNG 图标"
+    },
     "code": {
       "wrap": "自动换行",
       "copy": "复制代码",

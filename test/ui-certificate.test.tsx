@@ -22,6 +22,7 @@ function bridgeAnswering(answer: (path: string) => Promise<CertificatePreview>):
 		onApp: () => () => undefined,
 		onOffice: () => () => undefined,
 		onSlides: () => () => undefined,
+		onThumbnail: () => () => undefined,
 		ready: () => undefined,
 		zoomed: () => undefined,
 		request: never,

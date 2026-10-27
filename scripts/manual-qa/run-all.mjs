@@ -72,6 +72,7 @@ const LANES = [
 	{ name: "refresh-schedule", script: "run-qa-refresh-schedule.mjs", timeout: 300 },
 	{ name: "global-appearance", script: "run-qa-global-appearance.mjs", timeout: 300 },
 	{ name: "quick-look-reference", script: "run-qa-quick-look-reference.mjs", timeout: 420 },
+	{ name: "quick-look-apple-packages", script: "run-qa-quick-look-apple-packages.mjs", timeout: 420 },
 	{ name: "quick-look-data", script: "run-qa-quick-look-data.mjs", timeout: 300 },
 	{ name: "quick-look-mail", script: "run-qa-quick-look-mail.mjs", timeout: 300 },
 	{ name: "quick-look-heic", script: "run-qa-quick-look-heic.mjs", timeout: 240 },

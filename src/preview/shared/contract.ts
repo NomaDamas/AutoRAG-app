@@ -40,6 +40,8 @@ export const PREVIEW_CHANNELS = {
 	office: "preview:office",
 	/** Main -> preview window: Keynote finished drawing a deck's slides at full size (or could not). */
 	slides: "preview:slides",
+	/** Main -> preview window: a native document's OS thumbnail finished after the panel opened. */
+	thumbnail: "preview:thumbnail",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -61,6 +63,14 @@ export const PREVIEW_CHANNELS = {
 	/** Preview window -> main (send): a text field took or gave up focus; Space and the arrows stay with it while it has focus. */
 	textEntry: "preview:text-entry",
 } as const;
+
+/** Structured content decoded from an Apple pointer, archive, clipping, or directory package. */
+export type NativePreview =
+	| { readonly kind: "webloc"; readonly title: string; readonly url: string }
+	| { readonly kind: "webarchive"; readonly html: string }
+	| { readonly kind: "rtfd"; readonly rtf: Uint8Array; readonly attachments: readonly string[] }
+	| { readonly kind: "iconset"; readonly icons: readonly { readonly name: string; readonly bytes: Uint8Array }[] }
+	| { readonly kind: "textclipping"; readonly text: string };
 
 /**
  * One file the preview can render. `bytes` is null when the viewer streams
@@ -87,6 +97,10 @@ export interface PreviewDocument {
 	 * pointer file (`.gdoc`, ...); null for every other document.
 	 */
 	readonly thumbnail: string | null;
+	/** Decoded native content; absent for every ordinary document. */
+	readonly native?: NativePreview | null;
+	/** Directory packages have no single-file byte size to display. */
+	readonly package?: boolean;
 	/**
 	 * True while Keynote is drawing a deck's slides at full size; `pages` then
 	 * still holds the package's 356px renders. False for every other document.
@@ -113,6 +127,12 @@ export interface OfficePage {
 export interface QuickLookOffice {
 	readonly seq: number;
 	readonly office: OfficePage;
+}
+
+/** Main -> preview window: the OS thumbnail for the current native document. */
+export interface QuickLookThumbnail {
+	readonly seq: number;
+	readonly url: string;
 }
 
 /**
@@ -392,6 +412,7 @@ export interface QuickLookWindowBridge {
 	onApp(listener: (app: QuickLookApp) => void): () => void;
 	onOffice(listener: (update: QuickLookOffice) => void): () => void;
 	onSlides(listener: (update: QuickLookSlides) => void): () => void;
+	onThumbnail(listener: (update: QuickLookThumbnail) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -426,9 +447,23 @@ export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
 }
 
+export function isQuickLookThumbnail(value: unknown): value is QuickLookThumbnail {
+	return isRecord(value) && typeof value.seq === "number" && typeof value.url === "string";
+}
+
 export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
 	if (!isRecord(value) || typeof value.seq !== "number" || typeof value.rendering !== "boolean" || !Array.isArray(value.slides)) return false;
 	return value.slides.every((entry: unknown) => isRecord(entry) && Number.isInteger(entry.index) && (entry.index as number) >= 0 && entry.bytes instanceof Uint8Array);
+}
+
+function isNativePreview(value: unknown): value is NativePreview {
+	if (!isRecord(value) || typeof value.kind !== "string") return false;
+	if (value.kind === "webloc") return typeof value.title === "string" && typeof value.url === "string";
+	if (value.kind === "webarchive") return typeof value.html === "string";
+	if (value.kind === "textclipping") return typeof value.text === "string";
+	if (value.kind === "rtfd") return value.rtf instanceof Uint8Array && Array.isArray(value.attachments) && value.attachments.every((name) => typeof name === "string");
+	if (value.kind === "iconset") return Array.isArray(value.icons) && value.icons.every((icon: unknown) => isRecord(icon) && typeof icon.name === "string" && icon.bytes instanceof Uint8Array);
+	return false;
 }
 
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
@@ -439,6 +474,8 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
 	if (value.office !== null && !isOfficePage(value.office)) return false;
 	if (value.thumbnail !== null && typeof value.thumbnail !== "string") return false;
+	if (value.native !== undefined && value.native !== null && !isNativePreview(value.native)) return false;
+	if (value.package !== undefined && typeof value.package !== "boolean") return false;
 	if (typeof value.slidesRendering !== "boolean") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }

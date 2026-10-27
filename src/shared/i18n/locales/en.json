@@ -1620,6 +1620,12 @@
     "contents": {
       "title": "Contains"
     },
+    "native": {
+      "readFailed": "Couldn’t read this document",
+      "attachments": "Attachments",
+      "noAttachments": "No attachments",
+      "emptyIconset": "No PNG icons in this set"
+    },
     "code": {
       "wrap": "Wrap Lines",
       "copy": "Copy Code",
