@@ -1,6 +1,7 @@
 /** Step 3 — real sign-in through the system browser (OAuth code + PKCE), or the no-account BYOK path. */
 
 import { useState, type ReactElement } from "react";
+import { cn } from "../../lib/cn";
 import { AppLogo, Icon } from "../marks";
 import { openExternal } from "../parts";
 import { accountLegalUrl } from "../../../../shared/account-contract";
@@ -33,6 +34,34 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 	const signingIn = account?.state === "signingIn";
 	const snapshot = account?.account ?? null;
 
+	if (signedIn) {
+		return (
+			<section className="screen account-screen">
+				<div className="account-done">
+					<div className="account-done-mark">
+						<span className="account-done-logo">
+							<AppLogo />
+						</span>
+						<span className="account-done-check">
+							<Icon name="check" size={18} />
+						</span>
+					</div>
+					<h1>{t("onboarding.account.signedIn")}</h1>
+					{snapshot === null ? null : (
+						<div className="account-done-meta">
+							<span className={cn("account-plan-tag", snapshot.plan !== "free" && "paid")}>{t(`onboarding.plan.plan.${snapshot.plan}.name`)}</span>
+							<span>{snapshot.email}</span>
+						</div>
+					)}
+					{account?.offline === true ? <p className="auth-note">{t("onboarding.account.offline")}</p> : null}
+					<button type="button" className="account-switch" onClick={ctx.signOut}>
+						{t("onboarding.account.otherAccount")}
+					</button>
+				</div>
+			</section>
+		);
+	}
+
 	return (
 		<section className="screen account-screen">
 			<div className="account-column">
@@ -42,27 +71,7 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					</span>
 					<h1>{`${APP_NAME} ${t("onboarding.account.getStarted")}`}</h1>
 				</div>
-				{signedIn ? (
-					<div className="account-panel">
-						<div className="status-card">
-							<div className="status-mark">
-								<Icon name="check" size={16} />
-							</div>
-							<div>
-								<strong>{t("onboarding.account.signedIn")}</strong>
-								{snapshot === null ? null : (
-									<small>{`${snapshot.email} · ${t("onboarding.account.planLabel", { plan: t(`onboarding.plan.plan.${snapshot.plan}.name`) })}`}</small>
-								)}
-								{account?.offline === true ? <small>{t("onboarding.account.offline")}</small> : null}
-							</div>
-						</div>
-						<div className="action-row">
-							<button type="button" className="secondary" onClick={ctx.signOut}>
-								{t("onboarding.account.otherAccount")}
-							</button>
-						</div>
-					</div>
-				) : signingIn ? (
+				{signingIn ? (
 					<div className="account-panel">
 						<div className="status-card">
 							<div className="status-mark">
@@ -129,7 +138,7 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						</p>
 					</div>
 				)}
-				{signedIn || signingIn ? null : (
+				{signingIn ? null : (
 					<button type="button" className="account-guest" onClick={ctx.skipAccount}>
 						{t("onboarding.account.guest")}
 					</button>
