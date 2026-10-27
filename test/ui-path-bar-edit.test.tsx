@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PathBar } from "../src/renderer/src/components/PathBar";
-import { breadcrumbTrail } from "../src/renderer/src/state/paths";
+import { breadcrumbTrail, type PathCompletion } from "../src/renderer/src/state/paths";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -23,7 +23,7 @@ afterEach(() => {
 	host.remove();
 });
 
-function render(props: { path?: string; onNavigate?: (path: string) => void; onGoToPath?: (input: string) => Promise<boolean>; openEditor?: number; onEditorClosed?: () => void }): void {
+function render(props: { path?: string; onNavigate?: (path: string) => void; onGoToPath?: (input: string) => Promise<boolean>; completePath?: (input: string) => Promise<readonly PathCompletion[]>; openEditor?: number; onEditorClosed?: () => void }): void {
 	const path = props.path ?? PATH;
 	act(() =>
 		root.render(
@@ -33,6 +33,7 @@ function render(props: { path?: string; onNavigate?: (path: string) => void; onG
 				selectedName={null}
 				onNavigate={props.onNavigate ?? (() => {})}
 				onGoToPath={props.onGoToPath ?? (() => Promise.resolve(true))}
+				completePath={props.completePath ?? (() => Promise.resolve([]))}
 				openEditor={props.openEditor ?? 0}
 				onEditorClosed={props.onEditorClosed ?? (() => {})}
 			/>,
@@ -153,5 +154,71 @@ describe("PathBar path editing", () => {
 		click(nav());
 		render({ path: "/Users/jeffrey/Desktop" });
 		expect(editor()).toBeNull();
+	});
+
+	it("shows folder candidates and a Copilot-style ghost suffix while typing", async () => {
+		render({
+			completePath: async () => [
+				{ name: "Finance", path: "/Users/jeffrey/Documents/Finance", text: "/Users/jeffrey/Documents/Finance" },
+				{ name: "Family", path: "/Users/jeffrey/Documents/Family", text: "/Users/jeffrey/Documents/Family" },
+			],
+		});
+		click(nav());
+		type(editor()!, "/Users/jeffrey/Documents/F");
+		await act(async () => {});
+		expect([...host.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual(["Finance", "Family"]);
+		expect(host.querySelector("[data-path-ghost]")?.textContent).toBe("inance");
+		await press(editor()!, "ArrowDown");
+		expect(host.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe("Family");
+		expect(host.querySelector("[data-path-ghost]")?.textContent).toBe("amily");
+	});
+
+	it("accepts the active candidate on Tab without navigating", async () => {
+		const onGoToPath = vi.fn(() => Promise.resolve(true));
+		render({
+			onGoToPath,
+			completePath: async () => [{ name: "Finance", path: "/Users/jeffrey/Documents/Finance", text: "/Users/jeffrey/Documents/Finance" }],
+		});
+		click(nav());
+		type(editor()!, "/Users/jeffrey/Documents/Fin");
+		await act(async () => {});
+		const event = await press(editor()!, "Tab");
+		expect(editor()?.value).toBe("/Users/jeffrey/Documents/Finance");
+		expect(event.defaultPrevented).toBe(true);
+		expect(onGoToPath).not.toHaveBeenCalled();
+	});
+
+	it("navigates to a clicked candidate", async () => {
+		const onGoToPath = vi.fn(() => Promise.resolve(true));
+		render({
+			onGoToPath,
+			completePath: async () => [{ name: "Finance", path: "/Users/jeffrey/Documents/Finance", text: "/Users/jeffrey/Documents/Finance" }],
+		});
+		click(nav());
+		type(editor()!, "/Users/jeffrey/Documents/Fin");
+		await act(async () => {});
+		click(host.querySelector('[role="option"]')!);
+		await act(async () => {});
+		expect(onGoToPath).toHaveBeenCalledWith("/Users/jeffrey/Documents/Finance");
+		expect(editor()).toBeNull();
+	});
+
+	it("ignores a slower candidate response for superseded input", async () => {
+		const pending: Array<(value: readonly PathCompletion[]) => void> = [];
+		render({
+			completePath: () => {
+				const { promise, resolve } = Promise.withResolvers<readonly PathCompletion[]>();
+				pending.push(resolve);
+				return promise;
+			},
+		});
+		click(nav());
+		type(editor()!, "/old");
+		type(editor()!, "/new");
+		pending[1]!([{ name: "new", path: "/new", text: "/new" }]);
+		await act(async () => {});
+		pending[0]!([{ name: "old", path: "/old", text: "/old" }]);
+		await act(async () => {});
+		expect([...host.querySelectorAll('[role="option"]')].map((option) => option.textContent)).toEqual(["new"]);
 	});
 });

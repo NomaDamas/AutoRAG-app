@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+			"suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
     },
