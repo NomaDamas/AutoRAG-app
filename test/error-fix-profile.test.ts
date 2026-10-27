@@ -5,26 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createErrorFixToolkit, errorFixProfile, type ErrorFixToolkit, type ErrorFixToolkitDeps } from "../src/main/agents/profiles/error-fix";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import type { ConfigRefreshResult } from "../src/shared/settings-contract";
-import { ERROR_FIX_SETTINGS_PAGES, type ErrorFixStep } from "../src/shared/error-fix-contract";
+import { ERROR_FIX_SETTINGS_PAGES } from "../src/shared/error-fix-contract";
 
 let root: string;
 let configPath: string;
 let backupPath: string;
-let steps: ErrorFixStep[];
 
 async function writeConfig(config: Record<string, unknown>): Promise<void> {
 	await writeFile(configPath, `${JSON.stringify(config, null, 2)}\n`);
-}
-
-async function readConfig(): Promise<unknown> {
-	return JSON.parse(await readFile(configPath, "utf8"));
 }
 
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "error-fix-"));
 	configPath = join(root, "config.json");
 	backupPath = `${configPath}.bak-20261026101112-before-error-fix`;
-	steps = [];
 	await mkdir(join(root, "Docs"), { recursive: true });
 	await mkdir(join(root, "Documents"), { recursive: true });
 	await writeFile(join(root, "Documents", "a.md"), "x");
@@ -40,10 +34,12 @@ const REFRESHED: ConfigRefreshResult = { ok: true, methods: ["parsed"], scanned:
 
 function toolkit(overrides: Partial<ErrorFixToolkitDeps> = {}): ErrorFixToolkit {
 	return createErrorFixToolkit({
+		cwd: root,
+		agentDir: join(root, "agent"),
+		env: {},
 		config: createAutoRagConfigService({ env: { HOME: root, AUTORAG_CONFIG: configPath }, cwd: root }),
 		diagnostics: async () => ({ model: { provider: "faux", id: "m" } }),
 		refreshIndex: async () => REFRESHED,
-		onStep: (step) => steps.push(step),
 		now: () => new Date("2026-10-26T10:11:12Z"),
 		...overrides,
 	});
@@ -58,13 +54,13 @@ async function call(kit: ErrorFixToolkit, name: string, params: object): Promise
 }
 
 describe("the error-fix profile", () => {
-	it("gives the agent only the app's own tools: pi's file and shell tools reach the whole machine", () => {
+	it("gives the agent pi's own file and shell tools beside the app's three", () => {
 		const kit = toolkit();
 		const profile = errorFixProfile({ message: "boom", surface: "ai-search", language: "ko", toolkit: kit });
 
 		expect(profile.id).toBe("error-fix");
 		expect(profile.tools).toEqual([]);
-		expect(kit.tools.map((tool) => tool.name).sort()).toEqual(["check_path", "diagnose", "refresh_index", "report_result", "update_config"]);
+		expect(kit.tools.map((tool) => tool.name).sort()).toEqual(["bash", "diagnose", "edit", "find", "grep", "ls", "read", "refresh_index", "report_result", "write"]);
 		expect(profile.customTools).toBe(kit.tools);
 	});
 
@@ -92,6 +88,28 @@ describe("the error-fix profile", () => {
 		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
 
 		expect(prompt).toMatch(/choose[^\n]*folder[^\n]*scope|scope[^\n]*choose[^\n]*folder/iu);
+	});
+
+	it("keeps the hunt for a gone folder short: a few looks nearby, never a walk through the computer, and then the person is sent to choose the folder", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		expect(prompt).toMatch(/handful of looks, not a search of the computer/iu);
+		expect(prompt).toMatch(/never run grep or find over the whole home folder/iu);
+		expect(prompt).toMatch(/do not keep looking: report needs-user, and give a button to the page where they choose the folders \(kind settings, target scope/iu);
+	});
+
+	it("names every tool the agent has", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		for (const name of ["read", "ls", "find", "grep", "edit", "write", "bash", "diagnose", "refresh_index", "report_result"]) expect(prompt, name).toContain(name);
+		expect(prompt).not.toMatch(/check_path|update_config/u);
+	});
+
+	it("keeps the person's own documents out of what the agent may change, and the AI's own sign-in files out of what it may open", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		expect(prompt).toMatch(/person's own documents[^.]*(?:theirs|stay as they are)/iu);
+		expect(prompt).toMatch(/sign-in and key files[^)]*never opened/iu);
 	});
 
 	it("says a button is optional, and that there is no button to a folder", () => {
@@ -157,7 +175,6 @@ describe("diagnose", () => {
 				{ at: "datasources.demo.connector.dataDir", path: join(root, "missing-dir"), exists: false },
 			]),
 		});
-		expect(steps).toEqual([{ tool: "diagnose", detail: null }]);
 	});
 
 	it("passes on why the config cannot be read instead of failing", async () => {
@@ -173,146 +190,6 @@ describe("diagnose", () => {
 	});
 });
 
-describe("check_path", () => {
-	it("lists the names in a folder, marking sub-folders, and never opens a file", async () => {
-		const parsed = JSON.parse(await call(toolkit(), "check_path", { path: root }));
-
-		expect(parsed).toMatchObject({ exists: true, type: "directory", entries: expect.arrayContaining(["Docs/", "Documents/", "note.txt"]) });
-		expect(steps).toEqual([{ tool: "check_path", detail: root }]);
-	});
-
-	it("says what a file is without reading it", async () => {
-		const parsed = JSON.parse(await call(toolkit(), "check_path", { path: join(root, "note.txt") }));
-
-		expect(parsed).toMatchObject({ exists: true, type: "file" });
-		expect(parsed).not.toHaveProperty("entries");
-	});
-
-	it("shows the closest folder that does exist when the path is gone, so a renamed folder can be found", async () => {
-		const parsed = JSON.parse(await call(toolkit(), "check_path", { path: join(root, "Docs", "old", "deep") }));
-
-		expect(parsed).toMatchObject({ exists: false, nearestExisting: { path: join(root, "Docs"), entries: [] } });
-	});
-
-	it("refuses a relative path and says why", async () => {
-		expect(await call(toolkit(), "check_path", { path: "Docs" })).toContain("absolute");
-	});
-
-	it("caps a huge folder listing", async () => {
-		const many = join(root, "many");
-		await mkdir(many);
-		await Promise.all(Array.from({ length: 300 }, (_, index) => writeFile(join(many, `f${index}.txt`), "")));
-
-		const parsed = JSON.parse(await call(toolkit(), "check_path", { path: many }));
-
-		expect(parsed).toHaveProperty("entries.length", 100);
-		expect(parsed).toMatchObject({ more: 200 });
-	});
-
-	it("allows a bounded number of looks per run and then tells the agent to report, so a missing folder is never searched for across the whole machine", async () => {
-		const kit = toolkit();
-		const answers: string[] = [];
-
-		for (let index = 0; index < 8; index += 1) answers.push(await call(kit, "check_path", { path: join(root, `nowhere-${index}`) }));
-
-		expect(answers.slice(0, 6).every((text) => !text.startsWith("Refused"))).toBe(true);
-		expect(answers[6]).toMatch(/^Refused.*report_result/su);
-		expect(answers[7]).toMatch(/^Refused/u);
-		// Only the looks that were allowed are announced to the person.
-		expect(steps.filter((step) => step.tool === "check_path")).toHaveLength(6);
-	});
-
-	it("does not count a refused relative path as a look", async () => {
-		const kit = toolkit();
-
-		for (let index = 0; index < 10; index += 1) await call(kit, "check_path", { path: "relative" });
-
-		expect(await call(kit, "check_path", { path: root })).not.toMatch(/^Refused/u);
-	});
-});
-
-describe("update_config", () => {
-	it("writes the change, keeps a copy of the old config first and records before and after", async () => {
-		const kit = toolkit();
-
-		const text = await call(kit, "update_config", { updates: [{ path: ["searchPaths"], value: [join(root, "Documents")] }] });
-		await call(kit, "report_result", { status: "fixed", summary: "Pointed the search folder at Documents." });
-
-		expect(text).toContain("Changed searchPaths");
-		expect(await readConfig()).toMatchObject({ searchPaths: [join(root, "Documents")] });
-		expect(kit.result()).toMatchObject({
-			changes: [{ path: "searchPaths", before: JSON.stringify([join(root, "Docs")]), after: JSON.stringify([join(root, "Documents")]) }],
-			backupPath,
-		});
-		expect(JSON.parse(await readFile(backupPath, "utf8"))).toMatchObject({ searchPaths: [join(root, "Docs")] });
-		expect(steps).toContainEqual({ tool: "update_config", detail: "searchPaths" });
-	});
-
-	it("removes a key when asked to", async () => {
-		await writeConfig({ searchPaths: [root], workspacePath: join(root, "ws"), memoryPath: join(root, "memory.json"), webSearch: { enabled: true, order: ["nowhere"] } });
-
-		const text = await call(toolkit(), "update_config", { updates: [{ path: ["webSearch", "order"], remove: true }] });
-
-		expect(text).toContain("Changed webSearch.order");
-		const written = await readConfig();
-		expect(written).toHaveProperty("webSearch.enabled", true);
-		expect(written).not.toHaveProperty("webSearch.order");
-	});
-
-	it("refuses what is the person's to decide or can never be edited here, and writes nothing", async () => {
-		const before = await readFile(configPath, "utf8");
-		const kit = toolkit();
-
-		expect(await call(kit, "update_config", { updates: [{ path: ["model", "id"], value: "other" }] })).toMatch(/^Refused.*model/su);
-		expect(await call(kit, "update_config", { updates: [{ path: ["datasources", "x", "connector", "apiKey"], value: "abc" }] })).toMatch(/^Refused.*secret/su);
-		expect(await call(kit, "update_config", { updates: [{ path: ["workspacePath"], value: "/tmp/elsewhere" }] })).toMatch(/^Refused/u);
-		expect(await call(kit, "update_config", { updates: [{ path: [], value: 1 }] })).toMatch(/^Refused/u);
-		expect(await call(kit, "update_config", { updates: [{ path: ["searchPaths"] }] })).toMatch(/^Refused/u);
-		expect(await call(kit, "update_config", { updates: [] })).toMatch(/^Refused/u);
-
-		expect(await readFile(configPath, "utf8")).toBe(before);
-		await expect(readFile(backupPath, "utf8")).rejects.toThrow();
-	});
-
-	it("refuses to reach into a list by position: the list is set whole, or an index key would turn it into an object", async () => {
-		const before = await readFile(configPath, "utf8");
-
-		const text = await call(toolkit(), "update_config", { updates: [{ path: ["searchPaths", "0"], value: join(root, "Documents") }] });
-
-		expect(text).toMatch(/^Refused.*list/su);
-		expect(await readFile(configPath, "utf8")).toBe(before);
-		await expect(readFile(backupPath, "utf8")).rejects.toThrow();
-	});
-
-	it("lets the agent name an environment variable for a key, which is not itself a secret", async () => {
-		const text = await call(toolkit(), "update_config", { updates: [{ path: ["datasources", "x", "connector", "tokenEnv"], value: "MY_TOKEN" }] });
-
-		expect(text).not.toMatch(/^Refused/u);
-	});
-
-	it("hands the validator's complaint back to the agent and leaves the file and the backup alone", async () => {
-		const before = await readFile(configPath, "utf8");
-
-		const text = await call(toolkit(), "update_config", { updates: [{ path: ["searchPaths"], value: 5 }] });
-
-		expect(text).toMatch(/^Refused/u);
-		expect(await readFile(configPath, "utf8")).toBe(before);
-		await expect(readFile(backupPath, "utf8")).rejects.toThrow();
-	});
-
-	it("takes the backup once per run, however many changes follow", async () => {
-		const kit = toolkit();
-
-		await call(kit, "update_config", { updates: [{ path: ["searchPaths"], value: [join(root, "Documents")] }] });
-		await call(kit, "update_config", { updates: [{ path: ["excludeExactDuplicates"], value: false }] });
-		await call(kit, "report_result", { status: "fixed", summary: "Done." });
-
-		expect(kit.result()?.changes.map((change) => change.path)).toEqual(["searchPaths", "excludeExactDuplicates"]);
-		expect(kit.result()?.backupPath).toBe(backupPath);
-		expect(JSON.parse(await readFile(backupPath, "utf8"))).toMatchObject({ searchPaths: [join(root, "Docs")] });
-	});
-});
-
 describe("refresh_index", () => {
 	it("runs the index and reports what it did", async () => {
 		const refreshIndex = vi.fn(async () => REFRESHED);
@@ -321,7 +198,6 @@ describe("refresh_index", () => {
 
 		expect(refreshIndex).toHaveBeenCalledOnce();
 		expect(text).toContain("scanned 4");
-		expect(steps).toEqual([{ tool: "refresh_index", detail: null }]);
 	});
 
 	it("does not wait for a long index run: it tells the agent the run goes on in the background, and that is not yet a repair", async () => {
@@ -366,6 +242,7 @@ describe("report_result", () => {
 			actions: [{ kind: "settings", target: "scope", label: "Pick the folder" }],
 			changes: [],
 			backupPath: null,
+			commands: [],
 		});
 	});
 
@@ -476,6 +353,31 @@ describe("report_result", () => {
 		await call(working, "refresh_index", {});
 		expect(await call(working, "report_result", { status: "fixed", summary: "Rebuilt the index." })).toContain("Recorded");
 		expect(working.result()).toMatchObject({ status: "fixed", changes: [], backupPath: null });
+	});
+
+	it("counts a shell command as a change: what it did cannot be seen, so the person is shown it", async () => {
+		const kit = toolkit();
+
+		await call(kit, "bash", { command: "echo repaired" });
+
+		expect(await call(kit, "report_result", { status: "fixed", summary: "Ran a repair." })).toContain("Recorded");
+		expect(kit.result()).toMatchObject({ commands: ["echo repaired"] });
+	});
+
+	it("counts an edit of the config as a change and reports it with the answer", async () => {
+		const kit = toolkit();
+
+		await call(kit, "edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "Docs")), newText: JSON.stringify(join(root, "Documents")) }] });
+
+		expect(await call(kit, "report_result", { status: "fixed", summary: "Repointed." })).toContain("Recorded");
+		expect(kit.result()).toMatchObject({ changes: [{ path: "searchPaths" }], backupPath });
+	});
+
+	it("lists no commands when none ran", async () => {
+		const kit = toolkit();
+		await call(kit, "report_result", { status: "cannot-fix", summary: "Nothing to do." });
+
+		expect(kit.result()?.commands).toEqual([]);
 	});
 
 	it("refuses an empty summary", async () => {

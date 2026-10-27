@@ -14,8 +14,8 @@ export type ErrorFixRun =
 	| { readonly status: "idle" }
 	| { readonly status: "running"; readonly runId: string; readonly steps: readonly ErrorFixStep[] }
 	| { readonly status: "done"; readonly result: ErrorFixResult; readonly steps: readonly ErrorFixStep[] }
-	| { readonly status: "failed"; readonly message: string; readonly steps: readonly ErrorFixStep[]; readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null }
-	| { readonly status: "stopped"; readonly steps: readonly ErrorFixStep[]; readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null };
+	| { readonly status: "failed"; readonly message: string; readonly steps: readonly ErrorFixStep[]; readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null; readonly commands: readonly string[] }
+	| { readonly status: "stopped"; readonly steps: readonly ErrorFixStep[]; readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null; readonly commands: readonly string[] };
 
 export const initialErrorFixRun: ErrorFixRun = { status: "idle" };
 
@@ -32,16 +32,21 @@ export function reduceErrorFixRun(state: ErrorFixRun, event: ErrorFixEvent): Err
 		case "result":
 			return { status: "done", result: event.result, steps: state.steps };
 		case "error":
-			return { status: "failed", message: event.message, steps: state.steps, changes: event.changes, backupPath: event.backupPath };
+			return { status: "failed", message: event.message, steps: state.steps, changes: event.changes, backupPath: event.backupPath, commands: event.commands ?? [] };
 		case "cancelled":
-			return { status: "stopped", steps: state.steps, changes: event.changes, backupPath: event.backupPath };
+			return { status: "stopped", steps: state.steps, changes: event.changes, backupPath: event.backupPath, commands: event.commands ?? [] };
 	}
 }
 
 const STEP_KEY: Readonly<Record<ErrorFixStep["tool"], LocaleKey>> = {
 	diagnose: "appError.fix.steps.diagnose",
-	check_path: "appError.fix.steps.checkPath",
-	update_config: "appError.fix.steps.updateConfig",
+	read: "appError.fix.steps.read",
+	ls: "appError.fix.steps.ls",
+	find: "appError.fix.steps.find",
+	grep: "appError.fix.steps.grep",
+	edit: "appError.fix.steps.edit",
+	write: "appError.fix.steps.write",
+	bash: "appError.fix.steps.bash",
 	refresh_index: "appError.fix.steps.refreshIndex",
 };
 

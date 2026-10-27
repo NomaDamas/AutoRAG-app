@@ -2,7 +2,7 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
 import type { ErrorFixEvent, ErrorFixRequest } from "../shared/error-fix-contract";
 import type { ConfigRefreshResult } from "../shared/settings-contract";
-import { createErrorFixToolkit, errorFixProfile, type ErrorFixToolkit, type ReplyLanguage } from "./agents/profiles/error-fix";
+import { createErrorFixToolkit, errorFixProfile, stepOf, type ErrorFixToolkit, type ReplyLanguage } from "./agents/profiles/error-fix";
 import { errorText, modelFailure } from "./agents/session-failure";
 import type { AutoRagConfigService } from "./autorag-config-service";
 
@@ -22,7 +22,7 @@ export interface ErrorFixServiceDeps {
 	/** pi's agent dir, shared with the AutoRAG agent for credentials. */
 	readonly agentDir: string;
 	readonly env: NodeJS.ProcessEnv;
-	/** Working directory of the session; nothing is read from it. */
+	/** Working directory of the agent's file and shell tools. */
 	readonly cwd: string;
 	/** The interface language, read per run: the agent writes its summary in it. */
 	readonly language: () => ReplyLanguage;
@@ -70,6 +70,12 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 				model,
 			});
 			run.abort.signal.addEventListener("abort", () => void session?.abort(), { once: true });
+			// What the dialog lists is what pi reports the agent is doing: every tool, pi's own included, announces itself the same way.
+			session.subscribe((event) => {
+				if (event.type !== "tool_execution_start" || run.cancelled) return;
+				const step = stepOf(event.toolName, event.args);
+				if (step !== null) deps.send({ type: "step", runId, step });
+			});
 			await session.prompt(TASK);
 			if (run.cancelled) return;
 			const failure = run.timedOut ? null : modelFailure(session);
@@ -91,6 +97,10 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 			runs.set(runId, run);
 			const stopped = (): Promise<never> => Promise.reject(new Error("The run was cancelled."));
 			const toolkit = createErrorFixToolkit({
+				cwd: deps.cwd,
+				agentDir: deps.agentDir,
+				env: deps.env,
+				cancelled: () => run.cancelled,
 				config: {
 					get: () => deps.config.get(),
 					patch: async (updates) => {
@@ -102,9 +112,6 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 				},
 				diagnostics: deps.diagnostics,
 				refreshIndex: () => (run.cancelled ? stopped() : deps.refreshIndex()),
-				onStep: (step) => {
-					if (!run.cancelled) deps.send({ type: "step", runId, step });
-				},
 			});
 			try {
 				await execute(runId, run, request, toolkit);

@@ -313,8 +313,13 @@
       "running": "正在查找原因…",
       "steps": {
         "diagnose": "正在检查设置和状态",
-        "checkPath": "正在检查路径",
-        "updateConfig": "正在修改设置",
+        "read": "正在读取文件",
+        "ls": "正在查看文件夹",
+        "find": "正在查找文件",
+        "grep": "正在搜索内容",
+        "edit": "正在编辑文件",
+        "write": "正在写入文件",
+        "bash": "正在运行命令",
         "refreshIndex": "正在重建索引"
       },
       "status": {
@@ -330,7 +335,10 @@
       "openSource": "打开“{{name}}”连接",
       "retrySearch": "重新搜索",
       "failedTitle": "AI 未能修复",
-      "stopped": "已停止。"
+      "stopped": "已停止。",
+      "commandsTitle": "已运行的命令",
+      "commandsNote": "命令所做的更改不会单独记录，请查看上面的列表。",
+      "fileBackup": "更改前的文件已备份到 {{path}}。"
     }
   },
   "interaction": {

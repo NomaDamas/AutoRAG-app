@@ -313,8 +313,13 @@
       "running": "원인을 찾는 중…",
       "steps": {
         "diagnose": "설정과 상태 확인",
-        "checkPath": "경로 확인",
-        "updateConfig": "설정 수정",
+        "read": "파일 읽는 중",
+        "ls": "폴더 살펴보는 중",
+        "find": "파일 찾는 중",
+        "grep": "내용 검색 중",
+        "edit": "파일 수정 중",
+        "write": "파일 쓰는 중",
+        "bash": "명령 실행 중",
         "refreshIndex": "인덱스 다시 만드는 중"
       },
       "status": {
@@ -330,7 +335,10 @@
       "openSource": "‘{{name}}’ 연결 열기",
       "retrySearch": "다시 검색",
       "failedTitle": "AI로 고치지 못했어요",
-      "stopped": "중단했어요."
+      "stopped": "중단했어요.",
+      "commandsTitle": "실행한 명령",
+      "commandsNote": "명령이 바꾼 내용은 따로 기록되지 않아요. 위 목록을 확인해 주세요.",
+      "fileBackup": "바꾸기 전 파일은 {{path}} 에 백업해 두었어요."
     }
   },
   "interaction": {

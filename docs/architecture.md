@@ -832,24 +832,34 @@ and kept for the chat's life:
   selectable and in full for a bug report. A short plain message (a folder that does not exist, with its path) is shown as it is, with
   no button. A leftover that is only a status code ("401") is dropped from the line: the title already says it. The box and both
   places of the AI fix dialog use the same component.
-- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `ErrorFixDialog`). A helper-agent run on the AI Search
-  model (`resolveConfiguredSessionModel`), thinking `medium`, three minutes at most. It has no pi file or shell tool: it sees and
-  changes only through `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data
-  sources, the index state), `check_path` (names only; for a gone path the nearest folder that exists), `update_config` (the same
-  validating service the Settings pages use; it first copies `config.json` to `config.json.bak-<stamp>-before-error-fix`; the
-  `model` key, secret-looking keys and the paths AutoRAG manages are refused; a change the validator rejects writes nothing),
-  `refresh_index`, and `report_result`, which is the answer and refuses `fixed` unless something was really changed. The dialog
-  lists the agent's steps as they happen and, whatever the ending (result, failure, Stop), the config changes it made and where the
-  old config is kept. The buttons of a `needs-user` or `cannot-fix` answer are the agent's own: `report_result` takes up to three
-  `actions`, each `{kind, target, label}`: `settings` (a Settings page id), `source` (the alias of a configured data source, which
-  opens `source:<alias>` in Settings) or `folder` (an existing absolute folder, opened in a Finder tab). The agent only names a
-  destination and writes the label in the person's language; the toolkit checks every one (a page the app has, an alias that is in
-  the config, a path that is a folder), drops the rest and tells the agent which were dropped so it can correct them, removes
-  duplicates, and shortens the label; the renderer does the going (`onOpenSettings` / `onOpenSource` / `onOpenFolder`), and a button
-  with no label is named after its destination. A change to the config resets the idle chat agents (`SearchService.resetAgents`) so
-  the next question, including "다시 검색", is answered on the new config and resumes from the chat's file. A model that fails during
-  the run is explained exactly like the same error in the box. Pinned by `test/app-error.test.ts`, `app-error-details.test.ts`,
-  `error-fix-profile.test.ts`, `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
+- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `ErrorFixDialog`). A
+  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`, three minutes at most. It works with
+  pi's own `read`, `ls`, `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks, so
+  pi's behaviour is kept and only the rules below are added), plus three tools only the app can offer: `diagnose` (the config with
+  secrets redacted, whether every path written in it exists, the model, the data sources, the index state), `refresh_index` and
+  `report_result`, which is the answer and refuses `fixed` unless something was really changed (a file change, a shell command or a
+  successful index run). The rules of `error-fix-files.ts`: every tool refuses once the run is stopped; the AI's own sign-in and key
+  files (the pi agent dir) and any file named like a key or credential (`.env`, `id_*`, `*.pem`, `auth.json` ...) are never opened, also
+  by a shell command that names them; the AutoRAG config is shown with secrets hidden (an unparsable one is masked) and `edit`/`write` on
+  it go through the same validating service the Settings pages use, as a diff of leaf values (after a copy to
+  `config.json.bak-<stamp>-before-error-fix`, once per run), where the `model` key, secret-looking keys and the paths AutoRAG manages
+  are refused and a change the validator rejects writes nothing; `edit`/`write` of anything else is allowed only for a file a data
+  source in the config names (with its own `.bak-…` copy) and the app's workspace folder, never for the person's own documents; the
+  shell is pi's shell with the keys and tokens taken out of its environment, and each command is listed to the person afterwards
+  because what a command changed is not tracked. A run has 12 looks (`read`, `ls`, `find`, `grep` and shell commands together; a
+  refused call is refunded and a change is never a look); past that the agent is told to report, so a folder that is gone is not
+  hunted for across the computer. The dialog lists the agent's steps as they happen (taken from pi's `tool_execution_start` events, so
+  every tool announces itself the same way) and, whatever the ending (result, failure, Stop), the changes it made, where each old file
+  is kept and the commands that ran. The buttons of a `needs-user` or `cannot-fix` answer are the agent's own: `report_result` takes up
+  to three `actions`, each `{kind, target, label}`: `settings` (a Settings page id) or `source` (the alias of a configured data source,
+  which opens `source:<alias>` in Settings). There is no button to a folder. The agent only names a destination and writes the label in
+  the person's language; the toolkit checks every one (a page the app has, an alias that is in the config), drops the rest and tells
+  the agent which were dropped so it can correct them, removes duplicates, and shortens the label; the renderer does the going
+  (`onOpenSettings` / `onOpenSource`), and a button with no label is named after its destination. A change to the config resets the
+  idle chat agents (`SearchService.resetAgents`) so the next question, including "다시 검색", is answered on the new config and resumes
+  from the chat's file. A model that fails during the run is explained exactly like the same error in the box. Pinned by
+  `test/app-error.test.ts`, `app-error-details.test.ts`, `error-fix-files.test.ts`, `error-fix-profile.test.ts`,
+  `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
   `scripts/manual-qa/run-qa-finder-ai-search-error-fix.mjs` (scripted model) and `run-qa-live-ai-search-error-fix.mjs` (a real model).
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and

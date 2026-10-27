@@ -7,7 +7,7 @@
  * Real mouse and keyboard input; the config file on disk and the requests the model receives are checked, not just pixels.
  *
  *   1. an error in the app's own setup (a search folder that is gone) shows the plain message with "Fix with AI" on the
- *      right; the fix agent is told that error and offered only the app's five tools; it looks, repoints the folder,
+ *      right; the fix agent is told that error and offered pi's own file and shell tools beside the app's three; it looks, repoints the folder in the config file,
  *      the old config is backed up, the dialog lists the steps and the change, and "Search again" then answers;
  *   2. a model that cannot be used (rejected key, spent plan, retired model) says so in plain words, offers no AI fix
  *      and leads to the model settings and the subscription page; a rate limit and a lost connection say to wait / check
@@ -20,7 +20,7 @@
  *   bun run qa script scripts/manual-qa/run-qa-finder-ai-search-error-fix.mjs
  * Screenshots land in $QA_OUT (default .omo/evidence/ai-finder-app/qa-ai-search-error-fix/). Prereq: bun run build.
  */
-import { appendFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
@@ -230,8 +230,8 @@ await shot("01-other-error-notice");
 
 script([
 	{ tool: "diagnose", args: {}, delayMs: 1500 },
-	{ tool: "check_path", args: { path: WORK } },
-	{ tool: "update_config", args: { updates: [{ path: ["searchPaths"], value: [DOCS] }] } },
+	{ tool: "ls", args: { path: WORK } },
+	{ tool: "edit", args: { path: join(WORK, "config.json"), edits: [{ oldText: JSON.stringify(GONE), newText: JSON.stringify(DOCS) }] } },
 	{ tool: "diagnose", args: {} },
 	{ tool: "report_result", args: { status: "fixed", summary: "The search folder was renamed from Documents-old to Documents, so I pointed the setting at Documents.", nextSteps: [] } },
 	{ text: "done" },
@@ -243,14 +243,14 @@ check("the dialog shows the error that is being fixed", (await dialog.innerText(
 await shot("02-fix-running");
 await waitInDialog(dialog.getByText("Fixed", { exact: true }));
 const doneText = await dialog.innerText();
-check("the dialog lists what the agent did, in order", doneText.includes("Checking settings and status") && doneText.includes(`Checking path: ${WORK}`) && doneText.includes("Changing setting: searchPaths"), doneText.replace(/\s+/g, " ").slice(0, 400));
+check("the dialog lists what the agent did, in order", doneText.includes("Checking settings and status") && doneText.includes(`Looking in folder: ${WORK}`) && doneText.includes(`Editing file: ${join(WORK, "config.json")}`), doneText.replace(/\s+/g, " ").slice(0, 400));
 check("the dialog shows the agent's own summary", doneText.includes("pointed the setting at Documents"));
 check("the dialog shows the change, before and after", doneText.includes("searchPaths") && doneText.includes(GONE) && doneText.includes(DOCS), doneText.replace(/\s+/g, " ").slice(0, 500));
 check("the config on disk now points at the folder that exists", JSON.stringify(readConfig().searchPaths) === JSON.stringify([DOCS]), JSON.stringify(readConfig().searchPaths));
 const backups = readdirSync(WORK).filter((name) => /^config\.json\.bak-\d{14}-before-error-fix$/.test(name));
 check("the old config was kept beside it, and the dialog names where", backups.length === 1 && doneText.includes(backups[0] ?? "?"), JSON.stringify(backups));
 check("the backup holds the old folder", backups.length === 1 && JSON.parse(readFileSync(join(WORK, backups[0]), "utf8")).searchPaths[0] === GONE);
-check("the model got the error text and exactly the app's five tools, no pi file or shell tool", seen[0]?.system.includes(GONE) && JSON.stringify(seen[0]?.tools) === JSON.stringify(["check_path", "diagnose", "refresh_index", "report_result", "update_config"]), JSON.stringify(seen[0]?.tools));
+check("the model got the error text and pi's own file and shell tools beside the app's three", seen[0]?.system.includes(GONE) && JSON.stringify(seen[0]?.tools) === JSON.stringify(["bash", "diagnose", "edit", "find", "grep", "ls", "read", "refresh_index", "report_result", "write"]), JSON.stringify(seen[0]?.tools));
 check("the model was never told a secret: the redacted config has no key", !JSON.stringify(seen.map((entry) => entry.messages)).includes("qa-key"));
 await shot("03-fix-done");
 
@@ -429,7 +429,7 @@ await dialog.waitFor({ state: "detached" });
 
 // The model goes down AFTER the agent already changed the config: the change is not hidden.
 script([
-	{ tool: "update_config", args: { updates: [{ path: ["searchPaths"], value: [DOCS] }] } },
+	{ tool: "edit", args: { path: join(WORK, "config.json"), edits: [{ oldText: JSON.stringify(GONE), newText: JSON.stringify(DOCS) }] } },
 	{ httpStatus: 401, body: { error: { message: "Incorrect API key provided: qa-key." } } },
 ]);
 await fixButton("Fix with AI").click();
@@ -449,6 +449,37 @@ await notice.waitFor({ timeout: 90_000 });
 log(`no model → message shown: ${(await notice.innerText()).replace(/\s+/g, " ").slice(0, 300)}`);
 await shot("19-no-model");
 writeConfig([GONE]);
+// ── 4b. The agent repairs with the shell, and with a file the config names. The person sees each command, and the
+//        guarded tools refuse what must stay out of reach. ──
+{
+	writeConfig([GONE]);
+	await ask("the folder is gone again");
+	await notice.waitFor({ timeout: 90_000 });
+	const note = join(WORK, "my-own-note.txt");
+	writeFileSync(note, "the person's own note");
+	script([
+		{ tool: "bash", args: { command: `echo repaired > ${join(WORK, "repaired.txt")}` } },
+		{ tool: "write", args: { path: note, content: "overwritten by the agent" } },
+		{ tool: "read", args: { path: join(process.env.HOME ?? "", ".pi", "agent", "auth.json") } },
+		{ tool: "report_result", args: { status: "fixed", summary: "I ran a repair command for you.", nextSteps: [] } },
+		{ text: "done" },
+	]);
+	await fixButton("Fix with AI").click();
+	await dialog.waitFor();
+	await waitInDialog(dialog.getByText("Fixed", { exact: true }));
+	const shellText = await dialog.innerText();
+	check("the dialog lists the shell command the agent ran, as written", shellText.includes("Commands that ran") && shellText.includes(`echo repaired > ${join(WORK, "repaired.txt")}`), shellText.replace(/\s+/g, " ").slice(0, 500));
+	check("the dialog says what a command changed is not recorded separately", shellText.includes("not recorded separately"));
+	check("the command really ran", existsSync(join(WORK, "repaired.txt")));
+	check("the person's own file was not written by the agent", readFileSync(note, "utf8") === "the person's own note");
+	check("the dialog lists the steps in the interface language", shellText.includes("Running command") && shellText.includes("Writing file") && shellText.includes("Reading file"), shellText.replace(/\s+/g, " ").slice(0, 400));
+	check("the model was told the write was refused and that the sign-in file is off limits", JSON.stringify(seen.at(-1)?.messages ?? []).includes("not a place you may change") && JSON.stringify(seen.at(-1)?.messages ?? []).includes("never opened"), "");
+	await shot("15b-fix-shell-command");
+	await page.keyboard.press("Escape");
+	await dialog.waitFor({ state: "detached" });
+	writeConfig([GONE]);
+}
+
 // ── 5. The same screens in the other interface languages. ────────────────
 for (const [language, fixLabel, titleText] of [
 	["ko", "AI로 고치기", "문제가 생겼어요"],

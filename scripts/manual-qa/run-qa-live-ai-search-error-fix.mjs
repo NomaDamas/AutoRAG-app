@@ -12,7 +12,7 @@
 // created=2026-09-10; never pick a model from memory, read https://openrouter.ai/api/v1/models).
 //
 //   1. The search folder in the config is gone (it was moved up one level). AI Search says so; "Fix with AI" runs the real model
-//      as the error-fix agent; it must look (diagnose, check_path), repoint the folder through update_config, leave a backup of the
+//      as the error-fix agent with pi's own file and shell tools; it must look (read, ls, find, diagnose), repoint the folder in the config file (edit or write), leave a backup of the
 //      old config, and report `fixed`. The config on disk is then checked, not just the dialog. "Search again" answers from the
 //      file in the repaired folder (a number only that file holds).
 //   2. The server rejects the key (the stand-in swaps the Authorization header of /v1/responses for an invalid one, so the real
@@ -188,7 +188,10 @@ try {
 	console.log(`dialog after the real run:\n${outcome}`);
 	await shot("03-fix-finished");
 	const steps = outcome;
-	check("the real agent looked before it changed anything", steps.includes("Checking settings and status"));
+	const lookedAt = ["Checking settings and status", "Reading file", "Looking in folder", "Finding files", "Searching contents", "Running command"];
+	const firstLook = Math.min(...lookedAt.map((label) => (steps.includes(label) ? steps.indexOf(label) : Number.POSITIVE_INFINITY)));
+	const firstChange = Math.min(...["Editing file", "Writing file"].map((label) => (steps.includes(label) ? steps.indexOf(label) : Number.POSITIVE_INFINITY)));
+	check("the real agent looked before it changed anything", Number.isFinite(firstLook) && firstLook < firstChange, `look at ${firstLook}, change at ${firstChange}`);
 	const after = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check("the config now points at the folder that exists", Array.isArray(after.searchPaths) && after.searchPaths.length >= 1 && after.searchPaths.every((path) => existsSync(path)) && after.searchPaths.includes(REPORTS), JSON.stringify(after.searchPaths));
 	check("the model setting was not touched", JSON.stringify(after.model) === modelBefore);

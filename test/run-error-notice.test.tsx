@@ -189,10 +189,10 @@ describe("the AI fix dialog", () => {
 		expect(dialog()?.textContent).toContain(t("appError.fix.running"));
 
 		emit({ type: "step", runId: runId(), step: { tool: "diagnose", detail: null } });
-		emit({ type: "step", runId: runId(), step: { tool: "check_path", detail: "/Users/me/Documents" } });
+		emit({ type: "step", runId: runId(), step: { tool: "ls", detail: "/Users/me/Documents" } });
 
 		expect(dialog()?.textContent).toContain(t("appError.fix.steps.diagnose"));
-		expect(dialog()?.textContent).toContain(`${t("appError.fix.steps.checkPath")}: /Users/me/Documents`);
+		expect(dialog()?.textContent).toContain(`${t("appError.fix.steps.ls")}: /Users/me/Documents`);
 	});
 
 	it("shows what was fixed, what changed and where the old config is kept, and asks the question again on request", () => {

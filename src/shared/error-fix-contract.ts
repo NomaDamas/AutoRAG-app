@@ -26,20 +26,22 @@ export function isErrorFixRequest(value: unknown): value is ErrorFixRequest {
 	return typeof value === "object" && value !== null && "message" in value && typeof value.message === "string" && "surface" in value && value.surface === "ai-search";
 }
 
-/** The tools whose use is announced while the agent works. */
-export type ErrorFixTool = "diagnose" | "check_path" | "update_config" | "refresh_index";
+/** The tools whose use is announced while the agent works: pi's own file and shell tools, and the app's two. */
+export type ErrorFixTool = "read" | "ls" | "find" | "grep" | "edit" | "write" | "bash" | "diagnose" | "refresh_index";
 
-/** One thing the agent is doing now; the renderer words it, `detail` (a path or a config key) is shown as it is. */
+/** One thing the agent is doing now; the renderer words it, `detail` (a path, a pattern or a command) is shown as it is. */
 export interface ErrorFixStep {
 	readonly tool: ErrorFixTool;
 	readonly detail: string | null;
 }
 
-/** One config value the agent changed, as short JSON text (a secret is never writable, so none appears here). */
+/** One thing the agent changed: a config value (as short JSON text; a secret is never writable, so none appears here) or a whole file (its size in bytes). */
 export interface ErrorFixChange {
 	readonly path: string;
 	readonly before: string | null;
 	readonly after: string | null;
+	/** Copy of the file taken before it was changed; for a config value, the config's copy is {@link ErrorFixTrace.backupPath}. */
+	readonly backup?: string;
 }
 
 /** Settings pages the agent may point the person to; anything else it names is dropped. */
@@ -57,8 +59,10 @@ export type ErrorFixStatus =
 /** What a run changed so far; every run that ends reports it, so a change made before a failure or a stop is never silent. */
 export interface ErrorFixTrace {
 	readonly changes: readonly ErrorFixChange[];
-	/** Copy of the config taken before the first change, or null when nothing was changed. */
+	/** Copy of the config taken before the first change, or null when the config was not changed. */
 	readonly backupPath: string | null;
+	/** The shell commands the agent ran, as it wrote them: what a command did is not tracked, so the person is shown each one. */
+	readonly commands?: readonly string[];
 }
 
 /**

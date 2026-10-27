@@ -39,24 +39,42 @@ function Button({ primary = false, onClick, children, ariaLabel }: { readonly pr
 	);
 }
 
-function ChangeList({ changes, backupPath }: { readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null }): ReactElement | null {
+function ChangeList({ changes, backupPath, commands }: { readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null; readonly commands: readonly string[] }): ReactElement | null {
 	const { t } = useTranslation();
-	if (changes.length === 0) return null;
+	if (changes.length === 0 && commands.length === 0) return null;
 	const show = (value: string | null): string => value ?? t("appError.fix.unset");
 	return (
 		<div className="flex flex-col gap-6">
-			<strong className="text-meta font-semibold text-ink">{t("appError.fix.changesTitle")}</strong>
-			<ul className="m-0 flex list-none flex-col gap-4 p-0">
-				{changes.map((change) => (
-					<li key={change.path} className="flex flex-col gap-2 rounded-6 bg-chrome px-10 py-6 text-meta text-ink-body">
-						<code className="font-mono font-semibold text-ink">{change.path}</code>
-						<span className="break-all text-ink-muted">
-							{show(change.before)} → {show(change.after)}
-						</span>
-					</li>
-				))}
-			</ul>
+			{changes.length === 0 ? null : (
+				<>
+					<strong className="text-meta font-semibold text-ink">{t("appError.fix.changesTitle")}</strong>
+					<ul className="m-0 flex list-none flex-col gap-4 p-0">
+						{changes.map((change) => (
+							<li key={change.path} className="flex flex-col gap-2 rounded-6 bg-chrome px-10 py-6 text-meta text-ink-body">
+								<code className="break-all font-mono font-semibold text-ink">{change.path}</code>
+								<span className="break-all text-ink-muted">
+									{show(change.before)} → {show(change.after)}
+								</span>
+								{change.backup === undefined ? null : <span className="break-all text-ink-muted">{t("appError.fix.fileBackup", { path: change.backup })}</span>}
+							</li>
+						))}
+					</ul>
+				</>
+			)}
 			{backupPath === null ? null : <span className="break-all text-meta text-ink-muted">{t("appError.fix.backup", { path: backupPath })}</span>}
+			{commands.length === 0 ? null : (
+				<>
+					<strong className="text-meta font-semibold text-ink">{t("appError.fix.commandsTitle")}</strong>
+					<ul className="m-0 flex list-none flex-col gap-4 p-0">
+						{commands.map((command, index) => (
+							<li key={`${index}:${command}`} className="rounded-6 bg-chrome px-10 py-6">
+								<code className="break-all font-mono text-meta text-ink">{command}</code>
+							</li>
+						))}
+					</ul>
+					<span className="text-meta text-ink-muted">{t("appError.fix.commandsNote")}</span>
+				</>
+			)}
 		</div>
 	);
 }
@@ -82,7 +100,7 @@ function ResultBody({ result }: { readonly result: ErrorFixResult }): ReactEleme
 					</ul>
 				</div>
 			)}
-			<ChangeList changes={result.changes} backupPath={result.backupPath} />
+			<ChangeList changes={result.changes} backupPath={result.backupPath} commands={result.commands ?? []} />
 		</>
 	);
 }
@@ -175,7 +193,7 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource,
 					{view.kind === "other" ? null : <span className="text-meta leading-normal text-ink-body">{view.hint}</span>}
 					<ErrorDetails message={run.message} className="line-clamp-4 text-meta text-ink-muted" />
 				</div>
-				<ChangeList changes={run.changes} backupPath={run.backupPath} />
+				<ChangeList changes={run.changes} backupPath={run.backupPath} commands={run.commands} />
 			</>
 		);
 		actions = (
@@ -188,7 +206,7 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource,
 		body = (
 			<>
 				<p className="m-0 text-body text-ink-body">{t("appError.fix.stopped")}</p>
-				<ChangeList changes={run.changes} backupPath={run.backupPath} />
+				<ChangeList changes={run.changes} backupPath={run.backupPath} commands={run.commands} />
 			</>
 		);
 		actions = (

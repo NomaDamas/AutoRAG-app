@@ -74,12 +74,12 @@ function finalEvent(): ErrorFixEvent | undefined {
 }
 
 describe("error-fix service", () => {
-	it("diagnoses, repairs the config and reports what it changed, announcing each step", async () => {
+	it("diagnoses, repairs the config and reports what it changed, announcing each step from pi's own tool events", async () => {
 		const registration = register();
 		registration.setResponses([
 			fauxAssistantMessage(fauxToolCall("diagnose", {})),
-			fauxAssistantMessage(fauxToolCall("check_path", { path: join(root, "Documents") })),
-			fauxAssistantMessage(fauxToolCall("update_config", { updates: [{ path: ["searchPaths"], value: [join(root, "Documents")] }] })),
+			fauxAssistantMessage(fauxToolCall("ls", { path: root })),
+			fauxAssistantMessage(fauxToolCall("edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "OldDocs")), newText: JSON.stringify(join(root, "Documents")) }] })),
 			fauxAssistantMessage(fauxToolCall("report_result", { status: "fixed", summary: "검색 폴더를 Documents로 바꿨어요." })),
 			fauxAssistantMessage("done"),
 		]);
@@ -88,8 +88,8 @@ describe("error-fix service", () => {
 
 		expect(events.map((event) => (event.type === "step" ? `${event.step.tool}:${event.step.detail ?? ""}` : event.type))).toEqual([
 			"diagnose:",
-			`check_path:${join(root, "Documents")}`,
-			"update_config:searchPaths",
+			`ls:${root}`,
+			`edit:${configPath}`,
 			"result",
 		]);
 		expect(finalEvent()).toMatchObject({
@@ -100,7 +100,7 @@ describe("error-fix service", () => {
 		expect(JSON.parse(await readFile(configPath, "utf8"))).toMatchObject({ searchPaths: [join(root, "Documents")] });
 	});
 
-	it("gives the model the error as shown, the interface language and only the app's tools", async () => {
+	it("gives the model the error as shown, the interface language and pi's file and shell tools beside the app's three", async () => {
 		const registration = register();
 		const seen: { prompt: string; tools: string[] }[] = [];
 		registration.setResponses([
@@ -118,7 +118,7 @@ describe("error-fix service", () => {
 
 		expect(seen[0]?.prompt).toContain(REQUEST.message);
 		expect(seen[0]?.prompt).toContain("Korean");
-		expect(seen[0]?.tools).toEqual(["check_path", "diagnose", "refresh_index", "report_result", "update_config"]);
+		expect(seen[0]?.tools).toEqual(["bash", "diagnose", "edit", "find", "grep", "ls", "read", "refresh_index", "report_result", "write"]);
 	});
 
 	it("tells the model its 'fixed' was refused when nothing changed, so it can answer truthfully", async () => {
@@ -146,7 +146,7 @@ describe("error-fix service", () => {
 
 		await serviceFor(register(), { resolveModel }).start("run-4", REQUEST);
 
-		expect(events).toEqual([{ type: "error", runId: "run-4", message: "No API key found for dazzi", changes: [], backupPath: null }]);
+		expect(events).toEqual([{ type: "error", runId: "run-4", message: "No API key found for dazzi", changes: [], backupPath: null, commands: [] }]);
 	});
 
 	it("reports the provider's error when the model request fails", async () => {
@@ -174,21 +174,21 @@ describe("error-fix service", () => {
 		registration.setResponses([
 			async (): Promise<AssistantMessage> => {
 				await service.cancel("run-7");
-				return fauxAssistantMessage(fauxToolCall("update_config", { updates: [{ path: ["searchPaths"], value: [join(root, "Documents")] }] }));
+				return fauxAssistantMessage(fauxToolCall("edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "OldDocs")), newText: JSON.stringify(join(root, "Documents")) }] }));
 			},
 			fauxAssistantMessage("done"),
 		]);
 
 		await service.start("run-7", REQUEST);
 
-		expect(events).toEqual([{ type: "cancelled", runId: "run-7", changes: [], backupPath: null }]);
+		expect(events).toEqual([{ type: "cancelled", runId: "run-7", changes: [], backupPath: null, commands: [] }]);
 		expect(JSON.parse(await readFile(configPath, "utf8"))).toMatchObject({ searchPaths: [join(root, "OldDocs")] });
 	});
 
 	it("tells what it had already changed when the run ends in an error afterwards, so no change is silent", async () => {
 		const registration = register();
 		registration.setResponses([
-			fauxAssistantMessage(fauxToolCall("update_config", { updates: [{ path: ["searchPaths"], value: [join(root, "Documents")] }] })),
+			fauxAssistantMessage(fauxToolCall("edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "OldDocs")), newText: JSON.stringify(join(root, "Documents")) }] })),
 			fauxAssistantMessage("", { stopReason: "error", errorMessage: "provider exploded" }),
 		]);
 
@@ -207,8 +207,8 @@ describe("error-fix service", () => {
 		const registration = register();
 		const onConfigChanged = vi.fn();
 		registration.setResponses([
-			fauxAssistantMessage(fauxToolCall("update_config", { updates: [{ path: ["searchPaths"], value: 5 }] })),
-			fauxAssistantMessage(fauxToolCall("update_config", { updates: [{ path: ["searchPaths"], value: [join(root, "Documents")] }] })),
+			fauxAssistantMessage(fauxToolCall("edit", { path: configPath, edits: [{ oldText: JSON.stringify([join(root, "OldDocs")]), newText: "5" }] })),
+			fauxAssistantMessage(fauxToolCall("edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "OldDocs")), newText: JSON.stringify(join(root, "Documents")) }] })),
 			fauxAssistantMessage(fauxToolCall("report_result", { status: "fixed", summary: "ok" })),
 			fauxAssistantMessage("done"),
 		]);
@@ -248,5 +248,39 @@ describe("error-fix service", () => {
 
 		expect(fed[0]?.join("\n")).toContain("disk is full");
 		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "cannot-fix" } });
+	});
+
+	it("lets the agent repair with a shell command and shows the person that command, since what it did cannot be tracked", async () => {
+		const registration = register();
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("bash", { command: "echo repaired > repaired.txt" })),
+			fauxAssistantMessage(fauxToolCall("report_result", { status: "fixed", summary: "Ran a repair." })),
+			fauxAssistantMessage("done"),
+		]);
+
+		await serviceFor(registration).start("run-12", REQUEST);
+
+		expect(events.filter((event) => event.type === "step").map((event) => (event.type === "step" ? event.step : null))).toEqual([{ tool: "bash", detail: "echo repaired > repaired.txt" }]);
+		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "fixed", commands: ["echo repaired > repaired.txt"] } });
+		expect(await readFile(join(root, "repaired.txt"), "utf8")).toBe("repaired\n");
+	});
+
+	it("never lets the agent open the AI's own sign-in file, and says so to it", async () => {
+		const registration = register();
+		const fed: string[][] = [];
+		await writeFile(join(agentDir, "auth.json"), '{"dazzi":{"access":"AGENT-SECRET"}}');
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("read", { path: join(agentDir, "auth.json") })),
+			(context) => {
+				fed.push(toolResultTexts(context.messages));
+				return fauxAssistantMessage(fauxToolCall("report_result", { status: "cannot-fix", summary: "x" }));
+			},
+			fauxAssistantMessage("done"),
+		]);
+
+		await serviceFor(registration).start("run-13", REQUEST);
+
+		expect(fed[0]?.join("\n")).toMatch(/sign-in|key file/iu);
+		expect(fed[0]?.join("\n")).not.toContain("AGENT-SECRET");
 	});
 });

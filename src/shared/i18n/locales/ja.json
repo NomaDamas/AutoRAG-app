@@ -313,8 +313,13 @@
       "running": "原因を調べています…",
       "steps": {
         "diagnose": "設定と状態を確認中",
-        "checkPath": "パスを確認中",
-        "updateConfig": "設定を変更中",
+        "read": "ファイルを読み込み中",
+        "ls": "フォルダを確認中",
+        "find": "ファイルを検索中",
+        "grep": "内容を検索中",
+        "edit": "ファイルを編集中",
+        "write": "ファイルを書き込み中",
+        "bash": "コマンドを実行中",
         "refreshIndex": "インデックスを再作成中"
       },
       "status": {
@@ -330,7 +335,10 @@
       "openSource": "「{{name}}」の接続を開く",
       "retrySearch": "もう一度検索",
       "failedTitle": "AIでは修正できませんでした",
-      "stopped": "中断しました。"
+      "stopped": "中断しました。",
+      "commandsTitle": "実行したコマンド",
+      "commandsNote": "コマンドが変更した内容は別には記録されません。上の一覧をご確認ください。",
+      "fileBackup": "変更前のファイルを {{path}} にバックアップしました。"
     }
   },
   "interaction": {
