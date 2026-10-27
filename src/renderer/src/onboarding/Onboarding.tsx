@@ -1037,12 +1037,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			<>
 				<div className="progress-dashes">
 					{flow.map((id, index) => (
-						<span
-							key={id}
-							className={cn("dash", index < footerIndex && "done", index === footerIndex && "active")}
-							title={t(`onboarding.step.${id}`)}
-						/>
+						<span key={id} className={cn("dash", index === footerIndex && "active")} title={t(`onboarding.step.${id}`)} />
 					))}
+					<span className="dash-thumb" aria-hidden="true" style={{ transform: `translateX(${Math.max(footerIndex, 0) * 23}px)` }} />
 				</div>
 				<div className="footer-actions">
 					<button type="button" className="footer-btn" disabled={footerIndex <= 0} onClick={back}>

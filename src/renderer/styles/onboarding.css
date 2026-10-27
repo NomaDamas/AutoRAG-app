@@ -354,26 +354,45 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 }
 
 .onb .progress-dashes {
+	position: relative;
 	display: flex;
 	align-items: center;
 	gap: 5px;
 	justify-content: center;
 }
 
+/* Every dash looks the same; the current page is a wider slot the blue thumb slides into. */
 .onb .progress-dashes .dash {
 	width: 18px;
 	height: 3px;
 	border-radius: 3px;
 	background: var(--onb-border);
+	transition: width .35s cubic-bezier(.4,0,.2,1);
 }
 
 .onb .progress-dashes .dash.active {
 	width: 34px;
-	background: var(--onb-blue);
 }
 
-.onb .progress-dashes .dash.done {
-	background: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
+/* 23px is one dash (18px) plus its gap (5px). */
+.onb .progress-dashes .dash-thumb {
+	position: absolute;
+	top: 50%;
+	left: 0;
+	width: 34px;
+	height: 3px;
+	margin-top: -1.5px;
+	border-radius: 3px;
+	background: var(--onb-blue);
+	transition: transform .35s cubic-bezier(.4,0,.2,1);
+	pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.onb .progress-dashes .dash,
+	.onb .progress-dashes .dash-thumb {
+		transition: none;
+	}
 }
 
 .onb .footer .footer-hint {
