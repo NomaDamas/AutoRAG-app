@@ -2252,7 +2252,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	margin-top: 2px;
 }
 
-/* The cloud-embedding consent under the card grid (Figma 06b): ticking the box fades it away. */
+/* The cloud-embedding consent under the card grid (Figma 06b): shown while the cloud card is chosen. */
 .onb .em-consent {
 	position: absolute;
 	top: calc(100% + 12px);
@@ -2274,18 +2274,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-weight: 500;
 	line-height: 16px;
 	cursor: pointer;
-}
-
-.onb .em-consent.closing {
-	pointer-events: none;
-	animation: onb-consent-out .22s ease-in forwards;
-}
-
-@keyframes onb-consent-out {
-	to {
-		opacity: 0;
-		transform: translateX(-50%) translateY(-6px);
-	}
 }
 
 .onb .em-consent-check {
@@ -2332,11 +2320,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	outline-offset: 2px;
 }
 
-@media (prefers-reduced-motion: reduce) {
-	.onb .em-consent.closing {
-		animation-duration: 1ms;
-	}
-}
 
 /* The welcome step's usage-statistics checkbox: a small line under the note, not a boxed card. */
 .onb .usage-consent {
