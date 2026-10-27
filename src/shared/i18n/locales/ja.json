@@ -828,22 +828,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "セマンティック検索",
       "title": "埋め込みをどう使いますか？",
       "groupLabel": "埋め込み方法",
       "card": {
         "none": {
-          "name": "使用しない",
-          "line": "キーワード検索のみ"
-        },
-        "local": {
-          "name": "ローカル埋め込み",
-          "lineMac": "このMacで処理",
-          "linePc": "このPCで処理"
+          "name": "キーワードで探す",
+          "line": "入力した単語を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "リモート埋め込み",
-          "line": "サーバーで処理"
+          "name": "Dazziサーバーで分析",
+          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
+        },
+        "local": {
+          "nameMac": "自分のMacで分析",
+          "namePc": "自分のPCで分析",
+          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
+          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
         }
       },
       "meter": {
@@ -855,7 +855,9 @@
         "good": "良い"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "約{{minutes}}分",
+      "prepTime": "準備時間",
+      "about": "約",
+      "minutes": "{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
       "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。",

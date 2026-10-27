@@ -828,22 +828,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "Semantic search",
       "title": "How should we embed?",
       "groupLabel": "Embedding method",
       "card": {
         "none": {
-          "name": "Off",
-          "line": "Keyword search only"
-        },
-        "local": {
-          "name": "Local embedding",
-          "lineMac": "Runs on this Mac",
-          "linePc": "Runs on this PC"
+          "name": "Search by keyword",
+          "line": "Only finds documents that contain the words you type."
         },
         "cloud": {
-          "name": "Remote embedding",
-          "line": "Runs on the server"
+          "name": "Analyze on Dazzi's server",
+          "line": "Document contents are sent to Dazzi's server for analysis."
+        },
+        "local": {
+          "nameMac": "Analyze on my Mac",
+          "namePc": "Analyze on my PC",
+          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
+          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
         }
       },
       "meter": {
@@ -855,7 +855,9 @@
         "good": "Good"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "~{{minutes}} min",
+      "prepTime": "Setup time",
+      "about": "About",
+      "minutes": "{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
       "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing.",
