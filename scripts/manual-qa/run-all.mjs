@@ -85,6 +85,7 @@ const LANES = [
 	{ name: "quick-look-certificate", script: "run-qa-quick-look-certificate.mjs", timeout: 240 },
 	{ name: "fs-worker-crash", script: "run-qa-finder-fs-worker-crash.mjs", timeout: 180 },
 	{ name: "quit-clean", script: "run-qa-finder-quit-clean.mjs", timeout: 600 },
+	{ name: "force-quit", script: "run-qa-finder-force-quit.mjs", timeout: 600 },
 	{ name: "onboarding", script: "run-qa-onboarding.mjs", timeout: 900 },
 	{ name: "onboarding-language", script: "run-qa-onboarding-language.mjs", timeout: 900 },
 	{ name: "local-embedding-spec", script: "run-qa-local-embedding-spec.mjs", timeout: 900 },
