@@ -17,6 +17,9 @@
     "settings": "설정",
     "recents": "최근 항목",
     "tags": "태그",
+    "tagColorsDenied": "태그 색상 보기",
+    "tagColorsDeniedHint": "Finder의 태그 색상은 macOS가 전체 디스크 접근 권한 뒤에 두고 있어요. 허용한 뒤 앱을 다시 시작하면 색상이 보입니다.",
+    "tagColorsGrantToast": "전체 디스크 접근 권한을 허용하고 Dazzi를 다시 시작하세요.",
     "home": "홈",
     "applications": "응용 프로그램",
     "desktop": "데스크탑",
@@ -611,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "뒤로가기",
     "step": {
       "welcome": "소개",
       "permissions": "권한",
@@ -711,6 +715,14 @@
       "skip": "계정 없이 내 API 키로 사용 (BYOK)",
       "offline": "서버에 연결할 수 없어 마지막으로 확인한 정보를 보여줍니다.",
       "authNote": "로그인 방법(이메일 코드, 소셜 로그인)은 브라우저의 Dazzi 로그인 화면에서 고릅니다.",
+      "getStarted": "시작하기",
+      "continueGoogle": "Google로 계속",
+      "continueApple": "Apple로 계속",
+      "or": "또는",
+      "emailLabel": "이메일",
+      "emailPlaceholder": "name@example.com",
+      "continueEmail": "이메일로 계속",
+      "guest": "게스트로 계속하기",
       "agreeLead": "계속하면 Dazzi의 다음 정책에 동의합니다:",
       "agreeTerms": "이용약관",
       "agreePrivacy": "개인정보처리방침",
@@ -720,9 +732,10 @@
     },
     "permissions": {
       "eyebrow": "권한",
-      "title": "제대로 읽을 수 있게\n허용해주세요",
-      "leadMac": "macOS는 앱이 문서와 보호된 앱 데이터에 접근하기 전에 허락을 받습니다. 권한과 인덱싱 범위는 서로 다릅니다.",
-      "leadWindows": "알림과 네트워크만 확인하면 바로 시작할 수 있습니다. 나머지는 나중에 설정에서 바꿀 수 있습니다.",
+      "title": "허용 권한을 확인해주세요",
+      "leadMac": "macOS는 보호된 파일을 앱이 읽기 전에 사용자의 허용을 요구합니다.\n허용 후에도 검색 대상 폴더는 다음 단계에서 직접 선택합니다.",
+      "leadWindows": "필요한 권한만 먼저 확인하세요.\n모든 항목은 건너뛸 수 있으며, 나중에 설정에서 바꿀 수 있습니다.",
+      "titleWindows": "허용 권한을 확인해주세요",
       "note": "Dazzi는 파일을 수정하지 않습니다. 실제로 인덱싱할 폴더는 다음 단계에서 직접 고릅니다.",
       "required": "필수",
       "optional": "선택",
@@ -734,20 +747,22 @@
       "footnote": "켜야 다음 단계로 갈 수 있습니다.",
       "fda": {
         "name": "전체 디스크 접근",
-        "desc": "제대로 동작하려면 필요합니다."
+        "desc": "문서, 다운로드, 메일, 외장 디스크 등 보호된 영역을 읽기 위해 필요한 권한입니다.\n한 번 허용하면 폴더별 권한 요청이 반복되지 않습니다.",
+        "why": "왜 전체 디스크 접근이 필요한가요?"
       },
       "notifications": {
         "name": "알림",
+        "desc": "알림 권한을 미리 요청합니다. 수신할 알림은 설정에서 선택할 수 있습니다.",
         "allow": "알림 허용",
         "openWindows": "Windows 설정 열기"
       },
       "login": {
         "name": "로그인 시 실행",
-        "desc": "파일이 바뀌면 백그라운드에서 인덱스를 최신으로 유지합니다."
+        "desc": "컴퓨터를 켜면 앱이 자동으로 실행됩니다. 설정에서 언제든 끌 수 있습니다."
       },
       "network": {
-        "name": "네트워크 (방화벽)",
-        "desc": "원격 임베딩과 모델 호출에 필요합니다. 첫 실행 때 Windows 보안 경고가 뜨면 허용합니다.",
+        "name": "네트워크",
+        "desc": "온라인 AI에 질문하거나 문서를 온라인에서 분석할 때만 필요합니다.",
         "allow": "허용"
       }
     },
@@ -1297,7 +1312,21 @@
       "stars": "별 {{count}}개",
       "star": "별 1개"
     },
-    "kindByExtension": "{{ext}} 파일"
+    "kindByExtension": "{{ext}} 파일",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop 문서",
+      "illustrator": "Adobe Illustrator 문서",
+      "eps": "EPS 이미지",
+      "jpegxl": "JPEG XL 이미지",
+      "icns": "Apple 아이콘 이미지",
+      "targa": "TGA 이미지",
+      "openexr": "OpenEXR 이미지",
+      "gimp": "GIMP 이미지",
+      "sketch": "Sketch 문서",
+      "figma": "Figma 문서",
+      "raw": "{{maker}} RAW 이미지",
+      "rawGeneric": "RAW 이미지"
+    }
   },
   "main": {
     "interaction": {
@@ -1411,7 +1440,10 @@
     },
     "worker": {
       "unknownFormat": "알 수 없는 파일 형식입니다: {{format}}",
-      "invalidUrl": "웹 주소가 올바르지 않습니다"
+      "invalidUrl": "웹 주소가 올바르지 않습니다",
+      "librarianExited": "색인 도우미가 예기치 않게 멈췄습니다(코드 {{code}}).",
+      "librarianFailed": "색인 도우미가 실패했습니다: {{message}}",
+      "librarianStopped": "색인 도우미가 종료되어 요청을 처리할 수 없습니다."
     },
     "fs": {
       "restoreTempFailed": "{{message}} (임시 이름 {{name}}에서 되돌리지 못했습니다: {{detail}})",
@@ -1670,6 +1702,63 @@
       "rendering": "슬라이드를 선명하게 만드는 중…",
       "page": "{{count}}페이지"
     },
+    "certificate": {
+      "subject": "주체",
+      "issuer": "발급자",
+      "serial": "일련 번호",
+      "notBefore": "유효 시작",
+      "notAfter": "유효 종료",
+      "signature": "서명",
+      "publicKey": "공개 키",
+      "altNames": "대체 이름",
+      "keyUsage": "키 사용",
+      "extendedKeyUsage": "확장 키 사용",
+      "ca": "CA",
+      "status": {
+        "expired": "만료됨",
+        "notYetValid": "아직 유효하지 않음"
+      },
+      "usage": {
+        "digitalSignature": "디지털 서명",
+        "contentCommitment": "부인 방지",
+        "keyEncipherment": "키 암호화",
+        "dataEncipherment": "데이터 암호화",
+        "keyAgreement": "키 합의",
+        "keyCertSign": "인증서 서명",
+        "cRLSign": "CRL 서명",
+        "encipherOnly": "암호화 전용",
+        "decipherOnly": "복호화 전용"
+      },
+      "eku": {
+        "serverAuth": "TLS 웹 서버 인증",
+        "clientAuth": "TLS 웹 클라이언트 인증",
+        "codeSigning": "코드 서명",
+        "emailProtection": "이메일 보호",
+        "timeStamping": "타임스탬프",
+        "ocspSigning": "OCSP 서명"
+      },
+      "keyHidden": "개인 키 — 내용은 표시하지 않습니다",
+      "keyEncrypted": "암호화됨",
+      "keyPlain": "암호화되지 않음",
+      "unreadableBlock": "이 인증서를 읽을 수 없습니다",
+      "countOne": "인증서 1개",
+      "countMany": "인증서 {{count}}개",
+      "omitted": "{{count}}개는 표시하지 않음",
+      "truncated": "파일의 앞부분만 표시합니다",
+      "readFailed": "이 파일을 읽을 수 없습니다",
+      "container": {
+        "pkcs12": "PKCS #12 번들은 인증서와 개인 키를 담고 암호로 보호되어 있어 내용을 표시하지 않습니다.",
+        "keychain": "Apple 키체인은 암호화된 저장소라서 여기서는 읽거나 복호화하지 않습니다."
+      },
+      "notContainer": {
+        "pkcs12": "올바른 PKCS #12 번들이 아닙니다",
+        "keychain": "올바른 Apple 키체인이 아닙니다"
+      },
+      "unreadable": {
+        "empty": "비어 있는 파일입니다",
+        "notCertificate": "이 파일에서 인증서를 찾지 못했습니다"
+      }
+    },
     "gdrive": {
       "account": "Google 계정: {{email}}",
       "notPointer": "올바른 Google Drive 바로가기 파일이 아닙니다"
@@ -1829,6 +1918,9 @@
       "openFailed": "프레젠테이션을 열 수 없습니다",
       "noSlides": "슬라이드가 없습니다",
       "noPreview": "이 문서에는 미리보기 이미지가 없습니다"
+    },
+    "raster": {
+      "noPreview": "이 파일에서 미리보기 이미지를 만들 수 없습니다"
     },
     "evidence": {
       "searching": "근거 위치 찾는 중…",

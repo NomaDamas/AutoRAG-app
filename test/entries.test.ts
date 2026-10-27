@@ -65,6 +65,25 @@ describe("kindLabelOf", () => {
 		expect(t("finderState.kindByExtension", { ext: "JSON" })).toContain("JSON");
 	});
 
+	it("names GIMP, Sketch, Figma, Photoshop and camera RAW files itself when the OS reported no kind, never as a PNG or a bare extension", () => {
+		const labelOf = (name: string, ext: string): string => kindLabelOf(entryFromFs(fsEntry({ name, ext })));
+		expect(labelOf("a.xcf", "xcf")).toBe(t("finderState.kindNames.gimp"));
+		expect(labelOf("a.sketch", "sketch")).toBe(t("finderState.kindNames.sketch"));
+		expect(labelOf("a.fig", "fig")).toBe(t("finderState.kindNames.figma"));
+		expect(labelOf("a.psd", "psd")).toBe(t("finderState.kindNames.photoshop"));
+		expect(labelOf("a.cr3", "cr3")).toBe(t("finderState.kindNames.raw", { maker: "Canon" }));
+		expect(labelOf("a.cr3", "cr3")).toContain("Canon");
+		for (const ext of ["xcf", "sketch", "fig", "psd", "cr3", "raw"]) {
+			expect(labelOf(`a.${ext}`, ext)).not.toBe(t("finderState.kindByExtension", { ext: ext.toUpperCase() }));
+			expect(labelOf(`a.${ext}`, ext)).not.toBe("PNG Image");
+		}
+	});
+
+	it("still prefers the OS kind over the app's own name", () => {
+		const row = { ...entryFromFs(fsEntry({ name: "a.psd", ext: "psd" })), osKind: "Adobe Photoshop document" };
+		expect(kindLabelOf(row)).toBe("Adobe Photoshop document");
+	});
+
 	it("labels folders Folder", () => {
 		expect(kindLabelOf(entryFromFs(fsEntry({ name: "Docs", ext: "", kind: "folder", size: null })))).toBe("Folder");
 	});

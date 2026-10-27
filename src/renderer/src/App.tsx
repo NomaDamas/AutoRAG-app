@@ -220,6 +220,11 @@ export function App(): ReactElement {
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
 	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
+	const grantTagColors = useCallback(() => {
+		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
+		void autorag.onboarding.openFullDiskAccess().catch(reportTagError);
+		setToast(t("places.tagColorsGrantToast"));
+	}, [reportTagError, t]);
 	const tagCatalog = useTagCatalogLoader(source, reportTagError);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
@@ -692,6 +697,8 @@ export function App(): ReactElement {
 						onSearchBlur={() => finder?.setSearchFocused(false)}
 						onSubmitSearch={submitSidebarSearch}
 						aiSearchDrop={aiSearchDrop}
+						tagColorsDenied={tagCatalog.catalog.colorsDenied}
+						onGrantTagColors={grantTagColors}
 					/>
 				) : null}
 				<div className="flex min-w-0 min-h-0 flex-col">

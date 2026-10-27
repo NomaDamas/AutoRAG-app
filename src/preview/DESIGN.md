@@ -300,6 +300,24 @@ still has the previous file's size when they lay out.
   Inspector and panel show it enlarged. Where Drive has drawn nothing the OS
   type icon (macOS) or the page glyph stays.
 
+- **Certificates and key files** — `.pem`, `.crt`, `.cer`, `.der`, `.p12`,
+  `.pfx`, `.keychain`, `.keychain-db` (`certificate` viewer, `byteNeed`
+  `query`) send no file bytes to the page. `preview:certificate` reads only the
+  first 256KB in the main process (`node/certificate.ts`; the page never parses)
+  and decodes with `node:crypto`'s `X509Certificate`: no dependency, no network
+  (no OCSP/CRL), so it works the same on macOS, Windows and Linux. The type
+  comes from the bytes (`shared/certificate.ts`), not the name: PEM by its
+  `-----BEGIN` armour (a bundle lists up to 20 certificates and counts the
+  rest), DER by its leading SEQUENCE. Each certificate shows subject, issuer,
+  serial, validity (an `expired` or `not yet valid` badge), signature and key
+  algorithm, SAN, key usage (read from the DER keyUsage extension), extended
+  usage, and the SHA-256 and SHA-1 fingerprints. **A private key block is
+  reduced to its label and whether it is passphrase-protected before anything
+  is returned**; its body never reaches the page or the IPC. PKCS #12 and
+  Apple keychains are encrypted stores: they get a labelled panel (name, kind,
+  size, date, one sentence) and are never parsed or decrypted. No pure-JS
+  PKCS #12 reader is bundled, so there is no password prompt for them.
+
 - **Databases and data files** — `.sqlite`, `.sqlite3`, `.db`, and `.parquet`
   (`data` viewer, `byteNeed` `query`) send no file bytes to the page. The
   `preview:data` call opens the file in the main process (`node/data.ts`) and
@@ -386,6 +404,66 @@ still has the previous file's size when they lay out.
   median 3.8s to 0.26s (the old decoder ranged 0.4-7.3s run to run), and a
   35MB TIFF, past the old 32MB whole-file cap and never shown, opens in 0.27s.
   `run-qa-quick-look-tiff.mjs` drives this on the production build.
+
+- **Camera RAW, Photoshop, EPS, icns, tga, exr, Sketch, Figma** (`raster` viewer,
+  `byteNeed` `decode`; `node/raster.ts`) — the page gets one PNG or JPEG
+  (`PreviewDocument.mime`) the main process made without reading the file
+  whole. Each format has an ordered route (`ROUTES`): the picture the file
+  embeds of itself (`node/embedded-image.ts`), the OS decode (`sips`, 2048px
+  on the long side, never scaled up), or both. A file neither can draw arrives
+  with no bytes and gets the "Other" panel with a note.
+  - **RAW** (`cr2 cr3 nef arw dng orf rw2 raw`, `node/raw-preview.ts`): the
+    camera's own JPEG, chosen from IFD0, IFD1, SubIFDs and the Nikon, Olympus,
+    Sony and Panasonic (`JpgFromRaw`) maker notes, or from the CR3 `PRVW`/`THMB`
+    boxes and full-size JPEG track. Only the directory tables and that JPEG's
+    byte range are read (a 64MB test file reads a few KB), a candidate must be
+    a displayable JPEG (baseline/extended/progressive SOF, never the lossless
+    SOF3 sensor data in CR2), and a preview that carries no Exif gets the RAW's
+    Orientation tag written in so a portrait shot is not sideways. Measured on
+    real camera files: 1-5ms to the preview and 0.25-2.8MB of reads, where
+    `sips` develops the sensor data in 0.4-4s (ARW 4.1s, CR2 2.2s). `exifr`
+    cannot do this: it returns only the 160px IFD1 thumbnail, throws on CR2/CR3
+    and finds nothing in RW2. A RAW with no preview (a Samsung phone DNG is
+    uncompressed sensor data only) falls to `sips`, which keeps the source's
+    Orientation tag in the JPEG it writes, so Chromium turns it upright.
+  - **Photoshop** (`node/psd-preview.ts`): macOS draws the composite through
+    `sips`. Elsewhere the file's own image: the composite (the layer section is
+    skipped by its length, the merged image data is decoded by `ag-psd` from a
+    synthetic layerless buffer, at most 96MB of it, shrunk to 2048px and
+    encoded to PNG by `node/png-encode.ts`), or the thumbnail resource 1036.
+    A composite of one colour (a file saved without Maximize Compatibility)
+    is not trusted and the thumbnail is used instead.
+  - **EPS** (`node/xmp-thumbnail.ts`): macOS has no PostScript renderer
+    (`qlmanage` hangs on one for minutes and Quick Look answers with a generic
+    icon), so an EPS shows the `xmpGImg:image` JPEG Adobe's apps write into the
+    XMP packet, read from the first and last 2MB. An EPS without one stays on
+    its type icon. The same reader serves Illustrator tiles off macOS.
+  - **icns** (`node/icns-preview.ts`): the largest PNG entry; **Sketch**
+    (`previews/preview.png`) and **Figma** (`thumbnail.png` in the ZIP a
+    `.fig` save produces) are read through `node/zip-read.ts` like the ODF
+    first-page image.
+  - **tga, exr**: only the OS can decode them (macOS); elsewhere the Other panel.
+  - **xcf** (GIMP) is not supported: macOS draws a generic icon for it, it
+    carries no preview, and decoding its layers needs a library of its own.
+  - **Illustrator** (`.ai`) is a PDF, so it opens in the PDF panel; an old
+    PostScript-based `.ai` that pdf.js cannot open falls to the same message
+    a damaged PDF gets.
+  - **JPEG XL** (`.jxl`) joins the image viewer: Chromium decodes it behind the
+    `JXLImageFormat` feature, which `src/main/index.ts` enables, so there is no
+    wasm decoder to ship.
+  - **Kind column and grouping**: macOS reports an extension no installed app
+    registered (`.xcf`, `.sketch`, `.fig`) as the generic "Document" (its content
+    type is a `dyn.*` identifier), and Windows has no registry entry, so Group by
+    Kind put all three in one "Document" section. `file-kind.ts` reads the
+    content type beside the kind (one `mdls`, not two) and, for an unregistered
+    type whose extension `shared/extension-kind-names.ts` can name, answers
+    nothing; the Finder then shows its own translated name (GIMP image, Sketch
+    document, Figma document; also Photoshop, Illustrator, EPS, JPEG XL, icns,
+    TGA, OpenEXR and `{{maker}} RAW image` where the OS has none). A type macOS
+    does register keeps macOS's own kind ("Adobe Photoshop document"), and an
+    extension nobody names keeps "Document", as Finder shows it. The tile look
+    these formats borrow from the image family never supplies the words.
+  `run-qa-quick-look-raster.mjs` drives every format on the production build.
 
 Images, TIFF, HEIC, fonts, Word, sheets, slides, and EPUB keep their existing
 viewers inside the new chrome.

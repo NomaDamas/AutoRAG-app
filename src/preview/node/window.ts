@@ -51,6 +51,7 @@ import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
 import { readNativeDocument } from "./apple";
+import { previewCertificate } from "./certificate";
 import { previewData } from "./data";
 import { driveThumbnail, nativeThumbnail } from "./google-drive";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
@@ -59,6 +60,7 @@ import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readTiffPreview } from "./tiff";
+import { readRasterPreview } from "./raster";
 import { readIworkPreview } from "./iwork";
 import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } from "./keynote-render";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
@@ -372,6 +374,7 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
 		case "decode":
+			if (kind === "raster") return readRasterPreview(path);
 			return kind === "tiff" ? readTiffPreview(path) : readHeicPreview(path);
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {
@@ -766,6 +769,7 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		const shown = shownPath(event, path);
 		return listArchive(shown.path, { stopped: () => shown.state.current?.path !== shown.path });
 	});
+	ipc.handle(PREVIEW_CHANNELS.certificate, (event, path: unknown) => previewCertificate(shownPath(event, path).path));
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || state.current === null || process.platform !== "darwin") return;

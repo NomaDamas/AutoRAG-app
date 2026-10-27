@@ -66,7 +66,7 @@ function start(watcher: WatchBackend, onPush: (name: string, payload: unknown) =
 		config: { userDataDir: join(root, "user-data") },
 		host: {
 			shell: { trashItem: async () => {}, showItemInFolder: () => {}, openPath: async () => "", openExternal: async () => {} },
-			clipboard: { writeText: () => {} },
+			clipboard: { writeText: () => {}, writeFiles: async () => {} },
 			icons: { icons: async () => new Map(), preview: async () => null },
 		},
 		broadcast: onPush,
@@ -151,7 +151,7 @@ describe("fs worker service", () => {
 			config: { userDataDir: join(root, "user-data") },
 			host: {
 				shell: { trashItem: async () => {}, showItemInFolder: () => {}, openPath: async () => "", openExternal: async () => {} },
-				clipboard: { writeText: () => {} },
+				clipboard: { writeText: () => {}, writeFiles: async () => {} },
 				icons: { icons: async () => new Map(), preview: async () => null },
 			},
 			broadcast: () => {},

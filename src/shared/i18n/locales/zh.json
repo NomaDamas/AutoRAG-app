@@ -17,6 +17,9 @@
     "settings": "设置",
     "recents": "最近使用",
     "tags": "标签",
+    "tagColorsDenied": "显示标签颜色",
+    "tagColorsDeniedHint": "macOS 把 Finder 的标签颜色放在“完全磁盘访问权限”之后。允许后重新启动应用即可显示。",
+    "tagColorsGrantToast": "请允许“完全磁盘访问权限”，然后重新启动 Dazzi。",
     "home": "个人主页",
     "applications": "应用程序",
     "desktop": "桌面",
@@ -611,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "返回",
     "step": {
       "welcome": "介绍",
       "permissions": "权限",
@@ -711,6 +715,14 @@
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
       "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
+      "getStarted": "开始使用",
+      "continueGoogle": "使用 Google 继续",
+      "continueApple": "使用 Apple 继续",
+      "or": "或",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "mingzi@example.cn",
+      "continueEmail": "使用邮箱继续",
+      "guest": "以访客身份继续",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
@@ -720,9 +732,10 @@
     },
     "permissions": {
       "eyebrow": "权限",
-      "title": "请允许访问\n以便正确读取",
-      "leadMac": "macOS 会在应用访问文档和受保护的应用数据前征求许可。权限与索引范围是两回事。",
-      "leadWindows": "只需确认通知和网络即可开始。其余可稍后在设置中更改。",
+      "title": "请确认允许的权限",
+      "leadMac": "macOS 要求应用在读取受保护文件前获得你的许可。\n允许之后，要搜索的文件夹仍在下一步由你自己选择。",
+      "leadWindows": "请先确认需要的权限。\n所有项目都可以跳过，之后也可在设置中更改。",
+      "titleWindows": "请确认允许的权限",
       "note": "Dazzi 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
       "required": "必需",
       "optional": "可选",
@@ -734,20 +747,22 @@
       "footnote": "开启后才能继续。",
       "fda": {
         "name": "完全磁盘访问权限",
-        "desc": "需要此权限才能正常工作。"
+        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。",
+        "why": "为什么需要完全磁盘访问？"
       },
       "notifications": {
         "name": "通知",
+        "desc": "提前请求通知权限。要接收哪些通知可在设置中选择。",
         "allow": "允许通知",
         "openWindows": "打开 Windows 设置"
       },
       "login": {
         "name": "登录时启动",
-        "desc": "文件发生变化时，在后台保持索引最新。"
+        "desc": "开机后应用会自动启动。可随时在设置中关闭。"
       },
       "network": {
-        "name": "网络（防火墙）",
-        "desc": "远程嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
+        "name": "网络",
+        "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
         "allow": "允许"
       }
     },
@@ -1297,7 +1312,21 @@
       "stars": "{{count}} 星",
       "star": "1 星"
     },
-    "kindByExtension": "{{ext}} 文件"
+    "kindByExtension": "{{ext}} 文件",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop 文档",
+      "illustrator": "Adobe Illustrator 文档",
+      "eps": "EPS 图像",
+      "jpegxl": "JPEG XL 图像",
+      "icns": "Apple 图标图像",
+      "targa": "TGA 图像",
+      "openexr": "OpenEXR 图像",
+      "gimp": "GIMP 图像",
+      "sketch": "Sketch 文档",
+      "figma": "Figma 文档",
+      "raw": "{{maker}} RAW 图像",
+      "rawGeneric": "RAW 图像"
+    }
   },
   "main": {
     "interaction": {
@@ -1411,7 +1440,10 @@
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
-      "invalidUrl": "网址无效。"
+      "invalidUrl": "网址无效。",
+      "librarianExited": "索引辅助进程意外停止（代码 {{code}}）。",
+      "librarianFailed": "索引辅助进程失败：{{message}}",
+      "librarianStopped": "索引辅助进程已关闭，无法处理请求。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",
@@ -1670,6 +1702,63 @@
       "rendering": "正在生成高清幻灯片…",
       "page": "第 {{count}} 页"
     },
+    "certificate": {
+      "subject": "使用者",
+      "issuer": "颁发者",
+      "serial": "序列号",
+      "notBefore": "生效时间",
+      "notAfter": "到期时间",
+      "signature": "签名",
+      "publicKey": "公钥",
+      "altNames": "备用名称",
+      "keyUsage": "密钥用法",
+      "extendedKeyUsage": "扩展密钥用法",
+      "ca": "CA",
+      "status": {
+        "expired": "已过期",
+        "notYetValid": "尚未生效"
+      },
+      "usage": {
+        "digitalSignature": "数字签名",
+        "contentCommitment": "不可否认",
+        "keyEncipherment": "密钥加密",
+        "dataEncipherment": "数据加密",
+        "keyAgreement": "密钥协商",
+        "keyCertSign": "证书签名",
+        "cRLSign": "CRL 签名",
+        "encipherOnly": "仅加密",
+        "decipherOnly": "仅解密"
+      },
+      "eku": {
+        "serverAuth": "TLS Web 服务器身份验证",
+        "clientAuth": "TLS Web 客户端身份验证",
+        "codeSigning": "代码签名",
+        "emailProtection": "电子邮件保护",
+        "timeStamping": "时间戳",
+        "ocspSigning": "OCSP 签名"
+      },
+      "keyHidden": "私钥 — 内容已隐藏",
+      "keyEncrypted": "已加密",
+      "keyPlain": "未加密",
+      "unreadableBlock": "无法读取此证书",
+      "countOne": "1 个证书",
+      "countMany": "{{count}} 个证书",
+      "omitted": "另有 {{count}} 个未显示",
+      "truncated": "仅显示文件的前一部分",
+      "readFailed": "无法读取此文件",
+      "container": {
+        "pkcs12": "PKCS #12 捆绑包包含证书和私钥并受密码保护，因此不显示其内容。",
+        "keychain": "Apple 钥匙串是加密存储，此处不会读取或解密。"
+      },
+      "notContainer": {
+        "pkcs12": "这不是有效的 PKCS #12 捆绑包",
+        "keychain": "这不是有效的 Apple 钥匙串"
+      },
+      "unreadable": {
+        "empty": "此文件为空",
+        "notCertificate": "在此文件中未找到证书"
+      }
+    },
     "gdrive": {
       "account": "Google 账号：{{email}}",
       "notPointer": "此文件不是有效的 Google 云端硬盘快捷方式"
@@ -1829,6 +1918,9 @@
       "openFailed": "无法打开演示文稿",
       "noSlides": "没有幻灯片",
       "noPreview": "此文档没有预览图像"
+    },
+    "raster": {
+      "noPreview": "无法从此文件生成预览图像"
     },
     "evidence": {
       "searching": "正在查找引用段落…",

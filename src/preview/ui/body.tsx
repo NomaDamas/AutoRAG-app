@@ -10,6 +10,7 @@ import { ContactView } from "./contact";
 import { HtmlView, JsonLinesView, PlistView, TextView } from "./code";
 import { DataView } from "./data";
 import { DocxView, RtfView, SheetView } from "./documents";
+import { CertificateView } from "./certificate";
 import { FallbackView } from "./fallback";
 import { GoogleDriveView } from "./google-drive";
 import { MailView } from "./mail";
@@ -22,6 +23,7 @@ import { IworkView } from "./iwork";
 import { EpubView } from "./packages";
 import { OdfImageView, OdpView, OdtView } from "./odf";
 import { PptxView } from "./pptx";
+import { RasterView } from "./raster";
 import { PdfView } from "./pdf";
 import { AudioView, VideoView } from "./player";
 
@@ -108,6 +110,10 @@ export function PreviewBody({ file, anchor = null }: { readonly file: PreviewDoc
 			return <CalendarView file={file} />;
 		case "gdrive":
 			return <GoogleDriveView file={file} />;
+		case "raster":
+			return <RasterView file={file} />;
+		case "certificate":
+			return <CertificateView file={file} />;
 		case "fallback":
 			if (file.bytes !== null && looksLikeText(file.bytes)) return <TextView file={file} anchor={anchor} />;
 			return <FallbackView file={file} art={file.thumbnail === null ? undefined : <img className="ql-native-thumbnail flex-none size-176 object-contain" src={file.thumbnail} alt="" draggable={false} />} />;
