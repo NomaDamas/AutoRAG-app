@@ -4129,6 +4129,16 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	white-space: nowrap;
 }
 
+/* The granted and restart-needed badges share the action buttons' size; their colours stay. */
+.onb .permissions-screen .row-action .state {
+	justify-content: center;
+	height: 32px;
+	padding: 0 14px;
+	border-radius: 8px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
 .onb .permissions-screen .permission-icon.orange {
 	color: #ff9b00;
 }
