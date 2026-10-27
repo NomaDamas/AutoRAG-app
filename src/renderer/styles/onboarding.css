@@ -4294,3 +4294,17 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	text-decoration: underline;
 	cursor: pointer;
 }
+
+.onb .permissions-screen .permission-icon.orange {
+	color: #ff9b00;
+}
+
+.onb .permissions-screen.windows .permission-row {
+	padding-right: 16px;
+}
+
+.onb .permissions-screen.windows .row-action .secondary {
+	height: 32px;
+	border-color: var(--onb-divider);
+	border-radius: 8px;
+}

@@ -763,7 +763,7 @@
       "network": {
         "name": "网络",
         "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
-        "allow": "允许"
+        "allow": "允许网络"
       }
     },
     "smartScan": {
