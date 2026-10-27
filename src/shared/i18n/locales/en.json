@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+			"suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
     },
