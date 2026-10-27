@@ -872,8 +872,9 @@
       "minutes": "{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
-      "cloudConsent": "Document text is sent to Dazzi's server for processing.",
-      "cloudConsentCheck": "Got it",
+      "cloudConsentRequired": "(Required)",
+      "cloudConsent": "I agree that document text is sent to the server.",
+      "cloudConsentCheck": "I agree",
       "pausedNotice": {
         "config": "Indexing stopped because the chosen embedding isn't available",
         "disk": "Not enough storage space to download the model",

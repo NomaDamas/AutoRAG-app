@@ -177,7 +177,10 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 				</div>
 				{selected === "cloud" ? (
 					<label className="em-consent">
-						<span className="em-consent-text">{t("onboarding.embedding.cloudConsent")}</span>
+						<span className="em-consent-text">
+							<b>{t("onboarding.embedding.cloudConsentRequired")}</b>
+							{t("onboarding.embedding.cloudConsent")}
+						</span>
 						<span className="em-consent-check">
 							<input
 								type="checkbox"
