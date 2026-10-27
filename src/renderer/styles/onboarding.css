@@ -112,21 +112,25 @@ html[data-appearance="dark"] .onb {
 	-webkit-app-region: drag;
 }
 
+.onb .titlebar {
+	position: relative;
+}
+
+/* Centred on the window itself, not in the space the traffic lights or window controls leave over. */
 .onb .window-title {
-	flex: 1;
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
 	text-align: center;
-	margin-left: 74px;
+	white-space: nowrap;
+	pointer-events: none;
 	font-size: 12px;
 	font-weight: 500;
 	color: var(--onb-muted);
 }
 
-/* Off macOS the window controls overlay (src/main/window-chrome.ts) sits in this band and the title is not repeated:
- * the band stays as the 42px drag strip they live in, with the gutter they cover kept free. */
-html:not([data-platform="darwin"]) .onb .window-title {
-	visibility: hidden;
-}
-
+/* Off macOS the window controls overlay (src/main/window-chrome.ts) sits in this band: keep the gutter they cover free. */
 html:not([data-platform="darwin"]) .onb .titlebar {
 	padding-right: calc(15px + var(--window-controls-gutter));
 }
@@ -2839,9 +2843,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	}
 	.onb .plan-list {
 		grid-template-columns: repeat(2,minmax(0,1fr));
-	}
-	.onb .window-title {
-		margin-left: 0;
 	}
 	.onb .footer .footer-hint {
 		display: none;
