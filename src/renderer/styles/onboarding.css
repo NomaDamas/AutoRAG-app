@@ -2015,9 +2015,9 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	display: grid;
 	grid-template-columns: repeat(3,minmax(0,320px));
 	justify-content: center;
-	gap: 12px;
+	gap: 0 16px;
 	width: 100%;
-	max-width: 976px;
+	max-width: 992px;
 	margin-top: 32px;
 }
 
@@ -2054,7 +2054,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 /* Why a card cannot be chosen: a note under that card's column, outside the card. */
 .onb .em-blocked {
-	margin: 0;
+	margin: 12px 0 0;
 	padding: 6px 8px;
 	border-radius: 6px;
 	background: var(--onb-red-bg);
