@@ -4208,9 +4208,14 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border: 1px solid var(--onb-border);
 	border-radius: 7px;
 	background: transparent;
-	color: var(--onb-body);
+	color: var(--onb-ink);
 	font-size: 12px;
 	font-weight: 400;
+}
+
+.onb .account-input::placeholder {
+	color: var(--onb-muted);
+	opacity: 1;
 }
 
 .onb .account-guest {
