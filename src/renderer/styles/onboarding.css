@@ -4153,6 +4153,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .permissions-why {
 	margin-top: -12px;
 	font-size: 10.5px;
+}
 
 /* Account step: one centred column (Figma 03 · account). */
 .onb .screen.account-screen {
