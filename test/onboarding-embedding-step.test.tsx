@@ -280,8 +280,8 @@ describe("EmbeddingStep", () => {
 			expect(card("local").className).toContain("disabled");
 			expect(card("none").getAttribute("aria-disabled")).toBe("false");
 			expect(card("cloud").getAttribute("aria-disabled")).toBe("false");
-			expect(card("local").querySelector(".em-blocked")?.textContent).toContain("localSpec.reason.appleBaseChip");
-			expect(card("none").querySelector(".em-blocked")).toBeNull();
+			expect(host.querySelector('.em-blocked[data-for="local"]')?.textContent).toContain("localSpec.reason.appleBaseChip");
+			expect(host.querySelector('.em-blocked[data-for="none"]')).toBeNull();
 		});
 
 		it("explains instead of selecting when the local card is clicked or chosen with the keyboard", () => {

@@ -2015,9 +2015,9 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	display: grid;
 	grid-template-columns: repeat(3,minmax(0,320px));
 	justify-content: center;
-	gap: 16px;
+	gap: 12px;
 	width: 100%;
-	max-width: 992px;
+	max-width: 976px;
 	margin-top: 32px;
 }
 
@@ -2052,10 +2052,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	opacity: .55;
 }
 
-.onb .em-card.disabled>.em-blocked {
-	opacity: 1;
-}
-
+/* Why a card cannot be chosen: a note under that card's column, outside the card. */
 .onb .em-blocked {
 	margin: 0;
 	padding: 6px 8px;
@@ -2225,6 +2222,9 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 @media (max-width:850px) {
 	.onb .em-cards {
 		grid-template-columns: 1fr;
+	}
+	.onb .em-blocked {
+		grid-column: 1 !important;
 	}
 }
 
