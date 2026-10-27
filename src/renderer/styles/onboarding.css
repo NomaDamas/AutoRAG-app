@@ -4104,6 +4104,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .permissions-screen .permission-row {
 	min-height: 62px;
+	padding-right: 16px;
 	border-color: transparent;
 }
 
@@ -4118,10 +4119,10 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .permissions-screen .row-action .secondary {
-	height: 34px;
+	height: 32px;
 	padding: 0 14px;
 	border-color: var(--onb-divider);
-	border-radius: 7px;
+	border-radius: 8px;
 	background: var(--onb-bg-stage);
 	font-size: 12px;
 	font-weight: 500;
@@ -4140,14 +4141,4 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .permissions-screen .permission-icon.orange {
 	color: #ff9b00;
-}
-
-.onb .permissions-screen.windows .permission-row {
-	padding-right: 16px;
-}
-
-.onb .permissions-screen.windows .row-action .secondary {
-	height: 32px;
-	border-color: var(--onb-divider);
-	border-radius: 8px;
 }
