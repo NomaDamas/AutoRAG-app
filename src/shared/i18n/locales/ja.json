@@ -1559,6 +1559,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} は {{extension}} 形式に変換できません。",
+      "noRoute": "Filee は {{name}} を {{extension}} 形式に変換できません。",
       "invalidName": "変換後のファイル名として使えません: {{name}}",
       "sourceMissing": "変換するファイルが見つかりません: {{name}}",
       "nameTaken": "「{{name}}」という名前のファイルまたはフォルダがすでにあります",

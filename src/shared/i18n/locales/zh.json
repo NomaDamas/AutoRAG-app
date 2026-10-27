@@ -1559,6 +1559,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "noRoute": "Filee 无法将 {{name}} 转换为 {{extension}} 格式。",
       "invalidName": "不能用作转换后文件的名称：{{name}}",
       "sourceMissing": "找不到要转换的文件：{{name}}",
       "nameTaken": "已存在名为“{{name}}”的文件或文件夹",

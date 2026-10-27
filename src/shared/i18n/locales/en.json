@@ -1559,6 +1559,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} cannot be converted to {{extension}}.",
+      "noRoute": "Filee cannot convert {{name}} to {{extension}}.",
       "invalidName": "Not usable as the name of the converted file: {{name}}",
       "sourceMissing": "The file to convert could not be found: {{name}}",
       "nameTaken": "A file or folder named \"{{name}}\" already exists",

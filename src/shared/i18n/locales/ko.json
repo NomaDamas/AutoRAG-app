@@ -1559,6 +1559,7 @@
     },
     "convert": {
       "notConvertible": "{{name}}은(는) {{extension}} 형식으로 변환할 수 없습니다.",
+      "noRoute": "Filee는 {{name}}을(를) {{extension}} 형식으로 변환할 수 없습니다.",
       "invalidName": "변환 결과의 이름으로 쓸 수 없습니다: {{name}}",
       "sourceMissing": "변환할 파일을 찾을 수 없습니다: {{name}}",
       "nameTaken": "\"{{name}}\" 이름의 파일이나 폴더가 이미 있습니다",
