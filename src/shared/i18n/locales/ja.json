@@ -614,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "戻る",
     "step": {
       "welcome": "はじめに",
       "permissions": "権限",

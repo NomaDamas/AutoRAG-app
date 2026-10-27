@@ -614,6 +614,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "뒤로가기",
     "step": {
       "welcome": "소개",
       "permissions": "권한",
