@@ -866,10 +866,7 @@
       }
     },
     "sources": {
-      "eyebrow": "Data sources",
-      "title": "Also search\nconnected sources?",
-      "lead": "We only show sources that are already installed and authenticated. You don't have to select them all.",
-      "detected": "Detected",
+      "title": "Add the apps found on this PC to your search?",
       "checking": "Checking which other sources can be added…",
       "empty": "No connected sources found. You can connect some later in Settings.",
       "connectMore": "Sources that need setup can be connected later in Settings.",
