@@ -4137,3 +4137,17 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	margin-top: -12px;
 	font-size: 10.5px;
 }
+
+.onb .permissions-screen .permission-icon.orange {
+	color: #ff9b00;
+}
+
+.onb .permissions-screen.windows .permission-row {
+	padding-right: 16px;
+}
+
+.onb .permissions-screen.windows .row-action .secondary {
+	height: 32px;
+	border-color: var(--onb-divider);
+	border-radius: 8px;
+}

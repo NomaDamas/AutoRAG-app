@@ -754,7 +754,7 @@
       "network": {
         "name": "Network",
         "desc": "Only needed when you ask an online AI or analyze documents online.",
-        "allow": "Allow"
+        "allow": "Allow network"
       }
     },
     "smartScan": {
