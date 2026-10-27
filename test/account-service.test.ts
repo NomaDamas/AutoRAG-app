@@ -94,6 +94,24 @@ async function startFakeServer(): Promise<FakeServer> {
 				reply(response, 200, { access_token: "dz_fakekey", token_type: "Bearer", email: "user@example.com" });
 				return;
 			}
+			if (path === "/api/desktop/email/send" && request.method === "POST") {
+				const body = await readBody(request);
+				if (typeof body.email !== "string" || !body.email.includes("@")) {
+					reply(response, 400, { error: { message: "Enter a valid email address.", type: "invalid_request_error", code: "invalid_email" } });
+					return;
+				}
+				reply(response, 200, { ok: true, expires_in_seconds: 600, length: 6 });
+				return;
+			}
+			if (path === "/api/desktop/email/verify" && request.method === "POST") {
+				const body = await readBody(request);
+				if (body.otp !== "054810") {
+					reply(response, 400, { error: { message: "That code is incorrect. Check it and try again.", type: "invalid_request_error", code: "INVALID_OTP" } });
+					return;
+				}
+				reply(response, 200, { access_token: "dz_fakekey", token_type: "Bearer", email: String(body.email) });
+				return;
+			}
 			if (request.headers.authorization !== "Bearer dz_fakekey") {
 				reply(response, 401, { error: { message: "Invalid or revoked API key.", type: "invalid_request_error", code: "invalid_api_key" } });
 				return;
@@ -188,7 +206,7 @@ let service: AccountService;
 function makeBrowser(mutate: (callback: string) => string = (callback) => callback): (url: string) => Promise<void> {
 	return async (url) => {
 		opened.push(url);
-		if (!url.includes("/desktop/authorize")) return;
+		if (!url.includes("/desktop/authorize") && !url.includes("/api/desktop/oauth")) return;
 		const callback = mutate(await fake.approve(url));
 		void fetch(callback).catch(() => undefined);
 	};
@@ -256,20 +274,49 @@ describe("sign in", () => {
 		expect(fake.requests.find((request) => request.path === "/v1/account")?.auth).toBe("Bearer dz_fakekey");
 	});
 
-	it("carries the selected provider and email through the desktop authorize URL", async () => {
-		await service.signIn({ provider: "email", email: "person@example.com" });
-
-		const authorize = new URL(opened[0] ?? "");
-		expect(authorize.searchParams.get("provider")).toBe("email");
-		expect(authorize.searchParams.get("email")).toBe("person@example.com");
-	});
-
-	it("starts social sign-in with the selected provider only", async () => {
+	it("opens /api/desktop/oauth directly for Google and GitHub onboarding sign-in", async () => {
+		await service.signIn({ provider: "google" });
+		await service.signOut();
 		await service.signIn({ provider: "github" });
 
-		const authorize = new URL(opened[0] ?? "");
-		expect(authorize.searchParams.get("provider")).toBe("github");
-		expect(authorize.searchParams.has("email")).toBe(false);
+		const googleUrl = new URL(opened[0] ?? "");
+		expect(googleUrl.pathname).toBe("/api/desktop/oauth");
+		expect(googleUrl.searchParams.get("provider")).toBe("google");
+		expect(googleUrl.searchParams.get("client")).toBe("app");
+
+		const githubUrl = new URL(opened[1] ?? "");
+		expect(githubUrl.pathname).toBe("/api/desktop/oauth");
+		expect(githubUrl.searchParams.get("provider")).toBe("github");
+	});
+
+	it("surfaces non-cancellation OAuth callback errors instead of silently cancelling", async () => {
+		service = build(async (url) => {
+			opened.push(url);
+			const params = new URL(url).searchParams;
+			const callback = new URL(params.get("redirect_uri") ?? "");
+			callback.searchParams.set("error", "EMAIL_ALIAS_EXISTS");
+			callback.searchParams.set("error_description", "An account for this mailbox already exists.");
+			callback.searchParams.set("state", params.get("state") ?? "");
+			void fetch(callback).catch(() => undefined);
+		});
+
+		const status = await service.signIn({ provider: "google" });
+		expect(status).toMatchObject({ state: "signedOut", error: "An account for this mailbox already exists." });
+	});
+
+	it("completes native in-app Email OTP sign-in without opening the browser", async () => {
+		const sent = await service.sendEmailOtp("  person@example.com  ");
+		expect(sent).toEqual({ ok: true, email: "person@example.com", expiresInSeconds: 600 });
+
+		const wrong = await service.verifyEmailOtp("person@example.com", "000000");
+		expect(wrong).toMatchObject({ state: "signedOut", error: "That code is incorrect. Check it and try again." });
+
+		const verified = await service.verifyEmailOtp("person@example.com", "054810");
+		expect(verified.state).toBe("signedIn");
+		expect(verified.account?.email).toBe("user@example.com");
+		expect(opened).toEqual([]);
+		const stored = JSON.parse(await readFile(join(root, "auth.json"), "utf8")) as Record<string, { type: string; access: string }>;
+		expect(stored.dazzi).toMatchObject({ type: "oauth", access: "dz_fakekey" });
 	});
 
 	it("never exposes the key through status or events", async () => {

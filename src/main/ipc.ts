@@ -333,8 +333,17 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.status, () => service.status());
 	ipcMain.handle(ACCOUNT_CHANNELS.refresh, () => service.refresh());
 	ipcMain.handle(ACCOUNT_CHANNELS.signIn, (_event, options: unknown) => {
-		if (options !== undefined && !isAccountSignInOptions(options)) throw new TypeError("account:signIn expects a supported provider and optional email");
+		if (options !== undefined && !isAccountSignInOptions(options)) throw new TypeError("account:signIn expects \"google\" or \"github\"");
 		return service.signIn(options);
+	});
+	ipcMain.handle(ACCOUNT_CHANNELS.sendEmailOtp, (_event, email: unknown) => {
+		if (typeof email !== "string" || email.trim().length === 0) throw new TypeError("account:sendEmailOtp expects a non-empty email string");
+		return service.sendEmailOtp(email);
+	});
+	ipcMain.handle(ACCOUNT_CHANNELS.verifyEmailOtp, (_event, email: unknown, code: unknown) => {
+		if (typeof email !== "string" || email.trim().length === 0) throw new TypeError("account:verifyEmailOtp expects a non-empty email string");
+		if (typeof code !== "string" || !/^\d{6}$/u.test(code.trim())) throw new TypeError("account:verifyEmailOtp expects a 6-digit code");
+		return service.verifyEmailOtp(email, code);
 	});
 	ipcMain.handle(ACCOUNT_CHANNELS.cancelSignIn, () => service.cancelSignIn());
 	ipcMain.handle(ACCOUNT_CHANNELS.signOut, () => service.signOut());

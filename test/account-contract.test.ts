@@ -66,14 +66,13 @@ describe("splitRemaining", () => {
 });
 
 describe("isAccountSignInOptions", () => {
-	it("accepts the supported providers and an optional string email", () => {
+	it("accepts only the direct social OAuth providers", () => {
 		expect(isAccountSignInOptions({ provider: "google" })).toBe(true);
 		expect(isAccountSignInOptions({ provider: "github" })).toBe(true);
-		expect(isAccountSignInOptions({ provider: "email", email: "person@example.com" })).toBe(true);
 	});
 
 	it("rejects unsupported providers and malformed IPC payloads", () => {
-		for (const value of [null, undefined, "google", {}, { provider: "apple" }, { provider: "google", email: 3 }, { provider: "email", email: undefined }]) {
+		for (const value of [null, undefined, "google", {}, { provider: "apple" }, { provider: "email" }]) {
 			expect(isAccountSignInOptions(value), JSON.stringify(value)).toBe(false);
 		}
 	});

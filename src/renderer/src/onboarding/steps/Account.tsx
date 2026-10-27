@@ -1,6 +1,6 @@
-/** Step 3 — real sign-in through the system browser (OAuth code + PKCE), or the no-account BYOK path. */
+/** Step 3 — direct Google/GitHub OAuth, native in-app Email OTP, or the no-account BYOK path. */
 
-import { useState, type ReactElement } from "react";
+import { useEffect, useState, type FormEvent, type ReactElement } from "react";
 import { AppLogo, BrandMark, Icon } from "../marks";
 import { openExternal } from "../parts";
 import { accountLegalUrl } from "../../../../shared/account-contract";
@@ -18,13 +18,67 @@ function GoogleMark(): ReactElement {
 	);
 }
 
+const OTP_LENGTH = 6;
+const RESEND_COOLDOWN_SECONDS = 60;
+
 export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, account } = ctx;
 	const [email, setEmail] = useState("");
+	const [sentTo, setSentTo] = useState<string | null>(null);
+	const [code, setCode] = useState("");
+	const [busy, setBusy] = useState(false);
+	const [otpError, setOtpError] = useState<string | null>(null);
+	const [resendIn, setResendIn] = useState(0);
 	const signedIn = account?.state === "signedIn";
 	const signingIn = account?.state === "signingIn";
 	const snapshot = account?.account ?? null;
 
+	useEffect(() => {
+		if (resendIn <= 0) return;
+		const timer = window.setTimeout(() => setResendIn((seconds) => seconds - 1), 1000);
+		return () => window.clearTimeout(timer);
+	}, [resendIn]);
+
+	async function requestCode(address: string): Promise<void> {
+		const trimmed = address.trim();
+		if (trimmed.length === 0 || busy) return;
+		setOtpError(null);
+		setBusy(true);
+		try {
+			const result = await ctx.sendEmailOtp(trimmed);
+			if (!result.ok) {
+				setOtpError(result.error);
+				return;
+			}
+			setSentTo(result.email);
+			setCode("");
+			setResendIn(RESEND_COOLDOWN_SECONDS);
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	function submitEmail(event: FormEvent<HTMLFormElement>): void {
+		event.preventDefault();
+		void requestCode(email);
+	}
+
+	async function submitCode(event: FormEvent<HTMLFormElement>): Promise<void> {
+		event.preventDefault();
+		if (sentTo === null || code.length !== OTP_LENGTH || busy) return;
+		setOtpError(null);
+		setBusy(true);
+		try {
+			const status = await ctx.verifyEmailOtp(sentTo, code);
+			if (status != null && status.state !== "signedIn" && status.error !== null) {
+				setOtpError(status.error);
+			}
+		} finally {
+			setBusy(false);
+		}
+	}
+
+	const visibleError = otpError ?? account?.error ?? null;
 	return (
 		<section className="screen account-screen">
 			<div className="account-column">
@@ -73,41 +127,91 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 							</button>
 						</div>
 					</div>
+				) : sentTo !== null ? (
+					<div className="account-panel">
+						<form className="account-form" onSubmit={(event) => void submitCode(event)}>
+							<p className="auth-note">{t("onboarding.account.codeSentNote", { email: sentTo })}</p>
+							<label className="account-field">
+								<span>{t("onboarding.account.codeLabel")}</span>
+								<input
+									type="text"
+									inputMode="numeric"
+									pattern="[0-9]{6}"
+									maxLength={OTP_LENGTH}
+									className="account-input account-code-input"
+									value={code}
+									placeholder="000000"
+									autoComplete="one-time-code"
+									autoFocus
+									onChange={(event) => setCode(event.target.value.replace(/\D/gu, "").slice(0, OTP_LENGTH))}
+								/>
+							</label>
+							<button type="submit" className="account-btn email" disabled={busy || code.length !== OTP_LENGTH}>
+								{busy ? t("onboarding.account.verifyingCode") : t("onboarding.account.verifyCode")}
+							</button>
+						</form>
+						{visibleError !== null ? (
+							<p className="auth-note" role="alert">
+								{visibleError}
+							</p>
+						) : null}
+						<div className="account-otp-actions">
+							<button
+								type="button"
+								className="inline-link"
+								disabled={busy || resendIn > 0}
+								onClick={() => void requestCode(sentTo)}
+							>
+								{resendIn > 0 ? t("onboarding.account.resendIn", { seconds: resendIn }) : t("onboarding.account.resendCode")}
+							</button>
+							{" · "}
+							<button
+								type="button"
+								className="inline-link"
+								disabled={busy}
+								onClick={() => {
+									setSentTo(null);
+									setCode("");
+									setOtpError(null);
+									setResendIn(0);
+								}}
+							>
+								{t("onboarding.account.useDifferentEmail")}
+							</button>
+						</div>
+					</div>
 				) : (
 					<div className="account-panel">
 						<div className="account-providers">
-							<button type="button" className="account-btn google" onClick={() => ctx.signIn({ provider: "google" })}>
+							<button type="button" className="account-btn google" disabled={busy} onClick={() => ctx.signIn({ provider: "google" })}>
 								<GoogleMark />
 								{t("onboarding.account.continueGoogle")}
 							</button>
-							<button type="button" className="account-btn github" onClick={() => ctx.signIn({ provider: "github" })}>
+							<button type="button" className="account-btn github" disabled={busy} onClick={() => ctx.signIn({ provider: "github" })}>
 								<BrandMark name="github" size={15} />
 								{t("onboarding.account.continueGithub")}
 							</button>
 						</div>
 						<div className="account-divider">{t("onboarding.account.or")}</div>
-						<label className="account-field">
-							<span>{t("onboarding.account.emailLabel")}</span>
-							<input
-								type="email"
-								className="account-input"
-								value={email}
-								placeholder={t("onboarding.account.emailPlaceholder")}
-								autoComplete="email"
-								onChange={(event) => setEmail(event.target.value)}
-							/>
-						</label>
-						<button
-							type="button"
-							className="account-btn email"
-							disabled={email.trim().length === 0}
-							onClick={() => ctx.signIn({ provider: "email", email: email.trim() })}
-						>
-							{t("onboarding.account.continueEmail")}
-						</button>
-						{account?.error ? (
+						<form className="account-form" onSubmit={submitEmail}>
+							<label className="account-field">
+								<span>{t("onboarding.account.emailLabel")}</span>
+								<input
+									type="email"
+									className="account-input"
+									value={email}
+									placeholder={t("onboarding.account.emailPlaceholder")}
+									autoComplete="email"
+									onChange={(event) => setEmail(event.target.value)}
+								/>
+							</label>
+							<button type="submit" className="account-btn email" disabled={busy || email.trim().length === 0}>
+								{busy ? t("onboarding.account.sendingCode") : t("onboarding.account.continueEmail")}
+							</button>
+						</form>
+						{visibleError !== null ? (
 							<p className="auth-note" role="alert">
-								{account.error}
+								{visibleError}
 							</p>
 						) : null}
 						<p className="auth-note legal-note">

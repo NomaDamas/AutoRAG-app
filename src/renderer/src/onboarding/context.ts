@@ -4,7 +4,7 @@
  * so the step files stay presentational and the controller owns all state.
  */
 
-import type { AccountSignInOptions, AccountStatus } from "../../../shared/account-contract";
+import type { AccountSignInOptions, AccountStatus, EmailOtpSendResult } from "../../../shared/account-contract";
 import type {
 	DetectedSource,
 	EmbedMode,
@@ -85,6 +85,8 @@ export interface OnboardingCtx {
 	choosePlan(plan: PlanId): void;
 	setPromoCode(code: string): void;
 	signIn(options: AccountSignInOptions): void;
+	sendEmailOtp(email: string): Promise<EmailOtpSendResult>;
+	verifyEmailOtp(email: string, code: string): Promise<AccountStatus | null>;
 	cancelSignIn(): void;
 	signOut(): void;
 	/** The no-account path: pick BYOK and move on. */
