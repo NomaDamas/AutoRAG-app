@@ -860,7 +860,8 @@
       "minutes": "{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
-      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。",
+      "cloudConsent": "文書の本文は処理のためにDazziサーバーへ送信されます。",
+      "cloudConsentCheck": "確認しました",
       "pausedNotice": {
         "config": "選択した埋め込み方式を利用できず停止しました",
         "disk": "空き容量が足りずモデルをダウンロードできませんでした",

@@ -860,7 +860,8 @@
       "minutes": "{{minutes}}분",
       "cached": "준비됨",
       "downloadUnknown": "확인 중",
-      "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다.",
+      "cloudConsent": "문서 본문이 처리를 위해 Dazzi 서버로 전송돼요.",
+      "cloudConsentCheck": "확인했어요",
       "pausedNotice": {
         "config": "선택한 임베딩 방식을 쓸 수 없어서 멈췄어요",
         "disk": "저장 공간이 모자라 모델을 받지 못했어요",

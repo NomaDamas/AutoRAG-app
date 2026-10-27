@@ -2011,14 +2011,20 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	padding-top: 27px;
 }
 
+/* The cards and the consent card under them; the consent floats so ticking it moves nothing. */
+.onb .em-stack {
+	position: relative;
+	width: 100%;
+	max-width: 992px;
+	margin-top: 48px;
+}
+
 .onb .em-cards {
 	display: grid;
 	grid-template-columns: repeat(3,minmax(0,320px));
 	justify-content: center;
 	gap: 0 16px;
 	width: 100%;
-	max-width: 992px;
-	margin-top: 32px;
 }
 
 .onb .em-card {
@@ -2246,15 +2252,90 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	margin-top: 2px;
 }
 
-/* The cloud-embedding consent under the card grid: wider than the note version. */
+/* The cloud-embedding consent under the card grid (Figma 06b): ticking the box fades it away. */
 .onb .em-consent {
-	width: 100%;
-	max-width: 960px;
-	margin-top: 12px;
-	border-color: color-mix(in srgb,var(--onb-orange) 40%,var(--onb-border));
-	background: var(--onb-orange-bg);
+	position: absolute;
+	top: calc(100% + 12px);
+	left: 50%;
+	transform: translateX(-50%);
+	box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	width: 456px;
+	max-width: 100%;
+	padding: 16px;
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	filter: drop-shadow(0 0 2px rgba(0,0,0,.12));
 	color: var(--onb-body);
-	font-size: 11px;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.onb .em-consent.closing {
+	pointer-events: none;
+	animation: onb-consent-out .22s ease-in forwards;
+}
+
+@keyframes onb-consent-out {
+	to {
+		opacity: 0;
+		transform: translateX(-50%) translateY(-6px);
+	}
+}
+
+.onb .em-consent-check {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	gap: 8px;
+	white-space: nowrap;
+}
+
+.onb .em-consent-check input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.onb .em-box {
+	display: grid;
+	place-items: center;
+	width: 15px;
+	height: 15px;
+	box-sizing: border-box;
+	border: 1.5px solid var(--onb-border);
+	border-radius: 3px;
+	background: var(--onb-bg-card);
+	color: #fff;
+}
+
+.onb .em-box svg {
+	opacity: 0;
+}
+
+.onb .em-consent-check input:checked + .em-box {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+}
+
+.onb .em-consent-check input:checked + .em-box svg {
+	opacity: 1;
+}
+
+.onb .em-consent-check input:focus-visible + .em-box {
+	outline: 2px solid color-mix(in srgb,var(--onb-blue) 45%,transparent);
+	outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.onb .em-consent.closing {
+		animation-duration: 1ms;
+	}
 }
 
 /* The welcome step's usage-statistics checkbox: a small line under the note, not a boxed card. */
