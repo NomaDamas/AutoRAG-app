@@ -840,22 +840,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "의미 검색",
       "title": "임베딩을 어떻게 쓸까요?",
       "groupLabel": "임베딩 방식",
       "card": {
         "none": {
-          "name": "사용 안 함",
-          "line": "키워드 검색만"
-        },
-        "local": {
-          "name": "로컬 임베딩",
-          "lineMac": "이 Mac에서 처리",
-          "linePc": "이 PC에서 처리"
+          "name": "키워드로 찾기",
+          "line": "입력한 단어가 들어 있는 문서만 찾아요."
         },
         "cloud": {
-          "name": "원격 임베딩",
-          "line": "서버에서 처리"
+          "name": "Dazzi 서버에서 분석",
+          "line": "문서 내용이 분석을 위해 Dazzi 서버로 전송돼요."
+        },
+        "local": {
+          "nameMac": "내 Mac에서 분석",
+          "namePc": "내 PC에서 분석",
+          "lineMac": "모든 분석을 이 Mac 안에서 해요. 문서는 밖으로 나가지 않아요.",
+          "linePc": "모든 분석을 이 PC 안에서 해요. 문서는 밖으로 나가지 않아요."
         }
       },
       "meter": {
@@ -867,7 +867,9 @@
         "good": "좋음"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "약 {{minutes}}분",
+      "prepTime": "준비 시간",
+      "about": "약",
+      "minutes": "{{minutes}}분",
       "cached": "준비됨",
       "downloadUnknown": "확인 중",
       "cloudConsent": "선택한 폴더의 문서 본문이 임베딩 처리를 위해 Dazzi 서버로 전송되는 것에 동의합니다. 처리 후 보관하지 않습니다.",

@@ -8,7 +8,6 @@
 import { useRef, type KeyboardEvent, type ReactElement } from "react";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { Eyebrow } from "../parts";
 import { localSpecMessage } from "../../../../shared/local-embedding-spec";
 import type { IndexFailureReason } from "../../../../shared/index-failure";
 import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
@@ -112,7 +111,7 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			>
 				<span className="em-radio" />
 				<div className="embed-icon">
-					<Icon name={card.icon} size={19} />
+					<Icon name={card.icon} size={24} />
 				</div>
 				<div className="em-title">
 					<h3>{t(card.nameKey)}</h3>
@@ -138,13 +137,17 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 					))}
 				</div>
 				<div className="em-foot">
-					<b>{t("onboarding.embedding.minutes", { minutes: card.minutes })}</b>
-					{download === null ? null : (
-						<>
-							<span>·</span>
-							{download}
-						</>
-					)}
+					<span>{t("onboarding.embedding.prepTime")}</span>
+					<span className="em-eta">
+						<span className="em-about">{t("onboarding.embedding.about")}</span>
+						<b>{t("onboarding.embedding.minutes", { minutes: card.minutes })}</b>
+						{download === null ? null : (
+							<>
+								<span className="em-about">·</span>
+								<span>{download}</span>
+							</>
+						)}
+					</span>
 				</div>
 			</div>
 		);
@@ -153,7 +156,6 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	return (
 		<section className="screen center em-screen">
 			<div className="screen-copy">
-				<Eyebrow icon="search">{t("onboarding.embedding.eyebrow")}</Eyebrow>
 				<h1>{t("onboarding.embedding.title")}</h1>
 			</div>
 			{draft.resumeAt === "indexing" ? (
