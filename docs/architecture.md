@@ -1039,6 +1039,18 @@ Cancel stops the Filee process.
   removed, on success, failure and cancel alike. A result of several files (a PDF to
   PNG gives one image per page) goes into a folder named after the new name. The source is
   never modified; an existing name is refused before Filee starts.
+- **Fail fast.** Before the staging folder exists, the service asks `filee formats <source>`
+  (`src/main/filee-formats.ts` parses the answer: direct targets plus those reached by
+  downloading an engine). A target Filee does not list fails in about a second with
+  `main.convert.noRoute`, with nothing created on disk. If the listing is unavailable the
+  conversion runs and reports its own failure.
+- **Cancel.** `cancel(id)` works from the first instant of `run`, including while the file is
+  checked or Filee is still being found. `src/main/filee-process.ts` runs `filee-cli` as the
+  leader of its own process group (`taskkill /t` on Windows) so abort, timeout and app exit end
+  Filee *and* the ffmpeg/LibreOffice/Pandoc it started (the librarian's runner signals only
+  Filee, leaving the encoder running and writing into a folder about to be deleted). The run
+  settles only after the process is gone, then staging is removed. A cancelled run rejects with
+  the "was cancelled" message; the renderer strips Electron's IPC prefix before toasting it.
 - **Settings.** The `filee` block of the shared AutoRAG config (`enabled`, `binaryPath`,
   `autoInstall`, `timeoutMs`, `dataDir`) governs the agent and the app alike.
 - **Bridge.** `window.autorag.conversion` (`src/shared/conversion-contract.ts`):
@@ -1046,7 +1058,9 @@ Cancel stops the Filee process.
 
 `run-qa-finder-convert-rename.mjs` drives this in the built app against the real
 `filee-cli`: hwpx → pdf with both answers, a typed stem that differs from the source's, Cancel and
-Esc, an unsupported route (mp3 → pdf), a same-format rename, and no leftover staging folder.
+Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90 s 1080p MP4 → WebM
+encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
+`test/conversion-live.test.ts` does the same against the real binaries without the UI.
 
 ## Manual QA
 

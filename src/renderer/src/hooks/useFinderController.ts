@@ -37,7 +37,7 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import { fileExtension, type FileActionTarget } from "../state/file-actions";
-import type { ConvertRenameState } from "../state/convert-rename";
+import { conversionErrorMessage, type ConvertRenameState } from "../state/convert-rename";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -1753,7 +1753,7 @@ export function useFinderController(
 				dropRemoved(trashed.ok);
 				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
 			})
-			.catch(reportError)
+			.catch((error: unknown) => showToast(conversionErrorMessage(error)))
 			.finally(() => {
 				setConvertRename(null);
 				refresh();
