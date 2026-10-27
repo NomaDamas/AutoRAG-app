@@ -1,7 +1,6 @@
 /** Step 2 — macOS Full Disk Access, notifications and launch at login; Windows network, notifications and launch at login. */
 
 import type { ReactElement, ReactNode } from "react";
-import { cn } from "../../lib/cn";
 import { Multiline, PermissionRow, Switch } from "../parts";
 import type { OnboardingCtx } from "../context";
 
@@ -10,13 +9,12 @@ interface PermissionsScreenProps {
 	readonly lead: string;
 	readonly children: ReactNode;
 	readonly after?: ReactNode;
-	readonly className?: string;
 }
 
 /** The step's shared layout: a centred heading over a list of plain rows (Figma 02 · permissions). */
-function PermissionsScreen({ title, lead, children, after, className }: PermissionsScreenProps): ReactElement {
+function PermissionsScreen({ title, lead, children, after }: PermissionsScreenProps): ReactElement {
 	return (
-		<section className={cn("screen permissions-screen", className)}>
+		<section className="screen permissions-screen">
 			<div className="permissions-head">
 				<h1>{title}</h1>
 				<p>
@@ -113,7 +111,7 @@ function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement 
 function WindowsPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft } = ctx;
 	return (
-		<PermissionsScreen className="windows" title={t("onboarding.permissions.titleWindows")} lead={t("onboarding.permissions.leadWindows")}>
+		<PermissionsScreen title={t("onboarding.permissions.titleWindows")} lead={t("onboarding.permissions.leadWindows")}>
 			<PermissionRow
 				icon="shield"
 				tone="blue"
