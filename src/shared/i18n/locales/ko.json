@@ -833,17 +833,17 @@
       "card": {
         "none": {
           "name": "키워드로 찾기",
-          "line": "입력한 단어가 들어 있는 문서만 찾습니다."
+          "line": "입력한 단어가 들어 있는 문서만 찾아요."
         },
         "cloud": {
           "name": "Dazzi 서버에서 분석",
-          "line": "서버에서 분석하므로 컴퓨터 성능이 낮아도 쓸 수 있습니다."
+          "line": "문서 내용이 분석을 위해 Dazzi 서버로 전송돼요."
         },
         "local": {
           "nameMac": "내 Mac에서 분석",
           "namePc": "내 PC에서 분석",
-          "lineMac": "분석을 이 Mac 안에서 처리하며, 문서는 외부로 전송되지 않습니다.",
-          "linePc": "분석을 이 PC 안에서 처리하며, 문서는 외부로 전송되지 않습니다."
+          "lineMac": "모든 분석을 이 Mac 안에서 해요. 문서는 밖으로 나가지 않아요.",
+          "linePc": "모든 분석을 이 PC 안에서 해요. 문서는 밖으로 나가지 않아요."
         }
       },
       "meter": {
@@ -860,9 +860,8 @@
       "minutes": "{{minutes}}분",
       "cached": "준비됨",
       "downloadUnknown": "확인 중",
-      "cloudConsentRequired": "(필수)",
-      "cloudConsent": "문서 본문이 서버로 전송되는 데 동의합니다.",
-      "cloudConsentCheck": "동의합니다",
+      "cloudConsent": "문서 본문이 처리를 위해 Dazzi 서버로 전송돼요.",
+      "cloudConsentCheck": "확인했어요",
       "pausedNotice": {
         "config": "선택한 임베딩 방식을 쓸 수 없어서 멈췄어요",
         "disk": "저장 공간이 모자라 모델을 받지 못했어요",
