@@ -44,6 +44,7 @@ interface StubbedDeps {
 	readonly opened: string[];
 	readonly openedUrls: string[];
 	readonly clipboardText: string[];
+	readonly clipboardFiles: (readonly string[])[];
 	readonly recents: RecentsStore;
 }
 
@@ -53,6 +54,7 @@ function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): Stubbe
 	const opened: string[] = [];
 	const openedUrls: string[] = [];
 	const clipboardText: string[] = [];
+	const clipboardFiles: (readonly string[])[] = [];
 	return {
 		deps: {
 			shell: {
@@ -74,6 +76,9 @@ function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): Stubbe
 				writeText: (text: string) => {
 					clipboardText.push(text);
 				},
+				writeFiles: async (paths: readonly string[]) => {
+					clipboardFiles.push(paths);
+				},
 			},
 			homeDir,
 			platform,
@@ -93,6 +98,7 @@ function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): Stubbe
 		opened,
 		openedUrls,
 		clipboardText,
+		clipboardFiles,
 		recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 	};
 }
@@ -107,7 +113,7 @@ function makeFailingTrashDeps(homeDir: string, message: string): FsServiceDeps {
 			openPath: async () => "",
 			openExternal: async () => { },
 		},
-		clipboard: { writeText: () => { } },
+		clipboard: { writeText: () => { }, writeFiles: async () => { } },
 		homeDir,
 	};
 }
@@ -1515,6 +1521,43 @@ describe("Windows Recycle Bin listing", () => {
 });
 
 describe("shell and clipboard side effects", () => {
+	it("clipboardSet puts the copied files themselves on the OS clipboard and keeps the in-app clipboard", async () => {
+		// Given a stubbed OS clipboard
+		const stubs = makeDeps(root);
+		const service = createFsService(stubs.deps);
+
+		// When copying two files
+		await service.clipboardSet({ op: "copy", paths: ["/a/one.png", "/b/two.png"] });
+
+		// Then the OS clipboard holds the files (not their paths as text) and the in-app clipboard still pastes them
+		expect(stubs.clipboardFiles).toEqual([["/a/one.png", "/b/two.png"]]);
+		expect(stubs.clipboardText).toEqual([]);
+		expect(await service.clipboardGet()).toEqual({ op: "copy", paths: ["/a/one.png", "/b/two.png"] });
+	});
+
+	it("clipboardSet with a cut also exposes the files to other apps, and the cut stays in-app", async () => {
+		const stubs = makeDeps(root);
+		const service = createFsService(stubs.deps);
+
+		await service.clipboardSet({ op: "cut", paths: ["/a/one.png"] });
+
+		expect(stubs.clipboardFiles).toEqual([["/a/one.png"]]);
+		expect(await service.clipboardGet()).toEqual({ op: "cut", paths: ["/a/one.png"] });
+	});
+
+	it("keeps the in-app clipboard working when the OS clipboard write fails", async () => {
+		const stubs = makeDeps(root);
+		const failing: FsServiceDeps = { ...stubs.deps, clipboard: { writeText: () => {}, writeFiles: async () => { throw new Error("pasteboard busy"); } } };
+		const service = createFsService(failing);
+
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		await service.clipboardSet({ op: "copy", paths: ["/a/one.png"] });
+		expect(logged).toHaveBeenCalledOnce();
+		logged.mockRestore();
+
+		expect(await service.clipboardGet()).toEqual({ op: "copy", paths: ["/a/one.png"] });
+	});
+
 	it("reveal forwards the path to shell.showItemInFolder", async () => {
 		// Given a stubbed shell
 		const stubs = makeDeps(root);
@@ -1564,7 +1607,7 @@ describe("shell and clipboard side effects", () => {
 				openPath: async () => "The file “deck.key” does not exist.",
 				openExternal: async () => { },
 			},
-			clipboard: { writeText: () => { } },
+			clipboard: { writeText: () => { }, writeFiles: async () => { } },
 			homeDir: root,
 		};
 

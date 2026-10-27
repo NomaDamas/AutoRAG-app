@@ -305,7 +305,11 @@ hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
 owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what
 only Electron's main process can do and the worker asks for over its host
 port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
-opening files and URLs, and the clipboard.
+opening files and URLs, and the clipboard. ⌘C / ⌘X also put the selected files
+on the OS clipboard as copied files (`src/main/os-clipboard.ts`, Electron's
+`text/uri-list`, mapped to the platform's "copied files" format), so a browser,
+chat window, or Finder pastes the files themselves; the in-app clipboard still
+owns copy-vs-cut and the in-app paste.
 
 The worker never imports `@autorag/librarian` on its own thread: loading it takes
 ~2 s, and folder listings are answered on that thread. The one importer is a

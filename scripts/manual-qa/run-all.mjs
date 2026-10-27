@@ -46,6 +46,7 @@ const LANES = [
 	{ name: "context-menu", script: "run-qa-finder-context-menu.mjs", timeout: 300 },
 	{ name: "new-file", script: "run-qa-finder-new-file.mjs", timeout: 300 },
 	{ name: "native-drag-out", script: "run-qa-finder-drag-out.mjs", timeout: 300 },
+	{ name: "os-clipboard", script: "run-qa-finder-os-clipboard.mjs", timeout: 300 },
 	{ name: "external-drop", script: "run-qa-finder-external-drop.mjs", timeout: 300 },
 	{ name: "share", script: "run-qa-finder-share.mjs", timeout: 300 },
 	{ name: "nav-guard", script: "run-qa-finder-nav-guard.mjs", timeout: 240 },
