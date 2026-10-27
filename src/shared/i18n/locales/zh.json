@@ -860,8 +860,9 @@
       "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "cloudConsent": "文档正文会发送到 Dazzi 服务器进行处理。",
-      "cloudConsentCheck": "我已了解",
+      "cloudConsentRequired": "(必填)",
+      "cloudConsent": "我同意将文档正文发送到服务器。",
+      "cloudConsentCheck": "我同意",
       "pausedNotice": {
         "config": "所选嵌入方式不可用，已暂停",
         "disk": "存储空间不足，无法下载模型",
