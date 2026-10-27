@@ -121,7 +121,6 @@ export function Toolbar({
 		<div className="toolbar flex flex-none items-center gap-6 h-toolbar pl-12 pr-[calc(12px+var(--window-controls-gutter))] bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]">
 			{sidebarHidden ? (
 				<>
-					<span className="w-[70px] flex-none" aria-hidden="true" />
 					<button
 						type="button"
 						className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}

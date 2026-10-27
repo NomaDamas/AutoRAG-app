@@ -344,7 +344,7 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
-	letter-spacing: -0.06em;
+	line-height: 16px;
 }
 
 /* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
@@ -4588,6 +4588,6 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	background: var(--onb-bg-input);
 	color: var(--onb-ink);
 	font-size: 12px;
-	font-weight: 500;
-	letter-spacing: -0.05em;
+	font-weight: 400;
+	line-height: 16px;
 }
