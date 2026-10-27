@@ -2036,7 +2036,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	padding-top: 27px;
 }
 
-/* The cards and the consent card under them; the consent floats so ticking it moves nothing. */
+/* The cards; what hangs under a card (its consent, its download, why it is blocked) sits in a zero-height second row, so ticking or choosing moves nothing. */
 .onb .em-stack {
 	position: relative;
 	width: 100%;
@@ -2050,6 +2050,12 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	justify-content: center;
 	gap: 0 16px;
 	width: 100%;
+}
+
+@media (min-width:851px) {
+	.onb .em-cards {
+		grid-template-rows: auto 0;
+	}
 }
 
 .onb .em-card {
@@ -2085,13 +2091,16 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 /* Why a card cannot be chosen: a note under that card's column, outside the card. */
 .onb .em-blocked {
+	box-sizing: border-box;
+	align-self: start;
 	margin: 12px 0 0;
-	padding: 6px 8px;
-	border-radius: 6px;
+	padding: 8px 16px;
+	border-radius: 8px;
 	background: var(--onb-red-bg);
 	color: var(--onb-red);
-	font-size: 10px;
-	line-height: 1.45;
+	font-size: 10.5px;
+	line-height: 15.75px;
+	text-align: center;
 }
 
 .onb .em-card.disabled:hover {
@@ -2279,10 +2288,9 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 /* The cloud-embedding consent under the card grid (Figma 06b): shown while the cloud card is chosen. */
 .onb .em-consent {
-	position: absolute;
-	top: calc(100% + 12px);
-	left: 50%;
-	transform: translateX(-50%);
+	align-self: start;
+	justify-self: center;
+	margin-top: 12px;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -2303,6 +2311,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 .onb .em-consent-text {
 	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
 	gap: 2px;
 	white-space: nowrap;
 }
@@ -2354,6 +2364,60 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 .onb .em-consent-check input:focus-visible + .em-box {
 	outline: 2px solid color-mix(in srgb,var(--onb-blue) 45%,transparent);
 	outline-offset: 2px;
+}
+
+/* The on-device model's download under the "my PC" card (Figma 06c): the same small card as the consent, with a blue Download button. */
+.onb .em-download {
+	align-self: start;
+	justify-self: center;
+	width: 320px;
+	max-width: 100%;
+}
+
+.onb .em-download .model-dl {
+	box-sizing: border-box;
+	align-items: center;
+	gap: 6px;
+	margin-top: 12px;
+	padding: 12px 16px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	filter: drop-shadow(0 0 2px rgba(0,0,0,.12));
+	color: var(--onb-body);
+	text-align: center;
+}
+
+.onb .em-download .model-dl[data-state="absent"] .model-dl-head {
+	display: none;
+}
+
+.onb .em-download .model-dl-title,
+.onb .em-download .model-dl-meta,
+.onb .em-download .model-dl-error {
+	color: var(--onb-body);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.onb .em-download .model-dl-title {
+	font-weight: 500;
+}
+
+.onb .em-download .model-dl-actions button {
+	height: 32px;
+	padding: 0 14px;
+	border-radius: 8px;
+	border: 1px solid var(--onb-border);
+	color: var(--onb-body);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.onb .em-download .model-dl-actions button.primary {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+	color: #fff;
 }
 
 
