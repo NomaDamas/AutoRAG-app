@@ -344,6 +344,12 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
+	letter-spacing: -0.06em;
+}
+
+/* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
+.onb .footer-actions .footer-btn:last-child:not(:disabled) {
+	border-color: var(--onb-faint);
 }
 
 .onb .footer-btn:disabled {
@@ -4494,4 +4500,94 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	padding: 0 7px;
 	border-radius: 5px;
 	background: none;
+}
+
+/* Account step once signed in (Figma 03b): the mark with a check badge, the plan and email, and a switch button. */
+.onb .account-done {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	max-width: 375px;
+}
+
+.onb .account-done-mark {
+	position: relative;
+	width: 108px;
+	height: 104px;
+}
+
+.onb .account-done-logo {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 94px;
+	height: 94px;
+}
+
+.onb .account-done-logo .app-logo {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.onb .account-done-check {
+	position: absolute;
+	top: 68px;
+	left: 72px;
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
+	width: 36px;
+	height: 36px;
+	border: 4.5px solid var(--onb-bg-stage);
+	border-radius: 50%;
+	background: #d2f0dc;
+	color: #34c759;
+}
+
+.onb .account-done h1 {
+	margin: 0;
+	font-weight: 700;
+	text-align: center;
+}
+
+.onb .account-done-meta {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	color: var(--onb-body);
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .account-plan-tag {
+	padding: 2px 4px;
+	border-radius: 4px;
+	background: var(--onb-bg-input);
+	color: var(--onb-muted);
+	font-size: 8px;
+	line-height: 11px;
+	font-weight: 700;
+}
+
+.onb .account-plan-tag.paid {
+	background: rgba(245,158,11,.14);
+	color: #925800;
+}
+
+.onb .account-switch {
+	width: 244px;
+	height: 38px;
+	margin-top: 38px;
+	border: 1px solid var(--onb-bg-input);
+	border-radius: 7px;
+	background: var(--onb-bg-input);
+	color: var(--onb-ink);
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: -0.05em;
 }
