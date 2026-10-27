@@ -1428,7 +1428,10 @@
     },
     "worker": {
       "unknownFormat": "不明なファイル形式です: {{format}}",
-      "invalidUrl": "ウェブアドレスが正しくありません。"
+      "invalidUrl": "ウェブアドレスが正しくありません。",
+      "librarianExited": "インデックス用ヘルパーが予期せず停止しました（コード {{code}}）。",
+      "librarianFailed": "インデックス用ヘルパーが失敗しました: {{message}}",
+      "librarianStopped": "インデックス用ヘルパーは終了しているため、要求を処理できません。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(一時名 {{name}} から元に戻せませんでした: {{detail}})",
