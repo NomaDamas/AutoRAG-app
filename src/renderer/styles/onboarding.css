@@ -4230,7 +4230,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	color: var(--onb-ink);
 }
 
-.onb .account-btn.apple {
+.onb .account-btn.github {
 	border-color: #000;
 	background: #000;
 	color: #fff;
@@ -4242,6 +4242,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border-color: var(--onb-bg-input);
 	background: var(--onb-bg-input);
 	color: var(--onb-ink);
+}
+
+.onb .account-btn:disabled {
+	opacity: .45;
+	cursor: not-allowed;
 }
 
 .onb .account-divider {

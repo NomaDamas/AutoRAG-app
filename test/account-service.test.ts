@@ -256,6 +256,22 @@ describe("sign in", () => {
 		expect(fake.requests.find((request) => request.path === "/v1/account")?.auth).toBe("Bearer dz_fakekey");
 	});
 
+	it("carries the selected provider and email through the desktop authorize URL", async () => {
+		await service.signIn({ provider: "email", email: "person@example.com" });
+
+		const authorize = new URL(opened[0] ?? "");
+		expect(authorize.searchParams.get("provider")).toBe("email");
+		expect(authorize.searchParams.get("email")).toBe("person@example.com");
+	});
+
+	it("starts social sign-in with the selected provider only", async () => {
+		await service.signIn({ provider: "github" });
+
+		const authorize = new URL(opened[0] ?? "");
+		expect(authorize.searchParams.get("provider")).toBe("github");
+		expect(authorize.searchParams.has("email")).toBe(false);
+	});
+
 	it("never exposes the key through status or events", async () => {
 		const status = await service.signIn();
 

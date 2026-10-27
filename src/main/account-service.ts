@@ -13,6 +13,7 @@ import {
 	parsePromoCode,
 	shouldAdoptManagedModel,
 	type AccountPlanId,
+	type AccountSignInOptions,
 	type AccountSnapshot,
 	type AccountStatus,
 	type ManagedModelResult,
@@ -60,7 +61,7 @@ export interface AccountServiceDeps {
 export interface AccountService {
 	status(): Promise<AccountStatus>;
 	refresh(): Promise<AccountStatus>;
-	signIn(): Promise<AccountStatus>;
+	signIn(options?: AccountSignInOptions): Promise<AccountStatus>;
 	cancelSignIn(): Promise<AccountStatus>;
 	signOut(): Promise<AccountStatus>;
 	checkout(plan: PaidPlanId, promoCode?: string): Promise<void>;
@@ -392,7 +393,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		}
 	}
 
-	async function runSignIn(abort: AbortController): Promise<AccountStatus> {
+	async function runSignIn(abort: AbortController, options?: AccountSignInOptions): Promise<AccountStatus> {
 		const verifier = base64Url(randomBytes(32));
 		const challenge = base64Url(createHash("sha256").update(verifier).digest());
 		const state = base64Url(randomBytes(16));
@@ -408,6 +409,11 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 					authorize.searchParams.set("state", state);
 					authorize.searchParams.set("code_challenge", challenge);
 					authorize.searchParams.set("code_challenge_method", "S256");
+					if (options !== undefined) {
+						authorize.searchParams.set("provider", options.provider);
+						const email = options.email?.trim();
+						if (options.provider === "email" && email !== undefined && email.length > 0) authorize.searchParams.set("email", email);
+					}
 					await deps.openExternal(authorize.toString());
 				},
 				abort.signal,
@@ -514,11 +520,11 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	return {
 		status: buildStatus,
 		refresh,
-		signIn: () => {
+		signIn: (options) => {
 			if (flow !== null) return flow.promise;
 			lastError = null;
 			const abort = new AbortController();
-			const promise = runSignIn(abort);
+			const promise = runSignIn(abort, options);
 			flow = { promise, abort };
 			void publish();
 			return promise;

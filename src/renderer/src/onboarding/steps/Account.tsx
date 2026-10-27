@@ -1,7 +1,7 @@
 /** Step 3 — real sign-in through the system browser (OAuth code + PKCE), or the no-account BYOK path. */
 
 import { useState, type ReactElement } from "react";
-import { AppLogo, Icon } from "../marks";
+import { AppLogo, BrandMark, Icon } from "../marks";
 import { openExternal } from "../parts";
 import { accountLegalUrl } from "../../../../shared/account-contract";
 import { APP_NAME } from "../../../../shared/app-info";
@@ -14,14 +14,6 @@ function GoogleMark(): ReactElement {
 			<path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z" />
 			<path fill="#FBBC05" d="M10.5 28.7c-.5-1.5-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.1C.9 16.4 0 20.100 0 24s.9 7.600 2.600 10.800l7.900-6.100z" />
 			<path fill="#34A853" d="M24 48c6.500 0 11.900-2.100 15.900-5.800l-7.500-5.800c-2.100 1.400-4.800 2.300-8.400 2.300-6.300 0-11.600-4.100-13.500-9.800l-7.900 6.100C6.500 42.600 14.600 48 24 48z" />
-		</svg>
-	);
-}
-
-function AppleMark(): ReactElement {
-	return (
-		<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-			<path d="M16.4 12.700c0-2.400 2-3.500 2.100-3.600-1.100-1.700-2.900-1.900-3.500-1.900-1.500-.2-2.900.9-3.700.9-.8 0-1.900-.9-3.200-.8-1.600 0-3.100 1-4 2.400-1.700 3-.4 7.400 1.200 9.800.8 1.200 1.800 2.500 3 2.400 1.200 0 1.700-.8 3.100-.8 1.400 0 1.900.8 3.200.8 1.300 0 2.100-1.200 2.900-2.400.9-1.400 1.300-2.700 1.300-2.800 0 0-2.400-.9-2.400-3.900zM14.100 5.500c.7-.8 1.100-1.900 1-3-1 0-2.100.7-2.800 1.500-.6.700-1.100 1.800-1 2.900 1.100.1 2.100-.6 2.800-1.400z" />
 		</svg>
 	);
 }
@@ -84,13 +76,13 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 				) : (
 					<div className="account-panel">
 						<div className="account-providers">
-							<button type="button" className="account-btn google" onClick={ctx.signIn}>
+							<button type="button" className="account-btn google" onClick={() => ctx.signIn({ provider: "google" })}>
 								<GoogleMark />
 								{t("onboarding.account.continueGoogle")}
 							</button>
-							<button type="button" className="account-btn apple" onClick={ctx.signIn}>
-								<AppleMark />
-								{t("onboarding.account.continueApple")}
+							<button type="button" className="account-btn github" onClick={() => ctx.signIn({ provider: "github" })}>
+								<BrandMark name="github" size={15} />
+								{t("onboarding.account.continueGithub")}
 							</button>
 						</div>
 						<div className="account-divider">{t("onboarding.account.or")}</div>
@@ -105,7 +97,12 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 								onChange={(event) => setEmail(event.target.value)}
 							/>
 						</label>
-						<button type="button" className="account-btn email" onClick={ctx.signIn}>
+						<button
+							type="button"
+							className="account-btn email"
+							disabled={email.trim().length === 0}
+							onClick={() => ctx.signIn({ provider: "email", email: email.trim() })}
+						>
 							{t("onboarding.account.continueEmail")}
 						</button>
 						{account?.error ? (

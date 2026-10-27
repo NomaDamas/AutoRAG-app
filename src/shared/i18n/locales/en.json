@@ -718,7 +718,7 @@
       "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
       "getStarted": "Get started",
       "continueGoogle": "Continue with Google",
-      "continueApple": "Continue with Apple",
+      "continueGithub": "Continue with GitHub",
       "or": "or",
       "emailLabel": "Email",
       "emailPlaceholder": "name@example.com",

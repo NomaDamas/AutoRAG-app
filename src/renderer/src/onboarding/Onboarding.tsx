@@ -12,7 +12,7 @@ import {
 	useState,
 	type ReactElement,
 } from "react";
-import { isPaidPlanId, parsePromoCode, type AccountStatus } from "../../../shared/account-contract";
+import { isPaidPlanId, parsePromoCode, type AccountSignInOptions, type AccountStatus } from "../../../shared/account-contract";
 import type {
 	DetectedSource,
 	EmbedMode,
@@ -706,8 +706,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 	}, [overlay, account, next, showToast, t]);
 
-	const signIn = useCallback((): void => {
-		void autorag.account.signIn().then(
+	const signIn = useCallback((options: AccountSignInOptions): void => {
+		void autorag.account.signIn(options).then(
 			(status) => {
 				setAccount(status);
 				if (status.state === "signedIn") {

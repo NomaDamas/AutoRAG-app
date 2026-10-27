@@ -718,7 +718,7 @@
       "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
       "getStarted": "开始使用",
       "continueGoogle": "使用 Google 继续",
-      "continueApple": "使用 Apple 继续",
+      "continueGithub": "使用 GitHub 继续",
       "or": "或",
       "emailLabel": "邮箱",
       "emailPlaceholder": "mingzi@example.cn",

@@ -718,7 +718,7 @@
       "authNote": "로그인 방법(이메일 코드, 소셜 로그인)은 브라우저의 Dazzi 로그인 화면에서 고릅니다.",
       "getStarted": "시작하기",
       "continueGoogle": "Google로 계속",
-      "continueApple": "Apple로 계속",
+      "continueGithub": "GitHub로 계속",
       "or": "또는",
       "emailLabel": "이메일",
       "emailPlaceholder": "name@example.com",

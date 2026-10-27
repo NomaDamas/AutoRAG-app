@@ -718,7 +718,7 @@
       "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。",
       "getStarted": "はじめる",
       "continueGoogle": "Googleで続行",
-      "continueApple": "Appleで続行",
+      "continueGithub": "GitHubで続行",
       "or": "または",
       "emailLabel": "メール",
       "emailPlaceholder": "namae@example.jp",

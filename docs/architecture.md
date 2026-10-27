@@ -588,7 +588,10 @@ Account and plan are real. The account step signs in through the system
 browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
 against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
 `https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
+app. Google, GitHub, and email buttons pass their provider (and the trimmed email
+address for the email-code form) to `/desktop/authorize`; the hosted sign-in
+returns to the same consent request after that selected flow. The returned API
+key lives only in Pi's `auth.json` as the `dazzi`
 credential (mode 0600), the single place the librarian reads the hosted plan
 from, so the app and the librarian cannot disagree about being signed in; the
 renderer sees an `AccountStatus` (email, plan, subscription state, weekly
