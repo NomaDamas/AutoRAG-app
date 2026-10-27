@@ -218,18 +218,37 @@ describe("error-fix service", () => {
 		expect(onConfigChanged).toHaveBeenCalledTimes(1);
 	});
 
-	it("gives up after the time limit with an error rather than hanging", async () => {
-		const registration = register();
-		registration.setResponses([
-			(_context, options) =>
-				new Promise<AssistantMessage>((resolve) => {
-					options?.signal?.addEventListener("abort", () => resolve(fauxAssistantMessage("", { stopReason: "aborted" })));
-				}),
-		]);
+	it("has no time limit: a run that stays busy for hours is still waited for and ends with its answer", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		try {
+			const registration = register();
+			let release: () => void = () => undefined;
+			let entered: () => void = () => undefined;
+			const modelBusy = new Promise<void>((resolve) => {
+				entered = resolve;
+			});
+			registration.setResponses([
+				async (): Promise<AssistantMessage> => {
+					entered();
+					await new Promise<void>((resolve) => {
+						release = resolve;
+					});
+					return fauxAssistantMessage(fauxToolCall("report_result", { status: "cannot-fix", summary: "Took a while." }));
+				},
+				fauxAssistantMessage("done"),
+			]);
 
-		await serviceFor(registration, { timeoutMs: 200 }).start("run-8", REQUEST);
+			const run = serviceFor(registration).start("run-8", REQUEST);
+			await modelBusy;
+			await vi.advanceTimersByTimeAsync(6 * 60 * 60 * 1000);
+			expect(events).toEqual([]);
+			release();
+			await run;
 
-		expect(finalEvent()).toMatchObject({ type: "error", runId: "run-8", message: expect.stringMatching(/timed out/iu) });
+			expect(finalEvent()).toMatchObject({ type: "result", result: { summary: "Took a while." } });
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("shows a failing index run to the agent and still lets it explain", async () => {

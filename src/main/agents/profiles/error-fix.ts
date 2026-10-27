@@ -43,8 +43,6 @@ const MAX_STEP_CHARS = 300;
 const MAX_STEPS = 6;
 /** A command or a path shown in the activity list is cut here. */
 const MAX_STEP_DETAIL_CHARS = 160;
-/** How long `refresh_index` waits for an index run: a first index of a big folder takes far longer than the agent should stand by. */
-const DEFAULT_REFRESH_WAIT_MS = 90_000;
 
 export interface ErrorFixToolkitDeps {
 	/** The working folder of the agent's file and shell tools. */
@@ -61,8 +59,6 @@ export interface ErrorFixToolkitDeps {
 	/** True once the run was stopped; the file, shell and index tools then refuse. */
 	readonly cancelled?: () => boolean;
 	readonly now?: () => Date;
-	/** How long `refresh_index` waits for the run before leaving it to finish in the background; default {@link DEFAULT_REFRESH_WAIT_MS}. */
-	readonly refreshWaitMs?: number;
 }
 
 export interface ErrorFixToolkit {
@@ -181,19 +177,11 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		onCommand: (command) => commands.push(command.length > MAX_STEP_CHARS ? `${command.slice(0, MAX_STEP_CHARS)}…` : command),
 	});
 
-	type Settled = { readonly kind: "finished"; readonly result: ConfigRefreshResult } | { readonly kind: "failed"; readonly error: unknown } | { readonly kind: "running" };
+	type Settled = { readonly kind: "finished"; readonly result: ConfigRefreshResult } | { readonly kind: "failed"; readonly error: unknown };
 
-	/** The run's outcome, or `running` when it outlives the wait; a run left behind settles on its own. */
+	/** The run's outcome, whenever it comes. */
 	async function settled(run: Promise<ConfigRefreshResult>): Promise<Settled> {
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const waited = new Promise<Settled>((resolve) => {
-			timer = setTimeout(() => resolve({ kind: "running" }), deps.refreshWaitMs ?? DEFAULT_REFRESH_WAIT_MS);
-		});
-		try {
-			return await Promise.race([run.then((result): Settled => ({ kind: "finished", result }), (error: unknown): Settled => ({ kind: "failed", error })), waited]);
-		} finally {
-			clearTimeout(timer);
-		}
+		return run.then((result): Settled => ({ kind: "finished", result }), (error: unknown): Settled => ({ kind: "failed", error }));
 	}
 
 	const trace = (): ErrorFixTrace => ({ changes: [...changes.values()], backupPath: files.backupPath(), commands: [...commands] });
@@ -218,13 +206,12 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		name: "refresh_index",
 		label: "Refresh index",
 		description:
-			"Run the local document index once and report what it did or why it failed. Use it after you repointed a search folder or a data source so the new place gets indexed, or when the error was about the index itself. It waits for a while; a long run keeps going in the background and its progress shows in the app.",
+			"Run the local document index once, wait for it to end and report what it did or why it failed. Use it after you repointed a search folder or a data source so the new place gets indexed, or when the error was about the index itself.",
 		parameters: Type.Object({}),
 		execute: async () => {
 			if (deps.cancelled?.() === true) return text("Refused: the run was cancelled.");
 			const outcome = await settled(deps.refreshIndex());
 			if (outcome.kind === "failed") return text(`Index run failed: ${errorText(outcome.error)}`);
-			if (outcome.kind === "running") return text("The index run is still going after a while. It continues in the background and its progress shows in the app; do not wait for it, finish your report.");
 			const { result } = outcome;
 			if (result.ok) indexRebuilt = true;
 			const lines = [
@@ -331,15 +318,15 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		"",
 		"Your job: find out why it happened and fix it when the cause is something you can reach; otherwise tell the person plainly what to do next.",
 		"",
-		"What you can reach, all through your tools: the files on this computer (read, ls, find and grep to look; the AutoRAG config is shown with its secrets hidden, and the AI's own sign-in and key files, or any file named like a key, are never opened), and edit and write to change the AutoRAG config, the files its data sources name and the app's workspace folder. bash runs a command for what the file tools cannot do (a permission, a missing program, a stuck process); use it for repairs, not to change the person's own documents, which are theirs and stay as they are. diagnose shows what only the app knows (the chosen model, the data sources, the index state) and which paths in the config do not exist. refresh_index runs the local document index once.",
+		"What you can reach, all through your tools: the files on this computer (read, ls, find and grep to look; the AutoRAG config is shown with its secrets hidden, and the AI's own sign-in and key files, or any file named like a key, are never opened), and edit and write to change the AutoRAG config, the files its data sources name and the app's workspace folder. bash runs any command for what the file tools cannot do (a permission, a missing program, a stuck process); use it for repairs, not to change the person's own documents, which are theirs and stay as they are. diagnose shows what only the app knows (the chosen model, the data sources, the index state) and which paths in the config do not exist. refresh_index runs the local document index once and waits for it to end.",
 		"",
 		"How to work:",
 		"1. Call diagnose first. It shows the config, whether it loads, which paths in it do not exist, the chosen model, the data sources and the index state.",
-		"2. Match what it shows to the error. A search folder or data source path that no longer exists is the common case: use ls or find to see whether the folder moved or was renamed (the folder that still exists above it, and its neighbours, usually show where it went), and repoint it only when the new place is clearly the same folder (same name or the same contents). Look in the broken path's parent, the folder above it and the folders the config already names; that is a handful of looks, not a search of the computer. Never run grep or find over the whole home folder, the app's own folders or temporary folders: a folder that is not near where it was is not yours to hunt for, and a long walk costs the person time they do not have. If you do not find it there, or are not sure, do not guess and do not keep looking: report needs-user, and give a button to the page where they choose the folders (kind settings, target scope, with a label such as the example below). Other errors work the same way: read the config, the file or the log the error points at, find the cause, and change it; when what you find is outside Dazzi, say so and stop.",
+		"2. Match what it shows to the error. A search folder or data source path that no longer exists is the common case: use ls or find to see whether the folder moved or was renamed (the folder that still exists above it, and its neighbours, usually show where it went), and repoint it only when the new place is clearly the same folder (same name or the same contents). If you cannot find it, or are not sure, do not guess: report needs-user, and give a button to the page where they choose the folders (kind settings, target scope, with a label such as the example below). A missing program or library is yours to install with bash when that is what the error needs; say in the summary what you installed. Other errors work the same way: read the config, the file or the log the error points at, find the cause, and change it; when what you find is outside Dazzi and not yours to change, say so and stop.",
 		"3. Change as little as possible: only the setting the error points at. Never remove a folder or a data source just to make an error go away.",
-		"4. If you repointed a search folder or a data source, call refresh_index once so the new place gets indexed (a long run goes on in the background; do not wait for it). Then call diagnose once more to confirm the cause is gone. Only then report fixed.",
+		"4. If you repointed a search folder or a data source, call refresh_index so the new place gets indexed; it waits until the run ends. Then call diagnose once more to confirm the cause is gone. Only then report fixed.",
 		"5. Finish with report_result, once.",
-		"6. Be economical: every tool call is one request to the AI model, and some plans allow only a few requests a minute. Call independent tools together in one turn, never repeat a check you already have the answer to, and make a config change in one edit. To change the AutoRAG config use edit (exact text) or write (the whole file as you saw it, the secret placeholders left as they are); the app checks the result, refuses a bad value and says why, and keeps a copy of the old file.",
+		"6. To change the AutoRAG config use edit (exact text) or write (the whole file as you saw it, the secret placeholders left as they are); the app checks the result, refuses a bad value and says why, and keeps a copy of the old file.",
 		"",
 		"Limits you must respect:",
 		"- Never change the AI model, a sign-in, a subscription, a key or a token. If the error is about any of them (no model, wrong key, plan used up, model gone), report cannot-fix and give a button to Settings: target \"ai\" for the model, \"plan\" for the subscription.",

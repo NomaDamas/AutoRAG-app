@@ -31,8 +31,6 @@ export interface ErrorFixServiceDeps {
 	readonly refreshIndex: () => Promise<ConfigRefreshResult>;
 	/** Called after the agent wrote a change to the config, so what was built on the old config can be rebuilt. */
 	readonly onConfigChanged?: () => void;
-	/** Longest a run may take; default {@link DEFAULT_TIMEOUT_MS}. */
-	readonly timeoutMs?: number;
 }
 
 export interface ErrorFixService {
@@ -40,14 +38,11 @@ export interface ErrorFixService {
 	cancel(runId: string): Promise<void>;
 }
 
-const DEFAULT_TIMEOUT_MS = 3 * 60_000;
-
 const TASK = "Find out why the error happened, repair what you can reach, and report the result with report_result.";
 
 interface Run {
 	readonly abort: AbortController;
 	cancelled: boolean;
-	timedOut: boolean;
 }
 
 export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixService {
@@ -55,10 +50,6 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 
 	async function execute(runId: string, run: Run, request: ErrorFixRequest, toolkit: ErrorFixToolkit): Promise<void> {
 		let session: AgentSession | null = null;
-		const timer = setTimeout(() => {
-			run.timedOut = true;
-			run.abort.abort();
-		}, deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
 		try {
 			const model = await deps.resolveModel();
 			if (run.cancelled) return;
@@ -78,22 +69,21 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 			});
 			await session.prompt(TASK);
 			if (run.cancelled) return;
-			const failure = run.timedOut ? null : modelFailure(session);
+			const failure = modelFailure(session);
 			if (failure !== null) throw new Error(failure);
 			const result = toolkit.result();
-			if (result === null) throw new Error(run.timedOut ? "The repair timed out before the AI reported a result." : "The AI ended without reporting a result.");
+			if (result === null) throw new Error("The AI ended without reporting a result.");
 			deps.send({ type: "result", runId, result });
 		} catch (error) {
 			if (!run.cancelled) deps.send({ type: "error", runId, message: errorText(error), ...toolkit.trace() });
 		} finally {
-			clearTimeout(timer);
 			session?.dispose();
 		}
 	}
 
 	return {
 		start: async (runId, request) => {
-			const run: Run = { abort: new AbortController(), cancelled: false, timedOut: false };
+			const run: Run = { abort: new AbortController(), cancelled: false };
 			runs.set(runId, run);
 			const stopped = (): Promise<never> => Promise.reject(new Error("The run was cancelled."));
 			const toolkit = createErrorFixToolkit({

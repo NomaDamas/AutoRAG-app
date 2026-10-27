@@ -183,7 +183,12 @@ try {
 	await dialog.waitFor();
 	await shot("02-fix-started");
 	// The run is over when its Stop button is gone (the X in the corner is there all along).
-	await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 280_000 });
+	const startedAt = Date.now();
+	const watcher = setInterval(() => {
+		void dialog.innerText({ timeout: 2000 }).then((text) => console.log(`[${Math.round((Date.now() - startedAt) / 1000)}s] steps so far: ${text.split("\n").filter((line) => /^(Reading|Looking|Finding|Searching|Running|Editing|Writing|Checking|Rebuilding)/.test(line)).length}; last: ${text.split("\n").filter((line) => /^(Reading|Looking|Finding|Searching|Running|Editing|Writing|Checking|Rebuilding)/.test(line)).at(-1)?.slice(0, 140)}`), () => undefined);
+	}, 30_000);
+	await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 0 });
+	clearInterval(watcher);
 	const outcome = await dialog.innerText();
 	console.log(`dialog after the real run:\n${outcome}`);
 	await shot("03-fix-finished");
@@ -213,7 +218,7 @@ try {
 	// ── 2. The real server rejects the key: its own wording is a model problem. ─
 	badKey = true;
 	await ask("What is the vault access number in a.txt, one more time?");
-	await notice.waitFor({ timeout: 280_000 });
+	await notice.waitFor({ timeout: 0 });
 	const rejected = await notice.innerText();
 	console.log(`the real server's rejection as the person sees it: ${rejected.replace(/\s+/g, " ").slice(0, 400)}`);
 	check("the box says the model cannot be used", /AI model can’t be used|subscription or usage limit|No AI model is set up|can’t be found/.test(rejected), rejected.replace(/\s+/g, " ").slice(0, 200));
@@ -232,7 +237,7 @@ try {
 	check("the broken folder is an app-setup error again", (await panel.getByRole("button", { name: "Fix with AI", exact: true }).count()) === 1, (await notice.innerText()).replace(/\s+/g, " ").slice(0, 160));
 	badKey = true;
 	await panel.getByRole("button", { name: "Fix with AI", exact: true }).click();
-	await dialog.getByRole("button", { name: "Open model settings" }).waitFor({ timeout: 280_000 });
+	await dialog.getByRole("button", { name: "Open model settings" }).waitFor({ timeout: 0 });
 	const downText = await dialog.innerText();
 	console.log(`dialog when the model rejects the key during the fix:\n${downText}`);
 	check("the dialog explains the model problem instead of a bare failure", /can’t be used|subscription|usage limit|No AI model|can’t be found/.test(downText), downText.replace(/\s+/g, " ").slice(0, 200));
@@ -255,7 +260,7 @@ try {
 	for (let attempt = 1; attempt <= 3; attempt += 1) {
 		// The run is over when its Stop button has appeared and then gone: before it first renders it is "not there" too.
 		await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "visible", timeout: 30_000 });
-		await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 280_000 });
+		await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 0 });
 		handOver = await dialog.innerText();
 		if (!handOver.includes("Too many requests right now")) break;
 		console.log(`attempt ${attempt} hit the plan's rate limit; waiting before the next`);

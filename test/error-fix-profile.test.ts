@@ -90,12 +90,24 @@ describe("the error-fix profile", () => {
 		expect(prompt).toMatch(/choose[^\n]*folder[^\n]*scope|scope[^\n]*choose[^\n]*folder/iu);
 	});
 
-	it("keeps the hunt for a gone folder short: a few looks nearby, never a walk through the computer, and then the person is sent to choose the folder", () => {
+	it("sets the agent no budget: nothing about a few looks, a short search, being economical or not waiting", () => {
 		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
 
-		expect(prompt).toMatch(/handful of looks, not a search of the computer/iu);
-		expect(prompt).toMatch(/never run grep or find over the whole home folder/iu);
-		expect(prompt).toMatch(/do not keep looking: report needs-user, and give a button to the page where they choose the folders \(kind settings, target scope/iu);
+		expect(prompt).not.toMatch(/handful|a few looks|not a search of the computer|economical|costs the person time|do not wait for it|only a few requests/iu);
+		expect(prompt).not.toMatch(/never run grep or find/iu);
+	});
+
+	it("lets the agent install a missing program and asks it to say what it installed", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		expect(prompt).toMatch(/missing program or library is yours to install with bash/iu);
+		expect(prompt).toMatch(/say in the summary what you installed/iu);
+	});
+
+	it("sends the person to choose the folder when the agent cannot find it, instead of guessing", () => {
+		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+
+		expect(prompt).toMatch(/do not guess: report needs-user, and give a button to the page where they choose the folders \(kind settings, target scope/iu);
 	});
 
 	it("names every tool the agent has", () => {
@@ -144,10 +156,10 @@ describe("the error-fix profile", () => {
 	});
 
 	it("cuts a very long error before it reaches the prompt", () => {
-		const prompt = errorFixProfile({ message: `start ${"x".repeat(20_000)} end`, surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
+		const prompt = errorFixProfile({ message: `start ${"x".repeat(20_000)} TAIL-MARKER-9f3a`, surface: "ai-search", language: "en", toolkit: toolkit() }).systemPrompt;
 
 		expect(prompt).toContain("start ");
-		expect(prompt).not.toContain(" end");
+		expect(prompt).not.toContain("TAIL-MARKER-9f3a");
 		expect(prompt.length).toBeLessThan(12_000);
 	});
 });
@@ -200,18 +212,34 @@ describe("refresh_index", () => {
 		expect(text).toContain("scanned 4");
 	});
 
-	it("does not wait for a long index run: it tells the agent the run goes on in the background, and that is not yet a repair", async () => {
+	it("waits for the index run to end, however long it takes, and then tells the agent how it went", async () => {
 		let finish: (result: ConfigRefreshResult) => void = () => undefined;
-		const slow = new Promise<ConfigRefreshResult>((resolve) => {
-			finish = resolve;
+		let started: () => void = () => undefined;
+		const hasStarted = new Promise<void>((resolve) => {
+			started = resolve;
 		});
-		const kit = toolkit({ refreshIndex: () => slow, refreshWaitMs: 20 });
+		const kit = toolkit({
+			refreshIndex: () => {
+				started();
+				return new Promise<ConfigRefreshResult>((resolve) => {
+					finish = resolve;
+				});
+			},
+		});
+		let answered = false;
 
-		const text = await call(kit, "refresh_index", {});
-
-		expect(text).toMatch(/background/iu);
-		expect(await call(kit, "report_result", { status: "fixed", summary: "Rebuilt." })).toMatch(/^Refused/u);
+		const pending = call(kit, "refresh_index", {}).then((text) => {
+			answered = true;
+			return text;
+		});
+		await hasStarted;
+		// Let every already-queued continuation run: a tool that gave up waiting would have answered by now.
+		for (let turn = 0; turn < 20; turn += 1) await Promise.resolve();
+		expect(answered).toBe(false);
 		finish(REFRESHED);
+
+		expect(await pending).toContain("scanned 4");
+		expect(await call(kit, "report_result", { status: "fixed", summary: "Rebuilt." })).toContain("Recorded");
 	});
 
 	it("passes a failed run's diagnostics to the agent", async () => {

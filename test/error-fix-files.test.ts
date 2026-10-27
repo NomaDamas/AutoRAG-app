@@ -305,50 +305,26 @@ describe("the shell", () => {
 	});
 });
 
-describe("the number of looks", () => {
-	it("allows a bounded number of looks and shell commands per run and then tells the agent to report, so a folder that is gone is never hunted for across the whole machine", async () => {
+describe("no limit on how much the agent looks", () => {
+	it("lets the agent read, list, find, search and run commands as often as it needs", async () => {
 		const kit = tools();
-		const answers: string[] = [];
 
-		for (let index = 0; index < 20; index += 1) answers.push(await call(kit, "ls", { path: root }));
-
-		const allowed = answers.findIndex((text) => text.startsWith("ERROR"));
-		expect(allowed).toBeGreaterThanOrEqual(10);
-		expect(allowed).toBeLessThanOrEqual(24);
-		expect(answers[allowed]).toMatch(/report_result/u);
-		expect(answers.slice(allowed).every((text) => text.startsWith("ERROR"))).toBe(true);
-	});
-
-	it("counts reading, listing, finding, searching and the shell together, since each is one more request to the AI", async () => {
-		const kit = tools();
-		let refused = -1;
-
-		for (let index = 0; index < 40 && refused < 0; index += 1) {
+		for (let index = 0; index < 60; index += 1) {
 			const name = ["read", "ls", "find", "grep", "bash"][index % 5] as string;
 			const params = name === "read" ? { path: join(root, "note.txt") } : name === "ls" ? { path: root } : name === "find" ? { pattern: "*.md", path: root } : name === "grep" ? { pattern: "alpha", path: root } : { command: "true" };
-			if ((await call(kit, name, params)).startsWith("ERROR")) refused = index;
+			expect(await call(kit, name, params), `${name} #${index}`).not.toMatch(/^ERROR/u);
 		}
-
-		expect(refused).toBeGreaterThanOrEqual(10);
-		expect(refused).toBeLessThanOrEqual(24);
+		expect(commands).toHaveLength(12);
 	});
 
-	it("never counts a change: a repair is not a look, and it is still allowed after the looks are used up", async () => {
+	it("still allows a repair after any number of looks", async () => {
 		const kit = tools();
-		for (let index = 0; index < 40; index += 1) await call(kit, "ls", { path: root });
+		for (let index = 0; index < 60; index += 1) await call(kit, "ls", { path: root });
 
 		const text = await call(kit, "edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "Docs")), newText: JSON.stringify(join(root, "Documents")) }] });
 
 		expect(text).not.toMatch(/^ERROR/u);
 		expect((await readConfig()).searchPaths).toEqual([join(root, "Documents")]);
-	});
-
-	it("does not count a look that was refused", async () => {
-		const kit = tools();
-
-		for (let index = 0; index < 40; index += 1) await call(kit, "read", { path: join(agentDir, "auth.json") });
-
-		expect(await call(kit, "ls", { path: root })).not.toMatch(/^ERROR/u);
 	});
 });
 

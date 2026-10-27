@@ -833,7 +833,7 @@ and kept for the chat's life:
   no button. A leftover that is only a status code ("401") is dropped from the line: the title already says it. The box and both
   places of the AI fix dialog use the same component.
 - **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `ErrorFixDialog`). A
-  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`, three minutes at most. It works with
+  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`. It works with
   pi's own `read`, `ls`, `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks, so
   pi's behaviour is kept and only the rules below are added), plus three tools only the app can offer: `diagnose` (the config with
   secrets redacted, whether every path written in it exists, the model, the data sources, the index state), `refresh_index` and
@@ -846,9 +846,9 @@ and kept for the chat's life:
   are refused and a change the validator rejects writes nothing; `edit`/`write` of anything else is allowed only for a file a data
   source in the config names (with its own `.bak-…` copy) and the app's workspace folder, never for the person's own documents; the
   shell is pi's shell with the keys and tokens taken out of its environment, and each command is listed to the person afterwards
-  because what a command changed is not tracked. A run has 12 looks (`read`, `ls`, `find`, `grep` and shell commands together; a
-  refused call is refunded and a change is never a look); past that the agent is told to report, so a folder that is gone is not
-  hunted for across the computer. The dialog lists the agent's steps as they happen (taken from pi's `tool_execution_start` events, so
+  because what a command changed is not tracked. There is no limit on how much the agent looks (reads, lists, finds, searches, runs
+  commands; it may install a missing program and says so in its summary), no time limit on the run, and `refresh_index` waits for the
+  index run to end: only the person's Stop ends a run early. The dialog lists the agent's steps as they happen (taken from pi's `tool_execution_start` events, so
   every tool announces itself the same way) and, whatever the ending (result, failure, Stop), the changes it made, where each old file
   is kept and the commands that ran. The buttons of a `needs-user` or `cannot-fix` answer are the agent's own: `report_result` takes up
   to three `actions`, each `{kind, target, label}`: `settings` (a Settings page id) or `source` (the alias of a configured data source,

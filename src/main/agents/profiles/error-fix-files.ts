@@ -40,8 +40,6 @@ const MAX_VALUE_CHARS = 300;
 const LOOKS_LIKE_PATH = /^(?:\/|~\/|[A-Za-z]:[\\/])[^\n]{0,1000}$/u;
 /** Files that are keys or credentials by their name, wherever they lie. */
 const CREDENTIAL_NAME = /^(?:\.env(?:\..*)?|id_[a-z0-9]+(?:\.pub)?|.*\.(?:pem|key|p12|pfx|keychain-db)|auth\.json|credentials(?:\..*)?|\.netrc|\.npmrc|\.pypirc)$/iu;
-/** How many looks (read, ls, find, grep, a shell command) the agent gets in one run: enough to follow a moved folder and to read a log or two, not to comb the machine for one that is gone. */
-const MAX_LOOKS = 12;
 
 export interface FixToolsDeps {
 	readonly cwd: string;
@@ -150,8 +148,6 @@ export function createFixTools(deps: FixToolsDeps): FixTools {
 	let configBackup: string | null = null;
 	/** Files other than the config that were copied aside in this run, so each is copied once. */
 	const copied = new Set<string>();
-	/** How many looks (read, ls, find, grep, shell command) the agent has used. */
-	let looks = 0;
 
 	function running(): void {
 		if (deps.cancelled()) throw new Error("The run was cancelled; nothing more can be read or changed.");
@@ -330,30 +326,16 @@ export function createFixTools(deps: FixToolsDeps): FixTools {
 		},
 	};
 
-	/**
-	 * The tool as pi built it, but it refuses when the run was stopped and first looks at what `check` makes of its arguments.
-	 * A `look` (read, ls, find, grep, a shell command) is one of a bounded number: past it the agent is told to report. A call the
-	 * tools themselves refuse is not a look, and a change (edit, write) never is.
-	 */
+	/** The tool as pi built it, but it refuses when the run was stopped and first looks at what `check` makes of its arguments. */
 	// biome-ignore lint/suspicious/noExplicitAny: the wrapper only forwards the tool's own typed arguments.
-	function guarded<T extends ToolDefinition<any, any, any>>(tool: T, check: (params: Record<string, unknown>) => Promise<void> | void, look = false): T {
+	function guarded<T extends ToolDefinition<any, any, any>>(tool: T, check: (params: Record<string, unknown>) => Promise<void> | void): T {
 		const inner = tool.execute as (...args: unknown[]) => Promise<unknown>;
 		return {
 			...tool,
 			execute: async (...args: unknown[]) => {
 				running();
 				await check((args[1] ?? {}) as Record<string, unknown>);
-				if (!look) return inner(...args);
-				if (looks >= MAX_LOOKS) {
-					throw new Error(`Refused: you have looked ${MAX_LOOKS} times already. Do not keep searching for it: report with report_result what you found and, where the person has to act, give them a button. Changing a file is still allowed.`);
-				}
-				looks += 1;
-				try {
-					return await inner(...args);
-				} catch (error) {
-					if (error instanceof Error && error.message.startsWith("Refused:")) looks -= 1;
-					throw error;
-				}
+				return inner(...args);
 			},
 		} as unknown as T;
 	}
@@ -367,24 +349,20 @@ export function createFixTools(deps: FixToolsDeps): FixTools {
 	});
 
 	const tools = [
-		guarded(createReadToolDefinition(deps.cwd, { operations: readOps }), () => undefined, true),
-		guarded(createLsToolDefinition(deps.cwd, { operations: lsOps }), () => undefined, true),
-		guarded(createFindToolDefinition(deps.cwd), (params) => denyRead(pathArgument(params)), true),
-		guarded(createGrepToolDefinition(deps.cwd), (params) => denyRead(pathArgument(params)), true),
+		guarded(createReadToolDefinition(deps.cwd, { operations: readOps }), () => undefined),
+		guarded(createLsToolDefinition(deps.cwd, { operations: lsOps }), () => undefined),
+		guarded(createFindToolDefinition(deps.cwd), (params) => denyRead(pathArgument(params))),
+		guarded(createGrepToolDefinition(deps.cwd), (params) => denyRead(pathArgument(params))),
 		createEditToolDefinition(deps.cwd, { operations: editOps }),
 		createWriteToolDefinition(deps.cwd, { operations: writeOps }),
-		guarded(
-			bash,
-			async (params) => {
-				const command = typeof params.command === "string" ? params.command : "";
-				const real = await agentDirReal;
-				if (command.includes(real) || command.includes(resolve(deps.agentDir)) || /\b(?:auth|models)\.json\b/u.test(command)) {
-					throw new Error("Refused: the AI's own sign-in and key files are off limits, also in a shell.");
-				}
-				deps.onCommand(command);
-			},
-			true,
-		),
+		guarded(bash, async (params) => {
+			const command = typeof params.command === "string" ? params.command : "";
+			const real = await agentDirReal;
+			if (command.includes(real) || command.includes(resolve(deps.agentDir)) || /\b(?:auth|models)\.json\b/u.test(command)) {
+				throw new Error("Refused: the AI's own sign-in and key files are off limits, also in a shell.");
+			}
+			deps.onCommand(command);
+		}),
 	] as unknown as ToolDefinition[];
 
 	return { tools, backupPath: () => configBackup };
