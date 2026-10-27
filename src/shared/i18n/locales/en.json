@@ -848,14 +848,14 @@
           "line": "Only finds documents that contain the words you type."
         },
         "cloud": {
-          "name": "Analyze on Dazzi's server",
-          "line": "Document contents are sent to Dazzi's server for analysis."
+          "name": "Analyze on AutoRAG's server",
+          "line": "Analysis runs on the server, so a low-spec PC works too."
         },
         "local": {
           "nameMac": "Analyze on my Mac",
           "namePc": "Analyze on my PC",
-          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
-          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
+          "lineMac": "Analysis is handled on this Mac, and your documents are never sent out.",
+          "linePc": "Analysis is handled on this PC, and your documents are never sent out."
         }
       },
       "meter": {
