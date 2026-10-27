@@ -118,7 +118,6 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 					{card.tag === null ? null : <span className={cn("em-tag", card.tag.tone)}>{t(card.tag.labelKey)}</span>}
 				</div>
 				<p className="em-line">{t(card.lineKey)}</p>
-				{card.blocked === null ? null : <p className="em-blocked">{localSpecMessage(card.blocked, t)}</p>}
 				<div className="em-meters">
 					{card.meters.map((meter) => (
 						<div
@@ -166,6 +165,13 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			) : null}
 			<div ref={listRef} className="em-cards" role="radiogroup" aria-label={t("onboarding.embedding.groupLabel")}>
 				{cards.map(renderCard)}
+				{cards.map((card, index) =>
+					card.blocked === null ? null : (
+						<p key={card.id} className="em-blocked" data-for={card.id} style={{ gridColumn: index + 1 }}>
+							{localSpecMessage(card.blocked, t)}
+						</p>
+					),
+				)}
 			</div>
 			{selected === "local" && embedding?.localModel !== false ? (
 				<div className="em-download">
