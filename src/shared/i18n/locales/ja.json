@@ -220,7 +220,7 @@
       "videoConvert": "動画変換",
       "convertTo": "{{format}}に変換",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "容量最適化"
+      "reduceSize": "容量を減らす"
     },
     "versionRelations": {
       "exact": "同一",
@@ -1338,8 +1338,7 @@
     },
     "action": {
       "unsupportedResize": "この形式はサイズ変更に対応していません。",
-      "unsupportedOptimize": "この形式は容量の最適化に対応していません。",
-      "alreadyOptimized": "このファイルはすでに最適化されています。",
+      "alreadyOptimized": "これ以上小さくできないファイルです。",
       "unsupportedExtract": "展開できないファイル形式です。",
       "emptyTarget": "対象が空です。",
       "singleTargetOnly": "この操作は一度に 1 つの項目のみ対応しています。",
@@ -1352,10 +1351,12 @@
       "unsupportedConvert": "{{format}} への変換は対応していません。",
       "converted": "{{name}} — 変換しました",
       "resized": "{{name}} — サイズを変更しました",
-      "optimized": "{{name}} — 容量を最適化しました",
       "videoNeedsFfmpeg": "動画の変換には ffmpeg が必要です。",
       "containerConverted": "{{name}} — コンテナを変換しました",
-      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。"
+      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。",
+      "unsupportedReduce": "このファイルは形式を保ったまま容量を減らせません",
+      "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
+      "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）"
     },
     "indexStatus": {
       "outside": "Dazzi の検索パス外のファイル",

@@ -17,12 +17,13 @@
 
 import { execFile } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { lstat, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
 import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
+import { formatByteSize, reductionKindOf, REDUCIBLE_EXTENSIONS, extensionOfName } from "../shared/size-reduction";
 import { t } from "../shared/i18n/core";
 import { ArchiveError } from "./archive-guard.mjs";
 import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
@@ -36,6 +37,7 @@ import {
 	type OpenWithApplication,
 	type VideoContainer,
 } from "../shared/actions-contract";
+import type { PdfReducer } from "./pdf-reducer";
 import { writeSevenZip } from "./sevenzip-writer";
 import { errorMessage, pathExists } from "./fs-entry";
 
@@ -75,6 +77,8 @@ export interface ActionServiceDeps {
 	readonly run?: CommandRunner;
 	/** Extraction caps; tests inject small values to exercise the refusals. */
 	readonly archiveLimits?: ArchiveLimits;
+	/** Shrinks PDFs (Filee's Compress PDF); absent means PDFs are not offered. */
+	readonly pdf?: PdfReducer;
 }
 
 /** The Inspector action surface the IPC layer registers. */
@@ -193,8 +197,19 @@ const EXTENSION_FORMATS: Readonly<Record<string, ImageFormat>> = {
 	tiff: "tiff",
 	bmp: "bmp",
 };
-/** Lossy formats, where "optimize" actually saves bytes. */
-const LOSSY_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
+/** Staging folder a PDF reduction writes into before the result takes its final name. */
+const REDUCE_STAGING_PREFIX = ".dazzi-reduce-";
+/** Video written by size reduction: constant-quality x264 / VP9 plus a stereo-friendly audio track. */
+const REDUCE_X264_CRF = "28";
+const REDUCE_VP9_CRF = "33";
+const REDUCE_AUDIO_BITRATE = "128k";
+const REDUCE_OPUS_BITRATE = "64k";
+/** The ffmpeg encoder each audio extension needs. */
+const AUDIO_ENCODERS: Readonly<Record<string, string>> = { mp3: "libmp3lame", m4a: "aac", aac: "aac", opus: "libopus" };
+/** Containers that can carry the (copied) cover picture of a track. */
+const AUDIO_WITH_COVER: readonly string[] = ["mp3", "m4a"];
+/** Video extensions the MP4 family flags (`+faststart`) apply to. */
+const FASTSTART_EXTENSIONS: readonly string[] = ["mp4", "m4v", "mov"];
 
 export function defaultRun(
 	command: string,
@@ -432,7 +447,8 @@ function ffmpegResizeArgs(
 }
 
 /** Re-encode for size: PNG uses maximum deflate, lossy formats re-encode at the tuning quality. */
-function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat, avifEncoder: string | null): readonly string[] {
+function ffmpegReduceImageArgs(source: string, target: string, format: ImageFormat, avifEncoder: string | null): readonly string[] {
+	if (format === "webp") return ffmpegWebpArgs(source, target);
 	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
 	if (format === "png") args.push("-compression_level", "9", "-pred", "mixed");
 	else args.push(...ffmpegQualityArgs(format, avifEncoder));
@@ -440,10 +456,70 @@ function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat,
 	return args;
 }
 
+/** The video encoders a container is reduced with: WebM takes VP9 + Opus, the rest H.264 + AAC. */
+function videoReduceCodecs(extension: string): { readonly video: string; readonly audio: string } {
+	return extension === "webm" ? { video: "libvpx-vp9", audio: "libopus" } : { video: "libx264", audio: "aac" };
+}
+
+function ffmpegReduceVideoArgs(source: string, target: string, extension: string): readonly string[] {
+	const { video, audio } = videoReduceCodecs(extension);
+	const args = ["-y", "-i", source, "-map", "0:v:0", "-map", "0:a?", "-c:v", video];
+	// Even dimensions: yuv420p encoders refuse an odd width or height.
+	args.push("-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2", "-pix_fmt", "yuv420p");
+	if (video === "libvpx-vp9") args.push("-crf", REDUCE_VP9_CRF, "-b:v", "0");
+	else args.push("-crf", REDUCE_X264_CRF, "-preset", "medium");
+	args.push("-c:a", audio, "-b:a", audio === "libopus" ? REDUCE_OPUS_BITRATE : REDUCE_AUDIO_BITRATE, "-map_metadata", "0");
+	if (FASTSTART_EXTENSIONS.includes(extension)) args.push("-movflags", "+faststart");
+	args.push(target);
+	return args;
+}
+
+function ffmpegReduceAudioArgs(source: string, target: string, extension: string): readonly string[] {
+	const codec = AUDIO_ENCODERS[extension] ?? "aac";
+	const args = ["-y", "-i", source, "-map", "0:a:0"];
+	if (AUDIO_WITH_COVER.includes(extension)) args.push("-map", "0:v:0?", "-c:v", "copy");
+	if (extension === "m4a") args.push("-disposition:v:0", "attached_pic");
+	args.push("-c:a", codec, "-b:a", codec === "libopus" ? REDUCE_OPUS_BITRATE : REDUCE_AUDIO_BITRATE, "-map_metadata", "0", target);
+	return args;
+}
+
+/**
+ * Whether a PNG or WebP holds an animation, which a one-frame re-encode would
+ * flatten. PNG: an `acTL` chunk before the first `IDAT`; WebP: the VP8X
+ * animation flag.
+ */
+async function isAnimatedImage(path: string): Promise<boolean> {
+	const extension = extensionOfName(path);
+	if (extension !== "png" && extension !== "webp") return false;
+	const handle = await open(path, "r");
+	try {
+		if (extension === "webp") {
+			const head = Buffer.alloc(32);
+			const { bytesRead } = await handle.read(head, 0, 32, 0);
+			return bytesRead >= 21 && head.toString("latin1", 12, 16) === "VP8X" && ((head[20] ?? 0) & 0x02) !== 0;
+		}
+		const chunkHead = Buffer.alloc(8);
+		let offset = 8;
+		for (let chunks = 0; chunks < 64; chunks += 1) {
+			const { bytesRead } = await handle.read(chunkHead, 0, 8, offset);
+			if (bytesRead < 8) return false;
+			const type = chunkHead.toString("latin1", 4, 8);
+			if (type === "acTL") return true;
+			if (type === "IDAT" || type === "IEND") return false;
+			offset += 12 + chunkHead.readUInt32BE(0);
+		}
+		return false;
+	} finally {
+		await handle.close();
+	}
+}
+
 /** What the ffmpeg image backend can write, and the AV1 encoder AVIF uses when it can. */
 interface FfmpegImageProbe {
 	readonly formats: readonly ImageFormat[];
 	readonly avifEncoder: string | null;
+	/** Every encoder `ffmpeg -encoders` lists; size reduction needs x264, VP9, AAC, MP3 and Opus ones. */
+	readonly encoders: ReadonlySet<string>;
 }
 
 function ffmpegRemuxArgs(source: string, target: string): readonly string[] {
@@ -455,6 +531,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	const run = deps.run ?? defaultRun;
 	const share = deps.share ?? null;
 	const archiveLimits = deps.archiveLimits ?? DEFAULT_ARCHIVE_LIMITS;
+	const pdf = deps.pdf ?? null;
 	/** Memoized ffmpeg probe: one `ffmpeg -version` per session, at most. */
 	let ffmpeg: Promise<boolean> | null = null;
 	/** Memoized image-encoder probe: one `-encoders` / `-muxers` pass per session. */
@@ -494,9 +571,9 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					? (AVIF_ENCODERS.find((name) => encoderNames.has(name)) ?? null)
 					: null;
 				if (avifEncoder !== null) formats.add("avif");
-				return { formats: IMAGE_FORMAT_ORDER.filter((format) => formats.has(format)), avifEncoder };
+				return { formats: IMAGE_FORMAT_ORDER.filter((format) => formats.has(format)), avifEncoder, encoders: encoderNames };
 			} catch {
-				return { formats: [], avifEncoder: null };
+				return { formats: [], avifEncoder: null, encoders: new Set() };
 			}
 		})();
 		return ffmpegImageProbe;
@@ -544,28 +621,91 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return target;
 	}
 
-	async function optimizeImage(source: string): Promise<string> {
-		const format = imageFormatOf(source);
-		if (format === null) throw new Error(t("main.action.unsupportedOptimize"));
-		// Optimize re-encodes lossy formats; the ffmpeg backend also deflates PNG losslessly.
-		const optimizable = LOSSY_FORMATS.includes(format) || (platform !== "darwin" && format === "png");
-		if (!optimizable) throw new Error(t("main.action.unsupportedOptimize"));
-		const probe = platform === "darwin" ? null : await probeFfmpegImages();
-		if (probe !== null && !probe.formats.includes(format)) {
-			throw new Error(t("main.action.unsupportedOptimize"));
+	/** The extensions `reduceSize` can shrink on this machine, in the order the shared table lists them. */
+	async function reducibleExtensions(): Promise<readonly string[]> {
+		const probe = await probeFfmpegImages();
+		const stills = platform === "darwin" ? await probeSips() : probe.formats;
+		const can = new Set<string>();
+		if (pdf !== null && (await pdf.available())) can.add("pdf");
+		if (stills.includes("jpeg")) for (const extension of ["jpg", "jpeg"]) can.add(extension);
+		if (stills.includes("heic")) for (const extension of ["heic", "heif"]) can.add(extension);
+		// PNG's lossless deflate and WebP's encoder only exist in ffmpeg, on every platform.
+		if (probe.formats.includes("png")) can.add("png");
+		if (probe.formats.includes("webp")) can.add("webp");
+		for (const extension of REDUCIBLE_EXTENSIONS) {
+			const kind = reductionKindOf(`x.${extension}`);
+			if (kind === "video" && probe.encoders.has(videoReduceCodecs(extension).video) && probe.encoders.has(videoReduceCodecs(extension).audio)) can.add(extension);
+			if (kind === "audio" && probe.encoders.has(AUDIO_ENCODERS[extension] ?? "")) can.add(extension);
 		}
-		const target = await uniqueChild(dirname(source), `${stemOf(source)}-optimized${extname(source)}`);
-		if (platform === "darwin" && format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
-		else if (platform === "darwin") await run("sips", sipsOptimizeArgs(source, target, format));
-		else {
-			await run("ffmpeg", ffmpegOptimizeArgs(source, target, format, probe?.avifEncoder ?? null));
-			// Keep the output only when it actually shrank; ffmpeg may re-encode larger.
-			if ((await lstat(target)).size >= (await lstat(source)).size) {
+		return REDUCIBLE_EXTENSIONS.filter((extension) => can.has(extension));
+	}
+
+	/** Drops a result that is not smaller than the original, so a reduction never leaves a bigger copy. */
+	async function keepIfSmaller(source: string, target: string): Promise<{ readonly before: number; readonly after: number }> {
+		const [before, after] = [(await lstat(source)).size, (await lstat(target)).size];
+		if (after >= before) {
+			await rm(target, { force: true });
+			throw new Error(t("main.action.alreadyOptimized"));
+		}
+		return { before, after };
+	}
+
+	async function reduceWithFfmpeg(source: string, extension: string, target: string): Promise<void> {
+		const kind = reductionKindOf(source);
+		if (kind === "video") {
+			await run("ffmpeg", ffmpegReduceVideoArgs(source, target, extension));
+		} else if (kind === "audio") {
+			await run("ffmpeg", ffmpegReduceAudioArgs(source, target, extension));
+		} else {
+			const format = imageFormatOf(source);
+			if (format === null) throw new Error(t("main.action.unsupportedReduce"));
+			const sips = platform === "darwin" && (format === "jpeg" || format === "heic");
+			if (sips) await run("sips", sipsOptimizeArgs(source, target, format));
+			else await run("ffmpeg", ffmpegReduceImageArgs(source, target, format, (await probeFfmpegImages()).avifEncoder));
+		}
+	}
+
+	/**
+	 * Same format, fewer bytes: the result is `<name>-reduced.<ext>` next to the
+	 * original, which is never touched. Lossy re-encodes, so it is a copy by
+	 * design; a result that is not smaller is deleted and reported.
+	 */
+	async function reduceSize(source: string): Promise<ActionOutcome> {
+		const extension = extensionOfName(source);
+		if (!(await reducibleExtensions()).includes(extension)) throw new Error(t("main.action.unsupportedReduce"));
+		if (await isAnimatedImage(source)) throw new Error(t("main.action.animatedReduce"));
+		const directory = dirname(source);
+		const finalName = `${stemOf(source)}-reduced${extname(source)}`;
+		let target: string;
+		if (extension === "pdf") {
+			if (pdf === null) throw new Error(t("main.action.unsupportedReduce"));
+			const staging = await mkdtemp(join(directory, REDUCE_STAGING_PREFIX));
+			try {
+				const produced = await pdf.reduce(source, staging);
+				target = await uniqueChild(directory, finalName);
+				await rename(produced, target);
+			} finally {
+				await rm(staging, { recursive: true, force: true });
+			}
+		} else {
+			target = await uniqueChild(directory, finalName);
+			try {
+				await reduceWithFfmpeg(source, extension, target);
+			} catch (error) {
 				await rm(target, { force: true });
-				throw new Error(t("main.action.alreadyOptimized"));
+				throw error;
 			}
 		}
-		return target;
+		const { before, after } = await keepIfSmaller(source, target);
+		return {
+			output: target,
+			note: t("main.action.reduced", {
+				name: basename(target),
+				before: formatByteSize(before),
+				after: formatByteSize(after),
+				percent: Math.floor((1 - after / before) * 100),
+			}),
+		};
 	}
 
 	/**
@@ -644,6 +784,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 				archive: true,
 				imageFormats: await imageTargets(),
 				videoContainers: ffmpegPresent ? VIDEO_CONTAINERS : [],
+				reducibleExtensions: await reducibleExtensions(),
 			};
 		},
 
@@ -724,10 +865,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					const output = await resizeImage(sole(), request.maxEdge);
 					return { output, note: t("main.action.resized", { name: basename(output) }) };
 				}
-				case "optimizeImage": {
-					const output = await optimizeImage(sole());
-					return { output, note: t("main.action.optimized", { name: basename(output) }) };
-				}
+				case "reduceSize":
+					return reduceSize(sole());
 				case "convertVideo": {
 					if (!(await hasFfmpeg())) throw new Error(t("main.action.videoNeedsFfmpeg"));
 					const path = sole();

@@ -220,7 +220,7 @@
       "videoConvert": "동영상 변환",
       "convertTo": "{{format}}로 변환",
       "maxEdge": "최대 {{edge}}px",
-      "optimizeSize": "용량 최적화"
+      "reduceSize": "용량 줄이기"
     },
     "versionRelations": {
       "exact": "동일본",
@@ -1338,8 +1338,7 @@
     },
     "action": {
       "unsupportedResize": "이 형식은 크기 조절을 지원하지 않습니다",
-      "unsupportedOptimize": "이 형식은 용량 최적화를 지원하지 않습니다",
-      "alreadyOptimized": "이미 최적화된 파일입니다",
+      "alreadyOptimized": "더 이상 줄일 수 없는 파일입니다",
       "unsupportedExtract": "압축을 풀 수 없는 파일 형식입니다",
       "emptyTarget": "작업 대상이 비어 있습니다",
       "singleTargetOnly": "이 작업은 한 번에 하나의 항목만 지원합니다",
@@ -1352,10 +1351,12 @@
       "unsupportedConvert": "{{format}} 변환을 지원하지 않습니다",
       "converted": "{{name}} — 변환했습니다",
       "resized": "{{name}} — 크기를 조절했습니다",
-      "optimized": "{{name}} — 용량을 최적화했습니다",
       "videoNeedsFfmpeg": "동영상 변환에는 ffmpeg가 필요합니다",
       "containerConverted": "{{name}} — 컨테이너를 변환했습니다",
-      "shareUnsupported": "이 플랫폼은 시스템 공유를 지원하지 않습니다"
+      "shareUnsupported": "이 플랫폼은 시스템 공유를 지원하지 않습니다",
+      "unsupportedReduce": "이 파일은 형식을 유지한 채 용량을 줄일 수 없습니다",
+      "animatedReduce": "움직이는 이미지는 용량을 줄이면 애니메이션이 사라져 지원하지 않습니다",
+      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)"
     },
     "indexStatus": {
       "outside": "Dazzi 검색 경로 밖의 파일",

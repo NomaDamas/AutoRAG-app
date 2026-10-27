@@ -111,6 +111,7 @@ import {
 } from "./ipc";
 import { createActionService } from "./action-service";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
+import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -525,6 +526,7 @@ app.whenReady().then(async () => {
 	// anchored to the button that opened it.
 	registerActionsIpcHandlers(
 		createActionService({
+			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {

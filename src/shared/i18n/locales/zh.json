@@ -220,7 +220,7 @@
       "videoConvert": "转换视频",
       "convertTo": "转换为 {{format}}",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "体积优化"
+      "reduceSize": "缩小体积"
     },
     "versionRelations": {
       "exact": "完全相同",
@@ -1338,8 +1338,7 @@
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
-      "unsupportedOptimize": "此格式不支持容量优化。",
-      "alreadyOptimized": "此文件已优化。",
+      "alreadyOptimized": "此文件无法再缩小。",
       "unsupportedExtract": "无法解压此文件格式。",
       "emptyTarget": "没有可操作的目标。",
       "singleTargetOnly": "此操作一次仅支持一个项目。",
@@ -1352,10 +1351,12 @@
       "unsupportedConvert": "不支持转换为 {{format}}。",
       "converted": "{{name}} — 已转换",
       "resized": "{{name}} — 已调整大小",
-      "optimized": "{{name}} — 已优化容量",
       "videoNeedsFfmpeg": "视频转换需要 ffmpeg。",
       "containerConverted": "{{name}} — 已转换容器",
-      "shareUnsupported": "此平台不支持系统共享。"
+      "shareUnsupported": "此平台不支持系统共享。",
+      "unsupportedReduce": "此文件无法在保持格式的前提下缩小体积",
+      "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
+      "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）"
     },
     "indexStatus": {
       "outside": "文件在 Dazzi 搜索路径之外",

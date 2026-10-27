@@ -45,7 +45,7 @@ export type ActionRequest =
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
 	| { readonly kind: "resizeImage"; readonly maxEdge: number }
-	| { readonly kind: "optimizeImage" }
+	| { readonly kind: "reduceSize" }
 	| { readonly kind: "convertVideo"; readonly container: VideoContainer };
 
 /**
@@ -63,6 +63,12 @@ export interface ActionCapabilities {
 	readonly imageFormats: readonly ImageFormat[];
 	/** Containers the video engine can remux into (empty without ffmpeg). */
 	readonly videoContainers: readonly VideoContainer[];
+	/**
+	 * Extensions (lower-case, no dot) whose files `reduceSize` can shrink on this
+	 * machine without changing their format: PDF through Filee, pictures through
+	 * sips/ffmpeg, video and audio through ffmpeg encoders the build really has.
+	 */
+	readonly reducibleExtensions: readonly string[];
 }
 
 /**
@@ -124,7 +130,7 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 		case "compress":
 			return !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
 		case "extract":
-		case "optimizeImage":
+		case "reduceSize":
 			return true;
 		case "convertImage":
 			return "format" in value && typeof value.format === "string" && IMAGE_FORMATS.includes(value.format);
@@ -170,4 +176,5 @@ export const NO_CAPABILITIES: ActionCapabilities = {
 	archive: false,
 	imageFormats: [],
 	videoContainers: [],
+	reducibleExtensions: [],
 };

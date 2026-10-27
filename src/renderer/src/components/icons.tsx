@@ -46,6 +46,7 @@ import {
 	Send,
 	Settings,
 	Share,
+	Shrink,
 	Sparkles,
 	Trash2,
 	Undo2,
@@ -110,6 +111,8 @@ export const OpenIcon = glyph(ExternalLink, 16, 2);
 export const OpenWithIcon = glyph(AppWindow, 16, 1.9);
 
 export const CompressIcon = glyph(Archive, 16, 1.8);
+
+export const ReduceSizeIcon = glyph(Shrink, 16, 1.8);
 
 export const ExtractIcon = glyph(PackageOpen, 16, 1.8);
 

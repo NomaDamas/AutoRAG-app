@@ -220,7 +220,7 @@
       "videoConvert": "Convert Video",
       "convertTo": "Convert to {{format}}",
       "maxEdge": "Max {{edge}}px",
-      "optimizeSize": "Optimize Size"
+      "reduceSize": "Reduce Size"
     },
     "versionRelations": {
       "exact": "Exact",
@@ -1338,8 +1338,7 @@
     },
     "action": {
       "unsupportedResize": "This format cannot be resized.",
-      "unsupportedOptimize": "This format cannot be size-optimized.",
-      "alreadyOptimized": "This file is already optimized.",
+      "alreadyOptimized": "This file can’t be made any smaller.",
       "unsupportedExtract": "This file format cannot be extracted.",
       "emptyTarget": "There is nothing to act on.",
       "singleTargetOnly": "This action only supports one item at a time.",
@@ -1352,10 +1351,12 @@
       "unsupportedConvert": "{{format}} conversion is not supported.",
       "converted": "{{name}} — converted",
       "resized": "{{name}} — resized",
-      "optimized": "{{name}} — size optimized",
       "videoNeedsFfmpeg": "Video conversion requires ffmpeg.",
       "containerConverted": "{{name}} — container converted",
-      "shareUnsupported": "This platform does not support system sharing."
+      "shareUnsupported": "This platform does not support system sharing.",
+      "unsupportedReduce": "This file’s size can’t be reduced without changing its format",
+      "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
+      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)"
     },
     "indexStatus": {
       "outside": "File outside Dazzi search paths",

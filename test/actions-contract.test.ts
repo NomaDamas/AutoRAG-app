@@ -14,3 +14,10 @@ describe("isActionRequest compress", () => {
 		expect(isActionRequest({ kind: "compress", format: undefined })).toBe(false);
 	});
 });
+
+describe("isActionRequest reduceSize", () => {
+	it("accepts the bare request and no longer knows the image-only optimize", () => {
+		expect(isActionRequest({ kind: "reduceSize" })).toBe(true);
+		expect(isActionRequest({ kind: "optimizeImage" })).toBe(false);
+	});
+});

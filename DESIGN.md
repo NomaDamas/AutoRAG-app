@@ -222,7 +222,8 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 - **Which actions** a file offers comes from `src/renderer/src/state/file-actions.ts`:
   the base set is 열기 · 다른 앱으로 열기 · 압축 · 공유 · AI 요약, plus 압축 해제
-  for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
+  for `.zip`, an 이미지 편집 menu for images, a 동영상 변환 menu for video, and
+  용량 줄이기 for every type the machine can shrink (below).
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
 - The same headline actions sit in the row context menu (`state/context-menu.ts`):
@@ -254,6 +255,19 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
   palette. Resizing (최대 ○px) keeps the source format and is not offered for
   GIF, because both engines resize one frame and would drop an animation.
+- **용량 줄이기** is one flat button (`reduceSize`), shown only when the file's
+  extension is in `capabilities.reducibleExtensions`. It keeps the format — a
+  smaller `.pdf` is still a `.pdf` — and writes `<name>-reduced.<ext>` next to the
+  original (numbered by `uniqueChild`), never touching the source. PDF goes through
+  Filee's `compress-pdf` preset (`src/main/pdf-reducer.ts`, staged in a hidden
+  `.dazzi-reduce-` folder); JPEG/HEIC through `sips` on macOS and `ffmpeg`
+  elsewhere; PNG (max deflate) and WebP through `ffmpeg`; MP4/M4V/MOV/MKV through
+  x264 + AAC (`-crf 28`), WebM through VP9 + Opus; MP3/M4A/AAC/Opus at 128 k
+  (64 k Opus), keeping cover art. Each is offered only when `-encoders` lists
+  the codec it needs, and the extension table is `src/shared/size-reduction.ts`.
+  Animated PNG/WebP are refused (a one-frame re-encode would flatten them), and
+  a result that is not smaller is deleted and reported rather than kept. The
+  toast reports `before → after (N% smaller)`.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

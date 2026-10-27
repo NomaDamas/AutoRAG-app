@@ -74,6 +74,7 @@ import {
 	SparklesIcon,
 	TrashIcon,
 	VideoConvertIcon,
+	ReduceSizeIcon,
 } from "./icons";
 import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
@@ -157,6 +158,7 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
 	askAi: SparklesIcon,
 	image: ImageEditIcon,
 	video: VideoConvertIcon,
+	reduce: ReduceSizeIcon,
 };
 
 export function Inspector({
@@ -663,6 +665,7 @@ function ActionBar({
 							case "askAi": return t("inspector.actions.askAi", def);
 							case "imageEdit": return t("inspector.actions.imageEdit", def);
 							case "videoConvert": return t("inspector.actions.videoConvert", def);
+							case "reduceSize": return t("inspector.actions.reduceSize", def);
 							default: return def;
 						}
 					};
