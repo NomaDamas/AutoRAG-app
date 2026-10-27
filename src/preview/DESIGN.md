@@ -163,7 +163,9 @@ still has the previous file's size when they lay out.
   packages, plus `.pvt`, `.lpdf`, and `.prefpane`, are file rows rather than
   folders to browse into. The latter three and `.pict`/`.pct`/`.pic`/
   `.pictclipping` use macOS Quick Look thumbnails in the Other panel and keep
-  the ordinary information panel on other platforms.
+  the ordinary information panel on other platforms. The panel opens with the
+  cached thumbnail (or the information glyph) immediately; a slow Quick Look
+  render arrives afterward on the thumbnail channel instead of holding Space.
 - **Code** — numbered lines on the paper material with the reference's Xcode
   palette (highlight.js, plus call and constant classes the grammars leave
   out), wrap and copy in the toolbar, and a footer with language, encoding

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { readNativePreview, textFromResourceFork } from "../src/preview/node/apple";
 import { isNativeThumbnailExtension } from "../src/main/file-icon";
 import { viewerForExtension } from "../src/preview/shared/registry";
-import { isPreviewDocument } from "../src/preview/shared/contract";
+import { isPreviewDocument, isQuickLookThumbnail } from "../src/preview/shared/contract";
 
 const HOSTILE_ARCHIVE = Buffer.from(
 	"YnBsaXN0MDDSAQIDCl8QD1dlYk1haW5SZXNvdXJjZV8QD1dlYlN1YnJlc291cmNlc9MEBQYHCAleV2ViUmVzb3VyY2VVUkxfEBNXZWJSZXNvdXJjZU1JTUVUeXBlXxAPV2ViUmVzb3VyY2VEYXRhXxAfaHR0cHM6Ly9ldmlsLmV4YW1wbGUvaW5kZXguaHRtbFl0ZXh0L2h0bWxPEQEyPGh0bWw+PGhlYWQ+PHNjcmlwdD5mZXRjaCgiaHR0cHM6Ly9ldmlsLmV4YW1wbGUvYmVhY29uIik8L3NjcmlwdD48bGluayByZWw9InN0eWxlc2hlZXQiIGhyZWY9Imh0dHBzOi8vZXZpbC5leGFtcGxlL3N0eWxlLmNzcyI+PC9oZWFkPjxib2R5IG9ubG9hZD0iZmV0Y2goJ2h0dHBzOi8vZXZpbC5leGFtcGxlL29ubG9hZCcpIj48aW1nIHNyYz0iaHR0cHM6Ly9ldmlsLmV4YW1wbGUvcGl4ZWwucG5nIj48aW1nIHNyYz0iaHR0cHM6Ly9yZW1vdGUuZXhhbXBsZS90cmFja2VyLnBuZyI+PHA+U2FmZSBhcmNoaXZlPC9wPjwvYm9keT48L2h0bWw+ogsP0wQFBgwNDl8QHmh0dHBzOi8vZXZpbC5leGFtcGxlL3BpeGVsLnBuZ1lpbWFnZS9wbmdPEEaJUE5HDQoaCgAAAA1JSERSAAAAAQAAAAEIBgAAAB8VxIkAAAANSURBVHjaY/zPwFAPAASFAYCEqYwhAAAAAElFTkSuQmCC0wQFBhAREl8QHmh0dHBzOi8vZXZpbC5leGFtcGxlL3N0eWxlLmNzc1h0ZXh0L2Nzc08QFWJvZHl7YmFja2dyb3VuZDojZmZmfQAIAA0AHwAxADgARwBdAG8AkQCbAdEB1AHbAfwCBgJPAlYCdwKAAAAAAAAAAgEAAAAAAAAAEwAAAAAAAAAAAAAAAAAAApg=",
@@ -44,6 +44,14 @@ describe("native preview IPC contract", () => {
 		expect(isPreviewDocument({ ...document, package: "yes" })).toBe(false);
 		expect(isPreviewDocument({ ...document, native: { kind: "webloc", title: "Example" } })).toBe(false);
 		expect(isPreviewDocument({ ...document, native: { kind: "iconset", icons: [{ name: "x.png", bytes: "not bytes" }] } })).toBe(false);
+	});
+});
+
+describe("native thumbnail updates", () => {
+	it("validates sequence-scoped thumbnail URLs", () => {
+		expect(isQuickLookThumbnail({ seq: 3, url: "autorag-thumb://abc" })).toBe(true);
+		expect(isQuickLookThumbnail({ seq: 3, url: null })).toBe(false);
+		expect(isQuickLookThumbnail({ seq: "3", url: "autorag-thumb://abc" })).toBe(false);
 	});
 });
 

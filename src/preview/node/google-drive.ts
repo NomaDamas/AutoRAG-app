@@ -37,7 +37,18 @@ export async function driveThumbnail(
 	return isGoogleDriveExtension(target.ext) ? boundedThumbnail(target, icons, budgetMs, "Google Drive") : null;
 }
 
-/** The same bounded wait for macOS-native document and package thumbnails. */
-export async function nativeThumbnail(target: IconTarget, icons: DriveThumbnailSource | null, budgetMs = DRIVE_THUMBNAIL_BUDGET_MS): Promise<string | null> {
-	return boundedThumbnail(target, icons, budgetMs, "native document");
+/** Opens with the cached native thumbnail immediately, then publishes a slow OS render when it lands. */
+export function nativeThumbnail(target: IconTarget, icons: DriveThumbnailSource | null, publish: (url: string) => void): string | null {
+	if (icons === null) return null;
+	const cached = icons.cachedPreview?.(target) ?? null;
+	if (cached !== null) return cached;
+	void icons.preview(target).then(
+		(url) => {
+			if (url !== null) publish(url);
+		},
+		(error: unknown) => {
+			console.warn(`quick-look: native document thumbnail for ${target.path} failed: ${error instanceof Error ? error.message : String(error)}`);
+		},
+	);
+	return null;
 }

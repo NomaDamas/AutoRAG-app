@@ -155,14 +155,17 @@ describe("driveThumbnail", () => {
 		expect(await driveThumbnail(target, null, 50)).toBeNull();
 	});
 
-	it("applies the same cache and time budget to native-only document thumbnails", async () => {
+	it("opens native-only documents immediately and publishes their thumbnail when the OS finishes", async () => {
 		const targetPict = { path: "/docs/Picture.pict", ext: "pict", mtimeMs: 5 };
 		const cached = { cachedPreview: () => "autorag-thumb://cached", preview: async () => "autorag-thumb://fresh" };
-		expect(await nativeThumbnail(targetPict, cached, 20)).toBe("autorag-thumb://cached");
+		expect(nativeThumbnail(targetPict, cached, () => undefined)).toBe("autorag-thumb://cached");
 		const slow = Promise.withResolvers<string | null>();
-		const started = Date.now();
-		expect(await nativeThumbnail(targetPict, { cachedPreview: () => null, preview: () => slow.promise }, 20)).toBeNull();
-		expect(Date.now() - started).toBeLessThan(1000);
+		const published: string[] = [];
+		expect(nativeThumbnail(targetPict, { cachedPreview: () => null, preview: () => slow.promise }, (url) => published.push(url))).toBeNull();
+		expect(published).toEqual([]);
 		slow.resolve("autorag-thumb://late");
+		await slow.promise;
+		await Promise.resolve();
+		expect(published).toEqual(["autorag-thumb://late"]);
 	});
 });

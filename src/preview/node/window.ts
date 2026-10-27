@@ -37,6 +37,7 @@ import {
 	type QuickLookLoad,
 	type QuickLookOffice,
 	type QuickLookSlides,
+	type QuickLookThumbnail,
 	type QuickLookReady,
 	type QuickLookTarget,
 	type QuickLookZoom,
@@ -483,11 +484,15 @@ async function withDriveThumbnail(target: QuickLookTarget, content: TargetConten
 const NATIVE_ONLY_PREVIEWS = new Set(["pvt", "lpdf", "prefpane", "pict", "pct", "pic", "pictclipping"]);
 
 /** macOS-only formats keep the OS rendering; elsewhere the ordinary info panel remains. */
-async function withNativeThumbnail(content: TargetContent): Promise<TargetContent> {
+async function withNativeThumbnail(state: Session, seq: number, content: TargetContent): Promise<TargetContent> {
 	const document = content.document;
 	if (process.platform !== "darwin" || document === null || !NATIVE_ONLY_PREVIEWS.has(document.ext)) return content;
 	const { mtimeMs } = await stat(document.path);
-	const thumbnail = await nativeThumbnail({ path: document.path, ext: document.ext, mtimeMs }, iconSource);
+	const thumbnail = nativeThumbnail({ path: document.path, ext: document.ext, mtimeMs }, iconSource, (url) => {
+		if (seq !== state.seq || !live(state.window)) return;
+		const update: QuickLookThumbnail = { seq, url };
+		state.window.webContents.send(PREVIEW_CHANNELS.thumbnail, update);
+	});
 	return { ...content, document: { ...document, thumbnail } };
 }
 
@@ -503,7 +508,7 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	if (seq !== state.seq || !live(state.window)) return;
 	const withDrive = await withDriveThumbnail(target, withOfficePage);
 	if (seq !== state.seq || !live(state.window)) return;
-	const withNative = await withNativeThumbnail(withDrive);
+	const withNative = await withNativeThumbnail(state, seq, withDrive);
 	if (seq !== state.seq || !live(state.window)) return;
 	const content = await withKeynote(state, seq, target, withNative);
 	if (seq !== state.seq || !live(state.window)) return;

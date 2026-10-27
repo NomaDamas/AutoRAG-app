@@ -195,7 +195,7 @@ try {
 	// Main-process instrumentation: the default session's own request log, and a
 	// guard that records (instead of performing) any external launch, so the lane
 	// can assert the `.webloc` Open button was never pressed for real.
-	const instruments = await app.evaluate(({ session, shell }) => {
+	const instruments = await app.evaluate(({ session, shell, nativeImage }) => {
 		globalThis.__qaRequests = [];
 		session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
 			globalThis.__qaRequests.push(details.url);
@@ -211,12 +211,19 @@ try {
 		shell.openExternal = async (url) => {
 			globalThis.__qaLaunches.push({ via: "openExternal", url });
 		};
+		const createThumbnail = nativeImage.createThumbnailFromPath;
+		nativeImage.createThumbnailFromPath = async (path, size) => {
+			if (path.endsWith(".pict")) await new Promise((resolve) => setTimeout(resolve, 4500));
+			return createThumbnail.call(nativeImage, path, size);
+		};
 		return {
 			hooked: Array.isArray(globalThis.__qaRequests),
 			launchesGuarded: shell.openPath !== openPath && shell.openExternal !== openExternal,
+			slowThumbnail: nativeImage.createThumbnailFromPath !== createThumbnail,
 		};
 	});
 	check("the main-process request log is installed", instruments.hooked === true, JSON.stringify(instruments));
+	check("the slow native-thumbnail probe is installed", instruments.slowThumbnail === true, JSON.stringify(instruments));
 
 	const visible = () =>
 		app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().includes("quick-look.html") && window.isVisible()));
@@ -437,7 +444,10 @@ try {
 	// -----------------------------------------------------------------------
 	const NATIVE_ONLY = ["Live.pvt", "Legacy.pict", "Localized.lpdf", "Settings.prefpane"];
 	for (const name of NATIVE_ONLY) {
+		const openedAt = Date.now();
 		await open(name, showing(name));
+		const openMs = Date.now() - openedAt;
+		if (name === "Legacy.pict" && DARWIN) check("the info panel opens without waiting for the slow OS thumbnail", openMs < 4000, `${openMs}ms`);
 		const panelName = (await text(".ql-other__name")).trim();
 		check(`${name} opens as the info panel for that file`, panelName === name, panelName);
 		check(`${name} is not shown as a folder listing`, await notFolder(), "");

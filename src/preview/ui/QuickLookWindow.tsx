@@ -215,6 +215,10 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		const offSlides = bridge.onSlides((update) => {
 			if (update.seq === seqRef.current) sweep.push(update);
 		});
+		const offThumbnail = bridge.onThumbnail((update) => {
+			if (update.seq !== seqRef.current) return;
+			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, thumbnail: update.url } }));
+		});
 		const offUnload = bridge.onUnload(() => {
 			sweep.clear();
 			seqRef.current = -1;
@@ -225,6 +229,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			offApp();
 			offOffice();
 			offSlides();
+			offThumbnail();
 			sweep.clear();
 			offUnload();
 		};

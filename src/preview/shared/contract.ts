@@ -39,6 +39,8 @@ export const PREVIEW_CHANNELS = {
 	office: "preview:office",
 	/** Main -> preview window: Keynote finished drawing a deck's slides at full size (or could not). */
 	slides: "preview:slides",
+	/** Main -> preview window: a native document's OS thumbnail finished after the panel opened. */
+	thumbnail: "preview:thumbnail",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -122,6 +124,12 @@ export interface OfficePage {
 export interface QuickLookOffice {
 	readonly seq: number;
 	readonly office: OfficePage;
+}
+
+/** Main -> preview window: the OS thumbnail for the current native document. */
+export interface QuickLookThumbnail {
+	readonly seq: number;
+	readonly url: string;
 }
 
 /**
@@ -346,6 +354,7 @@ export interface QuickLookWindowBridge {
 	onApp(listener: (app: QuickLookApp) => void): () => void;
 	onOffice(listener: (update: QuickLookOffice) => void): () => void;
 	onSlides(listener: (update: QuickLookSlides) => void): () => void;
+	onThumbnail(listener: (update: QuickLookThumbnail) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -376,6 +385,10 @@ export function isOfficePage(value: unknown): value is OfficePage {
 
 export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
+}
+
+export function isQuickLookThumbnail(value: unknown): value is QuickLookThumbnail {
+	return isRecord(value) && typeof value.seq === "number" && typeof value.url === "string";
 }
 
 export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
