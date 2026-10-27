@@ -306,29 +306,46 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 
 /* Back | progress | primary: the outer columns are equal, so the progress stays on the window's centre line whatever the primary's label is. */
 .onb .footer {
-	display: grid;
-	grid-template-columns: minmax(0,1fr) auto minmax(0,1fr);
+	position: relative;
+	display: flex;
 	align-items: center;
-	gap: 16px;
+	justify-content: flex-end;
 	padding: 0 17px;
 	border-top: 1px solid var(--onb-divider);
 	background: var(--onb-bg-window);
 }
 
-.onb .back-btn {
-	display: grid;
-	justify-self: start;
-	place-items: center;
-	width: 30px;
-	height: 30px;
-	border: 1px solid var(--onb-border);
-	border-radius: 50%;
-	background: var(--onb-bg-card);
-	color: var(--onb-body);
+.onb .footer .progress-dashes {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
 }
 
-.onb .back-btn:disabled {
-	opacity: .35;
+.onb .footer-actions {
+	display: flex;
+	gap: 12px;
+}
+
+.onb .footer-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	min-width: 104px;
+	height: 34px;
+	padding: 0 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 7px;
+	background: var(--onb-bg-card);
+	color: var(--onb-body);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.onb .footer-btn:disabled {
+	border-color: var(--onb-border);
+	background: var(--onb-bg-input);
+	color: var(--onb-faint);
 	cursor: not-allowed;
 }
 
