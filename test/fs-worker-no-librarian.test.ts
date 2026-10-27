@@ -62,7 +62,7 @@ describe("the fs worker's module graph", () => {
 			config: { userDataDir: join(root, "user-data") },
 			host: {
 				shell: { trashItem: async () => {}, showItemInFolder: () => {}, openPath: async () => "", openExternal: async () => {} },
-				clipboard: { writeText: () => {} },
+				clipboard: { writeText: () => {}, writeFiles: async () => {} },
 				icons: { icons: async () => new Map(), preview: async () => null },
 			},
 			broadcast: () => {},
