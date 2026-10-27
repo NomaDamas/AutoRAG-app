@@ -340,6 +340,12 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
+	letter-spacing: -0.06em;
+}
+
+/* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
+.onb .footer-actions .footer-btn:last-child:not(:disabled) {
+	border-color: var(--onb-faint);
 }
 
 .onb .footer-btn:disabled {
