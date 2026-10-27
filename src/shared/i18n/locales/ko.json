@@ -128,6 +128,44 @@
       "progressAria": "변환 진행 중",
       "unsupported": "{{from}}에서 {{to}}(으)로는 변환할 수 없는 확장자예요. 이름은 바뀌지 않았습니다.",
       "replaced": "{{name}} — 변환됨, 원본은 휴지통으로 이동했습니다"
+    },
+    "reduce": {
+      "title": "용량 줄이기",
+      "levelLabel": "압축 강도",
+      "recommended": "권장",
+      "levels": {
+        "light": "약하게 (고화질)",
+        "balanced": "보통",
+        "max": "강하게 (최대 압축)"
+      },
+      "specs": {
+        "pdf": {
+          "light": "고해상도 유지 · 문서 최적화",
+          "balanced": "표준 문서·스캔 압축",
+          "max": "저해상도 · 최소 용량"
+        },
+        "image": {
+          "light": "원본 크기 · 고화질 (PNG 무손실)",
+          "balanced": "최대 2560px · 균형 압축",
+          "max": "최대 1600px · 고압축"
+        },
+        "video": {
+          "light": "원본 해상도 · 고화질",
+          "balanced": "최대 1080p · 표준 압축",
+          "max": "최대 720p · 최소 용량"
+        },
+        "audio": {
+          "light": "고음질 · 192 kbps",
+          "balanced": "표준 음질 · 128 kbps",
+          "max": "음성 위주 · 64 kbps"
+        }
+      },
+      "outputLabel": "저장 방식",
+      "replaceMode": "원본 대체",
+      "copyMode": "사본으로 저장",
+      "replaceHint": "원본은 휴지통에 보관하고 ‘{{name}}’을(를) 줄어든 파일로 바꿉니다.",
+      "copyHint": "원본은 그대로 두고 ‘{{copyName}}’ 파일로 저장합니다.",
+      "workingHint": "완료될 때까지 원본 파일은 변경되지 않습니다."
     }
   },
   "contextMenu": {
@@ -1359,7 +1397,8 @@
       "unsupportedReduce": "이 파일은 형식을 유지한 채 용량을 줄일 수 없습니다",
       "animatedReduce": "움직이는 이미지는 용량을 줄이면 애니메이션이 사라져 지원하지 않습니다",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)",
-      "reduceCancelled": "{{name}} 용량 줄이기를 취소했습니다"
+      "reduceCancelled": "{{name}} 용량 줄이기를 취소했습니다",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소 · 원본은 휴지통에 보관됨)"
     },
     "indexStatus": {
       "outside": "Dazzi 검색 경로 밖의 파일",

@@ -61,7 +61,7 @@ import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { closeDecision, completesOnClose } from "./onboarding-window";
 import { detectSources } from "./onboarding-sources";
-import { FS_CHANNELS } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
@@ -528,6 +528,11 @@ app.whenReady().then(async () => {
 	registerActionsIpcHandlers(
 		createActionService({
 			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
+			trash: async (target) => {
+				const result = (await workerHost.client.call("trash", [[target]])) as FsBatchResult;
+				const failure = result.failed[0];
+				if (failure !== undefined) throw new Error(failure.message);
+			},
 			onProgress: (event, window) => {
 				if (window !== null && !window.isDestroyed()) window.webContents.send(ACTIONS_CHANNELS.progress, event);
 				else sendToMainWindow(ACTIONS_CHANNELS.progress, event);

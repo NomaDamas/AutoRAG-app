@@ -32,6 +32,7 @@ interface Harness {
 	readonly service: ActionService;
 	readonly commands: { readonly command: string; readonly args: readonly string[] }[];
 	readonly shares: { readonly paths: readonly string[]; readonly anchor: ActionAnchor }[];
+	readonly trashed: string[];
 }
 
 /**
@@ -90,6 +91,7 @@ function makeService(
 ): Harness {
 	const commands: { command: string; args: string[] }[] = [];
 	const shares: { paths: string[]; anchor: ActionAnchor }[] = [];
+	const trashed: string[] = [];
 	const imageOutput = options.imageOutput ?? "encoded";
 	const run: CommandRunner = async (command, args) => {
 		commands.push({ command, args: [...args] });
@@ -127,10 +129,15 @@ function makeService(
 				},
 			},
 			...(options.pdf === undefined ? {} : { pdf: options.pdf }),
+			trash: async (target) => {
+				trashed.push(target);
+				await rm(target, { force: true });
+			},
 			run,
 		}),
 		commands,
 		shares,
+		trashed,
 	};
 }
 
@@ -749,13 +756,27 @@ describe("reduceSize", () => {
 		expect(await readdir(root)).toEqual(["photo.jpg"]);
 	});
 
-	it("numbers a second result instead of overwriting the first", async () => {
-		const { service } = makeService({ imageOutput: "s" });
+	it("replaces the original in place (moving the original to Trash) with zero extra files when replaceOriginal is true", async () => {
+		const { service, trashed } = makeService({ encoders: MEDIA_ENCODERS, imageOutput: "small" });
+		const clip = join(root, "k-skill-ai-rookie.mp4");
+		await writeFile(clip, "x".repeat(4096));
+		const outcome = await service.run([clip], { kind: "reduceSize", level: "balanced", replaceOriginal: true }, null);
+		expect(outcome.output).toBe(clip);
+		expect(await readdir(root)).toEqual(["k-skill-ai-rookie.mp4"]);
+		expect((await stat(clip)).size).toBe(5);
+		expect(trashed).toEqual([clip]);
+	});
+
+	it("reuses one -reduced file via Trash in copy mode instead of spawning -reduced 2 .. 8 garbage", async () => {
+		const { service, trashed } = makeService({ imageOutput: "s" });
 		const photo = join(root, "photo.heic");
 		await writeFile(photo, "heic-bytes");
-		await service.run([photo], { kind: "reduceSize" }, null);
-		const second = await service.run([photo], { kind: "reduceSize" }, null);
-		expect(second.output).toBe(join(root, "photo-reduced 2.heic"));
+		const first = await service.run([photo], { kind: "reduceSize", replaceOriginal: false }, null);
+		const second = await service.run([photo], { kind: "reduceSize", level: "max", replaceOriginal: false }, null);
+		expect(first.output).toBe(join(root, "photo-reduced.heic"));
+		expect(second.output).toBe(join(root, "photo-reduced.heic"));
+		expect((await readdir(root)).sort()).toEqual(["photo-reduced.heic", "photo.heic"]);
+		expect(trashed).toEqual([join(root, "photo-reduced.heic")]);
 	});
 
 	it("refuses types with no size reduction and several targets", async () => {
@@ -766,13 +787,16 @@ describe("reduceSize", () => {
 		await expect(service.run([note, note], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.singleTargetOnly"));
 	});
 
-	it("re-encodes PNG through ffmpeg with maximum deflate, also on macOS", async () => {
+	it("applies light (lossless deflate), balanced (256-color palette), and max (128-color 1600px) levels to PNG", async () => {
 		const { service, commands } = makeService({ imageOutput: "s" });
 		const png = join(root, "flat.png");
 		await writeFile(png, "png-bytes");
-		await service.run([png], { kind: "reduceSize" }, null);
-		expect(commands.at(-1)?.command).toBe("ffmpeg");
-		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("-compression_level 9");
+		await service.run([png], { kind: "reduceSize", level: "light" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("-compression_level 9 -pred mixed");
+		await service.run([png], { kind: "reduceSize", level: "balanced" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=256");
+		await service.run([png], { kind: "reduceSize", level: "max" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=128");
 	});
 
 	it("refuses an animated PNG or WebP, which a one-frame re-encode would flatten", async () => {
@@ -815,15 +839,21 @@ describe("reduceSize", () => {
 		await expect(none.service.run([source], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.unsupportedReduce"));
 	});
 
-	it("re-encodes video into the same container with x264 and AAC", async () => {
+	it("applies distinct video CRF, resolution cap, and audio bitrates across light, balanced, and max levels", async () => {
 		const { service, commands } = makeService({ encoders: MEDIA_ENCODERS, imageOutput: "s" });
 		const clip = join(root, "clip.mov");
 		await writeFile(clip, "x".repeat(4096));
-		const outcome = await service.run([clip], { kind: "reduceSize" }, null);
-		expect(outcome.output).toBe(join(root, "clip-reduced.mov"));
-		const args = commands.at(-1)?.args ?? [];
-		expect(args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-c:a", "aac", "-crf", "28", "-movflags", "+faststart"]));
-		expect(args.join(" ")).toContain("scale=trunc(iw/2)*2:trunc(ih/2)*2");
+
+		await service.run([clip], { kind: "reduceSize", level: "light" }, null);
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "23", "-b:a", "160k", "-movflags", "+faststart"]));
+
+		await service.run([clip], { kind: "reduceSize", level: "balanced" }, null);
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "28", "-b:a", "128k"]));
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("min(iw,1920)");
+
+		await service.run([clip], { kind: "reduceSize", level: "max" }, null);
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "33", "-b:a", "96k"]));
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("min(iw,1280)");
 	});
 
 	it("uses VP9 and Opus for WebM, and refuses video the build has no encoder for", async () => {

@@ -128,6 +128,44 @@
       "progressAria": "Conversion in progress",
       "unsupported": "Converting {{from}} to {{to}} is not supported, so the name was not changed.",
       "replaced": "{{name}} — converted; the original moved to the Trash"
+    },
+    "reduce": {
+      "title": "Reduce Size",
+      "levelLabel": "Compression strength",
+      "recommended": "Recommended",
+      "levels": {
+        "light": "Light (High quality)",
+        "balanced": "Balanced",
+        "max": "Maximum (Smallest size)"
+      },
+      "specs": {
+        "pdf": {
+          "light": "Keep high resolution",
+          "balanced": "Standard document compression",
+          "max": "Lower resolution · smallest file"
+        },
+        "image": {
+          "light": "Original size · high quality (lossless PNG)",
+          "balanced": "Up to 2560px · balanced",
+          "max": "Up to 1600px · smallest file"
+        },
+        "video": {
+          "light": "Original resolution · high quality",
+          "balanced": "Up to 1080p · standard",
+          "max": "Up to 720p · smallest file"
+        },
+        "audio": {
+          "light": "High quality · 192 kbps",
+          "balanced": "Standard · 128 kbps",
+          "max": "Voice / compact · 64 kbps"
+        }
+      },
+      "outputLabel": "Output",
+      "replaceMode": "Replace original",
+      "copyMode": "Save a copy",
+      "replaceHint": "Moves the original to the Trash and replaces “{{name}}” in place.",
+      "copyHint": "Keeps the original and saves “{{copyName}}” alongside it.",
+      "workingHint": "The original file stays untouched until compression finishes."
     }
   },
   "contextMenu": {
@@ -1359,7 +1397,8 @@
       "unsupportedReduce": "This file’s size can’t be reduced without changing its format",
       "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)",
-      "reduceCancelled": "Cancelled reducing {{name}}"
+      "reduceCancelled": "Cancelled reducing {{name}}",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller · original in Trash)"
     },
     "indexStatus": {
       "outside": "File outside Dazzi search paths",

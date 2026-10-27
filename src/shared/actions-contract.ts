@@ -11,6 +11,8 @@
  * All paths crossing this boundary are absolute OS paths.
  */
 
+import { REDUCTION_LEVELS, type ReductionLevel } from "./size-reduction";
+
 /** IPC channel names. Keep in 1:1 sync with the main-process handlers. */
 export const ACTIONS_CHANNELS = {
 	capabilities: "actions:capabilities",
@@ -47,7 +49,12 @@ export type ActionRequest =
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
 	| { readonly kind: "resizeImage"; readonly maxEdge: number }
-	| { readonly kind: "reduceSize"; readonly id?: string }
+	| {
+			readonly kind: "reduceSize";
+			readonly level?: ReductionLevel;
+			readonly replaceOriginal?: boolean;
+			readonly id?: string;
+	  }
 	| { readonly kind: "convertVideo"; readonly container: VideoContainer };
 
 /**
@@ -143,8 +150,14 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 			return !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
 		case "extract":
 			return true;
-		case "reduceSize":
-			return !("id" in value) || (typeof value.id === "string" && value.id.length > 0);
+		case "reduceSize": {
+			const validId = !("id" in value) || (typeof value.id === "string" && value.id.length > 0);
+			const validLevel =
+				!("level" in value) ||
+				(typeof value.level === "string" && (REDUCTION_LEVELS as readonly string[]).includes(value.level));
+			const validReplace = !("replaceOriginal" in value) || typeof value.replaceOriginal === "boolean";
+			return validId && validLevel && validReplace;
+		}
 		case "convertImage":
 			return "format" in value && typeof value.format === "string" && IMAGE_FORMATS.includes(value.format);
 		case "resizeImage":

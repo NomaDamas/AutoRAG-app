@@ -38,6 +38,8 @@ import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import { fileExtension, type FileActionTarget } from "../state/file-actions";
 import { conversionErrorMessage, type ConvertRenameState } from "../state/convert-rename";
+import type { ReductionLevel } from "../../../shared/size-reduction";
+import { createReduceSizeDialogState, type ReduceSizeDialogState } from "../state/reduce-size-dialog";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -231,10 +233,12 @@ export interface FinderController {
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
 	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
 	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
-	/** The currently running `reduceSize` job on this pane, or null when idle. */
-	readonly runningReduction: { readonly id: string; readonly path: string; readonly name: string; readonly percent: number | null } | null;
-	/** Stop the currently running `reduceSize` job. */
-	cancelReduction(): void;
+	/** The "용량 줄이기" dialog (choosing level/mode, or actively reducing with live progress); null when closed. */
+	readonly reduceDialog: ReduceSizeDialogState | null;
+	setReduceDialogLevel(level: ReductionLevel): void;
+	setReduceDialogReplaceOriginal(replaceOriginal: boolean): void;
+	confirmReduceSize(): void;
+	cancelReduceSize(): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -453,12 +457,7 @@ export function useFinderController(
 	const [pathEditingCount, setPathEditingCount] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
-	const [runningReduction, setRunningReduction] = useState<{
-		readonly id: string;
-		readonly path: string;
-		readonly name: string;
-		readonly percent: number | null;
-	} | null>(null);
+	const [reduceDialog, setReduceDialog] = useState<ReduceSizeDialogState | null>(null);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
@@ -518,7 +517,7 @@ export function useFinderController(
 	useEffect(() => {
 		if (source.actions.onProgress === undefined) return;
 		return source.actions.onProgress((event) => {
-			setRunningReduction((current) =>
+			setReduceDialog((current) =>
 				current !== null && current.id === event.id ? { ...current, percent: event.percent } : current,
 			);
 		});
@@ -1297,27 +1296,9 @@ export function useFinderController(
 					return;
 				case "request": {
 					if (target.request.kind === "reduceSize") {
-						if (runningReduction !== null) return;
-						const id = crypto.randomUUID();
-						setRunningReduction({ id, path: entry.path, name: entry.name, percent: null });
-						source.actions
-							.run([entry.path], { kind: "reduceSize", id })
-							.then((outcome) => {
-								showToast(outcome.note);
-								if (outcome.output !== null) {
-									recordActionOutput("reduceSize", outcome.output);
-									refresh();
-									if (!searchingRef.current && pathRef.current === locationOf(entry)) {
-										scrollTarget.current = outcome.output;
-										patchSelection(single(outcome.output));
-										setFlashPath(outcome.output);
-									}
-								}
-							})
-							.catch(reportError)
-							.finally(() => {
-								setRunningReduction((current) => (current?.id === id ? null : current));
-							});
+						if (reduceDialog !== null) return;
+						const opened = createReduceSizeDialogState(entry, crypto.randomUUID());
+						if (opened !== null) setReduceDialog(opened);
 						return;
 					}
 					source.actions
@@ -1342,10 +1323,51 @@ export function useFinderController(
 	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
 		source.actions.openWithApplications(entry.path));
 
-	const cancelReduction = useLatestCallback(() => {
-		const current = runningReduction;
-		if (current === null) return;
-		void source.actions.cancel?.(current.id).catch(reportError);
+	const setReduceDialogLevel = useLatestCallback((level: ReductionLevel) => {
+		setReduceDialog((current) => (current === null || current.working ? current : { ...current, level }));
+	});
+
+	const setReduceDialogReplaceOriginal = useLatestCallback((replaceOriginal: boolean) => {
+		setReduceDialog((current) => (current === null || current.working ? current : { ...current, replaceOriginal }));
+	});
+
+	const confirmReduceSize = useLatestCallback(() => {
+		const pending = reduceDialog;
+		if (pending === null || pending.working) return;
+		setReduceDialog({ ...pending, working: true, percent: null });
+		source.actions
+			.run([pending.path], {
+				kind: "reduceSize",
+				id: pending.id,
+				level: pending.level,
+				replaceOriginal: pending.replaceOriginal,
+			})
+			.then((outcome) => {
+				showToast(outcome.note);
+				if (outcome.output !== null) {
+					recordActionOutput("reduceSize", outcome.output);
+					refresh();
+					if (!searchingRef.current && pathRef.current === dirname(pending.path)) {
+						scrollTarget.current = outcome.output;
+						patchSelection(single(outcome.output));
+						setFlashPath(outcome.output);
+					}
+				}
+			})
+			.catch(reportError)
+			.finally(() => {
+				setReduceDialog((current) => (current?.id === pending.id ? null : current));
+			});
+	});
+
+	const cancelReduceSize = useLatestCallback(() => {
+		const pending = reduceDialog;
+		if (pending === null) return;
+		if (pending.working) {
+			void source.actions.cancel?.(pending.id).catch(reportError);
+			return;
+		}
+		setReduceDialog(null);
 	});
 
 	const dragEntries = useLatestCallback(
@@ -1891,8 +1913,8 @@ export function useFinderController(
 			cancelConvertRename();
 			return;
 		}
-		if (runningReduction !== null) {
-			cancelReduction();
+		if (reduceDialog !== null) {
+			cancelReduceSize();
 			return;
 		}
 		if (closingEvidenceTabId !== null) {
@@ -2198,8 +2220,11 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		loadOpenWithApplications,
-		runningReduction,
-		cancelReduction,
+		reduceDialog,
+		setReduceDialogLevel,
+		setReduceDialogReplaceOriginal,
+		confirmReduceSize,
+		cancelReduceSize,
 		dragEntries,
 		copySelection,
 		cutSelection,

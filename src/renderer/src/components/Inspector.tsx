@@ -78,16 +78,6 @@ import {
 } from "./icons";
 import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
-import { ProgressBar } from "./primitives/ProgressBar";
-
-/** An in-flight `reduceSize` job, shown in the Inspector's bottom-right bar until it settles or is cancelled. */
-export interface RunningReduction {
-	readonly path: string;
-	readonly name: string;
-	/** 0–99 while ffmpeg reports progress; null when indeterminate (PDF, sips, or before Duration arrives). */
-	readonly percent: number | null;
-}
-
 export interface InspectorFamilyMember {
 	readonly path: string;
 	readonly name: string;
@@ -117,10 +107,6 @@ export interface InspectorProps {
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	/** The applications the OS registers for `entry`'s type, default first. */
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
-	/** The currently running size reduction, or null when idle. */
-	readonly runningReduction?: RunningReduction | null | undefined;
-	/** Stop the running size reduction. */
-	readonly onCancelReduction?: (() => void) | undefined;
 	/** Dupey family of `entry`; null when it has no versions. */
 	readonly family: InspectorFamily | null;
 	readonly onOpenMember: (path: string) => void;
@@ -185,8 +171,6 @@ export function Inspector({
 	actionCapabilities,
 	onAction,
 	loadOpenWithApplications,
-	runningReduction = null,
-	onCancelReduction,
 	family,
 	onOpenMember,
 	view,
@@ -233,8 +217,6 @@ export function Inspector({
 					actionCapabilities={actionCapabilities}
 					onAction={onAction}
 					loadOpenWithApplications={loadOpenWithApplications}
-					runningReduction={runningReduction}
-					onCancelReduction={onCancelReduction}
 					automations={automations}
 					folderInView={folderInView}
 				/>
@@ -255,8 +237,6 @@ function InfoHalf({
 	actionCapabilities,
 	onAction,
 	loadOpenWithApplications,
-	runningReduction,
-	onCancelReduction,
 	automations,
 	folderInView,
 }: {
@@ -271,19 +251,21 @@ function InfoHalf({
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
-	readonly runningReduction: RunningReduction | null;
-	readonly onCancelReduction?: (() => void) | undefined;
 	readonly automations?: InspectorProps["automations"];
 	readonly folderInView: boolean;
 }): ReactElement {
 	const [brief, setBrief] = useState(false);
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
 	const focusedPath = entry?.path ?? null;
-	// Rich metadata is per-file and read on focus; a stale answer for a path the
-	// user already left must not overwrite the current one.
+	const focusedMtime = entry?.mtimeMs ?? null;
+	const focusedSize = entry?.size ?? null;
+	useEffect(() => {
+		setBrief(false);
+	}, [focusedPath]);
+	// Rich metadata is per-file and re-read when an in-place action (such as Reduce Size)
+	// replaces the file with a new size/mtime; stale answers are dropped on cleanup.
 	useEffect(() => {
 		setDetails(null);
-		setBrief(false);
 		if (focusedPath === null) return;
 		let cancelled = false;
 		const load = window.autorag?.fs?.details;
@@ -298,7 +280,7 @@ function InfoHalf({
 		return () => {
 			cancelled = true;
 		};
-	}, [focusedPath]);
+	}, [focusedPath, focusedMtime, focusedSize]);
 	const { t } = useTranslation();
 	const included = indexStatus === null || !indexStatus.excluded;
 	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
@@ -386,15 +368,7 @@ function InfoHalf({
 			)}
 
 			{entry === null ? null : (
-				<ActionBar
-					entry={entry}
-					capabilities={actionCapabilities}
-					onAction={onAction}
-					onAskAi={onAskAi}
-					loadOpenWithApplications={loadOpenWithApplications}
-					runningReduction={runningReduction}
-					onCancelReduction={onCancelReduction}
-				/>
+				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} loadOpenWithApplications={loadOpenWithApplications} />
 			)}
 		</div>
 	);
@@ -656,21 +630,16 @@ function ActionBar({
 	onAction,
 	onAskAi,
 	loadOpenWithApplications,
-	runningReduction,
-	onCancelReduction,
 }: {
 	readonly entry: FinderEntry;
 	readonly capabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly onAskAi: (entry: FinderEntry) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
-	readonly runningReduction: RunningReduction | null;
-	readonly onCancelReduction?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const actions = suggestedActions(entry, capabilities);
 	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
-	const reducing = runningReduction !== null;
 	function run(target: FileActionTarget, anchor: ActionAnchor): void {
 		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
 		if (target.kind === "askAi") onAskAi(entry);
@@ -685,36 +654,6 @@ function ActionBar({
 
 	return (
 		<div className="inspector-actions flex-none border-t border-border bg-chrome px-10 pt-10 pb-12">
-			{runningReduction === null ? null : (
-				<div
-					className="inspector-reduce-progress mb-8 flex flex-col gap-6 rounded-8 border border-border bg-window px-10 py-8"
-					role="status"
-					aria-live="polite"
-				>
-					<div className="flex items-center justify-between gap-8 text-meta">
-						<span className="min-w-0 flex-1 truncate font-medium text-ink">
-							{t("inspector.actions.reducing", { name: runningReduction.name })}
-						</span>
-						{runningReduction.percent !== null ? (
-							<span className="flex-none tabular-nums text-ink-muted">{runningReduction.percent}%</span>
-						) : null}
-						{onCancelReduction === undefined ? null : (
-							<button
-								type="button"
-								className="flex-none border-0 bg-transparent p-0 text-meta font-medium text-accent-text cursor-pointer hover:underline"
-								onClick={onCancelReduction}
-							>
-								{t("common.cancel")}
-							</button>
-						)}
-					</div>
-					<ProgressBar
-						percent={runningReduction.percent}
-						tone="run"
-						label={t("inspector.actions.reduceProgressAria", { name: runningReduction.name })}
-					/>
-				</div>
-			)}
 			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
 				{actions.map((action) => {
 					const Icon = ACTION_ICONS[action.icon];
@@ -737,7 +676,6 @@ function ActionBar({
 						<ActionButton
 							key={action.id}
 							actionId={action.id}
-							disabled={action.id === "reduceSize" && reducing}
 							icon={<Icon size={18} />}
 							label={localizedLabel(action.id, action.label)}
 							onClick={(event) => {

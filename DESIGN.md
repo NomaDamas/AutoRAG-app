@@ -255,24 +255,27 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
   palette. Resizing (최대 ○px) keeps the source format and is not offered for
   GIF, because both engines resize one frame and would drop an animation.
-- **용량 줄이기** is one flat button (`reduceSize`), shown only when the file's
-  extension is in `capabilities.reducibleExtensions`. It keeps the format — a
-  smaller `.pdf` is still a `.pdf` — and writes `<name>-reduced.<ext>` next to the
-  original (numbered by `uniqueChild`), never touching the source. Every family
-  writes into a hidden `.dazzi-reduce-` staging folder first so no half-written
-  file ever appears in the listing. PDF goes through Filee's `compress-pdf`
-  preset (`src/main/pdf-reducer.ts`) with a lossless PDF 1.5 object-stream
-  compaction fallback for digital-only documents; JPEG/HEIC through `sips` on
-  macOS and `ffmpeg` elsewhere; PNG (max deflate) and WebP through `ffmpeg`;
-  MP4/M4V/MOV/MKV through x264 + AAC (`-crf 28`), WebM through VP9 + Opus;
-  MP3/M4A/AAC/Opus at 128 k (64 k Opus), keeping cover art. While running, the
-  Inspector action bar shows a progress card (`ProgressBar` — determinate `%`
-  from `ffmpeg -progress pipe:1` on video/audio, indeterminate shimmer on PDF
-  and stills) and a Cancel button (or Esc) that kills the child process tree via
-  `actions:cancel` and removes staging cleanly. Animated PNG/WebP are refused
-  (a one-frame re-encode would flatten them), and a result that is not smaller
-  is deleted and reported rather than kept. Completing in a folder selects and
-  flashes the new `-reduced` row, and the toast reports `before → after (N% smaller)`.
+- **용량 줄이기** is one flat button (`reduceSize`) in the Inspector's bottom-right
+  bar, shown only when the file's extension is in `capabilities.reducibleExtensions`.
+  Clicking it opens `ReduceSizeDialog`, which lets the user pick **compression
+  strength** (`light` / `balanced` / `max`) and **output mode**:
+  - **원본 대체 (default)** moves the original safely to the OS Trash and replaces
+    it in place under its exact name — zero `-reduced` clutter.
+  - **사본으로 저장** writes a single `<stem>-reduced.<ext>` sibling (`reducedCopyName`),
+    recycling any prior `-reduced` copy through the Trash so `-reduced 2 .. 8`
+    duplicates never accumulate.
+  Every family stages in `.dazzi-reduce-*` first and keeps the same format:
+  PDF (`light`: 2400px JPEG re-encode + PDF 1.5 object streams; `balanced`: Filee
+  `compress-pdf` + object-stream fallback; `max`: Filee + 1100px JPEG re-encode),
+  JPEG/HEIC (`sips` on macOS, `ffmpeg` elsewhere), PNG (`light` lossless max
+  deflate; `balanced` 256-color palette; `max` 128-color 1600px) and WebP,
+  MP4/M4V/MOV/MKV (`libx264` crf 23/28/33 + original/1080p/720p cap + AAC
+  160/128/96k), WebM (VP9 + Opus), and MP3/M4A/AAC/Opus (192/128/64k, Opus
+  96/64/32k, keeping cover art). Once started, the same dialog turns into a live
+  progress card (`ProgressBar` — determinate `%` from `ffmpeg -progress pipe:1`,
+  shimmer on PDF/stills) with a Cancel button (or Esc) that kills the child
+  process tree via `actions:cancel`. Animated PNG/WebP are refused, and outputs
+  not smaller than the source are discarded.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

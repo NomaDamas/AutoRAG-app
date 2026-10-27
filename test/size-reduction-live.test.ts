@@ -149,4 +149,45 @@ describe.runIf(live)("reduceSize against the real tools", () => {
 		expect(names).not.toContain("live-slow-reduced.mp4");
 		expect(names.filter((name) => name.startsWith(".dazzi-reduce-"))).toEqual([]);
 	}, 120_000);
+
+	it("produces strictly smaller outputs at light > balanced > max on both real PDF and real MP4, and replaces in place cleanly", async () => {
+		const pageImg = join(root, "lvl-page.jpg");
+		ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=2400x3200", "-frames:v", "1", "-q:v", "1", pageImg);
+		const doc = await PDFDocument.create();
+		const embedded = await doc.embedJpg(await readFile(pageImg));
+		for (let i = 0; i < 3; i += 1) {
+			const page = doc.addPage([595, 842]);
+			page.drawImage(embedded, { x: 0, y: 0, width: 595, height: 842 });
+		}
+		const pdfSource = join(root, "levels.pdf");
+		await writeFile(pdfSource, await doc.save({ useObjectStreams: false }));
+		const pdfOriginal = await size(pdfSource);
+
+		const pdfLight = await size((await service.run([pdfSource], { kind: "reduceSize", level: "light" }, null)).output ?? "");
+		const pdfBalanced = await size((await service.run([pdfSource], { kind: "reduceSize", level: "balanced" }, null)).output ?? "");
+		const pdfMax = await size((await service.run([pdfSource], { kind: "reduceSize", level: "max" }, null)).output ?? "");
+		expect(pdfLight).toBeLessThan(pdfOriginal);
+		expect(pdfBalanced).toBeLessThan(pdfLight);
+		expect(pdfMax).toBeLessThan(pdfBalanced);
+		// Repeated copy-mode runs left only ONE levels-reduced.pdf, never levels-reduced 2 / 3.pdf!
+		expect((await readdir(root)).filter((n) => n.startsWith("levels-reduced"))).toEqual(["levels-reduced.pdf"]);
+
+		const vidSource = join(root, "levels.mp4");
+		ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=1920x1080:r=24", "-t", "2", "-c:v", "libx264", "-crf", "12", "-pix_fmt", "yuv420p", vidSource);
+		const vidOriginal = await size(vidSource);
+		const vidLight = await size((await service.run([vidSource], { kind: "reduceSize", level: "light" }, null)).output ?? "");
+		const vidBalanced = await size((await service.run([vidSource], { kind: "reduceSize", level: "balanced" }, null)).output ?? "");
+		const vidMax = await size((await service.run([vidSource], { kind: "reduceSize", level: "max" }, null)).output ?? "");
+		expect(vidLight).toBeLessThan(vidOriginal);
+		expect(vidBalanced).toBeLessThan(vidLight);
+		expect(vidMax).toBeLessThan(vidBalanced);
+
+		// In-place replace mode: shrinks the file at its own name with zero -reduced siblings.
+		const inplace = join(root, "inplace.mp4");
+		await writeFile(inplace, await readFile(vidSource));
+		const replaced = await service.run([inplace], { kind: "reduceSize", level: "balanced", replaceOriginal: true }, null);
+		expect(replaced.output).toBe(inplace);
+		expect(await size(inplace)).toBeLessThan(vidOriginal);
+		expect((await readdir(root)).filter((n) => n.startsWith("inplace"))).toEqual(["inplace.mp4"]);
+	}, 180_000);
 });

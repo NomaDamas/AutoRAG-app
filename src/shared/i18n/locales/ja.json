@@ -128,6 +128,44 @@
       "progressAria": "変換中",
       "unsupported": "{{from}} から {{to}} への変換には対応していないため、名前は変更されませんでした。",
       "replaced": "{{name}} — 変換しました。元のファイルはゴミ箱に移動しました"
+    },
+    "reduce": {
+      "title": "容量を減らす",
+      "levelLabel": "圧縮レベル",
+      "recommended": "推奨",
+      "levels": {
+        "light": "弱め（高画質）",
+        "balanced": "標準",
+        "max": "強め（最小サイズ）"
+      },
+      "specs": {
+        "pdf": {
+          "light": "高解像度を維持",
+          "balanced": "標準の文書・スキャン圧縮",
+          "max": "低解像度・最小サイズ"
+        },
+        "image": {
+          "light": "元のサイズ・高画質（PNG 無損失）",
+          "balanced": "最大 2560px・バランス圧縮",
+          "max": "最大 1600px・高圧縮"
+        },
+        "video": {
+          "light": "元の解像度・高画質",
+          "balanced": "最大 1080p・標準圧縮",
+          "max": "最大 720p・最小サイズ"
+        },
+        "audio": {
+          "light": "高音質・192 kbps",
+          "balanced": "標準音質・128 kbps",
+          "max": "音声向け・64 kbps"
+        }
+      },
+      "outputLabel": "保存方法",
+      "replaceMode": "元のファイルを置換",
+      "copyMode": "コピーとして保存",
+      "replaceHint": "元のファイルをゴミ箱へ移動し、「{{name}}」をそのまま置き換えます。",
+      "copyHint": "元のファイルを残して「{{copyName}}」として保存します。",
+      "workingHint": "完了するまで元のファイルは変更されません。"
     }
   },
   "contextMenu": {
@@ -1359,7 +1397,8 @@
       "unsupportedReduce": "このファイルは形式を保ったまま容量を減らせません",
       "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
       "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）",
-      "reduceCancelled": "{{name}} の容量削減をキャンセルしました"
+      "reduceCancelled": "{{name}} の容量削減をキャンセルしました",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減・元のファイルはゴミ箱へ移動）"
     },
     "indexStatus": {
       "outside": "Dazzi の検索パス外のファイル",

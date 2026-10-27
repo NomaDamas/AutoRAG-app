@@ -2,9 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { Inspector } from "../src/renderer/src/components/Inspector";
-import type { FinderEntry } from "../src/renderer/src/data/entries";
-import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
+import { ReduceSizeDialog } from "../src/renderer/src/components/primitives/ReduceSizeDialog";
+import type { ReduceSizeDialogState } from "../src/renderer/src/state/reduce-size-dialog";
 import { setAppLanguage } from "../src/shared/i18n";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -24,51 +23,80 @@ afterEach(() => {
 	host.remove();
 });
 
-const PDF_CAPS: ActionCapabilities = {
-	...NO_CAPABILITIES,
-	archive: true,
-	reducibleExtensions: ["pdf"],
+const BASE: ReduceSizeDialogState = {
+	id: "reduce-1",
+	path: "/Users/test/k-skill-ai-rookie.mp4",
+	name: "k-skill-ai-rookie.mp4",
+	size: 174_063_616,
+	kind: "video",
+	level: "balanced",
+	replaceOriginal: true,
+	working: false,
+	percent: null,
 };
 
-const SCAN: FinderEntry = {
-	name: "scan.pdf",
-	path: "/tmp/scan.pdf",
-	kind: "file",
-	ext: "pdf",
-	size: 2_097_152,
-	mtimeMs: 1_700_000_000_000,
-	birthtimeMs: 0,
-};
+describe("ReduceSizeDialog", () => {
+	it("lets the user pick compression strength and replace-vs-copy before starting", () => {
+		const onChangeLevel = vi.fn();
+		const onChangeReplace = vi.fn();
+		const onStart = vi.fn();
+		const onCancel = vi.fn();
 
-const noop = (): void => {};
+		act(() =>
+			root.render(
+				<ReduceSizeDialog
+					state={BASE}
+					onChangeLevel={onChangeLevel}
+					onChangeReplaceOriginal={onChangeReplace}
+					onStart={onStart}
+					onCancel={onCancel}
+				/>,
+			),
+		);
 
-describe("Inspector Reduce Size progress", () => {
-	it("shows a progress bar, percentage, and working cancel button while reducing", () => {
+		expect(host.textContent).toContain("k-skill-ai-rookie.mp4");
+		expect(host.textContent).toContain("166 MB");
+		const maxOption = host.querySelector<HTMLButtonElement>('[data-level="max"]');
+		expect(maxOption).not.toBeNull();
+		act(() => maxOption?.click());
+		expect(onChangeLevel).toHaveBeenCalledWith("max");
+
+		const copyOption = host.querySelector<HTMLButtonElement>('[data-output-mode="copy"]');
+		expect(copyOption).not.toBeNull();
+		act(() => copyOption?.click());
+		expect(onChangeReplace).toHaveBeenCalledWith(false);
+
+		const startButton = host.querySelector<HTMLButtonElement>('[data-action="confirm-reduce"]');
+		expect(startButton).not.toBeNull();
+		act(() => startButton?.click());
+		expect(onStart).toHaveBeenCalledTimes(1);
+	});
+
+	it("previews the single -reduced copy name when copy mode is chosen", () => {
+		act(() =>
+			root.render(
+				<ReduceSizeDialog
+					state={{ ...BASE, replaceOriginal: false }}
+					onChangeLevel={() => {}}
+					onChangeReplaceOriginal={() => {}}
+					onStart={() => {}}
+					onCancel={() => {}}
+				/>,
+			),
+		);
+		expect(host.textContent).toContain("k-skill-ai-rookie-reduced.mp4");
+	});
+
+	it("turns into a live progress card with percentage and Cancel while working", () => {
 		const onCancel = vi.fn();
 		act(() =>
 			root.render(
-				<Inspector
-					entry={SCAN}
-					entries={[SCAN]}
-					indexStatus={null}
-					onToggleIndex={noop}
-					onTrash={noop}
-					onCopyPath={noop}
-					onAskAi={noop}
-					actionCapabilities={PDF_CAPS}
-					onAction={noop}
-					loadOpenWithApplications={async () => []}
-					runningReduction={{ path: SCAN.path, name: SCAN.name, percent: 42 }}
-					onCancelReduction={onCancel}
-					family={null}
-					onOpenMember={noop}
-					view="info"
-					evidence={[]}
-					evidenceSelected={0}
-					onSelectEvidence={noop}
-					onRevealPath={noop}
-					onToast={noop}
-					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+				<ReduceSizeDialog
+					state={{ ...BASE, working: true, percent: 42 }}
+					onChangeLevel={() => {}}
+					onChangeReplaceOriginal={() => {}}
+					onStart={() => {}}
+					onCancel={onCancel}
 				/>,
 			),
 		);
@@ -77,8 +105,8 @@ describe("Inspector Reduce Size progress", () => {
 		expect(bar).not.toBeNull();
 		expect(bar?.getAttribute("aria-valuenow")).toBe("42");
 		expect(host.textContent).toContain("42%");
-		const reduceButton = host.querySelector<HTMLButtonElement>('button[data-action="reduceSize"]');
-		expect(reduceButton?.disabled).toBe(true);
+		expect(host.querySelector('[data-action="confirm-reduce"]')).toBeNull();
+
 		const cancel = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
 			(button.textContent ?? "").includes("취소"),
 		);
