@@ -83,7 +83,7 @@ function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement 
 function WindowsPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft } = ctx;
 	return (
-		<section className="screen permissions-screen windows">
+		<section className="screen permissions-screen">
 			<div className="permissions-head">
 				<h1>{t("onboarding.permissions.titleWindows")}</h1>
 				<p>
