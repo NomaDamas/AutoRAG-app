@@ -49,6 +49,9 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			? reported
 			: { ...reported, bytesTotal: embedding.modelBytes, ...(embedding.cached ? { state: "ready" as const, bytesDone: embedding.modelBytes } : {}) };
 
+	/** The grid column a card sits in, so what belongs to it (consent, download) hangs under it. */
+	const cardColumn = (id: EmbedCard["id"]): number => cards.findIndex((card) => card.id === id) + 1;
+
 	const choose = (card: EmbedCard): void => {
 		if (card.blocked !== null) {
 			// Say why the card cannot be chosen, instead of leaving a click that does nothing.
@@ -174,37 +177,28 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 							</p>
 						),
 					)}
-				</div>
-				{selected === "cloud" ? (
-					<label className="em-consent">
-						<span className="em-consent-text">
-							<b>{t("onboarding.embedding.cloudConsentRequired")}</b>
-							{t("onboarding.embedding.cloudConsent")}
-						</span>
-						<span className="em-consent-check">
-							<input
-								type="checkbox"
-								checked={consented}
-								onChange={(event) => ctx.setCloudConsent(event.target.checked)}
-							/>
-							<span className="em-box" aria-hidden="true">
-								<Icon name="check" size={10} />
+					{selected === "cloud" ? (
+						<label className="em-consent" style={{ gridColumn: cardColumn("cloud"), gridRow: 2 }}>
+							<span className="em-consent-text">
+								<b>{t("onboarding.embedding.cloudConsentRequired")}</b>
+								<span>{t("onboarding.embedding.cloudConsent")}</span>
 							</span>
-							{t("onboarding.embedding.cloudConsentCheck")}
-						</span>
-					</label>
-				) : null}
-			</div>
-			{selected === "local" && embedding?.localModel !== false ? (
-				<div className="em-download">
-					<ModelDownloadPanel
-						status={modelStatus}
-						t={t}
-						onStart={ctx.modelDownload.start}
-						onCancel={ctx.modelDownload.cancel}
-					/>
+							<span className="em-consent-check">
+								<input type="checkbox" checked={consented} onChange={(event) => ctx.setCloudConsent(event.target.checked)} />
+								<span className="em-box" aria-hidden="true">
+									<Icon name="check" size={10} />
+								</span>
+								{t("onboarding.embedding.cloudConsentCheck")}
+							</span>
+						</label>
+					) : null}
+					{selected === "local" && embedding?.localModel !== false ? (
+						<div className="em-download" style={{ gridColumn: cardColumn("local"), gridRow: 2 }}>
+							<ModelDownloadPanel status={modelStatus} t={t} onStart={ctx.modelDownload.start} onCancel={ctx.modelDownload.cancel} />
+						</div>
+					) : null}
 				</div>
-			) : null}
+			</div>
 		</section>
 	);
 }
