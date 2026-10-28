@@ -4253,7 +4253,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 36px;
+	gap: 48px;
 }
 
 .onb .permissions-head {
@@ -4290,9 +4290,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .permissions-screen .permission-desc {
-	margin-top: 2px;
-	font-size: 11px;
-	line-height: 16px;
+	margin-top: 3px;
+	font-size: 10.5px;
+	line-height: 15.75px;
 }
 
 .onb .permissions-screen .row-action .secondary {
@@ -4316,13 +4316,21 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-weight: 500;
 }
 
+/* The "required" tag leads the name as a solid red chip (Figma 02d). */
+.onb .permissions-screen .tag {
+	padding: 2px 4px;
+	font-size: 8px;
+	font-weight: 700;
+	line-height: 11px;
+}
+
 .onb .permissions-screen .tag.req {
 	background: #ff3b30;
 	color: #fff;
 }
 
 .onb .permissions-why {
-	margin-top: -12px;
+	margin-top: -28px;
 	font-size: 10.5px;
 }
 
