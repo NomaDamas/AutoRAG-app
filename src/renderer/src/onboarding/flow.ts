@@ -236,7 +236,7 @@ export interface EmbedCardsInput {
 
 /**
  * The prototype's `embedOptions()`: the three ways to make documents searchable,
- * compared on the same two axes (power needed, accuracy). `none` embeds nothing
+ * compared on the same two axes (power needed, accuracy), in the order the design lays them out. `none` embeds nothing
  * and is the cheapest; only the cloud card can be unavailable.
  */
 export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
@@ -265,18 +265,6 @@ export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
 			blocked: null,
 		},
 		{
-			id: "local",
-			icon: "cpu",
-			nameKey: "onboarding.embedding.card.local.name",
-			tag: null,
-			lineKey: input.platform === "win32" ? "onboarding.embedding.card.local.linePc" : "onboarding.embedding.card.local.lineMac",
-			meters: [meter("performance", 4, "high", "warn"), meter("accuracy", 4, "good", "good")],
-			minutes: etaMinutes(input.files, "local"),
-			foot: localDownload,
-			disabled: !localEmbeddingAllowed(input.localSpec),
-			blocked: input.localSpec !== null && !input.localSpec.eligible ? input.localSpec : null,
-		},
-		{
 			id: "cloud",
 			icon: "cloud",
 			nameKey: "onboarding.embedding.card.cloud.name",
@@ -287,6 +275,18 @@ export function embedCards(input: EmbedCardsInput): readonly EmbedCard[] {
 			foot: null,
 			disabled: !input.cloudAvailable,
 			blocked: null,
+		},
+		{
+			id: "local",
+			icon: "cpu",
+			nameKey: input.platform === "win32" ? "onboarding.embedding.card.local.namePc" : "onboarding.embedding.card.local.nameMac",
+			tag: null,
+			lineKey: input.platform === "win32" ? "onboarding.embedding.card.local.linePc" : "onboarding.embedding.card.local.lineMac",
+			meters: [meter("performance", 4, "high", "warn"), meter("accuracy", 4, "good", "good")],
+			minutes: etaMinutes(input.files, "local"),
+			foot: localDownload,
+			disabled: !localEmbeddingAllowed(input.localSpec),
+			blocked: input.localSpec !== null && !input.localSpec.eligible ? input.localSpec : null,
 		},
 	];
 }

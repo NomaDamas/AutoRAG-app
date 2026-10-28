@@ -8,7 +8,6 @@
 import { useRef, type KeyboardEvent, type ReactElement } from "react";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { Eyebrow } from "../parts";
 import { localSpecMessage } from "../../../../shared/local-embedding-spec";
 import type { IndexFailureReason } from "../../../../shared/index-failure";
 import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
@@ -42,6 +41,7 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	});
 	const selected = resolveEmbed(draft.embed, cloudAvailable, localEmbeddingAllowed(embedding === null ? null : embedding.localSpec));
 	const listRef = useRef<HTMLDivElement | null>(null);
+	const consented = draft.cloudConsent === true;
 	// Until main answers the first status read the size is unknown; the embedding info already carries it.
 	const reported = ctx.modelDownload.status;
 	const modelStatus =
@@ -112,14 +112,13 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			>
 				<span className="em-radio" />
 				<div className="embed-icon">
-					<Icon name={card.icon} size={19} />
+					<Icon name={card.icon} size={24} />
 				</div>
 				<div className="em-title">
 					<h3>{t(card.nameKey)}</h3>
 					{card.tag === null ? null : <span className={cn("em-tag", card.tag.tone)}>{t(card.tag.labelKey)}</span>}
 				</div>
 				<p className="em-line">{t(card.lineKey)}</p>
-				{card.blocked === null ? null : <p className="em-blocked">{localSpecMessage(card.blocked, t)}</p>}
 				<div className="em-meters">
 					{card.meters.map((meter) => (
 						<div
@@ -138,13 +137,17 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 					))}
 				</div>
 				<div className="em-foot">
-					<b>{t("onboarding.embedding.minutes", { minutes: card.minutes })}</b>
-					{download === null ? null : (
-						<>
-							<span>·</span>
-							{download}
-						</>
-					)}
+					<span>{t("onboarding.embedding.prepTime")}</span>
+					<span className="em-eta">
+						<span className="em-about">{t("onboarding.embedding.about")}</span>
+						<b>{t("onboarding.embedding.minutes", { minutes: card.minutes })}</b>
+						{download === null ? null : (
+							<>
+								<span className="em-about">·</span>
+								<span>{download}</span>
+							</>
+						)}
+					</span>
 				</div>
 			</div>
 		);
@@ -153,7 +156,6 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	return (
 		<section className="screen center em-screen">
 			<div className="screen-copy">
-				<Eyebrow icon="search">{t("onboarding.embedding.eyebrow")}</Eyebrow>
 				<h1>{t("onboarding.embedding.title")}</h1>
 			</div>
 			{draft.resumeAt === "indexing" ? (
@@ -162,8 +164,36 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 					<span>{t(`onboarding.embedding.pausedNotice.${pausedNoticeKey(ctx.indexStatus?.failure?.reason)}`)}</span>
 				</div>
 			) : null}
-			<div ref={listRef} className="em-cards" role="radiogroup" aria-label={t("onboarding.embedding.groupLabel")}>
-				{cards.map(renderCard)}
+			<div className="em-stack">
+				<div ref={listRef} className="em-cards" role="radiogroup" aria-label={t("onboarding.embedding.groupLabel")}>
+					{cards.map(renderCard)}
+					{cards.map((card, index) =>
+						card.blocked === null ? null : (
+							<p key={card.id} className="em-blocked" data-for={card.id} style={{ gridColumn: index + 1 }}>
+								{localSpecMessage(card.blocked, t)}
+							</p>
+						),
+					)}
+				</div>
+				{selected === "cloud" ? (
+					<label className="em-consent">
+						<span className="em-consent-text">
+							<b>{t("onboarding.embedding.cloudConsentRequired")}</b>
+							{t("onboarding.embedding.cloudConsent")}
+						</span>
+						<span className="em-consent-check">
+							<input
+								type="checkbox"
+								checked={consented}
+								onChange={(event) => ctx.setCloudConsent(event.target.checked)}
+							/>
+							<span className="em-box" aria-hidden="true">
+								<Icon name="check" size={10} />
+							</span>
+							{t("onboarding.embedding.cloudConsentCheck")}
+						</span>
+					</label>
+				) : null}
 			</div>
 			{selected === "local" && embedding?.localModel !== false ? (
 				<div className="em-download">
@@ -174,16 +204,6 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 						onCancel={ctx.modelDownload.cancel}
 					/>
 				</div>
-			) : null}
-			{selected === "cloud" ? (
-				<label className="consent em-consent">
-					<input
-						type="checkbox"
-						checked={draft.cloudConsent === true}
-						onChange={(event) => ctx.setCloudConsent(event.target.checked)}
-					/>
-					<span>{t("onboarding.embedding.cloudConsent")}</span>
-				</label>
 			) : null}
 		</section>
 	);
