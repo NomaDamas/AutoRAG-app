@@ -11,6 +11,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 import { StatusDot } from "./primitives/StatusDot";
 import { SidebarIndexActivity } from "./SidebarIndexActivity";
+import { SidebarErrorFixActivity } from "./SidebarErrorFixActivity";
 import { SidebarSearch, type SearchMode } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button): 28px rows, 12px labels. */
@@ -201,6 +202,7 @@ export function Sidebar({
 				))}
 			</div>
 			<div className="side-footer flex flex-none flex-col p-10 border-t border-border">
+				<SidebarErrorFixActivity />
 				<SidebarIndexActivity onOpen={onOpenIndexing} />
 				<button
 					type="button"

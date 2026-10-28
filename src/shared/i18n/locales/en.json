@@ -318,7 +318,12 @@
       "openSettings": "Open ‘{{page}}’ settings",
       "openSource": "Open the ‘{{name}}’ connection",
       "failedTitle": "Couldn’t fix it with AI",
-      "stopped": "Stopped."
+      "stopped": "Stopped.",
+      "minimize": "Keep fixing in background",
+      "sidebar": {
+        "running": "Fixing with AI…",
+        "open": "Show Fix with AI status"
+      }
     }
   },
   "interaction": {

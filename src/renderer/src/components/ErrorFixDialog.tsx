@@ -1,9 +1,11 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from "react";
+import { Minus } from "lucide-react";
+import { useEffect, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { isModelProblem } from "../../../shared/app-error";
 import type { ErrorFixAction, ErrorFixResult, ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
+import { dismissErrorFixDialog, retryErrorFix, stopErrorFix, useErrorFixSession } from "../hooks/useErrorFix";
 import { describeAppError, type ErrorActionId } from "../state/app-error";
-import { actionLabel, initialErrorFixRun, reduceErrorFixRun, startErrorFixRun, type ErrorFixRun } from "../state/error-fix";
+import { actionLabel } from "../state/error-fix";
 import { cn } from "../lib/cn";
 import { ErrorDetails } from "./ErrorDetails";
 import { CloseIcon, SparklesIcon } from "./icons";
@@ -11,15 +13,12 @@ import { CloseIcon, SparklesIcon } from "./icons";
 /**
  * "AI로 고치기": runs the self-healing helper agent for the error on screen with
  * a calm visual, a single shimmering live progress line from the agent's pre-tool
- * intent, and a clean restored state on completion. Raw error text stays hidden
- * behind "자세히 보기" unless opened, and shell commands or config diffs are never
- * dumped onto the screen.
+ * intent, and a clean restored state on completion. Closing or minimizing while
+ * `running` hides the modal and continues healing in the background (with live
+ * progress shown in the sidebar); only `Stop` cancels the run.
  */
 
 export interface ErrorFixDialogProps {
-	/** The error the run was started for. */
-	readonly message: string;
-	readonly onClose: () => void;
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Opens the Settings page of one configured data source, by its alias. */
 	readonly onOpenSource: (alias: string) => void;
@@ -145,46 +144,30 @@ function ResultBody({ result, errorMessage }: { readonly result: ErrorFixResult;
 	);
 }
 
-export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource }: ErrorFixDialogProps): ReactElement {
+export function ErrorFixDialog({ onOpenSettings, onOpenSource }: ErrorFixDialogProps): ReactElement | null {
 	const { t } = useTranslation();
-	const [run, setRun] = useState<ErrorFixRun>(initialErrorFixRun);
-	const [attempt, setAttempt] = useState(0);
-
-	// One run per attempt. Leaving (or retrying) cancels the one in flight; a run that has ended ignores the cancel.
-	useEffect(() => {
-		const bridge = window.autorag.errorFix;
-		const runId = crypto.randomUUID();
-		setRun(startErrorFixRun(runId));
-		const unsubscribe = bridge.onEvent((event) => setRun((current) => reduceErrorFixRun(current, event)));
-		bridge.start(runId, { message, surface: "ai-search" }).catch((error: unknown) => {
-			const reason = error instanceof Error ? error.message : String(error);
-			setRun((current) => reduceErrorFixRun(current, { type: "error", runId, message: reason, changes: [], backupPath: null }));
-		});
-		return () => {
-			unsubscribe();
-			void bridge.cancel(runId);
-		};
-	}, [message, attempt]);
+	const session = useErrorFixSession();
+	const { dialogOpen, message, run } = session;
 
 	useEffect(() => {
+		if (!dialogOpen) return;
 		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") onClose();
+			if (event.key === "Escape") dismissErrorFixDialog();
 		};
 		document.addEventListener("keydown", onKey);
 		return () => document.removeEventListener("keydown", onKey);
-	}, [onClose]);
+	}, [dialogOpen]);
 
-	const stop = (): void => {
-		if (run.status === "running") void window.autorag.errorFix.cancel(run.runId);
-	};
+	if (!dialogOpen || message === null || run.status === "idle") return null;
+
 	const openSettings = (page: ErrorFixSettingsPage): void => {
 		onOpenSettings(page);
-		onClose();
+		dismissErrorFixDialog();
 	};
 	const go = (action: ErrorFixAction): void => {
 		if (action.kind === "settings") onOpenSettings(action.target);
 		else onOpenSource(action.target);
-		onClose();
+		dismissErrorFixDialog();
 	};
 	const settingsButton = (id: ErrorActionId, label: string, primary: boolean): ReactElement | null =>
 		id === "fix" ? null : (
@@ -205,7 +188,14 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource 
 				</p>
 			</div>
 		);
-		actions = <Button onClick={stop}>{t("aiSearch.stop")}</Button>;
+		actions = (
+			<>
+				<Button primary onClick={dismissErrorFixDialog}>
+					{t("appError.fix.minimize")}
+				</Button>
+				<Button onClick={stopErrorFix}>{t("aiSearch.stop")}</Button>
+			</>
+		);
 	} else if (run.status === "done") {
 		const { result } = run;
 		body = <ResultBody result={result} errorMessage={message} />;
@@ -216,7 +206,7 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource 
 						{actionLabel(action, t)}
 					</Button>
 				))}
-				<Button primary={result.status === "fixed" && result.actions.length === 0} onClick={onClose}>
+				<Button primary={result.status === "fixed" && result.actions.length === 0} onClick={dismissErrorFixDialog}>
 					{t("common.close")}
 				</Button>
 			</>
@@ -236,11 +226,11 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource 
 				{isModelProblem(view.kind) ? (
 					view.actions.map((entry) => settingsButton(entry.id, entry.label, entry.primary))
 				) : (
-					<Button primary onClick={() => setAttempt((count) => count + 1)}>
+					<Button primary onClick={retryErrorFix}>
 						{t("common.retry")}
 					</Button>
 				)}
-				<Button onClick={onClose}>{t("common.close")}</Button>
+				<Button onClick={dismissErrorFixDialog}>{t("common.close")}</Button>
 			</>
 		);
 	} else if (run.status === "stopped") {
@@ -252,20 +242,21 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource 
 		);
 		actions = (
 			<>
-				<Button primary onClick={() => setAttempt((count) => count + 1)}>
+				<Button primary onClick={retryErrorFix}>
 					{t("common.retry")}
 				</Button>
-				<Button onClick={onClose}>{t("common.close")}</Button>
+				<Button onClick={dismissErrorFixDialog}>{t("common.close")}</Button>
 			</>
 		);
 	}
 
+	const isRunning = run.status === "running";
 	return (
 		<div
 			className="fixed inset-0 z-80 flex items-center justify-center bg-black/30"
 			role="presentation"
 			onMouseDown={(event) => {
-				if (event.target === event.currentTarget) onClose();
+				if (event.target === event.currentTarget) dismissErrorFixDialog();
 			}}
 		>
 			<div
@@ -282,10 +273,11 @@ export function ErrorFixDialog({ message, onClose, onOpenSettings, onOpenSource 
 					<button
 						type="button"
 						className="flex size-24 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted hover:bg-hover-strong"
-						aria-label={t("common.close")}
-						onClick={onClose}
+						aria-label={isRunning ? t("appError.fix.minimize") : t("common.close")}
+						title={isRunning ? t("appError.fix.minimize") : t("common.close")}
+						onClick={dismissErrorFixDialog}
 					>
-						<CloseIcon />
+						{isRunning ? <Minus size={14} strokeWidth={2.4} /> : <CloseIcon />}
 					</button>
 				</div>
 				{body}

@@ -62,3 +62,85 @@ export function actionLabel(action: ErrorFixAction, t: TFunction): string {
 	if (action.label !== "") return action.label;
 	return action.kind === "settings" ? t("appError.fix.openSettings", { page: settingsPageLabel(action.target, t) }) : t("appError.fix.openSource", { name: action.target });
 }
+
+export interface ErrorFixSession {
+	readonly message: string | null;
+	readonly dialogOpen: boolean;
+	readonly run: ErrorFixRun;
+}
+
+export const initialErrorFixSession: ErrorFixSession = {
+	message: null,
+	dialogOpen: false,
+	run: initialErrorFixRun,
+};
+
+export function beginErrorFixSession(runId: string, message: string): ErrorFixSession {
+	return { message, dialogOpen: true, run: startErrorFixRun(runId) };
+}
+
+export function reduceErrorFixSession(session: ErrorFixSession, event: ErrorFixEvent): ErrorFixSession {
+	const next = reduceErrorFixRun(session.run, event);
+	return next === session.run ? session : { ...session, run: next };
+}
+
+/** Hides the modal while keeping the repair running in the background. */
+export function minimizeErrorFixSession(session: ErrorFixSession): ErrorFixSession {
+	return session.dialogOpen ? { ...session, dialogOpen: false } : session;
+}
+
+/** Reopens a minimized or background-finished repair modal. */
+export function openErrorFixSession(session: ErrorFixSession): ErrorFixSession {
+	return session.run.status === "idle" || session.dialogOpen ? session : { ...session, dialogOpen: true };
+}
+
+/** Closes the modal: if still running, minimizes to background; once finished/stopped/failed, clears the session. */
+export function dismissErrorFixSession(session: ErrorFixSession): ErrorFixSession {
+	if (session.run.status === "running") return minimizeErrorFixSession(session);
+	return initialErrorFixSession;
+}
+
+export interface SidebarErrorFixView {
+	readonly tone: "run" | "ok" | "error";
+	readonly percent: number | null;
+	readonly headline: string;
+	readonly detail: string | null;
+}
+
+/**
+ * Renders the error-fix session in the sidebar footer using the same visual
+ * shape as `SidebarIndexActivity`: shown whenever a repair is running, or when
+ * a minimized repair has finished in the background and has not been reviewed yet.
+ */
+export function describeSidebarErrorFix(session: ErrorFixSession, t: TFunction): SidebarErrorFixView | null {
+	const { run } = session;
+	if (run.status === "idle") return null;
+	if (run.status === "running") {
+		return {
+			tone: "run",
+			percent: null,
+			headline: t("appError.fix.sidebar.running"),
+			detail: run.progress ?? t("appError.fix.running"),
+		};
+	}
+	if (session.dialogOpen || run.status === "stopped") return null;
+	if (run.status === "done") {
+		const fixed = run.result.status === "fixed";
+		return {
+			tone: fixed ? "ok" : "error",
+			percent: 100,
+			headline: fixed
+				? t("appError.fix.status.fixed")
+				: run.result.status === "needs-user"
+					? t("appError.fix.status.needsUser")
+					: t("appError.fix.status.cannotFix"),
+			detail: run.result.summary,
+		};
+	}
+	return {
+		tone: "error",
+		percent: 100,
+		headline: t("appError.fix.failedTitle"),
+		detail: null,
+	};
+}

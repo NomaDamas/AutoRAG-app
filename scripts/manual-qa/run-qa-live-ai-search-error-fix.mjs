@@ -189,12 +189,21 @@ try {
 	await panel.getByRole("button", { name: "Fix with AI", exact: true }).click();
 	await dialog.waitFor();
 	await shot("02-fix-started");
+	// Minimize the dialog so the real LLM repairs the config in the background while the sidebar displays live progress.
+	await dialog.getByRole("button", { name: "Keep fixing in background", exact: true }).last().click();
+	await dialog.waitFor({ state: "detached" });
+	const sidebarBlock = page.locator(".sidebar__error-fix");
+	await sidebarBlock.waitFor({ timeout: 10_000 });
+	check("the sidebar shows live Fix with AI progress while the modal is minimized", (await sidebarBlock.getAttribute("data-tone")) === "run");
 	const startedAt = Date.now();
 	const watcher = setInterval(() => {
-		void dialog.locator(".shimmer").innerText({ timeout: 2000 }).then((text) => console.log(`[${Math.round((Date.now() - startedAt) / 1000)}s] shimmering: ${text}`), () => undefined);
+		void sidebarBlock.innerText({ timeout: 2000 }).then((text) => console.log(`[${Math.round((Date.now() - startedAt) / 1000)}s] sidebar healing: ${text.replace(/\s+/g, " ")}`), () => undefined);
 	}, 15_000);
-	await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 0 });
+	await page.waitForFunction(() => document.querySelector(".sidebar__error-fix")?.getAttribute("data-tone") !== "run", null, { timeout: 0 });
 	clearInterval(watcher);
+	await shot("02b-live-minimized-sidebar-done");
+	await sidebarBlock.click();
+	await dialog.waitFor();
 	const outcome = await dialog.innerText();
 	console.log(`dialog after the real run:\n${outcome}`);
 	console.log(`live intent phrases emitted by real model: ${JSON.stringify(seenProgress)}`);

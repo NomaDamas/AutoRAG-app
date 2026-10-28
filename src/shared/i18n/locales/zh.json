@@ -318,7 +318,12 @@
       "openSettings": "打开“{{page}}”设置",
       "openSource": "打开“{{name}}”连接",
       "failedTitle": "AI 未能修复",
-      "stopped": "已停止。"
+      "stopped": "已停止。",
+      "minimize": "在后台继续修复",
+      "sidebar": {
+        "running": "正在用 AI 修复…",
+        "open": "查看 AI 修复状态"
+      }
     }
   },
   "interaction": {

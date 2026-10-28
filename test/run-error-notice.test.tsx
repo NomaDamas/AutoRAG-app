@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RunErrorNotice } from "../src/renderer/src/components/RunErrorNotice";
+import { SidebarErrorFixActivity } from "../src/renderer/src/components/SidebarErrorFixActivity";
+import { resetErrorFixStoreForTests } from "../src/renderer/src/hooks/useErrorFix";
 import type { ErrorFixEvent, ErrorFixRequest, ErrorFixResult } from "../src/shared/error-fix-contract";
 import { setAppLanguage, t } from "../src/shared/i18n";
 
@@ -36,7 +38,10 @@ beforeEach(async () => {
 	root = createRoot(host);
 });
 afterEach(() => {
-	act(() => root.unmount());
+	act(() => {
+		resetErrorFixStoreForTests();
+		root.unmount();
+	});
 	host.remove();
 	Reflect.deleteProperty(window, "autorag");
 });
@@ -74,13 +79,16 @@ function render(
 ): void {
 	act(() =>
 		root.render(
-			<RunErrorNotice
-				message={message}
-				action={props.action ?? null}
-				onOpenSettings={props.onOpenSettings ?? vi.fn()}
-				onOpenSource={props.onOpenSource ?? vi.fn()}
-				fix={props.fix ?? true}
-			/>,
+			<>
+				<SidebarErrorFixActivity />
+				<RunErrorNotice
+					message={message}
+					action={props.action ?? null}
+					onOpenSettings={props.onOpenSettings ?? vi.fn()}
+					onOpenSource={props.onOpenSource ?? vi.fn()}
+					fix={props.fix ?? true}
+				/>
+			</>,
 		),
 	);
 }
@@ -323,14 +331,38 @@ describe("the AI fix dialog", () => {
 		expect(dialog()).toBeNull();
 	});
 
-	it("cancels a running fix when the dialog is closed", () => {
+	it("minimizes to the background when dismissed while running, streams progress in the sidebar like indexing, and reopens on click", () => {
 		render("Search root /Users/me/Docs does not exist");
 		press(t("appError.fixAction"));
 		const id = runId();
 
-		press(t("common.close"));
-		expect(cancel).toHaveBeenCalledWith(id);
+		// Sidebar already mirrors the live repair.
+		expect(host.querySelector(".sidebar__error-fix")?.textContent).toContain(t("appError.fix.sidebar.running"));
+
+		// Dismissing / minimizing hides the modal WITHOUT cancelling the run.
+		press(t("appError.fix.minimize"));
+		expect(cancel).not.toHaveBeenCalled();
 		expect(dialog()).toBeNull();
+
+		// Live progress updates keep showing in the sidebar block while minimized.
+		emit({ type: "progress", runId: id, text: "누락된 검색 폴더 복구 중" });
+		expect(host.querySelector(".sidebar__error-fix")?.textContent).toContain("누락된 검색 폴더 복구 중");
+		expect(host.querySelector('.sidebar__error-fix [role="progressbar"]')).not.toBeNull();
+
+		// Completing in the background flips the sidebar block to healthy 100%, and clicking it reopens the modal.
+		emit({ type: "result", runId: id, result: FIXED });
+		expect(dialog()).toBeNull();
+		expect(host.querySelector(".sidebar__error-fix")?.getAttribute("data-tone")).toBe("ok");
+		expect(host.querySelector(".sidebar__error-fix")?.textContent).toContain(t("appError.fix.status.fixed"));
+
+		act(() => host.querySelector<HTMLButtonElement>(".sidebar__error-fix")?.click());
+		expect(dialog()).not.toBeNull();
+		expect(dialog()?.textContent).toContain("검색 폴더를 Documents로 바꿨어요.");
+
+		// Closing the finished modal clears the sidebar indicator.
+		press(t("common.close"));
+		expect(dialog()).toBeNull();
+		expect(host.querySelector(".sidebar__error-fix")).toBeNull();
 	});
 
 	it("shows a start that the bridge rejects as a failure with raw details hidden until opened", async () => {

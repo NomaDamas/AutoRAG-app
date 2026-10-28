@@ -318,7 +318,12 @@
       "openSettings": "‘{{page}}’ 설정 열기",
       "openSource": "‘{{name}}’ 연결 열기",
       "failedTitle": "AI로 고치지 못했어요",
-      "stopped": "중단했어요."
+      "stopped": "중단했어요.",
+      "minimize": "백그라운드로 전환",
+      "sidebar": {
+        "running": "AI로 고치는 중…",
+        "open": "AI로 고치기 상태 열기"
+      }
     }
   },
   "interaction": {

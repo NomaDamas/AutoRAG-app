@@ -249,6 +249,17 @@ check("the dialog keeps raw error text hidden", !(await dialog.innerText()).incl
 await shot("02-fix-running-start");
 await dialog.locator(".shimmer", { hasText: "Checking your search settings" }).waitFor({ timeout: 15_000 });
 await shot("02b-fix-running-intent");
+// Minimize the dialog while it is fixing: the run keeps going in the background and the sidebar shows live progress like indexing.
+await dialog.getByRole("button", { name: "Keep fixing in background", exact: true }).last().click();
+await dialog.waitFor({ state: "detached" });
+const sidebarBlock = page.locator(".sidebar__error-fix");
+await sidebarBlock.waitFor({ timeout: 5000 });
+check("minimizing hides the dialog while the sidebar shows live progress", (await sidebarBlock.getAttribute("data-tone")) === "run");
+await shot("02c-fix-minimized-sidebar-running");
+await page.waitForFunction(() => document.querySelector(".sidebar__error-fix")?.getAttribute("data-tone") === "ok", null, { timeout: 60_000 });
+check("the minimized repair completes in the background and turns green in the sidebar", (await sidebarBlock.innerText()).includes("Back to normal"));
+await shot("02d-fix-minimized-sidebar-done");
+await sidebarBlock.click();
 await waitInDialog(dialog.getByText("Back to normal", { exact: true }));
 const doneText = await dialog.innerText();
 check("the dialog transitions to the healthy state", (await dialog.locator('[data-healing-state="healthy"]').count()) === 1);

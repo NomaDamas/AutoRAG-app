@@ -1,15 +1,15 @@
 import { CircleAlert } from "lucide-react";
-import { useState, type ReactElement } from "react";
+import { type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import type { SearchErrorAction } from "../../../shared/search-contract";
+import { startErrorFix, useErrorFixSession } from "../hooks/useErrorFix";
 import { describeAppError, type ErrorAction } from "../state/app-error";
 import { cn } from "../lib/cn";
 import { ErrorDetails } from "./ErrorDetails";
 import { ErrorFixDialog } from "./ErrorFixDialog";
 import { SparklesIcon } from "./icons";
-
 export interface RunErrorNoticeProps {
 	readonly message: string;
 	/** What the person can do about it, when the main process knows: a button that goes there. */
@@ -32,18 +32,18 @@ const SECONDARY_BUTTON = "border-border bg-window text-ink hover:bg-hover";
  */
 export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, fix = true }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
-	const [fixing, setFixing] = useState(false);
+	const session = useErrorFixSession();
 	const view = describeAppError(message, action, t);
 	const entries = view.actions.filter((entry) => entry.id !== "fix" || fix);
 	// Without the fix there is nothing to promise: an earlier turn's error just reads as what it is.
 	const hint = view.kind === "other" && !fix ? null : view.hint;
 	const warnTone = view.kind === "rate-limit" || view.kind === "network";
+	const isFixingThis = fix && session.run.status === "running" && session.message === message;
 
 	const run = (entry: ErrorAction): void => {
-		if (entry.id === "fix") setFixing(true);
+		if (entry.id === "fix") startErrorFix(message);
 		else onOpenSettings(entry.id === "open-plan" ? "plan" : "ai");
 	};
-
 	return (
 		<div className="flex items-start gap-12 rounded-10 border border-border bg-subtle px-14 py-12 text-body text-ink" role="alert">
 			<div
@@ -77,16 +77,13 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 							onClick={() => run(entry)}
 						>
 							{entry.id === "fix" ? <SparklesIcon /> : null}
-							{entry.label}
+							{entry.id === "fix" && isFixingThis ? t("appError.fix.sidebar.running") : entry.label}
 						</button>
 					))}
 				</div>
 			)}
-			{fixing && fix
-				? createPortal(
-						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} />,
-						document.body,
-					)
+			{fix && session.dialogOpen && document.getElementById("dazzi-error-fix-host") === null
+				? createPortal(<ErrorFixDialog onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} />, document.body)
 				: null}
 		</div>
 	);

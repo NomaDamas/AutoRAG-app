@@ -318,7 +318,12 @@
       "openSettings": "「{{page}}」設定を開く",
       "openSource": "「{{name}}」の接続を開く",
       "failedTitle": "AIでは修正できませんでした",
-      "stopped": "中断しました。"
+      "stopped": "中断しました。",
+      "minimize": "バックグラウンドで続行",
+      "sidebar": {
+        "running": "AIで修正中…",
+        "open": "AIで修正の状態を表示"
+      }
     }
   },
   "interaction": {

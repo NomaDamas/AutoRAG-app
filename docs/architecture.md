@@ -830,7 +830,7 @@ and kept for the chat's life:
 - **Raw error text stays hidden behind "자세히 보기"** (`ErrorDetails`). By default the person sees only the plain-words title and hint;
   nothing of the raw error string is shown until they press "자세히 보기" ("Show details"), which expands the full selectable message for
   inspection or a bug report (only a pre-translated main-process plan message with `action: "open-plan"` is shown directly).
-- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `ErrorFixDialog`). A
+- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `hooks/useErrorFix.ts`, `ErrorFixDialog`, `SidebarErrorFixActivity`). A
   helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
   `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks), plus three tools only the app
   can offer: `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data sources, the index
@@ -843,9 +843,13 @@ and kept for the chat's life:
   refused and a change the validator rejects writes nothing; `edit`/`write` of anything else is allowed only for a file a data source in
   the config names (with its own `.bak-…` copy) and the app's workspace folder, never for the person's own documents; the shell is pi's
   shell with keys and tokens removed from its environment. There is no limit on how much the agent looks, no time limit on the run, and
-  `refresh_index` waits for the index run to end: only the person's Stop ends a run early. While running, `ErrorFixDialog` shows a calm
-  self-healing animation and one shimmering live status line (`"원인을 찾는 중…"` initially, then each tool call's live `i` intent phrase
-  from `profile-progress.ts`), never dumping command lines, raw paths or JSON diffs onto the screen. When `fixed`, it settles into a
+  `refresh_index` waits for the index run to end: only the person's Stop ends a run early. The session lives in the window-wide
+  `useErrorFix` store (`App.tsx` hosts the dialog), so dismissing or pressing "백그라운드로 전환" hides the modal without cancelling the
+  repair; while a run is active — or finished while minimized — `SidebarErrorFixActivity` renders in the sidebar footer in the exact
+  shape of `SidebarIndexActivity` (headline + shimmering `ProgressBar` + live `i` intent phrase, flipping to 100% green/orange when
+  done), and clicking it reopens the modal from any tab. While open and running, `ErrorFixDialog` shows a calm self-healing animation
+  and one shimmering live status line (`"원인을 찾는 중…"` initially, then each tool call's live `i` intent phrase from
+  `profile-progress.ts`), never dumping command lines, raw paths or JSON diffs onto the screen. When `fixed`, it settles into a
   healthy restored visual with the agent's plain summary and a single `Close` button. For `needs-user` or `cannot-fix`, `report_result`
   takes up to three `actions`, each `{kind, target, label}`: `settings` (a Settings page id) or `source` (the alias of a configured data
   source, which opens `source:<alias>` in Settings), validated by the toolkit and rendered as action buttons beside `Close`. A change to
