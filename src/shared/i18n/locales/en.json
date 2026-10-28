@@ -129,6 +129,44 @@
       "progressAria": "Conversion in progress",
       "unsupported": "Converting {{from}} to {{to}} is not supported, so the name was not changed.",
       "replaced": "{{name}} — converted; the original moved to the Trash"
+    },
+    "reduce": {
+      "title": "Reduce Size",
+      "levelLabel": "Compression strength",
+      "recommended": "Recommended",
+      "levels": {
+        "light": "Light (High quality)",
+        "balanced": "Balanced",
+        "max": "Maximum (Smallest size)"
+      },
+      "specs": {
+        "pdf": {
+          "light": "High quality · up to 1600px (~30–65% off)",
+          "balanced": "Standard · up to 1280px (~55–80% off)",
+          "max": "Smallest · up to 960px (~75–90% off)"
+        },
+        "image": {
+          "light": "High quality · 256-color/2560px (~35–60% off)",
+          "balanced": "Balanced · up to 1920px (~55–75% off)",
+          "max": "Smallest · up to 1280px (~70–85% off)"
+        },
+        "video": {
+          "light": "Original res · ~35%+ bitrate cut",
+          "balanced": "Up to 1080p · ~58%+ bitrate cut",
+          "max": "Up to 720p · ~76%+ bitrate cut"
+        },
+        "audio": {
+          "light": "High quality · ~28% bitrate cut",
+          "balanced": "Standard · ~50% bitrate cut",
+          "max": "Compact / voice · ~65% bitrate cut"
+        }
+      },
+      "outputLabel": "Output",
+      "replaceMode": "Replace original",
+      "copyMode": "Save a copy",
+      "replaceHint": "Moves the original to the Trash and replaces “{{name}}” in place.",
+      "copyHint": "Keeps the original and saves “{{copyName}}” alongside it.",
+      "workingHint": "The original file stays untouched until compression finishes."
     }
   },
   "contextMenu": {
@@ -221,7 +259,9 @@
       "videoConvert": "Convert Video",
       "convertTo": "Convert to {{format}}",
       "maxEdge": "Max {{edge}}px",
-      "optimizeSize": "Optimize Size"
+      "reduceSize": "Reduce Size",
+      "reducing": "Reducing “{{name}}”…",
+      "reduceProgressAria": "Reducing {{name}}"
     },
     "versionRelations": {
       "exact": "Exact",
@@ -1349,8 +1389,7 @@
     },
     "action": {
       "unsupportedResize": "This format cannot be resized.",
-      "unsupportedOptimize": "This format cannot be size-optimized.",
-      "alreadyOptimized": "This file is already optimized.",
+      "alreadyOptimized": "This file can’t be made any smaller.",
       "unsupportedExtract": "This file format cannot be extracted.",
       "emptyTarget": "There is nothing to act on.",
       "singleTargetOnly": "This action only supports one item at a time.",
@@ -1363,10 +1402,14 @@
       "unsupportedConvert": "{{format}} conversion is not supported.",
       "converted": "{{name}} — converted",
       "resized": "{{name}} — resized",
-      "optimized": "{{name}} — size optimized",
       "videoNeedsFfmpeg": "Video conversion requires ffmpeg.",
       "containerConverted": "{{name}} — container converted",
-      "shareUnsupported": "This platform does not support system sharing."
+      "shareUnsupported": "This platform does not support system sharing.",
+      "unsupportedReduce": "This file’s size can’t be reduced without changing its format",
+      "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
+      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)",
+      "reduceCancelled": "Cancelled reducing {{name}}",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller · original in Trash)"
     },
     "indexStatus": {
       "outside": "File outside Dazzi search paths",

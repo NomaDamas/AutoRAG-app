@@ -15,14 +15,26 @@
  * by chunk without ever holding the whole archive or its contents.
  */
 
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { lstat, mkdtemp, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
-import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { unzlibSync, Zip, ZipDeflate, ZipPassThrough, zlibSync } from "fflate";
+import { PDFDocument, PDFName, PDFNumber, PDFRawStream } from "pdf-lib";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
+import {
+	extensionOfName,
+	formatByteSize,
+	jpegDimensions,
+	parseMediaHeader,
+	reducedCopyName,
+	REDUCIBLE_EXTENSIONS,
+	reductionKindOf,
+	type MediaHeaderInfo,
+	type ReductionLevel,
+} from "../shared/size-reduction";
 import { t } from "../shared/i18n/core";
 import { ArchiveError } from "./archive-guard.mjs";
 import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
@@ -31,11 +43,13 @@ import {
 	type ActionAnchor,
 	type ActionCapabilities,
 	type ActionOutcome,
+	type ActionProgressEvent,
 	type ActionRequest,
 	type ImageFormat,
 	type OpenWithApplication,
 	type VideoContainer,
 } from "../shared/actions-contract";
+import type { PdfReducer } from "./pdf-reducer";
 import { writeSevenZip } from "./sevenzip-writer";
 import { errorMessage, pathExists } from "./fs-entry";
 
@@ -46,10 +60,17 @@ export interface CommandResult {
 }
 
 /** Runs an external command; rejects with the program's own message on failure. */
+export interface CommandRunOptions {
+	readonly timeoutMs?: number;
+	readonly signal?: AbortSignal;
+	readonly onStdout?: (chunk: string) => void;
+	readonly onStderr?: (chunk: string) => void;
+}
+
 export type CommandRunner = (
 	command: string,
 	args: readonly string[],
-	options?: { readonly timeoutMs?: number },
+	options?: CommandRunOptions,
 ) => Promise<CommandResult>;
 
 /** The "Open with" chooser for applications outside the OS's suggestions; injected so the service never imports `dialog`. */
@@ -75,12 +96,20 @@ export interface ActionServiceDeps {
 	readonly run?: CommandRunner;
 	/** Extraction caps; tests inject small values to exercise the refusals. */
 	readonly archiveLimits?: ArchiveLimits;
+	/** Shrinks PDFs (Filee's Compress PDF); absent means PDFs are not offered. */
+	readonly pdf?: PdfReducer;
+	/** Live progress callback for long-running jobs (`reduceSize` with an `id`). */
+	readonly onProgress?: (event: ActionProgressEvent, window: BrowserWindow | null) => void;
+	/** Moves a file to the OS Trash before in-place replacement; defaults to `rm` in bare unit harnesses. */
+	readonly trash?: (path: string) => Promise<void>;
 }
 
 /** The Inspector action surface the IPC layer registers. */
 export interface ActionService {
 	capabilities(): Promise<ActionCapabilities>;
 	run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
+	/** Stop a running cancellable action (`reduceSize`) identified by `id`. */
+	cancel(id: string): Promise<void>;
 	/** Applications the OS registers for `path`'s type, default first (macOS; empty elsewhere). */
 	openWithApplications(path: string): Promise<readonly OpenWithApplication[]>;
 	share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void>;
@@ -193,29 +222,170 @@ const EXTENSION_FORMATS: Readonly<Record<string, ImageFormat>> = {
 	tiff: "tiff",
 	bmp: "bmp",
 };
-/** Lossy formats, where "optimize" actually saves bytes. */
-const LOSSY_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
+/** Staging folder a size reduction writes into before the result takes its final name. */
+const REDUCE_STAGING_PREFIX = ".dazzi-reduce-";
+/** Per-level encoder parameters across image, video, audio, and PDF streams. */
+interface LevelSpec {
+	readonly sipsQuality: string;
+	readonly imageMaxEdge: number | null;
+	readonly ffmpegJpegQ: string;
+	readonly ffmpegWebpQuality: string;
+	readonly ffmpegHeicCrf: string;
+	readonly pngPaletteColors: 256 | 144 | 64;
+	readonly pngDither: string;
+	readonly x264Crf: string;
+	readonly vp9Crf: string;
+	readonly videoMaxEdge: number | null;
+	readonly videoBitrateRatio: number;
+	readonly videoAudioKbps: number;
+	readonly videoOpusKbps: number;
+	readonly audioKbps: number;
+	readonly opusKbps: number;
+	readonly audioBitrateRatio: number;
+	readonly pdfMaxEdge: number;
+	readonly pdfJpegQuality: string;
+	readonly pdfFfmpegQ: string;
+}
+
+const LEVEL_SPECS: Readonly<Record<ReductionLevel, LevelSpec>> = {
+	light: {
+		sipsQuality: "66",
+		imageMaxEdge: 2560,
+		ffmpegJpegQ: "6",
+		ffmpegWebpQuality: "72",
+		ffmpegHeicCrf: "25",
+		pngPaletteColors: 256,
+		pngDither: "floyd_steinberg",
+		x264Crf: "25",
+		vp9Crf: "30",
+		videoMaxEdge: null,
+		videoBitrateRatio: 0.65,
+		videoAudioKbps: 128,
+		videoOpusKbps: 96,
+		audioKbps: 160,
+		opusKbps: 96,
+		audioBitrateRatio: 0.72,
+		pdfMaxEdge: 1600,
+		pdfJpegQuality: "62",
+		pdfFfmpegQ: "7",
+	},
+	balanced: {
+		sipsQuality: "50",
+		imageMaxEdge: 1920,
+		ffmpegJpegQ: "10",
+		ffmpegWebpQuality: "58",
+		ffmpegHeicCrf: "29",
+		pngPaletteColors: 144,
+		pngDither: "sierra2_4a",
+		x264Crf: "28",
+		vp9Crf: "34",
+		videoMaxEdge: 1920,
+		videoBitrateRatio: 0.42,
+		videoAudioKbps: 128,
+		videoOpusKbps: 64,
+		audioKbps: 128,
+		opusKbps: 64,
+		audioBitrateRatio: 0.5,
+		pdfMaxEdge: 1280,
+		pdfJpegQuality: "48",
+		pdfFfmpegQ: "12",
+	},
+	max: {
+		sipsQuality: "34",
+		imageMaxEdge: 1280,
+		ffmpegJpegQ: "18",
+		ffmpegWebpQuality: "38",
+		ffmpegHeicCrf: "35",
+		pngPaletteColors: 64,
+		pngDither: "sierra2_4a",
+		x264Crf: "33",
+		vp9Crf: "40",
+		videoMaxEdge: 1280,
+		videoBitrateRatio: 0.24,
+		videoAudioKbps: 96,
+		videoOpusKbps: 48,
+		audioKbps: 64,
+		opusKbps: 32,
+		audioBitrateRatio: 0.35,
+		pdfMaxEdge: 960,
+		pdfJpegQuality: "34",
+		pdfFfmpegQ: "18",
+	},
+};
+
+const STEP_DOWN_LEVEL: Readonly<Record<ReductionLevel, ReductionLevel | null>> = {
+	light: "balanced",
+	balanced: "max",
+	max: null,
+};
+/** The ffmpeg encoder each audio extension needs. */
+const AUDIO_ENCODERS: Readonly<Record<string, string>> = { mp3: "libmp3lame", m4a: "aac", aac: "aac", opus: "libopus" };
+/** Containers that can carry the (copied) cover picture of a track. */
+const AUDIO_WITH_COVER: readonly string[] = ["mp3", "m4a"];
+/** Video extensions the MP4 family flags (`+faststart`) apply to. */
+const FASTSTART_EXTENSIONS: readonly string[] = ["mp4", "m4v", "mov"];
 
 export function defaultRun(
 	command: string,
 	args: readonly string[],
-	options?: { readonly timeoutMs?: number },
+	options?: CommandRunOptions,
 ): Promise<CommandResult> {
-	const { promise, resolve, reject } = Promise.withResolvers<CommandResult>();
-	execFile(
-		command,
-		[...args],
-		{ timeout: options?.timeoutMs ?? COMMAND_TIMEOUT_MS, maxBuffer: COMMAND_MAX_BUFFER, windowsHide: true },
-		(error, stdout, stderr) => {
-			if (error !== null) {
-				const detail = stderr.trim();
-				reject(new Error(detail.length > 0 ? detail : errorMessage(error)));
+	const signal = options?.signal;
+	if (signal?.aborted) return Promise.reject(new Error("aborted"));
+	return new Promise<CommandResult>((resolve, reject) => {
+		const child = spawn(command, [...args], {
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
+		});
+		const stdout: Buffer[] = [];
+		const stderr: Buffer[] = [];
+		let bytes = 0;
+		let settled = false;
+		const finish = (fn: () => void): void => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", onAbort);
+			fn();
+		};
+		const killChild = (): void => {
+			try {
+				child.kill("SIGTERM");
+			} catch {
+				// Already gone.
+			}
+		};
+		const timer = setTimeout(() => {
+			killChild();
+			finish(() => reject(new Error(`${command} timed out`)));
+		}, options?.timeoutMs ?? COMMAND_TIMEOUT_MS);
+		const onAbort = (): void => {
+			killChild();
+			finish(() => reject(new Error("aborted")));
+		};
+		signal?.addEventListener("abort", onAbort, { once: true });
+		child.stdout.on("data", (chunk: Buffer) => {
+			bytes += chunk.byteLength;
+			if (bytes <= COMMAND_MAX_BUFFER) stdout.push(chunk);
+			options?.onStdout?.(chunk.toString("utf8"));
+		});
+		child.stderr.on("data", (chunk: Buffer) => {
+			bytes += chunk.byteLength;
+			if (bytes <= COMMAND_MAX_BUFFER) stderr.push(chunk);
+			options?.onStderr?.(chunk.toString("utf8"));
+		});
+		child.once("error", (error) => finish(() => reject(new Error(errorMessage(error)))));
+		child.once("close", (code) => {
+			const out = Buffer.concat(stdout).toString("utf8");
+			const err = Buffer.concat(stderr).toString("utf8");
+			if (code !== 0) {
+				const detail = err.trim();
+				finish(() => reject(new Error(detail.length > 0 ? detail : `${command} exited with code ${code ?? -1}`)));
 				return;
 			}
-			resolve({ stdout, stderr });
-		},
-	);
-	return promise;
+			finish(() => resolve({ stdout: out, stderr: err }));
+		});
+	});
 }
 
 /** The file name without its final extension. */
@@ -364,8 +534,19 @@ function sipsResizeArgs(source: string, target: string, maxEdge: number): readon
 	return ["-Z", String(maxEdge), "--out", target, source];
 }
 
-function sipsOptimizeArgs(source: string, target: string, format: ImageFormat): readonly string[] {
-	return ["-s", "format", format, "-s", "formatOptions", JPEG_QUALITY, "--out", target, source];
+function sipsReduceArgs(source: string, target: string, format: ImageFormat, quality: string, maxEdge: number | null): readonly string[] {
+	return [
+		"-s",
+		"format",
+		format,
+		"-s",
+		"formatOptions",
+		quality,
+		...(maxEdge === null ? [] : ["-Z", String(maxEdge)]),
+		"--out",
+		target,
+		source,
+	];
 }
 
 /**
@@ -431,19 +612,247 @@ function ffmpegResizeArgs(
 	return args;
 }
 
-/** Re-encode for size: PNG uses maximum deflate, lossy formats re-encode at the tuning quality. */
-function ffmpegOptimizeArgs(source: string, target: string, format: ImageFormat, avifEncoder: string | null): readonly string[] {
+/** Re-encode an image for `level`: PNG uses perceptual palette quantization + mixed-filter deflate at all 3 levels. */
+function ffmpegReduceImageArgs(
+	source: string,
+	target: string,
+	format: ImageFormat,
+	level: ReductionLevel,
+	avifEncoder: string | null,
+): readonly string[] {
+	const spec = LEVEL_SPECS[level];
 	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
-	if (format === "png") args.push("-compression_level", "9", "-pred", "mixed");
+	if (format === "png") {
+		const scalePrefix =
+			spec.imageMaxEdge === null || level === "light"
+				? ""
+				: `scale='min(iw,${spec.imageMaxEdge})':'min(ih,${spec.imageMaxEdge})':force_original_aspect_ratio=decrease,`;
+		const filter = `${scalePrefix}split[a][b];[a]palettegen=max_colors=${spec.pngPaletteColors}:stats_mode=single:reserve_transparent=1[p];[b][p]paletteuse=dither=${spec.pngDither}`;
+		args.push("-vf", filter, "-compression_level", "9", "-pred", "mixed", ...ffmpegImageOutput("png"), target);
+		return args;
+	}
+	if (spec.imageMaxEdge !== null) {
+		args.push("-vf", `scale='min(iw,${spec.imageMaxEdge})':'min(ih,${spec.imageMaxEdge})':force_original_aspect_ratio=decrease`);
+	}
+	if (format === "webp") {
+		args.push("-c:v", "libwebp", "-quality", spec.ffmpegWebpQuality, target);
+		return args;
+	}
+	if (format === "jpeg") args.push("-q:v", spec.ffmpegJpegQ);
+	else if (format === "heic") args.push("-crf", spec.ffmpegHeicCrf);
 	else args.push(...ffmpegQualityArgs(format, avifEncoder));
 	args.push(...ffmpegImageOutput(format), target);
 	return args;
+}
+
+/** The video encoders a container is reduced with: WebM takes VP9 + Opus, the rest H.264 + AAC. */
+function videoReduceCodecs(extension: string): { readonly video: string; readonly audio: string } {
+	return extension === "webm" ? { video: "libvpx-vp9", audio: "libopus" } : { video: "libx264", audio: "aac" };
+}
+
+function ffmpegReduceVideoArgs(
+	source: string,
+	target: string,
+	extension: string,
+	level: ReductionLevel,
+	media: MediaHeaderInfo | null,
+	reportProgress = false,
+): readonly string[] {
+	const spec = LEVEL_SPECS[level];
+	const { video, audio } = videoReduceCodecs(extension);
+	const args = ["-y", ...(reportProgress ? ["-progress", "pipe:1", "-nostats"] : []), "-i", source, "-map", "0:v:0", "-map", "0:a?", "-c:v", video];
+	const scale =
+		spec.videoMaxEdge === null
+			? "scale=trunc(iw/2)*2:trunc(ih/2)*2"
+			: `scale='min(iw,${spec.videoMaxEdge})':'min(ih,${spec.videoMaxEdge})':force_original_aspect_ratio=decrease:force_divisible_by=2`;
+	args.push("-vf", scale, "-pix_fmt", "yuv420p");
+	if (video === "libvpx-vp9") args.push("-crf", spec.vp9Crf, "-b:v", "0");
+	else args.push("-crf", spec.x264Crf, "-preset", "faster");
+
+	const srcVideoKbps =
+		media?.videoKbps ??
+		(media?.totalKbps !== null && media?.totalKbps !== undefined
+			? Math.max(120, media.totalKbps - (media.audioKbps ?? 128))
+			: null);
+	if (srcVideoKbps !== null && srcVideoKbps > 0) {
+		const maxrate = Math.max(96, Math.round(srcVideoKbps * spec.videoBitrateRatio));
+		args.push("-maxrate", `${maxrate}k`, "-bufsize", `${maxrate * 2}k`);
+	}
+
+	const baseAudioKbps = audio === "libopus" ? spec.videoOpusKbps : spec.videoAudioKbps;
+	const audioKbps =
+		media?.audioKbps !== null && media?.audioKbps !== undefined
+			? Math.min(baseAudioKbps, Math.max(32, Math.round(media.audioKbps * (level === "light" ? 0.85 : level === "balanced" ? 0.7 : 0.55))))
+			: baseAudioKbps;
+	args.push("-c:a", audio, "-b:a", `${audioKbps}k`, "-map_metadata", "0");
+	if (FASTSTART_EXTENSIONS.includes(extension)) args.push("-movflags", "+faststart");
+	args.push(target);
+	return args;
+}
+
+function ffmpegReduceAudioArgs(
+	source: string,
+	target: string,
+	extension: string,
+	level: ReductionLevel,
+	media: MediaHeaderInfo | null,
+	reportProgress = false,
+): readonly string[] {
+	const spec = LEVEL_SPECS[level];
+	const codec = AUDIO_ENCODERS[extension] ?? "aac";
+	const args = ["-y", ...(reportProgress ? ["-progress", "pipe:1", "-nostats"] : []), "-i", source, "-map", "0:a:0"];
+	if (AUDIO_WITH_COVER.includes(extension)) args.push("-map", "0:v:0?", "-c:v", "copy");
+	if (extension === "m4a") args.push("-disposition:v:0", "attached_pic");
+	const defaultKbps = codec === "libopus" ? spec.opusKbps : spec.audioKbps;
+	const srcKbps = media?.audioKbps ?? media?.totalKbps ?? null;
+	const floorKbps = codec === "libopus" ? 24 : 40;
+	const targetKbps =
+		srcKbps !== null && srcKbps > 0
+			? Math.min(defaultKbps, Math.max(floorKbps, Math.floor(srcKbps * spec.audioBitrateRatio)))
+			: defaultKbps;
+	args.push("-c:a", codec, "-b:a", `${targetKbps}k`, "-map_metadata", "0", target);
+	return args;
+}
+
+/** Parses ffmpeg's `Duration: HH:MM:SS.xx` header and `out_time_us=...` lines into monotonic 1–99% steps. */
+function createFfmpegProgressTracker(emit: (percent: number) => void): {
+	readonly onStdout: (chunk: string) => void;
+	readonly onStderr: (chunk: string) => void;
+} {
+	let durationUs: number | null = null;
+	let lastPercent = 0;
+	let stderrTail = "";
+	let stdoutTail = "";
+	return {
+		onStderr(chunk) {
+			if (durationUs !== null) return;
+			stderrTail = (stderrTail + chunk).slice(-2048);
+			const match = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(stderrTail);
+			if (match === null) return;
+			const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+			if (Number.isFinite(seconds) && seconds > 0) durationUs = seconds * 1_000_000;
+		},
+		onStdout(chunk) {
+			if (durationUs === null) return;
+			const combined = stdoutTail + chunk;
+			const lines = combined.split(/\r?\n/);
+			stdoutTail = lines.pop() ?? "";
+			for (const line of lines) {
+				const match = /^out_time_us=(\d+)$/.exec(line.trim());
+				if (match === null) continue;
+				const currentUs = Number(match[1]);
+				const percent = Math.min(99, Math.max(1, Math.floor((currentUs / durationUs) * 100)));
+				if (percent > lastPercent) {
+					lastPercent = percent;
+					emit(percent);
+				}
+			}
+		},
+	};
+}
+
+/**
+ * Re-encodes `/DCTDecode` JPEG image XObjects inside a PDF at the level's target
+ * resolution and quality, then writes PDF 1.5 object streams (which also shrinks
+ * digital text-only PDFs with uncompressed xref/indirect objects).
+ */
+async function recompressPdfStreams(
+	source: string,
+	output: string,
+	staging: string,
+	level: ReductionLevel,
+	reencodeJpeg: (input: string, output: string, maxEdge: number, sipsQuality: string, ffmpegQ: string) => Promise<void>,
+): Promise<void> {
+	const spec = LEVEL_SPECS[level];
+	const fallbackLevel = STEP_DOWN_LEVEL[level];
+	const fallbackSpec = fallbackLevel === null ? null : LEVEL_SPECS[fallbackLevel];
+	const bytes = await readFile(source);
+	const doc = await PDFDocument.load(bytes, { updateMetadata: false });
+	let index = 0;
+	for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
+		if (!(obj instanceof PDFRawStream)) continue;
+		const filter = obj.dict.get(PDFName.of("Filter"))?.toString();
+		if (filter === "/FlateDecode") {
+			try {
+				const raw = unzlibSync(obj.contents);
+				const tighter = zlibSync(raw, { level: 9 });
+				if (tighter.byteLength < obj.contents.byteLength) {
+					doc.context.assign(ref, PDFRawStream.of(obj.dict, tighter));
+				}
+			} catch {
+				// Predictor-encoded or non-standard Flate stream: leave untouched.
+			}
+			continue;
+		}
+		if (obj.dict.get(PDFName.of("Subtype"))?.toString() !== "/Image") continue;
+		const colorSpace = obj.dict.get(PDFName.of("ColorSpace"))?.toString();
+		const smask = obj.dict.get(PDFName.of("SMask"));
+		if (filter !== "/DCTDecode" || smask !== undefined || colorSpace === "/DeviceCMYK") continue;
+		const inPath = join(staging, `pdf-img-${index}.jpg`);
+		const outPath = join(staging, `pdf-img-${index}-out.jpg`);
+		index += 1;
+		await writeFile(inPath, obj.contents);
+		try {
+			await reencodeJpeg(inPath, outPath, spec.pdfMaxEdge, spec.pdfJpegQuality, spec.pdfFfmpegQ);
+			let next = await readFile(outPath);
+			if (fallbackSpec !== null && next.byteLength > obj.contents.byteLength * 0.88) {
+				await reencodeJpeg(inPath, outPath, fallbackSpec.pdfMaxEdge, fallbackSpec.pdfJpegQuality, fallbackSpec.pdfFfmpegQ).catch(() => undefined);
+				const stepped = await readFile(outPath);
+				if (stepped.byteLength < next.byteLength) next = stepped;
+			}
+			if (next.byteLength < obj.contents.byteLength) {
+				const dims = jpegDimensions(next);
+				if (dims !== null) {
+					obj.dict.set(PDFName.of("Width"), PDFNumber.of(dims.width));
+					obj.dict.set(PDFName.of("Height"), PDFNumber.of(dims.height));
+				}
+				doc.context.assign(ref, PDFRawStream.of(obj.dict, new Uint8Array(next)));
+			}
+		} catch {
+			// Leave any unreadable embedded stream untouched.
+		}
+	}
+	const saved = await doc.save({ useObjectStreams: true });
+	if (saved.byteLength < bytes.byteLength) await writeFile(output, saved);
+}
+
+/**
+ * Whether a PNG or WebP holds an animation, which a one-frame re-encode would
+ * flatten. PNG: an `acTL` chunk before the first `IDAT`; WebP: the VP8X
+ * animation flag.
+ */
+async function isAnimatedImage(path: string): Promise<boolean> {
+	const extension = extensionOfName(path);
+	if (extension !== "png" && extension !== "webp") return false;
+	const handle = await open(path, "r");
+	try {
+		if (extension === "webp") {
+			const head = Buffer.alloc(32);
+			const { bytesRead } = await handle.read(head, 0, 32, 0);
+			return bytesRead >= 21 && head.toString("latin1", 12, 16) === "VP8X" && ((head[20] ?? 0) & 0x02) !== 0;
+		}
+		const chunkHead = Buffer.alloc(8);
+		let offset = 8;
+		for (let chunks = 0; chunks < 64; chunks += 1) {
+			const { bytesRead } = await handle.read(chunkHead, 0, 8, offset);
+			if (bytesRead < 8) return false;
+			const type = chunkHead.toString("latin1", 4, 8);
+			if (type === "acTL") return true;
+			if (type === "IDAT" || type === "IEND") return false;
+			offset += 12 + chunkHead.readUInt32BE(0);
+		}
+		return false;
+	} finally {
+		await handle.close();
+	}
 }
 
 /** What the ffmpeg image backend can write, and the AV1 encoder AVIF uses when it can. */
 interface FfmpegImageProbe {
 	readonly formats: readonly ImageFormat[];
 	readonly avifEncoder: string | null;
+	/** Every encoder `ffmpeg -encoders` lists; size reduction needs x264, VP9, AAC, MP3 and Opus ones. */
+	readonly encoders: ReadonlySet<string>;
 }
 
 function ffmpegRemuxArgs(source: string, target: string): readonly string[] {
@@ -455,6 +864,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	const run = deps.run ?? defaultRun;
 	const share = deps.share ?? null;
 	const archiveLimits = deps.archiveLimits ?? DEFAULT_ARCHIVE_LIMITS;
+	const pdf = deps.pdf ?? null;
+	const trash = deps.trash ?? ((target: string) => rm(target, { force: true }));
 	/** Memoized ffmpeg probe: one `ffmpeg -version` per session, at most. */
 	let ffmpeg: Promise<boolean> | null = null;
 	/** Memoized image-encoder probe: one `-encoders` / `-muxers` pass per session. */
@@ -494,9 +905,9 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					? (AVIF_ENCODERS.find((name) => encoderNames.has(name)) ?? null)
 					: null;
 				if (avifEncoder !== null) formats.add("avif");
-				return { formats: IMAGE_FORMAT_ORDER.filter((format) => formats.has(format)), avifEncoder };
+				return { formats: IMAGE_FORMAT_ORDER.filter((format) => formats.has(format)), avifEncoder, encoders: encoderNames };
 			} catch {
-				return { formats: [], avifEncoder: null };
+				return { formats: [], avifEncoder: null, encoders: new Set() };
 			}
 		})();
 		return ffmpegImageProbe;
@@ -544,28 +955,279 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		return target;
 	}
 
-	async function optimizeImage(source: string): Promise<string> {
-		const format = imageFormatOf(source);
-		if (format === null) throw new Error(t("main.action.unsupportedOptimize"));
-		// Optimize re-encodes lossy formats; the ffmpeg backend also deflates PNG losslessly.
-		const optimizable = LOSSY_FORMATS.includes(format) || (platform !== "darwin" && format === "png");
-		if (!optimizable) throw new Error(t("main.action.unsupportedOptimize"));
-		const probe = platform === "darwin" ? null : await probeFfmpegImages();
-		if (probe !== null && !probe.formats.includes(format)) {
-			throw new Error(t("main.action.unsupportedOptimize"));
+	/** The extensions `reduceSize` can shrink on this machine, in the order the shared table lists them. */
+	async function reducibleExtensions(): Promise<readonly string[]> {
+		const probe = await probeFfmpegImages();
+		const stills = platform === "darwin" ? await probeSips() : probe.formats;
+		const can = new Set<string>();
+		if (pdf !== null && (await pdf.available())) can.add("pdf");
+		if (stills.includes("jpeg")) for (const extension of ["jpg", "jpeg"]) can.add(extension);
+		if (stills.includes("heic")) for (const extension of ["heic", "heif"]) can.add(extension);
+		// PNG's lossless deflate and WebP's encoder only exist in ffmpeg, on every platform.
+		if (probe.formats.includes("png")) can.add("png");
+		if (probe.formats.includes("webp")) can.add("webp");
+		for (const extension of REDUCIBLE_EXTENSIONS) {
+			const kind = reductionKindOf(`x.${extension}`);
+			if (kind === "video" && probe.encoders.has(videoReduceCodecs(extension).video) && probe.encoders.has(videoReduceCodecs(extension).audio)) can.add(extension);
+			if (kind === "audio" && probe.encoders.has(AUDIO_ENCODERS[extension] ?? "")) can.add(extension);
 		}
-		const target = await uniqueChild(dirname(source), `${stemOf(source)}-optimized${extname(source)}`);
-		if (platform === "darwin" && format === "webp") await run("ffmpeg", ffmpegWebpArgs(source, target));
-		else if (platform === "darwin") await run("sips", sipsOptimizeArgs(source, target, format));
-		else {
-			await run("ffmpeg", ffmpegOptimizeArgs(source, target, format, probe?.avifEncoder ?? null));
-			// Keep the output only when it actually shrank; ffmpeg may re-encode larger.
-			if ((await lstat(target)).size >= (await lstat(source)).size) {
-				await rm(target, { force: true });
-				throw new Error(t("main.action.alreadyOptimized"));
+		return REDUCIBLE_EXTENSIONS.filter((extension) => can.has(extension));
+	}
+
+	/** Drops a result that is not smaller than the original, so a reduction never leaves a bigger copy. */
+	async function keepIfSmaller(source: string, target: string): Promise<{ readonly before: number; readonly after: number }> {
+		const [before, after] = [(await lstat(source)).size, (await lstat(target)).size];
+		if (after >= before) {
+			await rm(target, { force: true });
+			throw new Error(t("main.action.alreadyOptimized"));
+		}
+		return { before, after };
+	}
+
+	const running = new Map<string, AbortController>();
+
+	async function probeMedia(source: string, staging: string, beforeSize: number, signal: AbortSignal): Promise<MediaHeaderInfo | null> {
+		try {
+			const probeOut = join(staging, "probe.null");
+			const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", source, "-t", "0", "-f", "null", probeOut], {
+				signal,
+				timeoutMs: 10_000,
+			});
+			const parsed = parseMediaHeader(stderr, beforeSize);
+			return parsed.durationSec === null && parsed.videoKbps === null && parsed.audioKbps === null ? null : parsed;
+		} catch {
+			return null;
+		}
+	}
+
+	async function reencodePdfJpeg(
+		input: string,
+		output: string,
+		maxEdge: number,
+		sipsQuality: string,
+		ffmpegQ: string,
+		signal: AbortSignal,
+	): Promise<void> {
+		const ffmpegProbe = await probeFfmpegImages();
+		if (ffmpegProbe.formats.includes("jpeg")) {
+			await run(
+				"ffmpeg",
+				[
+					"-y",
+					...ffmpegImageInput(input),
+					"-i",
+					input,
+					"-frames:v",
+					"1",
+					"-vf",
+					`scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`,
+					"-q:v",
+					ffmpegQ,
+					"-update",
+					"1",
+					output,
+				],
+				{ signal },
+			);
+			return;
+		}
+		const dims = jpegDimensions(await readFile(input));
+		const cap = dims !== null && Math.max(dims.width, dims.height) > maxEdge ? maxEdge : null;
+		await run("sips", sipsReduceArgs(input, output, "jpeg", sipsQuality, cap), { signal });
+	}
+
+	async function pickSmallestExisting(candidates: readonly string[]): Promise<string | null> {
+		let best: { path: string; size: number } | null = null;
+		for (const candidate of candidates) {
+			if (!(await pathExists(candidate))) continue;
+			const size = (await lstat(candidate)).size;
+			if (size > 0 && (best === null || size < best.size)) best = { path: candidate, size };
+		}
+		return best?.path ?? null;
+	}
+
+	async function reducePdfInto(source: string, staging: string, level: ReductionLevel, beforeSize: number, signal: AbortSignal): Promise<string> {
+		if (pdf === null) throw new Error(t("main.action.unsupportedReduce"));
+		const reencode = (inPath: string, outPath: string, edge: number, sipsQ: string, ffQ: string): Promise<void> =>
+			reencodePdfJpeg(inPath, outPath, edge, sipsQ, ffQ, signal);
+
+		if (level === "light") {
+			const gentle = join(staging, "light.pdf");
+			await recompressPdfStreams(source, gentle, staging, "light", reencode).catch(() => undefined);
+			// Only settle for `gentle` alone when it genuinely shrunk (>= 15%); otherwise also consult Filee.
+			if ((await pathExists(gentle)) && (await lstat(gentle)).size <= beforeSize * 0.85) return gentle;
+			const fileeDir = join(staging, "filee");
+			await mkdir(fileeDir, { recursive: true });
+			const fromFilee = await pdf.reduce(source, fileeDir, signal);
+			return (await pickSmallestExisting([gentle, fromFilee])) ?? fromFilee;
+		}
+
+		const fileeDir = join(staging, "filee");
+		await mkdir(fileeDir, { recursive: true });
+		const fromFilee = await pdf.reduce(source, fileeDir, signal);
+		const refined = join(staging, `${level}.pdf`);
+		const baseForStreamPass = (await lstat(fromFilee)).size < beforeSize ? fromFilee : source;
+		await recompressPdfStreams(baseForStreamPass, refined, staging, level, reencode).catch(() => undefined);
+		return (await pickSmallestExisting([refined, fromFilee])) ?? fromFilee;
+	}
+
+	async function encodeStillImage(
+		source: string,
+		stagedTarget: string,
+		format: ImageFormat,
+		level: ReductionLevel,
+		signal: AbortSignal,
+	): Promise<void> {
+		const probe = await probeFfmpegImages();
+		const useFfmpeg =
+			format === "png" ||
+			format === "webp" ||
+			(format === "jpeg" && probe.formats.includes("jpeg")) ||
+			platform !== "darwin";
+		if (!useFfmpeg) {
+			const spec = LEVEL_SPECS[level];
+			const dims = format === "jpeg" && spec.imageMaxEdge !== null ? jpegDimensions(await readFile(source)) : null;
+			const cap =
+				spec.imageMaxEdge !== null && dims !== null && Math.max(dims.width, dims.height) > spec.imageMaxEdge
+					? spec.imageMaxEdge
+					: null;
+			await run("sips", sipsReduceArgs(source, stagedTarget, format, spec.sipsQuality, cap), { signal });
+			return;
+		}
+		await run("ffmpeg", ffmpegReduceImageArgs(source, stagedTarget, format, level, probe.avifEncoder), { signal });
+	}
+
+	async function reduceMediaInto(
+		source: string,
+		extension: string,
+		stagedTarget: string,
+		staging: string,
+		beforeSize: number,
+		level: ReductionLevel,
+		signal: AbortSignal,
+		emitProgress: ((percent: number) => void) | null,
+	): Promise<void> {
+		const kind = reductionKindOf(source);
+		if (kind === "video") {
+			const media = await probeMedia(source, staging, beforeSize, signal);
+			const tracker = emitProgress === null ? undefined : createFfmpegProgressTracker(emitProgress);
+			await run("ffmpeg", ffmpegReduceVideoArgs(source, stagedTarget, extension, level, media, emitProgress !== null), {
+				signal,
+				timeoutMs: 60 * 60 * 1000,
+				...(tracker === undefined ? {} : tracker),
+			});
+			return;
+		}
+		if (kind === "audio") {
+			const media = await probeMedia(source, staging, beforeSize, signal);
+			const tracker = emitProgress === null ? undefined : createFfmpegProgressTracker(emitProgress);
+			await run("ffmpeg", ffmpegReduceAudioArgs(source, stagedTarget, extension, level, media, emitProgress !== null), {
+				signal,
+				...(tracker === undefined ? {} : tracker),
+			});
+			return;
+		}
+		const format = imageFormatOf(source);
+		if (format === null) throw new Error(t("main.action.unsupportedReduce"));
+		await encodeStillImage(source, stagedTarget, format, level, signal);
+		// Adaptive step-down: when a JPEG/WebP/HEIC/PNG was already moderately compressed so
+		// `light` (or `balanced`) shaved <12%, step down once so the user gets a real reduction.
+		const nextLevel = STEP_DOWN_LEVEL[level];
+		if (nextLevel !== null && (await pathExists(stagedTarget)) && (await lstat(stagedTarget)).size > beforeSize * 0.88) {
+			const stepped = join(staging, `stepped-${basename(stagedTarget)}`);
+			await encodeStillImage(source, stepped, format, nextLevel, signal).catch(() => undefined);
+			if ((await pathExists(stepped)) && (await lstat(stepped)).size < (await lstat(stagedTarget)).size) {
+				await rename(stepped, stagedTarget);
 			}
 		}
-		return target;
+	}
+
+	/**
+	 * Same format, fewer bytes: either replaces `source` in place (moving the
+	 * original safely to the Trash) or writes one `<stem>-reduced.<ext>` sibling
+	 * (recycling any prior `-reduced` copy through the Trash so `-reduced 2 .. 8`
+	 * clutter never accumulates).
+	 */
+	async function reduceSize(
+		source: string,
+		options: { readonly level?: ReductionLevel; readonly replaceOriginal?: boolean; readonly id?: string },
+		window: BrowserWindow | null,
+	): Promise<ActionOutcome> {
+		const { id, level = "balanced", replaceOriginal = false } = options;
+		const name = basename(source);
+		const controller = new AbortController();
+		if (id !== undefined) running.set(id, controller);
+		const { signal } = controller;
+		const throwIfCancelled = (): void => {
+			if (signal.aborted) throw new Error(t("main.action.reduceCancelled", { name }));
+		};
+		let staging: string | null = null;
+		try {
+			const extension = extensionOfName(source);
+			if (!(await reducibleExtensions()).includes(extension)) throw new Error(t("main.action.unsupportedReduce"));
+			throwIfCancelled();
+			if (await isAnimatedImage(source)) throw new Error(t("main.action.animatedReduce"));
+			throwIfCancelled();
+			const beforeSize = (await lstat(source)).size;
+			const directory = dirname(source);
+			const copyName = reducedCopyName(name);
+			staging = await mkdtemp(join(directory, REDUCE_STAGING_PREFIX));
+			throwIfCancelled();
+
+			let produced: string;
+			if (extension === "pdf") {
+				produced = await reducePdfInto(source, staging, level, beforeSize, signal);
+			} else {
+				produced = join(staging, copyName);
+				const emit =
+					id !== undefined && deps.onProgress !== undefined
+						? (percent: number): void => deps.onProgress?.({ id, percent }, window)
+						: null;
+				await reduceMediaInto(source, extension, produced, staging, beforeSize, level, signal, emit);
+			}
+			throwIfCancelled();
+			const { before, after } = await keepIfSmaller(source, produced);
+			const percent = Math.floor((1 - after / before) * 100);
+
+			if (replaceOriginal) {
+				await trash(source);
+				await rename(produced, source);
+				return {
+					output: source,
+					note: t("main.action.reducedReplaced", {
+						name,
+						before: formatByteSize(before),
+						after: formatByteSize(after),
+						percent,
+					}),
+				};
+			}
+
+			const desired = join(directory, copyName);
+			let target: string;
+			if (desired === source) {
+				target = await uniqueChild(directory, copyName);
+			} else {
+				if (await pathExists(desired)) await trash(desired);
+				target = desired;
+			}
+			await rename(produced, target);
+			return {
+				output: target,
+				note: t("main.action.reduced", {
+					name: basename(target),
+					before: formatByteSize(before),
+					after: formatByteSize(after),
+					percent,
+				}),
+			};
+		} catch (error) {
+			if (signal.aborted) throw new Error(t("main.action.reduceCancelled", { name }));
+			throw error;
+		} finally {
+			if (id !== undefined) running.delete(id);
+			if (staging !== null) await rm(staging, { recursive: true, force: true });
+		}
 	}
 
 	/**
@@ -646,6 +1308,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 				archive: true,
 				imageFormats: await imageTargets(),
 				videoContainers: ffmpegPresent ? VIDEO_CONTAINERS : [],
+				reducibleExtensions: await reducibleExtensions(),
 			};
 		},
 
@@ -726,10 +1389,16 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					const output = await resizeImage(sole(), request.maxEdge);
 					return { output, note: t("main.action.resized", { name: basename(output) }) };
 				}
-				case "optimizeImage": {
-					const output = await optimizeImage(sole());
-					return { output, note: t("main.action.optimized", { name: basename(output) }) };
-				}
+				case "reduceSize":
+					return reduceSize(
+						sole(),
+						{
+							...(request.level === undefined ? {} : { level: request.level }),
+							...(request.replaceOriginal === undefined ? {} : { replaceOriginal: request.replaceOriginal }),
+							...(request.id === undefined ? {} : { id: request.id }),
+						},
+						window,
+					);
 				case "convertVideo": {
 					if (!(await hasFfmpeg())) throw new Error(t("main.action.videoNeedsFfmpeg"));
 					const path = sole();
@@ -738,6 +1407,10 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					return { output: target, note: t("main.action.containerConverted", { name: basename(target) }) };
 				}
 			}
+		},
+
+		async cancel(id: string): Promise<void> {
+			running.get(id)?.abort();
 		},
 
 		async share(paths: readonly string[], anchor: ActionAnchor, window: BrowserWindow | null): Promise<void> {

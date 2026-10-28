@@ -27,6 +27,7 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -60,7 +61,7 @@ import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { closeDecision, completesOnClose } from "./onboarding-window";
 import { detectSources } from "./onboarding-sources";
-import { FS_CHANNELS } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
@@ -111,6 +112,7 @@ import {
 } from "./ipc";
 import { createActionService } from "./action-service";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
+import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -525,6 +527,16 @@ app.whenReady().then(async () => {
 	// anchored to the button that opened it.
 	registerActionsIpcHandlers(
 		createActionService({
+			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
+			trash: async (target) => {
+				const result = (await workerHost.client.call("trash", [[target]])) as FsBatchResult;
+				const failure = result.failed[0];
+				if (failure !== undefined) throw new Error(failure.message);
+			},
+			onProgress: (event, window) => {
+				if (window !== null && !window.isDestroyed()) window.webContents.send(ACTIONS_CHANNELS.progress, event);
+				else sendToMainWindow(ACTIONS_CHANNELS.progress, event);
+			},
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {

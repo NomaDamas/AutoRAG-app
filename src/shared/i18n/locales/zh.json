@@ -129,6 +129,44 @@
       "progressAria": "转换进行中",
       "unsupported": "不支持从 {{from}} 转换为 {{to}}，因此名称没有更改。",
       "replaced": "{{name}} — 已转换，原文件已移到废纸篓"
+    },
+    "reduce": {
+      "title": "缩小体积",
+      "levelLabel": "压缩强度",
+      "recommended": "推荐",
+      "levels": {
+        "light": "轻度（高画质）",
+        "balanced": "均衡",
+        "max": "强力（最小体积）"
+      },
+      "specs": {
+        "pdf": {
+          "light": "高画质·最大 1600px（约减少 30–65%）",
+          "balanced": "标准压缩·最大 1280px（约减少 55–80%）",
+          "max": "极限压缩·最大 960px（约减少 75–90%）"
+        },
+        "image": {
+          "light": "高画质·256色/2560px（约减少 35–60%）",
+          "balanced": "均衡压缩·最大 1920px（约减少 55–75%）",
+          "max": "极限压缩·最大 1280px（约减少 70–85%）"
+        },
+        "video": {
+          "light": "原始分辨率·码率减少约 35%+",
+          "balanced": "最高 1080p·码率减少约 58%+",
+          "max": "最高 720p·码率减少约 76%+"
+        },
+        "audio": {
+          "light": "高音质·码率减少约 28%",
+          "balanced": "标准音质·码率减少约 50%",
+          "max": "语音优先·码率减少约 65%"
+        }
+      },
+      "outputLabel": "保存方式",
+      "replaceMode": "替换原文件",
+      "copyMode": "另存为副本",
+      "replaceHint": "原文件将移至废纸篓，并原地替换“{{name}}”。",
+      "copyHint": "保留原文件，并另存为“{{copyName}}”。",
+      "workingHint": "完成前原文件不会被修改。"
     }
   },
   "contextMenu": {
@@ -221,7 +259,9 @@
       "videoConvert": "转换视频",
       "convertTo": "转换为 {{format}}",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "体积优化"
+      "reduceSize": "缩小体积",
+      "reducing": "正在缩小“{{name}}”的体积…",
+      "reduceProgressAria": "正在缩小 {{name}} 的体积"
     },
     "versionRelations": {
       "exact": "完全相同",
@@ -1349,8 +1389,7 @@
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
-      "unsupportedOptimize": "此格式不支持容量优化。",
-      "alreadyOptimized": "此文件已优化。",
+      "alreadyOptimized": "此文件无法再缩小。",
       "unsupportedExtract": "无法解压此文件格式。",
       "emptyTarget": "没有可操作的目标。",
       "singleTargetOnly": "此操作一次仅支持一个项目。",
@@ -1363,10 +1402,14 @@
       "unsupportedConvert": "不支持转换为 {{format}}。",
       "converted": "{{name}} — 已转换",
       "resized": "{{name}} — 已调整大小",
-      "optimized": "{{name}} — 已优化容量",
       "videoNeedsFfmpeg": "视频转换需要 ffmpeg。",
       "containerConverted": "{{name}} — 已转换容器",
-      "shareUnsupported": "此平台不支持系统共享。"
+      "shareUnsupported": "此平台不支持系统共享。",
+      "unsupportedReduce": "此文件无法在保持格式的前提下缩小体积",
+      "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
+      "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）",
+      "reduceCancelled": "已取消缩小 {{name}} 的体积",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}% · 原文件已移至废纸篓）"
     },
     "indexStatus": {
       "outside": "文件在 Dazzi 搜索路径之外",

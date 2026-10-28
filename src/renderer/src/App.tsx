@@ -18,6 +18,7 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
+import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -851,6 +852,15 @@ export function App(): ReactElement {
 					state={finder.convertRename}
 					onConvert={(keepOriginal) => finder?.confirmConvertRename(keepOriginal)}
 					onCancel={() => finder?.cancelConvertRename()}
+				/>
+			)}
+			{finder?.reduceDialog == null ? null : (
+				<ReduceSizeDialog
+					state={finder.reduceDialog}
+					onChangeLevel={(level) => finder.setReduceDialogLevel(level)}
+					onChangeReplaceOriginal={(replaceOriginal) => finder.setReduceDialogReplaceOriginal(replaceOriginal)}
+					onStart={() => finder.confirmReduceSize()}
+					onCancel={() => finder.cancelReduceSize()}
 				/>
 			)}
 			{finder?.emptyTrashConfirm === true ? (

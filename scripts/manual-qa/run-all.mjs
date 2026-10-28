@@ -42,6 +42,7 @@ const LANES = [
 	{ name: "app-bundles", script: "run-qa-finder-app-bundles.mjs", timeout: 300 },
 	{ name: "info-metadata", script: "run-qa-finder-info-metadata.mjs", timeout: 240 },
 	{ name: "file-actions", script: "run-qa-finder-file-actions.mjs", timeout: 300 },
+	{ name: "reduce-size", script: "run-qa-finder-reduce-size.mjs", timeout: 420 },
 	{ name: "copy-extract", script: "run-qa-finder-copy-extract.mjs", timeout: 420 },
 	{ name: "convert-rename", script: "run-qa-finder-convert-rename.mjs", timeout: 480 },
 	{ name: "context-menu", script: "run-qa-finder-context-menu.mjs", timeout: 300 },

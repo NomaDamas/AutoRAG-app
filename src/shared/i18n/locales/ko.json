@@ -129,6 +129,44 @@
       "progressAria": "변환 진행 중",
       "unsupported": "{{from}}에서 {{to}}(으)로는 변환할 수 없는 확장자예요. 이름은 바뀌지 않았습니다.",
       "replaced": "{{name}} — 변환됨, 원본은 휴지통으로 이동했습니다"
+    },
+    "reduce": {
+      "title": "용량 줄이기",
+      "levelLabel": "압축 강도",
+      "recommended": "권장",
+      "levels": {
+        "light": "약하게 (고화질)",
+        "balanced": "보통",
+        "max": "강하게 (최대 압축)"
+      },
+      "specs": {
+        "pdf": {
+          "light": "고화질 · 최대 1600px (~30–65% 절감)",
+          "balanced": "표준 압축 · 최대 1280px (~55–80% 절감)",
+          "max": "최대 압축 · 최대 960px (~75–90% 절감)"
+        },
+        "image": {
+          "light": "고화질 · 256색/2560px (~35–60% 절감)",
+          "balanced": "균형 압축 · 최대 1920px (~55–75% 절감)",
+          "max": "최대 압축 · 최대 1280px (~70–85% 절감)"
+        },
+        "video": {
+          "light": "원본 해상도 · 비트레이트 ~35%+ 절감",
+          "balanced": "최대 1080p · 비트레이트 ~58%+ 절감",
+          "max": "최대 720p · 비트레이트 ~76%+ 절감"
+        },
+        "audio": {
+          "light": "고음질 · 비트레이트 ~28% 절감",
+          "balanced": "표준 음질 · 비트레이트 ~50% 절감",
+          "max": "음성 위주 · 비트레이트 ~65% 절감"
+        }
+      },
+      "outputLabel": "저장 방식",
+      "replaceMode": "원본 대체",
+      "copyMode": "사본으로 저장",
+      "replaceHint": "원본은 휴지통에 보관하고 ‘{{name}}’을(를) 줄어든 파일로 바꿉니다.",
+      "copyHint": "원본은 그대로 두고 ‘{{copyName}}’ 파일로 저장합니다.",
+      "workingHint": "완료될 때까지 원본 파일은 변경되지 않습니다."
     }
   },
   "contextMenu": {
@@ -221,7 +259,9 @@
       "videoConvert": "동영상 변환",
       "convertTo": "{{format}}로 변환",
       "maxEdge": "최대 {{edge}}px",
-      "optimizeSize": "용량 최적화"
+      "reduceSize": "용량 줄이기",
+      "reducing": "‘{{name}}’ 용량 줄이는 중…",
+      "reduceProgressAria": "{{name}} 용량 줄이기 진행 중"
     },
     "versionRelations": {
       "exact": "동일본",
@@ -1349,8 +1389,7 @@
     },
     "action": {
       "unsupportedResize": "이 형식은 크기 조절을 지원하지 않습니다",
-      "unsupportedOptimize": "이 형식은 용량 최적화를 지원하지 않습니다",
-      "alreadyOptimized": "이미 최적화된 파일입니다",
+      "alreadyOptimized": "더 이상 줄일 수 없는 파일입니다",
       "unsupportedExtract": "압축을 풀 수 없는 파일 형식입니다",
       "emptyTarget": "작업 대상이 비어 있습니다",
       "singleTargetOnly": "이 작업은 한 번에 하나의 항목만 지원합니다",
@@ -1363,10 +1402,14 @@
       "unsupportedConvert": "{{format}} 변환을 지원하지 않습니다",
       "converted": "{{name}} — 변환했습니다",
       "resized": "{{name}} — 크기를 조절했습니다",
-      "optimized": "{{name}} — 용량을 최적화했습니다",
       "videoNeedsFfmpeg": "동영상 변환에는 ffmpeg가 필요합니다",
       "containerConverted": "{{name}} — 컨테이너를 변환했습니다",
-      "shareUnsupported": "이 플랫폼은 시스템 공유를 지원하지 않습니다"
+      "shareUnsupported": "이 플랫폼은 시스템 공유를 지원하지 않습니다",
+      "unsupportedReduce": "이 파일은 형식을 유지한 채 용량을 줄일 수 없습니다",
+      "animatedReduce": "움직이는 이미지는 용량을 줄이면 애니메이션이 사라져 지원하지 않습니다",
+      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)",
+      "reduceCancelled": "{{name}} 용량 줄이기를 취소했습니다",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소 · 원본은 휴지통에 보관됨)"
     },
     "indexStatus": {
       "outside": "Dazzi 검색 경로 밖의 파일",
