@@ -7,7 +7,8 @@
  *   2. the gear opens Settings (General page) and is marked current while it is open;
  *   3. the chart opens Settings on the Subscription & Usage page ("AI usage" row);
  *   4. the update control is disabled and says why in its tooltip;
- *   5. the footer reads the same in Korean.
+ *   5. the footer reads the same in Korean;
+ *   6. in a short window the footer stays on screen and the list above it scrolls instead.
  *
  * Run `bun run build` first. Evidence lands in the ignored `.omo/` tree.
  */
@@ -97,6 +98,26 @@ try {
 	await page.waitForFunction((selector) => document.querySelector(selector)?.getAttribute("aria-label") === "설정", GEAR, { timeout: 10_000 });
 	check("the footer names follow the interface language", (await page.locator(USAGE).getAttribute("aria-label")) === "AI 사용량", await page.locator(USAGE).getAttribute("aria-label"));
 	await page.locator(FOOTER).screenshot({ path: join(EVIDENCE, "04-footer-ko.png") });
+	// 6. Short window: the footer is pinned, the nav list scrolls.
+	for (const height of [900, 600, 420]) {
+		await app.evaluate(({ BrowserWindow }, h) => BrowserWindow.getAllWindows().find((w) => w.isVisible())?.setContentSize(1200, h), height);
+		await page.waitForTimeout(600);
+		const m = await page.evaluate(
+			([footer, gear, update]) => {
+				const box = (selector) => document.querySelector(selector).getBoundingClientRect();
+				const scroll = document.querySelector(".side-scroll");
+				return { vh: innerHeight, aside: document.querySelector("aside.sidebar").getBoundingClientRect().bottom, footerBottom: box(footer).bottom, gearTop: box(gear).top, gearBottom: box(gear).bottom, updateBottom: box(update).bottom, scrollable: scroll.scrollHeight > scroll.clientHeight, scrollClient: scroll.clientHeight };
+			},
+			[FOOTER, GEAR, UPDATE],
+		);
+		check(
+			`${height}px window: the sidebar fits the window and the footer (gear, update) is fully on screen`,
+			m.aside <= m.vh + 0.5 && m.footerBottom <= m.vh + 0.5 && m.gearBottom <= m.vh && m.updateBottom <= m.vh && m.gearTop >= 0,
+			JSON.stringify(m),
+		);
+		if (height <= 600) check(`${height}px window: the list above the footer scrolls`, m.scrollable && m.scrollClient > 0, JSON.stringify(m));
+		await page.screenshot({ path: join(EVIDENCE, `05-window-${height}.png`) });
+	}
 } catch (error) {
 	console.error(`capture failed: ${String(error).slice(0, 600)}`);
 	failures.push("harness error");
