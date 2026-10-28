@@ -137,6 +137,19 @@ describe("RunErrorNotice", () => {
 		press(t("aiSearch.openPlan"));
 		expect(onOpenSettings).toHaveBeenCalledExactlyOnceWith("plan");
 	});
+
+	it("renders a neutral card with a soft status icon badge and an accent primary action button instead of a red-washed box", () => {
+		render("Search root /Users/me/Docs does not exist");
+
+		const alert = host.querySelector('[role="alert"]');
+		expect(alert?.className).toContain("bg-subtle");
+		expect(alert?.className).toContain("border-border");
+		expect(alert?.className).not.toContain("bg-danger-bg-soft");
+		expect(alert?.querySelector("[data-notice-icon]")).not.toBeNull();
+		const fixBtn = buttons().find((button) => button.textContent?.includes(t("appError.fixAction")));
+		expect(fixBtn?.className).toContain("bg-accent");
+		expect(fixBtn?.className).not.toContain("text-danger-text");
+	});
 });
 
 describe("the AI fix dialog", () => {

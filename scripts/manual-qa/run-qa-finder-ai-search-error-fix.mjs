@@ -222,10 +222,10 @@ check("the notice names the plain problem and hides the raw error behind Show de
 const noticeActionNames = (await panel.locator('[role="alert"] button').allInnerTexts()).filter((name) => name !== "Show details");
 check("the notice offers Fix with AI and nothing else", noticeActionNames.join("|") === "Fix with AI", JSON.stringify(noticeActionNames));
 const geometry = await notice.evaluate((root) => {
-	const leftCol = root.firstElementChild?.getBoundingClientRect();
+	const textCol = root.children[1]?.getBoundingClientRect();
 	const buttons = [...root.querySelectorAll("button")];
 	const fixBtn = buttons.find((b) => b.textContent?.includes("Fix with AI"))?.getBoundingClientRect();
-	return leftCol && fixBtn ? { textRight: leftCol.right, buttonLeft: fixBtn.left, buttonRight: fixBtn.right, noticeRight: root.getBoundingClientRect().right } : null;
+	return textCol && fixBtn ? { textRight: textCol.right, buttonLeft: fixBtn.left, buttonRight: fixBtn.right, noticeRight: root.getBoundingClientRect().right } : null;
 });
 check("the button sits to the right of the message, inside the box", geometry !== null && geometry.buttonLeft >= geometry.textRight - 1 && geometry.buttonRight <= geometry.noticeRight, JSON.stringify(geometry));
 await shot("01-other-error-notice");

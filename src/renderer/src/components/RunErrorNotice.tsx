@@ -1,3 +1,4 @@
+import { CircleAlert } from "lucide-react";
 import { useState, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
@@ -21,13 +22,13 @@ export interface RunErrorNoticeProps {
 	readonly fix?: boolean;
 }
 
-const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-center gap-6 rounded-8 border px-12 text-meta transition-colors duration-(--dur-color) ease-out";
+const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-center gap-6 rounded-8 border px-12 text-meta font-medium whitespace-nowrap transition-colors duration-(--dur-color) ease-out";
+const PRIMARY_BUTTON = "border-transparent bg-accent text-on-accent hover:bg-accent-hover";
+const SECONDARY_BUTTON = "border-border bg-window text-ink hover:bg-hover";
 
 /**
- * A run's error in the red box under the question: what it means in plain words,
- * the original message, and on the right what to do about it. A model that cannot
- * be used says so and leads to its settings and the subscription; an error in the
- * app's own setup carries "AI로 고치기".
+ * A run's error under the question: neutral card surface (`bg-subtle` + `border-border`)
+ * with color confined to the left status icon badge and the right action button.
  */
 export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, fix = true }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
@@ -36,6 +37,7 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 	const entries = view.actions.filter((entry) => entry.id !== "fix" || fix);
 	// Without the fix there is nothing to promise: an earlier turn's error just reads as what it is.
 	const hint = view.kind === "other" && !fix ? null : view.hint;
+	const warnTone = view.kind === "rate-limit" || view.kind === "network";
 
 	const run = (entry: ErrorAction): void => {
 		if (entry.id === "fix") setFixing(true);
@@ -43,25 +45,35 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 	};
 
 	return (
-		<div className="flex items-start gap-12 rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text" role="alert">
-			<div className="flex min-w-0 flex-1 flex-col gap-4">
+		<div className="flex items-start gap-12 rounded-10 border border-border bg-subtle px-14 py-12 text-body text-ink" role="alert">
+			<div
+				className={cn(
+					"mt-1 flex size-28 flex-none items-center justify-center rounded-8",
+					warnTone ? "bg-warn-bg text-warn-text" : "bg-danger-bg-soft text-danger-text",
+				)}
+				data-notice-icon
+				aria-hidden="true"
+			>
+				<CircleAlert size={15} strokeWidth={2.1} />
+			</div>
+			<div className="flex min-w-0 flex-1 flex-col gap-2">
 				{view.title === null ? (
-					<span className="select-text whitespace-pre-wrap break-words">{message}</span>
+					<span className="select-text whitespace-pre-wrap break-words text-ink">{message}</span>
 				) : (
 					<>
-						<strong className="font-semibold">{view.title}</strong>
-						{hint === null ? null : <span className="text-meta leading-normal">{hint}</span>}
+						<strong className="text-body font-semibold text-ink">{view.title}</strong>
+						{hint === null ? null : <span className="text-meta leading-normal text-ink-muted">{hint}</span>}
 						<ErrorDetails message={message} />
 					</>
 				)}
 			</div>
 			{entries.length === 0 ? null : (
-				<div className="flex flex-none flex-col items-stretch gap-6">
+				<div className="flex flex-none flex-wrap items-center gap-6 self-center">
 					{entries.map((entry) => (
 						<button
 							key={entry.id}
 							type="button"
-							className={cn(BUTTON, entry.primary ? "border-danger-border bg-window font-medium text-danger-text hover:bg-hover" : "border-transparent bg-transparent text-danger-text hover:bg-hover")}
+							className={cn(BUTTON, entry.primary ? PRIMARY_BUTTON : SECONDARY_BUTTON)}
 							onClick={() => run(entry)}
 						>
 							{entry.id === "fix" ? <SparklesIcon /> : null}
