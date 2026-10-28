@@ -4471,7 +4471,19 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	color: var(--onb-blue);
 }
 
+/* The spinner box is exactly the icon's size, so it turns around its own centre and never wobbles. */
+.onb .account-wait-mark .spin {
+	display: block;
+	width: 34px;
+	height: 34px;
+	line-height: 0;
+	transform-origin: 50% 50%;
+}
+
 .onb .account-wait-mark svg {
+	display: block;
+	width: 34px;
+	height: 34px;
 	stroke-width: 2.2;
 }
 
