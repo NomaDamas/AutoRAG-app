@@ -41,7 +41,8 @@ const POLICY = `<meta http-equiv="Content-Security-Policy" content="default-src 
 const PAPER = "<style>html,body{background:#fff;color:#000}</style>";
 
 function dataUri(mime: string, bytes: Uint8Array): string {
-	return `data:${mime};base64,${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64")}`;
+	const safeMime = /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/i.test(mime) ? mime : "application/octet-stream";
+	return `data:${safeMime};base64,${Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("base64")}`;
 }
 
 /**
@@ -54,26 +55,29 @@ function dataUri(mime: string, bytes: Uint8Array): string {
  */
 export function standaloneOfficeHtml(html: string, resolve: (name: string) => OfficeAttachment | null): string {
 	let out = html
-		.replace(/<script\b[\s\S]*?<\/script\s*>/gi, "")
-		.replace(/<(iframe|object|embed|frame)\b[\s\S]*?(?:<\/\1\s*>|\/>|>)/gi, "")
-		.replace(/(<[a-z][^>]*?)\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "$1")
-		.replace(/<link\b[^>]*?\bhref="([^"]*)"[^>]*>/gi, (_match, href: string) => {
-			const attachment = resolve(href);
-			return attachment?.kind === "css" ? `<style>${attachment.text}</style>` : "";
+		.replace(/<script\b[^>]*(?:>|$)(?:[\s\S]*?<\/script\s*>|$)/gi, "")
+		.replace(/<(meta|base)\b[^>]*(?:>|$)/gi, "")
+		.replace(/<(iframe|object|embed|frame)\b[^>]*(?:\/>|>(?:[\s\S]*?<\/\1\s*>|$)|$)/gi, "")
+		.replace(/<[a-z][^<>]*(?:>|$)/gi, (tag) => tag.replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, ""))
+		.replace(/<link\b[^<>]*(?:>|$)/gi, (tag) => {
+			const href = /\bhref\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag);
+			const attachment = href === null ? null : resolve(href[1] ?? href[2] ?? "");
+			return attachment?.kind === "css" ? `<style>${attachment.text.replace(/</g, "\\3C ")}</style>` : "";
 		})
-		.replace(/<link\b[^>]*>/gi, "")
-		.replace(/<img\b[^>]*>/gi, (tag) => {
-			const src = /\bsrc="([^"]*)"/i.exec(tag)?.[1];
+		.replace(/<img\b[^<>]*(?:>|$)/gi, (tag) => {
+			const srcPattern = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i;
+			const match = srcPattern.exec(tag);
+			const src = match?.[1] ?? match?.[2];
 			const attachment = src === undefined ? null : resolve(src);
 			if (attachment?.kind !== "data") return "";
-			return tag.replace(/\bsrc="[^"]*"/i, `src="${dataUri(attachment.mime, attachment.bytes)}"`);
+			return tag.replace(srcPattern, `src="${dataUri(attachment.mime, attachment.bytes)}"`);
 		})
-		.replace(/(<a\b[^>]*?)\s+href\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "$1");
-	const head = /<head\b[^>]*>/i.exec(out);
+		.replace(/<a\b[^<>]*(?:>|$)/gi, (tag) => tag.replace(/\shref\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, ""));
+	const head = /<head\b[^>]*(?:>|$)/i.exec(out);
 	const injected = `${POLICY}${PAPER}`;
 	if (head !== null) out = `${out.slice(0, head.index + head[0].length)}${injected}${out.slice(head.index + head[0].length)}`;
 	else {
-		const root = /<html\b[^>]*>/i.exec(out);
+		const root = /<html\b[^>]*(?:>|$)/i.exec(out);
 		out = root === null ? `<head>${injected}</head>${out}` : `${out.slice(0, root.index + root[0].length)}<head>${injected}</head>${out.slice(root.index + root[0].length)}`;
 	}
 	return out;

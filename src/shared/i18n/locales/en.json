@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+      "suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
     },
@@ -718,10 +719,19 @@
       "getStarted": "Get started",
       "continueGoogle": "Continue with Google",
       "continueApple": "Continue with Apple",
+      "continueGithub": "Continue with GitHub",
       "or": "or",
       "emailLabel": "Email",
       "emailPlaceholder": "name@example.com",
       "continueEmail": "Continue with email",
+      "codeLabel": "Sign-in code",
+      "codeSentNote": "We sent a 6-digit code to {{email}}.",
+      "sendingCode": "Sending code…",
+      "verifyCode": "Verify code",
+      "verifyingCode": "Checking…",
+      "resendCode": "Send a new code",
+      "resendIn": "Resend in {{seconds}}s",
+      "useDifferentEmail": "Use a different email",
       "guest": "Continue as guest",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
@@ -848,14 +858,14 @@
           "line": "Only finds documents that contain the words you type."
         },
         "cloud": {
-          "name": "Analyze on AutoRAG's server",
-          "line": "Analysis runs on the server, so a low-spec PC works too."
+          "name": "Analyze on Dazzi's server",
+          "line": "Document contents are sent to Dazzi's server for analysis."
         },
         "local": {
           "nameMac": "Analyze on my Mac",
           "namePc": "Analyze on my PC",
-          "lineMac": "Analysis is handled on this Mac, and your documents are never sent out.",
-          "linePc": "Analysis is handled on this PC, and your documents are never sent out."
+          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
+          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
         }
       },
       "meter": {
@@ -1441,7 +1451,10 @@
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",
-      "invalidUrl": "The web address is invalid."
+      "invalidUrl": "The web address is invalid.",
+      "librarianExited": "The indexing helper stopped unexpectedly (code {{code}}).",
+      "librarianFailed": "The indexing helper failed: {{message}}",
+      "librarianStopped": "The indexing helper has shut down and cannot take requests."
     },
     "fs": {
       "restoreTempFailed": "{{message}} (could not restore from the temporary name {{name}}: {{detail}})",
@@ -1557,6 +1570,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} cannot be converted to {{extension}}.",
+      "noRoute": "Filee cannot convert {{name}} to {{extension}}.",
       "invalidName": "Not usable as the name of the converted file: {{name}}",
       "sourceMissing": "The file to convert could not be found: {{name}}",
       "nameTaken": "A file or folder named \"{{name}}\" already exists",
@@ -1617,6 +1631,12 @@
     },
     "contents": {
       "title": "Contains"
+    },
+    "native": {
+      "readFailed": "Couldn’t read this document",
+      "attachments": "Attachments",
+      "noAttachments": "No attachments",
+      "emptyIconset": "No PNG icons in this set"
     },
     "code": {
       "wrap": "Wrap Lines",

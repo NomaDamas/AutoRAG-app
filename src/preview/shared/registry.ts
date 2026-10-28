@@ -28,6 +28,11 @@ export const VIEWER_KINDS = [
 	"hwp",
 	"font",
 	"rtf",
+	"webloc",
+	"webarchive",
+	"rtfd",
+	"iconset",
+	"textclipping",
 	"data",
 	"jsonl",
 	"plist",
@@ -89,6 +94,11 @@ assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
+assign("webloc", ["webloc", "inetloc"]);
+assign("webarchive", ["webarchive"]);
+assign("rtfd", ["rtfd"]);
+assign("iconset", ["iconset"]);
+assign("textclipping", ["textclipping"]);
 // Databases and columnar files are opened read-only in the main process; the
 // page only ever receives the capped rows it draws.
 assign("data", ["sqlite", "sqlite3", "db", "parquet"]);
@@ -142,6 +152,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "html":
 		case "text":
 		case "rtf":
+		case "textclipping":
 		case "jsonl":
 		case "mail":
 		case "contact":
@@ -160,6 +171,10 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "hwp":
 		case "plist":
 		case "msg":
+		case "webloc":
+		case "webarchive":
+		case "rtfd":
+		case "iconset":
 			return "whole";
 		case "data":
 		case "archiveList":
@@ -303,6 +318,19 @@ const LABELS: Readonly<Record<string, string>> = {
 	rpm: "RPM package",
 	cab: "Cabinet archive",
 	app: "Application",
+	webloc: "Internet location",
+	inetloc: "Internet location",
+	webarchive: "Safari web archive",
+	rtfd: "Rich Text with attachments",
+	iconset: "Icon set",
+	textclipping: "Text clipping",
+	pvt: "Live Photo package",
+	lpdf: "Localized PDF",
+	prefpane: "System Settings pane",
+	pict: "QuickDraw picture",
+	pct: "QuickDraw picture",
+	pic: "QuickDraw picture",
+	pictclipping: "QuickDraw clipping",
 	gdoc: "Google Docs document",
 	gsheet: "Google Sheets spreadsheet",
 	gslides: "Google Slides presentation",

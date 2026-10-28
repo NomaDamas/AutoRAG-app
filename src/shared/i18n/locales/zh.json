@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+      "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
     },
@@ -718,10 +719,19 @@
       "getStarted": "开始使用",
       "continueGoogle": "使用 Google 继续",
       "continueApple": "使用 Apple 继续",
+      "continueGithub": "使用 GitHub 继续",
       "or": "或",
       "emailLabel": "邮箱",
       "emailPlaceholder": "mingzi@example.cn",
       "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
       "guest": "以访客身份继续",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
@@ -848,14 +858,14 @@
           "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "在 AutoRAG 服务器上分析",
-          "line": "在服务器上分析，因此电脑性能较低也能使用。"
+          "name": "在 Dazzi 服务器上分析",
+          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
         },
         "local": {
           "nameMac": "在我的 Mac 上分析",
           "namePc": "在我的 PC 上分析",
-          "lineMac": "分析在这台 Mac 内处理，文档不会发送到外部。",
-          "linePc": "分析在这台 PC 内处理，文档不会发送到外部。"
+          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
+          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
         }
       },
       "meter": {
@@ -1441,7 +1451,10 @@
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
-      "invalidUrl": "网址无效。"
+      "invalidUrl": "网址无效。",
+      "librarianExited": "索引辅助进程意外停止（代码 {{code}}）。",
+      "librarianFailed": "索引辅助进程失败：{{message}}",
+      "librarianStopped": "索引辅助进程已关闭，无法处理请求。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",
@@ -1557,6 +1570,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "noRoute": "Filee 无法将 {{name}} 转换为 {{extension}} 格式。",
       "invalidName": "不能用作转换后文件的名称：{{name}}",
       "sourceMissing": "找不到要转换的文件：{{name}}",
       "nameTaken": "已存在名为“{{name}}”的文件或文件夹",
@@ -1617,6 +1631,12 @@
     },
     "contents": {
       "title": "包含内容"
+    },
+    "native": {
+      "readFailed": "无法读取此文稿",
+      "attachments": "附件",
+      "noAttachments": "无附件",
+      "emptyIconset": "此图标集中没有 PNG 图标"
     },
     "code": {
       "wrap": "自动换行",

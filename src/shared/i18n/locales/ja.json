@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+      "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
     },
@@ -718,10 +719,19 @@
       "getStarted": "はじめる",
       "continueGoogle": "Googleで続行",
       "continueApple": "Appleで続行",
+      "continueGithub": "GitHubで続行",
       "or": "または",
       "emailLabel": "メール",
       "emailPlaceholder": "namae@example.jp",
       "continueEmail": "メールで続行",
+      "codeLabel": "認証コード",
+      "codeSentNote": "{{email}} に6桁の認証コードを送信しました。",
+      "sendingCode": "認証コードを送信中…",
+      "verifyCode": "コードで続行",
+      "verifyingCode": "確認中…",
+      "resendCode": "コードを再送",
+      "resendIn": "{{seconds}}秒後に再送",
+      "useDifferentEmail": "別のメールを使う",
       "guest": "ゲストとして続行",
       "agreeLead": "続行すると、Dazziの以下に同意したものとみなされます:",
       "agreeTerms": "利用規約",
@@ -848,14 +858,14 @@
           "line": "入力した単語を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "AutoRAGサーバーで分析",
-          "line": "サーバーで分析するため、PCの性能が低くても使えます。"
+          "name": "Dazziサーバーで分析",
+          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
         },
         "local": {
           "nameMac": "自分のMacで分析",
           "namePc": "自分のPCで分析",
-          "lineMac": "分析はこのMac内で処理され、文書は外部に送信されません。",
-          "linePc": "分析はこのPC内で処理され、文書は外部に送信されません。"
+          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
+          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
         }
       },
       "meter": {
@@ -1441,7 +1451,10 @@
     },
     "worker": {
       "unknownFormat": "不明なファイル形式です: {{format}}",
-      "invalidUrl": "ウェブアドレスが正しくありません。"
+      "invalidUrl": "ウェブアドレスが正しくありません。",
+      "librarianExited": "インデックス用ヘルパーが予期せず停止しました（コード {{code}}）。",
+      "librarianFailed": "インデックス用ヘルパーが失敗しました: {{message}}",
+      "librarianStopped": "インデックス用ヘルパーは終了しているため、要求を処理できません。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(一時名 {{name}} から元に戻せませんでした: {{detail}})",
@@ -1557,6 +1570,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} は {{extension}} 形式に変換できません。",
+      "noRoute": "Filee は {{name}} を {{extension}} 形式に変換できません。",
       "invalidName": "変換後のファイル名として使えません: {{name}}",
       "sourceMissing": "変換するファイルが見つかりません: {{name}}",
       "nameTaken": "「{{name}}」という名前のファイルまたはフォルダがすでにあります",
@@ -1617,6 +1631,12 @@
     },
     "contents": {
       "title": "内容"
+    },
+    "native": {
+      "readFailed": "この書類を読み込めませんでした",
+      "attachments": "添付ファイル",
+      "noAttachments": "添付ファイルなし",
+      "emptyIconset": "このセットにはPNGアイコンがありません"
     },
     "code": {
       "wrap": "行を折り返す",
