@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+			"suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
     },
@@ -614,6 +615,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "Back",
     "step": {
       "welcome": "Intro",
       "permissions": "Permissions",
@@ -714,6 +716,22 @@
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
       "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
+      "getStarted": "Get started",
+      "continueGoogle": "Continue with Google",
+      "continueGithub": "Continue with GitHub",
+      "or": "or",
+      "emailLabel": "Email",
+      "emailPlaceholder": "name@example.com",
+      "continueEmail": "Continue with email",
+      "codeLabel": "Sign-in code",
+      "codeSentNote": "We sent a 6-digit code to {{email}}.",
+      "sendingCode": "Sending code…",
+      "verifyCode": "Verify code",
+      "verifyingCode": "Checking…",
+      "resendCode": "Send a new code",
+      "resendIn": "Resend in {{seconds}}s",
+      "useDifferentEmail": "Use a different email",
+      "guest": "Continue as guest",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
@@ -723,9 +741,10 @@
     },
     "permissions": {
       "eyebrow": "Permissions",
-      "title": "Allow access so we\ncan read properly",
-      "leadMac": "macOS asks for your permission before an app can access documents and protected app data. Permissions and indexing scope are different things.",
-      "leadWindows": "Just confirm notifications and network and you can start right away. You can change the rest later in Settings.",
+      "title": "Check the permissions",
+      "leadMac": "macOS asks for your permission before an app can read protected files.\nEven after you allow it, you choose the folders to search in the next step.",
+      "leadWindows": "Review only the permissions you need first.\nEvery item can be skipped and changed later in Settings.",
+      "titleWindows": "Check the permissions",
       "note": "Dazzi never modifies your files. You pick exactly which folders to index in the next step.",
       "required": "Required",
       "optional": "Optional",
@@ -737,20 +756,22 @@
       "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Needed for Dazzi to work properly."
+        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder.",
+        "why": "Why is Full Disk Access needed?"
       },
       "notifications": {
         "name": "Notifications",
+        "desc": "Asks for notification permission up front. You choose which notifications to receive in Settings.",
         "allow": "Allow notifications",
         "openWindows": "Open Windows Settings"
       },
       "login": {
         "name": "Launch at login",
-        "desc": "Keeps the index up to date in the background when files change."
+        "desc": "Dazzi starts automatically when you turn on your computer. You can turn it off in Settings any time."
       },
       "network": {
-        "name": "Network (firewall)",
-        "desc": "Needed for remote embedding and model calls. If the Windows security warning appears on first launch, allow it.",
+        "name": "Network",
+        "desc": "Only needed when you ask an online AI or analyze documents online.",
         "allow": "Allow"
       }
     },
@@ -828,22 +849,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "Semantic search",
       "title": "How should we embed?",
       "groupLabel": "Embedding method",
       "card": {
         "none": {
-          "name": "Off",
-          "line": "Keyword search only"
-        },
-        "local": {
-          "name": "Local embedding",
-          "lineMac": "Runs on this Mac",
-          "linePc": "Runs on this PC"
+          "name": "Search by keyword",
+          "line": "Only finds documents that contain the words you type."
         },
         "cloud": {
-          "name": "Remote embedding",
-          "line": "Runs on the server"
+          "name": "Analyze on Dazzi's server",
+          "line": "Document contents are sent to Dazzi's server for analysis."
+        },
+        "local": {
+          "nameMac": "Analyze on my Mac",
+          "namePc": "Analyze on my PC",
+          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
+          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
         }
       },
       "meter": {
@@ -855,10 +876,14 @@
         "good": "Good"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "~{{minutes}} min",
+      "prepTime": "Setup time",
+      "about": "About",
+      "minutes": "{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
-      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing.",
+      "cloudConsentRequired": "(Required)",
+      "cloudConsent": "I agree that document text is sent to the server.",
+      "cloudConsentCheck": "I agree",
       "pausedNotice": {
         "config": "Indexing stopped because the chosen embedding isn't available",
         "disk": "Not enough storage space to download the model",
@@ -1425,7 +1450,10 @@
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",
-      "invalidUrl": "The web address is invalid."
+      "invalidUrl": "The web address is invalid.",
+      "librarianExited": "The indexing helper stopped unexpectedly (code {{code}}).",
+      "librarianFailed": "The indexing helper failed: {{message}}",
+      "librarianStopped": "The indexing helper has shut down and cannot take requests."
     },
     "fs": {
       "restoreTempFailed": "{{message}} (could not restore from the temporary name {{name}}: {{detail}})",
@@ -1541,6 +1569,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} cannot be converted to {{extension}}.",
+      "noRoute": "Filee cannot convert {{name}} to {{extension}}.",
       "invalidName": "Not usable as the name of the converted file: {{name}}",
       "sourceMissing": "The file to convert could not be found: {{name}}",
       "nameTaken": "A file or folder named \"{{name}}\" already exists",
@@ -1601,6 +1630,12 @@
     },
     "contents": {
       "title": "Contains"
+    },
+    "native": {
+      "readFailed": "Couldn’t read this document",
+      "attachments": "Attachments",
+      "noAttachments": "No attachments",
+      "emptyIconset": "No PNG icons in this set"
     },
     "code": {
       "wrap": "Wrap Lines",

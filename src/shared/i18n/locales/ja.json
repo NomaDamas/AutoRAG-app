@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+			"suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
     },
@@ -614,6 +615,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "戻る",
     "step": {
       "welcome": "はじめに",
       "permissions": "権限",
@@ -714,6 +716,22 @@
       "skip": "アカウントなしで自分のAPIキーを使う (BYOK)",
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
       "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。",
+      "getStarted": "はじめる",
+      "continueGoogle": "Googleで続行",
+      "continueGithub": "GitHubで続行",
+      "or": "または",
+      "emailLabel": "メール",
+      "emailPlaceholder": "namae@example.jp",
+      "continueEmail": "メールで続行",
+      "codeLabel": "認証コード",
+      "codeSentNote": "{{email}} に6桁の認証コードを送信しました。",
+      "sendingCode": "認証コードを送信中…",
+      "verifyCode": "コードで続行",
+      "verifyingCode": "確認中…",
+      "resendCode": "コードを再送",
+      "resendIn": "{{seconds}}秒後に再送",
+      "useDifferentEmail": "別のメールを使う",
+      "guest": "ゲストとして続行",
       "agreeLead": "続行すると、Dazziの以下に同意したものとみなされます:",
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
@@ -723,9 +741,10 @@
     },
     "permissions": {
       "eyebrow": "権限",
-      "title": "正しく読み取れるように\n許可してください",
-      "leadMac": "macOSは、アプリが文書や保護されたアプリデータにアクセスする前に許可を求めます。権限とインデックス作成の範囲は別ものです。",
-      "leadWindows": "通知とネットワークだけ確認すればすぐに始められます。残りは後で設定から変更できます。",
+      "title": "許可する権限を確認してください",
+      "leadMac": "macOSでは、アプリが保護されたファイルを読む前にユーザーの許可が必要です。\n許可したあとも、検索対象のフォルダは次のステップで自分で選びます。",
+      "leadWindows": "必要な権限だけ先に確認してください。\nすべての項目はスキップでき、あとから設定で変更できます。",
+      "titleWindows": "許可する権限を確認してください",
       "note": "Dazziはファイルを変更しません。実際にインデックスするフォルダは次のステップでご自身で選びます。",
       "required": "必須",
       "optional": "任意",
@@ -737,20 +756,22 @@
       "footnote": "オンにすると次へ進めます。",
       "fda": {
         "name": "フルディスクアクセス",
-        "desc": "正しく動作するために必要です。"
+        "desc": "書類、ダウンロード、メール、外付けディスクなどの保護された領域を読むために必要な権限です。\n一度許可すれば、フォルダごとの許可リクエストは繰り返されません。",
+        "why": "なぜフルディスクアクセスが必要ですか？"
       },
       "notifications": {
         "name": "通知",
+        "desc": "通知の許可を先にリクエストします。受け取る通知は設定で選べます。",
         "allow": "通知を許可",
         "openWindows": "Windowsの設定を開く"
       },
       "login": {
         "name": "ログイン時に起動",
-        "desc": "ファイルが変更されると、バックグラウンドでインデックスを最新に保ちます。"
+        "desc": "パソコンを起動するとアプリが自動で起動します。設定でいつでもオフにできます。"
       },
       "network": {
-        "name": "ネットワーク（ファイアウォール）",
-        "desc": "リモート埋め込みとモデル呼び出しに必要です。初回起動時にWindowsのセキュリティ警告が出たら許可します。",
+        "name": "ネットワーク",
+        "desc": "オンラインのAIに質問する場合や、文書をオンラインで分析する場合にのみ必要です。",
         "allow": "許可"
       }
     },
@@ -828,22 +849,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "セマンティック検索",
       "title": "埋め込みをどう使いますか？",
       "groupLabel": "埋め込み方法",
       "card": {
         "none": {
-          "name": "使用しない",
-          "line": "キーワード検索のみ"
-        },
-        "local": {
-          "name": "ローカル埋め込み",
-          "lineMac": "このMacで処理",
-          "linePc": "このPCで処理"
+          "name": "キーワードで探す",
+          "line": "入力した単語を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "リモート埋め込み",
-          "line": "サーバーで処理"
+          "name": "Dazziサーバーで分析",
+          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
+        },
+        "local": {
+          "nameMac": "自分のMacで分析",
+          "namePc": "自分のPCで分析",
+          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
+          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
         }
       },
       "meter": {
@@ -855,10 +876,14 @@
         "good": "良い"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "約{{minutes}}分",
+      "prepTime": "準備時間",
+      "about": "約",
+      "minutes": "{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
-      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。",
+      "cloudConsentRequired": "(必須)",
+      "cloudConsent": "文書の本文がサーバーへ送信されることに同意します。",
+      "cloudConsentCheck": "同意します",
       "pausedNotice": {
         "config": "選択した埋め込み方式を利用できず停止しました",
         "disk": "空き容量が足りずモデルをダウンロードできませんでした",
@@ -1425,7 +1450,10 @@
     },
     "worker": {
       "unknownFormat": "不明なファイル形式です: {{format}}",
-      "invalidUrl": "ウェブアドレスが正しくありません。"
+      "invalidUrl": "ウェブアドレスが正しくありません。",
+      "librarianExited": "インデックス用ヘルパーが予期せず停止しました（コード {{code}}）。",
+      "librarianFailed": "インデックス用ヘルパーが失敗しました: {{message}}",
+      "librarianStopped": "インデックス用ヘルパーは終了しているため、要求を処理できません。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(一時名 {{name}} から元に戻せませんでした: {{detail}})",
@@ -1541,6 +1569,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} は {{extension}} 形式に変換できません。",
+      "noRoute": "Filee は {{name}} を {{extension}} 形式に変換できません。",
       "invalidName": "変換後のファイル名として使えません: {{name}}",
       "sourceMissing": "変換するファイルが見つかりません: {{name}}",
       "nameTaken": "「{{name}}」という名前のファイルまたはフォルダがすでにあります",
@@ -1601,6 +1630,12 @@
     },
     "contents": {
       "title": "内容"
+    },
+    "native": {
+      "readFailed": "この書類を読み込めませんでした",
+      "attachments": "添付ファイル",
+      "noAttachments": "添付ファイルなし",
+      "emptyIconset": "このセットにはPNGアイコンがありません"
     },
     "code": {
       "wrap": "行を折り返す",

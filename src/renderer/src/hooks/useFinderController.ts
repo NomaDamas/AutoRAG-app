@@ -37,7 +37,7 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import { fileExtension, type FileActionTarget } from "../state/file-actions";
-import type { ConvertRenameState } from "../state/convert-rename";
+import { conversionErrorMessage, type ConvertRenameState } from "../state/convert-rename";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -50,7 +50,7 @@ import {
 	selectDupey,
 	type LayerStore,
 } from "../state/layers";
-import { activeNavPath, basename, breadcrumbTrail, dirname, resolvePathInput, type Crumb } from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, completePath as completePathInput, dirname, resolvePathInput, type Crumb, type PathCompletion } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -284,6 +284,8 @@ export interface FinderController {
 	 * text names nothing that exists.
 	 */
 	goToPath(input: string): Promise<boolean>;
+	/** Direct child folder candidates for the path bar's inline completion. */
+	completePath(input: string): Promise<readonly PathCompletion[]>;
 	navigateNav(item: NavItem): void;
 	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
 	ejectNav(item: NavItem): void;
@@ -929,6 +931,11 @@ export function useFinderController(
 		if (entry.kind === "folder") navigate(entry.path);
 		else revealEntry(entry);
 		return true;
+	});
+
+	const completePath = useLatestCallback(async (input: string): Promise<readonly PathCompletion[]> => {
+		const home = locations.find((location) => location.icon === "home")?.path ?? null;
+		return completePathInput(input, { current: path, home }, (directory) => source.list(directory));
 	});
 
 	const navigateNav = useLatestCallback(
@@ -1753,7 +1760,7 @@ export function useFinderController(
 				dropRemoved(trashed.ok);
 				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
 			})
-			.catch(reportError)
+			.catch((error: unknown) => showToast(conversionErrorMessage(error)))
 			.finally(() => {
 				setConvertRename(null);
 				refresh();
@@ -2170,6 +2177,7 @@ export function useFinderController(
 		searchRef,
 		navigate,
 		goToPath,
+		completePath,
 		navigateNav,
 		ejectNav,
 		selectTabId,

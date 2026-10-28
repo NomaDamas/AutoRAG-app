@@ -9,6 +9,7 @@ import {
 	app,
 	BrowserWindow,
 	clipboard,
+	ClipboardItem,
 	dialog,
 	ipcMain,
 	nativeImage,
@@ -67,6 +68,7 @@ import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
+import { createOsClipboard } from "./os-clipboard";
 import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
@@ -508,7 +510,7 @@ app.whenReady().then(async () => {
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
 		shell,
-		clipboard,
+		clipboard: createOsClipboard({ clipboard, ClipboardItem }),
 		icons: iconProvider,
 		// A fresh worker starts in Korean; give it the current Interface language.
 		onFork: (client) => {

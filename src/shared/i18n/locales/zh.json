@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+			"suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
     },
@@ -614,6 +615,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "返回",
     "step": {
       "welcome": "介绍",
       "permissions": "权限",
@@ -714,6 +716,22 @@
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
       "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
+      "getStarted": "开始使用",
+      "continueGoogle": "使用 Google 继续",
+      "continueGithub": "使用 GitHub 继续",
+      "or": "或",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "mingzi@example.cn",
+      "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
+      "guest": "以访客身份继续",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
@@ -723,9 +741,10 @@
     },
     "permissions": {
       "eyebrow": "权限",
-      "title": "请允许访问\n以便正确读取",
-      "leadMac": "macOS 会在应用访问文档和受保护的应用数据前征求许可。权限与索引范围是两回事。",
-      "leadWindows": "只需确认通知和网络即可开始。其余可稍后在设置中更改。",
+      "title": "请确认允许的权限",
+      "leadMac": "macOS 要求应用在读取受保护文件前获得你的许可。\n允许之后，要搜索的文件夹仍在下一步由你自己选择。",
+      "leadWindows": "请先确认需要的权限。\n所有项目都可以跳过，之后也可在设置中更改。",
+      "titleWindows": "请确认允许的权限",
       "note": "Dazzi 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
       "required": "必需",
       "optional": "可选",
@@ -737,20 +756,22 @@
       "footnote": "开启后才能继续。",
       "fda": {
         "name": "完全磁盘访问权限",
-        "desc": "需要此权限才能正常工作。"
+        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。",
+        "why": "为什么需要完全磁盘访问？"
       },
       "notifications": {
         "name": "通知",
+        "desc": "提前请求通知权限。要接收哪些通知可在设置中选择。",
         "allow": "允许通知",
         "openWindows": "打开 Windows 设置"
       },
       "login": {
         "name": "登录时启动",
-        "desc": "文件发生变化时，在后台保持索引最新。"
+        "desc": "开机后应用会自动启动。可随时在设置中关闭。"
       },
       "network": {
-        "name": "网络（防火墙）",
-        "desc": "远程嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
+        "name": "网络",
+        "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
         "allow": "允许"
       }
     },
@@ -828,22 +849,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "语义搜索",
       "title": "如何使用嵌入？",
       "groupLabel": "嵌入方式",
       "card": {
         "none": {
-          "name": "不使用",
-          "line": "仅关键词搜索"
-        },
-        "local": {
-          "name": "本地嵌入",
-          "lineMac": "在此 Mac 上处理",
-          "linePc": "在此 PC 上处理"
+          "name": "按关键词查找",
+          "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "远程嵌入",
-          "line": "在服务器上处理"
+          "name": "在 Dazzi 服务器上分析",
+          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
+        },
+        "local": {
+          "nameMac": "在我的 Mac 上分析",
+          "namePc": "在我的 PC 上分析",
+          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
+          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
         }
       },
       "meter": {
@@ -855,10 +876,14 @@
         "good": "好"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "约 {{minutes}} 分钟",
+      "prepTime": "准备时间",
+      "about": "约",
+      "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。",
+      "cloudConsentRequired": "(必填)",
+      "cloudConsent": "我同意将文档正文发送到服务器。",
+      "cloudConsentCheck": "我同意",
       "pausedNotice": {
         "config": "所选嵌入方式不可用，已暂停",
         "disk": "存储空间不足，无法下载模型",
@@ -1425,7 +1450,10 @@
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
-      "invalidUrl": "网址无效。"
+      "invalidUrl": "网址无效。",
+      "librarianExited": "索引辅助进程意外停止（代码 {{code}}）。",
+      "librarianFailed": "索引辅助进程失败：{{message}}",
+      "librarianStopped": "索引辅助进程已关闭，无法处理请求。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",
@@ -1541,6 +1569,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "noRoute": "Filee 无法将 {{name}} 转换为 {{extension}} 格式。",
       "invalidName": "不能用作转换后文件的名称：{{name}}",
       "sourceMissing": "找不到要转换的文件：{{name}}",
       "nameTaken": "已存在名为“{{name}}”的文件或文件夹",
@@ -1601,6 +1630,12 @@
     },
     "contents": {
       "title": "包含内容"
+    },
+    "native": {
+      "readFailed": "无法读取此文稿",
+      "attachments": "附件",
+      "noAttachments": "无附件",
+      "emptyIconset": "此图标集中没有 PNG 图标"
     },
     "code": {
       "wrap": "自动换行",

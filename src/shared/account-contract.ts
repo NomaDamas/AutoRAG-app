@@ -15,6 +15,8 @@ export const ACCOUNT_CHANNELS = {
 	status: "account:status",
 	refresh: "account:refresh",
 	signIn: "account:signIn",
+	sendEmailOtp: "account:sendEmailOtp",
+	verifyEmailOtp: "account:verifyEmailOtp",
 	cancelSignIn: "account:cancelSignIn",
 	signOut: "account:signOut",
 	checkout: "account:checkout",
@@ -124,13 +126,33 @@ export interface ManagedModelResult {
 	readonly modelName: string;
 }
 
+export type AccountSignInProvider = "google" | "github";
+
+export interface AccountSignInOptions {
+	readonly provider: AccountSignInProvider;
+}
+
+export function isAccountSignInOptions(value: unknown): value is AccountSignInOptions {
+	if (typeof value !== "object" || value === null || !("provider" in value)) return false;
+	const provider = value.provider;
+	return provider === "google" || provider === "github";
+}
+
+export type EmailOtpSendResult =
+	| { readonly ok: true; readonly email: string; readonly expiresInSeconds: number }
+	| { readonly ok: false; readonly error: string };
+
 export interface AccountBridge {
 	/** Current status without a network call. */
 	status(): Promise<AccountStatus>;
 	/** Re-reads the account from the server. */
 	refresh(): Promise<AccountStatus>;
 	/** Opens the browser sign-in and resolves once it finished, was cancelled, or failed. */
-	signIn(): Promise<AccountStatus>;
+	signIn(options?: AccountSignInOptions): Promise<AccountStatus>;
+	/** Mails a 6-digit sign-in code for the native onboarding email step. */
+	sendEmailOtp(email: string): Promise<EmailOtpSendResult>;
+	/** Verifies the 6-digit email sign-in code in-app and stores the issued key. */
+	verifyEmailOtp(email: string, code: string): Promise<AccountStatus>;
 	cancelSignIn(): Promise<AccountStatus>;
 	/** Removes the stored key; the key stays valid on the server until revoked from its dashboard. */
 	signOut(): Promise<AccountStatus>;

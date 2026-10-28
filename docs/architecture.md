@@ -305,7 +305,23 @@ hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
 owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what
 only Electron's main process can do and the worker asks for over its host
 port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
-opening files and URLs, and the clipboard.
+opening files and URLs, and the clipboard. ⌘C / ⌘X also put the selected files
+on the OS clipboard as copied files (`src/main/os-clipboard.ts`, Electron's
+`text/uri-list`, mapped to the platform's "copied files" format), so a browser,
+chat window, or Finder pastes the files themselves; the in-app clipboard still
+owns copy-vs-cut and the in-app paste.
+
+The worker never imports `@autorag/librarian` on its own thread: loading it takes
+~2 s, and folder listings are answered on that thread. The one importer is a
+`worker_thread` inside the worker (`src/fs-worker/librarian-thread.ts`, built as an
+extra main-bundle entry like the archive workers). `src/fs-worker/librarian-client.ts`
+starts it on the first call that needs the librarian (a file-name search, the dupey
+scan, the index badges) and the worker asks for it once at launch, after the first
+folder renders; the contract is `librarian-contract.ts`. Quitting sends the thread a
+`shutdown` first, which stops the file-name index daemon (the Everything process on
+Windows, which otherwise keeps the profile folder locked) and raises the process
+`exit` event the librarian ends its MinSync children on, then terminates the thread.
+The client waits 1.8 s for that: main kills the worker 2 s after the quit.
 
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
@@ -316,6 +332,15 @@ message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+
+The Windows file-name index daemon (Everything, one per profile) is started through
+`launchTiedToParent` (`src/main/tied-launch.ts`), not detached: Windows ends a
+non-detached child with its parent however the parent ends, so a force-killed or
+crashed app no longer leaves an `everything.exe` pinning its profile folder. The quit
+path still stops it first. The fsearch daemon on macOS and Linux stays detached on
+purpose (restarting it re-scans every watched folder). QA lane:
+`scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
+`taskkill /F` on main alone).
 
 ## Error reports (Sentry)
 
@@ -559,12 +584,16 @@ resumes at the same step.
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
 
-Account and plan are real. The account step signs in through the system
-browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
-against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
-`https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
-credential (mode 0600), the single place the librarian reads the hosted plan
+Account and plan are real. The account step signs in against the hosted AutoRAG
+service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and
+no card number is typed into the app. Clicking Google or GitHub opens
+`/api/desktop/oauth?client=app&…&provider=google|github` (OAuth 2.0 authorization
+code + PKCE over a loopback redirect, RFC 8252), which 302-redirects straight to
+Google or GitHub without stopping on `/login` and returns straight to the
+loopback callback once authenticated. Email sign-in runs natively inside the
+onboarding screen (`POST /api/desktop/email/send` + `POST /api/desktop/email/verify`,
+6-digit verification code) without opening a browser. Settings › 계정 keeps the
+generic `/desktop/authorize` flow. The returned API key lives only in Pi's `auth.json` as the `dazzi`
 from, so the app and the librarian cannot disagree about being signed in; the
 renderer sees an `AccountStatus` (email, plan, subscription state, weekly
 credits), never the
@@ -1039,6 +1068,18 @@ Cancel stops the Filee process.
   removed, on success, failure and cancel alike. A result of several files (a PDF to
   PNG gives one image per page) goes into a folder named after the new name. The source is
   never modified; an existing name is refused before Filee starts.
+- **Fail fast.** Before the staging folder exists, the service asks `filee formats <source>`
+  (`src/main/filee-formats.ts` parses the answer: direct targets plus those reached by
+  downloading an engine). A target Filee does not list fails in about a second with
+  `main.convert.noRoute`, with nothing created on disk. If the listing is unavailable the
+  conversion runs and reports its own failure.
+- **Cancel.** `cancel(id)` works from the first instant of `run`, including while the file is
+  checked or Filee is still being found. `src/main/filee-process.ts` runs `filee-cli` as the
+  leader of its own process group (`taskkill /t` on Windows) so abort, timeout and app exit end
+  Filee *and* the ffmpeg/LibreOffice/Pandoc it started (the librarian's runner signals only
+  Filee, leaving the encoder running and writing into a folder about to be deleted). The run
+  settles only after the process is gone, then staging is removed. A cancelled run rejects with
+  the "was cancelled" message; the renderer strips Electron's IPC prefix before toasting it.
 - **Settings.** The `filee` block of the shared AutoRAG config (`enabled`, `binaryPath`,
   `autoInstall`, `timeoutMs`, `dataDir`) governs the agent and the app alike.
 - **Bridge.** `window.autorag.conversion` (`src/shared/conversion-contract.ts`):
@@ -1046,7 +1087,9 @@ Cancel stops the Filee process.
 
 `run-qa-finder-convert-rename.mjs` drives this in the built app against the real
 `filee-cli`: hwpx → pdf with both answers, a typed stem that differs from the source's, Cancel and
-Esc, an unsupported route (mp3 → pdf), a same-format rename, and no leftover staging folder.
+Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90 s 1080p MP4 → WebM
+encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
+`test/conversion-live.test.ts` does the same against the real binaries without the UI.
 
 ## Manual QA
 
