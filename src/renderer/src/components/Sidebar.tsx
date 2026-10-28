@@ -220,7 +220,7 @@ export function Sidebar({
 					</div>
 				))}
 			</div>
-			<div className="side-footer flex flex-none flex-col px-12 pt-10 pb-18 border-t border-border">
+			<div className="side-footer flex flex-none flex-col px-12 py-10 border-t border-border">
 				<SidebarIndexActivity onOpen={onOpenIndexing} />
 				<div className="flex items-center gap-4">
 					<button

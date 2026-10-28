@@ -69,6 +69,13 @@ try {
 		Math.abs(boxes.gear.y - boxes.usage.y) < 1 && Math.abs(boxes.gear.y - boxes.update.y) < 1,
 		JSON.stringify({ gear: boxes.gear.y, usage: boxes.usage.y, update: boxes.update.y }),
 	);
+	// The footer's own padding: the gap above the buttons (border → button) equals the gap below (button → window edge).
+	const gaps = await page.evaluate(([footer, gear]) => {
+		const f = document.querySelector(footer).getBoundingClientRect();
+		const g = document.querySelector(gear).getBoundingClientRect();
+		return { above: Math.round((g.top - f.top) * 10) / 10, below: Math.round((f.bottom - g.bottom) * 10) / 10 };
+	}, [FOOTER, GEAR]);
+	check("the gap below the footer buttons equals the gap above them", Math.abs(gaps.above - gaps.below) <= 1.5, JSON.stringify(gaps));
 	check("gear is named Settings for assistive tech and tooltip", (await page.locator(GEAR).getAttribute("aria-label")) === "Settings" && ((await page.locator(GEAR).getAttribute("title")) ?? "").startsWith("Settings"));
 	await page.locator(FOOTER).screenshot({ path: join(EVIDENCE, "01-footer-resting.png") });
 
