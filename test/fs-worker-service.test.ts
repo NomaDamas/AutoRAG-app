@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -103,6 +103,39 @@ describe("fs worker service", () => {
 		await worker.dispose();
 		service = null;
 		expect(watcher.live.size).toBe(0);
+	});
+
+	it("answers the remote upload and download ops through the worker's own handler table", async () => {
+		// Given a worker and a destination folder.
+		const dir = join(root, "remote-ops");
+		await mkdir(dir, { recursive: true });
+		const worker = start(fakeWatcher());
+		const signal = new AbortController().signal;
+
+		// When a browser upload writes bytes and a download reads them back.
+		const created = (await worker.handlers.uploadFile([dir, "up.txt", new Uint8Array([104, 105])], signal)) as { path: string; name: string };
+		const bytes = (await worker.handlers.readFile([created.path], signal)) as Uint8Array | null;
+
+		// Then the file is on disk under its name and the bytes come back.
+		expect(created.name).toBe("up.txt");
+		expect(await readFile(created.path, "utf8")).toBe("hi");
+		expect(Buffer.from(bytes ?? []).toString("utf8")).toBe("hi");
+		await worker.dispose();
+		service = null;
+	});
+
+	it("rejects an upload whose bytes did not arrive as bytes", async () => {
+		// Given a worker and a folder.
+		const dir = join(root, "remote-ops-bad");
+		await mkdir(dir, { recursive: true });
+		const worker = start(fakeWatcher());
+		const signal = new AbortController().signal;
+
+		// When a caller passes something that is not a byte array.
+		// Then the handler refuses it instead of writing a corrupt file.
+		expect(() => worker.handlers.uploadFile([dir, "up.txt", "hi"], signal)).toThrow(TypeError);
+		await worker.dispose();
+		service = null;
 	});
 
 	it("stops a listing whose caller went away instead of reading the rest of the folder", async () => {

@@ -33,11 +33,19 @@ export interface FsWorkerHostDeps {
 	readonly onFork?: (client: WorkerClient) => void;
 }
 
+/** One remote session's channel to the worker: live pushes included, torn down with the session. */
+export interface FsWorkerRemoteClient {
+	readonly client: WorkerClient;
+	close(): void;
+}
+
 export interface FsWorkerHost {
 	/** Main's own client of the worker. */
 	readonly client: WorkerClient;
 	/** Hand `contents` a port now and after every restart, until it is destroyed. */
 	connect(contents: WebContents): void;
+	/** One browser session's client of the worker; re-attached after every restart until closed. */
+	remoteClient(): FsWorkerRemoteClient;
 	/** The live worker's pid and how many times it was restarted. */
 	status(): { readonly pid: number | null; readonly restarts: number };
 	/** Ask the worker to release its watches, then stop it; bounded by {@link QUIT_DISPOSE_MS}. */
@@ -91,6 +99,8 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 	const entry = deps.entry ?? join(import.meta.dirname, "fs-worker.js");
 	const client = createWorkerClient();
 	const renderers = new Set<WebContents>();
+	/** Remote browser sessions: one client each, re-attached like a reloaded page after a worker restart. */
+	const remotes = new Set<{ readonly client: WorkerClient; port: WorkerPort | null }>();
 	const hostHandlers: Record<FsWorkerHostOp, WorkerHandler> = {
 		trashItem: (args) => deps.shell.trashItem(stringArg(args, "path")),
 		showItemInFolder: (args) => deps.shell.showItemInFolder(stringArg(args, "path")),
@@ -118,6 +128,15 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 		const { port1, port2 } = new MessageChannelMain();
 		worker.postMessage({ type: "client", kind: "renderer" }, [port1]);
 		contents.postMessage(FS_WORKER_CHANNELS.port, null, [port2]);
+	};
+
+	/** One port for a remote session on the current worker. */
+	const sendRemotePort = (remote: { readonly client: WorkerClient; port: WorkerPort | null }): void => {
+		if (worker === null) return;
+		const { port1, port2 } = new MessageChannelMain();
+		worker.postMessage({ type: "client", kind: "remote" }, [port1]);
+		remote.port = adaptPort(port2);
+		remote.client.attach(remote.port);
 	};
 
 	/**
@@ -151,6 +170,7 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 		child.postMessage({ type: "client", kind: "main" }, [own.port1]);
 		client.attach(adaptPort(own.port2));
 		for (const contents of renderers) sendPort(contents);
+		for (const remote of remotes) sendRemotePort(remote);
 		deps.onFork?.(client);
 		child.once("exit", (code) => {
 			if (worker !== child) return;
@@ -186,6 +206,18 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 			renderers.add(contents);
 			contents.once("destroyed", () => renderers.delete(contents));
 			sendPort(contents);
+		},
+		remoteClient() {
+			const remote: { readonly client: WorkerClient; port: WorkerPort | null } = { client: createWorkerClient(), port: null };
+			remotes.add(remote);
+			sendRemotePort(remote);
+			return {
+				client: remote.client,
+				close() {
+					remotes.delete(remote);
+					remote.port?.close();
+				},
+			};
 		},
 		status: () => ({ pid: worker?.pid ?? null, restarts }),
 		dispose() {

@@ -70,6 +70,14 @@ import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
 import { createOsClipboard } from "./os-clipboard";
 import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
+import { createRemoteHost, type RemoteHost } from "./remote/host";
+import { REMOTE_CHANNELS, type RemoteAccessStatus } from "../shared/remote-contract";
+import { SEARCH_CHANNELS } from "../shared/search-contract";
+import { ACCOUNT_CHANNELS } from "../shared/account-contract";
+import { ACTIONS_CHANNELS } from "../shared/actions-contract";
+import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
+import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
+import { SERVICES_CHANNELS } from "../shared/services-contract";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
@@ -265,6 +273,8 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 }
 
 let fsWorker: FsWorkerHost | null = null;
+/** Remote browser access; null until its host is built (and while the setting is off). */
+let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
@@ -285,12 +295,14 @@ let currentLanguage: AppSettings["language"] = "ko";
 /** One push to every window of the app: the Finder and, during first-run onboarding, the onboarding window. */
 function sendToMainWindow(channel: string, payload: unknown): void {
 	for (const window of appWindows()) window.webContents.send(channel, payload);
+	remoteHost?.push(channel, payload);
 }
 
 function sendToAllWindows(channel: string, payload: unknown): void {
 	for (const window of BrowserWindow.getAllWindows()) {
 		if (!window.isDestroyed()) window.webContents.send(channel, payload);
 	}
+	remoteHost?.push(channel, payload);
 }
 
 /** The `.app` bundle to drag into Full Disk Access: the packaged app, else the Electron bundle. */
@@ -802,6 +814,7 @@ app.whenReady().then(async () => {
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
+			void applyRemoteAccess(settings.remoteAccess);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -849,8 +862,64 @@ app.whenReady().then(async () => {
 	registerServicesIpcHandlers(createServicesService());
 	// Renaming a file to another format's extension converts it (Filee); the settings are the shared AutoRAG config's `filee` block.
 	registerConversionIpcHandlers(createFileeConversionService(() => readFileeSettings(autoragConfigPath())));
+	// Remote access: the same Finder UI served to a browser when the setting is
+	// on, each session with its own fs-worker client and its own watches.
+	const remoteTargets = {
+		settings: SETTINGS_CHANNELS,
+		search: SEARCH_CHANNELS,
+		interaction: INTERACTION_CHANNELS,
+		smartIndexing: SMART_INDEXING_CHANNELS,
+		account: ACCOUNT_CHANNELS,
+		modelDownload: MODEL_DOWNLOAD_CHANNELS,
+		automations: AUTOMATION_CHANNELS,
+		indexActivity: INDEX_ACTIVITY_CHANNELS,
+		indexProblem: INDEX_PROBLEM_CHANNELS,
+		appUpdate: APP_UPDATE_CHANNELS,
+		onboarding: ONBOARDING_CHANNELS,
+		osRequests: OS_REQUEST_CHANNELS,
+		services: SERVICES_CHANNELS,
+		conversion: CONVERSION_CHANNELS,
+		actions: ACTIONS_CHANNELS,
+		analytics: ANALYTICS_CHANNELS,
+	} as const;
+	async function applyRemoteAccess(enabled: boolean): Promise<void> {
+		if (enabled) {
+			remoteHost ??= createRemoteHost({
+				rendererRoot: join(import.meta.dirname, "../renderer"),
+				host: "0.0.0.0",
+				port: (await settingsService.get()).remotePort,
+				icons: iconProvider,
+				workerHost,
+				targets: remoteTargets,
+				window: () => mainWindow,
+				settings: () => settingsService.get(),
+			});
+			await remoteHost.start();
+			return;
+		}
+		await remoteHost?.stop();
+	}
+	const remoteStatus = async (): Promise<RemoteAccessStatus> => {
+		const status = remoteHost?.status() ?? { serving: false, origin: null, sessions: 0 };
+		const port = status.origin === null ? (await settingsService.get()).remotePort : Number(new URL(status.origin).port);
+		return { serving: status.serving, origin: status.origin, port, sessions: status.sessions };
+	};
+	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
+	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
+		await applyRemoteAccess(true);
+		return remoteStatus();
+	});
+	ipcMain.handle(REMOTE_CHANNELS.stop, async () => {
+		await applyRemoteAccess(false);
+		return remoteStatus();
+	});
+	app.once("will-quit", () => {
+		void remoteHost?.stop();
+	});
 	const settings = await settingsService.get();
 	appliedLaunchAtLogin = settings.launchAtLogin;
+	// A stored choice applies on launch, not only when it changes.
+	await applyRemoteAccess(settings.remoteAccess);
 	applyAppearance(settings.appearance);
 	applyLanguage(settings.language);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);

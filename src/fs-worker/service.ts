@@ -247,6 +247,12 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), numberArg(args, 1, "mtimeMs")),
 		exists: (args) => fsService.exists(stringArg(args, 0, "path")),
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
+		uploadFile: (args) => {
+			const data = args[2];
+			if (!(data instanceof Uint8Array)) throw new TypeError("uploadFile expects bytes");
+			return fsService.uploadFile(stringArg(args, 0, "directory"), stringArg(args, 1, "name"), data);
+		},
+		readFile: (args) => fsService.readFileBytes(stringArg(args, 0, "path")),
 		locations: () => fsService.locations(),
 		tags: () => fsService.tags(),
 		setTags: (args) => fsService.setTags(stringsArg(args, 0, "paths"), tagChangeArg(args[1])),

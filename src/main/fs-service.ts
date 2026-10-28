@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
-import { cp, link, lstat, mkdir, mkdtemp, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
+import { cp, link, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, sep, win32 } from "node:path";
 import {
@@ -284,6 +284,10 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 export interface FsService extends FsCoreBridge {
 	listDir(path: string, signal?: AbortSignal): Promise<DirListing>;
 	search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]>;
+	/** Write one browser-uploaded file into `directory` under a free name (remote access). */
+	uploadFile(directory: string, name: string, data: Uint8Array): Promise<{ readonly path: string; readonly name: string }>;
+	/** Read one whole file for a browser download (remote access). */
+	readFileBytes(path: string): Promise<Uint8Array | null>;
 	/** Clean up any remaining temporary Evidence Folders on worker shutdown. */
 	disposeEvidenceFolders?(): Promise<void>;
 }
@@ -1059,6 +1063,28 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	const redo = (): Promise<FsUndoOutcome> => replay(redoStack, undoStack);
 
 	/** Record an output the renderer observed an Action produce (extract, compress): undo moves it to the Trash. */
+	/** A browser upload keeps its own name, made safe and de-duplicated by Finder rules. */
+	async function uploadFile(directory: string, name: string, data: Uint8Array): Promise<{ readonly path: string; readonly name: string }> {
+		const safe = basename(name.trim().replace(/[/\\:\0]/gu, "-")) || "upload";
+		const unique = await resolveCopyName(directory, safe, false);
+		const target = join(directory, unique);
+		// Not recorded in the undo history: replaying an upload would have to keep
+		// the file's bytes in memory for every history entry.
+		await writeFile(target, data, { flag: "wx" });
+		return { path: target, name: unique };
+	}
+
+	async function readFileBytes(path: string): Promise<Uint8Array | null> {
+		try {
+			const info = await lstat(path);
+			if (!info.isFile()) return null;
+			return new Uint8Array(await readFile(path));
+		} catch (error) {
+			if (hasErrorCode(error, "ENOENT")) return null;
+			throw error;
+		}
+	}
+
 	async function recordCreated(path: string, operation: FsRecordedOperation): Promise<void> {
 		if (!isAbsolute(path)) {
 			throw new Error(`Invalid path "${path}": expected an absolute path`);
@@ -1175,6 +1201,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		undo,
 		redo,
 		recordCreated,
+		uploadFile,
+		readFileBytes,
 		createFolder,
 		createFile,
 		createEvidenceFolder,

@@ -16,6 +16,7 @@ import type { SearchBridge } from "./search-contract";
 import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
+import type { RemoteAccessBridge } from "./remote-contract";
 import type { AppUpdateBridge } from "./update-contract";
 import type { AutomationBridge } from "./automation-contract";
 
@@ -41,6 +42,7 @@ declare global {
 			readonly smartIndexing: SmartIndexingBridge;
 			readonly settings: SettingsBridge;
 			readonly services: ServicesBridge;
+			readonly remote: RemoteAccessBridge;
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */
 			readonly pathForFile: (file: File) => string;
 		};

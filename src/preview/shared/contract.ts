@@ -623,7 +623,22 @@ export function isNavigateDelta(value: unknown): value is NavigateDelta {
 
 export const PREVIEW_SCHEME = "autorag-preview";
 
+/** The remote bootstrap publishes this so scheme URLs become same-origin HTTP (see src/main/remote/bootstrap.ts). */
+interface RemoteUrlProvider {
+	readonly routes?: { readonly preview?: string };
+	readonly url?: (route: string, params?: Readonly<Record<string, unknown>>) => string;
+}
+
+function remotePreviewUrl(filePath: string): string | null {
+	const remote = Reflect.get(globalThis, "__autoragRemote") as RemoteUrlProvider | undefined;
+	const route = remote?.routes?.preview;
+	if (route === undefined || typeof remote?.url !== "function") return null;
+	return remote.url(route, { path: filePath });
+}
+
 export function previewStreamUrl(filePath: string): string {
+	const remote = remotePreviewUrl(filePath);
+	if (remote !== null) return remote;
 	const url = new URL(`${PREVIEW_SCHEME}://local/`);
 	url.searchParams.set("path", filePath);
 	return url.toString();

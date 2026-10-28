@@ -18,10 +18,17 @@ function body(filePath: string, start: number, end: number): ReadableStream<Uint
  * Streams a local file with HTTP range support. Chromium's media pipeline only
  * marks a source seekable when the server answers ranges with 206, so video
  * and audio scrubbing depend on this; PDF.js also fetches ranges on demand.
+ * The remote server reuses this through {@link previewResponseForPath}.
  */
 export async function handlePreviewRequest(request: Request): Promise<Response> {
 	const filePath = pathFromPreviewUrl(request.url);
 	if (filePath === null || !isAbsolute(filePath)) return new Response("bad path", { status: 400 });
+	return previewResponseForPath(filePath, request.headers.get("range"));
+}
+
+/** The same byte-range streaming without an Electron `Request`, for remote serving. */
+export async function previewResponseForPath(filePath: string, rangeHeader: string | null): Promise<Response> {
+	if (!isAbsolute(filePath) || filePath.includes("\0")) return new Response("bad path", { status: 400 });
 	let size: number;
 	try {
 		const followed = await stat(filePath);
@@ -36,7 +43,7 @@ export async function handlePreviewRequest(request: Request): Promise<Response> 
 		"content-type": mimeForExtension(extname(filePath).slice(1)),
 		"cache-control": "no-store",
 	});
-	const header = request.headers.get("range");
+	const header = rangeHeader;
 	if (header === null) {
 		headers.set("content-length", String(size));
 		return new Response(size === 0 ? null : body(filePath, 0, size - 1), { status: 200, headers });
