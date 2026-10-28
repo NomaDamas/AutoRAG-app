@@ -6,7 +6,9 @@ export function createAccountBridge(ipcRenderer: IpcRenderer): AccountBridge {
 	return {
 		status: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.status),
 		refresh: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.refresh),
-		signIn: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.signIn),
+		signIn: (options) => ipcRenderer.invoke(ACCOUNT_CHANNELS.signIn, options),
+		sendEmailOtp: (email) => ipcRenderer.invoke(ACCOUNT_CHANNELS.sendEmailOtp, email),
+		verifyEmailOtp: (email, code) => ipcRenderer.invoke(ACCOUNT_CHANNELS.verifyEmailOtp, email, code),
 		cancelSignIn: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.cancelSignIn),
 		signOut: () => ipcRenderer.invoke(ACCOUNT_CHANNELS.signOut),
 		checkout: (plan, promoCode) => ipcRenderer.invoke(ACCOUNT_CHANNELS.checkout, plan, promoCode),

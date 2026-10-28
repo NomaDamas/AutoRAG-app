@@ -13,6 +13,7 @@ import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
 import { CloseIcon, FullscreenIcon, ShareIcon } from "./icons";
+import { createSlideSweep } from "./slide-sweep";
 import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
 
@@ -40,6 +41,7 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	odp: true,
 	tiff: true,
 	heic: true,
+	raster: true,
 	video: true,
 	audio: true,
 	pdf: true,
@@ -50,6 +52,11 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	markdown: true,
 	html: true,
 	text: true,
+	webloc: true,
+	webarchive: true,
+	rtfd: true,
+	iconset: true,
+	textclipping: true,
 	data: true,
 	jsonl: true,
 	plist: true,
@@ -59,13 +66,14 @@ const SELF_SIZED: Partial<Record<StageKind, true>> = {
 	calendar: true,
 	fallback: true,
 	gdrive: true,
+	certificate: true,
 	folder: true,
 	bundle: true,
 	error: true,
 };
 
 /** Pictures size the window by their decoded pixels, scaled as a whole. */
-const MEDIA: Partial<Record<StageKind, true>> = { image: true, tiff: true, heic: true, video: true, iwork: true, odg: true };
+const MEDIA: Partial<Record<StageKind, true>> = { image: true, tiff: true, heic: true, raster: true, video: true, iwork: true, odg: true };
 
 function mediaSize(target: EventTarget): Size | null {
 	if (target instanceof HTMLImageElement) return { width: target.naturalWidth, height: target.naturalHeight };
@@ -183,8 +191,19 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	useZoom(bridge);
 
 	useEffect(() => {
+		const sweep = createSlideSweep((update) => {
+			setLoad((current) => {
+				if (current === null || current.document === null) return current;
+				const stored = current.document.pages;
+				if (stored === null) return current;
+				const pages = stored.slice();
+				for (const { index, bytes } of update.slides) if (index < pages.length) pages[index] = bytes;
+				return { ...current, document: { ...current.document, pages, slidesRendering: update.rendering } };
+			});
+		});
 		const offLoad = bridge.onLoad((next) => {
 			seqRef.current = next.seq;
+			sweep.clear();
 			setLoad(next);
 			setApp(next.app);
 		});
@@ -195,7 +214,15 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			if (update.seq !== seqRef.current) return;
 			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, office: update.office } }));
 		});
+		const offSlides = bridge.onSlides((update) => {
+			if (update.seq === seqRef.current) sweep.push(update);
+		});
+		const offThumbnail = bridge.onThumbnail((update) => {
+			if (update.seq !== seqRef.current) return;
+			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, thumbnail: update.url } }));
+		});
 		const offUnload = bridge.onUnload(() => {
+			sweep.clear();
 			seqRef.current = -1;
 			setLoad(null);
 		});
@@ -203,6 +230,9 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			offLoad();
 			offApp();
 			offOffice();
+			offSlides();
+			offThumbnail();
+			sweep.clear();
 			offUnload();
 		};
 	}, [bridge]);
@@ -254,7 +284,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	const material = bridge.platform === "darwin" ? "glass" : "solid";
 	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
 	const { document, folder, bundle } = load;
-	const meta = document === null ? describeExtension(extensionOf(load.name)) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
+	const meta = document === null ? describeExtension(extensionOf(load.name)) : document.package === true ? describeExtension(document.ext) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
 
 	function onMediaEvent(event: SyntheticEvent<HTMLElement>): void {
 		if (MEDIA[kind] !== true) return;
@@ -298,7 +328,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 				<main
 					ref={stageRef}
 					key={load.seq}
-					className="ql__stage relative flex flex-1 flex-col min-h-0 data-[layout=measured]:items-center data-[layout=measured]:justify-center-safe data-[layout=measured]:overflow-auto data-[layout=fill]:overflow-hidden data-[kind=video]:bg-ql-media data-[kind=image]:items-center data-[kind=image]:justify-center data-[kind=iwork]:items-center data-[kind=iwork]:justify-center data-[kind=odg]:items-center data-[kind=odg]:justify-center data-[kind=tiff]:items-center data-[kind=tiff]:justify-center data-[kind=heic]:items-center data-[kind=heic]:justify-center"
+					className="ql__stage relative flex flex-1 flex-col min-h-0 data-[layout=measured]:items-center data-[layout=measured]:justify-center-safe data-[layout=measured]:overflow-auto data-[layout=fill]:overflow-hidden data-[kind=video]:bg-ql-media data-[kind=image]:items-center data-[kind=image]:justify-center data-[kind=iwork]:items-center data-[kind=iwork]:justify-center data-[kind=odg]:items-center data-[kind=odg]:justify-center data-[kind=tiff]:items-center data-[kind=tiff]:justify-center data-[kind=heic]:items-center data-[kind=heic]:justify-center data-[kind=raster]:items-center data-[kind=raster]:justify-center"
 					data-kind={kind}
 					data-layout={measured ? "measured" : "fill"}
 					onLoadCapture={onMediaEvent}

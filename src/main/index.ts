@@ -9,6 +9,7 @@ import {
 	app,
 	BrowserWindow,
 	clipboard,
+	ClipboardItem,
 	dialog,
 	ipcMain,
 	nativeImage,
@@ -27,6 +28,7 @@ import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
+import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -60,7 +62,7 @@ import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { closeDecision, completesOnClose } from "./onboarding-window";
 import { detectSources } from "./onboarding-sources";
-import { FS_CHANNELS } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
@@ -68,6 +70,7 @@ import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
+import { createOsClipboard } from "./os-clipboard";
 import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
@@ -112,6 +115,7 @@ import {
 } from "./ipc";
 import { createActionService } from "./action-service";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
+import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -404,6 +408,9 @@ async function listMacDatalessPaths(root: string): Promise<ReadonlySet<string>> 
 	}
 }
 
+// Chromium decodes JPEG XL only behind this feature, which the Quick Look image viewer relies on for `.jxl`.
+// Merged with any `--enable-features` the app was launched with, because appendSwitch replaces a value.
+app.commandLine.appendSwitch("enable-features", [app.commandLine.getSwitchValue("enable-features"), "JXLImageFormat"].filter((value) => value !== "").join(","));
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
 // A menu request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.
@@ -508,7 +515,7 @@ app.whenReady().then(async () => {
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
 		shell,
-		clipboard,
+		clipboard: createOsClipboard({ clipboard, ClipboardItem }),
 		icons: iconProvider,
 		// A fresh worker starts in Korean; give it the current Interface language.
 		onFork: (client) => {
@@ -523,6 +530,16 @@ app.whenReady().then(async () => {
 	// anchored to the button that opened it.
 	registerActionsIpcHandlers(
 		createActionService({
+			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
+			trash: async (target) => {
+				const result = (await workerHost.client.call("trash", [[target]])) as FsBatchResult;
+				const failure = result.failed[0];
+				if (failure !== undefined) throw new Error(failure.message);
+			},
+			onProgress: (event, window) => {
+				if (window !== null && !window.isDestroyed()) window.webContents.send(ACTIONS_CHANNELS.progress, event);
+				else sendToMainWindow(ACTIONS_CHANNELS.progress, event);
+			},
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {

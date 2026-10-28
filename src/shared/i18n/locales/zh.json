@@ -17,6 +17,9 @@
     "settings": "设置",
     "recents": "最近使用",
     "tags": "标签",
+    "tagColorsDenied": "显示标签颜色",
+    "tagColorsDeniedHint": "macOS 把 Finder 的标签颜色放在“完全磁盘访问权限”之后。允许后重新启动应用即可显示。",
+    "tagColorsGrantToast": "请允许“完全磁盘访问权限”，然后重新启动 Dazzi。",
     "home": "个人主页",
     "applications": "应用程序",
     "desktop": "桌面",
@@ -111,6 +114,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+      "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
     },
@@ -125,6 +129,44 @@
       "progressAria": "转换进行中",
       "unsupported": "不支持从 {{from}} 转换为 {{to}}，因此名称没有更改。",
       "replaced": "{{name}} — 已转换，原文件已移到废纸篓"
+    },
+    "reduce": {
+      "title": "缩小体积",
+      "levelLabel": "压缩强度",
+      "recommended": "推荐",
+      "levels": {
+        "light": "轻度（高画质）",
+        "balanced": "均衡",
+        "max": "强力（最小体积）"
+      },
+      "specs": {
+        "pdf": {
+          "light": "高画质·最大 1600px（约减少 30–65%）",
+          "balanced": "标准压缩·最大 1280px（约减少 55–80%）",
+          "max": "极限压缩·最大 960px（约减少 75–90%）"
+        },
+        "image": {
+          "light": "高画质·256色/2560px（约减少 35–60%）",
+          "balanced": "均衡压缩·最大 1920px（约减少 55–75%）",
+          "max": "极限压缩·最大 1280px（约减少 70–85%）"
+        },
+        "video": {
+          "light": "原始分辨率·码率减少约 35%+",
+          "balanced": "最高 1080p·码率减少约 58%+",
+          "max": "最高 720p·码率减少约 76%+"
+        },
+        "audio": {
+          "light": "高音质·码率减少约 28%",
+          "balanced": "标准音质·码率减少约 50%",
+          "max": "语音优先·码率减少约 65%"
+        }
+      },
+      "outputLabel": "保存方式",
+      "replaceMode": "替换原文件",
+      "copyMode": "另存为副本",
+      "replaceHint": "原文件将移至废纸篓，并原地替换“{{name}}”。",
+      "copyHint": "保留原文件，并另存为“{{copyName}}”。",
+      "workingHint": "完成前原文件不会被修改。"
     }
   },
   "contextMenu": {
@@ -217,7 +259,9 @@
       "videoConvert": "转换视频",
       "convertTo": "转换为 {{format}}",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "体积优化"
+      "reduceSize": "缩小体积",
+      "reducing": "正在缩小“{{name}}”的体积…",
+      "reduceProgressAria": "正在缩小 {{name}} 的体积"
     },
     "versionRelations": {
       "exact": "完全相同",
@@ -664,6 +708,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "返回",
     "step": {
       "welcome": "介绍",
       "permissions": "权限",
@@ -679,7 +724,7 @@
       "indexing": "索引"
     },
     "stepLabel": {
-      "welcome": "开始使用",
+      "welcome": "继续",
       "permissions": "继续",
       "account": "继续",
       "folders": "选择文件夹并继续",
@@ -752,9 +797,9 @@
       "title": "用账户\n开始使用",
       "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
       "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
-      "signedIn": "已登录",
+      "signedIn": "登录完成",
       "signedInNote": "正在进入下一步",
-      "otherAccount": "其他账户",
+      "otherAccount": "使用其他账户登录",
       "cardTitle": "Dazzi 账户",
       "cardSub": "管理套餐和用量",
       "busy": "正在浏览器中登录…",
@@ -764,17 +809,36 @@
       "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
       "offline": "无法连接服务器，显示的是上次确认的信息。",
       "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
+      "getStarted": "开始使用",
+      "continueGoogle": "使用 Google 继续",
+      "continueApple": "使用 Apple 继续",
+      "continueGithub": "使用 GitHub 继续",
+      "or": "或",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "mingzi@example.cn",
+      "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
+      "guest": "以访客身份继续",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
       "agreePrivacy": "隐私政策",
       "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐"
+      "planLabel": "{{plan}} 套餐",
+      "leadPc": "套餐和用量与账户关联。文件和搜索索引保存在这台电脑上。"
     },
     "permissions": {
       "eyebrow": "权限",
-      "title": "请允许访问\n以便正确读取",
-      "leadMac": "macOS 会在应用访问文档和受保护的应用数据前征求许可。权限与索引范围是两回事。",
-      "leadWindows": "只需确认通知和网络即可开始。其余可稍后在设置中更改。",
+      "title": "请确认允许的权限",
+      "leadMac": "macOS 要求应用在读取受保护文件前获得你的许可。\n允许之后，要搜索的文件夹仍在下一步由你自己选择。",
+      "leadWindows": "请先确认需要的权限。\n所有项目都可以跳过，之后也可在设置中更改。",
+      "titleWindows": "请确认允许的权限",
       "note": "Dazzi 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
       "required": "必需",
       "optional": "可选",
@@ -786,21 +850,23 @@
       "footnote": "开启后才能继续。",
       "fda": {
         "name": "完全磁盘访问权限",
-        "desc": "需要此权限才能正常工作。"
+        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。",
+        "why": "为什么需要完全磁盘访问？"
       },
       "notifications": {
         "name": "通知",
+        "desc": "提前请求通知权限。要接收哪些通知可在设置中选择。",
         "allow": "允许通知",
         "openWindows": "打开 Windows 设置"
       },
       "login": {
         "name": "登录时启动",
-        "desc": "文件发生变化时，在后台保持索引最新。"
+        "desc": "开机后应用会自动启动。可随时在设置中关闭。"
       },
       "network": {
-        "name": "网络（防火墙）",
-        "desc": "远程嵌入和模型调用需要。首次启动时若出现 Windows 安全警告，请选择允许。",
-        "allow": "允许"
+        "name": "网络",
+        "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
+        "allow": "允许网络"
       }
     },
     "smartScan": {
@@ -832,7 +898,8 @@
       "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
       "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
       "cloudEta": "远程 约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。"
+      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
+      "localEtaPc": "本地 (此电脑) 约 {{minutes}} 分钟"
     },
     "smartScope": {
       "policy": {
@@ -876,22 +943,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "语义搜索",
       "title": "如何使用嵌入？",
       "groupLabel": "嵌入方式",
       "card": {
         "none": {
-          "name": "不使用",
-          "line": "仅关键词搜索"
-        },
-        "local": {
-          "name": "本地嵌入",
-          "lineMac": "在此 Mac 上处理",
-          "linePc": "在此 PC 上处理"
+          "name": "按关键词查找",
+          "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "远程嵌入",
-          "line": "在服务器上处理"
+          "name": "在 Dazzi 服务器上分析",
+          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
+        },
+        "local": {
+          "nameMac": "在我的 Mac 上分析",
+          "namePc": "在我的 PC 上分析",
+          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
+          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
         }
       },
       "meter": {
@@ -903,10 +970,14 @@
         "good": "好"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "约 {{minutes}} 分钟",
+      "prepTime": "准备时间",
+      "about": "约",
+      "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。",
+      "cloudConsentRequired": "(必填)",
+      "cloudConsent": "我同意将文档正文发送到服务器。",
+      "cloudConsentCheck": "我同意",
       "pausedNotice": {
         "config": "所选嵌入方式不可用，已暂停",
         "disk": "存储空间不足，无法下载模型",
@@ -914,10 +985,7 @@
       }
     },
     "sources": {
-      "eyebrow": "数据源",
-      "title": "连已连接的位置\n也一起搜索？",
-      "lead": "只先显示已安装并通过认证的数据源。无需全部选择。",
-      "detected": "已检测",
+      "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
       "checking": "正在检查可添加的其他来源…",
       "empty": "未找到已连接的来源。您可以稍后在设置中连接。",
       "connectMore": "需要准备的数据源可稍后在设置中连接。",
@@ -1348,7 +1416,21 @@
       "stars": "{{count}} 星",
       "star": "1 星"
     },
-    "kindByExtension": "{{ext}} 文件"
+    "kindByExtension": "{{ext}} 文件",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop 文档",
+      "illustrator": "Adobe Illustrator 文档",
+      "eps": "EPS 图像",
+      "jpegxl": "JPEG XL 图像",
+      "icns": "Apple 图标图像",
+      "targa": "TGA 图像",
+      "openexr": "OpenEXR 图像",
+      "gimp": "GIMP 图像",
+      "sketch": "Sketch 文档",
+      "figma": "Figma 文档",
+      "raw": "{{maker}} RAW 图像",
+      "rawGeneric": "RAW 图像"
+    }
   },
   "main": {
     "interaction": {
@@ -1360,8 +1442,7 @@
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
-      "unsupportedOptimize": "此格式不支持容量优化。",
-      "alreadyOptimized": "此文件已优化。",
+      "alreadyOptimized": "此文件无法再缩小。",
       "unsupportedExtract": "无法解压此文件格式。",
       "emptyTarget": "没有可操作的目标。",
       "singleTargetOnly": "此操作一次仅支持一个项目。",
@@ -1374,10 +1455,14 @@
       "unsupportedConvert": "不支持转换为 {{format}}。",
       "converted": "{{name}} — 已转换",
       "resized": "{{name}} — 已调整大小",
-      "optimized": "{{name}} — 已优化容量",
       "videoNeedsFfmpeg": "视频转换需要 ffmpeg。",
       "containerConverted": "{{name}} — 已转换容器",
-      "shareUnsupported": "此平台不支持系统共享。"
+      "shareUnsupported": "此平台不支持系统共享。",
+      "unsupportedReduce": "此文件无法在保持格式的前提下缩小体积",
+      "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
+      "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）",
+      "reduceCancelled": "已取消缩小 {{name}} 的体积",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}% · 原文件已移至废纸篓）"
     },
     "indexStatus": {
       "outside": "文件在 Dazzi 搜索路径之外",
@@ -1462,7 +1547,10 @@
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
-      "invalidUrl": "网址无效。"
+      "invalidUrl": "网址无效。",
+      "librarianExited": "索引辅助进程意外停止（代码 {{code}}）。",
+      "librarianFailed": "索引辅助进程失败：{{message}}",
+      "librarianStopped": "索引辅助进程已关闭，无法处理请求。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",
@@ -1578,6 +1666,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "noRoute": "Filee 无法将 {{name}} 转换为 {{extension}} 格式。",
       "invalidName": "不能用作转换后文件的名称：{{name}}",
       "sourceMissing": "找不到要转换的文件：{{name}}",
       "nameTaken": "已存在名为“{{name}}”的文件或文件夹",
@@ -1623,7 +1712,14 @@
       "tarListFailed": "无法读取 tar 列表",
       "readFailed": "无法读取归档",
       "empty": "空的归档",
-      "order": "修改日期"
+      "order": "修改日期",
+      "unreadable": {
+        "encrypted": "此归档受密码保护，无法列出其内容",
+        "corrupt": "无法列出此归档。它可能已损坏、受密码保护，或只压缩了一个文件",
+        "tooLarge": "此归档太大，无法列出，改为显示其信息",
+        "tooManyEntries": "此归档包含的项目过多，无法列出，改为显示其信息",
+        "tooSlow": "列出此归档耗时过长，仅显示其信息"
+      }
     },
     "folder": {
       "kind": "文件夹",
@@ -1631,6 +1727,12 @@
     },
     "contents": {
       "title": "包含内容"
+    },
+    "native": {
+      "readFailed": "无法读取此文稿",
+      "attachments": "附件",
+      "noAttachments": "无附件",
+      "emptyIconset": "此图标集中没有 PNG 图标"
     },
     "code": {
       "wrap": "自动换行",
@@ -1705,7 +1807,65 @@
       "slideMissing": "此幻灯片没有图片",
       "drawFailed": "无法绘制幻灯片",
       "noPreview": "此文档没有预览图片",
+      "rendering": "正在生成高清幻灯片…",
       "page": "第 {{count}} 页"
+    },
+    "certificate": {
+      "subject": "使用者",
+      "issuer": "颁发者",
+      "serial": "序列号",
+      "notBefore": "生效时间",
+      "notAfter": "到期时间",
+      "signature": "签名",
+      "publicKey": "公钥",
+      "altNames": "备用名称",
+      "keyUsage": "密钥用法",
+      "extendedKeyUsage": "扩展密钥用法",
+      "ca": "CA",
+      "status": {
+        "expired": "已过期",
+        "notYetValid": "尚未生效"
+      },
+      "usage": {
+        "digitalSignature": "数字签名",
+        "contentCommitment": "不可否认",
+        "keyEncipherment": "密钥加密",
+        "dataEncipherment": "数据加密",
+        "keyAgreement": "密钥协商",
+        "keyCertSign": "证书签名",
+        "cRLSign": "CRL 签名",
+        "encipherOnly": "仅加密",
+        "decipherOnly": "仅解密"
+      },
+      "eku": {
+        "serverAuth": "TLS Web 服务器身份验证",
+        "clientAuth": "TLS Web 客户端身份验证",
+        "codeSigning": "代码签名",
+        "emailProtection": "电子邮件保护",
+        "timeStamping": "时间戳",
+        "ocspSigning": "OCSP 签名"
+      },
+      "keyHidden": "私钥 — 内容已隐藏",
+      "keyEncrypted": "已加密",
+      "keyPlain": "未加密",
+      "unreadableBlock": "无法读取此证书",
+      "countOne": "1 个证书",
+      "countMany": "{{count}} 个证书",
+      "omitted": "另有 {{count}} 个未显示",
+      "truncated": "仅显示文件的前一部分",
+      "readFailed": "无法读取此文件",
+      "container": {
+        "pkcs12": "PKCS #12 捆绑包包含证书和私钥并受密码保护，因此不显示其内容。",
+        "keychain": "Apple 钥匙串是加密存储，此处不会读取或解密。"
+      },
+      "notContainer": {
+        "pkcs12": "这不是有效的 PKCS #12 捆绑包",
+        "keychain": "这不是有效的 Apple 钥匙串"
+      },
+      "unreadable": {
+        "empty": "此文件为空",
+        "notCertificate": "在此文件中未找到证书"
+      }
     },
     "gdrive": {
       "account": "Google 账号：{{email}}",
@@ -1748,6 +1908,14 @@
     },
     "pdf": {
       "openFailed": "无法打开 PDF"
+    },
+    "password": {
+      "locked": "此文档受密码保护",
+      "label": "密码",
+      "placeholder": "输入密码",
+      "unlock": "解锁",
+      "checking": "正在验证…",
+      "incorrect": "密码不正确，请重试。"
     },
     "pptx": {
       "openFailed": "无法打开演示文稿",
@@ -1858,6 +2026,9 @@
       "openFailed": "无法打开演示文稿",
       "noSlides": "没有幻灯片",
       "noPreview": "此文档没有预览图像"
+    },
+    "raster": {
+      "noPreview": "无法从此文件生成预览图像"
     },
     "evidence": {
       "searching": "正在查找引用段落…",
@@ -2099,7 +2270,8 @@
         "baseUrl": "服务器地址",
         "apiKeyOptional": "API 密钥 (可选)",
         "optionalPlaceholder": "可选",
-        "saved": "已保存 {{name}}。"
+        "saved": "已保存 {{name}}。",
+        "bodyLocalPc": "只能连接在此电脑上运行的服务器，例如 Ollama、LM Studio。"
       },
       "loginModal": {
         "openManually": "如果浏览器没有打开，请手动打开下面的地址。",
@@ -2131,7 +2303,8 @@
       "apiKeyPlaceholder": "留空则使用已保存的密钥",
       "apiKeyHint": "密钥保存在本机的安全钥匙串中,不会写入配置文件。",
       "consentRemote": "我同意将文档内容发送到本机之外的服务器",
-      "signInNote": "Dazzi 云需要登录 Dazzi 账户。请先在账户设置中登录。"
+      "signInNote": "Dazzi 云需要登录 Dazzi 账户。请先在账户设置中登录。",
+      "apiKeyHintPc": "密钥保存在这台电脑的安全凭据存储中，不会写入配置文件。"
     },
     "language": {
       "remove": "移除 {{name}}",

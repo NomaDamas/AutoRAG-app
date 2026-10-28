@@ -20,7 +20,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
-import { homeDir, rmRetry } from "./platform.mjs";
+import { homeDir, isWindows, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -46,7 +46,7 @@ const realMinsyncModels =
 		: join(homeDir(), ".cache", "minsync", "models"));
 // The first argument (or QA_ONBOARDING_EMBED) picks the embedding card: none (default, keyword-only) or local. `bun run qa script` forwards arguments into the VM, environment variables do not. Cloud needs an account, so it is not drivable here.
 const EMBED = process.argv[2]?.trim() || process.env.QA_ONBOARDING_EMBED?.trim() || "none";
-const EMBED_CARD = { none: 0, local: 1 }[EMBED];
+const EMBED_CARD = { none: 0, local: 2 }[EMBED];
 if (EMBED_CARD === undefined) throw new Error(`the embed mode must be none or local, got ${EMBED}`);
 const failures = [];
 const check = (name, ok, detail = "") => {
@@ -191,7 +191,7 @@ try {
 
 	// welcome
 	check("welcome headline", (await heading()).includes("파일에게"));
-	check("back is disabled on the first step", await page.locator(".onb .back-btn").isDisabled());
+	check("back is disabled on the first step", await page.locator(".onb .footer-btn >> nth=0").isDisabled());
 	await shot("01-welcome");
 	await page.keyboard.press("Enter");
 
@@ -218,6 +218,9 @@ try {
 	check("account step", (await heading()).includes("계정"));
 	check("signing in is gated until an account exists", await primary.isDisabled());
 	await shot("03-account");
+	// Where the files live is said in the machine's own words: "이 Mac" on a Mac, "이 PC" on Windows.
+	const accountLead = await page.locator(".onb .screen-copy p").first().innerText();
+	check("the account step names this machine, not another OS's", isWindows ? accountLead.includes("이 PC") && !accountLead.includes("Mac") : accountLead.includes("이 Mac"), accountLead);
 	await page.locator(".onb .auth-card .action-row button.secondary").click();
 
 	// model: BYOK connects its model before any folder is scanned, because the smart scan runs on it.
@@ -273,6 +276,8 @@ try {
 	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
 	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
 	await shot("04-folders");
+	const etaText = await page.locator(".onb .eta-row").first().innerText();
+	check("the local ETA names this machine, not another OS's", isWindows ? etaText.includes("이 PC") && !etaText.includes("Mac") : etaText.includes("이 Mac"), etaText);
 	await primary.click();
 
 	// smart scan: the AI looks through the folders just chosen, on the model connected before them.

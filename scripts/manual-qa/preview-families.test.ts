@@ -16,6 +16,8 @@ const bridge: QuickLookWindowBridge = {
 	onZoom: () => () => undefined,
 	onApp: () => () => undefined,
 	onOffice: () => () => undefined,
+	onSlides: () => () => undefined,
+	onThumbnail: () => () => undefined,
 	ready: () => undefined,
 	zoomed: () => undefined,
 	request: never,
@@ -24,6 +26,8 @@ const bridge: QuickLookWindowBridge = {
 	folderSize: never,
 	audioMetadata: never,
 	dataPreview: never,
+	archivePreview: never,
+	certificatePreview: never,
 	share: never,
 	copyText: never,
 };
@@ -46,6 +50,14 @@ function documentFor(ext: string, bytes: Uint8Array): PreviewDocument {
 		pages: null,
 		office: null,
 		thumbnail: null,
+		slidesRendering: false,
+		native:
+			ext === "webloc" ? { kind: "webloc", title: "Example", url: "https://example.com" }
+			: ext === "webarchive" ? { kind: "webarchive", html: "<p>Archived</p>" }
+			: ext === "rtfd" ? { kind: "rtfd", rtf: bytes, attachments: ["photo.png"] }
+			: ext === "iconset" ? { kind: "iconset", icons: [{ name: "icon_16x16.png", bytes }] }
+			: ext === "textclipping" ? { kind: "textclipping", text: "Clipped text" }
+			: null,
 	};
 }
 
@@ -65,6 +77,7 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	html: strToU8("<p>Hello</p>"),
 	text: strToU8("hello preview\n"),
 	archive: zipSync({ "notes/a.txt": strToU8("hi") }),
+	archiveList: new Uint8Array([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c]),
 	iwork: png,
 	odt: zipSync({ "content.xml": strToU8("<office:document-content/>") }),
 	odp: zipSync({ "content.xml": strToU8("<office:document-content/>") }),
@@ -73,6 +86,11 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	hwp: new Uint8Array([0xd0, 0xcf, 0x11, 0xe0]),
 	font: new Uint8Array([0x00, 0x01, 0x00, 0x00]),
 	rtf: strToU8("{\\rtf1 hello}"),
+	webloc: strToU8("url"),
+	webarchive: strToU8("archive"),
+	rtfd: strToU8("{\\rtf1 package}"),
+	iconset: png,
+	textclipping: strToU8("clipping"),
 	data: new Uint8Array([0x53, 0x51, 0x4c]),
 	jsonl: strToU8('{"a":1}\n{"a":2}\n'),
 	plist: strToU8('<plist version="1.0"><dict/></plist>'),
@@ -82,6 +100,8 @@ const bytesForKind: Readonly<Record<ViewerKind, Uint8Array>> = {
 	calendar: strToU8("BEGIN:VEVENT\nSUMMARY:Lunch\nEND:VEVENT"),
 	fallback: new Uint8Array([0, 1, 2, 3, 4]),
 	gdrive: strToU8('{"doc_id":"1abc","resource_key":"","email":"me@gmail.com"}'),
+	raster: png,
+	certificate: new Uint8Array(),
 };
 
 const extForKind: Readonly<Record<ViewerKind, string>> = {
@@ -100,6 +120,7 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	html: "html",
 	text: "txt",
 	archive: "zip",
+	archiveList: "7z",
 	iwork: "numbers",
 	odt: "odt",
 	odp: "odp",
@@ -108,6 +129,11 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	hwp: "hwp",
 	font: "ttf",
 	rtf: "rtf",
+	webloc: "webloc",
+	webarchive: "webarchive",
+	rtfd: "rtfd",
+	iconset: "iconset",
+	textclipping: "textclipping",
 	data: "sqlite",
 	jsonl: "jsonl",
 	plist: "plist",
@@ -116,6 +142,8 @@ const extForKind: Readonly<Record<ViewerKind, string>> = {
 	contact: "vcf",
 	calendar: "ics",
 	gdrive: "gdoc",
+	raster: "psd",
+	certificate: "pem",
 	fallback: "bin",
 };
 
@@ -127,6 +155,15 @@ describe("preview families", () => {
 			const markup = renderToStaticMarkup(createElement(ChromeProvider, { value: chrome }, createElement(PreviewBody, { file: documentFor(ext, bytesForKind[kind]) })));
 			expect(markup.length).toBeGreaterThan(0);
 		}
+	});
+});
+
+describe("native package information panel", () => {
+	it("does not call a zero-stat directory package an empty file or print a bogus size", () => {
+		const file = { ...documentFor("pvt", new Uint8Array([1])), size: 0, package: true };
+		const markup = renderToStaticMarkup(createElement(ChromeProvider, { value: chrome }, createElement(PreviewBody, { file })));
+		expect(markup).not.toContain("Empty file");
+		expect(markup).not.toContain("0 B");
 	});
 });
 

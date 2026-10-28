@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
+import { platformKey } from "../../lib/platform-copy";
 import type { ProviderLoginEvent, ProviderLoginPrompt, ProviderSummary } from "../../../../shared/settings-contract";
 import { AppIcon, ModalActions, ModalShell } from "./SettingsKit";
 import { defaultEnvName, errorText } from "./configSupport";
@@ -315,7 +316,7 @@ function ServerModal({ kind, provider, onClose, onDone }: { readonly kind: "loca
 	return (
 		<ModalShell onClose={onClose}>
 			<h2>{provider === null ? (kind === "local" ? t("settingsCore.ai.server.titleLocal") : t("settingsCore.ai.server.titleCustom")) : t("settingsCore.ai.server.titleEdit")}</h2>
-			<p>{kind === "local" ? t("settingsCore.ai.server.bodyLocal") : t("settingsCore.ai.server.bodyCustom")}</p>
+			<p>{kind === "local" ? t(platformKey("settingsCore.ai.server.bodyLocal")) : t("settingsCore.ai.server.bodyCustom")}</p>
 			<label>{t("settingsCore.ai.server.name")}<input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} /></label>
 			<label>{t("settingsCore.ai.server.baseUrl")}<input value={baseUrl} placeholder="https://…/v1" onChange={(event) => setBaseUrl(event.target.value)} /></label>
 			<label>{t("settingsCore.ai.server.apiKeyOptional")}<input type="password" value={apiKey} placeholder={t("settingsCore.ai.server.optionalPlaceholder")} onChange={(event) => setApiKey(event.target.value)} /></label>

@@ -283,4 +283,11 @@ describe("quick look keys", () => {
 		expect(quickLookKeyAction(input(" ", { control: true }))).toBeNull();
 		expect(quickLookKeyAction(input("ArrowDown", { alt: true }))).toBeNull();
 	});
+
+	it("lets a focused text field keep Space and the arrows, but Escape still closes", () => {
+		expect(quickLookKeyAction(input(" "), true)).toBeNull();
+		expect(quickLookKeyAction(input("ArrowDown"), true)).toBeNull();
+		expect(quickLookKeyAction(input("ArrowUp"), true)).toBeNull();
+		expect(quickLookKeyAction(input("Escape"), true)).toBe("close");
+	});
 });

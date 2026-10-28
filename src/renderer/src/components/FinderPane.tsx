@@ -425,6 +425,7 @@ export const FinderPane = memo(function FinderPane({
 							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
 							onNavigate={finder.navigate}
 							onGoToPath={finder.goToPath}
+							completePath={finder.completePath}
 							openEditor={finder.pathEditingCount}
 							onEditorClosed={finder.endPathEdit}
 						/>

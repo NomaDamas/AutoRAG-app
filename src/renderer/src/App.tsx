@@ -19,6 +19,7 @@ import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
+import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -221,6 +222,11 @@ export function App(): ReactElement {
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
 	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
+	const grantTagColors = useCallback(() => {
+		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
+		void autorag.onboarding.openFullDiskAccess().catch(reportTagError);
+		setToast(t("places.tagColorsGrantToast"));
+	}, [reportTagError, t]);
 	const tagCatalog = useTagCatalogLoader(source, reportTagError);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
@@ -657,7 +663,7 @@ export function App(): ReactElement {
 		},
 	};
 	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
-	const windowColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)`;
+	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr)`;
 	/** Inner grid under the toolbar: workspace + inspector. */
 	const finderColumns = `minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
 	const canCloseTabs = canCloseWorkspaceTab(workspace);
@@ -668,11 +674,10 @@ export function App(): ReactElement {
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
-				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
+				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
 				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
 			>
-				{sidebarVisible ? (
-					<Sidebar
+				<div className="min-w-0 min-h-0 overflow-hidden" inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
 						activePath={aiTabActive ? AI_SEARCH_PATH : automationsTabActive ? AUTOMATIONS_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
@@ -693,8 +698,9 @@ export function App(): ReactElement {
 						onSearchBlur={() => finder?.setSearchFocused(false)}
 						onSubmitSearch={submitSidebarSearch}
 						aiSearchDrop={aiSearchDrop}
-					/>
-				) : null}
+						tagColorsDenied={tagCatalog.catalog.colorsDenied}
+						onGrantTagColors={grantTagColors}
+					/></div></div>
 				<div className="flex min-w-0 min-h-0 flex-col">
 					<Toolbar
 						title={toolbarTitle}
@@ -851,6 +857,15 @@ export function App(): ReactElement {
 					state={finder.convertRename}
 					onConvert={(keepOriginal) => finder?.confirmConvertRename(keepOriginal)}
 					onCancel={() => finder?.cancelConvertRename()}
+				/>
+			)}
+			{finder?.reduceDialog == null ? null : (
+				<ReduceSizeDialog
+					state={finder.reduceDialog}
+					onChangeLevel={(level) => finder.setReduceDialogLevel(level)}
+					onChangeReplaceOriginal={(replaceOriginal) => finder.setReduceDialogReplaceOriginal(replaceOriginal)}
+					onStart={() => finder.confirmReduceSize()}
+					onCancel={() => finder.cancelReduceSize()}
 				/>
 			)}
 			{finder?.emptyTrashConfirm === true ? (

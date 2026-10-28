@@ -13,7 +13,7 @@ import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
-import { ACCOUNT_CHANNELS, isPaidPlanId } from "../shared/account-contract";
+import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
 import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
@@ -89,6 +89,10 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (!isActionPaths(paths)) throw new Error(t("main.ipc.invalidPaths"));
 		if (!isActionAnchor(anchor)) throw new Error(t("main.ipc.invalidAnchor"));
 		return service.share(paths, anchor, BrowserWindow.fromWebContents(event.sender));
+	});
+	ipcMain.handle(ACTIONS_CHANNELS.cancel, (_event, id: unknown) => {
+		if (typeof id !== "string" || id.length === 0) throw new Error(t("main.ipc.unknownAction"));
+		return service.cancel(id);
 	});
 }
 
@@ -338,11 +342,23 @@ export function registerSettingsIpcHandlers(service: SettingsBridge): void {
 	ipcMain.handle(SETTINGS_CHANNELS.mcpConnectInfo, () => service.mcpConnectInfo());
 }
 
-/** AutoRAG account: the plan is the only renderer-supplied payload and is validated here. */
+/** AutoRAG account: every renderer-supplied sign-in, plan and promo payload is validated here. */
 export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.status, () => service.status());
 	ipcMain.handle(ACCOUNT_CHANNELS.refresh, () => service.refresh());
-	ipcMain.handle(ACCOUNT_CHANNELS.signIn, () => service.signIn());
+	ipcMain.handle(ACCOUNT_CHANNELS.signIn, (_event, options: unknown) => {
+		if (options !== undefined && !isAccountSignInOptions(options)) throw new TypeError("account:signIn expects \"google\" or \"github\"");
+		return service.signIn(options);
+	});
+	ipcMain.handle(ACCOUNT_CHANNELS.sendEmailOtp, (_event, email: unknown) => {
+		if (typeof email !== "string" || email.trim().length === 0) throw new TypeError("account:sendEmailOtp expects a non-empty email string");
+		return service.sendEmailOtp(email);
+	});
+	ipcMain.handle(ACCOUNT_CHANNELS.verifyEmailOtp, (_event, email: unknown, code: unknown) => {
+		if (typeof email !== "string" || email.trim().length === 0) throw new TypeError("account:verifyEmailOtp expects a non-empty email string");
+		if (typeof code !== "string" || !/^\d{6}$/u.test(code.trim())) throw new TypeError("account:verifyEmailOtp expects a 6-digit code");
+		return service.verifyEmailOtp(email, code);
+	});
 	ipcMain.handle(ACCOUNT_CHANNELS.cancelSignIn, () => service.cancelSignIn());
 	ipcMain.handle(ACCOUNT_CHANNELS.signOut, () => service.signOut());
 	ipcMain.handle(ACCOUNT_CHANNELS.checkout, (_event, plan: unknown, promoCode: unknown) => {

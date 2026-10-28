@@ -37,6 +37,35 @@ describe("standaloneOfficeHtml", () => {
 		expect(html).not.toContain("x.test");
 	});
 
+	it("strips navigation directives and still inlines single-quoted archived resources", () => {
+		const html = standaloneOfficeHtml("<html><head><meta http-equiv='refresh' content='0;url=https://evil.test'><base href='https://evil.test'><link href='Attachment1.css'></head><body><img src='Attachment1.png'></body></html>", resolve);
+		expect(html).not.toContain("evil.test");
+		expect(html).not.toMatch(/<meta\s+http-equiv=["']?refresh|<base/i);
+		expect(html).toContain("<style>.s0{color:red}</style>");
+		expect(html).toContain("data:image/png;base64,");
+	});
+
+	it("does not let archived CSS or MIME metadata inject markup", () => {
+		const html = standaloneOfficeHtml('<html><head><link href="style.css" rel="stylesheet"></head><body><img src="pixel.png"></body></html>', (name) =>
+			name === "style.css"
+				? { kind: "css", text: '</style><script>fetch("https://evil.test")</script><style>' }
+				: { kind: "data", mime: 'image/png" onerror="fetch(\'https://evil.test\')', bytes: PNG },
+		);
+		expect(html).not.toContain("<script");
+		expect(html).not.toContain("onerror");
+		expect(html).toContain("data:application/octet-stream;base64,");
+	});
+
+	it("uses HTML quote semantics when stripping adjacent event handlers", () => {
+		const html = standaloneOfficeHtml('<a onclick="\\" title=" onerror=alert(1) x=">text</a>', resolve);
+		expect(html).not.toMatch(/\son[a-z]+\s*=/i);
+	});
+
+	it("drops a long unclosed tag without rescanning it for every opener", () => {
+		const html = standaloneOfficeHtml("<meta ".repeat(50_000), resolve);
+		expect(html.length).toBeLessThan(1000);
+	});
+
 	it("drops a picture it cannot resolve instead of leaving a dangling file reference", () => {
 		const html = standaloneOfficeHtml('<html><body><img src="Attachment9.emf" style="width:10"></body></html>', resolve);
 		expect(html).not.toContain("Attachment9");
@@ -130,7 +159,7 @@ describe("renderOfficeHtml", () => {
 });
 
 describe("PreviewDocument.office", () => {
-	const base = { name: "a.doc", path: "/a.doc", ext: "doc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: null, pages: null, thumbnail: null };
+	const base = { name: "a.doc", path: "/a.doc", ext: "doc", size: 1, modifiedAt: "2026-01-01T00:00:00.000Z", mime: "application/octet-stream", truncated: false, bytes: null, pages: null, thumbnail: null, slidesRendering: false };
 
 	it("is an office state or null", () => {
 		expect(isPreviewDocument({ ...base, office: null })).toBe(true);

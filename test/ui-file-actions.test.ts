@@ -15,12 +15,14 @@ const DARWIN: ActionCapabilities = {
 	archive: true,
 	imageFormats: ["jpeg", "png", "heic", "avif", "gif", "tiff", "bmp"],
 	videoContainers: [],
+	reducibleExtensions: ["jpg", "jpeg", "heic", "heif"],
 };
 
 const DARWIN_FFMPEG: ActionCapabilities = {
 	...DARWIN,
 	imageFormats: ["jpeg", "png", "webp", "heic", "avif", "gif", "tiff", "bmp"],
 	videoContainers: ["mp4", "mov", "mkv"],
+	reducibleExtensions: ["pdf", "jpg", "jpeg", "png", "webp", "heic", "heif", "mp4", "mov", "mp3"],
 };
 
 function ids(actions: readonly FileAction[]): readonly string[] {
@@ -66,28 +68,42 @@ describe("openWithItems", () => {
 	});
 });
 
-describe("optimize gate follows the platform image backend", () => {
-	// The bridge global decides the platform; absent (unit tests) means macOS.
-	const setPlatform = (platform: string | null): void => {
-		const host: unknown = globalThis;
-		if (typeof host !== "object" || host === null) return;
-		if (platform === null) Reflect.deleteProperty(host, "autorag");
-		else Reflect.set(host, "autorag", { platform });
-	};
-
-	it("offers PNG optimize on the ffmpeg backend, never on sips", () => {
-		const WINDOWS: ActionCapabilities = { ...DARWIN, share: false, imageFormats: ["jpeg", "png", "webp", "tiff"] };
-		try {
-			setPlatform("win32");
-		expect(menuItems(suggestedActions({ name: "photo.png", kind: "file" }, WINDOWS), "imageEdit")).toContainEqual(
-			expect.objectContaining({ id: "image:optimize" }),
-		);
-		} finally {
-			setPlatform("darwin");
+describe("reduce size", () => {
+	it("is one flat action for every type the machine can shrink, whatever the type", () => {
+		for (const name of ["scan.pdf", "photo.PNG", "clip.mov", "song.mp3", "IMG_1.heic"]) {
+			const action = suggestedActions({ name, kind: "file" }, DARWIN_FFMPEG).find((candidate) => candidate.id === "reduceSize");
+			expect(action, name).toMatchObject({
+				kind: "action",
+				label: "용량 줄이기",
+				icon: "reduce",
+				target: { kind: "request", request: { kind: "reduceSize" } },
+			});
 		}
-		expect(
-			menuItems(suggestedActions({ name: "photo.png", kind: "file" }, DARWIN_FFMPEG), "imageEdit"),
-		).not.toContainEqual(expect.objectContaining({ id: "image:optimize" }));
+	});
+
+	it("is absent for types the machine cannot shrink, folders, and unknown files", () => {
+		expect(ids(suggestedActions({ name: "scan.pdf", kind: "file" }, DARWIN))).not.toContain("reduceSize");
+		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN_FFMPEG))).not.toContain("reduceSize");
+		expect(ids(suggestedActions({ name: "pics.jpg", kind: "folder" }, DARWIN_FFMPEG))).not.toContain("reduceSize");
+		expect(ids(suggestedActions({ name: "photo.jpg", kind: "file" }, NO_CAPABILITIES))).not.toContain("reduceSize");
+	});
+
+	it("sits before archiving, after the type's own edit menu", () => {
+		expect(ids(suggestedActions({ name: "photo.jpg", kind: "file" }, DARWIN_FFMPEG))).toEqual([
+			"open",
+			"openWith",
+			"imageEdit",
+			"reduceSize",
+			"compress",
+			"compress7z",
+			"share",
+			"askAi",
+		]);
+	});
+
+	it("no longer hides an optimize entry inside the image menu", () => {
+		const items = menuItems(suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN), "imageEdit");
+		expect(items.map((item) => item.id)).not.toContain("image:optimize");
 	});
 });
 
@@ -133,7 +149,7 @@ describe("archives", () => {
 });
 
 describe("image menu", () => {
-	it("offers every other native format plus resize presets, but no lossy-only optimize for a PNG", () => {
+	it("offers every other native format plus resize presets, for a PNG", () => {
 		const actions = suggestedActions({ name: "photo.png", kind: "file" }, DARWIN);
 		const items = menuItems(actions, "imageEdit");
 		expect(items.map((item) => item.label)).toEqual([
@@ -150,10 +166,9 @@ describe("image menu", () => {
 		expect(items.map((item) => item.id)).not.toContain("image:convert:png");
 	});
 
-	it("optimizes a lossy source and excludes its own format from conversion", () => {
+	it("excludes the source's own format from conversion", () => {
 		const actions = suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN);
 		const items = menuItems(actions, "imageEdit");
-		expect(items.map((item) => item.label)).toContain("용량 최적화");
 		expect(items.map((item) => item.label)).not.toContain("HEIC로 변환");
 	});
 
@@ -181,7 +196,6 @@ describe("image menu", () => {
 			const labels = menuItems(suggestedActions({ name, kind: "file" }, DARWIN), "imageEdit").map((item) => item.label);
 			expect(labels).toContain("JPEG로 변환");
 			expect(labels.filter((label) => label.endsWith("로 변환"))).toHaveLength(DARWIN.imageFormats.length - 1);
-			expect(labels).not.toContain("용량 최적화");
 			expect(labels.includes("최대 640px")).toBe(name !== "anim.gif");
 		}
 	});

@@ -1,5 +1,7 @@
 import { assertNever } from "./assert";
+import { CERTIFICATE_EXTENSIONS } from "./certificate";
 import { GOOGLE_DRIVE_EXTENSIONS } from "./google-drive";
+import { RASTER_EXTENSIONS } from "./raster-formats";
 
 export const VIEWER_KINDS = [
 	"image",
@@ -17,6 +19,7 @@ export const VIEWER_KINDS = [
 	"html",
 	"text",
 	"archive",
+	"archiveList",
 	"iwork",
 	"odt",
 	"odp",
@@ -25,6 +28,11 @@ export const VIEWER_KINDS = [
 	"hwp",
 	"font",
 	"rtf",
+	"webloc",
+	"webarchive",
+	"rtfd",
+	"iconset",
+	"textclipping",
 	"data",
 	"jsonl",
 	"plist",
@@ -33,6 +41,8 @@ export const VIEWER_KINDS = [
 	"contact",
 	"calendar",
 	"gdrive",
+	"raster",
+	"certificate",
 	"fallback",
 ] as const;
 
@@ -44,12 +54,14 @@ function assign(kind: ViewerKind, extensions: readonly string[]): void {
 	for (const extension of extensions) viewers[extension] = kind;
 }
 
-assign("image", ["png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "gif", "webp", "bmp", "svg", "avif", "ico", "apng"]);
+// JPEG XL: Chromium decodes it when the `JXLImageFormat` feature is enabled (src/main/index.ts).
+assign("image", ["png", "jpg", "jpeg", "jfif", "pjpeg", "pjp", "gif", "webp", "bmp", "svg", "avif", "ico", "apng", "jxl"]);
 assign("tiff", ["tif", "tiff"]);
 assign("heic", ["heic", "heif"]);
 assign("video", ["mp4", "m4v", "webm", "ogv", "mov", "mkv", "avi", "mpeg", "mpg", "mpe", "3gp", "3gpp"]);
 assign("audio", ["mp3", "wav", "wave", "m4a", "aac", "flac", "opus", "ogg", "oga", "aiff", "aif", "weba", "mid", "midi"]);
-assign("pdf", ["pdf"]);
+// A current Illustrator file is a PDF with Illustrator's own data appended.
+assign("pdf", ["pdf", "ai"]);
 assign("docx", ["docx", "docm", "dotx"]);
 assign("legacyDoc", ["doc", "dot"]);
 assign("sheet", ["xlsx", "xlsm", "xlsb", "xls", "xlt", "csv", "tsv", "ods"]);
@@ -72,6 +84,9 @@ assign("text", [
 	"diff", "patch", "rst", "tex", "lock",
 ]);
 assign("archive", ["zip", "jar", "war", "apk", "ipa", "vsix", "crx", "tar", "gz", "gzip", "tgz"]);
+// Containers libarchive's wasm build (or Node's zstd and the deb/rpm wrappers) read in
+// the main process; the page gets only the capped top level, like a database.
+assign("archiveList", ["rar", "7z", "bz2", "tbz", "tbz2", "xz", "txz", "zst", "tzst", "iso", "deb", "rpm", "cab"]);
 // Apple's iWork packages are ZIPs whose `preview.jpg` is the first page, sheet,
 // or slide; the listing of their `Index/*.iwa` protobufs would say nothing.
 assign("iwork", ["numbers", "pages", "key"]);
@@ -79,6 +94,11 @@ assign("epub", ["epub"]);
 assign("hwp", ["hwp", "hwpx"]);
 assign("font", ["ttf", "otf", "woff", "woff2", "eot"]);
 assign("rtf", ["rtf"]);
+assign("webloc", ["webloc", "inetloc"]);
+assign("webarchive", ["webarchive"]);
+assign("rtfd", ["rtfd"]);
+assign("iconset", ["iconset"]);
+assign("textclipping", ["textclipping"]);
 // Databases and columnar files are opened read-only in the main process; the
 // page only ever receives the capped rows it draws.
 assign("data", ["sqlite", "sqlite3", "db", "parquet"]);
@@ -89,9 +109,16 @@ assign("mail", ["eml", "emlx", "mbox"]);
 assign("msg", ["msg"]);
 assign("contact", ["vcf", "vcard"]);
 assign("calendar", ["ics", "ical", "ifb"]);
+// Certificates and key containers: the main process decodes them (`node:crypto`)
+// from the first few hundred KB; the page never gets the bytes, so a private key
+// in a PEM cannot reach it.
+assign("certificate", CERTIFICATE_EXTENSIONS);
 // Drive for desktop's Google-native files are pointers to a cloud document; the
 // panel shows the thumbnail Drive's file provider draws for the OS.
 assign("gdrive", GOOGLE_DRIVE_EXTENSIONS);
+// Camera RAW, Photoshop, EPS, icns, tga, exr and the design tools' packages are
+// drawn from an image the main process produces (see node/raster.ts).
+assign("raster", RASTER_EXTENSIONS);
 
 export function viewerForExtension(ext: string): ViewerKind {
 	const key = ext.toLowerCase().replace(/^\./, "");
@@ -125,6 +152,7 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "html":
 		case "text":
 		case "rtf":
+		case "textclipping":
 		case "jsonl":
 		case "mail":
 		case "contact":
@@ -143,11 +171,18 @@ export function byteNeed(kind: ViewerKind): ByteNeed {
 		case "hwp":
 		case "plist":
 		case "msg":
+		case "webloc":
+		case "webarchive":
+		case "rtfd":
+		case "iconset":
 			return "whole";
 		case "data":
+		case "archiveList":
+		case "certificate":
 			return "query";
 		case "heic":
 		case "tiff":
+		case "raster":
 			return "decode";
 		case "iwork":
 		case "odg":
@@ -169,6 +204,7 @@ const MIME: Readonly<Record<string, string>> = {
 	bmp: "image/bmp",
 	svg: "image/svg+xml",
 	avif: "image/avif",
+	jxl: "image/jxl",
 	ico: "image/x-icon",
 	mp4: "video/mp4",
 	m4v: "video/mp4",
@@ -269,7 +305,32 @@ const LABELS: Readonly<Record<string, string>> = {
 	dmg: "Disk Image",
 	iso: "Disc Image",
 	pkg: "Installer Package",
+	rar: "RAR archive",
+	"7z": "7-Zip archive",
+	bz2: "Bzip2 archive",
+	tbz: "Bzip2 archive",
+	tbz2: "Bzip2 archive",
+	xz: "XZ archive",
+	txz: "XZ archive",
+	zst: "Zstandard archive",
+	tzst: "Zstandard archive",
+	deb: "Debian package",
+	rpm: "RPM package",
+	cab: "Cabinet archive",
 	app: "Application",
+	webloc: "Internet location",
+	inetloc: "Internet location",
+	webarchive: "Safari web archive",
+	rtfd: "Rich Text with attachments",
+	iconset: "Icon set",
+	textclipping: "Text clipping",
+	pvt: "Live Photo package",
+	lpdf: "Localized PDF",
+	prefpane: "System Settings pane",
+	pict: "QuickDraw picture",
+	pct: "QuickDraw picture",
+	pic: "QuickDraw picture",
+	pictclipping: "QuickDraw clipping",
 	gdoc: "Google Docs document",
 	gsheet: "Google Sheets spreadsheet",
 	gslides: "Google Slides presentation",
@@ -280,6 +341,32 @@ const LABELS: Readonly<Record<string, string>> = {
 	gjam: "Google Jamboard board",
 	gtable: "Google Tables table",
 	gscript: "Google Apps Script project",
+	psd: "Photoshop document",
+	ai: "Illustrator artwork",
+	eps: "Encapsulated PostScript",
+	jxl: "JPEG XL image",
+	icns: "Apple icon image",
+	tga: "Targa image",
+	exr: "OpenEXR image",
+	xcf: "GIMP image",
+	sketch: "Sketch document",
+	fig: "Figma document",
+	cr2: "Canon RAW image",
+	cr3: "Canon RAW image",
+	nef: "Nikon RAW image",
+	arw: "Sony RAW image",
+	dng: "DNG RAW image",
+	orf: "Olympus RAW image",
+	rw2: "Panasonic RAW image",
+	raw: "RAW image",
+	pem: "PEM certificate",
+	crt: "Certificate",
+	cer: "Certificate",
+	der: "DER certificate",
+	p12: "PKCS #12 bundle",
+	pfx: "PKCS #12 bundle",
+	keychain: "Keychain",
+	"keychain-db": "Keychain",
 	py: "Python Source",
 	html: "HTML Document",
 	htm: "HTML Document",

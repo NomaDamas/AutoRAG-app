@@ -69,6 +69,8 @@ The path bar under the Finder list is one line at every window size and never sh
 
 **Editing the path.** A folder segment navigates. A click anywhere else on the bar (the gap between segments, the strip after the trail, the volume or selected-file segment) swaps the trail for a text field holding the full path, all selected. The bar keeps a 24px right padding, so that strip exists even when the trail fills the width. Enter goes to the typed location: an absolute POSIX, drive or UNC path, `~/…`, a `file://` URL, a quoted path, or a path relative to the folder in view. A folder opens in the tab; a file opens its folder with the file selected. A location that does not exist shows a toast and leaves the field open with the text selected. Escape, a click elsewhere, or any navigation closes the field. Enter and Escape stay inside the field, and the trail stays mounted (invisible) under it, so the fit never goes stale. Resolution: `resolvePathInput` in `src/renderer/src/state/paths.ts` (`test/ui-paths.test.ts`); field behaviour: `test/ui-path-bar-edit.test.tsx`.
 
+While typing, direct child folders matching the last segment appear in a fixed-height list above the bar. The active candidate supplies an inline ghost suffix; ↑/↓ changes it, Tab accepts it without navigating, Enter opens the accepted path, and clicking a candidate opens it directly. Completion preserves `~/` and relative-path spelling and discards slower responses for superseded drafts. Resolution: `completePath` in `src/renderer/src/state/paths.ts` (`test/ui-path-completion.test.ts`); live Electron behaviour: `scripts/manual-qa/path-bar.e2e.ts`.
+
 A typed path can differ from the disk in case (`/volumes/ssd1/autorag`) or Unicode form (a Korean name typed NFC, stored NFD); a case-insensitive volume (the APFS and NTFS default) still opens it. The tab and the path bar still show the on-disk spelling: `fs.stat` maps every segment back to its directory entry, matched by case and Unicode form and confirmed by inode, and never resolves a symlink. The renderer then navigates to the path it gets back. Logic: `onDiskPath` in `src/main/fs-entry.ts` (`test/fs-entry.test.ts`).
 ### 1.3 Finder list density
 The list view follows the Bloom Finder density contract: file rows are 24px high, names and metadata use 12px text, default file names use the primary near-black ink, and alternate rows use `#F4F5F5`. A focused selection fills the complete row with the accent color immediately, with no background-color transition and no visible corner rounding; an unfocused selection remains muted gray. Virtualized row geometry and keyboard reveal scrolling use the same 24px stride. The top Finder chrome uses larger 32px controls with 18px glyphs so navigation, sorting, view mode, and folder actions remain easy to target.
@@ -171,6 +173,7 @@ Instant Search's filename search ("전체" and "파일 이름") answers from the
 The sidebar gains a **Tags** group, the row menu a colour-dot row plus a **Tags…** submenu, and rows a coloured dot. All three read and write the tags Finder itself uses; there is no app-private tag store. Windows and Linux show none of it (`FsTagCatalog.supported` is false and no `Tags` group renders) — the Windows design is tracked in #19.
 - **Where tags live.** A file's tags are the extended attribute `com.apple.metadata:_kMDItemUserTags`, a binary plist array of `"<name>"` / `"<name>\n<N>"` (N = the label colour when the tag was assigned: 1 gray, 2 green, 3 purple, 4 blue, 5 yellow, 6 red, 7 orange). The colour Finder draws comes from its **registry** (`FinderTagDict` in the iCloud key-value store under `~/Library/Daemon Containers/*/Data/com.apple.kvs`), not from the file: a tag recoloured later keeps the old suffix on files that already carry it. The app draws the registry's colour and falls back to the file's suffix for a tag the registry does not list (`tagDotsOf`, `src/renderer/src/state/tags.ts`).
 - **Sidebar.** The Tags group lists the tags Finder pins in its own sidebar, in Finder's order (the registry's `p` flag; `FavoriteTagNames` when the registry is unreadable; the seven colour tags on a Mac that never customized them). A row is the tag's colour dot and name; it opens `tag://<name>`, a virtual listing like Recents: real entries with their real paths, nothing created, pasted, dropped into, or watched there. The catalog is re-read when the window regains focus, because tags are created and recoloured in Finder and nothing signals it.
+- **Colours need Full Disk Access.** macOS keeps the registry in `~/Library/Daemon Containers`, which it hides from a process that lacks Full Disk Access: `readdir` fails with `EPERM` and `sqlite3` with `authorization denied` (measured on a packaged build started from LaunchServices; a terminal that has the grant reads it fine, which is why a dev run shows colours the installed app does not). The names still come from `FavoriteTagNames` in Finder's preferences, but every custom tag then has colour 0 and draws as a hollow ring. Neither the file suffix nor Spotlight's `kMDItemFSLabel` can stand in: both hold the colour at assignment time, not Finder's current one (a measured sidebar tag drew gray from its files and orange in Finder). So `FsTagCatalog.colorsDenied` is set when the registry was refused (not when it is merely absent), and the sidebar adds a **Show tag colors** row under the Tags group that opens System Settings › Full Disk Access (`onboarding.openFullDiskAccess`); the grant applies after a relaunch. Checks: `test/finder-tags.test.ts`, `test/ui-sidebar-app-rows.test.tsx`.
 - **Row menu.** Between Services and the Trash group, as in Finder: one row of the seven colour dots (red, orange, yellow, green, blue, purple, gray) with a caption line under it, then a **Tags…** submenu of every tag Finder knows. Each dot is the tag Finder pins for that colour (a Mac that renamed Red to "Research" shows Research under the red dot; a colour with no pinned tag uses the OS's colour name), so a tag is one click away with no trip into the submenu. The dot under the pointer (or keyboard focus) grows to 125% and shows a white **+** in its centre, or a **−** when every selected row already carries the tag, so it is clear which tag a click will touch; a dot the selection already carries rests as a small check. The caption spells it out — `Add “Research”` or `Remove “Research”` — and reads "Tags" while the pointer is off the dots. A click toggles the tag on the whole selection and closes the menu; choosing a ticked tag removes it, any other state adds it to all (Finder's rule). The submenu stays for tags with no colour. The menu never shows tags in the Trash.
 - **Row dots.** List, icon, and column views draw one dot per tag, overlapped like Finder's, with the tag names on the tooltip and accessible name. A tag with no colour is a hollow ring. Colours are `--tag-*` tokens (the values of `NSWorkspace.fileLabelColors`).
 - **Writes.** `fs.setTags(paths, { add, remove })` reads each file's current array, changes only the named entries (the others keep their text, colour suffix included), and writes a binary plist with `xattr`, the way Finder does. `NSURLTagNamesKey` is not used: it stores `Red\n0` for the standard tags and a different suffix than Finder. Each path reports on its own (`FsBatchResult`); a path that cannot be tagged fails with the verbatim reason. The app does not create, rename, recolour, or delete a tag in Finder's registry — only Finder can.
@@ -221,7 +224,8 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 - **Which actions** a file offers comes from `src/renderer/src/state/file-actions.ts`:
   the base set is 열기 · 다른 앱으로 열기 · 압축 · 공유 · AI 요약, plus 압축 해제
-  for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
+  for `.zip`, an 이미지 편집 menu for images, a 동영상 변환 menu for video, and
+  용량 줄이기 for every type the machine can shrink (below).
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
 - The same headline actions sit in the row context menu (`state/context-menu.ts`):
@@ -253,6 +257,32 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
   palette. Resizing (최대 ○px) keeps the source format and is not offered for
   GIF, because both engines resize one frame and would drop an animation.
+- **용량 줄이기** is one flat button (`reduceSize`) in the Inspector's bottom-right
+  bar, shown only when the file's extension is in `capabilities.reducibleExtensions`.
+  Clicking it opens `ReduceSizeDialog`, which lets the user pick **compression
+  strength** (`light` / `balanced` / `max`) and **output mode**:
+  - **원본 대체 (default)** moves the original safely to the OS Trash and replaces
+    it in place under its exact name — zero `-reduced` clutter.
+  - **사본으로 저장** writes a single `<stem>-reduced.<ext>` sibling (`reducedCopyName`),
+    recycling any prior `-reduced` copy through the Trash so `-reduced 2 .. 8`
+    duplicates never accumulate.
+  Every family stages in `.dazzi-reduce-*` first and keeps the same format:
+  PDF (`pdf-lib` + `fflate` level-9 `/FlateDecode` re-deflate + `/DCTDecode` JPEG
+  re-encode at 1600/1280/960px + Filee `compress-pdf`, picking the smallest valid
+  output and consulting Filee whenever `light` saves <15%), JPEG (`ffmpeg` `mjpeg`
+  when present — avoiding `sips`'s EXIF bloat — else `sips`, with automatic
+  step-down when an already-compressed source shrinks <12%), HEIC (`sips` on
+  macOS, `ffmpeg` elsewhere), PNG (perceptual 256/144/64-color `palettegen` +
+  Floyd-Steinberg/Sierra dithering + mixed-filter deflate) and WebP,
+  MP4/M4V/MOV/MKV (`libx264` crf 25/28/33 with VBV `-maxrate` capped at
+  65%/42%/24% of the probed source video bitrate + original/1080p/720p cap),
+  WebM (VP9 + Opus, VBV-capped), and MP3/M4A/AAC/Opus (bitrate stepped to
+  72%/50%/35% of the probed source audio bitrate, keeping cover art). Once started,
+  the same dialog turns into a live
+  progress card (`ProgressBar` — determinate `%` from `ffmpeg -progress pipe:1`,
+  shimmer on PDF/stills) with a Cancel button (or Esc) that kills the child
+  process tree via `actions:cancel`. Animated PNG/WebP are refused, and outputs
+  not smaller than the source are discarded.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

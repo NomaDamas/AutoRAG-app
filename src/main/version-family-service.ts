@@ -14,7 +14,7 @@
  * is outside every watched folder degrade to prune after 2000 ms.
  */
 
-import { scanWithDupey, type DupeyScanResult } from "@autorag/librarian";
+import type { DupeyScanResult } from "@autorag/librarian";
 import type {
 	FsEntry,
 	FsLocation,
@@ -114,8 +114,11 @@ export interface VersionFamilyServiceDeps {
 	readonly locations: () => Promise<readonly FsLocation[]>;
 	readonly store: VersionFamilyStore;
 	readonly buildEntry: (path: string) => Promise<FsEntry>;
-	/** Defaults to the dupey CLI; tests inject fixture scans. */
-	readonly scanDuplicates?: (dir: string) => Promise<DupeyScanResult>;
+	/**
+	 * Scans one folder with the dupey CLI. Injected, not imported: the scan lives in `@autorag/librarian`, which takes
+	 * ~2 s to load, and the fs worker answers folder listings on the thread this module runs on (see `librarian-client.ts`).
+	 */
+	readonly scanDuplicates: (dir: string) => Promise<DupeyScanResult>;
 	readonly dupey?: DupeyProbe;
 	/** Current interval in minutes, read from app Settings on every arm. */
 	readonly intervalMinutes: () => number;
@@ -150,7 +153,7 @@ export interface VersionFamilyService {
 }
 
 export function createVersionFamilyService(deps: VersionFamilyServiceDeps): VersionFamilyService {
-	const scanDuplicates = deps.scanDuplicates ?? ((dir: string) => scanWithDupey(dir));
+	const { scanDuplicates } = deps;
 	const dupey = deps.dupey ?? createDupeyProbe();
 	const probe = deps.probe ?? lstatProbe();
 	const now = deps.now ?? (() => new Date());

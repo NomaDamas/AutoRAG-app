@@ -118,7 +118,7 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					<div>
 						<div className="eta-row">
 							<span>
-								{t("onboarding.folders.localEta", { minutes: localEta })}
+								{t(ctx.platform === "win32" ? "onboarding.folders.localEtaPc" : "onboarding.folders.localEta", { minutes: localEta })}
 							</span>
 							<span>
 								{t("onboarding.folders.cloudEta", { minutes: cloudEta })}

@@ -7,9 +7,11 @@ import { zipSync } from "fflate";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createActionService, type ActionService } from "../src/main/action-service";
 import { type ArchiveLimits } from "../src/main/archive-common";
+import { flattenWrapper } from "../src/main/archive-extract";
 import { extractWithLibarchive } from "../src/main/libarchive-reader";
 import { ArchiveError } from "../src/main/archive-guard.mjs";
 import { t } from "../src/shared/i18n/core";
+import { RAR4_TREE, RAR5_ENCRYPTED, RAR5_STORED } from "./archive-fixtures";
 
 let root: string;
 
@@ -42,16 +44,6 @@ function service(archiveLimits?: ArchiveLimits): ActionService {
 }
 
 const LIMITS: ArchiveLimits = { maxTotalBytes: 20 * 1024 ** 3, maxEntries: 100_000, maxEngineBytes: 1024 ** 3 };
-
-/** libarchive's test_read_format_rar.rar: test.txt, a symlink, testdir/test.txt, and two directories. */
-const RAR4_TREE =
-	"UmFyIRoHAM+QcwAADQAAAAAAAACEUnQgkDIAFAAAABQAAAADQqLIvrd22j4UMAgApIEAAHRlc3QudHh0gAi3dto+t3baPnRlc3QgdGV4dCBkb2N1bWVudA0KnS90IJAyAAgAAAAIAAAAA3tEybbRTNg+FDAIAP+hAAB0ZXN0bGlua8AI0UzYPlBf2j50ZXN0LnR4dM3gdCCQOgAUAAAAFAAAAANCosi+Y3faPhQwEACkgQAAdGVzdGRpclx0ZXN0LnR4dMDMY3faPmN32j50ZXN0IHRleHQgZG9jdW1lbnQNCqHIdOCQMQAAAAAAAAAAAAMAAAAAY3faPhQwBwDtQQAAdGVzdGRpcsDMY3faPmR32j7m53TgkDYAAAAAAAAAAAADAAAAAJ2r1T4UMAwA7UEAAHRlc3RlbXB0eWRpcoDMnavVPsVd2j7EPXsAQAcA";
-/** libarchive's test_read_format_rar5_stored.rar: one stored member, helloworld.txt. */
-const RAR5_STORED =
-	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA4MAZjLAIDC50ABJ0ApIMCtEOglYAAAQ5oZWxsb3dvcmxkLnR4dAoDE34Oq1tW6Q4aaGVsbG8gbGliYXJjaGl2ZSB0ZXN0IHN1aXRlIQodd1ZRAwUEAA==";
-/** libarchive's test_read_format_rar5_encrypted.rar: four members behind a password. */
-const RAR5_ENCRYPTED =
-	"UmFyIRoHAQAzkrXlCgEFBgAFAQGAgAA1/zIeHwIDCxIEEiBVblrugAAABWEudHh0CgMCfCGEo4J82gFUaGlzIGlzIGZyb20gYS50eHR6QXGzUAIDPDAEEiAYRaMCgAMABWIudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN+jTfBqtdBdSTB3cPHY6AU+o1Zx1w8S1La5wanAoDAnJlmKaCfNoBY7pUstAQpUlftLrTwGmoOxu8uzgn14eTeHMvfJPi0ijEAN7+psA7fmxn1AVQANz4jXzxZh8CAwsSBBIgNT2alIAAAAVjLnR4dAoDAj5I6a6CfNoBVGhpcyBpcyBmcm9tIGMudHh07P3wXVICAzygAASSACDD32MSgAMABWQudHh0MAEAAw/HRF7hgPi1n9YrQzcIvFfN883Wsxy0W6d8rDZYjrMOaYNM1EjpFevWrHe3owoDAnvFKfSPfNoB22ly9PZWjqb9GWXplbM2hTQ39Sqg0yeHsvXBAjLYql4dd1ZRAwUEAA==";
 
 /** A source tree with a wrapper folder, a nested file, and an empty directory. */
 async function docsSource(): Promise<string> {
@@ -506,5 +498,96 @@ describe("non-archives", () => {
 		const path = join(root, ".zip");
 		await writeFile(path, "zipSync({})");
 		await expect(service().run([path], { kind: "extract" }, null)).rejects.toThrow(t("main.action.unsupportedExtract"));
+	});
+});
+
+describe("flattenWrapper", () => {
+	/** A staging folder holding exactly the given files, as the extractor leaves it. */
+	async function staged(files: Record<string, string>): Promise<string> {
+		const staging = await mkdtemp(join(root, ".docs-"));
+		for (const [name, body] of Object.entries(files)) {
+			await mkdir(join(staging, name, ".."), { recursive: true });
+			await writeFile(join(staging, name), body);
+		}
+		return staging;
+	}
+
+	it("hands back the wrapper itself when it is the only top-level entry, leaving its content where it is", async () => {
+		// Given a staging folder with nothing but docs/
+		const staging = await staged({ "docs/a.txt": "a", "docs/deep/b.txt": "b" });
+
+		// When the wrapper is flattened
+		const root = await flattenWrapper(staging, "docs");
+
+		// Then the wrapper is the root to move into place, and no child was touched
+		expect(root).toBe(join(staging, "docs"));
+		expect(await readdir(staging)).toEqual(["docs"]);
+		expect(await readFile(join(root, "deep", "b.txt"), "utf8")).toBe("b");
+	});
+
+	it("moves the wrapper's children up when other top-level entries sit beside it, as before", async () => {
+		// Given docs/ next to a loose file
+		const staging = await staged({ "docs/a.txt": "a", "readme.txt": "r" });
+
+		// When the wrapper is flattened
+		const root = await flattenWrapper(staging, "docs");
+
+		// Then the staging folder itself is the root, holding the children and the loose file
+		expect(root).toBe(staging);
+		expect((await readdir(staging)).sort()).toEqual(["a.txt", "readme.txt"]);
+	});
+
+	it("leaves an archive alone when no top-level folder carries its name", async () => {
+		const staging = await staged({ "alpha/a.txt": "a", "beta/b.txt": "b" });
+
+		expect(await flattenWrapper(staging, "docs")).toBe(staging);
+		expect((await readdir(staging)).sort()).toEqual(["alpha", "beta"]);
+	});
+
+	it("leaves a plain file named like the archive alone", async () => {
+		const staging = await staged({ docs: "not a folder" });
+
+		expect(await flattenWrapper(staging, "docs")).toBe(staging);
+		expect(await readdir(staging)).toEqual(["docs"]);
+	});
+});
+
+describe("extracting a zip whose only top-level folder is named like the archive", () => {
+	it("keeps a child folder that repeats the archive's name (docs/docs), which used to fail", async () => {
+		// Given docs.zip holding docs/docs/a.txt and docs/b.txt
+		const archive = join(root, "docs.zip");
+		await writeFile(archive, zipSync({ "docs/docs/a.txt": Buffer.from("a"), "docs/b.txt": Buffer.from("b") }));
+
+		// When it is extracted
+		const out = await service().run([archive], { kind: "extract" }, null);
+
+		// Then the outer docs/ is stripped and the inner docs/ survives with its content
+		expect(out.output).toBe(join(root, "docs"));
+		expect((await readdir(out.output ?? "")).sort()).toEqual(["b.txt", "docs"]);
+		expect(await readFile(join(out.output ?? "", "docs", "a.txt"), "utf8")).toBe("a");
+		expect(await readdir(root)).toEqual(["docs", "docs.zip"]);
+	});
+
+	it("still strips the wrapper beside loose files, and leaves no staging folder behind", async () => {
+		const archive = join(root, "docs.zip");
+		await writeFile(archive, zipSync({ "docs/a.txt": Buffer.from("a"), "readme.txt": Buffer.from("r") }));
+
+		const out = await service().run([archive], { kind: "extract" }, null);
+
+		expect((await readdir(out.output ?? "")).sort()).toEqual(["a.txt", "readme.txt"]);
+		expect(await readdir(root)).toEqual(["docs", "docs.zip"]);
+	});
+
+	it("extracts a 300-file wrapped zip with every file in place", async () => {
+		const files: Record<string, Uint8Array> = {};
+		for (let i = 0; i < 300; i += 1) files[`pack/d${i % 7}/f${i}.txt`] = Buffer.from(`body ${i}`);
+		const archive = join(root, "pack.zip");
+		await writeFile(archive, zipSync(files));
+
+		const out = await service().run([archive], { kind: "extract" }, null);
+
+		expect((await readdir(out.output ?? "")).sort()).toEqual(["d0", "d1", "d2", "d3", "d4", "d5", "d6"]);
+		expect(await readFile(join(out.output ?? "", "d3", "f290.txt"), "utf8")).toBe("body 290");
+		expect(await readdir(root)).toEqual(["pack", "pack.zip"]);
 	});
 });

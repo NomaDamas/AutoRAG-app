@@ -20,6 +20,9 @@ const vendoredLibarchiveWasm: Plugin = {
 	},
 };
 
+/** Node worker_thread entries: they keep the `.mjs` name so the source and the build share one spawn URL. */
+const WORKER_ENTRIES: Readonly<Record<string, true>> = { "librarian-thread": true, "archive-worker": true, "archive-list-worker": true, "lzma-worker": true, "parse-worker": true };
+
 export default defineConfig({
 	main: {
 		plugins: [vendoredLibarchiveWasm],
@@ -37,12 +40,15 @@ export default defineConfig({
 					"refresh-job": resolve(import.meta.dirname, "src/main/refresh-job.ts"),
 					"mcp-server": resolve(import.meta.dirname, "src/main/mcp-server.ts"),
 					"fs-worker": resolve(import.meta.dirname, "src/fs-worker/index.ts"),
+					// The fs worker's librarian thread: the one place that imports `@autorag/librarian` (see src/fs-worker/librarian-client.ts).
+					"librarian-thread": resolve(import.meta.dirname, "src/fs-worker/librarian-thread.ts"),
 					"archive-worker": resolve(import.meta.dirname, "src/main/archive-worker.mjs"),
+					"archive-list-worker": resolve(import.meta.dirname, "src/main/archive-list-worker.mjs"),
 					"parse-worker": resolve(import.meta.dirname, "src/main/parse-worker.mjs"),
 					"lzma-worker": resolve(import.meta.dirname, "src/main/lzma-worker.mjs"),
 				},
 				output: {
-					entryFileNames: (chunk) => (chunk.name === "archive-worker" || chunk.name === "lzma-worker" || chunk.name === "parse-worker" ? `${chunk.name}.mjs` : "[name].js"),
+					entryFileNames: (chunk) => (WORKER_ENTRIES[chunk.name] === true ? `${chunk.name}.mjs` : "[name].js"),
 				},
 			},
 		},
