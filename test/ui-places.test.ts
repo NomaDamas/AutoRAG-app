@@ -79,3 +79,12 @@ describe("the Automations app row", () => {
 		expect(groups[0]?.items.map((item) => item.view)).toEqual(["aiSearch", "automations"]);
 	});
 });
+
+describe("the Discord attachments row", () => {
+	it("is a Cloud row with the Discord glyph, whose status dot is keyed by it", () => {
+		const groups = navGroups([place("Discord", "cloud", { icon: "discord", scanned: true })]);
+		const row = groups.find((group) => group.label === "Cloud")?.items[0];
+		expect(row).toMatchObject({ label: "Discord", kind: "discord", path: "/Discord", available: true, ejectable: false });
+		expect(row?.icon).toBeDefined();
+	});
+});

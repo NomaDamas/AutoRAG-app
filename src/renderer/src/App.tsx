@@ -3,11 +3,11 @@ import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
-import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
+import { DEFAULT_SETTINGS, type AppSettings } from "../../shared/settings-contract";
 import { setAppLanguage } from "../../shared/i18n";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 import type { OsRendererRequest } from "../../shared/os-request-contract";
-import type { FsLocationIcon } from "../../shared/fs-contract";
+import { mapSourceStatus, type SourceStatusMap } from "./state/source-status";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
@@ -110,25 +110,6 @@ function saveNumber(key: string, value: number): void {
 	}
 }
 
-/** Sidebar cloud glyphs → live datasource rows (status dots on every account of that provider). */
-const SOURCE_ICON_MATCH: readonly (readonly [FsLocationIcon, RegExp])[] = [
-	["google-drive", /gdrive|google[- ]?drive/i],
-	["dropbox", /dropbox/i],
-	["icloud", /icloud/i],
-	["onedrive", /onedrive/i],
-];
-
-function mapSourceStatus(snapshot: DataSourcesSnapshot): Partial<Record<FsLocationIcon, "syncing" | "error">> {
-	const out: Partial<Record<FsLocationIcon, "syncing" | "error">> = {};
-	for (const [icon, needle] of SOURCE_ICON_MATCH) {
-		const row = snapshot.sources.find((source) => needle.test(source.id) || needle.test(source.type));
-		if (row === undefined) continue;
-		if (row.status === "syncing") out[icon] = "syncing";
-		else if (row.status === "attention") out[icon] = "error";
-	}
-	return out;
-}
-
 /**
  * The visible Finder icon for `path`, in viewport CSS pixels: Quick Look zooms
  * out of it and back into it. Null when the row is scrolled away or absent.
@@ -217,7 +198,7 @@ export function App(): ReactElement {
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
-	const [sourceStatus, setSourceStatus] = useState<Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>>({});
+	const [sourceStatus, setSourceStatus] = useState<SourceStatusMap>({});
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);

@@ -146,6 +146,7 @@ export type FsLocationIcon =
 	| "onedrive"
 	| "dropbox"
 	| "box"
+	| "discord"
 	| "cloud"
 	| "disk"
 	| "network";
