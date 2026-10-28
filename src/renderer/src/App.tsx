@@ -685,6 +685,10 @@ export function App(): ReactElement {
 						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
+						onOpenUsage={() => {
+							requestSettingsCategory("plan");
+							finder?.openSettings();
+						}}
 						onHideSidebar={() => setSidebarVisible(false)}
 						onOpenIndexing={() => {
 							requestSettingsCategory("indexing");
