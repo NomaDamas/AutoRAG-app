@@ -784,19 +784,18 @@
     "folders": {
       "eyebrow": "인덱싱 범위",
       "title": "AI가 읽을 폴더를 고르세요",
-      "lead": "여기 선택한 폴더만 AI 검색에 포함됩니다. 범위는 나중에 추가하거나 줄일 수 있습니다.",
-      "suggested": "추천 위치",
+      "lead": "선택한 폴더의 파일만 AI가 읽습니다. 폴더는 나중에 언제든 추가하거나 뺄 수 있습니다.",
+      "suggested": "추천 폴더",
       "selectAll": "모두 선택",
-      "add": "다른 폴더 추가",
+      "add": "폴더 직접 추가",
       "stats": "{{files}}개 · {{size}} · 약 {{minutes}}분",
       "scanning": "세는 중…",
       "scanError": "읽을 수 없음",
       "summary": "{{folders}}개 폴더 · {{files}}개 파일 · {{size}}",
-      "summaryNote": "node_modules · .git · 50 MiB 초과 파일은 자동으로 제외합니다.",
-      "localEta": "로컬 (이 Mac) 약 {{minutes}}분",
-      "cloudEta": "원격 약 {{minutes}}분",
+      "summaryNote": "개발자용 폴더와 50MB가 넘는 큰 파일은 자동으로 제외합니다.",
       "warning": "범위가 넓습니다. 하위 폴더를 고르거나 원격 임베딩을 선택하면 첫 결과를 더 빨리 볼 수 있습니다.",
-      "localEtaPc": "로컬 (이 PC) 약 {{minutes}}분"
+      "summaryEmpty": "폴더를 하나 이상 선택하세요",
+      "etaLabel": "처리 시간"
     },
     "smartScope": {
       "policy": {

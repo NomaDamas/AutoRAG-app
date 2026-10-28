@@ -784,19 +784,18 @@
     "folders": {
       "eyebrow": "インデックス作成の範囲",
       "title": "AIが読むフォルダを選んでください",
-      "lead": "ここで選んだフォルダだけがAI検索に含まれます。範囲は後から追加したり減らしたりできます。",
-      "suggested": "おすすめの場所",
+      "lead": "選択したフォルダのファイルだけをAIが読み取ります。フォルダは後からいつでも追加・削除できます。",
+      "suggested": "おすすめフォルダ",
       "selectAll": "すべて選択",
-      "add": "別のフォルダを追加",
+      "add": "フォルダを直接追加",
       "stats": "{{files}}件 · {{size}} · 約{{minutes}}分",
       "scanning": "集計中…",
       "scanError": "読み取れません",
       "summary": "{{folders}}フォルダ · {{files}}ファイル · {{size}}",
-      "summaryNote": "node_modules · .git · 50 MiBを超えるファイルは自動的に除外されます。",
-      "localEta": "ローカル（このMac）約{{minutes}}分",
-      "cloudEta": "リモート 約{{minutes}}分",
+      "summaryNote": "開発者用フォルダと50MBを超える大きなファイルは自動的に除外されます。",
       "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。",
-      "localEtaPc": "ローカル（このPC）約{{minutes}}分"
+      "summaryEmpty": "フォルダを1つ以上選択してください",
+      "etaLabel": "処理時間"
     },
     "smartScope": {
       "policy": {

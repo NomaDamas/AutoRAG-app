@@ -784,19 +784,18 @@
     "folders": {
       "eyebrow": "索引范围",
       "title": "选择 AI 可读取的文件夹",
-      "lead": "只有此处选择的文件夹会纳入 AI 搜索。范围可稍后扩大或缩小。",
-      "suggested": "推荐位置",
+      "lead": "只有所选文件夹中的文件会被 AI 读取。文件夹可随时添加或移除。",
+      "suggested": "推荐文件夹",
       "selectAll": "全选",
-      "add": "添加其他文件夹",
+      "add": "直接添加文件夹",
       "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
       "scanning": "统计中…",
       "scanError": "无法读取",
       "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-      "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
-      "cloudEta": "远程 约 {{minutes}} 分钟",
+      "summaryNote": "开发者文件夹和超过 50 MB 的大文件会自动排除。",
       "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
-      "localEtaPc": "本地 (此电脑) 约 {{minutes}} 分钟"
+      "summaryEmpty": "请至少选择一个文件夹",
+      "etaLabel": "处理时间"
     },
     "smartScope": {
       "policy": {

@@ -784,19 +784,18 @@
     "folders": {
       "eyebrow": "Indexing scope",
       "title": "Choose the folders AI can read",
-      "lead": "Only the folders selected here are included in AI search. You can expand or shrink the scope later.",
-      "suggested": "Suggested locations",
+      "lead": "Only the files in the folders you select are read by AI. You can add or remove folders at any time.",
+      "suggested": "Suggested folders",
       "selectAll": "Select all",
-      "add": "Add another folder",
+      "add": "Add a folder",
       "stats": "{{files}} · {{size}} · ~{{minutes}} min",
       "scanning": "Counting…",
       "scanError": "Can't read",
       "summary": "{{folders}} folders · {{files}} files · {{size}}",
-      "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
-      "localEta": "Local (this Mac) · ~{{minutes}} min",
-      "cloudEta": "Remote · ~{{minutes}} min",
+      "summaryNote": "Developer folders and files over 50 MB are excluded automatically.",
       "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
-      "localEtaPc": "Local (this PC) · ~{{minutes}} min"
+      "summaryEmpty": "Select at least one folder",
+      "etaLabel": "Processing time"
     },
     "smartScope": {
       "policy": {
