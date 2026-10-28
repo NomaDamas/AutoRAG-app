@@ -62,6 +62,28 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 		);
 	}
 
+	// Waiting for the browser: just the spinner, what is happening, and a way out (Figma 03e).
+	if (signingIn) {
+		return (
+			<section className="screen account-screen">
+				<div className="account-wait">
+					<div className="account-wait-mark">
+						<span className="spin">
+							<Icon name="loader-circle" size={34} />
+						</span>
+					</div>
+					<div className="account-wait-copy">
+						<strong>{t("onboarding.account.busy")}</strong>
+						<small>{t("onboarding.account.busyNote")}</small>
+					</div>
+					<button type="button" className="secondary" onClick={ctx.cancelSignIn}>
+						{t("onboarding.account.cancel")}
+					</button>
+				</div>
+			</section>
+		);
+	}
+
 	return (
 		<section className="screen account-screen">
 			<div className="account-column">
@@ -71,78 +93,55 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					</span>
 					<h1>{`${APP_NAME} ${t("onboarding.account.getStarted")}`}</h1>
 				</div>
-				{signingIn ? (
-					<div className="account-panel">
-						<div className="status-card">
-							<div className="status-mark">
-								<span className="spin">
-									<Icon name="loader-circle" size={16} />
-								</span>
-							</div>
-							<div>
-								<strong>{t("onboarding.account.busy")}</strong>
-								<small>{t("onboarding.account.busyNote")}</small>
-							</div>
-						</div>
-						<div className="action-row">
-							<button type="button" className="secondary" onClick={ctx.cancelSignIn}>
-								{t("onboarding.account.cancel")}
-							</button>
-						</div>
-					</div>
-				) : (
-					<div className="account-panel">
-						<div className="account-providers">
-							<button type="button" className="account-btn google" onClick={ctx.signIn}>
-								<GoogleMark />
-								{t("onboarding.account.continueGoogle")}
-							</button>
-							<button type="button" className="account-btn apple" onClick={ctx.signIn}>
-								<AppleMark />
-								{t("onboarding.account.continueApple")}
-							</button>
-						</div>
-						<div className="account-divider">{t("onboarding.account.or")}</div>
-						<label className="account-field">
-							<span>{t("onboarding.account.emailLabel")}</span>
-							<input
-								type="email"
-								className="account-input"
-								value={email}
-								placeholder={t("onboarding.account.emailPlaceholder")}
-								autoComplete="email"
-								onChange={(event) => setEmail(event.target.value)}
-							/>
-						</label>
-						<button type="button" className="account-btn email" onClick={ctx.signIn}>
-							{t("onboarding.account.continueEmail")}
+				<div className="account-panel">
+					<div className="account-providers">
+						<button type="button" className="account-btn google" onClick={ctx.signIn}>
+							<GoogleMark />
+							{t("onboarding.account.continueGoogle")}
 						</button>
-						{account?.error ? (
-							<p className="auth-note" role="alert">
-								{account.error}
-							</p>
-						) : null}
-						<p className="auth-note legal-note">
-							{t("onboarding.account.agreeLead")}{" "}
-							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "terms"))}>
-								{t("onboarding.account.agreeTerms")}
-							</button>
-							{" · "}
-							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "privacy"))}>
-								{t("onboarding.account.agreePrivacy")}
-							</button>
-							{" · "}
-							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "acceptableUse"))}>
-								{t("onboarding.account.agreeUse")}
-							</button>
-						</p>
+						<button type="button" className="account-btn apple" onClick={ctx.signIn}>
+							<AppleMark />
+							{t("onboarding.account.continueApple")}
+						</button>
 					</div>
-				)}
-				{signingIn ? null : (
-					<button type="button" className="account-guest" onClick={ctx.skipAccount}>
-						{t("onboarding.account.guest")}
+					<div className="account-divider">{t("onboarding.account.or")}</div>
+					<label className="account-field">
+						<span>{t("onboarding.account.emailLabel")}</span>
+						<input
+							type="email"
+							className="account-input"
+							value={email}
+							placeholder={t("onboarding.account.emailPlaceholder")}
+							autoComplete="email"
+							onChange={(event) => setEmail(event.target.value)}
+						/>
+					</label>
+					<button type="button" className="account-btn email" onClick={ctx.signIn}>
+						{t("onboarding.account.continueEmail")}
 					</button>
-				)}
+					{account?.error ? (
+						<p className="auth-note" role="alert">
+							{account.error}
+						</p>
+					) : null}
+					<p className="auth-note legal-note">
+						{t("onboarding.account.agreeLead")}{" "}
+						<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "terms"))}>
+							{t("onboarding.account.agreeTerms")}
+						</button>
+						{" · "}
+						<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "privacy"))}>
+							{t("onboarding.account.agreePrivacy")}
+						</button>
+						{" · "}
+						<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(account?.baseUrl, "acceptableUse"))}>
+							{t("onboarding.account.agreeUse")}
+						</button>
+					</p>
+				</div>
+				<button type="button" className="account-guest" onClick={ctx.skipAccount}>
+					{t("onboarding.account.guest")}
+				</button>
 			</div>
 		</section>
 	);
