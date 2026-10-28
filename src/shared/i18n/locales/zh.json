@@ -114,7 +114,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
-			"suggestions": "路径建议",
+      "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
     },
@@ -631,7 +631,7 @@
       "indexing": "索引"
     },
     "stepLabel": {
-      "welcome": "开始使用",
+      "welcome": "继续",
       "permissions": "继续",
       "account": "继续",
       "folders": "选择文件夹并继续",
@@ -704,9 +704,9 @@
       "title": "用账户\n开始使用",
       "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
       "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
-      "signedIn": "已登录",
+      "signedIn": "登录完成",
       "signedInNote": "正在进入下一步",
-      "otherAccount": "其他账户",
+      "otherAccount": "使用其他账户登录",
       "cardTitle": "Dazzi 账户",
       "cardSub": "管理套餐和用量",
       "busy": "正在浏览器中登录…",
@@ -718,6 +718,7 @@
       "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
       "getStarted": "开始使用",
       "continueGoogle": "使用 Google 继续",
+      "continueApple": "使用 Apple 继续",
       "continueGithub": "使用 GitHub 继续",
       "or": "或",
       "emailLabel": "邮箱",
@@ -772,7 +773,7 @@
       "network": {
         "name": "网络",
         "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
-        "allow": "允许"
+        "allow": "允许网络"
       }
     },
     "smartScan": {

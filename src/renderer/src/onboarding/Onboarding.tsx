@@ -1072,11 +1072,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			<>
 				<div className="progress-dashes">
 					{flow.map((id, index) => (
-						<span
-							key={id}
-							className={cn("dash", index < footerIndex && "done", index === footerIndex && "active")}
-							title={t(`onboarding.step.${id}`)}
-						/>
+						<span key={id} className={cn("dash", index === footerIndex && "active")} title={t(`onboarding.step.${id}`)} />
 					))}
 				</div>
 				<div className="footer-actions">

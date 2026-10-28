@@ -114,7 +114,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
-			"suggestions": "パス候補",
+      "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
     },
@@ -631,7 +631,7 @@
       "indexing": "インデックス作成"
     },
     "stepLabel": {
-      "welcome": "開始する",
+      "welcome": "続ける",
       "permissions": "続ける",
       "account": "続ける",
       "folders": "フォルダを選んで続ける",
@@ -704,9 +704,9 @@
       "title": "アカウントで\n始める",
       "lead": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのMacに保存されます。",
       "note": "ブラウザでログインすると、自動でこのアプリに戻ります。パスワードはアプリに入力しません。",
-      "signedIn": "ログインしました",
+      "signedIn": "ログインが完了しました",
       "signedInNote": "次のステップに進みます",
-      "otherAccount": "別のアカウント",
+      "otherAccount": "別のアカウントでログイン",
       "cardTitle": "Dazziアカウント",
       "cardSub": "プランと使用量を管理します",
       "busy": "ブラウザでログイン中…",
@@ -718,6 +718,7 @@
       "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。",
       "getStarted": "はじめる",
       "continueGoogle": "Googleで続行",
+      "continueApple": "Appleで続行",
       "continueGithub": "GitHubで続行",
       "or": "または",
       "emailLabel": "メール",
@@ -772,7 +773,7 @@
       "network": {
         "name": "ネットワーク",
         "desc": "オンラインのAIに質問する場合や、文書をオンラインで分析する場合にのみ必要です。",
-        "allow": "許可"
+        "allow": "ネットワークを許可"
       }
     },
     "smartScan": {

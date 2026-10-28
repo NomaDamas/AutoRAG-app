@@ -114,7 +114,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
-			"suggestions": "Path suggestions",
+      "suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
     },
@@ -631,7 +631,7 @@
       "indexing": "Indexing"
     },
     "stepLabel": {
-      "welcome": "Get started",
+      "welcome": "Continue",
       "permissions": "Continue",
       "account": "Continue",
       "folders": "Continue with folders",
@@ -704,9 +704,9 @@
       "title": "Start with\nyour account",
       "lead": "Your plan and usage are tied to your account. Your files and search index are stored on this Mac.",
       "note": "You sign in in your browser and come back to this app automatically. You never enter your password in the app.",
-      "signedIn": "Signed in",
+      "signedIn": "You're signed in",
       "signedInNote": "Moving to the next step",
-      "otherAccount": "Another account",
+      "otherAccount": "Sign in with another account",
       "cardTitle": "Dazzi account",
       "cardSub": "Manage your plan and usage",
       "busy": "Signing in in your browser…",
@@ -718,6 +718,7 @@
       "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
       "getStarted": "Get started",
       "continueGoogle": "Continue with Google",
+      "continueApple": "Continue with Apple",
       "continueGithub": "Continue with GitHub",
       "or": "or",
       "emailLabel": "Email",
@@ -772,7 +773,7 @@
       "network": {
         "name": "Network",
         "desc": "Only needed when you ask an online AI or analyze documents online.",
-        "allow": "Allow"
+        "allow": "Allow network"
       }
     },
     "smartScan": {
