@@ -9,6 +9,7 @@ import {
 	app,
 	BrowserWindow,
 	clipboard,
+	ClipboardItem,
 	dialog,
 	ipcMain,
 	nativeImage,
@@ -67,6 +68,7 @@ import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
+import { createOsClipboard } from "./os-clipboard";
 import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
@@ -401,6 +403,9 @@ async function listMacDatalessPaths(root: string): Promise<ReadonlySet<string>> 
 	}
 }
 
+// Chromium decodes JPEG XL only behind this feature, which the Quick Look image viewer relies on for `.jxl`.
+// Merged with any `--enable-features` the app was launched with, because appendSwitch replaces a value.
+app.commandLine.appendSwitch("enable-features", [app.commandLine.getSwitchValue("enable-features"), "JXLImageFormat"].filter((value) => value !== "").join(","));
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
 // A menu request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.
@@ -505,7 +510,7 @@ app.whenReady().then(async () => {
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
 		shell,
-		clipboard,
+		clipboard: createOsClipboard({ clipboard, ClipboardItem }),
 		icons: iconProvider,
 		// A fresh worker starts in Korean; give it the current Interface language.
 		onFork: (client) => {

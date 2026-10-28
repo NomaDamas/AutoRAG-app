@@ -13,12 +13,8 @@ export type DriveThumbnailSource = Pick<IconProvider, "preview"> & Partial<Pick<
  * `budgetMs` leaves the panel without a picture rather than holding Space; the
  * generation still finishes and is cached for the next open.
  */
-export async function driveThumbnail(
-	target: IconTarget,
-	icons: DriveThumbnailSource | null,
-	budgetMs: number = DRIVE_THUMBNAIL_BUDGET_MS,
-): Promise<string | null> {
-	if (icons === null || !isGoogleDriveExtension(target.ext)) return null;
+async function boundedThumbnail(target: IconTarget, icons: DriveThumbnailSource | null, budgetMs: number, label: string): Promise<string | null> {
+	if (icons === null) return null;
 	const cached = icons.cachedPreview?.(target) ?? null;
 	if (cached !== null) return cached;
 	const expired = Promise.withResolvers<null>();
@@ -26,9 +22,33 @@ export async function driveThumbnail(
 	try {
 		return await Promise.race([icons.preview(target), expired.promise]);
 	} catch (error) {
-		console.warn(`quick-look: Google Drive thumbnail for ${target.path} failed: ${error instanceof Error ? error.message : String(error)}`);
+		console.warn(`quick-look: ${label} thumbnail for ${target.path} failed: ${error instanceof Error ? error.message : String(error)}`);
 		return null;
 	} finally {
 		clearTimeout(timer);
 	}
+}
+
+export async function driveThumbnail(
+	target: IconTarget,
+	icons: DriveThumbnailSource | null,
+	budgetMs: number = DRIVE_THUMBNAIL_BUDGET_MS,
+): Promise<string | null> {
+	return isGoogleDriveExtension(target.ext) ? boundedThumbnail(target, icons, budgetMs, "Google Drive") : null;
+}
+
+/** Opens with the cached native thumbnail immediately, then publishes a slow OS render when it lands. */
+export function nativeThumbnail(target: IconTarget, icons: DriveThumbnailSource | null, publish: (url: string) => void): string | null {
+	if (icons === null) return null;
+	const cached = icons.cachedPreview?.(target) ?? null;
+	if (cached !== null) return cached;
+	void icons.preview(target).then(
+		(url) => {
+			if (url !== null) publish(url);
+		},
+		(error: unknown) => {
+			console.warn(`quick-look: native document thumbnail for ${target.path} failed: ${error instanceof Error ? error.message : String(error)}`);
+		},
+	);
+	return null;
 }

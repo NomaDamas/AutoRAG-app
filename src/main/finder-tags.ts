@@ -29,7 +29,7 @@ import { access, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { FsBatchResult, FsOpError, FsTag, FsTagCatalog, FsTagChange, FsTagColor } from "../shared/fs-contract";
 import { t } from "../shared/i18n/core";
-import { errorMessage } from "./fs-entry";
+import { errorMessage, hasErrorCode } from "./fs-entry";
 
 /** Runs one OS helper with optional stdin and resolves its raw stdout; rejects with stderr (or the spawn error) verbatim. */
 export type TagCommandRunner = (command: string, args: readonly string[], input?: string | Uint8Array) => Promise<Buffer>;
@@ -78,7 +78,10 @@ const ENGLISH_COLOR_NAMES: readonly string[] = ["None", "Gray", "Green", "Purple
 /** Finder's standard tag order in its menus and sidebar: red, orange, yellow, green, blue, purple, gray. */
 const STANDARD_ORDER: readonly FsTagColor[] = [6, 7, 5, 2, 4, 3, 1];
 
-const UNSUPPORTED: FsTagCatalog = { supported: false, tags: [], colorNames: [] };
+const UNSUPPORTED: FsTagCatalog = { supported: false, tags: [], colorNames: [], colorsDenied: false };
+
+/** macOS answers a process without Full Disk Access with these, from `sqlite3` as from `readdir`. */
+const DENIED = /authorization denied|operation not permitted|permission denied|EPERM|EACCES/i;
 
 function defaultRun(command: string, args: readonly string[], input?: string | Uint8Array): Promise<Buffer> {
 	const { promise, resolve, reject } = Promise.withResolvers<Buffer>();
@@ -108,7 +111,9 @@ async function defaultRegistryFiles(home: string): Promise<readonly string[]> {
 	let containers: string[];
 	try {
 		containers = await readdir(root);
-	} catch {
+	} catch (error) {
+		// A folder that is absent means no registry; one macOS refuses means a registry this app may not read.
+		if (hasErrorCode(error, "EPERM") || hasErrorCode(error, "EACCES")) throw error;
 		return [];
 	}
 	const found: string[] = [];
@@ -232,22 +237,39 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 		return parseRegistry(await plistToJson(Buffer.from(hex, "hex")));
 	}
 
-	/** Finder's registry, or null when this machine's store cannot be read. */
-	async function readRegistry(): Promise<readonly RegistryTag[] | null> {
-		const candidates = registryFile === null ? await registryFiles() : [registryFile];
+	/**
+	 * Finder's registry, or null when this machine's store cannot be read. `denied`
+	 * says macOS refused this app the store (no Full Disk Access) as opposed to the
+	 * store being absent, so the sidebar can offer the grant instead of silently
+	 * drawing every custom tag without its colour.
+	 */
+	async function readRegistry(): Promise<{ readonly tags: readonly RegistryTag[] | null; readonly denied: boolean }> {
+		let denied = false;
+		let candidates: readonly string[];
+		if (registryFile === null) {
+			try {
+				candidates = await registryFiles();
+			} catch (error) {
+				warnOnce(`finder-tags: registry folder unreadable: ${errorMessage(error)}`);
+				return { tags: null, denied: DENIED.test(errorMessage(error)) };
+			}
+		} else {
+			candidates = [registryFile];
+		}
 		for (const file of candidates) {
 			try {
 				const tags = await queryRegistry(file);
 				if (tags !== null) {
 					registryFile = file;
-					return tags;
+					return { tags, denied: false };
 				}
 			} catch (error) {
+				if (DENIED.test(errorMessage(error))) denied = true;
 				warnOnce(`finder-tags: registry ${file} unreadable: ${errorMessage(error)}`);
 			}
 		}
 		registryFile = null;
-		return null;
+		return { tags: null, denied };
 	}
 
 	/** The sidebar tags Finder remembers when the registry is unreadable: names only, no colours. */
@@ -268,7 +290,7 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 		const names = await loadColorNames();
 		const standard: FsTag[] = STANDARD_ORDER.map((color) => ({ name: names[color] ?? ENGLISH_COLOR_NAMES[color] ?? "", color, sidebar: false }));
 		const standardColor = new Map(standard.map((tag) => [tag.name.toLowerCase(), tag.color]));
-		const registry = await readRegistry();
+		const { tags: registry, denied } = await readRegistry();
 		let tags: FsTag[];
 		if (registry !== null && registry.length > 0) {
 			tags = registry.map((tag) => ({ ...tag }));
@@ -281,11 +303,11 @@ export function createFinderTags(deps: FinderTagsDeps = {}): FinderTags {
 		}
 		if (tags.length === 0) {
 			// A Mac that never customized Finder's tags: the seven colour tags are the sidebar.
-			return { supported: true, tags: standard.map((tag) => ({ ...tag, sidebar: true })), colorNames: names };
+			return { supported: true, tags: standard.map((tag) => ({ ...tag, sidebar: true })), colorNames: names, colorsDenied: false };
 		}
 		const known = new Set(tags.map((tag) => tag.name.toLowerCase()));
 		for (const tag of standard) if (!known.has(tag.name.toLowerCase())) tags.push(tag);
-		return { supported: true, tags, colorNames: names };
+		return { supported: true, tags, colorNames: names, colorsDenied: denied && registry === null };
 	}
 
 	async function readStored(path: string): Promise<readonly string[]> {

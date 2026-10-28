@@ -9,6 +9,7 @@ import {
 	type EverythingSearchRequest,
 } from "@autorag/librarian";
 import { RECENTS_PATH, type FsLocation } from "../shared/fs-contract";
+import { launchTiedToParent } from "./tied-launch";
 
 /**
  * Fast filename search for the Finder, routed through a platform index instead
@@ -280,7 +281,8 @@ function createEverythingBackend(deps: FileNameSearchDeps, warn: (message: strin
 			const folders = (await deps.locations())
 				.filter((location) => location.scanned && location.available && location.path !== RECENTS_PATH)
 				.map((location) => location.path);
-			client = (deps.everythingFactory ?? ((options) => new EverythingClient(options)))({
+			// The librarian launches the daemon detached by default; tied to this process it cannot outlive a force-kill.
+			client = (deps.everythingFactory ?? ((options) => new EverythingClient({ ...options, launch: launchTiedToParent })))({
 				root: deps.userDataDir,
 				folders,
 			});

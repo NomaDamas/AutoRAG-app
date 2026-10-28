@@ -17,6 +17,9 @@
     "settings": "Settings",
     "recents": "Recents",
     "tags": "Tags",
+    "tagColorsDenied": "Show tag colors",
+    "tagColorsDeniedHint": "macOS keeps Finder's tag colors behind Full Disk Access. Allow it, then relaunch the app to see them.",
+    "tagColorsGrantToast": "Allow Full Disk Access, then relaunch Dazzi.",
     "home": "Home",
     "applications": "Applications",
     "desktop": "Desktop",
@@ -111,6 +114,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+      "suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
     },
@@ -611,6 +615,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "Back",
     "step": {
       "welcome": "Intro",
       "permissions": "Permissions",
@@ -626,7 +631,7 @@
       "indexing": "Indexing"
     },
     "stepLabel": {
-      "welcome": "Get started",
+      "welcome": "Continue",
       "permissions": "Continue",
       "account": "Continue",
       "folders": "Continue with folders",
@@ -699,9 +704,9 @@
       "title": "Start with\nyour account",
       "lead": "Your plan and usage are tied to your account. Your files and search index are stored on this Mac.",
       "note": "You sign in in your browser and come back to this app automatically. You never enter your password in the app.",
-      "signedIn": "Signed in",
+      "signedIn": "You're signed in",
       "signedInNote": "Moving to the next step",
-      "otherAccount": "Another account",
+      "otherAccount": "Sign in with another account",
       "cardTitle": "Dazzi account",
       "cardSub": "Manage your plan and usage",
       "busy": "Signing in in your browser…",
@@ -711,6 +716,23 @@
       "skip": "Continue without an account, with my own API key (BYOK)",
       "offline": "Can't reach the server, so this is the last information we confirmed.",
       "authNote": "You choose how to sign in (email code or social sign-in) on the Dazzi page in your browser.",
+      "getStarted": "Get started",
+      "continueGoogle": "Continue with Google",
+      "continueApple": "Continue with Apple",
+      "continueGithub": "Continue with GitHub",
+      "or": "or",
+      "emailLabel": "Email",
+      "emailPlaceholder": "name@example.com",
+      "continueEmail": "Continue with email",
+      "codeLabel": "Sign-in code",
+      "codeSentNote": "We sent a 6-digit code to {{email}}.",
+      "sendingCode": "Sending code…",
+      "verifyCode": "Verify code",
+      "verifyingCode": "Checking…",
+      "resendCode": "Send a new code",
+      "resendIn": "Resend in {{seconds}}s",
+      "useDifferentEmail": "Use a different email",
+      "guest": "Continue as guest",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
       "agreePrivacy": "Privacy Policy",
@@ -720,9 +742,10 @@
     },
     "permissions": {
       "eyebrow": "Permissions",
-      "title": "Allow access so we\ncan read properly",
-      "leadMac": "macOS asks for your permission before an app can access documents and protected app data. Permissions and indexing scope are different things.",
-      "leadWindows": "Just confirm notifications and network and you can start right away. You can change the rest later in Settings.",
+      "title": "Check the permissions",
+      "leadMac": "macOS asks for your permission before an app can read protected files.\nEven after you allow it, you choose the folders to search in the next step.",
+      "leadWindows": "Review only the permissions you need first.\nEvery item can be skipped and changed later in Settings.",
+      "titleWindows": "Check the permissions",
       "note": "Dazzi never modifies your files. You pick exactly which folders to index in the next step.",
       "required": "Required",
       "optional": "Optional",
@@ -734,21 +757,23 @@
       "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Needed for Dazzi to work properly."
+        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder.",
+        "why": "Why is Full Disk Access needed?"
       },
       "notifications": {
         "name": "Notifications",
+        "desc": "Asks for notification permission up front. You choose which notifications to receive in Settings.",
         "allow": "Allow notifications",
         "openWindows": "Open Windows Settings"
       },
       "login": {
         "name": "Launch at login",
-        "desc": "Keeps the index up to date in the background when files change."
+        "desc": "Dazzi starts automatically when you turn on your computer. You can turn it off in Settings any time."
       },
       "network": {
-        "name": "Network (firewall)",
-        "desc": "Needed for remote embedding and model calls. If the Windows security warning appears on first launch, allow it.",
-        "allow": "Allow"
+        "name": "Network",
+        "desc": "Only needed when you ask an online AI or analyze documents online.",
+        "allow": "Allow network"
       }
     },
     "smartScan": {
@@ -825,22 +850,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "Semantic search",
       "title": "How should we embed?",
       "groupLabel": "Embedding method",
       "card": {
         "none": {
-          "name": "Off",
-          "line": "Keyword search only"
-        },
-        "local": {
-          "name": "Local embedding",
-          "lineMac": "Runs on this Mac",
-          "linePc": "Runs on this PC"
+          "name": "Search by keyword",
+          "line": "Only finds documents that contain the words you type."
         },
         "cloud": {
-          "name": "Remote embedding",
-          "line": "Runs on the server"
+          "name": "Analyze on Dazzi's server",
+          "line": "Document contents are sent to Dazzi's server for analysis."
+        },
+        "local": {
+          "nameMac": "Analyze on my Mac",
+          "namePc": "Analyze on my PC",
+          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
+          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
         }
       },
       "meter": {
@@ -852,10 +877,14 @@
         "good": "Good"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "~{{minutes}} min",
+      "prepTime": "Setup time",
+      "about": "About",
+      "minutes": "{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
-      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing.",
+      "cloudConsentRequired": "(Required)",
+      "cloudConsent": "I agree that document text is sent to the server.",
+      "cloudConsentCheck": "I agree",
       "pausedNotice": {
         "config": "Indexing stopped because the chosen embedding isn't available",
         "disk": "Not enough storage space to download the model",
@@ -863,10 +892,7 @@
       }
     },
     "sources": {
-      "eyebrow": "Data sources",
-      "title": "Also search\nconnected sources?",
-      "lead": "We only show sources that are already installed and authenticated. You don't have to select them all.",
-      "detected": "Detected",
+      "title": "Add the apps found on this PC to your search?",
       "checking": "Checking which other sources can be added…",
       "empty": "No connected sources found. You can connect some later in Settings.",
       "connectMore": "Sources that need setup can be connected later in Settings.",
@@ -1297,7 +1323,21 @@
       "stars": "{{count}} Stars",
       "star": "1 Star"
     },
-    "kindByExtension": "{{ext}} File"
+    "kindByExtension": "{{ext}} File",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop document",
+      "illustrator": "Adobe Illustrator document",
+      "eps": "EPS image",
+      "jpegxl": "JPEG XL image",
+      "icns": "Apple icon image",
+      "targa": "TGA image",
+      "openexr": "OpenEXR image",
+      "gimp": "GIMP image",
+      "sketch": "Sketch document",
+      "figma": "Figma document",
+      "raw": "{{maker}} RAW image",
+      "rawGeneric": "RAW image"
+    }
   },
   "main": {
     "interaction": {
@@ -1411,7 +1451,10 @@
     },
     "worker": {
       "unknownFormat": "Unknown file format: {{format}}",
-      "invalidUrl": "The web address is invalid."
+      "invalidUrl": "The web address is invalid.",
+      "librarianExited": "The indexing helper stopped unexpectedly (code {{code}}).",
+      "librarianFailed": "The indexing helper failed: {{message}}",
+      "librarianStopped": "The indexing helper has shut down and cannot take requests."
     },
     "fs": {
       "restoreTempFailed": "{{message}} (could not restore from the temporary name {{name}}: {{detail}})",
@@ -1527,6 +1570,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} cannot be converted to {{extension}}.",
+      "noRoute": "Filee cannot convert {{name}} to {{extension}}.",
       "invalidName": "Not usable as the name of the converted file: {{name}}",
       "sourceMissing": "The file to convert could not be found: {{name}}",
       "nameTaken": "A file or folder named \"{{name}}\" already exists",
@@ -1587,6 +1631,12 @@
     },
     "contents": {
       "title": "Contains"
+    },
+    "native": {
+      "readFailed": "Couldn’t read this document",
+      "attachments": "Attachments",
+      "noAttachments": "No attachments",
+      "emptyIconset": "No PNG icons in this set"
     },
     "code": {
       "wrap": "Wrap Lines",
@@ -1661,7 +1711,65 @@
       "slideMissing": "This slide has no image",
       "drawFailed": "Couldn’t draw the slide",
       "noPreview": "This document has no preview image",
+      "rendering": "Sharpening slides…",
       "page": "Page {{count}}"
+    },
+    "certificate": {
+      "subject": "Subject",
+      "issuer": "Issuer",
+      "serial": "Serial number",
+      "notBefore": "Valid from",
+      "notAfter": "Valid until",
+      "signature": "Signature",
+      "publicKey": "Public key",
+      "altNames": "Alternative names",
+      "keyUsage": "Key usage",
+      "extendedKeyUsage": "Extended usage",
+      "ca": "CA",
+      "status": {
+        "expired": "Expired",
+        "notYetValid": "Not yet valid"
+      },
+      "usage": {
+        "digitalSignature": "Digital Signature",
+        "contentCommitment": "Non-Repudiation",
+        "keyEncipherment": "Key Encipherment",
+        "dataEncipherment": "Data Encipherment",
+        "keyAgreement": "Key Agreement",
+        "keyCertSign": "Certificate Signing",
+        "cRLSign": "CRL Signing",
+        "encipherOnly": "Encipher Only",
+        "decipherOnly": "Decipher Only"
+      },
+      "eku": {
+        "serverAuth": "TLS Web Server Authentication",
+        "clientAuth": "TLS Web Client Authentication",
+        "codeSigning": "Code Signing",
+        "emailProtection": "Email Protection",
+        "timeStamping": "Time Stamping",
+        "ocspSigning": "OCSP Signing"
+      },
+      "keyHidden": "Private key — contents hidden",
+      "keyEncrypted": "Encrypted",
+      "keyPlain": "Not encrypted",
+      "unreadableBlock": "This certificate could not be read",
+      "countOne": "1 certificate",
+      "countMany": "{{count}} certificates",
+      "omitted": "{{count}} more not shown",
+      "truncated": "Showing the first part of the file",
+      "readFailed": "Couldn’t read this file",
+      "container": {
+        "pkcs12": "A PKCS #12 bundle holds certificates and private keys and is password-protected, so its contents are not shown.",
+        "keychain": "An Apple keychain is an encrypted store; it is not read or decrypted here."
+      },
+      "notContainer": {
+        "pkcs12": "This file isn’t a valid PKCS #12 bundle",
+        "keychain": "This file isn’t a valid Apple keychain"
+      },
+      "unreadable": {
+        "empty": "This file is empty",
+        "notCertificate": "No certificate was found in this file"
+      }
     },
     "gdrive": {
       "account": "Google account: {{email}}",
@@ -1822,6 +1930,9 @@
       "openFailed": "Couldn’t open the presentation",
       "noSlides": "No slides",
       "noPreview": "This document has no preview image"
+    },
+    "raster": {
+      "noPreview": "No preview image could be made from this file"
     },
     "evidence": {
       "searching": "Finding the cited passage…",

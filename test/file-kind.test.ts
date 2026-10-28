@@ -2,13 +2,13 @@ import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createOsKindResolver, kindQueryForPlatform, parseKindStdout } from "../src/main/file-kind";
+import { createOsKindResolver, kindQueryForPlatform, parseKindStdout, parseMacKindStdout } from "../src/main/file-kind";
 
 describe("kindQueryForPlatform", () => {
-	it("reads Spotlight metadata on macOS, the same string Finder's Kind column shows", () => {
+	it("reads Spotlight metadata on macOS, the same string Finder's Kind column shows, with the type identifier beside it", () => {
 		expect(kindQueryForPlatform("darwin", "/tmp/a.mp4")).toEqual({
 			command: "/usr/bin/mdls",
-			args: ["-name", "kMDItemKind", "-raw", "/tmp/a.mp4"],
+			args: ["-name", "kMDItemKind", "-name", "kMDItemContentType", "-raw", "/tmp/a.mp4"],
 		});
 	});
 
@@ -42,6 +42,28 @@ describe("parseKindStdout", () => {
 	});
 });
 
+describe("parseMacKindStdout", () => {
+	const SEP = "\0";
+
+	it("reads the kind of a type macOS knows", () => {
+		expect(parseMacKindStdout(`com.adobe.photoshop-image${SEP}Adobe Photoshop document`)).toEqual({ kind: "Adobe Photoshop document", registered: true });
+	});
+
+	it("marks an extension no installed app registered: macOS answers a dyn.* type with the generic 'Document'", () => {
+		expect(parseMacKindStdout(`dyn.ah62d4rv4ge81g45fsvv0u${SEP}Document`)).toEqual({ kind: "Document", registered: false });
+	});
+
+	it("reads a kind whose type identifier is missing as registered, since nothing says it is generic", () => {
+		expect(parseMacKindStdout(`(null)${SEP}PDF document`)).toEqual({ kind: "PDF document", registered: true });
+		expect(parseMacKindStdout("PDF document")).toEqual({ kind: "PDF document", registered: true });
+	});
+
+	it("has no kind when the OS reported none", () => {
+		expect(parseMacKindStdout(`(null)${SEP}(null)`)).toBeNull();
+		expect(parseMacKindStdout("")).toBeNull();
+	});
+});
+
 describe("createOsKindResolver", () => {
 	it("runs one OS query per extension and reuses the answer", async () => {
 		// Given a resolver whose runner records every query
@@ -62,6 +84,32 @@ describe("createOsKindResolver", () => {
 		expect(first).toBe("MPEG-4 movie");
 		expect(second).toBe("MPEG-4 movie");
 		expect(queried).toEqual(["/tmp/a.mp4"]);
+	});
+
+	it("drops macOS's generic 'Document' for an extension nothing registered when the app has its own name for it", async () => {
+		// Given macOS answering the dynamic type's generic kind for GIMP, Sketch and Figma files and for a made-up extension
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			run: async () => ({ kind: "Document", registered: false }),
+		});
+
+		// Then the three the app can name come back unanswered, so the row shows the app's own name
+		expect(await resolver.kindFor("/tmp/a.xcf", "xcf")).toBeNull();
+		expect(await resolver.kindFor("/tmp/a.sketch", "sketch")).toBeNull();
+		expect(await resolver.kindFor("/tmp/a.fig", "fig")).toBeNull();
+		// And an extension the app knows nothing about keeps the OS's own (generic) word, as Finder shows it
+		expect(await resolver.kindFor("/tmp/a.weird", "weird")).toBe("Document");
+	});
+
+	it("keeps the OS kind of a type macOS does know, even for an extension the app can also name", async () => {
+		// Given Photoshop (or Illustrator) installed, so macOS registers the type
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			run: async () => ({ kind: "Adobe Photoshop document", registered: true }),
+		});
+
+		// Then the OS answer wins
+		expect(await resolver.kindFor("/tmp/a.psd", "psd")).toBe("Adobe Photoshop document");
 	});
 
 	it("queries a different extension separately", async () => {

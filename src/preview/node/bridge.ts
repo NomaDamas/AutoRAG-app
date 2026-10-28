@@ -6,10 +6,13 @@ import {
 	isQuickLookApp,
 	isQuickLookOffice,
 	isQuickLookLoad,
+	isQuickLookSlides,
+	isQuickLookThumbnail,
 	isQuickLookZoom,
 	PREVIEW_CHANNELS,
 	type ArchivePreview,
 	type AudioMetadata,
+	type CertificatePreview,
 	type DataPreview,
 	type FileDetails,
 	type FolderSize,
@@ -68,6 +71,14 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.office, (update) => {
 				if (isQuickLookOffice(update)) listener(update);
 			}),
+		onSlides: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.slides, (update) => {
+				if (isQuickLookSlides(update)) listener(update);
+			}),
+		onThumbnail: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.thumbnail, (update) => {
+				if (isQuickLookThumbnail(update)) listener(update);
+			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
 		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),
 		request: async (action) => {
@@ -79,6 +90,7 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		audioMetadata: (path): Promise<AudioMetadata> => ipcRenderer.invoke(PREVIEW_CHANNELS.audioMetadata, path),
 		dataPreview: (path, table): Promise<DataPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.data, path, table),
 		archivePreview: (path): Promise<ArchivePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.archive, path),
+		certificatePreview: (path): Promise<CertificatePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.certificate, path),
 		share: async (anchor) => {
 			await ipcRenderer.invoke(PREVIEW_CHANNELS.share, { x: anchor.x, y: anchor.y, width: anchor.width, height: anchor.height });
 		},

@@ -10,7 +10,7 @@ export interface TagCatalogState {
 }
 
 export const NO_TAG_CATALOG: TagCatalogState = {
-	catalog: { supported: false, tags: [], colorNames: [] },
+	catalog: { supported: false, tags: [], colorNames: [], colorsDenied: false },
 	colors: NO_TAG_COLORS,
 };
 
@@ -50,6 +50,7 @@ export function useTagCatalogLoader(source: FinderSource, onError: (error: unkno
 function sameCatalog(a: FsTagCatalog, b: FsTagCatalog): boolean {
 	return (
 		a.supported === b.supported &&
+		a.colorsDenied === b.colorsDenied &&
 		a.colorNames.join("\u0000") === b.colorNames.join("\u0000") &&
 		a.tags.length === b.tags.length &&
 		a.tags.every((tag, index) => {

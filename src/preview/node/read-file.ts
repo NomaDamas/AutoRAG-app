@@ -70,5 +70,6 @@ export async function readPreviewFile(filePath: string, limit: number, whole = f
 		pages: null,
 		office: null,
 		thumbnail: null,
+		slidesRendering: false,
 	};
 }

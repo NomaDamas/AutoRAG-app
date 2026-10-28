@@ -62,7 +62,7 @@ export type FsWorkerOp =
 	| "diagnostics";
 
 /** The Electron-only ops the worker asks the main process for, over the host port. */
-export type FsWorkerHostOp = "trashItem" | "showItemInFolder" | "openPath" | "openExternal" | "writeText" | "icons" | "previewIcon";
+export type FsWorkerHostOp = "trashItem" | "showItemInFolder" | "openPath" | "openExternal" | "writeText" | "writeFiles" | "icons" | "previewIcon";
 
 /**
  * The filesystem worker: an Electron utility process that owns folder

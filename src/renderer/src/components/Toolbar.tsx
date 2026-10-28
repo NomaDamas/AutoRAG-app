@@ -5,7 +5,7 @@ import type { GroupKey } from "../state/grouping";
 import type { ViewMode } from "../state/view-mode";
 import type { SortDirection, SortKey, SortState } from "../state/sort";
 import { anchorOf } from "../lib/anchor";
-import { formatShortcut } from "../lib/shortcuts";
+import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import {
 	ChevronLeftIcon,
 	ChevronRightIcon,
@@ -117,11 +117,13 @@ export function Toolbar({
 		const rect = trigger.getBoundingClientRect();
 		setMenu((current) => (current?.kind === kind ? null : { kind, x: rect.left, y: rect.bottom, trigger }));
 	};
+	// macOS keeps room for the traffic lights before the icons; Windows has none, so they start at the left edge.
+	const trafficLights = hostPlatform() !== "win32";
 	return (
-		<div className="toolbar flex flex-none items-center gap-6 h-toolbar pl-12 pr-[calc(12px+var(--window-controls-gutter))] bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]">
+		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} pr-[calc(12px+var(--window-controls-gutter))] bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]`}>
 			{sidebarHidden ? (
 				<>
-					<span className="w-[70px] flex-none" aria-hidden="true" />
+					{trafficLights ? <span className="w-[70px] flex-none" aria-hidden="true" /> : null}
 					<button
 						type="button"
 						className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}

@@ -194,6 +194,12 @@ export interface FsTagCatalog {
 	readonly supported: boolean;
 	readonly tags: readonly FsTag[];
 	readonly colorNames: readonly string[];
+	/**
+	 * macOS refused the app Finder's tag registry (no Full Disk Access): the
+	 * custom tags' names are known, their colours are not, and every one of them
+	 * would draw as a hollow ring. The sidebar then offers the grant.
+	 */
+	readonly colorsDenied: boolean;
 }
 
 /** Tags to add to and to remove from every requested path; names match case-insensitively. */

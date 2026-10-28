@@ -64,6 +64,11 @@ function stringArg(args: readonly unknown[], label: string): string {
 	return value;
 }
 
+function stringsArg(value: unknown, label: string): readonly string[] {
+	if (!Array.isArray(value) || !value.every((entry): entry is string => typeof entry === "string")) throw new TypeError(`${label} must be an array of strings`);
+	return value;
+}
+
 function iconTargetArg(value: unknown): IconTarget {
 	if (
 		typeof value === "object" &&
@@ -92,6 +97,7 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 		openPath: (args) => deps.shell.openPath(stringArg(args, "path")),
 		openExternal: (args) => deps.shell.openExternal(stringArg(args, "url")),
 		writeText: (args) => deps.clipboard.writeText(stringArg(args, "text")),
+		writeFiles: (args) => deps.clipboard.writeFiles(stringsArg(args[0], "paths")),
 		// A Map does not survive structured clone through every port type; entries do.
 		icons: async (args) => {
 			const targets = args[0];

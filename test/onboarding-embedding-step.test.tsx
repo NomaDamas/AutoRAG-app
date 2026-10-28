@@ -113,6 +113,8 @@ function harness(options: {
 		choosePlan: noop,
 		setPromoCode: noop,
 		signIn: noop,
+		sendEmailOtp: async () => ({ ok: true, email: "", expiresInSeconds: 600 }),
+		verifyEmailOtp: async () => null,
 		cancelSignIn: noop,
 		signOut: noop,
 		skipAccount: noop,
@@ -166,7 +168,7 @@ describe("EmbeddingStep", () => {
 		const group = host.querySelector('[role="radiogroup"]');
 		expect(group).not.toBeNull();
 		const radios = [...host.querySelectorAll<HTMLElement>('[role="radio"]')];
-		expect(radios.map((radio) => radio.dataset.value)).toEqual(["none", "local", "cloud"]);
+		expect(radios.map((radio) => radio.dataset.value)).toEqual(["none", "cloud", "local"]);
 		expect(radios.map((radio) => radio.getAttribute("aria-checked"))).toEqual(["true", "false", "false"]);
 		expect(radios.every((radio) => radio.getAttribute("aria-disabled") === "false")).toBe(true);
 		// Two meters of four pips on every card.
@@ -280,8 +282,8 @@ describe("EmbeddingStep", () => {
 			expect(card("local").className).toContain("disabled");
 			expect(card("none").getAttribute("aria-disabled")).toBe("false");
 			expect(card("cloud").getAttribute("aria-disabled")).toBe("false");
-			expect(card("local").querySelector(".em-blocked")?.textContent).toContain("localSpec.reason.appleBaseChip");
-			expect(card("none").querySelector(".em-blocked")).toBeNull();
+			expect(host.querySelector('.em-blocked[data-for="local"]')?.textContent).toContain("localSpec.reason.appleBaseChip");
+			expect(host.querySelector('.em-blocked[data-for="none"]')).toBeNull();
 		});
 
 		it("explains instead of selecting when the local card is clicked or chosen with the keyboard", () => {
