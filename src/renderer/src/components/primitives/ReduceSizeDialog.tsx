@@ -36,7 +36,7 @@ export function ReduceSizeDialog({
 			}}
 		>
 			<div
-				className="flex w-[400px] max-w-[calc(100vw-32px)] flex-col gap-14 p-16 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex w-[460px] max-w-[calc(100vw-32px)] flex-col gap-14 p-16 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="alertdialog"
 				aria-modal="true"
 				aria-label={t("finder.reduce.title")}
@@ -87,7 +87,7 @@ export function ReduceSizeDialog({
 											)}
 											onClick={() => onChangeLevel(level)}
 										>
-											<span className="flex items-center gap-6 text-[12.5px] font-[600] text-ink">
+											<span className="flex flex-none items-center gap-6 whitespace-nowrap text-[12.5px] font-[600] text-ink">
 												{t(`finder.reduce.levels.${level}`)}
 												{level === "balanced" ? (
 													<span className="rounded-full bg-hover-strong px-6 py-1 text-[10.5px] font-medium text-ink-muted">

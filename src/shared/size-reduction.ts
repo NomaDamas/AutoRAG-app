@@ -99,3 +99,37 @@ export function jpegDimensions(bytes: Uint8Array): { readonly width: number; rea
 	}
 	return null;
 }
+
+export interface MediaHeaderInfo {
+	readonly durationSec: number | null;
+	readonly totalKbps: number | null;
+	readonly videoKbps: number | null;
+	readonly audioKbps: number | null;
+}
+
+/**
+ * Parses input duration and stream bitrates from `ffmpeg -i` stderr so video and
+ * audio reductions cap output bitrate below the source instead of re-encoding
+ * already-compressed streams larger or flat.
+ */
+export function parseMediaHeader(stderr: string, fileBytes: number): MediaHeaderInfo {
+	const inputSection = stderr.split(/Stream mapping:|Output #0/)[0] ?? stderr;
+	const durMatch = /Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/.exec(inputSection);
+	const seconds =
+		durMatch === null ? NaN : Number(durMatch[1]) * 3600 + Number(durMatch[2]) * 60 + Number(durMatch[3]);
+	const durationSec = Number.isFinite(seconds) && seconds > 0 ? seconds : null;
+
+	const headerBr = /Duration:[^\n]*?bitrate:\s*(\d+)\s*kb\/s/.exec(inputSection);
+	const derivedKbps =
+		durationSec !== null && fileBytes > 0 ? Math.round((fileBytes * 8) / 1000 / durationSec) : null;
+	const totalKbps = headerBr !== null ? Number(headerBr[1]) : derivedKbps;
+
+	const videoMatch = /Stream #\d+:\d+[^\n]*?:\s*Video:[^\n]*?,\s*(\d+)\s*kb\/s/.exec(inputSection);
+	const audioMatch = /Stream #\d+:\d+[^\n]*?:\s*Audio:[^\n]*?,\s*(\d+)\s*kb\/s/.exec(inputSection);
+	return {
+		durationSec,
+		totalKbps: totalKbps !== null && totalKbps > 0 ? totalKbps : null,
+		videoKbps: videoMatch !== null ? Number(videoMatch[1]) : null,
+		audioKbps: audioMatch !== null ? Number(audioMatch[1]) : null,
+	};
+}

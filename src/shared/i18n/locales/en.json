@@ -140,24 +140,24 @@
       },
       "specs": {
         "pdf": {
-          "light": "Keep high resolution",
-          "balanced": "Standard document compression",
-          "max": "Lower resolution · smallest file"
+          "light": "High quality · up to 1600px (~30–65% off)",
+          "balanced": "Standard · up to 1280px (~55–80% off)",
+          "max": "Smallest · up to 960px (~75–90% off)"
         },
         "image": {
-          "light": "Original size · high quality (lossless PNG)",
-          "balanced": "Up to 2560px · balanced",
-          "max": "Up to 1600px · smallest file"
+          "light": "High quality · 256-color/2560px (~35–60% off)",
+          "balanced": "Balanced · up to 1920px (~55–75% off)",
+          "max": "Smallest · up to 1280px (~70–85% off)"
         },
         "video": {
-          "light": "Original resolution · high quality",
-          "balanced": "Up to 1080p · standard",
-          "max": "Up to 720p · smallest file"
+          "light": "Original res · ~35%+ bitrate cut",
+          "balanced": "Up to 1080p · ~58%+ bitrate cut",
+          "max": "Up to 720p · ~76%+ bitrate cut"
         },
         "audio": {
-          "light": "High quality · 192 kbps",
-          "balanced": "Standard · 128 kbps",
-          "max": "Voice / compact · 64 kbps"
+          "light": "High quality · ~28% bitrate cut",
+          "balanced": "Standard · ~50% bitrate cut",
+          "max": "Compact / voice · ~65% bitrate cut"
         }
       },
       "outputLabel": "Output",

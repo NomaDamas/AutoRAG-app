@@ -735,17 +735,20 @@ function fakePdf(bytes: number, available = true): PdfReducer & { readonly calls
 }
 
 describe("reduceSize", () => {
-	it("keeps a picture's format, names the result -reduced and reports the saving", async () => {
-		const { service, commands } = makeService({ imageOutput: "s" });
+	it("keeps a picture's format (sips when ffmpeg is absent, ffmpeg mjpeg when present), names the result -reduced and reports the saving", async () => {
+		const noFfmpeg = makeService({ ffmpeg: false, imageOutput: "s" });
 		const photo = join(root, "photo.jpeg");
 		await writeFile(photo, "x".repeat(2048));
-		const outcome = await service.run([photo], { kind: "reduceSize" }, null);
+		const outcome = await noFfmpeg.service.run([photo], { kind: "reduceSize" }, null);
 		expect(outcome.output).toBe(join(root, "photo-reduced.jpeg"));
 		expect((await stat(photo)).size).toBe(2048);
 		expect((await stat(outcome.output ?? "")).size).toBe(1);
-		expect(commands.at(-1)?.command).toBe("sips");
-		expect(commands.at(-1)?.args.slice(0, 4)).toEqual(["-s", "format", "jpeg", "-s"]);
+		expect(noFfmpeg.commands.at(-1)?.command).toBe("sips");
 		expect(outcome.note).toBe(t("main.action.reduced", { name: "photo-reduced.jpeg", before: "2.0 KB", after: "1 B", percent: 99 }));
+
+		const withFfmpeg = makeService({ imageOutput: "s" });
+		await withFfmpeg.service.run([photo], { kind: "reduceSize", level: "light" }, null);
+		expect(withFfmpeg.commands.at(-1)?.command).toBe("ffmpeg");
 	});
 
 	it("leaves nothing behind when the result is not smaller than the original", async () => {
@@ -787,16 +790,17 @@ describe("reduceSize", () => {
 		await expect(service.run([note, note], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.singleTargetOnly"));
 	});
 
-	it("applies light (lossless deflate), balanced (256-color palette), and max (128-color 1600px) levels to PNG", async () => {
+	it("quantizes PNG at all three levels (256-color floyd_steinberg on light, 144 on balanced, 64 on max) so light genuinely shrinks", async () => {
 		const { service, commands } = makeService({ imageOutput: "s" });
 		const png = join(root, "flat.png");
 		await writeFile(png, "png-bytes");
 		await service.run([png], { kind: "reduceSize", level: "light" }, null);
-		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("-compression_level 9 -pred mixed");
-		await service.run([png], { kind: "reduceSize", level: "balanced" }, null);
 		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=256");
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("dither=floyd_steinberg");
+		await service.run([png], { kind: "reduceSize", level: "balanced" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=144");
 		await service.run([png], { kind: "reduceSize", level: "max" }, null);
-		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=128");
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=64");
 	});
 
 	it("refuses an animated PNG or WebP, which a one-frame re-encode would flatten", async () => {
@@ -839,20 +843,43 @@ describe("reduceSize", () => {
 		await expect(none.service.run([source], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.unsupportedReduce"));
 	});
 
-	it("applies distinct video CRF, resolution cap, and audio bitrates across light, balanced, and max levels", async () => {
-		const { service, commands } = makeService({ encoders: MEDIA_ENCODERS, imageOutput: "s" });
+	it("caps video -maxrate and audio bitrate relative to probed source streams across light, balanced, and max", async () => {
+		const commands: { command: string; args: string[] }[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			run: async (command, args) => {
+				commands.push({ command, args: [...args] });
+				if (command === "ffmpeg" && args[0] === "-version") return { stdout: "ffmpeg version 9", stderr: "" };
+				if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: MEDIA_ENCODERS, stderr: "" };
+				if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+				if (command === "sips") return { stdout: SIPS_FORMATS_LISTING, stderr: "" };
+				if (args.includes("null")) {
+					return {
+						stdout: "",
+						stderr:
+							"  Duration: 00:00:10.00, start: 0.000000, bitrate: 2128 kb/s\n" +
+							"  Stream #0:0: Video: h264, yuv420p, 1920x1080, 2000 kb/s, 30 fps\n" +
+							"  Stream #0:1: Audio: aac, 44100 Hz, stereo, 128 kb/s\n",
+					};
+				}
+				const target = args.at(-1);
+				if (target !== undefined) await writeFile(target, "s");
+				return { stdout: "", stderr: "" };
+			},
+		});
 		const clip = join(root, "clip.mov");
 		await writeFile(clip, "x".repeat(4096));
 
 		await service.run([clip], { kind: "reduceSize", level: "light" }, null);
-		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "23", "-b:a", "160k", "-movflags", "+faststart"]));
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "25", "-maxrate", "1300k", "-bufsize", "2600k", "-movflags", "+faststart"]));
 
 		await service.run([clip], { kind: "reduceSize", level: "balanced" }, null);
-		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "28", "-b:a", "128k"]));
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "28", "-maxrate", "840k", "-bufsize", "1680k"]));
 		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("min(iw,1920)");
 
 		await service.run([clip], { kind: "reduceSize", level: "max" }, null);
-		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "33", "-b:a", "96k"]));
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "33", "-maxrate", "480k", "-bufsize", "960k"]));
 		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("min(iw,1280)");
 	});
 
@@ -992,6 +1019,48 @@ describe("reduceSize", () => {
 		const outcome = await service.run([digital], { kind: "reduceSize" }, null);
 		expect(outcome.output).toBe(join(root, "digital-reduced.pdf"));
 		expect((await stat(outcome.output ?? "")).size).toBeLessThan(uncompacted.byteLength);
+	});
+
+	it("does not settle for a <10% object-stream shave on PDF light when Filee shrinks further", async () => {
+		const doc = await PDFDocument.create();
+		const page = doc.addPage([595, 842]);
+		page.drawText("Slide with tiny header shave", { x: 40, y: 800, size: 12 });
+		const pdfPath = join(root, "slides.pdf");
+		// Pad with a comment so object-stream save shaves <1%, simulating meetup.pdf's 0.11% shave.
+		const base = await doc.save({ useObjectStreams: true });
+		const padded = Buffer.concat([Buffer.from("% pad\n"), Buffer.from(base)]);
+		await writeFile(pdfPath, padded);
+		const filee = fakePdf(Math.floor(padded.length * 0.45));
+		const { service } = makeService({ pdf: filee });
+		const outcome = await service.run([pdfPath], { kind: "reduceSize", level: "light" }, null);
+		expect(filee.calls).toEqual([pdfPath]);
+		expect((await stat(outcome.output ?? "")).size).toBe(Math.floor(padded.length * 0.45));
+	});
+
+	it("steps down JPEG quality automatically on light when the source was already moderately compressed", async () => {
+		const qValues: string[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			run: async (command, args) => {
+				if (command === "ffmpeg" && args[0] === "-version") return { stdout: "ffmpeg version 9", stderr: "" };
+				if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: MEDIA_ENCODERS, stderr: "" };
+				if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+				if (command === "sips") return { stdout: SIPS_FORMATS_LISTING, stderr: "" };
+				const qIdx = args.indexOf("-q:v");
+				const q = qIdx >= 0 ? (args[qIdx + 1] ?? "") : "";
+				qValues.push(q);
+				const target = args.at(-1) ?? "";
+				// First pass (q=6) only shaves 2% (980 B vs 1000 B); stepped-down pass shrinks to 520 B!
+				await writeFile(target, Buffer.alloc(q === "6" ? 980 : 520));
+				return { stdout: "", stderr: "" };
+			},
+		});
+		const jpg = join(root, "already-q75.jpg");
+		await writeFile(jpg, Buffer.alloc(1000));
+		const outcome = await service.run([jpg], { kind: "reduceSize", level: "light" }, null);
+		expect(qValues.length).toBeGreaterThanOrEqual(2);
+		expect((await stat(outcome.output ?? "")).size).toBe(520);
 	});
 });
 

@@ -265,13 +265,18 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
     recycling any prior `-reduced` copy through the Trash so `-reduced 2 .. 8`
     duplicates never accumulate.
   Every family stages in `.dazzi-reduce-*` first and keeps the same format:
-  PDF (`light`: 2400px JPEG re-encode + PDF 1.5 object streams; `balanced`: Filee
-  `compress-pdf` + object-stream fallback; `max`: Filee + 1100px JPEG re-encode),
-  JPEG/HEIC (`sips` on macOS, `ffmpeg` elsewhere), PNG (`light` lossless max
-  deflate; `balanced` 256-color palette; `max` 128-color 1600px) and WebP,
-  MP4/M4V/MOV/MKV (`libx264` crf 23/28/33 + original/1080p/720p cap + AAC
-  160/128/96k), WebM (VP9 + Opus), and MP3/M4A/AAC/Opus (192/128/64k, Opus
-  96/64/32k, keeping cover art). Once started, the same dialog turns into a live
+  PDF (`pdf-lib` + `fflate` level-9 `/FlateDecode` re-deflate + `/DCTDecode` JPEG
+  re-encode at 1600/1280/960px + Filee `compress-pdf`, picking the smallest valid
+  output and consulting Filee whenever `light` saves <15%), JPEG (`ffmpeg` `mjpeg`
+  when present — avoiding `sips`'s EXIF bloat — else `sips`, with automatic
+  step-down when an already-compressed source shrinks <12%), HEIC (`sips` on
+  macOS, `ffmpeg` elsewhere), PNG (perceptual 256/144/64-color `palettegen` +
+  Floyd-Steinberg/Sierra dithering + mixed-filter deflate) and WebP,
+  MP4/M4V/MOV/MKV (`libx264` crf 25/28/33 with VBV `-maxrate` capped at
+  65%/42%/24% of the probed source video bitrate + original/1080p/720p cap),
+  WebM (VP9 + Opus, VBV-capped), and MP3/M4A/AAC/Opus (bitrate stepped to
+  72%/50%/35% of the probed source audio bitrate, keeping cover art). Once started,
+  the same dialog turns into a live
   progress card (`ProgressBar` — determinate `%` from `ffmpeg -progress pipe:1`,
   shimmer on PDF/stills) with a Cancel button (or Esc) that kills the child
   process tree via `actions:cancel`. Animated PNG/WebP are refused, and outputs

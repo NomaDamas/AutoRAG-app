@@ -69,9 +69,9 @@ async function fixture() {
 	writeFileSync(join(QA_ROOT, "scan.pdf"), await doc.save({ useObjectStreams: false }));
 	rmSync(join(QA_ROOT, "page.tmp.jpg"));
 	ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=2000x1500", "-frames:v", "1", "-q:v", "1", join(QA_ROOT, "photo.jpg"));
-	ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=1000x750", "-frames:v", "1", "-compression_level", "0", join(QA_ROOT, "shot.png"));
-	ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=1280x720:r=24", "-f", "lavfi", "-i", "sine=f=440:d=3", "-t", "3", "-c:v", "libx264", "-crf", "12", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "320k", join(QA_ROOT, "clip.mp4"));
-	ffmpeg("-f", "lavfi", "-i", "sine=f=440:d=5", "-c:a", "libmp3lame", "-b:a", "320k", join(QA_ROOT, "song.mp3"));
+	ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=1000x750", "-frames:v", "1", "-compression_level", "9", join(QA_ROOT, "shot.png"));
+	ffmpeg("-f", "lavfi", "-i", "testsrc2=s=1280x720:r=24:d=4", "-f", "lavfi", "-i", "sine=f=440:d=4", "-t", "4", "-c:v", "libx264", "-b:v", "2000k", "-maxrate", "2000k", "-bufsize", "4000k", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", join(QA_ROOT, "clip.mp4"));
+	ffmpeg("-f", "lavfi", "-i", "sine=f=440:d=6", "-c:a", "libmp3lame", "-b:a", "128k", join(QA_ROOT, "song.mp3"));
 	const tinyDoc = await PDFDocument.create();
 	tinyDoc.addPage([200, 200]);
 	writeFileSync(join(QA_ROOT, "tiny.pdf"), await tinyDoc.save({ useObjectStreams: true }));
@@ -141,16 +141,18 @@ try {
 	check("replace toast notes Trash backup", /smaller/.test(pdfToast) && /Trash/.test(pdfToast), true);
 	await page.screenshot({ path: join(EVIDENCE, "2-pdf-replaced-in-place.png") });
 
+	// Test Light specifically on already-compressed PNG (deflate-9), 2 Mbps MP4, and 128k MP3:
 	for (const name of ["shot.png", "clip.mp4", "song.mp3"]) {
 		const ext = name.split(".").pop();
 		await page.locator(".toast").waitFor({ state: "detached", timeout: 10_000 }).catch(() => {});
 		await row(page, name).click();
 		await page.getByRole("button", { name: "Reduce Size", exact: true }).click();
 		await dialog(page).waitFor({ state: "visible", timeout: 10_000 });
+		await dialog(page).locator('[data-level="light"]').click();
 		await dialog(page).locator('[data-action="confirm-reduce"]').click();
 		await dialog(page).waitFor({ state: "detached", timeout: 120_000 });
 		const afterBytes = readFileSync(join(QA_ROOT, name));
-		check(`${name} shrunk in place`, afterBytes.length < originals.get(name).length, true);
+		check(`${name} shrunk >=20% on Light`, afterBytes.length < originals.get(name).length * 0.8, true);
 		check(`${name} kept ${ext} format`, MAGIC[ext](afterBytes), true);
 		check(`${name} left zero -reduced clutter`, readdirSync(QA_ROOT).filter((n) => n.includes("-reduced")).length, 0);
 	}

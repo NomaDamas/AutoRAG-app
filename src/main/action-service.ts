@@ -17,10 +17,10 @@
 
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { lstat, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
-import { Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { unzlibSync, Zip, ZipDeflate, ZipPassThrough, zlibSync } from "fflate";
 import { PDFDocument, PDFName, PDFNumber, PDFRawStream } from "pdf-lib";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
@@ -28,9 +28,11 @@ import {
 	extensionOfName,
 	formatByteSize,
 	jpegDimensions,
+	parseMediaHeader,
 	reducedCopyName,
 	REDUCIBLE_EXTENSIONS,
 	reductionKindOf,
+	type MediaHeaderInfo,
 	type ReductionLevel,
 } from "../shared/size-reduction";
 import { t } from "../shared/i18n/core";
@@ -229,14 +231,17 @@ interface LevelSpec {
 	readonly ffmpegJpegQ: string;
 	readonly ffmpegWebpQuality: string;
 	readonly ffmpegHeicCrf: string;
-	readonly pngPaletteColors: 256 | 128 | null;
+	readonly pngPaletteColors: 256 | 144 | 64;
+	readonly pngDither: string;
 	readonly x264Crf: string;
 	readonly vp9Crf: string;
 	readonly videoMaxEdge: number | null;
-	readonly videoAudioBitrate: string;
-	readonly videoOpusBitrate: string;
-	readonly audioBitrate: string;
-	readonly opusBitrate: string;
+	readonly videoBitrateRatio: number;
+	readonly videoAudioKbps: number;
+	readonly videoOpusKbps: number;
+	readonly audioKbps: number;
+	readonly opusKbps: number;
+	readonly audioBitrateRatio: number;
 	readonly pdfMaxEdge: number;
 	readonly pdfJpegQuality: string;
 	readonly pdfFfmpegQ: string;
@@ -244,59 +249,74 @@ interface LevelSpec {
 
 const LEVEL_SPECS: Readonly<Record<ReductionLevel, LevelSpec>> = {
 	light: {
-		sipsQuality: "82",
-		imageMaxEdge: null,
-		ffmpegJpegQ: "3",
-		ffmpegWebpQuality: "82",
-		ffmpegHeicCrf: "22",
-		pngPaletteColors: null,
-		x264Crf: "23",
-		vp9Crf: "28",
-		videoMaxEdge: null,
-		videoAudioBitrate: "160k",
-		videoOpusBitrate: "96k",
-		audioBitrate: "192k",
-		opusBitrate: "96k",
-		pdfMaxEdge: 2400,
-		pdfJpegQuality: "82",
-		pdfFfmpegQ: "3",
-	},
-	balanced: {
-		sipsQuality: JPEG_QUALITY,
+		sipsQuality: "66",
 		imageMaxEdge: 2560,
 		ffmpegJpegQ: "6",
-		ffmpegWebpQuality: "68",
-		ffmpegHeicCrf: "28",
+		ffmpegWebpQuality: "72",
+		ffmpegHeicCrf: "25",
 		pngPaletteColors: 256,
+		pngDither: "floyd_steinberg",
+		x264Crf: "25",
+		vp9Crf: "30",
+		videoMaxEdge: null,
+		videoBitrateRatio: 0.65,
+		videoAudioKbps: 128,
+		videoOpusKbps: 96,
+		audioKbps: 160,
+		opusKbps: 96,
+		audioBitrateRatio: 0.72,
+		pdfMaxEdge: 1600,
+		pdfJpegQuality: "62",
+		pdfFfmpegQ: "7",
+	},
+	balanced: {
+		sipsQuality: "50",
+		imageMaxEdge: 1920,
+		ffmpegJpegQ: "10",
+		ffmpegWebpQuality: "58",
+		ffmpegHeicCrf: "29",
+		pngPaletteColors: 144,
+		pngDither: "sierra2_4a",
 		x264Crf: "28",
-		vp9Crf: "33",
+		vp9Crf: "34",
 		videoMaxEdge: 1920,
-		videoAudioBitrate: "128k",
-		videoOpusBitrate: "64k",
-		audioBitrate: "128k",
-		opusBitrate: "64k",
-		pdfMaxEdge: 1800,
-		pdfJpegQuality: "68",
-		pdfFfmpegQ: "6",
+		videoBitrateRatio: 0.42,
+		videoAudioKbps: 128,
+		videoOpusKbps: 64,
+		audioKbps: 128,
+		opusKbps: 64,
+		audioBitrateRatio: 0.5,
+		pdfMaxEdge: 1280,
+		pdfJpegQuality: "48",
+		pdfFfmpegQ: "12",
 	},
 	max: {
-		sipsQuality: "45",
-		imageMaxEdge: 1600,
-		ffmpegJpegQ: "12",
-		ffmpegWebpQuality: "45",
-		ffmpegHeicCrf: "34",
-		pngPaletteColors: 128,
+		sipsQuality: "34",
+		imageMaxEdge: 1280,
+		ffmpegJpegQ: "18",
+		ffmpegWebpQuality: "38",
+		ffmpegHeicCrf: "35",
+		pngPaletteColors: 64,
+		pngDither: "sierra2_4a",
 		x264Crf: "33",
 		vp9Crf: "40",
 		videoMaxEdge: 1280,
-		videoAudioBitrate: "96k",
-		videoOpusBitrate: "48k",
-		audioBitrate: "64k",
-		opusBitrate: "32k",
-		pdfMaxEdge: 1100,
-		pdfJpegQuality: "42",
-		pdfFfmpegQ: "14",
+		videoBitrateRatio: 0.24,
+		videoAudioKbps: 96,
+		videoOpusKbps: 48,
+		audioKbps: 64,
+		opusKbps: 32,
+		audioBitrateRatio: 0.35,
+		pdfMaxEdge: 960,
+		pdfJpegQuality: "34",
+		pdfFfmpegQ: "18",
 	},
+};
+
+const STEP_DOWN_LEVEL: Readonly<Record<ReductionLevel, ReductionLevel | null>> = {
+	light: "balanced",
+	balanced: "max",
+	max: null,
 };
 /** The ffmpeg encoder each audio extension needs. */
 const AUDIO_ENCODERS: Readonly<Record<string, string>> = { mp3: "libmp3lame", m4a: "aac", aac: "aac", opus: "libopus" };
@@ -592,7 +612,7 @@ function ffmpegResizeArgs(
 	return args;
 }
 
-/** Re-encode an image for `level`: `light` keeps PNG lossless; `balanced`/`max` quantize PNG palettes and bound dimensions. */
+/** Re-encode an image for `level`: PNG uses perceptual palette quantization + mixed-filter deflate at all 3 levels. */
 function ffmpegReduceImageArgs(
 	source: string,
 	target: string,
@@ -603,15 +623,12 @@ function ffmpegReduceImageArgs(
 	const spec = LEVEL_SPECS[level];
 	const args = ["-y", ...ffmpegImageInput(source), "-i", source, "-frames:v", "1"];
 	if (format === "png") {
-		if (spec.pngPaletteColors === null) {
-			args.push("-compression_level", "9", "-pred", "mixed");
-		} else {
-			const edge = spec.imageMaxEdge ?? 2560;
-			const dither = spec.pngPaletteColors === 256 ? "sierra2_4a" : "bayer:bayer_scale=3";
-			const filter = `scale='min(iw,${edge})':'min(ih,${edge})':force_original_aspect_ratio=decrease,split[a][b];[a]palettegen=max_colors=${spec.pngPaletteColors}:reserve_transparent=1[p];[b][p]paletteuse=dither=${dither}`;
-			args.push("-vf", filter, "-compression_level", "9");
-		}
-		args.push(...ffmpegImageOutput("png"), target);
+		const scalePrefix =
+			spec.imageMaxEdge === null || level === "light"
+				? ""
+				: `scale='min(iw,${spec.imageMaxEdge})':'min(ih,${spec.imageMaxEdge})':force_original_aspect_ratio=decrease,`;
+		const filter = `${scalePrefix}split[a][b];[a]palettegen=max_colors=${spec.pngPaletteColors}:stats_mode=single:reserve_transparent=1[p];[b][p]paletteuse=dither=${spec.pngDither}`;
+		args.push("-vf", filter, "-compression_level", "9", "-pred", "mixed", ...ffmpegImageOutput("png"), target);
 		return args;
 	}
 	if (spec.imageMaxEdge !== null) {
@@ -638,6 +655,7 @@ function ffmpegReduceVideoArgs(
 	target: string,
 	extension: string,
 	level: ReductionLevel,
+	media: MediaHeaderInfo | null,
 	reportProgress = false,
 ): readonly string[] {
 	const spec = LEVEL_SPECS[level];
@@ -649,8 +667,24 @@ function ffmpegReduceVideoArgs(
 			: `scale='min(iw,${spec.videoMaxEdge})':'min(ih,${spec.videoMaxEdge})':force_original_aspect_ratio=decrease:force_divisible_by=2`;
 	args.push("-vf", scale, "-pix_fmt", "yuv420p");
 	if (video === "libvpx-vp9") args.push("-crf", spec.vp9Crf, "-b:v", "0");
-	else args.push("-crf", spec.x264Crf, "-preset", "medium");
-	args.push("-c:a", audio, "-b:a", audio === "libopus" ? spec.videoOpusBitrate : spec.videoAudioBitrate, "-map_metadata", "0");
+	else args.push("-crf", spec.x264Crf, "-preset", "faster");
+
+	const srcVideoKbps =
+		media?.videoKbps ??
+		(media?.totalKbps !== null && media?.totalKbps !== undefined
+			? Math.max(120, media.totalKbps - (media.audioKbps ?? 128))
+			: null);
+	if (srcVideoKbps !== null && srcVideoKbps > 0) {
+		const maxrate = Math.max(96, Math.round(srcVideoKbps * spec.videoBitrateRatio));
+		args.push("-maxrate", `${maxrate}k`, "-bufsize", `${maxrate * 2}k`);
+	}
+
+	const baseAudioKbps = audio === "libopus" ? spec.videoOpusKbps : spec.videoAudioKbps;
+	const audioKbps =
+		media?.audioKbps !== null && media?.audioKbps !== undefined
+			? Math.min(baseAudioKbps, Math.max(32, Math.round(media.audioKbps * (level === "light" ? 0.85 : level === "balanced" ? 0.7 : 0.55))))
+			: baseAudioKbps;
+	args.push("-c:a", audio, "-b:a", `${audioKbps}k`, "-map_metadata", "0");
 	if (FASTSTART_EXTENSIONS.includes(extension)) args.push("-movflags", "+faststart");
 	args.push(target);
 	return args;
@@ -661,6 +695,7 @@ function ffmpegReduceAudioArgs(
 	target: string,
 	extension: string,
 	level: ReductionLevel,
+	media: MediaHeaderInfo | null,
 	reportProgress = false,
 ): readonly string[] {
 	const spec = LEVEL_SPECS[level];
@@ -668,7 +703,14 @@ function ffmpegReduceAudioArgs(
 	const args = ["-y", ...(reportProgress ? ["-progress", "pipe:1", "-nostats"] : []), "-i", source, "-map", "0:a:0"];
 	if (AUDIO_WITH_COVER.includes(extension)) args.push("-map", "0:v:0?", "-c:v", "copy");
 	if (extension === "m4a") args.push("-disposition:v:0", "attached_pic");
-	args.push("-c:a", codec, "-b:a", codec === "libopus" ? spec.opusBitrate : spec.audioBitrate, "-map_metadata", "0", target);
+	const defaultKbps = codec === "libopus" ? spec.opusKbps : spec.audioKbps;
+	const srcKbps = media?.audioKbps ?? media?.totalKbps ?? null;
+	const floorKbps = codec === "libopus" ? 24 : 40;
+	const targetKbps =
+		srcKbps !== null && srcKbps > 0
+			? Math.min(defaultKbps, Math.max(floorKbps, Math.floor(srcKbps * spec.audioBitrateRatio)))
+			: defaultKbps;
+	args.push("-c:a", codec, "-b:a", `${targetKbps}k`, "-map_metadata", "0", target);
 	return args;
 }
 
@@ -722,13 +764,27 @@ async function recompressPdfStreams(
 	reencodeJpeg: (input: string, output: string, maxEdge: number, sipsQuality: string, ffmpegQ: string) => Promise<void>,
 ): Promise<void> {
 	const spec = LEVEL_SPECS[level];
+	const fallbackLevel = STEP_DOWN_LEVEL[level];
+	const fallbackSpec = fallbackLevel === null ? null : LEVEL_SPECS[fallbackLevel];
 	const bytes = await readFile(source);
 	const doc = await PDFDocument.load(bytes, { updateMetadata: false });
 	let index = 0;
 	for (const [ref, obj] of doc.context.enumerateIndirectObjects()) {
 		if (!(obj instanceof PDFRawStream)) continue;
-		if (obj.dict.get(PDFName.of("Subtype"))?.toString() !== "/Image") continue;
 		const filter = obj.dict.get(PDFName.of("Filter"))?.toString();
+		if (filter === "/FlateDecode") {
+			try {
+				const raw = unzlibSync(obj.contents);
+				const tighter = zlibSync(raw, { level: 9 });
+				if (tighter.byteLength < obj.contents.byteLength) {
+					doc.context.assign(ref, PDFRawStream.of(obj.dict, tighter));
+				}
+			} catch {
+				// Predictor-encoded or non-standard Flate stream: leave untouched.
+			}
+			continue;
+		}
+		if (obj.dict.get(PDFName.of("Subtype"))?.toString() !== "/Image") continue;
 		const colorSpace = obj.dict.get(PDFName.of("ColorSpace"))?.toString();
 		const smask = obj.dict.get(PDFName.of("SMask"));
 		if (filter !== "/DCTDecode" || smask !== undefined || colorSpace === "/DeviceCMYK") continue;
@@ -738,7 +794,12 @@ async function recompressPdfStreams(
 		await writeFile(inPath, obj.contents);
 		try {
 			await reencodeJpeg(inPath, outPath, spec.pdfMaxEdge, spec.pdfJpegQuality, spec.pdfFfmpegQ);
-			const next = await readFile(outPath);
+			let next = await readFile(outPath);
+			if (fallbackSpec !== null && next.byteLength > obj.contents.byteLength * 0.88) {
+				await reencodeJpeg(inPath, outPath, fallbackSpec.pdfMaxEdge, fallbackSpec.pdfJpegQuality, fallbackSpec.pdfFfmpegQ).catch(() => undefined);
+				const stepped = await readFile(outPath);
+				if (stepped.byteLength < next.byteLength) next = stepped;
+			}
 			if (next.byteLength < obj.contents.byteLength) {
 				const dims = jpegDimensions(next);
 				if (dims !== null) {
@@ -925,6 +986,20 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 
 	const running = new Map<string, AbortController>();
 
+	async function probeMedia(source: string, staging: string, beforeSize: number, signal: AbortSignal): Promise<MediaHeaderInfo | null> {
+		try {
+			const probeOut = join(staging, "probe.null");
+			const { stderr } = await run("ffmpeg", ["-hide_banner", "-i", source, "-t", "0", "-f", "null", probeOut], {
+				signal,
+				timeoutMs: 10_000,
+			});
+			const parsed = parseMediaHeader(stderr, beforeSize);
+			return parsed.durationSec === null && parsed.videoKbps === null && parsed.audioKbps === null ? null : parsed;
+		} catch {
+			return null;
+		}
+	}
+
 	async function reencodePdfJpeg(
 		input: string,
 		output: string,
@@ -933,31 +1008,42 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		ffmpegQ: string,
 		signal: AbortSignal,
 	): Promise<void> {
-		if (platform === "darwin") {
-			const dims = jpegDimensions(await readFile(input));
-			const cap = dims !== null && Math.max(dims.width, dims.height) > maxEdge ? maxEdge : null;
-			await run("sips", sipsReduceArgs(input, output, "jpeg", sipsQuality, cap), { signal });
+		const ffmpegProbe = await probeFfmpegImages();
+		if (ffmpegProbe.formats.includes("jpeg")) {
+			await run(
+				"ffmpeg",
+				[
+					"-y",
+					...ffmpegImageInput(input),
+					"-i",
+					input,
+					"-frames:v",
+					"1",
+					"-vf",
+					`scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`,
+					"-q:v",
+					ffmpegQ,
+					"-update",
+					"1",
+					output,
+				],
+				{ signal },
+			);
 			return;
 		}
-		await run(
-			"ffmpeg",
-			[
-				"-y",
-				...ffmpegImageInput(input),
-				"-i",
-				input,
-				"-frames:v",
-				"1",
-				"-vf",
-				`scale='min(iw,${maxEdge})':'min(ih,${maxEdge})':force_original_aspect_ratio=decrease`,
-				"-q:v",
-				ffmpegQ,
-				"-update",
-				"1",
-				output,
-			],
-			{ signal },
-		);
+		const dims = jpegDimensions(await readFile(input));
+		const cap = dims !== null && Math.max(dims.width, dims.height) > maxEdge ? maxEdge : null;
+		await run("sips", sipsReduceArgs(input, output, "jpeg", sipsQuality, cap), { signal });
+	}
+
+	async function pickSmallestExisting(candidates: readonly string[]): Promise<string | null> {
+		let best: { path: string; size: number } | null = null;
+		for (const candidate of candidates) {
+			if (!(await pathExists(candidate))) continue;
+			const size = (await lstat(candidate)).size;
+			if (size > 0 && (best === null || size < best.size)) best = { path: candidate, size };
+		}
+		return best?.path ?? null;
 	}
 
 	async function reducePdfInto(source: string, staging: string, level: ReductionLevel, beforeSize: number, signal: AbortSignal): Promise<string> {
@@ -968,64 +1054,90 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 		if (level === "light") {
 			const gentle = join(staging, "light.pdf");
 			await recompressPdfStreams(source, gentle, staging, "light", reencode).catch(() => undefined);
-			if ((await pathExists(gentle)) && (await lstat(gentle)).size < beforeSize) return gentle;
-			return pdf.reduce(source, staging, signal);
+			// Only settle for `gentle` alone when it genuinely shrunk (>= 15%); otherwise also consult Filee.
+			if ((await pathExists(gentle)) && (await lstat(gentle)).size <= beforeSize * 0.85) return gentle;
+			const fileeDir = join(staging, "filee");
+			await mkdir(fileeDir, { recursive: true });
+			const fromFilee = await pdf.reduce(source, fileeDir, signal);
+			return (await pickSmallestExisting([gentle, fromFilee])) ?? fromFilee;
 		}
 
-		const fromFilee = await pdf.reduce(source, staging, signal);
-		if (level === "max") {
-			const tighter = join(staging, "max.pdf");
-			await recompressPdfStreams(fromFilee, tighter, staging, "max", reencode).catch(() => undefined);
-			if ((await pathExists(tighter)) && (await lstat(tighter)).size < (await lstat(fromFilee)).size) return tighter;
-			return fromFilee;
-		}
+		const fileeDir = join(staging, "filee");
+		await mkdir(fileeDir, { recursive: true });
+		const fromFilee = await pdf.reduce(source, fileeDir, signal);
+		const refined = join(staging, `${level}.pdf`);
+		const baseForStreamPass = (await lstat(fromFilee)).size < beforeSize ? fromFilee : source;
+		await recompressPdfStreams(baseForStreamPass, refined, staging, level, reencode).catch(() => undefined);
+		return (await pickSmallestExisting([refined, fromFilee])) ?? fromFilee;
+	}
 
-		if ((await lstat(fromFilee)).size >= beforeSize) {
-			await recompressPdfStreams(source, fromFilee, staging, "balanced", reencode).catch(() => undefined);
+	async function encodeStillImage(
+		source: string,
+		stagedTarget: string,
+		format: ImageFormat,
+		level: ReductionLevel,
+		signal: AbortSignal,
+	): Promise<void> {
+		const probe = await probeFfmpegImages();
+		const useFfmpeg =
+			format === "png" ||
+			format === "webp" ||
+			(format === "jpeg" && probe.formats.includes("jpeg")) ||
+			platform !== "darwin";
+		if (!useFfmpeg) {
+			const spec = LEVEL_SPECS[level];
+			const dims = format === "jpeg" && spec.imageMaxEdge !== null ? jpegDimensions(await readFile(source)) : null;
+			const cap =
+				spec.imageMaxEdge !== null && dims !== null && Math.max(dims.width, dims.height) > spec.imageMaxEdge
+					? spec.imageMaxEdge
+					: null;
+			await run("sips", sipsReduceArgs(source, stagedTarget, format, spec.sipsQuality, cap), { signal });
+			return;
 		}
-		return fromFilee;
+		await run("ffmpeg", ffmpegReduceImageArgs(source, stagedTarget, format, level, probe.avifEncoder), { signal });
 	}
 
 	async function reduceMediaInto(
 		source: string,
 		extension: string,
 		stagedTarget: string,
+		staging: string,
+		beforeSize: number,
 		level: ReductionLevel,
 		signal: AbortSignal,
 		emitProgress: ((percent: number) => void) | null,
 	): Promise<void> {
 		const kind = reductionKindOf(source);
 		if (kind === "video") {
+			const media = await probeMedia(source, staging, beforeSize, signal);
 			const tracker = emitProgress === null ? undefined : createFfmpegProgressTracker(emitProgress);
-			await run("ffmpeg", ffmpegReduceVideoArgs(source, stagedTarget, extension, level, emitProgress !== null), {
+			await run("ffmpeg", ffmpegReduceVideoArgs(source, stagedTarget, extension, level, media, emitProgress !== null), {
 				signal,
 				timeoutMs: 60 * 60 * 1000,
 				...(tracker === undefined ? {} : tracker),
 			});
-		} else if (kind === "audio") {
+			return;
+		}
+		if (kind === "audio") {
+			const media = await probeMedia(source, staging, beforeSize, signal);
 			const tracker = emitProgress === null ? undefined : createFfmpegProgressTracker(emitProgress);
-			await run("ffmpeg", ffmpegReduceAudioArgs(source, stagedTarget, extension, level, emitProgress !== null), {
+			await run("ffmpeg", ffmpegReduceAudioArgs(source, stagedTarget, extension, level, media, emitProgress !== null), {
 				signal,
 				...(tracker === undefined ? {} : tracker),
 			});
-		} else {
-			const format = imageFormatOf(source);
-			if (format === null) throw new Error(t("main.action.unsupportedReduce"));
-			const sips = platform === "darwin" && (format === "jpeg" || format === "heic");
-			if (sips) {
-				const spec = LEVEL_SPECS[level];
-				const dims = format === "jpeg" && spec.imageMaxEdge !== null ? jpegDimensions(await readFile(source)) : null;
-				const cap =
-					spec.imageMaxEdge !== null && dims !== null && Math.max(dims.width, dims.height) > spec.imageMaxEdge
-						? spec.imageMaxEdge
-						: null;
-				await run("sips", sipsReduceArgs(source, stagedTarget, format, spec.sipsQuality, cap), { signal });
-			} else {
-				await run(
-					"ffmpeg",
-					ffmpegReduceImageArgs(source, stagedTarget, format, level, (await probeFfmpegImages()).avifEncoder),
-					{ signal },
-				);
+			return;
+		}
+		const format = imageFormatOf(source);
+		if (format === null) throw new Error(t("main.action.unsupportedReduce"));
+		await encodeStillImage(source, stagedTarget, format, level, signal);
+		// Adaptive step-down: when a JPEG/WebP/HEIC/PNG was already moderately compressed so
+		// `light` (or `balanced`) shaved <12%, step down once so the user gets a real reduction.
+		const nextLevel = STEP_DOWN_LEVEL[level];
+		if (nextLevel !== null && (await pathExists(stagedTarget)) && (await lstat(stagedTarget)).size > beforeSize * 0.88) {
+			const stepped = join(staging, `stepped-${basename(stagedTarget)}`);
+			await encodeStillImage(source, stepped, format, nextLevel, signal).catch(() => undefined);
+			if ((await pathExists(stepped)) && (await lstat(stepped)).size < (await lstat(stagedTarget)).size) {
+				await rename(stepped, stagedTarget);
 			}
 		}
 	}
@@ -1071,7 +1183,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					id !== undefined && deps.onProgress !== undefined
 						? (percent: number): void => deps.onProgress?.({ id, percent }, window)
 						: null;
-				await reduceMediaInto(source, extension, produced, level, signal, emit);
+				await reduceMediaInto(source, extension, produced, staging, beforeSize, level, signal, emit);
 			}
 			throwIfCancelled();
 			const { before, after } = await keepIfSmaller(source, produced);

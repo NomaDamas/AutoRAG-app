@@ -190,4 +190,38 @@ describe.runIf(live)("reduceSize against the real tools", () => {
 		expect(await size(inplace)).toBeLessThan(vidOriginal);
 		expect((await readdir(root)).filter((n) => n.startsWith("inplace"))).toEqual(["inplace.mp4"]);
 	}, 180_000);
+
+	it("genuinely shrinks already-compressed PNG, 1080p slide PDF, 2 Mbps MP4, and 128k MP3 even on light", async () => {
+		// 1. Already max-deflated PNG (-compression_level 9): lossless deflate alone saves 0%, palette 256 saves 40%+.
+		const deflatedPng = join(root, "deflated.png");
+		ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=1000x750", "-frames:v", "1", "-compression_level", "9", deflatedPng);
+		const pngOut = (await service.run([deflatedPng], { kind: "reduceSize", level: "light" }, null)).output ?? "";
+		expect(await size(pngOut)).toBeLessThan((await size(deflatedPng)) * 0.75);
+
+		// 2. 1920x1080 JPEG-slide PDF at moderate quality (q=5): light must still shrink by >= 20%.
+		const slideJpg = join(root, "slide-q5.jpg");
+		ffmpeg("-f", "lavfi", "-i", "mandelbrot=s=1920x1080", "-frames:v", "1", "-q:v", "5", slideJpg);
+		const slideDoc = await PDFDocument.create();
+		const slideImg = await slideDoc.embedJpg(await readFile(slideJpg));
+		for (let i = 0; i < 4; i += 1) {
+			const p = slideDoc.addPage([960, 540]);
+			p.drawImage(slideImg, { x: 0, y: 0, width: 960, height: 540 });
+		}
+		const slidePdf = join(root, "slides-1080p.pdf");
+		await writeFile(slidePdf, await slideDoc.save({ useObjectStreams: true }));
+		const pdfOut = (await service.run([slidePdf], { kind: "reduceSize", level: "light" }, null)).output ?? "";
+		expect(await size(pdfOut)).toBeLessThan((await size(slidePdf)) * 0.8);
+
+		// 3. Already-compressed 2 Mbps MP4: VBV maxrate cap ensures light shrinks meaningfully.
+		const tightMp4 = join(root, "tight-2m.mp4");
+		ffmpeg("-f", "lavfi", "-i", "testsrc2=s=1280x720:r=30:d=4", "-c:v", "libx264", "-b:v", "2000k", "-maxrate", "2000k", "-bufsize", "4000k", "-pix_fmt", "yuv420p", tightMp4);
+		const mp4Out = (await service.run([tightMp4], { kind: "reduceSize", level: "light" }, null)).output ?? "";
+		expect(await size(mp4Out)).toBeLessThan((await size(tightMp4)) * 0.8);
+
+		// 4. Already-128kbps MP3: audio header bitrate stepping shrinks on light instead of inflating to 160k/192k.
+		const mp3128 = join(root, "song-128k.mp3");
+		ffmpeg("-f", "lavfi", "-i", "sine=f=440:d=6", "-c:a", "libmp3lame", "-b:a", "128k", mp3128);
+		const mp3Out = (await service.run([mp3128], { kind: "reduceSize", level: "light" }, null)).output ?? "";
+		expect(await size(mp3Out)).toBeLessThan((await size(mp3128)) * 0.82);
+	}, 180_000);
 });
