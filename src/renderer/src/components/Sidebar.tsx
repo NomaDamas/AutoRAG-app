@@ -6,9 +6,9 @@ import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { EyeIcon, GearIcon } from "./icons";
+import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
-import { Keycap } from "./primitives/Keycap";
+import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
 import { SidebarIndexActivity } from "./SidebarIndexActivity";
 import { SidebarSearch, type SearchMode } from "./SidebarSearch";
@@ -45,6 +45,7 @@ export function Sidebar({
 	onNavigate,
 	onEject,
 	onOpenSettings,
+	onOpenUsage,
 	onHideSidebar,
 	onOpenIndexing,
 	sourceStatus,
@@ -66,6 +67,8 @@ export function Sidebar({
 	readonly onNavigate: (item: NavItem) => void;
 	readonly onEject: (item: NavItem) => void;
 	readonly onOpenSettings?: (() => void) | undefined;
+	/** The footer's chart icon opens Settings on the AI usage page. */
+	readonly onOpenUsage?: (() => void) | undefined;
 	readonly onHideSidebar: () => void;
 	/** The indexing block opens Settings on its Indexing page. */
 	readonly onOpenIndexing: () => void;
@@ -217,22 +220,36 @@ export function Sidebar({
 					</div>
 				))}
 			</div>
-			<div className="side-footer flex flex-none flex-col p-10 border-t border-border">
+			<div className="side-footer flex flex-none flex-col px-12 pt-10 pb-18 border-t border-border">
 				<SidebarIndexActivity onOpen={onOpenIndexing} />
-				<button
-					type="button"
-					className={cn(ITEM_CLASS, "sidebar__item--settings", settingsActive && "bg-selected-nav text-ink")}
-					aria-current={settingsActive ? "true" : undefined}
-					aria-label={t("places.settings")}
-					onClick={onOpenSettings}
-				>
-					<GearIcon
-						className={cn("sidebar__item-icon flex-none", settingsActive ? "text-accent-text" : "text-ink-muted")}
-					/>
-					<span className="sidebar__item-label flex-1 min-w-0 truncate">{t("places.settings")}</span>
-					<span className="sr-only" aria-hidden="true" style={{ display: "none" }}>{t("places.settings")}</span>
-					{showHotkeys ? <Keycap label={formatShortcut({ key: "," })} /> : null}
-				</button>
+				<div className="flex items-center gap-4">
+					<button
+						type="button"
+						className={cn(
+							iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }),
+							"sidebar__item--settings",
+							settingsActive && "bg-selected-nav text-accent-text",
+						)}
+						aria-current={settingsActive ? "true" : undefined}
+						aria-label={t("places.settings")}
+						title={t("places.settingsHint", { shortcut: formatShortcut({ key: "," }) })}
+						onClick={onOpenSettings}
+					>
+						<GearIcon />
+					</button>
+					<button
+						type="button"
+						className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
+						data-action="open-usage"
+						aria-label={t("places.usage")}
+						title={t("places.usage")}
+						onClick={onOpenUsage}
+					>
+						<UsageIcon />
+					</button>
+					<div className="flex-1" aria-hidden="true" />
+					<SidebarUpdateButton />
+				</div>
 			</div>
 		</aside>
 	);

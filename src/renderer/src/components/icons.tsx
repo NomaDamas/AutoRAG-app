@@ -16,6 +16,7 @@ import {
 	Archive,
 	ArrowDownUp,
 	ArrowUp,
+	ChartNoAxesColumn,
 	Check,
 	ChevronLeft,
 	ChevronRight,
@@ -24,6 +25,7 @@ import {
 	Columns3,
 	Copy,
 	Database,
+	Download,
 	ExternalLink,
 	Eye,
 	Film,
@@ -76,6 +78,11 @@ function glyph(Icon: LucideIcon, defaultSize: number, strokeWidth: number = GLYP
 }
 
 export const GearIcon = glyph(Settings, 16);
+
+/** Sidebar footer: AI usage (bars) and the app-update states (refresh / download). */
+export const UsageIcon = glyph(ChartNoAxesColumn, 16, 1.8);
+
+export const DownloadIcon = glyph(Download, 16, 1.8);
 
 export const SearchIcon = glyph(Search, 14, 2.2);
 
