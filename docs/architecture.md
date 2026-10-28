@@ -750,11 +750,13 @@ built the same way:
 A session is in memory and disposed by its caller: nothing is written to the
 agent dir or the working directory, and the user's own pi settings never apply.
 A profile session never reads or writes AutoRAG's retrieval memory.
-App profiles live in `src/main/agents/profiles/`; the first is smart indexing
-(thinking `low`; looks only through `folder_survey` and `list_folder`, answers
-only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
-a UI, its own service and bridge. The factory's own tests (what the model is
-offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
+App profiles live in `src/main/agents/profiles/`, and every profile shares `src/main/agents/profile-progress.ts` (`withIntentTools`,
+`intentPromptLine`, `subscribeProfileProgress`), which mirrors AutoRAG's own `i` intent-tracing parameter: every working tool declares a
+required `i` string first in its schema so the model writes a short plain phrase in the interface language before calling the tool, and the
+session streams that phrase to the UI where it is rendered with the `.shimmer` text effect. The first profile is smart indexing (thinking
+`low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
+second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). A new profile adds one file there and, if it needs a UI,
+its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions
 
@@ -845,6 +847,45 @@ and kept for the chat's life:
   the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
   (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
   00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+- **An error in AI Search** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
+  `classifyAppError` reads what the person can do from the wording (HTTP statuses only in the shapes the SDKs use, and never inside a
+  path): no model or key (`model-missing`), a rejected key or login (`model-credentials`), a spent plan or billing problem
+  (`model-subscription`), a retired model (`model-not-found`), a rate limit, a lost connection, or anything else. The first four mean
+  the model itself cannot be used: the box says so in plain words, offers **no** AI fix (the AI is what is down), and leads to the
+  model settings and, where the subscription may be the cause, to Subscription & Usage. A rate limit and a lost connection say to wait
+  or check the connection. Everything else is the app's own setup and gets **AI로 고치기** on the right of the box. The main process's
+  own `open-plan` action (the weekly credits are used up) outranks the wording. An error of an earlier turn is shown as history, with
+  its explanation and settings buttons but no fix.
+- **Raw error text stays hidden behind "자세히 보기"** (`ErrorDetails`). By default the person sees only the plain-words title and hint;
+  nothing of the raw error string is shown until they press "자세히 보기" ("Show details"), which expands the full selectable message for
+  inspection or a bug report (only a pre-translated main-process plan message with `action: "open-plan"` is shown directly).
+- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `hooks/useErrorFix.ts`, `ErrorFixDialog`, `SidebarErrorFixActivity`). A
+  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
+  `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks), plus three tools only the app
+  can offer: `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data sources, the index
+  state), `refresh_index` and `report_result`, which is the answer and refuses `fixed` unless something was really changed (a file change,
+  a shell command or a successful index run). The rules of `error-fix-files.ts`: every tool refuses once the run is stopped; the AI's own
+  sign-in and key files (the pi agent dir) and any file named like a key or credential (`.env`, `id_*`, `*.pem`, `auth.json` ...) are never
+  opened, also by a shell command that names them; the AutoRAG config is shown with secrets hidden (an unparsable one is masked) and
+  `edit`/`write` on it go through the same validating service the Settings pages use, as a diff of leaf values (after a copy to
+  `config.json.bak-<stamp>-before-error-fix`, once per run), where the `model` key, secret-looking keys and the paths AutoRAG manages are
+  refused and a change the validator rejects writes nothing; `edit`/`write` of anything else is allowed only for a file a data source in
+  the config names (with its own `.bak-…` copy) and the app's workspace folder, never for the person's own documents; the shell is pi's
+  shell with keys and tokens removed from its environment. There is no limit on how much the agent looks, no time limit on the run, and
+  `refresh_index` waits for the index run to end: only the person's Stop ends a run early. The session lives in the window-wide
+  `useErrorFix` store (`App.tsx` hosts the dialog), so dismissing or pressing "백그라운드로 전환" hides the modal without cancelling the
+  repair; while a run is active — or finished while minimized — `SidebarErrorFixActivity` renders in the sidebar footer in the exact
+  shape of `SidebarIndexActivity` (headline + shimmering `ProgressBar` + live `i` intent phrase, flipping to 100% green/orange when
+  done), and clicking it reopens the modal from any tab. While open and running, `ErrorFixDialog` shows a calm self-healing animation
+  and one shimmering live status line (`"원인을 찾는 중…"` initially, then each tool call's live `i` intent phrase from
+  `profile-progress.ts`), never dumping command lines, raw paths or JSON diffs onto the screen. When `fixed`, it settles into a
+  healthy restored visual with the agent's plain summary and a single `Close` button. For `needs-user` or `cannot-fix`, `report_result`
+  takes up to three `actions`, each `{kind, target, label}`: `settings` (a Settings page id) or `source` (the alias of a configured data
+  source, which opens `source:<alias>` in Settings), validated by the toolkit and rendered as action buttons beside `Close`. A change to
+  the config resets the idle chat agents (`SearchService.resetAgents`) so the next question is answered on the new config. Pinned by
+  `test/app-error.test.ts`, `profile-progress.test.ts`, `error-fix-files.test.ts`, `error-fix-profile.test.ts`,
+  `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
+  `scripts/manual-qa/run-qa-finder-ai-search-error-fix.mjs` (scripted model) and `run-qa-live-ai-search-error-fix.mjs` (a real model).
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
 answer path, files on disk, what the model receives), `run-qa-finder-ai-search-conversation.mjs` (scripted model

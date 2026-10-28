@@ -9,6 +9,7 @@ import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
 import { createActionsBridge } from "./actions-bridge";
+import { createErrorFixBridge } from "./error-fix-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
 import { createInteractionBridge } from "./interaction-bridge";
@@ -50,6 +51,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	indexActivity: createIndexActivityBridge(ipcRenderer),
 	interaction: createInteractionBridge(ipcRenderer),
 	indexProblem: createIndexProblemBridge(ipcRenderer),
+	errorFix: createErrorFixBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),
 	onboarding: createOnboardingBridge(ipcRenderer),

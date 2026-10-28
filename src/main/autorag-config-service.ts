@@ -44,7 +44,7 @@ const NON_SECRET_KEY: Record<string, true> = {
 	maxfilebytes: true,
 };
 
-function isSecretKey(key: string): boolean {
+export function isSecretKey(key: string): boolean {
 	if (/(?:env|name)$/iu.test(key)) return false;
 	if (NON_SECRET_KEY[key.toLowerCase()] === true) return false;
 	return SECRET_KEY.test(key);
@@ -84,7 +84,7 @@ function restoreSecrets(previous: unknown, next: unknown): unknown {
 }
 
 /** True when the value is JSON-serializable, cycle-free, and free of pollution keys. */
-function isJsonValue(value: unknown, seen: Set<object> = new Set()): value is JsonValue {
+export function isJsonValue(value: unknown, seen: Set<object> = new Set()): value is JsonValue {
 	if (value === null || typeof value === "string" || typeof value === "boolean") return true;
 	if (typeof value === "number") return Number.isFinite(value);
 	if (Array.isArray(value)) {
