@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+      "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
     },
@@ -670,7 +671,7 @@
       "indexing": "インデックス作成"
     },
     "stepLabel": {
-      "welcome": "開始する",
+      "welcome": "続ける",
       "permissions": "続ける",
       "account": "続ける",
       "folders": "フォルダを選んで続ける",
@@ -743,9 +744,9 @@
       "title": "アカウントで\n始める",
       "lead": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのMacに保存されます。",
       "note": "ブラウザでログインすると、自動でこのアプリに戻ります。パスワードはアプリに入力しません。",
-      "signedIn": "ログインしました",
+      "signedIn": "ログインが完了しました",
       "signedInNote": "次のステップに進みます",
-      "otherAccount": "別のアカウント",
+      "otherAccount": "別のアカウントでログイン",
       "cardTitle": "Dazziアカウント",
       "cardSub": "プランと使用量を管理します",
       "busy": "ブラウザでログイン中…",
@@ -758,10 +759,19 @@
       "getStarted": "はじめる",
       "continueGoogle": "Googleで続行",
       "continueApple": "Appleで続行",
+      "continueGithub": "GitHubで続行",
       "or": "または",
       "emailLabel": "メール",
       "emailPlaceholder": "namae@example.jp",
       "continueEmail": "メールで続行",
+      "codeLabel": "認証コード",
+      "codeSentNote": "{{email}} に6桁の認証コードを送信しました。",
+      "sendingCode": "認証コードを送信中…",
+      "verifyCode": "コードで続行",
+      "verifyingCode": "確認中…",
+      "resendCode": "コードを再送",
+      "resendIn": "{{seconds}}秒後に再送",
+      "useDifferentEmail": "別のメールを使う",
       "guest": "ゲストとして続行",
       "agreeLead": "続行すると、Dazziの以下に同意したものとみなされます:",
       "agreeTerms": "利用規約",
@@ -803,7 +813,7 @@
       "network": {
         "name": "ネットワーク",
         "desc": "オンラインのAIに質問する場合や、文書をオンラインで分析する場合にのみ必要です。",
-        "allow": "許可"
+        "allow": "ネットワークを許可"
       }
     },
     "smartScan": {
@@ -880,22 +890,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "セマンティック検索",
       "title": "埋め込みをどう使いますか？",
       "groupLabel": "埋め込み方法",
       "card": {
         "none": {
-          "name": "使用しない",
-          "line": "キーワード検索のみ"
-        },
-        "local": {
-          "name": "ローカル埋め込み",
-          "lineMac": "このMacで処理",
-          "linePc": "このPCで処理"
+          "name": "キーワードで探す",
+          "line": "入力した単語を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "リモート埋め込み",
-          "line": "サーバーで処理"
+          "name": "Dazziサーバーで分析",
+          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
+        },
+        "local": {
+          "nameMac": "自分のMacで分析",
+          "namePc": "自分のPCで分析",
+          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
+          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
         }
       },
       "meter": {
@@ -907,10 +917,14 @@
         "good": "良い"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "約{{minutes}}分",
+      "prepTime": "準備時間",
+      "about": "約",
+      "minutes": "{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
-      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。",
+      "cloudConsentRequired": "(必須)",
+      "cloudConsent": "文書の本文がサーバーへ送信されることに同意します。",
+      "cloudConsentCheck": "同意します",
       "pausedNotice": {
         "config": "選択した埋め込み方式を利用できず停止しました",
         "disk": "空き容量が足りずモデルをダウンロードできませんでした",
@@ -918,10 +932,7 @@
       }
     },
     "sources": {
-      "eyebrow": "データソース",
-      "title": "接続先も\n一緒に検索しますか？",
-      "lead": "すでにインストールされ認証済みのソースだけを先に表示します。すべてを選択する必要はありません。",
-      "detected": "検出済み",
+      "title": "このPCで見つかったアプリも検索範囲に含めますか？",
       "checking": "追加できるソースを確認しています…",
       "empty": "接続済みのソースが見つかりませんでした。後で設定から接続できます。",
       "connectMore": "準備が必要なソースは後で設定から接続できます。",

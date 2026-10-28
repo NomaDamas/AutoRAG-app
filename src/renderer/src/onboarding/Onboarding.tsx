@@ -12,7 +12,7 @@ import {
 	useState,
 	type ReactElement,
 } from "react";
-import { isPaidPlanId, parsePromoCode, type AccountStatus } from "../../../shared/account-contract";
+import { isPaidPlanId, parsePromoCode, type AccountSignInOptions, type AccountStatus, type EmailOtpSendResult } from "../../../shared/account-contract";
 import type {
 	DetectedSource,
 	EmbedMode,
@@ -706,37 +706,70 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 	}, [overlay, account, next, showToast, t]);
 
-	const signIn = useCallback((): void => {
-		void autorag.account.signIn().then(
-			(status) => {
-				setAccount(status);
-				if (status.state === "signedIn") {
-					const subPlan = status.account?.plan;
-					setDraft((current) => {
-						if (current === null) return current;
-						const nextPlan: PlanId =
-							isPaidPlanId(subPlan)
-								? current.embed === "cloud"
-									? cloudPlanFor(subPlan)
-									: subPlan
-								: current.plan === "byok"
-									? "pro"
-									: current.plan;
-						return { ...current, plan: nextPlan };
-					});
-					showToast(t("onboarding.toast.signedIn"));
-					window.setTimeout(() => {
-						if (draftRef.current?.stepId === "account") {
-							next();
-						}
-					}, 700);
-				} else if (status.error !== null) {
-					showToast(status.error);
-				}
-			},
-			(error: unknown) => showToast(ipcMessage(error) || t("onboarding.toast.signInFailed")),
-		);
-	}, [next, showToast, t]);
+	const applyAccountStatus = useCallback(
+		(status: AccountStatus, options?: { readonly silentError?: boolean }): void => {
+			setAccount(status);
+			if (status.state === "signedIn") {
+				const subPlan = status.account?.plan;
+				setDraft((current) => {
+					if (current === null) return current;
+					const nextPlan: PlanId =
+						isPaidPlanId(subPlan)
+							? current.embed === "cloud"
+								? cloudPlanFor(subPlan)
+								: subPlan
+							: current.plan === "byok"
+								? "pro"
+								: current.plan;
+					return { ...current, plan: nextPlan };
+				});
+				showToast(t("onboarding.toast.signedIn"));
+				window.setTimeout(() => {
+					if (draftRef.current?.stepId === "account") {
+						next();
+					}
+				}, 700);
+			} else if (status.error !== null && options?.silentError !== true) {
+				showToast(status.error);
+			}
+		},
+		[next, showToast, t],
+	);
+
+	const signIn = useCallback(
+		(options: AccountSignInOptions): void => {
+			void autorag.account.signIn(options).then(
+				(status) => applyAccountStatus(status),
+				(error: unknown) => showToast(ipcMessage(error) || t("onboarding.toast.signInFailed")),
+			);
+		},
+		[applyAccountStatus, showToast, t],
+	);
+
+	const sendEmailOtp = useCallback(
+		async (email: string): Promise<EmailOtpSendResult> => {
+			try {
+				return await autorag.account.sendEmailOtp(email);
+			} catch (error) {
+				return { ok: false, error: ipcMessage(error) || t("onboarding.toast.signInFailed") };
+			}
+		},
+		[t],
+	);
+
+	const verifyEmailOtp = useCallback(
+		async (email: string, code: string): Promise<AccountStatus | null> => {
+			try {
+				const status = await autorag.account.verifyEmailOtp(email, code);
+				applyAccountStatus(status, { silentError: true });
+				return status;
+			} catch (error) {
+				showToast(ipcMessage(error) || t("onboarding.toast.signInFailed"));
+				return null;
+			}
+		},
+		[applyAccountStatus, showToast, t],
+	);
 
 	const ctx: OnboardingCtx = {
 		draft: draft as OnboardingDraft,
@@ -916,6 +949,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			patch({ plan });
 		},
 		signIn,
+		sendEmailOtp,
+		verifyEmailOtp,
 		cancelSignIn: () => {
 			void autorag.account.cancelSignIn().then(setAccount);
 		},
@@ -1037,11 +1072,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			<>
 				<div className="progress-dashes">
 					{flow.map((id, index) => (
-						<span
-							key={id}
-							className={cn("dash", index < footerIndex && "done", index === footerIndex && "active")}
-							title={t(`onboarding.step.${id}`)}
-						/>
+						<span key={id} className={cn("dash", index === footerIndex && "active")} title={t(`onboarding.step.${id}`)} />
 					))}
 				</div>
 				<div className="footer-actions">

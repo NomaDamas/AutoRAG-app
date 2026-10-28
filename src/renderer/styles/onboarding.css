@@ -112,21 +112,25 @@ html[data-appearance="dark"] .onb {
 	-webkit-app-region: drag;
 }
 
+.onb .titlebar {
+	position: relative;
+}
+
+/* Centred on the window itself, not in the space the traffic lights or window controls leave over. */
 .onb .window-title {
-	flex: 1;
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
 	text-align: center;
-	margin-left: 74px;
+	white-space: nowrap;
+	pointer-events: none;
 	font-size: 12px;
 	font-weight: 500;
 	color: var(--onb-muted);
 }
 
-/* Off macOS the window controls overlay (src/main/window-chrome.ts) sits in this band and the title is not repeated:
- * the band stays as the 42px drag strip they live in, with the gutter they cover kept free. */
-html:not([data-platform="darwin"]) .onb .window-title {
-	visibility: hidden;
-}
-
+/* Off macOS the window controls overlay (src/main/window-chrome.ts) sits in this band: keep the gutter they cover free. */
 html:not([data-platform="darwin"]) .onb .titlebar {
 	padding-right: calc(15px + var(--window-controls-gutter));
 }
@@ -340,11 +344,17 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
+	line-height: 16px;
+}
+
+/* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
+.onb .footer-actions .footer-btn:last-child:not(:disabled) {
+	border-color: var(--onb-faint);
 }
 
 .onb .footer-btn:disabled {
 	border-color: var(--onb-border);
-	background: var(--onb-bg-input);
+	background: transparent;
 	color: var(--onb-faint);
 	cursor: not-allowed;
 }
@@ -352,24 +362,20 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 .onb .progress-dashes {
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 4px;
 	justify-content: center;
 }
 
 .onb .progress-dashes .dash {
-	width: 18px;
+	width: 12px;
 	height: 3px;
-	border-radius: 3px;
+	border-radius: 1.5px;
 	background: var(--onb-border);
 }
 
 .onb .progress-dashes .dash.active {
 	width: 34px;
 	background: var(--onb-blue);
-}
-
-.onb .progress-dashes .dash.done {
-	background: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
 }
 
 .onb .footer .footer-hint {
@@ -2024,41 +2030,54 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
  * good or bad.
  */
 .onb .screen.em-screen {
+	padding-left: 24px;
+	padding-right: 24px;
 	justify-content: center;
 	padding-top: 27px;
 }
 
+/* The cards; what hangs under a card (its consent, its download, why it is blocked) sits in a zero-height second row, so ticking or choosing moves nothing. */
+.onb .em-stack {
+	position: relative;
+	width: 100%;
+	max-width: 992px;
+	margin-top: 48px;
+}
+
 .onb .em-cards {
 	display: grid;
-	grid-template-columns: repeat(3,minmax(0,1fr));
-	gap: 12px;
+	grid-template-columns: repeat(3,minmax(0,320px));
+	justify-content: center;
+	gap: 0 16px;
 	width: 100%;
-	max-width: 960px;
-	margin-top: 17px;
+}
+
+@media (min-width:851px) {
+	.onb .em-cards {
+		grid-template-rows: auto 0;
+	}
 }
 
 .onb .em-card {
 	position: relative;
 	display: flex;
 	flex-direction: column;
+	gap: 12px;
 	min-width: 0;
-	padding: 15px 15px 13px;
-	border: 1px solid var(--onb-border);
+	padding: 20px 20px 16px;
+	border: 1px solid var(--onb-bg-input);
 	border-radius: 12px;
 	background: var(--onb-bg-card);
 	cursor: pointer;
-	transition: border .15s, background .15s, box-shadow .15s, transform .15s;
+	transition: border .15s, background .15s;
 }
 
 .onb .em-card:hover {
 	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
-	transform: translateY(-1px);
 }
 
 .onb .em-card.selected {
 	border-color: var(--onb-blue);
-	background: var(--onb-blue-soft);
-	box-shadow: 0 0 0 2px color-mix(in srgb,var(--onb-blue) 17%,transparent);
 }
 
 .onb .em-card.disabled {
@@ -2070,31 +2089,31 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	opacity: .55;
 }
 
-.onb .em-card.disabled>.em-blocked {
-	opacity: 1;
-}
-
+/* Why a card cannot be chosen: a note under that card's column, outside the card. */
 .onb .em-blocked {
-	margin: 8px 0 0;
-	padding: 6px 8px;
-	border-radius: 6px;
+	box-sizing: border-box;
+	align-self: start;
+	margin: 12px 0 0;
+	padding: 8px 16px;
+	border-radius: 8px;
 	background: var(--onb-red-bg);
 	color: var(--onb-red);
-	font-size: 10px;
-	line-height: 1.45;
+	font-size: 10.5px;
+	line-height: 15.75px;
+	text-align: center;
 }
 
 .onb .em-card.disabled:hover {
-	border-color: var(--onb-border);
-	transform: none;
+	border-color: var(--onb-bg-input);
 }
 
 .onb .em-radio {
 	position: absolute;
-	top: 15px;
-	right: 14px;
+	top: 20px;
+	right: 20px;
 	width: 16px;
 	height: 16px;
+	box-sizing: border-box;
 	border: 1.5px solid var(--onb-border);
 	border-radius: 50%;
 	background: var(--onb-bg-card);
@@ -2108,26 +2127,36 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	display: none;
 }
 
+.onb .embed-icon {
+	display: grid;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	color: var(--onb-body);
+}
+
 .onb .em-title {
 	display: flex;
 	align-items: center;
 	flex-wrap: wrap;
-	gap: 6px;
-	margin-top: 12px;
+	gap: 4px;
+	margin-bottom: -8px;
 }
 
 .onb .em-title h3 {
 	margin: 0;
 	font-size: 14px;
+	line-height: 19px;
 }
 
 .onb .em-tag {
-	padding: 2px 6px;
+	padding: 2px 4px;
 	border-radius: 4px;
 	background: var(--onb-bg-input);
 	color: var(--onb-muted);
-	font-size: 8.5px;
-	font-weight: 600;
+	font-size: 8px;
+	line-height: 11px;
+	font-weight: 700;
 }
 
 .onb .em-tag.warn {
@@ -2140,68 +2169,61 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	color: var(--onb-red);
 }
 
-.onb .embed-icon {
-	display: grid;
-	place-items: center;
-	width: 36px;
-	height: 36px;
-	border-radius: 10px;
-	background: var(--onb-bg-input);
-	color: var(--onb-body);
-}
-
 .onb .em-line {
-	margin: 4px 0 0;
+	margin: 0;
 	color: var(--onb-muted);
 	font-size: 10.5px;
-	line-height: 1.45;
+	line-height: 15.75px;
 }
 
 .onb .em-meters {
 	display: flex;
 	flex-direction: column;
-	gap: 7px;
-	margin-top: 13px;
-	padding-top: 12px;
-	border-top: 1px solid var(--onb-divider);
+	gap: 4px;
+	padding: 12px;
+	border-radius: 6px;
+	background: var(--onb-bg-stage);
 }
 
 .onb .em-meter {
 	display: grid;
-	grid-template-columns: 52px 40px minmax(0,1fr);
+	grid-template-columns: 44px auto minmax(0,1fr);
 	align-items: center;
-	gap: 8px;
-	font-size: 10px;
+	gap: 12px;
+	font-size: 11px;
 }
 
 .onb .em-m-label {
 	color: var(--onb-muted);
+	line-height: 16px;
 }
 
 .onb .em-meter b {
-	color: var(--onb-ink);
-	font-size: 10px;
-	font-weight: 600;
+	color: var(--onb-body);
+	font-size: 11px;
+	line-height: 14px;
+	font-weight: 500;
 }
 
 .onb .em-pips {
 	display: flex;
-	gap: 2px;
+	gap: 4px;
 }
 
 .onb .em-pips i {
-	flex: 1;
-	height: 5px;
+	flex: none;
+	width: 20px;
+	height: 4px;
 	border-radius: 2px;
-	background: var(--onb-border);
+	background: var(--onb-divider);
 }
 
 .onb .em-meter.good .em-pips i.on {
-	background: var(--onb-green);
+	background: #34c759;
 }
 
 .onb .em-meter.warn .em-pips i.on {
-	background: var(--onb-orange);
+	background: #fc0;
 }
 
 .onb .em-meter.bad .em-pips i.on {
@@ -2210,22 +2232,39 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 .onb .em-foot {
 	display: flex;
-	flex-wrap: wrap;
-	gap: 5px;
-	margin-top: auto;
-	padding-top: 11px;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
 	color: var(--onb-muted);
+	font-size: 10px;
+	line-height: 14px;
+}
+
+.onb .em-eta {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	color: var(--onb-body);
+	font-size: 11px;
+	line-height: 16px;
+}
+
+.onb .em-eta .em-about {
+	color: var(--onb-faint);
 	font-size: 10px;
 }
 
 .onb .em-foot b {
-	color: var(--onb-ink);
-	font-weight: 600;
+	color: var(--onb-body);
+	font-weight: 400;
 }
 
 @media (max-width:850px) {
 	.onb .em-cards {
 		grid-template-columns: 1fr;
+	}
+	.onb .em-blocked {
+		grid-column: 1 !important;
 	}
 }
 
@@ -2247,16 +2286,140 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	margin-top: 2px;
 }
 
-/* The cloud-embedding consent under the card grid: wider than the note version. */
+/* The cloud-embedding consent under the card grid (Figma 06b): shown while the cloud card is chosen. */
 .onb .em-consent {
-	width: 100%;
-	max-width: 960px;
+	align-self: start;
+	justify-self: center;
 	margin-top: 12px;
-	border-color: color-mix(in srgb,var(--onb-orange) 40%,var(--onb-border));
-	background: var(--onb-orange-bg);
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: 320px;
+	max-width: 100%;
+	padding: 12px 16px;
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	filter: drop-shadow(0 0 2px rgba(0,0,0,.12));
 	color: var(--onb-body);
-	font-size: 11px;
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 16px;
+	cursor: pointer;
 }
+
+.onb .em-consent-text {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 2px;
+	white-space: nowrap;
+}
+
+.onb .em-consent-text b {
+	font-weight: 500;
+}
+
+.onb .em-consent-check {
+	display: inline-flex;
+	align-items: center;
+	flex: none;
+	gap: 8px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+
+.onb .em-consent-check input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.onb .em-box {
+	display: grid;
+	place-items: center;
+	width: 15px;
+	height: 15px;
+	box-sizing: border-box;
+	border: 1.5px solid var(--onb-border);
+	border-radius: 3px;
+	background: var(--onb-bg-card);
+	color: #fff;
+}
+
+.onb .em-box svg {
+	opacity: 0;
+}
+
+.onb .em-consent-check input:checked + .em-box {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+}
+
+.onb .em-consent-check input:checked + .em-box svg {
+	opacity: 1;
+}
+
+.onb .em-consent-check input:focus-visible + .em-box {
+	outline: 2px solid color-mix(in srgb,var(--onb-blue) 45%,transparent);
+	outline-offset: 2px;
+}
+
+/* The on-device model's download under the "my PC" card (Figma 06c): the same small card as the consent, with a blue Download button. */
+.onb .em-download {
+	align-self: start;
+	justify-self: center;
+	width: 320px;
+	max-width: 100%;
+}
+
+.onb .em-download .model-dl {
+	box-sizing: border-box;
+	align-items: center;
+	gap: 6px;
+	margin-top: 12px;
+	padding: 12px 16px;
+	border: 0;
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	filter: drop-shadow(0 0 2px rgba(0,0,0,.12));
+	color: var(--onb-body);
+	text-align: center;
+}
+
+.onb .em-download .model-dl[data-state="absent"] .model-dl-head {
+	display: none;
+}
+
+.onb .em-download .model-dl-title,
+.onb .em-download .model-dl-meta,
+.onb .em-download .model-dl-error {
+	color: var(--onb-body);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.onb .em-download .model-dl-title {
+	font-weight: 500;
+}
+
+.onb .em-download .model-dl-actions button {
+	height: 32px;
+	padding: 0 14px;
+	border-radius: 8px;
+	border: 1px solid var(--onb-border);
+	color: var(--onb-body);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.onb .em-download .model-dl-actions button.primary {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+	color: #fff;
+}
+
 
 /* The welcome step's usage-statistics checkbox: a small line under the note, not a boxed card. */
 .onb .usage-consent {
@@ -2839,9 +3002,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	}
 	.onb .plan-list {
 		grid-template-columns: repeat(2,minmax(0,1fr));
-	}
-	.onb .window-title {
-		margin-left: 0;
 	}
 	.onb .footer .footer-hint {
 		display: none;
@@ -4121,6 +4281,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .permissions-screen .permission-row {
 	min-height: 62px;
+	padding-right: 16px;
 	border-color: transparent;
 }
 
@@ -4135,14 +4296,24 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .permissions-screen .row-action .secondary {
-	height: 34px;
+	height: 32px;
 	padding: 0 14px;
 	border-color: var(--onb-divider);
-	border-radius: 7px;
+	border-radius: 8px;
 	background: var(--onb-bg-stage);
 	font-size: 12px;
 	font-weight: 500;
 	white-space: nowrap;
+}
+
+/* The granted and restart-needed badges share the action buttons' size; their colours stay. */
+.onb .permissions-screen .row-action .state {
+	justify-content: center;
+	height: 32px;
+	padding: 0 14px;
+	border-radius: 8px;
+	font-size: 12px;
+	font-weight: 500;
 }
 
 .onb .permissions-screen .tag.req {
@@ -4230,7 +4401,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	color: var(--onb-ink);
 }
 
-.onb .account-btn.apple {
+.onb .account-btn.github {
 	border-color: #000;
 	background: #000;
 	color: #fff;
@@ -4242,6 +4413,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border-color: var(--onb-bg-input);
 	background: var(--onb-bg-input);
 	color: var(--onb-ink);
+}
+
+.onb .account-btn:disabled {
+	opacity: .45;
+	cursor: not-allowed;
 }
 
 .onb .account-divider {
@@ -4276,9 +4452,38 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border: 1px solid var(--onb-border);
 	border-radius: 7px;
 	background: transparent;
-	color: var(--onb-body);
+	color: var(--onb-ink);
 	font-size: 12px;
 	font-weight: 400;
+}
+
+.onb .account-input::placeholder {
+	color: var(--onb-muted);
+	opacity: 1;
+}
+
+.onb .account-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	width: 100%;
+}
+
+.onb .account-code-input {
+	letter-spacing: 0.28em;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.onb .account-otp-actions {
+	text-align: center;
+	color: var(--onb-muted);
+	font-size: 11px;
+}
+
+.onb .inline-link:disabled {
+	opacity: .45;
+	cursor: not-allowed;
 }
 
 .onb .account-guest {
@@ -4288,4 +4493,190 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-size: 11px;
 	text-decoration: underline;
 	cursor: pointer;
+}
+
+.onb .permissions-screen .permission-icon.orange {
+	color: #ff9b00;
+}
+
+/* Sources step: centred heading over a list of plain rows (Figma 07 · sources). */
+.onb .screen.sources-screen {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 32px;
+}
+
+.onb .sources-screen h1 {
+	margin: 0;
+	font-weight: 700;
+	text-align: center;
+}
+
+/* Five rows show in full; every row after them scrolls (5 x 62px rows and 4 x 8px gaps). */
+.onb .sources-screen .source-list {
+	width: 100%;
+	max-width: 658px;
+	max-height: 342px;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.onb .sources-screen .source-row {
+	flex: none;
+	box-sizing: border-box;
+	align-items: center;
+	gap: 18px;
+	min-height: 62px;
+	padding: 14px 16px 14px 20px;
+	border-color: transparent;
+}
+
+.onb .sources-screen .source-icon {
+	width: 20px;
+	height: 20px;
+	border-radius: 0;
+	background: none;
+}
+
+.onb .sources-screen .source-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.onb .sources-screen .source-name {
+	line-height: 16px;
+}
+
+.onb .sources-screen .source-detail {
+	margin-top: 2px;
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+.onb .sources-screen .source-row .switch {
+	margin-top: 0;
+}
+
+.onb .sources-screen .sources-checking {
+	margin-top: 0;
+}
+
+.onb .sources-screen .connect-more {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	margin-top: 8px;
+}
+
+.onb .sources-screen .connect-more p {
+	margin: 0;
+	color: var(--onb-muted);
+	font-size: 11px;
+	line-height: 16px;
+	text-align: center;
+}
+
+.onb .sources-screen .more-chips {
+	justify-content: center;
+	margin-top: 0;
+}
+
+.onb .sources-screen .more-chips .brand-chip {
+	height: 22px;
+	padding: 0 7px;
+	border-radius: 5px;
+	background: none;
+}
+
+/* Account step once signed in (Figma 03b): the mark with a check badge, the plan and email, and a switch button. */
+.onb .account-done {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	max-width: 375px;
+}
+
+.onb .account-done-mark {
+	position: relative;
+	width: 108px;
+	height: 104px;
+}
+
+.onb .account-done-logo {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 94px;
+	height: 94px;
+}
+
+.onb .account-done-logo .app-logo {
+	display: block;
+	width: 100%;
+	height: 100%;
+	object-fit: contain;
+}
+
+.onb .account-done-check {
+	position: absolute;
+	top: 68px;
+	left: 72px;
+	display: grid;
+	place-items: center;
+	box-sizing: border-box;
+	width: 36px;
+	height: 36px;
+	border: 4.5px solid var(--onb-bg-stage);
+	border-radius: 50%;
+	background: #d2f0dc;
+	color: #34c759;
+}
+
+.onb .account-done h1 {
+	margin: 0;
+	font-weight: 700;
+	text-align: center;
+}
+
+.onb .account-done-meta {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	color: var(--onb-body);
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .account-plan-tag {
+	padding: 2px 4px;
+	border-radius: 4px;
+	background: var(--onb-bg-input);
+	color: var(--onb-muted);
+	font-size: 8px;
+	line-height: 11px;
+	font-weight: 700;
+}
+
+.onb .account-plan-tag.paid {
+	background: rgba(245,158,11,.14);
+	color: #925800;
+}
+
+.onb .account-switch {
+	width: 244px;
+	height: 38px;
+	margin-top: 38px;
+	border: 1px solid var(--onb-bg-input);
+	border-radius: 7px;
+	background: var(--onb-bg-input);
+	color: var(--onb-ink);
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 16px;
 }

@@ -429,6 +429,46 @@ describe("copy", () => {
 		expect(await readFile(join(destDir, "b copy.txt"), "utf8")).toBe("payload");
 	});
 
+	it("refuses to copy a folder into itself, reporting the reason and writing nothing", async () => {
+		// Given a folder with a subfolder
+		const folder = join(root, "outer");
+		await mkdir(join(folder, "inner"), { recursive: true });
+		await writeFile(join(folder, "a.txt"), "alpha");
+
+		// When copying it into its own subfolder
+		const result = await createFsService(makeDeps(root).deps).copy([folder], join(folder, "inner"));
+
+		// Then the batch names the folder with the OS reason, and nothing was created
+		expect(result.ok).toEqual([]);
+		expect(result.failed).toHaveLength(1);
+		expect(result.failed[0]?.path).toBe(folder);
+		expect(result.failed[0]?.message).toMatch(/subdirectory of self/);
+		expect(await readdir(join(folder, "inner"))).toEqual([]);
+	});
+
+	it("copies a nested folder and undo then redo recreate the same tree", async () => {
+		// Given a folder with nested files
+		const srcDir = join(root, "tree-src");
+		const destDir = join(root, "tree-dest");
+		await mkdir(join(srcDir, "deep", "deeper"), { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		await writeFile(join(srcDir, "top.txt"), "t");
+		await writeFile(join(srcDir, "deep", "mid.txt"), "m");
+		await writeFile(join(srcDir, "deep", "deeper", "low.txt"), "l");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When it is copied, undone and redone
+		await service.copy([srcDir], destDir);
+		await service.undo();
+		const afterUndo = await readdir(destDir);
+		await service.redo();
+
+		// Then undo removed it and redo brought back every file
+		expect(afterUndo).toEqual([]);
+		expect(await readFile(join(destDir, "tree-src", "deep", "deeper", "low.txt"), "utf8")).toBe("l");
+		expect(await readFile(join(destDir, "tree-src", "top.txt"), "utf8")).toBe("t");
+	});
+
 	it("reports per-path failures verbatim instead of throwing", async () => {
 		// Given a path that does not exist
 		const destDir = join(root, "dest2");

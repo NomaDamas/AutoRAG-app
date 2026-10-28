@@ -1287,9 +1287,11 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 			} else {
 				await extractIntoFolder(source, match.format, staging, archiveLimits);
 			}
-			await flattenWrapper(staging, match.stem);
+			const extracted = await flattenWrapper(staging, match.stem);
 			const target = await uniqueChild(directory, match.stem);
-			await rename(staging, target);
+			await rename(extracted, target);
+			// Renamed out of the staging folder, a lone wrapper leaves the (now empty) staging folder behind.
+			if (extracted !== staging) await rm(staging, { recursive: true, force: true });
 			return target;
 		} catch (error) {
 			await rm(staging, { recursive: true, force: true });

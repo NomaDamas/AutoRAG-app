@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+      "suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
     },
@@ -670,7 +671,7 @@
       "indexing": "Indexing"
     },
     "stepLabel": {
-      "welcome": "Get started",
+      "welcome": "Continue",
       "permissions": "Continue",
       "account": "Continue",
       "folders": "Continue with folders",
@@ -743,9 +744,9 @@
       "title": "Start with\nyour account",
       "lead": "Your plan and usage are tied to your account. Your files and search index are stored on this Mac.",
       "note": "You sign in in your browser and come back to this app automatically. You never enter your password in the app.",
-      "signedIn": "Signed in",
+      "signedIn": "You're signed in",
       "signedInNote": "Moving to the next step",
-      "otherAccount": "Another account",
+      "otherAccount": "Sign in with another account",
       "cardTitle": "Dazzi account",
       "cardSub": "Manage your plan and usage",
       "busy": "Signing in in your browser…",
@@ -758,10 +759,19 @@
       "getStarted": "Get started",
       "continueGoogle": "Continue with Google",
       "continueApple": "Continue with Apple",
+      "continueGithub": "Continue with GitHub",
       "or": "or",
       "emailLabel": "Email",
       "emailPlaceholder": "name@example.com",
       "continueEmail": "Continue with email",
+      "codeLabel": "Sign-in code",
+      "codeSentNote": "We sent a 6-digit code to {{email}}.",
+      "sendingCode": "Sending code…",
+      "verifyCode": "Verify code",
+      "verifyingCode": "Checking…",
+      "resendCode": "Send a new code",
+      "resendIn": "Resend in {{seconds}}s",
+      "useDifferentEmail": "Use a different email",
       "guest": "Continue as guest",
       "agreeLead": "By continuing, you agree to Dazzi's:",
       "agreeTerms": "Terms of Service",
@@ -803,7 +813,7 @@
       "network": {
         "name": "Network",
         "desc": "Only needed when you ask an online AI or analyze documents online.",
-        "allow": "Allow"
+        "allow": "Allow network"
       }
     },
     "smartScan": {
@@ -880,22 +890,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "Semantic search",
       "title": "How should we embed?",
       "groupLabel": "Embedding method",
       "card": {
         "none": {
-          "name": "Off",
-          "line": "Keyword search only"
-        },
-        "local": {
-          "name": "Local embedding",
-          "lineMac": "Runs on this Mac",
-          "linePc": "Runs on this PC"
+          "name": "Search by keyword",
+          "line": "Only finds documents that contain the words you type."
         },
         "cloud": {
-          "name": "Remote embedding",
-          "line": "Runs on the server"
+          "name": "Analyze on Dazzi's server",
+          "line": "Document contents are sent to Dazzi's server for analysis."
+        },
+        "local": {
+          "nameMac": "Analyze on my Mac",
+          "namePc": "Analyze on my PC",
+          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
+          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
         }
       },
       "meter": {
@@ -907,10 +917,14 @@
         "good": "Good"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "~{{minutes}} min",
+      "prepTime": "Setup time",
+      "about": "About",
+      "minutes": "{{minutes}} min",
       "cached": "Ready",
       "downloadUnknown": "Checking",
-      "cloudConsent": "I agree that the contents of documents in the selected folders will be sent to Dazzi servers for embedding. Nothing is stored after processing.",
+      "cloudConsentRequired": "(Required)",
+      "cloudConsent": "I agree that document text is sent to the server.",
+      "cloudConsentCheck": "I agree",
       "pausedNotice": {
         "config": "Indexing stopped because the chosen embedding isn't available",
         "disk": "Not enough storage space to download the model",
@@ -918,10 +932,7 @@
       }
     },
     "sources": {
-      "eyebrow": "Data sources",
-      "title": "Also search\nconnected sources?",
-      "lead": "We only show sources that are already installed and authenticated. You don't have to select them all.",
-      "detected": "Detected",
+      "title": "Add the apps found on this PC to your search?",
       "checking": "Checking which other sources can be added…",
       "empty": "No connected sources found. You can connect some later in Settings.",
       "connectMore": "Sources that need setup can be connected later in Settings.",

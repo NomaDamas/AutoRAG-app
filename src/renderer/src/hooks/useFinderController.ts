@@ -52,7 +52,7 @@ import {
 	selectDupey,
 	type LayerStore,
 } from "../state/layers";
-import { activeNavPath, basename, breadcrumbTrail, dirname, resolvePathInput, type Crumb } from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, completePath as completePathInput, dirname, resolvePathInput, type Crumb, type PathCompletion } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -292,6 +292,8 @@ export interface FinderController {
 	 * text names nothing that exists.
 	 */
 	goToPath(input: string): Promise<boolean>;
+	/** Direct child folder candidates for the path bar's inline completion. */
+	completePath(input: string): Promise<readonly PathCompletion[]>;
 	navigateNav(item: NavItem): void;
 	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
 	ejectNav(item: NavItem): void;
@@ -947,6 +949,11 @@ export function useFinderController(
 		if (entry.kind === "folder") navigate(entry.path);
 		else revealEntry(entry);
 		return true;
+	});
+
+	const completePath = useLatestCallback(async (input: string): Promise<readonly PathCompletion[]> => {
+		const home = locations.find((location) => location.icon === "home")?.path ?? null;
+		return completePathInput(input, { current: path, home }, (directory) => source.list(directory));
 	});
 
 	const navigateNav = useLatestCallback(
@@ -2251,6 +2258,7 @@ export function useFinderController(
 		searchRef,
 		navigate,
 		goToPath,
+		completePath,
 		navigateNav,
 		ejectNav,
 		selectTabId,

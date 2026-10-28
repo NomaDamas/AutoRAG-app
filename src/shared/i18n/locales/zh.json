@@ -114,6 +114,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+      "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
     },
@@ -670,7 +671,7 @@
       "indexing": "索引"
     },
     "stepLabel": {
-      "welcome": "开始使用",
+      "welcome": "继续",
       "permissions": "继续",
       "account": "继续",
       "folders": "选择文件夹并继续",
@@ -743,9 +744,9 @@
       "title": "用账户\n开始使用",
       "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
       "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
-      "signedIn": "已登录",
+      "signedIn": "登录完成",
       "signedInNote": "正在进入下一步",
-      "otherAccount": "其他账户",
+      "otherAccount": "使用其他账户登录",
       "cardTitle": "Dazzi 账户",
       "cardSub": "管理套餐和用量",
       "busy": "正在浏览器中登录…",
@@ -758,10 +759,19 @@
       "getStarted": "开始使用",
       "continueGoogle": "使用 Google 继续",
       "continueApple": "使用 Apple 继续",
+      "continueGithub": "使用 GitHub 继续",
       "or": "或",
       "emailLabel": "邮箱",
       "emailPlaceholder": "mingzi@example.cn",
       "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
       "guest": "以访客身份继续",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
@@ -803,7 +813,7 @@
       "network": {
         "name": "网络",
         "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
-        "allow": "允许"
+        "allow": "允许网络"
       }
     },
     "smartScan": {
@@ -880,22 +890,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "语义搜索",
       "title": "如何使用嵌入？",
       "groupLabel": "嵌入方式",
       "card": {
         "none": {
-          "name": "不使用",
-          "line": "仅关键词搜索"
-        },
-        "local": {
-          "name": "本地嵌入",
-          "lineMac": "在此 Mac 上处理",
-          "linePc": "在此 PC 上处理"
+          "name": "按关键词查找",
+          "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "远程嵌入",
-          "line": "在服务器上处理"
+          "name": "在 Dazzi 服务器上分析",
+          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
+        },
+        "local": {
+          "nameMac": "在我的 Mac 上分析",
+          "namePc": "在我的 PC 上分析",
+          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
+          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
         }
       },
       "meter": {
@@ -907,10 +917,14 @@
         "good": "好"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "约 {{minutes}} 分钟",
+      "prepTime": "准备时间",
+      "about": "约",
+      "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
       "downloadUnknown": "检查中",
-      "cloudConsent": "我同意将所选文件夹中的文档正文发送至 Dazzi 服务器进行嵌入处理。处理后不会保留。",
+      "cloudConsentRequired": "(必填)",
+      "cloudConsent": "我同意将文档正文发送到服务器。",
+      "cloudConsentCheck": "我同意",
       "pausedNotice": {
         "config": "所选嵌入方式不可用，已暂停",
         "disk": "存储空间不足，无法下载模型",
@@ -918,10 +932,7 @@
       }
     },
     "sources": {
-      "eyebrow": "数据源",
-      "title": "连已连接的位置\n也一起搜索？",
-      "lead": "只先显示已安装并通过认证的数据源。无需全部选择。",
-      "detected": "已检测",
+      "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
       "checking": "正在检查可添加的其他来源…",
       "empty": "未找到已连接的来源。您可以稍后在设置中连接。",
       "connectMore": "需要准备的数据源可稍后在设置中连接。",

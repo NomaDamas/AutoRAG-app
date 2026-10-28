@@ -97,7 +97,7 @@ async function onboardingEmbedding(page) {
 	await page.waitForTimeout(400);
 	return {
 		localDisabled: (await card(page, "local").getAttribute("aria-disabled")) === "true",
-		blockedText: (await card(page, "local").locator(".em-blocked").count()) === 0 ? null : await card(page, "local").locator(".em-blocked").innerText(),
+		blockedText: (await page.locator('.onb .em-blocked[data-for="local"]').count()) === 0 ? null : await page.locator('.onb .em-blocked[data-for="local"]').innerText(),
 		checked: await page.locator(".onb .em-card[aria-checked='true']").evaluateAll((nodes) => nodes.map((node) => node.dataset.value)),
 		noneDisabled: (await card(page, "none").getAttribute("aria-disabled")) === "true",
 	};

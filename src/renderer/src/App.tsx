@@ -662,7 +662,7 @@ export function App(): ReactElement {
 		},
 	};
 	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
-	const windowColumns = `${sidebarVisible ? `${sidebarWidth}px ` : ""}minmax(0,1fr)`;
+	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr)`;
 	/** Inner grid under the toolbar: workspace + inspector. */
 	const finderColumns = `minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
 	const canCloseTabs = canCloseWorkspaceTab(workspace);
@@ -673,11 +673,10 @@ export function App(): ReactElement {
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
-				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
+				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
 				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
 			>
-				{sidebarVisible ? (
-					<Sidebar
+				<div className="min-w-0 min-h-0 overflow-hidden" inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
 						activePath={aiTabActive ? AI_SEARCH_PATH : automationsTabActive ? AUTOMATIONS_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
@@ -700,8 +699,7 @@ export function App(): ReactElement {
 						aiSearchDrop={aiSearchDrop}
 						tagColorsDenied={tagCatalog.catalog.colorsDenied}
 						onGrantTagColors={grantTagColors}
-					/>
-				) : null}
+					/></div></div>
 				<div className="flex min-w-0 min-h-0 flex-col">
 					<Toolbar
 						title={toolbarTitle}

@@ -584,12 +584,16 @@ resumes at the same step.
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
 
-Account and plan are real. The account step signs in through the system
-browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
-against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
-`https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
-credential (mode 0600), the single place the librarian reads the hosted plan
+Account and plan are real. The account step signs in against the hosted AutoRAG
+service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and
+no card number is typed into the app. Clicking Google or GitHub opens
+`/api/desktop/oauth?client=app&…&provider=google|github` (OAuth 2.0 authorization
+code + PKCE over a loopback redirect, RFC 8252), which 302-redirects straight to
+Google or GitHub without stopping on `/login` and returns straight to the
+loopback callback once authenticated. Email sign-in runs natively inside the
+onboarding screen (`POST /api/desktop/email/send` + `POST /api/desktop/email/verify`,
+6-digit verification code) without opening a browser. Settings › 계정 keeps the
+generic `/desktop/authorize` flow. The returned API key lives only in Pi's `auth.json` as the `dazzi`
 from, so the app and the librarian cannot disagree about being signed in; the
 renderer sees an `AccountStatus` (email, plan, subscription state, weekly
 credits), never the
