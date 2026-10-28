@@ -4404,3 +4404,95 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	text-decoration: underline;
 	cursor: pointer;
 }
+
+/* Sources step: centred heading over a list of plain rows (Figma 07 · sources). */
+.onb .screen.sources-screen {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 32px;
+}
+
+.onb .sources-screen h1 {
+	margin: 0;
+	font-weight: 700;
+	text-align: center;
+}
+
+/* Five rows show in full; every row after them scrolls (5 x 62px rows and 4 x 8px gaps). */
+.onb .sources-screen .source-list {
+	width: 100%;
+	max-width: 658px;
+	max-height: 342px;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.onb .sources-screen .source-row {
+	flex: none;
+	box-sizing: border-box;
+	align-items: center;
+	gap: 18px;
+	min-height: 62px;
+	padding: 14px 16px 14px 20px;
+	border-color: transparent;
+}
+
+.onb .sources-screen .source-icon {
+	width: 20px;
+	height: 20px;
+	border-radius: 0;
+	background: none;
+}
+
+.onb .sources-screen .source-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.onb .sources-screen .source-name {
+	line-height: 16px;
+}
+
+.onb .sources-screen .source-detail {
+	margin-top: 2px;
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+.onb .sources-screen .source-row .switch {
+	margin-top: 0;
+}
+
+.onb .sources-screen .sources-checking {
+	margin-top: 0;
+}
+
+.onb .sources-screen .connect-more {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	margin-top: 8px;
+}
+
+.onb .sources-screen .connect-more p {
+	margin: 0;
+	color: var(--onb-muted);
+	font-size: 11px;
+	line-height: 16px;
+	text-align: center;
+}
+
+.onb .sources-screen .more-chips {
+	justify-content: center;
+	margin-top: 0;
+}
+
+.onb .sources-screen .more-chips .brand-chip {
+	height: 22px;
+	padding: 0 7px;
+	border-radius: 5px;
+	background: none;
+}
