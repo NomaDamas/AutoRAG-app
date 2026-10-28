@@ -1357,6 +1357,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .folder-card.add {
 	border-style: dashed;
+	background: transparent;
 	justify-content: center;
 	gap: 10px;
 	color: var(--onb-muted);
