@@ -4,10 +4,11 @@ import { join } from "node:path";
 import { defineTool, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { AgentProfile } from "@autorag/librarian/profiles";
-import { ERROR_FIX_SETTINGS_PAGES, MAX_ERROR_FIX_ACTIONS, MAX_ERROR_FIX_LABEL_CHARS, type ErrorFixAction, type ErrorFixChange, type ErrorFixResult, type ErrorFixSettingsPage, type ErrorFixStatus, type ErrorFixStep, type ErrorFixSurface, type ErrorFixTrace } from "../../../shared/error-fix-contract";
+import { ERROR_FIX_SETTINGS_PAGES, MAX_ERROR_FIX_ACTIONS, MAX_ERROR_FIX_LABEL_CHARS, type ErrorFixAction, type ErrorFixChange, type ErrorFixResult, type ErrorFixSettingsPage, type ErrorFixStatus, type ErrorFixSurface, type ErrorFixTrace } from "../../../shared/error-fix-contract";
 import type { AppSettings, ConfigRefreshResult } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import type { AutoRagConfigService } from "../../autorag-config-service";
+import { intentPromptLine, withIntentTools } from "../profile-progress";
 import { createFixTools } from "./error-fix-files";
 
 /**
@@ -41,8 +42,6 @@ const MAX_PATHS = 80;
 const MAX_SUMMARY_CHARS = 1500;
 const MAX_STEP_CHARS = 300;
 const MAX_STEPS = 6;
-/** A command or a path shown in the activity list is cut here. */
-const MAX_STEP_DETAIL_CHARS = 160;
 
 export interface ErrorFixToolkitDeps {
 	/** The working folder of the agent's file and shell tools. */
@@ -155,7 +154,7 @@ interface Answer {
 export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolkit {
 	/** Path → what it was before the run and is now, in the order first changed. */
 	const changes = new Map<string, ErrorFixChange>();
-	const commands: string[] = [];
+	let shellRan = false;
 	let indexRebuilt = false;
 	let answer: Answer | null = null;
 
@@ -174,7 +173,9 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 				changes.set(change.path, { path: change.path, before: previous.before, after: change.after, ...(backup === undefined ? {} : { backup }) });
 			}
 		},
-		onCommand: (command) => commands.push(command.length > MAX_STEP_CHARS ? `${command.slice(0, MAX_STEP_CHARS)}…` : command),
+		onCommand: () => {
+			shellRan = true;
+		},
 	});
 
 	type Settled = { readonly kind: "finished"; readonly result: ConfigRefreshResult } | { readonly kind: "failed"; readonly error: unknown };
@@ -184,7 +185,7 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		return run.then((result): Settled => ({ kind: "finished", result }), (error: unknown): Settled => ({ kind: "failed", error }));
 	}
 
-	const trace = (): ErrorFixTrace => ({ changes: [...changes.values()], backupPath: files.backupPath(), commands: [...commands] });
+	const trace = (): ErrorFixTrace => ({ changes: [...changes.values()], backupPath: files.backupPath() });
 
 	const diagnose = defineTool({
 		name: "diagnose",
@@ -244,7 +245,7 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 		execute: async (_toolCallId, params) => {
 			const summary = params.summary.trim().slice(0, MAX_SUMMARY_CHARS);
 			if (summary === "") return text("Refused: give a short summary of what was wrong and what you did.");
-			if (params.status === "fixed" && changes.size === 0 && commands.length === 0 && !indexRebuilt) {
+			if (params.status === "fixed" && changes.size === 0 && !shellRan && !indexRebuilt) {
 				return text("Refused: you report \"fixed\" but changed nothing. Change the cause with edit, write, bash or refresh_index, or report \"needs-user\" or \"cannot-fix\" and explain.");
 			}
 			const snapshot = await deps.config.get();
@@ -273,31 +274,6 @@ export function createErrorFixToolkit(deps: ErrorFixToolkitDeps): ErrorFixToolki
 	};
 }
 
-/** The step the dialog shows for a tool call of the run, or null for a call that is not an action (the answer itself). */
-export function stepOf(toolName: string, args: unknown): ErrorFixStep | null {
-	const argument = (key: string): string | null => {
-		const value: unknown = typeof args === "object" && args !== null ? Reflect.get(args, key) : undefined;
-		return typeof value === "string" && value !== "" ? value : null;
-	};
-	const cut = (value: string | null): string | null => (value === null ? null : value.length > MAX_STEP_DETAIL_CHARS ? `${value.slice(0, MAX_STEP_DETAIL_CHARS)}…` : value);
-	switch (toolName) {
-		case "diagnose":
-		case "refresh_index":
-			return { tool: toolName, detail: null };
-		case "read":
-		case "ls":
-		case "edit":
-		case "write":
-			return { tool: toolName, detail: cut(argument("path")) };
-		case "find":
-		case "grep":
-			return { tool: toolName, detail: cut(argument("pattern")) };
-		case "bash":
-			return { tool: "bash", detail: cut(argument("command")) };
-		default:
-			return null;
-	}
-}
 /** A natural button label in each reply language, so the model has a model of the tone: what the button does, in the person's own words. */
 const LABEL_EXAMPLE: Readonly<Record<ReplyLanguage, string>> = {
 	ko: "\"검색할 폴더 다시 고르기\"",
@@ -337,7 +313,8 @@ export function errorFixPrompt(input: { readonly message: string; readonly surfa
 		"What each Settings page (target) holds, so you pick the one that really has the setting:",
 		...SETTINGS_PAGE_GUIDE.map((line) => `- ${line}`),
 		"",
-		`Write summary and nextSteps in ${LANGUAGE_NAME[input.language]}, in plain words for someone who is not technical: no stack traces, no jargon, file paths only where they help. Write each button's label in ${LANGUAGE_NAME[input.language]} too, as a short, natural phrase for what the button does, the way a person who speaks it would say it (not a word-for-word translation of a page name; for example: ${LABEL_EXAMPLE[input.language]}). Do not reply with prose; the report_result call is your answer.`,
+		intentPromptLine(input.language),
+		`Write summary and nextSteps in ${LANGUAGE_NAME[input.language]}, in plain words for someone who is not technical: no stack traces, no shell commands, no jargon, file paths only where they help. Write each button's label in ${LANGUAGE_NAME[input.language]} too, as a short, natural phrase for what the button does, the way a person who speaks it would say it (not a word-for-word translation of a page name; for example: ${LABEL_EXAMPLE[input.language]}). Do not reply with prose; the report_result call is your answer.`,
 	].join("\n");
 }
 
@@ -354,7 +331,7 @@ export function errorFixProfile(input: ErrorFixProfileInput): AgentProfile {
 		systemPrompt: errorFixPrompt(input),
 		// pi's own read, ls, find, grep, edit, write and bash, each wrapped by the toolkit (see `error-fix-files.ts`), plus the app's three.
 		tools: [],
-		customTools: input.toolkit.tools,
+		customTools: withIntentTools(input.toolkit.tools, { language: input.language, exclude: ["report_result"] }),
 		thinking: "medium",
 	};
 }

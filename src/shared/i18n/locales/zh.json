@@ -308,37 +308,17 @@
     },
     "fix": {
       "title": "用 AI 修复",
-      "intro": "AI 会阅读错误信息，检查你的设置及其指向的文件夹，并尝试直接修复。它不会更改你的模型、登录或密钥。",
-      "errorLabel": "错误",
       "running": "正在查找原因…",
-      "steps": {
-        "diagnose": "正在检查设置和状态",
-        "read": "正在读取文件",
-        "ls": "正在查看文件夹",
-        "find": "正在查找文件",
-        "grep": "正在搜索内容",
-        "edit": "正在编辑文件",
-        "write": "正在写入文件",
-        "bash": "正在运行命令",
-        "refreshIndex": "正在重建索引"
-      },
       "status": {
-        "fixed": "已修复",
+        "fixed": "已恢复正常",
         "needsUser": "需要你来处理",
         "cannotFix": "无法修复"
       },
       "nextStepsLabel": "需要你做的事",
-      "changesTitle": "已更改的设置",
-      "unset": "无",
-      "backup": "更改前的设置已备份到 {{path}}。",
       "openSettings": "打开“{{page}}”设置",
       "openSource": "打开“{{name}}”连接",
-      "retrySearch": "重新搜索",
       "failedTitle": "AI 未能修复",
-      "stopped": "已停止。",
-      "commandsTitle": "已运行的命令",
-      "commandsNote": "命令所做的更改不会单独记录，请查看上面的列表。",
-      "fileBackup": "更改前的文件已备份到 {{path}}。"
+      "stopped": "已停止。"
     }
   },
   "interaction": {

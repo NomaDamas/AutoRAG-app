@@ -175,28 +175,31 @@ try {
 	await notice.waitFor({ timeout: 120_000 });
 	const brokenText = await notice.innerText();
 	console.log(`the error as the person sees it: ${brokenText.replace(/\s+/g, " ").slice(0, 300)}`);
-	check("AI Search reports the missing folder and offers Fix with AI", brokenText.includes(MOVED_FROM) && (await panel.getByRole("button", { name: "Fix with AI", exact: true }).count()) === 1);
+	check("AI Search hides the raw path behind Show details and offers Fix with AI", !brokenText.includes(MOVED_FROM) && brokenText.includes("Show details") && (await panel.getByRole("button", { name: "Fix with AI", exact: true }).count()) === 1);
 	await shot("01-broken-folder");
 
 	const configBefore = JSON.parse(readFileSync(CONFIG, "utf8"));
+	const seenProgress = [];
+	await page.exposeFunction("__recordFixProgress", (text) => seenProgress.push(text)).catch(() => undefined);
+	await page.evaluate(() => {
+		window.autorag.errorFix.onEvent((event) => {
+			if (event.type === "progress") window.__recordFixProgress?.(event.text);
+		});
+	});
 	await panel.getByRole("button", { name: "Fix with AI", exact: true }).click();
 	await dialog.waitFor();
 	await shot("02-fix-started");
-	// The run is over when its Stop button is gone (the X in the corner is there all along).
 	const startedAt = Date.now();
 	const watcher = setInterval(() => {
-		void dialog.innerText({ timeout: 2000 }).then((text) => console.log(`[${Math.round((Date.now() - startedAt) / 1000)}s] steps so far: ${text.split("\n").filter((line) => /^(Reading|Looking|Finding|Searching|Running|Editing|Writing|Checking|Rebuilding)/.test(line)).length}; last: ${text.split("\n").filter((line) => /^(Reading|Looking|Finding|Searching|Running|Editing|Writing|Checking|Rebuilding)/.test(line)).at(-1)?.slice(0, 140)}`), () => undefined);
-	}, 30_000);
+		void dialog.locator(".shimmer").innerText({ timeout: 2000 }).then((text) => console.log(`[${Math.round((Date.now() - startedAt) / 1000)}s] shimmering: ${text}`), () => undefined);
+	}, 15_000);
 	await dialog.getByRole("button", { name: "Stop", exact: true }).waitFor({ state: "detached", timeout: 0 });
 	clearInterval(watcher);
 	const outcome = await dialog.innerText();
 	console.log(`dialog after the real run:\n${outcome}`);
+	console.log(`live intent phrases emitted by real model: ${JSON.stringify(seenProgress)}`);
 	await shot("03-fix-finished");
-	const steps = outcome;
-	const lookedAt = ["Checking settings and status", "Reading file", "Looking in folder", "Finding files", "Searching contents", "Running command"];
-	const firstLook = Math.min(...lookedAt.map((label) => (steps.includes(label) ? steps.indexOf(label) : Number.POSITIVE_INFINITY)));
-	const firstChange = Math.min(...["Editing file", "Writing file"].map((label) => (steps.includes(label) ? steps.indexOf(label) : Number.POSITIVE_INFINITY)));
-	check("the real agent looked before it changed anything", Number.isFinite(firstLook) && firstLook < firstChange, `look at ${firstLook}, change at ${firstChange}`);
+	check("the real agent streamed live `i` progress phrases while working", seenProgress.length >= 1, JSON.stringify(seenProgress));
 	const after = JSON.parse(readFileSync(CONFIG, "utf8"));
 	check("the config now points at the folder that exists", Array.isArray(after.searchPaths) && after.searchPaths.length >= 1 && after.searchPaths.every((path) => existsSync(path)) && after.searchPaths.includes(REPORTS), JSON.stringify(after.searchPaths));
 	check("the model setting was not touched", JSON.stringify(after.model) === modelBefore);
@@ -204,15 +207,19 @@ try {
 	check("nothing but the search folder changed in the config (no key, token or other setting)", untouched.length === 0, JSON.stringify(untouched));
 	const backups = readdirSync(WORK).filter((name) => /^config\.json\.bak-\d{14}-before-error-fix$/.test(name));
 	check("the old config was kept before the change", backups.length === 1 && JSON.parse(readFileSync(join(WORK, backups[0]), "utf8")).searchPaths[0] === MOVED_FROM, JSON.stringify(backups));
-	check("the dialog reports it as fixed and shows the change", outcome.includes("Fixed") && outcome.includes("searchPaths"));
+	const fixedButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "");
+	check("the dialog shows the healthy state with Close only, and no raw command lines or JSON diffs", outcome.includes("Back to normal") && !outcome.includes("searchPaths") && JSON.stringify(fixedButtons) === JSON.stringify(["Close"]), JSON.stringify(fixedButtons));
 	check("the agent reached the model only through the Dazzi account (no other provider)", forwarded.some((entry) => entry.startsWith("POST /v1/responses")), forwarded.slice(0, 5).join(", "));
 
-	await dialog.getByRole("button", { name: "Search again" }).click();
+	await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
 	await dialog.waitFor({ state: "detached" });
+	await panel.locator('input[aria-label="Ask Dazzi"]').click();
+	await page.keyboard.type("What is the vault access number in a.txt?");
+	await page.keyboard.press("Enter");
 	await finished();
 	const answer = await answerText();
-	console.log(`answer after Search again: ${answer.replace(/\s+/g, " ").slice(0, 300)}`);
-	check("Search again answers from the repaired folder", answer.includes(CODE), answer.replace(/\s+/g, " ").slice(0, 200));
+	console.log(`answer after repair: ${answer.replace(/\s+/g, " ").slice(0, 300)}`);
+	check("asking again answers from the repaired folder", answer.includes(CODE), answer.replace(/\s+/g, " ").slice(0, 200));
 	await shot("04-searched-again");
 
 	// ── 2. The real server rejects the key: its own wording is a model problem. ─
@@ -270,7 +277,7 @@ try {
 	console.log(`dialog when the real AI cannot repair it:\n${handOver}`);
 	const buttonLabels = (await dialog.locator("button").allInnerTexts()).filter((label) => !["Close", "Retry", "Search again", "Show details", "Hide details", ""].includes(label));
 	console.log(`buttons the real AI put in its answer: ${JSON.stringify(buttonLabels)}`);
-	check("the real AI did not claim a repair it could not make", !handOver.includes("Fixed"), handOver.replace(/\s+/g, " ").slice(0, 200));
+	check("the real AI did not claim a repair it could not make", !handOver.includes("Back to normal"), handOver.replace(/\s+/g, " ").slice(0, 200));
 	check("the real AI gave the person a button to go and choose the folder", buttonLabels.length >= 1, JSON.stringify(buttonLabels));
 	check("every button is labelled in words, not as a bare page id", buttonLabels.every((label) => label.length > 2 && !/^(scope|ai|plan|indexing|apps)$/u.test(label)), JSON.stringify(buttonLabels));
 	check("the config was not touched when nothing could be repaired", JSON.parse(readFileSync(CONFIG, "utf8")).searchPaths[0] === GONE_FOR_GOOD);

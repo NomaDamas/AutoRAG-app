@@ -2,7 +2,8 @@ import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
 import type { ErrorFixEvent, ErrorFixRequest } from "../shared/error-fix-contract";
 import type { ConfigRefreshResult } from "../shared/settings-contract";
-import { createErrorFixToolkit, errorFixProfile, stepOf, type ErrorFixToolkit, type ReplyLanguage } from "./agents/profiles/error-fix";
+import { createErrorFixToolkit, errorFixProfile, type ErrorFixToolkit, type ReplyLanguage } from "./agents/profiles/error-fix";
+import { subscribeProfileProgress } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
 import type { AutoRagConfigService } from "./autorag-config-service";
 
@@ -61,11 +62,8 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 				model,
 			});
 			run.abort.signal.addEventListener("abort", () => void session?.abort(), { once: true });
-			// What the dialog lists is what pi reports the agent is doing: every tool, pi's own included, announces itself the same way.
-			session.subscribe((event) => {
-				if (event.type !== "tool_execution_start" || run.cancelled) return;
-				const step = stepOf(event.toolName, event.args);
-				if (step !== null) deps.send({ type: "step", runId, step });
+			subscribeProfileProgress(session, (text) => {
+				if (!run.cancelled) deps.send({ type: "progress", runId, text });
 			});
 			await session.prompt(TASK);
 			if (run.cancelled) return;

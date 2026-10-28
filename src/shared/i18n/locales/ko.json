@@ -308,37 +308,17 @@
     },
     "fix": {
       "title": "AI로 고치기",
-      "intro": "AI가 오류 메시지를 읽고, 설정과 설정이 가리키는 폴더를 살펴 직접 고쳐 봅니다. 모델, 로그인, 키는 바꾸지 않아요.",
-      "errorLabel": "오류",
       "running": "원인을 찾는 중…",
-      "steps": {
-        "diagnose": "설정과 상태 확인",
-        "read": "파일 읽는 중",
-        "ls": "폴더 살펴보는 중",
-        "find": "파일 찾는 중",
-        "grep": "내용 검색 중",
-        "edit": "파일 수정 중",
-        "write": "파일 쓰는 중",
-        "bash": "명령 실행 중",
-        "refreshIndex": "인덱스 다시 만드는 중"
-      },
       "status": {
-        "fixed": "고쳤어요",
+        "fixed": "다시 정상으로 돌아왔어요",
         "needsUser": "직접 해 주셔야 할 일이 있어요",
         "cannotFix": "고치지 못했어요"
       },
       "nextStepsLabel": "해야 할 일",
-      "changesTitle": "바뀐 설정",
-      "unset": "없음",
-      "backup": "바꾸기 전 설정을 {{path}} 에 백업해 두었어요.",
       "openSettings": "‘{{page}}’ 설정 열기",
       "openSource": "‘{{name}}’ 연결 열기",
-      "retrySearch": "다시 검색",
       "failedTitle": "AI로 고치지 못했어요",
-      "stopped": "중단했어요.",
-      "commandsTitle": "실행한 명령",
-      "commandsNote": "명령이 바꾼 내용은 따로 기록되지 않아요. 위 목록을 확인해 주세요.",
-      "fileBackup": "바꾸기 전 파일은 {{path}} 에 백업해 두었어요."
+      "stopped": "중단했어요."
     }
   },
   "interaction": {

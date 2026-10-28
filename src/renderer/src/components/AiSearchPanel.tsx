@@ -407,12 +407,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		};
 	}, [visible]);
 
-	/** Asks the question the error answered once more, in the same chat; the AI fix offers it after repairing something. */
-	function retryLastQuestion(): void {
-		const question = submittedQueryRef.current;
-		if (question !== null) void runSearch(question, submittedAttachmentsRef.current);
-	}
-
 	async function runSearch(text: string, sent: readonly ChatAttachment[]): Promise<void> {
 		if (searchIdRef.current !== null) return;
 		// Only New chat starts a new chat; any other question continues the current one.
@@ -886,7 +880,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							action={errorAction?.message === error ? errorAction.action : null}
 							onOpenSettings={onOpenSettings}
 							onOpenSource={onOpenSource}
-							fix={{ onRetry: retryLastQuestion }}
+							fix
 						/>
 					)}
 
@@ -1210,7 +1204,7 @@ function PastTurnView({
 					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{turn.question}</div>
 				</div>
 			</div>
-			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} fix={null} />}
+			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} fix={false} />}
 			{before.map((steer) => (
 				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 			))}

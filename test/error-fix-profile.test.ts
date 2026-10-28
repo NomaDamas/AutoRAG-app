@@ -61,7 +61,7 @@ describe("the error-fix profile", () => {
 		expect(profile.id).toBe("error-fix");
 		expect(profile.tools).toEqual([]);
 		expect(kit.tools.map((tool) => tool.name).sort()).toEqual(["bash", "diagnose", "edit", "find", "grep", "ls", "read", "refresh_index", "report_result", "write"]);
-		expect(profile.customTools).toBe(kit.tools);
+		expect(profile.customTools?.map((tool) => tool.name).sort()).toEqual(["bash", "diagnose", "edit", "find", "grep", "ls", "read", "refresh_index", "report_result", "write"]);
 	});
 
 	it("tells the agent the error as the person saw it, the reply language and that the model is not its to change", () => {
@@ -270,7 +270,6 @@ describe("report_result", () => {
 			actions: [{ kind: "settings", target: "scope", label: "Pick the folder" }],
 			changes: [],
 			backupPath: null,
-			commands: [],
 		});
 	});
 
@@ -383,13 +382,13 @@ describe("report_result", () => {
 		expect(working.result()).toMatchObject({ status: "fixed", changes: [], backupPath: null });
 	});
 
-	it("counts a shell command as a change: what it did cannot be seen, so the person is shown it", async () => {
+	it("counts a shell command as a change without exposing raw command lines in the result", async () => {
 		const kit = toolkit();
 
 		await call(kit, "bash", { command: "echo repaired" });
 
 		expect(await call(kit, "report_result", { status: "fixed", summary: "Ran a repair." })).toContain("Recorded");
-		expect(kit.result()).toMatchObject({ commands: ["echo repaired"] });
+		expect(kit.result()).toEqual({ status: "fixed", summary: "Ran a repair.", nextSteps: [], actions: [], changes: [], backupPath: null });
 	});
 
 	it("counts an edit of the config as a change and reports it with the answer", async () => {
@@ -399,13 +398,6 @@ describe("report_result", () => {
 
 		expect(await call(kit, "report_result", { status: "fixed", summary: "Repointed." })).toContain("Recorded");
 		expect(kit.result()).toMatchObject({ changes: [{ path: "searchPaths" }], backupPath });
-	});
-
-	it("lists no commands when none ran", async () => {
-		const kit = toolkit();
-		await call(kit, "report_result", { status: "cannot-fix", summary: "Nothing to do." });
-
-		expect(kit.result()?.commands).toEqual([]);
 	});
 
 	it("refuses an empty summary", async () => {

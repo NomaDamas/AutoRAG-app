@@ -26,15 +26,6 @@ export function isErrorFixRequest(value: unknown): value is ErrorFixRequest {
 	return typeof value === "object" && value !== null && "message" in value && typeof value.message === "string" && "surface" in value && value.surface === "ai-search";
 }
 
-/** The tools whose use is announced while the agent works: pi's own file and shell tools, and the app's two. */
-export type ErrorFixTool = "read" | "ls" | "find" | "grep" | "edit" | "write" | "bash" | "diagnose" | "refresh_index";
-
-/** One thing the agent is doing now; the renderer words it, `detail` (a path, a pattern or a command) is shown as it is. */
-export interface ErrorFixStep {
-	readonly tool: ErrorFixTool;
-	readonly detail: string | null;
-}
-
 /** One thing the agent changed: a config value (as short JSON text; a secret is never writable, so none appears here) or a whole file (its size in bytes). */
 export interface ErrorFixChange {
 	readonly path: string;
@@ -61,8 +52,6 @@ export interface ErrorFixTrace {
 	readonly changes: readonly ErrorFixChange[];
 	/** Copy of the config taken before the first change, or null when the config was not changed. */
 	readonly backupPath: string | null;
-	/** The shell commands the agent ran, as it wrote them: what a command did is not tracked, so the person is shown each one. */
-	readonly commands?: readonly string[];
 }
 
 /**
@@ -93,7 +82,8 @@ export interface ErrorFixResult extends ErrorFixTrace {
 }
 
 export type ErrorFixEvent =
-	| { readonly type: "step"; readonly runId: string; readonly step: ErrorFixStep }
+	/** Live phrase written by the agent before calling a tool, shown with text shimmer. */
+	| { readonly type: "progress"; readonly runId: string; readonly text: string }
 	| { readonly type: "result"; readonly runId: string; readonly result: ErrorFixResult }
 	| ({ readonly type: "error"; readonly runId: string; readonly message: string } & ErrorFixTrace)
 	| ({ readonly type: "cancelled"; readonly runId: string } & ErrorFixTrace);

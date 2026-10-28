@@ -308,37 +308,17 @@
     },
     "fix": {
       "title": "AIで修正",
-      "intro": "AIがエラーを読み取り、設定とその参照先のフォルダを調べて、直接修正を試みます。モデル、ログイン、キーは変更しません。",
-      "errorLabel": "エラー",
       "running": "原因を調べています…",
-      "steps": {
-        "diagnose": "設定と状態を確認中",
-        "read": "ファイルを読み込み中",
-        "ls": "フォルダを確認中",
-        "find": "ファイルを検索中",
-        "grep": "内容を検索中",
-        "edit": "ファイルを編集中",
-        "write": "ファイルを書き込み中",
-        "bash": "コマンドを実行中",
-        "refreshIndex": "インデックスを再作成中"
-      },
       "status": {
-        "fixed": "修正しました",
+        "fixed": "正常に戻りました",
         "needsUser": "あなたの操作が必要です",
         "cannotFix": "修正できませんでした"
       },
       "nextStepsLabel": "必要な操作",
-      "changesTitle": "変更した設定",
-      "unset": "なし",
-      "backup": "変更前の設定を {{path}} にバックアップしました。",
       "openSettings": "「{{page}}」設定を開く",
       "openSource": "「{{name}}」の接続を開く",
-      "retrySearch": "もう一度検索",
       "failedTitle": "AIでは修正できませんでした",
-      "stopped": "中断しました。",
-      "commandsTitle": "実行したコマンド",
-      "commandsNote": "コマンドが変更した内容は別には記録されません。上の一覧をご確認ください。",
-      "fileBackup": "変更前のファイルを {{path}} にバックアップしました。"
+      "stopped": "中断しました。"
     }
   },
   "interaction": {

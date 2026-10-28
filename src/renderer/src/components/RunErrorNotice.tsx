@@ -17,11 +17,8 @@ export interface RunErrorNoticeProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source (an AI fix button names it by alias). */
 	readonly onOpenSource: (alias: string) => void;
-	/**
-	 * Offers "AI로 고치기" when present; `onRetry` asks the question again once the AI fixed something.
-	 * Absent for the error of an earlier turn, which is history, not something to repair now.
-	 */
-	readonly fix: { readonly onRetry: () => void } | null;
+	/** True on the live turn's error so "AI로 고치기" is offered; false on past turns. */
+	readonly fix?: boolean;
 }
 
 const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-center gap-6 rounded-8 border px-12 text-meta transition-colors duration-(--dur-color) ease-out";
@@ -32,13 +29,13 @@ const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-c
  * be used says so and leads to its settings and the subscription; an error in the
  * app's own setup carries "AI로 고치기".
  */
-export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, fix }: RunErrorNoticeProps): ReactElement {
+export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, fix = true }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
 	const [fixing, setFixing] = useState(false);
 	const view = describeAppError(message, action, t);
-	const entries = view.actions.filter((entry) => entry.id !== "fix" || fix !== null);
+	const entries = view.actions.filter((entry) => entry.id !== "fix" || fix);
 	// Without the fix there is nothing to promise: an earlier turn's error just reads as what it is.
-	const hint = view.kind === "other" && fix === null ? null : view.hint;
+	const hint = view.kind === "other" && !fix ? null : view.hint;
 
 	const run = (entry: ErrorAction): void => {
 		if (entry.id === "fix") setFixing(true);
@@ -48,9 +45,15 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 	return (
 		<div className="flex items-start gap-12 rounded-10 border border-danger-border bg-danger-bg-soft px-14 py-10 text-body text-danger-text" role="alert">
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
-				{view.title === null ? null : <strong className="font-semibold">{view.title}</strong>}
-				{hint === null ? null : <span className="text-meta leading-normal">{hint}</span>}
-				<ErrorDetails message={message} className={cn(view.title !== null && "text-meta opacity-80")} />
+				{view.title === null ? (
+					<span className="select-text whitespace-pre-wrap break-words">{message}</span>
+				) : (
+					<>
+						<strong className="font-semibold">{view.title}</strong>
+						{hint === null ? null : <span className="text-meta leading-normal">{hint}</span>}
+						<ErrorDetails message={message} />
+					</>
+				)}
 			</div>
 			{entries.length === 0 ? null : (
 				<div className="flex flex-none flex-col items-stretch gap-6">
@@ -67,9 +70,9 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 					))}
 				</div>
 			)}
-			{fixing && fix !== null
+			{fixing && fix
 				? createPortal(
-						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} onRetry={fix.onRetry} />,
+						<ErrorFixDialog message={message} onClose={() => setFixing(false)} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} />,
 						document.body,
 					)
 				: null}

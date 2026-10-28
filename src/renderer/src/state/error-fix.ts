@@ -4,56 +4,35 @@
  */
 
 import type { TFunction } from "i18next";
-import type { ErrorFixAction, ErrorFixChange, ErrorFixEvent, ErrorFixResult, ErrorFixSettingsPage, ErrorFixStep } from "../../../shared/error-fix-contract";
+import type { ErrorFixAction, ErrorFixEvent, ErrorFixResult, ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import type { LocaleKey } from "../../../shared/i18n";
-
-/** The dialog lists what the agent did; a runaway run keeps only the latest. */
-const MAX_STEPS = 30;
 
 export type ErrorFixRun =
 	| { readonly status: "idle" }
-	| { readonly status: "running"; readonly runId: string; readonly steps: readonly ErrorFixStep[] }
-	| { readonly status: "done"; readonly result: ErrorFixResult; readonly steps: readonly ErrorFixStep[] }
-	| { readonly status: "failed"; readonly message: string; readonly steps: readonly ErrorFixStep[]; readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null; readonly commands: readonly string[] }
-	| { readonly status: "stopped"; readonly steps: readonly ErrorFixStep[]; readonly changes: readonly ErrorFixChange[]; readonly backupPath: string | null; readonly commands: readonly string[] };
+	| { readonly status: "running"; readonly runId: string; readonly progress: string | null }
+	| { readonly status: "done"; readonly result: ErrorFixResult }
+	| { readonly status: "failed"; readonly message: string }
+	| { readonly status: "stopped" };
 
 export const initialErrorFixRun: ErrorFixRun = { status: "idle" };
 
 export function startErrorFixRun(runId: string): ErrorFixRun {
-	return { status: "running", runId, steps: [] };
+	return { status: "running", runId, progress: null };
 }
 
 /** Applies one main-process event; events of another run, or arriving with no run going, change nothing. */
 export function reduceErrorFixRun(state: ErrorFixRun, event: ErrorFixEvent): ErrorFixRun {
 	if (state.status !== "running" || event.runId !== state.runId) return state;
 	switch (event.type) {
-		case "step":
-			return { ...state, steps: [...state.steps, event.step].slice(-MAX_STEPS) };
+		case "progress":
+			return { ...state, progress: event.text };
 		case "result":
-			return { status: "done", result: event.result, steps: state.steps };
+			return { status: "done", result: event.result };
 		case "error":
-			return { status: "failed", message: event.message, steps: state.steps, changes: event.changes, backupPath: event.backupPath, commands: event.commands ?? [] };
+			return { status: "failed", message: event.message };
 		case "cancelled":
-			return { status: "stopped", steps: state.steps, changes: event.changes, backupPath: event.backupPath, commands: event.commands ?? [] };
+			return { status: "stopped" };
 	}
-}
-
-const STEP_KEY: Readonly<Record<ErrorFixStep["tool"], LocaleKey>> = {
-	diagnose: "appError.fix.steps.diagnose",
-	read: "appError.fix.steps.read",
-	ls: "appError.fix.steps.ls",
-	find: "appError.fix.steps.find",
-	grep: "appError.fix.steps.grep",
-	edit: "appError.fix.steps.edit",
-	write: "appError.fix.steps.write",
-	bash: "appError.fix.steps.bash",
-	refresh_index: "appError.fix.steps.refreshIndex",
-};
-
-/** One line of the activity list: the action in the interface language, then the path or key it works on as it is. */
-export function describeFixStep(step: ErrorFixStep, t: TFunction): string {
-	const action = t(STEP_KEY[step.tool]);
-	return step.detail === null ? action : `${action}: ${step.detail}`;
 }
 
 const PAGE_KEY: Readonly<Record<ErrorFixSettingsPage, LocaleKey>> = {

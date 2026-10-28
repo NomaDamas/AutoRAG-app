@@ -7,6 +7,7 @@ import { createFolderSurvey } from "./agents/profiles/folder-stats";
 import { createProposalCollector, type ExclusionProposal, type ReplyLanguage, smartIndexingProfile } from "./agents/profiles/smart-indexing";
 import { type FolderScanOptions, scanFolder } from "./onboarding-scan";
 import { errorText, modelFailure } from "./agents/session-failure";
+import { subscribeProfileProgress } from "./agents/profile-progress";
 
 /**
  * Runs the smart-indexing agent (`agents/profiles/smart-indexing.ts`) over the
@@ -94,6 +95,9 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 				agentDir: deps.agentDir,
 				env: deps.env,
 				model,
+			});
+			subscribeProfileProgress(session, (text) => {
+				if (!run.cancelled) deps.send({ type: "progress", runId, text });
 			});
 			session.subscribe((event) => {
 				if (event.type !== "tool_execution_start" || EXPLORING_TOOLS[event.toolName] !== true || run.cancelled) return;

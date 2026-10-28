@@ -6,6 +6,7 @@ import type { AppSettings } from "../../../shared/settings-contract";
 import { DEFAULT_CODE_FOLDER_NAMES } from "../../../shared/settings-contract";
 import type { AgentProfile } from "@autorag/librarian/profiles";
 import type { FolderSurvey } from "./folder-stats";
+import { intentPromptLine, withIntentTools } from "../profile-progress";
 
 /**
  * The smart-indexing helper: before the first index it looks through the folders
@@ -153,6 +154,7 @@ export function smartIndexingPrompt(roots: readonly string[], language: ReplyLan
 		"2. A folder is mixed when its sample names show more than one pattern or kind of file, or when most of its files changed together while others changed at other times. A summary of a mixed folder says nothing about the parts: call folder_survey on it (or list_folder to see its names) before deciding, and keep going down while the parts are mixed. Do not stop at a folder because its total looks ordinary. You can only look inside the folders above.",
 		"3. Go through every subfolder the survey names, not only the large ones, and decide each one. Propose the highest-level folder that is generated, or is a code repository, as a whole, not each of its children. A folder that mixes the person's files with generated ones or with code stays; propose the generated or code subfolders instead. Only propose a folder you have surveyed.",
 		"4. When you have looked at what matters, call propose_exclusions once with every folder, then stop. If nothing should be left out, call it with an empty list.",
+		intentPromptLine(language),
 		`Write each reason as one short sentence in ${LANGUAGE_NAME[language]} that says what the names showed (for example the kind of files, how alike they are, and when they were written). Do not reply with prose; the tool call is your answer.`,
 	].join("\n");
 }
@@ -175,7 +177,7 @@ export function smartIndexingProfile(input: SmartIndexingProfileInput): AgentPro
 		// pi's read/ls/find/grep open any path on the machine, so the agent gets none of them:
 		// only the survey and the listing, both confined to the chosen folders.
 		tools: [],
-		customTools: [...input.survey.tools, input.collector.tool],
+		customTools: withIntentTools([...input.survey.tools, input.collector.tool], { language: input.language, exclude: ["propose_exclusions"] }),
 		thinking: "low",
 	};
 }

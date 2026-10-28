@@ -14,46 +14,6 @@ import { classifyAppError, type AppErrorKind } from "../../../shared/app-error";
 import type { LocaleKey } from "../../../shared/i18n";
 import type { SearchErrorAction } from "../../../shared/search-contract";
 
-/** What the person reads of a message, and the rest (codes, JSON, traces, internal instructions) kept for "자세히 보기". */
-export interface ErrorDetailsSplit {
-	readonly summary: string;
-	/** The whole original message when any of it is technical; `null` when the message is short and plain. */
-	readonly details: string | null;
-}
-
-const SUMMARY_MAX = 140;
-/** A JSON object body, as providers put theirs after the status. */
-const JSON_BODY = /\s*:?\s*\{[\s\S]*\}\s*$/u;
-/** A command in backticks, a "config.toml"-style internal file, or the pi/AutoRAG setup wording. */
-const INTERNAL = /`[^`]+`|\.toml\b|\bautorag (?:tui|models|automate)\b|\bcodex runtime\b/iu;
-
-/** A leftover that is a bare HTTP status, with or without the provider's name in front: "401", "dazzi API error (429)". */
-const STATUS_ONLY = /^(?:[\w .-]*\b(?:error|status)\b\s*)?\(?\b[1-5]\d{2}\b\)?$/iu;
-
-/**
- * Splits a raw error into a short readable line and the technical remainder. The folder or file a message names is
- * kept in the summary when the message is short: the person has to see which one it is.
- */
-export function splitErrorDetails(message: string): ErrorDetailsSplit {
-	const text = message.trim();
-	const firstLine = text.split(/\r?\n/u)[0] ?? "";
-	const multiline = text.includes("\n");
-	const hasJson = JSON_BODY.test(text);
-	const technical = multiline || hasJson || INTERNAL.test(text) || text.length > SUMMARY_MAX;
-	if (!technical) return { summary: text, details: null };
-	let summary = hasJson ? text.replace(JSON_BODY, "") : firstLine;
-	summary = summary.split(/\r?\n/u)[0] ?? "";
-	// Internal wording is cut at its first sentence, and a long line at the limit.
-	if (INTERNAL.test(summary)) summary = summary.split(/(?<=\.)\s/u)[0] ?? summary;
-	if (INTERNAL.test(summary)) summary = "";
-	if (summary.length > SUMMARY_MAX) summary = `${summary.slice(0, SUMMARY_MAX - 1).trimEnd()}…`;
-	// What is left may be only a status: "401", "dazzi API error (429)". The plain-words title says that better.
-	if (STATUS_ONLY.test(summary)) return { summary: "", details: text };
-	// `{"a":1}` alone leaves nothing readable at all: show the start of it rather than an empty line.
-	if (summary.trim() === "" && text !== "") summary = text.slice(0, SUMMARY_MAX);
-	return { summary: summary.trim(), details: text };
-}
-
 /** `fix` runs the fix agent; the other two go to a Settings page. */
 export type ErrorActionId = "fix" | "open-ai" | "open-plan";
 

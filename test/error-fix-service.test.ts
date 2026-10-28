@@ -74,22 +74,22 @@ function finalEvent(): ErrorFixEvent | undefined {
 }
 
 describe("error-fix service", () => {
-	it("diagnoses, repairs the config and reports what it changed, announcing each step from pi's own tool events", async () => {
+	it("diagnoses, repairs the config, streams the agent's live `i` progress phrases, and reports what it fixed", async () => {
 		const registration = register();
 		registration.setResponses([
-			fauxAssistantMessage(fauxToolCall("diagnose", {})),
-			fauxAssistantMessage(fauxToolCall("ls", { path: root })),
-			fauxAssistantMessage(fauxToolCall("edit", { path: configPath, edits: [{ oldText: JSON.stringify(join(root, "OldDocs")), newText: JSON.stringify(join(root, "Documents")) }] })),
+			fauxAssistantMessage(fauxToolCall("diagnose", { i: "설정과 인덱스 상태 확인 중" })),
+			fauxAssistantMessage(fauxToolCall("ls", { i: "이동된 검색 폴더 찾는 중", path: root })),
+			fauxAssistantMessage(fauxToolCall("edit", { i: "검색 폴더 경로 복구 중", path: configPath, edits: [{ oldText: JSON.stringify(join(root, "OldDocs")), newText: JSON.stringify(join(root, "Documents")) }] })),
 			fauxAssistantMessage(fauxToolCall("report_result", { status: "fixed", summary: "검색 폴더를 Documents로 바꿨어요." })),
 			fauxAssistantMessage("done"),
 		]);
 
 		await serviceFor(registration).start("run-1", REQUEST);
 
-		expect(events.map((event) => (event.type === "step" ? `${event.step.tool}:${event.step.detail ?? ""}` : event.type))).toEqual([
-			"diagnose:",
-			`ls:${root}`,
-			`edit:${configPath}`,
+		expect(events.map((event) => (event.type === "progress" ? `progress:${event.text}` : event.type))).toEqual([
+			"progress:설정과 인덱스 상태 확인 중",
+			"progress:이동된 검색 폴더 찾는 중",
+			"progress:검색 폴더 경로 복구 중",
 			"result",
 		]);
 		expect(finalEvent()).toMatchObject({
@@ -146,7 +146,7 @@ describe("error-fix service", () => {
 
 		await serviceFor(register(), { resolveModel }).start("run-4", REQUEST);
 
-		expect(events).toEqual([{ type: "error", runId: "run-4", message: "No API key found for dazzi", changes: [], backupPath: null, commands: [] }]);
+		expect(events).toEqual([{ type: "error", runId: "run-4", message: "No API key found for dazzi", changes: [], backupPath: null }]);
 	});
 
 	it("reports the provider's error when the model request fails", async () => {
@@ -181,7 +181,7 @@ describe("error-fix service", () => {
 
 		await service.start("run-7", REQUEST);
 
-		expect(events).toEqual([{ type: "cancelled", runId: "run-7", changes: [], backupPath: null, commands: [] }]);
+		expect(events).toEqual([{ type: "cancelled", runId: "run-7", changes: [], backupPath: null }]);
 		expect(JSON.parse(await readFile(configPath, "utf8"))).toMatchObject({ searchPaths: [join(root, "OldDocs")] });
 	});
 
@@ -269,18 +269,19 @@ describe("error-fix service", () => {
 		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "cannot-fix" } });
 	});
 
-	it("lets the agent repair with a shell command and shows the person that command, since what it did cannot be tracked", async () => {
+	it("lets the agent repair with a shell command without dumping raw command lines into the UI event", async () => {
 		const registration = register();
 		registration.setResponses([
-			fauxAssistantMessage(fauxToolCall("bash", { command: "echo repaired > repaired.txt" })),
+			fauxAssistantMessage(fauxToolCall("bash", { i: "누락된 구성 복구 중", command: "echo repaired > repaired.txt" })),
 			fauxAssistantMessage(fauxToolCall("report_result", { status: "fixed", summary: "Ran a repair." })),
 			fauxAssistantMessage("done"),
 		]);
 
 		await serviceFor(registration).start("run-12", REQUEST);
 
-		expect(events.filter((event) => event.type === "step").map((event) => (event.type === "step" ? event.step : null))).toEqual([{ tool: "bash", detail: "echo repaired > repaired.txt" }]);
-		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "fixed", commands: ["echo repaired > repaired.txt"] } });
+		expect(events).toContainEqual({ type: "progress", runId: "run-12", text: "누락된 구성 복구 중" });
+		expect(JSON.stringify(events)).not.toContain("echo repaired > repaired.txt");
+		expect(finalEvent()).toMatchObject({ type: "result", result: { status: "fixed" } });
 		expect(await readFile(join(root, "repaired.txt"), "utf8")).toBe("repaired\n");
 	});
 

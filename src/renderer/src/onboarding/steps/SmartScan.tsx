@@ -64,8 +64,10 @@ export function SmartScanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 			</div>
 			{running ? (
 				<>
-					<p className="si-scan-path">
-						{smartRun.current === null ? t("onboarding.smartScan.lead") : t("onboarding.smartScan.looking", { path: smartRun.current })}
+					<p className="si-scan-path" role="status">
+						<span className="shimmer">
+							{smartRun.progress ?? (smartRun.current === null ? t("onboarding.smartScan.lead") : t("onboarding.smartScan.looking", { path: smartRun.current }))}
+						</span>
 					</p>
 					<button type="button" className="quiet si-scan-cancel" onClick={ctx.cancelSmartScan}>
 						{t("onboarding.smartScan.cancel")}

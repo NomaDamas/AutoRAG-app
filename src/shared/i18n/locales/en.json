@@ -308,37 +308,17 @@
     },
     "fix": {
       "title": "Fix with AI",
-      "intro": "The AI reads the error, looks at your settings and the folders they point to, and tries to fix it. It never changes your model, sign-in or keys.",
-      "errorLabel": "Error",
       "running": "Looking for the cause…",
-      "steps": {
-        "diagnose": "Checking settings and status",
-        "read": "Reading file",
-        "ls": "Looking in folder",
-        "find": "Finding files",
-        "grep": "Searching contents",
-        "edit": "Editing file",
-        "write": "Writing file",
-        "bash": "Running command",
-        "refreshIndex": "Rebuilding the index"
-      },
       "status": {
-        "fixed": "Fixed",
+        "fixed": "Back to normal",
         "needsUser": "There is something you need to do",
         "cannotFix": "Couldn’t fix it"
       },
       "nextStepsLabel": "What to do",
-      "changesTitle": "Changed settings",
-      "unset": "none",
-      "backup": "The settings from before the change are saved at {{path}}.",
       "openSettings": "Open ‘{{page}}’ settings",
       "openSource": "Open the ‘{{name}}’ connection",
-      "retrySearch": "Search again",
       "failedTitle": "Couldn’t fix it with AI",
-      "stopped": "Stopped.",
-      "commandsTitle": "Commands that ran",
-      "commandsNote": "What a command changed is not recorded separately. Please look at the list above.",
-      "fileBackup": "The file from before the change is saved at {{path}}."
+      "stopped": "Stopped."
     }
   },
   "interaction": {

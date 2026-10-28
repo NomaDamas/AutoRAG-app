@@ -218,49 +218,61 @@ await ask("what does a.txt say?");
 await notice.waitFor();
 const otherText = await notice.innerText();
 log(`message shown: ${otherText.replace(/\s+/g, " ").slice(0, 220)}`);
-check("the notice names the plain problem and keeps the original message", otherText.includes("Something went wrong") && otherText.includes(GONE), otherText.slice(0, 200));
-check("the notice offers Fix with AI and nothing else", (await panel.locator('[role="alert"] button').allInnerTexts()).join("|") === "Fix with AI");
+check("the notice names the plain problem and hides the raw error behind Show details", otherText.includes("Something went wrong") && !otherText.includes(GONE) && otherText.includes("Show details"), otherText.slice(0, 200));
+const noticeActionNames = (await panel.locator('[role="alert"] button').allInnerTexts()).filter((name) => name !== "Show details");
+check("the notice offers Fix with AI and nothing else", noticeActionNames.join("|") === "Fix with AI", JSON.stringify(noticeActionNames));
 const geometry = await notice.evaluate((root) => {
-	const text = root.querySelector("span.select-text")?.getBoundingClientRect();
-	const button = root.querySelector("button")?.getBoundingClientRect();
-	return text && button ? { textRight: text.right, buttonLeft: button.left, buttonRight: button.right, noticeRight: root.getBoundingClientRect().right } : null;
+	const leftCol = root.firstElementChild?.getBoundingClientRect();
+	const buttons = [...root.querySelectorAll("button")];
+	const fixBtn = buttons.find((b) => b.textContent?.includes("Fix with AI"))?.getBoundingClientRect();
+	return leftCol && fixBtn ? { textRight: leftCol.right, buttonLeft: fixBtn.left, buttonRight: fixBtn.right, noticeRight: root.getBoundingClientRect().right } : null;
 });
 check("the button sits to the right of the message, inside the box", geometry !== null && geometry.buttonLeft >= geometry.textRight - 1 && geometry.buttonRight <= geometry.noticeRight, JSON.stringify(geometry));
 await shot("01-other-error-notice");
+await panel.getByRole("button", { name: "Show details", exact: true }).first().click();
+check("Show details reveals the raw error message, and Hide details hides it again", (await notice.innerText()).includes(GONE));
+await shot("01b-other-error-details");
+await panel.getByRole("button", { name: "Hide details", exact: true }).first().click();
 
 script([
-	{ tool: "diagnose", args: {}, delayMs: 1500 },
-	{ tool: "ls", args: { path: WORK } },
-	{ tool: "edit", args: { path: join(WORK, "config.json"), edits: [{ oldText: JSON.stringify(GONE), newText: JSON.stringify(DOCS) }] } },
-	{ tool: "diagnose", args: {} },
-	{ tool: "report_result", args: { status: "fixed", summary: "The search folder was renamed from Documents-old to Documents, so I pointed the setting at Documents.", nextSteps: [] } },
+	{ tool: "diagnose", args: { i: "Checking your search settings" }, delayMs: 2200 },
+	{ tool: "ls", args: { i: "Looking for the moved Documents folder", path: WORK }, delayMs: 2200 },
+	{ tool: "edit", args: { i: "Updating the search folder path", path: join(WORK, "config.json"), edits: [{ oldText: JSON.stringify(GONE), newText: JSON.stringify(DOCS) }] } },
+	{ tool: "diagnose", args: { i: "Confirming the repaired folder" } },
+	{ tool: "report_result", args: { status: "fixed", summary: "The search folder was renamed from Documents-old to Documents, so I updated the setting.", nextSteps: [] } },
 	{ text: "done" },
 ]);
 await fixButton("Fix with AI").click();
 await dialog.waitFor();
-check("the dialog says what the agent will and will not do", (await dialog.innerText()).includes("never changes your model"), (await dialog.innerText()).slice(0, 200));
-check("the dialog shows the error that is being fixed", (await dialog.innerText()).includes(GONE));
-await shot("02-fix-running");
-await waitInDialog(dialog.getByText("Fixed", { exact: true }));
+check("the dialog starts with the self-healing animation and shimmering 'Looking for the cause…'", (await dialog.locator('[data-healing-state="healing"]').count()) === 1 && (await dialog.locator(".shimmer").innerText()) === "Looking for the cause…");
+check("the dialog keeps raw error text hidden", !(await dialog.innerText()).includes(GONE));
+await shot("02-fix-running-start");
+await dialog.locator(".shimmer", { hasText: "Checking your search settings" }).waitFor({ timeout: 15_000 });
+await shot("02b-fix-running-intent");
+await waitInDialog(dialog.getByText("Back to normal", { exact: true }));
 const doneText = await dialog.innerText();
-check("the dialog lists what the agent did, in order", doneText.includes("Checking settings and status") && doneText.includes(`Looking in folder: ${WORK}`) && doneText.includes(`Editing file: ${join(WORK, "config.json")}`), doneText.replace(/\s+/g, " ").slice(0, 400));
-check("the dialog shows the agent's own summary", doneText.includes("pointed the setting at Documents"));
-check("the dialog shows the change, before and after", doneText.includes("searchPaths") && doneText.includes(GONE) && doneText.includes(DOCS), doneText.replace(/\s+/g, " ").slice(0, 500));
+check("the dialog transitions to the healthy state", (await dialog.locator('[data-healing-state="healthy"]').count()) === 1);
+check("the dialog shows the agent's plain summary without dumping JSON diffs or backup paths", doneText.includes("updated the setting") && !doneText.includes("searchPaths") && !doneText.includes(".bak-"), doneText.replace(/\s+/g, " ").slice(0, 400));
+const fixedFooterButtons = (await dialog.locator("button").allInnerTexts()).filter((name) => name !== "");
+check("a fixed result shows only the Close button", JSON.stringify(fixedFooterButtons) === JSON.stringify(["Close"]), JSON.stringify(fixedFooterButtons));
 check("the config on disk now points at the folder that exists", JSON.stringify(readConfig().searchPaths) === JSON.stringify([DOCS]), JSON.stringify(readConfig().searchPaths));
 const backups = readdirSync(WORK).filter((name) => /^config\.json\.bak-\d{14}-before-error-fix$/.test(name));
-check("the old config was kept beside it, and the dialog names where", backups.length === 1 && doneText.includes(backups[0] ?? "?"), JSON.stringify(backups));
-check("the backup holds the old folder", backups.length === 1 && JSON.parse(readFileSync(join(WORK, backups[0]), "utf8")).searchPaths[0] === GONE);
+check("the old config was backed up on disk", backups.length === 1 && JSON.parse(readFileSync(join(WORK, backups[0]), "utf8")).searchPaths[0] === GONE, JSON.stringify(backups));
 check("the model got the error text and pi's own file and shell tools beside the app's three", seen[0]?.system.includes(GONE) && JSON.stringify(seen[0]?.tools) === JSON.stringify(["bash", "diagnose", "edit", "find", "grep", "ls", "read", "refresh_index", "report_result", "write"]), JSON.stringify(seen[0]?.tools));
 check("the model was never told a secret: the redacted config has no key", !JSON.stringify(seen.map((entry) => entry.messages)).includes("qa-key"));
 await shot("03-fix-done");
 
-script([{ text: "a.txt says hello." }]);
-await dialog.getByRole("button", { name: "Search again" }).click();
+await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
 await dialog.waitFor({ state: "detached" });
+script([{ text: "a.txt says hello." }]);
+await panel.locator(`input[aria-label="${ui.askDazzi}"]`).click();
+await page.keyboard.type("what does a.txt say?");
+await page.keyboard.press("Enter");
 await finished();
 const answer = await panel.innerText();
-check("Search again asks the question once more and it now answers", answer.includes("a.txt says hello"), answer.replace(/\s+/g, " ").slice(-200));
-check("the earlier turn's error stays as plain words, without buttons", (await panel.locator('[role="alert"] button').count()) === 0);
+check("asking again in the same chat now answers from the repaired folder", answer.includes("a.txt says hello"), answer.replace(/\s+/g, " ").slice(-200));
+const pastNoticeButtons = (await panel.locator('[role="alert"] button').allInnerTexts()).filter((name) => name !== "Show details");
+check("the earlier turn's error has no action buttons, only Show details", pastNoticeButtons.length === 0, JSON.stringify(pastNoticeButtons));
 await shot("04-searched-again");
 
 // ── 2. A model that cannot be used: no AI fix, but a way out. ────────────
@@ -380,8 +392,8 @@ script([
 ]);
 await fixButton("Fix with AI").click();
 await waitInDialog(dialog.getByText("Couldn’t fix it", { exact: true }));
-const noButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "");
-check("an answer with no destination shows no button but Close", JSON.stringify(noButtons) === JSON.stringify(["Close"]), JSON.stringify(noButtons));
+const noButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "" && label !== "Show details");
+check("an answer with no destination shows no action button, only Close", JSON.stringify(noButtons) === JSON.stringify(["Close"]), JSON.stringify(noButtons));
 await shot("11c-fix-no-button");
 await page.keyboard.press("Escape");
 await dialog.waitFor({ state: "detached" });
@@ -396,7 +408,7 @@ script([
 ]);
 await fixButton("Fix with AI").click();
 await waitInDialog(dialog.getByText("There is something you need to do"));
-const sourceButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "" && label !== "Close");
+const sourceButtons = (await dialog.locator("button").allInnerTexts()).filter((label) => label !== "" && label !== "Close" && label !== "Show details");
 check("a data source button is kept and one for a source that is not configured is dropped", JSON.stringify(sourceButtons) === JSON.stringify(["Open the KakaoTalk connection"]), JSON.stringify(sourceButtons));
 await shot("11d-fix-source-button");
 await dialog.getByRole("button", { name: "Open the KakaoTalk connection", exact: true }).click();
@@ -427,18 +439,6 @@ await shot("17-fix-retry-result");
 await page.keyboard.press("Escape");
 await dialog.waitFor({ state: "detached" });
 
-// The model goes down AFTER the agent already changed the config: the change is not hidden.
-script([
-	{ tool: "edit", args: { path: join(WORK, "config.json"), edits: [{ oldText: JSON.stringify(GONE), newText: JSON.stringify(DOCS) }] } },
-	{ httpStatus: 401, body: { error: { message: "Incorrect API key provided: qa-key." } } },
-]);
-await fixButton("Fix with AI").click();
-await waitInDialog(dialog.getByText("sign-in or key was rejected"));
-check("a change made before the model went down is still shown", (await dialog.innerText()).includes("searchPaths"));
-await shot("18-fix-changed-then-model-down");
-await page.keyboard.press("Escape");
-await dialog.waitFor({ state: "detached" });
-writeConfig([GONE]);
 
 // No model is chosen at all.
 const withoutModel = { ...configWith([DOCS]) };
@@ -458,21 +458,19 @@ writeConfig([GONE]);
 	const note = join(WORK, "my-own-note.txt");
 	writeFileSync(note, "the person's own note");
 	script([
-		{ tool: "bash", args: { command: `echo repaired > ${join(WORK, "repaired.txt")}` } },
-		{ tool: "write", args: { path: note, content: "overwritten by the agent" } },
-		{ tool: "read", args: { path: join(process.env.HOME ?? "", ".pi", "agent", "auth.json") } },
-		{ tool: "report_result", args: { status: "fixed", summary: "I ran a repair command for you.", nextSteps: [] } },
+		{ tool: "bash", args: { i: "Repairing workspace state", command: `echo repaired > ${join(WORK, "repaired.txt")}` } },
+		{ tool: "write", args: { i: "Checking write guard", path: note, content: "overwritten by the agent" } },
+		{ tool: "read", args: { i: "Checking read guard", path: join(process.env.HOME ?? "", ".pi", "agent", "auth.json") } },
+		{ tool: "report_result", args: { status: "fixed", summary: "I ran a repair for you.", nextSteps: [] } },
 		{ text: "done" },
 	]);
 	await fixButton("Fix with AI").click();
 	await dialog.waitFor();
-	await waitInDialog(dialog.getByText("Fixed", { exact: true }));
+	await waitInDialog(dialog.getByText("Back to normal", { exact: true }));
 	const shellText = await dialog.innerText();
-	check("the dialog lists the shell command the agent ran, as written", shellText.includes("Commands that ran") && shellText.includes(`echo repaired > ${join(WORK, "repaired.txt")}`), shellText.replace(/\s+/g, " ").slice(0, 500));
-	check("the dialog says what a command changed is not recorded separately", shellText.includes("not recorded separately"));
+	check("the dialog never dumps shell command lines onto the screen", !shellText.includes("echo repaired") && !shellText.includes("Commands that ran"), shellText.replace(/\s+/g, " ").slice(0, 300));
 	check("the command really ran", existsSync(join(WORK, "repaired.txt")));
 	check("the person's own file was not written by the agent", readFileSync(note, "utf8") === "the person's own note");
-	check("the dialog lists the steps in the interface language", shellText.includes("Running command") && shellText.includes("Writing file") && shellText.includes("Reading file"), shellText.replace(/\s+/g, " ").slice(0, 400));
 	check("the model was told the write was refused and that the sign-in file is off limits", JSON.stringify(seen.at(-1)?.messages ?? []).includes("not a place you may change") && JSON.stringify(seen.at(-1)?.messages ?? []).includes("never opened"), "");
 	await shot("15b-fix-shell-command");
 	await page.keyboard.press("Escape");
@@ -499,15 +497,59 @@ for (const [language, fixLabel, titleText] of [
 	await ask(`language ${language}`);
 	await notice.waitFor();
 	const text = await notice.innerText();
-	check(`${language}: the notice and its button are translated`, text.includes(titleText) && (await fixButton(fixLabel).count()) === 1, text.replace(/\s+/g, " ").slice(0, 160));
+	check(`${language}: the notice and its button are translated and raw error is hidden`, text.includes(titleText) && !text.includes(GONE) && (await fixButton(fixLabel).count()) === 1, text.replace(/\s+/g, " ").slice(0, 160));
 	await shot(`12-${language}-notice`);
-	script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "x", nextSteps: ["y"] } }, { text: "done" }]);
-	await fixButton(fixLabel).click();
-	await dialog.waitFor();
-	await page.waitForTimeout(2500);
-	await shot(`13-${language}-dialog`);
-	await page.keyboard.press("Escape");
-	await dialog.waitFor({ state: "detached" });
+	if (language === "ko") {
+		await panel.getByRole("button", { name: "자세히 보기", exact: true }).first().click();
+		await shot("12b-ko-notice-details");
+		await panel.getByRole("button", { name: "자세히 닫기", exact: true }).first().click();
+		script([
+			{ tool: "diagnose", args: { i: "검색 설정과 상태 확인 중" }, delayMs: 2200 },
+			{ tool: "ls", args: { i: "이동된 문서 폴더 위치 살펴보는 중", path: WORK }, delayMs: 2200 },
+			{ tool: "edit", args: { i: "새 폴더 경로로 설정 복구 중", path: join(WORK, "config.json"), edits: [{ oldText: JSON.stringify(GONE), newText: JSON.stringify(DOCS) }] } },
+			{ tool: "report_result", args: { status: "fixed", summary: "문서 폴더가 새 위치로 옮겨져 있어서 설정을 바로잡았어요.", nextSteps: [] } },
+			{ text: "done" },
+		]);
+		await fixButton(fixLabel).click();
+		await dialog.waitFor();
+		await shot("13a-ko-healing-start");
+		await dialog.locator(".shimmer", { hasText: "검색 설정과 상태 확인 중" }).waitFor({ timeout: 15_000 });
+		await shot("13b-ko-healing-intent");
+		await waitInDialog(dialog.getByText("다시 정상으로 돌아왔어요", { exact: true }));
+		await shot("13c-ko-healthy-done");
+		await dialog.getByRole("button", { name: "닫기", exact: true }).last().click();
+		await dialog.waitFor({ state: "detached" });
+		writeConfig([GONE]);
+		await ask("다시 확인");
+		await notice.waitFor();
+		script([
+			{ tool: "diagnose", args: { i: "검색 폴더 상태 확인 중" } },
+			{
+				tool: "report_result",
+				args: {
+					status: "needs-user",
+					summary: "검색할 폴더를 찾을 수 없어서 새 폴더를 직접 골라 주셔야 해요.",
+					nextSteps: ["검색 범위에서 문서가 있는 폴더를 다시 선택해 주세요."],
+					actions: [{ kind: "settings", target: "scope", label: "검색할 폴더 다시 고르기" }],
+				},
+			},
+			{ text: "done" },
+		]);
+		await fixButton(fixLabel).click();
+		await dialog.waitFor();
+		await waitInDialog(dialog.getByText("직접 해 주셔야 할 일이 있어요", { exact: true }));
+		await shot("13d-ko-needs-user-buttons");
+		await page.keyboard.press("Escape");
+		await dialog.waitFor({ state: "detached" });
+	} else {
+		script([{ tool: "diagnose", args: {} }, { tool: "report_result", args: { status: "cannot-fix", summary: "x", nextSteps: ["y"] } }, { text: "done" }]);
+		await fixButton(fixLabel).click();
+		await dialog.waitFor();
+		await page.waitForTimeout(2000);
+		await shot(`13-${language}-dialog`);
+		await page.keyboard.press("Escape");
+		await dialog.waitFor({ state: "detached" });
+	}
 	// The folder works again, so this question reaches the model, which rejects the key.
 	writeConfig([DOCS]);
 	failWith(401, { error: { message: "Incorrect API key provided: qa-key." } });
