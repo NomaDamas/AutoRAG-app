@@ -18,6 +18,7 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
+import { ErrorFixDialog } from "./components/ErrorFixDialog";
 import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
@@ -781,8 +782,12 @@ export function App(): ReactElement {
 												onPublish={publishEvidence}
 												imageActions={imageActions}
 												language={language}
-												onOpenPlan={() => {
-													requestSettingsCategory("plan");
+												onOpenSettings={(page) => {
+													requestSettingsCategory(page);
+													finder?.openSettings();
+												}}
+												onOpenSource={(alias) => {
+													requestSettingsCategory(`source:${alias}`);
 													finder?.openSettings();
 												}}
 											/>
@@ -906,6 +911,18 @@ export function App(): ReactElement {
 			{automations.preview === null ? null : (
 				<AutomationQuickLook rule={automations.preview} onClose={automations.closePreview} onEdit={automations.edit} />
 			)}
+			<div id="dazzi-error-fix-host">
+				<ErrorFixDialog
+					onOpenSettings={(page) => {
+						requestSettingsCategory(page);
+						finder?.openSettings();
+					}}
+					onOpenSource={(alias) => {
+						requestSettingsCategory(`source:${alias}`);
+						finder?.openSettings();
+					}}
+				/>
+			</div>
 		</div>
 		</AutomationsContext>
 		</TagCatalogContext>

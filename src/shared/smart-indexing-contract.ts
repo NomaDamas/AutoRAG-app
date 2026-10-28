@@ -34,9 +34,10 @@ export interface SmartExclusion {
 }
 
 export type SmartIndexingEvent =
+	/** Live phrase written by the agent before calling a tool, shown with text shimmer. */
+	| { readonly type: "progress"; readonly runId: string; readonly text: string }
 	/** The agent is looking at `path` (a folder or file under a root). */
 	| { readonly type: "exploring"; readonly runId: string; readonly path: string }
-	/** The run finished; an empty list means nothing needs excluding. */
 	| { readonly type: "result"; readonly runId: string; readonly exclusions: readonly SmartExclusion[] }
 	/** The run could not finish (no model signed in or connected, a provider error, ...). */
 	| { readonly type: "error"; readonly runId: string; readonly message: string }

@@ -330,6 +330,59 @@
       "older": "그 이전"
     }
   },
+  "appError": {
+    "fixAction": "AI로 고치기",
+    "openModelSettings": "모델 설정 열기",
+    "showDetails": "자세히 보기",
+    "hideDetails": "자세히 닫기",
+    "other": {
+      "title": "문제가 생겼어요",
+      "hint": "AI가 원인을 찾아 직접 고쳐 볼 수 있어요."
+    },
+    "modelMissing": {
+      "title": "사용할 AI 모델이 설정되지 않았어요",
+      "hint": "모델을 고르거나 로그인하면 바로 쓸 수 있어요. 모델 설정에서 모델, 로그인 상태, 구독을 확인하세요."
+    },
+    "modelCredentials": {
+      "title": "AI 모델을 사용할 수 없어요 — 인증에 실패했어요",
+      "hint": "API 키나 로그인이 만료됐거나 올바르지 않을 수 있어요. 모델 설정에서 다시 로그인하거나 키를 확인하고, 구독이 유효한지도 확인하세요."
+    },
+    "modelSubscription": {
+      "title": "구독 또는 사용량 한도 때문에 AI 모델을 쓸 수 없어요",
+      "hint": "구독이 만료됐거나 사용량을 모두 썼을 수 있어요. 구독 및 사용량을 확인하거나, 모델 설정에서 다른 모델을 선택하세요."
+    },
+    "modelNotFound": {
+      "title": "선택한 AI 모델을 찾을 수 없어요",
+      "hint": "모델이 종료됐거나 이름이 바뀌었을 수 있어요. 모델 설정에서 다른 모델을 선택하세요."
+    },
+    "rateLimit": {
+      "title": "요청이 몰려 잠시 막혔어요",
+      "hint": "잠시 뒤에 다시 시도하세요. 계속되면 모델 설정에서 다른 모델을 선택해 보세요."
+    },
+    "network": {
+      "title": "AI 모델 서버에 연결할 수 없어요",
+      "hint": "인터넷 연결을 확인하고 다시 시도하세요. 연결이 정상인데도 계속되면 모델 설정을 확인하세요."
+    },
+    "fix": {
+      "title": "AI로 고치기",
+      "running": "원인을 찾는 중…",
+      "status": {
+        "fixed": "다시 정상으로 돌아왔어요",
+        "needsUser": "직접 해 주셔야 할 일이 있어요",
+        "cannotFix": "고치지 못했어요"
+      },
+      "nextStepsLabel": "해야 할 일",
+      "openSettings": "‘{{page}}’ 설정 열기",
+      "openSource": "‘{{name}}’ 연결 열기",
+      "failedTitle": "AI로 고치지 못했어요",
+      "stopped": "중단했어요.",
+      "minimize": "백그라운드로 전환",
+      "sidebar": {
+        "running": "AI로 고치는 중…",
+        "open": "AI로 고치기 상태 열기"
+      }
+    }
+  },
   "interaction": {
     "mode": {
       "menuLabel": "파일 변경 승인",
