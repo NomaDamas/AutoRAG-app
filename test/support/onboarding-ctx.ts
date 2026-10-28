@@ -67,6 +67,8 @@ export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): Onboardin
 		choosePlan: noop,
 		setPromoCode: noop,
 		signIn: noop,
+		sendEmailOtp: async () => ({ ok: true, email: "", expiresInSeconds: 600 }),
+		verifyEmailOtp: async () => null,
 		cancelSignIn: noop,
 		signOut: noop,
 		skipAccount: noop,
