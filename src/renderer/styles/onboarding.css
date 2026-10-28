@@ -4285,8 +4285,10 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border-color: transparent;
 }
 
-.onb .permissions-screen .permission-icon {
-	background: var(--onb-bg-stage);
+.onb .permissions-screen .permission-icon,
+.onb .permissions-screen .permission-icon.blue,
+.onb .permissions-screen .permission-icon.green {
+	background: none;
 }
 
 .onb .permissions-screen .permission-desc {
@@ -4475,6 +4477,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .permissions-screen .permission-icon.orange {
+	background: none;
 	color: #ff9b00;
 }
 
