@@ -372,7 +372,8 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 							</button>
 							<button
 								type="button"
-								className="linear-btn is-danger"
+								// The answer that goes ahead is the blue one (modal template, Figma 111:3985).
+								className="linear-btn settings-btn-primary"
 								onClick={() => {
 									const target = disconnecting;
 									setDisconnecting(null);

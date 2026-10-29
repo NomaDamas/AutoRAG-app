@@ -3037,14 +3037,15 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	filter: drop-shadow(0 0 4px rgba(0,0,0,.2));
 }
 
+/* The modal template (Figma 111:3985): a 20px close mark level with the title. */
 .onb .settings-view .settings-modal-close {
-	top: 19px;
-	right: 18px;
+	top: 21px;
+	right: 20px;
 }
 
 .onb .settings-view .settings-modal-close svg {
-	width: 24px;
-	height: 24px;
+	width: 20px;
+	height: 20px;
 }
 
 .onb .settings-view .settings-modal h2 {

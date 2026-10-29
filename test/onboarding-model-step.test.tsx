@@ -243,7 +243,7 @@ describe("ModelStep", () => {
 		bridge.settings.providersList.mockResolvedValueOnce([provider("ollama", [model("ollama", "a")], { kind: "local", authKinds: [] })]).mockResolvedValue([]);
 		await render(byokDraft());
 		await click(host.querySelector('[data-provider-row="ollama"] .model-service-remove'));
-		await click(document.querySelector(".settings-modal .is-danger"));
+		await click(document.querySelector(".settings-modal .settings-btn-primary"));
 		expect(store.model).toBeUndefined();
 		expect(bridge.settings.providersRemove).toHaveBeenCalledWith("ollama");
 	});
