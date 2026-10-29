@@ -5241,3 +5241,161 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-weight: 400;
 	line-height: 16px;
 }
+
+/* Welcome (Figma 01 · welcome): a centred heading over a 744px two-by-two grid of feature cards. */
+.onb .screen.welcome-screen {
+	justify-content: center;
+	gap: 36px;
+	padding: 24px 24px 16px;
+}
+
+.onb .welcome-screen h1 {
+	margin: 0 0 16px;
+}
+
+.onb .screen.center.welcome-screen .screen-copy>p {
+	max-width: none;
+	line-height: 21px;
+	white-space: nowrap;
+}
+
+.onb .welcome-screen .feature-grid {
+	width: 100%;
+	max-width: 744px;
+	height: auto;
+	min-height: 0;
+	grid-template-rows: none;
+	gap: 12px;
+}
+
+.onb .welcome-screen .feature-card {
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 12px;
+	box-shadow: none;
+}
+
+.onb .welcome-screen .feature-card:hover {
+	transform: none;
+	box-shadow: none;
+}
+
+.onb .welcome-screen .feature-art {
+	flex: none;
+	height: 103px;
+	padding: 0;
+	border-radius: 8px;
+	background: var(--onb-bg-input);
+}
+
+.onb .welcome-screen .art-chat .mini-chat {
+	gap: 7px;
+	padding: 16px 11px 0 9px;
+}
+
+.onb .welcome-screen .art-chat .mini-bubble {
+	max-width: 254px;
+	line-height: 10.5px;
+}
+
+.onb .welcome-screen .art-center {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.onb .welcome-screen .version-list {
+	gap: 4px;
+	width: 282px;
+}
+
+.onb .welcome-screen .version-row {
+	box-sizing: border-box;
+	height: 26px;
+}
+
+.onb .welcome-screen .source-grid {
+	grid-template-columns: repeat(4,31px);
+	gap: 8px 40px;
+}
+
+.onb .welcome-screen .art-rank {
+	padding: 9px 29px 0;
+}
+
+.onb .welcome-screen .rank-modes {
+	margin-bottom: 7px;
+}
+
+.onb .welcome-screen .rank-list {
+	gap: 4px;
+}
+
+.onb .welcome-screen .rank-row {
+	box-sizing: border-box;
+	height: 26px;
+}
+
+.onb .welcome-screen .feature-label {
+	gap: 12px;
+	margin-top: 0;
+}
+
+.onb .feature-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	color: var(--onb-blue);
+}
+
+.onb .feature-icon.purple {
+	color: #7650bb;
+}
+
+.onb .feature-icon.green {
+	color: #16833b;
+}
+
+.onb .feature-icon.amber {
+	color: #a15c00;
+}
+
+.onb .feature-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.onb .feature-copy strong {
+	color: var(--onb-ink);
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 21px;
+}
+
+.onb .welcome-screen .feature-copy small {
+	margin: 0;
+	color: var(--onb-muted);
+	font-size: 11px;
+	line-height: 16px;
+}
+
+/* The two opt-ins sit quietly under the cards. */
+.onb .welcome-consents {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	max-width: 744px;
+	margin-top: -24px;
+}
+
+.onb .welcome-consents .usage-consent {
+	margin: 0;
+	color: var(--onb-faint);
+	font-size: 10px;
+	line-height: 14px;
+}

@@ -1,30 +1,32 @@
-/** Step 1 — the value pitch, built from the prototype's `welcome` view. */
+/** Step 1 — the value pitch (Figma 01 · welcome): a centred heading over four feature cards, then the two privacy opt-ins. */
 
 import type { ReactElement, ReactNode } from "react";
 import { BrandMark, brandVars, Icon } from "../marks";
-import { Eyebrow, Multiline, SplitScreen, openExternal } from "../parts";
+import { Multiline, openExternal } from "../parts";
 import { WELCOME_BRANDS } from "../flow";
 import { accountLegalUrl } from "../../../../shared/account-contract";
+import { APP_NAME } from "../../../../shared/app-info";
 import type { OnboardingCtx } from "../context";
 
 interface FeatureCardProps {
 	readonly art: ReactNode;
+	readonly artClass: string;
 	readonly icon: string;
-	readonly tone?: string;
+	readonly tone: string;
 	readonly title: string;
 	readonly sub: string;
 }
 
-function FeatureCard({ art, icon, tone, title, sub }: FeatureCardProps): ReactElement {
+function FeatureCard({ art, artClass, icon, tone, title, sub }: FeatureCardProps): ReactElement {
 	return (
 		<article className="feature-card">
-			<div className="feature-art">{art}</div>
+			<div className={`feature-art ${artClass}`}>{art}</div>
 			<div className="feature-label">
-				<span className={tone === undefined ? "tile-icon" : `tile-icon ${tone}`}>
-					<Icon name={icon} size={13} />
+				<span className={`feature-icon ${tone}`}>
+					<Icon name={icon} size={16} />
 				</span>
-				<span>
-					{title}
+				<span className="feature-copy">
+					<strong>{title}</strong>
 					<small>{sub}</small>
 				</span>
 			</div>
@@ -35,42 +37,18 @@ function FeatureCard({ art, icon, tone, title, sub }: FeatureCardProps): ReactEl
 export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t } = ctx;
 	return (
-		<SplitScreen
-			copy={
-				<>
-					<Eyebrow icon="sparkles">{t("onboarding.welcome.eyebrow")}</Eyebrow>
-					<h1>
-						<Multiline text={t("onboarding.welcome.title")} />
-					</h1>
-					<p>{t("onboarding.welcome.lead")}</p>
-					<div className="micro-note">
-						<Icon name="shield-check" size={14} />
-						<span>{t("onboarding.welcome.note")}</span>
-					</div>
-					<label className="consent usage-consent">
-						<input type="checkbox" checked={ctx.shareUsage} onChange={(event) => ctx.setShareUsage(event.target.checked)} />
-						<span>
-							{t("onboarding.welcome.usageStats")}{" "}
-							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
-								{t("onboarding.welcome.usageStatsPolicy")}
-							</button>
-						</span>
-					</label>
-					<label className="consent usage-consent">
-						<input type="checkbox" checked={ctx.shareErrors} onChange={(event) => ctx.setShareErrors(event.target.checked)} />
-						<span>
-							{t("onboarding.welcome.errorReports")}{" "}
-							<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
-								{t("onboarding.welcome.usageStatsPolicy")}
-							</button>
-						</span>
-					</label>
-				</>
-			}
-		>
+		<section className="screen center welcome-screen">
+			<div className="screen-copy">
+				<h1>{t("onboarding.welcome.title", { app: APP_NAME })}</h1>
+				<p>
+					<Multiline text={t("onboarding.welcome.lead", { app: APP_NAME })} />
+				</p>
+			</div>
 			<div className="feature-grid">
 				<FeatureCard
 					icon="sparkles"
+					tone="blue"
+					artClass="art-chat"
 					title={t("onboarding.feature.ai.title")}
 					sub={t("onboarding.feature.ai.sub")}
 					art={
@@ -88,34 +66,9 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					}
 				/>
 				<FeatureCard
-					icon="quote"
-					tone="red"
-					title={t("onboarding.feature.citation.title")}
-					sub={t("onboarding.feature.citation.sub")}
-					art={
-						<div className="mini-evidence">
-							<div className="evidence-row">
-								<span className="file-tile">PDF</span>
-								<span>
-									<b>01</b> {t("onboarding.welcome.evidence.revenue")}
-									<br />
-									<span>{t("onboarding.welcome.evidence.revenueQuote")}</span>
-								</span>
-							</div>
-							<div className="evidence-row">
-								<span className="file-tile xlsx">XLS</span>
-								<span>
-									<b>02</b> {t("onboarding.welcome.evidence.budget")}
-									<br />
-									<span>{t("onboarding.welcome.evidence.budgetQuote")}</span>
-								</span>
-							</div>
-						</div>
-					}
-				/>
-				<FeatureCard
 					icon="layers"
 					tone="purple"
+					artClass="art-center"
 					title={t("onboarding.feature.versions.title")}
 					sub={t("onboarding.feature.versions.sub")}
 					art={
@@ -136,25 +89,9 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					}
 				/>
 				<FeatureCard
-					icon="scan-eye"
-					title={t("onboarding.feature.quicklook.title")}
-					sub={t("onboarding.feature.quicklook.sub")}
-					art={
-						<div className="paper">
-							<div className="paper-head" />
-							<div className="mini-lines">
-								<span className="mini-line" />
-								<span className="mini-line short" />
-								<span className="highlight" />
-								<span className="mini-line" />
-								<span className="mini-line short" />
-							</div>
-						</div>
-					}
-				/>
-				<FeatureCard
 					icon="plug-zap"
 					tone="green"
+					artClass="art-center"
 					title={t("onboarding.feature.sources.title")}
 					sub={t("onboarding.feature.sources.sub")}
 					art={
@@ -170,6 +107,7 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 				<FeatureCard
 					icon="list-checks"
 					tone="amber"
+					artClass="art-rank"
 					title={t("onboarding.feature.hybrid.title")}
 					sub={t("onboarding.feature.hybrid.sub")}
 					art={
@@ -198,6 +136,27 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					}
 				/>
 			</div>
-		</SplitScreen>
+			{/* The opt-ins are the consent itself (saved when the step is left), so they stay, under the cards. */}
+			<div className="welcome-consents">
+				<label className="consent usage-consent">
+					<input type="checkbox" checked={ctx.shareUsage} onChange={(event) => ctx.setShareUsage(event.target.checked)} />
+					<span>
+						{t("onboarding.welcome.usageStats")}{" "}
+						<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
+							{t("onboarding.welcome.usageStatsPolicy")}
+						</button>
+					</span>
+				</label>
+				<label className="consent usage-consent">
+					<input type="checkbox" checked={ctx.shareErrors} onChange={(event) => ctx.setShareErrors(event.target.checked)} />
+					<span>
+						{t("onboarding.welcome.errorReports")}{" "}
+						<button type="button" className="inline-link" onClick={() => openExternal(accountLegalUrl(ctx.account?.baseUrl, "privacy"))}>
+							{t("onboarding.welcome.usageStatsPolicy")}
+						</button>
+					</span>
+				</label>
+			</div>
+		</section>
 	);
 }

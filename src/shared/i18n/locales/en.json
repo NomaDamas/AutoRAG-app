@@ -643,10 +643,8 @@
       "indexing": "Continue"
     },
     "welcome": {
-      "eyebrow": "Pro 7-day free trial",
-      "title": "Ask your\nfiles",
-      "lead": "You don't have to dig through folders. Dazzi reads what's inside your documents and answers with sources.",
-      "note": "Local by default. Some features send content to Dazzi's servers or model providers when you use them; see the Privacy Policy.",
+      "title": "Finding files is now {{app}}'s job",
+      "lead": "No need to open folders one by one.\n{{app}} reads your files and finds just what you need.",
       "usageStats": "Send anonymous usage statistics to help improve Dazzi. They are not designed to include files, searches or document content, and you can turn it off anytime in Settings.",
       "errorReports": "Send error reports when the app crashes or indexing fails, to help fix problems. They are not designed to include file paths, file names or document content, and you can change this anytime in Settings.",
       "usageStatsPolicy": "Privacy Policy",
@@ -654,38 +652,24 @@
         "user": "Why did last quarter's costs go down?",
         "replyLead": "Marketing costs fell ",
         "replyTail": " from the previous quarter."
-      },
-      "evidence": {
-        "revenue": "Revenue report",
-        "revenueQuote": "“Up 18% year over year…”",
-        "budget": "Budget summary",
-        "budgetQuote": "“Q3 operating cost…”"
       }
     },
     "feature": {
       "ai": {
-        "title": "AI Search",
-        "sub": "Answers and sources at once"
-      },
-      "citation": {
-        "title": "Citations",
-        "sub": "Check where answers come from"
+        "title": "AI search",
+        "sub": "Just ask. Answers come with their sources."
       },
       "versions": {
-        "title": "Version grouping",
-        "sub": "Tidy up duplicate documents"
-      },
-      "quicklook": {
-        "title": "Quick Look",
-        "sub": "Preview before opening"
+        "title": "Version cleanup",
+        "sub": "Even files like final_really_final.docx get sorted out."
       },
       "sources": {
-        "title": "Data sources",
-        "sub": "Search connected sources too"
+        "title": "App connections",
+        "sub": "Finds what's scattered across Notion, Slack, GitHub and more."
       },
       "hybrid": {
         "title": "Hybrid search",
-        "sub": "Keywords and meaning together, ordered by reranking"
+        "sub": "Finds matches by meaning, even when the words differ."
       }
     },
     "hybrid": {
