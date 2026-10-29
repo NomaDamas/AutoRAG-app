@@ -80,11 +80,22 @@ describe("the Automations app row", () => {
 	});
 });
 
-describe("the Discord attachments row", () => {
-	it("is a Cloud row with the Discord glyph, whose status dot is keyed by it", () => {
-		const groups = navGroups([place("Discord", "cloud", { icon: "discord", scanned: true })]);
-		const row = groups.find((group) => group.label === "Cloud")?.items[0];
+describe("the Connections group", () => {
+	it("holds the Discord row, with the Discord glyph its status dot is keyed by", () => {
+		const groups = navGroups([place("Discord", "connections", { icon: "discord", scanned: true })]);
+		const row = groups.find((group) => group.label === "Connections")?.items[0];
 		expect(row).toMatchObject({ label: "Discord", kind: "discord", path: "/Discord", available: true, ejectable: false });
 		expect(row?.icon).toBeDefined();
+	});
+
+	it("sits after Cloud and before Locations, and is not rendered without a connection", () => {
+		const mixed = [
+			place("Macintosh HD", "locations"),
+			place("Discord", "connections", { icon: "discord" }),
+			place("iCloud Drive", "cloud", { icon: "icloud" }),
+			place("Desktop", "favorites"),
+		];
+		expect(navGroups(mixed).map((group) => group.label)).toEqual(["Favorites", "Cloud", "Connections", "Locations"]);
+		expect(navGroups(mixed.filter((row) => row.section !== "connections")).map((group) => group.label)).toEqual(["Favorites", "Cloud", "Locations"]);
 	});
 });

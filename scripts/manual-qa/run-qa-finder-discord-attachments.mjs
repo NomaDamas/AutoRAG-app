@@ -6,7 +6,7 @@
  * `download-status.json`, `.discrawl/` and `.lock/`). With the app running, real mouse and keyboard input
  * proves:
  *   1. a connection whose sync saved nothing (only the bookkeeping) has no Discord row;
- *   2. the first attachment landing makes the row appear without a restart;
+ *   2. the first attachment landing makes the row appear without a restart, in its own `Connections` group (not Cloud);
  *   3. clicking the row opens the connection folder, and the listing shows the server folder but not
  *      `download-status.json`, `.discrawl` or `.lock`; the server and channel folders open and list the files;
  *   4. a file-name search for a name shared by an attachment and the bookkeeping returns only the attachment;
@@ -75,7 +75,7 @@ try {
 	page.on("pageerror", (error) => console.log(`[pageerror] ${String(error).slice(0, 200)}`));
 	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 
-	// The Cloud group's heading is translated, the row's Discord label is not: find the row by its own text.
+	// The group heading is translated, the row's Discord label is not: find the row by its own text.
 	const discordRows = () => page.locator(".sidebar__item").filter({ hasText: /^Discord/ });
 	const rowLabels = () => page.locator('[role="row"] .row__label').allInnerTexts();
 	const rowNames = async () => (await rowLabels()).map((name) => name.trim()).sort();
@@ -110,7 +110,12 @@ try {
 	check("the first saved attachment adds the Discord row", JSON.stringify(await waitForRows(["Discord"])) === JSON.stringify(["Discord"]), JSON.stringify(await discordRows().allInnerTexts()));
 	check("the row carries the connection folder as its tooltip", (await discordRows().first().locator("xpath=ancestor-or-self::button").getAttribute("title")) === folderOf("nomadamas"), await discordRows().first().locator("xpath=ancestor-or-self::button").getAttribute("title"));
 	await page.screenshot({ path: join(EVIDENCE, "02-row.png") });
-	await page.locator(".side-group").filter({ has: page.locator(".side-label", { hasText: "Cloud" }) }).screenshot({ path: join(EVIDENCE, "02-cloud-group.png") });
+	// The row is in its own Connections group, not in Cloud, and that group sits above Locations.
+	const groupOfRow = await discordRows().first().evaluate((node) => node.closest(".side-group")?.querySelector(".side-label")?.textContent ?? null);
+	check("the row sits in its own `Connections` group", groupOfRow === "Connections", String(groupOfRow));
+	const groupLabels = await page.locator(".side-group .side-label").allInnerTexts();
+	check("the groups read Favorites, Connections, Locations (no Cloud group is added for it)", JSON.stringify(groupLabels.filter((label) => ["Favorites", "Cloud", "Connections", "Locations"].includes(label))) === JSON.stringify(["Favorites", "Connections", "Locations"]), JSON.stringify(groupLabels));
+	await page.locator(".side-group").filter({ has: page.locator(".side-label", { hasText: "Connections" }) }).screenshot({ path: join(EVIDENCE, "02-connections-group.png") });
 
 	// 3. Clicking the row opens the folder without the sync's own entries.
 	await discordRows().first().click();
@@ -207,6 +212,8 @@ try {
 	await page.waitForFunction(() => document.querySelector(".sidebar__item--settings")?.getAttribute("aria-label") === "설정", null, { timeout: 10_000 });
 	const korean = (await discordRows().allInnerTexts()).map((text) => text.trim());
 	check("the row keeps its product name in Korean", JSON.stringify(korean) === JSON.stringify(["Discord"]), JSON.stringify(korean));
+	const koreanGroup = await discordRows().first().evaluate((node) => node.closest(".side-group")?.querySelector(".side-label")?.textContent ?? null);
+	check("its group reads `연결` in Korean", koreanGroup === "연결", String(koreanGroup));
 	await page.screenshot({ path: join(EVIDENCE, "08-korean.png") });
 } catch (error) {
 	console.error(`capture failed: ${String(error).slice(0, 600)}`);

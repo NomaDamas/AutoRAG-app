@@ -1554,7 +1554,7 @@ describe("Discord attachment folders", () => {
 		const row: FsLocation = {
 			name: "Discord",
 			path: folder,
-			section: "cloud",
+			section: "connections",
 			icon: "discord",
 			available: true,
 			scanned: true,

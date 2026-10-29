@@ -153,15 +153,17 @@ export type FsLocationIcon =
 
 /**
  * A browsable top-level location shown in the sidebar. Cloud rows are the
- * drives connected to the OS (one per account); `locations` rows are the boot
- * disk plus every mounted volume / drive letter.
+ * drives connected to the OS (one per account); `connections` rows are folders
+ * an app connection of the AutoRAG config fills (a Discord source's saved
+ * attachments); `locations` rows are the boot disk plus every mounted volume /
+ * drive letter.
  */
 export interface FsLocation {
 	/** Display name, e.g. "Desktop", "Google Drive - me@example.com", "Data (D:)". */
 	readonly name: string;
 	readonly path: string;
 	/** Sidebar section for grouping. */
-	readonly section: "favorites" | "cloud" | "locations";
+	readonly section: "favorites" | "cloud" | "connections" | "locations";
 	readonly icon: FsLocationIcon;
 	/** True when the path exists and is readable right now. */
 	readonly available: boolean;

@@ -437,13 +437,13 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 	}
 
 	/**
-	 * One row per connected Discord source whose attachments folder holds something of the user's. Read on
-	 * every call, not cached with the mounts: it depends on the config and on what the last refresh saved.
+	 * One Connections row per connected Discord source whose attachments folder holds something of the user's.
+	 * Read on every call, not cached with the mounts: it depends on the config and on what the last refresh saved.
 	 */
 	async function discordRows(): Promise<FsLocation[]> {
 		const folders = await discordAttachmentFolders(env, home);
 		return folders.map(({ connection, path }) =>
-			location("cloud", folders.length === 1 ? "Discord" : `Discord - ${connection}`, path, "discord", { available: true, scanned: true }),
+			location("connections", folders.length === 1 ? "Discord" : `Discord - ${connection}`, path, "discord", { available: true, scanned: true }),
 		);
 	}
 

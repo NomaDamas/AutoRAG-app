@@ -651,29 +651,28 @@ describe("Discord attachment rows", () => {
 		});
 	}
 
-	it("lists a connected Discord source with saved attachments as a Cloud row that opens its folder", async () => {
+	it("lists a connected Discord source with saved attachments in the Connections section, apart from Cloud", async () => {
 		// Given an enabled Discord connection that saved a file, next to a connected iCloud
 		const home = await setup({ nomadamas: { type: "discord", enabled: true } });
 		await saveAttachment(home, "nomadamas");
 		await mkdir(join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"), { recursive: true });
 
 		// When listing places
-		const cloud = bySection(await placesFor(home).list(), "cloud");
+		const locations = await placesFor(home).list();
 
-		// Then the Discord row follows the OS cloud rows and points at the connection's folder
-		expect(cloud.map((row) => [row.name, row.icon])).toEqual([
-			["iCloud Drive", "icloud"],
-			["Discord", "discord"],
+		// Then Cloud keeps only the OS's drives, and the Discord row is in Connections with its folder
+		expect(bySection(locations, "cloud").map((row) => [row.name, row.icon])).toEqual([["iCloud Drive", "icloud"]]);
+		expect(bySection(locations, "connections")).toEqual([
+			{
+				name: "Discord",
+				path: connectionDir(home, "nomadamas"),
+				section: "connections",
+				icon: "discord",
+				available: true,
+				scanned: true,
+				ejectable: false,
+			},
 		]);
-		expect(cloud[1]).toEqual({
-			name: "Discord",
-			path: connectionDir(home, "nomadamas"),
-			section: "cloud",
-			icon: "discord",
-			available: true,
-			scanned: true,
-			ejectable: false,
-		});
 	});
 
 	it("shows no row for a connection that only has the sync's metadata", async () => {
@@ -685,7 +684,7 @@ describe("Discord attachment rows", () => {
 		await writeFile(join(folder, "download-status.json"), "{}");
 
 		// Then the sidebar has no Discord row
-		expect(bySection(await placesFor(home).list(), "cloud")).toEqual([]);
+		expect(bySection(await placesFor(home).list(), "connections")).toEqual([]);
 	});
 
 	it("shows no row when the connection is disabled or removed, however many files remain", async () => {
@@ -693,7 +692,7 @@ describe("Discord attachment rows", () => {
 		await saveAttachment(home, "off");
 		await saveAttachment(home, "slack");
 
-		expect(bySection(await placesFor(home).list(), "cloud")).toEqual([]);
+		expect(bySection(await placesFor(home).list(), "connections")).toEqual([]);
 	});
 
 	it("names each row after its connection when several have attachments", async () => {
@@ -701,9 +700,9 @@ describe("Discord attachment rows", () => {
 		await saveAttachment(home, "work");
 		await saveAttachment(home, "friends");
 
-		const cloud = bySection(await placesFor(home).list(), "cloud");
+		const connections = bySection(await placesFor(home).list(), "connections");
 
-		expect(cloud.map((row) => [row.name, row.path])).toEqual([
+		expect(connections.map((row) => [row.name, row.path])).toEqual([
 			["Discord - work", connectionDir(home, "work")],
 			["Discord - friends", connectionDir(home, "friends")],
 		]);
@@ -716,9 +715,9 @@ describe("Discord attachment rows", () => {
 		await writeFile(join(moved, "attachments", "discord", "nomadamas", "Guild", "general", "a.png"), "x");
 		await writeFile(join(moved, "config.json"), JSON.stringify({ datasources: { nomadamas: { type: "discord" } } }));
 
-		const cloud = bySection(await placesFor(home, { env: { AUTORAG_HOME: moved } }).list(), "cloud");
+		const connections = bySection(await placesFor(home, { env: { AUTORAG_HOME: moved } }).list(), "connections");
 
-		expect(cloud.map((row) => row.path)).toEqual([join(moved, "attachments", "discord", "nomadamas")]);
+		expect(connections.map((row) => row.path)).toEqual([join(moved, "attachments", "discord", "nomadamas")]);
 	});
 
 	it("lists the row on Windows too", async () => {
@@ -730,9 +729,9 @@ describe("Discord attachment rows", () => {
 			"powershell.exe": JSON.stringify({ DeviceID: "C:", VolumeName: "", DriveType: 3, ProviderName: null }),
 		});
 
-		const cloud = bySection(await placesFor(home, { platform: "win32", env: { SystemDrive: "C:" }, run: fake.run }).list(), "cloud");
+		const connections = bySection(await placesFor(home, { platform: "win32", env: { SystemDrive: "C:" }, run: fake.run }).list(), "connections");
 
-		expect(cloud.map((row) => [row.name, row.icon, row.path])).toEqual([["Discord", "discord", connectionDir(home, "nomadamas")]]);
+		expect(connections.map((row) => [row.name, row.icon, row.path])).toEqual([["Discord", "discord", connectionDir(home, "nomadamas")]]);
 	});
 
 	it("moves its signature when the first attachment lands, the source is switched off, and when it is switched back on", async () => {
