@@ -24,6 +24,7 @@ import type {
 	ChatMessageAssistant,
 	ChatRecord,
 	ChatMessageUser,
+	IndexNotice,
 	SearchBridge,
 	SearchErrorAction,
 	SearchStreamEvent,
@@ -85,6 +86,8 @@ type SearchAgent = {
 	readonly openSession?: (options: OpenSessionOptions) => Promise<OpenedSession>;
 	/** Ends the conversation's session in this process; its file stays for a later resume. */
 	readonly closeSession?: () => Promise<void>;
+	/** Calls `listener` once per run, when the run takes the local track and so searches the person's index; returns the stop function. */
+	readonly onLocalTrack?: (listener: () => void) => () => void;
 };
 
 export interface SearchServiceDeps {
@@ -108,6 +111,11 @@ export interface SearchServiceDeps {
 	readonly preflight?: () => Promise<SearchRefusal | null>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
+	/**
+	 * Whether the index a local-track run is about to search is ready: a notice when it is still being built, stopped,
+	 * empty or small, `null` when it is fine. A call that throws is the same as `null`.
+	 */
+	readonly indexReadiness?: () => Promise<IndexNotice | null>;
 }
 
 /** Why a run was not started, as the person is told. */
@@ -442,6 +450,22 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		});
 	}
 
+	/**
+	 * The run is searching the person's index: warn when that index is not ready. The check runs beside the search and
+	 * never holds it up; a run that ended or was stopped before the answer to it came needs no warning.
+	 */
+	async function announceIndexReadiness(run: SearchRun): Promise<void> {
+		let notice: IndexNotice | null;
+		try {
+			notice = (await deps.indexReadiness?.()) ?? null;
+		} catch {
+			// Not knowing is not a reason to warn: the run goes on without it.
+			return;
+		}
+		if (notice === null || run.cancelled || run.ended) return;
+		emit({ type: "index-notice", searchId: run.searchId, notice });
+	}
+
 	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
 		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
@@ -455,6 +479,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			run.pendingSteers = 0;
 			if (!run.cancelled) emit({ type: "steer-delivered", searchId: run.searchId });
 		});
+		// A run that searches the person's index while it is not ready says so as soon as the search starts, not with the answer.
+		const stopLocalTrack = deps.indexReadiness === undefined ? undefined : agent.onLocalTrack?.(() => void announceIndexReadiness(run));
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
 			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
@@ -515,6 +541,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			}
 		} finally {
 			unsubscribe?.();
+			stopLocalTrack?.();
 			// Nobody is asked once the run is over: a question still open closes, and its tool call is already unblocked.
 			agent.bindRun?.(undefined);
 			deps.interaction?.closeRun(run.searchId, "ended");

@@ -51,6 +51,7 @@ import {
 	Shrink,
 	Sparkles,
 	Trash2,
+	TriangleAlert,
 	Undo2,
 	Users,
 	X,
@@ -182,6 +183,9 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 
 /** Toolbar inspector toggle — the mockup's info-circle glyph, not the panel glyph. */
 export const InfoIcon = glyph(Info, 16, 1.8);
+
+/** A notice that something may not work as expected (a search over an index that is not ready). */
+export const WarningIcon = glyph(TriangleAlert, 14, 2);
 
 export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 

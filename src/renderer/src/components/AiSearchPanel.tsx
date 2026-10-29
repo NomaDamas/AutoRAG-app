@@ -16,6 +16,7 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
+	IndexNotice,
 	SearchErrorAction,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
@@ -46,6 +47,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { InteractionDock } from "./InteractionDock";
+import { IndexNoticeBanner } from "./IndexNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
 
 const autorag = window.autorag;
@@ -94,7 +96,7 @@ export interface AiSearchPanelProps {
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
 	readonly language: SummaryLanguage;
-	/** Goes to a Settings page: an error leads to the model settings, or to Subscription & Usage when the plan is the problem. */
+	/** Goes to a Settings page: an error leads to the model settings, or to Subscription & Usage when the plan is the problem; the index warning leads to Indexing. */
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source, by its alias (a button of the AI fix). */
 	readonly onOpenSource: (alias: string) => void;
@@ -134,6 +136,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [error, setError] = useState<string | null>(null);
 	/** The action the main process attached to `error` (shown only while that same message is on screen). */
 	const [errorAction, setErrorAction] = useState<{ readonly message: string; readonly action: SearchErrorAction } | null>(null);
+	/** The warning that the index this run searches is not ready; belongs to the latest run and ends with the next question. */
+	const [indexNotice, setIndexNotice] = useState<IndexNotice | null>(null);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
 	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
@@ -243,6 +247,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			switch (event.type) {
 				case "progress":
 					setProgress(event.text);
+					break;
+				case "index-notice":
+					setIndexNotice(event.notice);
 					break;
 				case "thinking":
 					// The reasoning text never crosses IPC; the panel's own pending
@@ -435,6 +442,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQuickDraft("");
 		setDeepDraft("");
 		setError(null);
+		setIndexNotice(null);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
@@ -556,6 +564,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQuickDraft("");
 		setDeepDraft("");
 		setError(null);
+		setIndexNotice(null);
 		setStopped(false);
 		setProgress("");
 		setEvidenceSource(null);
@@ -605,6 +614,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setQueued([]);
 		setStopped(assistant?.stopped ?? false);
 		setError(null);
+		setIndexNotice(null);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
@@ -883,6 +893,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							fix
 						/>
 					)}
+
+					{indexNotice === null ? null : <IndexNoticeBanner notice={indexNotice} onOpenIndexing={() => onOpenSettings("indexing")} />}
 
 					{steersBeforeQuick.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />

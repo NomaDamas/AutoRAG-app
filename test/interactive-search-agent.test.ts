@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type FauxResponseStep, fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { registerFauxProvider } from "@earendil-works/pi-ai/compat";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAgentInteraction } from "../src/main/agent-interaction";
 import { createInteractionHub } from "../src/main/interaction-hub";
 import { InteractiveSearchAgent } from "../src/main/interactive-search-agent";
@@ -208,5 +208,52 @@ describe("ask_user through the app's interaction hub", () => {
 		await t.agent.searchDocuments("summarize the report");
 
 		expect(t.results.find((result) => result.toolName === "ask_user")?.text).toBe("User cancelled the question");
+	});
+});
+
+describe("onLocalTrack on the real librarian agent", () => {
+	const answer = (text: string): FauxResponseStep => fauxAssistantMessage(text, { stopReason: "stop" });
+
+	it("calls back once when a first question takes the local search track", async () => {
+		const t = await build("auto", [answer("fast answer"), answer("verified answer")], () => ({ kind: "cancel" }));
+		const taken = vi.fn();
+		const stop = t.agent.onLocalTrack(taken);
+		disposers.push(stop);
+
+		await t.agent.searchDocuments("what do my notes say about the refund policy?");
+
+		expect(taken).toHaveBeenCalledTimes(1);
+	});
+
+	it("stays quiet for a follow-up the conversation answers by itself", async () => {
+		const t = await build("auto", [answer("fast answer"), answer("verified answer"), answer("follow-up answer")], () => ({ kind: "cancel" }));
+		await t.agent.searchDocuments("what do my notes say about the refund policy?");
+		const taken = vi.fn();
+		disposers.push(t.agent.onLocalTrack(taken));
+
+		await t.agent.searchDocuments("and who approves it?");
+
+		expect(taken).not.toHaveBeenCalled();
+	});
+
+	it("reads the route the librarian's own progress tracker reports, so a librarian release that renames it fails here", async () => {
+		const t = await build("auto", [], () => ({ kind: "cancel" }));
+		const tracker: unknown = Reflect.get(t.agent, "searchProgress");
+		const progress = tracker as { begin(query: string): void; end(): void; beginStep(id: string, label: string): void; endStep(id: string, status: "done" | "failed", detail?: string): void };
+		const taken = vi.fn();
+		disposers.push(t.agent.onLocalTrack(taken));
+
+		progress.begin("rename the invoices");
+		progress.beginStep("route", "Routing the question");
+		progress.endStep("route", "done", "organize");
+		progress.end();
+		expect(taken).not.toHaveBeenCalled();
+
+		progress.begin("what is in my notes?");
+		progress.beginStep("route", "Routing the question");
+		expect(taken).not.toHaveBeenCalled();
+		progress.endStep("route", "done", "local");
+		expect(taken).toHaveBeenCalledTimes(1);
+		progress.end();
 	});
 });
