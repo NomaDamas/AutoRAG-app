@@ -269,4 +269,17 @@ describe("smart indexing service", () => {
 
 		expect(finalEvent()).toMatchObject({ type: "result", runId: "run-9", exclusions: [{ path: join(root, "Telegram Desktop"), files: 2 }] });
 	});
+
+	it("streams the agent's pre-tool `i` progress phrase to the UI", async () => {
+		const registration = register();
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("folder_survey", { i: "채팅 다운로드 폴더 살펴보는 중", path: join(root, "Telegram Desktop") })),
+			fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [] })),
+			fauxAssistantMessage("done"),
+		]);
+
+		await serviceFor(registration).analyze("run-10", [root]);
+
+		expect(events).toContainEqual({ type: "progress", runId: "run-10", text: "채팅 다운로드 폴더 살펴보는 중" });
+	});
 });

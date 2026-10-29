@@ -32,6 +32,12 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   "확인할 수 없음".
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, error reports, and document languages.
+- **기본 → 사이드바** — sidebar item and section visibility, ordering, custom pinned
+  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** (`AppCustomizerModal`)
+  dialog, all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
+  `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
+  **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
+  locked core rows at the top of Favorites and can never be hidden.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
   account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
@@ -305,7 +311,23 @@ hands the preload (`src/preload/worker-link.ts`); main only brokers ports and
 owns the process lifecycle (`src/main/fs-worker-host.ts`). Main keeps what
 only Electron's main process can do and the worker asks for over its host
 port: thumbnails and file icons (`nativeImage`, `app.getFileIcon`), the Trash,
-opening files and URLs, and the clipboard.
+opening files and URLs, and the clipboard. ⌘C / ⌘X also put the selected files
+on the OS clipboard as copied files (`src/main/os-clipboard.ts`, Electron's
+`text/uri-list`, mapped to the platform's "copied files" format), so a browser,
+chat window, or Finder pastes the files themselves; the in-app clipboard still
+owns copy-vs-cut and the in-app paste.
+
+The worker never imports `@autorag/librarian` on its own thread: loading it takes
+~2 s, and folder listings are answered on that thread. The one importer is a
+`worker_thread` inside the worker (`src/fs-worker/librarian-thread.ts`, built as an
+extra main-bundle entry like the archive workers). `src/fs-worker/librarian-client.ts`
+starts it on the first call that needs the librarian (a file-name search, the dupey
+scan, the index badges) and the worker asks for it once at launch, after the first
+folder renders; the contract is `librarian-contract.ts`. Quitting sends the thread a
+`shutdown` first, which stops the file-name index daemon (the Everything process on
+Windows, which otherwise keeps the profile folder locked) and raises the process
+`exit` event the librarian ends its MinSync children on, then terminates the thread.
+The client waits 1.8 s for that: main kills the worker 2 s after the quit.
 
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
@@ -316,6 +338,15 @@ message asking the user to check the result.
 Quitting asks the worker to release its watches and waits up to 2 s before
 exiting. QA lane: `scripts/manual-qa/run-qa-finder-fs-worker-crash.mjs`
 (SIGKILLs the worker twice and checks the tabs recover within 5 s).
+
+The Windows file-name index daemon (Everything, one per profile) is started through
+`launchTiedToParent` (`src/main/tied-launch.ts`), not detached: Windows ends a
+non-detached child with its parent however the parent ends, so a force-killed or
+crashed app no longer leaves an `everything.exe` pinning its profile folder. The quit
+path still stops it first. The fsearch daemon on macOS and Linux stays detached on
+purpose (restarting it re-scans every watched folder). QA lane:
+`scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
+`taskkill /F` on main alone).
 
 ## Error reports (Sentry)
 
@@ -559,12 +590,16 @@ resumes at the same step.
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
 
-Account and plan are real. The account step signs in through the system
-browser (OAuth 2.0 authorization code + PKCE over a loopback redirect, RFC 8252)
-against the hosted AutoRAG service (`AUTORAG_BASE_URL`, default
-`https://api.dazziapp.com`); no password and no card number is typed into the
-app. The returned API key lives only in Pi's `auth.json` as the `dazzi`
-credential (mode 0600), the single place the librarian reads the hosted plan
+Account and plan are real. The account step signs in against the hosted AutoRAG
+service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and
+no card number is typed into the app. Clicking Google or GitHub opens
+`/api/desktop/oauth?client=app&…&provider=google|github` (OAuth 2.0 authorization
+code + PKCE over a loopback redirect, RFC 8252), which 302-redirects straight to
+Google or GitHub without stopping on `/login` and returns straight to the
+loopback callback once authenticated. Email sign-in runs natively inside the
+onboarding screen (`POST /api/desktop/email/send` + `POST /api/desktop/email/verify`,
+6-digit verification code) without opening a browser. Settings › 계정 keeps the
+generic `/desktop/authorize` flow. The returned API key lives only in Pi's `auth.json` as the `dazzi`
 from, so the app and the librarian cannot disagree about being signed in; the
 renderer sees an `AccountStatus` (email, plan, subscription state, weekly
 credits), never the
@@ -721,11 +756,17 @@ built the same way:
 A session is in memory and disposed by its caller: nothing is written to the
 agent dir or the working directory, and the user's own pi settings never apply.
 A profile session never reads or writes AutoRAG's retrieval memory.
-App profiles live in `src/main/agents/profiles/`; the first is smart indexing
-(thinking `low`; looks only through `folder_survey` and `list_folder`, answers
-only through a `propose_exclusions` tool that validates paths). A new profile adds one file there and, if it needs
-a UI, its own service and bridge. The factory's own tests (what the model is
-offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
+App profiles live in `src/main/agents/profiles/`, and every profile shares `src/main/agents/profile-progress.ts` (`withIntentTools`,
+`intentPromptLine`, `subscribeProfileProgress`), which mirrors AutoRAG's own `i` intent-tracing parameter: every working tool declares a
+required `i` string first in its schema so the model writes a short plain phrase in the interface language before calling the tool, and the
+session streams that phrase to the UI where it is rendered with the `.shimmer` text effect. The first profile is smart indexing (thinking
+`low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
+second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
+app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
+`src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 that
+inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`, `update_general_settings`)
+while enforcing the locked `AI Search` and `Automations` invariant. A new profile adds one file there and, if it needs a UI,
+its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions
 
@@ -816,6 +857,45 @@ and kept for the chat's life:
   the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
   (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
   00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+- **An error in AI Search** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
+  `classifyAppError` reads what the person can do from the wording (HTTP statuses only in the shapes the SDKs use, and never inside a
+  path): no model or key (`model-missing`), a rejected key or login (`model-credentials`), a spent plan or billing problem
+  (`model-subscription`), a retired model (`model-not-found`), a rate limit, a lost connection, or anything else. The first four mean
+  the model itself cannot be used: the box says so in plain words, offers **no** AI fix (the AI is what is down), and leads to the
+  model settings and, where the subscription may be the cause, to Subscription & Usage. A rate limit and a lost connection say to wait
+  or check the connection. Everything else is the app's own setup and gets **AI로 고치기** on the right of the box. The main process's
+  own `open-plan` action (the weekly credits are used up) outranks the wording. An error of an earlier turn is shown as history, with
+  its explanation and settings buttons but no fix.
+- **Raw error text stays hidden behind "자세히 보기"** (`ErrorDetails`). By default the person sees only the plain-words title and hint;
+  nothing of the raw error string is shown until they press "자세히 보기" ("Show details"), which expands the full selectable message for
+  inspection or a bug report (only a pre-translated main-process plan message with `action: "open-plan"` is shown directly).
+- **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `hooks/useErrorFix.ts`, `ErrorFixDialog`, `SidebarErrorFixActivity`). A
+  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
+  `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks), plus three tools only the app
+  can offer: `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data sources, the index
+  state), `refresh_index` and `report_result`, which is the answer and refuses `fixed` unless something was really changed (a file change,
+  a shell command or a successful index run). The rules of `error-fix-files.ts`: every tool refuses once the run is stopped; the AI's own
+  sign-in and key files (the pi agent dir) and any file named like a key or credential (`.env`, `id_*`, `*.pem`, `auth.json` ...) are never
+  opened, also by a shell command that names them; the AutoRAG config is shown with secrets hidden (an unparsable one is masked) and
+  `edit`/`write` on it go through the same validating service the Settings pages use, as a diff of leaf values (after a copy to
+  `config.json.bak-<stamp>-before-error-fix`, once per run), where the `model` key, secret-looking keys and the paths AutoRAG manages are
+  refused and a change the validator rejects writes nothing; `edit`/`write` of anything else is allowed only for a file a data source in
+  the config names (with its own `.bak-…` copy) and the app's workspace folder, never for the person's own documents; the shell is pi's
+  shell with keys and tokens removed from its environment. There is no limit on how much the agent looks, no time limit on the run, and
+  `refresh_index` waits for the index run to end: only the person's Stop ends a run early. The session lives in the window-wide
+  `useErrorFix` store (`App.tsx` hosts the dialog), so dismissing or pressing "백그라운드로 전환" hides the modal without cancelling the
+  repair; while a run is active — or finished while minimized — `SidebarErrorFixActivity` renders in the sidebar footer in the exact
+  shape of `SidebarIndexActivity` (headline + shimmering `ProgressBar` + live `i` intent phrase, flipping to 100% green/orange when
+  done), and clicking it reopens the modal from any tab. While open and running, `ErrorFixDialog` shows a calm self-healing animation
+  and one shimmering live status line (`"원인을 찾는 중…"` initially, then each tool call's live `i` intent phrase from
+  `profile-progress.ts`), never dumping command lines, raw paths or JSON diffs onto the screen. When `fixed`, it settles into a
+  healthy restored visual with the agent's plain summary and a single `Close` button. For `needs-user` or `cannot-fix`, `report_result`
+  takes up to three `actions`, each `{kind, target, label}`: `settings` (a Settings page id) or `source` (the alias of a configured data
+  source, which opens `source:<alias>` in Settings), validated by the toolkit and rendered as action buttons beside `Close`. A change to
+  the config resets the idle chat agents (`SearchService.resetAgents`) so the next question is answered on the new config. Pinned by
+  `test/app-error.test.ts`, `profile-progress.test.ts`, `error-fix-files.test.ts`, `error-fix-profile.test.ts`,
+  `error-fix-service.test.ts`, `error-fix-state.test.ts`, `run-error-notice.test.tsx`; on device by
+  `scripts/manual-qa/run-qa-finder-ai-search-error-fix.mjs` (scripted model) and `run-qa-live-ai-search-error-fix.mjs` (a real model).
 
 On-device checks: `scripts/manual-qa/run-qa-finder-ai-search-interaction.mjs` (scripted model: every card and
 answer path, files on disk, what the model receives), `run-qa-finder-ai-search-conversation.mjs` (scripted model
@@ -1039,6 +1119,18 @@ Cancel stops the Filee process.
   removed, on success, failure and cancel alike. A result of several files (a PDF to
   PNG gives one image per page) goes into a folder named after the new name. The source is
   never modified; an existing name is refused before Filee starts.
+- **Fail fast.** Before the staging folder exists, the service asks `filee formats <source>`
+  (`src/main/filee-formats.ts` parses the answer: direct targets plus those reached by
+  downloading an engine). A target Filee does not list fails in about a second with
+  `main.convert.noRoute`, with nothing created on disk. If the listing is unavailable the
+  conversion runs and reports its own failure.
+- **Cancel.** `cancel(id)` works from the first instant of `run`, including while the file is
+  checked or Filee is still being found. `src/main/filee-process.ts` runs `filee-cli` as the
+  leader of its own process group (`taskkill /t` on Windows) so abort, timeout and app exit end
+  Filee *and* the ffmpeg/LibreOffice/Pandoc it started (the librarian's runner signals only
+  Filee, leaving the encoder running and writing into a folder about to be deleted). The run
+  settles only after the process is gone, then staging is removed. A cancelled run rejects with
+  the "was cancelled" message; the renderer strips Electron's IPC prefix before toasting it.
 - **Settings.** The `filee` block of the shared AutoRAG config (`enabled`, `binaryPath`,
   `autoInstall`, `timeoutMs`, `dataDir`) governs the agent and the app alike.
 - **Bridge.** `window.autorag.conversion` (`src/shared/conversion-contract.ts`):
@@ -1046,7 +1138,9 @@ Cancel stops the Filee process.
 
 `run-qa-finder-convert-rename.mjs` drives this in the built app against the real
 `filee-cli`: hwpx → pdf with both answers, a typed stem that differs from the source's, Cancel and
-Esc, an unsupported route (mp3 → pdf), a same-format rename, and no leftover staging folder.
+Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90 s 1080p MP4 → WebM
+encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
+`test/conversion-live.test.ts` does the same against the real binaries without the UI.
 
 ## Manual QA
 

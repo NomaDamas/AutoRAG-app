@@ -12,9 +12,23 @@
   "places": {
     "favorites": "个人收藏",
     "cloud": "云端",
+    "connections": "连接",
     "locations": "位置",
     "aiSearch": "AI 搜索",
     "settings": "设置",
+    "settingsHint": "设置 {{shortcut}}",
+    "usage": "AI 用量",
+    "update": {
+      "unsupported": "版本 {{version}} · 此版本不会自动更新",
+      "current": "版本 {{version}}",
+      "checking": "正在检查更新…",
+      "upToDate": "已是最新版本 ({{version}})",
+      "available": "下载新版本 {{version}}",
+      "availableManual": "获取 {{version}} 的安装程序",
+      "downloading": "正在下载 {{version}}… {{percent}}%",
+      "ready": "{{version}} 已就绪 · 立即重启以安装",
+      "error": "检查更新失败: {{message}}"
+    },
     "recents": "最近使用",
     "tags": "标签",
     "tagColorsDenied": "显示标签颜色",
@@ -114,6 +128,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+      "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
     },
@@ -128,6 +143,44 @@
       "progressAria": "转换进行中",
       "unsupported": "不支持从 {{from}} 转换为 {{to}}，因此名称没有更改。",
       "replaced": "{{name}} — 已转换，原文件已移到废纸篓"
+    },
+    "reduce": {
+      "title": "缩小体积",
+      "levelLabel": "压缩强度",
+      "recommended": "推荐",
+      "levels": {
+        "light": "轻度（高画质）",
+        "balanced": "均衡",
+        "max": "强力（最小体积）"
+      },
+      "specs": {
+        "pdf": {
+          "light": "高画质·最大 1600px（约减少 30–65%）",
+          "balanced": "标准压缩·最大 1280px（约减少 55–80%）",
+          "max": "极限压缩·最大 960px（约减少 75–90%）"
+        },
+        "image": {
+          "light": "高画质·256色/2560px（约减少 35–60%）",
+          "balanced": "均衡压缩·最大 1920px（约减少 55–75%）",
+          "max": "极限压缩·最大 1280px（约减少 70–85%）"
+        },
+        "video": {
+          "light": "原始分辨率·码率减少约 35%+",
+          "balanced": "最高 1080p·码率减少约 58%+",
+          "max": "最高 720p·码率减少约 76%+"
+        },
+        "audio": {
+          "light": "高音质·码率减少约 28%",
+          "balanced": "标准音质·码率减少约 50%",
+          "max": "语音优先·码率减少约 65%"
+        }
+      },
+      "outputLabel": "保存方式",
+      "replaceMode": "替换原文件",
+      "copyMode": "另存为副本",
+      "replaceHint": "原文件将移至废纸篓，并原地替换“{{name}}”。",
+      "copyHint": "保留原文件，并另存为“{{copyName}}”。",
+      "workingHint": "完成前原文件不会被修改。"
     }
   },
   "contextMenu": {
@@ -220,7 +273,9 @@
       "videoConvert": "转换视频",
       "convertTo": "转换为 {{format}}",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "体积优化"
+      "reduceSize": "缩小体积",
+      "reducing": "正在缩小“{{name}}”的体积…",
+      "reduceProgressAria": "正在缩小 {{name}} 的体积"
     },
     "versionRelations": {
       "exact": "完全相同",
@@ -274,6 +329,59 @@
       "last7Days": "过去 7 天",
       "last30Days": "过去 30 天",
       "older": "更早"
+    }
+  },
+  "appError": {
+    "fixAction": "用 AI 修复",
+    "openModelSettings": "打开模型设置",
+    "showDetails": "查看详情",
+    "hideDetails": "收起详情",
+    "other": {
+      "title": "出现了问题",
+      "hint": "AI 可以查找原因并尝试为你修复。"
+    },
+    "modelMissing": {
+      "title": "尚未设置可用的 AI 模型",
+      "hint": "选择模型或登录后即可使用。请在模型设置中检查模型、登录状态和订阅。"
+    },
+    "modelCredentials": {
+      "title": "无法使用 AI 模型：认证失败",
+      "hint": "API 密钥或登录可能已过期或不正确。请在模型设置中重新登录或检查密钥，并确认订阅是否有效。"
+    },
+    "modelSubscription": {
+      "title": "订阅或用量额度导致无法使用 AI 模型",
+      "hint": "订阅可能已到期，或用量已用完。请查看订阅与用量，或在模型设置中选择其他模型。"
+    },
+    "modelNotFound": {
+      "title": "找不到所选的 AI 模型",
+      "hint": "该模型可能已下线或已改名。请在模型设置中选择其他模型。"
+    },
+    "rateLimit": {
+      "title": "请求过多，暂时受限",
+      "hint": "请稍后再试。如果持续出现，请在模型设置中选择其他模型。"
+    },
+    "network": {
+      "title": "无法连接到 AI 模型的服务器",
+      "hint": "请检查网络连接后重试。如果网络正常仍反复失败，请检查模型设置。"
+    },
+    "fix": {
+      "title": "用 AI 修复",
+      "running": "正在查找原因…",
+      "status": {
+        "fixed": "已恢复正常",
+        "needsUser": "需要你来处理",
+        "cannotFix": "无法修复"
+      },
+      "nextStepsLabel": "需要你做的事",
+      "openSettings": "打开“{{page}}”设置",
+      "openSource": "打开“{{name}}”连接",
+      "failedTitle": "AI 未能修复",
+      "stopped": "已停止。",
+      "minimize": "在后台继续修复",
+      "sidebar": {
+        "running": "正在用 AI 修复…",
+        "open": "查看 AI 修复状态"
+      }
     }
   },
   "interaction": {
@@ -702,10 +810,19 @@
       "getStarted": "开始使用",
       "continueGoogle": "使用 Google 继续",
       "continueApple": "使用 Apple 继续",
+      "continueGithub": "使用 GitHub 继续",
       "or": "或",
       "emailLabel": "邮箱",
       "emailPlaceholder": "mingzi@example.cn",
       "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
       "guest": "以访客身份继续",
       "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
       "agreeTerms": "服务条款",
@@ -831,14 +948,14 @@
           "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "在 AutoRAG 服务器上分析",
-          "line": "在服务器上分析，因此电脑性能较低也能使用。"
+          "name": "在 Dazzi 服务器上分析",
+          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
         },
         "local": {
           "nameMac": "在我的 Mac 上分析",
           "namePc": "在我的 PC 上分析",
-          "lineMac": "分析在这台 Mac 内处理，文档不会发送到外部。",
-          "linePc": "分析在这台 PC 内处理，文档不会发送到外部。"
+          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
+          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
         }
       },
       "meter": {
@@ -1206,6 +1323,8 @@
     "fileCreated": "{{name}} — 已创建新文件",
     "shareAnchorMissing": "找不到共享弹出位置",
     "tagChangeFailed": "{{name}} — 无法更改标签：{{message}}",
+    "remotePreviewUnsupported": "此文件格式无法在浏览器中预览，请双击下载。",
+    "remotePreviewFolderUnsupported": "文件夹无法在浏览器中预览。",
     "onboardingDemo": {
       "meetingNotes": "会议记录.md"
     }
@@ -1343,8 +1462,7 @@
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
-      "unsupportedOptimize": "此格式不支持容量优化。",
-      "alreadyOptimized": "此文件已优化。",
+      "alreadyOptimized": "此文件无法再缩小。",
       "unsupportedExtract": "无法解压此文件格式。",
       "emptyTarget": "没有可操作的目标。",
       "singleTargetOnly": "此操作一次仅支持一个项目。",
@@ -1357,10 +1475,14 @@
       "unsupportedConvert": "不支持转换为 {{format}}。",
       "converted": "{{name}} — 已转换",
       "resized": "{{name}} — 已调整大小",
-      "optimized": "{{name}} — 已优化容量",
       "videoNeedsFfmpeg": "视频转换需要 ffmpeg。",
       "containerConverted": "{{name}} — 已转换容器",
-      "shareUnsupported": "此平台不支持系统共享。"
+      "shareUnsupported": "此平台不支持系统共享。",
+      "unsupportedReduce": "此文件无法在保持格式的前提下缩小体积",
+      "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
+      "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）",
+      "reduceCancelled": "已取消缩小 {{name}} 的体积",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}% · 原文件已移至废纸篓）"
     },
     "indexStatus": {
       "outside": "文件在 Dazzi 搜索路径之外",
@@ -1445,7 +1567,10 @@
     },
     "worker": {
       "unknownFormat": "未知的文件格式：{{format}}",
-      "invalidUrl": "网址无效。"
+      "invalidUrl": "网址无效。",
+      "librarianExited": "索引辅助进程意外停止（代码 {{code}}）。",
+      "librarianFailed": "索引辅助进程失败：{{message}}",
+      "librarianStopped": "索引辅助进程已关闭，无法处理请求。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(无法从临时名称 {{name}} 恢复：{{detail}})",
@@ -1561,6 +1686,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} 无法转换为 {{extension}} 格式。",
+      "noRoute": "Filee 无法将 {{name}} 转换为 {{extension}} 格式。",
       "invalidName": "不能用作转换后文件的名称：{{name}}",
       "sourceMissing": "找不到要转换的文件：{{name}}",
       "nameTaken": "已存在名为“{{name}}”的文件或文件夹",
@@ -1621,6 +1747,12 @@
     },
     "contents": {
       "title": "包含内容"
+    },
+    "native": {
+      "readFailed": "无法读取此文稿",
+      "attachments": "附件",
+      "noAttachments": "无附件",
+      "emptyIconset": "此图标集中没有 PNG 图标"
     },
     "code": {
       "wrap": "自动换行",
@@ -1933,6 +2065,7 @@
       "account": "我的账户",
       "plan": "订阅与用量",
       "general": "通用",
+      "sidebar": "侧边栏",
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
@@ -1951,6 +2084,7 @@
         "account": "账户 登录 邮箱 名称 个人资料",
         "plan": "套餐 付款 额度 用量 订阅 billing",
         "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言",
+        "sidebar": "侧边栏 个人收藏 云盘 位置 标签 文件夹 隐藏 显示 顺序 自定义 AI",
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
         "indexing": "更新 同步 增量 索引 更新周期 sync",
@@ -1969,6 +2103,56 @@
       "empty": "没有匹配的设置。",
       "contentAria": "{{name}} 设置"
     },
+    "sidebar": {
+      "description": "配置侧边栏中显示的项目与分区顺序，或直接与 AI 助手对话进行个性化定制。",
+      "aiHeroTitle": "使用 AI 定制侧边栏与应用",
+      "aiHeroDesc": "用自然语言描述即可设置，例如：“隐藏音乐和影片，并把下载和文稿移到最上方”。",
+      "aiHeroButton": "使用 AI 定制",
+      "presetsTitle": "快速预设",
+      "presetShowAll": "全部显示",
+      "presetMinimal": "仅显示核心项",
+      "resetDefault": "恢复默认设置",
+      "favoritesTitle": "个人收藏项目",
+      "favoritesDesc": "设置常用文件夹的显示状态与排列顺序。AI 搜索与自动化为核心功能，始终保持显示。",
+      "lockedBadge": "始终显示",
+      "lockedHint": "AI 搜索与自动化是核心必选项，无法隐藏。",
+      "customBadge": "自定义文件夹",
+      "moveUp": "上移 {{name}}",
+      "moveDown": "下移 {{name}}",
+      "removeCustom": "移除 {{name}}",
+      "addCustomFolder": "+ 添加文件夹…",
+      "addCustomModalTitle": "添加文件夹到个人收藏",
+      "addCustomModalDesc": "输入要固定到侧边栏个人收藏的文件夹路径。",
+      "addCustomPathLabel": "文件夹路径",
+      "addCustomPathPlaceholder": "~/Projects 或 /Users/me/Work",
+      "addCustomConfirm": "添加",
+      "sectionsTitle": "侧边栏分区与项目",
+      "sectionsDesc": "统一管理个人收藏、云盘、位置与标签分区的顺序及各项目的显示状态。AI 搜索与自动化为核心功能，始终保持显示。",
+      "sectionAlwaysShown": "个人收藏分区始终保持显示",
+      "sectionCount": "显示 {{visible}}/{{total}}",
+      "emptyCloud": "未连接任何云盘驱动器。",
+      "emptyConnections": "没有已连接应用的附件文件夹。",
+      "emptyLocations": "未找到已挂载的磁盘。",
+      "emptyTags": "没有固定的 Finder 标签。",
+      "modal": {
+        "title": "AI 应用定制助手",
+        "subtitle": "自由描述您想要的侧边栏布局或界面设置。",
+        "newChat": "新对话",
+        "emptyTitle": "您希望如何定制 Dazzi？",
+        "emptyDesc": "告诉助手要显示的文件夹、分区顺序或外观模式，更改会实时生效。",
+        "promptMinimal": "在侧边栏中隐藏音乐、影片、图片和应用程序文件夹",
+        "promptReorder": "把下载和文稿移到个人收藏的最上方",
+        "promptCleanSections": "隐藏云盘和标签分区，让侧边栏更清爽",
+        "promptReset": "将侧边栏布局恢复为默认状态",
+        "thinking": "正在检查设置",
+        "placeholder": "例如：隐藏音乐和影片，并把下载放到最上面…",
+        "send": "发送",
+        "stop": "停止",
+        "lockedNotice": "AI 搜索与自动化是核心功能，始终保留在侧边栏中。",
+        "openAiSettings": "打开 AI 模型设置",
+        "unavailable": "应用定制服务不可用。"
+      }
+    },
     "general": {
       "description": "设置 Dazzi 的界面和启动方式。",
       "screenTitle": "界面",
@@ -1982,6 +2166,20 @@
       "finderDesc": "文件浏览界面的行为。",
       "showHiddenFiles": "显示隐藏文件",
       "showHiddenFilesHint": "在 Finder 中显示以点(.)开头的系统文件。",
+      "remoteTitle": "远程访问",
+      "remoteSecurityHint": "HTTP 未加密。仅在可信网络或加密隧道中使用。",
+      "remoteAccess": "允许远程访问",
+      "remoteAccessHint": "在其他设备的浏览器中打开此 Dazzi。",
+      "remoteAddress": "浏览器地址",
+      "remoteStopped": "已停止",
+      "remotePort": "端口",
+      "remotePortHint": "默认端口为 47833。设为 0 可选择可用端口。更改后请重启 Dazzi。",
+      "remoteCopyAddress": "复制地址",
+      "remoteAddressCopied": "地址已复制",
+      "remoteCopyError": "无法复制地址。请选中地址后手动复制。",
+      "remoteStatusError": "无法读取远程访问状态：{{error}}",
+      "remoteSettingsError": "无法保存远程访问设置：{{error}}",
+      "remoteLimitations": "将文件拖到窗口外会下载文件。不支持“在 Finder 中显示”和“打开方式”。文件剪贴板在各浏览器会话中独立保存。上传操作无法通过 Cmd+Z 撤销。",
       "launchTitle": "启动与更新",
       "launchAtLogin": "登录时自动启动",
       "launchAtLoginHint": "开机时在后台启动 Dazzi。",

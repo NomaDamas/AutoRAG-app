@@ -10,6 +10,7 @@
  */
 
 import { join } from "node:path";
+import { Worker } from "node:worker_threads";
 import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
@@ -20,18 +21,22 @@ import { isNewFileFormatId } from "../shared/new-file-contract";
 import { createChangeHub, type ChangeHub } from "../main/change-hub";
 import { createDupeyLayer } from "../main/dupey-layer";
 import type { IconProvider } from "../main/file-icon";
-import { createFileNameSearch, type FileNameSearchBackend } from "../main/file-name-search";
+import type { FileNameSearchBackend } from "../main/file-name-search";
 import { buildFsEntry } from "../main/fs-entry";
 import { createFsService, type FsOsClipboard, type FsShell } from "../main/fs-service";
 import { createFsWatchService } from "../main/fs-watch-service";
-import { createIndexStatusService } from "../main/index-status";
 import { createPlaces, type Places } from "../main/places";
 import { createRecentsStore } from "../main/recents-store";
 import { createTrashStore } from "../main/trash-store";
 import { createVersionFamilyService, DEFAULT_SCAN_INTERVAL_MINUTES, type VersionFamilyService } from "../main/version-family-service";
+import type { IndexStatusService } from "../main/index-status";
 import { createFileVersionFamilyStore } from "../main/version-family-store";
 import type { WatchBackend } from "../main/watch-backend";
 import { lookupDefaultApp } from "../preview/node/default-app";
+import { createLibrarianClient, type LibrarianClient } from "./librarian-client";
+import { reportError } from "../main/error-report-core";
+import type { LibrarianThread, LibrarianThreadData } from "./librarian-contract";
+import { adaptWorker } from "./thread-port";
 
 /** The Electron-only operations the worker asks the main process for. */
 export interface FsWorkerHost {
@@ -42,13 +47,20 @@ export interface FsWorkerHost {
 
 export interface FsWorkerServiceDeps {
 	readonly config: FsWorkerConfig;
+	/**
+	 * Starts the thread that holds everything needing `@autorag/librarian`. Defaults to the real thread, started on the first
+	 * call that needs it; tests that never reach the librarian leave it out.
+	 */
+	readonly librarianThread?: () => LibrarianThread;
 	readonly host: FsWorkerHost;
 	/** Sends one push to every renderer client. */
 	readonly broadcast: (name: string, payload: unknown) => void;
 	/** Defaults to `@parcel/watcher`, loaded on the first watch; tests inject a fake. */
 	readonly watchBackend?: WatchBackend;
-	/** Defaults to the platform file-name index; tests inject a stub. */
+	/** Defaults to the platform file-name index in the librarian thread; tests inject a stub. */
 	readonly fileNameSearch?: FileNameSearchBackend;
+	/** Defaults to the AutoRAG index status in the librarian thread; tests inject a stub. */
+	readonly indexStatus?: IndexStatusService;
 	/** Defaults to the OS places; tests inject a fixture. */
 	readonly places?: Places;
 	/** Defaults to the real dupey scanner; tests inject a stub. */
@@ -151,13 +163,20 @@ function tagChangeArg(value: unknown): FsTagChange {
 
 export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerService {
 	const { config, host } = deps;
+	// Everything that needs `@autorag/librarian` runs in a thread of its own: loading it takes ~2 s of event loop.
+	const librarian: LibrarianClient = createLibrarianClient({
+		spawn: deps.librarianThread ?? (() => spawnLibrarianThread(config.userDataDir)),
+		locations: () => fsService.locations(),
+		onIndexRefreshed: (error) => deps.broadcast(FS_WORKER_PUSH.indexRefreshed, error),
+		onReport: (report) => reportError(report),
+	});
 	const places =
 		deps.places ??
 		createPlaces(process.platform === "win32" && config.knownFolders !== undefined ? { knownFolders: config.knownFolders } : {});
 	// Filename search rides the platform index (fsearch / Everything); the
 	// disk walk stays as the fallback when no index answers.
 	const fileNameSearch =
-		deps.fileNameSearch ?? createFileNameSearch({ userDataDir: config.userDataDir, locations: () => fsService.locations() });
+		deps.fileNameSearch ?? librarian.fileNameSearch;
 	const fsService = createFsService({
 		shell: host.shell,
 		clipboard: host.clipboard,
@@ -175,6 +194,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		deps.versionFamilies?.(familyDeps) ??
 		createVersionFamilyService({
 			...familyDeps,
+			scanDuplicates: (dir) => librarian.scanDuplicates(dir),
 			locations: () => fsService.locations(),
 			store: createFileVersionFamilyStore(join(config.userDataDir, "dupey-cache")),
 			buildEntry: buildFsEntry,
@@ -186,11 +206,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		backend: deps.watchBackend ?? lazyParcelBackend(),
 		onBatch: (batch) => liveHub.ingest(batch),
 	});
-	const indexStatus = createIndexStatusService({
-		env: process.env,
-		cwd: process.cwd(),
-		onRefreshed: (error) => deps.broadcast(FS_WORKER_PUSH.indexRefreshed, error),
-	});
+	const indexStatus: IndexStatusService = deps.indexStatus ?? librarian.indexStatus;
 	// A volume mounting or a cloud account connecting re-renders the sidebar.
 	const stopPlacesWatch = places.watch(() => deps.broadcast(FS_WORKER_PUSH.locationsChanged, null));
 	void versionFamilies.start();
@@ -231,6 +247,12 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), numberArg(args, 1, "mtimeMs")),
 		exists: (args) => fsService.exists(stringArg(args, 0, "path")),
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
+		uploadFile: (args) => {
+			const data = args[2];
+			if (!(data instanceof Uint8Array)) throw new TypeError("uploadFile expects bytes");
+			return fsService.uploadFile(stringArg(args, 0, "directory"), stringArg(args, 1, "name"), data);
+		},
+		readFile: (args) => fsService.readFileBytes(stringArg(args, 0, "path")),
 		locations: () => fsService.locations(),
 		tags: () => fsService.tags(),
 		setTags: (args) => fsService.setTags(stringsArg(args, 0, "paths"), tagChangeArg(args[1])),
@@ -290,6 +312,8 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		setLanguage: async (args) => {
 			if (!isAppLanguage(args[0])) throw new TypeError("language must be ko, en, ja, or zh");
 			await setAppLanguage(args[0]);
+			// Chosen only once a thread exists; a thread started later is told on its first call.
+			await librarian.setLanguage(args[0]);
 		},
 		indexStatus: (args) => indexStatus.indexStatus(stringsArg(args, 0, "paths")),
 		setIndexExcluded: (args) => {
@@ -334,8 +358,42 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			versionFamilies.stop();
 			// The index daemon (Everything / fsearch) is a separate OS process that
 			// outlives the app unless asked to exit; left running it pins userData.
+			// The librarian thread owns the real one: its shutdown stops the daemon and lets the librarian end the MinSync
+			// children it started, in one call. That runs beside the watch release, not after it, because main bounds the
+			// whole dispose (QUIT_DISPOSE_MS) and kills the worker, and the daemon with a stop still in flight, at the limit.
 			// `stop()` reports its own failures, so it cannot block the watch release.
-			await Promise.all([watch.dispose(), fileNameSearch.stop(), fsService.disposeEvidenceFolders?.() ?? Promise.resolve()]);
+			await Promise.all([
+				watch.dispose(),
+				// An injected index (a test's) stops itself; the real one stops inside the thread's shutdown below.
+				deps.fileNameSearch?.stop() ?? Promise.resolve(),
+				librarian.dispose(),
+				fsService.disposeEvidenceFolders?.() ?? Promise.resolve(),
+			]);
+		},
+	};
+}
+
+const LIBRARIAN_THREAD_FILE = "librarian-thread.mjs";
+
+/**
+ * The real librarian thread: the build entry `librarian-thread.mjs` beside the fs worker's own. The name stays out of a
+ * literal `new URL("./...", import.meta.url)` so the bundler does not try to resolve it as a source file.
+ */
+function spawnLibrarianThread(userDataDir: string): LibrarianThread {
+	const worker = new Worker(new URL(LIBRARIAN_THREAD_FILE, import.meta.url), { workerData: { userDataDir } satisfies LibrarianThreadData });
+	// Never keep the worker's event loop alive: the worker ends by being killed, and the thread with it.
+	worker.unref();
+	return {
+		port: adaptWorker(worker),
+		onExit: (listener) => {
+			let error: Error | null = null;
+			worker.once("error", (reason: unknown) => {
+				error = reason instanceof Error ? reason : new Error(String(reason));
+			});
+			worker.once("exit", (code) => listener(code, error));
+		},
+		terminate: async () => {
+			await worker.terminate();
 		},
 	};
 }

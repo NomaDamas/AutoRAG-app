@@ -3,11 +3,13 @@ import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
-import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
+import { DEFAULT_SETTINGS, type AppSettings } from "../../shared/settings-contract";
 import { setAppLanguage } from "../../shared/i18n";
+import { t as translate } from "../../shared/i18n/core";
+import { REMOTE_PREVIEW_FOLDER_CODE, REMOTE_PREVIEW_UNSUPPORTED_CODE } from "../../shared/remote-contract";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 import type { OsRendererRequest } from "../../shared/os-request-contract";
-import type { FsLocationIcon } from "../../shared/fs-contract";
+import { mapSourceStatus, type SourceStatusMap } from "./state/source-status";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
@@ -18,6 +20,8 @@ import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
+import { ErrorFixDialog } from "./components/ErrorFixDialog";
+import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
@@ -28,6 +32,8 @@ import type { DirectoryData } from "./hooks/useDirectoryData";
 import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
+import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
+import type { SidebarSettings } from "../../shared/sidebar-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
@@ -108,25 +114,6 @@ function saveNumber(key: string, value: number): void {
 	}
 }
 
-/** Sidebar cloud glyphs → live datasource rows (status dots on every account of that provider). */
-const SOURCE_ICON_MATCH: readonly (readonly [FsLocationIcon, RegExp])[] = [
-	["google-drive", /gdrive|google[- ]?drive/i],
-	["dropbox", /dropbox/i],
-	["icloud", /icloud/i],
-	["onedrive", /onedrive/i],
-];
-
-function mapSourceStatus(snapshot: DataSourcesSnapshot): Partial<Record<FsLocationIcon, "syncing" | "error">> {
-	const out: Partial<Record<FsLocationIcon, "syncing" | "error">> = {};
-	for (const [icon, needle] of SOURCE_ICON_MATCH) {
-		const row = snapshot.sources.find((source) => needle.test(source.id) || needle.test(source.type));
-		if (row === undefined) continue;
-		if (row.status === "syncing") out[icon] = "syncing";
-		else if (row.status === "attention") out[icon] = "error";
-	}
-	return out;
-}
-
 /**
  * The visible Finder icon for `path`, in viewport CSS pixels: Quick Look zooms
  * out of it and back into it. Null when the row is scrolled away or absent.
@@ -188,6 +175,7 @@ export function App(): ReactElement {
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
+	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
@@ -199,7 +187,12 @@ export function App(): ReactElement {
 		setPreview((current) =>
 			current?.path === target.path && target.anchor === undefined
 				? null
-				: { path: target.path, name: target.name, ...(target.anchor === undefined ? {} : { anchor: target.anchor }) },
+				: {
+						path: target.path,
+						name: target.name,
+						...(target.kind === undefined ? {} : { kind: target.kind }),
+						...(target.anchor === undefined ? {} : { anchor: target.anchor }),
+					},
 		);
 	}, []);
 	const closeQuickLook = useCallback(() => {
@@ -215,7 +208,7 @@ export function App(): ReactElement {
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
-	const [sourceStatus, setSourceStatus] = useState<Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>>({});
+	const [sourceStatus, setSourceStatus] = useState<SourceStatusMap>({});
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
@@ -379,6 +372,7 @@ export function App(): ReactElement {
 			onSettingsChanged: (settings: AppSettings) => {
 				setShowHiddenFiles(settings.showHiddenFiles);
 				setLanguage(settings.language);
+				setSidebarSettings(settings.sidebar);
 				void setAppLanguage(settings.language);
 			},
 			setListColumns,
@@ -523,14 +517,19 @@ export function App(): ReactElement {
 			if (current === null || current.path === focusPath) return current;
 			const match = stackRows.find((row) => row.entry.path === focusPath);
 			if (match === undefined) return current;
-			return { path: match.entry.path, name: match.entry.name };
+			return { path: match.entry.path, name: match.entry.name, kind: match.entry.kind };
 		});
 	}, [focusPath, stackRows]);
 
 	useEffect(() => {
 		const request = preview === null ? autorag.preview.hide(closingRef.current) : autorag.preview.show(preview, iconRect(preview.path));
 		closingRef.current = null;
-		request.catch((error: unknown) => setToast(error instanceof Error ? error.message : String(error)));
+		request.catch((error: unknown) => {
+			const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+			if (code === REMOTE_PREVIEW_FOLDER_CODE) setToast(translate("finderComponents.remotePreviewFolderUnsupported"));
+			else if (code === REMOTE_PREVIEW_UNSUPPORTED_CODE) setToast(translate("finderComponents.remotePreviewUnsupported"));
+			else setToast(error instanceof Error ? error.message : String(error));
+		});
 	}, [preview]);
 
 	// The OS takes 0.1-0.7s to draw a legacy Office page and up to 0.4s more to
@@ -557,11 +556,14 @@ export function App(): ReactElement {
 	}, [moveSelectionBy]);
 
 	useEffect(() => {
-		void autorag.settings.get().then((settings) => {
+		const applySettings = (settings: AppSettings): void => {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
+			setSidebarSettings(settings.sidebar);
 			void setAppLanguage(settings.language);
-		});
+		};
+		void autorag.settings.get().then(applySettings);
+		return autorag.settings.onChanged?.(applySettings);
 	}, []);
 
 	const focused = finder?.focusedEntry ?? null;
@@ -669,6 +671,7 @@ export function App(): ReactElement {
 
 	return (
 		<TagCatalogContext value={tagCatalog}>
+		<SidebarSettingsContext value={sidebarSettings}>
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
@@ -683,6 +686,10 @@ export function App(): ReactElement {
 						onNavigate={(item) => (item.view === "aiSearch" ? showAiSearch() : item.view === "automations" ? finder?.showAutomations() : finder?.navigateNav(item))}
 						onEject={(item) => finder?.ejectNav(item)}
 						onOpenSettings={() => finder?.openSettings()}
+						onOpenUsage={() => {
+							requestSettingsCategory("plan");
+							finder?.openSettings();
+						}}
 						onHideSidebar={() => setSidebarVisible(false)}
 						onOpenIndexing={() => {
 							requestSettingsCategory("indexing");
@@ -776,8 +783,12 @@ export function App(): ReactElement {
 												onPublish={publishEvidence}
 												imageActions={imageActions}
 												language={language}
-												onOpenPlan={() => {
-													requestSettingsCategory("plan");
+												onOpenSettings={(page) => {
+													requestSettingsCategory(page);
+													finder?.openSettings();
+												}}
+												onOpenSource={(alias) => {
+													requestSettingsCategory(`source:${alias}`);
 													finder?.openSettings();
 												}}
 											/>
@@ -853,6 +864,15 @@ export function App(): ReactElement {
 					onCancel={() => finder?.cancelConvertRename()}
 				/>
 			)}
+			{finder?.reduceDialog == null ? null : (
+				<ReduceSizeDialog
+					state={finder.reduceDialog}
+					onChangeLevel={(level) => finder.setReduceDialogLevel(level)}
+					onChangeReplaceOriginal={(replaceOriginal) => finder.setReduceDialogReplaceOriginal(replaceOriginal)}
+					onStart={() => finder.confirmReduceSize()}
+					onCancel={() => finder.cancelReduceSize()}
+				/>
+			)}
 			{finder?.emptyTrashConfirm === true ? (
 				<ConfirmDialog
 					title={t("confirm.emptyTrashTitle")}
@@ -892,8 +912,21 @@ export function App(): ReactElement {
 			{automations.preview === null ? null : (
 				<AutomationQuickLook rule={automations.preview} onClose={automations.closePreview} onEdit={automations.edit} />
 			)}
+			<div id="dazzi-error-fix-host">
+				<ErrorFixDialog
+					onOpenSettings={(page) => {
+						requestSettingsCategory(page);
+						finder?.openSettings();
+					}}
+					onOpenSource={(alias) => {
+						requestSettingsCategory(`source:${alias}`);
+						finder?.openSettings();
+					}}
+				/>
+			</div>
 		</div>
 		</AutomationsContext>
+		</SidebarSettingsContext>
 		</TagCatalogContext>
 	);
 }
