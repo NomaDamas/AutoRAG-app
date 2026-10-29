@@ -2330,6 +2330,7 @@
         "discover": "モデルを再検索"
       },
       "searchModels": "モデルを検索",
+      "emptySearchModels": "一致するモデルがありません。",
       "emptyRoleModels": "この役割で使える対応モデルがありません。先に該当のサービスを接続してください。",
       "emptyModels": "接続済みサービスから利用できるモデルがありません。",
       "connect": {

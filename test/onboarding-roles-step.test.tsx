@@ -70,8 +70,10 @@ describe("RolesStep", () => {
 		settings.configGet.mockResolvedValue(config());
 		await render();
 		await click(trigger("rerank"));
+		expect(host.querySelector('[data-provider-trigger="openrouter"]')).not.toBeNull();
+		expect(host.querySelector('[data-provider-trigger="anthropic"]')).toBeNull();
+		await click(host.querySelector('[data-provider-trigger="openrouter"]'));
 		expect(host.querySelector('[data-model-id="openrouter/cohere/rerank-v3.5"]')).not.toBeNull();
-		expect(host.querySelector('[data-model-id^="anthropic/"]')).toBeNull();
 	});
 
 	it("saves the picked reranker into the shared config, where Settings reads it", async () => {
@@ -79,6 +81,7 @@ describe("RolesStep", () => {
 		settings.configGet.mockResolvedValue(config());
 		await render();
 		await click(trigger("rerank"));
+		await click(host.querySelector('[data-provider-trigger="openrouter"]'));
 		await click(host.querySelector('[data-model-id="openrouter/cohere/rerank-v3.5"]'));
 		expect(settings.configPatch).toHaveBeenCalledWith([{ path: ["rerank"], value: { enabled: true, provider: "openrouter", model: "cohere/rerank-v3.5" } }]);
 	});
@@ -88,6 +91,7 @@ describe("RolesStep", () => {
 		settings.configGet.mockResolvedValue(config());
 		await render();
 		await click(trigger("jev"));
+		await click(host.querySelector('[data-provider-trigger="openrouter"]'));
 		await click(host.querySelector('[data-model-id="openrouter/typesafe/jev-1.13"]'));
 		expect(settings.configPatch).toHaveBeenCalledWith([{ path: ["jev"], value: { model: "typesafe/jev-1.13", backend: "openrouter" } }]);
 	});
