@@ -48,6 +48,8 @@ export interface ProviderConnectOptions {
 	readonly reload: () => Promise<void>;
 	/** Shows a one-line result ("connected", or why it failed) wherever the caller keeps its notices. */
 	readonly onNotice: (message: string) => void;
+	/** The onboarding model step marks the server form's required fields and drops "(optional)" from the key label. */
+	readonly markRequired?: boolean;
 }
 
 export interface ProviderConnect {
@@ -59,7 +61,7 @@ export interface ProviderConnect {
 	readonly modals: ReactElement | null;
 }
 
-export function useProviderConnect({ reload, onNotice }: ProviderConnectOptions): ProviderConnect {
+export function useProviderConnect({ reload, onNotice, markRequired = false }: ProviderConnectOptions): ProviderConnect {
 	const { t } = useTranslation();
 	const [keyModal, setKeyModal] = useState<ProviderSummary | null>(null);
 	const [serverModal, setServerModal] = useState<{ readonly kind: "local" | "custom"; readonly provider: ProviderSummary | null } | null>(null);
@@ -183,7 +185,7 @@ export function useProviderConnect({ reload, onNotice }: ProviderConnectOptions)
 		keyModal !== null || serverModal !== null || login !== null ? (
 			<>
 				{keyModal !== null ? <ApiKeyModal provider={keyModal} onClose={() => setKeyModal(null)} onDone={(message) => { setKeyModal(null); done(message); }} /> : null}
-				{serverModal !== null ? <ServerModal kind={serverModal.kind} provider={serverModal.provider} onClose={() => setServerModal(null)} onDone={(message) => { setServerModal(null); done(message); }} /> : null}
+				{serverModal !== null ? <ServerModal kind={serverModal.kind} provider={serverModal.provider} markRequired={markRequired} onClose={() => setServerModal(null)} onDone={(message) => { setServerModal(null); done(message); }} /> : null}
 				{login !== null ? <LoginModal state={login} input={loginInput} onInput={setLoginInput} onRespond={respond} onCancel={cancelLogin} /> : null}
 			</>
 		) : null;
@@ -306,7 +308,19 @@ function ApiKeyModal({ provider, onClose, onDone }: { readonly provider: Provide
 	);
 }
 
-function ServerModal({ kind, provider, onClose, onDone }: { readonly kind: "local" | "custom"; readonly provider: ProviderSummary | null; readonly onClose: () => void; readonly onDone: (message: string) => void }): ReactElement {
+function ServerModal({
+	kind,
+	provider,
+	markRequired,
+	onClose,
+	onDone,
+}: {
+	readonly kind: "local" | "custom";
+	readonly provider: ProviderSummary | null;
+	readonly markRequired: boolean;
+	readonly onClose: () => void;
+	readonly onDone: (message: string) => void;
+}): ReactElement {
 	const { t } = useTranslation();
 	const [label, setLabel] = useState(provider?.name ?? (kind === "local" ? t("settingsCore.ai.server.defaultLocal") : t("settingsCore.ai.server.defaultCustom")));
 	const [baseUrl, setBaseUrl] = useState(provider?.baseUrl ?? (kind === "local" ? "http://127.0.0.1:11434" : ""));
@@ -317,9 +331,9 @@ function ServerModal({ kind, provider, onClose, onDone }: { readonly kind: "loca
 		<ModalShell onClose={onClose}>
 			<h2>{provider === null ? (kind === "local" ? t("settingsCore.ai.server.titleLocal") : t("settingsCore.ai.server.titleCustom")) : t("settingsCore.ai.server.titleEdit")}</h2>
 			<p>{kind === "local" ? t(platformKey("settingsCore.ai.server.bodyLocal")) : t("settingsCore.ai.server.bodyCustom")}</p>
-			<label>{t("settingsCore.ai.server.name")}<input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} /></label>
-			<label>{t("settingsCore.ai.server.baseUrl")}<input value={baseUrl} placeholder="https://…/v1" onChange={(event) => setBaseUrl(event.target.value)} /></label>
-			<label>{t("settingsCore.ai.server.apiKeyOptional")}<input type="password" value={apiKey} placeholder={t("settingsCore.ai.server.optionalPlaceholder")} onChange={(event) => setApiKey(event.target.value)} /></label>
+			<label><span className={markRequired ? "settings-field-name is-required" : "settings-field-name"}>{t("settingsCore.ai.server.name")}</span><input autoFocus value={label} onChange={(event) => setLabel(event.target.value)} /></label>
+			<label><span className={markRequired ? "settings-field-name is-required" : "settings-field-name"}>{t("settingsCore.ai.server.baseUrl")}</span><input value={baseUrl} placeholder="https://…/v1" onChange={(event) => setBaseUrl(event.target.value)} /></label>
+			<label><span className="settings-field-name">{t(markRequired ? "settingsCore.ai.server.apiKey" : "settingsCore.ai.server.apiKeyOptional")}</span><input type="password" value={apiKey} placeholder={t("settingsCore.ai.server.optionalPlaceholder")} onChange={(event) => setApiKey(event.target.value)} /></label>
 			{error !== null ? <p className="settings-modal-error">{error}</p> : null}
 			<ModalActions>
 				<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>

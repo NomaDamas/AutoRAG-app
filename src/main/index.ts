@@ -28,7 +28,7 @@ import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from 
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
-import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
+import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, resolveConfigReadOnly, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
@@ -81,7 +81,7 @@ import { resolveMcpConnectInfo } from "./mcp-connect-info";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
-import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
+import { resolveConfiguredSessionModel, resolveSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -340,6 +340,17 @@ const SOURCE_PROBE_TIMEOUT_MS = 15_000;
 
 /** Longest the onboarding model check waits for the chosen model to answer one short prompt. */
 const MODEL_CHECK_TIMEOUT_MS = 30_000;
+
+/**
+ * The question-splitting model with its credentials, resolved exactly as the
+ * answer model is: the shared config with `queryDecomposition.model` standing in
+ * for `model`. `false` (split with the answer model) checks the answer model.
+ */
+function resolveDecompositionModel(): ReturnType<typeof resolveConfiguredSessionModel> {
+	const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
+	const decomposition = config.queryDecomposition === false ? undefined : config.queryDecomposition?.model;
+	return resolveSessionModel(decomposition === undefined ? config : { ...config, model: decomposition }, process.env, process.cwd(), getAgentDir());
+}
 
 /** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
 function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
@@ -1015,9 +1026,9 @@ app.whenReady().then(async () => {
 				return null;
 			}
 		},
-		checkModel: () =>
+		checkModel: (role) =>
 			checkModelHealth({
-				resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+				resolveModel: () => (role === "decomposition" ? resolveDecompositionModel() : resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir())),
 				complete: completeSimple,
 				timeoutMs: MODEL_CHECK_TIMEOUT_MS,
 				now: Date.now,

@@ -964,22 +964,43 @@
       }
     },
     "model": {
-      "eyebrow": "AI 모델",
-      "title": "사용할 모델을 연결하세요",
-      "lead": "API 키, 구독 계정 로그인, 내 컴퓨터의 서버 등 이미 가진 서비스를 연결한 다음 모델을 고르세요. 실제 호출에 응답해야 다음으로 넘어갈 수 있어요.",
-      "note": "설정 → AI 모델에 저장되므로 나중에 언제든 바꿀 수 있어요.",
+      "title": "사용할 AI 모델을 연결하세요",
+      "lead": "사용 중인 AI 서비스를 연결한 뒤, 역할마다 사용할 모델을 지정하세요.\nAPI 키, 구독 계정, 내 컴퓨터의 모델 서버를 연결할 수 있으며, 설정은 나중에 언제든 변경할 수 있습니다.",
       "connectedTitle": "연결된 서비스",
-      "none": "아직 연결된 서비스가 없어요.",
+      "rolesTitle": "역할별 모델 지정",
       "connect": "서비스 연결",
-      "modelRow": "모델",
       "pick": "모델 선택",
-      "needService": "먼저 서비스를 연결하세요",
-      "unready": "계속하려면 모델을 선택하세요.",
-      "ready": "✓ 준비 완료 · {{model}}이(가) {{seconds}}초 만에 응답했어요.",
-      "checking": "{{model}}이(가) 응답하는지 확인하는 중…",
-      "failed": "{{model}}이(가) 응답하지 않았어요: {{error}}",
-      "readyResumed": "✓ 준비 완료 · {{model}} 모델이 답변합니다.",
-      "retry": "다시 확인"
+      "auto": "자동 설정",
+      "searchServices": "검색하기",
+      "searchModels": "모델 검색하기",
+      "noMatch": "검색 결과가 없습니다.",
+      "noModels": "이 역할에 쓸 수 있는 모델이 없습니다. 자동 설정을 고르거나 해당 서비스를 연결하세요.",
+      "addCustom": "OpenAI 호환 서비스 추가",
+      "addLocal": "내 컴퓨터 서버 추가",
+      "disconnect": "{{name}} 연결 해제",
+      "status": {
+        "checking": "확인 중",
+        "ok": "연결 성공",
+        "failed": "연결 실패"
+      },
+      "role": {
+        "answer": {
+          "name": "답변 생성",
+          "desc": "질문에 대한 답변을 작성하고 문서를 요약합니다."
+        },
+        "decomposition": {
+          "name": "질문 나누기",
+          "desc": "길고 복잡한 질문을 여러 개의 검색어로 나눕니다."
+        },
+        "jev": {
+          "name": "검색 여부 판단 (Jev)",
+          "desc": "질문에 바로 답할지, 내 문서를 먼저 검색할지 결정합니다."
+        },
+        "rerank": {
+          "name": "결과 재정렬",
+          "desc": "질문과 관련성이 높은 문서를 상단에 배치합니다."
+        }
+      }
     },
     "indexing": {
       "tip": "꿀팁",
@@ -1155,13 +1176,6 @@
       "planActive": "{{plan}} 플랜이 적용되었습니다.",
       "signInFailed": "로그인하지 못했습니다.",
       "notIndexed": "인덱싱이 끝나야 Dazzi를 열 수 있어요."
-    },
-    "roles": {
-      "eyebrow": "검색 보조 모델",
-      "title": "재정렬·판단 모델을 고르세요",
-      "lead": "Dazzi 요금제를 쓰면 기본으로 제공되는 모델이에요. 내 키를 쓴다면 연결한 서비스에서 고르거나 그대로 두세요.",
-      "note": "설정 → AI 모델에 저장되므로 나중에 언제든 바꿀 수 있어요.",
-      "unavailable": "연결한 서비스 중에는 이 모델을 제공하는 곳이 없어요. 설정에서 OpenRouter를 연결하면 쓸 수 있어요."
     }
   },
   "finderComponents": {
@@ -2154,7 +2168,8 @@
         "apiKeyOptional": "API 키 (선택)",
         "optionalPlaceholder": "선택 사항",
         "saved": "{{name}}을(를) 저장했습니다.",
-        "bodyLocalPc": "Ollama, LM Studio처럼 이 PC에서 실행 중인 서버만 연결할 수 있습니다."
+        "bodyLocalPc": "Ollama, LM Studio처럼 이 PC에서 실행 중인 서버만 연결할 수 있습니다.",
+        "apiKey": "API 키"
       },
       "loginModal": {
         "openManually": "브라우저가 열리지 않으면 아래 주소를 직접 여세요.",

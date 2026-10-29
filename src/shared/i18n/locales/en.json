@@ -964,22 +964,43 @@
       }
     },
     "model": {
-      "eyebrow": "AI model",
-      "title": "Connect the model you'll use",
-      "lead": "Connect any provider you already have — an API key, a subscription sign-in, or a server on your computer — then choose the model. It has to answer a real call before you can continue.",
-      "note": "Saved to Settings → AI models, so you can change it there any time.",
+      "title": "Connect your AI models",
+      "lead": "Connect the AI services you already use, then choose a model for each role.\nYou can connect an API key, a subscription account, or a model server on your computer, and change this anytime in Settings.",
       "connectedTitle": "Connected services",
-      "none": "No service connected yet.",
+      "rolesTitle": "Models by role",
       "connect": "Connect a service",
-      "modelRow": "Model",
       "pick": "Choose a model",
-      "needService": "Connect a service first",
-      "unready": "Choose a model to continue.",
-      "ready": "✓ Ready · {{model}} answered in {{seconds}}s.",
-      "checking": "Checking that {{model}} answers…",
-      "failed": "{{model}} did not answer: {{error}}",
-      "readyResumed": "✓ Ready · {{model}} will answer your questions.",
-      "retry": "Check again"
+      "auto": "Auto",
+      "searchServices": "Search",
+      "searchModels": "Search models",
+      "noMatch": "No results.",
+      "noModels": "No model can do this role yet. Choose Auto, or connect a service that offers one.",
+      "addCustom": "Add an OpenAI-compatible service",
+      "addLocal": "Add a server on this computer",
+      "disconnect": "Disconnect {{name}}",
+      "status": {
+        "checking": "Checking",
+        "ok": "Connected",
+        "failed": "Connection failed"
+      },
+      "role": {
+        "answer": {
+          "name": "Answers",
+          "desc": "Writes answers to your questions and summarizes documents."
+        },
+        "decomposition": {
+          "name": "Query splitting",
+          "desc": "Breaks long, complex questions into several searches."
+        },
+        "jev": {
+          "name": "Search decision (Jev)",
+          "desc": "Decides whether to answer right away or search your documents first."
+        },
+        "rerank": {
+          "name": "Reranking",
+          "desc": "Moves the most relevant documents to the top."
+        }
+      }
     },
     "indexing": {
       "tip": "Tip",
@@ -1155,13 +1176,6 @@
       "planActive": "The {{plan}} plan is active.",
       "signInFailed": "Couldn't sign in.",
       "notIndexed": "Finish indexing to open Dazzi."
-    },
-    "roles": {
-      "eyebrow": "Search helpers",
-      "title": "Choose the reranker and Jev",
-      "lead": "A Dazzi plan would provide these. With your own keys, pick them from the services you connected — or leave them as they are.",
-      "note": "Saved to Settings → AI models, so you can change them there any time.",
-      "unavailable": "None of your connected services offer this. Connect OpenRouter in Settings to use it."
     }
   },
   "finderComponents": {
@@ -2154,7 +2168,8 @@
         "apiKeyOptional": "API Key (optional)",
         "optionalPlaceholder": "Optional",
         "saved": "Saved {{name}}.",
-        "bodyLocalPc": "You can only connect servers running on this PC, such as Ollama or LM Studio."
+        "bodyLocalPc": "You can only connect servers running on this PC, such as Ollama or LM Studio.",
+        "apiKey": "API key"
       },
       "loginModal": {
         "openManually": "If the browser doesn't open, open the address below yourself.",

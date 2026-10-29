@@ -93,7 +93,6 @@ describe("onboarding flow", () => {
 			"embedding",
 			"sources",
 			"plan",
-			"roles",
 			"indexing",
 		]);
 	});
@@ -110,7 +109,6 @@ describe("onboarding flow", () => {
 			"smartScope",
 			"embedding",
 			"sources",
-			"roles",
 			"indexing",
 		]);
 		expect(flow.indexOf("model")).toBeLessThan(flow.indexOf("smartScan"));
@@ -128,7 +126,6 @@ describe("onboarding flow", () => {
 			"sources",
 			"plan",
 			"model",
-			"roles",
 			"indexing",
 		]);
 	});
@@ -142,11 +139,12 @@ describe("onboarding flow", () => {
 		}
 	});
 
-	it("lets a BYOK user pick the reranker and Jev right before indexing, however the flow is ordered", () => {
+	it("has no separate role step: the model step picks the reranker and Jev too", () => {
 		for (const signedIn of [false, true]) {
 			for (const embed of ["none", "local", "cloud"] as const) {
 				const flow = buildFlow("byok", false, embed, signedIn);
-				expect(flow.slice(-2)).toEqual(["roles", "indexing"]);
+				expect(flow).not.toContain("roles");
+				expect(flow.at(-1)).toBe("indexing");
 			}
 		}
 	});

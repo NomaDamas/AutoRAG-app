@@ -38,6 +38,19 @@ export function modelConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdat
 	];
 }
 
+/** The write that makes `entry` the question-decomposition model, in the same shape as the answer model. */
+export function decompositionConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
+	const model: Record<string, string> = { provider: entry.provider, id: entry.id };
+	const name = entry.name.trim();
+	const baseUrl = (entry.baseUrl ?? "").trim();
+	const env = (entry.apiKeyEnv ?? "").trim();
+	if (name.length > 0) model.name = name;
+	if (entry.api.length > 0 && isAllowedAgentApi(entry.api)) model.api = entry.api;
+	if (baseUrl.length > 0) model.baseUrl = baseUrl;
+	if (env.length > 0) model.apiKeyEnv = env;
+	return [{ path: ["queryDecomposition"], value: { model } }];
+}
+
 /** The leaf write that makes `entry` the Jev model, with the backend its provider serves. */
 export function jevConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
 	const backend = jevBackendFor(entry.provider);

@@ -964,22 +964,43 @@
       }
     },
     "model": {
-      "eyebrow": "AI 模型",
-      "title": "连接要使用的模型",
-      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。它必须能响应一次真实调用，才能继续。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
+      "title": "连接要使用的 AI 模型",
+      "lead": "连接你正在使用的 AI 服务，然后为每个角色指定要使用的模型。\n可以连接 API 密钥、订阅账户或这台电脑上的模型服务器，设置之后可随时更改。",
       "connectedTitle": "已连接的服务",
-      "none": "尚未连接任何服务。",
+      "rolesTitle": "按角色指定模型",
       "connect": "连接服务",
-      "modelRow": "模型",
       "pick": "选择模型",
-      "needService": "请先连接服务",
-      "unready": "请选择模型以继续。",
-      "ready": "✓ 已就绪 · {{model}} 在 {{seconds}} 秒内响应。",
-      "checking": "正在确认 {{model}} 是否响应…",
-      "failed": "{{model}} 没有响应：{{error}}",
-      "readyResumed": "✓ 已就绪 · 将由 {{model}} 回答。",
-      "retry": "重新检查"
+      "auto": "自动设置",
+      "searchServices": "搜索",
+      "searchModels": "搜索模型",
+      "noMatch": "没有搜索结果。",
+      "noModels": "暂无可用于此角色的模型。请选择自动设置，或连接提供该模型的服务。",
+      "addCustom": "添加 OpenAI 兼容服务",
+      "addLocal": "添加这台电脑上的服务器",
+      "disconnect": "断开 {{name}}",
+      "status": {
+        "checking": "检查中",
+        "ok": "连接成功",
+        "failed": "连接失败"
+      },
+      "role": {
+        "answer": {
+          "name": "生成回答",
+          "desc": "撰写问题的回答并总结文档。"
+        },
+        "decomposition": {
+          "name": "拆分问题",
+          "desc": "将冗长复杂的问题拆分为多个搜索词。"
+        },
+        "jev": {
+          "name": "判断是否检索 (Jev)",
+          "desc": "决定是直接回答，还是先检索你的文档。"
+        },
+        "rerank": {
+          "name": "结果重排",
+          "desc": "把与问题最相关的文档排到前面。"
+        }
+      }
     },
     "indexing": {
       "tip": "小技巧",
@@ -1155,13 +1176,6 @@
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 Dazzi。"
-    },
-    "roles": {
-      "eyebrow": "检索辅助模型",
-      "title": "选择重排序与判断模型",
-      "lead": "使用 Dazzi 套餐时会默认提供。使用自己的密钥时，请从已连接的服务中选择，或保持现状。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
-      "unavailable": "已连接的服务中没有提供该模型的。在设置中连接 OpenRouter 即可使用。"
     }
   },
   "finderComponents": {
@@ -2154,7 +2168,8 @@
         "apiKeyOptional": "API 密钥 (可选)",
         "optionalPlaceholder": "可选",
         "saved": "已保存 {{name}}。",
-        "bodyLocalPc": "只能连接在此电脑上运行的服务器，例如 Ollama、LM Studio。"
+        "bodyLocalPc": "只能连接在此电脑上运行的服务器，例如 Ollama、LM Studio。",
+        "apiKey": "API 密钥"
       },
       "loginModal": {
         "openManually": "如果浏览器没有打开，请手动打开下面的地址。",

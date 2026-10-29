@@ -2622,90 +2622,485 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 9px;
 }
 
-.onb .model-card {
-	padding: 14px;
+/* Model step (Figma 09e): connected services on the left, a model per role on the right. */
+.onb .screen.model-screen {
+	justify-content: center;
+	gap: 50px;
+	padding-left: 24px;
+	padding-right: 24px;
 }
 
-.onb .model-services {
-	margin-bottom: 10px;
+.onb .model-screen h1 {
+	margin: 0 0 16px;
 }
 
-.onb .model-services .detected-row > :last-child:not(div) {
-	margin-left: auto;
-	color: var(--onb-blue);
+.onb .screen.center.model-screen .screen-copy>p {
+	max-width: none;
+	line-height: 21px;
+	white-space: nowrap;
 }
 
 .onb .model-overlays {
 	display: contents;
 }
 
-.onb .model-empty {
-	margin: 4px 0 10px;
+.onb .model-columns {
+	display: grid;
+	grid-template-columns: 324px 576px;
+	gap: 35px;
+	align-items: start;
+}
+
+.onb .model-column-title {
+	margin: 0 0 8px;
 	color: var(--onb-muted);
-	font-size: 10px;
+	font-size: 13px;
+	line-height: 21px;
 }
 
-.onb .model-connect {
-	display: inline-flex;
+/* Three services show; a fourth scrolls the list, and the connect row stays under it. */
+.onb .model-services {
+	overflow: hidden;
+	border-radius: 12px;
+	background: var(--onb-bg-card);
+}
+
+.onb .model-services-list {
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.onb .model-service {
+	display: flex;
 	align-items: center;
-	gap: 6px;
-	margin-top: 8px;
+	gap: 12px;
+	height: 60px;
+	padding: 0 16px;
+	box-sizing: border-box;
+	border-bottom: 1px solid var(--onb-bg-input);
 }
 
-.onb .model-trigger {
-	display: inline-flex;
+.onb .model-service-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 31px;
+	height: 31px;
+	border-radius: 8px;
+	background: var(--onb-bg-input);
+	color: var(--onb-body);
+	font-size: 15.6px;
+}
+
+.onb .model-service strong {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--onb-ink);
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-service-remove {
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--onb-faint);
+	cursor: pointer;
+}
+
+.onb .model-service-remove:hover {
+	color: var(--onb-body);
+}
+
+.onb .model-service-add {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	height: 60px;
+	padding: 0 16px;
+	border: 0;
+	background: none;
+	color: var(--onb-muted);
+	font: inherit;
+	font-size: 12px;
+	line-height: 16px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.onb .model-service-add svg {
+	color: var(--onb-faint);
+}
+
+.onb .model-role-card {
+	overflow: hidden;
+	margin-bottom: 8px;
+	border-radius: 12px;
+	background: var(--onb-bg-card);
+}
+
+.onb .model-role {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--onb-bg-input);
+}
+
+.onb .model-role:last-child {
+	border-bottom: 0;
+}
+
+.onb .model-role-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.onb .model-role-copy strong {
+	color: var(--onb-ink);
+	font-size: 12px;
+	font-weight: 400;
+	line-height: 16px;
+}
+
+.onb .model-role-copy small {
+	color: var(--onb-muted);
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+.onb .model-role-pick {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex: none;
+}
+
+/* The status sits left of the menu, so the menus line up whether or not a role shows one. */
+.onb .model-role-status {
+	display: grid;
+	place-items: center;
+	width: 12px;
+	height: 12px;
+	color: var(--onb-faint);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 12px;
+}
+
+.onb .model-role-status.ok {
+	color: #34c759;
+}
+
+.onb .model-role-status.failed {
+	color: #ff3b30;
+}
+
+.onb .model-role-status .spin {
+	display: block;
+}
+
+.onb .model-role-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 164px;
+	padding: 8px 12px;
+	border: 1px solid var(--onb-border);
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	color: var(--onb-body);
+	font: inherit;
+	font-size: 12px;
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.onb .model-role-trigger > span {
+	min-width: 0;
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-role-trigger svg {
+	flex: none;
+	color: var(--onb-muted);
+}
+
+.onb .model-role-trigger.failed {
+	border-color: rgba(255,59,48,.5);
+}
+
+/* While its check runs a menu cannot open. */
+.onb .model-role-trigger:disabled {
+	color: var(--onb-faint);
+	cursor: default;
+}
+
+.onb .model-role-trigger:disabled svg {
+	color: var(--onb-border);
+}
+
+.onb .model-notice {
+	margin: 4px 0 0;
+	color: var(--onb-red);
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+/* The step's menus: a fixed height, the search and "auto" pinned, only the list between them scrolls. */
+.onb .settings-view .settings-menu:has(.onb-menu) {
+	width: auto;
+	max-height: none;
+	overflow: hidden;
+	padding: 0;
+	border: 1px solid var(--onb-border);
+	border-radius: 12px;
+	background: rgba(255,255,255,.9);
+	backdrop-filter: blur(2px);
+	box-shadow: none;
+}
+
+.onb .onb-menu {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 0;
+	box-sizing: border-box;
+}
+
+.onb .onb-menu.connect {
+	width: 280px;
+	height: 220px;
+}
+
+.onb .onb-menu.role {
+	width: 188px;
+	height: 190px;
+}
+
+.onb .onb-menu.role.with-auto {
+	height: 232px;
+	padding-bottom: 0;
+}
+
+.onb .onb-menu-search {
+	display: flex;
 	align-items: center;
 	gap: 8px;
-	max-width: 70%;
+	flex: none;
+	padding: 4px 16px;
+	color: var(--onb-muted);
 }
 
-.onb .model-trigger > span {
+.onb .onb-menu-search input {
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: none;
+	color: var(--onb-ink);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .onb-menu-search input::placeholder {
+	color: var(--onb-muted);
+}
+
+.onb .onb-menu-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.onb .onb-menu-group+.onb-menu-group {
+	margin-top: 6px;
+	padding-top: 6px;
+	border-top: 1px solid var(--onb-divider);
+}
+
+.onb .onb-menu-group-title {
+	margin: 0;
+	padding: 4px 16px;
+	color: var(--onb-muted);
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+}
+
+.onb .onb-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 16px;
+	border: 0;
+	background: none;
+	color: var(--onb-ink);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.onb .onb-menu-item:hover {
+	background: var(--onb-bg-stage);
+}
+
+.onb .onb-menu-item > span {
+	flex: 1;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.onb .model-status.ready {
-	color: var(--onb-blue);
+.onb .onb-menu-item.failed {
+	color: var(--onb-faint);
 }
 
-.onb .model-status.failed {
-	color: var(--onb-red);
+.onb .onb-menu-icon {
+	display: grid;
+	place-items: center;
+	flex: none !important;
+	width: 18px;
+	height: 18px;
+	border-radius: 5px;
+	background: var(--onb-bg-input);
+	color: var(--onb-muted);
+	font-size: 10px;
+	line-height: 1;
 }
 
-.onb .model-retry {
-	margin-top: 8px;
+.onb .onb-menu-mark {
+	flex: none;
+	color: var(--onb-muted);
 }
 
-.onb .role-row {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 12px 4px;
+.onb .onb-menu-mark.failed {
+	color: #ff3b30;
+	font-size: 12px;
+}
+
+.onb .onb-menu-auto {
+	flex: none;
+	padding-top: 9px;
+	padding-bottom: 10px;
 	border-top: 1px solid var(--onb-divider);
 }
 
-.onb .role-row:first-child {
-	border-top: 0;
-}
-
-.onb .role-copy strong {
-	display: block;
+.onb .onb-menu-empty {
+	margin: 0;
+	padding: 6px 16px;
+	color: var(--onb-muted);
 	font-size: 11px;
+	line-height: 16px;
 }
 
-.onb .role-copy small {
-	display: block;
-	margin-top: 3px;
-	color: var(--onb-muted);
-	font-size: 9.5px;
+/* The add-service form (Figma 09f): a 398px card, starred required fields, and a blue Connect. */
+.onb .settings-view .settings-modal-backdrop {
+	background: rgba(20,20,25,.22);
 }
 
-.onb .model-status {
-	margin: 10px 0 0;
+.onb .settings-view .settings-modal {
+	width: 398px;
+	padding: 20px;
+	border: 0;
+	border-radius: 16px;
+	background: var(--onb-bg-card);
+	box-shadow: none;
+	filter: drop-shadow(0 0 4px rgba(0,0,0,.2));
+}
+
+.onb .settings-view .settings-modal-close {
+	top: 20px;
+	right: 20px;
+}
+
+.onb .settings-view .settings-modal h2 {
+	margin: 0 0 6px;
+	color: var(--onb-ink);
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 22px;
+}
+
+.onb .settings-view .settings-modal p {
 	color: var(--onb-muted);
-	font-size: 10px;
+	font-size: 11px;
+	line-height: 16px;
+}
+
+.onb .settings-view .settings-modal label {
+	margin-top: 12px;
+	color: var(--onb-body);
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+.onb .settings-view .settings-modal label:first-of-type {
+	margin-top: 30px;
+}
+
+.onb .settings-view .settings-modal .settings-field-name.is-required::after {
+	content: "*";
+	margin-left: 1px;
+	color: #ff3b30;
+}
+
+.onb .settings-view .settings-modal input:not([type="radio"], [type="checkbox"]) {
+	height: 28px;
+	margin-top: 4px;
+	padding: 0 10px;
+	border-color: var(--onb-divider);
+	border-radius: 6px;
+	font-size: 12px;
+}
+
+.onb .settings-view .settings-modal input::placeholder {
+	color: var(--onb-faint);
+}
+
+.onb .settings-view .settings-modal-actions {
+	gap: 8px;
+	margin-top: 30px;
+}
+
+.onb .settings-view .settings-modal-actions .linear-btn {
+	height: 26px;
+	padding: 0 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 4px;
+	background: none;
+	color: var(--onb-muted);
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.onb .settings-view .settings-modal-actions .settings-btn-primary {
+	border-color: transparent;
+	background: var(--onb-blue);
+	color: #fff;
+}
+
+.onb .settings-view .settings-modal-actions .settings-btn-primary:disabled {
+	background: rgba(10,100,216,.5);
+	opacity: 1;
 }
 
 .onb .secure-note {
