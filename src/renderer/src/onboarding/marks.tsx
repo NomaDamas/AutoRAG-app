@@ -294,3 +294,22 @@ export function BrandMark({ name, size = 16 }: BrandMarkProps): ReactElement | n
 export function AppLogo(): ReactElement {
 	return <img className="app-logo" src={dazziLogo} alt="" draggable={false} />;
 }
+
+/** The footer's Back key (basil backspace-outline, Figma 111:3347), drawn in the text color it is given. */
+export function FooterBackKey(): ReactElement {
+	return (
+		<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false">
+			<path d="Vector" />
+			<path d="Vector_2" fillRule="evenodd" clipRule="evenodd" />
+		</svg>
+	);
+}
+
+/** The footer's Continue arrow (fluent arrow-enter-left, Figma 111:3346). */
+export function FooterEnterArrow(): ReactElement {
+	return (
+		<svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" focusable="false">
+			<path d="Vector" />
+		</svg>
+	);
+}

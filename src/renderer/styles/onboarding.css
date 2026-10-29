@@ -340,7 +340,7 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	padding: 0 20px;
 	border: 1px solid var(--onb-border);
 	border-radius: 8px;
-	background: var(--onb-bg-card);
+	background: transparent;
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
@@ -349,6 +349,16 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 
 .onb .footer-btn.next {
 	gap: 14px;
+}
+
+/* The glyphs are a step lighter than the label (Figma: muted on body). */
+.onb .footer-btn svg {
+	flex: none;
+	color: var(--onb-muted);
+}
+
+.onb .footer-btn:disabled svg {
+	color: var(--onb-faint);
 }
 
 /* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */

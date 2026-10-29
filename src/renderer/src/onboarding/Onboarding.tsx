@@ -46,7 +46,7 @@ import {
 	usageConsentOnLeaving,
 	type Translate,
 } from "./flow";
-import { AppLogo, Icon } from "./marks";
+import { AppLogo, FooterBackKey, FooterEnterArrow, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import {
 	addExclusion as withExclusion,
@@ -1043,11 +1043,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				<div className="footer-actions">
 					<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={back}>
 						{t("onboarding.footerBack")}
-						<Icon name="backspace" size={24} />
+						<FooterBackKey />
 					</button>
 					<button type="button" className="footer-btn next" disabled={!currentAdvance()} onClick={next}>
 						{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))}
-						<Icon name="corner-down-left" size={20} />
+						<FooterEnterArrow />
 					</button>
 				</div>
 			</>
