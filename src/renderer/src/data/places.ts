@@ -1,14 +1,16 @@
 /**
  * Sidebar navigation, derived from the live locations the main process reports
  * (`fs.locations`): Favorites (the Finder/Explorer standard folders), Cloud (the
- * drives connected to the OS — one row per account), and Locations (the boot
- * disk plus every mounted volume / drive letter). Nothing here is a fixed list;
- * a section with no rows is not rendered — the app rows are AI Search and
- * Automations, which head Favorites (DESIGN.md §1.3a, §1.3c).
+ * drives connected to the OS — one row per account), Connections (folders the
+ * app connections of the AutoRAG config fill, today a Discord source's saved
+ * attachments), and Locations (the boot disk plus every mounted volume / drive
+ * letter). Nothing here is a fixed list; a section with no rows is not rendered —
+ * the app rows are AI Search and Automations, which head Favorites (DESIGN.md
+ * §1.3a, §1.3c).
  *
- * The status dot beside a cloud row is NOT data: it is driven by the live
- * datasource status the shell reads from `settings.sourcesList`, keyed by the
- * row's provider glyph and passed down as `sourceStatus`.
+ * The status dot beside a cloud or connection row is NOT data: it is driven by the
+ * live datasource status the shell reads from `settings.sourcesList`, keyed by the
+ * row's glyph and passed down as `sourceStatus`.
  */
 
 import {
@@ -27,6 +29,7 @@ import {
 	Image,
 	Monitor,
 	Music,
+	MessagesSquare,
 	Package,
 	Server,
 	Sparkles,
@@ -88,6 +91,7 @@ const ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
 	onedrive: Cloud,
 	dropbox: Box,
 	box: Package,
+	discord: MessagesSquare,
 	cloud: Cloud,
 	disk: HardDrive,
 	network: Server,
@@ -120,6 +124,7 @@ const AUTOMATIONS_ITEM: NavItem = {
 const SECTIONS: readonly (readonly [FsLocation["section"], string])[] = [
 	["favorites", "Favorites"],
 	["cloud", "Cloud"],
+	["connections", "Connections"],
 	["locations", "Locations"],
 ];
 
