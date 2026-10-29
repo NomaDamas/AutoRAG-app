@@ -2,7 +2,7 @@ import { execFile } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { t } from "../shared/i18n/core";
@@ -44,12 +44,6 @@ export interface AutomationServiceDeps {
 	readonly pollMs?: number;
 	/** Liveness probe for the pid in the daemon lock; `EPERM` counts as alive. */
 	readonly pidAlive?: (pid: number) => boolean;
-}
-
-/** The librarian's operator home: `AUTORAG_HOME` when set, `<homeDir>/.autorag` otherwise. */
-export function automationsHome(env: NodeJS.ProcessEnv, homeDir: string): string {
-	const configured = env.AUTORAG_HOME?.trim();
-	return configured === undefined || configured.length === 0 ? join(homeDir, ".autorag") : resolve(configured);
 }
 
 export interface LibrarianCommandDeps {

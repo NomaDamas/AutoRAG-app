@@ -46,7 +46,7 @@ const realMinsyncModels =
 		: join(homeDir(), ".cache", "minsync", "models"));
 // The first argument (or QA_ONBOARDING_EMBED) picks the embedding card: none (default, keyword-only) or local. `bun run qa script` forwards arguments into the VM, environment variables do not. Cloud needs an account, so it is not drivable here.
 const EMBED = process.argv[2]?.trim() || process.env.QA_ONBOARDING_EMBED?.trim() || "none";
-const EMBED_CARD = { none: 0, local: 1 }[EMBED];
+const EMBED_CARD = { none: 0, local: 2 }[EMBED];
 if (EMBED_CARD === undefined) throw new Error(`the embed mode must be none or local, got ${EMBED}`);
 const failures = [];
 const check = (name, ok, detail = "") => {
@@ -191,7 +191,7 @@ try {
 
 	// welcome
 	check("welcome headline", (await heading()).includes("파일에게"));
-	check("back is disabled on the first step", await page.locator(".onb .back-btn").isDisabled());
+	check("back is disabled on the first step", await page.locator(".onb .footer-btn >> nth=0").isDisabled());
 	await shot("01-welcome");
 	await page.keyboard.press("Enter");
 

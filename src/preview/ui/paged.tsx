@@ -60,7 +60,7 @@ function useNearScreen<T extends HTMLElement>(scroller: string, margin: string):
  * drawn, so a zoom keeps showing the old pixels (stretched) instead of a blank
  * page while the new resolution renders.
  */
-function usePageDraw(draw: DrawPage, index: number, width: number | null, holder: HTMLElement | null, onBox: (index: number, box: Size) => void, onError: (message: string) => void): boolean {
+function usePageDraw(draw: DrawPage, index: number, width: number | null, holder: HTMLElement | null, onBox: (index: number, box: Size) => void, onError: (message: string) => void, revision = 0): boolean {
 	const { t } = useTranslation();
 	const [drawn, setDrawn] = useState(false);
 	useEffect(() => {
@@ -82,7 +82,7 @@ function usePageDraw(draw: DrawPage, index: number, width: number | null, holder
 			cancelled = true;
 			job.cancel();
 		};
-	}, [draw, index, width, holder, onBox, onError, t]);
+	}, [draw, index, width, holder, onBox, onError, t, revision]);
 	return drawn;
 }
 
@@ -95,15 +95,17 @@ interface PageProps {
 	readonly marks: PageMarks["rects"] | undefined;
 	readonly onBox: (index: number, box: Size) => void;
 	readonly onError: (message: string) => void;
+	/** Bumped when the page's source changed (a sharper picture arrived): the page is drawn again. */
+	readonly revision: number;
 	readonly register: (index: number, node: HTMLDivElement | null) => void;
 }
 
 /** One paper card. It keeps its size while released, so a long document stays cheap to scroll. */
-function Page({ draw, index, box, scale, marks, onBox, onError, register }: PageProps): ReactElement {
+function Page({ draw, index, box, scale, marks, onBox, onError, register, revision }: PageProps): ReactElement {
 	const { attach, near } = useNearScreen<HTMLDivElement>(".ql-pages__scroll", RENDER_MARGIN);
 	const [holder, setHolder] = useState<HTMLDivElement | null>(null);
 	const width = Math.round(box.width * scale);
-	usePageDraw(draw, index, near ? width : null, holder, onBox, onError);
+	usePageDraw(draw, index, near ? width : null, holder, onBox, onError, revision);
 	useEffect(() => {
 		// Leaving the viewport drops the backing store.
 		if (!near) holder?.replaceChildren();
@@ -190,11 +192,14 @@ export function PagedView({
 	file,
 	boxes: initialBoxes,
 	draw,
+	revisions,
 	evidence = null,
 }: {
 	readonly file: PreviewDocument;
 	readonly boxes: readonly Size[];
 	readonly draw: DrawPage;
+	/** Per page, a number that changes when the page's source does; that page alone is drawn again. */
+	readonly revisions?: readonly number[];
 	readonly evidence?: EvidenceMarks | null;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -311,7 +316,7 @@ export function PagedView({
 				<div ref={scrollerRef} className="ql-pages__scroll absolute inset-0 overflow-auto">
 					<div className="flex flex-col items-center gap-18 w-fit min-w-full px-[56px] pt-8 pb-70 box-border">
 						{boxes.map((box, index) => (
-							<Page key={index} draw={draw} index={index} box={box} scale={scale} marks={marksByPage.get(index)} onBox={onBox} onError={fail} register={register} />
+							<Page key={index} draw={draw} index={index} box={box} scale={scale} marks={marksByPage.get(index)} onBox={onBox} onError={fail} register={register} revision={revisions?.[index] ?? 0} />
 						))}
 					</div>
 				</div>

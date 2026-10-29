@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, creditsResetAt, isPaidPlanId, nextWeeklyReset, parsePromoCode, splitRemaining } from "../src/shared/account-contract";
+import { ACCOUNT_LEGAL_ROUTES, accountDashboardUrl, accountLegalUrl, creditsResetAt, isAccountSignInOptions, isPaidPlanId, nextWeeklyReset, parsePromoCode, splitRemaining } from "../src/shared/account-contract";
 
 describe("accountLegalUrl", () => {
 	it("serves the server's legal routes", () => {
@@ -62,6 +62,19 @@ describe("splitRemaining", () => {
 		expect(splitRemaining(2 * 86_400_000 + 3 * 3_600_000 + 4 * 60_000)).toEqual({ days: 2, hours: 3, minutes: 4 });
 		expect(splitRemaining(30_000)).toEqual({ days: 0, hours: 0, minutes: 1 });
 		expect(splitRemaining(-5)).toEqual({ days: 0, hours: 0, minutes: 0 });
+	});
+});
+
+describe("isAccountSignInOptions", () => {
+	it("accepts only the direct social OAuth providers", () => {
+		expect(isAccountSignInOptions({ provider: "google" })).toBe(true);
+		expect(isAccountSignInOptions({ provider: "github" })).toBe(true);
+	});
+
+	it("rejects unsupported providers and malformed IPC payloads", () => {
+		for (const value of [null, undefined, "google", {}, { provider: "apple" }, { provider: "email" }]) {
+			expect(isAccountSignInOptions(value), JSON.stringify(value)).toBe(false);
+		}
 	});
 });
 

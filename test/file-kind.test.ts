@@ -6,18 +6,20 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import {
 	createOsKindResolver,
+	defaultRun,
 	kindQueryForPlatform,
 	parseKindStdout,
+	parseMacKindStdout,
 	parseWindowsKindStdout,
 	windowsKindQuery,
 	windowsRegistryExtension,
 } from "../src/main/file-kind";
 
 describe("kindQueryForPlatform", () => {
-	it("reads Spotlight metadata on macOS, the same string Finder's Kind column shows", () => {
+	it("reads Spotlight metadata on macOS, the same string Finder's Kind column shows, with the type identifier beside it", () => {
 		expect(kindQueryForPlatform("darwin", "/tmp/a.mp4")).toEqual({
 			command: "/usr/bin/mdls",
-			args: ["-name", "kMDItemKind", "-raw", "/tmp/a.mp4"],
+			args: ["-name", "kMDItemKind", "-name", "kMDItemContentType", "-raw", "/tmp/a.mp4"],
 		});
 	});
 
@@ -43,6 +45,28 @@ describe("parseKindStdout", () => {
 	});
 });
 
+describe("parseMacKindStdout", () => {
+	const SEP = "\0";
+
+	it("reads the kind of a type macOS knows", () => {
+		expect(parseMacKindStdout(`com.adobe.photoshop-image${SEP}Adobe Photoshop document`)).toEqual({ kind: "Adobe Photoshop document", registered: true });
+	});
+
+	it("marks an extension no installed app registered: macOS answers a dyn.* type with the generic 'Document'", () => {
+		expect(parseMacKindStdout(`dyn.ah62d4rv4ge81g45fsvv0u${SEP}Document`)).toEqual({ kind: "Document", registered: false });
+	});
+
+	it("reads a kind whose type identifier is missing as registered, since nothing says it is generic", () => {
+		expect(parseMacKindStdout(`(null)${SEP}PDF document`)).toEqual({ kind: "PDF document", registered: true });
+		expect(parseMacKindStdout("PDF document")).toEqual({ kind: "PDF document", registered: true });
+	});
+
+	it("has no kind when the OS reported none", () => {
+		expect(parseMacKindStdout(`(null)${SEP}(null)`)).toBeNull();
+		expect(parseMacKindStdout("")).toBeNull();
+	});
+});
+
 describe("createOsKindResolver", () => {
 	it("runs one OS query per extension and reuses the answer", async () => {
 		// Given a resolver whose runner records every query
@@ -63,6 +87,32 @@ describe("createOsKindResolver", () => {
 		expect(first).toBe("MPEG-4 movie");
 		expect(second).toBe("MPEG-4 movie");
 		expect(queried).toEqual(["/tmp/a.mp4"]);
+	});
+
+	it("drops macOS's generic 'Document' for an extension nothing registered when the app has its own name for it", async () => {
+		// Given macOS answering the dynamic type's generic kind for GIMP, Sketch and Figma files and for a made-up extension
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			run: async () => ({ kind: "Document", registered: false }),
+		});
+
+		// Then the three the app can name come back unanswered, so the row shows the app's own name
+		expect(await resolver.kindFor("/tmp/a.xcf", "xcf")).toBeNull();
+		expect(await resolver.kindFor("/tmp/a.sketch", "sketch")).toBeNull();
+		expect(await resolver.kindFor("/tmp/a.fig", "fig")).toBeNull();
+		// And an extension the app knows nothing about keeps the OS's own (generic) word, as Finder shows it
+		expect(await resolver.kindFor("/tmp/a.weird", "weird")).toBe("Document");
+	});
+
+	it("keeps the OS kind of a type macOS does know, even for an extension the app can also name", async () => {
+		// Given Photoshop (or Illustrator) installed, so macOS registers the type
+		const resolver = createOsKindResolver({
+			platform: "darwin",
+			run: async () => ({ kind: "Adobe Photoshop document", registered: true }),
+		});
+
+		// Then the OS answer wins
+		expect(await resolver.kindFor("/tmp/a.psd", "psd")).toBe("Adobe Photoshop document");
 	});
 
 	it("queries a different extension separately", async () => {
@@ -238,6 +288,15 @@ describe("windowsKindQuery / parseWindowsKindStdout", () => {
 });
 
 describe("createOsKindResolver on Windows", () => {
+	it("preserves leading blank lines from defaultRun when the first extension in a batch is unknown", async () => {
+		const stdout = await defaultRun({
+			command: process.execPath,
+			args: ["-e", "process.stdout.write('\\r\\nPDF Document\\r\\n')"],
+			extensions: [".zzz-unknown", ".pdf"],
+		});
+
+		expect(parseWindowsKindStdout(typeof stdout === "string" ? stdout : "", 2)).toEqual([null, "PDF Document"]);
+	});
 	/** A runner that answers each extension in a batch from a table and records every batch. */
 	function recordingRunner(answers: Record<string, string>) {
 		const batches: (readonly string[])[] = [];
@@ -378,6 +437,25 @@ describe("createOsKindResolver on Windows", () => {
 		expect(await resolver.kindFor("C:\\repo\\.gitignore", "gitignore")).toBe("GITIGNORE File");
 		expect(batches).toEqual([[".gitignore"]]);
 	});
+
+	it("settles every caller when cache eviction drops a waiting extension that is requested again in the same batch", async () => {
+		const { batches, run } = recordingRunner({ ".aaa": "Kind A", ".bbb": "Kind B", ".ccc": "Kind C" });
+		const resolver = createOsKindResolver({ platform: "win32", cacheLimit: 2, run });
+
+		const requests = Promise.all([
+			resolver.kindFor("C:\\first.aaa", "aaa"),
+			resolver.kindFor("C:\\one.bbb", "bbb"),
+			resolver.kindFor("C:\\two.ccc", "ccc"),
+			resolver.kindFor("C:\\second.aaa", "aaa"),
+		]);
+		const outcome = await Promise.race([
+			requests,
+			new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 300)),
+		]);
+
+		expect(outcome).toEqual(["Kind A", "Kind B", "Kind C", "Kind A"]);
+		expect(batches).toEqual([[".aaa", ".bbb", ".ccc"]]);
+	});
 });
 
 const runPowerShell = promisify(execFile);
@@ -412,10 +490,10 @@ describe.skipIf(process.platform !== "win32")("the Windows registry lookup, on a
 
 	it("resolves files end to end through the default runner, extensionless files without a process", async () => {
 		const resolver = createOsKindResolver();
-		const files = ["C:\\x\\a.zip", "C:\\x\\b.exe", "C:\\x\\c.json", "C:\\x\\d.ZIP", "C:\\x\\Makefile"];
+		const files = ["C:\\x\\first.zzz-no-such-extension", "C:\\x\\a.zip", "C:\\x\\b.exe", "C:\\x\\c.json", "C:\\x\\d.ZIP", "C:\\x\\Makefile"];
 		const kinds = await Promise.all(files.map((file) => resolver.kindFor(file, file.includes(".") ? file.split(".").pop()?.toLowerCase() ?? "" : "")));
 		const expected = await Promise.all([".zip", ".exe", ".json", ".zip"].map(providerKind));
 
-		expect(kinds).toEqual([...expected, null]);
+		expect(kinds).toEqual([null, ...expected, null]);
 	});
 });

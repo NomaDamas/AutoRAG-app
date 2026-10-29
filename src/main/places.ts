@@ -19,6 +19,12 @@
  * - Cloud: `HKLM\…\Explorer\SyncRootManager` roots registered for this user's SID.
  * - Disks: every `Win32_LogicalDisk`; a Google Drive virtual drive joins Cloud.
  * - Eject: `net use X: /delete` for network drives, the shell "Eject" verb otherwise.
+ *
+ * Both platforms
+ * - Discord: one Cloud row per enabled Discord datasource of the AutoRAG config whose attachments folder
+ *   (`<AUTORAG_HOME>/attachments/discord/<connection>`, see `discord-attachments.ts`) holds a file of the
+ *   user's. The row opens that folder; a sync that saved nothing (only `download-status.json`, `.discrawl/`,
+ *   `.lock/`) shows none.
  */
 
 import { execFile } from "node:child_process";
@@ -28,6 +34,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { basename, join, win32 } from "node:path";
 import type { FsLocation, FsLocationIcon } from "../shared/fs-contract";
 import type { KnownFolders } from "../shared/fs-worker-contract";
+import { discordAttachmentFolders } from "./discord-attachments";
 import { errorMessage, hasErrorCode, isAvailable, pathExists } from "./fs-entry";
 import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
 
@@ -45,7 +52,7 @@ export interface PlacesDeps {
 	readonly volumesRoot?: string;
 	/** macOS Applications folder; defaults to /Applications. */
 	readonly applicationsDir?: string;
-	/** Windows environment (SystemDrive, ProgramFiles); defaults to process.env. */
+	/** Windows (SystemDrive, ProgramFiles) and the AutoRAG home and config (AUTORAG_HOME, AUTORAG_CONFIG); defaults to process.env. */
 	readonly env?: Readonly<Record<string, string | undefined>>;
 	/** Defaults to `<home>/<Folder>`; production passes Electron's resolved paths. */
 	readonly knownFolders?: KnownFolders;
@@ -58,7 +65,7 @@ export interface Places {
 	list(): Promise<readonly FsLocation[]>;
 	/** Unmount the ejectable location at `path`; rejects with the OS reason. */
 	eject(path: string): Promise<void>;
-	/** Cheap fingerprint of what is mounted/connected; changes when a volume or cloud account comes or goes. */
+	/** Cheap fingerprint of what is mounted/connected; changes when a volume, cloud account or Discord attachments folder comes or goes. */
 	signature(): Promise<string>;
 	/** Poll `signature` and call `listener` whenever it moves. Returns the stop function. */
 	watch(listener: () => void, intervalMs?: number): () => void;
@@ -403,7 +410,8 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		return [...cloud, ...disks];
 	}
 
-	async function signature(): Promise<string> {
+	/** What is mounted or connected at the OS level; the cached cloud and disk rows are valid while it holds. */
+	async function mountSignature(): Promise<string> {
 		if (windows) {
 			const letters: string[] = [];
 			for (let code = 65; code <= 90; code += 1) {
@@ -428,8 +436,26 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		return JSON.stringify([devices, domains.sort(), hasICloud]);
 	}
 
+	/**
+	 * One Connections row per connected Discord source whose attachments folder holds something of the user's.
+	 * Read on every call, not cached with the mounts: it depends on the config and on what the last refresh saved.
+	 */
+	async function discordRows(): Promise<FsLocation[]> {
+		const folders = await discordAttachmentFolders(env, home);
+		return folders.map(({ connection, path }) =>
+			location("connections", folders.length === 1 ? "Discord" : `Discord - ${connection}`, path, "discord", { available: true, scanned: true }),
+		);
+	}
+
+	async function signature(): Promise<string> {
+		const [mounted, discord] = await Promise.all([mountSignature(), discordAttachmentFolders(env, home)]);
+		// Which folders are shown, not how many files they hold: the first attachment and a connection
+		// being switched on or off move it, the thousandth download does not.
+		return JSON.stringify([mounted, discord.map((folder) => folder.path)]);
+	}
+
 	async function mountedRows(): Promise<readonly FsLocation[]> {
-		const current = await signature();
+		const current = await mountSignature();
 		if (cached === null || cached.signature !== current) {
 			const rows = windows ? windowsRows() : Promise.all([macCloud(), macDisks()]).then((parts) => parts.flat());
 			cached = { signature: current, rows };
@@ -442,8 +468,8 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 	}
 
 	async function list(): Promise<readonly FsLocation[]> {
-		const [favoriteRows, rows] = await Promise.all([favorites(), mountedRows()]);
-		return [...favoriteRows, ...rows];
+		const [favoriteRows, rows, discord] = await Promise.all([favorites(), mountedRows(), discordRows()]);
+		return [...favoriteRows, ...rows, ...discord];
 	}
 
 	async function eject(path: string): Promise<void> {

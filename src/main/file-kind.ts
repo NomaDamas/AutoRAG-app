@@ -14,8 +14,18 @@
 
 import { execFile } from "node:child_process";
 import { lstat, stat } from "node:fs/promises";
+import { hasExtensionKindName } from "../shared/extension-kind-names";
 import { errorMessage, hasErrorCode } from "./fs-entry";
 import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
+
+/**
+ * What a probe answered. `registered` is false when macOS had no type for the
+ * extension (a `dyn.*` content type) and so gave only the generic "Document".
+ */
+export interface KindAnswer {
+	readonly kind: string;
+	readonly registered: boolean;
+}
 
 export interface KindQuery {
 	readonly command: string;
@@ -32,8 +42,8 @@ export interface OsKindResolver {
 export interface OsKindDeps {
 	/** Defaults to process.platform. */
 	readonly platform?: NodeJS.Platform;
-	/** Runs the query and returns its stdout. Defaults to spawning the platform command with execFile. */
-	readonly run?: (query: KindQuery) => Promise<string | null>;
+	/** Runs the query; defaults to spawning the platform command with execFile. A bare string is raw stdout on Windows or a registered kind on macOS. */
+	readonly run?: (query: KindQuery) => Promise<KindAnswer | string | null>;
 	/** Defaults to console.warn. */
 	readonly warn?: (message: string) => void;
 	/** Most cached kinds kept; the least recently used drop first. Defaults to 2048. */
@@ -44,6 +54,7 @@ const KIND_TIMEOUT_MS = 5000;
 /** Extensions are few; extensionless files key by path, so this bounds a long session. */
 const KIND_CACHE_LIMIT = 2048;
 const KIND_MAX_BUFFER = 1 << 20;
+const MDLS = "/usr/bin/mdls";
 /** One process answers at most this many extensions, which keeps its command line short and its run inside the timeout. */
 const WINDOWS_BATCH_LIMIT = 100;
 
@@ -90,7 +101,8 @@ export function parseWindowsKindStdout(stdout: string, count: number): (string |
 /** The per-path OS command on macOS; null elsewhere (Windows answers whole batches of extensions, see windowsKindQuery). */
 export function kindQueryForPlatform(platform: NodeJS.Platform, path: string): KindQuery | null {
 	if (platform === "darwin") {
-		return { command: "/usr/bin/mdls", args: ["-name", "kMDItemKind", "-raw", path] };
+		// `mdls -raw` prints the content type, then the kind, joined by NUL, whichever order the names are given (checked on macOS 26).
+		return { command: MDLS, args: ["-name", "kMDItemKind", "-name", "kMDItemContentType", "-raw", path] };
 	}
 	return null;
 }
@@ -102,14 +114,28 @@ export function parseKindStdout(stdout: string): string | null {
 	return value;
 }
 
-function defaultRun(query: KindQuery): Promise<string | null> {
+/**
+ * `mdls -raw` for the kind and the content type: the two values joined by NUL,
+ * type first. A type that is `dyn.*` is the one macOS invents for an extension
+ * nothing registered; its kind is the generic "Document". Null when there is no kind.
+ */
+export function parseMacKindStdout(stdout: string): KindAnswer | null {
+	const parts = stdout.split("\0");
+	const kind = parseKindStdout(parts[parts.length - 1] ?? "");
+	if (kind === null) return null;
+	const type = parts.length > 1 ? parseKindStdout(parts[0] ?? "") : null;
+	return { kind, registered: type === null || !type.startsWith("dyn.") };
+}
+
+export function defaultRun(query: KindQuery): Promise<KindAnswer | string | null> {
 	return new Promise((resolve, reject) => {
 		execFile(query.command, [...query.args], { timeout: KIND_TIMEOUT_MS, maxBuffer: KIND_MAX_BUFFER, windowsHide: true }, (error, stdout) => {
 			if (error) {
 				reject(error);
 				return;
 			}
-			resolve(stdout);
+			// Windows batch output has one line per extension; trimming leading blank lines would shift later answers onto earlier unknown extensions.
+			resolve(query.command === MDLS ? parseMacKindStdout(stdout) : stdout);
 		});
 	});
 }
@@ -143,16 +169,24 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 	const cache = new Map<string, Promise<string | null>>();
 	const limit = deps.cacheLimit ?? KIND_CACHE_LIMIT;
 
-	/** The OS kind, or a rejection when there is no answer to share with other files of the extension. */
-	async function query(path: string): Promise<string | null> {
+	/**
+	 * The OS kind, or a rejection when there is no answer to share with other
+	 * files of the extension. macOS's generic "Document" for an extension no app
+	 * registered is dropped when the app has its own name for it (`ext`), so the
+	 * row shows that name instead of lumping GIMP, Sketch and Figma files under
+	 * "Document"; every other answer is the OS's own word.
+	 */
+	async function query(path: string, ext: string): Promise<string | null> {
 		const request = kindQueryForPlatform(platform, path);
 		if (request === null) return null;
 		// A symlink whose target is gone (an uninstalled app's alias, an Android
 		// device's /bin) has no kind for the OS to report; asking only logs noise.
 		if (await isDanglingSymlink(path)) throw new Error("dangling symlink");
 		try {
-			const stdout = await run(request);
-			return stdout === null ? null : parseKindStdout(stdout);
+			const answer = await run(request);
+			if (answer === null) return null;
+			if (typeof answer === "string") return parseKindStdout(answer);
+			return !answer.registered && hasExtensionKindName(ext) ? null : answer.kind;
 		} catch (error) {
 			warn(`file-kind: ${request.command} failed for ${path}: ${errorMessage(error)}`);
 			throw error;
@@ -191,8 +225,8 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 				const extensions = batch.map(([extension]) => extension);
 				let kinds: (string | null)[] | null = null;
 				try {
-					const stdout = await run(windowsKindQuery(extensions));
-					kinds = parseWindowsKindStdout(stdout ?? "", extensions.length);
+					const answer = await run(windowsKindQuery(extensions));
+					kinds = parseWindowsKindStdout(typeof answer === "string" ? answer : "", extensions.length);
 				} catch (error) {
 					warn(`file-kind: powershell.exe failed for ${extensions.length} extension(s) (${extensions.slice(0, 8).join(" ")}): ${errorMessage(error)}`);
 				}
@@ -223,6 +257,11 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 		if (extension === "") return Promise.resolve(null);
 		const cached = cache.get(extension);
 		if (cached !== undefined) return touch(extension, cached);
+		const queued = waiting.get(extension);
+		if (queued !== undefined) {
+			remember(extension, queued.promise);
+			return queued.promise;
+		}
 		let settle: (kind: string | null) => void = () => {};
 		const pending = new Promise<string | null>((resolve) => {
 			settle = resolve;
@@ -239,7 +278,7 @@ export function createOsKindResolver(deps: OsKindDeps = {}): OsKindResolver {
 			const key = ext === "" ? path : ext;
 			const cached = cache.get(key);
 			if (cached !== undefined) return touch(key, cached);
-			const pending = query(path).catch(() => {
+			const pending = query(path, ext).catch(() => {
 				// One unanswerable file must not erase the kind of every file sharing its extension.
 				if (cache.get(key) === pending) cache.delete(key);
 				return null;

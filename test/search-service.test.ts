@@ -7,7 +7,7 @@ import { createChatStore, type ChatStore } from "../src/main/chat-store";
 import type { RunInteraction } from "../src/main/host-ui";
 import { createInteractionHub } from "../src/main/interaction-hub";
 import type { InteractionAnswer, InteractionRequest } from "../src/shared/interaction-contract";
-import { buildAgentOptions, type CliConfig } from "@autorag/librarian";
+import { buildAgentOptions, type CliConfig, type SearchDocumentDiagnostic } from "@autorag/librarian";
 import {
 	createSearchService,
 	DEFAULT_WEB_SEARCH_PROVIDER_ORDER,
@@ -31,7 +31,7 @@ interface TestResponse {
 	readonly answer: string;
 	readonly searched: number;
 	readonly warnings: readonly "empty-query"[];
-	readonly diagnostics: readonly [];
+	readonly diagnostics: readonly SearchDocumentDiagnostic[];
 	readonly retrievalTrace: readonly [];
 }
 
@@ -320,6 +320,67 @@ describe("createSearchService", () => {
 			{ type: "error", searchId: "search-bad", message: "Error: AutoRAG search root does not exist: /gone" },
 			{ type: "done", searchId: "search-bad" },
 		]);
+	});
+
+	/** What the librarian returns when the model request failed: not a throw, but a degraded answer with this diagnostic. */
+	const modelFailed = (reason: string): TestResponse => ({
+		...createResponse("session-failed", `The search run for "refund approval" ended without a final answer.\n\nThe model request failed: ${reason}\n\nNext steps: fix the model provider error above and retry.`, 0),
+		results: [],
+		diagnostics: [
+			{ code: "no-final-answer", severity: "warning", message: "The agent ended its run without a final answer message." },
+			{ code: "model-request-failed", severity: "error", message: `The model request failed: ${reason}` },
+		],
+	});
+
+	it("reports a failed model request as the run's error, in the provider's words, instead of showing the librarian's degraded answer", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: modelFailed("401 Incorrect API key provided") };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-401", "chat-401", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick" || event.type === "deep")).toEqual([]);
+		expect(events).toContainEqual({ type: "error", searchId: "search-401", message: "401 Incorrect API key provided" });
+		expect(events.at(-1)).toEqual({ type: "done", searchId: "search-401" });
+		// The question stays in the chat; no answer was made, so none is stored.
+		expect((await store.get("chat-401"))?.messages.map((message) => message.role)).toEqual(["user"]);
+	});
+
+	it("keeps the Quick answer when only the Deep step's model request failed, and adds the error", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("session-q", "Quick answer [1]", 2) };
+			yield { type: "complete", response: modelFailed("429 You exceeded your current quota") };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-deep-fail", "chat-deep-fail", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick")).toHaveLength(1);
+		expect(events.filter((event) => event.type === "deep")).toEqual([]);
+		expect(events).toContainEqual({ type: "error", searchId: "search-deep-fail", message: "429 You exceeded your current quota" });
+		const assistant = (await store.get("chat-deep-fail"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.quick?.answer).toBe("Quick answer [1]");
+		expect(assistant.deep).toBeNull();
+	});
+
+	it("still answers normally when a diagnostic is only a warning", async () => {
+		const response: TestResponse = { ...createResponse("session-warn", "A fine answer", 3), diagnostics: [{ code: "no-final-answer", severity: "warning", message: "x" }] };
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-warn", "chat-warn", "refund approval", []);
+
+		expect(events.some((event) => event.type === "error")).toBe(false);
+		expect(events.some((event) => event.type === "quick")).toBe(true);
 	});
 
 	it("sends a complete answer that no preliminary preceded as the Quick phase and stores it once", async () => {
@@ -1226,6 +1287,25 @@ describe("createSearchService conversations", () => {
 
 		expect(factory).toHaveBeenCalledTimes(1);
 		expect(opened).toHaveLength(1);
+	});
+
+	it("lets go of the open conversations so the next question builds an agent on the current config and resumes from the chat's file", async () => {
+		const { agent, opened } = conversationAgent("/sessions/chat-1.jsonl");
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const factory = vi.fn(() => agent);
+		const service = createSearchService({ agentFactory: factory, chatStore: await createStore(), send, now, sessions: sessions.index });
+		await service.start("search-1", "chat-1", "first", []);
+
+		await service.resetAgents();
+		await service.start("search-2", "chat-1", "second", []);
+
+		expect(agent.closeSession).toHaveBeenCalledTimes(1);
+		expect(factory).toHaveBeenCalledTimes(2);
+		expect(opened).toEqual([
+			{ resumeFile: undefined, seed: [] },
+			{ resumeFile: "/sessions/chat-1.jsonl", seed: [] },
+		]);
 	});
 
 	it("opens a chat that has history but no conversation with its earlier turns already in it", async () => {

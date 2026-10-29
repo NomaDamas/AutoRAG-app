@@ -16,6 +16,7 @@ const MAC: ActionCapabilities = {
 	archive: true,
 	imageFormats: [],
 	videoContainers: [],
+	reducibleExtensions: [],
 };
 
 const file = {

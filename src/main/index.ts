@@ -9,6 +9,7 @@ import {
 	app,
 	BrowserWindow,
 	clipboard,
+	ClipboardItem,
 	dialog,
 	ipcMain,
 	nativeImage,
@@ -26,6 +27,9 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
+import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
+import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -34,7 +38,8 @@ import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../s
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
-import { automationsHome, createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { autoragHome } from "./autorag-home";
+import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -49,6 +54,8 @@ import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
+import { createFinderTags } from "./finder-tags";
+import { createPlaces } from "./places";
 import type { KnownFolders } from "../shared/fs-worker-contract";
 import { hasErrorCode, pathExists } from "./fs-entry";
 import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
@@ -59,7 +66,7 @@ import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { closeDecision, completesOnClose } from "./onboarding-window";
 import { detectSources } from "./onboarding-sources";
-import { FS_CHANNELS } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
@@ -67,7 +74,15 @@ import { createChatSessionIndex } from "./chat-sessions";
 import { createChatStore } from "./chat-store";
 import { createDataSourceStatusService } from "./datasource-status";
 import { readDevLabel, resolveClonePath } from "./dev-label";
+import { createOsClipboard } from "./os-clipboard";
 import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs-worker-host";
+import { createRemoteHost, type RemoteHost } from "./remote/host";
+import { REMOTE_CHANNELS, type RemoteAccessStatus } from "../shared/remote-contract";
+import { SEARCH_CHANNELS } from "../shared/search-contract";
+import { ACCOUNT_CHANNELS } from "../shared/account-contract";
+import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
+import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
+import { SERVICES_CHANNELS } from "../shared/services-contract";
 import { createAutoRagConfigService } from "./autorag-config-service";
 import { createModelStatusService } from "./model-status";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
@@ -85,6 +100,8 @@ import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
+import { createErrorFixService } from "./error-fix-service";
+import { createAppCustomizerService } from "./app-customizer-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
@@ -92,11 +109,13 @@ import {
 	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
+	registerAppCustomizerIpcHandlers,
 	registerAppUpdateIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerErrorFixIpcHandlers,
 	registerInteractionIpcHandlers,
 	registerIndexProblemIpcHandlers,
 	registerModelDownloadIpcHandlers,
@@ -109,6 +128,7 @@ import {
 } from "./ipc";
 import { createActionService } from "./action-service";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
+import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -263,6 +283,8 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 }
 
 let fsWorker: FsWorkerHost | null = null;
+/** Remote browser access; null until its host is built (and while the setting is off). */
+let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
@@ -283,12 +305,14 @@ let currentLanguage: AppSettings["language"] = "ko";
 /** One push to every window of the app: the Finder and, during first-run onboarding, the onboarding window. */
 function sendToMainWindow(channel: string, payload: unknown): void {
 	for (const window of appWindows()) window.webContents.send(channel, payload);
+	remoteHost?.push(channel, payload);
 }
 
 function sendToAllWindows(channel: string, payload: unknown): void {
 	for (const window of BrowserWindow.getAllWindows()) {
 		if (!window.isDestroyed()) window.webContents.send(channel, payload);
 	}
+	remoteHost?.push(channel, payload);
 }
 
 /** The `.app` bundle to drag into Full Disk Access: the packaged app, else the Electron bundle. */
@@ -401,6 +425,9 @@ async function listMacDatalessPaths(root: string): Promise<ReadonlySet<string>> 
 	}
 }
 
+// Chromium decodes JPEG XL only behind this feature, which the Quick Look image viewer relies on for `.jxl`.
+// Merged with any `--enable-features` the app was launched with, because appendSwitch replaces a value.
+app.commandLine.appendSwitch("enable-features", [app.commandLine.getSwitchValue("enable-features"), "JXLImageFormat"].filter((value) => value !== "").join(","));
 // Electron keeps only the last `registerSchemesAsPrivileged` call: every scheme registers here, together.
 protocol.registerSchemesAsPrivileged([PREVIEW_PRIVILEGED_SCHEME, THUMB_PRIVILEGED_SCHEME]);
 // A menu request that finds a running app only hands over and exits; keep it out of the Dock meanwhile.
@@ -505,7 +532,7 @@ app.whenReady().then(async () => {
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
 		shell,
-		clipboard,
+		clipboard: createOsClipboard({ clipboard, ClipboardItem }),
 		icons: iconProvider,
 		// A fresh worker starts in Korean; give it the current Interface language.
 		onFork: (client) => {
@@ -520,6 +547,16 @@ app.whenReady().then(async () => {
 	// anchored to the button that opened it.
 	registerActionsIpcHandlers(
 		createActionService({
+			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
+			trash: async (target) => {
+				const result = (await workerHost.client.call("trash", [[target]])) as FsBatchResult;
+				const failure = result.failed[0];
+				if (failure !== undefined) throw new Error(failure.message);
+			},
+			onProgress: (event, window) => {
+				if (window !== null && !window.isDestroyed()) window.webContents.send(ACTIONS_CHANNELS.progress, event);
+				else sendToMainWindow(ACTIONS_CHANNELS.progress, event);
+			},
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {
@@ -797,11 +834,13 @@ app.whenReady().then(async () => {
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
+			void applyRemoteAccess(settings.remoteAccess);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
 			}
 			void appUpdater?.applySettings();
+			sendToAllWindows(SETTINGS_CHANNELS.changed, settings);
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
@@ -827,7 +866,7 @@ app.whenReady().then(async () => {
 	});
 	app.once("will-quit", stopIndexActivity);
 	const automations = createAutomationService({
-		home: () => automationsHome(process.env, homedir()),
+		home: () => autoragHome(process.env, homedir()),
 		// The daemon's login service records whichever node ran the install, so it is never this process's own binary.
 		run: (args) => {
 			const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
@@ -844,8 +883,66 @@ app.whenReady().then(async () => {
 	registerServicesIpcHandlers(createServicesService());
 	// Renaming a file to another format's extension converts it (Filee); the settings are the shared AutoRAG config's `filee` block.
 	registerConversionIpcHandlers(createFileeConversionService(() => readFileeSettings(autoragConfigPath())));
+	// Remote access: the same Finder UI served to a browser when the setting is
+	// on, each session with its own fs-worker client and its own watches.
+	const remoteTargets = {
+		settings: SETTINGS_CHANNELS,
+		search: SEARCH_CHANNELS,
+		interaction: INTERACTION_CHANNELS,
+		smartIndexing: SMART_INDEXING_CHANNELS,
+		account: ACCOUNT_CHANNELS,
+		modelDownload: MODEL_DOWNLOAD_CHANNELS,
+		errorFix: ERROR_FIX_CHANNELS,
+		appCustomizer: APP_CUSTOMIZER_CHANNELS,
+		automations: AUTOMATION_CHANNELS,
+		indexActivity: INDEX_ACTIVITY_CHANNELS,
+		indexProblem: INDEX_PROBLEM_CHANNELS,
+		appUpdate: APP_UPDATE_CHANNELS,
+		onboarding: ONBOARDING_CHANNELS,
+		osRequests: OS_REQUEST_CHANNELS,
+		services: SERVICES_CHANNELS,
+		conversion: CONVERSION_CHANNELS,
+		actions: ACTIONS_CHANNELS,
+		analytics: ANALYTICS_CHANNELS,
+	} as const;
+	async function applyRemoteAccess(enabled: boolean): Promise<void> {
+		if (enabled) {
+			remoteHost ??= createRemoteHost({
+				rendererRoot: join(import.meta.dirname, "../renderer"),
+				host: "0.0.0.0",
+				port: (await settingsService.get()).remotePort,
+				icons: iconProvider,
+				workerHost,
+				targets: remoteTargets,
+				window: () => mainWindow,
+				settings: () => settingsService.get(),
+			});
+			await remoteHost.start();
+			return;
+		}
+		await remoteHost?.stop();
+	}
+	const remoteStatus = async (): Promise<RemoteAccessStatus> => {
+		const status = remoteHost?.status() ?? { serving: false, origin: null, sessions: 0 };
+		const port = status.origin === null ? (await settingsService.get()).remotePort : Number(new URL(status.origin).port);
+		return { serving: status.serving, origin: status.origin, port, sessions: status.sessions };
+	};
+	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
+	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
+		await applyRemoteAccess(true);
+		return remoteStatus();
+	});
+	ipcMain.handle(REMOTE_CHANNELS.stop, async () => {
+		await applyRemoteAccess(false);
+		return remoteStatus();
+	});
+	app.once("will-quit", () => {
+		void remoteHost?.stop();
+	});
 	const settings = await settingsService.get();
 	appliedLaunchAtLogin = settings.launchAtLogin;
+	// A stored choice applies on launch, not only when it changes.
+	await applyRemoteAccess(settings.remoteAccess);
 	applyAppearance(settings.appearance);
 	applyLanguage(settings.language);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -890,6 +987,50 @@ app.whenReady().then(async () => {
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
+	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	registerErrorFixIpcHandlers(
+		createErrorFixService({
+			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			agentDir: getAgentDir(),
+			env: process.env,
+			cwd: process.cwd(),
+			language: () => currentLanguage,
+			config: autoRagConfig,
+			diagnostics: async () => {
+				const [model, sources] = await Promise.all([settingsService.modelsResolve(), dataSources.list()]);
+				return {
+					model: model.error !== null ? { error: model.error } : model.model === null ? null : { provider: model.model.provider, id: model.model.modelId, signedIn: model.model.auth.present },
+					sources: sources.error !== null ? { error: sources.error } : sources.sources.map((source) => ({ id: source.id, type: source.type, enabled: source.enabled, install: source.install.state, index: source.index.state, indexDetail: source.index.detail })),
+					localIndex: sources.local,
+					indexProblem: indexProblem.get(),
+				};
+			},
+			refreshIndex: () => runLocalIndex("manual-refresh", undefined, busyResult(undefined), recordLocalRun),
+			// An open chat's agent was built on the old config; the next question rebuilds it and resumes the conversation.
+			onConfigChanged: () => void searchService.resetAgents(),
+		}),
+	);
+	const customizerPlaces = createPlaces({
+		homeDir: home,
+		platform: process.platform,
+		...(knownFolders === undefined ? {} : { knownFolders }),
+	});
+	const customizerTags = createFinderTags({ homeDir: home, platform: process.platform });
+	const appCustomizerService = createAppCustomizerService({
+		send: (event) => sendToMainWindow(APP_CUSTOMIZER_CHANNELS.event, event),
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		cwd: process.cwd(),
+		homeDir: home,
+		language: () => currentLanguage,
+		settings: settingsService,
+		listLocations: () => customizerPlaces.list().catch(() => []),
+		listTags: () => customizerTags.catalog().then((catalog) => catalog.tags.filter((tag) => tag.sidebar), () => []),
+	});
+	registerAppCustomizerIpcHandlers(appCustomizerService);
+	app.once("will-quit", () => appCustomizerService.dispose());
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,

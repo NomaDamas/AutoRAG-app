@@ -13,7 +13,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.0 adds hybrid-first retrieval (one `FallbackRetrievalMethod` per datasource; MinSync's vector method leaves the method registry), folds the Jev
 // `direct` route into `extra`, offers the public web as a Jev datasource, and loads the `organize` / `autorag-setup` skills into the turn (`internal-skills/`),
 // on top of v2.12.0 (permission gate ask/auto/full, `ask_user`, `convert_files`) and v2.11.1 (file automations, `autorag automate`, `@autorag/librarian/profiles`).
-const librarianRef = "v2.13.0";
+// Pinned to a commit on top of v2.13.0 (2.13.1 work): each Discord connection saves its attachments under
+// `<AUTORAG_HOME>/attachments/discord/<connection>/` right after a refresh (Marker-Inc-Korea/AutoRAG#2030), which the
+// sidebar's Discord row shows. Move back to a release tag once one carries it.
+const librarianRef = "a2e3a2f679c055f12b8050e549e49db41cb3669e";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -13,6 +13,7 @@
 
 import type { FsFinderMetadata } from "../../../shared/fs-contract";
 import { t } from "../../../shared/i18n/core";
+import { extensionKindName } from "../../../shared/extension-kind-names";
 import { formatModified, formatSize } from "./format";
 import { type FileKind, isKnownExtension, kindFromExtension, kindMeta } from "./kinds";
 import { dirname } from "./paths";
@@ -55,11 +56,19 @@ export function fileKindOf(entry: SortableEntry): FileKind {
 	return entry.kind === "folder" ? "folder" : kindFromExtension(entry.ext);
 }
 
-/** Finder's Kind column: the OS-reported kind wins; the extension map is the fallback, then "<EXT> File". */
+/**
+ * Finder's Kind column: the OS-reported kind wins; then the app's own name for
+ * the formats the OS leaves unnamed (GIMP, Sketch, Figma, RAW, ...); the
+ * extension map; then "<EXT> File". The tile family a PSD or a RAW borrows from
+ * the extension map is only a look, never the words: it would read "PNG Image".
+ */
 export function kindLabelOf(entry: SortableEntry): string {
 	if (entry.osKind !== undefined) return entry.osKind;
+	const real = entry.fixture === undefined && entry.kind !== "folder" && entry.ext !== "";
+	const named = real ? extensionKindName(entry.ext) : null;
+	if (named !== null) return named.key === "raw" ? t("finderState.kindNames.raw", { maker: named.maker }) : t(`finderState.kindNames.${named.key}`);
 	// An extension the map does not know (.json, .py on a PC whose registry has no name for it) would read "Markdown".
-	if (entry.fixture === undefined && entry.kind !== "folder" && entry.ext !== "" && !isKnownExtension(entry.ext)) return t("finderState.kindByExtension", { ext: entry.ext.toUpperCase() });
+	if (real && !isKnownExtension(entry.ext)) return t("finderState.kindByExtension", { ext: entry.ext.toUpperCase() });
 	return kindMeta(fileKindOf(entry)).label;
 }
 

@@ -13,6 +13,7 @@ const COLOR_NAMES = ["None", "Gray", "Green", "Purple", "Blue", "Yellow", "Red",
 const CATALOG: FsTagCatalog = {
 	supported: true,
 	colorNames: COLOR_NAMES,
+	colorsDenied: false,
 	tags: [
 		{ name: "Research", color: 6, sidebar: true },
 		{ name: "Career", color: 7, sidebar: true },
@@ -95,7 +96,7 @@ describe("the sidebar Tags group", () => {
 	});
 
 	it("has no Tags group where the platform has no tags", () => {
-		const off: FsTagCatalog = { supported: false, tags: [], colorNames: [] };
+		const off: FsTagCatalog = { supported: false, tags: [], colorNames: [], colorsDenied: false };
 		expect(navGroups([], sidebarTags(off)).map((group) => group.label)).not.toContain(TAGS_GROUP_LABEL);
 	});
 });
@@ -169,7 +170,7 @@ describe("the row context menu's tag block", () => {
 	});
 
 	it("leaves the tag block out off macOS, in the Trash, and when the caller passes none", () => {
-		const off: FsTagCatalog = { supported: false, tags: [], colorNames: [] };
+		const off: FsTagCatalog = { supported: false, tags: [], colorNames: [], colorsDenied: false };
 		const hasTags = (entries: ReturnType<typeof buildContextMenu>): boolean => entries.some((entry) => entry.kind === "tags");
 		expect(hasTags(buildContextMenu({ ...file, tags: { catalog: off, shared: new Set() } }))).toBe(false);
 		expect(hasTags(withTags([], { inTrash: true }))).toBe(false);

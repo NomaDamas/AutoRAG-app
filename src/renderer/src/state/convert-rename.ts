@@ -17,3 +17,9 @@ export interface ConvertRenameState {
 	readonly to: string;
 	readonly working: boolean;
 }
+
+/** Electron wraps a handler's error as "Error invoking remote method 'x': Error: <message>"; show only the message. */
+export function conversionErrorMessage(error: unknown): string {
+	const text = error instanceof Error ? error.message : String(error);
+	return text.replace(/^Error invoking remote method '[^']*': (?:Error: )?/u, "");
+}
