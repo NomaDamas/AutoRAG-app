@@ -2526,11 +2526,8 @@
       "cloudDrive": {
         "summary": "rclone リモートを増分ミラーリングしてインデックスします。"
       },
-      "mailExport": {
-        "summary": "ローカルの .eml / .mbox アーカイブをインデックスします。"
-      },
       "mailcrawl": {
-        "summary": "mailcrawl アーカイブからメールを検索します。"
+        "summary": "mailcrawl でメールとローカルの .eml / .mbox アーカイブを検索します。"
       },
       "obsidian": {
         "summary": "MinSync で Obsidian の保管庫を検索します。"
@@ -2545,7 +2542,7 @@
         "summary": "EventKit MCP 経由で macOS のカレンダー予定とリマインダーをライブ照会します。"
       },
       "spotlight": {
-        "summary": "macOS Spotlight(mdfind)クエリでローカルファイルをインデックスします。"
+        "summary": "macOS Spotlight (mdfind) でローカルファイルをライブ照会します。"
       }
     },
     "groups": {
@@ -2564,7 +2561,6 @@
       "github": "GitHub",
       "githubGist": "GitHub Gist",
       "cloudDrive": "Cloud Drive (rclone)",
-      "mailExport": "Mail Export",
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",

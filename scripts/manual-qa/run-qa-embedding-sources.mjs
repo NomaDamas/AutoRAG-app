@@ -138,7 +138,7 @@ try {
 	backend = first;
 	const localPid = first?.pid ?? 0;
 
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: "AI Models" }).first().click();
 	await page.waitForSelector(".settings-trigger[aria-haspopup='dialog']");

@@ -69,7 +69,7 @@ try {
 	check("preview is loaded before switching", initial[1].name === "appearance.md", JSON.stringify(initial[1]));
 
 	await main.keyboard.press(chord("2"));
-	await main.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await main.locator(".sidebar__item--settings").click();
 	const appearance = main.locator('select[aria-label="Appearance"]');
 	await appearance.waitFor({ timeout: 15_000 });
 	await appearance.selectOption("dark");
@@ -107,7 +107,7 @@ try {
 	);
 	check("dark appearance survives restart", persisted === "dark", String(persisted));
 	await restarted.keyboard.press(chord("2"));
-	await restarted.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await restarted.locator(".sidebar__item--settings").click();
 	const persistedSelect = restarted.locator('select[aria-label="Appearance"]');
 	await persistedSelect.waitFor({ timeout: 15_000 });
 	check("settings reload the persisted dark choice", (await persistedSelect.inputValue()) === "dark", await persistedSelect.inputValue());

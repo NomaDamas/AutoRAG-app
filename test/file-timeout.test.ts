@@ -52,6 +52,7 @@ describe("appIndexing.fileTimeoutMs", () => {
 		directories.push(root);
 		const docs = join(root, "docs");
 		await mkdir(docs, { recursive: true });
+		await mkdir(join(root, "ws"), { recursive: true });
 		await writeFile(join(docs, "notes.txt"), "plain notes");
 		await writeFile(join(docs, "stuck.pdf"), "%PDF-1.4 never parses");
 		await writeFile(join(docs, "fine.pdf"), "%PDF-1.4 parses");

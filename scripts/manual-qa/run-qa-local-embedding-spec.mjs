@@ -13,7 +13,7 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { cpus, tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
 import { rmRetry } from "./platform.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/local-embedding-spec");
@@ -80,7 +80,7 @@ async function withApp({ hardware, language, embed, onboarding }, run) {
 	};
 	const app = await launchFinder({ userDataDir, env, onboarding, language });
 	try {
-		const page = await finderWindow(app, 20_000);
+		const page = await (onboarding ? onboardingWindow(app, 20_000) : finderWindow(app, 20_000));
 		return await run(page, { work, configPath });
 	} finally {
 		await app.close().catch(() => undefined);
@@ -105,7 +105,7 @@ async function onboardingEmbedding(page) {
 
 async function settingsPicker(page) {
 	await page.waitForSelector('[role="row"]');
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: "AI Models" }).first().click();
 	await page.locator(".linear-row", { hasText: "Document Understanding Model" }).locator(".settings-trigger").click();

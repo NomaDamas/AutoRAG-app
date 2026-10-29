@@ -2,25 +2,24 @@
  * Hard version floors for the tools the installer bundles. A resolved version below
  * its floor fails the stage instead of shipping a tool that lacks what the app relies on.
  *
- *  - `minsync` 0.4.12: 0.4.11 is the first release with `minsync serve` (the shared
- *    loopback embedding server the app starts at launch), and 0.4.12 is the first with
- *    the two first-index fixes the app depends on: a failed chunk counts once toward the
- *    systemic-failure streak (three bad files in a row no longer abort a healthy sync), and
- *    inputs to a remote embedder are cut below the model's context instead of answering 400.
- *  - `@nomadamas/mailcrawl` 0.2.2 gains the openai/tei providers, so it can embed through
- *    the daemon's OpenAI route instead of loading its own model.
+ *  - `minsync` 0.5.1: librarian 2.13.2 requires MinSync 0.5.1's durable stage protocol v2
+ *    (`capabilities`/`plan`/`inspect`) for incremental parsed mirrors, JSONL sync progress
+ *    streaming (`--progress jsonl`), and preflight exit codes 4/5 on top of `minsync serve`.
+ *  - `@nomadamas/mailcrawl` 0.3.0: librarian 2.13.2 requires mailcrawl 0.3.0's `--source files`
+ *    (`--path`) local archive indexing (which retires `mail-export`), on top of the daemon's
+ *    OpenAI embedding route.
  *  - `lazykatok` 0.3.3 gains the OpenAI-compatible embedder, the same route.
  */
 export const VERSION_FLOORS = {
-	minsync: "0.4.12",
-	"@nomadamas/mailcrawl": "0.2.2",
+	minsync: "0.5.1",
+	"@nomadamas/mailcrawl": "0.3.0",
 	lazykatok: "0.3.3",
 };
 
 /** What each floor guarantees, for the error a build prints when it resolves something older. */
 const FLOOR_REASONS = {
-	minsync: "it is the first release with the first-index fixes this app relies on (failed chunks counted once toward the abort streak, remote inputs cut below the model context) on top of the `minsync serve` embedding daemon",
-	"@nomadamas/mailcrawl": "it is the first release that can embed through the `minsync serve` daemon's OpenAI route",
+	minsync: "librarian 2.13.2 requires MinSync 0.5.1's durable stage protocol v2 (`capabilities`/`plan`/`inspect`), `--progress jsonl`, and preflight exit codes on top of `minsync serve`",
+	"@nomadamas/mailcrawl": "librarian 2.13.2 requires mailcrawl 0.3.0's `--source files` local archive support on top of the `minsync serve` daemon's OpenAI route",
 	lazykatok: "it is the first release that can embed through the `minsync serve` daemon's OpenAI route",
 };
 

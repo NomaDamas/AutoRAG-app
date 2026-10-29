@@ -372,7 +372,7 @@ check(
 );
 
 // 10. Switch Interface language to Korean via Settings and verify Korean UI ("근거 폴더" button & "근거 폴더 닫기" modal).
-await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+await page.locator(".sidebar__item--settings").click();
 const langSelect = page.locator("select.linear-select").nth(1);
 await langSelect.waitFor({ state: "visible" });
 await langSelect.selectOption("ko");

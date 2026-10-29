@@ -133,7 +133,7 @@ function stopOnSignal(signal) {
 
 /** Setup needs host tools that brew installs; a missing one must fail up front, not an hour in. */
 function assertHostTools() {
-	for (const tool of ["tart", "sshpass", "rsync", "python3", "dupey"]) {
+	for (const tool of ["tart", "sshpass", "rsync", "python3", "dupey", "minsync"]) {
 		try {
 			execFileSync("which", [tool], { stdio: "ignore" });
 		} catch {
@@ -193,6 +193,9 @@ export async function setup({ rebuild }) {
 			const dupey = execFileSync("which", ["dupey"], { encoding: "utf8" }).trim();
 			await pushFile(ip, dupey, "bin/dupey");
 			await sshOk(ip, "chmod 755 ~/bin/dupey && ~/bin/dupey --version");
+			const minsync = execFileSync("which", ["minsync"], { encoding: "utf8" }).trim();
+			await pushFile(ip, minsync, "bin/minsync");
+			await sshOk(ip, "chmod 755 ~/bin/minsync && ~/bin/minsync --version");
 
 			log("step 3/3: verifying");
 			const verify = await sshRun(

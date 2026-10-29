@@ -39,7 +39,6 @@ const GLYPH_BY_TEMPLATE: Readonly<Record<string, LucideIcon>> = {
 	clawgallery: Images,
 	"cloud-drive": Cloud,
 	mailcrawl: Mail,
-	"mail-export": Mail,
 	local: Folder,
 	spotlight: Search,
 	hister: Globe,

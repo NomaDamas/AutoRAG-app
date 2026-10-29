@@ -88,7 +88,7 @@ const idFile = (profile) => join(profile, "analytics", "install-id");
 const savedSettings = (profile) => JSON.parse(readFileSync(join(profile, "settings", "settings-state.json"), "utf8")).settings;
 
 async function openSettings(page) {
-	await page.locator(".sidebar__item", { hasText: /Settings|설정/ }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 }
 const switchFor = (page, label) => page.locator(".linear-row", { hasText: label }).locator('[role="switch"]');
