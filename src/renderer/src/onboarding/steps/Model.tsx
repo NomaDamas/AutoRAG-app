@@ -240,6 +240,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 								role="answer"
 								models={models}
 								specials={[]}
+								selected={shown === null ? null : { kind: "model", provider: shown.provider, modelId: shown.modelId }}
 								onPick={(picked) => {
 									setMenu(null);
 									choose(picked);
