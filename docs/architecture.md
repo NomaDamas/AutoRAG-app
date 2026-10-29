@@ -32,6 +32,12 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   "확인할 수 없음".
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, error reports, and document languages.
+- **기본 → 사이드바** — sidebar item and section visibility, ordering, custom pinned
+  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** (`AppCustomizerModal`)
+  dialog, all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
+  `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
+  **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
+  locked core rows at the top of Favorites and can never be hidden.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
   account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
@@ -755,7 +761,11 @@ App profiles live in `src/main/agents/profiles/`, and every profile shares `src/
 required `i` string first in its schema so the model writes a short plain phrase in the interface language before calling the tool, and the
 session streams that phrase to the UI where it is rendered with the `.shimmer` text effect. The first profile is smart indexing (thinking
 `low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
-second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). A new profile adds one file there and, if it needs a UI,
+second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
+app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
+`src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 that
+inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`, `update_general_settings`)
+while enforcing the locked `AI Search` and `Automations` invariant. A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions
