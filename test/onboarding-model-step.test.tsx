@@ -160,6 +160,22 @@ describe("ModelStep", () => {
 		expect(document.querySelector('[data-model-id="openai/b"]')?.classList.contains("failed")).toBe(true);
 	});
 
+	it("closes an open menu from its own trigger, and turns the trigger's arrow while it is open", async () => {
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		await render(byokDraft());
+		const trigger = host.querySelector('[data-role-trigger="answer"]');
+		await click(trigger);
+		expect(trigger?.getAttribute("aria-expanded")).toBe("true");
+		expect(document.querySelector(".onb-menu")).not.toBeNull();
+		await click(trigger);
+		expect(trigger?.getAttribute("aria-expanded")).toBe("false");
+		expect(document.querySelector(".onb-menu")).toBeNull();
+		await click(host.querySelector("[data-connect-service]"));
+		expect(document.querySelector(".onb-menu.connect")).not.toBeNull();
+		await click(host.querySelector("[data-connect-service]"));
+		expect(document.querySelector(".onb-menu.connect")).toBeNull();
+	});
+
 	it("does not open a role's menu while its check runs", async () => {
 		store = { ...HELPERS_AUTO };
 		bridge.onboarding.checkModel.mockReturnValue(new Promise(() => undefined));

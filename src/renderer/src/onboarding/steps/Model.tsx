@@ -266,7 +266,8 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 						data-role-trigger={role}
 						aria-expanded={open}
 						disabled={status === "checking"}
-						onClick={(event) => setMenu({ kind: "role", role, anchor: event.currentTarget })}
+						// Its own trigger closes an open menu again.
+						onClick={(event) => setMenu(open ? null : { kind: "role", role, anchor: event.currentTarget })}
 					>
 						<span>{value.kind === "model" ? value.label : value.kind === "auto" ? t("onboarding.model.auto") : t("onboarding.model.pick")}</span>
 						<Arrow size={16} aria-hidden="true" focusable="false" />
@@ -305,7 +306,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 								))}
 							</div>
 						) : null}
-						<button type="button" className="model-service-add" data-connect-service onClick={(event) => setMenu({ kind: "connect", anchor: event.currentTarget })}>
+						<button type="button" className="model-service-add" data-connect-service onClick={(event) => setMenu(menu?.kind === "connect" ? null : { kind: "connect", anchor: event.currentTarget })}>
 							<Plus size={14} aria-hidden="true" focusable="false" />
 							{t("onboarding.model.connect")}
 						</button>
