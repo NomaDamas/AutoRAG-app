@@ -40,11 +40,13 @@ The app consumes the librarian only through the dependency declared in
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
 ref is a release tag or, while the librarian has no tag that carries what the
-app needs, a full commit SHA (now the release tag `v2.12.0`: the file-change approval gate with its
-`ask`/`auto`/`full` modes, the `ask_user` tool and `convert_files` — Filee file conversion, whose
-`convertWithFilee`, `resolveFileeOptions` and route matrix the app's convert-on-rename uses — on top of 2.11.1: file
-automations, `autorag automate`, the agent's `manage_automations` and `@autorag/librarian/profiles`, the
-helper-agent factory; v2.11.0 pins MinSync 0.4.10+ and indexes Obsidian vaults with MinSync instead of `qmd`). It is
+app needs, a full commit SHA (now the commit `a2e3a2f` on top of the release tag `v2.13.0`: each Discord connection saves its
+attachments under `<AUTORAG_HOME>/attachments/discord/<connection>/` after a refresh, which the sidebar's Discord row shows;
+v2.13.0 is hybrid-first retrieval on top of v2.12.0's file-change approval gate with its `ask`/`auto`/`full` modes, the `ask_user`
+tool and `convert_files` — Filee file conversion, whose `convertWithFilee`, `resolveFileeOptions` and route matrix the app's
+convert-on-rename uses — and 2.11.1's file automations, `autorag automate`, the agent's `manage_automations`,
+`@autorag/librarian/profiles` and the helper-agent factory; v2.11.0 pins MinSync 0.4.10+ and indexes Obsidian vaults with
+MinSync instead of `qmd`). It is
 raised deliberately with the alignment changes a new librarian release needs. The staging directory holds only what the librarian
 publishes (`files` of its `package.json`, without devDependencies), so the install
 resolves the librarian's dependencies into the app's one `node_modules` and

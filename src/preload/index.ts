@@ -10,6 +10,7 @@ import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
 import { REMOTE_CHANNELS, type RemoteAccessBridge } from "../shared/remote-contract";
 import { createActionsBridge } from "./actions-bridge";
+import { createAppCustomizerBridge } from "./app-customizer-bridge";
 import { createErrorFixBridge } from "./error-fix-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
@@ -45,6 +46,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	fs: createFsBridge(ipcRenderer, fsWorker),
 	actions: createActionsBridge(ipcRenderer),
 	analytics: createAnalyticsBridge(ipcRenderer),
+	appCustomizer: createAppCustomizerBridge(ipcRenderer),
 	appUpdate: createAppUpdateBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
 	automations: createAutomationBridge(ipcRenderer),

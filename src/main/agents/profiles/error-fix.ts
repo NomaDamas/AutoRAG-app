@@ -142,6 +142,7 @@ const SETTINGS_PAGE_GUIDE: readonly string[] = [
 	"plan: the subscription and AI usage",
 	"account: the Dazzi account and sign-in",
 	"general: appearance and startup behaviour",
+	"sidebar: which items, folders and sections are shown or hidden in the Finder sidebar",
 ];
 
 interface Answer {

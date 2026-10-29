@@ -3,13 +3,13 @@ import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
-import { DEFAULT_SETTINGS, type AppSettings, type DataSourcesSnapshot } from "../../shared/settings-contract";
+import { DEFAULT_SETTINGS, type AppSettings } from "../../shared/settings-contract";
 import { setAppLanguage } from "../../shared/i18n";
 import { t as translate } from "../../shared/i18n/core";
 import { REMOTE_PREVIEW_FOLDER_CODE, REMOTE_PREVIEW_UNSUPPORTED_CODE } from "../../shared/remote-contract";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 import type { OsRendererRequest } from "../../shared/os-request-contract";
-import type { FsLocationIcon } from "../../shared/fs-contract";
+import { mapSourceStatus, type SourceStatusMap } from "./state/source-status";
 import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
@@ -32,6 +32,8 @@ import type { DirectoryData } from "./hooks/useDirectoryData";
 import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
+import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
+import type { SidebarSettings } from "../../shared/sidebar-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
@@ -112,25 +114,6 @@ function saveNumber(key: string, value: number): void {
 	}
 }
 
-/** Sidebar cloud glyphs → live datasource rows (status dots on every account of that provider). */
-const SOURCE_ICON_MATCH: readonly (readonly [FsLocationIcon, RegExp])[] = [
-	["google-drive", /gdrive|google[- ]?drive/i],
-	["dropbox", /dropbox/i],
-	["icloud", /icloud/i],
-	["onedrive", /onedrive/i],
-];
-
-function mapSourceStatus(snapshot: DataSourcesSnapshot): Partial<Record<FsLocationIcon, "syncing" | "error">> {
-	const out: Partial<Record<FsLocationIcon, "syncing" | "error">> = {};
-	for (const [icon, needle] of SOURCE_ICON_MATCH) {
-		const row = snapshot.sources.find((source) => needle.test(source.id) || needle.test(source.type));
-		if (row === undefined) continue;
-		if (row.status === "syncing") out[icon] = "syncing";
-		else if (row.status === "attention") out[icon] = "error";
-	}
-	return out;
-}
-
 /**
  * The visible Finder icon for `path`, in viewport CSS pixels: Quick Look zooms
  * out of it and back into it. Null when the row is scrolled away or absent.
@@ -192,6 +175,7 @@ export function App(): ReactElement {
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
+	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
@@ -224,7 +208,7 @@ export function App(): ReactElement {
 	const [sidebarWidth, setSidebarWidth] = useState(() => loadNumber(SIDEBAR_WIDTH_KEY, SIDEBAR_MIN));
 	const [inspectorWidth, setInspectorWidth] = useState(() => loadNumber(INSPECTOR_WIDTH_KEY, INSPECTOR_MIN));
 	const [listColumns, setListColumns] = useState<ListColumnsState>(loadListColumns);
-	const [sourceStatus, setSourceStatus] = useState<Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>>({});
+	const [sourceStatus, setSourceStatus] = useState<SourceStatusMap>({});
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
@@ -388,6 +372,7 @@ export function App(): ReactElement {
 			onSettingsChanged: (settings: AppSettings) => {
 				setShowHiddenFiles(settings.showHiddenFiles);
 				setLanguage(settings.language);
+				setSidebarSettings(settings.sidebar);
 				void setAppLanguage(settings.language);
 			},
 			setListColumns,
@@ -571,11 +556,14 @@ export function App(): ReactElement {
 	}, [moveSelectionBy]);
 
 	useEffect(() => {
-		void autorag.settings.get().then((settings) => {
+		const applySettings = (settings: AppSettings): void => {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
+			setSidebarSettings(settings.sidebar);
 			void setAppLanguage(settings.language);
-		});
+		};
+		void autorag.settings.get().then(applySettings);
+		return autorag.settings.onChanged?.(applySettings);
 	}, []);
 
 	const focused = finder?.focusedEntry ?? null;
@@ -683,6 +671,7 @@ export function App(): ReactElement {
 
 	return (
 		<TagCatalogContext value={tagCatalog}>
+		<SidebarSettingsContext value={sidebarSettings}>
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
@@ -937,6 +926,7 @@ export function App(): ReactElement {
 			</div>
 		</div>
 		</AutomationsContext>
+		</SidebarSettingsContext>
 		</TagCatalogContext>
 	);
 }

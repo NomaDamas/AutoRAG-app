@@ -40,6 +40,7 @@ import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, onDiskPath, path
 import { createPlaces, type Places } from "./places";
 import { isRecycleBinDir, readRecycleBinName, readRecycleBinRecord } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
+import { discordAttachmentPaths, type DiscordAttachmentPaths } from "./discord-attachments";
 import { isInsideSystemFolder, isSystemFolderName } from "./system-folders";
 import { createTrashStore, type TrashStore } from "./trash-store";
 
@@ -88,6 +89,8 @@ export interface FsServiceDeps {
 	readonly tags?: FinderTags;
 	/** Defaults to the OS places for `homeDir`; production injects one with Electron's known-folder paths. */
 	readonly places?: Places;
+	/** The AutoRAG home and config variables (AUTORAG_HOME, AUTORAG_CONFIG); defaults to process.env. */
+	readonly env?: Readonly<Record<string, string | undefined>>;
 	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
 	readonly recycleBin?: (dir: string) => boolean;
 	/**
@@ -187,6 +190,7 @@ interface SearchContext {
 	readonly needle: string;
 	readonly location: string;
 	readonly platform: NodeJS.Platform;
+	readonly discord: DiscordAttachmentPaths;
 	readonly results: FsSearchResult[];
 	readonly signal: AbortSignal | undefined;
 }
@@ -259,6 +263,8 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 		if (context.results.length >= SEARCH_MAX_RESULTS) return;
 		// System folders are neither results nor walked; a symlink named like one is the user's own link.
 		if (dirent.isDirectory() && isSystemFolderName(dirent.name)) continue;
+		// A Discord connection's status file, `.discrawl/` and `.lock/` are the sync's, not attachments.
+		if (context.discord.isInternalEntry(dir, dirent.name)) continue;
 		const fullPath = join(dir, dirent.name);
 		// macOS stores Hangul names decomposed (NFD); compare in one form so a typed (NFC) query matches.
 		if (dirent.name.normalize("NFC").toLowerCase().includes(context.needle)) {
@@ -296,12 +302,14 @@ export interface FsService extends FsCoreBridge {
 export function createFsService(deps: FsServiceDeps): FsService {
 	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
+	const env = deps.env ?? process.env;
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
 	const finderTags = deps.tags ?? createFinderTags({ platform, homeDir: home });
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
-	const places = deps.places ?? createPlaces({ homeDir: home, platform });
+	const places = deps.places ?? createPlaces({ homeDir: home, platform, env });
+	const discord = discordAttachmentPaths(env, home);
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	const trashStore = deps.trashStore ?? createTrashStore({ directory: join(home, "trash-store") });
 	// In-app clipboard lives in this process's memory only (the fs worker in the app).
@@ -513,7 +521,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		if (recycleBin(path)) {
 			return { path, entries: await recycleBinEntries(path, dirents) };
 		}
-		const entries = await buildListingEntries(dirents, path, signal);
+		const visible = dirents.filter((dirent) => !discord.isInternalEntry(path, dirent.name));
+		const entries = await buildListingEntries(visible, path, signal);
 		entries.sort(compareEntries);
 		return { path, entries };
 	}
@@ -572,7 +581,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				}),
 			);
 			for (const item of resolved) {
-				if (item.entry === null) removed.push(item.path);
+				// The sync rewrites its status file and logs all the time; the listing never shows them, so the patch must not add them.
+				if (item.entry === null || discord.isInternalEntry(dir, basename(item.path))) removed.push(item.path);
 				else entries.push(item.entry);
 			}
 		}
@@ -673,14 +683,14 @@ export function createFsService(deps: FsServiceDeps): FsService {
 
 	/**
 	 * Turn index paths into rows, attributing each to its location by longest prefix.
-	 * The index knows nothing of system folders, so hits inside one are dropped here.
+	 * The index knows nothing of system folders or a Discord sync's own entries, so hits inside them are dropped here.
 	 */
 	async function indexedHits(paths: readonly string[], scope: string | undefined): Promise<readonly FsSearchResult[]> {
 		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
 		const results: FsSearchResult[] = [];
 		for (const path of paths) {
 			if (results.length >= SEARCH_MAX_RESULTS) break;
-			if (isInsideSystemFolder(path, scope)) continue;
+			if (isInsideSystemFolder(path, scope) || discord.isInternalPath(path)) continue;
 			try {
 				results.push({ entry: await buildFsEntry(path, platform), location: searchLocation(path, known) });
 			} catch (error) {
@@ -710,13 +720,13 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			// The "파일 이름" chip scopes to the folder in view, which may sit
 			// outside the scanned places (e.g. inside a mounted disk).
 			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, results, signal });
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, discord, results, signal });
 			return results;
 		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, platform, results, signal });
+			await walkForSearch(location.path, 0, { needle, location: location.name, platform, discord, results, signal });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
 		return results;

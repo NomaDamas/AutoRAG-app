@@ -2,6 +2,7 @@ import type { PreviewBridge } from "../preview/shared/contract";
 import type { AccountBridge } from "./account-contract";
 import type { AnalyticsBridge } from "./analytics-contract";
 import type { ActionsBridge } from "./actions-contract";
+import type { AppCustomizerBridge } from "./app-customizer-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { ConversionBridge } from "./conversion-contract";
 import type { ErrorFixBridge } from "./error-fix-contract";
@@ -27,6 +28,7 @@ declare global {
 			readonly fs: FsBridge;
 			readonly actions: ActionsBridge;
 			readonly analytics: AnalyticsBridge;
+			readonly appCustomizer: AppCustomizerBridge;
 			readonly appUpdate: AppUpdateBridge;
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;

@@ -36,7 +36,7 @@ export interface ErrorFixChange {
 }
 
 /** Settings pages the agent may point the person to; anything else it names is dropped. */
-export const ERROR_FIX_SETTINGS_PAGES = ["ai", "account", "plan", "general", "web", "mcp", "indexing", "scope", "reading", "duplicates", "apps"] as const;
+export const ERROR_FIX_SETTINGS_PAGES = ["ai", "account", "plan", "general", "sidebar", "web", "mcp", "indexing", "scope", "reading", "duplicates", "apps"] as const;
 export type ErrorFixSettingsPage = (typeof ERROR_FIX_SETTINGS_PAGES)[number];
 
 export type ErrorFixStatus =

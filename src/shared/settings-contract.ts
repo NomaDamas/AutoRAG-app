@@ -7,10 +7,12 @@
 
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "./interaction-contract";
 import type { McpLaunch, McpPlatform } from "./mcp-connect";
+import { DEFAULT_SIDEBAR_SETTINGS, type SidebarSettings } from "./sidebar-contract";
 
 export const SETTINGS_CHANNELS = {
 	get: "settings:get",
 	set: "settings:set",
+	changed: "settings:changed",
 	clearHistory: "settings:clearHistory",
 	permGet: "access:get",
 	permSet: "access:set",
@@ -99,6 +101,8 @@ export interface AppSettings {
 	readonly remoteAccess: boolean;
 	/** The port the remote server binds; 0 picks a free one. */
 	readonly remotePort: number;
+	/** User customization of sidebar visibility, ordering, and pinned folders (`settings-state.json`). */
+	readonly sidebar: SidebarSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -115,6 +119,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	approvalMode: DEFAULT_APPROVAL_MODE,
 	remoteAccess: false,
 	remotePort: 47833,
+	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 };
 
 /** Whether the backend a datasource needs is present on this machine. */
@@ -546,6 +551,7 @@ export interface RefreshScheduleStatus {
 export interface SettingsBridge {
 	get(): Promise<AppSettings>;
 	set(patch: Partial<AppSettings>): Promise<AppSettings>;
+	onChanged?: (listener: (settings: AppSettings) => void) => () => void;
 	clearHistory(): Promise<void>;
 
 	permGet(path: string): Promise<ResolvedPermission>;

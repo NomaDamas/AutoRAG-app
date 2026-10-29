@@ -96,6 +96,7 @@ export function Sidebar({
 		switch (label) {
 			case "Favorites": return t("places.favorites", label);
 			case "Cloud": return t("places.cloud", label);
+			case "Connections": return t("places.connections", label);
 			case "Locations": return t("places.locations", label);
 			case TAGS_GROUP_LABEL: return t("places.tags", label);
 			default: return label;

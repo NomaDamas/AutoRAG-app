@@ -11,6 +11,7 @@ import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shar
 import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
+import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
@@ -39,6 +40,7 @@ import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
 import type { SmartIndexingService } from "./smart-indexing-service";
 import type { ErrorFixService } from "./error-fix-service";
+import type { AppCustomizerService } from "./app-customizer-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -149,6 +151,21 @@ export function registerErrorFixIpcHandlers(service: ErrorFixService): void {
 		return service.start(runId, request);
 	});
 	ipcMain.handle(ERROR_FIX_CHANNELS.cancel, (_event, runId: unknown) => (typeof runId === "string" ? service.cancel(runId) : undefined));
+}
+
+export function registerAppCustomizerIpcHandlers(service: AppCustomizerService): void {
+	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.send, (_event, runId: unknown, request: unknown) => {
+		if (typeof runId !== "string" || !isAppCustomizerRequest(request)) {
+			throw new TypeError("appCustomizer:send expects a run id and { sessionId, message }");
+		}
+		return service.send(runId, request);
+	});
+	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.cancel, (_event, runId: unknown) =>
+		typeof runId === "string" ? service.cancel(runId) : undefined,
+	);
+	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.reset, (_event, sessionId: unknown) =>
+		typeof sessionId === "string" ? service.reset(sessionId) : undefined,
+	);
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {

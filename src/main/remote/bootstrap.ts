@@ -1,6 +1,7 @@
 import { APPEARANCE_CHANNELS } from "../../shared/appearance-contract";
 import { ACCOUNT_CHANNELS } from "../../shared/account-contract";
 import { ACTIONS_CHANNELS, NO_CAPABILITIES } from "../../shared/actions-contract";
+import { APP_CUSTOMIZER_CHANNELS } from "../../shared/app-customizer-contract";
 import { APP_UPDATE_CHANNELS } from "../../shared/update-contract";
 import { AUTOMATION_CHANNELS } from "../../shared/automation-contract";
 import { ERROR_FIX_CHANNELS } from "../../shared/error-fix-contract";
@@ -34,6 +35,7 @@ import {
 const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"account.onChanged": ACCOUNT_CHANNELS.changed,
 	"actions.onProgress": ACTIONS_CHANNELS.progress,
+	"appCustomizer.onEvent": APP_CUSTOMIZER_CHANNELS.event,
 	"appUpdate.onChange": APP_UPDATE_CHANNELS.changed,
 	"automations.onChange": AUTOMATION_CHANNELS.changed,
 	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
@@ -44,6 +46,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"interaction.onClosed": INTERACTION_CHANNELS.closed,
 	"modelDownload.onChange": MODEL_DOWNLOAD_CHANNELS.changed,
 	"search.onEvent": SEARCH_CHANNELS.event,
+	"settings.onChanged": SETTINGS_CHANNELS.changed,
 	"settings.onProviderLoginEvent": SETTINGS_CHANNELS.providerLoginEvent,
 	"smartIndexing.onEvent": SMART_INDEXING_CHANNELS.event,
 	"osRequests.onAvailable": OS_REQUEST_CHANNELS.available,
@@ -65,6 +68,7 @@ const TARGETS = [
 	"services",
 	"conversion",
 	"errorFix",
+	"appCustomizer",
 	"account",
 	"automations",
 	"appUpdate",
