@@ -3031,8 +3031,13 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 }
 
 .onb .settings-view .settings-modal-close {
-	top: 20px;
-	right: 20px;
+	top: 19px;
+	right: 18px;
+}
+
+.onb .settings-view .settings-modal-close svg {
+	width: 24px;
+	height: 24px;
 }
 
 .onb .settings-view .settings-modal h2 {
@@ -3047,17 +3052,18 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	color: var(--onb-muted);
 	font-size: 11px;
 	line-height: 16px;
+	white-space: pre-line;
 }
 
 .onb .settings-view .settings-modal label {
-	margin-top: 12px;
+	margin-top: 16px;
 	color: var(--onb-body);
-	font-size: 10.5px;
-	line-height: 15.75px;
+	font-size: 11px;
+	line-height: 16px;
 }
 
 .onb .settings-view .settings-modal label:first-of-type {
-	margin-top: 30px;
+	margin-top: 20px;
 }
 
 .onb .settings-view .settings-modal .settings-field-name.is-required::after {
@@ -3067,12 +3073,25 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 }
 
 .onb .settings-view .settings-modal input:not([type="radio"], [type="checkbox"]) {
-	height: 28px;
+	height: 35px;
 	margin-top: 4px;
-	padding: 0 10px;
+	padding: 6px 10px;
 	border-color: var(--onb-divider);
 	border-radius: 6px;
-	font-size: 12px;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .settings-view .settings-modal input.is-invalid {
+	border-color: rgba(255,59,48,.5);
+}
+
+.onb .settings-view .settings-modal .settings-field-error {
+	display: block;
+	margin-top: 4px;
+	color: #ff3b30;
+	font-size: 10.5px;
+	line-height: 15.75px;
 }
 
 .onb .settings-view .settings-modal input::placeholder {
@@ -3081,7 +3100,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 .onb .settings-view .settings-modal-actions {
 	gap: 8px;
-	margin-top: 30px;
+	margin-top: 20px;
 }
 
 .onb .settings-view .settings-modal-actions .linear-btn {
@@ -3095,15 +3114,16 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-weight: 500;
 }
 
+/* Connect is the full blue once the form is valid, and half-strength until then. */
 .onb .settings-view .settings-modal-actions .settings-btn-primary {
 	border-color: transparent;
 	background: var(--onb-blue);
 	color: #fff;
+	opacity: 1;
 }
 
 .onb .settings-view .settings-modal-actions .settings-btn-primary:disabled {
-	background: rgba(10,100,216,.5);
-	opacity: 1;
+	opacity: .5;
 }
 
 .onb .secure-note {

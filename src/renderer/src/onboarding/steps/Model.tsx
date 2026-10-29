@@ -132,7 +132,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 		void reload();
 	}, [reload]);
 
-	const connect = useProviderConnect({ reload, onNotice: setNotice, markRequired: true });
+	const connect = useProviderConnect({ reload, onNotice: setNotice, guided: true });
 
 	const connected = useMemo(() => withoutAutorag((providers ?? []).filter((provider) => provider.authConfigured)), [providers]);
 	const available = useMemo(() => withoutAutorag((providers ?? []).filter((provider) => !provider.authConfigured)), [providers]);

@@ -247,4 +247,29 @@ describe("ModelStep", () => {
 		expect(store.model).toBeUndefined();
 		expect(bridge.settings.providersRemove).toHaveBeenCalledWith("ollama");
 	});
+
+	it("keeps Connect half-strength until the server form is valid, and says which field is wrong", async () => {
+		bridge.settings.providersList.mockResolvedValue([]);
+		await render(byokDraft());
+		await click(host.querySelector("[data-connect-service]"));
+		await click([...document.querySelectorAll(".onb-menu-item")].find((item) => item.textContent?.includes("onboarding.model.addCustom")) ?? null);
+		const inputs = [...document.querySelectorAll<HTMLInputElement>(".settings-modal input")];
+		const connect = document.querySelector<HTMLButtonElement>(".settings-modal .settings-btn-primary");
+		const type = async (input: HTMLInputElement | undefined, value: string): Promise<void> => {
+			if (input === undefined) throw new Error("no input");
+			await act(async () => {
+				Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+		};
+		expect(inputs[0]?.value).toBe("");
+		expect(connect?.disabled).toBe(true);
+		await type(inputs[0], "My server");
+		await type(inputs[1], "not a url");
+		expect(connect?.disabled).toBe(true);
+		expect(document.querySelector(".settings-field-error")?.textContent).toBe("This address isn't valid. Check it and try again.");
+		await type(inputs[1], "https://gateway.example.com/v1");
+		expect(connect?.disabled).toBe(false);
+		expect(document.querySelector(".settings-field-error")).toBeNull();
+	});
 });

@@ -1000,6 +1000,13 @@
           "name": "結果の並べ替え",
           "desc": "質問との関連性が高い文書を上位に表示します。"
         }
+      },
+      "server": {
+        "body": "社内ゲートウェイや、OpenAI API 形式のサーバーを接続します。\n入力したキーは暗号化してこのコンピューターに保存します。",
+        "namePlaceholder": "表示名",
+        "keyPlaceholder": "サーバーがキーを求める場合のみ入力してください",
+        "urlInvalid": "アドレスが正しくありません。もう一度確認してください。",
+        "keyInvalid": "API キーが正しくありません。もう一度確認してください。"
       }
     },
     "indexing": {
@@ -2168,8 +2175,7 @@
         "apiKeyOptional": "API キー (任意)",
         "optionalPlaceholder": "任意",
         "saved": "{{name}} を保存しました。",
-        "bodyLocalPc": "Ollama、LM Studio のようにこのPCで実行中のサーバーのみ接続できます。",
-        "apiKey": "APIキー"
+        "bodyLocalPc": "Ollama、LM Studio のようにこのPCで実行中のサーバーのみ接続できます。"
       },
       "loginModal": {
         "openManually": "ブラウザが開かない場合は、以下のアドレスを直接開いてください。",

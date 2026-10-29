@@ -1000,6 +1000,13 @@
           "name": "Reranking",
           "desc": "Moves the most relevant documents to the top."
         }
+      },
+      "server": {
+        "body": "Connect a company gateway or any server that uses the OpenAI API format.\nKeys you enter are encrypted and stored on this computer.",
+        "namePlaceholder": "Display name",
+        "keyPlaceholder": "Only if the server requires one",
+        "urlInvalid": "This address isn't valid. Check it and try again.",
+        "keyInvalid": "This API key isn't valid. Check it and try again."
       }
     },
     "indexing": {
@@ -2168,8 +2175,7 @@
         "apiKeyOptional": "API Key (optional)",
         "optionalPlaceholder": "Optional",
         "saved": "Saved {{name}}.",
-        "bodyLocalPc": "You can only connect servers running on this PC, such as Ollama or LM Studio.",
-        "apiKey": "API key"
+        "bodyLocalPc": "You can only connect servers running on this PC, such as Ollama or LM Studio."
       },
       "loginModal": {
         "openManually": "If the browser doesn't open, open the address below yourself.",

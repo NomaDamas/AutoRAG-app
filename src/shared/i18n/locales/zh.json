@@ -1000,6 +1000,13 @@
           "name": "结果重排",
           "desc": "把与问题最相关的文档排到前面。"
         }
+      },
+      "server": {
+        "body": "连接公司网关，或使用 OpenAI API 格式的服务器。\n输入的密钥会加密保存在这台电脑上。",
+        "namePlaceholder": "显示名称",
+        "keyPlaceholder": "仅在服务器需要密钥时填写",
+        "urlInvalid": "地址无效，请重新检查。",
+        "keyInvalid": "API 密钥无效，请重新检查。"
       }
     },
     "indexing": {
@@ -2168,8 +2175,7 @@
         "apiKeyOptional": "API 密钥 (可选)",
         "optionalPlaceholder": "可选",
         "saved": "已保存 {{name}}。",
-        "bodyLocalPc": "只能连接在此电脑上运行的服务器，例如 Ollama、LM Studio。",
-        "apiKey": "API 密钥"
+        "bodyLocalPc": "只能连接在此电脑上运行的服务器，例如 Ollama、LM Studio。"
       },
       "loginModal": {
         "openManually": "如果浏览器没有打开，请手动打开下面的地址。",
