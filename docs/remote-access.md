@@ -35,39 +35,133 @@ Turn off **Enable Remote Access** to stop serving. Quitting Dazzi also stops
 the server. A new server session has a new token: copy the address again after
 restarting Dazzi or stopping and starting remote access.
 
-## Security model
+## Connect from outside your home or office
 
-**The server is LAN-visible HTTP with no TLS. Use it only on a trusted network
-or through an encrypted tunnel.** It listens on all IPv4 interfaces, not only
-loopback. Do not expose the raw HTTP port to the public internet.
+Dazzi's built-in server speaks plain HTTP on your local network and does not
+open router ports, configure DDNS, or manage TLS certificates. To reach your
+host safely over the internet or an untrusted Wi-Fi network, put an encrypted
+private network or tunnel in front of it. **Never forward the raw HTTP port on
+your router to the public internet:** unencrypted traffic exposes both the
+session token and your files.
 
-The host generates a random token for each server session. Every request,
-including the interface, previews, uploads, downloads, and event stream, must
-carry that token. Browser tabs have separate session identifiers for their
-file watches and clipboard; those identifiers are not separate credentials.
-The token grants access to the host's Dazzi services and files with the
-permissions of the running desktop app. This is not a read-only share, a
-folder-limited share, or a multi-user permission system.
+| Method | Best for | Router port forwarding | Client software needed |
+| --- | --- | --- | --- |
+| **Tailscale (direct IP / MagicDNS)** | Personal laptops, phones, and tablets | None | Tailscale app on host and client |
+| **Tailscale Serve (HTTPS)** | Same as above, plus full browser HTTPS (clipboard API, no HTTP warnings) | None | Tailscale app on host and client |
+| **SSH local port forward** | Developers who already have SSH access to the host | Only if SSH is remote | Any SSH client |
+| **Cloudflare Tunnel + Cloudflare Access** | Devices where you cannot install a VPN client | None | Browser only |
 
-Treat the complete browser address as a credential. Anyone who has it and can
-reach the server can use it. The token may appear in browser history and
-copied links. It authenticates requests but does not encrypt them: someone
-able to observe unencrypted network traffic can read the token and file
-content. Stop and restart remote access if an address has been disclosed.
+### Option 1: Tailscale (recommended)
 
-An encrypted SSH or VPN tunnel can protect transport over an untrusted
-network. For example, with remote access running on port `47833` and SSH
-already configured for the host:
+[Tailscale](https://tailscale.com) creates an encrypted WireGuard mesh
+(tailnet) between your own signed-in devices, even behind home NAT or carrier
+CGNAT, without exposing any port to the public internet.
+
+1. Install Tailscale and sign in to the same tailnet on both the **host**
+   computer running Dazzi and the **client** device (Mac, Windows, iOS, or
+   Android).
+2. Keep the host awake while away (for example `caffeinate -dimsu` on macOS, or
+   disable sleep in System Settings / Windows Power settings).
+3. Enable **Remote Access** in Dazzi (**Settings > General > Remote Access**)
+   and copy **Browser Address**:
+   ```text
+   http://localhost:47833/?token=<your-session-token>
+   ```
+4. Find the host computer's Tailscale IPv4 address (`100.x.y.z`) or MagicDNS
+   name (`<machine>.<tailnet>.ts.net`) in the Tailscale menu bar / tray icon,
+   or from a terminal on the host:
+   ```sh
+   tailscale ip -4
+   ```
+5. On the client device, replace `localhost` with that Tailscale IP or MagicDNS
+   hostname, **keeping the port and `?token=...` query intact**:
+   ```text
+   http://100.x.y.z:47833/?token=<your-session-token>
+   ```
+
+#### Optional: HTTPS within your tailnet (`tailscale serve`)
+
+Plain `http://100.x.y.z:...` is already encrypted end-to-end by WireGuard, but
+browsers still treat `http://` origins as non-secure contexts (which can block
+one-click clipboard copy). If HTTPS certificates are enabled in your Tailscale
+admin console (**DNS > HTTPS Certificates**), proxy Dazzi's port over TLS inside
+your tailnet:
+
+```sh
+tailscale serve --bg 47833
+```
+
+(If you configured a custom port or `0`, pass the actual running port shown in
+**Browser Address** instead of `47833`.)
+
+Tailscale prints an `https://<machine>.<tailnet>.ts.net` URL reachable **only**
+by devices in your tailnet. Open it with the same `?token=...` query from Dazzi:
+
+```text
+https://<machine>.<tailnet>.ts.net/?token=<your-session-token>
+```
+
+Stop sharing the HTTPS proxy at any time with `tailscale serve reset`. Do
+**not** use `tailscale funnel`, which exposes the port to the public internet.
+
+### Option 2: SSH local port forwarding
+
+If you already reach the host over SSH, forward a local port on the client to
+`127.0.0.1` on the host (replace `47833` with Dazzi's running port if
+different):
 
 ```sh
 ssh -N -L 47833:127.0.0.1:47833 user@dazzi-host
 ```
 
-Open the copied URL at `http://localhost:47833/` on the client, retaining the
-token query. Replace the example user, hostname, and ports with your own.
-If the client-side port is different, change only that port in the URL.
-A tunnel does not change the server's all-interface bind: restrict the host
-firewall as needed so the raw HTTP port is reachable only by trusted devices.
+Leave the `ssh` command running and open the copied URL unchanged
+(`http://localhost:47833/?token=...`) in the client's browser. Because the
+browser connects to `localhost`, it treats the page as a secure context. If the
+local port `47833` is taken on the client, forward another port (for example
+`-L 57833:127.0.0.1:47833`) and change only the port in the URL.
+
+### Option 3: Cloudflare Tunnel + Cloudflare Access (browser-only clients)
+
+When you need to connect from a browser on a machine where you cannot install
+Tailscale or run SSH:
+
+1. Point a `cloudflared` tunnel on the host at `http://127.0.0.1:47833` (or
+   your configured fixed port — avoid port `0` so the local port stays fixed
+   across restarts).
+2. **Required:** Protect the hostname with a **Cloudflare Access** application
+   (email OTP, SSO, or hardware key) restricted to your own email address
+   *before* routing traffic. Without an Access policy, anyone who discovers or
+   guesses the URL reaches your host's login boundary directly.
+3. After passing Cloudflare Access in the browser, append Dazzi's current
+   `/?token=...` query on first entry so Dazzi sets its session cookie.
+
+## Security model
+
+**The built-in server is LAN-visible HTTP with no TLS. Use it only on a trusted
+network or through an encrypted tunnel.** It binds to `0.0.0.0` (all IPv4
+interfaces), not only loopback. Even when you connect through Tailscale, SSH,
+or `cloudflared`, the local HTTP port remains open on the host's active network
+interfaces: if the host joins an untrusted Wi-Fi network (hotel, cafe, airport),
+enable the OS firewall to block incoming connections to Dazzi's port on public
+interfaces while allowing loopback / Tailscale, or turn off Remote Access until
+needed.
+
+The host generates a fresh 256-bit random token each time the server starts.
+Every request — the interface, static assets (via an `HttpOnly; SameSite=Strict`
+session cookie set on first entry), previews, uploads, downloads, and the SSE
+event stream — must carry that token. Browser tabs have separate session
+identifiers for their file watches and clipboard; those identifiers are not
+separate credentials.
+
+The token grants full access to the host's Dazzi services and files with the
+permissions of the running desktop app. This is not a read-only share, a
+folder-limited share, or a multi-user permission system:
+
+- Treat the complete browser address as a password. It may be recorded in
+  browser history, bookmarks, or chat logs.
+- If a token-bearing URL is ever shared or exposed, toggle **Enable Remote
+  Access** off and back on (or restart Dazzi) to invalidate the old token
+  immediately.
 
 ## Browser capabilities and limitations
 
@@ -133,7 +227,7 @@ dragging a folder produces an archive.
 | --- | --- |
 | The address says **Stopped** | Confirm remote access is enabled on the host. Return to General or refocus the window to refresh status. Check the host log if the server could not start. |
 | The page says `remote access token required` or returns HTTP 403 | Copy the current complete address from the host. Keep the token query intact; an address from a previous server session no longer works. |
-| It works on the host but not another device | Replace `localhost` with the host's LAN address. Check the host firewall, Wi-Fi client isolation, network routing, and that both devices can reach the selected port. |
+| It works on the host but not another device | Replace `localhost` with the host's LAN IP or Tailscale IP (`100.x.y.z` / MagicDNS). Confirm Tailscale is signed in and connected on both devices, or check the host firewall, Wi-Fi client isolation, and routing on a local network. |
 | Connection refused or the page stops updating | Keep Dazzi running and the host awake. Check that remote access is still enabled, then reload using the current address. |
 | The port is already in use | Choose another valid port or `0`, save it, and restart Dazzi. Copy the newly reported address rather than constructing one from the old port. |
 | A changed port does not match the browser address | The displayed address is the running server's address. Restart Dazzi to apply the saved port. |

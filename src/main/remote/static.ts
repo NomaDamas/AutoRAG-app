@@ -33,17 +33,18 @@ export const REMOTE_BOOTSTRAP_PATH = "/remote/bootstrap.js";
 /**
  * `index.html` with the remote bootstrap script inserted as the first script
  * of `<head>` and a CSP that keeps every bundled rule but lets the page talk
- * to its own origin over HTTP and WebSocket (the Electron CSP allows only
+ * to its own origin over HTTP/HTTPS and WebSocket (the Electron CSP allows only
  * `autorag-preview:`/`blob:` beyond self, and `img-src`/`media-src`/`font-src`
- * must also accept the same origin's preview and thumbnail endpoints).
+ * must also accept the same origin's preview and thumbnail endpoints whether
+ * served over plain HTTP or an HTTPS proxy such as `tailscale serve`).
  */
 export function rewriteIndexHtml(html: string): string {
 	const script = `<script src="${REMOTE_BOOTSTRAP_PATH}"></script>`;
 	let out = html.replace(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/, (_match, content: string) => {
 		const csp = content
-			.replaceAll("autorag-preview: autorag-thumb:", "http: ws:")
-			.replaceAll("autorag-preview:", "http:")
-			.replaceAll("autorag-thumb:", "http:");
+			.replaceAll("autorag-preview: autorag-thumb:", "http: https: ws: wss:")
+			.replaceAll("autorag-preview:", "http: https:")
+			.replaceAll("autorag-thumb:", "http: https:");
 		return `<meta http-equiv="Content-Security-Policy" content="${csp}"`;
 	});
 	if (out.includes("<head>")) {

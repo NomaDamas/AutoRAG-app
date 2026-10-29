@@ -21,7 +21,7 @@ describe("rewriteIndexHtml", () => {
 		// Then the bootstrap comes before the bundle so window.autorag exists first.
 		expect(out.indexOf(REMOTE_BOOTSTRAP_PATH)).toBeGreaterThan(-1);
 		expect(out.indexOf(REMOTE_BOOTSTRAP_PATH)).toBeLessThan(out.indexOf("/assets/index.js"));
-		expect(out).toContain("connect-src 'self' blob: http:");
+		expect(out).toContain("connect-src 'self' blob: http: https:");
 	});
 });
 
