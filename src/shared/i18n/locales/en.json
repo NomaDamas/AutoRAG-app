@@ -15,6 +15,19 @@
     "locations": "Locations",
     "aiSearch": "AI Search",
     "settings": "Settings",
+    "settingsHint": "Settings {{shortcut}}",
+    "usage": "AI usage",
+    "update": {
+      "unsupported": "Version {{version}} · this build does not update automatically",
+      "current": "Version {{version}}",
+      "checking": "Checking for updates…",
+      "upToDate": "You're up to date ({{version}})",
+      "available": "Download new version {{version}}",
+      "availableManual": "Get the installer for {{version}}",
+      "downloading": "Downloading {{version}}… {{percent}}%",
+      "ready": "{{version}} is ready · restart now to install",
+      "error": "Update check failed: {{message}}"
+    },
     "recents": "Recents",
     "tags": "Tags",
     "tagColorsDenied": "Show tag colors",
@@ -129,6 +142,44 @@
       "progressAria": "Conversion in progress",
       "unsupported": "Converting {{from}} to {{to}} is not supported, so the name was not changed.",
       "replaced": "{{name}} — converted; the original moved to the Trash"
+    },
+    "reduce": {
+      "title": "Reduce Size",
+      "levelLabel": "Compression strength",
+      "recommended": "Recommended",
+      "levels": {
+        "light": "Light (High quality)",
+        "balanced": "Balanced",
+        "max": "Maximum (Smallest size)"
+      },
+      "specs": {
+        "pdf": {
+          "light": "High quality · up to 1600px (~30–65% off)",
+          "balanced": "Standard · up to 1280px (~55–80% off)",
+          "max": "Smallest · up to 960px (~75–90% off)"
+        },
+        "image": {
+          "light": "High quality · 256-color/2560px (~35–60% off)",
+          "balanced": "Balanced · up to 1920px (~55–75% off)",
+          "max": "Smallest · up to 1280px (~70–85% off)"
+        },
+        "video": {
+          "light": "Original res · ~35%+ bitrate cut",
+          "balanced": "Up to 1080p · ~58%+ bitrate cut",
+          "max": "Up to 720p · ~76%+ bitrate cut"
+        },
+        "audio": {
+          "light": "High quality · ~28% bitrate cut",
+          "balanced": "Standard · ~50% bitrate cut",
+          "max": "Compact / voice · ~65% bitrate cut"
+        }
+      },
+      "outputLabel": "Output",
+      "replaceMode": "Replace original",
+      "copyMode": "Save a copy",
+      "replaceHint": "Moves the original to the Trash and replaces “{{name}}” in place.",
+      "copyHint": "Keeps the original and saves “{{copyName}}” alongside it.",
+      "workingHint": "The original file stays untouched until compression finishes."
     }
   },
   "contextMenu": {
@@ -221,7 +272,9 @@
       "videoConvert": "Convert Video",
       "convertTo": "Convert to {{format}}",
       "maxEdge": "Max {{edge}}px",
-      "optimizeSize": "Optimize Size"
+      "reduceSize": "Reduce Size",
+      "reducing": "Reducing “{{name}}”…",
+      "reduceProgressAria": "Reducing {{name}}"
     },
     "versionRelations": {
       "exact": "Exact",
@@ -275,6 +328,59 @@
       "last7Days": "Previous 7 days",
       "last30Days": "Previous 30 days",
       "older": "Earlier"
+    }
+  },
+  "appError": {
+    "fixAction": "Fix with AI",
+    "openModelSettings": "Open model settings",
+    "showDetails": "Show details",
+    "hideDetails": "Hide details",
+    "other": {
+      "title": "Something went wrong",
+      "hint": "The AI can look for the cause and try to fix it for you."
+    },
+    "modelMissing": {
+      "title": "No AI model is set up",
+      "hint": "Choose a model or sign in and it works right away. Check the model, your sign-in and your subscription in the model settings."
+    },
+    "modelCredentials": {
+      "title": "The AI model can’t be used — sign-in or key was rejected",
+      "hint": "Your API key or sign-in may have expired or be wrong. Sign in again or check the key in the model settings, and check that your subscription is active."
+    },
+    "modelSubscription": {
+      "title": "Your subscription or usage limit is blocking the AI model",
+      "hint": "The subscription may have expired or the usage may be used up. Check Subscription & Usage, or pick another model in the model settings."
+    },
+    "modelNotFound": {
+      "title": "The selected AI model can’t be found",
+      "hint": "The model may have been retired or renamed. Pick another model in the model settings."
+    },
+    "rateLimit": {
+      "title": "Too many requests right now",
+      "hint": "Try again in a moment. If it keeps happening, pick another model in the model settings."
+    },
+    "network": {
+      "title": "Can’t reach the AI model’s server",
+      "hint": "Check your internet connection and try again. If the connection is fine and it keeps failing, check the model settings."
+    },
+    "fix": {
+      "title": "Fix with AI",
+      "running": "Looking for the cause…",
+      "status": {
+        "fixed": "Back to normal",
+        "needsUser": "There is something you need to do",
+        "cannotFix": "Couldn’t fix it"
+      },
+      "nextStepsLabel": "What to do",
+      "openSettings": "Open ‘{{page}}’ settings",
+      "openSource": "Open the ‘{{name}}’ connection",
+      "failedTitle": "Couldn’t fix it with AI",
+      "stopped": "Stopped.",
+      "minimize": "Keep fixing in background",
+      "sidebar": {
+        "running": "Fixing with AI…",
+        "open": "Show Fix with AI status"
+      }
     }
   },
   "interaction": {
@@ -1349,8 +1455,7 @@
     },
     "action": {
       "unsupportedResize": "This format cannot be resized.",
-      "unsupportedOptimize": "This format cannot be size-optimized.",
-      "alreadyOptimized": "This file is already optimized.",
+      "alreadyOptimized": "This file can’t be made any smaller.",
       "unsupportedExtract": "This file format cannot be extracted.",
       "emptyTarget": "There is nothing to act on.",
       "singleTargetOnly": "This action only supports one item at a time.",
@@ -1363,10 +1468,14 @@
       "unsupportedConvert": "{{format}} conversion is not supported.",
       "converted": "{{name}} — converted",
       "resized": "{{name}} — resized",
-      "optimized": "{{name}} — size optimized",
       "videoNeedsFfmpeg": "Video conversion requires ffmpeg.",
       "containerConverted": "{{name}} — container converted",
-      "shareUnsupported": "This platform does not support system sharing."
+      "shareUnsupported": "This platform does not support system sharing.",
+      "unsupportedReduce": "This file’s size can’t be reduced without changing its format",
+      "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
+      "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)",
+      "reduceCancelled": "Cancelled reducing {{name}}",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller · original in Trash)"
     },
     "indexStatus": {
       "outside": "File outside Dazzi search paths",

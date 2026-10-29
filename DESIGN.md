@@ -224,7 +224,8 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 - **Which actions** a file offers comes from `src/renderer/src/state/file-actions.ts`:
   the base set is 열기 · 다른 앱으로 열기 · 압축 · 공유 · AI 요약, plus 압축 해제
-  for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
+  for `.zip`, an 이미지 편집 menu for images, a 동영상 변환 menu for video, and
+  용량 줄이기 for every type the machine can shrink (below).
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
 - The same headline actions sit in the row context menu (`state/context-menu.ts`):
@@ -256,6 +257,32 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
   palette. Resizing (최대 ○px) keeps the source format and is not offered for
   GIF, because both engines resize one frame and would drop an animation.
+- **용량 줄이기** is one flat button (`reduceSize`) in the Inspector's bottom-right
+  bar, shown only when the file's extension is in `capabilities.reducibleExtensions`.
+  Clicking it opens `ReduceSizeDialog`, which lets the user pick **compression
+  strength** (`light` / `balanced` / `max`) and **output mode**:
+  - **원본 대체 (default)** moves the original safely to the OS Trash and replaces
+    it in place under its exact name — zero `-reduced` clutter.
+  - **사본으로 저장** writes a single `<stem>-reduced.<ext>` sibling (`reducedCopyName`),
+    recycling any prior `-reduced` copy through the Trash so `-reduced 2 .. 8`
+    duplicates never accumulate.
+  Every family stages in `.dazzi-reduce-*` first and keeps the same format:
+  PDF (`pdf-lib` + `fflate` level-9 `/FlateDecode` re-deflate + `/DCTDecode` JPEG
+  re-encode at 1600/1280/960px + Filee `compress-pdf`, picking the smallest valid
+  output and consulting Filee whenever `light` saves <15%), JPEG (`ffmpeg` `mjpeg`
+  when present — avoiding `sips`'s EXIF bloat — else `sips`, with automatic
+  step-down when an already-compressed source shrinks <12%), HEIC (`sips` on
+  macOS, `ffmpeg` elsewhere), PNG (perceptual 256/144/64-color `palettegen` +
+  Floyd-Steinberg/Sierra dithering + mixed-filter deflate) and WebP,
+  MP4/M4V/MOV/MKV (`libx264` crf 25/28/33 with VBV `-maxrate` capped at
+  65%/42%/24% of the probed source video bitrate + original/1080p/720p cap),
+  WebM (VP9 + Opus, VBV-capped), and MP3/M4A/AAC/Opus (bitrate stepped to
+  72%/50%/35% of the probed source audio bitrate, keeping cover art). Once started,
+  the same dialog turns into a live
+  progress card (`ProgressBar` — determinate `%` from `ffmpeg -progress pipe:1`,
+  shimmer on PDF/stills) with a Cancel button (or Esc) that kills the child
+  process tree via `actions:cancel`. Animated PNG/WebP are refused, and outputs
+  not smaller than the source are discarded.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

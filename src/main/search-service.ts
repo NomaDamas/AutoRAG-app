@@ -275,6 +275,18 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
+/** The librarian prefixes the provider's own words with this in the `model-request-failed` diagnostic. */
+const MODEL_REQUEST_FAILED_PREFIX = /^The model request failed:\s*/u;
+
+/**
+ * The provider's error when the run's model request failed, else null. The librarian does not throw for it: it ends the
+ * run with a degraded "ended without a final answer" text and this diagnostic, which the panel must not show as an answer.
+ */
+function modelRequestFailure(response: SearchDocumentsResponse): string | null {
+	const diagnostic = response.diagnostics?.find((entry) => entry.code === "model-request-failed");
+	return diagnostic === undefined ? null : diagnostic.message.replace(MODEL_REQUEST_FAILED_PREFIX, "");
+}
+
 function mapPhase(response: SearchDocumentsResponse): AnswerPhase {
 	return {
 		answer: response.answer,
@@ -311,6 +323,11 @@ export interface SearchService extends SearchBridge {
 	setApprovalMode(mode: ApprovalMode): void;
 	/** Ends every open conversation (the app is quitting); the session files stay. */
 	dispose(): Promise<void>;
+	/**
+	 * The config changed under the open agents (the error-fix helper repaired it): lets go of every agent that is not
+	 * answering, so the next question of a chat builds one on the current config and resumes from the chat's file.
+	 */
+	resetAgents(): Promise<void>;
 }
 
 export function createSearchService(deps: SearchServiceDeps): SearchService {
@@ -366,6 +383,14 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		const open = [...agents.values()];
 		agents.clear();
 		await Promise.allSettled(open.map((agent) => agent.closeSession?.()));
+	}
+
+	/** Closes the agents that are idle; one that is answering finishes on the config it started with. */
+	async function resetAgents(): Promise<void> {
+		const answering = new Set([...active.values()].map((run) => run.agent));
+		const idle = [...agents].filter(([, agent]) => !answering.has(agent));
+		for (const [chatId] of idle) agents.delete(chatId);
+		await Promise.allSettled(idle.map(([, agent]) => agent.closeSession?.()));
 	}
 
 	const emit = (event: SearchStreamEvent): void => deps.send(SEARCH_CHANNELS.event, event);
@@ -456,6 +481,13 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 						break;
 					}
 					case "complete": {
+						const failure = modelRequestFailure(event.response);
+						if (failure !== null) {
+							// No answer was made: the Quick answer, if one was shown, stays as it is and the error comes with it.
+							run.failed = true;
+							emit({ type: "error", searchId: run.searchId, message: failure });
+							break;
+						}
 						run.sessionId = event.response.sessionId;
 						const phase = mapPhase(event.response);
 						// Without a preliminary this is the run's only answer: Jev judged the
@@ -619,6 +651,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		},
 		onEvent: () => () => undefined,
 		dispose: closeAgents,
+		resetAgents,
 	};
 }
 

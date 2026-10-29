@@ -1,7 +1,9 @@
 import { APPEARANCE_CHANNELS } from "../../shared/appearance-contract";
 import { ACCOUNT_CHANNELS } from "../../shared/account-contract";
+import { ACTIONS_CHANNELS, NO_CAPABILITIES } from "../../shared/actions-contract";
 import { APP_UPDATE_CHANNELS } from "../../shared/update-contract";
 import { AUTOMATION_CHANNELS } from "../../shared/automation-contract";
+import { ERROR_FIX_CHANNELS } from "../../shared/error-fix-contract";
 import { INDEX_ACTIVITY_CHANNELS } from "../../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../../shared/index-problem-contract";
 import { INTERACTION_CHANNELS } from "../../shared/interaction-contract";
@@ -25,8 +27,10 @@ import { REMOTE_ROUTES, type RemoteBootstrapConfig } from "../../shared/remote-c
 
 const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"account.onChanged": ACCOUNT_CHANNELS.changed,
+	"actions.onProgress": ACTIONS_CHANNELS.progress,
 	"appUpdate.onChange": APP_UPDATE_CHANNELS.changed,
 	"automations.onChange": AUTOMATION_CHANNELS.changed,
+	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
 	"indexActivity.onChange": INDEX_ACTIVITY_CHANNELS.changed,
 	"indexProblem.onChange": INDEX_PROBLEM_CHANNELS.changed,
 	"interaction.onMode": INTERACTION_CHANNELS.modeChanged,
@@ -54,6 +58,7 @@ const TARGETS = [
 	"actions",
 	"services",
 	"conversion",
+	"errorFix",
 	"account",
 	"automations",
 	"appUpdate",
@@ -226,7 +231,7 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		onNavigate: () => () => {},
 	};
 	const actions = {
-		capabilities: async () => ({ openWith: false, share: false, archive: false, imageFormats: [], videoContainers: [] }),
+		capabilities: async () => (${JSON.stringify(NO_CAPABILITIES)}),
 	};
 	const services = {
 		list: async () => [],

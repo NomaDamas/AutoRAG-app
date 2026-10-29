@@ -82,7 +82,7 @@ export interface RemoteBootstrapConfig {
  */
 export const REMOTE_NATIVE_ONLY_METHODS: Readonly<Record<string, readonly string[]>> = {
 	fs: ["startDrag", "reveal", "open", "quickLook"],
-	actions: ["run", "share", "openWithApplications"],
+	actions: ["run", "cancel", "share", "openWithApplications"],
 	preview: ["show", "hide", "prefetch"],
 	conversion: ["plan", "run", "cancel"],
 	services: ["list", "run"],

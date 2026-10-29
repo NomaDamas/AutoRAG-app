@@ -74,10 +74,10 @@ import {
 	SparklesIcon,
 	TrashIcon,
 	VideoConvertIcon,
+	ReduceSizeIcon,
 } from "./icons";
 import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
-
 export interface InspectorFamilyMember {
 	readonly path: string;
 	readonly name: string;
@@ -157,6 +157,7 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
 	askAi: SparklesIcon,
 	image: ImageEditIcon,
 	video: VideoConvertIcon,
+	reduce: ReduceSizeIcon,
 };
 
 export function Inspector({
@@ -256,11 +257,15 @@ function InfoHalf({
 	const [brief, setBrief] = useState(false);
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
 	const focusedPath = entry?.path ?? null;
-	// Rich metadata is per-file and read on focus; a stale answer for a path the
-	// user already left must not overwrite the current one.
+	const focusedMtime = entry?.mtimeMs ?? null;
+	const focusedSize = entry?.size ?? null;
+	useEffect(() => {
+		setBrief(false);
+	}, [focusedPath]);
+	// Rich metadata is per-file and re-read when an in-place action (such as Reduce Size)
+	// replaces the file with a new size/mtime; stale answers are dropped on cleanup.
 	useEffect(() => {
 		setDetails(null);
-		setBrief(false);
 		if (focusedPath === null) return;
 		let cancelled = false;
 		const load = window.autorag?.fs?.details;
@@ -275,7 +280,7 @@ function InfoHalf({
 		return () => {
 			cancelled = true;
 		};
-	}, [focusedPath]);
+	}, [focusedPath, focusedMtime, focusedSize]);
 	const { t } = useTranslation();
 	const included = indexStatus === null || !indexStatus.excluded;
 	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
@@ -663,6 +668,7 @@ function ActionBar({
 							case "askAi": return t("inspector.actions.askAi", def);
 							case "imageEdit": return t("inspector.actions.imageEdit", def);
 							case "videoConvert": return t("inspector.actions.videoConvert", def);
+							case "reduceSize": return t("inspector.actions.reduceSize", def);
 							default: return def;
 						}
 					};
@@ -722,18 +728,21 @@ function ActionButton({
 	icon,
 	label,
 	actionId,
+	disabled = false,
 	onClick,
 }: {
 	readonly icon: ReactElement;
 	readonly label: string;
-	readonly actionId?: string;
+	readonly actionId?: string | undefined;
+	readonly disabled?: boolean | undefined;
 	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
 }): ReactElement {
 	return (
 		<button
 			type="button"
 			data-action={actionId}
-			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover hover:text-ink"
+			disabled={disabled}
+			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
 			onClick={onClick}
 		>
 			{icon}

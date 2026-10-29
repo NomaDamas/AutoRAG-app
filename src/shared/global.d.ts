@@ -4,6 +4,7 @@ import type { AnalyticsBridge } from "./analytics-contract";
 import type { ActionsBridge } from "./actions-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { ConversionBridge } from "./conversion-contract";
+import type { ErrorFixBridge } from "./error-fix-contract";
 import type { FsBridge } from "./fs-contract";
 import type { IndexActivityBridge } from "./index-activity-contract";
 import type { InteractionBridge } from "./interaction-contract";
@@ -30,6 +31,7 @@ declare global {
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;
 			readonly conversion: ConversionBridge;
+			readonly errorFix: ErrorFixBridge;
 			readonly indexActivity: IndexActivityBridge;
 			readonly interaction: InteractionBridge;
 			readonly indexProblem: IndexProblemBridge;

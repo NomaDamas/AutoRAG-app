@@ -27,6 +27,8 @@ import { setAppLanguage, t } from "../shared/i18n/core";
 import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
+import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
+import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
@@ -60,7 +62,7 @@ import { quotaBlock } from "./quota-guard";
 import { createOnboardingService, type OnboardingService } from "./onboarding-service";
 import { closeDecision, completesOnClose } from "./onboarding-window";
 import { detectSources } from "./onboarding-sources";
-import { FS_CHANNELS } from "../shared/fs-contract";
+import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
 import windowIconPath from "../../build/icons/512x512.png?asset";
 import { APP_FULL_NAME, APP_VERSION, formatWindowTitle, type DevLabel } from "../shared/app-info";
@@ -74,7 +76,6 @@ import { createRemoteHost, type RemoteHost } from "./remote/host";
 import { REMOTE_CHANNELS, type RemoteAccessStatus } from "../shared/remote-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
 import { ACCOUNT_CHANNELS } from "../shared/account-contract";
-import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
 import { SERVICES_CHANNELS } from "../shared/services-contract";
@@ -95,6 +96,7 @@ import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
+import { createErrorFixService } from "./error-fix-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
@@ -107,6 +109,7 @@ import {
 	registerAutomationIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
+	registerErrorFixIpcHandlers,
 	registerInteractionIpcHandlers,
 	registerIndexProblemIpcHandlers,
 	registerModelDownloadIpcHandlers,
@@ -119,6 +122,7 @@ import {
 } from "./ipc";
 import { createActionService } from "./action-service";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
+import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
@@ -537,6 +541,16 @@ app.whenReady().then(async () => {
 	// anchored to the button that opened it.
 	registerActionsIpcHandlers(
 		createActionService({
+			pdf: createFileePdfReducer(() => readFileeSettings(autoragConfigPath())),
+			trash: async (target) => {
+				const result = (await workerHost.client.call("trash", [[target]])) as FsBatchResult;
+				const failure = result.failed[0];
+				if (failure !== undefined) throw new Error(failure.message);
+			},
+			onProgress: (event, window) => {
+				if (window !== null && !window.isDestroyed()) window.webContents.send(ACTIONS_CHANNELS.progress, event);
+				else sendToMainWindow(ACTIONS_CHANNELS.progress, event);
+			},
 			applications: {
 				async pick(window) {
 					const options: OpenDialogOptions = {
@@ -871,6 +885,7 @@ app.whenReady().then(async () => {
 		smartIndexing: SMART_INDEXING_CHANNELS,
 		account: ACCOUNT_CHANNELS,
 		modelDownload: MODEL_DOWNLOAD_CHANNELS,
+		errorFix: ERROR_FIX_CHANNELS,
 		automations: AUTOMATION_CHANNELS,
 		indexActivity: INDEX_ACTIVITY_CHANNELS,
 		indexProblem: INDEX_PROBLEM_CHANNELS,
@@ -962,6 +977,30 @@ app.whenReady().then(async () => {
 			env: process.env,
 			language: () => currentLanguage,
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
+		}),
+	);
+	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	registerErrorFixIpcHandlers(
+		createErrorFixService({
+			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),
+			resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+			agentDir: getAgentDir(),
+			env: process.env,
+			cwd: process.cwd(),
+			language: () => currentLanguage,
+			config: autoRagConfig,
+			diagnostics: async () => {
+				const [model, sources] = await Promise.all([settingsService.modelsResolve(), dataSources.list()]);
+				return {
+					model: model.error !== null ? { error: model.error } : model.model === null ? null : { provider: model.model.provider, id: model.model.modelId, signedIn: model.model.auth.present },
+					sources: sources.error !== null ? { error: sources.error } : sources.sources.map((source) => ({ id: source.id, type: source.type, enabled: source.enabled, install: source.install.state, index: source.index.state, indexDetail: source.index.detail })),
+					localIndex: sources.local,
+					indexProblem: indexProblem.get(),
+				};
+			},
+			refreshIndex: () => runLocalIndex("manual-refresh", undefined, busyResult(undefined), recordLocalRun),
+			// An open chat's agent was built on the old config; the next question rebuilds it and resumes the conversation.
+			onConfigChanged: () => void searchService.resetAgents(),
 		}),
 	);
 	const accountService = createAccountService({

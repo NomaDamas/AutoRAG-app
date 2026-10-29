@@ -15,6 +15,19 @@
     "locations": "場所",
     "aiSearch": "AI 検索",
     "settings": "設定",
+    "settingsHint": "設定 {{shortcut}}",
+    "usage": "AI 使用量",
+    "update": {
+      "unsupported": "バージョン {{version}} · このビルドは自動更新されません",
+      "current": "バージョン {{version}}",
+      "checking": "アップデートを確認中…",
+      "upToDate": "最新バージョンです ({{version}})",
+      "available": "新バージョン {{version}} をダウンロード",
+      "availableManual": "{{version}} のインストーラーを入手",
+      "downloading": "{{version}} をダウンロード中… {{percent}}%",
+      "ready": "{{version}} の準備ができました · 今すぐ再起動してインストール",
+      "error": "アップデートの確認に失敗しました: {{message}}"
+    },
     "recents": "最近使った項目",
     "tags": "タグ",
     "tagColorsDenied": "タグの色を表示",
@@ -129,6 +142,44 @@
       "progressAria": "変換中",
       "unsupported": "{{from}} から {{to}} への変換には対応していないため、名前は変更されませんでした。",
       "replaced": "{{name}} — 変換しました。元のファイルはゴミ箱に移動しました"
+    },
+    "reduce": {
+      "title": "容量を減らす",
+      "levelLabel": "圧縮レベル",
+      "recommended": "推奨",
+      "levels": {
+        "light": "弱め（高画質）",
+        "balanced": "標準",
+        "max": "強め（最小サイズ）"
+      },
+      "specs": {
+        "pdf": {
+          "light": "高画質・最大 1600px（約 30〜65% 削減）",
+          "balanced": "標準圧縮・最大 1280px（約 55〜80% 削減）",
+          "max": "最大圧縮・最大 960px（約 75〜90% 削減）"
+        },
+        "image": {
+          "light": "高画質・256色/2560px（約 35〜60% 削減）",
+          "balanced": "標準・最大 1920px（約 55〜75% 削減）",
+          "max": "最大圧縮・最大 1280px（約 70〜85% 削減）"
+        },
+        "video": {
+          "light": "元の解像度・ビットレート約 35%+ 削減",
+          "balanced": "最大 1080p・ビットレート約 58%+ 削減",
+          "max": "最大 720p・ビットレート約 76%+ 削減"
+        },
+        "audio": {
+          "light": "高音質・ビットレート約 28% 削減",
+          "balanced": "標準音質・ビットレート約 50% 削減",
+          "max": "音声優先・ビットレート約 65% 削減"
+        }
+      },
+      "outputLabel": "保存方法",
+      "replaceMode": "元のファイルを置換",
+      "copyMode": "コピーとして保存",
+      "replaceHint": "元のファイルをゴミ箱へ移動し、「{{name}}」をそのまま置き換えます。",
+      "copyHint": "元のファイルを残して「{{copyName}}」として保存します。",
+      "workingHint": "完了するまで元のファイルは変更されません。"
     }
   },
   "contextMenu": {
@@ -221,7 +272,9 @@
       "videoConvert": "動画変換",
       "convertTo": "{{format}}に変換",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "容量最適化"
+      "reduceSize": "容量を減らす",
+      "reducing": "「{{name}}」の容量を減らしています…",
+      "reduceProgressAria": "{{name}} の容量削減の進行状況"
     },
     "versionRelations": {
       "exact": "同一",
@@ -275,6 +328,59 @@
       "last7Days": "過去7日間",
       "last30Days": "過去30日間",
       "older": "それ以前"
+    }
+  },
+  "appError": {
+    "fixAction": "AIで修正",
+    "openModelSettings": "モデル設定を開く",
+    "showDetails": "詳細を表示",
+    "hideDetails": "詳細を閉じる",
+    "other": {
+      "title": "問題が発生しました",
+      "hint": "AIが原因を調べて、直せるか試します。"
+    },
+    "modelMissing": {
+      "title": "使用するAIモデルが設定されていません",
+      "hint": "モデルを選ぶかログインすると、すぐに使えます。モデル設定でモデル、ログイン状態、サブスクリプションを確認してください。"
+    },
+    "modelCredentials": {
+      "title": "AIモデルを使用できません（認証に失敗しました）",
+      "hint": "APIキーまたはログインの有効期限が切れているか、正しくない可能性があります。モデル設定で再ログインするかキーを確認し、サブスクリプションが有効かも確認してください。"
+    },
+    "modelSubscription": {
+      "title": "サブスクリプションまたは使用量の上限のため、AIモデルを使用できません",
+      "hint": "サブスクリプションの期限が切れているか、使用量を使い切った可能性があります。サブスクリプションと使用量を確認するか、モデル設定で別のモデルを選んでください。"
+    },
+    "modelNotFound": {
+      "title": "選択したAIモデルが見つかりません",
+      "hint": "モデルが終了したか、名前が変わった可能性があります。モデル設定で別のモデルを選んでください。"
+    },
+    "rateLimit": {
+      "title": "リクエストが集中して一時的に制限されています",
+      "hint": "しばらくしてからもう一度お試しください。続く場合は、モデル設定で別のモデルを選んでみてください。"
+    },
+    "network": {
+      "title": "AIモデルのサーバーに接続できません",
+      "hint": "インターネット接続を確認して、もう一度お試しください。接続が正常でも続く場合は、モデル設定を確認してください。"
+    },
+    "fix": {
+      "title": "AIで修正",
+      "running": "原因を調べています…",
+      "status": {
+        "fixed": "正常に戻りました",
+        "needsUser": "あなたの操作が必要です",
+        "cannotFix": "修正できませんでした"
+      },
+      "nextStepsLabel": "必要な操作",
+      "openSettings": "「{{page}}」設定を開く",
+      "openSource": "「{{name}}」の接続を開く",
+      "failedTitle": "AIでは修正できませんでした",
+      "stopped": "中断しました。",
+      "minimize": "バックグラウンドで続行",
+      "sidebar": {
+        "running": "AIで修正中…",
+        "open": "AIで修正の状態を表示"
+      }
     }
   },
   "interaction": {
@@ -1349,8 +1455,7 @@
     },
     "action": {
       "unsupportedResize": "この形式はサイズ変更に対応していません。",
-      "unsupportedOptimize": "この形式は容量の最適化に対応していません。",
-      "alreadyOptimized": "このファイルはすでに最適化されています。",
+      "alreadyOptimized": "これ以上小さくできないファイルです。",
       "unsupportedExtract": "展開できないファイル形式です。",
       "emptyTarget": "対象が空です。",
       "singleTargetOnly": "この操作は一度に 1 つの項目のみ対応しています。",
@@ -1363,10 +1468,14 @@
       "unsupportedConvert": "{{format}} への変換は対応していません。",
       "converted": "{{name}} — 変換しました",
       "resized": "{{name}} — サイズを変更しました",
-      "optimized": "{{name}} — 容量を最適化しました",
       "videoNeedsFfmpeg": "動画の変換には ffmpeg が必要です。",
       "containerConverted": "{{name}} — コンテナを変換しました",
-      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。"
+      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。",
+      "unsupportedReduce": "このファイルは形式を保ったまま容量を減らせません",
+      "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
+      "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）",
+      "reduceCancelled": "{{name}} の容量削減をキャンセルしました",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減・元のファイルはゴミ箱へ移動）"
     },
     "indexStatus": {
       "outside": "Dazzi の検索パス外のファイル",

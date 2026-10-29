@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NO_CAPABILITIES } from "../src/shared/actions-contract";
 import { buildRemoteBootstrapScript } from "../src/main/remote/bootstrap";
 
 /** A minimal browser the generated script can run against, so its shape is checked, not just its text. */
@@ -35,7 +36,7 @@ describe("remote bootstrap", () => {
 		const autorag = window.autorag as Record<string, unknown>;
 		expect(autorag.platform).toBe("darwin");
 		expect(typeof autorag.pathForFile).toBe("function");
-		for (const target of ["fs", "live", "settings", "search", "preview", "interaction", "onboarding"]) {
+		for (const target of ["fs", "live", "settings", "search", "preview", "interaction", "onboarding", "errorFix"]) {
 			expect(autorag[target], `${target} bridge`).toBeDefined();
 		}
 	});
@@ -109,12 +110,6 @@ describe("remote bootstrap", () => {
 		expect(opened).toHaveLength(1);
 		expect(opened[0]).toContain("/remote/preview");
 		expect(closedCount).toBe(1);
-		expect(await autorag.actions.capabilities()).toEqual({
-			openWith: false,
-			share: false,
-			archive: false,
-			imageFormats: [],
-			videoContainers: [],
-		});
+		expect(await autorag.actions.capabilities()).toEqual(NO_CAPABILITIES);
 	});
 });
