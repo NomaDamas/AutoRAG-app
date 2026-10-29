@@ -65,7 +65,7 @@ describe("sidebar-contract normalization & locked items", () => {
 		expect(normalized.hiddenItems).toEqual(["place:music", "place:movies"]);
 		expect(normalized.hiddenSections).toEqual(["cloud"]);
 		expect(normalized.favoritesOrder).toEqual(["place:downloads", "place:documents"]);
-		expect(normalized.sectionOrder).toEqual(["locations", "cloud", "favorites", "tags"]);
+		expect(normalized.sectionOrder).toEqual(["locations", "cloud", "favorites", "connections", "tags"]);
 		expect(normalized.customFavorites).toEqual([{ path: "/Users/me/Projects", label: "Projects" }]);
 		expect(isDefaultSidebarSettings(normalized)).toBe(false);
 		expect(isDefaultSidebarSettings(DEFAULT_SIDEBAR_SETTINGS)).toBe(true);

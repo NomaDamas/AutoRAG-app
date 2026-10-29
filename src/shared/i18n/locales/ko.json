@@ -2125,6 +2125,7 @@
       "sectionAlwaysShown": "즐겨찾기 섹션은 항상 표시됩니다",
       "sectionCount": "{{visible}}/{{total}} 표시",
       "emptyCloud": "연결된 클라우드 드라이브가 없습니다.",
+      "emptyConnections": "연결된 앱 첨부 폴더가 없습니다.",
       "emptyLocations": "마운트된 디스크가 없습니다.",
       "emptyTags": "고정된 Finder 태그가 없습니다.",
       "modal": {

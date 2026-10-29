@@ -2125,6 +2125,7 @@
       "sectionAlwaysShown": "Favorites section is always shown",
       "sectionCount": "{{visible}}/{{total}} shown",
       "emptyCloud": "No cloud drives connected.",
+      "emptyConnections": "No connected app attachment folders.",
       "emptyLocations": "No mounted volumes found.",
       "emptyTags": "No pinned Finder tags.",
       "modal": {

@@ -209,8 +209,8 @@ try {
 	);
 	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section-card").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
 	check(
-		"Favorites, Cloud, Locations, and Tags render together in one unified .sidebar-sections-stack",
-		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "locations", "tags"]),
+		"Favorites, Cloud, Connections, Locations, and Tags render together in one unified .sidebar-sections-stack",
+		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "connections", "locations", "tags"]),
 		JSON.stringify(sectionIds),
 	);
 	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);

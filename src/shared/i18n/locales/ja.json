@@ -2125,6 +2125,7 @@
       "sectionAlwaysShown": "お気に入りセクションは常に表示されます",
       "sectionCount": "{{visible}}/{{total}} 表示",
       "emptyCloud": "接続されたクラウドドライブはありません。",
+      "emptyConnections": "接続済みアプリの添付フォルダはありません。",
       "emptyLocations": "マウントされたディスクはありません。",
       "emptyTags": "ピン留めされた Finder タグはありません。",
       "modal": {

@@ -15,10 +15,10 @@ import type { FsLocationIcon } from "./fs-contract";
 export const LOCKED_SIDEBAR_ITEM_IDS = ["app:aiSearch", "app:automations"] as const;
 export type LockedSidebarItemId = (typeof LOCKED_SIDEBAR_ITEM_IDS)[number];
 
-export const SIDEBAR_SECTION_IDS = ["favorites", "cloud", "locations", "tags"] as const;
+export const SIDEBAR_SECTION_IDS = ["favorites", "cloud", "connections", "locations", "tags"] as const;
 export type SidebarSectionId = (typeof SIDEBAR_SECTION_IDS)[number];
 
-export const HIDEABLE_SIDEBAR_SECTION_IDS = ["cloud", "locations", "tags"] as const;
+export const HIDEABLE_SIDEBAR_SECTION_IDS = ["cloud", "connections", "locations", "tags"] as const;
 export type HideableSidebarSectionId = (typeof HIDEABLE_SIDEBAR_SECTION_IDS)[number];
 
 /** Standard OS favorite folder kinds in their default Finder order. */
@@ -81,7 +81,7 @@ export const DEFAULT_SIDEBAR_SETTINGS: SidebarSettings = {
 	hiddenItems: [],
 	hiddenSections: [],
 	favoritesOrder: [],
-	sectionOrder: ["favorites", "cloud", "locations", "tags"],
+	sectionOrder: ["favorites", "cloud", "connections", "locations", "tags"],
 	customFavorites: [],
 };
 
@@ -183,6 +183,11 @@ export function customSidebarItemId(path: string): string {
 /** Canonical sidebar item ID for a cloud drive (`cloud:/path`). */
 export function cloudSidebarItemId(path: string): string {
 	return `cloud:${path}`;
+}
+
+/** Canonical sidebar item ID for a connected datasource folder (`connection:/path`). */
+export function connectionSidebarItemId(path: string): string {
+	return `connection:${path}`;
 }
 
 /** Canonical sidebar item ID for a mounted volume/disk (`location:/path`). */

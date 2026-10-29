@@ -2125,6 +2125,7 @@
       "sectionAlwaysShown": "个人收藏分区始终保持显示",
       "sectionCount": "显示 {{visible}}/{{total}}",
       "emptyCloud": "未连接任何云盘驱动器。",
+      "emptyConnections": "没有已连接应用的附件文件夹。",
       "emptyLocations": "未找到已挂载的磁盘。",
       "emptyTags": "没有固定的 Finder 标签。",
       "modal": {

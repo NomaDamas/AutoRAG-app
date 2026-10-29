@@ -335,6 +335,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer modal
 		expect(sectionCards.map((el) => el.getAttribute("data-sidebar-section"))).toEqual([
 			"favorites",
 			"cloud",
+			"connections",
 			"locations",
 			"tags",
 		]);
@@ -400,7 +401,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer modal
 			heroBtn: "使用 AI 定制",
 			sectionsTitle: "侧边栏分区与项目",
 			favoritesSection: "个人收藏",
-			cloudSection: "云盘",
+			cloudSection: "云端",
 			locationsSection: "位置",
 			tagsSection: "标签",
 			lockedBadge: "始终显示",

@@ -16,9 +16,11 @@ import {
 	House,
 	Image,
 	Lock,
+	MessagesSquare,
 	Monitor,
 	Music,
 	Package,
+	Plug,
 	RotateCcw,
 	Server,
 	Sparkles,
@@ -34,6 +36,7 @@ import { RECENTS_PATH, type FsBridge, type FsLocation, type FsLocationIcon, type
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	cloudSidebarItemId,
+	connectionSidebarItemId,
 	customSidebarItemId,
 	DEFAULT_SIDEBAR_SETTINGS,
 	isDefaultSidebarSettings,
@@ -86,6 +89,7 @@ const KIND_ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
 	onedrive: Cloud,
 	dropbox: Box,
 	box: Package,
+	discord: MessagesSquare,
 	cloud: Cloud,
 	disk: HardDrive,
 	network: Server,
@@ -94,6 +98,7 @@ const KIND_ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
 const SECTION_ICONS: Readonly<Record<SidebarSectionId, LucideIcon>> = {
 	favorites: Star,
 	cloud: Cloud,
+	connections: Plug,
 	locations: HardDrive,
 	tags: Tag,
 };
@@ -266,6 +271,8 @@ export function SidebarPage({
 				return t("places.favorites");
 			case "cloud":
 				return t("places.cloud");
+			case "connections":
+				return t("places.connections");
 			case "locations":
 				return t("places.locations");
 			case "tags":
@@ -274,6 +281,7 @@ export function SidebarPage({
 	};
 
 	const cloudRows = useMemo(() => locations.filter((loc) => loc.section === "cloud"), [locations]);
+	const connectionRows = useMemo(() => locations.filter((loc) => loc.section === "connections"), [locations]);
 	const locationRows = useMemo(() => locations.filter((loc) => loc.section === "locations"), [locations]);
 
 	const sectionCounts = (sectionId: SidebarSectionId): { readonly visible: number; readonly total: number } | null => {
@@ -287,6 +295,13 @@ export function SidebarPage({
 			return {
 				visible: cloudRows.filter((loc) => !hiddenItems.has(cloudSidebarItemId(loc.path))).length,
 				total: cloudRows.length,
+			};
+		}
+		if (sectionId === "connections") {
+			if (connectionRows.length === 0) return null;
+			return {
+				visible: connectionRows.filter((loc) => !hiddenItems.has(connectionSidebarItemId(loc.path))).length,
+				total: connectionRows.length,
 			};
 		}
 		if (sectionId === "locations") {
@@ -562,6 +577,40 @@ export function SidebarPage({
 										) : (
 											cloudRows.map((loc) => {
 												const id = cloudSidebarItemId(loc.path);
+												const Icon = KIND_ICONS[loc.icon];
+												const visible = !hiddenItems.has(id);
+												return (
+													<div key={id} className={`sidebar-custom-row${visible ? "" : " is-muted"}`} data-sidebar-row={id}>
+														<div className="sidebar-custom-row__order" aria-hidden="true" />
+														<span className="sidebar-custom-row__icon" aria-hidden="true">
+															<Icon size={15} />
+														</span>
+														<div className="sidebar-custom-row__main">
+															<span className="sidebar-custom-row__name">{loc.name}</span>
+															<span className="sidebar-custom-row__path" title={loc.path}>
+																{loc.path}
+															</span>
+														</div>
+														<Switch
+															checked={visible}
+															dataSwitchId={id}
+															ariaLabel={loc.name}
+															onChange={() => toggleItem(id)}
+														/>
+													</div>
+												);
+											})
+										)}
+									</div>
+								) : null}
+
+								{sectionVisible && sectionId === "connections" ? (
+									<div className="sidebar-section-card__items">
+										{connectionRows.length === 0 ? (
+											<p className="sidebar-section-card__empty">{t("settingsCore.sidebar.emptyConnections")}</p>
+										) : (
+											connectionRows.map((loc) => {
+												const id = connectionSidebarItemId(loc.path);
 												const Icon = KIND_ICONS[loc.icon];
 												const visible = !hiddenItems.has(id);
 												return (

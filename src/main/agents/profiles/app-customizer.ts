@@ -9,6 +9,7 @@ import type { FsLocation, FsTag } from "../../../shared/fs-contract";
 import type { AppSettings, SettingsBridge } from "../../../shared/settings-contract";
 import {
 	cloudSidebarItemId,
+	connectionSidebarItemId,
 	customSidebarItemId,
 	DEFAULT_SIDEBAR_SETTINGS,
 	isHideableSidebarSectionId,
@@ -75,6 +76,7 @@ function resolveCandidateItemId(
 		normalized.startsWith("app:") ||
 		normalized.startsWith("place:") ||
 		normalized.startsWith("cloud:") ||
+		normalized.startsWith("connection:") ||
 		normalized.startsWith("location:") ||
 		normalized.startsWith("tag:") ||
 		normalized.startsWith("custom:")
@@ -86,6 +88,11 @@ function resolveCandidateItemId(
 		(loc) => loc.section === "cloud" && (loc.name.toLowerCase() === lower || loc.path === normalized || loc.icon.toLowerCase() === lower),
 	);
 	if (cloudMatch !== undefined) return cloudSidebarItemId(cloudMatch.path);
+
+	const connMatch = locations.find(
+		(loc) => loc.section === "connections" && (loc.name.toLowerCase() === lower || loc.path === normalized || loc.icon.toLowerCase() === lower),
+	);
+	if (connMatch !== undefined) return connectionSidebarItemId(connMatch.path);
 
 	const locMatch = locations.find(
 		(loc) => loc.section === "locations" && (loc.name.toLowerCase() === lower || loc.path === normalized),
@@ -282,15 +289,24 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 										path: loc.path,
 										visible: !hiddenItems.has(cloudSidebarItemId(loc.path)),
 									}))
-							: sectionId === "locations"
+							: sectionId === "connections"
 								? locations
-										.filter((loc) => loc.section === "locations")
+										.filter((loc) => loc.section === "connections")
 										.map((loc) => ({
-											id: locationSidebarItemId(loc.path),
+											id: connectionSidebarItemId(loc.path),
 											label: loc.name,
 											path: loc.path,
-											visible: !hiddenItems.has(locationSidebarItemId(loc.path)),
+											visible: !hiddenItems.has(connectionSidebarItemId(loc.path)),
 										}))
+								: sectionId === "locations"
+									? locations
+											.filter((loc) => loc.section === "locations")
+											.map((loc) => ({
+												id: locationSidebarItemId(loc.path),
+												label: loc.name,
+												path: loc.path,
+												visible: !hiddenItems.has(locationSidebarItemId(loc.path)),
+											}))
 								: sectionId === "tags"
 									? tags.map((tag) => ({
 											id: tagSidebarItemId(tag.name),
@@ -354,19 +370,28 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				}),
 			),
 			showSections: Type.Optional(
-				Type.Array(Type.Union([Type.Literal("cloud"), Type.Literal("locations"), Type.Literal("tags")]), {
-					description: "Sidebar sections to show as a whole ('cloud', 'locations', 'tags').",
+				Type.Array(Type.Union([Type.Literal("cloud"), Type.Literal("connections"), Type.Literal("locations"), Type.Literal("tags")]), {
+					description: "Sidebar sections to show as a whole ('cloud', 'connections', 'locations', 'tags').",
 				}),
 			),
 			hideSections: Type.Optional(
 				Type.Array(Type.String(), {
-					description: "Sidebar sections to hide as a whole ('cloud', 'locations', 'tags'). 'favorites' cannot be hidden.",
+					description: "Sidebar sections to hide as a whole ('cloud', 'connections', 'locations', 'tags'). 'favorites' cannot be hidden.",
 				}),
 			),
 			sectionOrder: Type.Optional(
-				Type.Array(Type.Union([Type.Literal("favorites"), Type.Literal("cloud"), Type.Literal("locations"), Type.Literal("tags")]), {
-					description: "Order of sidebar sections (default: ['favorites', 'cloud', 'locations', 'tags']).",
-				}),
+				Type.Array(
+					Type.Union([
+						Type.Literal("favorites"),
+						Type.Literal("cloud"),
+						Type.Literal("connections"),
+						Type.Literal("locations"),
+						Type.Literal("tags"),
+					]),
+					{
+						description: "Order of sidebar sections (default: ['favorites', 'cloud', 'connections', 'locations', 'tags']).",
+					},
+				),
 			),
 			addCustomFavorites: Type.Optional(
 				Type.Array(

@@ -41,6 +41,7 @@ import {
 import { tagPath, type FsLocation, type FsLocationIcon, type FsTag, type FsTagColor } from "../../../shared/fs-contract";
 import {
 	cloudSidebarItemId,
+	connectionSidebarItemId,
 	customSidebarItemId,
 	DEFAULT_SIDEBAR_SETTINGS,
 	locationSidebarItemId,
@@ -121,13 +122,6 @@ const AUTOMATIONS_ITEM: NavItem = {
 	view: "automations",
 };
 
-const SECTIONS: readonly (readonly [FsLocation["section"], string])[] = [
-	["favorites", "Favorites"],
-	["cloud", "Cloud"],
-	["connections", "Connections"],
-	["locations", "Locations"],
-];
-
 /** The Tags group heading, kept apart from the OS-reported sections. */
 export const TAGS_GROUP_LABEL = "Tags";
 
@@ -204,6 +198,20 @@ export function navGroups(
 					ejectable: location.ejectable,
 				}));
 			return items.length > 0 ? { label: "Cloud", items } : null;
+		}
+
+		if (sectionId === "connections") {
+			const items: NavItem[] = locations
+				.filter((location) => location.section === "connections" && !hiddenItems.has(connectionSidebarItemId(location.path)))
+				.map((location) => ({
+					label: location.name,
+					path: location.path,
+					icon: ICONS[location.icon],
+					kind: location.icon,
+					available: location.available,
+					ejectable: location.ejectable,
+				}));
+			return items.length > 0 ? { label: "Connections", items } : null;
 		}
 
 		if (sectionId === "locations") {
