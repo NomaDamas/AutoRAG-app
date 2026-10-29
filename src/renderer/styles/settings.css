@@ -952,6 +952,61 @@
 	font-size: 12.5px;
 }
 
+.settings-view .settings-menu:has(.settings-model-picker) {
+	width: 244px;
+	overflow: visible;
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-view .settings-menu.settings-submenu {
+	z-index: 16;
+	width: 256px;
+	overflow: visible;
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-view .settings-submenu-list {
+	flex: 1;
+	min-height: 0;
+	max-height: min(360px, calc(100vh - 36px));
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.settings-view .settings-menu.settings-submenu[data-side="left"]::after {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 100%;
+	width: 8px;
+}
+
+.settings-view .settings-menu.settings-submenu[data-side="right"]::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	right: 100%;
+	width: 8px;
+}
+
+.settings-view .settings-model-picker {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	max-height: min(360px, calc(100vh - 36px));
+}
+
+.settings-view .settings-model-picker-list {
+	flex: 1;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
 .settings-view .settings-menu.is-compact {
 	width: 210px;
 }
@@ -959,6 +1014,7 @@
 .settings-view .settings-menu-search {
 	position: relative;
 	display: block;
+	flex: none;
 	margin-bottom: var(--space-4);
 }
 
@@ -982,6 +1038,10 @@
 	outline: none;
 }
 
+.settings-view .settings-menu-search input::placeholder {
+	color: var(--text-faint);
+}
+
 .settings-view .settings-menu-group {
 	margin: var(--space-6) 0 var(--space-2);
 	padding: 0 var(--space-8);
@@ -990,6 +1050,19 @@
 	font-weight: var(--weight-medium);
 }
 
+.settings-view .settings-menu-group.is-provider {
+	display: flex;
+	align-items: center;
+	gap: var(--space-6);
+	margin: var(--space-6) 0 var(--space-4);
+}
+
+.settings-view .settings-menu-group.is-provider .settings-app-icon.is-sm {
+	width: 16px;
+	height: 16px;
+	border-radius: var(--radius-4);
+	font-size: 9.5px;
+}
 .settings-view .settings-menu-item {
 	display: flex;
 	align-items: center;
@@ -1005,7 +1078,7 @@
 	cursor: pointer;
 }
 
-.settings-view .settings-menu-item > span:not(.settings-app-icon) {
+.settings-view .settings-menu-item > span:not(.settings-app-icon):not(.settings-provider-active-dot) {
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
@@ -1023,10 +1096,28 @@
 	font-size: var(--font-size-badge);
 }
 
-.settings-view .settings-menu-item:hover {
-	background: var(--bg-hover-strong);
+.settings-view .settings-menu-item > svg {
+	flex: none;
+	color: var(--text-muted);
 }
 
+.settings-view .settings-menu-chevron {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .settings-provider-active-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: var(--radius-full);
+	background: var(--accent);
+}
+
+.settings-view .settings-menu-item:hover,
+.settings-view .settings-menu-item.is-open {
+	background: var(--bg-hover-strong);
+}
 .settings-view .settings-menu-item.is-danger {
 	color: var(--danger-text);
 }

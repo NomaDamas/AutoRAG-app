@@ -2337,6 +2337,7 @@
         "discover": "重新搜索模型"
       },
       "searchModels": "搜索模型",
+      "emptySearchModels": "没有匹配的模型。",
       "emptyRoleModels": "没有可用于该角色的受支持模型。请先连接相应服务。",
       "emptyModels": "已连接的服务中没有可用的模型。",
       "connect": {

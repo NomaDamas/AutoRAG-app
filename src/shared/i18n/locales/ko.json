@@ -2337,6 +2337,7 @@
         "discover": "모델 다시 검색"
       },
       "searchModels": "모델 검색",
+      "emptySearchModels": "일치하는 모델이 없습니다.",
       "emptyRoleModels": "이 역할에 쓸 수 있는 지원 모델이 없습니다. 해당 서비스를 먼저 연결하세요.",
       "emptyModels": "연결된 서비스에서 사용할 수 있는 모델이 없습니다.",
       "connect": {

@@ -15,7 +15,7 @@ import { jevConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ProviderSummary } from "../../../../shared/settings-contract";
 import { RolePicker } from "../../components/settings/ModelPicker";
 import { errorText } from "../../components/settings/configSupport";
-import { jevLabel, jevOptionsFor, rerankLabel, rerankOptionsFor, type RoleOption } from "../../components/settings/roleSupport";
+import { jevLabel, jevOptionsFor, rerankLabel, rerankOptionsFor, roleSelectionFor, type RoleOption } from "../../components/settings/roleSupport";
 import { FloatingMenu } from "../../components/settings/SettingsKit";
 import type { OnboardingCtx } from "../context";
 import { Eyebrow, SplitScreen } from "../parts";
@@ -123,6 +123,7 @@ export function RolesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 							role={menu.role}
 							models={options[menu.role]}
 							specials={[{ value: "off", label: settingsT("settingsCore.ai.off") }]}
+							selected={config === null ? null : roleSelectionFor(menu.role, config, connected)}
 							onPick={(entry) => {
 								setMenu(null);
 								save(menu.role === "rerank" ? rerankConfigUpdates(entry) : jevConfigUpdates(entry));

@@ -2337,6 +2337,7 @@
         "discover": "Refresh Models"
       },
       "searchModels": "Search models",
+      "emptySearchModels": "No matching models.",
       "emptyRoleModels": "No supported models are available for this role. Connect the service first.",
       "emptyModels": "No models are available from connected services.",
       "connect": {

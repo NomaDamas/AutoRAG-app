@@ -102,6 +102,7 @@ describe("ModelStep", () => {
 		bridge.settings.configGet.mockResolvedValue(config());
 		const { patch } = await render(byokDraft());
 		await click(host.querySelector("[data-model-trigger]"));
+		await click(host.querySelector('[data-provider-trigger="openai"]'));
 		await click(host.querySelector('[data-model-id="openai/b"]'));
 		expect(bridge.settings.configPatch).toHaveBeenCalledWith(
 			expect.arrayContaining([
@@ -121,6 +122,7 @@ describe("ModelStep", () => {
 		bridge.settings.configGet.mockResolvedValue(config());
 		const { patch } = await render(byokDraft());
 		await click(host.querySelector("[data-model-trigger]"));
+		await click(host.querySelector('[data-provider-trigger="openai"]'));
 		await click(host.querySelector('[data-model-id="openai/b"]'));
 		expect(patch).not.toHaveBeenCalledWith({ model: expect.objectContaining({ verified: true }) });
 		expect(host.textContent).toContain("401 invalid api key");
@@ -133,6 +135,7 @@ describe("ModelStep", () => {
 		bridge.settings.configGet.mockResolvedValue(config());
 		const { patch } = await render(byokDraft());
 		await click(host.querySelector("[data-model-trigger]"));
+		await click(host.querySelector('[data-provider-trigger="openai"]'));
 		await click(host.querySelector('[data-model-id="openai/b"]'));
 		await click(host.querySelector("[data-model-retry]"));
 		expect(bridge.onboarding.checkModel).toHaveBeenCalledTimes(2);
