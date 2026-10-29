@@ -128,6 +128,58 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
+describe("remote upload and download", () => {
+	it("writes an uploaded file under its own name", async () => {
+		// Given a destination folder and the service.
+		const dir = join(root, "uploads");
+		await mkdir(dir, { recursive: true });
+		const service = createFsService(makeDeps(root).deps);
+
+		// When a browser uploads one file.
+		const created = await service.uploadFile(dir, "notes.txt", Buffer.from("hello"));
+
+		// Then it lands under its own name with the uploaded bytes.
+		expect(created.name).toBe("notes.txt");
+		expect(await readFile(created.path, "utf8")).toBe("hello");
+	});
+
+	it("numbers a colliding upload and strips path separators from the name", async () => {
+		// Given a folder that already holds the upload's name.
+		const dir = join(root, "collide");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "notes.txt"), "existing");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When two uploads arrive, one of them with a traversal-looking name.
+		const second = await service.uploadFile(dir, "notes.txt", Buffer.from("second"));
+		const escaped = await service.uploadFile(dir, "../../evil.txt", Buffer.from("x"));
+
+		// Then the collision is numbered and the separator is never part of the name.
+		expect(second.name).toBe("notes copy.txt");
+		expect(await readFile(join(dir, "notes.txt"), "utf8")).toBe("existing");
+		expect(escaped.path.startsWith(dir)).toBe(true);
+		expect(escaped.name.includes("/")).toBe(false);
+	});
+
+	it("reads a file's bytes and answers null for a directory or a missing path", async () => {
+		// Given a file, a folder and a missing path.
+		const dir = join(root, "downloads");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "a.txt"), "bytes");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When each is read for download.
+		const file = await service.readFileBytes(join(dir, "a.txt"));
+		const folder = await service.readFileBytes(dir);
+		const missing = await service.readFileBytes(join(dir, "gone.txt"));
+
+		// Then only the file yields bytes.
+		expect(Buffer.from(file ?? []).toString("utf8")).toBe("bytes");
+		expect(folder).toBeNull();
+		expect(missing).toBeNull();
+	});
+});
+
 describe("listDir", () => {
 	it("returns files and folders with the contract shape, folders getting size null", async () => {
 		// Given a directory with one file and one folder

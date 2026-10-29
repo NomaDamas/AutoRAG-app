@@ -1,15 +1,16 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { AppSettings } from "../../../shared/settings-contract";
-import { isTagPath, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
+import { isTagPath, isVirtualListing, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
 import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
 import { useFinderController, type QuickLookBridge } from "../hooks/useFinderController";
 import type { ControllerStore } from "../hooks/usePaneControllers";
 import { pressRow } from "../lib/row-drag";
 import type { AiDeliveryRequest } from "../state/ai-delivery";
-import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag, readDropPaths } from "../state/attachments";
+import { attachmentsFromDrop, isAttachmentDrag, isFileTransferDrag, isFinderDrag, readDropFiles, readDropPaths } from "../state/attachments";
 import { backgroundDropDir, dropTransferOp } from "../state/file-transfer";
+import { batchToast } from "../state/format";
 import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn, type ListColumnKey, type ListColumnsState } from "../state/list-columns";
 import { basename, breadcrumbTrail } from "../state/paths";
 import { requestSettingsCategory } from "../state/settings-navigation";
@@ -160,6 +161,39 @@ export const FinderPane = memo(function FinderPane({
 		};
 	}, [cancelSpringTab]);
 
+	/**
+	 * Only browser files need a byte upload; desktop paths keep the existing
+	 * transfer below. Relist the captured destination, not the folder the user
+	 * may have navigated to while the upload was running.
+	 */
+	const uploadDropped = useCallback(
+		(event: DragEvent<HTMLDivElement>, folder: string): boolean => {
+			if (folder === "" || isVirtualListing(folder) || isVirtualTabPath(folder)) return false;
+			const fs: typeof autorag.fs & {
+				readonly uploadFiles?: (folder: string, files: File[]) => Promise<{ name: string; ok: boolean }[]>;
+			} = autorag.fs;
+			const uploadFiles = fs.uploadFiles;
+			const files = readDropFiles(event.dataTransfer, autorag.pathForFile, typeof uploadFiles === "function");
+			if (files.length === 0 || uploadFiles === undefined) return false;
+			event.preventDefault();
+			void uploadFiles(folder, files)
+				.then(async (results) => {
+					shell.onToast(batchToast("copy", {
+						ok: results.filter((result) => result.ok).map((result) => result.name),
+						failed: results.filter((result) => !result.ok).map((result) => ({
+							path: result.name,
+							message: t("common.error"),
+						})),
+					}));
+					const outcome = await shell.directoryData.store.load(folder, "silent");
+					if (outcome.kind === "error") throw outcome.error;
+				})
+				.catch((error: unknown) => shell.onToast(error instanceof Error ? error.message : String(error)));
+			return true;
+		},
+		[shell, t],
+	);
+
 	const backgroundDrop = useCallback(
 		(dir: string): BackgroundDropHandlers => ({
 			onContextMenu: (event) => {
@@ -186,6 +220,7 @@ export const FinderPane = memo(function FinderPane({
 				const destination = backgroundDropDir(dir, { searching: finder.searching, claimed: event.defaultPrevented });
 				setDropBackgroundDir(null);
 				if (destination === null) return;
+				if (uploadDropped(event, destination)) return;
 				const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
 				if (paths.length === 0) return;
 				event.preventDefault();
@@ -197,7 +232,7 @@ export const FinderPane = memo(function FinderPane({
 				setDropBackgroundDir((current) => (current === dir ? null : current));
 			},
 		}),
-		[finder.searching, finder.transferDropped, finder.openBackgroundContextMenu],
+		[finder.searching, finder.transferDropped, finder.openBackgroundContextMenu, uploadDropped],
 	);
 
 	// One object per drop highlight, not per render: every row and tile gets
@@ -224,6 +259,7 @@ export const FinderPane = memo(function FinderPane({
 				setDropTargetPath(null);
 				setDropBackgroundDir(null);
 				if (entry.kind !== "folder") return;
+				if (uploadDropped(event, entry.path)) return;
 				const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);
 				if (paths.length === 0) return;
 				// No stopPropagation: the window "drop" listener clears the AI panel's
@@ -247,6 +283,7 @@ export const FinderPane = memo(function FinderPane({
 			finder.openContextMenu,
 			dragEntries,
 			transferDropped,
+			uploadDropped,
 			dropTargetPath,
 			finder.toggleIndex,
 			finder.toggleStack,
@@ -314,6 +351,11 @@ export const FinderPane = memo(function FinderPane({
 							if (dropped.length === 0) return;
 							finder.selectTabId(id);
 							shell.deliverToAi({ attach: dropped });
+							return;
+						}
+						const target = pane.tabs.find((tab) => tab.id === id);
+						if (target !== undefined && uploadDropped(event, target.path)) {
+							finder.selectTabId(id);
 							return;
 						}
 						const paths = readDropPaths(event.dataTransfer, autorag.pathForFile);

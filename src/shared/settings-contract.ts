@@ -93,6 +93,14 @@ export interface AppSettings {
 	 * rest, `full` never asks. Chosen in the AI Search message box; applies to every agent, running or later.
 	 */
 	readonly approvalMode: ApprovalMode;
+	/**
+	 * Remote access: while on, Dazzi serves its own Finder UI to a browser on this
+	 * machine's network, behind a session token. Off by default; turning it off
+	 * stops the server and drops every browser session.
+	 */
+	readonly remoteAccess: boolean;
+	/** The port the remote server binds; 0 picks a free one. */
+	readonly remotePort: number;
 	/** User customization of sidebar visibility, ordering, and pinned folders (`settings-state.json`). */
 	readonly sidebar: SidebarSettings;
 }
@@ -109,6 +117,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
 	approvalMode: DEFAULT_APPROVAL_MODE,
+	remoteAccess: false,
+	remotePort: 47833,
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 };
 

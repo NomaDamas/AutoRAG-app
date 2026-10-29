@@ -4,10 +4,11 @@ import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { createAutomationBridge } from "./automation-bridge";
 import { createConversionBridge } from "./conversion-bridge";
-import { contextBridge, ipcRenderer, webUtils } from "electron";
+import { contextBridge, ipcRenderer, webUtils, type IpcRenderer } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
+import { REMOTE_CHANNELS, type RemoteAccessBridge } from "../shared/remote-contract";
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
 import { createErrorFixBridge } from "./error-fix-bridge";
@@ -63,6 +64,16 @@ contextBridge.exposeInMainWorld("autorag", {
 	smartIndexing: createSmartIndexingBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
 	services: createServicesBridge(ipcRenderer),
+	remote: createRemoteBridge(ipcRenderer),
 	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.
 	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });
+
+/** Remote access: the Settings toggle's live status, start and stop. */
+function createRemoteBridge(ipcRenderer: IpcRenderer): RemoteAccessBridge {
+	return {
+		status: () => ipcRenderer.invoke(REMOTE_CHANNELS.status),
+		start: () => ipcRenderer.invoke(REMOTE_CHANNELS.start),
+		stop: () => ipcRenderer.invoke(REMOTE_CHANNELS.stop),
+	};
+}

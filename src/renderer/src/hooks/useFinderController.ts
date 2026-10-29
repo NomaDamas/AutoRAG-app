@@ -6,6 +6,7 @@ import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
+import type { QuickLookTarget } from "../../../preview/shared/contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -359,7 +360,7 @@ export interface FinderController {
 }
 
 export interface QuickLookBridge {
-	readonly onQuickLook: (target: { readonly path: string; readonly name: string }) => void;
+	readonly onQuickLook: (target: QuickLookTarget) => void;
 	readonly closeQuickLook: () => void;
 	readonly isQuickLookOpen: () => boolean;
 }
@@ -1404,8 +1405,8 @@ export function useFinderController(
 	});
 
 	const presentQuickLook = useLatestCallback(
-		(target: { readonly path: string; readonly name: string }) => {
-			quickLookRef.current?.onQuickLook(target);
+		(target: { readonly path: string; readonly name: string; readonly kind?: "file" | "folder" }) => {
+			quickLookRef.current?.onQuickLook({ path: target.path, name: target.name, kind: target.kind ?? "file" });
 			source.quickLook(target.path).catch(reportError);
 		});
 
@@ -1414,10 +1415,10 @@ export function useFinderController(
 		if (entry === null) return;
 		// Like Finder, Space previews folders too; only files land in Recents.
 		if (entry.kind === "folder") {
-			quickLookRef.current?.onQuickLook({ path: entry.path, name: entry.name });
+			quickLookRef.current?.onQuickLook({ path: entry.path, name: entry.name, kind: "folder" });
 			return;
 		}
-		presentQuickLook({ path: entry.path, name: entry.name });
+		presentQuickLook({ path: entry.path, name: entry.name, kind: "file" });
 	});
 
 	/** Space with a preview open closes it, whatever opened it (a row, or an evidence title with no row to toggle). */
@@ -1674,7 +1675,7 @@ export function useFinderController(
 			const targets = menuTargets(entry);
 			switch (action) {
 				case "quickLook":
-					presentQuickLook({ path: entry.path, name: entry.name });
+					presentQuickLook({ path: entry.path, name: entry.name, kind: entry.kind });
 					return;
 				case "open":
 					navigate(entry.path);

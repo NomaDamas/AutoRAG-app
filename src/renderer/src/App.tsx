@@ -5,6 +5,8 @@ import type { Bounds } from "../../preview/shared/fit";
 import { NO_CAPABILITIES, type ActionAnchor } from "../../shared/actions-contract";
 import { DEFAULT_SETTINGS, type AppSettings } from "../../shared/settings-contract";
 import { setAppLanguage } from "../../shared/i18n";
+import { t as translate } from "../../shared/i18n/core";
+import { REMOTE_PREVIEW_FOLDER_CODE, REMOTE_PREVIEW_UNSUPPORTED_CODE } from "../../shared/remote-contract";
 import type { ChatAttachment, CitationEvidence } from "../../shared/search-contract";
 import type { OsRendererRequest } from "../../shared/os-request-contract";
 import { mapSourceStatus, type SourceStatusMap } from "./state/source-status";
@@ -185,7 +187,12 @@ export function App(): ReactElement {
 		setPreview((current) =>
 			current?.path === target.path && target.anchor === undefined
 				? null
-				: { path: target.path, name: target.name, ...(target.anchor === undefined ? {} : { anchor: target.anchor }) },
+				: {
+						path: target.path,
+						name: target.name,
+						...(target.kind === undefined ? {} : { kind: target.kind }),
+						...(target.anchor === undefined ? {} : { anchor: target.anchor }),
+					},
 		);
 	}, []);
 	const closeQuickLook = useCallback(() => {
@@ -510,14 +517,19 @@ export function App(): ReactElement {
 			if (current === null || current.path === focusPath) return current;
 			const match = stackRows.find((row) => row.entry.path === focusPath);
 			if (match === undefined) return current;
-			return { path: match.entry.path, name: match.entry.name };
+			return { path: match.entry.path, name: match.entry.name, kind: match.entry.kind };
 		});
 	}, [focusPath, stackRows]);
 
 	useEffect(() => {
 		const request = preview === null ? autorag.preview.hide(closingRef.current) : autorag.preview.show(preview, iconRect(preview.path));
 		closingRef.current = null;
-		request.catch((error: unknown) => setToast(error instanceof Error ? error.message : String(error)));
+		request.catch((error: unknown) => {
+			const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
+			if (code === REMOTE_PREVIEW_FOLDER_CODE) setToast(translate("finderComponents.remotePreviewFolderUnsupported"));
+			else if (code === REMOTE_PREVIEW_UNSUPPORTED_CODE) setToast(translate("finderComponents.remotePreviewUnsupported"));
+			else setToast(error instanceof Error ? error.message : String(error));
+		});
 	}, [preview]);
 
 	// The OS takes 0.1-0.7s to draw a legacy Office page and up to 0.4s more to

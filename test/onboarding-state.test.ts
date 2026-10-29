@@ -57,6 +57,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
 	approvalMode: "auto",
+	remoteAccess: false,
+	remotePort: 47833,
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 };
 
