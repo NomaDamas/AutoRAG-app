@@ -432,7 +432,7 @@ function ConnectList({
 							{group.items.map((provider) => (
 								<button key={provider.id} type="button" className="onb-menu-item" onClick={() => onConnect(provider, group.auth)}>
 									<span className="onb-menu-icon" aria-hidden="true">
-										{provider.name.charAt(0).toUpperCase()}
+										<ProviderIcon provider={provider} size={16} />
 									</span>
 									<span>{provider.name}</span>
 								</button>

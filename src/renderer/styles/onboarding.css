@@ -2978,11 +2978,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	flex: none !important;
 	width: 18px;
 	height: 18px;
-	border-radius: 5px;
-	background: var(--onb-bg-input);
-	color: var(--onb-muted);
-	font-size: 10px;
-	line-height: 1;
+	color: var(--onb-body);
 }
 
 .onb .onb-menu-mark {
