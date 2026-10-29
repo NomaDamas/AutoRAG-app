@@ -30,6 +30,8 @@ import type { DirectoryData } from "./hooks/useDirectoryData";
 import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
+import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
+import type { SidebarSettings } from "../../shared/sidebar-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
@@ -171,6 +173,7 @@ export function App(): ReactElement {
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
+	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
@@ -362,6 +365,7 @@ export function App(): ReactElement {
 			onSettingsChanged: (settings: AppSettings) => {
 				setShowHiddenFiles(settings.showHiddenFiles);
 				setLanguage(settings.language);
+				setSidebarSettings(settings.sidebar);
 				void setAppLanguage(settings.language);
 			},
 			setListColumns,
@@ -540,11 +544,14 @@ export function App(): ReactElement {
 	}, [moveSelectionBy]);
 
 	useEffect(() => {
-		void autorag.settings.get().then((settings) => {
+		const applySettings = (settings: AppSettings): void => {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
+			setSidebarSettings(settings.sidebar);
 			void setAppLanguage(settings.language);
-		});
+		};
+		void autorag.settings.get().then(applySettings);
+		return autorag.settings.onChanged?.(applySettings);
 	}, []);
 
 	const focused = finder?.focusedEntry ?? null;
@@ -652,6 +659,7 @@ export function App(): ReactElement {
 
 	return (
 		<TagCatalogContext value={tagCatalog}>
+		<SidebarSettingsContext value={sidebarSettings}>
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
@@ -906,6 +914,7 @@ export function App(): ReactElement {
 			</div>
 		</div>
 		</AutomationsContext>
+		</SidebarSettingsContext>
 		</TagCatalogContext>
 	);
 }

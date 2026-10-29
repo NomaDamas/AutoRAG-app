@@ -40,6 +40,7 @@ const PAGE_KEY: Readonly<Record<ErrorFixSettingsPage, LocaleKey>> = {
 	account: "settingsCore.nav.account",
 	plan: "settingsCore.nav.plan",
 	general: "settingsCore.nav.general",
+	sidebar: "settingsCore.nav.sidebar",
 	web: "settingsCore.nav.web",
 	mcp: "settingsCore.nav.mcp",
 	indexing: "settingsCore.nav.indexing",

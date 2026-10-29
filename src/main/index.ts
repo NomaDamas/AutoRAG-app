@@ -28,6 +28,7 @@ import { LANGUAGE_CHANNELS } from "../shared/language-contract";
 import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from "../shared/onboarding-contract";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
+import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
@@ -53,6 +54,8 @@ import { schedulePaths, withRefreshLock } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
+import { createFinderTags } from "./finder-tags";
+import { createPlaces } from "./places";
 import type { KnownFolders } from "../shared/fs-worker-contract";
 import { hasErrorCode, pathExists } from "./fs-entry";
 import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
@@ -91,6 +94,7 @@ import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
 import { createErrorFixService } from "./error-fix-service";
+import { createAppCustomizerService } from "./app-customizer-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
@@ -98,6 +102,7 @@ import {
 	registerAccountIpcHandlers,
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
+	registerAppCustomizerIpcHandlers,
 	registerAppUpdateIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
@@ -823,6 +828,7 @@ app.whenReady().then(async () => {
 				applyLoginItem(settings.launchAtLogin);
 			}
 			void appUpdater?.applySettings();
+			sendToAllWindows(SETTINGS_CHANNELS.changed, settings);
 		},
 	});
 	registerSettingsIpcHandlers(settingsService);
@@ -935,6 +941,26 @@ app.whenReady().then(async () => {
 			onConfigChanged: () => void searchService.resetAgents(),
 		}),
 	);
+	const customizerPlaces = createPlaces({
+		homeDir: home,
+		platform: process.platform,
+		...(knownFolders === undefined ? {} : { knownFolders }),
+	});
+	const customizerTags = createFinderTags({ homeDir: home, platform: process.platform });
+	const appCustomizerService = createAppCustomizerService({
+		send: (event) => sendToMainWindow(APP_CUSTOMIZER_CHANNELS.event, event),
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		cwd: process.cwd(),
+		homeDir: home,
+		language: () => currentLanguage,
+		settings: settingsService,
+		listLocations: () => customizerPlaces.list().catch(() => []),
+		listTags: () => customizerTags.catalog().then((catalog) => catalog.tags.filter((tag) => tag.sidebar), () => []),
+	});
+	registerAppCustomizerIpcHandlers(appCustomizerService);
+	app.once("will-quit", () => appCustomizerService.dispose());
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,

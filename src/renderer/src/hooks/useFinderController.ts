@@ -17,6 +17,7 @@ import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { useTagCatalog } from "./useTagCatalog";
+import { useSidebarSettings } from "./useSidebarSettings";
 import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
@@ -2119,15 +2120,18 @@ export function useFinderController(
 		// `t` changes identity with the language, so the menu re-labels on a switch.
 	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf]);
 
-	const navTargets = useMemo(
-		() => [
-			...(locations.length > 0 ? locations : [{ name: basename(path), path }]),
-			...sidebarTags(tagCatalog.catalog).map((tag) => ({ name: tag.name, path: tagPath(tag.name) })),
-		],
-		[locations, path, tagCatalog],
+	const sidebarSettings = useSidebarSettings();
+	const sidebarGroups = useMemo(
+		() => navGroups(locations, sidebarTags(tagCatalog.catalog), sidebarSettings),
+		[locations, tagCatalog, sidebarSettings],
 	);
+	const navTargets = useMemo(() => {
+		const visibleItems = sidebarGroups.flatMap((group) => group.items).filter((item) => item.view === undefined);
+		return visibleItems.length > 0
+			? visibleItems.map((item) => ({ name: item.label, path: item.path }))
+			: [{ name: basename(path), path }];
+	}, [sidebarGroups, path]);
 	const activeNav = activeNavPath(path, navTargets);
-	const sidebarGroups = useMemo(() => navGroups(locations, sidebarTags(tagCatalog.catalog)), [locations, tagCatalog]);
 
 	// Handlers handed to the view: one stable identity each (see useLatestCallback),
 	// so no closure here keeps an earlier render's rows alive.
