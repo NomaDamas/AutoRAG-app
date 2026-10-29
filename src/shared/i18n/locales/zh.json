@@ -971,7 +971,7 @@
       "connect": "连接服务",
       "pick": "选择模型",
       "auto": "自动设置",
-      "searchServices": "搜索",
+      "searchServices": "搜索服务",
       "searchModels": "搜索模型",
       "noMatch": "没有搜索结果。",
       "noModels": "暂无可用于此角色的模型。请选择自动设置，或连接提供该模型的服务。",

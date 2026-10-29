@@ -2654,8 +2654,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 .onb .model-column-title {
 	margin: 0 0 8px;
 	color: var(--onb-muted);
-	font-size: 13px;
-	line-height: 21px;
+	font-size: 12px;
+	line-height: 16px;
 }
 
 /* Three services show; a fourth scrolls the list, and the connect row stays under it. */
@@ -2697,9 +2697,9 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	min-width: 0;
 	overflow: hidden;
 	color: var(--onb-ink);
-	font-size: 12px;
-	font-weight: 500;
-	line-height: 16px;
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 21px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
@@ -2729,8 +2729,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	background: none;
 	color: var(--onb-muted);
 	font: inherit;
-	font-size: 12px;
-	line-height: 16px;
+	font-size: 13px;
+	line-height: 21px;
 	text-align: left;
 	cursor: pointer;
 }
@@ -2767,9 +2767,9 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 .onb .model-role-copy strong {
 	color: var(--onb-ink);
-	font-size: 12px;
+	font-size: 13px;
 	font-weight: 400;
-	line-height: 16px;
+	line-height: 21px;
 }
 
 .onb .model-role-copy small {
@@ -2821,8 +2821,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	background: var(--onb-bg-card);
 	color: var(--onb-body);
 	font: inherit;
-	font-size: 12px;
-	line-height: 16px;
+	font-size: 13px;
+	line-height: 21px;
 	cursor: pointer;
 }
 
@@ -2876,23 +2876,24 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 .onb .onb-menu {
 	display: flex;
 	flex-direction: column;
-	padding: 8px 0;
+	padding: 8px 0 10px;
 	box-sizing: border-box;
 }
 
 .onb .onb-menu.connect {
 	width: 280px;
 	height: 220px;
+	padding-bottom: 8px;
 }
 
+/* Five models show (33px each) under the search; "auto" sits 8px under a rule. */
 .onb .onb-menu.role {
 	width: 188px;
-	height: 190px;
+	height: 218px;
 }
 
 .onb .onb-menu.role.with-auto {
-	height: 232px;
-	padding-bottom: 0;
+	height: 256px;
 }
 
 .onb .onb-menu-search {
@@ -2900,7 +2901,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	align-items: center;
 	gap: 8px;
 	flex: none;
-	padding: 4px 16px;
+	padding: 4px 16px 10px;
 	color: var(--onb-muted);
 }
 
@@ -2928,8 +2929,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 }
 
 .onb .onb-menu-group+.onb-menu-group {
-	margin-top: 6px;
-	padding-top: 6px;
+	margin-top: 12px;
+	padding-top: 12px;
 	border-top: 1px solid var(--onb-divider);
 }
 
@@ -2992,15 +2993,17 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	color: var(--onb-muted);
 }
 
+/* In the menu a refused model is greyed with a grey mark; red is kept for the row's own status. */
 .onb .onb-menu-mark.failed {
-	color: #ff3b30;
+	color: var(--onb-faint);
 	font-size: 12px;
 }
 
 .onb .onb-menu-auto {
 	flex: none;
-	padding-top: 9px;
-	padding-bottom: 10px;
+	margin-top: 8px;
+	padding-top: 8px;
+	padding-bottom: 0;
 	border-top: 1px solid var(--onb-divider);
 }
 

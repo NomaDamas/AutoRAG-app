@@ -971,7 +971,7 @@
       "connect": "Connect a service",
       "pick": "Choose a model",
       "auto": "Auto",
-      "searchServices": "Search",
+      "searchServices": "Search services",
       "searchModels": "Search models",
       "noMatch": "No results.",
       "noModels": "No model can do this role yet. Choose Auto, or connect a service that offers one.",

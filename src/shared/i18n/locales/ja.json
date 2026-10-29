@@ -971,7 +971,7 @@
       "connect": "サービスを接続",
       "pick": "モデルを選択",
       "auto": "自動設定",
-      "searchServices": "検索",
+      "searchServices": "サービスを検索",
       "searchModels": "モデルを検索",
       "noMatch": "検索結果がありません。",
       "noModels": "この役割に使えるモデルがまだありません。自動設定を選ぶか、対応するサービスを接続してください。",

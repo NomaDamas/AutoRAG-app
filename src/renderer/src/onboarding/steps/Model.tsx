@@ -16,7 +16,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { Check, ChevronDown, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { jevBackendFor, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles, withoutAutorag } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import type { ModelCheckResult } from "../../../../shared/onboarding-contract";
@@ -246,6 +246,8 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 		const value = values?.[role] ?? { kind: "unset" };
 		const check = checks[role];
 		const status = value.kind === "model" ? check.state : "idle";
+		const open = menu?.kind === "role" && menu.role === role;
+		const Arrow = open ? ChevronUp : ChevronDown;
 		return (
 			<div key={role} className="model-role" data-role-row={role}>
 				<div className="model-role-copy">
@@ -260,13 +262,14 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 					</span>
 					<button
 						type="button"
-						className={cn("model-role-trigger", status === "failed" && "failed")}
+						className={cn("model-role-trigger", status === "failed" && "failed", open && "open")}
 						data-role-trigger={role}
+						aria-expanded={open}
 						disabled={status === "checking"}
 						onClick={(event) => setMenu({ kind: "role", role, anchor: event.currentTarget })}
 					>
 						<span>{value.kind === "model" ? value.label : value.kind === "auto" ? t("onboarding.model.auto") : t("onboarding.model.pick")}</span>
-						<ChevronDown size={16} aria-hidden="true" focusable="false" />
+						<Arrow size={16} aria-hidden="true" focusable="false" />
 					</button>
 				</div>
 			</div>
