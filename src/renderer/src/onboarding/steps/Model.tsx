@@ -21,6 +21,7 @@ import { jevBackendFor, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles
 import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import type { ModelCheckResult } from "../../../../shared/onboarding-contract";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
+import { ProviderIcon } from "../../components/settings/ProviderIcon";
 import { useProviderConnect } from "../../components/settings/ProviderConnect";
 import { asRecord, errorText, getAt, stringOf } from "../../components/settings/configSupport";
 import { jevOptionsFor, providerRoleCleanup, rerankOptionsFor, type RoleOption } from "../../components/settings/roleSupport";
@@ -294,7 +295,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 								{connected.map((provider) => (
 									<div key={provider.id} className="model-service" data-provider-row={provider.id}>
 										<span className="model-service-icon" aria-hidden="true">
-											{provider.name.charAt(0).toUpperCase()}
+											<ProviderIcon provider={provider} />
 										</span>
 										<strong>{provider.name}</strong>
 										{provider.authSource === "environment" ? null : (

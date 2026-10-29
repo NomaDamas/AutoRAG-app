@@ -2686,10 +2686,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	flex: none;
 	width: 31px;
 	height: 31px;
-	border-radius: 8px;
-	background: var(--onb-bg-input);
 	color: var(--onb-body);
-	font-size: 15.6px;
 }
 
 .onb .model-service strong {
