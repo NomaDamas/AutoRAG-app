@@ -18,11 +18,13 @@ export function Switch({
 	onChange,
 	disabled = false,
 	ariaLabel,
+	dataSwitchId,
 }: {
 	readonly checked: boolean;
 	readonly onChange: () => void;
 	readonly disabled?: boolean | undefined;
 	readonly ariaLabel?: string | undefined;
+	readonly dataSwitchId?: string | undefined;
 }): ReactElement {
 	return (
 		<SwitchPrimitive.Root
@@ -34,6 +36,7 @@ export function Switch({
 			checked={checked}
 			disabled={disabled}
 			aria-label={ariaLabel}
+			data-sidebar-switch={dataSwitchId}
 			onCheckedChange={() => onChange()}
 		>
 			<SwitchPrimitive.Thumb

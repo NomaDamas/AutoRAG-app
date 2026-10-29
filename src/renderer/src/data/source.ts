@@ -521,7 +521,7 @@ export function createFixtureSource(): FinderSource {
 			}
 			return Promise.resolve(hits);
 		},
-		tags: () => Promise.resolve({ supported: false, tags: [], colorNames: [] }),
+		tags: () => Promise.resolve({ supported: false, tags: [], colorNames: [], colorsDenied: false }),
 		setTags: (paths) => Promise.resolve({ ok: [], failed: paths.map((path) => ({ path, message: t("finderState.source.tagsUnavailable") })) }),
 		locations: () =>
 			Promise.resolve(

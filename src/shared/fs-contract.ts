@@ -146,21 +146,24 @@ export type FsLocationIcon =
 	| "onedrive"
 	| "dropbox"
 	| "box"
+	| "discord"
 	| "cloud"
 	| "disk"
 	| "network";
 
 /**
  * A browsable top-level location shown in the sidebar. Cloud rows are the
- * drives connected to the OS (one per account); `locations` rows are the boot
- * disk plus every mounted volume / drive letter.
+ * drives connected to the OS (one per account); `connections` rows are folders
+ * an app connection of the AutoRAG config fills (a Discord source's saved
+ * attachments); `locations` rows are the boot disk plus every mounted volume /
+ * drive letter.
  */
 export interface FsLocation {
 	/** Display name, e.g. "Desktop", "Google Drive - me@example.com", "Data (D:)". */
 	readonly name: string;
 	readonly path: string;
 	/** Sidebar section for grouping. */
-	readonly section: "favorites" | "cloud" | "locations";
+	readonly section: "favorites" | "cloud" | "connections" | "locations";
 	readonly icon: FsLocationIcon;
 	/** True when the path exists and is readable right now. */
 	readonly available: boolean;
@@ -194,6 +197,12 @@ export interface FsTagCatalog {
 	readonly supported: boolean;
 	readonly tags: readonly FsTag[];
 	readonly colorNames: readonly string[];
+	/**
+	 * macOS refused the app Finder's tag registry (no Full Disk Access): the
+	 * custom tags' names are known, their colours are not, and every one of them
+	 * would draw as a hollow ring. The sidebar then offers the grant.
+	 */
+	readonly colorsDenied: boolean;
 }
 
 /** Tags to add to and to remove from every requested path; names match case-insensitively. */

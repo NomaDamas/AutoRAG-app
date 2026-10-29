@@ -21,6 +21,8 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		onZoom: () => () => undefined,
 		onApp: () => () => undefined,
 		onOffice: () => () => undefined,
+		onSlides: () => () => undefined,
+		onThumbnail: () => () => undefined,
 		ready: () => undefined,
 		zoomed: () => undefined,
 		request: never,
@@ -30,8 +32,10 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		audioMetadata: never,
 		dataPreview: never,
 		archivePreview: answer,
+		certificatePreview: never,
 		share: never,
 		copyText: never,
+		textEntry: () => undefined,
 	};
 }
 
@@ -48,6 +52,7 @@ function fileAt(path: string): PreviewDocument {
 		pages: null,
 		office: null,
 		thumbnail: null,
+		slidesRendering: false,
 	};
 }
 

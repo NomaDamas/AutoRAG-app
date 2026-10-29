@@ -1,6 +1,7 @@
 import type { AppSettings } from "../../shared/settings-contract";
 import type { BinaryKind } from "./binary-kind";
 import type { ArchiveEntry } from "./archive-items";
+import type { KeyUsageName } from "./certificate";
 import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
 
@@ -37,6 +38,10 @@ export const PREVIEW_CHANNELS = {
 	app: "preview:app",
 	/** Main -> preview window: the Office page macOS drew landed (first-page image, then the whole page). */
 	office: "preview:office",
+	/** Main -> preview window: Keynote finished drawing a deck's slides at full size (or could not). */
+	slides: "preview:slides",
+	/** Main -> preview window: a native document's OS thumbnail finished after the panel opened. */
+	thumbnail: "preview:thumbnail",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -49,11 +54,23 @@ export const PREVIEW_CHANNELS = {
 	data: "preview:data",
 	/** Preview window -> main (invoke): the top-level children of the shown 7z, RAR, ISO, deb, rpm, CAB, or tar.bz2/xz/zst. */
 	archive: "preview:archive",
+	/** Preview window -> main (invoke): the subject, validity, and fingerprints of the shown certificate file, or what kind of container it is. */
+	certificate: "preview:certificate",
 	/** Preview window -> main (invoke): the macOS share menu, anchored under a toolbar rect. */
 	share: "preview:share",
 	/** Preview window -> main (invoke): put text on the system clipboard. */
 	copyText: "preview:copy-text",
+	/** Preview window -> main (send): a text field took or gave up focus; Space and the arrows stay with it while it has focus. */
+	textEntry: "preview:text-entry",
 } as const;
+
+/** Structured content decoded from an Apple pointer, archive, clipping, or directory package. */
+export type NativePreview =
+	| { readonly kind: "webloc"; readonly title: string; readonly url: string }
+	| { readonly kind: "webarchive"; readonly html: string }
+	| { readonly kind: "rtfd"; readonly rtf: Uint8Array; readonly attachments: readonly string[] }
+	| { readonly kind: "iconset"; readonly icons: readonly { readonly name: string; readonly bytes: Uint8Array }[] }
+	| { readonly kind: "textclipping"; readonly text: string };
 
 /**
  * One file the preview can render. `bytes` is null when the viewer streams
@@ -80,6 +97,15 @@ export interface PreviewDocument {
 	 * pointer file (`.gdoc`, ...); null for every other document.
 	 */
 	readonly thumbnail: string | null;
+	/** Decoded native content; absent for every ordinary document. */
+	readonly native?: NativePreview | null;
+	/** Directory packages have no single-file byte size to display. */
+	readonly package?: boolean;
+	/**
+	 * True while Keynote is drawing a deck's slides at full size; `pages` then
+	 * still holds the package's 356px renders. False for every other document.
+	 */
+	readonly slidesRendering: boolean;
 }
 
 /**
@@ -103,6 +129,23 @@ export interface QuickLookOffice {
 	readonly office: OfficePage;
 }
 
+/** Main -> preview window: the OS thumbnail for the current native document. */
+export interface QuickLookThumbnail {
+	readonly seq: number;
+	readonly url: string;
+}
+
+/**
+ * Main -> preview window: Keynote finished drawing some slides of the open deck
+ * at full size. Each entry replaces the stored slide at `index`; `rendering`
+ * goes false with the last update (which may carry no slides).
+ */
+export interface QuickLookSlides {
+	readonly seq: number;
+	readonly slides: readonly { readonly index: number; readonly bytes: Uint8Array }[];
+	readonly rendering: boolean;
+}
+
 /** What the Finder knows of a selected file; the same identity keys the rendered-page cache. */
 export interface PreviewPrefetch {
 	readonly path: string;
@@ -116,6 +159,7 @@ export const ANCHOR_LIMITS = { excerpts: 32, chars: 8000 } as const;
 export interface QuickLookTarget {
 	readonly path: string;
 	readonly name: string;
+	readonly kind?: "file" | "folder";
 	/**
 	 * Evidence excerpts to find and highlight (an AI Search citation); the
 	 * viewer scrolls to the first one it finds. Absent for a plain preview.
@@ -273,6 +317,61 @@ export type ArchivePreview =
 	| { readonly kind: "entries"; readonly entries: readonly ArchiveEntry[] }
 	| { readonly kind: "unreadable"; readonly reason: ArchiveUnreadable };
 
+export type CertificateStatus = "valid" | "expired" | "notYetValid";
+
+/** One X.509 certificate, decoded in the main process. Dates are ISO strings; fingerprints are colon-separated hex. */
+export interface CertificateInfo {
+	readonly subject: string;
+	/** The subject's CN, or the whole subject when it has none. */
+	readonly commonName: string;
+	readonly issuer: string;
+	readonly serial: string;
+	readonly notBefore: string;
+	readonly notAfter: string;
+	readonly status: CertificateStatus;
+	readonly signatureAlgorithm: string;
+	readonly keyAlgorithm: string;
+	/** RSA/DSA modulus size; null for curve keys. */
+	readonly keyBits: number | null;
+	/** Named curve of an EC key; null otherwise. */
+	readonly curve: string | null;
+	readonly subjectAltNames: readonly string[];
+	/** keyUsage bits by name. */
+	readonly keyUsage: readonly KeyUsageName[];
+	/** Extended key usage OIDs; the page names the well-known ones. */
+	readonly extendedKeyUsage: readonly string[];
+	/** Whether OpenSSL accepts the certificate as a CA (basicConstraints, or a self-signed root without extensions). */
+	readonly ca: boolean;
+	readonly sha256: string;
+	readonly sha1: string;
+}
+
+/**
+ * One PEM block or the DER certificate of a file. A private key is only ever a
+ * label and whether it is passphrase-protected (`null`: cannot tell); its body
+ * never leaves the main process.
+ */
+export type CertificateEntry =
+	| { readonly kind: "certificate"; readonly certificate: CertificateInfo }
+	| { readonly kind: "privateKey"; readonly label: string; readonly encrypted: boolean | null }
+	| { readonly kind: "other"; readonly label: string }
+	| { readonly kind: "invalid"; readonly label: string };
+
+/** The certificates and keys of a PEM or DER file. `omitted` counts entries past the cap; `truncated` says the file was longer than what was read. */
+export interface CertificateList {
+	readonly kind: "certificates";
+	readonly source: "pem" | "der";
+	readonly entries: readonly CertificateEntry[];
+	readonly omitted: number;
+	readonly truncated: boolean;
+}
+
+/** What the certificate panel draws, from `certificatePreview`. */
+export type CertificatePreview =
+	| CertificateList
+	| { readonly kind: "container"; readonly container: "pkcs12" | "keychain"; readonly recognized: boolean }
+	| { readonly kind: "unreadable"; readonly reason: "empty" | "notCertificate" };
+
 export type QuickLookAction = "close" | "next" | "previous" | "open" | "fullscreen" | "reveal";
 
 export type NavigateDelta = 1 | -1;
@@ -313,6 +412,8 @@ export interface QuickLookWindowBridge {
 	onZoom(listener: (zoom: QuickLookZoom) => void): () => void;
 	onApp(listener: (app: QuickLookApp) => void): () => void;
 	onOffice(listener: (update: QuickLookOffice) => void): () => void;
+	onSlides(listener: (update: QuickLookSlides) => void): () => void;
+	onThumbnail(listener: (update: QuickLookThumbnail) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -325,9 +426,13 @@ export interface QuickLookWindowBridge {
 	dataPreview(path: string, table: string | null): Promise<DataPreview>;
 	/** The top-level children of a 7z, RAR, tar.bz2/xz/zst, ISO, deb, rpm, or CAB; the page has no engine to read them itself. */
 	archivePreview(path: string): Promise<ArchivePreview>;
+	/** What a certificate or key file holds, read by the main process (`node:crypto`); never any private-key material. */
+	certificatePreview(path: string): Promise<CertificatePreview>;
 	/** `anchor` is the share button's rect in page CSS pixels. macOS only. */
 	share(anchor: Bounds): Promise<void>;
 	copyText(text: string): Promise<void>;
+	/** A viewer that shows a text field (the PDF password prompt) reports whether it has one, so the window takes focus and Space and the arrows reach the field. */
+	textEntry(active: boolean): void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -343,6 +448,25 @@ export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
 }
 
+export function isQuickLookThumbnail(value: unknown): value is QuickLookThumbnail {
+	return isRecord(value) && typeof value.seq === "number" && typeof value.url === "string";
+}
+
+export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
+	if (!isRecord(value) || typeof value.seq !== "number" || typeof value.rendering !== "boolean" || !Array.isArray(value.slides)) return false;
+	return value.slides.every((entry: unknown) => isRecord(entry) && Number.isInteger(entry.index) && (entry.index as number) >= 0 && entry.bytes instanceof Uint8Array);
+}
+
+function isNativePreview(value: unknown): value is NativePreview {
+	if (!isRecord(value) || typeof value.kind !== "string") return false;
+	if (value.kind === "webloc") return typeof value.title === "string" && typeof value.url === "string";
+	if (value.kind === "webarchive") return typeof value.html === "string";
+	if (value.kind === "textclipping") return typeof value.text === "string";
+	if (value.kind === "rtfd") return value.rtf instanceof Uint8Array && Array.isArray(value.attachments) && value.attachments.every((name) => typeof name === "string");
+	if (value.kind === "iconset") return Array.isArray(value.icons) && value.icons.every((icon: unknown) => isRecord(icon) && typeof icon.name === "string" && icon.bytes instanceof Uint8Array);
+	return false;
+}
+
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (!isRecord(value)) return false;
 	if (typeof value.name !== "string" || typeof value.path !== "string" || typeof value.ext !== "string") return false;
@@ -351,7 +475,63 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
 	if (value.office !== null && !isOfficePage(value.office)) return false;
 	if (value.thumbnail !== null && typeof value.thumbnail !== "string") return false;
+	if (value.native !== undefined && value.native !== null && !isNativePreview(value.native)) return false;
+	if (value.package !== undefined && typeof value.package !== "boolean") return false;
+	if (typeof value.slidesRendering !== "boolean") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
+}
+
+const CERTIFICATE_STATUSES: readonly unknown[] = ["valid", "expired", "notYetValid"];
+
+function isStringList(value: unknown): value is readonly string[] {
+	return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isCertificateInfo(value: unknown): value is CertificateInfo {
+	if (!isRecord(value)) return false;
+	const strings = [value.subject, value.commonName, value.issuer, value.serial, value.notBefore, value.notAfter, value.signatureAlgorithm, value.keyAlgorithm, value.sha256, value.sha1];
+	if (!strings.every((item) => typeof item === "string")) return false;
+	if (value.commonName === null) return false;
+	if (!CERTIFICATE_STATUSES.includes(value.status)) return false;
+	if (value.keyBits !== null && typeof value.keyBits !== "number") return false;
+	if (value.curve !== null && typeof value.curve !== "string") return false;
+	if (typeof value.ca !== "boolean") return false;
+	return isStringList(value.subjectAltNames) && isStringList(value.keyUsage) && isStringList(value.extendedKeyUsage);
+}
+
+function isCertificateEntry(value: unknown): value is CertificateEntry {
+	if (!isRecord(value)) return false;
+	switch (value.kind) {
+		case "certificate":
+			return isCertificateInfo(value.certificate);
+		case "privateKey":
+			return typeof value.label === "string" && (value.encrypted === null || typeof value.encrypted === "boolean");
+		case "other":
+		case "invalid":
+			return typeof value.label === "string";
+		default:
+			return false;
+	}
+}
+
+export function isCertificatePreview(value: unknown): value is CertificatePreview {
+	if (!isRecord(value)) return false;
+	switch (value.kind) {
+		case "certificates":
+			return (
+				(value.source === "pem" || value.source === "der") &&
+				typeof value.omitted === "number" &&
+				typeof value.truncated === "boolean" &&
+				Array.isArray(value.entries) &&
+				value.entries.every(isCertificateEntry)
+			);
+		case "container":
+			return (value.container === "pkcs12" || value.container === "keychain") && typeof value.recognized === "boolean";
+		case "unreadable":
+			return value.reason === "empty" || value.reason === "notCertificate";
+		default:
+			return false;
+	}
 }
 
 export function isPreviewPrefetch(value: unknown): value is PreviewPrefetch {
@@ -369,6 +549,7 @@ function isAnchor(value: unknown): value is readonly string[] {
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {
 	if (!isRecord(value)) return false;
 	if (value.anchor !== undefined && !isAnchor(value.anchor)) return false;
+	if (value.kind !== undefined && value.kind !== "file" && value.kind !== "folder") return false;
 	return typeof value.path === "string" && value.path.length > 0 && typeof value.name === "string";
 }
 
@@ -444,7 +625,22 @@ export function isNavigateDelta(value: unknown): value is NavigateDelta {
 
 export const PREVIEW_SCHEME = "autorag-preview";
 
+/** The remote bootstrap publishes this so scheme URLs become same-origin HTTP (see src/main/remote/bootstrap.ts). */
+interface RemoteUrlProvider {
+	readonly routes?: { readonly preview?: string };
+	readonly url?: (route: string, params?: Readonly<Record<string, unknown>>) => string;
+}
+
+function remotePreviewUrl(filePath: string): string | null {
+	const remote = Reflect.get(globalThis, "__autoragRemote") as RemoteUrlProvider | undefined;
+	const route = remote?.routes?.preview;
+	if (route === undefined || typeof remote?.url !== "function") return null;
+	return remote.url(route, { path: filePath });
+}
+
 export function previewStreamUrl(filePath: string): string {
+	const remote = remotePreviewUrl(filePath);
+	if (remote !== null) return remote;
 	const url = new URL(`${PREVIEW_SCHEME}://local/`);
 	url.searchParams.set("path", filePath);
 	return url.toString();

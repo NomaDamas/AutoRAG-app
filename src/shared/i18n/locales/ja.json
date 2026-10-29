@@ -12,11 +12,28 @@
   "places": {
     "favorites": "お気に入り",
     "cloud": "クラウド",
+    "connections": "接続",
     "locations": "場所",
     "aiSearch": "AI 検索",
     "settings": "設定",
+    "settingsHint": "設定 {{shortcut}}",
+    "usage": "AI 使用量",
+    "update": {
+      "unsupported": "バージョン {{version}} · このビルドは自動更新されません",
+      "current": "バージョン {{version}}",
+      "checking": "アップデートを確認中…",
+      "upToDate": "最新バージョンです ({{version}})",
+      "available": "新バージョン {{version}} をダウンロード",
+      "availableManual": "{{version}} のインストーラーを入手",
+      "downloading": "{{version}} をダウンロード中… {{percent}}%",
+      "ready": "{{version}} の準備ができました · 今すぐ再起動してインストール",
+      "error": "アップデートの確認に失敗しました: {{message}}"
+    },
     "recents": "最近使った項目",
     "tags": "タグ",
+    "tagColorsDenied": "タグの色を表示",
+    "tagColorsDeniedHint": "Finderのタグの色はmacOSがフルディスクアクセスの内側に保管しています。許可してからアプリを再起動すると表示されます。",
+    "tagColorsGrantToast": "フルディスクアクセスを許可し、Dazziを再起動してください。",
     "home": "ホーム",
     "applications": "アプリケーション",
     "desktop": "デスクトップ",
@@ -111,6 +128,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+      "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
     },
@@ -125,6 +143,44 @@
       "progressAria": "変換中",
       "unsupported": "{{from}} から {{to}} への変換には対応していないため、名前は変更されませんでした。",
       "replaced": "{{name}} — 変換しました。元のファイルはゴミ箱に移動しました"
+    },
+    "reduce": {
+      "title": "容量を減らす",
+      "levelLabel": "圧縮レベル",
+      "recommended": "推奨",
+      "levels": {
+        "light": "弱め（高画質）",
+        "balanced": "標準",
+        "max": "強め（最小サイズ）"
+      },
+      "specs": {
+        "pdf": {
+          "light": "高画質・最大 1600px（約 30〜65% 削減）",
+          "balanced": "標準圧縮・最大 1280px（約 55〜80% 削減）",
+          "max": "最大圧縮・最大 960px（約 75〜90% 削減）"
+        },
+        "image": {
+          "light": "高画質・256色/2560px（約 35〜60% 削減）",
+          "balanced": "標準・最大 1920px（約 55〜75% 削減）",
+          "max": "最大圧縮・最大 1280px（約 70〜85% 削減）"
+        },
+        "video": {
+          "light": "元の解像度・ビットレート約 35%+ 削減",
+          "balanced": "最大 1080p・ビットレート約 58%+ 削減",
+          "max": "最大 720p・ビットレート約 76%+ 削減"
+        },
+        "audio": {
+          "light": "高音質・ビットレート約 28% 削減",
+          "balanced": "標準音質・ビットレート約 50% 削減",
+          "max": "音声優先・ビットレート約 65% 削減"
+        }
+      },
+      "outputLabel": "保存方法",
+      "replaceMode": "元のファイルを置換",
+      "copyMode": "コピーとして保存",
+      "replaceHint": "元のファイルをゴミ箱へ移動し、「{{name}}」をそのまま置き換えます。",
+      "copyHint": "元のファイルを残して「{{copyName}}」として保存します。",
+      "workingHint": "完了するまで元のファイルは変更されません。"
     }
   },
   "contextMenu": {
@@ -217,7 +273,9 @@
       "videoConvert": "動画変換",
       "convertTo": "{{format}}に変換",
       "maxEdge": "最大 {{edge}}px",
-      "optimizeSize": "容量最適化"
+      "reduceSize": "容量を減らす",
+      "reducing": "「{{name}}」の容量を減らしています…",
+      "reduceProgressAria": "{{name}} の容量削減の進行状況"
     },
     "versionRelations": {
       "exact": "同一",
@@ -278,6 +336,59 @@
       "last7Days": "過去7日間",
       "last30Days": "過去30日間",
       "older": "それ以前"
+    }
+  },
+  "appError": {
+    "fixAction": "AIで修正",
+    "openModelSettings": "モデル設定を開く",
+    "showDetails": "詳細を表示",
+    "hideDetails": "詳細を閉じる",
+    "other": {
+      "title": "問題が発生しました",
+      "hint": "AIが原因を調べて、直せるか試します。"
+    },
+    "modelMissing": {
+      "title": "使用するAIモデルが設定されていません",
+      "hint": "モデルを選ぶかログインすると、すぐに使えます。モデル設定でモデル、ログイン状態、サブスクリプションを確認してください。"
+    },
+    "modelCredentials": {
+      "title": "AIモデルを使用できません（認証に失敗しました）",
+      "hint": "APIキーまたはログインの有効期限が切れているか、正しくない可能性があります。モデル設定で再ログインするかキーを確認し、サブスクリプションが有効かも確認してください。"
+    },
+    "modelSubscription": {
+      "title": "サブスクリプションまたは使用量の上限のため、AIモデルを使用できません",
+      "hint": "サブスクリプションの期限が切れているか、使用量を使い切った可能性があります。サブスクリプションと使用量を確認するか、モデル設定で別のモデルを選んでください。"
+    },
+    "modelNotFound": {
+      "title": "選択したAIモデルが見つかりません",
+      "hint": "モデルが終了したか、名前が変わった可能性があります。モデル設定で別のモデルを選んでください。"
+    },
+    "rateLimit": {
+      "title": "リクエストが集中して一時的に制限されています",
+      "hint": "しばらくしてからもう一度お試しください。続く場合は、モデル設定で別のモデルを選んでみてください。"
+    },
+    "network": {
+      "title": "AIモデルのサーバーに接続できません",
+      "hint": "インターネット接続を確認して、もう一度お試しください。接続が正常でも続く場合は、モデル設定を確認してください。"
+    },
+    "fix": {
+      "title": "AIで修正",
+      "running": "原因を調べています…",
+      "status": {
+        "fixed": "正常に戻りました",
+        "needsUser": "あなたの操作が必要です",
+        "cannotFix": "修正できませんでした"
+      },
+      "nextStepsLabel": "必要な操作",
+      "openSettings": "「{{page}}」設定を開く",
+      "openSource": "「{{name}}」の接続を開く",
+      "failedTitle": "AIでは修正できませんでした",
+      "stopped": "中断しました。",
+      "minimize": "バックグラウンドで続行",
+      "sidebar": {
+        "running": "AIで修正中…",
+        "open": "AIで修正の状態を表示"
+      }
     }
   },
   "interaction": {
@@ -618,6 +729,7 @@
     }
   },
   "onboarding": {
+    "footerBack": "戻る",
     "step": {
       "welcome": "はじめに",
       "permissions": "権限",
@@ -633,7 +745,7 @@
       "indexing": "インデックス作成"
     },
     "stepLabel": {
-      "welcome": "開始する",
+      "welcome": "続ける",
       "permissions": "続ける",
       "account": "続ける",
       "folders": "フォルダを選んで続ける",
@@ -706,9 +818,9 @@
       "title": "アカウントで\n始める",
       "lead": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのMacに保存されます。",
       "note": "ブラウザでログインすると、自動でこのアプリに戻ります。パスワードはアプリに入力しません。",
-      "signedIn": "ログインしました",
+      "signedIn": "ログインが完了しました",
       "signedInNote": "次のステップに進みます",
-      "otherAccount": "別のアカウント",
+      "otherAccount": "別のアカウントでログイン",
       "cardTitle": "Dazziアカウント",
       "cardSub": "プランと使用量を管理します",
       "busy": "ブラウザでログイン中…",
@@ -718,6 +830,23 @@
       "skip": "アカウントなしで自分のAPIキーを使う (BYOK)",
       "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
       "authNote": "ログイン方法（メールコード、ソーシャルログイン）は、ブラウザのDazziログイン画面で選びます。",
+      "getStarted": "はじめる",
+      "continueGoogle": "Googleで続行",
+      "continueApple": "Appleで続行",
+      "continueGithub": "GitHubで続行",
+      "or": "または",
+      "emailLabel": "メール",
+      "emailPlaceholder": "namae@example.jp",
+      "continueEmail": "メールで続行",
+      "codeLabel": "認証コード",
+      "codeSentNote": "{{email}} に6桁の認証コードを送信しました。",
+      "sendingCode": "認証コードを送信中…",
+      "verifyCode": "コードで続行",
+      "verifyingCode": "確認中…",
+      "resendCode": "コードを再送",
+      "resendIn": "{{seconds}}秒後に再送",
+      "useDifferentEmail": "別のメールを使う",
+      "guest": "ゲストとして続行",
       "agreeLead": "続行すると、Dazziの以下に同意したものとみなされます:",
       "agreeTerms": "利用規約",
       "agreePrivacy": "プライバシーポリシー",
@@ -727,9 +856,10 @@
     },
     "permissions": {
       "eyebrow": "権限",
-      "title": "正しく読み取れるように\n許可してください",
-      "leadMac": "macOSは、アプリが文書や保護されたアプリデータにアクセスする前に許可を求めます。権限とインデックス作成の範囲は別ものです。",
-      "leadWindows": "通知とネットワークだけ確認すればすぐに始められます。残りは後で設定から変更できます。",
+      "title": "許可する権限を確認してください",
+      "leadMac": "macOSでは、アプリが保護されたファイルを読む前にユーザーの許可が必要です。\n許可したあとも、検索対象のフォルダは次のステップで自分で選びます。",
+      "leadWindows": "必要な権限だけ先に確認してください。\nすべての項目はスキップでき、あとから設定で変更できます。",
+      "titleWindows": "許可する権限を確認してください",
       "note": "Dazziはファイルを変更しません。実際にインデックスするフォルダは次のステップでご自身で選びます。",
       "required": "必須",
       "optional": "任意",
@@ -741,21 +871,23 @@
       "footnote": "オンにすると次へ進めます。",
       "fda": {
         "name": "フルディスクアクセス",
-        "desc": "正しく動作するために必要です。"
+        "desc": "書類、ダウンロード、メール、外付けディスクなどの保護された領域を読むために必要な権限です。\n一度許可すれば、フォルダごとの許可リクエストは繰り返されません。",
+        "why": "なぜフルディスクアクセスが必要ですか？"
       },
       "notifications": {
         "name": "通知",
+        "desc": "通知の許可を先にリクエストします。受け取る通知は設定で選べます。",
         "allow": "通知を許可",
         "openWindows": "Windowsの設定を開く"
       },
       "login": {
         "name": "ログイン時に起動",
-        "desc": "ファイルが変更されると、バックグラウンドでインデックスを最新に保ちます。"
+        "desc": "パソコンを起動するとアプリが自動で起動します。設定でいつでもオフにできます。"
       },
       "network": {
-        "name": "ネットワーク（ファイアウォール）",
-        "desc": "リモート埋め込みとモデル呼び出しに必要です。初回起動時にWindowsのセキュリティ警告が出たら許可します。",
-        "allow": "許可"
+        "name": "ネットワーク",
+        "desc": "オンラインのAIに質問する場合や、文書をオンラインで分析する場合にのみ必要です。",
+        "allow": "ネットワークを許可"
       }
     },
     "smartScan": {
@@ -832,22 +964,22 @@
       }
     },
     "embedding": {
-      "eyebrow": "セマンティック検索",
       "title": "埋め込みをどう使いますか？",
       "groupLabel": "埋め込み方法",
       "card": {
         "none": {
-          "name": "使用しない",
-          "line": "キーワード検索のみ"
-        },
-        "local": {
-          "name": "ローカル埋め込み",
-          "lineMac": "このMacで処理",
-          "linePc": "このPCで処理"
+          "name": "キーワードで探す",
+          "line": "入力した単語を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "リモート埋め込み",
-          "line": "サーバーで処理"
+          "name": "Dazziサーバーで分析",
+          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
+        },
+        "local": {
+          "nameMac": "自分のMacで分析",
+          "namePc": "自分のPCで分析",
+          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
+          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
         }
       },
       "meter": {
@@ -859,10 +991,14 @@
         "good": "良い"
       },
       "meterAria": "{{label}}: {{value}}",
-      "minutes": "約{{minutes}}分",
+      "prepTime": "準備時間",
+      "about": "約",
+      "minutes": "{{minutes}}分",
       "cached": "準備完了",
       "downloadUnknown": "確認中",
-      "cloudConsent": "選択したフォルダの文書本文が埋め込み処理のためにDazziサーバーへ送信されることに同意します。処理後は保持されません。",
+      "cloudConsentRequired": "(必須)",
+      "cloudConsent": "文書の本文がサーバーへ送信されることに同意します。",
+      "cloudConsentCheck": "同意します",
       "pausedNotice": {
         "config": "選択した埋め込み方式を利用できず停止しました",
         "disk": "空き容量が足りずモデルをダウンロードできませんでした",
@@ -870,10 +1006,7 @@
       }
     },
     "sources": {
-      "eyebrow": "データソース",
-      "title": "接続先も\n一緒に検索しますか？",
-      "lead": "すでにインストールされ認証済みのソースだけを先に表示します。すべてを選択する必要はありません。",
-      "detected": "検出済み",
+      "title": "このPCで見つかったアプリも検索範囲に含めますか？",
       "checking": "追加できるソースを確認しています…",
       "empty": "接続済みのソースが見つかりませんでした。後で設定から接続できます。",
       "connectMore": "準備が必要なソースは後で設定から接続できます。",
@@ -1193,6 +1326,8 @@
     "fileCreated": "{{name}} — 新しいファイルを作成しました",
     "shareAnchorMissing": "共有シートの表示位置が見つかりませんでした",
     "tagChangeFailed": "{{name}} — タグを変更できませんでした: {{message}}",
+    "remotePreviewUnsupported": "このファイル形式はブラウザーでプレビューできません。ダブルクリックしてダウンロードしてください。",
+    "remotePreviewFolderUnsupported": "フォルダはブラウザーでプレビューできません。",
     "onboardingDemo": {
       "meetingNotes": "議事録.md"
     }
@@ -1304,7 +1439,21 @@
       "stars": "星{{count}}つ",
       "star": "星1つ"
     },
-    "kindByExtension": "{{ext}} ファイル"
+    "kindByExtension": "{{ext}} ファイル",
+    "kindNames": {
+      "photoshop": "Adobe Photoshop ドキュメント",
+      "illustrator": "Adobe Illustrator ドキュメント",
+      "eps": "EPS 画像",
+      "jpegxl": "JPEG XL 画像",
+      "icns": "Apple アイコン画像",
+      "targa": "TGA 画像",
+      "openexr": "OpenEXR 画像",
+      "gimp": "GIMP 画像",
+      "sketch": "Sketch ドキュメント",
+      "figma": "Figma ドキュメント",
+      "raw": "{{maker}} RAW 画像",
+      "rawGeneric": "RAW 画像"
+    }
   },
   "main": {
     "interaction": {
@@ -1316,8 +1465,7 @@
     },
     "action": {
       "unsupportedResize": "この形式はサイズ変更に対応していません。",
-      "unsupportedOptimize": "この形式は容量の最適化に対応していません。",
-      "alreadyOptimized": "このファイルはすでに最適化されています。",
+      "alreadyOptimized": "これ以上小さくできないファイルです。",
       "unsupportedExtract": "展開できないファイル形式です。",
       "emptyTarget": "対象が空です。",
       "singleTargetOnly": "この操作は一度に 1 つの項目のみ対応しています。",
@@ -1330,10 +1478,14 @@
       "unsupportedConvert": "{{format}} への変換は対応していません。",
       "converted": "{{name}} — 変換しました",
       "resized": "{{name}} — サイズを変更しました",
-      "optimized": "{{name}} — 容量を最適化しました",
       "videoNeedsFfmpeg": "動画の変換には ffmpeg が必要です。",
       "containerConverted": "{{name}} — コンテナを変換しました",
-      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。"
+      "shareUnsupported": "このプラットフォームはシステム共有に対応していません。",
+      "unsupportedReduce": "このファイルは形式を保ったまま容量を減らせません",
+      "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
+      "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）",
+      "reduceCancelled": "{{name}} の容量削減をキャンセルしました",
+      "reducedReplaced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減・元のファイルはゴミ箱へ移動）"
     },
     "indexStatus": {
       "outside": "Dazzi の検索パス外のファイル",
@@ -1418,7 +1570,10 @@
     },
     "worker": {
       "unknownFormat": "不明なファイル形式です: {{format}}",
-      "invalidUrl": "ウェブアドレスが正しくありません。"
+      "invalidUrl": "ウェブアドレスが正しくありません。",
+      "librarianExited": "インデックス用ヘルパーが予期せず停止しました（コード {{code}}）。",
+      "librarianFailed": "インデックス用ヘルパーが失敗しました: {{message}}",
+      "librarianStopped": "インデックス用ヘルパーは終了しているため、要求を処理できません。"
     },
     "fs": {
       "restoreTempFailed": "{{message}}(一時名 {{name}} から元に戻せませんでした: {{detail}})",
@@ -1534,6 +1689,7 @@
     },
     "convert": {
       "notConvertible": "{{name}} は {{extension}} 形式に変換できません。",
+      "noRoute": "Filee は {{name}} を {{extension}} 形式に変換できません。",
       "invalidName": "変換後のファイル名として使えません: {{name}}",
       "sourceMissing": "変換するファイルが見つかりません: {{name}}",
       "nameTaken": "「{{name}}」という名前のファイルまたはフォルダがすでにあります",
@@ -1594,6 +1750,12 @@
     },
     "contents": {
       "title": "内容"
+    },
+    "native": {
+      "readFailed": "この書類を読み込めませんでした",
+      "attachments": "添付ファイル",
+      "noAttachments": "添付ファイルなし",
+      "emptyIconset": "このセットにはPNGアイコンがありません"
     },
     "code": {
       "wrap": "行を折り返す",
@@ -1668,7 +1830,65 @@
       "slideMissing": "このスライドには画像がありません",
       "drawFailed": "スライドを描画できませんでした",
       "noPreview": "この文書にはプレビュー画像がありません",
+      "rendering": "スライドを鮮明にしています…",
       "page": "{{count}}ページ"
+    },
+    "certificate": {
+      "subject": "サブジェクト",
+      "issuer": "発行者",
+      "serial": "シリアル番号",
+      "notBefore": "有効期間の開始",
+      "notAfter": "有効期間の終了",
+      "signature": "署名",
+      "publicKey": "公開鍵",
+      "altNames": "別名",
+      "keyUsage": "鍵の用途",
+      "extendedKeyUsage": "拡張鍵用途",
+      "ca": "CA",
+      "status": {
+        "expired": "期限切れ",
+        "notYetValid": "まだ有効ではありません"
+      },
+      "usage": {
+        "digitalSignature": "デジタル署名",
+        "contentCommitment": "否認防止",
+        "keyEncipherment": "鍵の暗号化",
+        "dataEncipherment": "データの暗号化",
+        "keyAgreement": "鍵合意",
+        "keyCertSign": "証明書の署名",
+        "cRLSign": "CRL の署名",
+        "encipherOnly": "暗号化のみ",
+        "decipherOnly": "復号のみ"
+      },
+      "eku": {
+        "serverAuth": "TLS Web サーバー認証",
+        "clientAuth": "TLS Web クライアント認証",
+        "codeSigning": "コード署名",
+        "emailProtection": "メール保護",
+        "timeStamping": "タイムスタンプ",
+        "ocspSigning": "OCSP 署名"
+      },
+      "keyHidden": "秘密鍵 — 内容は表示しません",
+      "keyEncrypted": "暗号化済み",
+      "keyPlain": "暗号化なし",
+      "unreadableBlock": "この証明書を読み取れませんでした",
+      "countOne": "証明書 1 件",
+      "countMany": "証明書 {{count}} 件",
+      "omitted": "ほか {{count}} 件は表示していません",
+      "truncated": "ファイルの先頭部分のみ表示しています",
+      "readFailed": "このファイルを読み取れませんでした",
+      "container": {
+        "pkcs12": "PKCS #12 バンドルは証明書と秘密鍵を含みパスワードで保護されているため、内容は表示しません。",
+        "keychain": "Apple キーチェーンは暗号化されたストアのため、ここでは読み取りも復号も行いません。"
+      },
+      "notContainer": {
+        "pkcs12": "有効な PKCS #12 バンドルではありません",
+        "keychain": "有効な Apple キーチェーンではありません"
+      },
+      "unreadable": {
+        "empty": "このファイルは空です",
+        "notCertificate": "このファイルに証明書が見つかりませんでした"
+      }
     },
     "gdrive": {
       "account": "Google アカウント: {{email}}",
@@ -1711,6 +1931,14 @@
     },
     "pdf": {
       "openFailed": "PDFを開けませんでした"
+    },
+    "password": {
+      "locked": "パスワードで保護された文書です",
+      "label": "パスワード",
+      "placeholder": "パスワードを入力",
+      "unlock": "ロック解除",
+      "checking": "確認中…",
+      "incorrect": "パスワードが正しくありません。もう一度入力してください。"
     },
     "pptx": {
       "openFailed": "プレゼンテーションを開けませんでした",
@@ -1822,6 +2050,9 @@
       "noSlides": "スライドがありません",
       "noPreview": "このドキュメントにはプレビュー画像がありません"
     },
+    "raster": {
+      "noPreview": "このファイルからプレビュー画像を作成できませんでした"
+    },
     "evidence": {
       "searching": "引用箇所を検索中…",
       "found": "引用箇所をハイライト表示",
@@ -1837,6 +2068,7 @@
       "account": "マイアカウント",
       "plan": "サブスクリプションと使用量",
       "general": "一般",
+      "sidebar": "サイドバー",
       "ai": "AI モデル",
       "web": "ウェブ検索",
       "indexing": "インデックス作成",
@@ -1855,6 +2087,7 @@
         "account": "アカウント ログイン メール 名前 プロフィール",
         "plan": "プラン 支払い クレジット 使用量 サブスクリプション billing",
         "general": "画面 テーマ 外観 言語 隠しファイル ログイン アップデート 統計 書類の言語",
+        "sidebar": "サイドバー お気に入り クラウド 場所 タグ フォルダ 非表示 表示 並び順 カスタム AI",
         "ai": "LLM モデル プロバイダ サービス API キー サブスクリプション 埋め込み Jev 質問分解 並べ替え",
         "web": "ウェブ検索 インターネット 検索 サービス ページ読み取り",
         "indexing": "更新 同期 増分 インデックス 更新間隔 sync",
@@ -1873,6 +2106,56 @@
       "empty": "一致する設定がありません。",
       "contentAria": "{{name}} の設定"
     },
+    "sidebar": {
+      "description": "サイドバーに表示する項目やセクションの順序を構成するか、AIアシスタントと対話してカスタマイズします。",
+      "aiHeroTitle": "AIでサイドバーとアプリをカスタム",
+      "aiHeroDesc": "「ミュージックとムービーを隠して、ダウンロードと書類を一番上に移動して」のように言葉で設定できます。",
+      "aiHeroButton": "AIでカスタム",
+      "presetsTitle": "クイック構成",
+      "presetShowAll": "すべて表示",
+      "presetMinimal": "主要項目のみ",
+      "resetDefault": "初期設定に戻す",
+      "favoritesTitle": "お気に入り",
+      "favoritesDesc": "お気に入りフォルダの表示と並び順を設定します。AI 検索と自動化は必須機能のため常に表示されます。",
+      "lockedBadge": "常時表示",
+      "lockedHint": "AI 検索と自動化は必須項目のため非表示にできません。",
+      "customBadge": "カスタムフォルダ",
+      "moveUp": "{{name}} を上へ移動",
+      "moveDown": "{{name}} を下へ移動",
+      "removeCustom": "{{name}} を削除",
+      "addCustomFolder": "+ フォルダを追加…",
+      "addCustomModalTitle": "お気に入りにフォルダを追加",
+      "addCustomModalDesc": "サイドバーのお気に入りに固定するフォルダパスを入力します。",
+      "addCustomPathLabel": "フォルダパス",
+      "addCustomPathPlaceholder": "~/Projects または /Users/me/Work",
+      "addCustomConfirm": "追加",
+      "sectionsTitle": "サイドバーのセクションと項目",
+      "sectionsDesc": "お気に入り、クラウド、場所、タグの各セクションの並び順と項目の表示を一括で管理します。AI 検索と自動化は必須機能のため常に表示されます。",
+      "sectionAlwaysShown": "お気に入りセクションは常に表示されます",
+      "sectionCount": "{{visible}}/{{total}} 表示",
+      "emptyCloud": "接続されたクラウドドライブはありません。",
+      "emptyConnections": "接続済みアプリの添付フォルダはありません。",
+      "emptyLocations": "マウントされたディスクはありません。",
+      "emptyTags": "ピン留めされた Finder タグはありません。",
+      "modal": {
+        "title": "AI アプリカスタムアシスタント",
+        "subtitle": "希望するサイドバーの構成や画面設定を自由に入力してください。",
+        "newChat": "新しい会話",
+        "emptyTitle": "どのようにカスタマイズしますか？",
+        "emptyDesc": "表示するフォルダ、セクションの順序、画面モードを伝えると即座に反映されます。",
+        "promptMinimal": "ミュージック、ムービー、ピクチャ、アプリケーションをサイドバーから隠して",
+        "promptReorder": "ダウンロードと書類をお気に入りの一番上に移動して",
+        "promptCleanSections": "クラウドとタグのセクションを隠してすっきり整理して",
+        "promptReset": "サイドバーの構成を初期状態に戻して",
+        "thinking": "設定を確認中",
+        "placeholder": "例：ミュージックとムービーを隠してダウンロードを一番上にして…",
+        "send": "送信",
+        "stop": "停止",
+        "lockedNotice": "AI 検索と自動化は必須機能のため常にサイドバーに表示されます。",
+        "openAiSettings": "AI モデル設定を開く",
+        "unavailable": "アプリカスタムサービスを利用できません。"
+      }
+    },
     "general": {
       "description": "Dazzi の画面と起動方法を設定します。",
       "screenTitle": "画面",
@@ -1886,6 +2169,20 @@
       "finderDesc": "ファイル閲覧画面の動作です。",
       "showHiddenFiles": "隠しファイルを表示",
       "showHiddenFilesHint": "ドット(.)で始まるシステムファイルを Finder に表示します。",
+      "remoteTitle": "リモートアクセス",
+      "remoteSecurityHint": "HTTP は暗号化されません。信頼できるネットワークまたは暗号化されたトンネルでのみ使用してください。",
+      "remoteAccess": "リモートアクセスを許可",
+      "remoteAccessHint": "別の端末のブラウザーからこの Dazzi を開きます。",
+      "remoteAddress": "ブラウザーのアドレス",
+      "remoteStopped": "停止中",
+      "remotePort": "ポート",
+      "remotePortHint": "既定値は 47833 です。0 を指定すると空いているポートを選びます。変更後は Dazzi を再起動してください。",
+      "remoteCopyAddress": "アドレスをコピー",
+      "remoteAddressCopied": "コピーしました",
+      "remoteCopyError": "アドレスをコピーできませんでした。選択して手動でコピーしてください。",
+      "remoteStatusError": "リモートアクセスの状態を確認できませんでした：{{error}}",
+      "remoteSettingsError": "リモートアクセスの設定を保存できませんでした：{{error}}",
+      "remoteLimitations": "ファイルを外へドラッグするとダウンロードされます。Finder で表示とアプリケーションで開く機能は使えません。ファイルのクリップボードはブラウザーのセッションごとに独立しています。アップロードは Cmd+Z で取り消せません。",
       "launchTitle": "起動と更新",
       "launchAtLogin": "ログイン時に自動起動",
       "launchAtLoginHint": "コンピュータの起動時に Dazzi をバックグラウンドで開始します。",

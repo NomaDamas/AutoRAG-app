@@ -1,11 +1,11 @@
 import { stat } from "node:fs/promises";
-import { basename, extname } from "node:path";
+import { basename, extname, join } from "node:path";
 import { t } from "../../shared/i18n/core";
 import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import type { IconPreviewCache } from "../../main/file-icon";
 import { listArchive } from "../../main/archive-list";
-import { isAppBundle } from "../../main/fs-entry";
+import { isAppBundle, isPackageDirectory } from "../../main/fs-entry";
 import {
 	app,
 	BrowserWindow,
@@ -36,6 +36,8 @@ import {
 	type QuickLookApp,
 	type QuickLookLoad,
 	type QuickLookOffice,
+	type QuickLookSlides,
+	type QuickLookThumbnail,
 	type QuickLookReady,
 	type QuickLookTarget,
 	type QuickLookZoom,
@@ -48,15 +50,19 @@ import { isGoogleDriveExtension } from "../shared/google-drive";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { readNativeDocument } from "./apple";
+import { previewCertificate } from "./certificate";
 import { previewData } from "./data";
-import { driveThumbnail } from "./google-drive";
+import { driveThumbnail, nativeThumbnail } from "./google-drive";
 import { type BundleIconSource, summarizeBundle } from "./bundle";
 import { createDefaultAppCache, type DefaultAppCache } from "./default-app";
 import { fileDetails, sha256File } from "./details";
 import { measureFolder, summarizeFolder } from "./folder";
 import { readHeicPreview } from "./heic";
 import { readTiffPreview } from "./tiff";
+import { readRasterPreview } from "./raster";
 import { readIworkPreview } from "./iwork";
+import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } from "./keynote-render";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
@@ -107,6 +113,8 @@ interface Session {
 	opening: { readonly id: number; bounds: Bounds } | null;
 	/** A close zoom is running: the content must stay until the panel has shrunk away. */
 	closing: boolean;
+	/** A text field in the page has focus (the PDF password prompt): Space and the arrows are its own. */
+	typing: boolean;
 	readonly waiters: Map<string, () => void>;
 	readonly defaultApps: DefaultAppCache;
 	detach: () => void;
@@ -123,6 +131,8 @@ let quitting = false;
 let iconSource: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null;
 /** The Office pages macOS drew, rendered ahead of Space when the Finder selects a legacy Office file. */
 let officePages: OfficeRenderCache = createOfficeRenderCache();
+/** Full-size Keynote slides drawn by macOS Quick Look; null in unit tests and before `registerQuickLookIpc` runs. */
+let keynoteSlides: KeynoteSlideCache | null = null;
 
 function live(window: BrowserWindow): boolean {
 	return !window.isDestroyed();
@@ -211,6 +221,7 @@ async function zoomIn(state: Session, bounds: Bounds): Promise<void> {
 	await zoomStep(state, id, "prepared", ZOOM_PREPARE_MS);
 	if (!current(state, id)) return;
 	window.showInactive();
+	focusTextEntry(state);
 	sendZoom(state, { id, phase: "run" });
 	await zoomStep(state, id, "done", ZOOM_DONE_TIMEOUT_MS);
 	if (!current(state, id)) return;
@@ -242,6 +253,18 @@ async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
 	sendZoom(state, { id, phase: "settle" });
 }
 
+/**
+ * The panel opens without taking focus; a text field in it (the PDF password prompt) needs it
+ * to receive keys. Closing hands focus back to the Finder (see {@link hide}). A window that is not
+ * visible yet is focused by the show that follows.
+ */
+function focusTextEntry(state: Session): void {
+	const { window } = state;
+	if (!state.typing || !live(window) || !window.isVisible()) return;
+	window.focus();
+	window.webContents.focus();
+}
+
 function present(state: Session, report: QuickLookReady): void {
 	clearDeadline(state);
 	const { window } = state;
@@ -267,10 +290,12 @@ function present(state: Session, report: QuickLookReady): void {
 	state.shown = true;
 	float(state, true);
 	window.showInactive();
+	focusTextEntry(state);
 }
 
 function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = state.origin): void {
 	state.seq += 1;
+	state.typing = false;
 	state.current = null;
 	clearDeadline(state);
 	const { window, owner } = state;
@@ -334,6 +359,7 @@ async function readFolder(path: string): Promise<TargetContent> {
  */
 async function readDocument(path: string): Promise<PreviewDocument> {
 	const kind = viewerForExtension(extname(path).slice(1));
+	if (kind === "webloc" || kind === "webarchive" || kind === "rtfd" || kind === "iconset" || kind === "textclipping") return readNativeDocument(path);
 	if (kind === "legacyDoc" || kind === "legacyPpt") {
 		// The whole file for the text reader. What macOS draws for it arrives
 		// separately (`openOfficePage`): the panel must not wait for it.
@@ -348,6 +374,7 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 		case "whole":
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
 		case "decode":
+			if (kind === "raster") return readRasterPreview(path);
 			return kind === "tiff" ? readTiffPreview(path) : readHeicPreview(path);
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {
@@ -385,6 +412,9 @@ async function readTarget(target: QuickLookTarget): Promise<TargetContent> {
 			if (isAppBundle(basename(target.path), true, process.platform)) {
 				return { document: null, folder: null, bundle: await summarizeBundle(target.path, iconSource), error: null };
 			}
+			if (isPackageDirectory(basename(target.path), true, process.platform)) {
+				return { document: await readNativeDocument(target.path), folder: null, bundle: null, error: null };
+			}
 			return readFolder(target.path);
 		}
 		if (error instanceof PreviewReadError) return { document: null, folder: null, bundle: null, error: error.message };
@@ -421,6 +451,27 @@ async function withOffice(state: Session, seq: number, target: QuickLookTarget, 
 }
 
 /**
+ * A Keynote deck opens on the package's stored slides at once, upgraded in
+ * place to full-size ones drawn by macOS Quick Look (see {@link openKeynoteSlides}):
+ * from disk if drawn before, else on the `slides` channel.
+ */
+async function withKeynote(state: Session, seq: number, target: QuickLookTarget, content: TargetContent): Promise<TargetContent> {
+	const document = content.document;
+	const stored = document?.pages ?? null;
+	if (document === null || keynoteSlides === null || document.ext !== "key" || stored === null || stored.length < 2) return content;
+	const info = await stat(target.path);
+	const opened = await openKeynoteSlides({ path: target.path, mtimeMs: info.mtimeMs, size: info.size }, stored.length, {
+		cache: keynoteSlides,
+		publish: (next) => {
+			const update: QuickLookSlides = { seq, slides: next.slides, rendering: next.rendering };
+			if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.slides, update);
+		},
+		current: () => seq === state.seq && live(state.window),
+	});
+	return { ...content, document: { ...document, pages: opened.pages ?? stored, slidesRendering: opened.rendering } };
+}
+
+/**
  * A Google Drive pointer opens with the picture Drive for desktop's file
  * provider drew for it (the one thing Quick Look can show of a cloud-only
  * document); every other document passes through untouched.
@@ -433,8 +484,24 @@ async function withDriveThumbnail(target: QuickLookTarget, content: TargetConten
 	return { ...content, document: { ...document, thumbnail } };
 }
 
+const NATIVE_ONLY_PREVIEWS = new Set(["pvt", "lpdf", "prefpane", "pict", "pct", "pic", "pictclipping"]);
+
+/** macOS-only formats keep the OS rendering; elsewhere the ordinary info panel remains. */
+async function withNativeThumbnail(state: Session, seq: number, content: TargetContent): Promise<TargetContent> {
+	const document = content.document;
+	if (process.platform !== "darwin" || document === null || !NATIVE_ONLY_PREVIEWS.has(document.ext)) return content;
+	const { mtimeMs } = await stat(document.path);
+	const thumbnail = nativeThumbnail({ path: document.path, ext: document.ext, mtimeMs }, iconSource, (url) => {
+		if (seq !== state.seq || !live(state.window)) return;
+		const update: QuickLookThumbnail = { seq, url };
+		state.window.webContents.send(PREVIEW_CHANNELS.thumbnail, update);
+	});
+	return { ...content, document: { ...document, thumbnail } };
+}
+
 async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
+	state.typing = false;
 	const seq = state.seq;
 	state.current = target;
 	state.origin = origin;
@@ -442,7 +509,11 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	if (seq !== state.seq || !live(state.window)) return;
 	const withOfficePage = await withOffice(state, seq, target, read);
 	if (seq !== state.seq || !live(state.window)) return;
-	const content = await withDriveThumbnail(target, withOfficePage);
+	const withDrive = await withDriveThumbnail(target, withOfficePage);
+	if (seq !== state.seq || !live(state.window)) return;
+	const withNative = await withNativeThumbnail(state, seq, withDrive);
+	if (seq !== state.seq || !live(state.window)) return;
+	const content = await withKeynote(state, seq, target, withNative);
 	if (seq !== state.seq || !live(state.window)) return;
 	const folder = content.folder !== null;
 	// An app bundle is launched by the Open button itself, so there is no
@@ -579,6 +650,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		zoom: 0,
 		opening: null,
 		closing: false,
+		typing: false,
 		waiters: new Map(),
 		defaultApps: createDefaultAppCache(options.defaultApp),
 		detach: () => undefined,
@@ -601,7 +673,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	// consume Space and arrows, so a page keydown listener never sees them.
 	const onInput = (event: Electron.Event, input: Electron.Input): void => {
 		if (input.type !== "keyDown") return;
-		const action = quickLookKeyAction(input);
+		const action = quickLookKeyAction(input, state.typing);
 		if (action === null) return;
 		event.preventDefault();
 		if (action === "close" && input.isAutoRepeat) return;
@@ -634,6 +706,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 
 export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
 	iconSource = icons;
+	keynoteSlides = createKeynoteSlideCache({ dir: join(app.getPath("userData"), "keynote-slides") });
 	app.on("before-quit", () => {
 		quitting = true;
 	});
@@ -658,6 +731,12 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		const state = fromPreview(event);
 		if (state === null || !isQuickLookZoomed(report)) return;
 		state.waiters.get(`${report.id}:${report.phase}`)?.();
+	});
+	ipc.on(PREVIEW_CHANNELS.textEntry, (event, active: unknown) => {
+		const state = fromPreview(event);
+		if (state === null || typeof active !== "boolean") return;
+		state.typing = active && state.current !== null;
+		focusTextEntry(state);
 	});
 	ipc.on(PREVIEW_CHANNELS.ready, (event, report: unknown) => {
 		const state = fromPreview(event);
@@ -690,6 +769,7 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		const shown = shownPath(event, path);
 		return listArchive(shown.path, { stopped: () => shown.state.current?.path !== shown.path });
 	});
+	ipc.handle(PREVIEW_CHANNELS.certificate, (event, path: unknown) => previewCertificate(shownPath(event, path).path));
 	ipc.handle(PREVIEW_CHANNELS.share, (event, anchor: unknown) => {
 		const state = fromPreview(event);
 		if (state === null || state.current === null || process.platform !== "darwin") return;

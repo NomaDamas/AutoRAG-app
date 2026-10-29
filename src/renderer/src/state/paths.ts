@@ -160,6 +160,46 @@ export function resolvePathInput(input: string, context: PathInputContext): stri
 	return root.prefix + parts.join(root.separator);
 }
 
+export interface PathCompletionEntry {
+	readonly name: string;
+	readonly path: string;
+	readonly kind: "folder" | "file";
+}
+
+export interface PathCompletion {
+	/** On-disk folder name shown in the candidate row. */
+	readonly name: string;
+	/** Absolute folder path used for navigation. */
+	readonly path: string;
+	/** Draft after acceptance; keeps the user's ~, relative, and separator spelling. */
+	readonly text: string;
+}
+
+/**
+ * Complete the last path segment from direct child folders. The parent is
+ * resolved with the same rules as Enter, while the accepted draft retains the
+ * user's original prefix instead of unexpectedly expanding `~` or a relative
+ * path. URLs and quoted paths keep their existing paste-and-Enter behavior.
+ */
+export async function completePath(
+	input: string,
+	context: PathInputContext,
+	list: (dir: string) => Promise<readonly PathCompletionEntry[]>,
+): Promise<readonly PathCompletion[]> {
+	if (FILE_URL.test(input) || input.startsWith('"') || input.startsWith("'")) return [];
+	const separator = Math.max(input.lastIndexOf("/"), input.lastIndexOf("\\"));
+	const prefix = separator < 0 ? "" : input.slice(0, separator + 1);
+	const query = input.slice(separator + 1).toLocaleLowerCase();
+	const directory = prefix === "" ? context.current : resolvePathInput(prefix, context);
+	if (directory === null) return [];
+	const entries = await list(directory);
+	return entries.flatMap((entry) =>
+		entry.kind === "folder" && entry.name.toLocaleLowerCase().startsWith(query)
+			? [{ name: entry.name, path: entry.path, text: prefix + entry.name }]
+			: [],
+	);
+}
+
 export interface Crumb {
 	readonly label: string;
 	readonly path: string;

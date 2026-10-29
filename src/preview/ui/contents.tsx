@@ -33,6 +33,11 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	hwp: "bg-ql-badge-doc",
 	font: "bg-ql-badge-other",
 	rtf: "bg-ql-badge-text",
+	webloc: "bg-ql-badge-html",
+	webarchive: "bg-ql-badge-html",
+	rtfd: "bg-ql-badge-text",
+	iconset: "bg-ql-badge-image",
+	textclipping: "bg-ql-badge-text",
 	data: "bg-ql-badge-sheet",
 	jsonl: "bg-ql-badge-code",
 	plist: "bg-ql-badge-code",
@@ -41,6 +46,8 @@ const BADGE: Readonly<Record<ViewerKind, string>> = {
 	contact: "bg-ql-badge-doc",
 	calendar: "bg-ql-badge-doc",
 	gdrive: "bg-ql-badge-doc",
+	raster: "bg-ql-badge-image",
+	certificate: "bg-ql-badge-other",
 	fallback: "bg-ql-badge-other",
 };
 
