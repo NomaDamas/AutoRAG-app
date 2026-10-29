@@ -37,7 +37,8 @@ import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../s
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
-import { automationsHome, createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { autoragHome } from "./autorag-home";
+import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -847,7 +848,7 @@ app.whenReady().then(async () => {
 	});
 	app.once("will-quit", stopIndexActivity);
 	const automations = createAutomationService({
-		home: () => automationsHome(process.env, homedir()),
+		home: () => autoragHome(process.env, homedir()),
 		// The daemon's login service records whichever node ran the install, so it is never this process's own binary.
 		run: (args) => {
 			const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
