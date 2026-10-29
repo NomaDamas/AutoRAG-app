@@ -80,4 +80,41 @@ describe("remote bootstrap", () => {
 		expect(resolved).toContain("path=%2Ftmp%2Fa.png");
 		expect(resolved).toContain("token=T");
 	});
+
+	it("closes the preview state after opening a preview tab so selection clicks never spawn new tabs", async () => {
+		// Given a bootstrap session with a window.open spy and an onClosed listener.
+		const script = buildRemoteBootstrapScript({ token: "T", platform: "darwin", appearance: "light", language: "ko", version: "0.1.0" });
+		const window = runBootstrap(script);
+		const opened: string[] = [];
+		window.open = (target: string) => {
+			opened.push(target);
+			return null;
+		};
+		const autorag = window.autorag as {
+			fs: { quickLook: (path: string) => Promise<void> };
+			preview: { show: (target: { path: string; name: string }) => Promise<void>; onClosed: (listener: () => void) => () => void };
+			actions: { capabilities: () => Promise<{ archive: boolean; openWith: boolean; share: boolean }> };
+		};
+		let closedCount = 0;
+		autorag.preview.onClosed(() => {
+			closedCount += 1;
+		});
+
+		// When Quick Look runs (`presentQuickLook` calls both preview.show and fs.quickLook).
+		await autorag.preview.show({ path: "/tmp/a.png", name: "a.png" });
+		await autorag.fs.quickLook("/tmp/a.png");
+		await Promise.resolve();
+
+		// Then only one preview tab opened, and onClosed fired so single/right clicks stay focus-only.
+		expect(opened).toHaveLength(1);
+		expect(opened[0]).toContain("/remote/preview");
+		expect(closedCount).toBe(1);
+		expect(await autorag.actions.capabilities()).toEqual({
+			openWith: false,
+			share: false,
+			archive: false,
+			imageFormats: [],
+			videoContainers: [],
+		});
+	});
 });

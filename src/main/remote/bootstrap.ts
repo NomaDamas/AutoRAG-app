@@ -11,7 +11,6 @@ import { OS_REQUEST_CHANNELS } from "../../shared/os-request-contract";
 import { SEARCH_CHANNELS } from "../../shared/search-contract";
 import { SETTINGS_CHANNELS } from "../../shared/settings-contract";
 import { SMART_INDEXING_CHANNELS } from "../../shared/smart-indexing-contract";
-import { PREVIEW_CHANNELS } from "../../preview/shared/contract";
 import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
 import { REMOTE_ROUTES, type RemoteBootstrapConfig } from "../../shared/remote-contract";
 
@@ -34,8 +33,6 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"interaction.onRequest": INTERACTION_CHANNELS.request,
 	"interaction.onClosed": INTERACTION_CHANNELS.closed,
 	"modelDownload.onChange": MODEL_DOWNLOAD_CHANNELS.changed,
-	"preview.onClosed": PREVIEW_CHANNELS.closed,
-	"preview.onNavigate": PREVIEW_CHANNELS.navigate,
 	"search.onEvent": SEARCH_CHANNELS.event,
 	"settings.onProviderLoginEvent": SETTINGS_CHANNELS.providerLoginEvent,
 	"smartIndexing.onEvent": SMART_INDEXING_CHANNELS.event,
@@ -193,7 +190,9 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 	const nativeFs = {
 		startDrag: saveLocally,
 		open: async (path) => { saveLocally([path]); },
-		quickLook: async (path) => { window.open(url(routes.preview, { path }), "_blank", "noopener"); },
+		// presentQuickLook calls both preview.show and fs.quickLook (which
+		// only records Recents on the desktop); opening the tab belongs to preview.show.
+		quickLook: async () => {},
 		reveal: async () => {}, 
 		// Dropped browser files have no host path; the renderer uploads them here.
 		uploadFiles: async (folder, files) => {
@@ -205,11 +204,32 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 			return results;
 		},
 	};
-	// Quick Look is a window of its own on the desktop; here it is a preview tab.
+	// Quick Look is a window of its own on the desktop; here it is a one-shot
+	// preview tab, so closed fires at once instead of leaving preview open
+	// and spawning a new tab on every later selection or context-menu click.
+	const previewClosed = new Set();
 	const preview = {
-		show: async (target) => { window.open(url(routes.preview, { path: target.path }), "_blank", "noopener"); },
+		show: async (target) => {
+			window.open(url(routes.preview, { path: target.path }), "_blank", "noopener");
+			queueMicrotask(() => {
+				for (const listener of previewClosed) listener();
+			});
+		},
 		hide: async () => {},
 		prefetch: () => {},
+		onClosed: (listener) => {
+			previewClosed.add(listener);
+			return () => {
+				previewClosed.delete(listener);
+			};
+		},
+		onNavigate: () => () => {},
+	};
+	const actions = {
+		capabilities: async () => ({ openWith: false, share: false, archive: false, imageFormats: [], videoContainers: [] }),
+	};
+	const services = {
+		list: async () => [],
 	};
 	// Members named on* are subscriptions the page registers, so they must return
 	// an unsubscribe function synchronously; everything else is a bridge call.
@@ -217,6 +237,8 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		const seed = values ?? {};
 		if (target === "fs") Object.assign(seed, nativeFs);
 		if (target === "preview") Object.assign(seed, preview);
+		if (target === "actions") Object.assign(seed, actions);
+		if (target === "services") Object.assign(seed, services);
 		return new Proxy(seed, {
 			get: (own, name) => {
 				if (typeof name !== "string") return undefined;

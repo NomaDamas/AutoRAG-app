@@ -347,6 +347,18 @@ try {
 			} finally {
 				await preview.close();
 			}
+			// Subsequent single-click and right-click must only focus/open the context menu, never pop a new tab.
+			const unexpectedPages = [];
+			const onPopup = (popupPage) => unexpectedPages.push(popupPage.url());
+			context.on("page", onPopup);
+			try {
+				await row(downloadFile).click();
+				await row(imageFile).click({ button: "right" });
+				await page.keyboard.press("Escape");
+				assert.deepEqual(unexpectedPages, []);
+			} finally {
+				context.off("page", onPopup);
+			}
 		});
 		await scenario("type an AI Search draft without sending a model request", async () => {
 			await openAiSearch(page);
