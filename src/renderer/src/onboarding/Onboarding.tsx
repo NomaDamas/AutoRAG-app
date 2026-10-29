@@ -1041,13 +1041,13 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					))}
 				</div>
 				<div className="footer-actions">
-					<button type="button" className="footer-btn" disabled={footerIndex <= 0} onClick={back}>
+					<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={back}>
 						{t("onboarding.footerBack")}
-						<Icon name="backspace" size={16} />
+						<Icon name="backspace" size={24} />
 					</button>
-					<button type="button" className="footer-btn" disabled={!currentAdvance()} onClick={next}>
+					<button type="button" className="footer-btn next" disabled={!currentAdvance()} onClick={next}>
 						{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))}
-						<Icon name="corner-down-left" size={16} />
+						<Icon name="corner-down-left" size={20} />
 					</button>
 				</div>
 			</>

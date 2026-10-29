@@ -314,7 +314,7 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	padding: 0 17px;
+	padding: 0 42px 0 17px;
 	border-top: 1px solid var(--onb-divider);
 	background: var(--onb-bg-window);
 }
@@ -330,21 +330,25 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	gap: 12px;
 }
 
+/* Footer buttons (Figma 110:2612): as wide as their label, 20px each side; Back hugs its 24px key, Continue keeps 14px before its 20px arrow. */
 .onb .footer-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	min-width: 104px;
+	gap: 2px;
 	height: 34px;
-	padding: 0 10px;
+	padding: 0 20px;
 	border: 1px solid var(--onb-border);
-	border-radius: 7px;
+	border-radius: 8px;
 	background: var(--onb-bg-card);
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
 	line-height: 16px;
+}
+
+.onb .footer-btn.next {
+	gap: 14px;
 }
 
 /* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
