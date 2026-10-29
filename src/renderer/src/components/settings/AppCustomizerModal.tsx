@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, Lock, RotateCcw, Sparkles, Square, X } from "lucide-react";
+import { ArrowUp, Check, Lock, RotateCcw, Square, X } from "lucide-react";
+import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent } from "../../../../shared/app-customizer-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
@@ -213,7 +214,7 @@ export function AppCustomizerModal({
 			if (bridge === undefined) {
 				setActiveRunId(null);
 				setTurns((prev) =>
-					prev.map((turn) => (turn.id === runId ? { ...turn, status: "error", error: "App customizer service is unavailable." } : turn)),
+					prev.map((turn) => (turn.id === runId ? { ...turn, status: "error", error: t("settingsCore.sidebar.modal.unavailable") } : turn)),
 				);
 				return;
 			}
@@ -228,7 +229,7 @@ export function AppCustomizerModal({
 				);
 			});
 		},
-		[sessionId],
+		[sessionId, t],
 	);
 
 	const resetChat = useCallback((): void => {
@@ -275,7 +276,7 @@ export function AppCustomizerModal({
 				<header className="customizer-modal__head">
 					<div className="customizer-modal__brand">
 						<span className="customizer-modal__icon" aria-hidden="true">
-							<Sparkles size={16} />
+							<img src={dazziMark} alt="" className="customizer-modal__logo" draggable={false} />
 						</span>
 						<div className="customizer-modal__titles">
 							<h2 id={titleId} className="customizer-modal__title">
@@ -314,7 +315,7 @@ export function AppCustomizerModal({
 					{turns.length === 0 ? (
 						<div className="customizer-modal__empty">
 							<div className="customizer-modal__empty-orb" aria-hidden="true">
-								<Sparkles size={20} />
+								<img src={dazziMark} alt="" className="customizer-modal__empty-logo" draggable={false} />
 							</div>
 							<h3 className="customizer-modal__empty-title">{t("settingsCore.sidebar.modal.emptyTitle")}</h3>
 							<p className="customizer-modal__empty-desc">{t("settingsCore.sidebar.modal.emptyDesc")}</p>
@@ -327,7 +328,7 @@ export function AppCustomizerModal({
 										data-action="customizer-suggestion"
 										onClick={() => sendMessage(promptText)}
 									>
-										<Sparkles size={12} className="customizer-suggestion-chip__icon" aria-hidden="true" />
+										<img src={dazziMark} alt="" className="customizer-suggestion-chip__logo" aria-hidden="true" draggable={false} />
 										<span>{promptText}</span>
 									</button>
 								))}

@@ -324,4 +324,110 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer modal
 		await settle();
 		expect(currentSettings.sidebar.customFavorites).toEqual([]);
 	});
+
+	it("renders all 4 sidebar sections inside one unified .sidebar-sections-stack and uses the transparent Dazzi sunflower mark on AI surfaces", async () => {
+		await act(async () => {
+			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+		});
+		await settle();
+
+		const sectionCards = [...host.querySelectorAll<HTMLElement>(".sidebar-sections-stack .sidebar-section-card")];
+		expect(sectionCards.map((el) => el.getAttribute("data-sidebar-section"))).toEqual([
+			"favorites",
+			"cloud",
+			"locations",
+			"tags",
+		]);
+		// Favorites items live directly inside the `favorites` section card
+		const favCard = sectionCards[0];
+		expect(favCard?.querySelector('[data-sidebar-switch="app:aiSearch"]')).not.toBeNull();
+		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
+		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
+
+		// Hero banner & button use the transparent Dazzi sunflower mark image
+		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__logo")).not.toBeNull();
+		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__btn-logo")).not.toBeNull();
+
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="open-app-customizer"]')?.click();
+		});
+		const dialog = document.body.querySelector<HTMLElement>('[data-testid="app-customizer-modal"]');
+		expect(dialog?.querySelector<HTMLImageElement>("img.customizer-modal__logo")).not.toBeNull();
+		expect(dialog?.querySelector<HTMLImageElement>("img.customizer-modal__empty-logo")).not.toBeNull();
+		expect(dialog?.querySelectorAll<HTMLImageElement>("img.customizer-suggestion-chip__logo").length).toBe(4);
+	});
+
+	it.each([
+		{
+			lang: "ko" as const,
+			nav: "사이드바",
+			heroBtn: "AI로 커스텀하기",
+			sectionsTitle: "사이드바 섹션 및 항목",
+			favoritesSection: "즐겨찾기",
+			cloudSection: "클라우드",
+			locationsSection: "위치",
+			tagsSection: "태그",
+			lockedBadge: "항상 표시",
+			modalTitle: "AI 앱 커스텀 어시스턴트",
+		},
+		{
+			lang: "en" as const,
+			nav: "Sidebar",
+			heroBtn: "Customize with AI",
+			sectionsTitle: "Sidebar Sections & Items",
+			favoritesSection: "Favorites",
+			cloudSection: "Cloud",
+			locationsSection: "Locations",
+			tagsSection: "Tags",
+			lockedBadge: "Always shown",
+			modalTitle: "AI App Customizer",
+		},
+		{
+			lang: "ja" as const,
+			nav: "サイドバー",
+			heroBtn: "AIでカスタム",
+			sectionsTitle: "サイドバーのセクションと項目",
+			favoritesSection: "お気に入り",
+			cloudSection: "クラウド",
+			locationsSection: "場所",
+			tagsSection: "タグ",
+			lockedBadge: "常時表示",
+			modalTitle: "AI アプリカスタムアシスタント",
+		},
+		{
+			lang: "zh" as const,
+			nav: "侧边栏",
+			heroBtn: "使用 AI 定制",
+			sectionsTitle: "侧边栏分区与项目",
+			favoritesSection: "个人收藏",
+			cloudSection: "云盘",
+			locationsSection: "位置",
+			tagsSection: "标签",
+			lockedBadge: "始终显示",
+			modalTitle: "AI 应用定制助手",
+		},
+	])("renders fully localized Sidebar settings and AI Customizer modal in $lang", async (spec) => {
+		await setAppLanguage(spec.lang);
+		currentSettings = { ...currentSettings, language: spec.lang };
+
+		await act(async () => {
+			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+		});
+		await settle();
+
+		expect(host.querySelector("h1.linear-title")?.textContent).toBe(spec.nav);
+		expect(host.querySelector('[data-action="open-app-customizer"]')?.textContent).toContain(spec.heroBtn);
+		expect(host.textContent).toContain(spec.sectionsTitle);
+		expect(host.textContent).toContain(spec.favoritesSection);
+		expect(host.textContent).toContain(spec.cloudSection);
+		expect(host.textContent).toContain(spec.locationsSection);
+		expect(host.textContent).toContain(spec.tagsSection);
+		expect(host.textContent).toContain(spec.lockedBadge);
+
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="open-app-customizer"]')?.click();
+		});
+		const dialog = document.body.querySelector<HTMLElement>('[data-testid="app-customizer-modal"]');
+		expect(dialog?.querySelector(".customizer-modal__title")?.textContent).toBe(spec.modalTitle);
+	});
 });

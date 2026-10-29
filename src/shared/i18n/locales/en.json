@@ -2119,9 +2119,10 @@
       "addCustomPathLabel": "Folder Path",
       "addCustomPathPlaceholder": "~/Projects or /Users/me/Work",
       "addCustomConfirm": "Add",
-      "sectionsTitle": "Sidebar Sections & Connected Items",
-      "sectionsDesc": "Control the visibility and order of Cloud drives, Locations, and Finder Tags.",
+      "sectionsTitle": "Sidebar Sections & Items",
+      "sectionsDesc": "Manage the order and visibility of Favorites, Cloud, Locations, and Tags in one place. AI Search and Automations are core features and are always shown.",
       "sectionAlwaysShown": "Favorites section is always shown",
+      "sectionCount": "{{visible}}/{{total}} shown",
       "emptyCloud": "No cloud drives connected.",
       "emptyLocations": "No mounted volumes found.",
       "emptyTags": "No pinned Finder tags.",
@@ -2140,7 +2141,8 @@
         "send": "Send",
         "stop": "Stop",
         "lockedNotice": "AI Search and Automations are essential features and always remain visible.",
-        "openAiSettings": "Open AI Model Settings"
+        "openAiSettings": "Open AI Model Settings",
+        "unavailable": "App customizer service is unavailable."
       }
     },
     "general": {

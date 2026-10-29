@@ -2119,9 +2119,10 @@
       "addCustomPathLabel": "文件夹路径",
       "addCustomPathPlaceholder": "~/Projects 或 /Users/me/Work",
       "addCustomConfirm": "添加",
-      "sectionsTitle": "侧边栏分区与已连接项目",
-      "sectionsDesc": "管理云盘驱动器、挂载磁盘位置以及 Finder 标签分区的显示状态和顺序。",
+      "sectionsTitle": "侧边栏分区与项目",
+      "sectionsDesc": "统一管理个人收藏、云盘、位置与标签分区的顺序及各项目的显示状态。AI 搜索与自动化为核心功能，始终保持显示。",
       "sectionAlwaysShown": "个人收藏分区始终保持显示",
+      "sectionCount": "显示 {{visible}}/{{total}}",
       "emptyCloud": "未连接任何云盘驱动器。",
       "emptyLocations": "未找到已挂载的磁盘。",
       "emptyTags": "没有固定的 Finder 标签。",
@@ -2140,7 +2141,8 @@
         "send": "发送",
         "stop": "停止",
         "lockedNotice": "AI 搜索与自动化是核心功能，始终保留在侧边栏中。",
-        "openAiSettings": "打开 AI 模型设置"
+        "openAiSettings": "打开 AI 模型设置",
+        "unavailable": "应用定制服务不可用。"
       }
     },
     "general": {

@@ -118,7 +118,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 			listLocations: deps.listLocations,
 			listTags: deps.listTags,
 			...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
-			language: () => currentLang,
+			language: () => deps.language(),
 			cancelled: () => entryRef?.cancelled === true,
 		});
 		const session = await createProfileSession({

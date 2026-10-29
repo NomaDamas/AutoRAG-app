@@ -2119,9 +2119,10 @@
       "addCustomPathLabel": "폴더 경로",
       "addCustomPathPlaceholder": "~/Projects 또는 /Users/me/Work",
       "addCustomConfirm": "추가",
-      "sectionsTitle": "사이드바 섹션 및 연결 항목",
-      "sectionsDesc": "클라우드 드라이브, 마운트된 디스크 위치, Finder 태그 섹션의 표시 여부와 순서를 설정합니다.",
+      "sectionsTitle": "사이드바 섹션 및 항목",
+      "sectionsDesc": "즐겨찾기, 클라우드, 위치, 태그 섹션의 순서와 각 항목의 표시 여부를 한곳에서 관리합니다. AI 검색과 자동화는 핵심 기능으로 항상 표시됩니다.",
       "sectionAlwaysShown": "즐겨찾기 섹션은 항상 표시됩니다",
+      "sectionCount": "{{visible}}/{{total}} 표시",
       "emptyCloud": "연결된 클라우드 드라이브가 없습니다.",
       "emptyLocations": "마운트된 디스크가 없습니다.",
       "emptyTags": "고정된 Finder 태그가 없습니다.",
@@ -2140,7 +2141,8 @@
         "send": "보내기",
         "stop": "중단",
         "lockedNotice": "AI 검색과 자동화는 필수 기능으로 항상 사이드바에 유지됩니다.",
-        "openAiSettings": "AI 모델 설정 열기"
+        "openAiSettings": "AI 모델 설정 열기",
+        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
       }
     },
     "general": {

@@ -146,16 +146,49 @@ function summarizeSidebarChange(language: ReplyLanguage, fields: readonly string
 	}
 }
 
+const GENERAL_FIELD_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<string, string>>>> = {
+	ko: {
+		appearance: "화면 모드",
+		language: "앱 언어",
+		showHiddenFiles: "숨김 파일",
+		launchAtLogin: "로그인 시 실행",
+		autoInstallUpdates: "자동 업데이트",
+	},
+	en: {
+		appearance: "Appearance",
+		language: "App Language",
+		showHiddenFiles: "Hidden Files",
+		launchAtLogin: "Launch at Login",
+		autoInstallUpdates: "Auto Updates",
+	},
+	ja: {
+		appearance: "画面モード",
+		language: "アプリの言語",
+		showHiddenFiles: "隠しファイル",
+		launchAtLogin: "ログイン時に起動",
+		autoInstallUpdates: "自動アップデート",
+	},
+	zh: {
+		appearance: "显示模式",
+		language: "应用语言",
+		showHiddenFiles: "隐藏文件",
+		launchAtLogin: "登录时启动",
+		autoInstallUpdates: "自动更新",
+	},
+};
+
 function summarizeGeneralChange(language: ReplyLanguage, fields: readonly string[]): string {
+	const labels = GENERAL_FIELD_LABELS[language];
+	const localized = fields.map((field) => labels[field] ?? field).join(", ");
 	switch (language) {
 		case "ko":
-			return `앱 설정 변경 (${fields.join(", ")})`;
+			return `앱 설정 변경 (${localized})`;
 		case "ja":
-			return `アプリ設定を変更 (${fields.join(", ")})`;
+			return `アプリ設定を変更 (${localized})`;
 		case "zh":
-			return `应用设置已更改 (${fields.join(", ")})`;
+			return `应用设置已更改 (${localized})`;
 		default:
-			return `Updated app settings (${fields.join(", ")})`;
+			return `Updated app settings (${localized})`;
 	}
 }
 
@@ -477,9 +510,15 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			if (params.hideSections !== undefined && params.hideSections.length > 0) {
 				for (const section of params.hideSections) {
 					const normalizedSection = section.trim().toLowerCase();
-					if (normalizedSection === "favorites" || normalizedSection === "즐겨찾기") {
+					if (
+						normalizedSection === "favorites" ||
+						normalizedSection === "즐겨찾기" ||
+						normalizedSection === "よく使う項目" ||
+						normalizedSection === "お気に入り" ||
+						normalizedSection === "个人收藏"
+					) {
 						warnings.push(
-							"The 'Favorites' (즐겨찾기) section cannot be hidden because 'AI Search' and 'Automations (자동화)' live in it and must always remain visible.",
+							"The 'Favorites' section cannot be hidden because 'AI Search' and 'Automations' live in it and must always remain visible.",
 						);
 						continue;
 					}
@@ -574,7 +613,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			if (fields.length > 0) {
 				changes.push({
 					kind: "general",
-					summary: summarizeGeneralChange(lang(), fields),
+					summary: summarizeGeneralChange(updated.language, fields),
 					fields,
 				});
 			}

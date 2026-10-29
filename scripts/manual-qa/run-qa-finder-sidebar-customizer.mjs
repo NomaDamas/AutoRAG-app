@@ -193,6 +193,9 @@ try {
 	await page.locator(".settings-nav-item", { hasText: "사이드바" }).click();
 	await page.locator("h1.linear-title", { hasText: "사이드바" }).waitFor();
 	await shot("01-settings-sidebar-default");
+	await page.locator(".settings-content").evaluate((el) => { el.scrollTop = el.scrollHeight; });
+	await shot("01b-settings-sidebar-bottom-sections");
+	await page.locator(".settings-content").evaluate((el) => { el.scrollTop = 0; });
 
 	// Verify AI 검색 and 자동화 switches are checked and disabled
 	const aiSwitch = page.locator('[data-sidebar-switch="app:aiSearch"]');
@@ -204,6 +207,14 @@ try {
 			(await autoSwitch.getAttribute("aria-checked")) === "true" &&
 			(await autoSwitch.isDisabled()),
 	);
+	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section-card").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
+	check(
+		"Favorites, Cloud, Locations, and Tags render together in one unified .sidebar-sections-stack",
+		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "locations", "tags"]),
+		JSON.stringify(sectionIds),
+	);
+	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
+	check("AI Customizer hero displays the transparent Dazzi sunflower mark image", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
 
 	// Toggle Music and Movies off in Settings UI
 	await page.locator('[data-sidebar-switch="place:music"]').click();
@@ -314,6 +325,27 @@ try {
 		enLabels[0] === "AI Search" && enLabels[1] === "Automations" && enLabels[2] === "Projects",
 		JSON.stringify(enLabels),
 	);
+
+	// 3. Verify Japanese (`ja`) and Simplified Chinese (`zh`) localization on the Sidebar settings page
+	await page.evaluate(() => window.autorag.settings.set({ language: "ja", appearance: "light" }));
+	await page.locator("h1.linear-title", { hasText: "サイドバー" }).waitFor();
+	const jaLabels = await sidebarLabels();
+	check(
+		"Japanese localization renders AI 検索, 自動化, and サイドバー settings cleanly",
+		jaLabels[0] === "AI 検索" && jaLabels[1] === "自動化" && (await page.locator('[data-sidebar-section="favorites"]').innerText()).includes("お気に入り"),
+		JSON.stringify(jaLabels.slice(0, 5)),
+	);
+	await shot("08-settings-sidebar-ja");
+
+	await page.evaluate(() => window.autorag.settings.set({ language: "zh", appearance: "light" }));
+	await page.locator("h1.linear-title", { hasText: "侧边栏" }).waitFor();
+	const zhLabels = await sidebarLabels();
+	check(
+		"Simplified Chinese localization renders AI 搜索, 自动化, and 侧边栏 settings cleanly",
+		zhLabels[0] === "AI 搜索" && zhLabels[1] === "自动化" && (await page.locator('[data-sidebar-section="favorites"]').innerText()).includes("个人收藏"),
+		JSON.stringify(zhLabels.slice(0, 5)),
+	);
+	await shot("09-settings-sidebar-zh");
 } finally {
 	sweep();
 }
