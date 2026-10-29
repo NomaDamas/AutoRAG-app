@@ -1318,6 +1318,8 @@
     "fileCreated": "{{name}} — created a new file",
     "shareAnchorMissing": "Couldn't find where to show the share sheet",
     "tagChangeFailed": "{{name}} — couldn't change tags: {{message}}",
+    "remotePreviewUnsupported": "This file format can't be previewed in the browser. Double-click to download it.",
+    "remotePreviewFolderUnsupported": "Folders can't be previewed in the browser.",
     "onboardingDemo": {
       "meetingNotes": "meeting-notes.md"
     }

@@ -188,6 +188,10 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 			response.statusCode = result.status;
 			for (const [name, value] of result.headers) response.setHeader(name, value);
 			response.setHeader("cache-control", "no-store");
+			response.setHeader("x-content-type-options", "nosniff");
+			if (result.headers.get("content-type")?.startsWith("image/svg+xml") === true) {
+				response.setHeader("content-security-policy", "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; sandbox");
+			}
 			if (result.body === null) {
 				response.end();
 				return;

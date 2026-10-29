@@ -14,7 +14,13 @@ import { SEARCH_CHANNELS } from "../../shared/search-contract";
 import { SETTINGS_CHANNELS } from "../../shared/settings-contract";
 import { SMART_INDEXING_CHANNELS } from "../../shared/smart-indexing-contract";
 import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
-import { REMOTE_ROUTES, type RemoteBootstrapConfig } from "../../shared/remote-contract";
+import {
+	REMOTE_PREVIEW_FOLDER_CODE,
+	REMOTE_PREVIEW_MIMES,
+	REMOTE_PREVIEW_UNSUPPORTED_CODE,
+	REMOTE_ROUTES,
+	type RemoteBootstrapConfig,
+} from "../../shared/remote-contract";
 
 /**
  * Builds the script the remote server injects before the renderer bundle: it
@@ -81,6 +87,15 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 	const pushChannels = ${pushChannels};
 	const targets = ${targets};
 	const routes = ${JSON.stringify(REMOTE_ROUTES)};
+	const previewMimes = ${JSON.stringify(REMOTE_PREVIEW_MIMES)};
+	const remotePreviewMime = (filePath) => {
+		const value = String(filePath);
+		const sep = Math.max(value.lastIndexOf("/"), value.lastIndexOf("\\\\"));
+		const baseName = value.slice(sep + 1);
+		const dot = baseName.lastIndexOf(".");
+		if (dot <= 0 || dot === baseName.length - 1) return null;
+		return previewMimes[baseName.slice(dot + 1).toLowerCase()] ?? null;
+	};
 	const base = new URL("/", location.href);
 	const session = (crypto.randomUUID && crypto.randomUUID()) || String(Date.now()) + Math.random().toString(36).slice(2);
 	const url = (route, params) => {
@@ -215,10 +230,25 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 	const previewClosed = new Set();
 	const preview = {
 		show: async (target) => {
+			const close = () => {
+				queueMicrotask(() => {
+					for (const listener of previewClosed) listener();
+				});
+			};
+			if (target?.kind === "folder") {
+				close();
+				const error = new Error("Folders cannot be previewed in the browser");
+				error.code = ${JSON.stringify(REMOTE_PREVIEW_FOLDER_CODE)};
+				throw error;
+			}
+			if (remotePreviewMime(target?.path ?? "") === null) {
+				close();
+				const error = new Error("This file format cannot be previewed in the browser");
+				error.code = ${JSON.stringify(REMOTE_PREVIEW_UNSUPPORTED_CODE)};
+				throw error;
+			}
 			window.open(url(routes.preview, { path: target.path }), "_blank", "noopener");
-			queueMicrotask(() => {
-				for (const listener of previewClosed) listener();
-			});
+			close();
 		},
 		hide: async () => {},
 		prefetch: () => {},

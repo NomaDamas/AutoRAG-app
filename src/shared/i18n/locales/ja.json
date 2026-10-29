@@ -1318,6 +1318,8 @@
     "fileCreated": "{{name}} — 新しいファイルを作成しました",
     "shareAnchorMissing": "共有シートの表示位置が見つかりませんでした",
     "tagChangeFailed": "{{name}} — タグを変更できませんでした: {{message}}",
+    "remotePreviewUnsupported": "このファイル形式はブラウザーでプレビューできません。ダブルクリックしてダウンロードしてください。",
+    "remotePreviewFolderUnsupported": "フォルダはブラウザーでプレビューできません。",
     "onboardingDemo": {
       "meetingNotes": "議事録.md"
     }

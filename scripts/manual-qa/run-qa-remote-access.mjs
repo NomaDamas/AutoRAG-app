@@ -51,9 +51,12 @@ const imageBytes = Buffer.from(
 const downloadFile = join(fixture, "download-me.txt");
 const imageFile = join(fixture, "preview.png");
 const uploadFile = join(incoming, "uploaded.txt");
+const archiveFile = join(fixture, "sample.zip");
 writeFileSync(downloadFile, downloadBytes);
 writeFileSync(imageFile, imageBytes);
 writeFileSync(uploadFile, uploadBytes);
+// Minimal empty ZIP archive (end-of-central-directory record).
+writeFileSync(archiveFile, Buffer.from("504b0506000000000000000000000000000000000000", "hex"));
 
 /** A Playwright/CDP await has no timeout of its own, so a stalled step fails instead of hanging the lane. */
 const bounded = (promise, ms, label) =>
@@ -358,6 +361,25 @@ try {
 				assert.deepEqual(unexpectedPages, []);
 			} finally {
 				context.off("page", onPopup);
+			}
+		});
+		await scenario("refuses Space preview on unsupported formats with a toast instead of a popup or download", async () => {
+			const unexpectedPages = [];
+			const unexpectedDownloads = [];
+			const onPopup = (popupPage) => unexpectedPages.push(popupPage.url());
+			const onDownload = (dl) => unexpectedDownloads.push(dl.suggestedFilename());
+			context.on("page", onPopup);
+			page.on("download", onDownload);
+			try {
+				await row(archiveFile).click();
+				await page.keyboard.press("Space");
+				await expect(page.getByText("This file format can't be previewed in the browser. Double-click to download it.")).toBeVisible({ timeout: 5_000 });
+				await screenshot(page, "07b-unsupported-preview-toast");
+				assert.deepEqual(unexpectedPages, []);
+				assert.deepEqual(unexpectedDownloads, []);
+			} finally {
+				context.off("page", onPopup);
+				page.off("download", onDownload);
 			}
 		});
 		await scenario("type an AI Search draft without sending a model request", async () => {

@@ -27,7 +27,7 @@ export async function handlePreviewRequest(request: Request): Promise<Response> 
 }
 
 /** The same byte-range streaming without an Electron `Request`, for remote serving. */
-export async function previewResponseForPath(filePath: string, rangeHeader: string | null): Promise<Response> {
+export async function previewResponseForPath(filePath: string, rangeHeader: string | null, contentType?: string): Promise<Response> {
 	if (!isAbsolute(filePath) || filePath.includes("\0")) return new Response("bad path", { status: 400 });
 	let size: number;
 	try {
@@ -40,7 +40,7 @@ export async function previewResponseForPath(filePath: string, rangeHeader: stri
 	}
 	const headers = new Headers({
 		"accept-ranges": "bytes",
-		"content-type": mimeForExtension(extname(filePath).slice(1)),
+		"content-type": contentType ?? mimeForExtension(extname(filePath).slice(1)),
 		"cache-control": "no-store",
 	});
 	const header = rangeHeader;

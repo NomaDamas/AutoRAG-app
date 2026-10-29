@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
-import type { RemoteCall, RemotePush } from "../../shared/remote-contract";
+import { remotePreviewMime, type RemoteCall, type RemotePush } from "../../shared/remote-contract";
 import { APP_VERSION } from "../../shared/app-info";
 import { buildRemoteBootstrapScript } from "./bootstrap";
 import { createRemoteDispatcher } from "./registry";
@@ -132,7 +132,7 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 					sessions.get(sessionId)?.close();
 					sessions.delete(sessionId);
 				},
-				preview: (filePath, range) => previewResponseForPath(filePath, range),
+				preview: (filePath, range) => previewResponseForPath(filePath, range, remotePreviewMime(filePath) ?? undefined),
 				thumbnail: (query) => {
 					const path = query.get("path");
 					const mtime = query.get("mtime");

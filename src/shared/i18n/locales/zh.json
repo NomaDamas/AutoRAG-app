@@ -1318,6 +1318,8 @@
     "fileCreated": "{{name}} — 已创建新文件",
     "shareAnchorMissing": "找不到共享弹出位置",
     "tagChangeFailed": "{{name}} — 无法更改标签：{{message}}",
+    "remotePreviewUnsupported": "此文件格式无法在浏览器中预览，请双击下载。",
+    "remotePreviewFolderUnsupported": "文件夹无法在浏览器中预览。",
     "onboardingDemo": {
       "meetingNotes": "会议记录.md"
     }

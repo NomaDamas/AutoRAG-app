@@ -162,7 +162,16 @@ describe("remote server", () => {
 		const response = await fetch(`${origin}${REMOTE_ROUTES.preview}?path=%2Ftmp%2Fa.png&token=secret-token`);
 
 		// Then the preview body comes back.
+		expect(response.headers.get("x-content-type-options")).toBe("nosniff");
 		expect(await response.text()).toBe("preview-bytes");
+	});
+
+	it("sandboxes SVG previews so embedded scripts cannot run on the remote origin", async () => {
+		const { origin } = await start({
+			preview: async () => new Response("<svg/>", { status: 200, headers: { "content-type": "image/svg+xml" } }),
+		});
+		const response = await fetch(`${origin}${REMOTE_ROUTES.preview}?path=%2Ftmp%2Fa.svg&token=secret-token`);
+		expect(response.headers.get("content-security-policy")).toContain("sandbox");
 	});
 
 	it("writes an uploaded file into the requested folder", async () => {

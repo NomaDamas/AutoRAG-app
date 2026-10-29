@@ -92,3 +92,67 @@ export const REMOTE_NATIVE_ONLY_METHODS: Readonly<Record<string, readonly string
 	appUpdate: ["install", "download", "check"],
 	account: ["signIn", "cancelSignIn", "sendEmailOtp", "verifyEmailOtp", "checkout", "useManagedModel", "signOut", "refresh"],
 };
+
+export const REMOTE_PREVIEW_UNSUPPORTED_CODE = "remote-preview-unsupported";
+export const REMOTE_PREVIEW_FOLDER_CODE = "remote-preview-folder";
+
+const TEXT_PLAIN_UTF8 = "text/plain; charset=utf-8";
+
+const REMOTE_PREVIEW_TEXT_EXTENSIONS = [
+	"txt", "text", "log", "md", "markdown", "mdx", "csv", "tsv",
+	"json", "jsonc", "jsonl", "ndjson", "xml", "yaml", "yml",
+	"toml", "ini", "cfg", "conf", "properties", "lock", "diff", "patch", "rst", "tex",
+	"sql", "graphql", "gql", "proto",
+	"css", "scss", "less", "html", "htm", "xhtml",
+	"js", "jsx", "mjs", "cjs", "ts", "tsx", "mts", "cts",
+	"py", "pyw", "go", "rs", "java", "c", "h", "cpp", "cc", "cxx", "hpp", "hh",
+	"cs", "rb", "php", "sh", "bash", "zsh", "vue", "svelte", "astro",
+	"lua", "pl", "swift", "kt", "kts", "scala", "dart", "r", "jl",
+	"hs", "ex", "exs", "erl", "clj", "cljs", "vim", "cmake", "gradle",
+] as const;
+
+/**
+ * Extensions a browser renders or plays directly in a preview tab (rather than
+ * downloading or failing). Shared between the remote server's preview route and
+ * the injected bootstrap's Quick Look guard.
+ */
+export const REMOTE_PREVIEW_MIMES: Readonly<Record<string, string>> = {
+	png: "image/png",
+	jpg: "image/jpeg",
+	jpeg: "image/jpeg",
+	jfif: "image/jpeg",
+	pjpeg: "image/jpeg",
+	pjp: "image/jpeg",
+	gif: "image/gif",
+	webp: "image/webp",
+	bmp: "image/bmp",
+	svg: "image/svg+xml",
+	avif: "image/avif",
+	ico: "image/x-icon",
+	apng: "image/apng",
+	mp4: "video/mp4",
+	m4v: "video/mp4",
+	webm: "video/webm",
+	ogv: "video/ogg",
+	mkv: "video/x-matroska",
+	mp3: "audio/mpeg",
+	wav: "audio/wav",
+	wave: "audio/wav",
+	m4a: "audio/mp4",
+	aac: "audio/aac",
+	flac: "audio/flac",
+	ogg: "audio/ogg",
+	oga: "audio/ogg",
+	opus: "audio/ogg",
+	weba: "audio/webm",
+	pdf: "application/pdf",
+	...Object.fromEntries(REMOTE_PREVIEW_TEXT_EXTENSIONS.map((ext) => [ext, TEXT_PLAIN_UTF8])),
+};
+
+export function remotePreviewMime(filePath: string): string | null {
+	const sep = Math.max(filePath.lastIndexOf("/"), filePath.lastIndexOf("\\"));
+	const base = filePath.slice(sep + 1);
+	const dot = base.lastIndexOf(".");
+	if (dot <= 0 || dot === base.length - 1) return null;
+	return REMOTE_PREVIEW_MIMES[base.slice(dot + 1).toLowerCase()] ?? null;
+}

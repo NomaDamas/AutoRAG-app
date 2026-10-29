@@ -77,8 +77,10 @@ The browser uses the same Finder interface and host services as the desktop:
 - Create, rename, move, copy, duplicate, and trash host files, subject to the
   host's filesystem permissions.
 - Use AI Search with the host's configured models and indexed sources.
-- Open supported file previews in the browser. Browser format support and
-  popup settings can affect how a preview opens.
+- Open supported file previews (images, PDF, plain text, and browser-playable
+  audio/video) in a browser tab. Formats a browser cannot render directly, such
+  as archives or Office/HWP documents, show an unsupported notice instead;
+  double-click them to download.
 - Receive live file-list updates from the host.
 
 Browser actions that need native operating-system integration differ:

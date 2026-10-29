@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { NO_CAPABILITIES } from "../src/shared/actions-contract";
 import { buildRemoteBootstrapScript } from "../src/main/remote/bootstrap";
+import {
+	REMOTE_PREVIEW_FOLDER_CODE,
+	REMOTE_PREVIEW_UNSUPPORTED_CODE,
+	remotePreviewMime,
+} from "../src/shared/remote-contract";
 
 /** A minimal browser the generated script can run against, so its shape is checked, not just its text. */
 function runBootstrap(script: string): Record<string, unknown> {
@@ -111,5 +116,48 @@ describe("remote bootstrap", () => {
 		expect(opened[0]).toContain("/remote/preview");
 		expect(closedCount).toBe(1);
 		expect(await autorag.actions.capabilities()).toEqual(NO_CAPABILITIES);
+	});
+
+	it("refuses Quick Look for archives, non-browser formats, and folders without opening a tab", async () => {
+		expect(remotePreviewMime("/tmp/photo.png")).toBe("image/png");
+		expect(remotePreviewMime("/tmp/manual.pdf")).toBe("application/pdf");
+		expect(remotePreviewMime("C:\\Users\\admin\\notes.md")).toBe("text/plain; charset=utf-8");
+		expect(remotePreviewMime("/tmp/clip.mp4")).toBe("video/mp4");
+		expect(remotePreviewMime("/tmp/song.mp3")).toBe("audio/mpeg");
+		expect(remotePreviewMime("/tmp/bundle.zip")).toBeNull();
+		expect(remotePreviewMime("/tmp/report.docx")).toBeNull();
+		expect(remotePreviewMime("/tmp/report.hwp")).toBeNull();
+		expect(remotePreviewMime("/tmp/clip.mov")).toBeNull();
+		expect(remotePreviewMime("/tmp/font.ttf")).toBeNull();
+		expect(remotePreviewMime("/tmp/dir.png/Makefile")).toBeNull();
+
+		const script = buildRemoteBootstrapScript({ token: "T", platform: "darwin", appearance: "light", language: "ko", version: "0.1.0" });
+		const window = runBootstrap(script);
+		const opened: string[] = [];
+		window.open = (target: string) => {
+			opened.push(target);
+			return null;
+		};
+		const autorag = window.autorag as {
+			preview: {
+				show: (target: { path: string; name: string; kind?: "file" | "folder" }) => Promise<void>;
+				onClosed: (listener: () => void) => () => void;
+			};
+		};
+		let closedCount = 0;
+		autorag.preview.onClosed(() => {
+			closedCount += 1;
+		});
+
+		await expect(autorag.preview.show({ path: "/tmp/archive.zip", name: "archive.zip", kind: "file" })).rejects.toMatchObject({
+			code: REMOTE_PREVIEW_UNSUPPORTED_CODE,
+		});
+		await expect(autorag.preview.show({ path: "/tmp/folder.png", name: "folder.png", kind: "folder" })).rejects.toMatchObject({
+			code: REMOTE_PREVIEW_FOLDER_CODE,
+		});
+		await Promise.resolve();
+
+		expect(opened).toEqual([]);
+		expect(closedCount).toBe(2);
 	});
 });

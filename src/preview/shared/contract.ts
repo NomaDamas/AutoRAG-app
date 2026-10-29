@@ -159,6 +159,7 @@ export const ANCHOR_LIMITS = { excerpts: 32, chars: 8000 } as const;
 export interface QuickLookTarget {
 	readonly path: string;
 	readonly name: string;
+	readonly kind?: "file" | "folder";
 	/**
 	 * Evidence excerpts to find and highlight (an AI Search citation); the
 	 * viewer scrolls to the first one it finds. Absent for a plain preview.
@@ -548,6 +549,7 @@ function isAnchor(value: unknown): value is readonly string[] {
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {
 	if (!isRecord(value)) return false;
 	if (value.anchor !== undefined && !isAnchor(value.anchor)) return false;
+	if (value.kind !== undefined && value.kind !== "file" && value.kind !== "folder") return false;
 	return typeof value.path === "string" && value.path.length > 0 && typeof value.name === "string";
 }
 

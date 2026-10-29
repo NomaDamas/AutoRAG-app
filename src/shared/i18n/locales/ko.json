@@ -1318,6 +1318,8 @@
     "fileCreated": "{{name}} — 새 파일을 만들었습니다",
     "shareAnchorMissing": "공유 위치를 찾지 못했습니다",
     "tagChangeFailed": "{{name}} — 태그를 바꾸지 못했습니다: {{message}}",
+    "remotePreviewUnsupported": "이 파일 형식은 브라우저에서 미리볼 수 없습니다. 더블클릭해 다운로드하세요.",
+    "remotePreviewFolderUnsupported": "폴더는 브라우저에서 미리볼 수 없습니다.",
     "onboardingDemo": {
       "meetingNotes": "회의록.md"
     }
