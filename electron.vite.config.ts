@@ -65,8 +65,8 @@ export default defineConfig({
 	},
 	renderer: {
 		plugins: [tailwindcss()],
-		esbuild: {
-			jsx: "automatic",
+		oxc: {
+			jsx: { runtime: "automatic" },
 		},
 		server: {
 			port: Number(process.env.PORT) || 5173,

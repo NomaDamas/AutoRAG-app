@@ -126,7 +126,7 @@ const clipboard = {
 };
 
 async function openMcpPage(page, { navLabel }) {
-	await page.locator(".sidebar__item", { hasText: /Settings|설정/u }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: navLabel }).click();
 	await page.waitForSelector(".settings-seg", { timeout: 15_000 }).catch(async (error) => {

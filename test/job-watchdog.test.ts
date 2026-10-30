@@ -100,9 +100,9 @@ describe("progress files", () => {
 		const workspace = await mkdtemp(join(tmpdir(), "autorag-job-watchdog-"));
 		directories.push(workspace);
 		const [progress, parsed] = progressFiles(workspace);
-		await mkdir(join(workspace, ".autorag", "parsed"), { recursive: true });
+		await mkdir(join(workspace, ".autorag"), { recursive: true });
+		await mkdir(parsed as string, { recursive: true });
 		await writeFile(progress as string, "{}");
-		await writeFile(parsed as string, "{}");
 		await utimes(progress as string, 1000, 1000);
 		await utimes(parsed as string, 5000, 5000);
 

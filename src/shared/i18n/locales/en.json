@@ -2526,11 +2526,8 @@
       "cloudDrive": {
         "summary": "Index an rclone remote by incremental mirroring."
       },
-      "mailExport": {
-        "summary": "Index local .eml / .mbox archive files."
-      },
       "mailcrawl": {
-        "summary": "Search mail from the mailcrawl archive."
+        "summary": "Search mail and local .eml / .mbox archives with mailcrawl."
       },
       "obsidian": {
         "summary": "Search an Obsidian vault, indexed by MinSync."
@@ -2545,7 +2542,7 @@
         "summary": "Query macOS Calendar events and Reminders live via EventKit MCP."
       },
       "spotlight": {
-        "summary": "Index local files with macOS Spotlight (mdfind) queries."
+        "summary": "Query local files live with macOS Spotlight (mdfind)."
       }
     },
     "groups": {
@@ -2564,7 +2561,6 @@
       "github": "GitHub",
       "githubGist": "GitHub Gist",
       "cloudDrive": "Cloud Drive (rclone)",
-      "mailExport": "Mail Export",
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",

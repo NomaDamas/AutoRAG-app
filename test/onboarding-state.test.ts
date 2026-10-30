@@ -607,12 +607,21 @@ describe("createOnboardingService persistence", () => {
 	it("reports what a run that finished before the first poll actually read", async () => {
 		const directory = await workDir();
 		const documents = join(directory, "Documents");
-		await mkdir(join(directory, ".autorag", "parsed"), { recursive: true });
-		const entry = (name: string, updatedAt: string) => ({ sourcePath: join(documents, name), updatedAt });
-		await writeFile(
-			join(directory, ".autorag", "parsed", "index.json"),
-			JSON.stringify({ entries: { a: entry("a.md", "2026-01-01T00:00:00Z"), b: entry("b.md", "2026-01-02T00:00:00Z") }, skipped: {} }),
-		);
+		const { seedMirrorStage } = await import("./support/seed-mirror-stage");
+		const entry = (name: string) => ({
+			virtualPath: `/Documents/${name}`,
+			sourcePath: join(documents, name),
+			outputPath: join(directory, `${name}.md`),
+			parserName: "plain-text",
+			sourceMtimeNs: 1,
+			sourceSizeBytes: 1,
+			updatedAt: new Date(0).toISOString(),
+		});
+		seedMirrorStage(directory, {
+			version: 1,
+			entries: { "/Documents/a.md": entry("a.md"), "/Documents/b.md": entry("b.md") },
+			skipped: {},
+		});
 		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 2 });
 
 		await service.startIndexing({ folders: [documents], embed: "none", sources: [], plan: "free" });
