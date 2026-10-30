@@ -89,7 +89,17 @@ const status = (role: string): Element | null => host.querySelector(`[data-role-
 
 async function pick(role: string, id: string): Promise<void> {
 	await click(host.querySelector(`[data-role-trigger="${role}"]`));
+	await click(document.querySelector(`[data-provider-trigger="${id.slice(0, id.indexOf("/"))}"]`));
 	await click(document.querySelector(`[data-model-id="${id}"]`));
+}
+
+async function searchModels(value: string): Promise<void> {
+	const input = document.querySelector<HTMLInputElement>(".onb-menu.role .onb-menu-search input");
+	if (input === null) throw new Error("missing model search");
+	await act(async () => {
+		Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+		input.dispatchEvent(new Event("input", { bubbles: true }));
+	});
 }
 
 beforeEach(async () => {
@@ -136,6 +146,35 @@ describe("ModelStep", () => {
 		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "openai", modelId: "b", verified: true } });
 	});
 
+	it("browses providers before models and groups selectable search results by provider", async () => {
+		store = { model: { provider: "openai", id: "shared" }, ...HELPERS_AUTO };
+		bridge.settings.providersList.mockResolvedValue([
+			provider("openai", [model("openai", "shared"), model("openai", "alpha")]),
+			provider("anthropic", [model("anthropic", "shared"), model("anthropic", "beta")]),
+		]);
+		await render(byokDraft());
+		await click(host.querySelector('[data-role-trigger="answer"]'));
+
+		expect(document.querySelector('[data-provider-trigger="openai"] .onb-provider-active-dot')).not.toBeNull();
+		expect(document.querySelector("[data-model-id]")).toBeNull();
+		await click(document.querySelector('[data-provider-trigger="openai"]'));
+		expect(document.querySelector('[data-provider-submenu="openai"]')).not.toBeNull();
+		expect(document.querySelector('[data-model-id="openai/shared"]')?.getAttribute("aria-checked")).toBe("true");
+		expect(document.querySelector('[data-model-id="anthropic/shared"]')).toBeNull();
+
+		await searchModels("shared");
+		expect(document.querySelector("[data-provider-submenu]")).toBeNull();
+		expect(document.querySelector("[data-provider-trigger]")).toBeNull();
+		expect([...document.querySelectorAll(".onb-menu-group-title.is-provider > span:last-child")].map((element) => element.textContent)).toEqual(["Provider openai", "Provider anthropic"]);
+		expect(document.querySelector('[data-model-id="openai/shared"]')?.getAttribute("aria-checked")).toBe("true");
+		expect(document.querySelector('[data-model-id="anthropic/shared"]')?.getAttribute("aria-checked")).toBe("false");
+		expect(document.querySelector('[data-model-id="openai/alpha"]')).toBeNull();
+		expect(document.querySelector('[data-model-id="anthropic/beta"]')).toBeNull();
+
+		await click(document.querySelector('[data-model-id="anthropic/shared"]'));
+		expect(store.model).toEqual(expect.objectContaining({ provider: "anthropic", id: "shared" }));
+	});
+
 	it("keeps the step closed while a helper role has no model yet", async () => {
 		store = { model: { provider: "openai", id: "a" }, jev: false, rerank: false };
 		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
@@ -157,6 +196,7 @@ describe("ModelStep", () => {
 		expect(host.querySelector('[data-role-trigger="answer"]')?.classList.contains("failed")).toBe(true);
 		expect(patch).not.toHaveBeenCalledWith({ model: expect.objectContaining({ verified: true }) });
 		await click(host.querySelector('[data-role-trigger="answer"]'));
+		await click(document.querySelector('[data-provider-trigger="openai"]'));
 		expect(document.querySelector('[data-model-id="openai/b"]')?.classList.contains("failed")).toBe(true);
 	});
 
