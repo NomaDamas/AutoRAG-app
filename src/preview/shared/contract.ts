@@ -4,6 +4,7 @@ import type { ArchiveEntry } from "./archive-items";
 import type { KeyUsageName } from "./certificate";
 import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
+import type { VideoAudioPlan } from "./video-audio";
 
 /**
  * Quick Look runs in its own pre-warmed BrowserWindow (the sigma-file-manager
@@ -50,6 +51,8 @@ export const PREVIEW_CHANNELS = {
 	folderSize: "preview:folder-size",
 	/** Preview window -> main (invoke): tags, cover art, and stream facts of the shown audio file. */
 	audioMetadata: "preview:audio-metadata",
+	/** Preview window -> main (invoke): whether the shown video's sound needs the ffmpeg-decoded sidecar, and which track. */
+	videoAudio: "preview:video-audio",
 	/** Preview window -> main (invoke): tables and first rows of the shown database or Parquet file. */
 	data: "preview:data",
 	/** Preview window -> main (invoke): the top-level children of the shown 7z, RAR, ISO, deb, rpm, CAB, or tar.bz2/xz/zst. */
@@ -422,6 +425,8 @@ export interface QuickLookWindowBridge {
 	sha256(path: string): Promise<string>;
 	folderSize(path: string): Promise<FolderSize>;
 	audioMetadata(path: string): Promise<AudioMetadata>;
+	/** How the shown video gets its sound: its own track, or an ffmpeg-decoded sidecar when the page cannot play the codec. */
+	videoAudio(path: string): Promise<VideoAudioPlan>;
 	/** Database tables and first rows, or a Parquet file's schema and first rows. `table` picks a database table (null: the first). */
 	dataPreview(path: string, table: string | null): Promise<DataPreview>;
 	/** The top-level children of a 7z, RAR, tar.bz2/xz/zst, ISO, deb, rpm, or CAB; the page has no engine to read them itself. */
@@ -644,6 +649,27 @@ export function previewStreamUrl(filePath: string): string {
 	const url = new URL(`${PREVIEW_SCHEME}://local/`);
 	url.searchParams.set("path", filePath);
 	return url.toString();
+}
+
+/** The file's audio track `track` as a stereo WAV (see shared/video-audio.ts), over the same scheme. */
+export function previewVideoAudioUrl(filePath: string, track: number): string {
+	const url = new URL(`${PREVIEW_SCHEME}://local/`);
+	url.searchParams.set("path", filePath);
+	url.searchParams.set("audio", String(track));
+	return url.toString();
+}
+
+/** The audio track a preview URL asks for, or null for the file itself (and for anything but a plain track number). */
+export function videoAudioTrackFromUrl(raw: string): number | null {
+	let url: URL;
+	try {
+		url = new URL(raw);
+	} catch (error) {
+		if (error instanceof TypeError) return null;
+		throw error;
+	}
+	const value = url.searchParams.get("audio");
+	return value !== null && /^\d{1,4}$/.test(value) ? Number(value) : null;
 }
 
 export function pathFromPreviewUrl(raw: string): string | null {
