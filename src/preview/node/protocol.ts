@@ -2,9 +2,10 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { extname, isAbsolute } from "node:path";
 import { Readable } from "node:stream";
-import { pathFromPreviewUrl } from "../shared/contract";
+import { pathFromPreviewUrl, videoAudioTrackFromUrl } from "../shared/contract";
 import { parseByteRange } from "../shared/range";
 import { mimeForExtension } from "../shared/registry";
+import { videoAudioResponse } from "./video-audio";
 
 function isEnoent(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
@@ -18,11 +19,15 @@ function body(filePath: string, start: number, end: number): ReadableStream<Uint
  * Streams a local file with HTTP range support. Chromium's media pipeline only
  * marks a source seekable when the server answers ranges with 206, so video
  * and audio scrubbing depend on this; PDF.js also fetches ranges on demand.
- * The remote server reuses this through {@link previewResponseForPath}.
+ * `?audio=<n>` asks instead for the file's n-th audio track decoded to WAV by
+ * ffmpeg (see ./video-audio.ts). The remote server reuses the file streaming
+ * through {@link previewResponseForPath}.
  */
 export async function handlePreviewRequest(request: Request): Promise<Response> {
 	const filePath = pathFromPreviewUrl(request.url);
-	if (filePath === null || !isAbsolute(filePath)) return new Response("bad path", { status: 400 });
+	if (filePath === null || !isAbsolute(filePath) || filePath.includes("\0")) return new Response("bad path", { status: 400 });
+	const track = videoAudioTrackFromUrl(request.url);
+	if (track !== null) return videoAudioResponse(filePath, track, request.headers.get("range"));
 	return previewResponseForPath(filePath, request.headers.get("range"));
 }
 

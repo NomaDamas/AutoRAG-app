@@ -19,6 +19,7 @@ import {
 	type PreviewBridge,
 	type QuickLookWindowBridge,
 } from "../shared/contract";
+import type { VideoAudioPlan } from "../shared/video-audio";
 
 function subscribe(ipcRenderer: IpcRenderer, channel: string, listener: (payload: unknown) => void): () => void {
 	const handler = (_event: IpcRendererEvent, payload: unknown): void => listener(payload);
@@ -88,6 +89,7 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		sha256: (path): Promise<string> => ipcRenderer.invoke(PREVIEW_CHANNELS.sha256, path),
 		folderSize: (path): Promise<FolderSize> => ipcRenderer.invoke(PREVIEW_CHANNELS.folderSize, path),
 		audioMetadata: (path): Promise<AudioMetadata> => ipcRenderer.invoke(PREVIEW_CHANNELS.audioMetadata, path),
+		videoAudio: (path): Promise<VideoAudioPlan> => ipcRenderer.invoke(PREVIEW_CHANNELS.videoAudio, path),
 		dataPreview: (path, table): Promise<DataPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.data, path, table),
 		archivePreview: (path): Promise<ArchivePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.archive, path),
 		certificatePreview: (path): Promise<CertificatePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.certificate, path),

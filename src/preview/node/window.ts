@@ -50,6 +50,7 @@ import { isGoogleDriveExtension } from "../shared/google-drive";
 import { byteNeed, viewerForExtension } from "../shared/registry";
 import { fallbackOrigin, screenOrigin, ZOOM_DONE_TIMEOUT_MS, zoomGeometry } from "../shared/zoom";
 import { readAudioMetadata } from "./audio-metadata";
+import { planVideoAudio } from "./video-audio";
 import { readNativeDocument } from "./apple";
 import { previewCertificate } from "./certificate";
 import { previewData } from "./data";
@@ -761,6 +762,7 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		return measureFolder(shown.path, { ...FOLDER_SIZE_BUDGET, stopped: () => shown.state.current?.path !== shown.path });
 	});
 	ipc.handle(PREVIEW_CHANNELS.audioMetadata, (event, path: unknown) => readAudioMetadata(shownPath(event, path).path));
+	ipc.handle(PREVIEW_CHANNELS.videoAudio, (event, path: unknown) => planVideoAudio(shownPath(event, path).path));
 	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
 		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
 		return previewData(shownPath(event, path).path, table);

@@ -30,6 +30,7 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		sha256: never,
 		folderSize: never,
 		audioMetadata: never,
+		videoAudio: never,
 		dataPreview: never,
 		archivePreview: answer,
 		certificatePreview: never,
