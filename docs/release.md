@@ -73,10 +73,10 @@ packages it.
 `filee-cli` is the exception and follows the librarian's own pin, so the staged
 copy is the exact version (`FILEE_CLI_VERSION`) the librarian would otherwise
 download. Three tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
-the reason for each): `minsync` ≥ 0.4.12, `@nomadamas/mailcrawl` ≥ 0.2.2,
+the reason for each): `minsync` ≥ 0.5.1, `@nomadamas/mailcrawl` ≥ 0.3.0,
 `lazykatok` ≥ 0.3.3. All three reach the shared `minsync serve` embedding route;
-0.4.12 is also the first MinSync that keeps one failed chunk from aborting a
-healthy sync and cuts remote inputs below the model's context. The stager fails
+0.5.1 adds durable stage protocol v2 (`capabilities`/`plan`/`inspect`) and JSONL sync
+progress streaming, and `mailcrawl` 0.3.0 adds `--source files` local archive indexing. The stager fails
 rather than ship an older one.
 `components-<platform>.json` on the release lists exactly what shipped (name,
 version, source, sha256), and the build fails rather than ship a download that

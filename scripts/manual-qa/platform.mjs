@@ -160,25 +160,63 @@ export function isolatedToolPath(binDir) {
 }
 
 /**
- * A `minsync` that does nothing and exits 0, in `binDir`, for lanes that must keep the index out of the way
- * (the librarian refuses to run without a MinSync binary). Where the binary is a shell script on POSIX, the
- * librarian only resolves `minsync.exe` on Windows, so there the stub is a tiny executable compiled once by Bun
- * and cached in the temp directory.
+ * Resolve the host's real `minsync` binary when installed, or null.
+ */
+function findRealMinsync() {
+	try {
+		const finder = isWindows ? "where minsync" : "command -v minsync";
+		const found = execSync(finder, { encoding: "utf8", shell: isWindows ? undefined : "/bin/sh" }).split(/\r?\n/u)[0]?.trim() ?? "";
+		if (found.length > 0 && existsSync(found)) return found;
+	} catch {
+		// Fall back to standard install locations when PATH was stripped.
+	}
+	const home = homedir();
+	const candidates = isWindows
+		? [join(home, ".cargo", "bin", "minsync.exe")]
+		: [join(home, ".cargo", "bin", "minsync"), join(home, "bin", "minsync"), "/opt/homebrew/bin/minsync", "/usr/local/bin/minsync"];
+	return candidates.find((candidate) => existsSync(candidate)) ?? null;
+}
+
+/**
+ * A `minsync` stand-in in `binDir` for lanes that keep vector embedding out of the way while still
+ * supporting librarian 2.13.2's `minsync stage` protocol v2 (required by `parsed`-only refreshes and
+ * `loadMirrorIndex`): forwards `stage` and `--version` to the host's `minsync` when present, and exits 0
+ * for `sync`/`query`/`serve`/`check`/`init`.
  */
 export function writeMinsyncStub(binDir) {
 	mkdirSync(binDir, { recursive: true });
+	const realMinsync = findRealMinsync();
 	if (!isWindows) {
 		const stub = join(binDir, "minsync");
-		writeFileSync(stub, "#!/bin/sh\nexit 0\n");
+		const body =
+			realMinsync === null
+				? '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "minsync 0.5.1"; exit 0; fi\nexit 0\n'
+				: `#!/bin/sh\ncase "$1" in\n  stage|--version)\n    exec '${realMinsync.replaceAll("'", "'\\''")}' "$@"\n    ;;\nesac\nexit 0\n`;
+		writeFileSync(stub, body);
 		chmodSync(stub, 0o755);
 		return stub;
 	}
-	const cached = join(tmpdir(), "dazzi-qa-minsync-stub.exe");
+	const cached = join(tmpdir(), "dazzi-qa-minsync-stub-v2.exe");
 	if (!existsSync(cached)) {
-		const source = join(tmpdir(), "dazzi-qa-minsync-stub.mjs");
-		writeFileSync(source, "process.exit(0);\n");
+		const source = join(tmpdir(), "dazzi-qa-minsync-stub-v2.mjs");
+		writeFileSync(
+			source,
+			[
+				'import { spawnSync } from "node:child_process";',
+				'import { existsSync } from "node:fs";',
+				'const args = process.argv.slice(2);',
+				'const real = process.env.DAZZI_REAL_MINSYNC || "";',
+				'if ((args[0] === "stage" || args[0] === "--version") && real && existsSync(real)) {',
+				'  const r = spawnSync(real, args, { stdio: "inherit" });',
+				'  process.exit(r.status ?? 1);',
+				'}',
+				'if (args[0] === "--version") console.log("minsync 0.5.1");',
+				'process.exit(0);',
+			].join("\n"),
+		);
 		execFileSync(process.execPath, ["build", "--compile", source, "--outfile", cached], { stdio: "ignore" });
 	}
+	if (realMinsync !== null) process.env.DAZZI_REAL_MINSYNC = realMinsync;
 	const stub = join(binDir, "minsync.exe");
 	copyFileSync(cached, stub);
 	return stub;

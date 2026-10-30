@@ -2526,11 +2526,8 @@
       "cloudDrive": {
         "summary": "通过增量镜像索引 rclone 远程。"
       },
-      "mailExport": {
-        "summary": "索引本地 .eml / .mbox 存档文件。"
-      },
       "mailcrawl": {
-        "summary": "从 mailcrawl 存档中搜索邮件。"
+        "summary": "通过 mailcrawl 搜索邮件及本地 .eml / .mbox 存档。"
       },
       "obsidian": {
         "summary": "通过 MinSync 搜索 Obsidian 保管库。"
@@ -2545,7 +2542,7 @@
         "summary": "通过 EventKit MCP 实时查询 macOS 日历日程与提醒事项。"
       },
       "spotlight": {
-        "summary": "使用 macOS Spotlight (mdfind) 查询索引本地文件。"
+        "summary": "使用 macOS Spotlight (mdfind) 实时查询本地文件。"
       }
     },
     "groups": {
@@ -2564,7 +2561,6 @@
       "github": "GitHub",
       "githubGist": "GitHub Gist",
       "cloudDrive": "Cloud Drive (rclone)",
-      "mailExport": "Mail Export",
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",

@@ -11,7 +11,7 @@ const app = await launchFinder();
 const page = await app.firstWindow();
 await page.waitForSelector('[role="row"]');
 
-await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+await page.locator(".sidebar__item--settings").click();
 await page.waitForSelector(".settings-panel");
 
 const sw = page.locator(".linear-row", { hasText: "Show Hidden Files" }).locator(".settings-switch");

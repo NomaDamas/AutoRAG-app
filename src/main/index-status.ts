@@ -1,6 +1,6 @@
 import { access, realpath } from "node:fs/promises";
 import { basename, isAbsolute, resolve, sep } from "node:path";
-import { createDefaultParserRegistry, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
+import { createDefaultParserRegistry, emptyMirrorIndex, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { refreshAutoragIndex } from "./index-refresh";
@@ -63,7 +63,12 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			Promise.all((config.excludePaths ?? []).map(canonical)),
 			Promise.all(config.searchPaths.map(canonical)),
 		]);
-		const index = loadMirrorIndex(config.workspacePath);
+		let index = emptyMirrorIndex();
+		try {
+			index = loadMirrorIndex(config.workspacePath);
+		} catch {
+			// Missing or older MinSync binary: fall back to empty mirror state so Finder badges never throw.
+		}
 		const registry = createDefaultParserRegistry((config.parserOptions ?? {}) as DefaultParserRegistryOptions);
 		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
 		const skips = new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry]));

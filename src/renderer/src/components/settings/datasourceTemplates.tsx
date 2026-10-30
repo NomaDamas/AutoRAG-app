@@ -311,24 +311,6 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		],
 	},
 	{
-		id: "mail-export",
-		label: "Mail Export",
-		binary: null,
-		summary: "settingsSources.templates.mailExport.summary",
-		channels: "both",
-		polling: true,
-		groups: [
-			{
-				title: "settingsSources.groups.mailExport",
-				fields: [
-					{ key: "paths", label: "settingsSources.fields.mailPaths", kind: "pathList" },
-					{ key: "maxDocuments", label: "settingsSources.fields.maxDocuments", kind: "number" },
-					{ key: "maxBytesPerFile", label: "settingsSources.fields.maxBytesPerFile", kind: "number" },
-				],
-			},
-		],
-	},
-	{
 		id: "mailcrawl",
 		label: "Mail",
 		binary: "mailcrawl",
@@ -344,8 +326,10 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 					{ key: "dataDir", label: "settingsSources.fields.dataDir", kind: "text" },
 					{ key: "backend", label: "settingsSources.fields.backend", kind: "text" },
 					{ key: "source", label: "settingsSources.fields.source", kind: "text" },
+					{ key: "paths", label: "settingsSources.fields.mailPaths", kind: "pathList" },
 					{ key: "fixture", label: "settingsSources.fields.fixture", kind: "text" },
 					{ key: "himalayaConfig", label: "settingsSources.fields.himalayaConfig", kind: "text" },
+					{ key: "concurrency", label: "settingsSources.fields.concurrency", kind: "number" },
 				],
 			},
 			{
@@ -439,8 +423,8 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 		label: "Spotlight",
 		binary: "mdfind",
 		summary: "settingsSources.templates.spotlight.summary",
-		channels: "both",
-		polling: true,
+		channels: "none",
+		polling: false,
 		groups: [
 			{
 				title: "settingsSources.groups.spotlight",
