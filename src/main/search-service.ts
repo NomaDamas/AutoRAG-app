@@ -14,6 +14,7 @@ import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/libraria
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
+import { withLocalJevFallback } from "./local-jev";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
 import { syncCalendarMcpConfig } from "./calendar-mcp";
 import type {
@@ -778,8 +779,12 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
+		const baseOptions = buildAgentOptions(effective);
+		// No usable Jev credential (a BYOK sign-in without OpenRouter): judge what only reads locally instead of asking about every `ls`.
+		const jev = await withLocalJevFallback(baseOptions.jev, { env: input.env, agentDir });
 		const agentOptions: AutoRAGAgentOptions = {
-			...buildAgentOptions(effective),
+			...baseOptions,
+			...(jev === undefined ? {} : { jev }),
 			model: resolved.model,
 			piAgentDir: agentDir,
 			piSessionDir: options.sessionDir,

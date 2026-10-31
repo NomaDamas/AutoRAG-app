@@ -779,8 +779,12 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
 - **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `auto`; persisted by the settings
   service, which refuses any other value) is chosen in the menu at the left of the message box. `ask` puts every
   shell/write/edit call to the person; `auto` lets Jev (the judgment model) approve what the request clearly
-  covers and asks about the rest — with no Jev backend every call is unclassified and is asked about, as in
-  the TUI; `full` never asks. `main/index.ts` applies a change to every chat's agent
+  covers and asks about the rest. When the configured Jev backend has no credential (a BYOK sign-in without
+  OpenRouter keeps the librarian's default `jev.backend = "openrouter"`), `createDefaultAgentFactory` hands the
+  agent `local-jev.ts`'s backend instead (`withLocalJevFallback`, which mirrors jev-use's own key lookup): it
+  answers only the gate's questions, and only for a shell command `read-only-shell.ts` can prove read-only
+  (an allow-list: no write redirect, substitution or program that writes or starts another); any other call is
+  "could not classify" and asked about, as with no judgment at all. `full` never asks. `main/index.ts` applies a change to every chat's agent
   (`InteractiveSearchAgent.setApprovalMode` → the librarian's `permissionControl.set`, which also ends the
   session's "allow all of this kind" grants) and to agents built later, and tells every window.
   `AUTORAG_PERMISSION_MODE` and `permissionMode` in the shared config feed the librarian's own default only;
