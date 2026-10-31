@@ -46,6 +46,7 @@ import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, 
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
+import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
 import { IndexNoticeBanner } from "./IndexNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
@@ -170,7 +171,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragOver, setDragOver] = useState(false);
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
-	const inputRef = useRef<HTMLInputElement | null>(null);
+	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -879,7 +880,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										))}
 									</div>
 								) : null}
-								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{submittedQuery}</div>
+								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{submittedQuery}</div>
 							</div>
 						</div>
 					)}
@@ -1015,53 +1016,59 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">Esc</kbd> {t("aiSearch.stop")}</span>
 						</div>
 					) : null}
-					<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
-						<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-						<input
-							ref={inputRef}
+					<div
+						className="compose-box flex flex-col gap-6 rounded-14 border border-border bg-input px-14 pt-12 pb-8 transition-colors duration-(--dur-color) ease-out focus-within:border-accent"
+						onMouseDown={(event) => {
+							// A click on the box's own padding or toolbar gap lands in the field, like any chat composer.
+							if (!(event.target instanceof HTMLElement) || event.target.closest("button, textarea") !== null) return;
+							event.preventDefault();
+							inputRef.current?.focus();
+						}}
+					>
+						<ComposerField
+							fieldRef={inputRef}
 							value={query}
-							onChange={(event) => setQuery(event.target.value)}
-							onKeyDown={(event) => {
-								// ⌥Enter queues; plain Enter goes through the form. A Hangul IME's composing Enter is no send.
-								if (event.key !== "Enter" || !event.altKey || event.nativeEvent.isComposing) return;
-								event.preventDefault();
-								send(true);
-							}}
+							onChange={setQuery}
+							onAltEnter={() => send(true)}
 							placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
-							aria-label={t("aiSearch.askDazzi")}
-							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
+							ariaLabel={t("aiSearch.askDazzi")}
 						/>
-						{searching && query.trim().length > 0 ? (
-							<button
-								type="submit"
-								className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-								title={t("aiSearch.steerSend")}
-								aria-label={t("aiSearch.steerSend")}
-							>
-								<ArrowUpIcon />
-							</button>
-						) : null}
-						{searching ? (
-							<button
-								type="button"
-								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-								title={t("aiSearch.stop")}
-								aria-label={t("aiSearch.stop")}
-								onClick={() => void stop()}
-							>
-								<Square size={10} strokeWidth={3} fill="currentColor" />
-							</button>
-						) : (
-							<button
-								type="submit"
-								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-								title={t("aiSearch.askDazzi")}
-								aria-label={t("aiSearch.askDazzi")}
-								disabled={query.trim().length === 0 && attachments.length === 0}
-							>
-								<ArrowUpIcon />
-							</button>
-						)}
+						<div className="composer-toolbar flex items-center justify-between gap-8">
+							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+							<div className="composer-actions flex items-center gap-7">
+								{searching && query.trim().length > 0 ? (
+									<button
+										type="submit"
+										className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+										title={t("aiSearch.steerSend")}
+										aria-label={t("aiSearch.steerSend")}
+									>
+										<ArrowUpIcon />
+									</button>
+								) : null}
+								{searching ? (
+									<button
+										type="button"
+										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+										title={t("aiSearch.stop")}
+										aria-label={t("aiSearch.stop")}
+										onClick={() => void stop()}
+									>
+										<Square size={10} strokeWidth={3} fill="currentColor" />
+									</button>
+								) : (
+									<button
+										type="submit"
+										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+										title={t("aiSearch.askDazzi")}
+										aria-label={t("aiSearch.askDazzi")}
+										disabled={query.trim().length === 0 && attachments.length === 0}
+									>
+										<ArrowUpIcon />
+									</button>
+								)}
+							</div>
+						</div>
 					</div>
 					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
@@ -1127,7 +1134,7 @@ function SteerBubble({
 			<div className="flex max-w-bubble-max flex-col items-end gap-5">
 				<div
 					className={cn(
-						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
+						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words whitespace-pre-wrap transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
 						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
 						steer.status === "delivered" && "border-border bg-input text-ink-body",
 						steer.status === "dropped" && "border-border bg-input text-ink-muted line-through",
@@ -1213,7 +1220,7 @@ function PastTurnView({
 							))}
 						</div>
 					) : null}
-					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{turn.question}</div>
+					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
 				</div>
 			</div>
 			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} fix={false} />}

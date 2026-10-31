@@ -181,7 +181,7 @@ try {
 
 	await openAiSearch(page);
 	let panel = page.locator(AI_PANEL);
-	let composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	let composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 	let approval = panel.locator('[role="alertdialog"]');
 	let question = panel.locator('[role="dialog"]');
 	const shot = async (name) => {
@@ -190,7 +190,7 @@ try {
 	};
 	const finished = () =>
 		page.waitForFunction(
-			() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null,
+			() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null,
 			null,
 			{ timeout: 300_000 },
 		);
@@ -266,7 +266,7 @@ try {
 				await page.waitForTimeout(300);
 				continue;
 			}
-			const idle = await page.evaluate(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null);
+			const idle = await page.evaluate(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null);
 			if (idle) return cards;
 			await page.waitForTimeout(250);
 		}
@@ -333,7 +333,7 @@ try {
 	page.setDefaultTimeout(30_000);
 	await openAiSearch(page);
 	panel = page.locator(AI_PANEL);
-	composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 	approval = panel.locator('[role="alertdialog"]');
 	question = panel.locator('[role="dialog"]');
 	await panel.locator('button[aria-label="Chat history"]').click();

@@ -139,7 +139,7 @@ const start = async (language) => {
 	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 	await page.locator(".sidebar__item", { hasText: labels.sidebar }).click();
 	panel = page.locator(`section[aria-label="${labels.panel}"]:not([aria-hidden="true"])`);
-	composer = panel.locator(`input[aria-label="${labels.ask}"]`);
+	composer = panel.locator(`textarea[aria-label="${labels.ask}"]`);
 	await composer.waitFor({ timeout: 30_000 });
 };
 const stop = async () => {
@@ -207,7 +207,7 @@ const problem = await page.evaluate(() => window.autorag.indexProblem.get());
 check("the app recorded the stopped run", problem.failure !== null, JSON.stringify(problem));
 await openAiSearch(page);
 panel = page.locator(AI_PANEL);
-composer = panel.locator('input[aria-label="Ask Dazzi"]');
+composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 await newChat();
 await ask("do the notes have a quarterly figure?");
 await notices().first().waitFor();

@@ -151,7 +151,7 @@ try {
 
 	await openAiSearch(page);
 	const panel = page.locator(AI_PANEL);
-	const composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 	const notice = panel.locator('[role="alert"]');
 	const dialog = page.getByRole("dialog");
 	const shot = async (name) => {
@@ -165,7 +165,7 @@ try {
 		await page.keyboard.press("Enter");
 	};
 	const finished = () =>
-		page.waitForFunction(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 300_000 });
+		page.waitForFunction(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 300_000 });
 	const answerText = async () => (await page.locator(".assistant-msg .assistant-prose").allTextContents()).join("\n");
 	const pageTitle = (title) => page.locator("h1.linear-title", { hasText: title }).waitFor();
 	const backToAiSearch = () => page.locator('[data-ai-search="true"] .tab__title').click();
@@ -222,7 +222,7 @@ try {
 
 	await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
 	await dialog.waitFor({ state: "detached" });
-	await panel.locator('input[aria-label="Ask Dazzi"]').click();
+	await panel.locator('textarea[aria-label="Ask Dazzi"]').click();
 	await page.keyboard.type("What is the vault access number in a.txt?");
 	await page.keyboard.press("Enter");
 	await finished();

@@ -10,7 +10,7 @@
  * inventing a second one.
  */
 
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ShieldAlert, ShieldCheck, ShieldQuestion, type LucideIcon } from "lucide-react";
 import { APPROVAL_MODES, DEFAULT_APPROVAL_MODE, type ApprovalMode } from "../../../shared/interaction-contract";
@@ -23,6 +23,10 @@ import { CheckIcon } from "./icons";
 const MENU_WIDTH = 316;
 /** A mode row: the label line plus its description. */
 const MENU_ROW_HEIGHT = 64;
+/** Space between the pill and its menu. */
+const MENU_GAP = 4;
+/** Smallest distance the menu keeps from the window edge; matches `menuPlacement`. */
+const MENU_VIEWPORT_MARGIN = 8;
 
 const MODE_ICON: Record<ApprovalMode, LucideIcon> = {
 	ask: ShieldQuestion,
@@ -105,10 +109,16 @@ export function ApprovalModeMenu({ mode, onChange }: ApprovalModeMenuProps): Rea
 	const rect = triggerRef.current?.getBoundingClientRect();
 	const height = APPROVAL_MODES.length * MENU_ROW_HEIGHT + 8;
 	const placement = menuPlacement(
-		{ x: rect?.left ?? 0, y: rect?.bottom ?? 0 },
+		{ x: rect?.left ?? 0, y: rect === undefined ? 0 : rect.bottom + MENU_GAP },
 		{ width: MENU_WIDTH, height },
 		{ width: window.innerWidth, height: window.innerHeight },
 	);
+	// The pill sits in the composer's bottom toolbar: the menu opens above it unless the window is too short for that.
+	// It hangs from its own bottom edge, so it clears the pill whatever height its rows render at.
+	const position: CSSProperties =
+		rect !== undefined && rect.top - MENU_GAP - height >= MENU_VIEWPORT_MARGIN
+			? { left: placement.left, bottom: window.innerHeight - rect.top + MENU_GAP, maxHeight: rect.top - MENU_GAP - MENU_VIEWPORT_MARGIN }
+			: { left: placement.left, top: placement.top, maxHeight: window.innerHeight - 16 };
 
 	return (
 		<>
@@ -141,7 +151,7 @@ export function ApprovalModeMenu({ mode, onChange }: ApprovalModeMenuProps): Rea
 					className="menu fixed z-60 flex w-interaction-menu flex-col overflow-y-auto rounded-10 border border-border bg-window p-4 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 					role="menu"
 					aria-label={t("interaction.mode.menuLabel")}
-					style={{ left: placement.left, top: placement.top, maxHeight: window.innerHeight - 16 }}
+					style={position}
 					onKeyDown={(event) => {
 						event.stopPropagation();
 						if (event.key === "Escape") {

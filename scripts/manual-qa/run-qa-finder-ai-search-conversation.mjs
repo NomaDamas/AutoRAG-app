@@ -160,7 +160,7 @@ const start = async () => {
 	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 	await openAiSearch(page);
 	panel = page.locator(AI_PANEL);
-	composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 };
 const stop = async () => {
 	await app.close();
@@ -171,7 +171,7 @@ const shot = async (name) => {
 	await page.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 };
 const finished = () =>
-	page.waitForFunction(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
+	page.waitForFunction(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
 const ask = async (text) => {
 	await composer.click();
 	await page.keyboard.type(text);

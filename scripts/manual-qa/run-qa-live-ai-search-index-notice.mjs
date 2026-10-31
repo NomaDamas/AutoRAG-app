@@ -170,7 +170,7 @@ try {
 
 	await openAiSearch(page);
 	const panel = page.locator(AI_PANEL);
-	const composer = panel.locator('input[aria-label="Ask Dazzi"]');
+	const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 	const notices = () => panel.locator('[role="status"]', { hasText: /index/iu });
 	const stopButton = panel.locator('button[aria-label="Stop"]');
 	const shot = async (name) => {
@@ -185,7 +185,7 @@ try {
 		await page.waitForFunction(() => document.querySelector('button[aria-label="Stop"]') !== null || document.querySelector(".text-danger-text") !== null, null, { timeout: 30_000 });
 		return before;
 	};
-	const finished = () => page.waitForFunction(() => document.querySelector('button[aria-label="Stop"]') === null && document.querySelector('input[aria-label="Ask Dazzi"]') !== null, null, { timeout: 240_000 });
+	const finished = () => page.waitForFunction(() => document.querySelector('button[aria-label="Stop"]') === null && document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null, null, { timeout: 240_000 });
 	const errorText = async () => (await page.locator(".ai .text-danger-text").first().textContent({ timeout: 1000 }).catch(() => null)) ?? "";
 	const verdictSince = (before) => (routeVerdicts.length > before ? routeVerdicts[before] : undefined);
 	const describe = (verdict) => (verdict === undefined ? "no verdict" : `${branchOf(verdict)} ${JSON.stringify(verdict.probabilities)}`);
