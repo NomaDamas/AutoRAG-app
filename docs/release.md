@@ -59,6 +59,12 @@ installs one file and nothing else:
 | Everything + ES (Windows only) | the librarian's own `vendor/everything` | the Windows equivalent of fsearch; already inside the app, hash-checked and unpacked on first use |
 | `mailcrawl`, `kordoc` | newest npm release, installed with the bundled Node | native add-ons are fetched for the bundled Node's ABI. `mailcrawl` — the stager refuses it below 0.2.2 — embeds through the daemon's OpenAI route |
 
+On Windows, `kiwi.dll` cannot be loaded from a path with characters outside the ANSI code page (a Korean user
+name puts the per-user install under such a path: `GetLastError=126`, issue #388). When `tools/kiwi` is not
+ASCII, `bundled-tools.ts` copies it once to `%ProgramData%\Dazzi\kiwi-<size>-<mtime>` (else `%PUBLIC%\Dazzi`),
+reuses it while the bundled library is unchanged, drops older copies, and sets `KIWI_*` to the copy. With no
+writable ASCII location it sets nothing, so the librarian falls back to whitespace tokenization.
+
 The embedding model is **not** in the installer. The app downloads the pinned
 `Qwen/Qwen3-Embedding-0.6B` files (~1.2 GB, sha256-verified, resumable) from
 Hugging Face into MinSync's model cache (`~/.cache/minsync/models` on macOS,

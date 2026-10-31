@@ -134,3 +134,81 @@ describe("bundled Kiwi", () => {
 		expect(env.KIWI_MODEL_PATH).toBe(join(kiwi, "models", "cong", "base"));
 	});
 });
+
+describe("bundled Kiwi under a non-ASCII install path (Windows loads kiwi.dll through the ANSI API)", () => {
+	function koreanTools(): { readonly kiwi: string; readonly programData: string } {
+		const resources = join(temp(), "한글사용자", "resources");
+		const kiwi = join(resources, "tools", "kiwi");
+		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
+		mkdirSync(join(kiwi, "lib"), { recursive: true });
+		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
+		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "dll-bytes");
+		writeFileSync(join(kiwi, "models", "cong", "base", "sylls.bin"), "model-bytes");
+		return { kiwi, programData: temp() };
+	}
+	const resourcesOf = (kiwi: string): string => join(kiwi, "..", "..");
+
+	it("points Kiwi at an ASCII copy, with the library and model both copied", () => {
+		const { kiwi, programData } = koreanTools();
+		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
+
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "win32" });
+
+		const library = env.KIWI_LIBRARY_PATH ?? "";
+		const model = env.KIWI_MODEL_PATH ?? "";
+		expect(library).toMatch(/^[\x20-\x7e]+$/);
+		expect(model).toMatch(/^[\x20-\x7e]+$/);
+		expect(library.startsWith(programData)).toBe(true);
+		expect(readFileSync(library, "utf8")).toBe("dll-bytes");
+		expect(readFileSync(join(model, "sylls.bin"), "utf8")).toBe("model-bytes");
+	});
+
+	it("reuses the copy on the next start and rebuilds it when the bundled library changes", () => {
+		const { kiwi, programData } = koreanTools();
+		const first: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env: first, platform: "win32" });
+		const copied = first.KIWI_LIBRARY_PATH ?? "";
+		const stamp = lstatSync(copied).mtimeMs;
+
+		const again: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env: again, platform: "win32" });
+		expect(again.KIWI_LIBRARY_PATH).toBe(copied);
+		expect(lstatSync(copied).mtimeMs).toBe(stamp);
+
+		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "a-newer-and-longer-dll");
+		const upgraded: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env: upgraded, platform: "win32" });
+		expect(readFileSync(upgraded.KIWI_LIBRARY_PATH ?? "", "utf8")).toBe("a-newer-and-longer-dll");
+	});
+
+	it("tries the next ASCII location when the first is not usable", () => {
+		const { kiwi } = koreanTools();
+		const publicDir = temp();
+		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: join(temp(), "프로그램데이터"), PUBLIC: publicDir };
+
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "win32" });
+
+		expect((env.KIWI_LIBRARY_PATH ?? "").startsWith(publicDir)).toBe(true);
+	});
+
+	it("leaves Kiwi unset rather than pointing at a path that cannot load when no ASCII location exists", () => {
+		const { kiwi } = koreanTools();
+		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: join(temp(), "프로그램데이터") };
+
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "win32" });
+
+		expect(env.KIWI_LIBRARY_PATH).toBeUndefined();
+		expect(env.KIWI_MODEL_PATH).toBeUndefined();
+	});
+
+	it("does not copy when the bundled path is already ASCII, or off Windows", () => {
+		const { kiwi, programData } = koreanTools();
+		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", PROGRAMDATA: programData };
+		writeFileSync(join(kiwi, "lib", "libkiwi.dylib"), "");
+
+		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "darwin" });
+
+		expect(env.KIWI_LIBRARY_PATH).toBe(join(kiwi, "lib", "libkiwi.dylib"));
+		expect(existsSync(join(programData, "Dazzi"))).toBe(false);
+	});
+});
