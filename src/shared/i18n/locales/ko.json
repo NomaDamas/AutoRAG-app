@@ -336,11 +336,18 @@
       "last7Days": "지난 7일",
       "last30Days": "지난 30일",
       "older": "그 이전"
+    },
+    "context": {
+      "compacting": "대화가 길어 이전 내용을 요약하는 중…",
+      "compacted": "이전 대화를 요약했어요",
+      "compactedHint": "이전 대화는 요약본으로 이어가요. 빠진 세부 내용이 있으면 다시 알려 주세요.",
+      "trimmed": "너무 큰 검색 결과는 일부만 사용했어요"
     }
   },
   "appError": {
     "fixAction": "AI로 고치기",
     "openModelSettings": "모델 설정 열기",
+    "askNarrower": "범위 좁혀 다시 묻기",
     "showDetails": "자세히 보기",
     "hideDetails": "자세히 닫기",
     "other": {
@@ -370,6 +377,10 @@
     "network": {
       "title": "AI 모델 서버에 연결할 수 없어요",
       "hint": "인터넷 연결을 확인하고 다시 시도하세요. 연결이 정상인데도 계속되면 모델 설정을 확인하세요."
+    },
+    "contextOverflow": {
+      "title": "모델이 한 번에 읽을 수 있는 양을 넘었어요",
+      "hint": "대화와 검색 결과가 너무 커서 답하지 못했어요. 새 대화를 시작하거나, 범위를 좁혀 다시 물어보세요."
     },
     "fix": {
       "title": "AI로 고치기",
@@ -1953,6 +1964,7 @@
     },
     "player": {
       "videoFailed": "동영상을 재생할 수 없습니다",
+      "videoPreparing": "재생할 수 있도록 동영상을 준비하는 중… {{percent}}%",
       "audioFailed": "오디오를 재생할 수 없습니다",
       "playPause": "재생 또는 일시정지",
       "muteToggle": "음소거 전환",

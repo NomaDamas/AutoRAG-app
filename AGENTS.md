@@ -40,7 +40,9 @@ The app consumes the librarian only through the dependency declared in
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
 ref is a release tag or, while the librarian has no tag that carries what the
-app needs, a full commit SHA (now the release tag `v2.13.2`: live Spotlight search without snapshots, MinSync 0.5.1 durable stages
+app needs, a full commit SHA (now the release tag `v2.13.3`: after a Dazzi context overflow the retry is held to half the failed
+request, so an oversized newest tool result no longer fails the compact-and-retry again; v2.13.2 is live Spotlight search without
+snapshots, MinSync 0.5.1 durable stages
 for incremental parsed mirrors plus streamed sync progress and skipped-file counts, `mailcrawl` 0.3.0 `--source files` retiring
 `mail-export`, pi 1.4.0, and Discord attachment downloads under `<AUTORAG_HOME>/attachments/discord/<connection>/` from v2.13.1;
 v2.13.0 is hybrid-first retrieval on top of v2.12.0's file-change approval gate with its `ask`/`auto`/`full` modes, the `ask_user`

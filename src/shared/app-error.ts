@@ -30,6 +30,11 @@ export type AppErrorKind =
 	| "rate-limit"
 	/** The provider could not be reached. */
 	| "network"
+	/**
+	 * The conversation no longer fits the model, even after pi summarised it. Only the main process's verdict gives it
+	 * (the `new-chat` action, from pi's own reading of the provider's words); no wording maps to it here.
+	 */
+	| "context-overflow"
 	| "other";
 
 /** Paths in a message are names the person chose, never a sign of what failed: "Billing/402.pdf" must not read as a payment error. */
