@@ -1,61 +1,122 @@
 /**
- * BYOK model step — connect any provider Settings → AI 모델 can connect, pick
- * the answer model, and prove it answers a real call before moving on. It runs
- * on the same machinery as that page (Pi login, `providersList`, the shared
- * config), so what is connected and chosen here is exactly what Settings shows
- * afterwards; nothing is kept in a separate store. The step stays closed
- * (`draft.model.verified`) until the saved model has answered.
+ * BYOK model step — connect the services Settings → AI 모델 can connect, then
+ * give each role (answer, question splitting, Jev, reranking) its model, and
+ * prove every pick answers before moving on (Figma 09e). It runs on the same
+ * machinery as that page (Pi login, `providersList`, the shared config), so what
+ * is connected and chosen here is exactly what Settings shows afterwards;
+ * nothing is kept in a separate store.
+ *
+ * A pick is saved at once, then checked: the answer and splitting models by a
+ * real call, Jev and the reranker by their provider's connection test. While a
+ * check runs its menu stays shut; a failed one is marked and keeps the step
+ * closed. The three helper roles also offer "auto", which hands the job to the
+ * answer model (splitting) or leaves it off (Jev, reranking) and needs no check.
+ * The step opens (`draft.model.verified`) once a service is connected and every
+ * role has a model that answered or is on auto.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { Check, ChevronDown, Plus } from "lucide-react";
-import { withoutAutorag } from "../../../../shared/account-contract";
-import { modelConfigUpdates } from "../../../../shared/model-config";
-import type { ModelCheckResult, OnboardingModelChoice } from "../../../../shared/onboarding-contract";
-import type { AutoRagConfigSnapshot, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
-import { RolePicker } from "../../components/settings/ModelPicker";
-import { ConnectMenu, useProviderConnect } from "../../components/settings/ProviderConnect";
-import { errorText } from "../../components/settings/configSupport";
-import { FloatingMenu } from "../../components/settings/SettingsKit";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { jevBackendFor, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles, withoutAutorag } from "../../../../shared/ai-roles";
+import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import type { ModelCheckResult } from "../../../../shared/onboarding-contract";
+import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
+import { ProviderIcon } from "../../components/settings/ProviderIcon";
+import { useProviderConnect } from "../../components/settings/ProviderConnect";
+import { asRecord, errorText, getAt, stringOf } from "../../components/settings/configSupport";
+import { jevOptionsFor, providerRoleCleanup, rerankOptionsFor, type RoleOption } from "../../components/settings/roleSupport";
+import { FloatingMenu, ModalActions, ModalShell } from "../../components/settings/SettingsKit";
+import { cn } from "../../lib/cn";
 import type { OnboardingCtx } from "../context";
-import { onlyModel, reconcileModelChoice } from "../model-choice";
-import { Eyebrow, SplitScreen } from "../parts";
+import { onlyModel } from "../model-choice";
+import { Multiline } from "../parts";
 
 const settings = window.autorag.settings;
 const onboarding = window.autorag.onboarding;
 
-interface MenuState {
-	readonly kind: "connect" | "picker";
-	readonly anchor: HTMLElement;
+type RoleId = "answer" | "decomposition" | "jev" | "rerank";
+
+/** The answer model stands alone; the three helpers share one card (Figma 09e). */
+const HELPER_ROLES: readonly RoleId[] = ["decomposition", "jev", "rerank"];
+const ROLES: readonly RoleId[] = ["answer", ...HELPER_ROLES];
+
+/** What the config says a role uses: nothing yet, the auto choice, or a model. */
+type RoleValue =
+	| { readonly kind: "unset" }
+	| { readonly kind: "auto" }
+	| { readonly kind: "model"; readonly provider: string; readonly modelId: string; readonly label: string };
+
+/** Where a role's pick stands: not asked yet, being asked, answered, or refused. */
+type Check = { readonly state: "idle" } | { readonly state: "checking" } | { readonly state: "ok" } | { readonly state: "failed"; readonly error: string };
+
+type MenuState = { readonly kind: "connect"; readonly anchor: HTMLElement } | { readonly kind: "role"; readonly role: RoleId; readonly anchor: HTMLElement };
+
+const IDLE: Check = { state: "idle" };
+const NO_CHECKS: Readonly<Record<RoleId, Check>> = { answer: IDLE, decomposition: IDLE, jev: IDLE, rerank: IDLE };
+
+const keyOf = (provider: string, modelId: string): string => `${provider}/${modelId}`;
+
+function optionLabel(options: readonly RoleOption[], provider: string, modelId: string, fallback: string): string {
+	const hit = options.find((option) => option.provider.id === provider && option.model.id === modelId);
+	return hit === undefined ? fallback : hit.model.name || hit.model.id;
 }
 
-/** Where the chosen model stands: not asked yet, being asked, answered, or refused. */
-type Check =
-	| { readonly state: "idle" }
-	| { readonly state: "checking" }
-	| { readonly state: "ok"; readonly latencyMs: number }
-	| { readonly state: "failed"; readonly error: string };
+/** Reads a role's current pick from the shared config; a block the librarian wrote by itself counts as unset. */
+function roleValue(role: RoleId, config: AutoRagConfigSnapshot["config"], options: readonly RoleOption[], connected: readonly ProviderSummary[]): RoleValue {
+	if (role === "answer") {
+		const model = asRecord(getAt(config, ["model"]));
+		const provider = stringOf(model?.provider);
+		const modelId = stringOf(model?.id);
+		if (provider.length === 0 || modelId.length === 0 || !connected.some((candidate) => candidate.id === provider)) return { kind: "unset" };
+		return { kind: "model", provider, modelId, label: optionLabel(options, provider, modelId, stringOf(model?.name) || modelId) };
+	}
+	if (role === "decomposition") {
+		const raw = getAt(config, ["queryDecomposition"]);
+		if (raw === false) return { kind: "auto" };
+		if (shouldAdoptManagedDecomposition(raw)) return { kind: "unset" };
+		const model = asRecord(asRecord(raw)?.model);
+		const provider = stringOf(model?.provider);
+		const modelId = stringOf(model?.id);
+		if (provider.length === 0 || modelId.length === 0) return { kind: "unset" };
+		return { kind: "model", provider, modelId, label: optionLabel(options, provider, modelId, stringOf(model?.name) || modelId) };
+	}
+	const raw = getAt(config, [role]);
+	if (raw === false) return { kind: "auto" };
+	if (shouldAdoptManagedRoles({ [role]: raw })[role]) return { kind: "unset" };
+	const block = asRecord(raw);
+	const modelId = stringOf(block?.model);
+	// Jev names a backend, not a provider: find the connected provider that serves it.
+	const provider = role === "jev" ? (connected.find((candidate) => jevBackendFor(candidate.id) === stringOf(block?.backend))?.id ?? "") : stringOf(block?.provider);
+	if (provider.length === 0 || modelId.length === 0) return { kind: "unset" };
+	return { kind: "model", provider, modelId, label: optionLabel(options, provider, modelId, modelId) };
+}
 
-type ModelRef = Pick<OnboardingModelChoice, "provider" | "modelId">;
+function pickUpdates(role: RoleId, entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
+	if (role === "answer") return modelConfigUpdates(entry);
+	if (role === "decomposition") return decompositionConfigUpdates(entry);
+	return role === "jev" ? jevConfigUpdates(entry) : rerankConfigUpdates(entry);
+}
 
-const keyOf = (ref: ModelRef): string => `${ref.provider}/${ref.modelId}`;
+/** "Auto": splitting falls to the answer model; Jev and reranking stay off. */
+function autoUpdates(role: Exclude<RoleId, "answer">): AutoRagConfigUpdate[] {
+	return [{ path: [role === "decomposition" ? "queryDecomposition" : role], value: false }];
+}
 
 export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft, patch } = ctx;
 	const [providers, setProviders] = useState<readonly ProviderSummary[] | null>(null);
 	const [config, setConfig] = useState<AutoRagConfigSnapshot["config"] | null>(null);
-	const [notice, setNotice] = useState<string | null>(null);
 	const [menu, setMenu] = useState<MenuState | null>(null);
-	const [active, setActive] = useState<ModelRef | null>(null);
-	const [check, setCheck] = useState<Check>({ state: "idle" });
-	/** A save is in flight: the sync below must not start a second one for the same state. */
-	const saving = useRef(false);
-	/** The models picked for the user already; each is tried once, so a save that did not stick cannot loop. */
-	const autoPicked = useRef(new Set<string>());
-	/** The models already sent to the check from the sync below, so one config entry is asked once. */
+	const [checks, setChecks] = useState<Readonly<Record<RoleId, Check>>>(NO_CHECKS);
+	/** Models that refused a check, per role, so the menu can mark them. */
+	const [refused, setRefused] = useState<Readonly<Record<RoleId, ReadonlySet<string>>>>({ answer: new Set(), decomposition: new Set(), jev: new Set(), rerank: new Set() });
+	const [disconnecting, setDisconnecting] = useState<ProviderSummary | null>(null);
+	const [notice, setNotice] = useState<string | null>(null);
+	/** Picks already sent to a check, so one config entry is asked once. */
 	const attempted = useRef(new Set<string>());
-	/** Only the latest check may land: a slow answer for a model since replaced is dropped. */
-	const checkRun = useRef(0);
+	/** Only the latest check per role may land: a slow answer for a model since replaced is dropped. */
+	const runs = useRef<Record<RoleId, number>>({ answer: 0, decomposition: 0, jev: 0, rerank: 0 });
+	const autoPicked = useRef(false);
 
 	const reload = useCallback(async (): Promise<void> => {
 		try {
@@ -65,163 +126,212 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 		} catch (cause) {
 			setNotice(errorText(cause));
 			setProviders((previous) => previous ?? []);
+			setConfig((previous) => previous ?? {});
 		}
 	}, []);
 	useEffect(() => {
 		void reload();
 	}, [reload]);
 
-	const connect = useProviderConnect({ reload, onNotice: setNotice });
+	const connect = useProviderConnect({ reload, onNotice: setNotice, guided: true });
 
 	const connected = useMemo(() => withoutAutorag((providers ?? []).filter((provider) => provider.authConfigured)), [providers]);
-	const available = useMemo(() => (providers ?? []).filter((provider) => !provider.authConfigured), [providers]);
-	const models = useMemo(() => connected.flatMap((provider) => provider.models.map((model) => ({ provider, model }))), [connected]);
-
-	/** Asks the saved model for a short reply; the step opens only when it answers. */
-	const verify = useCallback(
-		async (ref: ModelRef): Promise<void> => {
-			const run = ++checkRun.current;
-			setActive(ref);
-			setCheck({ state: "checking" });
-			let result: ModelCheckResult;
-			try {
-				result = await onboarding.checkModel();
-			} catch (cause) {
-				result = { ok: false, error: errorText(cause) };
-			}
-			if (run !== checkRun.current) return;
-			setCheck(result.ok ? { state: "ok", latencyMs: result.latencyMs } : { state: "failed", error: result.error });
-			patch({ model: { provider: ref.provider, modelId: ref.modelId, verified: result.ok } });
-		},
-		[patch],
+	const available = useMemo(() => withoutAutorag((providers ?? []).filter((provider) => !provider.authConfigured)), [providers]);
+	const options = useMemo((): Readonly<Record<RoleId, readonly RoleOption[]>> => {
+		const models = connected.flatMap((provider) => provider.models.map((model) => ({ provider, model })));
+		return { answer: models, decomposition: models, jev: jevOptionsFor(connected), rerank: rerankOptionsFor(connected) };
+	}, [connected]);
+	const values = useMemo(
+		(): Readonly<Record<RoleId, RoleValue>> | null =>
+			config === null
+				? null
+				: {
+						answer: roleValue("answer", config, options.answer, connected),
+						decomposition: roleValue("decomposition", config, options.decomposition, connected),
+						jev: roleValue("jev", config, options.jev, connected),
+						rerank: roleValue("rerank", config, options.rerank, connected),
+					},
+		[config, options, connected],
 	);
 
-	const choose = useCallback(
-		(entry: ModelCatalogEntry): void => {
-			const ref: ModelRef = { provider: entry.provider, modelId: entry.id };
-			saving.current = true;
-			// The config is written first: the check calls the model exactly as the smart scan and AI Search will.
-			checkRun.current += 1;
-			setActive(ref);
-			setCheck({ state: "checking" });
+	/** Proves a saved pick: a real call for the answer and splitting models, the provider's connection test for Jev and reranking. */
+	const verify = useCallback(async (role: RoleId, provider: string, modelId: string): Promise<void> => {
+		const run = ++runs.current[role];
+		setChecks((previous) => ({ ...previous, [role]: { state: "checking" } }));
+		let result: ModelCheckResult;
+		try {
+			if (role === "answer" || role === "decomposition") result = await onboarding.checkModel(role);
+			else result = (await settings.providersTest(provider)).ok ? { ok: true, latencyMs: 0 } : { ok: false, error: "" };
+		} catch (cause) {
+			result = { ok: false, error: errorText(cause) };
+		}
+		if (run !== runs.current[role]) return;
+		setChecks((previous) => ({ ...previous, [role]: result.ok ? { state: "ok" } : { state: "failed", error: result.error } }));
+		setRefused((previous) => {
+			const next = new Set(previous[role]);
+			if (result.ok) next.delete(keyOf(provider, modelId));
+			else next.add(keyOf(provider, modelId));
+			return { ...previous, [role]: next };
+		});
+	}, []);
+
+	const save = useCallback(
+		(role: RoleId, updates: readonly AutoRagConfigUpdate[], pick: { readonly provider: string; readonly modelId: string } | null): void => {
+			runs.current[role] += 1;
+			setChecks((previous) => ({ ...previous, [role]: pick === null ? IDLE : { state: "checking" } }));
 			void settings
-				.configPatch(modelConfigUpdates(entry))
+				.configPatch(updates)
 				.then((next) => {
-					attempted.current.add(keyOf(ref));
 					setConfig(next.config);
-					patch({ model: { ...ref, verified: false } });
-					return verify(ref);
+					setNotice(null);
+					if (pick === null) return;
+					attempted.current.add(`${role}:${keyOf(pick.provider, pick.modelId)}`);
+					return verify(role, pick.provider, pick.modelId);
 				})
 				.catch((cause) => {
-					setCheck({ state: "idle" });
+					setChecks((previous) => ({ ...previous, [role]: IDLE }));
 					setNotice(errorText(cause));
-				})
-				.finally(() => {
-					saving.current = false;
 				});
 		},
-		[patch, verify],
+		[verify],
 	);
 
-	// The config is the authority for the model: adopt what it holds and have it answer before the step opens,
-	// drop a draft choice it no longer backs, and pick the model for the user when exactly one is on offer.
+	// A pick already in the config (a returning user, or one Settings made) is checked once, like a fresh one.
+	// With exactly one model on offer and no answer model yet, that model is chosen for the user.
+	useEffect(() => {
+		if (values === null) return;
+		for (const role of ROLES) {
+			const value = values[role];
+			if (value.kind !== "model") continue;
+			const key = `${role}:${keyOf(value.provider, value.modelId)}`;
+			if (attempted.current.has(key)) continue;
+			attempted.current.add(key);
+			void verify(role, value.provider, value.modelId);
+		}
+		const only = onlyModel(options.answer);
+		if (values.answer.kind === "unset" && only !== null && !autoPicked.current) {
+			autoPicked.current = true;
+			save("answer", modelConfigUpdates(only), { provider: only.provider, modelId: only.id });
+		}
+	}, [values, options, verify, save]);
+
+	// The step opens once a service is connected and every role is on auto or has a model that answered.
+	const ready =
+		values !== null &&
+		connected.length > 0 &&
+		ROLES.every((role) => values[role].kind === "auto" || (values[role].kind === "model" && checks[role].state === "ok"));
+	const answer = values?.answer;
 	const drafted = draft.model;
 	useEffect(() => {
-		if (providers === null || config === null || saving.current) return;
-		const choice = reconcileModelChoice(config, providers);
-		if (choice !== null) {
-			const same = drafted?.provider === choice.provider && drafted.modelId === choice.modelId;
-			if (same && drafted.verified) {
-				setActive((previous) => previous ?? choice);
-				return;
-			}
-			const key = keyOf(choice);
-			if (attempted.current.has(key)) return;
-			attempted.current.add(key);
-			if (!same) patch({ model: choice });
-			void verify(choice);
-			return;
+		if (answer === undefined) return;
+		const next = answer.kind === "model" ? { provider: answer.provider, modelId: answer.modelId, verified: ready } : null;
+		const same = next === null ? drafted === null : drafted !== null && drafted.provider === next.provider && drafted.modelId === next.modelId && drafted.verified === next.verified;
+		if (!same) patch({ model: next });
+	}, [answer, ready, drafted, patch]);
+
+	const disconnect = async (provider: ProviderSummary): Promise<void> => {
+		// Off the list first, so nothing (the only-model pick) reaches for it while it goes.
+		setProviders((previous) => previous?.filter((candidate) => candidate.id !== provider.id) ?? previous);
+		try {
+			const ops = providerRoleCleanup(config ?? {}, provider.id);
+			if (ops.length > 0) setConfig((await settings.configPatch(ops)).config);
+			if (provider.kind === "local" || provider.kind === "custom") await settings.providersRemove(provider.id);
+			else await settings.providerLogout(provider.id);
+			await reload();
+		} catch (cause) {
+			setNotice(errorText(cause));
 		}
-		const only = onlyModel(models);
-		const key = only === null ? null : `${only.provider}/${only.id}`;
-		if (only !== null && key !== null && !autoPicked.current.has(key)) {
-			autoPicked.current.add(key);
-			choose(only);
-		} else if (drafted !== null) patch({ model: null });
-	}, [providers, config, models, drafted, patch, choose, verify]);
+	};
 
-	const shown = active ?? (drafted === null ? null : { provider: drafted.provider, modelId: drafted.modelId });
-	const entry = shown === null ? undefined : models.find((candidate) => candidate.provider.id === shown.provider && candidate.model.id === shown.modelId);
-	const chosenName = shown === null ? null : entry === undefined ? shown.modelId : entry.model.name || entry.model.id;
-	// A resumed draft that was already proven needs no new answer to read as ready.
-	const ready = check.state === "ok" || (check.state === "idle" && drafted?.verified === true && shown !== null);
-
-	let status: string;
-	if (chosenName === null) status = notice ?? t("onboarding.model.unready");
-	else if (check.state === "failed") status = t("onboarding.model.failed", { model: chosenName, error: check.error });
-	else if (ready) status = check.state === "ok" ? t("onboarding.model.ready", { model: chosenName, seconds: Math.max(0.1, Math.round(check.latencyMs / 100) / 10) }) : t("onboarding.model.readyResumed", { model: chosenName });
-	else status = t("onboarding.model.checking", { model: chosenName });
-
-	return (
-		<SplitScreen
-			copy={
-				<>
-					<Eyebrow icon="brain">{t("onboarding.model.eyebrow")}</Eyebrow>
-					<h1>{t("onboarding.model.title")}</h1>
-					<p>{t("onboarding.model.lead")}</p>
-					<p className="micro-note">{t("onboarding.model.note")}</p>
-				</>
-			}
-		>
-			<div className="card model-card">
-				<div className="detected model-services">
-					<div className="detected-title">{t("onboarding.model.connectedTitle")}</div>
-					{connected.map((provider) => (
-						<div key={provider.id} className="detected-row" data-provider-row={provider.id}>
-							<span className="source-icon" aria-hidden="true">{provider.name.charAt(0).toUpperCase()}</span>
-							<div>
-								<strong>{provider.name}</strong>
-								<small>{provider.baseUrl ?? t(provider.subscription ? "settingsCore.ai.subscriptionAccount" : `settingsCore.ai.kind.${provider.kind}`)}</small>
-							</div>
-							<Check size={14} aria-hidden="true" focusable="false" />
-						</div>
-					))}
-					{providers !== null && connected.length === 0 ? <p className="model-empty">{t("onboarding.model.none")}</p> : null}
-					<button type="button" className="secondary model-connect" data-connect-service onClick={(event) => setMenu({ kind: "connect", anchor: event.currentTarget })}>
-						<Plus size={14} aria-hidden="true" focusable="false" />
-						{t("onboarding.model.connect")}
-					</button>
+	const roleRow = (role: RoleId): ReactElement => {
+		const value = values?.[role] ?? { kind: "unset" };
+		const check = checks[role];
+		const status = value.kind === "model" ? check.state : "idle";
+		const open = menu?.kind === "role" && menu.role === role;
+		const Arrow = open ? ChevronUp : ChevronDown;
+		return (
+			<div key={role} className="model-role" data-role-row={role}>
+				<div className="model-role-copy">
+					<strong>{t(`onboarding.model.role.${role}.name`)}</strong>
+					<small>{t(`onboarding.model.role.${role}.desc`)}</small>
 				</div>
-				<div className="model-row">
-					<span>{t("onboarding.model.modelRow")}</span>
+				<div className="model-role-pick">
+					<span className={cn("model-role-status", status)} role="status" aria-label={status === "idle" ? undefined : t(`onboarding.model.status.${status}`)} title={check.state === "failed" ? check.error || t("onboarding.model.status.failed") : undefined}>
+						{status === "checking" ? <LoaderCircle size={12} className="spin" aria-hidden="true" focusable="false" /> : null}
+						{status === "ok" ? <Check size={12} aria-hidden="true" focusable="false" /> : null}
+						{status === "failed" ? "!" : null}
+					</span>
 					<button
 						type="button"
-						className="secondary model-trigger"
-						data-model-trigger
-						disabled={models.length === 0 || check.state === "checking"}
-						onClick={(event) => setMenu({ kind: "picker", anchor: event.currentTarget })}
+						className={cn("model-role-trigger", status === "failed" && "failed", open && "open")}
+						data-role-trigger={role}
+						aria-expanded={open}
+						disabled={status === "checking"}
+						// Its own trigger closes an open menu again.
+						onClick={(event) => setMenu(open ? null : { kind: "role", role, anchor: event.currentTarget })}
 					>
-						<span>{chosenName ?? t(models.length === 0 ? "onboarding.model.needService" : "onboarding.model.pick")}</span>
-						<ChevronDown size={14} aria-hidden="true" focusable="false" />
+						<span>{value.kind === "model" ? value.label : value.kind === "auto" ? t("onboarding.model.auto") : t("onboarding.model.pick")}</span>
+						<Arrow size={16} aria-hidden="true" focusable="false" />
 					</button>
 				</div>
-				<p className={ready ? "model-status ready" : check.state === "failed" ? "model-status failed" : "model-status"} role="status">
-					{status}
+			</div>
+		);
+	};
+
+	return (
+		<section className="screen center model-screen">
+			<div className="screen-copy">
+				<h1>{t("onboarding.model.title")}</h1>
+				<p>
+					<Multiline text={t("onboarding.model.lead")} />
 				</p>
-				{check.state === "failed" && shown !== null ? (
-					<button type="button" className="secondary model-retry" data-model-retry onClick={() => void verify(shown)}>
-						{t("onboarding.model.retry")}
-					</button>
-				) : null}
+			</div>
+			<div className="model-columns">
+				<div className="model-column services">
+					<p className="model-column-title">{t("onboarding.model.connectedTitle")}</p>
+					<div className="model-services">
+						{connected.length > 0 ? (
+							<div className="model-services-list">
+								{connected.map((provider) => (
+									<div key={provider.id} className="model-service" data-provider-row={provider.id}>
+										<span className="model-service-icon" aria-hidden="true">
+											<ProviderIcon provider={provider} />
+										</span>
+										<strong>{provider.name}</strong>
+										{provider.authSource === "environment" ? null : (
+											<button type="button" className="model-service-remove" aria-label={t("onboarding.model.disconnect", { name: provider.name })} onClick={() => setDisconnecting(provider)}>
+												<X size={16} aria-hidden="true" focusable="false" />
+											</button>
+										)}
+									</div>
+								))}
+							</div>
+						) : null}
+						<button type="button" className="model-service-add" data-connect-service onClick={(event) => setMenu(menu?.kind === "connect" ? null : { kind: "connect", anchor: event.currentTarget })}>
+							<Plus size={14} aria-hidden="true" focusable="false" />
+							{t("onboarding.model.connect")}
+						</button>
+					</div>
+				</div>
+				<div className="model-column roles">
+					<p className="model-column-title">{t("onboarding.model.rolesTitle")}</p>
+					<div className="model-role-card">{roleRow("answer")}</div>
+					<div className="model-role-card">{HELPER_ROLES.map(roleRow)}</div>
+					{notice !== null ? (
+						<p className="model-notice" role="alert">
+							{notice}
+						</p>
+					) : null}
+				</div>
 			</div>
 			{/* The menus and dialogs are Settings' own, and their styles hang off `.settings-view`; this box adds no layout of its own. */}
 			<div className="settings-view model-overlays">
 				{menu !== null ? (
 					<FloatingMenu anchor={menu.anchor} onClose={() => setMenu(null)}>
 						{menu.kind === "connect" ? (
-							<ConnectMenu
-								providers={withoutAutorag(available)}
-								onSignInToAutorag={undefined}
+							<ConnectList
+								t={t}
+								providers={available}
 								onConnect={(provider, authType) => {
 									setMenu(null);
 									connect.connect(provider, authType);
@@ -230,28 +340,412 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 									setMenu(null);
 									connect.openServer(kind, null);
 								}}
-								onPickServerExisting={(provider) => {
-									setMenu(null);
-									connect.openServer(provider.kind === "local" ? "local" : "custom", provider);
-								}}
 							/>
 						) : (
-							<RolePicker
-								role="answer"
-								models={models}
-								specials={[]}
-								selected={shown === null ? null : { kind: "model", provider: shown.provider, modelId: shown.modelId }}
-								onPick={(picked) => {
+							<RoleList
+								t={t}
+								options={options[menu.role]}
+								current={values?.[menu.role] ?? { kind: "unset" }}
+								refused={refused[menu.role]}
+								auto={menu.role !== "answer"}
+								onPick={(entry) => {
+									const role = menu.role;
 									setMenu(null);
-									choose(picked);
+									save(role, pickUpdates(role, entry), { provider: entry.provider, modelId: entry.id });
 								}}
-								onSpecial={() => undefined}
+								onAuto={() => {
+									const role = menu.role;
+									setMenu(null);
+									if (role !== "answer") save(role, autoUpdates(role), null);
+								}}
 							/>
 						)}
 					</FloatingMenu>
 				) : null}
+				{disconnecting !== null ? (
+					<ModalShell onClose={() => setDisconnecting(null)}>
+						<h2>{t("settingsCore.ai.disconnect.title", { name: disconnecting.name })}</h2>
+						<p>{t("settingsCore.ai.disconnect.body")}</p>
+						<ModalActions>
+							<button type="button" className="linear-btn" onClick={() => setDisconnecting(null)}>
+								{t("common.cancel")}
+							</button>
+							<button
+								type="button"
+								// The answer that goes ahead is the blue one (modal template, Figma 111:3985).
+								className="linear-btn settings-btn-primary"
+								onClick={() => {
+									const target = disconnecting;
+									setDisconnecting(null);
+									void disconnect(target);
+								}}
+							>
+								{t("settingsCore.ai.disconnect.action")}
+							</button>
+						</ModalActions>
+					</ModalShell>
+				) : null}
 				{connect.modals}
 			</div>
-		</SplitScreen>
+		</section>
+	);
+}
+
+/** The search box that stays put while the list under it scrolls. */
+function MenuSearch({ value, placeholder, onChange }: { readonly value: string; readonly placeholder: string; readonly onChange: (value: string) => void }): ReactElement {
+	return (
+		<label className="onb-menu-search">
+			<Search size={16} aria-hidden="true" focusable="false" />
+			<input autoFocus value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} />
+		</label>
+	);
+}
+
+/** The "connect a service" menu: subscriptions, API keys and servers on this computer, filtered by the search. */
+function ConnectList({
+	t,
+	providers,
+	onConnect,
+	onPickServer,
+}: {
+	readonly t: OnboardingCtx["t"];
+	readonly providers: readonly ProviderSummary[];
+	readonly onConnect: (provider: ProviderSummary, authType: "oauth" | "api_key") => void;
+	readonly onPickServer: (kind: "local" | "custom") => void;
+}): ReactElement {
+	const [query, setQuery] = useState("");
+	const lower = query.trim().toLowerCase();
+	const shown = providers.filter((provider) => lower.length === 0 || provider.name.toLowerCase().includes(lower));
+	const subscriptions = shown.filter((provider) => provider.kind === "runtime" && (provider.subscription || provider.authKinds.includes("oauth")));
+	const apiKeys = shown.filter((provider) => provider.kind === "runtime" && !provider.subscription && provider.authKinds.includes("api_key"));
+	const groups: readonly { readonly title: string; readonly items: readonly ProviderSummary[]; readonly auth: "oauth" | "api_key" }[] = [
+		{ title: t("settingsCore.ai.subscriptionAccount"), items: subscriptions, auth: "oauth" },
+		{ title: t("settingsCore.ai.menu.apiKeys"), items: apiKeys, auth: "api_key" },
+	];
+	return (
+		<div className="onb-menu connect">
+			<MenuSearch value={query} placeholder={t("onboarding.model.searchServices")} onChange={setQuery} />
+			<div className="onb-menu-list">
+				{groups.map((group) =>
+					group.items.length === 0 ? null : (
+						<div key={group.auth} className="onb-menu-group">
+							<p className="onb-menu-group-title">{group.title}</p>
+							{group.items.map((provider) => (
+								<button key={provider.id} type="button" className="onb-menu-item" onClick={() => onConnect(provider, group.auth)}>
+									<span className="onb-menu-icon" aria-hidden="true">
+										<ProviderIcon provider={provider} size={16} />
+									</span>
+									<span>{provider.name}</span>
+								</button>
+							))}
+						</div>
+					),
+				)}
+				<div className="onb-menu-group">
+					<p className="onb-menu-group-title">{t("settingsCore.ai.menu.localMachine")}</p>
+					<button type="button" className="onb-menu-item" onClick={() => onPickServer("custom")}>
+						<Plus size={14} aria-hidden="true" focusable="false" />
+						<span>{t("onboarding.model.addCustom")}</span>
+					</button>
+					<button type="button" className="onb-menu-item" onClick={() => onPickServer("local")}>
+						<Plus size={14} aria-hidden="true" focusable="false" />
+						<span>{t("onboarding.model.addLocal")}</span>
+					</button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+interface RoleProviderBucket {
+	readonly provider: ProviderSummary;
+	readonly models: readonly ModelCatalogEntry[];
+}
+
+interface RoleSubmenuAnchor {
+	readonly providerId: string;
+	readonly trigger: HTMLButtonElement;
+}
+
+const ROLE_SUBMENU_WIDTH = 256;
+const ROLE_SUBMENU_GAP = 4;
+const ROLE_VIEWPORT_MARGIN = 12;
+
+function groupRoleOptions(options: readonly RoleOption[], filter?: (option: RoleOption) => boolean): RoleProviderBucket[] {
+	const grouped = new Map<string, { readonly provider: ProviderSummary; readonly models: ModelCatalogEntry[] }>();
+	for (const option of options) {
+		if (filter !== undefined && !filter(option)) continue;
+		const existing = grouped.get(option.provider.id);
+		if (existing !== undefined) existing.models.push(option.model);
+		else grouped.set(option.provider.id, { provider: option.provider, models: [option.model] });
+	}
+	return [...grouped.values()];
+}
+
+/** A role's model menu: providers open a model submenu; search returns models grouped by provider. */
+function RoleList({
+	t,
+	options,
+	current,
+	refused,
+	auto,
+	onPick,
+	onAuto,
+}: {
+	readonly t: OnboardingCtx["t"];
+	readonly options: readonly RoleOption[];
+	readonly current: RoleValue;
+	readonly refused: ReadonlySet<string>;
+	readonly auto: boolean;
+	readonly onPick: (entry: ModelCatalogEntry) => void;
+	readonly onAuto: () => void;
+}): ReactElement {
+	const [query, setQuery] = useState("");
+	const [submenu, setSubmenu] = useState<RoleSubmenuAnchor | null>(null);
+	const submenuRef = useRef<HTMLDivElement>(null);
+	const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const lower = query.trim().toLowerCase();
+	const searching = lower.length > 0;
+	const allBuckets = useMemo(() => groupRoleOptions(options), [options]);
+	const filteredBuckets = useMemo(() => {
+		if (!searching) return allBuckets;
+		return groupRoleOptions(options, ({ provider, model }) => [model.name, model.id, provider.name].some((text) => text.toLowerCase().includes(lower)));
+	}, [allBuckets, lower, options, searching]);
+	const activeBucket = !searching && submenu !== null ? (allBuckets.find((bucket) => bucket.provider.id === submenu.providerId) ?? null) : null;
+
+	const cancelClose = useCallback((): void => {
+		if (closeTimerRef.current !== null) {
+			clearTimeout(closeTimerRef.current);
+			closeTimerRef.current = null;
+		}
+	}, []);
+	const scheduleClose = useCallback((): void => {
+		cancelClose();
+		closeTimerRef.current = setTimeout(() => {
+			setSubmenu(null);
+			closeTimerRef.current = null;
+		}, 120);
+	}, [cancelClose]);
+	useEffect(() => () => cancelClose(), [cancelClose]);
+	useEffect(() => {
+		if (searching) setSubmenu(null);
+	}, [searching]);
+
+	const openProvider = useCallback(
+		(providerId: string, trigger: HTMLButtonElement, focusFirstModel = false): void => {
+			cancelClose();
+			setSubmenu({ providerId, trigger });
+			if (focusFirstModel) {
+				queueMicrotask(() => submenuRef.current?.querySelector<HTMLButtonElement>(".onb-menu-item")?.focus());
+			}
+		},
+		[cancelClose],
+	);
+
+	return (
+		<div className={cn("onb-menu role", auto && "with-auto")} onMouseLeave={scheduleClose} onMouseEnter={cancelClose}>
+			<MenuSearch value={query} placeholder={t("onboarding.model.searchModels")} onChange={setQuery} />
+			<div className="onb-menu-list">
+				{searching ? (
+					filteredBuckets.length === 0 ? (
+						<p className="onb-menu-empty">{t("onboarding.model.noMatch")}</p>
+					) : (
+						filteredBuckets.map((bucket) => (
+							<div key={bucket.provider.id} className="onb-menu-group">
+								<p className="onb-menu-group-title is-provider">
+									<span className="onb-menu-icon" aria-hidden="true">
+										<ProviderIcon provider={bucket.provider} size={14} />
+									</span>
+									<span>{bucket.provider.name}</span>
+								</p>
+								{bucket.models.map((model) => (
+									<RoleModelItem key={keyOf(model.provider, model.id)} provider={bucket.provider} model={model} current={current} refused={refused} onPick={onPick} />
+								))}
+							</div>
+						))
+					)
+				) : allBuckets.length === 0 ? (
+					<p className="onb-menu-empty">{t("onboarding.model.noModels")}</p>
+				) : (
+					allBuckets.map((bucket) => {
+						const open = activeBucket?.provider.id === bucket.provider.id;
+						const hasSelectedModel = current.kind === "model" && current.provider === bucket.provider.id;
+						return (
+							<button
+								key={bucket.provider.id}
+								type="button"
+								role="menuitem"
+								aria-haspopup="menu"
+								aria-expanded={open}
+								className={cn("onb-menu-item onb-provider-trigger", open && "open")}
+								data-provider-trigger={bucket.provider.id}
+								onMouseEnter={(event) => openProvider(bucket.provider.id, event.currentTarget)}
+								onClick={(event) => {
+									if (open) setSubmenu(null);
+									else openProvider(bucket.provider.id, event.currentTarget);
+								}}
+								onKeyDown={(event) => {
+									if (event.key === "ArrowRight") {
+										event.preventDefault();
+										openProvider(bucket.provider.id, event.currentTarget, true);
+									} else if (event.key === "ArrowLeft" && open) {
+										event.preventDefault();
+										setSubmenu(null);
+									}
+								}}
+							>
+								<span className="onb-menu-icon" aria-hidden="true">
+									<ProviderIcon provider={bucket.provider} size={16} />
+								</span>
+								<span>{bucket.provider.name}</span>
+								{hasSelectedModel ? <span className="onb-provider-active-dot" aria-hidden="true" /> : null}
+								<ChevronRight size={14} className="onb-menu-chevron" aria-hidden="true" focusable="false" />
+							</button>
+						);
+					})
+				)}
+			</div>
+			{auto ? (
+				<button
+					type="button"
+					role="menuitemradio"
+					aria-checked={current.kind === "auto"}
+					className="onb-menu-item onb-menu-auto"
+					data-role-auto
+					onMouseEnter={() => {
+						cancelClose();
+						setSubmenu(null);
+					}}
+					onClick={onAuto}
+				>
+					<span>{t("onboarding.model.auto")}</span>
+					{current.kind === "auto" ? <Check size={12} className="onb-menu-mark" aria-hidden="true" focusable="false" /> : null}
+				</button>
+			) : null}
+			{activeBucket !== null && submenu !== null ? (
+				<RoleProviderSubmenu
+					refObj={submenuRef}
+					bucket={activeBucket}
+					trigger={submenu.trigger}
+					current={current}
+					refused={refused}
+					onPick={onPick}
+					onClose={() => {
+						const trigger = submenu.trigger;
+						setSubmenu(null);
+						trigger.focus();
+					}}
+				/>
+			) : null}
+		</div>
+	);
+}
+
+function RoleModelItem({
+	provider,
+	model,
+	current,
+	refused,
+	onPick,
+}: {
+	readonly provider: ProviderSummary;
+	readonly model: ModelCatalogEntry;
+	readonly current: RoleValue;
+	readonly refused: ReadonlySet<string>;
+	readonly onPick: (entry: ModelCatalogEntry) => void;
+}): ReactElement {
+	const key = keyOf(model.provider, model.id);
+	const chosen = current.kind === "model" && keyOf(current.provider, current.modelId) === key;
+	const failed = refused.has(key);
+	return (
+		<button
+			type="button"
+			role="menuitemradio"
+			aria-checked={chosen}
+			className={cn("onb-menu-item", failed && "failed")}
+			data-model-id={key}
+			title={`${provider.name} · ${model.id}`}
+			onClick={() => onPick(model)}
+		>
+			<span>{model.name || model.id}</span>
+			{failed ? <b className="onb-menu-mark failed">!</b> : chosen ? <Check size={12} className="onb-menu-mark" aria-hidden="true" focusable="false" /> : null}
+		</button>
+	);
+}
+
+function RoleProviderSubmenu({
+	refObj,
+	bucket,
+	trigger,
+	current,
+	refused,
+	onPick,
+	onClose,
+}: {
+	readonly refObj: RefObject<HTMLDivElement | null>;
+	readonly bucket: RoleProviderBucket;
+	readonly trigger: HTMLButtonElement;
+	readonly current: RoleValue;
+	readonly refused: ReadonlySet<string>;
+	readonly onPick: (entry: ModelCatalogEntry) => void;
+	readonly onClose: () => void;
+}): ReactElement {
+	const [position, setPosition] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
+	const place = useCallback((): void => {
+		const panel = refObj.current;
+		if (panel === null || !trigger.isConnected) return;
+		const parentMenu = trigger.closest(".settings-menu");
+		const menuRect = (parentMenu ?? trigger).getBoundingClientRect();
+		const rowRect = trigger.getBoundingClientRect();
+		const width = panel.offsetWidth || ROLE_SUBMENU_WIDTH;
+		const height = panel.offsetHeight;
+		const leftCandidate = menuRect.left - ROLE_SUBMENU_GAP - width;
+		const rightCandidate = menuRect.right + ROLE_SUBMENU_GAP;
+		const side = leftCandidate >= ROLE_VIEWPORT_MARGIN || rightCandidate + width > window.innerWidth - ROLE_VIEWPORT_MARGIN ? "left" : "right";
+		const rawLeft = side === "left" ? leftCandidate : rightCandidate;
+		const viewportLeft = Math.max(ROLE_VIEWPORT_MARGIN, Math.min(rawLeft, window.innerWidth - width - ROLE_VIEWPORT_MARGIN));
+		const preferredTop = rowRect.top - 5;
+		const viewportTop = Math.max(ROLE_VIEWPORT_MARGIN, Math.min(preferredTop, window.innerHeight - height - ROLE_VIEWPORT_MARGIN));
+		// The onboarding menu's backdrop-filter makes it the containing block for this absolute flyout.
+		setPosition({ left: viewportLeft - menuRect.left, top: viewportTop - menuRect.top, side });
+	}, [refObj, trigger]);
+
+	useLayoutEffect(() => {
+		place();
+	}, [bucket.models.length, bucket.provider.id, place]);
+	useEffect(() => {
+		window.addEventListener("resize", place);
+		document.addEventListener("scroll", place, true);
+		return () => {
+			window.removeEventListener("resize", place);
+			document.removeEventListener("scroll", place, true);
+		};
+	}, [place]);
+
+	return (
+		<div
+			ref={refObj}
+			role="menu"
+			aria-label={bucket.provider.name}
+			data-provider-submenu={bucket.provider.id}
+			data-side={position?.side ?? "left"}
+			className="settings-menu onb-role-submenu"
+			style={position === null ? { left: -9999, top: 0, visibility: "hidden" } : { left: position.left, top: position.top }}
+			onKeyDown={(event) => {
+				if (event.key === "ArrowLeft") {
+					event.preventDefault();
+					event.stopPropagation();
+					onClose();
+				}
+			}}
+		>
+			<div className="onb-menu role-submenu">
+				<div className="onb-menu-list">
+					{bucket.models.map((model) => (
+						<RoleModelItem key={keyOf(model.provider, model.id)} provider={bucket.provider} model={model} current={current} refused={refused} onPick={onPick} />
+					))}
+				</div>
+			</div>
+		</div>
 	);
 }

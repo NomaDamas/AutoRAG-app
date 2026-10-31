@@ -314,7 +314,7 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	padding: 0 17px;
+	padding: 0 42px 0 17px;
 	border-top: 1px solid var(--onb-divider);
 	background: var(--onb-bg-window);
 }
@@ -330,21 +330,35 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	gap: 12px;
 }
 
+/* Footer buttons (Figma 110:2612): as wide as their label, 20px each side; Back hugs its 24px key, Continue keeps 14px before its 20px arrow. */
 .onb .footer-btn {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	gap: 6px;
-	min-width: 104px;
+	gap: 2px;
 	height: 34px;
-	padding: 0 10px;
+	padding: 0 20px;
 	border: 1px solid var(--onb-border);
-	border-radius: 7px;
-	background: var(--onb-bg-card);
+	border-radius: 8px;
+	background: transparent;
 	color: var(--onb-body);
 	font-size: 12px;
 	font-weight: 500;
 	line-height: 16px;
+}
+
+.onb .footer-btn.next {
+	gap: 14px;
+}
+
+/* The glyphs are a step lighter than the label (Figma: muted on body). */
+.onb .footer-btn svg {
+	flex: none;
+	color: var(--onb-muted);
+}
+
+.onb .footer-btn:disabled svg {
+	color: var(--onb-faint);
 }
 
 /* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
@@ -1272,48 +1286,88 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	background: #0078d4;
 }
 
+/* Folders step (Figma 05b): a 760px column of two-up folder cards under a one-line lead. */
+.onb .screen.folders-screen {
+	justify-content: center;
+	padding-left: 24px;
+	padding-right: 24px;
+}
+
+.onb .folders-screen h1 {
+	margin: 0 0 16px;
+}
+
+.onb .screen.center.folders-screen .screen-copy>p {
+	max-width: none;
+	white-space: nowrap;
+}
+
+.onb .folders-stack {
+	width: 100%;
+	max-width: 760px;
+	margin-top: 21px;
+}
+
 .onb .folder-head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	width: 100%;
-	margin-bottom: 12px;
-}
-
-.onb .folder-head strong {
+	height: 19px;
+	margin-bottom: 8px;
+	color: var(--onb-ink);
 	font-size: 12px;
+	line-height: 16px;
 }
 
-.onb .folder-head label {
+.onb .folder-all {
 	display: flex;
 	align-items: center;
-	gap: 7px;
-	color: var(--onb-muted);
+	gap: 4px;
+	color: var(--onb-body);
 	font-size: 10.5px;
+	line-height: 15.75px;
+	cursor: pointer;
+}
+
+.onb .folder-all input {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+}
+
+.onb .folder-all input:checked + .check-box {
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+	color: #fff;
+}
+
+.onb .folder-all input:focus-visible + .check-box {
+	outline: 2px solid color-mix(in srgb,var(--onb-blue) 45%,transparent);
+	outline-offset: 2px;
 }
 
 .onb .folder-grid {
 	display: grid;
 	grid-template-columns: repeat(2,minmax(0,1fr));
-	gap: 9px;
+	gap: 8px;
 }
 
 .onb .folder-card {
 	position: relative;
 	display: flex;
 	align-items: center;
-	gap: 10px;
-	min-height: 73px;
-	padding: 10px;
+	gap: 16px;
+	min-height: 74px;
+	padding: 10px 10px 10px 12px;
 	border: 1px solid var(--onb-border);
-	border-radius: 9px;
+	border-radius: 8px;
 	background: var(--onb-bg-card);
 	cursor: pointer;
 }
 
 .onb .folder-card.selected {
 	border-color: var(--onb-blue);
-	background: var(--onb-blue-soft);
 }
 
 .onb .folder-card.locked {
@@ -1322,17 +1376,22 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .folder-card.add {
 	border-style: dashed;
+	background: transparent;
 	justify-content: center;
+	gap: 10px;
 	color: var(--onb-muted);
+	font-size: 13px;
+	line-height: 21px;
 }
 
 .onb .check-box {
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 16px;
-	height: 16px;
-	border: 1.5px solid var(--onb-border);
+	width: 15px;
+	height: 15px;
+	box-sizing: border-box;
+	border: 1.5px solid var(--onb-faint);
 	border-radius: 4px;
 	color: transparent;
 }
@@ -1349,6 +1408,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	flex: none;
 	width: 35px;
 	height: 29px;
+	margin-right: -6px;
 	border-radius: 5px 6px 6px 6px;
 	background: linear-gradient(#8cb9f7 0 28%,#70a8f5 28%);
 	color: #4c89dc;
@@ -1366,6 +1426,9 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 }
 
 .onb .folder-info {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
 	min-width: 0;
 }
 
@@ -1373,61 +1436,81 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-	font-size: 11.5px;
+	font-size: 12px;
+	line-height: 16px;
 	font-weight: 500;
 }
 
 .onb .folder-path {
-	margin-top: 2px;
-	color: var(--onb-muted);
-	font-size: 9px;
+	color: var(--onb-faint);
+	font-size: 10.5px;
+	line-height: 15.75px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
 .onb .folder-stats {
-	margin-top: 5px;
-	color: var(--onb-faint);
-	font-size: 9px;
+	color: var(--onb-muted);
+	font-size: 10px;
+	line-height: 14px;
 }
 
 .onb .folder-summary {
 	display: flex;
 	align-items: center;
+	justify-content: space-between;
 	gap: 15px;
-	margin-top: 10px;
-	padding: 11px 13px;
-	border: 1px solid var(--onb-divider);
+	margin-top: 8px;
+	padding: 20px;
 	border-radius: 8px;
 	background: var(--onb-bg-card);
 }
 
 .onb .summary-main {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 	flex: 1;
 }
 
 .onb .summary-main strong {
-	font-size: 11px;
+	font-size: 12px;
+	line-height: 16px;
+	font-weight: 500;
 }
 
 .onb .summary-main small {
-	display: block;
-	margin-top: 3px;
 	color: var(--onb-muted);
-	font-size: 9.5px;
+	font-size: 10.5px;
+	line-height: 15.75px;
 }
 
 .onb .eta-row {
 	display: flex;
-	gap: 8px;
-	font-size: 9px;
+	align-items: center;
+	gap: 12px;
+	color: var(--onb-muted);
+	font-size: 10px;
+	line-height: 14px;
+	white-space: nowrap;
+}
+
+.onb .eta-value {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.onb .eta-about {
 	color: var(--onb-muted);
 }
 
 .onb .eta-row b {
-	color: var(--onb-ink);
-	font-weight: 500;
+	color: var(--onb-body);
+	font-size: 11px;
+	line-height: 16px;
+	font-weight: 400;
 }
 
 .onb .summary-warning {
@@ -2558,90 +2641,561 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 9px;
 }
 
-.onb .model-card {
-	padding: 14px;
+/* Model step (Figma 09e): connected services on the left, a model per role on the right. */
+.onb .screen.model-screen {
+	justify-content: center;
+	gap: 50px;
+	padding-left: 24px;
+	padding-right: 24px;
 }
 
-.onb .model-services {
-	margin-bottom: 10px;
+.onb .model-screen h1 {
+	margin: 0 0 16px;
 }
 
-.onb .model-services .detected-row > :last-child:not(div) {
-	margin-left: auto;
-	color: var(--onb-blue);
+.onb .screen.center.model-screen .screen-copy>p {
+	max-width: none;
+	line-height: 21px;
+	white-space: nowrap;
 }
 
 .onb .model-overlays {
 	display: contents;
 }
 
-.onb .model-empty {
-	margin: 4px 0 10px;
+.onb .model-columns {
+	display: grid;
+	grid-template-columns: 324px 576px;
+	gap: 35px;
+	align-items: start;
+}
+
+.onb .model-column-title {
+	margin: 0 0 8px;
 	color: var(--onb-muted);
-	font-size: 10px;
+	font-size: 12px;
+	line-height: 16px;
 }
 
-.onb .model-connect {
-	display: inline-flex;
+/* Three services show; a fourth scrolls the list, and the connect row stays under it. */
+.onb .model-services {
+	overflow: hidden;
+	border-radius: 12px;
+	background: var(--onb-bg-card);
+}
+
+.onb .model-services-list {
+	max-height: 180px;
+	overflow-y: auto;
+}
+
+.onb .model-service {
+	display: flex;
 	align-items: center;
-	gap: 6px;
-	margin-top: 8px;
+	gap: 12px;
+	height: 60px;
+	padding: 0 16px;
+	box-sizing: border-box;
+	border-bottom: 1px solid var(--onb-bg-input);
 }
 
-.onb .model-trigger {
-	display: inline-flex;
+.onb .model-service-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 31px;
+	height: 31px;
+	color: var(--onb-body);
+}
+
+.onb .model-service strong {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--onb-ink);
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 21px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-service-remove {
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--onb-faint);
+	cursor: pointer;
+}
+
+.onb .model-service-remove:hover {
+	color: var(--onb-body);
+}
+
+.onb .model-service-add {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	height: 60px;
+	padding: 0 16px;
+	border: 0;
+	background: none;
+	color: var(--onb-muted);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.onb .model-service-add svg {
+	color: var(--onb-faint);
+}
+
+.onb .model-role-card {
+	overflow: hidden;
+	margin-bottom: 8px;
+	border-radius: 12px;
+	background: var(--onb-bg-card);
+}
+
+.onb .model-role {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	padding: 12px 16px;
+	border-bottom: 1px solid var(--onb-bg-input);
+}
+
+.onb .model-role:last-child {
+	border-bottom: 0;
+}
+
+.onb .model-role-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.onb .model-role-copy strong {
+	color: var(--onb-ink);
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 21px;
+}
+
+.onb .model-role-copy small {
+	color: var(--onb-muted);
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+.onb .model-role-pick {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex: none;
+}
+
+/* The status sits left of the menu, so the menus line up whether or not a role shows one. */
+.onb .model-role-status {
+	display: grid;
+	place-items: center;
+	width: 12px;
+	height: 12px;
+	color: var(--onb-faint);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 12px;
+}
+
+.onb .model-role-status.ok {
+	color: #34c759;
+}
+
+.onb .model-role-status.failed {
+	color: #ff3b30;
+}
+
+.onb .model-role-status .spin {
+	display: block;
+}
+
+.onb .model-role-trigger {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	width: 164px;
+	padding: 8px 12px;
+	border: 1px solid var(--onb-border);
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	color: var(--onb-body);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+	cursor: pointer;
+}
+
+.onb .model-role-trigger > span {
+	min-width: 0;
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .model-role-trigger svg {
+	flex: none;
+	color: var(--onb-muted);
+}
+
+.onb .model-role-trigger.failed {
+	border-color: rgba(255,59,48,.5);
+}
+
+/* While its check runs a menu cannot open. */
+.onb .model-role-trigger:disabled {
+	color: var(--onb-faint);
+	cursor: default;
+}
+
+.onb .model-role-trigger:disabled svg {
+	color: var(--onb-border);
+}
+
+.onb .model-notice {
+	margin: 4px 0 0;
+	color: var(--onb-red);
+	font-size: 10.5px;
+	line-height: 15.75px;
+}
+
+/* The step's menus: a fixed height, the search and "auto" pinned, only the list between them scrolls. */
+.onb .settings-view .settings-menu:has(.onb-menu) {
+	width: auto;
+	max-height: none;
+	overflow: hidden;
+	padding: 0;
+	border: 1px solid var(--onb-border);
+	border-radius: 12px;
+	background: rgba(255,255,255,.9);
+	backdrop-filter: blur(2px);
+	box-shadow: none;
+}
+
+/* Provider flyouts escape the root menu without clipping. */
+.onb .settings-view .settings-menu:has(.onb-menu.role) {
+	overflow: visible;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu {
+	position: absolute;
+	z-index: 2;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="left"]::after,
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="right"]::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 8px;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="left"]::after {
+	left: 100%;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="right"]::before {
+	right: 100%;
+}
+
+.onb .onb-menu {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 0 10px;
+	box-sizing: border-box;
+}
+
+.onb .onb-menu.connect {
+	width: 280px;
+	height: 220px;
+	padding-bottom: 8px;
+}
+
+/* Five rows show (33px each) under the search; "auto" sits 8px under a rule. */
+.onb .onb-menu.role {
+	width: 244px;
+	height: 218px;
+}
+
+.onb .onb-menu.role.with-auto {
+	height: 256px;
+}
+
+.onb .onb-menu.role-submenu {
+	width: 256px;
+	max-height: 218px;
+	padding: 8px 0;
+}
+
+.onb .onb-menu-search {
+	display: flex;
 	align-items: center;
 	gap: 8px;
-	max-width: 70%;
+	flex: none;
+	padding: 4px 16px 10px;
+	color: var(--onb-muted);
 }
 
-.onb .model-trigger > span {
+.onb .onb-menu-search input {
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: none;
+	color: var(--onb-ink);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .onb-menu-search input::placeholder {
+	color: var(--onb-muted);
+}
+
+.onb .onb-menu-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+}
+
+.onb .onb-menu-group+.onb-menu-group {
+	margin-top: 12px;
+	padding-top: 12px;
+	border-top: 1px solid var(--onb-divider);
+}
+
+.onb .onb-menu-group-title {
+	margin: 0;
+	padding: 4px 16px;
+	color: var(--onb-muted);
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+}
+
+.onb .onb-menu-group-title.is-provider {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.onb .onb-menu-group-title.is-provider > span:last-child {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.onb .model-status.ready {
-	color: var(--onb-blue);
-}
-
-.onb .model-status.failed {
-	color: var(--onb-red);
-}
-
-.onb .model-retry {
-	margin-top: 8px;
-}
-
-.onb .role-row {
+.onb .onb-menu-item {
 	display: flex;
 	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	padding: 12px 4px;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 16px;
+	border: 0;
+	background: none;
+	color: var(--onb-ink);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.onb .onb-menu-item:hover,
+.onb .onb-menu-item.open {
+	background: var(--onb-bg-stage);
+}
+
+.onb .onb-menu-item > span {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.onb .onb-menu-item > span.onb-provider-active-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--onb-blue);
+}
+
+.onb .onb-menu-chevron {
+	flex: none;
+	color: var(--onb-muted);
+}
+
+.onb .onb-menu-item.failed {
+	color: var(--onb-faint);
+}
+
+.onb .onb-menu-icon {
+	display: grid;
+	place-items: center;
+	flex: none !important;
+	width: 18px;
+	height: 18px;
+	color: var(--onb-body);
+}
+
+.onb .onb-menu-mark {
+	flex: none;
+	color: var(--onb-muted);
+}
+
+/* In the menu a refused model is greyed with a grey mark; red is kept for the row's own status. */
+.onb .onb-menu-mark.failed {
+	color: var(--onb-faint);
+	font-size: 12px;
+}
+
+.onb .onb-menu-auto {
+	flex: none;
+	margin-top: 8px;
+	padding-top: 8px;
+	padding-bottom: 0;
 	border-top: 1px solid var(--onb-divider);
 }
 
-.onb .role-row:first-child {
-	border-top: 0;
-}
-
-.onb .role-copy strong {
-	display: block;
+.onb .onb-menu-empty {
+	margin: 0;
+	padding: 6px 16px;
+	color: var(--onb-muted);
 	font-size: 11px;
+	line-height: 16px;
 }
 
-.onb .role-copy small {
+/* The add-service form (Figma 09f): a 398px card, starred required fields, and a blue Connect. */
+.onb .settings-view .settings-modal-backdrop {
+	background: rgba(20,20,25,.22);
+}
+
+.onb .settings-view .settings-modal {
+	width: 398px;
+	padding: 20px;
+	border: 0;
+	border-radius: 16px;
+	background: var(--onb-bg-card);
+	box-shadow: none;
+	filter: drop-shadow(0 0 4px rgba(0,0,0,.2));
+}
+
+/* The modal template (Figma 111:3985): a 20px close mark level with the title. */
+.onb .settings-view .settings-modal-close {
+	top: 21px;
+	right: 20px;
+}
+
+.onb .settings-view .settings-modal-close svg {
+	width: 20px;
+	height: 20px;
+}
+
+.onb .settings-view .settings-modal h2 {
+	margin: 0 0 6px;
+	color: var(--onb-ink);
+	font-size: 17px;
+	font-weight: 700;
+	line-height: 22px;
+}
+
+.onb .settings-view .settings-modal p {
+	color: var(--onb-muted);
+	font-size: 11px;
+	line-height: 16px;
+	white-space: pre-line;
+}
+
+.onb .settings-view .settings-modal label {
+	margin-top: 16px;
+	color: var(--onb-body);
+	font-size: 11px;
+	line-height: 16px;
+}
+
+.onb .settings-view .settings-modal label:first-of-type {
+	margin-top: 20px;
+}
+
+.onb .settings-view .settings-modal .settings-field-name.is-required::after {
+	content: "*";
+	margin-left: 1px;
+	color: #ff3b30;
+}
+
+.onb .settings-view .settings-modal input:not([type="radio"], [type="checkbox"]) {
+	height: 35px;
+	margin-top: 4px;
+	padding: 6px 10px;
+	border-color: var(--onb-divider);
+	border-radius: 6px;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .settings-view .settings-modal input.is-invalid {
+	border-color: rgba(255,59,48,.5);
+}
+
+.onb .settings-view .settings-modal .settings-field-error {
 	display: block;
-	margin-top: 3px;
-	color: var(--onb-muted);
-	font-size: 9.5px;
+	margin-top: 4px;
+	color: #ff3b30;
+	font-size: 10.5px;
+	line-height: 15.75px;
 }
 
-.onb .model-status {
-	margin: 10px 0 0;
+.onb .settings-view .settings-modal input::placeholder {
+	color: var(--onb-faint);
+}
+
+.onb .settings-view .settings-modal-actions {
+	gap: 8px;
+	margin-top: 20px;
+}
+
+.onb .settings-view .settings-modal-actions .linear-btn {
+	height: 26px;
+	padding: 0 10px;
+	border: 1px solid var(--onb-border);
+	border-radius: 4px;
+	background: none;
 	color: var(--onb-muted);
-	font-size: 10px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+/* Connect is the full blue once the form is valid, and half-strength until then. */
+.onb .settings-view .settings-modal-actions .settings-btn-primary {
+	border-color: transparent;
+	background: var(--onb-blue);
+	color: #fff;
+	opacity: 1;
+}
+
+.onb .settings-view .settings-modal-actions .settings-btn-primary:disabled {
+	opacity: .5;
 }
 
 .onb .secure-note {
@@ -4284,18 +4838,38 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	max-width: 658px;
 }
 
+/* Rows (Figma 02 / 02d): 72px, 16px 20px padding, a bare 20px icon 22px from the text. */
 .onb .permissions-screen .permission-row {
-	min-height: 62px;
-	padding-right: 16px;
-	border-color: transparent;
+	box-sizing: border-box;
+	min-height: 72px;
+	gap: 22px;
+	padding: 16px 20px;
+	border: 0;
+	border-radius: 8px;
 }
 
-.onb .permissions-screen .permission-icon {
-	background: var(--onb-bg-stage);
+.onb .permissions-screen .permission-icon,
+.onb .permissions-screen .permission-icon.blue,
+.onb .permissions-screen .permission-icon.green {
+	width: 20px;
+	height: 20px;
+	border-radius: 0;
+	background: none;
+}
+
+.onb .permissions-screen .permission-icon svg {
+	width: 20px;
+	height: 20px;
+}
+
+.onb .permissions-screen .permission-name {
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 21px;
 }
 
 .onb .permissions-screen .permission-desc {
-	margin-top: 2px;
+	margin-top: 3px;
 	font-size: 11px;
 	line-height: 16px;
 }
@@ -4321,13 +4895,21 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-weight: 500;
 }
 
+/* The "required" tag leads the name as a solid red chip (Figma 02d). */
+.onb .permissions-screen .tag {
+	padding: 2px 4px;
+	font-size: 8px;
+	font-weight: 700;
+	line-height: 11px;
+}
+
 .onb .permissions-screen .tag.req {
 	background: #ff3b30;
 	color: #fff;
 }
 
 .onb .permissions-why {
-	margin-top: -12px;
+	margin-top: -16px;
 	font-size: 10.5px;
 }
 
@@ -4379,6 +4961,73 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	gap: 16px;
 	width: 100%;
 	margin-top: 10px;
+}
+
+/* Waiting for the browser sign-in (Figma 03e): a spinner, two lines, and Cancel, centred in the stage. */
+.onb .account-wait {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+}
+
+.onb .account-wait-mark {
+	display: grid;
+	place-items: center;
+	width: 60px;
+	height: 60px;
+	color: var(--onb-blue);
+}
+
+/* The spinner box is exactly the icon's size, so it turns around its own centre and never wobbles. */
+.onb .account-wait-mark .spin {
+	display: block;
+	width: 34px;
+	height: 34px;
+	line-height: 0;
+	transform-origin: 50% 50%;
+}
+
+.onb .account-wait-mark svg {
+	display: block;
+	width: 34px;
+	height: 34px;
+	stroke-width: 2.2;
+}
+
+.onb .account-wait-copy {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	margin-bottom: 16px;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.onb .account-wait-copy strong {
+	color: var(--onb-ink);
+	font-size: 17px;
+	line-height: 22px;
+	font-weight: 700;
+}
+
+.onb .account-wait-copy small {
+	color: var(--onb-muted);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.onb .account-wait .secondary {
+	height: 32px;
+	padding: 0 14px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 8px;
+	background: var(--onb-bg-stage);
+	color: var(--onb-body);
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 16px;
 }
 
 .onb .account-providers {
@@ -4501,6 +5150,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .permissions-screen .permission-icon.orange {
+	background: none;
 	color: #ff9b00;
 }
 
@@ -4684,4 +5334,162 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-size: 12px;
 	font-weight: 400;
 	line-height: 16px;
+}
+
+/* Welcome (Figma 01 · welcome): a centred heading over a 744px two-by-two grid of feature cards. */
+.onb .screen.welcome-screen {
+	justify-content: center;
+	gap: 36px;
+	padding: 24px 24px 16px;
+}
+
+.onb .welcome-screen h1 {
+	margin: 0 0 16px;
+}
+
+.onb .screen.center.welcome-screen .screen-copy>p {
+	max-width: none;
+	line-height: 21px;
+	white-space: nowrap;
+}
+
+.onb .welcome-screen .feature-grid {
+	width: 100%;
+	max-width: 744px;
+	height: auto;
+	min-height: 0;
+	grid-template-rows: none;
+	gap: 12px;
+}
+
+.onb .welcome-screen .feature-card {
+	gap: 8px;
+	padding: 12px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 12px;
+	box-shadow: none;
+}
+
+.onb .welcome-screen .feature-card:hover {
+	transform: none;
+	box-shadow: none;
+}
+
+.onb .welcome-screen .feature-art {
+	flex: none;
+	height: 103px;
+	padding: 0;
+	border-radius: 8px;
+	background: var(--onb-bg-input);
+}
+
+.onb .welcome-screen .art-chat .mini-chat {
+	gap: 7px;
+	padding: 16px 11px 0 9px;
+}
+
+.onb .welcome-screen .art-chat .mini-bubble {
+	max-width: 254px;
+	line-height: 10.5px;
+}
+
+.onb .welcome-screen .art-center {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.onb .welcome-screen .version-list {
+	gap: 4px;
+	width: 282px;
+}
+
+.onb .welcome-screen .version-row {
+	box-sizing: border-box;
+	height: 26px;
+}
+
+.onb .welcome-screen .source-grid {
+	grid-template-columns: repeat(4,31px);
+	gap: 8px 40px;
+}
+
+.onb .welcome-screen .art-rank {
+	padding: 9px 29px 0;
+}
+
+.onb .welcome-screen .rank-modes {
+	margin-bottom: 7px;
+}
+
+.onb .welcome-screen .rank-list {
+	gap: 4px;
+}
+
+.onb .welcome-screen .rank-row {
+	box-sizing: border-box;
+	height: 26px;
+}
+
+.onb .welcome-screen .feature-label {
+	gap: 12px;
+	margin-top: 0;
+}
+
+.onb .feature-icon {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 20px;
+	height: 20px;
+	color: var(--onb-blue);
+}
+
+.onb .feature-icon.purple {
+	color: #7650bb;
+}
+
+.onb .feature-icon.green {
+	color: #16833b;
+}
+
+.onb .feature-icon.amber {
+	color: #a15c00;
+}
+
+.onb .feature-copy {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.onb .feature-copy strong {
+	color: var(--onb-ink);
+	font-size: 13px;
+	font-weight: 400;
+	line-height: 21px;
+}
+
+.onb .welcome-screen .feature-copy small {
+	margin: 0;
+	color: var(--onb-muted);
+	font-size: 11px;
+	line-height: 16px;
+}
+
+/* The two opt-ins sit quietly under the cards. */
+.onb .welcome-consents {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
+	max-width: 744px;
+	margin-top: -24px;
+}
+
+.onb .welcome-consents .usage-consent {
+	margin: 0;
+	color: var(--onb-faint);
+	font-size: 10px;
+	line-height: 14px;
 }

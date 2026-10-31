@@ -758,10 +758,8 @@
       "indexing": "继续"
     },
     "welcome": {
-      "eyebrow": "Pro 7 天免费试用",
-      "title": "直接向\n文件提问",
-      "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
-      "note": "默认在本地处理。部分功能在使用时，内容可能会发送到 Dazzi 服务器或模型提供方。详情请参阅隐私政策。",
+      "title": "找文件，现在交给 {{app}}",
+      "lead": "无需逐个打开文件夹。\n{{app}} 会读取文件，只找出你需要的内容。",
       "usageStats": "发送匿名使用统计以帮助改进 Dazzi。统计在设计上不包含文件、搜索词或文档内容，可随时在设置中关闭。",
       "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。报告在设计上不包含文件路径、文件名和文档内容，可随时在设置中更改。",
       "usageStatsPolicy": "隐私政策",
@@ -769,38 +767,24 @@
         "user": "上一季度的成本为什么下降了？",
         "replyLead": "营销成本比上季度下降了",
         "replyTail": "。"
-      },
-      "evidence": {
-        "revenue": "营收报告",
-        "revenueQuote": "“同比增长 18%…”",
-        "budget": "预算摘要",
-        "budgetQuote": "“第三季度运营成本…”"
       }
     },
     "feature": {
       "ai": {
         "title": "AI 搜索",
-        "sub": "答案与依据一并呈现"
-      },
-      "citation": {
-        "title": "引用依据",
-        "sub": "查看答案的来源"
+        "sub": "有问题尽管问，回答会附上出处。"
       },
       "versions": {
-        "title": "版本归组",
-        "sub": "整理重复文档"
-      },
-      "quicklook": {
-        "title": "快速查看",
-        "sub": "打开前预览"
+        "title": "版本整理",
+        "sub": "像 final_真的最终版.docx 这样的文件也会自动整理。"
       },
       "sources": {
-        "title": "数据源",
-        "sub": "连同已连接的位置一起搜索"
+        "title": "应用连接",
+        "sub": "分散在 Notion、Slack、GitHub 等处的资料也能一次找到。"
       },
       "hybrid": {
         "title": "混合搜索",
-        "sub": "关键词与语义并用，按重排排序"
+        "sub": "即使用词不同，只要意思相近也能找到。"
       }
     },
     "hybrid": {
@@ -908,19 +892,18 @@
     "folders": {
       "eyebrow": "索引范围",
       "title": "选择 AI 可读取的文件夹",
-      "lead": "只有此处选择的文件夹会纳入 AI 搜索。范围可稍后扩大或缩小。",
-      "suggested": "推荐位置",
+      "lead": "只有所选文件夹中的文件会被 AI 读取。文件夹可随时添加或移除。",
+      "suggested": "推荐文件夹",
       "selectAll": "全选",
-      "add": "添加其他文件夹",
+      "add": "直接添加文件夹",
       "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
       "scanning": "统计中…",
       "scanError": "无法读取",
       "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-      "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
-      "cloudEta": "远程 约 {{minutes}} 分钟",
+      "summaryNote": "开发者文件夹和超过 50 MB 的大文件会自动排除。",
       "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
-      "localEtaPc": "本地 (此电脑) 约 {{minutes}} 分钟"
+      "summaryEmpty": "请至少选择一个文件夹",
+      "etaLabel": "处理时间"
     },
     "smartScope": {
       "policy": {
@@ -1089,22 +1072,50 @@
       }
     },
     "model": {
-      "eyebrow": "AI 模型",
-      "title": "连接要使用的模型",
-      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。它必须能响应一次真实调用，才能继续。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
+      "title": "连接要使用的 AI 模型",
+      "lead": "连接你正在使用的 AI 服务，然后为每个角色指定要使用的模型。\n可以连接 API 密钥、订阅账户或这台电脑上的模型服务器，设置之后可随时更改。",
       "connectedTitle": "已连接的服务",
-      "none": "尚未连接任何服务。",
+      "rolesTitle": "按角色指定模型",
       "connect": "连接服务",
-      "modelRow": "模型",
       "pick": "选择模型",
-      "needService": "请先连接服务",
-      "unready": "请选择模型以继续。",
-      "ready": "✓ 已就绪 · {{model}} 在 {{seconds}} 秒内响应。",
-      "checking": "正在确认 {{model}} 是否响应…",
-      "failed": "{{model}} 没有响应：{{error}}",
-      "readyResumed": "✓ 已就绪 · 将由 {{model}} 回答。",
-      "retry": "重新检查"
+      "auto": "自动设置",
+      "searchServices": "搜索服务",
+      "searchModels": "搜索模型",
+      "noMatch": "没有搜索结果。",
+      "noModels": "暂无可用于此角色的模型。请选择自动设置，或连接提供该模型的服务。",
+      "addCustom": "添加 OpenAI 兼容服务",
+      "addLocal": "添加这台电脑上的服务器",
+      "disconnect": "断开 {{name}}",
+      "status": {
+        "checking": "检查中",
+        "ok": "连接成功",
+        "failed": "连接失败"
+      },
+      "role": {
+        "answer": {
+          "name": "生成回答",
+          "desc": "撰写问题的回答并总结文档。"
+        },
+        "decomposition": {
+          "name": "拆分问题",
+          "desc": "将冗长复杂的问题拆分为多个搜索词。"
+        },
+        "jev": {
+          "name": "判断是否检索 (Jev)",
+          "desc": "决定是直接回答，还是先检索你的文档。"
+        },
+        "rerank": {
+          "name": "结果重排",
+          "desc": "把与问题最相关的文档排到前面。"
+        }
+      },
+      "server": {
+        "body": "连接公司网关，或使用 OpenAI API 格式的服务器。\n输入的密钥会加密保存在这台电脑上。",
+        "namePlaceholder": "显示名称",
+        "keyPlaceholder": "仅在服务器需要密钥时填写",
+        "urlInvalid": "地址无效，请重新检查。",
+        "keyInvalid": "API 密钥无效，请重新检查。"
+      }
     },
     "indexing": {
       "tip": "小技巧",
@@ -1280,13 +1291,6 @@
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 Dazzi。"
-    },
-    "roles": {
-      "eyebrow": "检索辅助模型",
-      "title": "选择重排序与判断模型",
-      "lead": "使用 Dazzi 套餐时会默认提供。使用自己的密钥时，请从已连接的服务中选择，或保持现状。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
-      "unavailable": "已连接的服务中没有提供该模型的。在设置中连接 OpenRouter 即可使用。"
     }
   },
   "finderComponents": {

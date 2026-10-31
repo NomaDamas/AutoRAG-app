@@ -4,8 +4,8 @@ import type { ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { Eyebrow, Multiline } from "../parts";
-import { etaMinutes, formatSize } from "../flow";
+import { Multiline } from "../parts";
+import { canSelectCloudEmbedding, etaMinutes, formatSize, localEmbeddingAllowed, resolveEmbed } from "../flow";
 import type { OnboardingCtx } from "../context";
 
 function folderIcon(kind: FolderKind): string {
@@ -41,8 +41,10 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 			bytes += scan.bytes;
 		}
 	}
+	// The time shown is for the way the documents will be embedded, as chosen (or defaulted) on the embedding step.
+	const mode = resolveEmbed(draft.embed, canSelectCloudEmbedding(ctx.account), localEmbeddingAllowed(ctx.embedding === null ? null : ctx.embedding.localSpec));
+	const eta = files === 0 ? 0 : etaMinutes(files, mode);
 	const localEta = etaMinutes(files, "local");
-	const cloudEta = etaMinutes(files, "cloud");
 
 	const card = (candidate: FolderCandidate): ReactElement => {
 		const selected = selectedPaths.has(candidate.path);
@@ -81,19 +83,21 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 	};
 
 	return (
-		<section className="screen center">
+		<section className="screen center folders-screen">
 			<div className="screen-copy">
-				<Eyebrow icon="folder-search">{t("onboarding.folders.eyebrow")}</Eyebrow>
 				<h1>
 					<Multiline text={t("onboarding.folders.title")} />
 				</h1>
 				<p>{t("onboarding.folders.lead")}</p>
 			</div>
-			<div style={{ width: "100%", maxWidth: 760, marginTop: 19 }}>
+			<div className="folders-stack">
 				<div className="folder-head">
-					<strong>{t("onboarding.folders.suggested")}</strong>
-					<label>
-						<input type="checkbox" checked={allSelected} onChange={ctx.toggleAllFolders} />{" "}
+					<span>{t("onboarding.folders.suggested")}</span>
+					<label className="folder-all">
+						<input type="checkbox" checked={allSelected} onChange={ctx.toggleAllFolders} />
+						<span className="check-box">
+							<Icon name="check" size={12} />
+						</span>
 						{t("onboarding.folders.selectAll")}
 					</label>
 				</div>
@@ -107,23 +111,22 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 				<div className="folder-summary">
 					<div className="summary-main">
 						<strong>
-							{t("onboarding.folders.summary", {
-								folders: selectedPaths.size,
-								files: files.toLocaleString(),
-								size: formatSize(bytes),
-							})}
+							{selectedPaths.size === 0
+								? t("onboarding.folders.summaryEmpty")
+								: t("onboarding.folders.summary", {
+										folders: selectedPaths.size,
+										files: files.toLocaleString(),
+										size: formatSize(bytes),
+									})}
 						</strong>
 						<small>{t("onboarding.folders.summaryNote")}</small>
 					</div>
-					<div>
-						<div className="eta-row">
-							<span>
-								{t(ctx.platform === "win32" ? "onboarding.folders.localEtaPc" : "onboarding.folders.localEta", { minutes: localEta })}
-							</span>
-							<span>
-								{t("onboarding.folders.cloudEta", { minutes: cloudEta })}
-							</span>
-						</div>
+					<div className="eta-row">
+						<span>{t("onboarding.folders.etaLabel")}</span>
+						<span className="eta-value">
+							<span className="eta-about">{t("onboarding.embedding.about")}</span>
+							<b>{t("onboarding.embedding.minutes", { minutes: eta })}</b>
+						</span>
 					</div>
 				</div>
 				<div className={cn("summary-warning", localEta <= 120 && "hidden")}>

@@ -322,12 +322,13 @@ describe("FoldersStep, where the folders to look through are chosen", () => {
 		expect(addFolders).toHaveBeenCalledTimes(1);
 	});
 
-	it("sums the selected folders into a summary with the local and remote estimate", () => {
+	it("sums the selected folders into a summary with the processing time of the chosen embedding", () => {
 		renderPicker();
 
 		expect(text(".summary-main strong")).toContain("folders=1");
 		expect(text(".summary-main strong")).toContain("files=1,000");
-		expect(text(".eta-row")).toContain("minutes=12");
+		expect(text(".eta-row")).toContain("onboarding.folders.etaLabel");
+		expect(text(".eta-row")).toContain("minutes=8");
 	});
 
 	it("does not show the smart-indexing panels: those come after the scan", () => {

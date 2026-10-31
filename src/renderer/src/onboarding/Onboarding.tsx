@@ -46,7 +46,7 @@ import {
 	usageConsentOnLeaving,
 	type Translate,
 } from "./flow";
-import { AppLogo, Icon } from "./marks";
+import { AppLogo, FooterBackKey, FooterEnterArrow, Icon } from "./marks";
 import type { OnboardingCtx, OverlayKind } from "./context";
 import {
 	addExclusion as withExclusion,
@@ -68,7 +68,6 @@ import { SmartScopeStep } from "./steps/SmartScope";
 import { ModelStep } from "./steps/Model";
 import { PermissionsStep } from "./steps/Permissions";
 import { PlanStep } from "./steps/Plan";
-import { RolesStep } from "./steps/Roles";
 import { SourcesStep } from "./steps/Sources";
 import { WelcomeStep } from "./steps/Welcome";
 
@@ -249,7 +248,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return;
 			}
 			setPermission(perms);
-			const draft = snapshot.draft ?? seedDraft(folders, perms);
+			// The role step was folded into the model step; a draft saved on it resumes there.
+			const saved = snapshot.draft ?? seedDraft(folders, perms);
+			const draft = saved.stepId === "roles" ? { ...saved, stepId: "model" as const } : saved;
 			// A resumed draft may hold folders added through the dialog; list them
 			// again (they are not built-in candidates) so they stay visible.
 			const known = new Set(folders.map((candidate) => candidate.path));
@@ -1058,9 +1059,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			case "plan":
 				return <PlanStep ctx={ctx} />;
 			case "model":
-				return <ModelStep ctx={ctx} />;
 			case "roles":
-				return <RolesStep ctx={ctx} />;
+				return <ModelStep ctx={ctx} />;
 			case "indexing":
 				return <IndexingScreen ctx={ctx} />;
 		}
@@ -1076,13 +1076,13 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					))}
 				</div>
 				<div className="footer-actions">
-					<button type="button" className="footer-btn" disabled={footerIndex <= 0} onClick={back}>
+					<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={back}>
 						{t("onboarding.footerBack")}
-						<Icon name="backspace" size={16} />
+						<FooterBackKey />
 					</button>
-					<button type="button" className="footer-btn" disabled={!currentAdvance()} onClick={next}>
+					<button type="button" className="footer-btn next" disabled={!currentAdvance()} onClick={next}>
 						{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))}
-						<Icon name="corner-down-left" size={16} />
+						<FooterEnterArrow />
 					</button>
 				</div>
 			</>

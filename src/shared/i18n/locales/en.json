@@ -758,10 +758,8 @@
       "indexing": "Continue"
     },
     "welcome": {
-      "eyebrow": "Pro 7-day free trial",
-      "title": "Ask your\nfiles",
-      "lead": "You don't have to dig through folders. Dazzi reads what's inside your documents and answers with sources.",
-      "note": "Local by default. Some features send content to Dazzi's servers or model providers when you use them; see the Privacy Policy.",
+      "title": "Finding files is now {{app}}'s job",
+      "lead": "No need to open folders one by one.\n{{app}} reads your files and finds just what you need.",
       "usageStats": "Send anonymous usage statistics to help improve Dazzi. They are not designed to include files, searches or document content, and you can turn it off anytime in Settings.",
       "errorReports": "Send error reports when the app crashes or indexing fails, to help fix problems. They are not designed to include file paths, file names or document content, and you can change this anytime in Settings.",
       "usageStatsPolicy": "Privacy Policy",
@@ -769,38 +767,24 @@
         "user": "Why did last quarter's costs go down?",
         "replyLead": "Marketing costs fell ",
         "replyTail": " from the previous quarter."
-      },
-      "evidence": {
-        "revenue": "Revenue report",
-        "revenueQuote": "“Up 18% year over year…”",
-        "budget": "Budget summary",
-        "budgetQuote": "“Q3 operating cost…”"
       }
     },
     "feature": {
       "ai": {
-        "title": "AI Search",
-        "sub": "Answers and sources at once"
-      },
-      "citation": {
-        "title": "Citations",
-        "sub": "Check where answers come from"
+        "title": "AI search",
+        "sub": "Just ask. Answers come with their sources."
       },
       "versions": {
-        "title": "Version grouping",
-        "sub": "Tidy up duplicate documents"
-      },
-      "quicklook": {
-        "title": "Quick Look",
-        "sub": "Preview before opening"
+        "title": "Version cleanup",
+        "sub": "Even files like final_really_final.docx get sorted out."
       },
       "sources": {
-        "title": "Data sources",
-        "sub": "Search connected sources too"
+        "title": "App connections",
+        "sub": "Finds what's scattered across Notion, Slack, GitHub and more."
       },
       "hybrid": {
         "title": "Hybrid search",
-        "sub": "Keywords and meaning together, ordered by reranking"
+        "sub": "Finds matches by meaning, even when the words differ."
       }
     },
     "hybrid": {
@@ -908,19 +892,18 @@
     "folders": {
       "eyebrow": "Indexing scope",
       "title": "Choose the folders AI can read",
-      "lead": "Only the folders selected here are included in AI search. You can expand or shrink the scope later.",
-      "suggested": "Suggested locations",
+      "lead": "Only the files in the folders you select are read by AI. You can add or remove folders at any time.",
+      "suggested": "Suggested folders",
       "selectAll": "Select all",
-      "add": "Add another folder",
+      "add": "Add a folder",
       "stats": "{{files}} · {{size}} · ~{{minutes}} min",
       "scanning": "Counting…",
       "scanError": "Can't read",
       "summary": "{{folders}} folders · {{files}} files · {{size}}",
-      "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
-      "localEta": "Local (this Mac) · ~{{minutes}} min",
-      "cloudEta": "Remote · ~{{minutes}} min",
+      "summaryNote": "Developer folders and files over 50 MB are excluded automatically.",
       "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
-      "localEtaPc": "Local (this PC) · ~{{minutes}} min"
+      "summaryEmpty": "Select at least one folder",
+      "etaLabel": "Processing time"
     },
     "smartScope": {
       "policy": {
@@ -1089,22 +1072,50 @@
       }
     },
     "model": {
-      "eyebrow": "AI model",
-      "title": "Connect the model you'll use",
-      "lead": "Connect any provider you already have — an API key, a subscription sign-in, or a server on your computer — then choose the model. It has to answer a real call before you can continue.",
-      "note": "Saved to Settings → AI models, so you can change it there any time.",
+      "title": "Connect your AI models",
+      "lead": "Connect the AI services you already use, then choose a model for each role.\nYou can connect an API key, a subscription account, or a model server on your computer, and change this anytime in Settings.",
       "connectedTitle": "Connected services",
-      "none": "No service connected yet.",
+      "rolesTitle": "Models by role",
       "connect": "Connect a service",
-      "modelRow": "Model",
       "pick": "Choose a model",
-      "needService": "Connect a service first",
-      "unready": "Choose a model to continue.",
-      "ready": "✓ Ready · {{model}} answered in {{seconds}}s.",
-      "checking": "Checking that {{model}} answers…",
-      "failed": "{{model}} did not answer: {{error}}",
-      "readyResumed": "✓ Ready · {{model}} will answer your questions.",
-      "retry": "Check again"
+      "auto": "Auto",
+      "searchServices": "Search services",
+      "searchModels": "Search models",
+      "noMatch": "No results.",
+      "noModels": "No model can do this role yet. Choose Auto, or connect a service that offers one.",
+      "addCustom": "Add an OpenAI-compatible service",
+      "addLocal": "Add a server on this computer",
+      "disconnect": "Disconnect {{name}}",
+      "status": {
+        "checking": "Checking",
+        "ok": "Connected",
+        "failed": "Connection failed"
+      },
+      "role": {
+        "answer": {
+          "name": "Answers",
+          "desc": "Writes answers to your questions and summarizes documents."
+        },
+        "decomposition": {
+          "name": "Query splitting",
+          "desc": "Breaks long, complex questions into several searches."
+        },
+        "jev": {
+          "name": "Search decision (Jev)",
+          "desc": "Decides whether to answer right away or search your documents first."
+        },
+        "rerank": {
+          "name": "Reranking",
+          "desc": "Moves the most relevant documents to the top."
+        }
+      },
+      "server": {
+        "body": "Connect a company gateway or any server that uses the OpenAI API format.\nKeys you enter are encrypted and stored on this computer.",
+        "namePlaceholder": "Display name",
+        "keyPlaceholder": "Only if the server requires one",
+        "urlInvalid": "This address isn't valid. Check it and try again.",
+        "keyInvalid": "This API key isn't valid. Check it and try again."
+      }
     },
     "indexing": {
       "tip": "Tip",
@@ -1280,13 +1291,6 @@
       "planActive": "The {{plan}} plan is active.",
       "signInFailed": "Couldn't sign in.",
       "notIndexed": "Finish indexing to open Dazzi."
-    },
-    "roles": {
-      "eyebrow": "Search helpers",
-      "title": "Choose the reranker and Jev",
-      "lead": "A Dazzi plan would provide these. With your own keys, pick them from the services you connected — or leave them as they are.",
-      "note": "Saved to Settings → AI models, so you can change them there any time.",
-      "unavailable": "None of your connected services offer this. Connect OpenRouter in Settings to use it."
     }
   },
   "finderComponents": {

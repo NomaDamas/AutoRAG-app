@@ -22,10 +22,10 @@ import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, Se
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
-import { jevLabel, jevOptionsFor, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
+import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
 import { jevBackendFor } from "../../../../shared/ai-roles";
-import { isAllowedAgentApi, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
 const settings = window.autorag.settings;
@@ -112,15 +112,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}
 
 	function writeDecomposition(entry: ModelCatalogEntry): void {
-		const model: Record<string, string> = { provider: entry.provider, id: entry.id };
-		const name = entry.name.trim();
-		const baseUrl = (entry.baseUrl ?? "").trim();
-		const env = (entry.apiKeyEnv ?? "").trim();
-		if (name.length > 0) model.name = name;
-		if (entry.api.length > 0 && isAllowedAgentApi(entry.api)) model.api = entry.api;
-		if (baseUrl.length > 0) model.baseUrl = baseUrl;
-		if (env.length > 0) model.apiKeyEnv = env;
-		void run([{ path: ["queryDecomposition"], value: { model } }]);
+		void run(decompositionConfigUpdates(entry));
 	}
 
 	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
@@ -158,15 +150,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			setNotice(t("settingsCore.ai.envKeyCannotRemove", { name: provider.name }));
 			return;
 		}
-		const model = asRecord(getAt(snapshot.config, ["model"]));
-		const decomposition = asRecord(getAt(snapshot.config, ["queryDecomposition", "model"]));
-		const rerank = asRecord(getAt(snapshot.config, ["rerank"]));
-		const jev = asRecord(getAt(snapshot.config, ["jev"]));
-		const ops: AutoRagConfigUpdate[] = [];
-		if (stringOf(model?.provider) === provider.id) ops.push({ path: ["model"], remove: true });
-		if (stringOf(decomposition?.provider) === provider.id) ops.push({ path: ["queryDecomposition"], remove: true });
-		if (stringOf(rerank?.provider) === provider.id) ops.push({ path: ["rerank"], value: false });
-		if (stringOf(jev?.backend) === jevBackendFor(provider.id)) ops.push({ path: ["jev"], value: false });
+		const ops = providerRoleCleanup(snapshot.config, provider.id);
 		try {
 			if (ops.length > 0) await run(ops);
 			if (provider.kind === "local" || provider.kind === "custom") await settings.providersRemove(provider.id);
