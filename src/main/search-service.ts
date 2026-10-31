@@ -9,6 +9,7 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { type AssistantMessage, isContextOverflow } from "@earendil-works/pi-ai";
 import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
@@ -24,6 +25,7 @@ import type {
 	ChatMessageAssistant,
 	ChatRecord,
 	ChatMessageUser,
+	ContextNotice,
 	IndexNotice,
 	SearchBridge,
 	SearchErrorAction,
@@ -32,6 +34,7 @@ import type {
 import { SEARCH_CHANNELS } from "../shared/search-contract";
 import { buildAttachmentContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
+import type { ContextEvent } from "./context-watch";
 import { createAgentInteraction } from "./agent-interaction";
 import type { RunInteraction } from "./host-ui";
 import type { InteractionHub } from "./interaction-hub";
@@ -51,11 +54,14 @@ export interface LiveAgentEvent {
 	readonly message?: {
 		readonly role?: string;
 		readonly stopReason?: string;
+		readonly timestamp?: number;
 	};
 	readonly assistantMessageEvent?: {
 		readonly type: string;
 		readonly delta?: string;
 	};
+	/** On `tool_execution_*`: the call the event belongs to. */
+	readonly toolCallId?: string;
 }
 
 type ChatSession = {
@@ -88,6 +94,8 @@ type SearchAgent = {
 	readonly closeSession?: () => Promise<void>;
 	/** Calls `listener` once per run, when the run takes the local track and so searches the person's index; returns the stop function. */
 	readonly onLocalTrack?: (listener: () => void) => () => void;
+	/** Calls `listener` with what the conversation does to the model's view of it (see {@link ContextEvent}); returns the stop function. */
+	readonly onContext?: (listener: (event: ContextEvent) => void) => () => void;
 };
 
 export interface SearchServiceDeps {
@@ -169,6 +177,14 @@ interface SearchRun {
 	failed: boolean;
 	/** `ai_search_finished` was already reported for this run. */
 	reported: boolean;
+	/** What the run did to the model's view of the chat, in order (stored with its answer). */
+	readonly context: ContextNotice[];
+	/**
+	 * The tool calls this run made and the user messages it sent (by timestamp): a request that cut one of them showed the
+	 * model only part of what this run searched for.
+	 */
+	readonly toolCalls: Set<string>;
+	readonly userMessages: Set<number>;
 }
 
 /**
@@ -283,6 +299,15 @@ function errorText(error: unknown): string {
 	return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
 }
 
+/**
+ * The action for a run's error: `new-chat` when the model refused the request as larger than its window, in pi's reading
+ * of the provider's words (the same test pi compacts and retries on), so the error says why and what to do next.
+ */
+function errorAction(message: string): { readonly action?: SearchErrorAction } {
+	const failed = { role: "assistant", stopReason: "error", errorMessage: message } as AssistantMessage;
+	return isContextOverflow(failed) ? { action: "new-chat" } : {};
+}
+
 /** The librarian prefixes the provider's own words with this in the `model-request-failed` diagnostic. */
 const MODEL_REQUEST_FAILED_PREFIX = /^The model request failed:\s*/u;
 
@@ -319,6 +344,7 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 		deep: run.deep,
 		stopped,
 		at: now().toISOString(),
+		...(run.context.length === 0 ? {} : { context: [...run.context] }),
 	};
 }
 
@@ -466,6 +492,41 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		emit({ type: "index-notice", searchId: run.searchId, notice });
 	}
 
+	/**
+	 * Records what the run did to the model's view of the chat, tells the panel, and stores it with the answer already
+	 * kept. A kind is marked once per place (before or after the Quick answer): pi may summarise twice in a row (the
+	 * overflow's summary, then a threshold one once the retry answered), and the second divider would only repeat the first.
+	 */
+	function addContextNotice(run: SearchRun, kind: ContextNotice["kind"]): void {
+		const notice: ContextNotice = { kind, timing: run.quick === null ? "before-quick" : "after-quick" };
+		if (run.context.some((earlier) => earlier.kind === kind && earlier.timing === notice.timing)) return;
+		run.context.push(notice);
+		emit({ type: "context-notice", searchId: run.searchId, notice });
+		// Before the Quick answer nothing of the run is stored yet; the answer carries the notice when it is.
+		if (run.quick !== null) void saveRunMessage(run, false).catch(() => undefined);
+	}
+
+	function noteContext(run: SearchRun, event: ContextEvent): void {
+		if (run.cancelled || run.ended) return;
+		switch (event.type) {
+			case "compaction_start":
+				emit({ type: "compacting", searchId: run.searchId, active: true });
+				return;
+			case "compaction_end":
+				emit({ type: "compacting", searchId: run.searchId, active: false });
+				if (event.compacted) addContextNotice(run, "compacted");
+				return;
+			case "request_cut":
+				// Said once a run, and only for what this run searched for: an earlier turn's result cut to make room is the
+				// conversation's housekeeping, not news about this answer.
+				if (run.context.some((notice) => notice.kind === "trimmed")) return;
+				if (event.toolCallIds.some((id) => run.toolCalls.has(id)) || event.userMessages.some((at) => run.userMessages.has(at))) {
+					addContextNotice(run, "trimmed");
+				}
+				return;
+		}
+	}
+
 	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
 		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
@@ -474,6 +535,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		// tokens are lost.
 		const unsubscribe = agent.subscribe?.((event) => {
 			mapLive(event);
+			if (event.type === "tool_execution_start" && event.toolCallId !== undefined) run.toolCalls.add(event.toolCallId);
+			if (event.type === "message_start" && event.message?.role === "user" && event.message.timestamp !== undefined) run.userMessages.add(event.message.timestamp);
 			// Each model request starts with a user message, and queued steers go out with it.
 			if (event.type !== "message_start" || event.message?.role !== "user" || run.pendingSteers === 0) return;
 			run.pendingSteers = 0;
@@ -481,6 +544,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		});
 		// A run that searches the person's index while it is not ready says so as soon as the search starts, not with the answer.
 		const stopLocalTrack = deps.indexReadiness === undefined ? undefined : agent.onLocalTrack?.(() => void announceIndexReadiness(run));
+		const stopContext = agent.onContext?.((event) => noteContext(run, event));
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
 			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
@@ -511,7 +575,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 						if (failure !== null) {
 							// No answer was made: the Quick answer, if one was shown, stays as it is and the error comes with it.
 							run.failed = true;
-							emit({ type: "error", searchId: run.searchId, message: failure });
+							emit({ type: "error", searchId: run.searchId, message: failure, ...errorAction(failure) });
 							break;
 						}
 						run.sessionId = event.response.sessionId;
@@ -537,11 +601,13 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		} catch (error) {
 			run.failed = true;
 			if (!run.cancelled) {
-				emit({ type: "error", searchId: run.searchId, message: errorText(error) });
+				const message = errorText(error);
+				emit({ type: "error", searchId: run.searchId, message, ...errorAction(message) });
 			}
 		} finally {
 			unsubscribe?.();
 			stopLocalTrack?.();
+			stopContext?.();
 			// Nobody is asked once the run is over: a question still open closes, and its tool call is already unblocked.
 			agent.bindRun?.(undefined);
 			deps.interaction?.closeRun(run.searchId, "ended");
@@ -591,6 +657,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				startedAt: now().getTime(),
 				failed: false,
 				reported: false,
+				context: [],
+				toolCalls: new Set(),
+				userMessages: new Set(),
 			};
 			// Register before the async factory resolves so Stop during creation
 			// cancels the run instead of racing it.

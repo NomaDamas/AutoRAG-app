@@ -14,8 +14,8 @@ import { classifyAppError, type AppErrorKind } from "../../../shared/app-error";
 import type { LocaleKey } from "../../../shared/i18n";
 import type { SearchErrorAction } from "../../../shared/search-contract";
 
-/** `fix` runs the fix agent; the other two go to a Settings page. */
-export type ErrorActionId = "fix" | "open-ai" | "open-plan";
+/** `fix` runs the fix agent; `open-ai`/`open-plan` go to a Settings page; `new-chat` starts a new chat; `rephrase` puts the question back in the composer. */
+export type ErrorActionId = "fix" | "open-ai" | "open-plan" | "new-chat" | "rephrase";
 
 export interface ErrorAction {
 	readonly id: ErrorActionId;
@@ -46,6 +46,7 @@ const COPY: Readonly<Record<AppErrorKind, Copy>> = {
 	"model-not-found": { title: "appError.modelNotFound.title", hint: "appError.modelNotFound.hint" },
 	"rate-limit": { title: "appError.rateLimit.title", hint: "appError.rateLimit.hint" },
 	network: { title: "appError.network.title", hint: "appError.network.hint" },
+	"context-overflow": { title: "appError.contextOverflow.title", hint: "appError.contextOverflow.hint" },
 	other: { title: "appError.other.title", hint: "appError.other.hint" },
 };
 
@@ -64,6 +65,11 @@ const PLAN: Readonly<Record<AppErrorKind, readonly (readonly [ErrorActionId, boo
 	// Waiting is the cure for these; the model settings are only the way out when it does not pass.
 	"rate-limit": [["open-ai", false]],
 	network: [["open-ai", false]],
+	// A fresh conversation always fits; the same question asked about less may fit this one.
+	"context-overflow": [
+		["new-chat", true],
+		["rephrase", false],
+	],
 	other: [["fix", true]],
 };
 
@@ -75,15 +81,19 @@ function label(id: ErrorActionId, t: TFunction): string {
 			return t("appError.openModelSettings");
 		case "open-plan":
 			return t("aiSearch.openPlan");
+		case "new-chat":
+			return t("aiSearch.newChat");
+		case "rephrase":
+			return t("appError.askNarrower");
 	}
 }
 
-/** `serverAction` is the main process's own verdict (it knows the plan's credits are spent); it outranks the wording. */
+/** `serverAction` is the main process's own verdict (it knows the plan's credits are spent, or that the conversation outgrew the model); it outranks the wording. */
 export function describeAppError(message: string, serverAction: SearchErrorAction | null, t: TFunction): AppErrorView {
 	if (serverAction === "open-plan") {
 		return { kind: "model-subscription", title: null, hint: null, actions: [{ id: "open-plan", label: label("open-plan", t), primary: true }] };
 	}
-	const kind = classifyAppError(message);
+	const kind = serverAction === "new-chat" ? "context-overflow" : classifyAppError(message);
 	const copy = COPY[kind];
 	return {
 		kind,

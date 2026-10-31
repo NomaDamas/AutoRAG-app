@@ -336,11 +336,18 @@
       "last7Days": "过去 7 天",
       "last30Days": "过去 30 天",
       "older": "更早"
+    },
+    "context": {
+      "compacting": "对话较长，正在总结之前的内容…",
+      "compacted": "已总结之前的对话",
+      "compactedHint": "之前的对话现在只以摘要形式提供给模型。如仍需要具体细节，请再次告诉它。",
+      "trimmed": "过大的搜索结果只使用了一部分"
     }
   },
   "appError": {
     "fixAction": "用 AI 修复",
     "openModelSettings": "打开模型设置",
+    "askNarrower": "缩小范围重新提问",
     "showDetails": "查看详情",
     "hideDetails": "收起详情",
     "other": {
@@ -370,6 +377,10 @@
     "network": {
       "title": "无法连接到 AI 模型的服务器",
       "hint": "请检查网络连接后重试。如果网络正常仍反复失败，请检查模型设置。"
+    },
+    "contextOverflow": {
+      "title": "超出了模型一次能读取的量",
+      "hint": "对话和搜索结果过大，未能生成回答。请新建对话，或缩小范围后重新提问。"
     },
     "fix": {
       "title": "用 AI 修复",
