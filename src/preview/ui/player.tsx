@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl, previewVideoAudioUrl, type AudioMetadata, type PreviewDocument } from "../shared/contract";
 import { formatClock, formatFinderSize } from "../shared/format";
+import { needsPlaybackCopy } from "../shared/video-playback";
 import { useChrome } from "./chrome";
 import { followVideo } from "./audio-follow";
 import { FallbackView } from "./fallback";
@@ -13,6 +14,8 @@ const VIDEO_SPEEDS = [1, 1.25, 1.5, 2, 0.5] as const;
 const AUDIO_SPEEDS = [1, 1.25, 1.5, 2, 0.75] as const;
 /** The playing HUD fades after this long without the pointer moving. */
 const HUD_IDLE_MS = 2500;
+/** A video copy that is not ready this soon gets the progress notice; a cached one arrives sooner and shows none. */
+const PREPARING_NOTICE_MS = 400;
 /** The audio panel is a fixed card in the reference: 620 × 368 with the toolbar. */
 const AUDIO_BODY = { width: 620, height: 322 } as const;
 const WAVE_BARS = 56;
@@ -171,10 +174,10 @@ function Track({
  * audio the page plays itself gets nothing here, and a video that turns out to
  * decode its own sound drops the sidecar.
  */
-function useVideoAudioSidecar(element: HTMLVideoElement | null, path: string): void {
+function useVideoAudioSidecar(element: HTMLVideoElement | null, path: string, enabled: boolean): void {
 	const { bridge } = useChrome();
 	useEffect(() => {
-		if (element === null) return;
+		if (element === null || !enabled) return;
 		let cancelled = false;
 		let drop: (() => void) | null = null;
 		bridge.videoAudio(path).then(
@@ -203,7 +206,7 @@ function useVideoAudioSidecar(element: HTMLVideoElement | null, path: string): v
 			cancelled = true;
 			drop?.();
 		};
-	}, [bridge, element, path]);
+	}, [bridge, element, path, enabled]);
 }
 
 /**
@@ -211,14 +214,14 @@ function useVideoAudioSidecar(element: HTMLVideoElement | null, path: string): v
  * middle, speed, loop, and picture-in-picture on the right, and a scrubber
  * with elapsed and remaining time. Clicking the picture plays or pauses.
  */
-export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
+function VideoPlayer({ file, src, withSidecar }: { readonly file: PreviewDocument; readonly src: string; readonly withSidecar: boolean }): ReactElement {
 	const { t } = useTranslation();
 	const [element, setElement] = useState<HTMLVideoElement | null>(null);
 	const [failed, setFailed] = useState(false);
 	const [idle, setIdle] = useState(false);
 	const media = useMedia(element);
 	useArrowSeek(media.skip);
-	useVideoAudioSidecar(element, file.path);
+	useVideoAudioSidecar(element, file.path, withSidecar);
 	const timer = useRef<number | undefined>(undefined);
 	const wake = useCallback(() => {
 		setIdle(false);
@@ -237,7 +240,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 			<video
 				ref={setElement}
 				className="ql__video absolute inset-0 w-full h-full object-contain"
-				src={previewStreamUrl(file.path)}
+				src={src}
 				autoPlay
 				playsInline
 				preload="auto"
@@ -309,6 +312,62 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 			</div>
 		</div>
 	);
+}
+
+/**
+ * A video whose container the page cannot open (an AVI): main rewrites it into an
+ * MP4 with ffmpeg, once, and the player plays that copy. While ffmpeg works the
+ * panel shows its progress, after a moment so a copy already in the cache does
+ * not flash it; leaving the file stops the work. When main cannot make a copy
+ * (no ffmpeg, not a video) the file is played as it is, which fails into the
+ * usual "couldn't play" panel.
+ */
+function VideoCopyView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	const { t } = useTranslation();
+	const { bridge } = useChrome();
+	const [src, setSrc] = useState<string | null>(null);
+	const [fraction, setFraction] = useState(0);
+	const [noticeShown, setNoticeShown] = useState(false);
+	useEffect(() => {
+		const id = crypto.randomUUID();
+		let cancelled = false;
+		setSrc(null);
+		setFraction(0);
+		setNoticeShown(false);
+		const notice = window.setTimeout(() => setNoticeShown(true), PREPARING_NOTICE_MS);
+		const unsubscribe = bridge.onVideoPlaybackProgress((progress) => {
+			if (progress.id === id) setFraction(progress.fraction);
+		});
+		bridge.videoPlayback(file.path, id).then(
+			(plan) => {
+				if (!cancelled) setSrc(previewStreamUrl(plan.kind === "file" ? plan.path : file.path));
+			},
+			(caught: unknown) => {
+				if (cancelled) return;
+				if (!(caught instanceof Error)) throw caught;
+				setSrc(previewStreamUrl(file.path));
+			},
+		);
+		return () => {
+			window.clearTimeout(notice);
+			cancelled = true;
+			unsubscribe();
+			bridge.cancelVideoPlayback(id);
+		};
+	}, [bridge, file.path]);
+	if (src === null) {
+		return (
+			<div className="ql-video relative flex-1 min-h-0 grid place-items-center bg-ql-media">
+				{noticeShown ? <p className="m-0 text-[13px] tabular-nums text-ql-hud-ink">{t("quickLook.player.videoPreparing", { percent: Math.floor(fraction * 100) })}</p> : null}
+			</div>
+		);
+	}
+	return <VideoPlayer file={file} src={src} withSidecar={false} />;
+}
+
+export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
+	if (needsPlaybackCopy(file.ext)) return <VideoCopyView file={file} />;
+	return <VideoPlayer file={file} src={previewStreamUrl(file.path)} withSidecar />;
 }
 
 /** Peak heights (px) for the waveform, or null while decoding or when the file is too large. */

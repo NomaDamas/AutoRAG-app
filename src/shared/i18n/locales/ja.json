@@ -1953,6 +1953,7 @@
     },
     "player": {
       "videoFailed": "動画を再生できませんでした",
+      "videoPreparing": "再生できるように動画を準備しています… {{percent}}%",
       "audioFailed": "音声を再生できませんでした",
       "playPause": "再生または一時停止",
       "muteToggle": "ミュートの切り替え",

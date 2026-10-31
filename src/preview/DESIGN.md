@@ -75,6 +75,20 @@ still has the previous file's size when they lay out.
   track the page plays itself, or no ffmpeg on the machine, is left exactly as
   before; a video that turns out to decode its own sound drops the sidecar.
   Closing or changing the panel detaches the source, which stops ffmpeg.
+  Chromium has no AVI demuxer, so an `.avi` fails with MEDIA_ERR_SRC_NOT_SUPPORTED
+  whatever it holds. For `needsPlaybackCopy` extensions the panel
+  (`VideoCopyView`) asks main (`createVideoPlayback`, `node/video-playback.ts`)
+  for an MP4 made by ffmpeg, cached in `<userData>/video-playback/` by path,
+  mtime, and size (least recently used copies go past 4GB). Streams an MP4
+  plays as they are (8-bit h264, AAC, MP3) are copied, the rest become H.264
+  and AAC, so a typical h264 file takes seconds and an xvid file the time the
+  encode takes. The panel shows "Preparing the video…" (after 400ms, so a copy
+  already cached shows no flash) with ffmpeg's
+  progress (`preview:video-playback-progress`) and leaving the file cancels the
+  job (`preview:video-playback-cancel`), which kills ffmpeg and deletes the
+  partial output. No ffmpeg, or a file ffmpeg cannot read, answers "native":
+  the panel plays the file itself and shows the "couldn't play" card. The copy's
+  sound is the element's own, so the AC-3 sidecar is off for it.
 - **Audio** — cover art (or a stand-in sleeve), title, artist, album, and time
   from the tags (`music-metadata`, read in the main process without a full
   scan), a 56-bar waveform decoded at 8kHz that doubles as a scrubber, stream
