@@ -22,6 +22,7 @@ import type {
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
 import { calendarSupported, isCalendarDatasourceType } from "../../../../shared/calendar-platform";
+import { newDatasourceEntry } from "../../../../shared/datasource-defaults";
 import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { hostPlatform } from "../../lib/shortcuts";
@@ -412,7 +413,7 @@ export function AppsPage({
 	async function addConnection(templateId: string, alias: string): Promise<void> {
 		setAddError(null);
 		try {
-			const entry: Record<string, JsonValue> = templateId === alias ? {} : { type: templateId };
+			const entry = newDatasourceEntry(templateId, alias);
 			onSaved(await settings.configSet(["datasources", alias], entry));
 			setAddTemplate(null);
 			onOpenSource(alias);

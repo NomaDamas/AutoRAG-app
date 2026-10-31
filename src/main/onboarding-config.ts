@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import type { SourceFacts, SourceId } from "../shared/onboarding-contract";
+import { connectorDefaultsFor } from "../shared/datasource-defaults";
 import { isJsonObject } from "../shared/settings-contract";
 
 /**
@@ -88,19 +89,9 @@ function entriesFor(datasource: IndexingDatasource, home: string): Record<string
 		case "whatsapp":
 			return { whatsapp: { instanceId: "default", connector: {} } };
 		case "slack":
-			return {
-				slack: {
-					type: "slack",
-					connector: {
-						// Detection counted the local mirror's rows (`~/.slacrawl`), so the
-						// first index must sync the same way: `--source wiretap` reads the
-						// Slack Desktop cache and needs no token. slacrawl's default sync
-						// is the API source, which exits nonzero without SLACK_BOT_TOKEN
-						// and fails the whole refresh.
-						syncSource: "wiretap",
-					},
-				},
-			};
+			// Detection counted the local mirror's rows (`~/.slacrawl`), so the first index syncs the same way Settings
+			// does: the shared preset reads Slack Desktop's cache (see datasource-defaults.ts).
+			return { slack: { type: "slack", connector: connectorDefaultsFor("slack") ?? {} } };
 	}
 }
 
