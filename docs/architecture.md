@@ -812,7 +812,10 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
 - **Panel.** `InteractionDock` replaces the composer's form for the run it belongs to (draft text and attachments
   stay in the panel's state): a question card (single/multiple choice with descriptions, free text, 2–4 together
   in steps) or an approval card (what the call does, the command, four answers; initial focus on Deny, Esc
-  denies, Enter never approves). Stop stays reachable on the card. Pure logic: `state/interaction.ts`.
+  denies, Enter never approves). Stop stays reachable on the card. A call the judgment model could not classify
+  (`sessionScope: "unclassified"`) says so in the app's words — its own headline and a translated note — instead
+  of claiming a change to files and printing the gate's raw English reason (a missing key, a timeout). Pure
+  logic: `state/interaction.ts`.
 
 ### One conversation per chat
 
