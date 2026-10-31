@@ -42,7 +42,7 @@ const PROBE_CACHE_LIMIT = 32;
  * with damaged frames still ends when the video does (measured on a mkv whose
  * AC-3 stream drops frames: 232 MB of PCM without it, 323 MB of 323.3 MB with it).
  */
-const MIX_FILTER = "aresample=osr=48000:ochl=stereo:rematrix_maxval=3:async=1:first_pts=0,alimiter=limit=0.95:level=disabled:latency=1";
+export const MIX_FILTER = "aresample=osr=48000:ochl=stereo:rematrix_maxval=3:async=1:first_pts=0,alimiter=limit=0.95:level=disabled:latency=1";
 
 /** Streams of files already probed, by file identity: Chromium issues a request per seek, each needing the duration. */
 const probes = new Map<string, Promise<AudioProbe | null>>();
@@ -51,17 +51,19 @@ function isEnoent(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
 }
 
-function runProbe(command: string, path: string, timeoutMs: number): Promise<AudioProbe | null> {
-	const { promise, resolve } = Promise.withResolvers<AudioProbe | null>();
+/** The stderr listing of `ffmpeg -i <path>`; null when there is no ffmpeg or it ran out of time. */
+export function ffmpegListing(command: string, path: string, timeoutMs: number): Promise<string | null> {
+	const { promise, resolve } = Promise.withResolvers<string | null>();
 	// `ffmpeg -i` with no output prints the listing and exits 1, so the error is expected; only a missing program or a deadline means "no answer".
 	execFile(command, ["-hide_banner", "-nostdin", "-i", path], { encoding: "utf8", timeout: timeoutMs, maxBuffer: PROBE_MAX_BUFFER, windowsHide: true }, (error, _stdout, stderr) => {
-		if (error !== null && (isEnoent(error) || error.killed === true)) {
-			resolve(null);
-			return;
-		}
-		resolve(parseAudioProbe(stderr));
+		resolve(error !== null && (isEnoent(error) || error.killed === true) ? null : stderr);
 	});
 	return promise;
+}
+
+async function runProbe(command: string, path: string, timeoutMs: number): Promise<AudioProbe | null> {
+	const listing = await ffmpegListing(command, path, timeoutMs);
+	return listing === null ? null : parseAudioProbe(listing);
 }
 
 /** The audio streams and duration of `path`; null when there is no ffmpeg, no such file, or ffmpeg ran out of time. */

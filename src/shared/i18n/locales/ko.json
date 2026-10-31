@@ -1964,6 +1964,7 @@
     },
     "player": {
       "videoFailed": "동영상을 재생할 수 없습니다",
+      "videoPreparing": "재생할 수 있도록 동영상을 준비하는 중… {{percent}}%",
       "audioFailed": "오디오를 재생할 수 없습니다",
       "playPause": "재생 또는 일시정지",
       "muteToggle": "음소거 전환",

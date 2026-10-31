@@ -1964,6 +1964,7 @@
     },
     "player": {
       "videoFailed": "无法播放视频",
+      "videoPreparing": "正在准备视频以便播放… {{percent}}%",
       "audioFailed": "无法播放音频",
       "playPause": "播放或暂停",
       "muteToggle": "切换静音",
