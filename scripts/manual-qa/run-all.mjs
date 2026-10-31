@@ -62,6 +62,7 @@ const LANES = [
 	{ name: "evidence-panel", script: "run-qa-finder-evidence-panel.mjs", timeout: 300 },
 	{ name: "evidence-folder", script: "run-qa-finder-evidence-folder.mjs", timeout: 300 },
 	{ name: "split-panes", script: "run-qa-finder-split-panes.mjs", timeout: 300 },
+	{ name: "tab-view-state", script: "run-qa-finder-tab-view-state.mjs", timeout: 300 },
 	{ name: "ai-search-images", script: "run-qa-finder-ai-search-images.mjs", timeout: 300 },
 	{ name: "ai-search-table", script: "run-qa-finder-ai-search-table.mjs", timeout: 300 },
 	{ name: "ai-search-links", script: "run-qa-finder-ai-search-links.mjs", timeout: 300 },
