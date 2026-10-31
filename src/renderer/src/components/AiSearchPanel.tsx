@@ -42,7 +42,7 @@ import {
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, PlusIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -777,7 +777,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					aria-label={t("aiSearch.newChat")}
 					onClick={() => newChat()}
 				>
-					<PlusIcon />
+					<NewChatIcon />
 				</button>
 			</div>
 
