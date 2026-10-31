@@ -961,8 +961,11 @@ app.whenReady().then(async () => {
 	});
 	const settings = await settingsService.get();
 	appliedLaunchAtLogin = settings.launchAtLogin;
-	// A stored choice applies on launch, not only when it changes.
-	await applyRemoteAccess(settings.remoteAccess);
+	// A stored choice applies on launch, not only when it changes. A taken port
+	// (another Dazzi on the same profile) must not abort the rest of startup.
+	await applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+		console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+	});
 	applyAppearance(settings.appearance);
 	applyLanguage(settings.language);
 	if (settings.dupeyScanIntervalMinutes !== DEFAULT_SCAN_INTERVAL_MINUTES) applyScanInterval(settings.dupeyScanIntervalMinutes);
