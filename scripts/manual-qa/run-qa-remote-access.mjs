@@ -384,7 +384,7 @@ try {
 		});
 		await scenario("type an AI Search draft without sending a model request", async () => {
 			await openAiSearch(page);
-			const composer = page.locator(`${AI_PANEL} input[aria-label="Ask Dazzi"]`);
+			const composer = page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`);
 			await composer.click();
 			await composer.pressSequentially("Find the remote access fixture, but do not send.");
 			await expect(composer).toHaveValue("Find the remote access fixture, but do not send.");

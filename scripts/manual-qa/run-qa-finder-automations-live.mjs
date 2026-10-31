@@ -134,7 +134,7 @@ const readRules = () => JSON.parse(readFileSync(RULES, "utf8")).automations;
 
 const ROW = (id) => `[role="row"][data-rule-id="${id}"]`;
 const AI_PANEL = '[data-ai-tab] section.ai:not([aria-hidden="true"])';
-const COMPOSER = `${AI_PANEL} .compose-box input`;
+const COMPOSER = `${AI_PANEL} .compose-box textarea`;
 const text = async (page, selector) => ((await page.locator(selector).first().innerText({ timeout: 5000 }).catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
 const rowIds = (page) => page.$$eval('[role="row"][data-rule-id]', (rows) => rows.map((row) => row.getAttribute("data-rule-id")));
 const sidebarItem = (page, label) => page.locator(".sidebar__item", { hasText: label }).first();
