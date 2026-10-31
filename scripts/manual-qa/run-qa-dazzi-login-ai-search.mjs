@@ -165,10 +165,10 @@ try {
 			}
 		}).observe(panel, { subtree: true, childList: true, characterData: true });
 	});
-	await page.fill('input[aria-label="Ask Dazzi"]', "환불 예외는 누구 승인이 필요해?");
+	await page.fill('textarea[aria-label="Ask Dazzi"]', "환불 예외는 누구 승인이 필요해?");
 	await page.keyboard.press("Enter");
 	const finished = () => {
-		const input = document.querySelector('input[aria-label="Ask Dazzi"]');
+		const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
 		const done = input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 		return done || document.querySelector(".ai .text-danger-text")?.textContent;
 	};

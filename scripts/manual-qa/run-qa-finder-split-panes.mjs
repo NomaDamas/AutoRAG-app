@@ -292,7 +292,7 @@ try {
 
 	// 6. AI Search as a tab: show it in a tab, split it off to the right, type a draft, move it back.
 	await page.locator(".sidebar__item", { hasText: "AI Search" }).click();
-	await page.waitForSelector(`${AI_PANEL} input[aria-label="Ask Dazzi"]`);
+	await page.waitForSelector(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`);
 	const aiTabIndex = (await panes(page))[0].tabs.findIndex((entry) => entry.active);
 	await dragTab(page, tabIn(page, left.id, aiTabIndex), [await bodyPoint(page, left.id, 0.96, 0.5)], "08-ai-drag");
 	state = await panes(page);
@@ -305,7 +305,7 @@ try {
 		JSON.stringify({ aiBox, aiPane: aiPane && { x: aiPane.x, y: aiPane.y, width: aiPane.width } }),
 	);
 	check("the folder pane stays on screen beside the chat", folderPane !== undefined && folderPane.pathbar);
-	await page.locator(`${AI_PANEL} input[aria-label="Ask Dazzi"]`).fill("draft survives moving");
+	await page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`).fill("draft survives moving");
 	await page.screenshot({ path: join(EVIDENCE, "09-ai-split.png") });
 	// ⌘K from the folder pane focuses the AI tab already on screen instead of opening another.
 	await paneEl(page, folderPane.id).locator(".pathbar").click();
@@ -337,7 +337,7 @@ try {
 	const aiIndex = revealed.tabs.findIndex((entry) => entry.title === "AI Search");
 	const folderStrip = await tabIn(page, folderPane.id, 0).boundingBox();
 	await dragTab(page, tabIn(page, aiPane.id, aiIndex), [[folderStrip.x + folderStrip.width - 10, folderStrip.y + folderStrip.height / 2]]);
-	const draft = await page.locator(`${AI_PANEL} input[aria-label="Ask Dazzi"]`).inputValue();
+	const draft = await page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`).inputValue();
 	check("the AI tab's chat (draft) survives moving to another pane", draft === "draft survives moving", draft);
 
 	// 6b. Settings is a tab too: ⌘, opens it in the focused pane and it splits off like any tab.

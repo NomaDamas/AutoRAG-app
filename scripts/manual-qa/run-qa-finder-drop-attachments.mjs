@@ -254,12 +254,12 @@ try {
 	const sent = await pills(page);
 	const question =
 		"첨부한 파일들에 적힌 프로젝트 코드명, 예산 승인자, Finder 드롭 확인 문구를 각각 그대로 알려주고, 첨부한 링크의 도메인도 알려줘.";
-	await page.fill(`${DOCK} input[aria-label="Ask Dazzi"]`, question);
+	await page.fill(`${DOCK} textarea[aria-label="Ask Dazzi"]`, question);
 	await page.keyboard.press("Enter");
 	log(`submitted with ${sent.length} attachments: ${question}`);
 	await page.waitForFunction(
 		(panel) => {
-			const input = document.querySelector(`${panel} input[aria-label="Ask Dazzi"]`);
+			const input = document.querySelector(`${panel} textarea[aria-label="Ask Dazzi"]`);
 			return input !== null && !input.disabled && document.querySelector(`${panel} .user-msg`) !== null;
 		},
 		DOCK,

@@ -86,6 +86,19 @@ describe("ApprovalModeMenu", () => {
 		expect(checked[0]?.textContent).toContain(t("interaction.mode.ask.label"));
 	});
 
+	it("opens above a trigger that sits at the bottom of the window, without covering it", async () => {
+		await renderHarness();
+		const triggerTop = window.innerHeight - 60;
+		trigger().getBoundingClientRect = () => new DOMRect(40, triggerTop, 90, 26);
+		act(() => trigger().click());
+
+		const menu = host.querySelector<HTMLElement>('[role="menu"]')!;
+		// Anchored by its own bottom edge, so the menu clears the pill whatever height its rows render at.
+		expect(menu.style.top).toBe("");
+		expect(Number.parseFloat(menu.style.bottom)).toBeGreaterThanOrEqual(window.innerHeight - triggerTop);
+		expect(Number.parseFloat(menu.style.left)).toBe(40);
+	});
+
 	it("persists the picked mode and shows what the main process resolved to", async () => {
 		setMode.mockImplementation(async () => "full");
 		await renderHarness();
