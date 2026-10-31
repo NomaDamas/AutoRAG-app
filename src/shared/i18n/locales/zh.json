@@ -307,6 +307,13 @@
     "askDazzi": "向 Dazzi 提问",
     "stop": "停止",
     "openPlan": "打开订阅与用量",
+    "indexNotice": {
+      "indexing": "索引尚未建完，搜索可能无法正常工作。还没有收录的文档会搜不到。",
+      "failed": "上一次建立索引没有完成，搜索可能无法正常工作。",
+      "empty": "没有已建立索引的文档，搜索可能无法正常工作。",
+      "few": "仅有 {{count}} 份文档已建立索引，搜索可能无法正常工作。",
+      "manage": "管理索引"
+    },
     "thinking": "思考中…",
     "workedFor": "思考耗时 {{time}}",
     "reviewing": "正在核对提问…",
@@ -2334,6 +2341,7 @@
         "discover": "重新搜索模型"
       },
       "searchModels": "搜索模型",
+      "emptySearchModels": "没有匹配的模型。",
       "emptyRoleModels": "没有可用于该角色的受支持模型。请先连接相应服务。",
       "emptyModels": "已连接的服务中没有可用的模型。",
       "connect": {
@@ -2522,11 +2530,8 @@
       "cloudDrive": {
         "summary": "通过增量镜像索引 rclone 远程。"
       },
-      "mailExport": {
-        "summary": "索引本地 .eml / .mbox 存档文件。"
-      },
       "mailcrawl": {
-        "summary": "从 mailcrawl 存档中搜索邮件。"
+        "summary": "通过 mailcrawl 搜索邮件及本地 .eml / .mbox 存档。"
       },
       "obsidian": {
         "summary": "通过 MinSync 搜索 Obsidian 保管库。"
@@ -2541,7 +2546,7 @@
         "summary": "通过 EventKit MCP 实时查询 macOS 日历日程与提醒事项。"
       },
       "spotlight": {
-        "summary": "使用 macOS Spotlight (mdfind) 查询索引本地文件。"
+        "summary": "使用 macOS Spotlight (mdfind) 实时查询本地文件。"
       }
     },
     "groups": {
@@ -2560,7 +2565,6 @@
       "github": "GitHub",
       "githubGist": "GitHub Gist",
       "cloudDrive": "Cloud Drive (rclone)",
-      "mailExport": "Mail Export",
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",

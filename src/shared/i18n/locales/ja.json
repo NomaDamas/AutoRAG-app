@@ -307,6 +307,13 @@
     "askDazzi": "Dazziに質問する",
     "stop": "停止",
     "openPlan": "サブスクリプションと使用量を開く",
+    "indexNotice": {
+      "indexing": "インデックス作成がまだ終わっていないため、検索がうまく動かないことがあります。まだ反映されていない書類は見つかりません。",
+      "failed": "前回のインデックス作成が最後まで終わらなかったため、検索がうまく動かないことがあります。",
+      "empty": "インデックスされた書類がないため、検索がうまく動かないことがあります。",
+      "few": "インデックスされた書類が{{count}}件しかないため、検索がうまく動かないことがあります。",
+      "manage": "インデックス作成を管理"
+    },
     "thinking": "思考中…",
     "workedFor": "{{time}}間回答を生成",
     "reviewing": "質問を確認中…",
@@ -2334,6 +2341,7 @@
         "discover": "モデルを再検索"
       },
       "searchModels": "モデルを検索",
+      "emptySearchModels": "一致するモデルがありません。",
       "emptyRoleModels": "この役割で使える対応モデルがありません。先に該当のサービスを接続してください。",
       "emptyModels": "接続済みサービスから利用できるモデルがありません。",
       "connect": {
@@ -2522,11 +2530,8 @@
       "cloudDrive": {
         "summary": "rclone リモートを増分ミラーリングしてインデックスします。"
       },
-      "mailExport": {
-        "summary": "ローカルの .eml / .mbox アーカイブをインデックスします。"
-      },
       "mailcrawl": {
-        "summary": "mailcrawl アーカイブからメールを検索します。"
+        "summary": "mailcrawl でメールとローカルの .eml / .mbox アーカイブを検索します。"
       },
       "obsidian": {
         "summary": "MinSync で Obsidian の保管庫を検索します。"
@@ -2541,7 +2546,7 @@
         "summary": "EventKit MCP 経由で macOS のカレンダー予定とリマインダーをライブ照会します。"
       },
       "spotlight": {
-        "summary": "macOS Spotlight(mdfind)クエリでローカルファイルをインデックスします。"
+        "summary": "macOS Spotlight (mdfind) でローカルファイルをライブ照会します。"
       }
     },
     "groups": {
@@ -2560,7 +2565,6 @@
       "github": "GitHub",
       "githubGist": "GitHub Gist",
       "cloudDrive": "Cloud Drive (rclone)",
-      "mailExport": "Mail Export",
       "mail": "Mail",
       "obsidian": "Obsidian",
       "rss": "RSS / News",

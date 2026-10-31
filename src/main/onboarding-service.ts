@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join, sep } from "node:path";
+import { loadMirrorIndex } from "@autorag/librarian";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_ACCOUNT_BASE_URL } from "../shared/account-contract";
@@ -336,31 +337,26 @@ interface ParsedMirrorSnapshot {
 }
 
 /** Count what the parsed mirror actually handled, and find the newest entry. */
-function readParsedMirror(text: string): ParsedMirrorSnapshot {
-	let parsed: unknown;
+function snapshotParsedStage(workspaceRoot: string): ParsedMirrorSnapshot {
 	try {
-		parsed = JSON.parse(text);
+		const index = loadMirrorIndex(workspaceRoot);
+		const entries = Object.values(index.entries);
+		const skippedCount = Object.keys(index.skipped ?? {}).length;
+		let recentFile: string | null = null;
+		let recentSourcePath: string | null = null;
+		let newest = "";
+		for (const entry of entries) {
+			if (entry.updatedAt >= newest) {
+				newest = entry.updatedAt;
+				recentSourcePath = entry.sourcePath;
+				recentFile = basename(entry.sourcePath);
+			}
+		}
+		return { processedFiles: entries.length + skippedCount, recentFile, recentSourcePath };
 	} catch {
 		return { processedFiles: 0, recentFile: null, recentSourcePath: null };
 	}
-	if (!isJsonObject(parsed)) return { processedFiles: 0, recentFile: null, recentSourcePath: null };
-	const entries = isJsonObject(parsed.entries) ? parsed.entries : {};
-	const skipped = isJsonObject(parsed.skipped) ? parsed.skipped : {};
-	let recentFile: string | null = null;
-	let recentSourcePath: string | null = null;
-	let newest = "";
-	for (const entry of Object.values(entries)) {
-		if (!isJsonObject(entry) || typeof entry.sourcePath !== "string") continue;
-		const updatedAt = typeof entry.updatedAt === "string" ? entry.updatedAt : "";
-		if (updatedAt >= newest) {
-			newest = updatedAt;
-			recentSourcePath = entry.sourcePath;
-			recentFile = basename(entry.sourcePath);
-		}
-	}
-	return { processedFiles: Object.keys(entries).length + Object.keys(skipped).length, recentFile, recentSourcePath };
 }
-
 /** Count the committed file entries in MinSync's crash-resume log (`progress.jsonl`). */
 function countMinSyncProgress(text: string | null): number {
 	if (text === null) return 0;
@@ -397,7 +393,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let parsedSnapshot: ParsedMirrorSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
 	let embeddedFiles = 0;
 	let progressSignature = "";
-	let parsedSignature = "";
 	let minsyncSignature = "";
 	/** True while a keyword-only index runs: no embedding phase exists, so the bar has none. */
 	let keywordOnly = false;
@@ -456,9 +451,9 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		const root = join(workspacePath, ".autorag");
 		// Synchronous reads: an async read keeps the file open across event-loop turns, which fails the librarian's rename on Windows.
 		const progressRead = readIfChanged(join(root, "refresh-progress.json"), progressSignature);
-		const parsedRead = readIfChanged(join(root, "parsed", "index.json"), parsedSignature);
 		const minsyncRead = readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
 		if (ownRun !== runId || status.state !== "running") return;
+		let inspectStage = false;
 		if (progressRead.text !== null) {
 			progressSignature = progressRead.signature;
 			let parsed: unknown;
@@ -473,12 +468,26 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 					phase = nextPhase;
 					phaseStartedAt = now();
 				}
+				if (isJsonObject(parsed.parsedCounts) && typeof parsed.parsedCounts.scanned === "number") {
+					parsedSnapshot = {
+						...parsedSnapshot,
+						processedFiles: Math.max(parsedSnapshot.processedFiles, parsed.parsedCounts.scanned),
+					};
+					inspectStage = true;
+				}
+				if (isJsonObject(parsed.minsync) && typeof parsed.minsync.synced === "number") {
+					embeddedFiles = Math.max(embeddedFiles, parsed.minsync.synced);
+				}
 			}
 		}
 
-		if (parsedRead.text !== null) {
-			parsedSignature = parsedRead.signature;
-			parsedSnapshot = readParsedMirror(parsedRead.text);
+		if (inspectStage && existsSync(join(root, "parsed", "stage"))) {
+			const stageSnapshot = snapshotParsedStage(workspacePath);
+			parsedSnapshot = {
+				processedFiles: Math.max(parsedSnapshot.processedFiles, stageSnapshot.processedFiles),
+				recentFile: stageSnapshot.recentFile ?? parsedSnapshot.recentFile,
+				recentSourcePath: stageSnapshot.recentSourcePath ?? parsedSnapshot.recentSourcePath,
+			};
 		}
 
 		if (minsyncRead.text !== null) {
@@ -733,7 +742,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			localIndexDone = false;
 			phase = null;
 			progressSignature = "";
-			parsedSignature = "";
 			minsyncSignature = "";
 			parsedSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
 			embeddedFiles = 0;
@@ -753,6 +761,19 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			// A keyword-only run can end before the first poll: read the mirror once more so the final status counts what it read.
 			const settle = async (result: ConfigRefreshResult): Promise<void> => {
 				await tick().catch(() => undefined);
+				if (workspacePath !== null && existsSync(join(workspacePath, ".autorag", "parsed", "stage"))) {
+					const stageSnapshot = snapshotParsedStage(workspacePath);
+					const processedFiles = Math.max(status.processedFiles, stageSnapshot.processedFiles, result.scanned);
+					const recentSourcePath = stageSnapshot.recentSourcePath;
+					status = {
+						...status,
+						processedFiles,
+						recentFile: stageSnapshot.recentFile ?? status.recentFile,
+						recentFolder: recentSourcePath === null ? status.recentFolder : folderNameFor(recentSourcePath),
+					};
+				} else if (result.scanned > status.processedFiles) {
+					status = { ...status, processedFiles: result.scanned };
+				}
 				finish(result.ok, result.error, result.diagnostics);
 			};
 			// The first index embeds on this computer when the config now names the local model: its weights have to be

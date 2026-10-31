@@ -131,7 +131,8 @@ function clean(parent: Node, folder: string | null): void {
  * dropped: the preview never reaches the network.
  */
 export function sanitizeMarkdownHtml(html: string, folder: string | null): string {
-	const inert = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
-	clean(inert.body, folder);
-	return inert.body.innerHTML;
+	const template = document.createElement("template");
+	template.innerHTML = html;
+	clean(template.content, folder);
+	return template.innerHTML;
 }

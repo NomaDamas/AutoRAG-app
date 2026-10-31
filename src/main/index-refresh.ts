@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { AutoRAGLite, type AutoRAGRefreshResult, type RefreshMethod } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -119,6 +119,7 @@ async function runRefresh(
 	}
 	// A refresh re-walks the folders, so a dot-folder created minutes ago is excluded too.
 	const effective = await applyAppIndexing(resolveConfigReadOnly(input), raw, { fresh: true, configPath });
+	mkdirSync(effective.workspacePath, { recursive: true });
 	const diagnostics: ConfigRefreshDiagnostic[] = [];
 	// A root that cannot be listed, or reads as empty although it was full, would make this
 	// refresh delete everything indexed from it; leave the index alone until it returns.

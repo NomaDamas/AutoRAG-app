@@ -32,6 +32,7 @@ export interface RootCheckDeps {
 	/** Test seam: resolves a root's canonical path; production uses fs realpath. */
 	readonly realpath?: (path: string) => Promise<string>;
 	readonly timeoutMs?: number;
+	readonly minSyncBinaryPath?: string;
 }
 
 async function listRoot(root: string): Promise<RootProbe> {
@@ -55,9 +56,11 @@ function withTimeout<T>(work: Promise<T>, timeoutMs: number, fallback: T): Promi
 	return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
-function indexedEntries(workspacePath: string): readonly string[] {
+function indexedEntries(workspacePath: string, minSyncBinaryPath?: string): readonly string[] {
 	try {
-		return Object.values(loadMirrorIndex(workspacePath).entries).map((entry) => entry.sourcePath);
+		return Object.values(
+			loadMirrorIndex(workspacePath, minSyncBinaryPath === undefined ? {} : { minSyncBinaryPath }).entries,
+		).map((entry) => entry.sourcePath);
 	} catch {
 		return [];
 	}
@@ -71,7 +74,7 @@ export async function findUnavailableRoots(searchPaths: readonly string[], works
 	const probe = deps.probe ?? listRoot;
 	const canonical = deps.realpath ?? realpath;
 	const timeoutMs = deps.timeoutMs ?? ROOT_PROBE_TIMEOUT_MS;
-	const sources = indexedEntries(workspacePath);
+	const sources = indexedEntries(workspacePath, deps.minSyncBinaryPath);
 	const problems: RootProblem[] = [];
 	for (const root of searchPaths) {
 		const outcome = await withTimeout(probe(root), timeoutMs, "unreadable");

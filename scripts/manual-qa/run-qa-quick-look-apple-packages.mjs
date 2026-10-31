@@ -499,7 +499,7 @@ try {
 	// -----------------------------------------------------------------------
 	// 8. The Interface language reaches the viewers, switched through Settings.
 	// -----------------------------------------------------------------------
-	await main.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await main.locator(".sidebar__item--settings").click();
 	const languageSelect = main.locator('select[aria-label="App Language"]');
 	await languageSelect.waitFor({ timeout: 20_000 });
 	await languageSelect.selectOption("ko");

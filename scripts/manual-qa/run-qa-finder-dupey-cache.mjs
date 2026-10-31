@@ -129,7 +129,7 @@ const report = {};
 
 	// Settings: change the scan interval and confirm it persists. Settings
 	// opens as a tab from the sidebar (the v7 Settings is not a button).
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: "Duplicate Cleanup" }).first().click();
 	const interval = page.locator('.settings-panel select[aria-label="Check interval"]');

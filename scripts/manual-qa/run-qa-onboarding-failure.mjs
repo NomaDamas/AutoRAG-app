@@ -20,7 +20,8 @@ import { spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveMirrorIndex } from "@autorag/librarian";
+import { loadMirrorIndex } from "@autorag/librarian";
+import { seedMirrorStage } from "./seed-mirror-stage.mjs";
 import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
 import { homeDir, rmRetry } from "./platform.mjs";
 
@@ -395,8 +396,14 @@ await scenario("an offline embedder: it retries itself, and closing the window k
 	const kept = await problem(finder);
 	check("the problem record is the same fact the screen showed", kept.failure?.reason === "embedder-offline", JSON.stringify(kept));
 	await bothAppearances(finder, "05-offline-in-app");
-	const mirror = join(state.autoragHome, "workspace", ".autorag", "parsed", "index.json");
-	await until(() => existsSync(mirror) && readFileSync(mirror, "utf8").includes("note.md"), 90_000, "the keyword index to read the folder");
+	const workspaceRoot = join(state.autoragHome, "workspace");
+	await until(() => {
+		try {
+			return Object.values(loadMirrorIndex(workspaceRoot).entries).some((entry) => entry.sourcePath.endsWith("note.md"));
+		} catch {
+			return false;
+		}
+	}, 90_000, "the keyword index to read the folder");
 	check("closing on the stop started the keyword index, so the app is not empty", true);
 	check("onboarding is over for good", onboardingState(state)?.completed === true);
 
@@ -433,7 +440,7 @@ await scenario("an unreadable folder: it goes on by itself when the folder retur
 	Object.assign(state, profile({ embed: "none" }));
 	// A root that held documents and now cannot be listed is what the app refuses to refresh over.
 	const workspace = join(state.autoragHome, "workspace");
-	saveMirrorIndex(workspace, {
+	seedMirrorStage(workspace, {
 		version: 1,
 		entries: {
 			"/Projects/note.md": {
@@ -474,7 +481,7 @@ await scenario("an unreadable folder: it goes on by itself when the folder retur
 await scenario("an unreadable folder: leaving it out goes back to choosing folders when it was the only one", async (state) => {
 	Object.assign(state, profile({ embed: "none" }));
 	const workspace = join(state.autoragHome, "workspace");
-	saveMirrorIndex(workspace, {
+	seedMirrorStage(workspace, {
 		version: 1,
 		entries: {
 			"/Projects/note.md": {
@@ -723,7 +730,7 @@ await scenario("a first index still running: closing the onboarding window leave
 const unreadableFolder = (state) => {
 	Object.assign(state, profile({ embed: "none" }));
 	const workspace = join(state.autoragHome, "workspace");
-	saveMirrorIndex(workspace, {
+	seedMirrorStage(workspace, {
 		version: 1,
 		entries: {
 			"/Projects/note.md": { virtualPath: "/Projects/note.md", sourcePath: join(state.docsDir, "note.md"), outputPath: join(workspace, "note.md"), parserName: "plain-text", sourceMtimeNs: 1, sourceSizeBytes: 1, updatedAt: new Date(0).toISOString() },

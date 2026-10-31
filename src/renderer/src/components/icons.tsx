@@ -40,17 +40,18 @@ import {
 	PanelLeft,
 	PanelRight,
 	Pencil,
-	Plus,
 	RefreshCw,
 	RotateCw,
 	Rows3,
 	Search,
 	Send,
+	SquarePen,
 	Settings,
 	Share,
 	Shrink,
 	Sparkles,
 	Trash2,
+	TriangleAlert,
 	Undo2,
 	Users,
 	X,
@@ -129,7 +130,7 @@ export const VideoConvertIcon = glyph(Film, 16, 1.8);
 
 export const CloseIcon = glyph(X, 10, 3);
 
-export const PlusIcon = glyph(Plus, 14, 2.4);
+export const NewChatIcon = glyph(SquarePen, 15, 2);
 
 /**
  * Tab strip: the reference's `icon('close',11)` / `icon('plus',14)` at the
@@ -183,6 +184,9 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 /** Toolbar inspector toggle — the mockup's info-circle glyph, not the panel glyph. */
 export const InfoIcon = glyph(Info, 16, 1.8);
 
+/** A notice that something may not work as expected (a search over an index that is not ready). */
+export const WarningIcon = glyph(TriangleAlert, 14, 2);
+
 export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 
 export const GroupIcon = glyph(Layers, 16, 1.9);
@@ -190,7 +194,6 @@ export const GroupIcon = glyph(Layers, 16, 1.9);
 export const DatabaseIcon = glyph(Database, 16, 1.8);
 
 export const UsersIcon = glyph(Users, 16, 1.8);
-
 
 /**
  * Folders render the filled glyph in `--folder`, never a tile (DESIGN.md §5).

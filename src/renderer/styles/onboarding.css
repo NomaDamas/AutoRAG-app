@@ -366,6 +366,11 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	border-color: var(--onb-faint);
 }
 
+/* Back's icon is the quiet one: faint, while its label and the forward icon stay body (Figma 77:1806). */
+.onb .footer-actions .footer-btn:first-child svg {
+	color: var(--onb-faint);
+}
+
 .onb .footer-btn:disabled {
 	border-color: var(--onb-border);
 	background: transparent;

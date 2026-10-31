@@ -1,10 +1,11 @@
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { minSyncDocumentPath, minSyncWorkspaceRoot, saveMirrorIndex } from "@autorag/librarian";
+import { minSyncDocumentPath, minSyncWorkspaceRoot } from "@autorag/librarian";
 import type * as LibrarianModule from "@autorag/librarian";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createIndexStatusService } from "../src/main/index-status";
+import { seedMirrorStage } from "./support/seed-mirror-stage";
 
 /**
  * `setIndexExcluded` kicks off a parsed + MinSync (+Jikji) refresh in the
@@ -65,7 +66,7 @@ async function indexFile(fixture: Fixture, name: string, staged: boolean): Promi
 	const outputPath = join(fixture.workspace, ".autorag", "parsed", "files", `${name}.md`);
 	await mkdir(join(fixture.workspace, ".autorag", "parsed", "files"), { recursive: true });
 	await writeFile(outputPath, `${name}\n`);
-	saveMirrorIndex(fixture.workspace, {
+	seedMirrorStage(fixture.workspace, {
 		version: 1,
 		entries: {
 			[virtualPath]: {

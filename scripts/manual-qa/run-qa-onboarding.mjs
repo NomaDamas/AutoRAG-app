@@ -437,7 +437,7 @@ try {
 		check("keyword-only: semantic search switched off in the config", raw.appIndexing?.semanticSearch === false, JSON.stringify(raw.appIndexing));
 		check("keyword-only: no embedder written", raw.minSync?.embedder === undefined, JSON.stringify(raw.minSync));
 		check("keyword-only: MinSync never ran (no .minsync index in the workspace)", !existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "minsync")));
-		check("keyword-only: the parsed mirror exists", existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "index.json")));
+		check("keyword-only: the parsed mirror exists", existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "stage")) && existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "files")));
 	} else {
 		check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
 		check("semantic search stays on", raw.appIndexing?.semanticSearch === undefined, JSON.stringify(raw.appIndexing));

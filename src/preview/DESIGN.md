@@ -63,6 +63,18 @@ still has the previous file's size when they lay out.
   ±15s, play, speed (1 → 1.25 → 1.5 → 2 → 0.5), loop, picture-in-picture, and
   a scrubber with elapsed and remaining time. Clicking the picture toggles
   playback; the HUD fades while playing and the pointer rests. ←/→ seek 5s.
+  Chromium plays the picture of a video whose sound is AC-3, E-AC-3, DTS,
+  TrueHD, ALAC, MP2, or WMA and no sound at all (no error; its decoded audio
+  byte count stays 0), which is what HDTV and disc rips carry. For those, main
+  (`planVideoAudio`, `node/video-audio.ts`) reads the track list from
+  `ffmpeg -i` and the page plays that track from `autorag-preview://…&audio=<n>`:
+  a stereo 48 kHz WAV with its length declared up front, decoded by ffmpeg from
+  the byte the player asks for, so seeking is a range request and nothing is
+  stored. A hidden `<audio>` follows the video's play state, position, speed,
+  and volume (`ui/audio-follow.ts`); the video stays the clock. A file with any
+  track the page plays itself, or no ffmpeg on the machine, is left exactly as
+  before; a video that turns out to decode its own sound drops the sidecar.
+  Closing or changing the panel detaches the source, which stops ffmpeg.
 - **Audio** — cover art (or a stand-in sleeve), title, artist, album, and time
   from the tags (`music-metadata`, read in the main process without a full
   scan), a 56-bar waveform decoded at 8kHz that doubles as a scrubber, stream
