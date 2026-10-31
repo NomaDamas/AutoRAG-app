@@ -1953,6 +1953,7 @@
     },
     "player": {
       "videoFailed": "Couldn’t play the video",
+      "videoPreparing": "Preparing the video to play… {{percent}}%",
       "audioFailed": "Couldn’t play the audio",
       "playPause": "Play or Pause",
       "muteToggle": "Toggle Mute",
