@@ -422,7 +422,9 @@
     "questionAria": "Question from Dazzi",
     "approval": {
       "headlineChange": "Dazzi wants to change your files — allow this?",
-      "headlineRun": "Dazzi wants to run this — allow?"
+      "headlineRun": "Dazzi wants to run this — allow?",
+      "headlineUnclassified": "Dazzi wants to run this command — allow?",
+      "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide."
     },
     "category": {
       "delete": "Delete",

@@ -422,7 +422,9 @@
     "questionAria": "Dazzi からの質問",
     "approval": {
       "headlineChange": "Dazzi がファイルを変更しようとしています — 許可しますか？",
-      "headlineRun": "Dazzi が実行しようとしています — 許可しますか？"
+      "headlineRun": "Dazzi が実行しようとしています — 許可しますか？",
+      "headlineUnclassified": "Dazzi がこのコマンドを実行しようとしています — 許可しますか？",
+      "noteUnclassified": "このコマンドがファイルを変更するかどうか事前に確認できませんでした。内容を確認して判断してください。"
     },
     "category": {
       "delete": "削除",
