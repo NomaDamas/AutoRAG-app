@@ -10,12 +10,13 @@
 //   bun scripts/manual-qa/run-qa-live-ai-search-byok-readonly.mjs
 //
 // QA_LIVE_MODEL picks the model (default z-ai/glm-5.3-flash).
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { request as httpsRequest } from "node:https";
 import { createServer } from "node:http";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
+import { writeMinsyncStub } from "./platform.mjs";
 
 const REAL_API = "https://api.dazziapp.com";
 const MODEL_ID = process.env.QA_LIVE_MODEL?.trim() || "z-ai/glm-5.3-flash";
@@ -55,10 +56,7 @@ const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 mkdirSync(DOCS, { recursive: true });
 mkdirSync(join(WORK, "workspace"), { recursive: true });
-mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
-const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
-writeFileSync(minsyncStub, "#!/bin/sh\nexit 0\n");
-chmodSync(minsyncStub, 0o755);
+writeMinsyncStub(join(AUTORAG_HOME, "bin"));
 const file = (name) => join(DOCS, name);
 const seed = () => {
 	writeFileSync(file("meeting-notes.md"), "Zebrafish project budget: 4,200 million won. Delivery date: March 14.\n");
