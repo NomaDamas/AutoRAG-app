@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { AI_SEARCH_PATH, AUTOMATIONS_PATH, navigateTab, openEvidenceFolderTab, openTabAt, SETTINGS_PATH } from "../src/renderer/src/state/tabs";
+import { AI_SEARCH_PATH, AUTOMATIONS_PATH, navigateTab, openEvidenceFolderTab, openTabAt, selectTab, setActiveTabGrouping, setActiveTabSort, SETTINGS_PATH } from "../src/renderer/src/state/tabs";
+import { explicitSort } from "../src/renderer/src/state/sort";
 import {
 	canCloseWorkspaceTab,
 	canDropTab,
@@ -403,5 +404,45 @@ describe("the Automations tab in the workspace", () => {
 		ws = closeWorkspaceTab(ws, tabId(ws, 1, AUTOMATIONS_PATH));
 		expect(ws.closedTabs).toEqual([]);
 		expect(reopenClosedTab(ws)).toBe(ws);
+	});
+});
+
+describe("a tab's sort and grouping while it moves", () => {
+	const bySize = explicitSort("size", -1);
+	const view = (ws: Workspace, paneId: number, path: string) => {
+		const tab = paneOf(ws, paneId).tabs.find((candidate) => candidate.path === path);
+		return { sort: tab?.sort, grouping: tab?.grouping };
+	};
+	/** /a untouched, /b sorted by size and grouped by kind, both in pane 1. */
+	function arranged(): Workspace {
+		const ws = withTabs(createWorkspace("/a"), 1, "/b");
+		return updatePaneTabs(ws, 1, (state) => setActiveTabGrouping(setActiveTabSort(selectTab(state, tabId(ws, 1, "/b")), bySize), "kind"));
+	}
+
+	it("survives splitting the tab off into a new pane", () => {
+		const ws = moveTab(arranged(), tabId(arranged(), 1, "/b"), { kind: "split", paneId: 1, edge: "right" });
+		expect(view(ws, 2, "/b")).toEqual({ sort: bySize, grouping: "kind" });
+		expect(view(ws, 1, "/a")).toEqual({ sort: null, grouping: null });
+	});
+
+	it("survives merging into another pane's strip or body", () => {
+		const split = moveTab(arranged(), tabId(arranged(), 1, "/b"), { kind: "split", paneId: 1, edge: "right" });
+		const toStrip = moveTab(split, tabId(split, 2, "/b"), { kind: "strip", paneId: 1, index: 0 });
+		expect(view(toStrip, 1, "/b")).toEqual({ sort: bySize, grouping: "kind" });
+		const toBody = moveTab(split, tabId(split, 2, "/b"), { kind: "pane", paneId: 1 });
+		expect(view(toBody, 1, "/b")).toEqual({ sort: bySize, grouping: "kind" });
+	});
+
+	it("survives reordering inside the strip", () => {
+		const ws = arranged();
+		const reordered = moveTab(ws, tabId(ws, 1, "/b"), { kind: "strip", paneId: 1, index: 0 });
+		expect(paths(reordered, 1)).toEqual(["/b", "/a"]);
+		expect(view(reordered, 1, "/b")).toEqual({ sort: bySize, grouping: "kind" });
+	});
+
+	it("comes back with a reopened closed tab", () => {
+		const ws = arranged();
+		const reopened = reopenClosedTab(closeWorkspaceTab(ws, tabId(ws, 1, "/b")));
+		expect(view(reopened, 1, "/b")).toEqual({ sort: bySize, grouping: "kind" });
 	});
 });

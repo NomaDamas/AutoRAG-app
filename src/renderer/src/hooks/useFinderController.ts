@@ -103,6 +103,8 @@ import {
 	openTabAt,
 	patchActiveTab,
 	selectTab,
+	setActiveTabGrouping,
+	setActiveTabSort,
 	showAiSearchInActiveTab,
 	tabTitle,
 	type TabsState,
@@ -150,13 +152,23 @@ function readStoredViewMode(): ViewMode {
 	}
 }
 
-function readStoredGrouping(): GroupKey {
-	try {
-		return parseGroupKey(globalThis.localStorage?.getItem(GROUP_STORAGE_KEY) ?? null);
-	} catch {
-		// Storage can be unavailable (sandboxed renderer, tests); grouping stays off.
-		return parseGroupKey(null);
+let launchGroupingKey: GroupKey | undefined;
+
+/**
+ * The grouping a tab shows until the user picks one: the last choice stored
+ * before this launch, read once. Fixing it for the session keeps a tab's
+ * display from changing when it moves to a pane mounted after another tab's choice.
+ */
+function launchGrouping(): GroupKey {
+	if (launchGroupingKey === undefined) {
+		try {
+			launchGroupingKey = parseGroupKey(globalThis.localStorage?.getItem(GROUP_STORAGE_KEY) ?? null);
+		} catch {
+			// Storage can be unavailable (sandboxed renderer, tests); grouping stays off.
+			launchGroupingKey = parseGroupKey(null);
+		}
 	}
+	return launchGroupingKey;
 }
 
 interface RenameState {
@@ -435,9 +447,6 @@ export function useFinderController(
 		});
 	}, []);
 	const [searchScope, setSearchScope] = useState<SearchScope>("all");
-	const [sort, setSort] = useState<SortState | null>(null);
-	/** The toolbar Group control's criterion; the views render section headers for it. */
-	const [grouping, setGroupingValue] = useState<GroupKey>(readStoredGrouping);
 	const [zone, setZone] = useState<FocusZone>("finder");
 	const [hits, setHits] = useState<readonly FinderEntry[]>([]);
 	const [locations, setLocations] = useState<readonly FinderLocation[]>([]);
@@ -481,6 +490,9 @@ export function useFinderController(
 	const tab = activeTab(tabsState);
 	const path = tab.path;
 	const selection = tab.selection;
+	/** The sort and grouping belong to the tab, so they stay with it when it moves between panes. */
+	const sort = tab.sort;
+	const grouping = tab.grouping ?? launchGrouping();
 	const searching = query.trim() !== "";
 	const dupey = selectDupey(layerStore);
 	layerStoreRef.current = layerStore;
@@ -915,7 +927,8 @@ export function useFinderController(
 	});
 
 	const setGrouping = useLatestCallback((key: GroupKey) => {
-		setGroupingValue(key);
+		setTabsState((state) => setActiveTabGrouping(state, key));
+		// The last choice seeds the next launch's tabs; tabs of this session keep what they have.
 		try {
 			globalThis.localStorage?.setItem(GROUP_STORAGE_KEY, key);
 		} catch (error) {
@@ -925,7 +938,7 @@ export function useFinderController(
 
 	/** The toolbar Sort menu: an explicit key/direction, in the same state the header cycle drives. */
 	const applySort = useLatestCallback((key: SortKey, direction: SortDirection) => {
-		setSort(explicitSort(key, direction));
+		setTabsState((state) => setActiveTabSort(state, explicitSort(key, direction)));
 	});
 
 	const navigate = useLatestCallback((next: string) => {
@@ -2152,7 +2165,7 @@ export function useFinderController(
 	const focusAiSearch = useLatestCallback(() => updateWorkspace(focusAiSearchInWorkspace));
 	const openFolder = useLatestCallback((path: string) => updateWorkspace((workspace) => openOrSelectFolderInWorkspace(workspace, path)));
 	const leaveVirtualTab = useLatestCallback(() => setTabsState((state) => exitVirtualTab(state)));
-	const sortBy = useLatestCallback((key: SortKey) => setSort((current) => cycleSort(current, key)));
+	const sortBy = useLatestCallback((key: SortKey) => setTabsState((state) => setActiveTabSort(state, cycleSort(activeTab(state).sort, key))));
 	const focusFinder = useLatestCallback(() => setZone("finder"));
 	const clickRow = useLatestCallback((entry: FinderEntry, event: ReactMouseEvent<HTMLDivElement>) => {
 		setZone("finder");

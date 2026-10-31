@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { setAppLanguage } from "../src/shared/i18n/core";
+import { explicitSort } from "../src/renderer/src/state/sort";
 import {
 	activeTab,
 	AUTOMATIONS_PATH,
@@ -22,6 +23,8 @@ import {
 	openOrSelectFolderTab,
 	openOrSelectSettingsTab,
 	selectTab,
+	setActiveTabGrouping,
+	setActiveTabSort,
 	SETTINGS_PATH,
 	showAiSearchInActiveTab,
 	showAutomationsInActiveTab,
@@ -378,5 +381,50 @@ describe("Automations tabs", () => {
 	it("leaves Automations for the last folder it showed", () => {
 		const shown = showAutomationsInActiveTab(createTabsState("/Users/me/Documents"));
 		expect(activeTab(exitVirtualTab(shown)).path).toBe("/Users/me/Documents");
+	});
+});
+
+describe("a tab's own sort and grouping", () => {
+	const bySize = explicitSort("size", -1);
+
+	it("starts unsorted with no grouping chosen", () => {
+		expect(activeTab(createTabsState("/a"))).toMatchObject({ sort: null, grouping: null });
+		expect(activeTab(openTabAt(createTabsState("/a"), "/b"))).toMatchObject({ sort: null, grouping: null });
+	});
+
+	it("sorts and groups the active tab only", () => {
+		let state = openTabAt(createTabsState("/a"), "/b");
+		state = setActiveTabGrouping(setActiveTabSort(state, bySize), "kind");
+		expect(state.tabs.map((tab) => [tab.sort, tab.grouping])).toEqual([[null, null], [bySize, "kind"]]);
+		// Back on the first tab, the second tab's choices stay with it.
+		const first = selectTab(state, state.tabs[0]!.id);
+		expect(activeTab(first)).toMatchObject({ sort: null, grouping: null });
+		expect(selectTab(first, state.tabs[1]!.id).tabs[1]).toMatchObject({ sort: bySize, grouping: "kind" });
+	});
+
+	it("clears the sort again with null", () => {
+		const sorted = setActiveTabSort(createTabsState("/a"), bySize);
+		expect(activeTab(setActiveTabSort(sorted, null)).sort).toBeNull();
+	});
+
+	it("returns the same state when nothing changes", () => {
+		const state = setActiveTabGrouping(setActiveTabSort(createTabsState("/a"), bySize), "kind");
+		expect(setActiveTabSort(state, bySize)).toBe(state);
+		expect(setActiveTabGrouping(state, "kind")).toBe(state);
+	});
+
+	it("keeps them through navigation, history, and column picks", () => {
+		let state = setActiveTabGrouping(setActiveTabSort(createTabsState("/a"), bySize), "kind");
+		state = navigateTab(state, "/a/b");
+		expect(activeTab(state)).toMatchObject({ sort: bySize, grouping: "kind" });
+		expect(activeTab(goBack(state))).toMatchObject({ sort: bySize, grouping: "kind" });
+		expect(activeTab(goForward(goBack(state)))).toMatchObject({ sort: bySize, grouping: "kind" });
+		const picked = applyColumnChoice(state, { path: "/a/b/c", chain: ["/a/b", "/a/b/c"] }, activeTab(state).selection);
+		expect(activeTab(picked)).toMatchObject({ sort: bySize, grouping: "kind" });
+	});
+
+	it("keeps them when an unmounted volume sends the tab to the fallback folder", () => {
+		const state = setActiveTabGrouping(setActiveTabSort(createTabsState("/Volumes/USB/x"), bySize), "kind");
+		expect(activeTab(evacuateTabs(state, "/Volumes/USB", "/Users/me"))).toMatchObject({ path: "/Users/me", sort: bySize, grouping: "kind" });
 	});
 });
