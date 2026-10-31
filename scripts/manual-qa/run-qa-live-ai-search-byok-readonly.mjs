@@ -174,9 +174,17 @@ try {
 	await shot("byok-01-after-read");
 	const readAnswer = await answerText();
 	console.log(`model answer: ${readAnswer.replace(/\s+/g, " ").slice(0, 300)}`);
+	// The run's failure card ("Something went wrong") is not the inline error line `runError` reads: open its details.
+	const showDetails = panel.getByText("Show details");
+	let failure = "";
+	if ((await showDetails.count()) > 0) {
+		await showDetails.first().click();
+		failure = (await panel.innerText()).replace(/\s+/g, " ").slice(0, 900);
+		console.log(`run failed: ${failure}`);
+	}
 	check("a read-only shell run opens no approval card", readCards.length === 0, readCards.map((card) => card.slice(0, 200).replace(/\s+/g, " ")).join(" || "));
 	check("the answer states the budget from the file", /4,?200/.test(readAnswer), readAnswer.slice(0, 160).replace(/\s+/g, " "));
-	check("no run error after the read", (await runError()) === "", await runError());
+	check("no run error after the read", (await runError()) === "" && failure === "", (await runError()) || failure);
 
 	// ── 2. A delete is still put to the person. ──────────────────────────────
 	await send(`Run exactly this shell command and nothing else: rm ${file("old-draft.txt")} (I confirm: it is a stale draft and I want it gone.)`, { fresh: true });
