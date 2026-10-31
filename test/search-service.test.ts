@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createChatStore, type ChatStore } from "../src/main/chat-store";
+import type { ContextEvent } from "../src/main/context-watch";
 import type { RunInteraction } from "../src/main/host-ui";
 import { createInteractionHub } from "../src/main/interaction-hub";
 import type { InteractionAnswer, InteractionRequest } from "../src/shared/interaction-contract";
@@ -1557,5 +1558,231 @@ describe("createSearchService index notice", () => {
 
 		expect(events.filter((event) => event.type === "index-notice").map((event) => event.searchId)).toEqual(["search-first", "search-second"]);
 		expect(listeners.size).toBe(0);
+	});
+});
+
+describe("createSearchService conversation context (issue #389)", () => {
+	/** A fake agent whose conversation reports what pi and the context guard did, when the test says so. */
+	function contextAgent(stream: (context: (event: ContextEvent) => void, live: (event: LiveAgentEvent) => void) => AsyncGenerator<TestStreamEvent, void, void>) {
+		const listeners = new Set<(event: ContextEvent) => void>();
+		const context = (event: ContextEvent): void => {
+			for (const listener of [...listeners]) listener(event);
+		};
+		const agent = createFakeAgent((live) => stream(context, live));
+		return {
+			agent: {
+				...agent,
+				onContext: vi.fn((listener: (event: ContextEvent) => void) => {
+					listeners.add(listener);
+					return () => void listeners.delete(listener);
+				}),
+			},
+			listeners,
+		};
+	}
+
+	const contextEvents = (events: readonly SearchStreamEvent[]): SearchStreamEvent[] =>
+		events.filter((event) => event.type === "compacting" || event.type === "context-notice");
+
+	it("shows the summary while pi writes it, then marks where the earlier turns were replaced, and keeps the mark with the answer", async () => {
+		const { agent, listeners } = contextAgent(async function*(context) {
+			context({ type: "compaction_start" });
+			context({ type: "compaction_end", compacted: true });
+			yield { type: "preliminary", response: createResponse("session-c", "Quick answer", 1) };
+			yield { type: "complete", response: createResponse("session-c", "Deep answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-c", "chat-c", "summarise everything", []);
+
+		expect(contextEvents(events)).toEqual([
+			{ type: "compacting", searchId: "search-c", active: true },
+			{ type: "compacting", searchId: "search-c", active: false },
+			{ type: "context-notice", searchId: "search-c", notice: { kind: "compacted", timing: "before-quick" } },
+		]);
+		const assistant = (await store.get("chat-c"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.context).toEqual([{ kind: "compacted", timing: "before-quick" }]);
+		expect(listeners.size).toBe(0);
+	});
+
+	it("marks two summaries written back to back once, while showing the summarising line for each", async () => {
+		// The live overflow of issue #389 does this: the overflow's summary, then a threshold one once the cut retry answered.
+		const { agent } = contextAgent(async function*(context) {
+			context({ type: "compaction_start" });
+			context({ type: "compaction_end", compacted: true });
+			context({ type: "compaction_start" });
+			context({ type: "compaction_end", compacted: true });
+			yield { type: "complete", response: createResponse("session-2", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-2", "chat-2", "summarise everything", []);
+
+		expect(contextEvents(events).filter((event) => event.type === "compacting")).toHaveLength(4);
+		expect(contextEvents(events).filter((event) => event.type === "context-notice")).toEqual([
+			{ type: "context-notice", searchId: "search-2", notice: { kind: "compacted", timing: "before-quick" } },
+		]);
+		const assistant = (await store.get("chat-2"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.context).toEqual([{ kind: "compacted", timing: "before-quick" }]);
+	});
+
+	it("places a summary written after the Quick answer after it, and stores it with the answer already kept", async () => {
+		const release = Promise.withResolvers<void>();
+		const { agent } = contextAgent(async function*(context) {
+			yield { type: "preliminary", response: createResponse("session-a", "Quick answer", 1) };
+			context({ type: "compaction_start" });
+			context({ type: "compaction_end", compacted: true });
+			await release.promise;
+			throw new Error("provider exploded");
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		const run = service.start("search-a", "chat-a", "q", []);
+		await vi.waitFor(() => expect(events.some((event) => event.type === "context-notice")).toBe(true));
+		release.resolve();
+		await run;
+
+		expect(events.find((event) => event.type === "context-notice")).toEqual({
+			type: "context-notice",
+			searchId: "search-a",
+			notice: { kind: "compacted", timing: "after-quick" },
+		});
+		// The run failed after the summary: the Quick answer it kept still carries the mark.
+		const assistant = (await store.get("chat-a"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.context).toEqual([{ kind: "compacted", timing: "after-quick" }]);
+	});
+
+	it("ends the summarising line without a mark when the summary failed or was stopped", async () => {
+		const { agent } = contextAgent(async function*(context) {
+			context({ type: "compaction_start" });
+			context({ type: "compaction_end", compacted: false });
+			yield { type: "complete", response: createResponse("session-f", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-f", "chat-f", "q", []);
+
+		expect(contextEvents(events)).toEqual([
+			{ type: "compacting", searchId: "search-f", active: true },
+			{ type: "compacting", searchId: "search-f", active: false },
+		]);
+		const assistant = (await store.get("chat-f"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.context).toBeUndefined();
+	});
+
+	it("says once that the answer used only part of a result this run fetched, and never for an earlier turn's result", async () => {
+		const { agent } = contextAgent(async function*(context, live) {
+			// An earlier turn's result, cut to make room: housekeeping of the conversation, not news about this answer.
+			context({ type: "request_cut", toolCallIds: ["earlier-call"], userMessages: [] });
+			live({ type: "tool_execution_start", toolCallId: "call-spotlight" });
+			context({ type: "request_cut", toolCallIds: ["earlier-call", "call-spotlight"], userMessages: [] });
+			context({ type: "request_cut", toolCallIds: ["call-spotlight"], userMessages: [] });
+			yield { type: "complete", response: createResponse("session-t", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-t", "chat-t", "find every refund document", []);
+
+		expect(contextEvents(events)).toEqual([
+			{ type: "context-notice", searchId: "search-t", notice: { kind: "trimmed", timing: "before-quick" } },
+		]);
+		const assistant = (await store.get("chat-t"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.context).toEqual([{ kind: "trimmed", timing: "before-quick" }]);
+	});
+
+	it("says so as well when the cut fell on this run's prompt, which holds the evidence searched for the question", async () => {
+		const { agent } = contextAgent(async function*(context, live) {
+			// An earlier question's prompt, cut to make room, says nothing about this answer.
+			context({ type: "request_cut", toolCallIds: [], userMessages: [1_000] });
+			live({ type: "message_start", message: { role: "user", timestamp: 2_000 } });
+			context({ type: "request_cut", toolCallIds: [], userMessages: [1_000, 2_000] });
+			yield { type: "complete", response: createResponse("session-b", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-b", "chat-b", "find every refund document", []);
+
+		expect(contextEvents(events)).toEqual([
+			{ type: "context-notice", searchId: "search-b", notice: { kind: "trimmed", timing: "before-quick" } },
+		]);
+	});
+
+	it("tells nothing of a run the person already stopped", async () => {
+		const stopped = Promise.withResolvers<void>();
+		let report: (event: ContextEvent) => void = () => undefined;
+		const { agent } = contextAgent(async function*(context) {
+			report = context;
+			yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+			await stopped.promise;
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+		const run = service.start("search-s", "chat-s", "q", []);
+		await vi.waitFor(() => expect(events.some((event) => event.type === "progress")).toBe(true));
+
+		await service.cancel("search-s");
+		report({ type: "compaction_start" });
+		report({ type: "compaction_end", compacted: true });
+		stopped.resolve();
+		await run;
+
+		expect(contextEvents(events)).toEqual([]);
+	});
+
+	const modelFailed = (reason: string): TestResponse => ({
+		...createResponse("session-failed", `The search run ended without a final answer.\n\nThe model request failed: ${reason}`, 0),
+		results: [],
+		diagnostics: [{ code: "model-request-failed", severity: "error", message: `The model request failed: ${reason}` }],
+	});
+
+	it("offers a new chat when the run failed because the conversation no longer fits the model", async () => {
+		const reason = "400 context_length_exceeded: This model's maximum context length is 1048576 tokens. However, you requested about 1730000 tokens.";
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: modelFailed(reason) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-o", "chat-o", "q", []);
+
+		expect(events).toContainEqual({ type: "error", searchId: "search-o", message: reason, action: "new-chat" });
+	});
+
+	it("offers it for an overflow the agent threw as well, and for no other failure", async () => {
+		const thrown = createFakeAgent(async function*() {
+			yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+			throw new Error("Prompt is too long: 213462 tokens > 200000 maximum");
+		});
+		const other = createFakeAgent(async function*() {
+			yield { type: "complete", response: modelFailed("500 Internal Server Error") };
+		});
+		const { events, send } = collectEvents();
+		const agents = [thrown, other];
+		const service = createSearchService({ agentFactory: () => agents.shift() ?? other, chatStore: await createStore(), send, now });
+
+		await service.start("search-thrown", "chat-thrown", "q", []);
+		await service.start("search-other", "chat-other", "q", []);
+
+		const errors = events.filter((event) => event.type === "error");
+		expect(errors).toEqual([
+			{ type: "error", searchId: "search-thrown", message: "Error: Prompt is too long: 213462 tokens > 200000 maximum", action: "new-chat" },
+			{ type: "error", searchId: "search-other", message: "500 Internal Server Error" },
+		]);
 	});
 });

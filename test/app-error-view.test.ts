@@ -71,6 +71,18 @@ describe("describeAppError", () => {
 		expect(view.actions).toEqual([{ id: "open-plan", label: t("aiSearch.openPlan"), primary: true }]);
 	});
 
+	it("explains a conversation that no longer fits the model and offers a new chat or a narrower question, never the AI fix", () => {
+		const view = describeAppError("400 context_length_exceeded: This model's maximum context length is 1048576 tokens.", "new-chat", t);
+
+		expect(view.kind).toBe("context-overflow");
+		expect(view.title).toBe(t("appError.contextOverflow.title"));
+		expect(view.hint).toBe(t("appError.contextOverflow.hint"));
+		expect(view.actions).toEqual([
+			{ id: "new-chat", label: t("aiSearch.newChat"), primary: true },
+			{ id: "rephrase", label: t("appError.askNarrower"), primary: false },
+		]);
+	});
+
 	it("speaks the interface language", async () => {
 		await setAppLanguage("en");
 

@@ -16,6 +16,7 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
+	ContextNotice,
 	IndexNotice,
 	SearchErrorAction,
 	SearchStreamEvent,
@@ -49,6 +50,7 @@ import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
 import { IndexNoticeBanner } from "./IndexNotice";
+import { CompactingStatus, ContextNoticeView } from "./ContextNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
 
 const autorag = window.autorag;
@@ -139,6 +141,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [errorAction, setErrorAction] = useState<{ readonly message: string; readonly action: SearchErrorAction } | null>(null);
 	/** The warning that the index this run searches is not ready; belongs to the latest run and ends with the next question. */
 	const [indexNotice, setIndexNotice] = useState<IndexNotice | null>(null);
+	/** pi is summarising the chat's earlier turns for the current run (issue #389). */
+	const [compacting, setCompacting] = useState(false);
+	/** What the current run did to the model's view of the chat, in order. */
+	const [contextNotices, setContextNotices] = useState<readonly ContextNotice[]>([]);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
 	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
@@ -206,6 +212,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	errorActionRef.current = errorAction;
 	const deepElapsedRef = useRef(deepElapsed);
 	deepElapsedRef.current = deepElapsed;
+	const contextNoticesRef = useRef(contextNotices);
+	contextNoticesRef.current = contextNotices;
 
 	useEffect(() => {
 		if (!active) {
@@ -279,21 +287,30 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				case "steer-delivered":
 					setSteers(deliverSteers);
 					break;
+				case "compacting":
+					setCompacting(event.active);
+					break;
+				case "context-notice":
+					setContextNotices((current) => [...current, event.notice]);
+					break;
 				case "error":
 					setError(event.message);
 					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
 					setProgress("");
+					setCompacting(false);
 					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 				case "cancelled":
 					setStopped(true);
 					setProgress("");
+					setCompacting(false);
 					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 				case "done":
 					setProgress("");
+					setCompacting(false);
 					setSteers(settleSteers);
 					setSearchId(null);
 					break;
@@ -346,7 +363,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices]);
 
 	useEffect(() => {
 		if (!active) return;
@@ -433,6 +450,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				error: errorRef.current,
 				errorAction: errorRef.current !== null && errorActionRef.current?.message === errorRef.current ? errorActionRef.current.action : null,
 				deepElapsed: deepElapsedRef.current,
+				contextNotices: contextNoticesRef.current,
 			};
 			setPastTurns((current) => [...current, finished]);
 		}
@@ -444,6 +462,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeepDraft("");
 		setError(null);
 		setIndexNotice(null);
+		setCompacting(false);
+		setContextNotices([]);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
@@ -566,6 +586,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeepDraft("");
 		setError(null);
 		setIndexNotice(null);
+		setCompacting(false);
+		setContextNotices([]);
 		setStopped(false);
 		setProgress("");
 		setEvidenceSource(null);
@@ -602,6 +624,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				error: null,
 				errorAction: null,
 				deepElapsed: null,
+				contextNotices: turn.assistant?.context ?? [],
 			})),
 		);
 		setQuick(assistant?.quick ?? null);
@@ -616,6 +639,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setStopped(assistant?.stopped ?? false);
 		setError(null);
 		setIndexNotice(null);
+		setCompacting(false);
+		setContextNotices(assistant?.context ?? []);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
@@ -632,6 +657,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		// backend was still doing.
 		setSearchId(null);
 		setProgress("");
+		setCompacting(false);
 		setStopped(true);
 		setSteers(settleSteers);
 		// Stop ends the whole turn: questions queued behind it go back to the composer, unasked.
@@ -656,6 +682,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		pendingFocusRef.current = true;
 	}
 
+	/** Leaves `text` in the composer unsent and focuses it: the person finishes or edits it and sends it themselves. */
+	function prefill(text: string): void {
+		setQuery(text);
+		ensureFocus();
+	}
+
 	useImperativeHandle(ref, () => ({
 		sendQuery(text: string): void {
 			const trimmed = text.trim();
@@ -663,10 +695,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setQuery(trimmed);
 			void runSearch(trimmed, attachmentsRef.current);
 		},
-		prefill(text: string): void {
-			setQuery(text);
-			ensureFocus();
-		},
+		prefill,
 		attach(atts: readonly ChatAttachment[]): void {
 			setAttachments((current) => mergeAttachments(current, atts));
 			ensureFocus();
@@ -739,6 +768,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
+	const contextBeforeQuick = contextNotices.filter((notice) => notice.timing === "before-quick");
+	const contextAfterQuick = contextNotices.filter((notice) => notice.timing === "after-quick");
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -867,6 +898,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							imageActions={imageActions}
 							onOpenSettings={onOpenSettings}
 							onOpenSource={onOpenSource}
+							onNewChat={newChat}
+							onRephrase={prefill}
 						/>
 					))}
 
@@ -885,12 +918,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					)}
 
+					{contextBeforeQuick.map((notice, index) => (
+						<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
+					))}
+
 					{error === null ? null : (
 						<RunErrorNotice
 							message={error}
 							action={errorAction?.message === error ? errorAction.action : null}
 							onOpenSettings={onOpenSettings}
 							onOpenSource={onOpenSource}
+							onNewChat={newChat}
+							onRephrase={() => prefill(submittedQuery ?? "")}
 							fix
 						/>
 					)}
@@ -923,7 +962,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{steersAfterQuick.map((steer) => (
 								<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 							))}
-							{shimmer ? (
+							{contextAfterQuick.map((notice, index) => (
+								<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
+							))}
+							{searching && compacting ? (
+								<CompactingStatus />
+							) : shimmer ? (
 								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
 									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
 										{progress === "" ? t("aiSearch.thinking") : progress}
@@ -1168,6 +1212,8 @@ interface PastTurn {
 	readonly error: string | null;
 	readonly errorAction: SearchErrorAction | null;
 	readonly deepElapsed: number | null;
+	/** What the turn's run did to the model's view of the chat (issue #389). */
+	readonly contextNotices: readonly ContextNotice[];
 }
 
 function PastTurnView({
@@ -1180,6 +1226,8 @@ function PastTurnView({
 	imageActions,
 	onOpenSettings,
 	onOpenSource,
+	onNewChat,
+	onRephrase,
 }: {
 	readonly turn: PastTurn;
 	readonly turnIndex: number;
@@ -1190,10 +1238,15 @@ function PastTurnView({
 	readonly imageActions: ImageActions;
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	readonly onOpenSource: (alias: string) => void;
+	readonly onNewChat: () => void;
+	/** Puts a question back in the composer. */
+	readonly onRephrase: (question: string) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
 	const after = turn.steers.filter((steer) => steer.timing === "after-quick");
+	const contextBefore = turn.contextNotices.filter((notice) => notice.timing === "before-quick");
+	const contextAfter = turn.contextNotices.filter((notice) => notice.timing === "after-quick");
 	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
 		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
 			<ProseBlocks
@@ -1223,7 +1276,20 @@ function PastTurnView({
 					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
 				</div>
 			</div>
-			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} fix={false} />}
+			{contextBefore.map((notice, index) => (
+				<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
+			))}
+			{turn.error === null ? null : (
+				<RunErrorNotice
+					message={turn.error}
+					action={turn.errorAction}
+					onOpenSettings={onOpenSettings}
+					onOpenSource={onOpenSource}
+					onNewChat={onNewChat}
+					onRephrase={() => onRephrase(turn.question)}
+					fix={false}
+				/>
+			)}
 			{before.map((steer) => (
 				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 			))}
@@ -1231,6 +1297,9 @@ function PastTurnView({
 				{turn.quickText === "" ? null : prose(turn.quickText, turn.quick, "quick")}
 				{after.map((steer) => (
 					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+				))}
+				{contextAfter.map((notice, index) => (
+					<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
 				))}
 				{turn.deepText === "" ? null : (
 					<div className="flex flex-col gap-6">

@@ -336,11 +336,18 @@
       "last7Days": "Previous 7 days",
       "last30Days": "Previous 30 days",
       "older": "Earlier"
+    },
+    "context": {
+      "compacting": "The conversation is long — summarizing earlier messages…",
+      "compacted": "Earlier conversation summarized",
+      "compactedHint": "Earlier messages now reach the model only as a summary. Mention any detail it should still see.",
+      "trimmed": "Only part of an oversized search result was used"
     }
   },
   "appError": {
     "fixAction": "Fix with AI",
     "openModelSettings": "Open model settings",
+    "askNarrower": "Ask narrower",
     "showDetails": "Show details",
     "hideDetails": "Hide details",
     "other": {
@@ -370,6 +377,10 @@
     "network": {
       "title": "Can’t reach the AI model’s server",
       "hint": "Check your internet connection and try again. If the connection is fine and it keeps failing, check the model settings."
+    },
+    "contextOverflow": {
+      "title": "Too much for the model to read at once",
+      "hint": "The conversation and search results grew past the model's limit, so no answer was made. Start a new chat, or ask again about something narrower."
     },
     "fix": {
       "title": "Fix with AI",
