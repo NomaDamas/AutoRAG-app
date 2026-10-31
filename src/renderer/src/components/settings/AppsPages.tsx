@@ -452,14 +452,15 @@ export function AppsPage({
 								if (template === undefined) return null;
 								// KakaoTalk is read through a macOS-only program (lazykatok): it is not offered at all elsewhere.
 								if (!datasourceSupported(templateId, hostPlatform())) return null;
-								// Calendar reads EventKit and Spotlight runs mdfind, so both can only be connected on a Mac.
-								const available = (templateId !== "calendar" && templateId !== "spotlight") || calendarSupported(hostPlatform());
+								// Calendar reads EventKit and Spotlight runs mdfind, so each can only be connected on a Mac; each names its own reason.
+								const macOnlyKey = templateId === "calendar" ? "settingsSources.apps.macOnlyCalendar" : templateId === "spotlight" ? "settingsSources.apps.macOnlySpotlight" : null;
+								const available = macOnlyKey === null || calendarSupported(hostPlatform());
 								return (
 									<div className="settings-list-row" key={templateId}>
 										<SourceIcon type={templateId} label={template.label} />
 										<span className="settings-list-body">
 											<span className="settings-list-title">{template.label}</span>
-											<span className="settings-list-meta">{available ? t(template.summary) : t("settingsSources.apps.macOnly")}</span>
+											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
 										{connectedTypes.has(templateId) ? <span className="settings-badge">{t("settingsSources.apps.connected")}</span> : null}
 										<button type="button" className="linear-btn" disabled={!available} onClick={() => setAddTemplate(templateId)}>

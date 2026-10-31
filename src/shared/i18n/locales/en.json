@@ -2764,7 +2764,8 @@
       "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
       "promptLabel": "Connection id",
       "promptConfirm": "Add connection",
-      "macOnly": "Only available on macOS (EventKit)."
+      "macOnlyCalendar": "Only available on macOS (EventKit).",
+      "macOnlySpotlight": "Only available on macOS (Spotlight)."
     },
     "sourceDetail": {
       "fallbackSummary": "Manage the settings for this connection.",

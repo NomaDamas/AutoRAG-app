@@ -2764,7 +2764,8 @@
       "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
       "promptLabel": "连接 id",
       "promptConfirm": "添加连接",
-      "macOnly": "仅在 macOS 上可用（EventKit）。"
+      "macOnlyCalendar": "仅在 macOS 上可用（EventKit）。",
+      "macOnlySpotlight": "仅在 macOS 上可用（Spotlight）。"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",

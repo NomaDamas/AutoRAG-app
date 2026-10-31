@@ -10,11 +10,12 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.13.2 lands live Spotlight search without snapshots, MinSync 0.5.1 durable stages for incremental parsed mirrors
+// v2.13.3 holds the retry after a Dazzi context overflow to half the failed request (AutoRAG#2055), on top of
+// v2.13.2: live Spotlight search without snapshots, MinSync 0.5.1 durable stages for incremental parsed mirrors
 // plus streamed sync progress and skipped-file counts, mailcrawl 0.3.0 (`--source files` retiring `mail-export`),
 // pi 1.4.0, and Discord attachment downloads under `<AUTORAG_HOME>/attachments/discord/<connection>/` (v2.13.1),
 // on top of v2.13.0 (hybrid-first retrieval) and v2.12.0 (permission gate, `ask_user`, `convert_files`).
-const librarianRef = "v2.13.2";
+const librarianRef = "v2.13.3";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -2764,7 +2764,8 @@
       "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
       "promptLabel": "接続 ID",
       "promptConfirm": "接続を追加",
-      "macOnly": "macOS（EventKit）でのみ利用できます。"
+      "macOnlyCalendar": "macOS（EventKit）でのみ利用できます。",
+      "macOnlySpotlight": "macOS（Spotlight）でのみ利用できます。"
     },
     "sourceDetail": {
       "fallbackSummary": "この接続の設定を管理します。",
