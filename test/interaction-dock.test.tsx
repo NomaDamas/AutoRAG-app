@@ -168,6 +168,15 @@ describe("InteractionDock approval card", () => {
 		expect(host.textContent).not.toContain("shell");
 	});
 
+	it("tells the person plainly that a call could not be classified, without the raw configuration error or a claim that files change", () => {
+		render(approvalRequest({ sessionScope: "unclassified", call: "cat notes.md", reason: "JEV_BACKEND=openrouter needs OPENROUTER_API_KEY." }));
+		expect(host.textContent).toContain(t("interaction.approval.headlineUnclassified"));
+		expect(host.textContent).toContain(t("interaction.approval.noteUnclassified"));
+		expect(host.textContent).not.toContain("OPENROUTER_API_KEY");
+		expect(host.textContent).not.toContain(t("interaction.approval.headlineChange"));
+		expect(host.textContent).toContain(t("interaction.allowSession.unclassified"));
+	});
+
 	it("shows the change headline, the category chips, the call and the judgement reason", () => {
 		render(
 			approvalRequest({

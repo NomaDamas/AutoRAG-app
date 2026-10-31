@@ -422,7 +422,9 @@
     "questionAria": "Dazzi 的提问",
     "approval": {
       "headlineChange": "Dazzi 想更改你的文件——允许吗？",
-      "headlineRun": "Dazzi 想运行这个——允许吗？"
+      "headlineRun": "Dazzi 想运行这个——允许吗？",
+      "headlineUnclassified": "Dazzi 想运行这条命令——允许吗？",
+      "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定。"
     },
     "category": {
       "delete": "删除",

@@ -422,7 +422,9 @@
     "questionAria": "Dazzi의 질문",
     "approval": {
       "headlineChange": "Dazzi가 파일을 바꾸려고 해요 — 허용할까요?",
-      "headlineRun": "Dazzi가 실행하려고 해요 — 허용할까요?"
+      "headlineRun": "Dazzi가 실행하려고 해요 — 허용할까요?",
+      "headlineUnclassified": "Dazzi가 이 명령을 실행하려고 해요 — 허용할까요?",
+      "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했어요. 내용을 살펴보고 판단해 주세요."
     },
     "category": {
       "delete": "삭제",

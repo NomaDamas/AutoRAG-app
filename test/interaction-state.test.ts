@@ -6,6 +6,7 @@ import {
 	answeredCount,
 	approvalAnswer,
 	approvalHeadlineKey,
+	approvalNoteKey,
 	approvalReasonVisible,
 	buildAnswer,
 	canSubmit,
@@ -106,10 +107,10 @@ describe("approval mode labels", () => {
 });
 
 describe("approval gate labels", () => {
-	it("asks whether the call may run in ask (sessionScope all) and whether the change may proceed otherwise", () => {
+	it("asks whether the call may run in ask (sessionScope all), whether the change may proceed when the gate flagged one, and says plainly when it could not tell", () => {
 		expect(approvalHeadlineKey(approvalRequest({ sessionScope: "all" }))).toBe("interaction.approval.headlineRun");
 		expect(approvalHeadlineKey(approvalRequest({ sessionScope: "categories" }))).toBe("interaction.approval.headlineChange");
-		expect(approvalHeadlineKey(approvalRequest({ sessionScope: "unclassified" }))).toBe("interaction.approval.headlineChange");
+		expect(approvalHeadlineKey(approvalRequest({ sessionScope: "unclassified" }))).toBe("interaction.approval.headlineUnclassified");
 	});
 
 	it("names the session-allow label after what the allowance covers", () => {
@@ -128,6 +129,14 @@ describe("approval gate labels", () => {
 		expect(approvalReasonVisible(approvalRequest({ sessionScope: "all", reason: "shell" }))).toBe(false);
 		expect(approvalReasonVisible(approvalRequest({ sessionScope: "categories", reason: "rm -rf build" }))).toBe(false);
 		expect(approvalReasonVisible(approvalRequest({ sessionScope: "categories", reason: "removes the build output" }))).toBe(true);
+	});
+
+	it("never shows the gate's raw English reason for a call it could not classify, and explains it in the app's words instead", () => {
+		const unclassified = approvalRequest({ sessionScope: "unclassified", reason: "JEV_BACKEND=openrouter needs OPENROUTER_API_KEY." });
+		expect(approvalReasonVisible(unclassified)).toBe(false);
+		expect(approvalNoteKey(unclassified)).toBe("interaction.approval.noteUnclassified");
+		expect(approvalNoteKey(approvalRequest({ sessionScope: "categories", reason: "x" }))).toBeNull();
+		expect(approvalNoteKey(approvalRequest({ sessionScope: "all" }))).toBeNull();
 	});
 });
 
