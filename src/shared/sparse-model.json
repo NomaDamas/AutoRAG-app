@@ -1,0 +1,13 @@
+{
+	"repo": "nlpai-lab/KURE-Sparse-nano",
+	"repoDir": "models--nlpai-lab--KURE-Sparse-nano",
+	"revision": "41a5790497674efdcdf7c87a4392087cb9851a0f",
+	"license": "Apache-2.0",
+	"files": [
+		{ "name": "config.json", "bytes": 1919, "sha256": "a837a628d8b482b6ba56af52efc20590d67cccffdf1e7a5618030a88dfda2a74" },
+		{ "name": "modules.json", "bytes": 260, "sha256": "b5f005bb18580417908201cd4b6ec31f152e3035d21f9328a475463f5e78ccc2" },
+		{ "name": "tokenizer.json", "bytes": 1087863, "sha256": "58e7d1edd61000f576acd4fdc89ea269c44f4532b65bb42e52ef5165c1ea3c1a" },
+		{ "name": "1_ShiftedTopKSpladePooling/config.json", "bytes": 729236, "sha256": "266df613cd5daa1c9c01a27ac89b023efaf55407db6ccc6bab8763f562cc5689" },
+		{ "name": "model.safetensors", "bytes": 298761772, "sha256": "d90ec7893b24d3c1a4db4be1a8f550f9b305dce546b339cbb72bdd95fe3ed602" }
+	]
+}

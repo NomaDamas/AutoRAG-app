@@ -9,14 +9,13 @@ import {
 	MailcrawlClient,
 	RetrievalMethodRegistry,
 	type CliConfig,
-	type RefreshMethod,
 	type RetrievalMethod,
 	type RetrievalMethodDescriptor,
 } from "@autorag/librarian";
 import { describe, expect, it, vi } from "vitest";
 import { createEndpointEmbedder } from "../src/main/embedding-endpoint";
 import { readAppIndexing } from "../src/main/app-indexing";
-import { agentMinSyncVectorMethod, agentOptionsForSemantic, applySemanticPolicyToAgent, methodsForSemantic, neutralizeSemanticMethods, runWithoutSemanticIndexing, withSemanticPolicyApplied } from "../src/main/semantic-policy";
+import { agentMinSyncVectorMethod, agentOptionsForSemantic, applySemanticPolicyToAgent, neutralizeSemanticMethods, runWithoutSemanticIndexing, withSemanticPolicyApplied } from "../src/main/semantic-policy";
 
 function config(datasources: CliConfig["datasources"]): CliConfig {
 	return { searchPaths: ["/docs"], workspacePath: "/ws", memoryPath: "/ws/memory.json", ...(datasources === undefined ? {} : { datasources }) };
@@ -32,23 +31,6 @@ describe("appIndexing.semanticSearch", () => {
 
 	it("ignores a value that is not a boolean instead of silently switching semantic search off", () => {
 		expect(readAppIndexing({ appIndexing: { semanticSearch: "no" } }).semanticSearch).toBe(true);
-	});
-});
-
-describe("methodsForSemantic", () => {
-	it("leaves the methods alone while semantic search is on", () => {
-		const methods: RefreshMethod[] = ["parsed", "minsync", "datasources"];
-		expect(methodsForSemantic(methods, true)).toEqual(methods);
-	});
-
-	it("drops minsync but keeps what a minsync run implied: the parsed mirror and Jikji's keyword index", () => {
-		expect(methodsForSemantic(["parsed", "minsync"], false)).toEqual(["parsed", "jikji"]);
-		expect(methodsForSemantic(["minsync"], false)).toEqual(["parsed", "jikji"]);
-	});
-
-	it("does not add what the caller did not ask for and never repeats a method", () => {
-		expect(methodsForSemantic(["datasources"], false)).toEqual(["datasources"]);
-		expect(methodsForSemantic(["parsed", "jikji", "minsync"], false)).toEqual(["parsed", "jikji"]);
 	});
 });
 
@@ -86,10 +68,18 @@ describe("withSemanticPolicyApplied", () => {
 		expect(effective.datasources?.gallery).toEqual({ type: "clawgallery", connector: { syncVisual: false, defaultMode: "keyword" } });
 	});
 
-	it("leaves an Obsidian vault unindexed, since MinSync cannot index without an embedder", () => {
-		const effective = withSemanticPolicyApplied(config({ vault: { type: "obsidian", connector: { vaultPath: "/vault" } } }), false);
+	it("indexes MinSync, and an Obsidian vault with it, as a sparse-only SPLADE index instead of dropping them", () => {
+		const input = { ...config({ vault: { type: "obsidian", connector: { vaultPath: "/vault" } } }), minSync: { autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } } };
 
-		expect(effective.datasources?.vault).toEqual({ type: "obsidian", enabled: false, connector: { vaultPath: "/vault" } });
+		const effective = withSemanticPolicyApplied(input, false);
+
+		expect(effective.minSync).toEqual({ autoInstall: true, embedder: { id: "none" } });
+		expect(effective.datasources?.vault).toEqual({ type: "obsidian", connector: { vaultPath: "/vault" } });
+		expect(input.minSync.embedder.id).toBe("native:Qwen/Qwen3-Embedding-0.6B");
+	});
+
+	it("makes MinSync sparse-only even with no datasources configured", () => {
+		expect(withSemanticPolicyApplied(config(undefined), false).minSync?.embedder).toEqual({ id: "none" });
 	});
 
 	it("asks github-gist to stay lexical-only through connector.semantic", () => {
@@ -263,35 +253,25 @@ describe("keyword-only search agent", () => {
 	async function agentFor(semantic: boolean, minSync?: { readonly binaryPath: string; readonly workspacePath: string }): Promise<{ readonly agent: AutoRAGAgent; readonly cleanup: () => Promise<void> }> {
 		const root = await mkdtemp(join(tmpdir(), "autorag-semantic-agent-"));
 		await writeFile(join(root, "note.md"), "quarterly revenue report");
-		const base = buildAgentOptions({ searchPaths: [root], workspacePath: root, memoryPath: join(root, "memory.json") });
+		const base = buildAgentOptions(withSemanticPolicyApplied({ searchPaths: [root], workspacePath: root, memoryPath: join(root, "memory.json") }, semantic));
 		const options = { ...base, ...(minSync === undefined ? {} : { minSync: { ...base.minSync, ...minSync } }) };
 		const agent = new AutoRAGAgent(agentOptionsForSemantic(options, semantic));
 		applySemanticPolicyToAgent(agent, semantic);
 		return { agent, cleanup: () => rm(root, { recursive: true, force: true }) };
 	}
 
-	/** The vector method the agent keeps outside its registry; it must be found on a real agent, or keyword-only mode cannot silence it. */
+	/** The MinSync method the agent keeps outside its registry; it must be found on a real agent. */
 	function vectorMethodOf(agent: AutoRAGAgent): RetrievalMethod {
 		const found = agentMinSyncVectorMethod(agent);
 		if (found === undefined) throw new Error("the librarian's agent no longer carries a MinSync vector method");
 		return found;
 	}
 
-	it("answers nothing from MinSync's hybrid method", async () => {
+	it("ranks local files with MinSync's SPLADE index: the hybrid and the agent's own method are sparse and stay live", async () => {
 		const { agent, cleanup } = await agentFor(false);
 		try {
-			const registry = agent.getMethodRegistry();
-			expect(registry.get("hybrid")?.describe().type).toBe("hybrid");
-			expect(await registry.get("hybrid")?.retrieve("revenue", {})).toEqual([]);
-		} finally {
-			await cleanup();
-		}
-	});
-
-	it("keeps MinSync's methods live while semantic search is on", async () => {
-		const { agent, cleanup } = await agentFor(true);
-		try {
-			expect(vectorMethodOf(agent).describe().type).toBe("vector");
+			expect(agent.getMethodRegistry().get("hybrid")?.describe().type).toBe("sparse");
+			expect(vectorMethodOf(agent).describe().type).toBe("sparse");
 			expect(Object.hasOwn(vectorMethodOf(agent) as object, "retrieve")).toBe(false);
 			expect(Object.hasOwn(agent.getMethodRegistry().get("hybrid") as object, "retrieve")).toBe(false);
 		} finally {
@@ -299,24 +279,33 @@ describe("keyword-only search agent", () => {
 		}
 	});
 
-	it.skipIf(process.platform === "win32")("answers nothing from the agent's own MinSync vector method and never spawns minsync for it", async () => {
+	it("keeps MinSync's dense methods live while semantic search is on", async () => {
+		const { agent, cleanup } = await agentFor(true);
+		try {
+			expect(vectorMethodOf(agent).describe().type).toBe("vector");
+			expect(agent.getMethodRegistry().get("hybrid")?.describe().type).toBe("hybrid");
+			expect(Object.hasOwn(vectorMethodOf(agent) as object, "retrieve")).toBe(false);
+		} finally {
+			await cleanup();
+		}
+	});
+
+	it.skipIf(process.platform === "win32")("queries MinSync with --mode sparse in keyword-only mode, and with dense vectors otherwise", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "autorag-fake-minsync-"));
-		const marker = join(dir, "spawned");
+		const log = join(dir, "calls.log");
 		const binaryPath = join(dir, "minsync");
-		await writeFile(binaryPath, `#!/bin/sh\necho "$@" >> '${marker}'\nexit 1\n`, { mode: 0o755 });
+		await writeFile(binaryPath, `#!/bin/sh\necho "$@" >> '${log}'\necho '[]'\n`, { mode: 0o755 });
 		// The binary runs in the workspace directory, which MinSync only creates on its first sync.
 		const workspacePath = join(dir, "workspace");
 		await mkdir(workspacePath);
-		const spawned = () => stat(marker).then(() => true, () => false);
 		const keywordOnly = await agentFor(false, { binaryPath, workspacePath });
 		const semantic = await agentFor(true, { binaryPath, workspacePath });
 		try {
-			expect(await vectorMethodOf(keywordOnly.agent).retrieve("revenue", {})).toEqual([]);
-			expect(await spawned()).toBe(false);
+			await vectorMethodOf(keywordOnly.agent).retrieve("revenue", {});
+			await vectorMethodOf(semantic.agent).retrieve("revenue", {});
 
-			// Control: with semantic search on, the same call does reach the binary.
-			await expect(vectorMethodOf(semantic.agent).retrieve("revenue", {})).rejects.toThrow();
-			expect(await spawned()).toBe(true);
+			const modes = (await readFile(log, "utf8")).trim().split("\n").map((line) => line.split(" ")[4]);
+			expect(modes).toEqual(["sparse", "vector"]);
 		} finally {
 			await keywordOnly.cleanup();
 			await semantic.cleanup();
