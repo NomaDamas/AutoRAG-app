@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { kakaoSupported } from "../shared/messenger-platform";
+import { datasourceSupported, kakaoSupported } from "../shared/messenger-platform";
 import type { DetectedSource, SourceDetection, SourceId } from "../shared/onboarding-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { ensureMessengerConfig } from "./messenger-config";
@@ -28,10 +28,10 @@ export interface SourceDetectionDeps {
 	readonly readFileText: (path: string) => Promise<string>;
 }
 
-/** Every connector the step can find on this host, in display order; KakaoTalk is a Mac-only app. */
+/** Every connector the step can find on this host, in display order; KakaoTalk and WhatsApp are Mac-only apps. */
 function sourceOrder(platform: NodeJS.Platform): readonly SourceId[] {
 	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
-	return kakaoSupported(platform) ? all : all.filter((id) => id !== "kakao");
+	return all.filter((id) => datasourceSupported(id, platform));
 }
 const GITHUB_REPO_LIMIT = 5;
 const MAILCRAWL_ACCOUNT_LIMIT = 5;

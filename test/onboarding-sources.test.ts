@@ -110,6 +110,7 @@ describe("onboarding datasource detection", () => {
 				}),
 			),
 			...noGithub,
+			platform: "darwin",
 		});
 
 		expect(result.sources).toEqual([
@@ -219,6 +220,7 @@ describe("onboarding datasource detection", () => {
 			{
 				...deps(async (command, args) => (command === "himalaya" && args[0] === "mailbox" ? slowMail.promise : run(command, args))),
 				...noGithub,
+				platform: "darwin",
 			},
 			(source) => found.push(source.id),
 		);

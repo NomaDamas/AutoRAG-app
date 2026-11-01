@@ -2727,6 +2727,7 @@
       "chunkCount": "{{noun}} {{count}}개",
       "noDocsYet": "아직 읽은 문서 없음",
       "notFetchedYet": "아직 내용을 가져오지 않았습니다",
+      "notOnThisComputer": "이 컴퓨터에서는 사용할 수 없습니다",
       "importedNone": "가져온 {{noun}} 없음",
       "liveQuery": "검색할 때 바로 조회",
       "appNeeds": "{{name}} 컴퓨터 앱 필요"
@@ -2781,7 +2782,8 @@
       "promptLabel": "연결 id",
       "promptConfirm": "연결 추가",
       "macOnlyCalendar": "macOS에서만 사용할 수 있습니다 (EventKit).",
-      "macOnlySpotlight": "macOS에서만 사용할 수 있습니다 (Spotlight)."
+      "macOnlySpotlight": "macOS에서만 사용할 수 있습니다 (Spotlight).",
+      "macOnlyWhatsapp": "macOS에서만 사용할 수 있습니다 (WhatsApp)."
     },
     "sourceDetail": {
       "fallbackSummary": "이 연결의 설정을 관리합니다.",
@@ -2813,7 +2815,9 @@
       "confirmTitle": "연결을 해제할까요?",
       "confirmBody": "'{{alias}}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.",
       "macOnlyNote": "Apple 캘린더와 미리알림은 macOS의 EventKit으로만 읽을 수 있어, 이 컴퓨터에서는 연결되지 않습니다.",
-      "kakaoOnlyNote": "카카오톡은 Mac 앱에서만 읽을 수 있는 lazykatok으로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다."
+      "kakaoOnlyNote": "카카오톡은 Mac 앱에서만 읽을 수 있는 lazykatok으로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다.",
+      "whatsappOnlyNote": "WhatsApp은 Mac 앱의 데이터베이스를 읽는 wacrawl로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다. 복사해 둔 데이터 폴더가 있다면 ‘소스 경로’에 지정하세요.",
+      "spotlightOnlyNote": "Spotlight는 macOS의 mdfind로만 검색할 수 있어, 이 컴퓨터에서는 연결되지 않습니다."
     },
     "scope": {
       "title": "검색 범위",

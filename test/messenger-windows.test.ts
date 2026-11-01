@@ -67,6 +67,61 @@ describe("KakaoTalk is a macOS-only source", () => {
 	});
 });
 
+describe("WhatsApp and Spotlight are macOS-only sources too", () => {
+	it("is offered on macOS and nowhere else: wacrawl finds WhatsApp Desktop only in the macOS group container, mdfind is macOS's", () => {
+		for (const type of ["whatsapp", "spotlight", "kakao", "calendar", "apple-events"]) {
+			expect(datasourceSupported(type, "darwin"), `${type} on darwin`).toBe(true);
+			expect(datasourceSupported(type, "win32"), `${type} on win32`).toBe(false);
+		}
+		for (const type of ["slack", "discord", "telegram", "notion", "obsidian", "mailcrawl", "cloud-drive", "hister", "lark", "rss", "github"]) {
+			expect(datasourceSupported(type, "win32"), `${type} on win32`).toBe(true);
+		}
+	});
+
+	it("drops WhatsApp and Spotlight rows inherited from a Mac config before the librarian sees them, under any alias", () => {
+		const config = {
+			datasources: { whatsapp: {}, "wa-work": { type: "whatsapp" }, spotlight: { type: "spotlight" }, slack: { type: "slack" } },
+		} as unknown as CliConfig;
+
+		expect(Object.keys(withIndexingPoliciesApplied(config, "win32").datasources ?? {})).toEqual(["slack"]);
+		expect(Object.keys(withIndexingPoliciesApplied(config, "darwin").datasources ?? {})).toEqual(["whatsapp", "wa-work", "spotlight", "slack"]);
+	});
+
+	it("keeps a WhatsApp row off macOS when the user names the folder wacrawl should read, the one thing it cannot find itself", () => {
+		const config = {
+			datasources: {
+				whatsapp: { connector: { sourcePath: "D:\\copied\\group.net.whatsapp.WhatsApp.shared" } },
+				"wa-empty": { type: "whatsapp", connector: { sourcePath: " " } },
+			},
+		} as unknown as CliConfig;
+
+		expect(Object.keys(withIndexingPoliciesApplied(config, "win32").datasources ?? {})).toEqual(["whatsapp"]);
+	});
+
+	it("is never probed on Windows, even when a wacrawl binary happens to be on PATH", async () => {
+		const probed: string[] = [];
+		const root = await home();
+		const result = await detectSources({
+			platform: "win32",
+			home: root,
+			env: { LOCALAPPDATA: join(root, "AppData", "Local"), APPDATA: join(root, "AppData", "Roaming") },
+			run: async (command) => {
+				probed.push(command);
+				if (command === "wacrawl") return JSON.stringify({ desktop: { available: true, message_rows: 9, chat_rows: 1 } });
+				throw new Error(`${command}: not found`);
+			},
+			pathExists: async () => false,
+			readDirNames: async () => [],
+			readFileText: async () => {
+				throw new Error("none");
+			},
+		});
+
+		expect(probed).not.toContain("wacrawl");
+		expect(result.sources.some((source) => source.id === "whatsapp")).toBe(false);
+	});
+});
+
 describe("desktop app locator on Windows", () => {
 	it("finds a per-user Squirrel install of Discord and Slack", async () => {
 		const root = await home();

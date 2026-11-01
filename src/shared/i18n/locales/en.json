@@ -2727,6 +2727,7 @@
       "chunkCount": "{{count}} {{noun}}",
       "noDocsYet": "No documents read yet",
       "notFetchedYet": "No content fetched yet",
+      "notOnThisComputer": "Not available on this computer",
       "importedNone": "No {{noun}} imported",
       "liveQuery": "Queried live on search",
       "appNeeds": "{{name}} desktop app required"
@@ -2781,7 +2782,8 @@
       "promptLabel": "Connection id",
       "promptConfirm": "Add connection",
       "macOnlyCalendar": "Only available on macOS (EventKit).",
-      "macOnlySpotlight": "Only available on macOS (Spotlight)."
+      "macOnlySpotlight": "Only available on macOS (Spotlight).",
+      "macOnlyWhatsapp": "Only available on macOS (WhatsApp)."
     },
     "sourceDetail": {
       "fallbackSummary": "Manage the settings for this connection.",
@@ -2813,7 +2815,9 @@
       "confirmTitle": "Disconnect this connection?",
       "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
       "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer.",
-      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer."
+      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer.",
+      "whatsappOnlyNote": "WhatsApp is read through wacrawl, which only finds the Mac app's database, so this connection is inactive on this computer. If you have a copied data folder, set it as the source path.",
+      "spotlightOnlyNote": "Spotlight can only be searched through mdfind on macOS, so this connection is inactive on this computer."
     },
     "scope": {
       "title": "Search scope",
