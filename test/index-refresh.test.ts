@@ -13,6 +13,7 @@ import { t } from "../src/shared/i18n/core";
 const refresh = vi.hoisted(() => vi.fn());
 const syncMinSync = vi.hoisted(() => vi.fn());
 const batches = vi.hoisted((): Array<number | undefined> => []);
+const embedderIds = vi.hoisted((): Array<string | undefined> => []);
 const excludes = vi.hoisted((): Array<readonly string[]> => []);
 const datasourceConfigs = vi.hoisted((): Array<unknown> => []);
 const modelMissing = vi.hoisted(() => ({ value: false }));
@@ -25,9 +26,10 @@ vi.mock("../src/main/embedding-daemon", async (importOriginal) => ({
 vi.mock("@autorag/librarian", async (importOriginal) => ({
 	...(await importOriginal<typeof Librarian>()),
 	AutoRAGLite: class {
-		constructor(config: { minSync?: { embedder?: { batchSize?: number } }; excludePaths?: readonly string[]; datasources?: unknown }) {
+		constructor(config: { minSync?: { embedder?: { id?: string; batchSize?: number } }; excludePaths?: readonly string[]; datasources?: unknown }) {
 			datasourceConfigs.push(config.datasources);
 			batches.push(config.minSync?.embedder?.batchSize);
+			embedderIds.push(config.minSync?.embedder?.id);
 			excludes.push(config.excludePaths ?? []);
 		}
 		refresh = refresh;
@@ -57,6 +59,7 @@ beforeEach(() => {
 	batches.length = 0;
 	excludes.length = 0;
 	datasourceConfigs.length = 0;
+	embedderIds.length = 0;
 	modelMissing.value = false;
 });
 afterEach(async () => {
@@ -319,7 +322,7 @@ describe("refreshAutoragIndex while the on-device model is not downloaded", () =
 		expect(outcome.diagnostics).toEqual([expect.objectContaining({ code: "embedding-model-missing", severity: "error" })]);
 	});
 
-	it("still refreshes keyword-only, which needs no model", async () => {
+	it("still refreshes keyword-only, whose sparse-only MinSync index needs no dense model", async () => {
 		modelMissing.value = true;
 		refresh.mockResolvedValue({ scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [] });
 		const setup = await fixture();
@@ -342,14 +345,14 @@ describe("refreshAutoragIndex in keyword-only mode (appIndexing.semanticSearch: 
 		return setup;
 	}
 
-	it("runs the parsed mirror and Jikji instead of MinSync, and never calls MinSync", async () => {
+	it("still indexes MinSync, as a sparse-only SPLADE index the librarian builds with no dense model", async () => {
 		refresh.mockResolvedValue({ scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [] });
 
 		const outcome = await refreshAutoragIndex(await keywordOnly());
 
-		expect(refresh).toHaveBeenCalledWith(false, { methods: ["parsed", "jikji"] });
-		expect(syncMinSync).not.toHaveBeenCalled();
-		expect(outcome).toMatchObject({ ok: true, error: null, methods: ["parsed", "jikji"] });
+		expect(refresh).toHaveBeenCalledWith(false, { methods: ["parsed", "minsync"] });
+		expect(embedderIds.at(-1)).toBe("none");
+		expect(outcome).toMatchObject({ ok: true, error: null, methods: ["parsed", "minsync"] });
 	});
 
 	it("hands the librarian datasources whose semantic half is off", async () => {
@@ -381,6 +384,7 @@ describe("refreshAutoragIndex in keyword-only mode (appIndexing.semanticSearch: 
 
 		expect(refresh).toHaveBeenCalledWith(false, { methods: ["parsed", "minsync"] });
 		expect(datasourceConfigs.at(-1)).toBeUndefined();
+		expect(embedderIds.at(-1)).not.toBe("none");
 	});
 });
 

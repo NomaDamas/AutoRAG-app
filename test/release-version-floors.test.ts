@@ -26,9 +26,9 @@ describe("assertVersionFloor", () => {
 });
 
 describe("VERSION_FLOORS", () => {
-	it("keeps minsync at 0.5.1 or newer, the first release with durable stage protocol v2 and JSONL sync progress", () => {
-		expect(compareVersions("0.5.0", VERSION_FLOORS.minsync)).toBeLessThan(0);
-		expect(compareVersions("0.5.1", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
+	it("keeps minsync at 0.6.0 or newer, the first release with SPLADE sparse retrieval and sparse-only indexes", () => {
+		expect(compareVersions("0.5.1", VERSION_FLOORS.minsync)).toBeLessThan(0);
+		expect(compareVersions("0.6.0", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
 	});
 
 	it("keeps mailcrawl at 0.3.0+ for local mail archive indexing and lazykatok at 0.3.3+ for the embedding daemon", () => {

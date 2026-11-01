@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { t } from "../shared/i18n/core";
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "./embedding-daemon";
 import type { ModelDownloadState, ModelDownloadStatus } from "../shared/model-download-contract";
+import { minSyncModelCacheRoot } from "./bundled-sparse-model";
 
 /**
  * Fetches the on-device embedding model (Qwen/Qwen3-Embedding-0.6B) into the cache MinSync's native embedder
@@ -49,26 +50,6 @@ export function nativeQwen3Spec(baseUrl: string = `https://huggingface.co/${DEFA
 
 export function modelTotalBytes(spec: ModelSpec): number {
 	return spec.files.reduce((sum, file) => sum + file.bytes, 0);
-}
-
-/**
- * Where `minsync`'s `NativeEmbedder` (`apply_cache_dir` in `native.rs`) looks for cached Hugging Face models:
- * `FASTEMBED_CACHE_DIR` when set, else `%LOCALAPPDATA%\minsync\models` on Windows and `~/.cache/minsync/models`
- * everywhere else.
- */
-export function minSyncModelCacheRoot(options: {
-	readonly platform?: NodeJS.Platform;
-	readonly home: string;
-	readonly env?: NodeJS.ProcessEnv;
-}): string {
-	const override = options.env?.FASTEMBED_CACHE_DIR?.trim();
-	if (override !== undefined && override.length > 0) return override;
-	if ((options.platform ?? process.platform) === "win32") {
-		const localAppData = options.env?.LOCALAPPDATA?.trim();
-		const root = localAppData !== undefined && localAppData.length > 0 ? localAppData : join(options.home, "AppData", "Local");
-		return join(root, "minsync", "models");
-	}
-	return join(options.home, ".cache", "minsync", "models");
 }
 
 /**

@@ -1,3 +1,4 @@
+import { baselineJev } from "./baseline-jev";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -62,7 +63,7 @@ async function build(mode: ApprovalMode, responses: FauxResponseStep[], respond:
 			jikji: false,
 			piAgentDir: agentDir,
 			piSessionDir: join(root, "sessions"),
-			jev: false,
+			jev: baselineJev(),
 			filee: false,
 			permissionMode: "full",
 		},
@@ -146,15 +147,16 @@ describe("file-change gate through the app's interaction hub", () => {
 		expect(existsSync(file)).toBe(false);
 	});
 
-	it("auto mode with no judgment model asks about the call instead of letting it through", async () => {
+	it("auto mode asks about a call the judgment model does not approve instead of letting it through", async () => {
 		const file = join(root, "report.pdf");
 		writeFileSync(file, "x");
+		// The baseline decision backend flags every permission category and approves nothing on its own.
 		const t = await build("auto", removeFile(file), () => ({ kind: "approval", choice: "deny" }));
 
 		await t.agent.searchDocuments("delete the report");
 
 		expect(t.requests).toHaveLength(1);
-		expect(t.requests[0]).toMatchObject({ kind: "approval", sessionScope: "unclassified", reason: "Jev is not configured" });
+		expect(t.requests[0]).toMatchObject({ kind: "approval" });
 		expect(existsSync(file)).toBe(true);
 	});
 

@@ -5,12 +5,8 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-	createModelDownloadService,
-	minSyncModelCacheRoot,
-	modelFilesPresent,
-	type ModelSpec,
-} from "../src/main/model-download";
+import { minSyncModelCacheRoot } from "../src/main/bundled-sparse-model";
+import { createModelDownloadService, modelFilesPresent, type ModelSpec } from "../src/main/model-download";
 import type { ModelDownloadStatus } from "../src/shared/model-download-contract";
 
 const sha = (buffer: Buffer): string => createHash("sha256").update(buffer).digest("hex");

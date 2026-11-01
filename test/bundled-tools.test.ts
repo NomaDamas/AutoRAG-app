@@ -1,8 +1,8 @@
-import { createHash } from "node:crypto";
-import { lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync, existsSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join, win32 } from "node:path";
+import { delimiter, dirname, join, win32 } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { SPARSE_MODEL, seedBundledSparseModel, sparseModelPresent } from "../src/main/bundled-sparse-model";
 import { applyBundledTools, pathKey, prependPath } from "../src/main/bundled-tools";
 
 const dirs: string[] = [];
@@ -77,138 +77,78 @@ describe("bundled tools on PATH", () => {
 	});
 });
 
-describe("bundled Kiwi", () => {
-	function toolsWithKiwi(): { readonly resources: string; readonly library: string; readonly model: string } {
+describe("bundled SPLADE model", () => {
+	/** The bundled snapshot, every file at its pinned size (sparse files, so no 299 MB is written). */
+	function toolsWithSparseModel(): { readonly resources: string; readonly bundled: string } {
 		const resources = temp();
-		const kiwi = join(resources, "tools", "kiwi");
 		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
-		mkdirSync(join(kiwi, "lib"), { recursive: true });
-		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
-		const library = join(kiwi, "lib", "libkiwi.dylib");
-		writeFileSync(library, "");
-		return { resources, library, model: join(kiwi, "models", "cong", "base") };
-	}
-
-	it("points MinSync's tokenizer at the library and model that shipped with the app", () => {
-		const { resources, library, model } = toolsWithKiwi();
-		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
-
-		applyBundledTools({ resourcesPath: resources, env, platform: "darwin" });
-
-		expect(env.KIWI_LIBRARY_PATH).toBe(library);
-		expect(env.KIWI_MODEL_PATH).toBe(model);
-	});
-
-	it("never overrides a path the user chose, and does not pair a bundled half with theirs", () => {
-		const { resources } = toolsWithKiwi();
-		for (const chosen of [{ KIWI_LIBRARY_PATH: "/mine/libkiwi.dylib" }, { KIWI_MODEL_PATH: "/mine/base" }]) {
-			const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", ...chosen };
-			applyBundledTools({ resourcesPath: resources, env, platform: "darwin" });
-			expect({ library: env.KIWI_LIBRARY_PATH, model: env.KIWI_MODEL_PATH }).toEqual({ library: chosen.KIWI_LIBRARY_PATH, model: chosen.KIWI_MODEL_PATH });
+		const bundled = join(resources, "tools", "models", SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision);
+		for (const file of SPARSE_MODEL.files) {
+			mkdirSync(dirname(join(bundled, file.name)), { recursive: true });
+			writeFileSync(join(bundled, file.name), file.name);
+			truncateSync(join(bundled, file.name), file.bytes);
 		}
-	});
-
-	it("sets nothing when the model is missing, so the librarian's probe falls back to whitespace tokenization", () => {
-		const { resources, model } = toolsWithKiwi();
-		rmSync(model, { recursive: true });
-		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin" };
-
-		applyBundledTools({ resourcesPath: resources, env, platform: "darwin" });
-
-		expect(env.KIWI_LIBRARY_PATH).toBeUndefined();
-		expect(env.KIWI_MODEL_PATH).toBeUndefined();
-	});
-
-	it("finds kiwi.dll on Windows, where the environment spells PATH `Path`", () => {
-		const resources = temp();
-		const kiwi = join(resources, "tools", "kiwi");
-		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
-		mkdirSync(join(kiwi, "lib"), { recursive: true });
-		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
-		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "");
-		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows" };
-
-		applyBundledTools({ resourcesPath: resources, env, platform: "win32" });
-
-		expect(env.KIWI_LIBRARY_PATH).toBe(join(kiwi, "lib", "kiwi.dll"));
-		expect(env.KIWI_MODEL_PATH).toBe(join(kiwi, "models", "cong", "base"));
-	});
-});
-
-describe("bundled Kiwi under a non-ASCII install path (Windows loads kiwi.dll through the ANSI API)", () => {
-	function koreanTools(): { readonly kiwi: string; readonly programData: string } {
-		const resources = join(temp(), "한글사용자", "resources");
-		const kiwi = join(resources, "tools", "kiwi");
-		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
-		mkdirSync(join(kiwi, "lib"), { recursive: true });
-		mkdirSync(join(kiwi, "models", "cong", "base"), { recursive: true });
-		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "dll-bytes");
-		writeFileSync(join(kiwi, "models", "cong", "base", "sylls.bin"), "model-bytes");
-		return { kiwi, programData: temp() };
+		return { resources, bundled };
 	}
-	const resourcesOf = (kiwi: string): string => join(kiwi, "..", "..");
 
-	it("points Kiwi at an ASCII copy, with the library and model both copied", () => {
-		const { kiwi, programData } = koreanTools();
-		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
+	it("seeds MinSync's model cache from the installer so sparse search needs no download", () => {
+		const { resources } = toolsWithSparseModel();
+		const home = temp();
 
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "win32" });
+		applyBundledTools({ resourcesPath: resources, env: { PATH: "/usr/bin" }, platform: "darwin", home });
 
-		const library = env.KIWI_LIBRARY_PATH ?? "";
-		const model = env.KIWI_MODEL_PATH ?? "";
-		expect(library).toMatch(/^[\x20-\x7e]+$/);
-		expect(model).toMatch(/^[\x20-\x7e]+$/);
-		expect(library.startsWith(programData)).toBe(true);
-		expect(readFileSync(library, "utf8")).toBe("dll-bytes");
-		expect(readFileSync(join(model, "sylls.bin"), "utf8")).toBe("model-bytes");
+		const cache = join(home, ".cache", "minsync", "models");
+		expect(sparseModelPresent(cache)).toBe(true);
+		expect(readFileSync(join(cache, SPARSE_MODEL.repoDir, "refs", "main"), "utf8")).toBe(SPARSE_MODEL.revision);
+		const config = join(cache, SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision, "config.json");
+		expect(readFileSync(config, "utf8").startsWith("config.json")).toBe(true);
 	});
 
-	it("reuses the copy on the next start and rebuilds it when the bundled library changes", () => {
-		const { kiwi, programData } = koreanTools();
-		const first: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env: first, platform: "win32" });
-		const copied = first.KIWI_LIBRARY_PATH ?? "";
-		const stamp = lstatSync(copied).mtimeMs;
+	it("honours FASTEMBED_CACHE_DIR, the cache MinSync itself reads", () => {
+		const { resources } = toolsWithSparseModel();
+		const custom = temp();
 
-		const again: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env: again, platform: "win32" });
-		expect(again.KIWI_LIBRARY_PATH).toBe(copied);
-		expect(lstatSync(copied).mtimeMs).toBe(stamp);
+		applyBundledTools({ resourcesPath: resources, env: { PATH: "/usr/bin", FASTEMBED_CACHE_DIR: custom }, platform: "darwin", home: temp() });
 
-		writeFileSync(join(kiwi, "lib", "kiwi.dll"), "a-newer-and-longer-dll");
-		const upgraded: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: programData };
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env: upgraded, platform: "win32" });
-		expect(readFileSync(upgraded.KIWI_LIBRARY_PATH ?? "", "utf8")).toBe("a-newer-and-longer-dll");
+		expect(sparseModelPresent(custom)).toBe(true);
 	});
 
-	it("tries the next ASCII location when the first is not usable", () => {
-		const { kiwi } = koreanTools();
-		const publicDir = temp();
-		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: join(temp(), "프로그램데이터"), PUBLIC: publicDir };
+	it("leaves a complete cached copy untouched", () => {
+		const { resources, bundled } = toolsWithSparseModel();
+		const home = temp();
+		const cache = join(home, ".cache", "minsync", "models");
+		const input = { resourcesPath: resources, env: { PATH: "/usr/bin" }, platform: "darwin" as const, home };
+		applyBundledTools(input);
+		const tokenizer = join(cache, SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision, "tokenizer.json");
+		writeFileSync(tokenizer, "kept");
+		truncateSync(tokenizer, SPARSE_MODEL.files.find((file) => file.name === "tokenizer.json")?.bytes ?? 0);
+		// A different bundled build of the same size must not overwrite what the cache already holds.
+		writeFileSync(join(bundled, "tokenizer.json"), "bundled");
+		truncateSync(join(bundled, "tokenizer.json"), SPARSE_MODEL.files.find((file) => file.name === "tokenizer.json")?.bytes ?? 0);
 
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "win32" });
-
-		expect((env.KIWI_LIBRARY_PATH ?? "").startsWith(publicDir)).toBe(true);
+		expect(seedBundledSparseModel({ toolsRoot: join(resources, "tools"), home, env: {}, platform: "darwin" })).toBe("present");
+		expect(readFileSync(tokenizer, "utf8").startsWith("kept")).toBe(true);
 	});
 
-	it("leaves Kiwi unset rather than pointing at a path that cannot load when no ASCII location exists", () => {
-		const { kiwi } = koreanTools();
-		const env: NodeJS.ProcessEnv = { Path: "C:\\Windows", PROGRAMDATA: join(temp(), "프로그램데이터") };
+	it("does not mark a cache complete while a file is missing, and finishes it on the next start", () => {
+		const { resources } = toolsWithSparseModel();
+		const home = temp();
+		const cache = join(home, ".cache", "minsync", "models");
+		const input = { resourcesPath: resources, env: { PATH: "/usr/bin" }, platform: "darwin" as const, home };
+		applyBundledTools(input);
+		rmSync(join(cache, SPARSE_MODEL.repoDir, "snapshots", SPARSE_MODEL.revision, "model.safetensors"));
+		expect(sparseModelPresent(cache)).toBe(false);
 
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "win32" });
-
-		expect(env.KIWI_LIBRARY_PATH).toBeUndefined();
-		expect(env.KIWI_MODEL_PATH).toBeUndefined();
+		expect(seedBundledSparseModel({ toolsRoot: join(resources, "tools"), home, env: {}, platform: "darwin" })).toBe("seeded");
+		expect(sparseModelPresent(cache)).toBe(true);
 	});
 
-	it("does not copy when the bundled path is already ASCII, or off Windows", () => {
-		const { kiwi, programData } = koreanTools();
-		const env: NodeJS.ProcessEnv = { PATH: "/usr/bin", PROGRAMDATA: programData };
-		writeFileSync(join(kiwi, "lib", "libkiwi.dylib"), "");
+	it("does nothing when the build carries no model, so MinSync downloads it itself", () => {
+		const resources = temp();
+		mkdirSync(join(resources, "tools", "bin"), { recursive: true });
+		const home = temp();
 
-		applyBundledTools({ resourcesPath: resourcesOf(kiwi), env, platform: "darwin" });
-
-		expect(env.KIWI_LIBRARY_PATH).toBe(join(kiwi, "lib", "libkiwi.dylib"));
-		expect(existsSync(join(programData, "Dazzi"))).toBe(false);
+		expect(seedBundledSparseModel({ toolsRoot: join(resources, "tools"), home, env: {}, platform: "darwin" })).toBe("not-bundled");
+		expect(existsSync(join(home, ".cache", "minsync"))).toBe(false);
 	});
 });

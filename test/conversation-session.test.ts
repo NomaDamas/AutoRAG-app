@@ -1,3 +1,4 @@
+import { baselineJev } from "./baseline-jev";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -98,7 +99,7 @@ function harness(options: Options = {}): Harness {
 			piSessionDir: options.sessionDir ?? join(root, "sessions"),
 			filee: false,
 			permissionMode: options.permissionMode ?? "full",
-			...(options.jev === undefined ? { jev: false as const } : { jev: { backend: options.jev } }),
+			jev: options.jev === undefined ? baselineJev() : { backend: options.jev },
 		},
 		createAgentInteraction(),
 	);

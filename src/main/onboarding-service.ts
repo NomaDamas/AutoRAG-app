@@ -37,7 +37,8 @@ import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
 import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
-import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
+import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 import { classifyIndexFailure, modelDownloadFailure, skippedFileCount } from "./index-failure";
 import type { RunOutcome } from "./index-problem-service";
 

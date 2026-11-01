@@ -1,3 +1,4 @@
+import { baselineJev } from "./baseline-jev";
 import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -183,6 +184,7 @@ describe("AttachmentContextAgent", () => {
 				{ mode: 0o755 },
 			);
 			const agent = new AttachmentContextAgent({
+				jev: baselineJev(),
 				model: registration.getModel() as never,
 				searchPaths: [corpus],
 				workspacePath: directory,

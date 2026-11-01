@@ -76,31 +76,32 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   included, so choosing a model again needs no re-entry). `semantic-policy.ts`
   applies it to the config the app hands to the librarian, because the librarian
   has no switch for it:
-  - *Refresh*: `minsync` is replaced by `parsed` + `jikji`, so MinSync never runs, no
-    model is loaded or downloaded, and no `.minsync` index is built.
+  - *Refresh*: MinSync still runs, as a sparse-only index: the config handed to the
+    librarian sets `minSync.embedder.id: "none"`, so MinSync encodes SPLADE vectors with
+    the model the installer carries and no dense model is loaded or downloaded. Switching
+    between keyword-only and a dense embedder rebuilds the `.minsync` index (the librarian
+    re-initializes it).
   - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
     `connector.sidecar.semantic: false` (BM25 only), Discord answers from FTS,
     ClawGallery skips its visual vector sync and pins `defaultMode: "keyword"`, and for the duration of a refresh the
     embedding steps the librarian runs unconditionally (mailcrawl `index`,
     discrawl `embed`) are successful no-ops; their sync and update steps still run.
-    The Obsidian source is left unindexed instead: MinSync indexes a vault into a
-    MinSync workspace of its own and needs an embedder, so with keyword-only search
-    the app does not index Obsidian at all. GitHub Gist sets `connector.semantic: false`, which
+    An Obsidian vault is indexed by MinSync the same way, as a sparse-only index. GitHub Gist sets `connector.semantic: false`, which
     the librarian (Marker-Inc-Korea/AutoRAG#1936) maps to the gist skill's own
     switch: no vector index and no `<name>-semantic` method. The pre-#1936
     prototype patch for it is gone with the v2.10.4 pin.
-  - *Search*: MinSync's vector and hybrid methods answer nothing without being run
-    (the agent keeps its vector method outside the method registry, so
-    `semantic-policy.ts` reaches it through the agent's `minSyncMethod`, and refuses
-    to run keyword-only when a librarian release moves it). The shared embedder reports
-    no endpoint, so a datasource's hybrid-first method (mailcrawl, the kakao CLI) fails
-    its hybrid search with `embedding-unavailable` and answers from its own keyword
-    search; the app drops the pipeline's `onFallback` for it, so that deliberate
-    fallback is not reported as a failed method. There is no "method failed"
-    diagnostic for an index that is deliberately absent, and the agent's
-    past-question memory ranks by keywords only. Local file content is found by
-    Jikji and the file-name tools.
-  - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
+  - *Search*: MinSync's methods over the sparse-only index describe themselves as `sparse`
+    and search with `--mode sparse` (SPLADE), so local file content is found by meaning-
+    aware keyword ranking as well as Jikji and the file-name tools. Dense vector and hybrid
+    methods answer nothing without being run (the agent keeps its MinSync method outside
+    the method registry, so `semantic-policy.ts` reaches it through the agent's
+    `minSyncMethod`, and refuses to run keyword-only when a librarian release moves it).
+    The shared embedder reports no endpoint, so a datasource's hybrid-first method
+    (mailcrawl, the kakao CLI) fails its hybrid search with `embedding-unavailable` and
+    answers from its own keyword search; the app drops the pipeline's `onFallback` for it,
+    so that deliberate fallback is not reported as a failed method. The agent's
+    past-question memory ranks by keywords only.
+  - *Status*: a parsed file counts as included once it is staged into the sparse-only MinSync index.
 - **Embedder preflight** — before a refresh that includes `minsync` parses a single
   document, `embedder-preflight.ts` sends one embedding request to a remote
   (`openai:` or `tei:`) embedder, built the way MinSync builds its own: `baseUrl` +
@@ -184,17 +185,11 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
-  - *The BM25 tokenizer needs Kiwi* (librarian 733e8a0 / MinSync 0.4.10). The
-    librarian always asks MinSync for the `multilingual` tokenizer, which loads
-    the Kiwi native library and model at run time; neither ships with the app.
-    Without them a new workspace is built with `simple` (whitespace) tokenization
-    and the refresh returns a `lexical-tokenizer-unavailable` warning (not an
-    error: `ok` stays true, so the UI shows it only as the `진단 N건` count after
-    a manual refresh in Settings → 인덱싱); the next
-    refresh after Kiwi is installed (`~/.local/kiwi`, or `KIWI_LIBRARY_PATH` and
-    `KIWI_MODEL_PATH`) re-indexes the workspace once with `multilingual`. A
-    workspace already on `multilingual` is never switched back when Kiwi
-    disappears.
+  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0). MinSync replaced its BM25 index with
+    learned-sparse retrieval (`nlpai-lab/KURE-Sparse-nano`), which matches Korean inflected forms
+    (`인증서를` for `인증서`) with no tokenizer library, so Kiwi is gone. The installer carries the model and
+    `bundled-sparse-model.ts` seeds it into MinSync's cache at startup. The first refresh after the upgrade
+    migrates a BM25-era index in place: sparse vectors are encoded for every chunk and dense vectors are kept.
   - Not covered: cancelling a refresh from the UI (the librarian has no abort
     signal, AutoRAG#1892), and an unreadable subfolder inside a readable root
     (AutoRAG#1889).

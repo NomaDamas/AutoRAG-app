@@ -10,12 +10,11 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// v2.13.3 holds the retry after a Dazzi context overflow to half the failed request (AutoRAG#2055), on top of
-// v2.13.2: live Spotlight search without snapshots, MinSync 0.5.1 durable stages for incremental parsed mirrors
-// plus streamed sync progress and skipped-file counts, mailcrawl 0.3.0 (`--source files` retiring `mail-export`),
-// pi 1.4.0, and Discord attachment downloads under `<AUTORAG_HOME>/attachments/discord/<connection>/` (v2.13.1),
-// on top of v2.13.0 (hybrid-first retrieval) and v2.12.0 (permission gate, `ask_user`, `convert_files`).
-const librarianRef = "v2.13.3";
+// This SHA is the librarian on MinSync 0.6.0: SPLADE sparse retrieval (KURE-Sparse-nano) replaces BM25, Kiwi and
+// `minsync init --language` are gone, and `minSync.embedder.id: "none"` builds a sparse-only index (AutoRAG#2080,
+// #2081). Main since v2.13.3 also carries the required decision model, opt-in reranking, parallel name search,
+// SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources.
+const librarianRef = "ef91c9ef132ffcd60de6916a9ec97339e01d1865";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -1,3 +1,4 @@
+import { baselineJev } from "./baseline-jev";
 import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -108,7 +109,7 @@ async function harness(options: { readonly contextWindow?: number } = {}): Promi
 			piSessionDir: join(root, "sessions"),
 			filee: false,
 			permissionMode: "full",
-			jev: false,
+			jev: baselineJev(),
 			tools: [hugeTool],
 		},
 		createAgentInteraction(),

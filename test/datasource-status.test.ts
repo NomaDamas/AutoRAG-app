@@ -92,11 +92,11 @@ describe("createDataSourceStatusService", () => {
 		expect(slack.index).toMatchObject({ state: "not-indexed", chunkCount: null, unit: "message" });
 		expect(slack.status).toBe("ready");
 
+		// The librarian removed the rclone `cloud-drive` datasource (AutoRAG#2078): the row reports it as unknown.
 		const drive = byId(snapshot.sources, "my-drive");
 		expect(drive.type).toBe("cloud-drive");
-		expect(drive.install).toMatchObject({ state: "missing", binary: "rclone" });
-		expect(drive.agent.state).toBe("connected");
-		expect(drive.index).toMatchObject({ state: "indexed", chunkCount: 2, indexedAt: "2026-09-30T01:02:03.000Z" });
+		expect(drive.install).toMatchObject({ state: "unsupported", binary: null });
+		expect(drive.agent.state).toBe("unsupported");
 		expect(drive.status).toBe("attention");
 
 		const github = byId(snapshot.sources, "github");
@@ -563,17 +563,15 @@ describe.skipIf(process.platform === "win32")("backend-owned index counts", () =
 		expect(row?.index).toMatchObject({ state: "live", chunkCount: null });
 	});
 
-	it("reports Spotlight as live on macOS once queries are configured, not-indexed without queries, and unsupported on Windows", async () => {
+	it("reports Spotlight, which the librarian no longer builds (AutoRAG#2057), as not indexed on macOS and unsupported on Windows", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		await installFakeCli(fixture, "mdfind", "");
 		await writeConfig(fixture, {
 			spotlightReady: { type: "spotlight", connector: { queries: ["kMDItemContentType == 'public.plain-text'"] } },
-			spotlightEmpty: { type: "spotlight", connector: {} },
 		});
 
 		const macRows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "darwin" }).list()).sources;
-		expect(byId(macRows, "spotlightReady").index).toMatchObject({ state: "live", chunkCount: null });
-		expect(byId(macRows, "spotlightEmpty").index).toMatchObject({ state: "not-indexed", chunkCount: null });
+		expect(byId(macRows, "spotlightReady").index).toMatchObject({ state: "not-indexed", chunkCount: null });
 
 		const winRows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "win32" }).list()).sources;
 		expect(byId(winRows, "spotlightReady").install.state).toBe("unsupported");
