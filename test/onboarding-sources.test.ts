@@ -131,6 +131,41 @@ describe("onboarding datasource detection", () => {
 		expect(ids(result)).toEqual([]);
 	});
 
+	describe("Slack Desktop on a Mac with nothing archived yet", () => {
+		const slack = (desktop: unknown, archived = 0) =>
+			script({
+				which: () => "/opt/homebrew/bin/slacrawl",
+				slacrawl: (args) => (args.includes("sql") ? ok([{ n: archived }]) : ok({ desktop_source: desktop })),
+			});
+
+		it("is offered from the signed-in desktop app, which `sync --source wiretap` imports", async () => {
+			const result = await detectSources({
+				...deps(slack({ available: true, summary: { workspace_count: 6 } })),
+				...noGithub,
+				platform: "darwin",
+			});
+
+			expect(result.sources).toEqual([{ id: "slack", facts: { workspaces: 6 } }]);
+		});
+
+		it("is hidden when Slack Desktop is missing or has no signed-in workspace", async () => {
+			for (const desktop of [{ available: false }, { available: true, summary: { workspace_count: 0 } }]) {
+				const result = await detectSources({ ...deps(slack(desktop)), ...noGithub, platform: "darwin" });
+				expect(ids(result)).toEqual([]);
+			}
+		});
+
+		it("prefers what is already archived over the desktop app's workspace count", async () => {
+			const run = script({
+				which: () => "/opt/homebrew/bin/slacrawl",
+				slacrawl: (args) => (args.includes("sql") ? ok([{ n: 2 }]) : ok({})),
+			});
+			const result = await detectSources({ ...deps(run), ...noGithub, platform: "darwin" });
+
+			expect(result.sources).toEqual([{ id: "slack", facts: { workspaces: 2, channels: 2, messages: 2 } }]);
+		});
+	});
+
 	it("detects KakaoTalk on macOS with a cached login or a live source chats probe, and records the chat count", async () => {
 		const probe = (macos: Record<string, unknown>, chatsOutput?: string) =>
 			script({

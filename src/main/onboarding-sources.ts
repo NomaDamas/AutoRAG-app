@@ -139,9 +139,9 @@ async function detectSlack(deps: SourceDetectionDeps): Promise<DetectedSource | 
 		const messages = await query("select count(*) as n from messages");
 		return { id: "slack", facts: { workspaces, channels, messages } };
 	}
-	// Nothing archived yet. On Windows the desktop app itself is the source: `doctor` reports how many workspaces
-	// it has signed in, and the first index imports them with `sync --source wiretap`.
-	if (deps.platform !== "win32") return null;
+	// Nothing archived yet. On macOS and Windows the desktop app itself is the source: `doctor` reports how many
+	// workspaces it has signed in, and the first index imports them with `sync --source wiretap`.
+	if (deps.platform !== "win32" && deps.platform !== "darwin") return null;
 	const doctor = await runJsonObject(deps, "slacrawl", ["--json", "doctor"]);
 	const desktop = isJsonObject(doctor?.desktop_source) ? doctor.desktop_source : null;
 	const summary = isJsonObject(desktop?.summary) ? desktop.summary : null;
