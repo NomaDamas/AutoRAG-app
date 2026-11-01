@@ -30,7 +30,7 @@ export interface SourceDetectionDeps {
 
 /** Every connector the step can find on this host, in display order; KakaoTalk and WhatsApp are Mac-only apps. */
 function sourceOrder(platform: NodeJS.Platform): readonly SourceId[] {
-	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
+	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian"];
 	return all.filter((id) => datasourceSupported(id, platform));
 }
 const GITHUB_REPO_LIMIT = 5;
@@ -183,6 +183,17 @@ async function detectWhatsapp(deps: SourceDetectionDeps): Promise<DetectedSource
 }
 
 /**
+ * Notion Desktop's local cache, which `notcrawl sync` (the skill's only sync command) reads with no token. `doctor`
+ * reports the cache file on every OS (`desktop_available`, `desktop_size`) and writes nothing, so detection imports
+ * nothing; an API token alone does not count, because that needs a Notion integration rather than the signed-in app.
+ */
+async function detectNotion(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
+	const doctor = await runJsonObject(deps, "notcrawl", ["doctor", "--json"]);
+	if (doctor === null || doctor.desktop_available !== true || positiveInt(doctor.desktop_size) === 0) return null;
+	return { id: "notion", facts: {} };
+}
+
+/**
  * mailcrawl reads mail through himalaya, which owns the account logins. An account
  * counts only when himalaya can actually list its mailboxes (a real IMAP login),
  * so a configured-but-signed-out account never becomes a source that fails its
@@ -271,6 +282,7 @@ export async function detectSources(
 		whatsapp: detectWhatsapp,
 		mailcrawl: detectMailcrawl,
 		github: detectGithub,
+		notion: detectNotion,
 		obsidian: detectObsidian,
 	};
 	const results = await Promise.all(

@@ -61,6 +61,8 @@ function entriesFor(datasource: IndexingDatasource, home: string): Record<string
 					connector: { repos: [...(datasource.facts.repos ?? [])], tokenEnv: "GITHUB_TOKEN" },
 				},
 			};
+		case "notion":
+			return { notion: { instanceId: "default", connector: {} } };
 		case "obsidian": {
 			const entries: Record<string, Record<string, unknown>> = {};
 			const vaults = datasource.facts.vaults ?? [];

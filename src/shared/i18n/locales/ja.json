@@ -1034,6 +1034,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "メール (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1044,6 +1045,7 @@
         "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
         "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
         "github": "ログイン済み · IssuesとPull Requests",
+        "notion": "Notion アプリのデータを検出",
         "obsidian": "Vault {{vaults}}件を検出"
       }
     },

@@ -1034,6 +1034,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "邮件 (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1044,6 +1045,7 @@
         "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
         "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
         "github": "已登录 · Issues 与 Pull Requests",
+        "notion": "发现 Notion 应用数据",
         "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },
