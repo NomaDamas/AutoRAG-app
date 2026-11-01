@@ -580,6 +580,33 @@ describe.skipIf(process.platform === "win32")("backend-owned index counts", () =
 		expect(byId(winRows, "spotlightReady").agent.state).toBe("unsupported");
 	});
 
+	it("reports WhatsApp as unsupported on Windows, where wacrawl cannot find WhatsApp Desktop, and never asks the desktop app for it", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "wacrawl", JSON.stringify({ messages: 5 }));
+		await writeConfig(fixture, { whatsapp: {} });
+
+		const winRow = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "win32" }).list()).sources, "whatsapp");
+		expect(winRow.install).toMatchObject({ state: "unsupported", binary: null, app: { required: false } });
+		expect(winRow.agent.state).toBe("unsupported");
+		expect(winRow.index.state).not.toBe("indexed");
+
+		const macRow = byId((await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "darwin" }).list()).sources, "whatsapp");
+		expect(macRow.install.state).toBe("installed");
+		expect(macRow.agent.state).toBe("connected");
+		expect(macRow.index).toMatchObject({ state: "indexed", chunkCount: 5 });
+	});
+
+	it("refuses to sync WhatsApp on Windows without running wacrawl or filing a failure report", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		const argv = await installFakeCli(fixture, "wacrawl", JSON.stringify({ messages: 5 }));
+		await writeConfig(fixture, { whatsapp: {} });
+
+		const result = await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "win32" }).sync("whatsapp");
+
+		expect(result).toMatchObject({ ok: false, state: "unsupported" });
+		await expect(readFile(argv, "utf8")).rejects.toThrow();
+	});
+
 	it("never runs one backend CLI twice at once, so overlapping lists cannot trip its database lock", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		const lock = join(fixture.root, "wacrawl.lock");

@@ -1,5 +1,5 @@
 import type { CliConfig } from "@autorag/librarian/core";
-import { isKakaoEntry, kakaoSupported } from "../shared/messenger-platform";
+import { datasourceEntrySupported } from "../shared/messenger-platform";
 import { isJsonObject } from "../shared/settings-contract";
 import { isCalendarDatasourceEntry } from "./calendar-mcp";
 
@@ -49,8 +49,8 @@ export function withIndexingPoliciesApplied(config: CliConfig, platform: string 
 			: Object.fromEntries(
 					Object.entries(config.datasources)
 						.filter(([id, entry]) => !isCalendarDatasourceEntry(id, entry))
-						// KakaoTalk reads the Mac app: a row inherited from a Mac config never runs where lazykatok cannot.
-						.filter(([id, entry]) => kakaoSupported(platform) || !isKakaoEntry(id, entry))
+						// A row inherited from a Mac config (KakaoTalk, WhatsApp, Spotlight) never runs where its backend cannot.
+						.filter(([id, entry]) => datasourceEntrySupported(id, entry, platform))
 						.map(([id, entry]) => [id, withConnectorOcrDisabled(entry)]),
 				);
 	const jikji = withMediaIndexDisabled(config.jikji);
