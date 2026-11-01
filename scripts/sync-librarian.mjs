@@ -14,7 +14,7 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // `minsync init --language` are gone, and `minSync.embedder.id: "none"` builds a sparse-only index (AutoRAG#2080,
 // #2081). Main since v2.13.3 also carries the required decision model, opt-in reranking, parallel name search,
 // SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources.
-const librarianRef = "ef91c9ef132ffcd60de6916a9ec97339e01d1865";
+const librarianRef = "642cd9ba71bfa272109e18865f713c94b2e8c1a7";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
