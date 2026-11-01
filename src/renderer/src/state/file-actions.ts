@@ -194,35 +194,43 @@ export function openWithItems(applications: readonly OpenWithApplication[]): rea
 }
 
 /**
+ * The Inspector action bar for a multi-selection: Compress only, because
+ * packing several items into one archive is the one action that needs more
+ * than one (a single item is not worth an archive). One menu button picks the
+ * format, like the image and video menus; the in-process archiver writes both.
+ */
+export function selectionActions(capabilities: ActionCapabilities): readonly FileAction[] {
+	if (!capabilities.archive) return [];
+	return [
+		{
+			kind: "menu",
+			id: "compress",
+			label: t("inspector.actions.compress"),
+			icon: "compress",
+			items: [
+				{
+					id: "compress:zip",
+					label: t("inspector.actions.compressZip"),
+					target: { kind: "request", request: { kind: "compress", format: "zip" } },
+				},
+				{
+					id: "compress:7z",
+					label: t("inspector.actions.compress7z"),
+					target: { kind: "request", request: { kind: "compress", format: "7z" } },
+				},
+			],
+		},
+	];
+}
+
+/**
  * The Inspector action bar for `subject`. Capability-gated: an action whose
  * backing engine is missing never renders, so the bar never lies about the
  * machine.
  */
 export function suggestedActions(subject: ActionSubject, capabilities: ActionCapabilities): readonly FileAction[] {
-	// One button, the format picked in its menu (like the image and video menus); the in-process archiver writes both.
-	const compress: FileAction | null = capabilities.archive
-		? {
-				kind: "menu",
-				id: "compress",
-				label: t("inspector.actions.compress"),
-				icon: "compress",
-				items: [
-					{
-						id: "compress:zip",
-						label: t("inspector.actions.compressZip"),
-						target: { kind: "request", request: { kind: "compress", format: "zip" } },
-					},
-					{
-						id: "compress:7z",
-						label: t("inspector.actions.compress7z"),
-						target: { kind: "request", request: { kind: "compress", format: "7z" } },
-					},
-				],
-			}
-		: null;
 	if (subject.kind === "folder") {
 		const actions: FileAction[] = [];
-		if (compress !== null) actions.push(compress);
 		if (capabilities.share) {
 			actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 		}
@@ -273,7 +281,6 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			target: { kind: "request", request: { kind: "reduceSize" } },
 		});
 	}
-	if (compress !== null) actions.push(compress);
 	if (capabilities.share) {
 		actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 	}
