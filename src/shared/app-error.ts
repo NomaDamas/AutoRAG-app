@@ -24,6 +24,8 @@ export type AppErrorKind =
 	| "model-credentials"
 	/** The plan, credits or billing no longer cover the call. */
 	| "model-subscription"
+	/** The chosen model exists but needs a higher plan than the account has (Dazzi's Max-only models). */
+	| "model-plan"
 	/** The chosen model does not exist (any more) on its provider. */
 	| "model-not-found"
 	/** Too many requests or an overloaded provider; passes by itself. */
@@ -49,6 +51,14 @@ function status(code: number): RegExp {
 }
 
 const MISSING = /\bno model (?:is )?(?:configured|selected)\b|\bno api key found\b|\bnot signed in\b|\bsign in and pick one\b/iu;
+
+/**
+ * Dazzi's answer to a model the account's plan does not include: `403 plan_upgrade_required`, worded
+ * "The model `…` is available on the Max plan only. …". Checked before {@link SUBSCRIPTION}, which its
+ * "your plan" would otherwise match, because the cure differs: credits are fine, the model is not in the plan.
+ */
+const PLAN_REQUIRED = /\bplan_upgrade_required\b|\bavailable on the [\p{L}\p{N}]+ plan only\b/iu;
+const REQUIRED_PLAN_NAME = /\bavailable on the ([\p{L}\p{N}]+) plan only\b/iu;
 
 const SUBSCRIPTION = new RegExp(
 	[
@@ -100,6 +110,7 @@ const STATUS_5XX = new RegExp(`${status(503).source}|${status(529).source}`, "iu
 export function classifyAppError(message: string): AppErrorKind {
 	const text = message.replace(PATH, " ");
 	if (MISSING.test(text)) return "model-missing";
+	if (PLAN_REQUIRED.test(text)) return "model-plan";
 	if (!LOCAL_STORAGE.test(text) && (SUBSCRIPTION.test(text) || STATUS_402.test(text))) return "model-subscription";
 	if (CREDENTIALS.test(text) || STATUS_401.test(text) || STATUS_403.test(text)) return "model-credentials";
 	if (NOT_FOUND.test(text)) return "model-not-found";
@@ -108,9 +119,14 @@ export function classifyAppError(message: string): AppErrorKind {
 	return "other";
 }
 
+/** The plan a `model-plan` error names ("Max"), as the server spelled it; null when the message does not say. */
+export function requiredPlanName(message: string): string | null {
+	return REQUIRED_PLAN_NAME.exec(message)?.[1] ?? null;
+}
+
 /** The model cannot be used at all: only Settings (or the subscription) can change that. */
 export function isModelProblem(kind: AppErrorKind): boolean {
-	return kind === "model-missing" || kind === "model-credentials" || kind === "model-subscription" || kind === "model-not-found";
+	return kind === "model-missing" || kind === "model-credentials" || kind === "model-subscription" || kind === "model-plan" || kind === "model-not-found";
 }
 
 /** The fix agent is worth offering: the model works, and the cause is the app's own setup. */
