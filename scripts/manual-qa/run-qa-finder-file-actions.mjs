@@ -2,9 +2,9 @@
  * Manual QA: the Inspector action bar follows the file's own type.
  *
  * Proves, against the real app (production build, isolated HOME and userData):
- *  1. a text file offers 열기 / 다른 앱으로 열기 / 압축 / 7z로 압축 / 공유 / AI 요약 — and no
+ *  1. a text file offers 열기 / 다른 앱으로 열기 / 압축 / 공유 / AI 요약 — and no
  *     Quick Look, copy-path, or trash button (those live elsewhere)
- *  2. 압축 really writes a zip next to the source
+ *  2. 압축 is one menu button (ZIP으로 압축 / 7z로 압축); each item writes real zip / 7z bytes
  *  3. a zip offers 압축 해제, which restores the folder
  *  4. a PNG offers 이미지 편집 -> JPEG로 변환, which writes a JPEG (real sips)
  *  4b. an iPhone-style IMG_0001.HEIC (macOS only: sips writes the fixture)
@@ -149,19 +149,36 @@ try {
 	await selectFile(page, "notes.txt");
 	const textActions = await actionLabels(page);
 	const expectedTextActions = canShare
-		? ["Open", "Open With", "Compress", "Compress as 7z", "Share", "AI Summary"]
-		: ["Open", "Open With", "Compress", "Compress as 7z", "AI Summary"];
+		? ["Open", "Open With", "Compress", "Share", "AI Summary"]
+		: ["Open", "Open With", "Compress", "AI Summary"];
 	check("text actions", JSON.stringify(textActions), JSON.stringify(expectedTextActions));
 	check("no Quick Look button", textActions.includes("Quick Look"), false);
 	await page.screenshot({ path: join(EVIDENCE, "1-text-actions.png") });
 
-	// 2. 압축 writes a real zip.
+	// 2. 압축 is one menu button; each item writes its own real archive format.
 	await page.getByRole("button", { name: "Compress", exact: true }).click();
+	const compressItems = await page.locator('[role="menu"][aria-label="More actions"] [role="menuitem"] span').allInnerTexts();
+	check("compress menu offers zip and 7z", JSON.stringify(compressItems), JSON.stringify(["Compress as ZIP", "Compress as 7z"]));
+	await sleep(400);
+	await page.screenshot({ path: join(EVIDENCE, "2a-compress-menu.png") });
+	await page.getByRole("menuitem", { name: "Compress as ZIP", exact: true }).click();
 	const zipPath = join(QA_ROOT, "notes.txt.zip");
 	await waitFor(() => existsSync(zipPath), { label: "notes.txt.zip to appear" });
-	check("compress wrote a zip", existsSync(zipPath), true);
+	await sleep(300);
+	check("compress as zip wrote zip bytes", readFileSync(zipPath).subarray(0, 2).toString("latin1"), "PK");
+	check("compress as zip wrote no 7z", existsSync(join(QA_ROOT, "notes.txt.7z")), false);
 	await page.waitForSelector(".toast", { timeout: 5000 }).catch(() => {});
-	await page.screenshot({ path: join(EVIDENCE, "2-compressed.png") });
+	await page.screenshot({ path: join(EVIDENCE, "2b-compressed-zip.png") });
+
+	await selectFile(page, "notes.txt");
+	await page.getByRole("button", { name: "Compress", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Compress as 7z", exact: true }).click();
+	const sevenPath = join(QA_ROOT, "notes.txt.7z");
+	await waitFor(() => existsSync(sevenPath), { label: "notes.txt.7z to appear" });
+	await sleep(300);
+	check("compress as 7z wrote 7z bytes", readFileSync(sevenPath).subarray(0, 6).toString("hex"), "377abcaf271c");
+	await page.waitForSelector(".toast", { timeout: 5000 }).catch(() => {});
+	await page.screenshot({ path: join(EVIDENCE, "2c-compressed-7z.png") });
 
 	// 3. A zip extracts in place.
 	await selectFile(page, "bundle.zip");

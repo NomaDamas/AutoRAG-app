@@ -95,7 +95,6 @@ describe("reduce size", () => {
 			"imageEdit",
 			"reduceSize",
 			"compress",
-			"compress7z",
 			"share",
 			"askAi",
 		]);
@@ -110,13 +109,14 @@ describe("reduce size", () => {
 describe("base action set", () => {
 	it("offers open, open-with, archive, share and AI to a plain file", () => {
 		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);
-		expect(ids(actions)).toEqual(["open", "openWith", "compress", "compress7z", "share", "askAi"]);
-		expect(actions.every((action) => action.kind === "action")).toBe(true);
+		expect(ids(actions)).toEqual(["open", "openWith", "compress", "share", "askAi"]);
+		expect(actions.filter((action) => action.kind === "menu").map((action) => action.id)).toEqual(["compress"]);
+		expect(actions.filter((action) => action.kind === "action")).toHaveLength(4);
 	});
 
 	it("drops open-with, archive and share for a folder", () => {
 		const actions = suggestedActions({ name: "docs", kind: "folder" }, DARWIN);
-		expect(ids(actions)).toEqual(["compress", "compress7z", "share", "askAi"]);
+		expect(ids(actions)).toEqual(["compress", "share", "askAi"]);
 	});
 
 	it("never offers an action the machine cannot run", () => {
@@ -135,7 +135,7 @@ describe("base action set", () => {
 describe("archives", () => {
 	it("extracts in place, before compressing", () => {
 		const actions = suggestedActions({ name: "docs.zip", kind: "file" }, DARWIN);
-		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "compress7z", "share", "askAi"]);
+		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "share", "askAi"]);
 	});
 
 	it("offers extraction for every archive format, but never a plain file", () => {
@@ -145,6 +145,39 @@ describe("archives", () => {
 		expect(ids(suggestedActions({ name: "docs.rar", kind: "file" }, DARWIN))).toContain("extract");
 		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN))).not.toContain("extract");
 		expect(ids(suggestedActions({ name: "docs.zip", kind: "file" }, NO_CAPABILITIES))).not.toContain("extract");
+	});
+});
+
+describe("compress menu", () => {
+	it("is one menu button that picks the archive format, for a file and a folder", () => {
+		for (const subject of [
+			{ name: "notes.txt", kind: "file" },
+			{ name: "docs", kind: "folder" },
+			{ name: "photo.jpg", kind: "file" },
+		] as const) {
+			const actions = suggestedActions(subject, DARWIN_FFMPEG);
+			expect(ids(actions).filter((id) => id.startsWith("compress")), subject.name).toEqual(["compress"]);
+			expect(actions.find((action) => action.id === "compress")).toMatchObject({ kind: "menu", icon: "compress", label: "압축" });
+			expect(menuItems(actions, "compress").map((item) => item.label), subject.name).toEqual(["ZIP으로 압축", "7z로 압축"]);
+		}
+	});
+
+	it("writes zip or 7z by the chosen item, each as its own compress request", () => {
+		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);
+		expect(menuItems(actions, "compress").map((item) => (item.target.kind === "request" ? item.target.request : item.target))).toEqual([
+			{ kind: "compress", format: "zip" },
+			{ kind: "compress", format: "7z" },
+		]);
+		expect(menuItems(actions, "compress").map((item) => item.id)).toEqual(["compress:zip", "compress:7z"]);
+	});
+
+	it("is absent when the machine cannot archive", () => {
+		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, NO_CAPABILITIES))).not.toContain("compress");
+		expect(ids(suggestedActions({ name: "docs", kind: "folder" }, NO_CAPABILITIES))).not.toContain("compress");
+	});
+
+	it("is also offered for an archive, which can be packed again", () => {
+		expect(ids(suggestedActions({ name: "docs.7z", kind: "file" }, DARWIN))).toContain("compress");
 	});
 });
 

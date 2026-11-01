@@ -265,6 +265,7 @@
       "open": "열기",
       "openWith": "다른 앱으로 열기",
       "compress": "압축",
+      "compressZip": "ZIP으로 압축",
       "compress7z": "7z로 압축",
       "extract": "압축 해제",
       "share": "공유",

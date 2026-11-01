@@ -199,24 +199,30 @@ export function openWithItems(applications: readonly OpenWithApplication[]): rea
  * machine.
  */
 export function suggestedActions(subject: ActionSubject, capabilities: ActionCapabilities): readonly FileAction[] {
-	if (subject.kind === "folder") {
-		const actions: FileAction[] = [];
-		if (capabilities.archive) {
-			actions.push({
-				kind: "action",
+	// One button, the format picked in its menu (like the image and video menus); the in-process archiver writes both.
+	const compress: FileAction | null = capabilities.archive
+		? {
+				kind: "menu",
 				id: "compress",
 				label: t("inspector.actions.compress"),
 				icon: "compress",
-				target: { kind: "request", request: { kind: "compress" } },
-			});
-			actions.push({
-				kind: "action",
-				id: "compress7z",
-				label: t("inspector.actions.compress7z"),
-				icon: "compress",
-				target: { kind: "request", request: { kind: "compress", format: "7z" } },
-			});
-		}
+				items: [
+					{
+						id: "compress:zip",
+						label: t("inspector.actions.compressZip"),
+						target: { kind: "request", request: { kind: "compress", format: "zip" } },
+					},
+					{
+						id: "compress:7z",
+						label: t("inspector.actions.compress7z"),
+						target: { kind: "request", request: { kind: "compress", format: "7z" } },
+					},
+				],
+			}
+		: null;
+	if (subject.kind === "folder") {
+		const actions: FileAction[] = [];
+		if (compress !== null) actions.push(compress);
 		if (capabilities.share) {
 			actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 		}
@@ -267,22 +273,7 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			target: { kind: "request", request: { kind: "reduceSize" } },
 		});
 	}
-	if (capabilities.archive) {
-		actions.push({
-			kind: "action",
-			id: "compress",
-			label: t("inspector.actions.compress"),
-			icon: "compress",
-			target: { kind: "request", request: { kind: "compress" } },
-		});
-		actions.push({
-			kind: "action",
-			id: "compress7z",
-			label: t("inspector.actions.compress7z"),
-			icon: "compress",
-			target: { kind: "request", request: { kind: "compress", format: "7z" } },
-		});
-	}
+	if (compress !== null) actions.push(compress);
 	if (capabilities.share) {
 		actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 	}

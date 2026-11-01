@@ -306,8 +306,9 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   longer extracts as `ÇÑ±Û.txt`. The wasm engine is a vendored rebuild with a
   UTF-8 locale (`scripts/libarchive-wasm/`); its licenses are
   recorded in `THIRD_PARTY_NOTICES.md`.
-- Compression writes zip (default) or 7z — "7z로 압축" is a second row beside "압축"
-  in the Inspector and context menu, a `compress` request with `format: "7z"`.
+- Compression writes zip (default) or 7z — the Inspector has one "압축" menu button
+  (like "이미지 편집") whose items "ZIP으로 압축" / "7z로 압축" send a `compress`
+  request with `format: "zip"` / `"7z"`; the context menu keeps "압축" and "7z로 압축" rows.
   The 7z writer (`src/main/sevenzip-writer.ts`) writes solid LZMA blocks (up to
   32 MiB each, so redundancy between files is shared): the LZMA encoder is
   WebAssembly (`lzma-wasm`) running in `src/main/lzma-worker.mjs`, so the main
