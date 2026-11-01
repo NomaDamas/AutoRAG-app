@@ -86,7 +86,10 @@ describe("desktop app locator on Windows", () => {
 		const host = { platform: "win32" as const, env: { LOCALAPPDATA: join(root, "AppData", "Local") }, home: root };
 
 		expect(await desktopAppInstalled("Discord", host)).toBe(false);
-		expect(await desktopAppInstalled("Obsidian", host)).toBeNull();
+		expect(await desktopAppInstalled("Obsidian", host)).toBe(false);
+		expect(await desktopAppInstalled("Telegram", host)).toBe(false);
+		expect(await desktopAppInstalled("Notion", host)).toBe(false);
+		expect(await desktopAppInstalled("Figma", host)).toBeNull();
 		expect(await desktopAppInstalled("Discord", { ...host, platform: "linux" })).toBeNull();
 	});
 
@@ -96,6 +99,49 @@ describe("desktop app locator on Windows", () => {
 		await mkdir(join(local, "Packages", "91750D7E.Slack_8she8kybcnzg4"), { recursive: true });
 
 		expect(await desktopAppInstalled("Slack", { platform: "win32", env: { LOCALAPPDATA: local }, home: root })).toBe(true);
+	});
+
+	it("finds the apps whose installers do not use the Squirrel layout: Notion and Obsidian under Programs, Telegram under Roaming", async () => {
+		const root = await home();
+		const local = join(root, "AppData", "Local");
+		const roaming = join(root, "AppData", "Roaming");
+		await mkdir(join(local, "Programs", "Notion"), { recursive: true });
+		await writeFile(join(local, "Programs", "Notion", "Notion.exe"), "");
+		await mkdir(join(local, "Programs", "Obsidian"), { recursive: true });
+		await writeFile(join(local, "Programs", "Obsidian", "Obsidian.exe"), "");
+		await mkdir(join(roaming, "Telegram Desktop"), { recursive: true });
+		await writeFile(join(roaming, "Telegram Desktop", "Telegram.exe"), "");
+		const host = { platform: "win32" as const, env: { LOCALAPPDATA: local, APPDATA: roaming }, home: root };
+
+		expect(await desktopAppInstalled("Notion", host)).toBe(true);
+		expect(await desktopAppInstalled("Obsidian", host)).toBe(true);
+		expect(await desktopAppInstalled("Telegram", host)).toBe(true);
+	});
+
+	it("finds a machine-wide install under Program Files and a Store package of Telegram", async () => {
+		const root = await home();
+		const programFiles = join(root, "Program Files");
+		await mkdir(join(programFiles, "Obsidian"), { recursive: true });
+		await writeFile(join(programFiles, "Obsidian", "Obsidian.exe"), "");
+		const local = join(root, "AppData", "Local");
+		const host = { platform: "win32" as const, env: { LOCALAPPDATA: local, ProgramFiles: programFiles }, home: root };
+		expect(await desktopAppInstalled("Obsidian", host)).toBe(true);
+
+		await mkdir(join(local, "Packages", "TelegramMessengerLLP.TelegramDesktop_t4vj0pshhgkwm"), { recursive: true });
+		expect(await desktopAppInstalled("Telegram", host)).toBe(true);
+	});
+
+	it("does not mistake the data folder an uninstalled app leaves behind for the app", async () => {
+		const root = await home();
+		const local = join(root, "AppData", "Local");
+		const roaming = join(root, "AppData", "Roaming");
+		await mkdir(join(roaming, "Telegram Desktop", "tdata"), { recursive: true });
+		await mkdir(join(roaming, "Notion"), { recursive: true });
+		await mkdir(join(local, "notion-updater"), { recursive: true });
+		const host = { platform: "win32" as const, env: { LOCALAPPDATA: local, APPDATA: roaming }, home: root };
+
+		expect(await desktopAppInstalled("Telegram", host)).toBe(false);
+		expect(await desktopAppInstalled("Notion", host)).toBe(false);
 	});
 });
 
