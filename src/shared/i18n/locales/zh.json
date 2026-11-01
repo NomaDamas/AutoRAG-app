@@ -1034,6 +1034,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "邮件 (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1044,6 +1045,7 @@
         "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
         "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
         "github": "已登录 · Issues 与 Pull Requests",
+        "notion": "发现 Notion 应用数据",
         "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },
@@ -2727,6 +2729,7 @@
       "chunkCount": "{{noun}} {{count}}",
       "noDocsYet": "尚未读取任何文档",
       "notFetchedYet": "尚未获取任何内容",
+      "notOnThisComputer": "此电脑上不可用",
       "importedNone": "未导入任何{{noun}}",
       "liveQuery": "搜索时即时查询",
       "appNeeds": "需要 {{name}} 桌面应用"
@@ -2781,7 +2784,8 @@
       "promptLabel": "连接 id",
       "promptConfirm": "添加连接",
       "macOnlyCalendar": "仅在 macOS 上可用（EventKit）。",
-      "macOnlySpotlight": "仅在 macOS 上可用（Spotlight）。"
+      "macOnlySpotlight": "仅在 macOS 上可用（Spotlight）。",
+      "macOnlyWhatsapp": "仅在 macOS 上可用（WhatsApp）。"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",
@@ -2813,7 +2817,9 @@
       "confirmTitle": "要断开此连接吗？",
       "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
       "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。",
-      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。"
+      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。",
+      "whatsappOnlyNote": "WhatsApp 通过只能找到 Mac 应用数据库的 wacrawl 读取，因此此连接在这台电脑上无效。如果你有复制出来的数据文件夹，请将其设为源路径。",
+      "spotlightOnlyNote": "Spotlight 只能通过 macOS 的 mdfind 搜索，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",

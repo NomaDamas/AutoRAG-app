@@ -464,16 +464,19 @@ describe("onboarding ETA and formatting", () => {
 
 describe("detected sources list", () => {
 	it("keeps a stable order however the probes finish", () => {
-		const arrival = [{ id: "github" }, { id: "mailcrawl" }, { id: "kakao" }, { id: "whatsapp" }] as const;
-		expect([...arrival].sort(bySourceOrder).map((source) => source.id)).toEqual(["kakao", "whatsapp", "mailcrawl", "github"]);
+		const arrival = [{ id: "obsidian" }, { id: "github" }, { id: "notion" }, { id: "mailcrawl" }, { id: "kakao" }, { id: "whatsapp" }] as const;
+		expect([...arrival].sort(bySourceOrder).map((source) => source.id)).toEqual(["kakao", "whatsapp", "mailcrawl", "github", "notion", "obsidian"]);
 	});
 
 	it("offers later only what was not found, plus brands that cannot be probed", () => {
-		const labels = (found: readonly { readonly id: "kakao" | "slack" }[]): string[] => connectableLater(found).map((chip) => chip.label);
+		const labels = (found: readonly { readonly id: "kakao" | "slack" | "notion" }[]): string[] => connectableLater(found).map((chip) => chip.label);
 		expect(labels([])).toContain("KakaoTalk");
 		expect(labels([{ id: "kakao" }])).not.toContain("KakaoTalk");
 		expect(labels([{ id: "kakao" }, { id: "slack" }])).toEqual(expect.arrayContaining(["Notion", "Google Drive"]));
 		expect(labels([{ id: "slack" }])).not.toContain("Slack");
+		// Notion is probed now: once found it is a source row, not a "connect later" chip; Google Drive still cannot be probed.
+		expect(labels([{ id: "notion" }])).not.toContain("Notion");
+		expect(labels([{ id: "notion" }])).toContain("Google Drive");
 	});
 
 	it("interpolates detected facts into the connector's detail line", () => {

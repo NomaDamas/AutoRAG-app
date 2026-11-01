@@ -64,6 +64,7 @@ const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 	whatsapp: "WhatsApp",
 	mailcrawl: "Mail",
 	github: "GitHub",
+	notion: "Notion",
 	obsidian: "Obsidian",
 };
 
@@ -196,6 +197,7 @@ const SOURCE_IDS: Readonly<Record<string, true>> = {
 	whatsapp: true,
 	mailcrawl: true,
 	github: true,
+	notion: true,
 	obsidian: true,
 };
 

@@ -67,6 +67,61 @@ describe("KakaoTalk is a macOS-only source", () => {
 	});
 });
 
+describe("WhatsApp and Spotlight are macOS-only sources too", () => {
+	it("is offered on macOS and nowhere else: wacrawl finds WhatsApp Desktop only in the macOS group container, mdfind is macOS's", () => {
+		for (const type of ["whatsapp", "spotlight", "kakao", "calendar", "apple-events"]) {
+			expect(datasourceSupported(type, "darwin"), `${type} on darwin`).toBe(true);
+			expect(datasourceSupported(type, "win32"), `${type} on win32`).toBe(false);
+		}
+		for (const type of ["slack", "discord", "telegram", "notion", "obsidian", "mailcrawl", "cloud-drive", "hister", "lark", "rss", "github"]) {
+			expect(datasourceSupported(type, "win32"), `${type} on win32`).toBe(true);
+		}
+	});
+
+	it("drops WhatsApp and Spotlight rows inherited from a Mac config before the librarian sees them, under any alias", () => {
+		const config = {
+			datasources: { whatsapp: {}, "wa-work": { type: "whatsapp" }, spotlight: { type: "spotlight" }, slack: { type: "slack" } },
+		} as unknown as CliConfig;
+
+		expect(Object.keys(withIndexingPoliciesApplied(config, "win32").datasources ?? {})).toEqual(["slack"]);
+		expect(Object.keys(withIndexingPoliciesApplied(config, "darwin").datasources ?? {})).toEqual(["whatsapp", "wa-work", "spotlight", "slack"]);
+	});
+
+	it("keeps a WhatsApp row off macOS when the user names the folder wacrawl should read, the one thing it cannot find itself", () => {
+		const config = {
+			datasources: {
+				whatsapp: { connector: { sourcePath: "D:\\copied\\group.net.whatsapp.WhatsApp.shared" } },
+				"wa-empty": { type: "whatsapp", connector: { sourcePath: " " } },
+			},
+		} as unknown as CliConfig;
+
+		expect(Object.keys(withIndexingPoliciesApplied(config, "win32").datasources ?? {})).toEqual(["whatsapp"]);
+	});
+
+	it("is never probed on Windows, even when a wacrawl binary happens to be on PATH", async () => {
+		const probed: string[] = [];
+		const root = await home();
+		const result = await detectSources({
+			platform: "win32",
+			home: root,
+			env: { LOCALAPPDATA: join(root, "AppData", "Local"), APPDATA: join(root, "AppData", "Roaming") },
+			run: async (command) => {
+				probed.push(command);
+				if (command === "wacrawl") return JSON.stringify({ desktop: { available: true, message_rows: 9, chat_rows: 1 } });
+				throw new Error(`${command}: not found`);
+			},
+			pathExists: async () => false,
+			readDirNames: async () => [],
+			readFileText: async () => {
+				throw new Error("none");
+			},
+		});
+
+		expect(probed).not.toContain("wacrawl");
+		expect(result.sources.some((source) => source.id === "whatsapp")).toBe(false);
+	});
+});
+
 describe("desktop app locator on Windows", () => {
 	it("finds a per-user Squirrel install of Discord and Slack", async () => {
 		const root = await home();
@@ -86,7 +141,10 @@ describe("desktop app locator on Windows", () => {
 		const host = { platform: "win32" as const, env: { LOCALAPPDATA: join(root, "AppData", "Local") }, home: root };
 
 		expect(await desktopAppInstalled("Discord", host)).toBe(false);
-		expect(await desktopAppInstalled("Obsidian", host)).toBeNull();
+		expect(await desktopAppInstalled("Obsidian", host)).toBe(false);
+		expect(await desktopAppInstalled("Telegram", host)).toBe(false);
+		expect(await desktopAppInstalled("Notion", host)).toBe(false);
+		expect(await desktopAppInstalled("Figma", host)).toBeNull();
 		expect(await desktopAppInstalled("Discord", { ...host, platform: "linux" })).toBeNull();
 	});
 
@@ -96,6 +154,49 @@ describe("desktop app locator on Windows", () => {
 		await mkdir(join(local, "Packages", "91750D7E.Slack_8she8kybcnzg4"), { recursive: true });
 
 		expect(await desktopAppInstalled("Slack", { platform: "win32", env: { LOCALAPPDATA: local }, home: root })).toBe(true);
+	});
+
+	it("finds the apps whose installers do not use the Squirrel layout: Notion and Obsidian under Programs, Telegram under Roaming", async () => {
+		const root = await home();
+		const local = join(root, "AppData", "Local");
+		const roaming = join(root, "AppData", "Roaming");
+		await mkdir(join(local, "Programs", "Notion"), { recursive: true });
+		await writeFile(join(local, "Programs", "Notion", "Notion.exe"), "");
+		await mkdir(join(local, "Programs", "Obsidian"), { recursive: true });
+		await writeFile(join(local, "Programs", "Obsidian", "Obsidian.exe"), "");
+		await mkdir(join(roaming, "Telegram Desktop"), { recursive: true });
+		await writeFile(join(roaming, "Telegram Desktop", "Telegram.exe"), "");
+		const host = { platform: "win32" as const, env: { LOCALAPPDATA: local, APPDATA: roaming }, home: root };
+
+		expect(await desktopAppInstalled("Notion", host)).toBe(true);
+		expect(await desktopAppInstalled("Obsidian", host)).toBe(true);
+		expect(await desktopAppInstalled("Telegram", host)).toBe(true);
+	});
+
+	it("finds a machine-wide install under Program Files and a Store package of Telegram", async () => {
+		const root = await home();
+		const programFiles = join(root, "Program Files");
+		await mkdir(join(programFiles, "Obsidian"), { recursive: true });
+		await writeFile(join(programFiles, "Obsidian", "Obsidian.exe"), "");
+		const local = join(root, "AppData", "Local");
+		const host = { platform: "win32" as const, env: { LOCALAPPDATA: local, ProgramFiles: programFiles }, home: root };
+		expect(await desktopAppInstalled("Obsidian", host)).toBe(true);
+
+		await mkdir(join(local, "Packages", "TelegramMessengerLLP.TelegramDesktop_t4vj0pshhgkwm"), { recursive: true });
+		expect(await desktopAppInstalled("Telegram", host)).toBe(true);
+	});
+
+	it("does not mistake the data folder an uninstalled app leaves behind for the app", async () => {
+		const root = await home();
+		const local = join(root, "AppData", "Local");
+		const roaming = join(root, "AppData", "Roaming");
+		await mkdir(join(roaming, "Telegram Desktop", "tdata"), { recursive: true });
+		await mkdir(join(roaming, "Notion"), { recursive: true });
+		await mkdir(join(local, "notion-updater"), { recursive: true });
+		const host = { platform: "win32" as const, env: { LOCALAPPDATA: local, APPDATA: roaming }, home: root };
+
+		expect(await desktopAppInstalled("Telegram", host)).toBe(false);
+		expect(await desktopAppInstalled("Notion", host)).toBe(false);
 	});
 });
 

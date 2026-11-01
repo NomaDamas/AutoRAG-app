@@ -1034,6 +1034,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "メール (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1044,6 +1045,7 @@
         "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
         "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
         "github": "ログイン済み · IssuesとPull Requests",
+        "notion": "Notion アプリのデータを検出",
         "obsidian": "Vault {{vaults}}件を検出"
       }
     },
@@ -2727,6 +2729,7 @@
       "chunkCount": "{{noun}} {{count}}個",
       "noDocsYet": "まだ読み込んだドキュメントなし",
       "notFetchedYet": "まだ内容を取得していません",
+      "notOnThisComputer": "このコンピューターでは利用できません",
       "importedNone": "取り込んだ{{noun}}なし",
       "liveQuery": "検索時に都度照会",
       "appNeeds": "{{name}} デスクトップアプリが必要"
@@ -2781,7 +2784,8 @@
       "promptLabel": "接続 ID",
       "promptConfirm": "接続を追加",
       "macOnlyCalendar": "macOS（EventKit）でのみ利用できます。",
-      "macOnlySpotlight": "macOS（Spotlight）でのみ利用できます。"
+      "macOnlySpotlight": "macOS（Spotlight）でのみ利用できます。",
+      "macOnlyWhatsapp": "macOS（WhatsApp）でのみ利用できます。"
     },
     "sourceDetail": {
       "fallbackSummary": "この接続の設定を管理します。",
@@ -2813,7 +2817,9 @@
       "confirmTitle": "接続を解除しますか？",
       "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
       "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
-      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。"
+      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。",
+      "whatsappOnlyNote": "WhatsApp は Mac アプリのデータベースだけを読み取れる wacrawl で取得するため、このコンピューターでは接続は無効です。コピーしたデータフォルダがある場合は、ソースパスに指定してください。",
+      "spotlightOnlyNote": "Spotlight は macOS の mdfind でのみ検索できるため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",
