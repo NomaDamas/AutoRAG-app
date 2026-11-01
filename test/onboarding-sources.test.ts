@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { describe, expect, it } from "vitest";
 import { detectSources } from "../src/main/onboarding-sources";
 
@@ -121,34 +123,75 @@ describe("onboarding datasource detection", () => {
 	});
 
 	describe("Notion", () => {
-		const notion = (doctor: unknown, probed: string[] = []) =>
+		const READY = { desktop_available: true, desktop_size: 11370496, api_token_present: false };
+		interface Seen {
+			readonly commands: string[];
+			readonly configs: string[];
+			readonly configText: string[];
+		}
+		const seen = (): Seen => ({ commands: [], configs: [], configText: [] });
+		/**
+		 * A fake notcrawl. `doctor` answers from `doctor`; a desktop sync imports the app's cache into the archive
+		 * named by `--config`, and `status` then reports how many pages that archive holds.
+		 */
+		const notion = (doctor: unknown, archive: { readonly pages: number } | "sync-fails", log: Seen = seen()) =>
 			script({
 				notcrawl: (args) => {
-					probed.push(args.join(" "));
-					return ok(doctor);
+					log.commands.push(args.join(" "));
+					if (args.join(" ") === "doctor --json") return ok(doctor);
+					if (args[0] !== "--config") throw new Error(`unexpected notcrawl args: ${args.join(" ")}`);
+					const config = args[1] ?? "";
+					log.configs.push(config);
+					if (args[2] === "sync") {
+						if (archive === "sync-fails") throw new Error("exit status 1");
+						log.configText.push(readFileSync(config, "utf8"));
+						return "desktop: done";
+					}
+					if (args[2] === "status") return ok({ pages: archive === "sync-fails" ? 0 : archive.pages });
+					throw new Error(`unexpected notcrawl args: ${args.join(" ")}`);
 				},
 			});
 
-		it("is offered from notcrawl's own health output once Notion Desktop's cache holds data, without importing anything", async () => {
-			const probed: string[] = [];
-			const result = await detectSources({
-				...deps(notion({ desktop_available: true, desktop_size: 11370496, api_token_present: false }, probed)),
-				...noGithub,
-				platform: "darwin",
-			});
+		it("is offered once Notion Desktop is signed in: its cache imported into a throwaway archive holds pages", async () => {
+			const log = seen();
+			const result = await detectSources({ ...deps(notion(READY, { pages: 1464 }, log)), ...noGithub, platform: "darwin" });
 
 			expect(result.sources).toEqual([{ id: "notion", facts: {} }]);
-			expect(probed).toEqual(["doctor --json"]);
+			expect(log.commands.map((command) => command.replace(/^--config \S+ /u, ""))).toEqual(["doctor --json", "sync --source desktop", "status"]);
+			// Never the user's own ~/.notcrawl archive: one temp config, desktop only, API off, removed afterwards.
+			const [config] = log.configs;
+			expect(new Set(log.configs).size).toBe(1);
+			expect(config).toBeDefined();
+			expect(config?.startsWith("/home/test")).toBe(false);
+			expect(log.configText[0]).toContain("[notion.api]\nenabled = false");
+			expect(existsSync(dirname(config ?? "/"))).toBe(false);
+		});
+
+		it("is hidden when the app is installed but nobody is signed in: the cache file exists yet holds no pages", async () => {
+			// A fresh Notion.app writes a ~480 KB notion.db on first launch; `doctor` already calls that available.
+			const result = await detectSources({ ...deps(notion({ ...READY, desktop_size: 483328 }, { pages: 0 })), ...noGithub, platform: "darwin" });
+
+			expect(ids(result)).toEqual([]);
+		});
+
+		it("is hidden, and leaves nothing behind, when the cache cannot be imported", async () => {
+			const log = seen();
+			const result = await detectSources({ ...deps(notion(READY, "sync-fails", log)), ...noGithub, platform: "darwin" });
+
+			expect(ids(result)).toEqual([]);
+			expect(existsSync(dirname(log.configs[0] ?? "/"))).toBe(false);
 		});
 
 		it.each([
 			["Notion Desktop is not installed", { desktop_available: false, desktop_size: 0 }],
 			["its cache is empty", { desktop_available: true, desktop_size: 0 }],
 			["only an API token is set, which needs a Notion integration rather than the signed-in app", { desktop_available: false, api_token_present: true }],
-		])("is hidden when %s", async (_name, doctor) => {
-			const result = await detectSources({ ...deps(notion(doctor)), ...noGithub, platform: "darwin" });
+		])("is hidden without importing anything when %s", async (_name, doctor) => {
+			const log = seen();
+			const result = await detectSources({ ...deps(notion(doctor, { pages: 9 }, log)), ...noGithub, platform: "darwin" });
 
 			expect(ids(result)).toEqual([]);
+			expect(log.commands).toEqual(["doctor --json"]);
 		});
 
 		it("is hidden when notcrawl is not installed", async () => {
