@@ -1,3 +1,5 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { datasourceSupported, kakaoSupported } from "../shared/messenger-platform";
 import type { DetectedSource, SourceDetection, SourceId } from "../shared/onboarding-contract";
@@ -184,13 +186,37 @@ async function detectWhatsapp(deps: SourceDetectionDeps): Promise<DetectedSource
 
 /**
  * Notion Desktop's local cache, which `notcrawl sync` (the skill's only sync command) reads with no token. `doctor`
- * reports the cache file on every OS (`desktop_available`, `desktop_size`) and writes nothing, so detection imports
- * nothing; an API token alone does not count, because that needs a Notion integration rather than the signed-in app.
+ * calls the cache available as soon as the app has run once: a fresh Notion.app writes a ~480 KB `notion.db` with no
+ * workspace in it, and a source that holds nothing would fail its first index. So `doctor` only gates the real probe,
+ * which imports the cache into a throwaway archive (its own config, never `~/.notcrawl`, deleted afterwards) and
+ * offers Notion when that archive holds pages. An API token alone does not count: that needs a Notion integration
+ * rather than the signed-in app.
  */
 async function detectNotion(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
 	const doctor = await runJsonObject(deps, "notcrawl", ["doctor", "--json"]);
 	if (doctor === null || doctor.desktop_available !== true || positiveInt(doctor.desktop_size) === 0) return null;
-	return { id: "notion", facts: {} };
+	const probeDir = await mkdtemp(join(tmpdir(), "dazzi-notion-probe-"));
+	try {
+		const config = join(probeDir, "config.toml");
+		await writeFile(
+			config,
+			[
+				`db_path = ${JSON.stringify(join(probeDir, "notcrawl.db"))}`,
+				`cache_dir = ${JSON.stringify(join(probeDir, "cache"))}`,
+				`markdown_dir = ${JSON.stringify(join(probeDir, "pages"))}`,
+				"[notion.desktop]",
+				"enabled = true",
+				"[notion.api]",
+				"enabled = false",
+				"",
+			].join("\n"),
+		);
+		await deps.run("notcrawl", ["--config", config, "sync", "--source", "desktop"]);
+		const status = await runJsonObject(deps, "notcrawl", ["--config", config, "status"]);
+		return positiveInt(status?.pages) > 0 ? { id: "notion", facts: {} } : null;
+	} finally {
+		await rm(probeDir, { recursive: true, force: true });
+	}
 }
 
 /**
