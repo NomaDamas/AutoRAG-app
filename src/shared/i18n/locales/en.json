@@ -2727,6 +2727,7 @@
       "chunkCount": "{{count}} {{noun}}",
       "noDocsYet": "No documents read yet",
       "notFetchedYet": "No content fetched yet",
+      "notOnThisComputer": "Not available on this computer",
       "importedNone": "No {{noun}} imported",
       "liveQuery": "Queried live on search",
       "appNeeds": "{{name}} desktop app required"

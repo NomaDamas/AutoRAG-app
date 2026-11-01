@@ -2727,6 +2727,7 @@
       "chunkCount": "{{noun}} {{count}}",
       "noDocsYet": "尚未读取任何文档",
       "notFetchedYet": "尚未获取任何内容",
+      "notOnThisComputer": "此电脑上不可用",
       "importedNone": "未导入任何{{noun}}",
       "liveQuery": "搜索时即时查询",
       "appNeeds": "需要 {{name}} 桌面应用"

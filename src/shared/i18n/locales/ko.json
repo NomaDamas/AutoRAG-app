@@ -2727,6 +2727,7 @@
       "chunkCount": "{{noun}} {{count}}개",
       "noDocsYet": "아직 읽은 문서 없음",
       "notFetchedYet": "아직 내용을 가져오지 않았습니다",
+      "notOnThisComputer": "이 컴퓨터에서는 사용할 수 없습니다",
       "importedNone": "가져온 {{noun}} 없음",
       "liveQuery": "검색할 때 바로 조회",
       "appNeeds": "{{name}} 컴퓨터 앱 필요"

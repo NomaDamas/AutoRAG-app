@@ -2727,6 +2727,7 @@
       "chunkCount": "{{noun}} {{count}}個",
       "noDocsYet": "まだ読み込んだドキュメントなし",
       "notFetchedYet": "まだ内容を取得していません",
+      "notOnThisComputer": "このコンピューターでは利用できません",
       "importedNone": "取り込んだ{{noun}}なし",
       "liveQuery": "検索時に都度照会",
       "appNeeds": "{{name}} デスクトップアプリが必要"

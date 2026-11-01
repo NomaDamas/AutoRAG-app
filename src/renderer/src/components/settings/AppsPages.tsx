@@ -106,6 +106,7 @@ function sourceMeta(row: DataSourceRow): string {
 	if (row.install.app.required && row.install.app.installed === false) return t("settingsSources.meta.appNeeds", { name: row.install.app.name });
 	if (state === "empty") return t("settingsSources.meta.importedNone", { noun });
 	if (state === "live") return t("settingsSources.meta.liveQuery");
+	if (row.install.state === "unsupported" && !datasourceSupported(row.type, hostPlatform())) return t("settingsSources.meta.notOnThisComputer");
 	if (row.install.state === "unsupported") return row.install.detail;
 	if (row.install.state === "missing") return row.install.detail;
 	return t("settingsSources.meta.notFetchedYet");
