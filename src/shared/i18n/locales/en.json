@@ -366,6 +366,11 @@
       "title": "Your subscription or usage limit is blocking the AI model",
       "hint": "The subscription may have expired or the usage may be used up. Check Subscription & Usage, or pick another model in the model settings."
     },
+    "modelPlan": {
+      "title": "The selected AI model isn’t included in your plan",
+      "hint": "This model is only available on a higher plan. Upgrade your plan, or pick a model your current plan includes in the model settings.",
+      "hintNamed": "This model is only available on the {{plan}} plan. Upgrade to {{plan}}, or pick a model your current plan includes in the model settings."
+    },
     "modelNotFound": {
       "title": "The selected AI model can’t be found",
       "hint": "The model may have been retired or renamed. Pick another model in the model settings."

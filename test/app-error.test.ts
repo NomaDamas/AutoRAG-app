@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { canFixWithAi, classifyAppError, isModelProblem, type AppErrorKind } from "../src/shared/app-error";
+import { canFixWithAi, classifyAppError, isModelProblem, requiredPlanName, type AppErrorKind } from "../src/shared/app-error";
+
+/** What a Pro account gets from Dazzi for a Max-only model, exactly as the app showed it (librarian's wrapper + the server's body). */
+const MAX_ONLY_MODEL_ERROR =
+	'dazzi API error (403): {"message":"The model `moonshotai/kimi-k3.1-pro` is available on the Max plan only. Upgrade to Max in the dashboard, or list the models your plan can use with GET /v1/models.","type":"invalid_request_error","code":"plan_upgrade_required"}';
 
 /** Wordings taken from what pi, the librarian and the OpenAI/Anthropic SDKs really throw, not invented ones. */
 const CASES: readonly (readonly [string, AppErrorKind])[] = [
@@ -21,6 +25,9 @@ const CASES: readonly (readonly [string, AppErrorKind])[] = [
 	["Your credit balance is too low to access the API.", "model-subscription"],
 	["403 Your plan does not include this model", "model-subscription"],
 	["usage_limit_exceeded", "model-subscription"],
+
+	[MAX_ONLY_MODEL_ERROR, "model-plan"],
+	["403 plan_upgrade_required", "model-plan"],
 
 	["Unknown configured model: dazzi/deepseek/old-model. Run `autorag models list`.", "model-not-found"],
 	["Model \"gpt-x\" not found for provider \"openai\"", "model-not-found"],
@@ -62,6 +69,20 @@ describe("classifyAppError", () => {
 		expect(classifyAppError("ENOENT: no such file or directory, open '/Users/me/Billing/subscription.pdf'")).toBe("other");
 		expect(classifyAppError("Cannot open C:\\Users\\me\\Unauthorized\\plan.xlsx")).toBe("other");
 	});
+
+	it("tells a model the plan does not include apart from a spent plan, though both mention the plan and the 403", () => {
+		// "your plan" in the server's wording would otherwise read as used-up credits, and the 403 as a rejected key.
+		expect(classifyAppError(MAX_ONLY_MODEL_ERROR)).toBe("model-plan");
+		expect(classifyAppError("You have reached your usage limit for this plan.")).toBe("model-subscription");
+	});
+});
+
+describe("requiredPlanName", () => {
+	it("reads the plan the server names, and nothing when it names none", () => {
+		expect(requiredPlanName(MAX_ONLY_MODEL_ERROR)).toBe("Max");
+		expect(requiredPlanName("403 plan_upgrade_required")).toBeNull();
+		expect(requiredPlanName("402 Payment Required")).toBeNull();
+	});
 });
 
 describe("what each kind allows", () => {
@@ -69,6 +90,7 @@ describe("what each kind allows", () => {
 		expect(isModelProblem("model-missing")).toBe(true);
 		expect(isModelProblem("model-credentials")).toBe(true);
 		expect(isModelProblem("model-subscription")).toBe(true);
+		expect(isModelProblem("model-plan")).toBe(true);
 		expect(isModelProblem("model-not-found")).toBe(true);
 		expect(isModelProblem("rate-limit")).toBe(false);
 		expect(isModelProblem("network")).toBe(false);
@@ -77,7 +99,7 @@ describe("what each kind allows", () => {
 
 	it("offers the AI fix only for errors that are not about reaching or paying for the model", () => {
 		expect(canFixWithAi("other")).toBe(true);
-		for (const kind of ["model-missing", "model-credentials", "model-subscription", "model-not-found", "rate-limit", "network"] as const) {
+		for (const kind of ["model-missing", "model-credentials", "model-subscription", "model-plan", "model-not-found", "rate-limit", "network"] as const) {
 			expect(canFixWithAi(kind)).toBe(false);
 		}
 	});

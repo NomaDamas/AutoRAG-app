@@ -10,7 +10,7 @@
  */
 
 import type { TFunction } from "i18next";
-import { classifyAppError, type AppErrorKind } from "../../../shared/app-error";
+import { classifyAppError, requiredPlanName, type AppErrorKind } from "../../../shared/app-error";
 import type { LocaleKey } from "../../../shared/i18n";
 import type { SearchErrorAction } from "../../../shared/search-contract";
 
@@ -43,6 +43,7 @@ const COPY: Readonly<Record<AppErrorKind, Copy>> = {
 	"model-missing": { title: "appError.modelMissing.title", hint: "appError.modelMissing.hint" },
 	"model-credentials": { title: "appError.modelCredentials.title", hint: "appError.modelCredentials.hint" },
 	"model-subscription": { title: "appError.modelSubscription.title", hint: "appError.modelSubscription.hint" },
+	"model-plan": { title: "appError.modelPlan.title", hint: "appError.modelPlan.hint" },
 	"model-not-found": { title: "appError.modelNotFound.title", hint: "appError.modelNotFound.hint" },
 	"rate-limit": { title: "appError.rateLimit.title", hint: "appError.rateLimit.hint" },
 	network: { title: "appError.network.title", hint: "appError.network.hint" },
@@ -58,6 +59,11 @@ const PLAN: Readonly<Record<AppErrorKind, readonly (readonly [ErrorActionId, boo
 		["open-plan", false],
 	],
 	"model-subscription": [
+		["open-plan", true],
+		["open-ai", false],
+	],
+	// Upgrading is the direct cure; any model the current plan includes is the other way out.
+	"model-plan": [
 		["open-plan", true],
 		["open-ai", false],
 	],
@@ -95,10 +101,12 @@ export function describeAppError(message: string, serverAction: SearchErrorActio
 	}
 	const kind = serverAction === "new-chat" ? "context-overflow" : classifyAppError(message);
 	const copy = COPY[kind];
+	// The server names the plan the model needs; say it, since "a higher plan" leaves the user guessing which.
+	const plan = kind === "model-plan" ? requiredPlanName(message) : null;
 	return {
 		kind,
 		title: t(copy.title),
-		hint: t(copy.hint),
+		hint: plan === null ? t(copy.hint) : t("appError.modelPlan.hintNamed", { plan }),
 		actions: PLAN[kind].map(([id, primary]) => ({ id, label: label(id, t), primary })),
 	};
 }
