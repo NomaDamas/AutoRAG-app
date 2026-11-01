@@ -120,6 +120,44 @@ describe("onboarding datasource detection", () => {
 		]);
 	});
 
+	describe("Notion", () => {
+		const notion = (doctor: unknown, probed: string[] = []) =>
+			script({
+				notcrawl: (args) => {
+					probed.push(args.join(" "));
+					return ok(doctor);
+				},
+			});
+
+		it("is offered from notcrawl's own health output once Notion Desktop's cache holds data, without importing anything", async () => {
+			const probed: string[] = [];
+			const result = await detectSources({
+				...deps(notion({ desktop_available: true, desktop_size: 11370496, api_token_present: false }, probed)),
+				...noGithub,
+				platform: "darwin",
+			});
+
+			expect(result.sources).toEqual([{ id: "notion", facts: {} }]);
+			expect(probed).toEqual(["doctor --json"]);
+		});
+
+		it.each([
+			["Notion Desktop is not installed", { desktop_available: false, desktop_size: 0 }],
+			["its cache is empty", { desktop_available: true, desktop_size: 0 }],
+			["only an API token is set, which needs a Notion integration rather than the signed-in app", { desktop_available: false, api_token_present: true }],
+		])("is hidden when %s", async (_name, doctor) => {
+			const result = await detectSources({ ...deps(notion(doctor)), ...noGithub, platform: "darwin" });
+
+			expect(ids(result)).toEqual([]);
+		});
+
+		it("is hidden when notcrawl is not installed", async () => {
+			const result = await detectSources({ ...deps(script({})), ...noGithub, platform: "darwin" });
+
+			expect(ids(result)).toEqual([]);
+		});
+	});
+
 	it.each([
 		["discord with an empty cache", "discrawl", (args: readonly string[]) => (args.includes("doctor") ? ok({ config: "ok", database: "ok" }) : ok({ messages: 0 }))],
 		["discord with no ready archive database", "discrawl", () => ok({ config: "ok", database: "missing", messages: 5 })],

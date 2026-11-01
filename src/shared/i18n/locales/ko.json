@@ -1034,6 +1034,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "메일 (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1044,6 +1045,7 @@
         "whatsapp": "대화 {{chats}}개 · 메시지 {{messages}}개",
         "mailcrawl": "메일 계정 {{accounts}}개 로그인 확인됨",
         "github": "로그인됨 · Issues와 Pull Requests",
+        "notion": "Notion 앱 데이터 감지됨",
         "obsidian": "Vault {{vaults}}개 발견"
       }
     },
