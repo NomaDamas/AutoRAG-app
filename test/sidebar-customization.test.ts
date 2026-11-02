@@ -195,4 +195,17 @@ describe("settingsService sidebar persistence in settings-state.json", () => {
 		const reloaded = await createSettingsService(createStubDeps(dir)).get();
 		expect(reloaded.sidebar.hiddenItems).toEqual(["place:trash"]);
 	});
+
+	it("expands ~\\ and ~/ custom favorite paths against the resolved OS home location in navGroups", () => {
+		const winLocations: readonly FsLocation[] = [
+			place("김동규", "favorites", "home", "C:\\Users\\김동규"),
+			place("Documents", "favorites", "documents", "C:\\Users\\김동규\\Documents"),
+		];
+		const groups = navGroups(winLocations, [], {
+			...DEFAULT_SIDEBAR_SETTINGS,
+			customFavorites: [{ path: "~\\Documents\\문서보관함" }],
+		});
+		const pinned = groups[0]?.items.find((item) => item.label === "문서보관함");
+		expect(pinned?.path).toBe("C:\\Users\\김동규\\Documents\\문서보관함");
+	});
 });

@@ -231,16 +231,27 @@ export function SidebarPage({
 	};
 
 	const addCustomFavorite = (rawPath: string): void => {
-		const normalizedPath = normalizeTypedPath(rawPath, homePath);
-		if (normalizedPath.length === 0) return;
-		const nextCustom = [...sidebar.customFavorites.filter((item) => item.path !== normalizedPath), { path: normalizedPath }];
-		const nextHidden = sidebar.hiddenItems.filter((id) => id !== customSidebarItemId(normalizedPath));
 		setAddFolderOpen(false);
-		void updateSidebar({
-			...sidebar,
-			customFavorites: nextCustom,
-			hiddenItems: nextHidden,
-		});
+		void (async () => {
+			let effectiveHome = homePath;
+			if (effectiveHome === null) {
+				const fs = getFsReader();
+				if (fs !== undefined) {
+					const loaded = await fs.locations().catch(() => [] as readonly FsLocation[]);
+					if (loaded.length > 0) setLocations(loaded);
+					effectiveHome = loaded.find((loc) => loc.section === "favorites" && loc.icon === "home")?.path ?? null;
+				}
+			}
+			const normalizedPath = normalizeTypedPath(rawPath, effectiveHome);
+			if (normalizedPath.length === 0) return;
+			const nextCustom = [...sidebar.customFavorites.filter((item) => item.path !== normalizedPath), { path: normalizedPath }];
+			const nextHidden = sidebar.hiddenItems.filter((id) => id !== customSidebarItemId(normalizedPath));
+			await updateSidebar({
+				...sidebar,
+				customFavorites: nextCustom,
+				hiddenItems: nextHidden,
+			});
+		})();
 	};
 
 	const removeCustomFavorite = (path: string): void => {

@@ -182,7 +182,7 @@ try {
 	const sidebarLabels = async () =>
 		page.locator(".sidebar .sidebar__item-label").allInnerTexts();
 
-	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
+	await page.locator(".sidebar .sidebar__item-label", { hasText: "문서" }).waitFor({ timeout: 30_000 });
 	const initialLabels = await sidebarLabels();
 	check(
 		"Sidebar starts with AI 검색 and 자동화 at top of Favorites",

@@ -165,7 +165,10 @@ describe("magic-action-service execution", () => {
 						extensions: ["txt"],
 						execution: {
 							kind: "script",
-							command: 'printf "count=%s first=%s argc=%s\\n" "$DAZZI_FILE_COUNT" "$DAZZI_FILE" "$#"',
+							command:
+								process.platform === "win32"
+									? 'Write-Output "count=$($env:DAZZI_FILE_COUNT) first=$($env:DAZZI_FILE) argc=$($args.Count)"'
+									: 'printf "count=%s first=%s argc=%s\\n" "$DAZZI_FILE_COUNT" "$DAZZI_FILE" "$#"',
 						},
 					},
 				],
