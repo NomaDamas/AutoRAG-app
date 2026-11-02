@@ -68,7 +68,10 @@ export function modeDescriptionKey(mode: ApprovalMode): ModeDescriptionKey {
 
 // --------------------------------------------------------- approval labels
 
-export type ApprovalHeadlineKey = "interaction.approval.headlineChange" | "interaction.approval.headlineRun";
+export type ApprovalHeadlineKey =
+	| "interaction.approval.headlineChange"
+	| "interaction.approval.headlineRun"
+	| "interaction.approval.headlineUnclassified";
 
 export type SessionAllowKey =
 	| "interaction.allowSession.categories"
@@ -79,11 +82,21 @@ export type CategoryKey = `interaction.category.${ChangeCategory}`;
 
 /**
  * The card's headline. `sessionScope` is `all` only in `ask`, where nothing was
- * classified: the question is whether the call may run at all. Otherwise the
- * gate flagged a change to existing files and asks whether it may proceed.
+ * classified on purpose: the question is whether the call may run at all.
+ * `unclassified` is a call the judgement model could not read (unreachable, no
+ * credential): nothing is known about it, so the card must not claim it changes
+ * files. Otherwise the gate flagged a change to existing files and asks whether
+ * it may proceed.
  */
 export function approvalHeadlineKey(request: ApprovalRequest): ApprovalHeadlineKey {
-	return request.sessionScope === "all" ? "interaction.approval.headlineRun" : "interaction.approval.headlineChange";
+	switch (request.sessionScope) {
+		case "all":
+			return "interaction.approval.headlineRun";
+		case "unclassified":
+			return "interaction.approval.headlineUnclassified";
+		case "categories":
+			return "interaction.approval.headlineChange";
+	}
 }
 
 /** What "allow for this session" covers, as the label key for that scope. */
@@ -106,12 +119,19 @@ export function categoryKey(category: ChangeCategory): CategoryKey {
 /**
  * The gate's `reason` is English model text. In `ask` (`sessionScope: "all"`) it
  * only names the tool, so it is noise beside the call that already shows it; the
- * judgement model's reason in `auto` is the sentence worth reading. Never show
- * an empty line.
+ * judgement model's reason in `auto` is the sentence worth reading. For a call
+ * that could not be classified the reason is a configuration or transport error
+ * (a missing key, a timeout), never a sentence for the person: it is replaced by
+ * {@link approvalNoteKey}. Never show an empty line.
  */
 export function approvalReasonVisible(request: ApprovalRequest): boolean {
 	const reason = request.reason.trim();
-	return reason.length > 0 && request.sessionScope !== "all" && reason !== request.call.trim();
+	return reason.length > 0 && request.sessionScope === "categories" && reason !== request.call.trim();
+}
+
+/** The app's own sentence for why a call could not be classified; null when the card has nothing to add. */
+export function approvalNoteKey(request: ApprovalRequest): "interaction.approval.noteUnclassified" | null {
+	return request.sessionScope === "unclassified" ? "interaction.approval.noteUnclassified" : null;
 }
 
 // ------------------------------------------------------------ answer shapes
