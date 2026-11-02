@@ -886,19 +886,14 @@
     },
     "folders": {
       "eyebrow": "インデックス作成の範囲",
-      "title": "AIが読むフォルダを選んでください",
-      "lead": "選択したフォルダのファイルだけをAIが読み取ります。フォルダは後からいつでも追加・削除できます。",
+      "title": "インデックスするフォルダを選択してください",
+      "lead": "選択したフォルダ内の文書をAIが検索できるように準備します。",
       "suggested": "おすすめフォルダ",
       "selectAll": "すべて選択",
       "add": "フォルダを直接追加",
       "stats": "{{files}}件 · {{size}} · 約{{minutes}}分",
       "scanning": "集計中…",
-      "scanError": "読み取れません",
-      "summary": "{{folders}}フォルダ · {{files}}ファイル · {{size}}",
-      "summaryNote": "開発者用フォルダと50MBを超える大きなファイルは自動的に除外されます。",
-      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。",
-      "summaryEmpty": "フォルダを1つ以上選択してください",
-      "etaLabel": "処理時間"
+      "scanError": "読み取れません"
     },
     "smartScope": {
       "policy": {
@@ -935,22 +930,22 @@
       "rescan": "もう一度おすすめ"
     },
     "embedding": {
-      "title": "埋め込みをどう使いますか？",
+      "title": "文書をどのように分析しますか？",
       "groupLabel": "埋め込み方法",
       "card": {
         "none": {
           "name": "キーワードで探す",
-          "line": "入力した単語を含む文書だけを探します。"
+          "line": "入力した語句を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "Dazziサーバーで分析",
-          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
+          "name": "サーバーで分析",
+          "line": "文書の内容は分析のため AutoRAG サーバーに送信されます。"
         },
         "local": {
           "nameMac": "自分のMacで分析",
           "namePc": "自分のPCで分析",
-          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
-          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
+          "lineMac": "すべての分析をこの Mac 内で行います。文書が外部に出ることはありません。",
+          "linePc": "すべての分析をこの PC 内で行います。文書が外部に出ることはありません。"
         }
       },
       "meter": {
@@ -962,7 +957,7 @@
         "good": "良い"
       },
       "meterAria": "{{label}}: {{value}}",
-      "prepTime": "準備時間",
+      "prepTime": "インデックスの予想時間",
       "about": "約",
       "minutes": "{{minutes}}分",
       "cached": "準備完了",
@@ -979,7 +974,7 @@
     "sources": {
       "title": "このPCで見つかったアプリも検索範囲に含めますか？",
       "checking": "追加できるソースを確認しています…",
-      "empty": "接続済みのソースが見つかりませんでした。後で設定から接続できます。",
+      "empty": "接続済みのソースは見つかりませんでした。",
       "connectMore": "準備が必要なソースは後で設定から接続できます。",
       "name": {
         "kakao": "KakaoTalk",
@@ -998,7 +993,7 @@
         "telegram": "Telegramアプリのデータを検出",
         "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
         "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
-        "github": "ログイン済み · IssuesとPull Requests",
+        "github": "gh にログイン済み · Issues と Pull Requests",
         "obsidian": "Vault {{vaults}}件を検出"
       }
     },

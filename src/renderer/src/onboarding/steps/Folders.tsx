@@ -5,7 +5,7 @@ import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { Multiline } from "../parts";
-import { canSelectCloudEmbedding, etaMinutes, formatSize, localEmbeddingAllowed, resolveEmbed } from "../flow";
+import { etaMinutes, formatSize } from "../flow";
 import type { OnboardingCtx } from "../context";
 
 function folderIcon(kind: FolderKind): string {
@@ -31,20 +31,6 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 
 	const selectedPaths = new Set(draft.folders.filter((f) => f.selected).map((f) => f.path));
 	const allSelected = candidates.length > 0 && candidates.every((c) => selectedPaths.has(c.path));
-
-	let files = 0;
-	let bytes = 0;
-	for (const path of selectedPaths) {
-		const scan = scans.get(path);
-		if (scan !== undefined) {
-			files += scan.files;
-			bytes += scan.bytes;
-		}
-	}
-	// The time shown is for the way the documents will be embedded, as chosen (or defaulted) on the embedding step.
-	const mode = resolveEmbed(draft.embed, canSelectCloudEmbedding(ctx.account), localEmbeddingAllowed(ctx.embedding === null ? null : ctx.embedding.localSpec));
-	const eta = files === 0 ? 0 : etaMinutes(files, mode);
-	const localEta = etaMinutes(files, "local");
 
 	const card = (candidate: FolderCandidate): ReactElement => {
 		const selected = selectedPaths.has(candidate.path);
@@ -107,30 +93,6 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						<Icon name="plus" size={15} />
 						<span>{t("onboarding.folders.add")}</span>
 					</div>
-				</div>
-				<div className="folder-summary">
-					<div className="summary-main">
-						<strong>
-							{selectedPaths.size === 0
-								? t("onboarding.folders.summaryEmpty")
-								: t("onboarding.folders.summary", {
-										folders: selectedPaths.size,
-										files: files.toLocaleString(),
-										size: formatSize(bytes),
-									})}
-						</strong>
-						<small>{t("onboarding.folders.summaryNote")}</small>
-					</div>
-					<div className="eta-row">
-						<span>{t("onboarding.folders.etaLabel")}</span>
-						<span className="eta-value">
-							<span className="eta-about">{t("onboarding.embedding.about")}</span>
-							<b>{t("onboarding.embedding.minutes", { minutes: eta })}</b>
-						</span>
-					</div>
-				</div>
-				<div className={cn("summary-warning", localEta <= 120 && "hidden")}>
-					<Icon name="triangle-alert" size={12} /> {t("onboarding.folders.warning")}
 				</div>
 			</div>
 		</section>

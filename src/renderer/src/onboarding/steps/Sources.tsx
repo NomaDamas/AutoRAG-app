@@ -1,6 +1,7 @@
 /** Step 6 — connectors the app found usable, streamed in as each probe finishes (Figma 07 · sources). */
 
 import type { ReactElement } from "react";
+import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { BrandChip, SourceIcon, Switch } from "../parts";
 import { connectableLater, sourceDetail } from "../flow";
@@ -13,7 +14,7 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 	const more = connectableLater(sources, hostPlatform());
 
 	return (
-		<section className="screen sources-screen">
+		<section className={cn("screen sources-screen", !sourcesChecking && sources.length === 0 && "none-found")}>
 			<h1>{t("onboarding.sources.title")}</h1>
 			<div className="source-list">
 				{sources.map((source) => {

@@ -162,10 +162,27 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 }
 
 /* The plan screen is centred in the stage top and bottom, not hung from the top. */
+/* The heading and cards keep Figma's place in any frame (166 above : 174 below); the promo hangs in the space below, so it does not move them. */
 .onb .screen.plan-screen {
-	justify-content: center;
-	padding-top: 34px;
-	padding-bottom: 34px;
+	display: grid;
+	grid-template-rows: minmax(0,166fr) auto auto minmax(max-content,174fr);
+	justify-content: stretch;
+	justify-items: center;
+	padding-top: 0;
+	padding-bottom: 0;
+}
+
+.onb .plan-screen .screen-copy {
+	grid-row: 2;
+}
+
+.onb .plan-screen .plan-list {
+	grid-row: 3;
+}
+
+.onb .plan-screen .promo {
+	grid-row: 4;
+	align-self: start;
 }
 
 .onb .screen.center .screen-copy {
@@ -381,12 +398,12 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 .onb .progress-dashes {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 5px;
 	justify-content: center;
 }
 
 .onb .progress-dashes .dash {
-	width: 12px;
+	width: 18px;
 	height: 3px;
 	border-radius: 1.5px;
 	background: var(--onb-border);
@@ -1291,10 +1308,11 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	justify-content: center;
 	padding-left: 24px;
 	padding-right: 24px;
+	padding-bottom: 42px;
 }
 
 .onb .folders-screen h1 {
-	margin: 0 0 16px;
+	margin: 0 0 8px;
 }
 
 .onb .screen.center.folders-screen .screen-copy>p {
@@ -1305,7 +1323,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .folders-stack {
 	width: 100%;
 	max-width: 760px;
-	margin-top: 21px;
+	margin-top: 36px;
 }
 
 .onb .folder-head {
@@ -2121,7 +2139,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	padding-left: 24px;
 	padding-right: 24px;
 	justify-content: center;
-	padding-top: 27px;
+	padding-top: 0;
+	padding-bottom: 62px;
 }
 
 /* The cards; what hangs under a card (its consent, its download, why it is blocked) sits in a zero-height second row, so ticking or choosing moves nothing. */
@@ -2129,7 +2148,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	position: relative;
 	width: 100%;
 	max-width: 992px;
-	margin-top: 48px;
+	margin-top: 40px;
 }
 
 .onb .em-cards {
@@ -5160,7 +5179,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
-	gap: 32px;
+	padding-top: 25px;
 }
 
 .onb .sources-screen h1 {
@@ -5169,11 +5188,12 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	text-align: center;
 }
 
-/* Five rows show in full; every row after them scrolls (5 x 62px rows and 4 x 8px gaps). */
+/* Five rows show in full; every row after them scrolls (5 x 65px rows and 4 x 8px gaps). */
 .onb .sources-screen .source-list {
 	width: 100%;
 	max-width: 658px;
-	max-height: 342px;
+	max-height: 357px;
+	margin-top: 40px;
 	overflow-x: hidden;
 	overflow-y: auto;
 }
@@ -5183,7 +5203,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	box-sizing: border-box;
 	align-items: center;
 	gap: 18px;
-	min-height: 62px;
+	min-height: 65px;
 	padding: 14px 16px 14px 20px;
 	border-color: transparent;
 }
@@ -5201,13 +5221,16 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .sources-screen .source-name {
-	line-height: 16px;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 21px;
 }
 
 .onb .sources-screen .source-detail {
-	margin-top: 2px;
-	font-size: 10.5px;
-	line-height: 15.75px;
+	margin-top: 0;
+	color: var(--onb-muted);
+	font-size: 12px;
+	line-height: 16px;
 }
 
 .onb .sources-screen .source-row .switch {
@@ -5215,15 +5238,36 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .sources-screen .sources-checking {
-	margin-top: 0;
+	margin-top: 30px;
 }
 
 .onb .sources-screen .connect-more {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
+	gap: 8px;
+	margin-top: 30px;
+}
+
+/* No source found (Figma 07c): the list gives way to one line between the title and the chips. */
+.onb .sources-screen.none-found {
+	padding-top: 6px;
+}
+
+.onb .sources-screen.none-found .source-list {
+	display: none;
+}
+
+.onb .sources-screen.none-found .connect-more {
 	gap: 12px;
-	margin-top: 8px;
+	margin-top: 50px;
+}
+
+.onb .sources-screen.none-found .sources-empty {
+	margin: 0 0 25px;
+	color: var(--onb-body);
+	font-size: 13px;
+	line-height: 21px;
 }
 
 .onb .sources-screen .connect-more p {
@@ -5337,14 +5381,21 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 /* Welcome (Figma 01 · welcome): a centred heading over a 744px two-by-two grid of feature cards. */
+/* The heading and cards keep Figma's place in any frame (62 above : 75 below); the opt-ins hang in the space below, so they do not move them. */
 .onb .screen.welcome-screen {
-	justify-content: center;
-	gap: 36px;
-	padding: 24px 24px 16px;
+	display: grid;
+	grid-template-rows: minmax(0,62fr) auto auto minmax(max-content,75fr);
+	justify-content: stretch;
+	justify-items: center;
+	padding: 0 24px;
+}
+
+.onb .welcome-screen .screen-copy {
+	grid-row: 2;
 }
 
 .onb .welcome-screen h1 {
-	margin: 0 0 16px;
+	margin: 0 0 12px;
 }
 
 .onb .screen.center.welcome-screen .screen-copy>p {
@@ -5354,6 +5405,8 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .welcome-screen .feature-grid {
+	grid-row: 3;
+	margin-top: 28px;
 	width: 100%;
 	max-width: 744px;
 	height: auto;
@@ -5483,8 +5536,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	flex-direction: column;
 	gap: 4px;
 	width: 100%;
+	grid-row: 4;
+	align-self: start;
 	max-width: 744px;
-	margin-top: -24px;
+	margin-top: 12px;
+	padding-bottom: 16px;
 }
 
 .onb .welcome-consents .usage-consent {
@@ -5494,14 +5550,14 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 14px;
 }
 
-/* Smart-indexing scope (Figma 05c): a left-aligned heading, two 340px panels folders drag between, and a summary bar. */
+/* Smart-indexing scope (Figma 05c): a left-aligned heading, two 352px panels folders drag between, and a summary bar. */
 .onb .si-screen:has(.si-head) {
 	justify-content: center;
 	gap: 20px;
 	max-width: 1092px;
 	min-height: 100%;
 	margin: 0 auto;
-	padding: 40px 24px 0;
+	padding: 34px 24px 0;
 	box-sizing: border-box;
 }
 
@@ -5595,7 +5651,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-screen:has(.si-head) .si-panel {
 	display: flex;
 	flex-direction: column;
-	height: 340px;
+	height: 352px;
 	box-sizing: border-box;
 	padding: 0;
 	border: 1px solid var(--onb-divider);

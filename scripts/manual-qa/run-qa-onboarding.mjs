@@ -271,13 +271,11 @@ try {
 	check("folders gate closes with nothing selected", await primary.isDisabled());
 	await page.locator(".onb .folder-card.add").click();
 	await page.waitForFunction(() => document.querySelectorAll(".onb .folder-card.selected").length === 2, null, { timeout: 5000 });
-	await page.waitForFunction(() => !document.querySelector(".onb .folder-summary")?.textContent?.includes("세는 중"), null, { timeout: 15_000 });
-	const summary = await page.locator(".onb .folder-summary").innerText();
-	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
+	await page.waitForFunction(() => ![...document.querySelectorAll(".onb .folder-card.selected")].some((card) => card.textContent?.includes("세는 중")), null, { timeout: 15_000 });
+	const counted = (await page.locator(".onb .folder-card.selected").allInnerTexts()).join(" ");
+	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(counted), counted.replace(/\s+/g, " "));
 	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
 	await shot("04-folders");
-	const etaText = await page.locator(".onb .eta-row").first().innerText();
-	check("the local ETA names this machine, not another OS's", isWindows ? etaText.includes("이 PC") && !etaText.includes("Mac") : etaText.includes("이 Mac"), etaText);
 	await primary.click();
 
 	// smart scan: the AI looks through the folders just chosen, on the model connected before them.

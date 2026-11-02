@@ -886,19 +886,14 @@
     },
     "folders": {
       "eyebrow": "索引范围",
-      "title": "选择 AI 可读取的文件夹",
-      "lead": "只有所选文件夹中的文件会被 AI 读取。文件夹可随时添加或移除。",
+      "title": "请选择要索引的文件夹",
+      "lead": "我们会处理所选文件夹中的文档，以便 AI 进行搜索。",
       "suggested": "推荐文件夹",
       "selectAll": "全选",
       "add": "直接添加文件夹",
       "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
       "scanning": "统计中…",
-      "scanError": "无法读取",
-      "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-      "summaryNote": "开发者文件夹和超过 50 MB 的大文件会自动排除。",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
-      "summaryEmpty": "请至少选择一个文件夹",
-      "etaLabel": "处理时间"
+      "scanError": "无法读取"
     },
     "smartScope": {
       "policy": {
@@ -935,7 +930,7 @@
       "rescan": "重新推荐"
     },
     "embedding": {
-      "title": "如何使用嵌入？",
+      "title": "要如何分析文档？",
       "groupLabel": "嵌入方式",
       "card": {
         "none": {
@@ -943,14 +938,14 @@
           "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "在 Dazzi 服务器上分析",
-          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
+          "name": "在服务器上分析",
+          "line": "文档内容会发送到 AutoRAG 服务器进行分析。"
         },
         "local": {
           "nameMac": "在我的 Mac 上分析",
           "namePc": "在我的 PC 上分析",
-          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
-          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
+          "lineMac": "所有分析都在这台 Mac 上完成，文档不会离开设备。",
+          "linePc": "所有分析都在这台 PC 上完成，文档不会离开设备。"
         }
       },
       "meter": {
@@ -962,7 +957,7 @@
         "good": "好"
       },
       "meterAria": "{{label}}: {{value}}",
-      "prepTime": "准备时间",
+      "prepTime": "预计索引时间",
       "about": "约",
       "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
@@ -979,7 +974,7 @@
     "sources": {
       "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
       "checking": "正在检查可添加的其他来源…",
-      "empty": "未找到已连接的来源。您可以稍后在设置中连接。",
+      "empty": "未找到已连接的来源。",
       "connectMore": "需要准备的数据源可稍后在设置中连接。",
       "name": {
         "kakao": "KakaoTalk",
@@ -998,7 +993,7 @@
         "telegram": "检测到 Telegram 应用数据",
         "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
         "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
-        "github": "已登录 · Issues 与 Pull Requests",
+        "github": "已登录 gh · Issues 和 Pull Requests",
         "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },

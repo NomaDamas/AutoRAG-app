@@ -63,15 +63,10 @@ describe("copy that names the machine", () => {
 		}
 	});
 
-	it("the folders step asks for a folder first, then totals the selection and shows one processing time", () => {
+	it("the folders step shows each folder's count and processing time on its card", () => {
 		const candidates = [{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents" as const, defaultSelected: true, ocrOff: false }];
 		const scans = new Map([["/docs", { path: "/docs", files: 1000, bytes: 1, onlineOnly: 0, done: true, error: null }]]);
-		const none = { ...BASE_DRAFT, folders: [{ path: "/docs", selected: false }] };
-		act(() => root.render(<FoldersStep ctx={onboardingCtx({ platform: "win32", candidates, scans, draft: none })} />));
-		expect(shown()).toContain("onboarding.folders.summaryEmpty");
 		act(() => root.render(<FoldersStep ctx={onboardingCtx({ platform: "win32", candidates, scans, draft: BASE_DRAFT })} />));
-		expect(shown()).not.toContain("onboarding.folders.summaryEmpty");
-		expect(shown()).toContain("onboarding.folders.summary ");
-		expect(shown()).toContain("onboarding.folders.etaLabel");
+		expect(shown()).toContain("onboarding.folders.stats files=1,000");
 	});
 });
