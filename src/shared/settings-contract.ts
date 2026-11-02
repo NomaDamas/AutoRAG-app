@@ -8,6 +8,7 @@
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "./interaction-contract";
 import type { McpLaunch, McpPlatform } from "./mcp-connect";
 import { DEFAULT_SIDEBAR_SETTINGS, type SidebarSettings } from "./sidebar-contract";
+import { DEFAULT_CONTEXT_MENU_SETTINGS, type ContextMenuSettings } from "./context-menu-contract";
 import { DEFAULT_SHORTCUT_SETTINGS, type ShortcutSettings } from "./shortcuts-contract";
 
 export const SETTINGS_CHANNELS = {
@@ -104,6 +105,8 @@ export interface AppSettings {
 	readonly remotePort: number;
 	/** User customization of sidebar visibility, ordering, and pinned folders (`settings-state.json`). */
 	readonly sidebar: SidebarSettings;
+	/** User customization of the file right-click context menu and custom Magic Actions (`settings-state.json`). */
+	readonly contextMenu: ContextMenuSettings;
 	/** User customization of keyboard shortcuts (`settings-state.json`). */
 	readonly shortcuts: ShortcutSettings;
 }
@@ -123,6 +126,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	remoteAccess: false,
 	remotePort: 47833,
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
+	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
 };
 

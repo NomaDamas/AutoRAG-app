@@ -83,6 +83,8 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
 	);
 }
 
+export type { AppCustomizerSurface };
+
 export function AppCustomizerModal({
 	surface = "sidebar",
 	onClose,
@@ -263,20 +265,28 @@ export function AppCustomizerModal({
 		}
 	};
 
+	const isContextMenu = surface === "contextMenu";
 	const isShortcuts = surface === "shortcuts";
-	const suggestions = isShortcuts
+	const suggestions = isContextMenu
 		? [
-				t("settingsCore.shortcuts.modal.promptMacFinder"),
-				t("settingsCore.shortcuts.modal.promptWindowsExplorer"),
-				t("settingsCore.shortcuts.modal.promptSwap"),
-				t("settingsCore.shortcuts.modal.promptReset"),
+				t("settingsCore.contextMenu.modal.promptSummarizePdf"),
+				t("settingsCore.contextMenu.modal.promptBatchScript"),
+				t("settingsCore.contextMenu.modal.promptCleanMenu"),
+				t("settingsCore.contextMenu.modal.promptReset"),
 			]
-		: [
-				t("settingsCore.sidebar.modal.promptMinimal"),
-				t("settingsCore.sidebar.modal.promptReorder"),
-				t("settingsCore.sidebar.modal.promptCleanSections"),
-				t("settingsCore.sidebar.modal.promptReset"),
-			];
+		: isShortcuts
+			? [
+					t("settingsCore.shortcuts.modal.promptMacFinder"),
+					t("settingsCore.shortcuts.modal.promptWindowsExplorer"),
+					t("settingsCore.shortcuts.modal.promptSwap"),
+					t("settingsCore.shortcuts.modal.promptReset"),
+				]
+			: [
+					t("settingsCore.sidebar.modal.promptMinimal"),
+					t("settingsCore.sidebar.modal.promptReorder"),
+					t("settingsCore.sidebar.modal.promptCleanSections"),
+					t("settingsCore.sidebar.modal.promptReset"),
+				];
 
 	const running = activeRunId !== null;
 
@@ -301,10 +311,18 @@ export function AppCustomizerModal({
 						</span>
 						<div className="customizer-modal__titles">
 							<h2 id={titleId} className="customizer-modal__title">
-								{isShortcuts ? t("settingsCore.shortcuts.modal.title") : t("settingsCore.sidebar.modal.title")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.title")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.title")
+										: t("settingsCore.sidebar.modal.title")}
 							</h2>
 							<p className="customizer-modal__subtitle">
-								{isShortcuts ? t("settingsCore.shortcuts.modal.subtitle") : t("settingsCore.sidebar.modal.subtitle")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.subtitle")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.subtitle")
+										: t("settingsCore.sidebar.modal.subtitle")}
 							</p>
 						</div>
 					</div>
@@ -341,10 +359,18 @@ export function AppCustomizerModal({
 								<img src={dazziMark} alt="" className="customizer-modal__empty-logo" draggable={false} />
 							</div>
 							<h3 className="customizer-modal__empty-title">
-								{isShortcuts ? t("settingsCore.shortcuts.modal.emptyTitle") : t("settingsCore.sidebar.modal.emptyTitle")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.emptyTitle")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.emptyTitle")
+										: t("settingsCore.sidebar.modal.emptyTitle")}
 							</h3>
 							<p className="customizer-modal__empty-desc">
-								{isShortcuts ? t("settingsCore.shortcuts.modal.emptyDesc") : t("settingsCore.sidebar.modal.emptyDesc")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.emptyDesc")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.emptyDesc")
+										: t("settingsCore.sidebar.modal.emptyDesc")}
 							</p>
 							<div className="customizer-modal__suggestions">
 								{suggestions.map((promptText, idx) => (
@@ -431,7 +457,11 @@ export function AppCustomizerModal({
 							data-testid="app-customizer-input"
 							className="customizer-composer__input"
 							placeholder={
-								isShortcuts ? t("settingsCore.shortcuts.modal.placeholder") : t("settingsCore.sidebar.modal.placeholder")
+								isContextMenu
+									? t("settingsCore.contextMenu.modal.placeholder")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.placeholder")
+										: t("settingsCore.sidebar.modal.placeholder")
 							}
 							value={input}
 							onChange={(event) => setInput(event.target.value)}
@@ -465,7 +495,11 @@ export function AppCustomizerModal({
 					<div className="customizer-modal__footnote">
 						<Lock size={11} aria-hidden="true" />
 						<span>
-							{isShortcuts ? t("settingsCore.shortcuts.modal.lockedNotice") : t("settingsCore.sidebar.modal.lockedNotice")}
+							{isContextMenu
+								? t("settingsCore.contextMenu.modal.lockedNotice")
+								: isShortcuts
+									? t("settingsCore.shortcuts.modal.lockedNotice")
+									: t("settingsCore.sidebar.modal.lockedNotice")}
 						</span>
 					</div>
 				</footer>

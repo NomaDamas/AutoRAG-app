@@ -769,12 +769,19 @@ session streams that phrase to the UI where it is rendered with the `.shimmer` t
 `low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
 second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
 app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
-`src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 that
-inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`, `update_general_settings`)
-while enforcing the locked `AI Search` and `Automations` invariant. Alongside it, the `shortcut-customizer`
-helper (`src/main/agents/profiles/shortcut-customizer.ts`, routed when `AppCustomizerRequest.surface === "shortcuts"`)
-inspects and edits `AppSettings.shortcuts` (`get_shortcuts`, `update_shortcuts`) within the closed 26-action catalog.
-A new profile adds one file there and, if it needs a UI, its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
+`src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 and
+Settings → 우클릭 메뉴 that inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`,
+`update_context_menu`, `upsert_magic_action`, `delete_magic_action`, `update_general_settings`) while enforcing
+the locked `AI Search` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. Alongside it,
+the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.ts`, routed when
+`AppCustomizerRequest.surface === "shortcuts"`) inspects and edits `AppSettings.shortcuts` (`get_shortcuts`,
+`update_shortcuts`) within the closed 26-action catalog. Finally, the `magic-action` helper
+(`src/main/agents/profiles/magic-action.ts`, `src/main/magic-action-service.ts`, `src/shared/magic-actions-contract.ts`)
+runs user-defined right-click Magic Actions on selected files and folders — either executing an arbitrary shell script
+or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
+(`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
+per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
+its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions
 

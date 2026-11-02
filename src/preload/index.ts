@@ -12,6 +12,7 @@ import { REMOTE_CHANNELS, type RemoteAccessBridge } from "../shared/remote-contr
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
 import { createErrorFixBridge } from "./error-fix-bridge";
+import { createMagicActionBridge } from "./magic-action-bridge";
 import { createFsBridge } from "./fs-bridge";
 import { createIndexActivityBridge } from "./index-activity-bridge";
 import { createInteractionBridge } from "./interaction-bridge";
@@ -55,6 +56,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	interaction: createInteractionBridge(ipcRenderer),
 	indexProblem: createIndexProblemBridge(ipcRenderer),
 	errorFix: createErrorFixBridge(ipcRenderer),
+	magicAction: createMagicActionBridge(ipcRenderer),
 	live: createLiveBridge(fsWorker),
 	modelDownload: createModelDownloadBridge(ipcRenderer),
 	onboarding: createOnboardingBridge(ipcRenderer),

@@ -41,7 +41,7 @@ describe("remote bootstrap", () => {
 		const autorag = window.autorag as Record<string, unknown>;
 		expect(autorag.platform).toBe("darwin");
 		expect(typeof autorag.pathForFile).toBe("function");
-		for (const target of ["fs", "live", "settings", "search", "preview", "interaction", "onboarding", "errorFix", "appCustomizer"]) {
+		for (const target of ["fs", "live", "settings", "search", "preview", "interaction", "onboarding", "errorFix", "appCustomizer", "magicAction"]) {
 			expect(autorag[target], `${target} bridge`).toBeDefined();
 		}
 	});

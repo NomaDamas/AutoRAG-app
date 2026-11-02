@@ -21,7 +21,7 @@ export const APP_CUSTOMIZER_CHANNELS = {
 	event: "appCustomizer:event",
 } as const;
 
-export type AppCustomizerSurface = "sidebar" | "shortcuts";
+export type AppCustomizerSurface = "sidebar" | "contextMenu" | "shortcuts";
 
 export interface AppCustomizerRequest {
 	readonly sessionId: string;
@@ -34,7 +34,10 @@ export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRe
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Record<string, unknown>;
 	const validSurface =
-		candidate.surface === undefined || candidate.surface === "sidebar" || candidate.surface === "shortcuts";
+		candidate.surface === undefined ||
+		candidate.surface === "sidebar" ||
+		candidate.surface === "contextMenu" ||
+		candidate.surface === "shortcuts";
 	return (
 		validSurface &&
 		typeof candidate.sessionId === "string" &&
@@ -46,7 +49,7 @@ export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRe
 
 /** One setting mutation performed by a tool call during a turn. */
 export interface AppCustomizerChange {
-	readonly kind: "sidebar" | "shortcuts" | "general";
+	readonly kind: "sidebar" | "contextMenu" | "shortcuts" | "general";
 	/** Short human-readable description of the change. */
 	readonly summary: string;
 	/** Settings keys modified (e.g. `["sidebar.hiddenItems"]`, `["appearance"]`). */
