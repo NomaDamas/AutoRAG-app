@@ -5798,11 +5798,16 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	padding: 16px 16px 20px;
 	border-color: var(--onb-border);
 	border-radius: 16px;
-	transition: none;
+	transition: border .15s, background .15s;
 }
 
+/* The same hover as the embedding cards: the border leans blue, nothing moves. */
 .onb .plan-screen .plan-card:hover {
 	transform: none;
+}
+
+.onb .plan-screen .plan-card:not(.selected, .disabled):hover {
+	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
 }
 
 .onb .plan-screen .plan-card.has-trial {
