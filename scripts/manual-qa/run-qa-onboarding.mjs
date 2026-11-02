@@ -293,7 +293,6 @@ try {
 	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });
 	check("the scope screen follows the scan", true);
 	check("it lists exactly the two chosen folders", (await page.locator(".onb .si-panel.blue .si-pill").count()) === 2);
-	check("the red panel says what is always left out when nothing was proposed", (await page.locator(".onb .si-panel.red .si-panel-foot").innerText()).includes("node_modules"));
 	check("the scope screen can be left", await primary.isEnabled());
 	await shot("04c-smart-scope");
 	await primary.click();

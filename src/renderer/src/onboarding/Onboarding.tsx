@@ -47,7 +47,7 @@ import {
 	type Translate,
 } from "./flow";
 import { AppLogo, FooterBackKey, FooterEnterArrow, Icon } from "./marks";
-import type { OnboardingCtx, OverlayKind } from "./context";
+import type { OnboardingCtx, OverlayKind, SubFolder } from "./context";
 import {
 	addExclusion as withExclusion,
 	needsAnalysis,
@@ -56,7 +56,6 @@ import {
 	reduceSmartRun,
 	setScopeExcluded,
 	setScopeMeasure,
-	type AddExclusionStatus,
 	type SmartRun,
 } from "./smart-scope";
 import { IndexingScreen } from "./IndexingScreen";
@@ -147,6 +146,14 @@ function leaveDetour(draft: OnboardingDraft): OnboardingDraft {
 
 const trimTrailingSeparators = (path: string): string => path.replace(/[\\/]+$/u, "");
 
+/** Folders directly inside `path`; the scope screen browses with it, and an unreadable folder just has none. */
+function listSubfolders(path: string): Promise<readonly SubFolder[]> {
+	return window.autorag.fs.listDir(path).then(
+		(listing) => listing.entries.filter((entry) => entry.kind === "folder" && !entry.name.startsWith(".") && entry.name !== "node_modules").map(({ path: child, name }) => ({ path: child, name })),
+		() => [],
+	);
+}
+
 export function Onboarding({ onComplete }: { readonly onComplete: () => void }): ReactElement {
 	const { t: translateFn } = useTranslation();
 	// The onboarding copy lives under a fixed `onboarding` namespace tree; a loose
@@ -158,6 +165,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [permission, setPermission] = useState<PermissionStatus | null>(null);
 	const [fdaPending, setFdaPending] = useState(false);
 	const [scans, setScans] = useState<ReadonlyMap<string, FolderScan>>(new Map());
+	const scansRef = useRef(scans);
+	scansRef.current = scans;
 	const [embedding, setEmbedding] = useState<EmbeddingInfo | null>(null);
 	const modelDownload = useModelDownload();
 	const modelDownloadRef = useRef(modelDownload);
@@ -793,51 +802,30 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				void autorag.smartIndexing.cancel(runId);
 			}
 		},
-		rescanSmart: () => {
-			const runId = smartRunIdRef.current;
-			smartRunIdRef.current = null;
-			setSmartRun(initialSmartRun);
-			if (runId !== null) {
-				void autorag.smartIndexing.cancel(runId);
-			}
-			setDraft((current) => {
-				if (current === null) {
-					return current;
-				}
-				const { smartScope: _dropped, smartScopeRoots: _roots, ...rest } = current;
-				return { ...rest, stepId: "smartScan" };
-			});
-		},
 		setSmartExcluded: (path, excluded) =>
 			setDraft((current) =>
 				current === null || current.smartScope === undefined ? current : { ...current, smartScope: setScopeExcluded(current.smartScope, path, excluded) },
 			),
-		addExclusion: () => {
-			void bridge.pickFolders().then((picked) => {
-				const current = draftRef.current;
-				if (current === null || picked.length === 0) {
-					return;
-				}
-				const roots = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-				let scope = current.smartScope;
-				const added: string[] = [];
-				let refused: AddExclusionStatus | null = null;
-				for (const candidate of picked) {
-					const result = withExclusion(scope, candidate.path, roots);
-					if (result.status === "added") {
-						scope = result.scope;
-						added.push(candidate.path);
-					} else {
-						refused = result.status;
-					}
-				}
-				if (added.length > 0) {
-					patch({ smartScope: scope ?? [] });
-					void bridge.scanFolders(added);
-				} else if (refused !== null) {
-					showToast(t(`onboarding.folders.exclude.refused.${refused}`));
-				}
-			});
+		excludeFolder: (path) => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const roots = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
+			const result = withExclusion(current.smartScope, path, roots);
+			if (result.status !== "added") {
+				showToast(t(`onboarding.smartScope.exclude.refused.${result.status}`));
+				return;
+			}
+			patch({ smartScope: result.scope });
+			void bridge.scanFolders([path]);
+		},
+		listSubfolders,
+		measureFolders: (paths) => {
+			const missing = paths.filter((path) => !scansRef.current.has(path));
+			if (missing.length > 0) {
+				void bridge.scanFolders(missing);
+			}
 		},
 		addFolders: () => {
 			void bridge.pickFolders().then((picked) => {

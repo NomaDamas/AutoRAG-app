@@ -1,207 +1,262 @@
 /**
- * Step 6 — smart-indexing scope (prototype's "스마트 인덱싱 범위"): a policy bar, a blue
- * panel of the folders that are included and a red panel of the sub-folders left
- * out. Pills are removable and ghost pills bring a folder back; the folders
- * themselves were chosen in the step before the scan.
+ * Step 6 — smart-indexing scope (Figma 05c): what the first index reads on the left, what it leaves out on the
+ * right. Folders move between the two by dragging. The left panel browses: its top level is the selected folders,
+ * and a pill with sub-folders opens them under a breadcrumb. The right panel groups what is left out by the
+ * selected folder it lies under; a whole selected folder dragged over is unselected and listed on its own.
  */
 
-import { useState, type ReactElement } from "react";
-import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement } from "react";
+import { ChevronRight, CircleHelp, Folder } from "lucide-react";
+import type { FolderCandidate } from "../../../../shared/onboarding-contract";
 import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
-import { Icon } from "../marks";
-import { formatSize, scanTotals } from "../flow";
-import { etaSaving, excludedTotals, visibleScope } from "../smart-scope";
-import type { OnboardingCtx } from "../context";
+import { cn } from "../../lib/cn";
+import { canSelectCloudEmbedding, etaMinutes, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals } from "../flow";
+import { excludedTotals, visibleScope } from "../smart-scope";
+import type { OnboardingCtx, SubFolder } from "../context";
 
-/** Ghost pills shown before the rest are summarised; the prototype lists three. */
-const MAX_GHOSTS = 3;
+type Side = "include" | "exclude";
 
-function folderIcon(kind: FolderKind): string {
-	switch (kind) {
-		case "desktop":
-			return "monitor";
-		case "documents":
-			return "file-text";
-		case "icloud":
-		case "cloud":
-			return "cloud";
-		case "downloads":
-			return "download";
-		case "pictures":
-			return "image";
-		case "custom":
-			return "folder";
-	}
+/** What a pill stands for when it moves: a whole selected folder, or a folder inside one. */
+interface Moving {
+	readonly path: string;
+	readonly from: Side;
+	readonly top: boolean;
 }
 
-/** The part of a left-out folder's path below the folder it lies under. */
+/** The part of a left-out folder's path below the folder it lies under, with "/" between its parts. */
 function insidePath(item: SmartExclusion): string {
-	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "");
+	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "").replace(/\\/gu, "/");
 }
 
-/** How the AI decides, in words: what it looked at, what it keeps and leaves out, and that the person has the last word. */
+/** How the AI decides; shown while the pointer (or focus) rests on its label. */
 function Criteria({ t }: { readonly t: OnboardingCtx["t"] }): ReactElement {
-	const keys = ["looked", "keep", "leave", "code", "doubt", "you"] as const;
 	return (
-		<ol className="si-criteria">
-			{keys.map((key) => (
-				<li key={key}>{t(`onboarding.smartScope.criteria.${key}`)}</li>
-			))}
-		</ol>
+		<span className="si-criteria-wrap">
+			<button type="button" className="si-criteria-toggle" aria-describedby="si-criteria-tip">
+				<CircleHelp size={16} aria-hidden="true" focusable="false" />
+				{t("onboarding.smartScope.criteria.label")}
+			</button>
+			<span id="si-criteria-tip" className="si-criteria" role="tooltip">
+				{(["include", "exclude"] as const).map((part) => (
+					<span key={part} className="si-criteria-part">
+						<b>{t(`onboarding.smartScope.criteria.${part}Title`)}</b>
+						<span className="si-criteria-item">{t(`onboarding.smartScope.criteria.${part}Body`)}</span>
+					</span>
+				))}
+			</span>
+		</span>
 	);
 }
 
 export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
-	const { t, candidates, draft, scans } = ctx;
-	const [showCriteria, setShowCriteria] = useState(false);
+	const { t, candidates, draft, scans, listSubfolders, measureFolders } = ctx;
+	/** The folders opened on the left, outermost first; empty at the top level. */
+	const [trail, setTrail] = useState<readonly SubFolder[]>([]);
+	const [level, setLevel] = useState<readonly SubFolder[]>([]);
+	/** Which listed folders have sub-folders of their own, so only those offer to open. */
+	const [opens, setOpens] = useState<ReadonlyMap<string, boolean>>(new Map());
+	const [over, setOver] = useState<Side | null>(null);
+	const moving = useRef<Moving | null>(null);
 
 	const selectedPaths = draft.folders.filter((folder) => folder.selected).map((folder) => folder.path);
 	const selected = selectedPaths.map((path) => candidates.find((candidate) => candidate.path === path)).filter((candidate): candidate is FolderCandidate => candidate !== undefined);
-	// A folder can only be put back here if the AI looked through it; choosing folders is the step before the scan.
+	// A selected folder dragged out stays listed on the right, as long as the AI looked through it.
 	const analysed = draft.smartScopeRoots ?? [];
-	const putBack = candidates.filter((candidate) => analysed.includes(candidate.path) && !selectedPaths.includes(candidate.path));
+	const unselected = candidates.filter((candidate) => analysed.includes(candidate.path) && !selectedPaths.includes(candidate.path));
 
-	const items = visibleScope(draft.smartScope, selectedPaths);
-	const leftOut = items.filter((item) => item.excluded);
-	const kept = items.filter((item) => !item.excluded);
+	const leftOut = visibleScope(draft.smartScope, selectedPaths).filter((item) => item.excluded);
+	const leftOutPaths = new Set(leftOut.map((item) => item.path));
 	const totals = excludedTotals(draft.smartScope, selectedPaths);
 	const included = scanTotals(selectedPaths, scans);
-	const eta = etaSaving(included.files, totals.files, "local");
-	const rootName = (item: SmartExclusion): string => candidates.find((candidate) => candidate.path === item.root)?.name ?? item.root;
+	const mode = resolveEmbed(draft.embed, canSelectCloudEmbedding(ctx.account), localEmbeddingAllowed(ctx.embedding === null ? null : ctx.embedding.localSpec));
+	const minutes = etaMinutes(Math.max(0, included.files - totals.files), mode);
+	const groups = selected.map((candidate) => ({ candidate, items: leftOut.filter((item) => item.root === candidate.path) })).filter((group) => group.items.length > 0);
+
+	const current = trail.at(-1)?.path ?? null;
+	const shown: readonly SubFolder[] = current === null ? selected.map(({ path, name }) => ({ path, name })) : level.filter((folder) => !leftOutPaths.has(folder.path));
+	const shownKey = shown.map((folder) => folder.path).join("\n");
+
+	useEffect(() => {
+		if (current === null) return;
+		let alive = true;
+		setLevel([]);
+		void listSubfolders(current).then((folders) => {
+			if (!alive) return;
+			setLevel(folders);
+			if (folders.length > 0) measureFolders(folders.map((folder) => folder.path));
+		});
+		return () => {
+			alive = false;
+		};
+	}, [current, listSubfolders, measureFolders]);
+
+	useEffect(() => {
+		let alive = true;
+		for (const path of shownKey.length === 0 ? [] : shownKey.split("\n")) {
+			void listSubfolders(path).then((folders) => {
+				if (alive) setOpens((previous) => (previous.get(path) === folders.length > 0 ? previous : new Map(previous).set(path, folders.length > 0)));
+			});
+		}
+		return () => {
+			alive = false;
+		};
+	}, [shownKey, listSubfolders]);
+
+	const move = (item: Moving, to: Side): void => {
+		if (item.from === to) return;
+		if (item.top) ctx.setFolderSelected(item.path, to === "include");
+		else if (to === "exclude") ctx.excludeFolder(item.path);
+		else ctx.setSmartExcluded(item.path, false);
+	};
+
+	const dropZone = (side: Side) => ({
+		onDragOver: (event: DragEvent<HTMLElement>): void => {
+			if (moving.current === null || moving.current.from === side) return;
+			event.preventDefault();
+			setOver(side);
+		},
+		onDragLeave: (event: DragEvent<HTMLElement>): void => {
+			if (!(event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget))) setOver(null);
+		},
+		onDrop: (event: DragEvent<HTMLElement>): void => {
+			event.preventDefault();
+			setOver(null);
+			if (moving.current !== null) move(moving.current, side);
+			moving.current = null;
+		},
+	});
+
+	const pill = (item: Moving, label: string, size: string, tone: "blue" | "red", title: string, open?: () => void): ReactElement => (
+		<div
+			key={item.path}
+			className={cn("si-pill", tone)}
+			data-path={item.path}
+			title={title}
+			draggable
+			role="button"
+			tabIndex={0}
+			aria-keyshortcuts={item.from === "include" ? "ArrowRight" : "ArrowLeft"}
+			onDragStart={(event) => {
+				moving.current = item;
+				event.dataTransfer?.setData("text/plain", item.path);
+			}}
+			onDragEnd={() => {
+				moving.current = null;
+				setOver(null);
+			}}
+			onClick={open}
+			onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+				if (event.key === "ArrowRight" && item.from === "include") move(item, "exclude");
+				else if (event.key === "ArrowLeft" && item.from === "exclude") move(item, "include");
+				else if (event.key === "Enter" && open !== undefined) open();
+				else return;
+				event.preventDefault();
+				event.stopPropagation();
+			}}
+		>
+			<Folder size={12} aria-hidden="true" focusable="false" />
+			<span className="si-pill-label">{label}</span>
+			{open === undefined ? null : <ChevronRight size={12} className="si-pill-open" aria-hidden="true" focusable="false" />}
+			<span className="si-pill-size">{size}</span>
+		</div>
+	);
+
+	const sizeOf = (path: string): string => {
+		const scan = scans.get(path);
+		return scan === undefined || scan.error !== null ? "…" : formatSize(scan.bytes);
+	};
 
 	return (
 		<section className="si-screen">
-			<div className="si-policy-bar">
-				<div className="si-policy-copy">
-					<strong>
-						{t("onboarding.smartScope.policy.title")}
-						{draft.smartScope !== undefined ? <span className="tag rec">{t("onboarding.smartScope.policy.tag")}</span> : null}
-					</strong>
-					<p>
-						{t("onboarding.smartScope.policy.lead")}{" "}
-						<button type="button" className="si-criteria-toggle" aria-expanded={showCriteria} onClick={() => setShowCriteria((shown) => !shown)}>
-							{t(showCriteria ? "onboarding.smartScope.criteria.hide" : "onboarding.smartScope.criteria.show")}
-						</button>
-					</p>
-					{showCriteria ? <Criteria t={t} /> : null}
-				</div>
-				<div className="si-policy-right">
-					<div className="si-eta-pill">
-						{eta.percent > 0 ? <del>{t("onboarding.smartScope.policy.eta", { minutes: eta.before })}</del> : null}
-						<b>{t("onboarding.smartScope.policy.eta", { minutes: eta.after })}</b>
-						{eta.percent > 0 ? <em>{t("onboarding.smartScope.policy.etaSaved", { percent: eta.percent })}</em> : null}
-					</div>
-					<button type="button" className="secondary si-rescan" onClick={ctx.rescanSmart}>
-						<Icon name="search" size={12} /> {t("onboarding.smartScope.policy.rescan")}
-					</button>
+			<div className="si-head">
+				<h1>{t("onboarding.smartScope.policy.title")}</h1>
+				<div className="si-lead">
+					<p>{t("onboarding.smartScope.policy.lead")}</p>
+					<Criteria t={t} />
 				</div>
 			</div>
 			<div className="si-dual-panels">
-				<div className="si-panel blue">
+				<div className={cn("si-panel blue", over === "include" && "drop")} {...dropZone("include")}>
 					<div className="si-panel-head">
-						<div className="si-panel-title">
-							<i className="si-panel-dot" />
-							{t("onboarding.smartScope.include.title")}
-						</div>
-						<span className="si-panel-meta">
-							{t("onboarding.smartScope.include.meta", {
-								folders: selected.length,
-								files: Math.max(0, included.files - totals.files).toLocaleString(),
-								size: formatSize(Math.max(0, included.bytes - totals.bytes)),
-							})}
-						</span>
+						<div className="si-panel-title">{t("onboarding.smartScope.include.title")}</div>
+						<span className="si-panel-meta">{t("onboarding.smartScope.include.meta", { count: selected.length })}</span>
 					</div>
-					<div className="si-pills">
-						{selected.map((candidate) => {
-							const scan = scans.get(candidate.path);
-							return (
-								<span key={candidate.path} className="si-pill blue" title={candidate.displayPath}>
-									<span className="si-pill-ico">
-										<Icon name={folderIcon(candidate.kind)} size={12} />
-									</span>
-									<span className="si-pill-label">{candidate.name}</span>
-									<span className="si-pill-size">{scan === undefined || scan.error !== null ? "…" : formatSize(scan.bytes)}</span>
-									<button
-										type="button"
-										className="si-pill-x"
-										title={t("onboarding.smartScope.include.remove")}
-										onClick={() => ctx.setFolderSelected(candidate.path, false)}
-									>
-										<Icon name="x" size={11} />
-									</button>
-								</span>
-							);
-						})}
-					</div>
-					<div className="si-panel-foot">
-						<div className="si-ghost-row">
-							{putBack.length > 0 ? (
-								<>
-									<span>{t("onboarding.smartScope.include.addable")}</span>
-									{putBack.map((candidate) => (
-										<button key={candidate.path} type="button" className="si-ghost-pill" onClick={() => ctx.setFolderSelected(candidate.path, true)}>
-											+ {candidate.name}
-										</button>
-									))}
-								</>
+					<div className="si-panel-body">
+						<nav className="si-crumbs">
+							{trail.length === 0 ? (
+								<span>{t("onboarding.smartScope.include.all")}</span>
 							) : (
-								<span>{t("onboarding.smartScope.include.allIn")}</span>
+								<button type="button" className="si-crumb" onClick={() => setTrail([])}>
+									{t("onboarding.smartScope.include.all")}
+								</button>
+							)}
+							{trail.map((crumb, index) => (
+								<span key={crumb.path} className="si-crumb-part">
+									<ChevronRight size={12} aria-hidden="true" focusable="false" />
+									{index === trail.length - 1 ? (
+										<span className="si-crumb-here">{crumb.name}</span>
+									) : (
+										<button type="button" className="si-crumb" onClick={() => setTrail(trail.slice(0, index + 1))}>
+											{crumb.name}
+										</button>
+									)}
+								</span>
+							))}
+						</nav>
+						<div className="si-pills">
+							{shown.map((folder) =>
+								pill(
+									{ path: folder.path, from: "include", top: current === null },
+									folder.name,
+									sizeOf(folder.path),
+									"blue",
+									folder.path,
+									opens.get(folder.path) === true ? () => setTrail([...trail, folder]) : undefined,
+								),
 							)}
 						</div>
 					</div>
 				</div>
-				<div className="si-panel red">
+				<div className={cn("si-panel red", over === "exclude" && "drop")} {...dropZone("exclude")}>
 					<div className="si-panel-head">
-						<div className="si-panel-title">
-							<i className="si-panel-dot" />
-							{t("onboarding.smartScope.exclude.title")}
-						</div>
-						<span className="si-panel-meta">{t("onboarding.smartScope.exclude.meta", { count: leftOut.length, size: formatSize(totals.bytes) })}</span>
+						<div className="si-panel-title">{t("onboarding.smartScope.exclude.title")}</div>
+						<span className="si-panel-meta">{formatSize(totals.bytes)}</span>
 					</div>
-					<div className="si-pills">
-						<button type="button" className="si-add-pill red" onClick={ctx.addExclusion} disabled={selectedPaths.length === 0}>
-							<Icon name="plus" size={12} /> {t("onboarding.smartScope.exclude.add")}
-						</button>
-						{leftOut.map((item) => (
-							<span key={item.path} className="si-pill red" title={item.reason === "" ? item.path : `${item.reason}\n${item.path}`}>
-								<span className="si-pill-ico">
-									<Icon name="eye-off" size={11} />
-								</span>
-								<span className="si-pill-label">
-									<em>{rootName(item)} / </em>
-									<b>{insidePath(item)}</b>
-								</span>
-								<span className="si-pill-size">{item.files === 0 ? t("onboarding.smartScope.exclude.noDocs") : `−${formatSize(item.bytes)}`}</span>
-								<button
-									type="button"
-									className="si-pill-x"
-									title={t("onboarding.smartScope.exclude.restore")}
-									onClick={() => ctx.setSmartExcluded(item.path, false)}
-								>
-									<Icon name="x" size={11} />
-								</button>
-							</span>
+					<div className="si-panel-body">
+						{unselected.length > 0 ? (
+							<div className="si-group">
+								<p className="si-group-title">{t("onboarding.smartScope.exclude.group", { name: t("onboarding.smartScope.include.all"), count: unselected.length })}</p>
+								<div className="si-pills">
+									{unselected.map((candidate) => pill({ path: candidate.path, from: "exclude", top: true }, candidate.name, sizeOf(candidate.path), "red", candidate.displayPath))}
+								</div>
+							</div>
+						) : null}
+						{groups.map(({ candidate, items }) => (
+							<div key={candidate.path} className="si-group">
+								<p className="si-group-title">{t("onboarding.smartScope.exclude.group", { name: candidate.name, count: items.length })}</p>
+								<div className="si-pills">
+									{items.map((item) =>
+										pill(
+											{ path: item.path, from: "exclude", top: false },
+											insidePath(item),
+											item.files === 0 ? t("onboarding.smartScope.exclude.noDocs") : formatSize(item.bytes),
+											"red",
+											item.reason === "" ? item.path : `${item.reason}\n${item.path}`,
+										),
+									)}
+								</div>
+							</div>
 						))}
 					</div>
-					<div className="si-panel-foot">
-						<div className="si-ghost-row">
-							{kept.length > 0 ? (
-								<>
-									<span>{t("onboarding.smartScope.exclude.restored")}</span>
-									{kept.slice(0, MAX_GHOSTS).map((item) => (
-										<button key={item.path} type="button" className="si-ghost-pill" onClick={() => ctx.setSmartExcluded(item.path, true)}>
-											+ {insidePath(item)}
-										</button>
-									))}
-								</>
-							) : (
-								<span>
-									<Icon name="lock" size={11} /> {t("onboarding.smartScope.policy.auto")}
-								</span>
-							)}
-						</div>
-					</div>
 				</div>
+			</div>
+			<div className="si-summary">
+				<span>
+					{t("onboarding.smartScope.summary.eta")} <b>{t("onboarding.smartScope.policy.eta", { minutes })}</b>
+				</span>
+				<span>
+					{t("onboarding.smartScope.summary.total")} <b>{formatSize(Math.max(0, included.bytes - totals.bytes))}</b>
+				</span>
 			</div>
 		</section>
 	);
