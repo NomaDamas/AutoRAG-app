@@ -5885,10 +5885,10 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	grid-template-rows: 42px minmax(0,1fr);
 }
 
-/* The title and folder keep Figma's place in any frame (176 above : 241 below at 678px), and stay put across the states; what differs hangs under them. */
+/* The title and folder keep Figma's place in any frame (164 above : 253 below at 678px), and stay put across the states; what differs hangs under them. */
 .onb .si-minimal-scan {
 	display: grid;
-	grid-template-rows: minmax(0,176fr) auto auto minmax(max-content,241fr);
+	grid-template-rows: minmax(0,164fr) auto auto minmax(max-content,253fr);
 	justify-items: center;
 	box-sizing: border-box;
 	padding: 0 24px;
