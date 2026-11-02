@@ -1338,7 +1338,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	color: var(--onb-body);
+	color: var(--onb-ink);
 	font-size: 12px;
 	line-height: 16px;
 	cursor: pointer;
@@ -1366,13 +1366,13 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	outline-offset: 2px;
 }
 
-/* Four rows show in full; every row after them scrolls (4 x 84px rows and 3 x 8px gaps). */
+/* Three rows show in full; every row after them scrolls (3 x 84px rows and 2 x 8px gaps). */
 .onb .folder-grid {
 	display: grid;
 	grid-template-columns: repeat(2,minmax(0,1fr));
 	grid-auto-rows: 84px;
 	gap: 8px;
-	max-height: 360px;
+	max-height: 268px;
 	overflow-y: auto;
 }
 
@@ -1462,7 +1462,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	gap: 5px;
 	font-size: 14px;
 	line-height: 19px;
-	font-weight: 700;
+	font-weight: 500;
 }
 
 .onb .folder-path {
@@ -2265,6 +2265,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 }
 
 .onb .em-tag {
+	box-sizing: border-box;
+	height: 16px;
 	padding: 2px 4px;
 	border-radius: 4px;
 	background: var(--onb-bg-input);
@@ -2279,16 +2281,24 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	color: #925800;
 }
 
+.onb .em-tag.trial {
+	background: rgba(10,100,216,.12);
+	color: var(--onb-blue);
+}
+
 .onb .em-tag.bad {
 	background: var(--onb-red-bg);
 	color: var(--onb-red);
 }
 
+/* Two lines' height on every card, so the meters line up across them. */
 .onb .em-line {
+	min-height: 32px;
 	margin: 0;
 	color: var(--onb-muted);
-	font-size: 10.5px;
-	line-height: 15.75px;
+	font-size: 12px;
+	line-height: 16px;
+	white-space: pre-line;
 }
 
 .onb .em-meters {
@@ -2309,7 +2319,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 }
 
 .onb .em-m-label {
-	color: var(--onb-muted);
+	color: var(--onb-body);
 	line-height: 16px;
 }
 
@@ -2351,8 +2361,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	justify-content: space-between;
 	gap: 8px;
 	color: var(--onb-muted);
-	font-size: 10px;
-	line-height: 14px;
+	font-size: 11px;
+	line-height: 16px;
 }
 
 .onb .em-eta {
@@ -2366,12 +2376,13 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 .onb .em-eta .em-about {
 	color: var(--onb-faint);
-	font-size: 10px;
+	font-size: 11px;
 }
 
 .onb .em-foot b {
 	color: var(--onb-body);
-	font-weight: 400;
+	font-size: 12px;
+	font-weight: 500;
 }
 
 @media (max-width:850px) {

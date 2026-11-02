@@ -962,8 +962,8 @@
         "local": {
           "nameMac": "Analyze on my Mac",
           "namePc": "Analyze on my PC",
-          "lineMac": "All analysis runs on this Mac. Your documents never leave it.",
-          "linePc": "All analysis runs on this PC. Your documents never leave it."
+          "lineMac": "All analysis runs on this Mac.\nYour documents never leave it.",
+          "linePc": "All analysis runs on this PC.\nYour documents never leave it."
         }
       },
       "meter": {
