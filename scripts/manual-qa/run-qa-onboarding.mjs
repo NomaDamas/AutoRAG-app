@@ -321,41 +321,46 @@ try {
 	// sources: rows stream in as each probe finishes; a spinner line holds the
 	// "connect later" row back until every probe is done.
 	const sourcesShownAt = Date.now();
-	await page.waitForSelector(".onb [data-sources-done]", { timeout: 60_000 });
+	await page.waitForSelector(".onb [data-sources-done], .onb .plan-screen", { timeout: 60_000 });
 	const allDoneMs = Date.now() - sourcesShownAt;
-	const sourcesSeen = await page.evaluate(() => window.__sources);
-	check("a checking line shows while probes run", sourcesSeen.sawChecking);
-	check("connect-later row is hidden while probing", !sourcesSeen.overlap);
-	console.log(`INFO sources: all probes done after ${allDoneMs}ms`);
-	const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
-	check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
-	check("rows only ever grow while probing", !sourcesSeen.shrank, `${ids.length} rows`);
-	const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
-	check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
-	check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);
-	const chips = await page.locator(".onb .more-chips .brand-chip").allInnerTexts();
-	check(
-		"connect-later chips exclude the detected sources",
-		!ids.includes("kakao") || !chips.some((label) => label.includes("KakaoTalk")),
-		chips.join(", "),
-	);
-	await shot("06-sources");
-	// Optional source-specific regression lane: enable exactly the requested
-	// detected connector. The default lane keeps datasources off.
-	const requestedSource = process.env.QA_ONBOARDING_SOURCE?.trim() ?? "";
-	if (requestedSource.length > 0) {
-		if (!ids.includes(requestedSource)) throw new Error(`requested datasource is not detected: ${requestedSource}`);
-		const sourceRow = page.locator(`.onb .source-row[data-source-id="${requestedSource}"]`);
-		await sourceRow.locator(".switch").click();
-		await page.waitForFunction(
-			(sourceId) => document.querySelector(`.onb .source-row[data-source-id="${sourceId}"] .switch.on`) !== null,
-			requestedSource,
-			{ timeout: 3000 },
+	// A machine with no connectors (a fresh QA VM) finds nothing, and the step moves on to the plan by itself.
+	if ((await page.locator(".onb .sources-screen").count()) === 0) {
+		check("no source found: the sources step is skipped", (await page.locator(".onb .plan-screen").count()) === 1);
+	} else {
+		const sourcesSeen = await page.evaluate(() => window.__sources);
+		check("a checking line shows while probes run", sourcesSeen.sawChecking);
+		check("connect-later row is hidden while probing", !sourcesSeen.overlap);
+		console.log(`INFO sources: all probes done after ${allDoneMs}ms`);
+		const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
+		check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
+		check("rows only ever grow while probing", !sourcesSeen.shrank, `${ids.length} rows`);
+		const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
+		check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
+		check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);
+		const chips = await page.locator(".onb .more-chips .brand-chip").allInnerTexts();
+		check(
+			"connect-later chips exclude the detected sources",
+			!ids.includes("kakao") || !chips.some((label) => label.includes("KakaoTalk")),
+			chips.join(", "),
 		);
-		check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
-		check(`${requestedSource} switch is enabled`, await sourceRow.locator(".switch").isEnabled());
+		await shot("06-sources");
+		// Optional source-specific regression lane: enable exactly the requested
+		// detected connector. The default lane keeps datasources off.
+		const requestedSource = process.env.QA_ONBOARDING_SOURCE?.trim() ?? "";
+		if (requestedSource.length > 0) {
+			if (!ids.includes(requestedSource)) throw new Error(`requested datasource is not detected: ${requestedSource}`);
+			const sourceRow = page.locator(`.onb .source-row[data-source-id="${requestedSource}"]`);
+			await sourceRow.locator(".switch").click();
+			await page.waitForFunction(
+				(sourceId) => document.querySelector(`.onb .source-row[data-source-id="${sourceId}"] .switch.on`) !== null,
+				requestedSource,
+				{ timeout: 3000 },
+			);
+			check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
+			check(`${requestedSource} switch is enabled`, await sourceRow.locator(".switch").isEnabled());
+		}
+		await primary.click();
 	}
-	await primary.click();
 
 	// plan: with no account, a paid plan stays gated behind sign-in (no checkout,
 	// no charge); BYOK needs no account and keeps the lane offline.
