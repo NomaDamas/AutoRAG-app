@@ -1127,10 +1127,12 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					))}
 				</div>
 				<div className="footer-actions">
-					<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={draft.stepId === "smartScope" ? rescan : back}>
-						{t(draft.stepId === "smartScope" ? "onboarding.smartScope.rescan" : "onboarding.footerBack")}
-						<FooterBackKey />
-					</button>
+					{draft.stepId === "welcome" ? null : (
+						<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={draft.stepId === "smartScope" ? rescan : back}>
+							{t(draft.stepId === "smartScope" ? "onboarding.smartScope.rescan" : "onboarding.footerBack")}
+							<FooterBackKey />
+						</button>
+					)}
 					<button type="button" className="footer-btn next" disabled={!currentAdvance()} onClick={next}>
 						{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))}
 						<FooterEnterArrow />
