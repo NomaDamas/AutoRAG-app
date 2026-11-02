@@ -5376,8 +5376,14 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	text-align: center;
 }
 
+/* This screen is not a .screen, so its title sets everything itself (Figma Display/H1). */
 .onb .si-head h1 {
 	margin: 0 0 8px;
+	color: var(--onb-ink);
+	font-size: 31px;
+	font-weight: 700;
+	line-height: 34.7px;
+	letter-spacing: -1.39px;
 }
 
 .onb .si-lead {
