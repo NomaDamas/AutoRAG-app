@@ -63,32 +63,34 @@ export function SmartScanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 				<FolderArt />
 				{running ? <Loupe /> : null}
 			</div>
-			{smartRun.status === "running" ? (
-				<p className="si-scan-path" role="status">
-					<span className="shimmer">
-						{smartRun.progress ?? (smartRun.current === null ? t("onboarding.smartScan.lead") : t("onboarding.smartScan.looking", { path: smartRun.current }))}
-					</span>
-				</p>
-			) : null}
-			{running ? (
-				<button type="button" className="si-scan-link si-scan-cancel" onClick={backToFolders}>
-					{t("onboarding.smartScan.back")}
-				</button>
-			) : null}
-			{failed ? (
-				<div className="si-scan-failed" role="alert">
-					<button type="button" className="si-scan-retry" title={smartRun.message} onClick={ctx.startSmartScan}>
-						{t("onboarding.smartScan.retry")}
-					</button>
-					<button type="button" className="si-scan-link faint si-scan-back" onClick={backToFolders}>
+			<div className="si-scan-below">
+				{smartRun.status === "running" ? (
+					<p className="si-scan-path" role="status">
+						<span className="shimmer">
+							{smartRun.progress ?? (smartRun.current === null ? t("onboarding.smartScan.lead") : t("onboarding.smartScan.looking", { path: smartRun.current }))}
+						</span>
+					</p>
+				) : null}
+				{running ? (
+					<button type="button" className="si-scan-link si-scan-cancel" onClick={backToFolders}>
 						{t("onboarding.smartScan.back")}
 					</button>
-					{/* Without this a model that keeps failing would leave no way past this screen. */}
-					<button type="button" className="si-scan-link faint si-scan-manual" onClick={() => ctx.setStep("smartScope")}>
-						{t("onboarding.smartScan.manual")}
-					</button>
-				</div>
-			) : null}
+				) : null}
+				{failed ? (
+					<div className="si-scan-failed" role="alert">
+						<button type="button" className="si-scan-retry" title={smartRun.message} onClick={ctx.startSmartScan}>
+							{t("onboarding.smartScan.retry")}
+						</button>
+						<button type="button" className="si-scan-link faint si-scan-back" onClick={backToFolders}>
+							{t("onboarding.smartScan.back")}
+						</button>
+						{/* Without this a model that keeps failing would leave no way past this screen. */}
+						<button type="button" className="si-scan-link faint si-scan-manual" onClick={() => ctx.setStep("smartScope")}>
+							{t("onboarding.smartScan.manual")}
+						</button>
+					</div>
+				) : null}
+			</div>
 		</section>
 	);
 }

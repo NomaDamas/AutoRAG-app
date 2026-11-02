@@ -5885,9 +5885,30 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	grid-template-rows: 42px minmax(0,1fr);
 }
 
+/* The title and folder keep Figma's place in any frame (176 above : 241 below at 678px), and stay put across the states; what differs hangs under them. */
 .onb .si-minimal-scan {
-	justify-content: flex-start;
-	padding-top: 176px;
+	display: grid;
+	grid-template-rows: minmax(0,176fr) auto auto minmax(max-content,241fr);
+	justify-items: center;
+	box-sizing: border-box;
+	padding: 0 24px;
+}
+
+.onb .si-minimal-scan h1 {
+	grid-row: 2;
+}
+
+.onb .si-minimal-scan .si-folder-scene {
+	grid-row: 3;
+}
+
+.onb .si-scan-below {
+	grid-row: 4;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	max-width: 100%;
+	padding-bottom: 24px;
 }
 
 .onb .si-minimal-scan h1 {
@@ -5972,7 +5993,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	animation: onb-dissolve-out .45s ease-in-out forwards;
 }
 
+/* It keeps the footerless layout it had, though the stage shrinks under it for the footer. */
 .onb .si-dissolve .si-minimal-scan {
+	height: calc(100% + 62px);
 	animation: none;
 }
 
