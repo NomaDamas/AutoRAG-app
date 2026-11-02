@@ -992,7 +992,6 @@
     "sources": {
       "title": "이 PC에서 찾은 앱도 검색 범위에 넣을까요?",
       "checking": "추가할 수 있는 소스를 확인하는 중…",
-      "empty": "연결된 소스를 찾지 못했어요.",
       "connectMore": "준비가 필요한 소스는 나중에 설정에서 연결할 수 있습니다.",
       "name": {
         "kakao": "KakaoTalk",

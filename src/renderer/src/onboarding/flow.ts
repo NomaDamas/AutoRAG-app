@@ -38,14 +38,16 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
  * folder is scanned. A signed-in user who only picks BYOK on the plan step has
  * already scanned with the account's model; theirs comes after the plan. The
  * model step also picks the helper roles (question splitting, Jev, reranking)
- * the Dazzi plan would otherwise provide.
+ * the Dazzi plan would otherwise provide. A finished detection that found no
+ * source leaves nothing to ask, so the sources step drops out too.
  */
-export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean): OnboardingStepId[] {
+export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean, noSources = false): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
 	const modelFirst = plan === "byok" && !signedIn;
 	const tail: OnboardingStepId[] = plan !== "byok" || modelFirst ? ["indexing"] : ["model", "indexing"];
 	const head: OnboardingStepId[] = ["welcome", "permissions", "account", ...(modelFirst ? (["model"] as const) : []), "folders", "smartScan", "smartScope", "embedding"];
-	return head.concat(planConfirmed ? mid.filter((id) => id !== "plan") : mid).concat(tail);
+	const middle = mid.filter((id) => !(planConfirmed && id === "plan") && !(noSources && id === "sources"));
+	return head.concat(middle).concat(tail);
 }
 
 export function stepIndex(flow: readonly OnboardingStepId[], stepId: OnboardingStepId): number {

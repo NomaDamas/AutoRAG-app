@@ -28,6 +28,12 @@ import type { FolderScan } from "../src/shared/onboarding-contract";
 const stubTranslate: Translate = (key, options) => (options === undefined ? key : `${key}:${JSON.stringify(options)}`);
 
 describe("onboarding flow", () => {
+	it("drops the sources step once detection found none", () => {
+		expect(buildFlow("free", false, "local", true, true)).not.toContain("sources");
+		expect(buildFlow("free", false, "cloud", true, true)).toContain("plan");
+		expect(buildFlow("free", false, "local", true)).toContain("sources");
+	});
+
 	it("orders steps for a local, unconfirmed plan", () => {
 		expect(buildFlow("pro", false, "local", false)).toEqual([
 			"welcome",

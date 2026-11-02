@@ -992,7 +992,6 @@
     "sources": {
       "title": "Add the apps found on this PC to your search?",
       "checking": "Checking which other sources can be added…",
-      "empty": "No connected sources found.",
       "connectMore": "Sources that need setup can be connected later in Settings.",
       "name": {
         "kakao": "KakaoTalk",

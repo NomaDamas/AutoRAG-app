@@ -992,7 +992,6 @@
     "sources": {
       "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
       "checking": "正在检查可添加的其他来源…",
-      "empty": "未找到已连接的来源。",
       "connectMore": "需要准备的数据源可稍后在设置中连接。",
       "name": {
         "kakao": "KakaoTalk",

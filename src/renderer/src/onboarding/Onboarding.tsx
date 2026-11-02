@@ -224,6 +224,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	permissionRef.current = permission;
 	accountRef.current = account;
 	localAllowedRef.current = localEmbeddingAllowed(embedding?.localSpec ?? null);
+	const noSources = sourcesDone && detectedSources.length === 0;
+	const noSourcesRef = useRef(noSources);
+	noSourcesRef.current = noSources;
 	useEffect(() => {
 		overlayRef.current = overlay;
 	}, [overlay]);
@@ -365,7 +368,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const flow =
 		draft === null
 			? []
-			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed, canSelectCloudEmbedding(account));
+			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed, canSelectCloudEmbedding(account), noSources);
 
 	const startIndexing = useCallback((): void => {
 		const current = draftRef.current;
@@ -436,7 +439,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn, noSourcesRef.current);
 		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
 		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
 		const following = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
@@ -486,7 +489,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn, noSourcesRef.current);
 		// A plan just chosen has dropped out of the list, but the model step that follows it still steps back to it.
 		if (current.stepId === "model" && list.indexOf("model") > list.indexOf("embedding") && !shouldSkipPlanStep(false, embed, accountRef.current)) {
 			setDraft({ ...current, stepId: "plan", planConfirmed: false });
@@ -684,6 +687,21 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			offDone();
 		};
 	}, [stepId]);
+
+	// Detection only runs on the sources step, so finding nothing is learned there: move on to what follows it.
+	useEffect(() => {
+		const current = draftRef.current;
+		if (!noSources || stepId !== "sources" || current === null) {
+			return;
+		}
+		const signedIn = accountRef.current?.state === "signedIn";
+		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		const following = list[list.indexOf("sources") + 1];
+		if (following !== undefined) {
+			setDraft({ ...current, stepId: following });
+		}
+	}, [noSources, stepId]);
 
 	useEffect(() => {
 		if (stepId !== "indexing") {

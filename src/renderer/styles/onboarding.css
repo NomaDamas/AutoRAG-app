@@ -1299,12 +1299,12 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	flex: none;
 }
 
-/* Folders step (Figma 05b): a 760px column of two-up folder cards under a one-line lead. */
+/* Folders step (Figma 05b): an 856px column of two-up folder cards under a one-line lead. */
 .onb .screen.folders-screen {
 	justify-content: center;
 	padding-left: 24px;
 	padding-right: 24px;
-	padding-bottom: 42px;
+	padding-bottom: 13px;
 }
 
 .onb .folders-screen h1 {
@@ -1318,7 +1318,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .folders-stack {
 	width: 100%;
-	max-width: 760px;
+	max-width: 856px;
 	margin-top: 36px;
 }
 
@@ -1337,10 +1337,10 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .folder-all {
 	display: flex;
 	align-items: center;
-	gap: 4px;
+	gap: 6px;
 	color: var(--onb-body);
-	font-size: 10.5px;
-	line-height: 15.75px;
+	font-size: 12px;
+	line-height: 16px;
 	cursor: pointer;
 }
 
@@ -1348,6 +1348,11 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	position: absolute;
 	opacity: 0;
 	pointer-events: none;
+}
+
+.onb .folder-all .check-box {
+	width: 16px;
+	height: 16px;
 }
 
 .onb .folder-all input:checked + .check-box {
@@ -1361,13 +1366,13 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	outline-offset: 2px;
 }
 
-/* Four rows show in full; every row after them scrolls (4 x 74px rows and 3 x 8px gaps). */
+/* Four rows show in full; every row after them scrolls (4 x 84px rows and 3 x 8px gaps). */
 .onb .folder-grid {
 	display: grid;
 	grid-template-columns: repeat(2,minmax(0,1fr));
-	grid-auto-rows: 74px;
+	grid-auto-rows: 84px;
 	gap: 8px;
-	max-height: 320px;
+	max-height: 360px;
 	overflow-y: auto;
 }
 
@@ -1377,10 +1382,10 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	align-items: center;
 	box-sizing: border-box;
 	gap: 16px;
-	min-height: 74px;
+	min-height: 84px;
 	padding: 10px 10px 10px 12px;
 	border: 1px solid var(--onb-border);
-	border-radius: 8px;
+	border-radius: 12px;
 	background: var(--onb-bg-card);
 	cursor: pointer;
 }
@@ -1422,25 +1427,25 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 }
 
 .onb .folder-art {
+	position: relative;
 	display: grid;
 	place-items: center;
 	flex: none;
 	width: 35px;
 	height: 29px;
-	margin-right: -6px;
 	border-radius: 5px 6px 6px 6px;
-	background: linear-gradient(#8cb9f7 0 28%,#70a8f5 28%);
+	background: #70a8f5;
 	color: #4c89dc;
 }
 
 .onb .folder-art:before {
 	content: "";
 	position: absolute;
+	top: -1.5px;
+	left: 4.5px;
 	width: 16px;
 	height: 3px;
-	margin-top: -29px;
-	margin-left: -10px;
-	border-radius: 3px 3px 0 0;
+	border-radius: 1.5px 1.5px 0 0;
 	background: #8cb9f7;
 }
 
@@ -1455,15 +1460,16 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	display: flex;
 	align-items: center;
 	gap: 5px;
-	font-size: 12px;
-	line-height: 16px;
-	font-weight: 500;
+	font-size: 14px;
+	line-height: 19px;
+	font-weight: 700;
 }
 
 .onb .folder-path {
+	margin-top: -4px;
 	color: var(--onb-faint);
-	font-size: 10.5px;
-	line-height: 15.75px;
+	font-size: 12px;
+	line-height: 16px;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -1471,8 +1477,8 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .folder-stats {
 	color: var(--onb-muted);
-	font-size: 10px;
-	line-height: 14px;
+	font-size: 12px;
+	line-height: 16px;
 }
 
 .onb .folder-summary {
@@ -3250,12 +3256,6 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	font-size: 10px;
 }
 
-.onb .sources-empty {
-	margin-bottom: 8px;
-	color: var(--onb-body);
-	font-size: 11px;
-}
-
 .onb .connect-more {
 	margin-top: 10px;
 	color: var(--onb-muted);
@@ -4998,12 +4998,12 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	text-align: center;
 }
 
-/* Five rows show in full; every row after them scrolls (5 x 65px rows and 4 x 8px gaps). */
+/* Five rows show in full; every row after them scrolls (5 x 63px rows and 4 x 8px gaps). */
 .onb .sources-screen .source-list {
 	width: 100%;
 	max-width: 658px;
-	max-height: 357px;
-	margin-top: 40px;
+	max-height: 347px;
+	margin-top: 44px;
 	overflow-x: hidden;
 	overflow-y: auto;
 }
@@ -5013,9 +5013,10 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	box-sizing: border-box;
 	align-items: center;
 	gap: 18px;
-	min-height: 65px;
-	padding: 14px 16px 14px 20px;
-	border-color: transparent;
+	min-height: 63px;
+	padding: 14px 20px;
+	border: 0;
+	border-radius: 8px;
 }
 
 .onb .sources-screen .source-icon {
@@ -5031,9 +5032,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .sources-screen .source-name {
-	font-size: 13px;
+	font-size: 14px;
 	font-weight: 700;
-	line-height: 21px;
+	line-height: 19px;
 }
 
 .onb .sources-screen .source-detail {
@@ -5048,7 +5049,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .sources-screen .sources-checking {
-	margin-top: 30px;
+	margin-top: 34px;
 }
 
 .onb .sources-screen .connect-more {
@@ -5056,28 +5057,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	flex-direction: column;
 	align-items: center;
 	gap: 8px;
-	margin-top: 30px;
-}
-
-/* No source found (Figma 07c): the list gives way to one line between the title and the chips. */
-.onb .sources-screen.none-found {
-	padding-top: 6px;
-}
-
-.onb .sources-screen.none-found .source-list {
-	display: none;
-}
-
-.onb .sources-screen.none-found .connect-more {
-	gap: 12px;
-	margin-top: 50px;
-}
-
-.onb .sources-screen.none-found .sources-empty {
-	margin: 0 0 25px;
-	color: var(--onb-body);
-	font-size: 13px;
-	line-height: 21px;
+	margin-top: 34px;
 }
 
 .onb .sources-screen .connect-more p {
