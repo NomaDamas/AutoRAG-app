@@ -5879,3 +5879,74 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-size: 12px;
 	line-height: 16px;
 }
+
+/* The scan screen (Figma 04c/e/f) has no footer; title and folder stay put across running, finished and failed. */
+.onb.no-footer {
+	grid-template-rows: 42px minmax(0,1fr);
+}
+
+.onb .si-minimal-scan {
+	justify-content: flex-start;
+	padding-top: 176px;
+}
+
+.onb .si-minimal-scan h1 {
+	font-size: 31px;
+	font-weight: 700;
+	line-height: 34.7px;
+	letter-spacing: -1.39px;
+}
+
+.onb .si-minimal-scan .si-folder-scene {
+	margin-top: 64px;
+}
+
+.onb .si-minimal-scan .si-scan-path {
+	margin-top: 43px;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .si-scan-link {
+	margin-top: 26px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--onb-body);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 16px;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.onb .si-scan-failed {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	margin-top: 36px;
+}
+
+.onb .si-scan-failed .si-scan-link {
+	margin-top: 0;
+}
+
+.onb .si-scan-link.faint {
+	color: var(--onb-faint);
+}
+
+.onb .si-scan-retry {
+	height: 32px;
+	padding: 0 14px;
+	border: 1px solid var(--onb-divider);
+	border-radius: 8px;
+	background: var(--onb-bg-card);
+	color: var(--onb-body);
+	font: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	line-height: 16px;
+	cursor: pointer;
+}

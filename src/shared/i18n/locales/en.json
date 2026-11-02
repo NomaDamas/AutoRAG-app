@@ -875,19 +875,14 @@
       }
     },
     "smartScan": {
-      "title": "Looking through your folders…",
-      "done": "Finished looking",
-      "idle": "Look through your folders?",
-      "failedTitle": "Could not look through your folders",
-      "lead": "AI is counting the files in the suggested folders",
-      "looking": "Looking at: {{path}}",
-      "cancel": "Cancel and choose by hand",
-      "note": "Found {{count}} sub-folders worth leaving out. Review them on the next screen.",
-      "noteNone": "Nothing to leave out. The folders you chose look document-heavy.",
-      "failed": "The analysis did not finish. You can pick the scope yourself on the next screen.",
+      "title": "Recommending what to index…",
+      "done": "Recommendation finished",
+      "failedTitle": "Could not make a recommendation",
+      "lead": "Looking only at folder names and structure, without opening your files.",
+      "back": "Back to folder selection",
+      "manual": "Choose without a recommendation",
       "retry": "Try again",
-      "skipped": "You can pick the scope yourself without the AI scan.",
-      "start": "Scan with AI"
+      "looking": "Looking at: {{path}}"
     },
     "folders": {
       "eyebrow": "Indexing scope",

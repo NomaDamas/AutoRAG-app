@@ -1,7 +1,6 @@
-/** Step 5 — smart scan: the AI looks through the folders chosen in the step before (prototype's "폴더 탐색 중…" screen). */
+/** Step 5 — smart scan (Figma 04c/e/f): the AI recommends a scope from the folders chosen before. It has no footer: a finished run moves on by itself. */
 
 import type { ReactElement } from "react";
-import { visibleScope } from "../smart-scope";
 import type { OnboardingCtx } from "../context";
 
 /** The prototype's drawn folder with two sheets in it. */
@@ -47,55 +46,48 @@ function Loupe(): ReactElement {
 
 export function SmartScanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement {
 	const { t, draft, smartRun } = ctx;
-	const roots = draft.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-	const running = smartRun.status === "running";
 	const failed = smartRun.status === "error";
 	// A saved draft resumes with its proposals while the run state is fresh: that is "done" too.
 	const done = smartRun.status === "done" || (smartRun.status === "idle" && draft.smartScope !== undefined);
-	const proposals = visibleScope(draft.smartScope, roots).length;
+	const running = !failed && !done;
+	const backToFolders = (): void => {
+		ctx.cancelSmartScan();
+		ctx.setStep("folders");
+	};
 
 	return (
 		<section className="si-minimal-scan">
-			<h1>{t(running ? "onboarding.smartScan.title" : done ? "onboarding.smartScan.done" : failed ? "onboarding.smartScan.failedTitle" : "onboarding.smartScan.idle")}</h1>
+			<h1>{t(failed ? "onboarding.smartScan.failedTitle" : done ? "onboarding.smartScan.done" : "onboarding.smartScan.title")}</h1>
 			<div className="si-folder-scene">
 				<div className="si-folder-glow" />
 				<FolderArt />
 				{running ? <Loupe /> : null}
 			</div>
-			{running ? (
-				<>
-					<p className="si-scan-path" role="status">
-						<span className="shimmer">
-							{smartRun.progress ?? (smartRun.current === null ? t("onboarding.smartScan.lead") : t("onboarding.smartScan.looking", { path: smartRun.current }))}
-						</span>
-					</p>
-					<button type="button" className="quiet si-scan-cancel" onClick={ctx.cancelSmartScan}>
-						{t("onboarding.smartScan.cancel")}
-					</button>
-				</>
-			) : null}
-			{done ? (
-				<p className="si-scan-note">
-					{proposals > 0 ? t("onboarding.smartScan.note", { count: proposals }) : t("onboarding.smartScan.noteNone")}
+			{smartRun.status === "running" ? (
+				<p className="si-scan-path" role="status">
+					<span className="shimmer">
+						{smartRun.progress ?? (smartRun.current === null ? t("onboarding.smartScan.lead") : t("onboarding.smartScan.looking", { path: smartRun.current }))}
+					</span>
 				</p>
 			) : null}
+			{running ? (
+				<button type="button" className="si-scan-link si-scan-cancel" onClick={backToFolders}>
+					{t("onboarding.smartScan.back")}
+				</button>
+			) : null}
 			{failed ? (
-				<>
-					<p className="si-scan-error">
-						{t("onboarding.smartScan.failed")} <small>{smartRun.message}</small>
-					</p>
-					<button type="button" className="secondary si-scan-retry" onClick={ctx.startSmartScan}>
+				<div className="si-scan-failed" role="alert">
+					<button type="button" className="si-scan-retry" title={smartRun.message} onClick={ctx.startSmartScan}>
 						{t("onboarding.smartScan.retry")}
 					</button>
-				</>
-			) : null}
-			{!running && !done && !failed ? (
-				<>
-					<p className="si-scan-note">{t("onboarding.smartScan.skipped")}</p>
-					<button type="button" className="secondary si-scan-retry" disabled={ctx.candidates.length === 0 && draft.folders.length === 0} onClick={ctx.startSmartScan}>
-						{t("onboarding.smartScan.start")}
+					<button type="button" className="si-scan-link faint si-scan-back" onClick={backToFolders}>
+						{t("onboarding.smartScan.back")}
 					</button>
-				</>
+					{/* Without this a model that keeps failing would leave no way past this screen. */}
+					<button type="button" className="si-scan-link faint si-scan-manual" onClick={() => ctx.setStep("smartScope")}>
+						{t("onboarding.smartScan.manual")}
+					</button>
+				</div>
 			) : null}
 		</section>
 	);

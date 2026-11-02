@@ -92,30 +92,38 @@ describe("SmartScanStep", () => {
 		expect(shimmer?.textContent).toBe("다운로드 하위 폴더 살펴보는 중");
 	});
 
-	it("cancels the analysis and falls back to choosing by hand", () => {
+	it("stops the analysis and goes back to choosing folders", () => {
 		const cancelSmartScan = vi.fn();
-		renderScan({ cancelSmartScan, smartRun: { status: "running", runId: "r", current: null } });
+		const setStep = vi.fn();
+		renderScan({ cancelSmartScan, setStep, smartRun: { status: "running", runId: "r", current: null } });
 
 		click(one(".si-scan-cancel"));
 		expect(cancelSmartScan).toHaveBeenCalledTimes(1);
+		expect(setStep).toHaveBeenCalledWith("folders");
 	});
 
-	it("reports a failure with its reason and offers a retry", () => {
+	it("offers a retry, the way back and a way on when the analysis fails", () => {
 		const startSmartScan = vi.fn();
-		renderScan({ startSmartScan, smartRun: { status: "error", message: "No model configured" } });
+		const setStep = vi.fn();
+		renderScan({ startSmartScan, setStep, smartRun: { status: "error", message: "No model configured" } });
 
-		expect(text(".si-scan-error")).toContain("onboarding.smartScan.failed");
-		expect(text(".si-scan-error")).toContain("No model configured");
+		expect(text("h1")).toContain("onboarding.smartScan.failedTitle");
+		expect(one(".si-scan-retry").title).toBe("No model configured");
 		click(one(".si-scan-retry"));
 		expect(startSmartScan).toHaveBeenCalledTimes(1);
 		expect(host.querySelector(".si-roaming-loupe")).toBeNull();
+		click(one(".si-scan-back"));
+		expect(setStep).toHaveBeenLastCalledWith("folders");
+		click(one(".si-scan-manual"));
+		expect(setStep).toHaveBeenLastCalledWith("smartScope");
 	});
 
-	it("says it is done, with what it proposes, once the analysis finished", () => {
-		renderScan({ smartRun: { status: "done" }, draft: { ...DRAFT, smartScope: [proposal("/docs/Zoom"), proposal("/docs/Logs", { excluded: false })] } });
+	it("shows only the finished title once the analysis is done", () => {
+		renderScan({ smartRun: { status: "done" }, draft: { ...DRAFT, smartScope: [proposal("/docs/Zoom")] } });
 
 		expect(text("h1")).toContain("onboarding.smartScan.done");
-		expect(text(".si-scan-note")).toContain("count=2");
+		expect(host.querySelector(".si-roaming-loupe")).toBeNull();
+		expect(host.querySelector("button")).toBeNull();
 	});
 });
 

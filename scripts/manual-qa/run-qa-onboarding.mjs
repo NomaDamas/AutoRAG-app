@@ -283,11 +283,10 @@ try {
 	// smart scan: the AI looks through the folders just chosen, on the model connected before them.
 	await page.waitForSelector(".onb .si-minimal-scan", { timeout: 6000 });
 	check("folders advance to the smart scan", true);
-	await page.waitForFunction(() => document.querySelector(".onb .si-scan-note") !== null || document.querySelector(".onb .si-scan-error") !== null, null, { timeout: 60_000 });
-	check("the scan ran on the connected model instead of failing for want of one", (await page.locator(".onb .si-scan-error").count()) === 0, await page.locator(".onb .si-scan-error").innerText().catch(() => ""));
-	check("the scan step can be left", await primary.isEnabled());
 	await shot("04b-smart-scan");
-	await primary.click();
+	// The scan has no footer: a finished run opens the scope screen by itself, and a failed one stays with its retry.
+	await page.waitForFunction(() => document.querySelector(".onb .si-dual-panels") !== null || document.querySelector(".onb .si-scan-failed") !== null, null, { timeout: 60_000 });
+	check("the scan ran on the connected model instead of failing for want of one", (await page.locator(".onb .si-scan-failed").count()) === 0);
 
 	// smart-indexing scope: the chosen folders as blue pills, nothing proposed by the stub model.
 	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });

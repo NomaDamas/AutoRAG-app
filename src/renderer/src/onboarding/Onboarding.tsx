@@ -146,6 +146,9 @@ function leaveDetour(draft: OnboardingDraft): OnboardingDraft {
 
 const trimTrailingSeparators = (path: string): string => path.replace(/[\\/]+$/u, "");
 
+/** How long a finished scan stays on screen before the scope screen opens. */
+const SCAN_DONE_HOLD_MS = 900;
+
 /** Folders directly inside `path`; the scope screen browses with it, and an unreadable folder just has none. */
 function listSubfolders(path: string): Promise<readonly SubFolder[]> {
 	return window.autorag.fs.listDir(path).then(
@@ -436,7 +439,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
 		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
 		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
-		const target = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
+		const following = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
+		// With proposals that still cover the selection there is nothing to scan: go straight to them.
+		const selected = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
+		const target = following === "smartScan" && !needsAnalysis(selected, current.smartScopeRoots, current.smartScope) ? "smartScope" : following;
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
 		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
 		if (consent !== null && errorConsent !== null) {
@@ -466,7 +472,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
-			const target = list[index - 1];
+			// The scan screen moves on by itself, so stepping back passes over it.
+			const previous = list[index - 1];
+			const target = previous === "smartScan" ? "folders" : previous;
 			if (target !== undefined) {
 				setDraft({ ...current, stepId: target });
 			}
@@ -596,6 +604,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		startSmartScan();
 	}, [stepId, startSmartScan]);
+
+	// A finished scan has no footer to press: it shows its result for a moment, then opens the scope screen.
+	const scanFinished = stepId === "smartScan" && (smartRun.status === "done" || (smartRun.status === "idle" && draft?.smartScope !== undefined));
+	useEffect(() => {
+		if (!scanFinished) {
+			return;
+		}
+		const timer = window.setTimeout(() => {
+			setDraft((current) => (current === null || current.stepId !== "smartScan" ? current : { ...current, stepId: "smartScope" }));
+		}, SCAN_DONE_HOLD_MS);
+		return () => window.clearTimeout(timer);
+	}, [scanFinished]);
 
 	// A folder the user left out by hand is measured by the pre-scan; its size lands in the draft when that scan is done.
 	useEffect(() => {
@@ -1077,12 +1097,12 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		);
 
 	return (
-		<div className={cn("onb", draft.stepId === "indexing" && "immersive")}>
+		<div className={cn("onb", draft.stepId === "indexing" && "immersive", draft.stepId === "smartScan" && "no-footer")}>
 			<header className="titlebar">
 				<div className="window-title">{WINDOW_TITLE}</div>
 			</header>
 			<div className="stage">{renderStep()}</div>
-			<footer className="footer">{footer}</footer>
+			{draft.stepId === "smartScan" ? null : <footer className="footer">{footer}</footer>}
 			<div className={cn("toast", toast !== null && "show")}>{toast}</div>
 			<div className="scrim" hidden={overlay === null}>
 				{renderOverlay(overlay, {
