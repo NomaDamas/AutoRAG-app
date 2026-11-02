@@ -378,9 +378,15 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	color: var(--onb-faint);
 }
 
-/* The forward button is the one to press: a darker outline than Back (Figma 77:1806). */
+/* The forward button is the one to press: solid blue with a white label and arrow (Figma 117:4102). */
 .onb .footer-actions .footer-btn:last-child:not(:disabled) {
-	border-color: var(--onb-faint);
+	border-color: var(--onb-blue);
+	background: var(--onb-blue);
+	color: #fff;
+}
+
+.onb .footer-actions .footer-btn:last-child:not(:disabled) svg {
+	color: #fff;
 }
 
 /* Back's icon is the quiet one: faint, while its label and the forward icon stay body (Figma 77:1806). */
