@@ -265,6 +265,7 @@
       "open": "Open",
       "openWith": "Open With",
       "compress": "Compress",
+      "compressZip": "Compress as ZIP",
       "compress7z": "Compress as 7z",
       "extract": "Extract",
       "share": "Share",

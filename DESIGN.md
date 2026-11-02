@@ -155,7 +155,7 @@ HWP and HWPX are the one exception to the OS thumbnailer: neither macOS nor Wind
 
 Scrollbars are deliberately unstyled (base.css §7): any `::-webkit-scrollbar` rule forces Chromium's classic scrollbars, which consume layout width and visibly shift the preview and metadata rows whenever the panel starts or stops scrolling. Leaving them untouched keeps the macOS-native overlay scrollbars that float above the content, so no surface ever changes width; on-device check: `scripts/manual-qa/run-qa-finder-overlay-scrollbars.mjs`.
 
-A multi-selection replaces the single-file panel with the aggregate view (`src/renderer/src/state/inspector-multi.ts`): a fan of up to five of the selection's own preview papers, each sheet dog-eared (`.page-curl`) and drop-shadowed, deeper sheets rotated wider and stepped further out, focused file in front; then the "N개 항목" title, the per-kind breakdown with the total size ("PDF document 2개 · 1 KB", tails folded into 외 N종), and 생성한/수정한 날짜 date ranges that collapse to one date on a shared day. Per-file affordances — the index chip, the Versions family, the action bar — stay single-selection only. On-device check: `scripts/manual-qa/run-qa-finder-inspector-preview.mjs`.
+A multi-selection replaces the single-file panel with the aggregate view (`src/renderer/src/state/inspector-multi.ts`): a fan of up to five of the selection's own preview papers, each sheet dog-eared (`.page-curl`) and drop-shadowed, deeper sheets rotated wider and stepped further out, focused file in front; then the "N개 항목" title, the per-kind breakdown with the total size ("PDF document 2개 · 1 KB", tails folded into 외 N종), and 생성한/수정한 날짜 date ranges that collapse to one date on a shared day. Per-file affordances — the index chip, the Versions family — stay single-selection only; the action bar holds just "압축" (see Compression below). On-device check: `scripts/manual-qa/run-qa-finder-inspector-preview.mjs`.
 
 The list is expanded by default and the "간략히 / 전체 정보" button collapses it to the core summary (kind, size, where, path, created, modified); the button only appears when there is a non-core row to hide. Labels, ordering, and the collapse rule live in `src/renderer/src/state/inspector-info.ts`; automated check: `test/ui-inspector-info.test.ts`; on-device check: `scripts/manual-qa/run-qa-finder-info-metadata.mjs`.
 
@@ -306,8 +306,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   longer extracts as `ÇÑ±Û.txt`. The wasm engine is a vendored rebuild with a
   UTF-8 locale (`scripts/libarchive-wasm/`); its licenses are
   recorded in `THIRD_PARTY_NOTICES.md`.
-- Compression writes zip (default) or 7z — "7z로 압축" is a second row beside "압축"
-  in the Inspector and context menu, a `compress` request with `format: "7z"`.
+- Compression writes zip (default) or 7z. The Inspector's action bar offers "압축" only
+  for a multi-selection (`selectionActions` in `state/file-actions.ts`; packing one item
+  is not worth an archive, so a single file or folder gets none) as one menu button
+  (like "이미지 편집") whose items "ZIP으로 압축" / "7z로 압축" send a `compress`
+  request with `format: "zip"` / `"7z"` for every selected row, writing one archive. The
+  context menu keeps its "압축" and "7z로 압축" rows.
   The 7z writer (`src/main/sevenzip-writer.ts`) writes solid LZMA blocks (up to
   32 MiB each, so redundancy between files is shared): the LZMA encoder is
   WebAssembly (`lzma-wasm`) running in `src/main/lzma-worker.mjs`, so the main

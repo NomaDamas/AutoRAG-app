@@ -245,6 +245,8 @@ export interface FinderController {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
+	/** Run one Inspector action over the whole multi-selection (Compress). */
+	runSelectionAction(target: FileActionTarget): void;
 	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
 	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
 	/** The "용량 줄이기" dialog (choosing level/mode, or actively reducing with live progress); null when closed. */
@@ -1342,6 +1344,27 @@ export function useFinderController(
 			}
 		});
 
+	/**
+	 * Run one Inspector action over the whole multi-selection. Compress is the
+	 * only one: it writes a single archive holding every selected row.
+	 */
+	const runSelectionAction = useLatestCallback((target: FileActionTarget) => {
+		if (target.kind !== "request" || target.request.kind !== "compress") return;
+		source.actions
+			.run(
+				selectedEntries.map((entry) => entry.path),
+				target.request,
+			)
+			.then((outcome) => {
+				showToast(outcome.note);
+				if (outcome.output !== null) {
+					recordActionOutput("compress", outcome.output);
+					refresh();
+				}
+			})
+			.catch(reportError);
+	});
+
 	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
 		source.actions.openWithApplications(entry.path));
 
@@ -2244,6 +2267,7 @@ export function useFinderController(
 		copyEntryPath,
 		actionCapabilities,
 		runEntryAction,
+		runSelectionAction,
 		loadOpenWithApplications,
 		reduceDialog,
 		setReduceDialogLevel,

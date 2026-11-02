@@ -265,6 +265,7 @@
       "open": "打开",
       "openWith": "打开方式",
       "compress": "压缩",
+      "compressZip": "压缩为 ZIP",
       "compress7z": "压缩为 7z",
       "extract": "解压",
       "share": "共享",

@@ -605,10 +605,11 @@ export function App(): ReactElement {
 		path,
 		rules: automationsView.state.rules,
 	});
-	/** Inspector action bar: open, share, archive, and edits all run through the focused pane's controller. */
+	/** Inspector action bar: open, share, and edits run on the focused row; a multi-selection's Compress packs every selected row. */
 	const runInspectorAction = useCallback(
 		(target: FileActionTarget, anchor: ActionAnchor | null) => {
-			if (inspectorEntry !== null) finder?.runEntryAction(inspectorEntry, target, anchor);
+			if ((finder?.selectedEntries.length ?? 0) > 1) finder?.runSelectionAction(target);
+			else if (inspectorEntry !== null) finder?.runEntryAction(inspectorEntry, target, anchor);
 		},
 		[finder, inspectorEntry],
 	);
