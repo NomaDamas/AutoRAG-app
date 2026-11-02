@@ -902,8 +902,8 @@
     },
     "smartScope": {
       "policy": {
-        "title": "Smart indexing scope",
-        "lead": "Drag folders to include them in the index or leave them out.",
+        "title": "Review the indexing scope",
+        "lead": "Indexing has not started yet. Drag folders to adjust the scope.",
         "eta": "~{{minutes}} min"
       },
       "include": {
@@ -922,7 +922,7 @@
         }
       },
       "criteria": {
-        "label": "How the AI decides",
+        "label": "How it recommends",
         "includeTitle": "What it includes",
         "includeBody": "Documents you wrote, downloaded or collected (reports, notes, contracts, papers, lecture materials and so on), and folders named after projects, people or dates.",
         "excludeTitle": "What it leaves out",
@@ -931,7 +931,8 @@
       "summary": {
         "eta": "Estimated first index",
         "total": "Total"
-      }
+      },
+      "rescan": "Recommend again"
     },
     "embedding": {
       "title": "How should we embed?",

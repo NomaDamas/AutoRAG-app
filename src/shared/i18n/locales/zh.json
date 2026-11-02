@@ -902,8 +902,8 @@
     },
     "smartScope": {
       "policy": {
-        "title": "智能索引范围",
-        "lead": "拖动文件夹，即可将其纳入或排除出索引范围。",
+        "title": "请确认索引范围",
+        "lead": "尚未开始索引。拖动文件夹即可调整索引范围。",
         "eta": "约 {{minutes}} 分钟"
       },
       "include": {
@@ -922,7 +922,7 @@
         }
       },
       "criteria": {
-        "label": "AI 的判断标准",
+        "label": "推荐标准",
         "includeTitle": "包含的内容",
         "includeBody": "你撰写、下载或收集的文档(报告、笔记、合同、论文、讲义等),以及以项目、人名、日期等命名的文件夹。",
         "excludeTitle": "排除的内容",
@@ -931,7 +931,8 @@
       "summary": {
         "eta": "首次索引预计时间",
         "total": "总计"
-      }
+      },
+      "rescan": "重新推荐"
     },
     "embedding": {
       "title": "如何使用嵌入？",

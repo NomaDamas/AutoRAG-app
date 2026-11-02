@@ -5498,15 +5498,15 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-screen:has(.si-head) {
 	justify-content: center;
 	gap: 20px;
-	max-width: 1044px;
+	max-width: 1092px;
 	min-height: 100%;
 	margin: 0 auto;
-	padding: 0 24px;
-	box-sizing: content-box;
+	padding: 40px 24px 0;
+	box-sizing: border-box;
 }
 
 .onb .si-head h1 {
-	margin: 0 0 12px;
+	margin: 0 0 8px;
 }
 
 .onb .si-lead {

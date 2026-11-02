@@ -457,6 +457,23 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, [currentAdvance, openCheckout]);
 
+	/** The scope screen's way back: drops the proposals and runs the recommendation again on the selected folders. */
+	const rescan = useCallback((): void => {
+		const runId = smartRunIdRef.current;
+		smartRunIdRef.current = null;
+		setSmartRun(initialSmartRun);
+		if (runId !== null) {
+			void autorag.smartIndexing.cancel(runId);
+		}
+		setDraft((current) => {
+			if (current === null) {
+				return current;
+			}
+			const { smartScope: _dropped, smartScopeRoots: _roots, ...rest } = current;
+			return { ...rest, stepId: "smartScan" };
+		});
+	}, []);
+
 	const back = useCallback((): void => {
 		const current = draftRef.current;
 		if (current === null) {
@@ -1086,8 +1103,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					))}
 				</div>
 				<div className="footer-actions">
-					<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={back}>
-						{t("onboarding.footerBack")}
+					<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={draft.stepId === "smartScope" ? rescan : back}>
+						{t(draft.stepId === "smartScope" ? "onboarding.smartScope.rescan" : "onboarding.footerBack")}
 						<FooterBackKey />
 					</button>
 					<button type="button" className="footer-btn next" disabled={!currentAdvance()} onClick={next}>
