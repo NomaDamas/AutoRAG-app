@@ -5885,11 +5885,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	grid-template-rows: 42px minmax(0,1fr);
 }
 
-/* Figma 04c/f centre the whole group in the frame, whatever its size. */
+/* Figma 04c/f centre the whole group in the frame, whatever its size, 7px above the middle. */
 .onb .si-minimal-scan {
 	justify-content: center;
 	box-sizing: border-box;
-	padding: 24px;
+	padding: 24px 24px 38px;
 }
 
 .onb .si-scan-below {

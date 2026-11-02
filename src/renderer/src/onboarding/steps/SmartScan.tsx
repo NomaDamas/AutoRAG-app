@@ -81,7 +81,7 @@ export function SmartScanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 						<button type="button" className="si-scan-retry" title={smartRun.message} onClick={ctx.startSmartScan}>
 							{t("onboarding.smartScan.retry")}
 						</button>
-						<button type="button" className="si-scan-link faint si-scan-back" onClick={backToFolders}>
+						<button type="button" className="si-scan-link si-scan-back" onClick={backToFolders}>
 							{t("onboarding.smartScan.back")}
 						</button>
 						{/* Without this a model that keeps failing would leave no way past this screen. */}

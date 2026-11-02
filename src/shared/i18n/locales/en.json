@@ -875,9 +875,9 @@
       }
     },
     "smartScan": {
-      "title": "Recommending what to index…",
-      "done": "Recommendation finished",
-      "failedTitle": "Could not make a recommendation",
+      "title": "Looking for the scope to recommend…",
+      "done": "Finished looking",
+      "failedTitle": "Could not finish looking",
       "lead": "Looking only at folder names and structure, without opening your files.",
       "back": "Back to folder selection",
       "manual": "Choose without a recommendation",
