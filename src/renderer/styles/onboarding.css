@@ -5898,7 +5898,8 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .si-minimal-scan .si-folder-scene {
-	margin-top: 64px;
+	height: 162px;
+	margin: 64px auto 0;
 }
 
 .onb .si-minimal-scan .si-scan-path {
@@ -5908,7 +5909,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .si-scan-link {
-	margin-top: 26px;
+	margin-top: 36px;
 	padding: 0;
 	border: 0;
 	background: none;
@@ -5933,6 +5934,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	margin-top: 0;
 }
 
+/* Figma 04f: the way back sits 15px under the retry. */
+.onb .si-scan-failed .si-scan-retry {
+	margin-bottom: 3px;
+}
+
 .onb .si-scan-link.faint {
 	color: var(--onb-faint);
 }
@@ -5949,4 +5955,43 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-weight: 500;
 	line-height: 16px;
 	cursor: pointer;
+}
+
+/* A finished scan dissolves into the scope screen: it fades out on top while the screen and footer come in under it. */
+.onb .stage:has(.si-dissolve) {
+	position: relative;
+	overflow: hidden;
+}
+
+.onb .si-dissolve {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	background: var(--onb-bg-stage);
+	pointer-events: none;
+	animation: onb-dissolve-out .45s ease-in-out forwards;
+}
+
+.onb .si-dissolve .si-minimal-scan {
+	animation: none;
+}
+
+.onb.dissolving .si-screen {
+	animation: none;
+}
+
+.onb.dissolving .footer {
+	animation: onb-dissolve-in .45s ease-in-out;
+}
+
+@keyframes onb-dissolve-out {
+	to {
+		opacity: 0;
+	}
+}
+
+@keyframes onb-dissolve-in {
+	from {
+		opacity: 0;
+	}
 }

@@ -606,12 +606,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId, startSmartScan]);
 
 	// A finished scan has no footer to press: it shows its result for a moment, then opens the scope screen.
+	const [dissolving, setDissolving] = useState(false);
 	const scanFinished = stepId === "smartScan" && (smartRun.status === "done" || (smartRun.status === "idle" && draft?.smartScope !== undefined));
 	useEffect(() => {
 		if (!scanFinished) {
 			return;
 		}
 		const timer = window.setTimeout(() => {
+			setDissolving(true);
 			setDraft((current) => (current === null || current.stepId !== "smartScan" ? current : { ...current, stepId: "smartScope" }));
 		}, SCAN_DONE_HOLD_MS);
 		return () => window.clearTimeout(timer);
@@ -1097,11 +1099,19 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		);
 
 	return (
-		<div className={cn("onb", draft.stepId === "indexing" && "immersive", draft.stepId === "smartScan" && "no-footer")}>
+		<div className={cn("onb", draft.stepId === "indexing" && "immersive", draft.stepId === "smartScan" && "no-footer", dissolving && "dissolving")}>
 			<header className="titlebar">
 				<div className="window-title">{WINDOW_TITLE}</div>
 			</header>
-			<div className="stage">{renderStep()}</div>
+			<div className="stage">
+				{renderStep()}
+				{/* The finished scan stays on top of the scope screen and fades away, so one dissolves into the other. */}
+				{dissolving ? (
+					<div className="si-dissolve" aria-hidden="true" inert onAnimationEnd={() => setDissolving(false)}>
+						<SmartScanStep ctx={ctx} />
+					</div>
+				) : null}
+			</div>
 			{draft.stepId === "smartScan" ? null : <footer className="footer">{footer}</footer>}
 			<div className={cn("toast", toast !== null && "show")}>{toast}</div>
 			<div className="scrim" hidden={overlay === null}>
