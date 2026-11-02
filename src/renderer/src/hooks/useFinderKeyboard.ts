@@ -10,6 +10,7 @@ import type { StackRow } from "../state/version-family";
 import type { ViewMode } from "../state/view-mode";
 import { columnsForWidth, gridColumnCount } from "../state/virtual";
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
+import { useShortcutSettings } from "./useShortcutSettings";
 
 /** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
 const WINDOW_KEY_ACTIONS: Partial<Record<KeyAction["type"], true>> = {
@@ -196,6 +197,7 @@ export interface FinderKeyboardInput {
 /** The input half of a Finder pane: its window-level keyboard shortcuts. */
 export function useFinderKeyboard(input: FinderKeyboardInput): void {
 	const { focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions } = input;
+	const shortcutSettings = useShortcutSettings();
 	useEffect(() => {
 		// Every pane mounts a controller; only the focused one answers the keyboard.
 		if (!focused) return;
@@ -224,11 +226,13 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 			const action = resolveKeyAction(
 				{
 					key: event.key,
+					code: event.code,
 					meta: event.metaKey || event.ctrlKey,
 					shift: event.shiftKey,
 					alt: event.altKey,
 				},
 				{ zone, typing, viewMode: layout },
+				shortcutSettings,
 			);
 			if (action === null) {
 				return;
@@ -401,5 +405,5 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 			window.removeEventListener("mousedown", swallow);
 			window.removeEventListener("auxclick", swallow);
 		};
-	}, [focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions]);
+	}, [focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions, shortcutSettings]);
 }

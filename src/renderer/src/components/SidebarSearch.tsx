@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
+import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
 
@@ -37,6 +38,7 @@ export function SidebarSearch({
 	/** mode + raw text; an empty text clears the committed search. */
 	readonly onSubmit: (mode: SearchMode, text: string) => void;
 }): ReactElement {
+	const focusSearchShortcut = useFormattedShortcut("focusSearch");
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState(query);
 	const [mode, setMode] = useState<SearchMode>("name");
@@ -117,7 +119,7 @@ export function SidebarSearch({
 						✕
 					</button>
 				) : showHotkeys && !focused ? (
-					<Keycap label={formatShortcut({ key: "F" })} />
+					<Keycap label={focusSearchShortcut} />
 				) : null}
 			</label>
 			{focused ? (

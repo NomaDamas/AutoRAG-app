@@ -2446,3 +2446,325 @@
 	font-size: var(--font-size-badge);
 	color: var(--text-muted);
 }
+
+/* ------------------------------------------------ Shortcuts Customization -- */
+
+.settings-view .shortcuts-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	margin-bottom: var(--space-12);
+}
+
+.settings-view .shortcuts-filter-box {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	flex: 1;
+	height: 32px;
+	padding: 0 var(--space-10);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	color: var(--text-muted);
+	transition: border-color var(--dur-color) var(--ease-out), box-shadow var(--dur-color) var(--ease-out);
+}
+
+.settings-view .shortcuts-filter-box:focus-within {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-view .shortcuts-filter-box__icon {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-filter-box__input {
+	flex: 1;
+	min-width: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .shortcuts-filter-box__input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .shortcuts-filter-box__clear {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-full);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-filter-box__clear:hover {
+	background: var(--bg-hover-strong);
+	color: var(--text-primary);
+}
+
+.settings-view .shortcut-row-wrap {
+	display: flex;
+	flex-direction: column;
+	border-bottom: 1px solid var(--border-divider);
+}
+
+.settings-view .shortcut-row-wrap:last-child {
+	border-bottom: 0;
+}
+
+.settings-view .shortcut-row-wrap > .sidebar-custom-row {
+	border-bottom: 0;
+}
+
+.settings-view .shortcut-row__controls {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	flex: none;
+}
+
+.settings-view .shortcut-recorder-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-6);
+	min-width: 72px;
+	height: 28px;
+	padding: 0 var(--space-8);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-chrome);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+	transition: background var(--dur-color) var(--ease-out), border-color var(--dur-color) var(--ease-out), box-shadow var(--dur-color) var(--ease-out);
+}
+
+.settings-view .shortcut-recorder-btn:hover:not(.is-locked) {
+	border-color: var(--border-strong);
+	background: var(--bg-hover);
+}
+
+.settings-view .shortcut-recorder-btn.is-customized {
+	border-color: var(--accent-pending-border);
+	background: var(--accent-drop-hover);
+}
+
+.settings-view .shortcut-recorder-btn.is-recording {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent-text);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-view .shortcut-recorder-btn.is-locked {
+	opacity: 0.72;
+	cursor: default;
+}
+
+.settings-view .shortcut-recorder-btn__dot {
+	width: 6px;
+	height: 6px;
+	border-radius: var(--radius-full);
+	background: var(--accent);
+	animation: pulseDot 1.2s ease-in-out infinite;
+}
+
+.settings-view .shortcut-recorder-btn__prompt {
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+}
+
+.settings-view .shortcut-keycap-seq {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.settings-view .shortcut-keycap-piece {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+}
+
+.settings-view .shortcut-keycap-plus {
+	color: var(--text-faint);
+	font-size: 10px;
+}
+
+.settings-view .shortcut-keycap {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	min-width: 19px;
+	height: 19px;
+	padding: 0 5px;
+	border: 1px solid var(--border);
+	border-bottom-width: 2px;
+	border-radius: var(--radius-4);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-family: var(--font-sans);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+	line-height: 1;
+}
+
+.settings-view .shortcut-icon-btn {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 1px solid transparent;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+	transition: background var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out), border-color var(--dur-color) var(--ease-out);
+}
+
+.settings-view .shortcut-icon-btn:hover {
+	background: var(--bg-hover-strong);
+	color: var(--text-primary);
+}
+
+.settings-view .shortcut-icon-btn.is-active {
+	border-color: var(--accent-pending-border);
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .shortcut-feedback {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	margin: 0 var(--space-12) var(--space-10);
+	padding: var(--space-8) var(--space-10);
+	border-radius: var(--radius-6);
+	font-size: var(--font-size-badge);
+}
+
+.settings-view .shortcut-feedback.is-warning {
+	justify-content: flex-start;
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .shortcut-feedback.is-conflict {
+	border: 1px solid var(--danger-border);
+	background: var(--danger-bg-soft);
+	color: var(--danger-text);
+}
+
+.settings-view .shortcut-feedback__text {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.settings-view .shortcut-feedback__actions {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.settings-view .shortcut-feedback__btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: 24px;
+	padding: 0 var(--space-8);
+	font-size: var(--font-size-badge);
+}
+
+.settings-view .shortcut-ui-editor {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	margin: 0 var(--space-12) var(--space-10);
+	padding: var(--space-10) var(--space-12);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-subtle);
+}
+
+.settings-view .shortcut-ui-editor__controls {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .shortcut-ui-editor__mods {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+}
+
+.settings-view .shortcut-mod-chip {
+	display: inline-flex;
+	align-items: center;
+	height: 26px;
+	padding: 0 var(--space-8);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font: inherit;
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+}
+
+.settings-view .shortcut-mod-chip.is-active {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .shortcut-key-select {
+	height: 26px;
+	padding: 0 var(--space-8);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-badge);
+}
+
+.settings-view .shortcut-ui-editor__actions {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .shortcut-ui-editor__hint {
+	font-size: var(--font-size-badge);
+	color: var(--warn-text);
+}
+
+.settings-view .shortcut-ui-editor__hint.is-conflict {
+	color: var(--danger-text);
+}

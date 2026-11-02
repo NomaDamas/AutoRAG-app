@@ -34,6 +34,8 @@ import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
 import type { SidebarSettings } from "../../shared/sidebar-contract";
+import { ShortcutSettingsContext } from "./hooks/useShortcutSettings";
+import type { ShortcutSettings } from "../../shared/shortcuts-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
@@ -176,6 +178,7 @@ export function App(): ReactElement {
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
 	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
+	const [shortcutSettings, setShortcutSettings] = useState<ShortcutSettings>(DEFAULT_SETTINGS.shortcuts);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
@@ -373,6 +376,7 @@ export function App(): ReactElement {
 				setShowHiddenFiles(settings.showHiddenFiles);
 				setLanguage(settings.language);
 				setSidebarSettings(settings.sidebar);
+				setShortcutSettings(settings.shortcuts);
 				void setAppLanguage(settings.language);
 			},
 			setListColumns,
@@ -560,6 +564,7 @@ export function App(): ReactElement {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
 			setSidebarSettings(settings.sidebar);
+			setShortcutSettings(settings.shortcuts);
 			void setAppLanguage(settings.language);
 		};
 		void autorag.settings.get().then(applySettings);
@@ -673,6 +678,7 @@ export function App(): ReactElement {
 	return (
 		<TagCatalogContext value={tagCatalog}>
 		<SidebarSettingsContext value={sidebarSettings}>
+		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
@@ -927,6 +933,7 @@ export function App(): ReactElement {
 			</div>
 		</div>
 		</AutomationsContext>
+		</ShortcutSettingsContext>
 		</SidebarSettingsContext>
 		</TagCatalogContext>
 	);

@@ -1,18 +1,27 @@
 /**
- * Keyboard routing for the window, resolved against the focus zone.
- *
- * Reference: handoff README "Keyboard shortcuts". The zone model is `finder`
- * or `evidence`; `typing` is true whenever the event target is a text input,
- * which is what keeps `space` out of composed text.
+ * Keyboard routing for the window, resolved against the focus zone and
+ * user-customized shortcut settings (`src/shared/shortcuts-contract.ts`).
  */
 
-import { type ViewMode, viewModeForKey } from "./view-mode";
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
+import {
+	chordFromKeyEvent,
+	DEFAULT_SHORTCUT_SETTINGS,
+	decomposeShortcutChord,
+	resolveEffectiveShortcuts,
+	SHORTCUT_BY_ID,
+	SHORTCUT_CATALOG,
+	type ShortcutId,
+	type ShortcutSettings,
+} from "../../../shared/shortcuts-contract";
+import type { ViewMode } from "./view-mode";
 
 export type FocusZone = "finder" | "evidence";
 
 export interface KeyEventLike {
 	readonly key: string;
+	/** Physical key code (`KeyP`, `Digit1`, …) when available from a DOM KeyboardEvent. */
+	readonly code?: string | undefined;
 	/** Command on macOS (or Control elsewhere). */
 	readonly meta: boolean;
 	/** Control on Windows/Linux; optional for existing event adapters. */
@@ -55,92 +64,146 @@ export type KeyAction =
 	| { readonly type: "newFolder" }
 	| { readonly type: "newFile"; readonly format: NewFileFormatId }
 	| { readonly type: "openSettings" };
-export function resolveKeyAction(event: KeyEventLike, context: KeyContext): KeyAction | null {
+
+const FINDER_ZONE_ONLY: Readonly<Partial<Record<ShortcutId, true>>> = {
+	parentFolder: true,
+	openItem: true,
+	newFolder: true,
+	newFile: true,
+	rename: true,
+	duplicate: true,
+	copy: true,
+	cut: true,
+	paste: true,
+	pasteMove: true,
+	trash: true,
+	undo: true,
+	redo: true,
+};
+
+function actionForShortcutId(id: ShortcutId): KeyAction | null {
+	switch (id) {
+		case "focusSearch":
+			return { type: "focusSearch" };
+		case "focusComposer":
+			return { type: "focusComposer" };
+		case "openSettings":
+			return { type: "openSettings" };
+		case "newTab":
+			return { type: "newTab" };
+		case "reopenTab":
+			return { type: "reopenTab" };
+		case "closeTab":
+			return { type: "closeTab" };
+		case "editPath":
+			return { type: "editPath" };
+		case "parentFolder":
+			return { type: "parentFolder" };
+		case "viewIcons":
+			return { type: "setViewMode", mode: "icons" };
+		case "viewList":
+			return { type: "setViewMode", mode: "list" };
+		case "viewColumns":
+			return { type: "setViewMode", mode: "columns" };
+		case "quickLook":
+			return { type: "quickLook" };
+		case "openItem":
+			return { type: "open" };
+		case "newFolder":
+			return { type: "newFolder" };
+		case "newFile":
+			return { type: "newFile", format: "text" };
+		case "rename":
+			return { type: "rename" };
+		case "duplicate":
+			return { type: "duplicate" };
+		case "copy":
+			return { type: "copy" };
+		case "cut":
+			return { type: "cut" };
+		case "paste":
+			return { type: "paste", move: false };
+		case "pasteMove":
+			return { type: "paste", move: true };
+		case "trash":
+			return { type: "trash" };
+		case "undo":
+			return { type: "undo" };
+		case "redo":
+			return { type: "redo" };
+		case "aiNewChat":
+		case "aiToggleHistory":
+			// Handled inside AiSearchPanel when an AI Search tab is active.
+			return null;
+	}
+}
+
+export function resolveKeyAction(
+	event: KeyEventLike,
+	context: KeyContext,
+	shortcuts: ShortcutSettings = DEFAULT_SHORTCUT_SETTINGS,
+): KeyAction | null {
 	if (event.key === "Escape") {
 		return { type: "dismiss" };
 	}
-	if ((event.meta || event.ctrl === true) && !event.alt) {
-		switch (event.key.toLowerCase()) {
-			case "f":
-				return { type: "focusSearch" };
-			// ⌘L types a path into the path bar, as in a browser's address bar.
-			case "l":
-				return { type: "editPath" };
-			// ⌘D duplicates the selection, as in Finder.
-			case "d":
-				return context.typing || context.zone !== "finder" ? null : { type: "duplicate" };
-			case "k":
-				return { type: "focusComposer" };
-			// ⇧⌘T brings back the tab ⌘W closed, as in a browser.
-			case "t":
-				return event.shift ? { type: "reopenTab" } : { type: "newTab" };
-			case "w":
-				return { type: "closeTab" };
-			case ",":
-				return { type: "openSettings" };
-			// ⇧⌘N is Finder's New Folder; ⌥⌘N is this app's New File.
-			case "n":
-				return context.typing || context.zone !== "finder" || !event.shift ? null : { type: "newFolder" };
-			// The file clipboard is the Finder zone's; a text field keeps its own
-			// native copy/cut/paste, so these are never swallowed while typing.
-			case "c":
-				return context.typing || context.zone !== "finder" ? null : { type: "copy" };
-			case "x":
-				return context.typing || context.zone !== "finder" ? null : { type: "cut" };
-			case "v":
-				return context.typing || context.zone !== "finder" ? null : { type: "paste", move: false };
-			case "r":
-				// ⌘R renames the selected row, as Finder's Return does.
-				return context.typing || context.zone !== "finder" ? null : { type: "rename" };
-			case "z":
-				// ⌘Z undoes the newest file operation; ⇧⌘Z redoes the one it took back.
-				if (context.typing || context.zone !== "finder") return null;
-				return event.shift ? { type: "redo" } : { type: "undo" };
-			default: {
-				const mode = viewModeForKey(event.key);
-				return mode === null ? null : { type: "setViewMode", mode };
+
+	const recorded = chordFromKeyEvent(event);
+	if (recorded.kind === "valid") {
+		const effective = resolveEffectiveShortcuts(shortcuts);
+		const eventParts = decomposeShortcutChord(recorded.chord);
+		const hasMod = eventParts?.mod === true;
+
+		for (const item of SHORTCUT_CATALOG) {
+			if (item.scope === "aiSearch") continue;
+			const targetChord = effective[item.id];
+			const matchesExact = targetChord === recorded.chord;
+			const matchesSecondaryDelete =
+				!matchesExact &&
+				item.id === "trash" &&
+				targetChord === "Backspace" &&
+				recorded.chord === "Delete" &&
+				!Object.entries(effective).some(
+					([otherId, otherChord]) =>
+						otherId !== "trash" &&
+						SHORTCUT_BY_ID[otherId as ShortcutId].scope !== "aiSearch" &&
+						otherChord === "Delete",
+				);
+
+			if (!matchesExact && !matchesSecondaryDelete) continue;
+
+			// While typing in an input, only Mod-modified chords that explicitly opt in may fire.
+			if (context.typing && (!item.allowWhileTyping || !hasMod)) {
+				return null;
 			}
+			if (FINDER_ZONE_ONLY[item.id] === true && context.zone !== "finder") {
+				return null;
+			}
+			return actionForShortcutId(item.id);
 		}
 	}
-	// ⌥⌘V (Finder's "Move Item Here"): paste the clipboard as a move, whatever
-	// the clipboard was cut or copied with.
-	if ((event.meta || event.ctrl === true) && event.alt && event.key.toLowerCase() === "v") {
-		return context.typing || context.zone !== "finder" ? null : { type: "paste", move: true };
-	}
-	// ⌥⌘N creates a new text file.
-	if ((event.meta || event.ctrl === true) && event.alt && event.key.toLowerCase() === "n") {
-		return context.typing || context.zone !== "finder" ? null : { type: "newFile", format: "text" };
-	}
+
 	if (context.typing) {
 		return null;
 	}
-	// ⌥↑ goes up to the enclosing folder; it must not fall through to the plain ↑ row move.
-	if (event.alt && !event.meta && event.key === "ArrowUp") {
-		return context.zone === "finder" ? { type: "parentFolder" } : null;
-	}
-	if (event.key === " ") {
-		return { type: "quickLook" };
-	}
-	if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-		const delta = event.key === "ArrowDown" ? 1 : -1;
-		return context.zone === "evidence" ? { type: "moveEvidence", delta } : { type: "moveSelection", delta };
-	}
-	if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-		const delta = event.key === "ArrowRight" ? 1 : -1;
-		if (context.zone === "evidence") {
-			return { type: "moveEvidence", delta };
+
+	const mod = event.meta || event.ctrl === true;
+	if (!mod && !event.alt && !event.shift) {
+		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+			const delta = event.key === "ArrowDown" ? 1 : -1;
+			return context.zone === "evidence" ? { type: "moveEvidence", delta } : { type: "moveSelection", delta };
 		}
-		if ((context.viewMode ?? "list") === "list") {
-			return { type: "disclose", direction: event.key === "ArrowRight" ? "expand" : "collapse" };
+		if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+			const delta = event.key === "ArrowRight" ? 1 : -1;
+			if (context.zone === "evidence") {
+				return { type: "moveEvidence", delta };
+			}
+			if ((context.viewMode ?? "list") === "list") {
+				return { type: "disclose", direction: event.key === "ArrowRight" ? "expand" : "collapse" };
+			}
+			return { type: "moveSelectionSideways", delta };
 		}
-		return { type: "moveSelectionSideways", delta };
 	}
-	if (event.key === "Enter" && context.zone === "finder") {
-		return { type: "open" };
-	}
-	if ((event.key === "Delete" || event.key === "Backspace") && context.zone === "finder") {
-		return { type: "trash" };
-	}
+
 	return null;
 }
 
