@@ -1473,7 +1473,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 .onb .folder-path {
 	margin-top: -4px;
 	color: var(--onb-faint);
-	font-size: 12px;
+	font-size: 11px;
 	line-height: 16px;
 	white-space: nowrap;
 	overflow: hidden;
