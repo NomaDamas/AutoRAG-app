@@ -1,8 +1,8 @@
 /**
  * BYOK role step — the reranker and Jev. A Dazzi plan serves both; someone who
  * brings their own key picks them here from the services they connected, right
- * before the first index. Both are optional (each can stay at its default or be
- * turned off), and a role no connected service serves says so instead of
+ * before the first index. The reranker can stay off, while Jev is required by
+ * the shared config, and a role no connected service serves says so instead of
  * offering an empty menu. Choices are saved to the shared config at once, the
  * same blocks Settings → AI 모델 writes.
  */
@@ -122,7 +122,7 @@ export function RolesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 						<RolePicker
 							role={menu.role}
 							models={options[menu.role]}
-							specials={[{ value: "off", label: settingsT("settingsCore.ai.off") }]}
+							specials={menu.role === "rerank" ? [{ value: "off", label: settingsT("settingsCore.ai.off") }] : []}
 							selected={config === null ? null : roleSelectionFor(menu.role, config, connected)}
 							onPick={(entry) => {
 								setMenu(null);
@@ -130,7 +130,7 @@ export function RolesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 							}}
 							onSpecial={() => {
 								setMenu(null);
-								save([{ path: [menu.role], value: false }]);
+								if (menu.role === "rerank") save([{ path: ["rerank"], value: false }]);
 							}}
 						/>
 					</FloatingMenu>

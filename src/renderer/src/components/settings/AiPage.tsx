@@ -50,8 +50,8 @@ const DECOMPOSITION_SPECIALS = [
 	{ value: "default", labelKey: "settingsCore.ai.decompDefault" },
 ] as const;
 
-/** Jev and rerank disable by writing `false` to their block. */
-const OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
+/** Rerank can be disabled; Jev is required by the shared AutoRAG config. */
+const RERANK_OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
 
 interface MenuState {
 	readonly kind: "connect" | "provider" | "picker" | "thinking";
@@ -166,7 +166,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 		if (stringOf(model?.provider) === provider.id) ops.push({ path: ["model"], remove: true });
 		if (stringOf(decomposition?.provider) === provider.id) ops.push({ path: ["queryDecomposition"], remove: true });
 		if (stringOf(rerank?.provider) === provider.id) ops.push({ path: ["rerank"], value: false });
-		if (stringOf(jev?.backend) === jevBackendFor(provider.id)) ops.push({ path: ["jev"], value: false });
+		if (stringOf(jev?.backend) === jevBackendFor(provider.id)) ops.push({ path: ["jev"], remove: true });
 		try {
 			if (ops.length > 0) await run(ops);
 			if (provider.kind === "local" || provider.kind === "custom") await settings.providersRemove(provider.id);
@@ -202,7 +202,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	function specialsFor(role: string): readonly { readonly value: string; readonly label: string }[] {
 		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
-		if (role === "jev" || role === "rerank") return OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "rerank") return RERANK_OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		return [];
 	}
 
@@ -283,7 +283,6 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 								closeMenu();
 								if (menu.arg === "decomposition" && special === "same") void run([{ path: ["queryDecomposition"], value: false }]);
 								else if (menu.arg === "decomposition" && special === "default") void run([{ path: ["queryDecomposition"], remove: true }]);
-								else if (menu.arg === "jev" && special === "off") void run([{ path: ["jev"], value: false }]);
 								else if (menu.arg === "rerank" && special === "off") void run([{ path: ["rerank"], value: false }]);
 							}}
 						/>

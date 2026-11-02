@@ -30,8 +30,7 @@ export function rerankOptionsFor(connected: readonly ProviderSummary[]): RoleOpt
 
 export function jevLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
 	const raw = getAt(config, ["jev"]);
-	if (raw === false) return t("settingsCore.ai.off");
-	if (raw === undefined) return t("settingsCore.ai.auto");
+	if (raw === undefined || raw === false) return t("settingsCore.ai.auto");
 	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.auto");
 }
 
@@ -72,7 +71,7 @@ export function roleSelectionFor(
 	}
 	if (role === "jev") {
 		const raw = getAt(config, ["jev"]);
-		if (raw === false) return { kind: "special", value: "off" };
+		if (raw === false) return null;
 		const record = asRecord(raw);
 		const backend = stringOf(record?.backend);
 		const modelId = stringOf(record?.model);

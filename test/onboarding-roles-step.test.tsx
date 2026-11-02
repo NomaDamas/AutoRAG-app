@@ -106,6 +106,14 @@ describe("RolesStep", () => {
 		expect(settings.configPatch).toHaveBeenCalledWith([{ path: ["rerank"], value: false }]);
 	});
 
+	it("does not offer Disabled for the required Jev role", async () => {
+		settings.providersList.mockResolvedValue([provider("openrouter")]);
+		settings.configGet.mockResolvedValue(config({ jev: { backend: "openrouter", model: "typesafe/jev-1.13" } }));
+		await render();
+		await click(trigger("jev"));
+		expect([...host.querySelectorAll(".settings-menu-item")].some((item) => item.textContent?.trim() === "Disabled")).toBe(false);
+	});
+
 	it("says so, instead of showing an empty menu, when the connected services serve a role not at all", async () => {
 		settings.providersList.mockResolvedValue([provider("anthropic")]);
 		settings.configGet.mockResolvedValue(config());
