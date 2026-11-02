@@ -52,5 +52,6 @@ declare global {
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */
 			readonly pathForFile: (file: File) => string;
 		};
+		readonly autoragIsRemote?: boolean;
 	}
 }

@@ -28,29 +28,102 @@ export const REMOTE_ROUTES = {
 	download: "/remote/download",
 	preview: "/remote/preview",
 	thumb: "/remote/thumb",
+	pair: "/remote/pair",
+	auth: "/remote/auth",
+	health: "/remote/health",
 } as const;
 
 export const REMOTE_TOKEN_HEADER = "x-remote-token";
+export const REMOTE_CSRF_HEADER = "x-dazzi-remote";
 
-/** Main <-> renderer channels for the remote-access setting's live status. */
+/** Main <-> renderer channels for the remote-access setting's live status, pairing, devices, and tunnel. */
 export const REMOTE_CHANNELS = {
 	status: "remote:status",
 	start: "remote:start",
 	stop: "remote:stop",
+	startPairing: "remote:startPairing",
+	devices: "remote:devices",
+	renameDevice: "remote:renameDevice",
+	revokeDevice: "remote:revokeDevice",
+	revokeAllDevices: "remote:revokeAllDevices",
+	refreshNetwork: "remote:refreshNetwork",
+	startTunnel: "remote:startTunnel",
+	stopTunnel: "remote:stopTunnel",
+	changed: "remote:changed",
 } as const;
 
-/** What Settings shows about remote access, and the address a browser opens. */
+/** One-time 6-digit pairing code minted on the host (10-minute TTL, 5-attempt burn). */
+export interface RemotePairingCode {
+	readonly code: string;
+	readonly expiresAt: string;
+}
+
+/** A durably enrolled browser/device holding a hashed `dazzi_device` credential. */
+export interface RemotePairedDevice {
+	readonly id: string;
+	readonly label: string;
+	readonly createdAt: string;
+	readonly lastSeenAt: string | null;
+	readonly current?: boolean;
+}
+
+/** Read-only Tailscale status on the host (`tailscale status --json` + `tailscale serve status --json`). */
+export interface RemoteTailscaleStatus {
+	readonly state: "running" | "stopped" | "missing";
+	readonly dnsName: string | null;
+	readonly tailnetIp: string | null;
+	readonly owner: string | null;
+	readonly servingUrl: string | null;
+	readonly serveCommand: string | null;
+	readonly serveUrl: string | null;
+}
+
+/** Outbound Cloudflare Quick Tunnel (`cloudflared tunnel --url http://127.0.0.1:<port>`) for zero-VPN HTTPS access. */
+export interface RemoteTunnelStatus {
+	readonly available: boolean;
+	readonly state: "off" | "starting" | "online" | "error";
+	readonly url: string | null;
+	readonly error: string | null;
+}
+
+/** How the current browser request authenticated to the remote server. */
+export type RemoteAccessVia = "token" | "device" | "tailscale";
+
+/** Why an unauthenticated browser request reached the AccessGate instead of Finder. */
+export type RemoteAccessRefusal = "pairing_required" | "other_user";
+
+/** What Settings shows about remote access, how devices connect, and the addresses a browser opens. */
 export interface RemoteAccessStatus {
 	readonly serving: boolean;
+	/** Complete token-bearing localhost URL (`http://localhost:<port>/?token=...`) on the host; `location.origin` in a remote browser. */
 	readonly origin: string | null;
+	/** Clean base origin (`http://localhost:<port>`) without the secret token. */
+	readonly baseOrigin?: string | null;
 	readonly port: number;
 	readonly sessions: number;
+	/** Active non-loopback, non-tailnet LAN origins (`http://192.168.x.y:<port>`). */
+	readonly lanOrigins?: readonly string[];
+	readonly tailscale?: RemoteTailscaleStatus;
+	readonly tunnel?: RemoteTunnelStatus;
+	readonly pairing?: RemotePairingCode | null;
+	readonly devices?: readonly RemotePairedDevice[];
+	/** Present in a remote browser session to describe how it authenticated. */
+	readonly via?: RemoteAccessVia;
 }
 
 export interface RemoteAccessBridge {
 	status(): Promise<RemoteAccessStatus>;
 	start(): Promise<RemoteAccessStatus>;
 	stop(): Promise<RemoteAccessStatus>;
+	startPairing(): Promise<RemotePairingCode>;
+	devices(): Promise<readonly RemotePairedDevice[]>;
+	renameDevice(id: string, label: string): Promise<RemotePairedDevice | null>;
+	revokeDevice(id: string): Promise<boolean>;
+	revokeAllDevices(): Promise<number>;
+	refreshNetwork(): Promise<RemoteAccessStatus>;
+	startTunnel(): Promise<RemoteAccessStatus>;
+	stopTunnel(): Promise<RemoteAccessStatus>;
+	onChange(listener: (status: RemoteAccessStatus) => void): () => void;
 }
 
 /** One bridge method invocation. `target` is the bridge name (`fs`, `settings`, …). */
@@ -68,7 +141,10 @@ export interface RemotePush {
 
 /** The remote session's configuration, injected into the bootstrap script. */
 export interface RemoteBootstrapConfig {
-	readonly token: string;
+	/** Optional: omitted for cookie/Tailscale-authenticated sessions where HttpOnly cookies carry authority. */
+	readonly token?: string;
+	readonly via?: RemoteAccessVia;
+	readonly deviceId?: string | null;
 	readonly platform: string;
 	readonly appearance: AppSettings["appearance"];
 	readonly language: AppSettings["language"];

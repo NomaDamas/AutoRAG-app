@@ -149,3 +149,10 @@ as a separate program it starts with command-line arguments.
 |---|---|---|
 | hyparquet, hyparquet-compressors | MIT | Hyperparam — https://github.com/hyparam/hyparquet |
 | hyparquet-writer (tests and QA fixtures only) | MIT | Hyperparam — https://github.com/hyparam/hyparquet-writer |
+
+## Remote access pairing and QR Code generator
+
+| Component | License | Copyright / source |
+|---|---|---|
+| Ovis remote pairing, device registry, Tailscale discovery, and AccessGate patterns (`src/main/remote/{private-state,devices,tailscale,auth,gate}.ts`) | MIT | devswha — https://github.com/devswha/ovis |
+| Project Nayuki QR Code generator (Level M byte-mode port in `src/renderer/src/components/settings/QrCode.tsx`) | MIT | Copyright (c) Project Nayuki — https://github.com/nayuki/QR-Code-generator |

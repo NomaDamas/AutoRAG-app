@@ -915,28 +915,29 @@ app.whenReady().then(async () => {
 		actions: ACTIONS_CHANNELS,
 		analytics: ANALYTICS_CHANNELS,
 	} as const;
+	const ensureRemoteHost = (): RemoteHost => {
+		remoteHost ??= createRemoteHost({
+			rendererRoot: join(import.meta.dirname, "../renderer"),
+			stateDir: join(app.getPath("userData"), "settings"),
+			host: "0.0.0.0",
+			port: async () => (await settingsService.get()).remotePort,
+			icons: iconProvider,
+			workerHost,
+			targets: remoteTargets,
+			window: () => mainWindow,
+			settings: () => settingsService.get(),
+			onStatusChanged: (next) => sendToAllWindows(REMOTE_CHANNELS.changed, next),
+		});
+		return remoteHost;
+	};
 	async function applyRemoteAccess(enabled: boolean): Promise<void> {
 		if (enabled) {
-			remoteHost ??= createRemoteHost({
-				rendererRoot: join(import.meta.dirname, "../renderer"),
-				host: "0.0.0.0",
-				port: (await settingsService.get()).remotePort,
-				icons: iconProvider,
-				workerHost,
-				targets: remoteTargets,
-				window: () => mainWindow,
-				settings: () => settingsService.get(),
-			});
-			await remoteHost.start();
+			await ensureRemoteHost().start();
 			return;
 		}
 		await remoteHost?.stop();
 	}
-	const remoteStatus = async (): Promise<RemoteAccessStatus> => {
-		const status = remoteHost?.status() ?? { serving: false, origin: null, sessions: 0 };
-		const port = status.origin === null ? (await settingsService.get()).remotePort : Number(new URL(status.origin).port);
-		return { serving: status.serving, origin: status.origin, port, sessions: status.sessions };
-	};
+	const remoteStatus = (): Promise<RemoteAccessStatus> => ensureRemoteHost().status();
 	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
 	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
 		await applyRemoteAccess(true);
@@ -946,6 +947,14 @@ app.whenReady().then(async () => {
 		await applyRemoteAccess(false);
 		return remoteStatus();
 	});
+	ipcMain.handle(REMOTE_CHANNELS.startPairing, () => ensureRemoteHost().startPairing());
+	ipcMain.handle(REMOTE_CHANNELS.devices, () => ensureRemoteHost().devices());
+	ipcMain.handle(REMOTE_CHANNELS.renameDevice, (_event, id: string, label: string) => ensureRemoteHost().renameDevice(id, label));
+	ipcMain.handle(REMOTE_CHANNELS.revokeDevice, (_event, id: string) => ensureRemoteHost().revokeDevice(id));
+	ipcMain.handle(REMOTE_CHANNELS.revokeAllDevices, () => ensureRemoteHost().revokeAllDevices());
+	ipcMain.handle(REMOTE_CHANNELS.refreshNetwork, () => ensureRemoteHost().refreshNetwork());
+	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});

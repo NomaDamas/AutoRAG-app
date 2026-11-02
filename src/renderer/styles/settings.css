@@ -2768,3 +2768,297 @@
 .settings-view .shortcut-ui-editor__hint.is-conflict {
 	color: var(--danger-text);
 }
+
+/* ---------------------------------------------------------- Remote Access -- */
+
+.settings-view .settings-remote-hub {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+	margin-top: var(--space-10);
+	margin-bottom: var(--space-8);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-via {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
+}
+
+.settings-view .settings-remote-card,
+.settings-view .settings-remote-devices {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-10);
+	background: var(--bg-subtle);
+	padding: var(--space-12) var(--space-14);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-6);
+	margin-bottom: var(--space-12);
+}
+
+.settings-view .settings-remote-tab {
+	height: 28px;
+	padding: 0 var(--space-12);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+}
+
+.settings-view .settings-remote-tab:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-tab.is-active {
+	border-color: var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .settings-remote-pane {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-desc {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	line-height: var(--leading-body);
+	color: var(--text-body);
+}
+
+.settings-view .settings-remote-sub {
+	margin: 0;
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+	word-break: break-all;
+}
+
+.settings-view .settings-remote-error {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	color: var(--danger-text);
+}
+
+.settings-view .settings-remote-origin-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-origin-label {
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
+}
+
+.settings-view .settings-remote-origin-select {
+	max-width: 100%;
+	min-width: 0;
+}
+
+.settings-view .settings-remote-pair-box {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-14);
+	padding: var(--space-10);
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-qr {
+	flex: none;
+	display: block;
+	border-radius: var(--radius-6);
+	border: 1px solid var(--border-divider);
+}
+
+.settings-view .settings-remote-pair-meta {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-6);
+	min-width: 180px;
+}
+
+.settings-view .settings-remote-code {
+	font-family: var(--font-mono);
+	font-size: 24px;
+	font-weight: var(--weight-semibold);
+	letter-spacing: 0.14em;
+	color: var(--text-primary);
+	line-height: 1.15;
+}
+
+.settings-view .settings-remote-expiry {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+}
+
+.settings-view .settings-remote-url-line {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-badge);
+	color: var(--text-body);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 100%;
+}
+
+.settings-view .settings-remote-status-line {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-command {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	padding: var(--space-8) var(--space-10);
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-command code {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-badge);
+	color: var(--text-primary);
+	word-break: break-all;
+	min-width: 0;
+}
+
+.settings-view .settings-remote-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-actions .linear-btn,
+.settings-view .settings-remote-device-actions .linear-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-remote-devices__head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	margin-bottom: var(--space-8);
+}
+
+.settings-view .settings-remote-devices__title {
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-semibold);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-empty {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
+}
+
+.settings-view .settings-remote-device-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-remote-device-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-8);
+	padding: var(--space-8) var(--space-10);
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-device-info {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-2);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-device-name {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-6);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-device-badge {
+	display: inline-flex;
+	align-items: center;
+	height: 18px;
+	padding: 0 var(--space-6);
+	border-radius: var(--radius-5);
+	background: var(--accent-soft);
+	color: var(--accent-text);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .settings-remote-device-seen {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+}
+
+.settings-view .settings-remote-device-actions {
+	display: inline-flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-remote-rename-form {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: var(--space-6);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-revoke-btn {
+	color: var(--danger-text);
+}

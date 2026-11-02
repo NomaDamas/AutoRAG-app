@@ -12,15 +12,14 @@ import { useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
-import type { RemoteAccessStatus } from "../../../../shared/remote-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
-import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { RemoteAccessSection } from "./RemoteAccessSection";
+import { Row, Section, SettingsPageHead } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 import { hostPlatform } from "../../lib/shortcuts";
 
 const autorag = window.autorag;
-
 export function GeneralPage({
 	appSettings,
 	onAppSettingsChanged,
@@ -35,49 +34,12 @@ export function GeneralPage({
 	readonly onSaved: (snapshot: AutoRagConfigSnapshot) => void;
 }): ReactElement {
 	const { t } = useTranslation();
-	const [remoteStatus, setRemoteStatus] = useState<RemoteAccessStatus | null>(null);
-	const [remotePort, setRemotePort] = useState(String(appSettings.remotePort));
-	const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
-	const canManageRemote = typeof autorag.remote?.status === "function";
-	useEffect(() => setRemotePort(String(appSettings.remotePort)), [appSettings.remotePort]);
-	useEffect(() => {
-		if (!canManageRemote) return;
-		let live = true;
-		setRemoteStatus(null);
-		const refreshStatus = (): void => {
-			void autorag.remote.status().then(
-				(status) => {
-					if (live) setRemoteStatus(status);
-				},
-				(cause: unknown) => {
-					if (live) onSettingsError(t("settingsCore.general.remoteStatusError", { error: cause instanceof Error ? cause.message : String(cause) }));
-				},
-			);
-		};
-		refreshStatus();
-		window.addEventListener("focus", refreshStatus);
-		return () => {
-			live = false;
-			window.removeEventListener("focus", refreshStatus);
-		};
-	}, [appSettings.remoteAccess, appSettings.remotePort, canManageRemote, onSettingsError, t]);
-	const remoteAddress = remoteStatus?.serving === true ? remoteStatus.origin : null;
-
 	async function setApp(patch: Partial<AppSettings>): Promise<void> {
 		try {
 			onAppSettingsChanged(await autorag.settings.set(patch));
 		} catch (cause) {
 			// A rejected change (the right-click menu could not be written) leaves the stored setting as it was.
 			onSettingsError(t(patch.remoteAccess !== undefined || patch.remotePort !== undefined ? "settingsCore.general.remoteSettingsError" : "settingsCore.general.osMenuError", { error: cause instanceof Error ? cause.message : String(cause) }));
-		}
-	}
-	async function copyRemoteAddress(): Promise<void> {
-		if (remoteAddress === null) return;
-		try {
-			await navigator.clipboard.writeText(remoteAddress);
-			setCopiedAddress(remoteAddress);
-		} catch {
-			onSettingsError(t("settingsCore.general.remoteCopyError"));
 		}
 	}
 	return (
@@ -110,52 +72,7 @@ export function GeneralPage({
 					<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
 				</Row>
 			</Section>
-			{canManageRemote ? <Section title={t("settingsCore.general.remoteTitle")} description={t("settingsCore.general.remoteSecurityHint")}>
-				<Row name={t("settingsCore.general.remoteAccess")} hint={t("settingsCore.general.remoteAccessHint")}>
-					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.general.remoteAccess")} />
-				</Row>
-				<Row name={t("settingsCore.general.remoteAddress")} stack>
-					<input
-						type="text"
-						className="settings-source-desc__input min-w-0"
-						aria-label={t("settingsCore.general.remoteAddress")}
-						value={remoteAddress ?? t("settingsCore.general.remoteStopped")}
-						readOnly
-						onClick={(event) => event.currentTarget.select()}
-					/>
-					<button type="button" className="linear-btn shrink-0" disabled={remoteAddress === null} onClick={() => void copyRemoteAddress()}>
-						{remoteAddress !== null && copiedAddress === remoteAddress ? t("settingsCore.general.remoteAddressCopied") : t("settingsCore.general.remoteCopyAddress")}
-					</button>
-				</Row>
-				<Row name={t("settingsCore.general.remotePort")} hint={t("settingsCore.general.remotePortHint")}>
-					<input
-						type="number"
-						className="settings-source-desc__input"
-						aria-label={t("settingsCore.general.remotePort")}
-						min={0}
-						max={65535}
-						step={1}
-						required
-						value={remotePort}
-						onChange={(event) => setRemotePort(event.currentTarget.value)}
-						onBlur={(event) => {
-							const input = event.currentTarget;
-							if (input.reportValidity() && input.valueAsNumber !== appSettings.remotePort) void setApp({ remotePort: input.valueAsNumber });
-						}}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								event.currentTarget.blur();
-							}
-							if (event.key === "Escape") {
-								event.preventDefault();
-								setRemotePort(String(appSettings.remotePort));
-							}
-						}}
-					/>
-				</Row>
-				<Note>{t("settingsCore.general.remoteLimitations")}</Note>
-			</Section> : null}
+			<RemoteAccessSection appSettings={appSettings} setApp={setApp} onSettingsError={onSettingsError} />
 			<Section title={t("settingsCore.general.launchTitle")}>
 				<Row name={t("settingsCore.general.launchAtLogin")} hint={t("settingsCore.general.launchAtLoginHint")}>
 					<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel={t("settingsCore.general.launchAtLogin")} />
