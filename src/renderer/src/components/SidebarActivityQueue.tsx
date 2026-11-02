@@ -19,12 +19,11 @@ function ActivityCard({
 	readonly extraCount?: number;
 	readonly inPopover?: boolean;
 }): ReactElement {
-	const { t } = useTranslation();
 	return (
 		<button
 			type="button"
 			className={cn(
-				"sidebar__activity flex w-full flex-col gap-4 px-8 py-6 border-0 rounded-6 bg-transparent text-left cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
+				"sidebar__activity flex w-full flex-col gap-4 px-8 py-5 border-0 rounded-6 bg-transparent text-left cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
 				!inPopover && "relative",
 				entry.className,
 			)}
@@ -38,33 +37,29 @@ function ActivityCard({
 		>
 			<span className="flex items-center gap-6 min-w-0 text-meta text-ink-body">
 				{entry.sparkle === true ? <SparklesIcon className="flex-none text-accent" /> : null}
-				<span className="flex-1 min-w-0 truncate">{entry.headline}</span>
+				<span
+					className={cn(
+						"flex-1 min-w-0 truncate",
+						entry.shimmerHeadline === true && "shimmer",
+						entry.tone === "error" && "text-(--error-orange-text)",
+						entry.tone === "queued" && "text-ink-muted",
+					)}
+				>
+					{entry.headline}
+				</span>
 				{entry.percent !== null && entry.tone === "run" ? (
-					<span className="flex-none text-ink-muted tabular-nums">{entry.percent}%</span>
-				) : entry.tone === "queued" ? (
-					<span className="flex-none text-badge text-ink-faint">{t("indexActivity.queued")}</span>
+					<span className="flex-none text-badge text-ink-muted tabular-nums">{entry.percent}%</span>
 				) : null}
 				{extraCount > 0 ? (
 					<span
 						data-testid="sidebar-activity-badge"
-						className="flex-none rounded-full bg-hover-strong px-6 py-1 text-badge font-semibold text-ink-muted tabular-nums"
+						className="flex-none rounded-full bg-hover-strong px-5 py-0.5 text-badge font-semibold text-ink-muted tabular-nums"
 					>
 						+{extraCount}
 					</span>
 				) : null}
 			</span>
 			<ProgressBar percent={entry.percent} tone={entry.tone} label={entry.headline} />
-			{entry.detail !== null ? (
-				<span
-					className={cn(
-						"min-w-0 truncate text-badge",
-						entry.shimmerDetail === true && "shimmer text-ink-muted",
-						entry.tone === "error" ? "text-(--error-orange-text)" : "text-ink-muted",
-					)}
-				>
-					{entry.detail}
-				</span>
-			) : null}
 		</button>
 	);
 }
@@ -129,11 +124,8 @@ export function SidebarActivityStack({ entries }: { readonly entries: readonly S
 						data-testid="sidebar-activity-popover"
 						role="region"
 						aria-label={t("sidebarActivity.queueAria")}
-						className="flex max-h-[300px] flex-col gap-2 overflow-y-auto [scrollbar-width:thin] rounded-8 border border-border bg-window p-4 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+						className="flex max-h-[260px] flex-col gap-2 overflow-y-auto [scrollbar-width:thin] rounded-8 border border-border bg-window p-4 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
 					>
-						<div className="flex items-center justify-between px-6 py-2 text-badge font-semibold text-ink-muted">
-							<span>{t("sidebarActivity.queueHeader", { count: entries.length })}</span>
-						</div>
 						{extra.map((entry) => (
 							<ActivityCard key={entry.id} entry={entry} inPopover />
 						))}

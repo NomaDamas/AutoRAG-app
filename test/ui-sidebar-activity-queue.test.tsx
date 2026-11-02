@@ -194,6 +194,11 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 		expect(allText).toContain("kakao");
 		expect(allText).toContain("demo.mp4");
 		expect(allText).toContain("이 컴퓨터용 모델");
+		// Verbose sub-descriptions stay in tooltips instead of crowding the narrow sidebar cards.
+		expect(allText).not.toContain("검색 색인 만드는 중");
+		expect(allText).not.toContain("진행 및 대기열");
+		const localCard = [...expandedCards].find((card) => card.textContent?.includes("로컬 폴더"));
+		expect(localCard?.getAttribute("title")).toContain("검색 색인 만드는 중");
 
 		// Clicking individual cards routes to their respective owners.
 		const modelCard = [...expandedCards].find((card) => card.textContent?.includes("이 컴퓨터용 모델"));

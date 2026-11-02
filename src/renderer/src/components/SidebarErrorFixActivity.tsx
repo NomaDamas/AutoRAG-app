@@ -14,18 +14,28 @@ export function SidebarErrorFixActivity(): ReactElement | null {
 	const { t } = useTranslation();
 	const store = useErrorFixStore();
 	const openLabel = t("appError.fix.sidebar.open");
-	const entries: SidebarActivityEntry[] = describeSidebarErrorFixEntries(store, t).map((entry) => ({
-		id: `error-fix:${entry.id}`,
-		tone: entry.tone,
-		percent: entry.percent,
-		headline: entry.headline,
-		detail: entry.detail,
-		ariaLabel: openLabel,
-		title: openLabel,
-		className: "sidebar__error-fix",
-		sparkle: true,
-		shimmerDetail: entry.tone === "run",
-		onSelect: () => openErrorFixDialog(entry.id),
-	}));
+	const firstRunningIndex = store.sessions.findIndex((entry) => entry.run.status === "running");
+	const entries: SidebarActivityEntry[] = describeSidebarErrorFixEntries(store, t).map((entry, idx) => {
+		const session = store.sessions.find((item) => item.id === entry.id);
+		const isQueued = entry.tone === "queued" || (session?.run.status === "running" && firstRunningIndex >= 0 && idx > firstRunningIndex && session.run.progress === null);
+		const headline =
+			isQueued
+				? t("appError.fix.title")
+				: session?.run.status === "running"
+					? (session.run.progress ?? entry.headline)
+					: entry.headline;
+		return {
+			id: `error-fix:${entry.id}`,
+			tone: isQueued ? "queued" : entry.tone,
+			percent: isQueued ? 0 : entry.percent,
+			headline,
+			ariaLabel: openLabel,
+			title: entry.detail ? `${entry.detail} — ${openLabel}` : openLabel,
+			className: "sidebar__error-fix",
+			sparkle: true,
+			shimmerHeadline: !isQueued && entry.tone === "run",
+			onSelect: () => openErrorFixDialog(entry.id),
+		};
+	});
 	return <SidebarActivityStack entries={entries} />;
 }

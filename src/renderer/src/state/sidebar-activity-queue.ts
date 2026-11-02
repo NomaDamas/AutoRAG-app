@@ -16,13 +16,16 @@ export interface SidebarActivityEntry {
 	readonly tone: SidebarActivityTone;
 	readonly percent: number | null;
 	readonly headline: string;
-	readonly detail: string | null;
 	readonly ariaLabel: string;
 	readonly title: string;
 	readonly className?: string | undefined;
 	readonly sparkle?: boolean | undefined;
-	readonly shimmerDetail?: boolean | undefined;
+	readonly shimmerHeadline?: boolean | undefined;
 	readonly onSelect?: (() => void) | undefined;
+}
+
+function joinTooltip(parts: readonly (string | null | undefined)[]): string {
+	return parts.filter((part): part is string => typeof part === "string" && part.length > 0).join(" — ");
 }
 
 export interface CollectSidebarActivitiesInput {
@@ -70,18 +73,13 @@ function indexEntries(
 			const name = itemName(item, t);
 			if (item.state === "running") {
 				const phase = itemPhaseText(item, t);
-				const detail =
-					item.kind === "local"
-						? [name, phase].filter((part): part is string => part !== null).join(" · ")
-						: t("indexActivity.syncing", { name });
 				multi.push({
 					id: `index:${item.key}`,
 					tone: "run",
 					percent: item.kind === "local" ? localPartialPercent : null,
-					headline: item.kind === "local" ? t("indexActivity.running") : name,
-					detail: detail || null,
+					headline: name,
 					ariaLabel,
-					title,
+					title: joinTooltip([origin, name, phase, ariaLabel]),
 					onSelect: onOpenIndexing,
 				});
 			} else if (item.state === "queued") {
@@ -90,9 +88,8 @@ function indexEntries(
 					tone: "queued",
 					percent: 0,
 					headline: name,
-					detail: null,
 					ariaLabel,
-					title,
+					title: joinTooltip([name, t("indexActivity.queued"), ariaLabel]),
 					onSelect: onOpenIndexing,
 				});
 			} else if (item.state === "failed") {
@@ -100,10 +97,9 @@ function indexEntries(
 					id: `index:${item.key}`,
 					tone: "error",
 					percent: 100,
-					headline: `${t("indexActivity.failed")} · ${name}`,
-					detail: item.error,
+					headline: name,
 					ariaLabel,
-					title,
+					title: joinTooltip([name, item.error, ariaLabel]),
 					onSelect: onOpenIndexing,
 				});
 			}
@@ -113,15 +109,16 @@ function indexEntries(
 
 	const view = describeIndexActivity(snapshot, t);
 	if (view === null) return [];
+	const loneSource = snapshot.state === "running" && snapshot.items.length === 1 && snapshot.items[0]?.kind === "source" ? snapshot.items[0] : undefined;
+	const headline = loneSource === undefined ? view.headline : itemName(loneSource, t);
 	return [
 		{
 			id: `index:${snapshot.state}`,
 			tone: view.tone,
 			percent: view.percent,
-			headline: view.headline,
-			detail: view.detail,
+			headline,
 			ariaLabel,
-			title,
+			title: joinTooltip([origin, view.detail, title]),
 			onSelect: onOpenIndexing,
 		},
 	];
@@ -135,9 +132,8 @@ function backgroundTaskEntry(task: BackgroundTaskItem, t: TFunction): SidebarAct
 			tone: "queued",
 			percent: 0,
 			headline: task.queuedHeadline ?? task.headline,
-			detail: task.detail ?? t("indexActivity.queued"),
 			ariaLabel,
-			title: ariaLabel,
+			title: joinTooltip([task.detail, t("indexActivity.queued"), ariaLabel]),
 			onSelect: task.onSelect,
 		};
 	}
@@ -147,9 +143,8 @@ function backgroundTaskEntry(task: BackgroundTaskItem, t: TFunction): SidebarAct
 			tone: "run",
 			percent: task.percent,
 			headline: task.headline,
-			detail: task.detail,
 			ariaLabel,
-			title: ariaLabel,
+			title: joinTooltip([task.detail, ariaLabel]),
 			onSelect: task.onSelect,
 		};
 	}
@@ -159,9 +154,8 @@ function backgroundTaskEntry(task: BackgroundTaskItem, t: TFunction): SidebarAct
 			tone: "ok",
 			percent: 100,
 			headline: task.doneHeadline,
-			detail: task.detail,
 			ariaLabel,
-			title: ariaLabel,
+			title: joinTooltip([task.detail, ariaLabel]),
 			onSelect: task.onSelect,
 		};
 	}
@@ -170,9 +164,8 @@ function backgroundTaskEntry(task: BackgroundTaskItem, t: TFunction): SidebarAct
 		tone: "error",
 		percent: 100,
 		headline: task.failedHeadline,
-		detail: task.error ?? task.detail,
 		ariaLabel,
-		title: ariaLabel,
+		title: joinTooltip([task.error ?? task.detail, ariaLabel]),
 		onSelect: task.onSelect,
 	};
 }
@@ -189,19 +182,29 @@ export function collectSidebarActivities(input: CollectSidebarActivitiesInput): 
 
 	// 1. AI Error Fix sessions (running, queued, or finished in background awaiting review)
 	const fixAria = t("appError.fix.sidebar.open");
-	for (const entry of describeSidebarErrorFixEntries(input.errorFix, t)) {
+	for (const session of input.errorFix.sessions) {
+		const view = describeSidebarErrorFixEntries({ sessions: [session], activeId: input.errorFix.activeId }, t)[0];
+		if (view === undefined) continue;
+		const firstRunningIndex = input.errorFix.sessions.findIndex((entry) => entry.run.status === "running");
+		const thisIndex = input.errorFix.sessions.indexOf(session);
+		const isQueued = session.run.status === "running" && firstRunningIndex >= 0 && thisIndex > firstRunningIndex && session.run.progress === null;
+		const liveText =
+			isQueued
+				? t("appError.fix.title")
+				: session.run.status === "running"
+					? (session.run.progress ?? view.headline)
+					: view.headline;
 		raw.push({
-			id: `error-fix:${entry.id}`,
-			tone: entry.tone,
-			percent: entry.percent,
-			headline: entry.headline,
-			detail: entry.detail,
+			id: `error-fix:${session.id}`,
+			tone: isQueued ? "queued" : view.tone,
+			percent: isQueued ? 0 : view.percent,
+			headline: liveText,
 			ariaLabel: fixAria,
-			title: fixAria,
+			title: joinTooltip([view.detail, fixAria]),
 			className: "sidebar__error-fix",
 			sparkle: true,
-			shimmerDetail: entry.tone === "run",
-			onSelect: () => input.onOpenErrorFix(entry.id),
+			shimmerHeadline: !isQueued && view.tone === "run",
+			onSelect: () => input.onOpenErrorFix(session.id),
 		});
 	}
 
@@ -226,9 +229,8 @@ export function collectSidebarActivities(input: CollectSidebarActivitiesInput): 
 				tone: problem.tone,
 				percent: problem.retrying ? null : 100,
 				headline: problem.sideTitle,
-				detail: problem.sideDetail,
 				ariaLabel: openLabel,
-				title: openLabel,
+				title: joinTooltip([problem.sideDetail, openLabel]),
 				onSelect: input.onOpenIndexing,
 			});
 		}
@@ -255,9 +257,8 @@ export function collectSidebarActivities(input: CollectSidebarActivitiesInput): 
 			tone: "run",
 			percent,
 			headline: t("modelDownload.title"),
-			detail: amount,
 			ariaLabel: modelOpen,
-			title: modelOpen,
+			title: joinTooltip([amount, modelOpen]),
 			onSelect: input.onOpenAiSettings,
 		});
 	}
