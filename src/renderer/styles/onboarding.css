@@ -5341,15 +5341,24 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 14px;
 }
 
-/* Smart-indexing scope (Figma 05c): a left-aligned heading, two 352px panels folders drag between, and a summary bar. */
+/* Smart-indexing scope (Figma 05c): a centred heading, two 320px panels folders drag between, and a summary bar. */
 .onb .si-screen:has(.si-head) {
 	justify-content: center;
 	gap: 20px;
 	max-width: 1092px;
 	min-height: 100%;
 	margin: 0 auto;
-	padding: 34px 24px 0;
+	padding: 0 24px;
 	box-sizing: border-box;
+}
+
+.onb .si-head {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-bottom: 24px;
+	text-align: center;
 }
 
 .onb .si-head h1 {
@@ -5359,6 +5368,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-lead {
 	display: flex;
 	align-items: center;
+	justify-content: center;
 	gap: 8px;
 }
 
@@ -5370,7 +5380,6 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .si-criteria-wrap {
-	position: relative;
 	display: inline-flex;
 }
 
@@ -5390,8 +5399,8 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .si-criteria {
 	position: absolute;
-	top: calc(100% + 6px);
-	left: 0;
+	top: calc(100% + 9px);
+	left: 50%;
 	z-index: 5;
 	display: none;
 	flex-direction: column;
@@ -5403,6 +5412,8 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	background: var(--onb-bg-card);
 	filter: drop-shadow(0 0 4px rgba(0,0,0,.2));
 	color: var(--onb-body);
+	text-align: left;
+	transform: translateX(-50%);
 }
 
 .onb .si-criteria-wrap:hover .si-criteria,
@@ -5417,17 +5428,17 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .si-criteria-part b {
-	font-size: 11px;
+	font-size: 12px;
 	font-weight: 500;
-	line-height: 14px;
+	line-height: 16px;
 }
 
 .onb .si-criteria-item {
 	display: list-item;
-	margin-left: 16px;
+	margin-left: 16.5px;
 	list-style: disc;
-	font-size: 10.5px;
-	line-height: 15.75px;
+	font-size: 11px;
+	line-height: 16px;
 }
 
 .onb .si-screen:has(.si-head) .si-dual-panels {
@@ -5442,7 +5453,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-screen:has(.si-head) .si-panel {
 	display: flex;
 	flex-direction: column;
-	height: 352px;
+	height: 320px;
 	box-sizing: border-box;
 	padding: 0;
 	border: 1px solid var(--onb-divider);
@@ -5558,6 +5569,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border: 1px solid var(--onb-border);
 	border-radius: 8px;
 	background: var(--onb-bg-card);
+	opacity: .8;
 	cursor: grab;
 }
 

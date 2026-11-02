@@ -916,7 +916,7 @@
     "smartScope": {
       "policy": {
         "title": "Review the indexing scope",
-        "lead": "Indexing has not started yet. Drag folders to adjust the scope.",
+        "lead": "Drag folders to include them in the index or leave them out.",
         "eta": "~{{minutes}} min"
       },
       "include": {
