@@ -402,8 +402,10 @@
       "failedTitle": "AI로 고치지 못했어요",
       "stopped": "중단했어요.",
       "minimize": "백그라운드로 전환",
+      "queued": "앞선 수리가 끝나면 시작합니다…",
       "sidebar": {
         "running": "AI로 고치는 중…",
+        "queued": "AI로 고치기 대기 중",
         "open": "AI로 고치기 상태 열기"
       }
     }
@@ -3083,6 +3085,24 @@
     "failed": "다운로드가 멈췄습니다",
     "indexingTitle": "임베딩 모델을 내려받는 중",
     "indexingNote": "받기가 끝나면 첫 색인이 자동으로 시작됩니다."
+  },
+  "sidebarActivity": {
+    "queueAria": "진행 및 대기 중인 작업",
+    "queueHeader": "진행 및 대기열 ({{count}})",
+    "moreBadgeAria": "외 {{count}}개 작업 보기",
+    "collapseAria": "대기열 접기",
+    "minimize": "백그라운드로 전환",
+    "reduceRunning": "용량 줄이는 중 · {{name}}",
+    "reduceQueued": "용량 줄이기 대기 중 · {{name}}",
+    "reduceDone": "용량 줄이기 완료 · {{name}}",
+    "reduceFailed": "용량 줄이기 실패 · {{name}}",
+    "reduceOpen": "용량 줄이기 상태 열기",
+    "convertRunning": "변환 중 · {{name}}",
+    "convertQueued": "변환 대기 중 · {{name}}",
+    "convertDone": "변환 완료 · {{name}}",
+    "convertFailed": "변환 실패 · {{name}}",
+    "convertOpen": "변환 상태 열기",
+    "modelDownloadOpen": "모델 다운로드 상태 열기"
   },
   "magicAction": {
     "running": "매직 액션 실행 중…",

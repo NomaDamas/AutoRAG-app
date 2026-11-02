@@ -130,6 +130,10 @@ export interface SidebarMagicActionView {
 	readonly detail: string | null;
 }
 
+export interface SidebarMagicActionEntry extends SidebarMagicActionView {
+	readonly id: string;
+}
+
 export function describeSidebarMagicAction(session: MagicActionSession, t: TFunction): SidebarMagicActionView | null {
 	const { run } = session;
 	if (run.status === "idle") return null;
@@ -157,4 +161,92 @@ export function describeSidebarMagicAction(session: MagicActionSession, t: TFunc
 		headline: run.actionLabel,
 		detail: run.message,
 	};
+}
+
+/* -------------------------------- Multi-session background queue store --- */
+
+export interface MagicActionSessionItem {
+	readonly id: string;
+	readonly run: MagicActionRunState;
+}
+
+export interface MagicActionStore {
+	readonly sessions: readonly MagicActionSessionItem[];
+	readonly activeId: string | null;
+}
+
+export const initialMagicActionStore: MagicActionStore = {
+	sessions: [],
+	activeId: null,
+};
+
+export function enqueueMagicActionStore(
+	store: MagicActionStore,
+	input: {
+		readonly runId: string;
+		readonly actionId: string;
+		readonly actionLabel: string;
+		readonly executionKind: "script" | "agent";
+		readonly paths: readonly string[];
+	},
+): MagicActionStore {
+	const begun = beginMagicActionSession(input);
+	return {
+		sessions: [...store.sessions, { id: input.runId, run: begun.run }],
+		activeId: input.runId,
+	};
+}
+
+export function reduceMagicActionStore(store: MagicActionStore, event: MagicActionEvent): MagicActionStore {
+	let changed = false;
+	const nextSessions: MagicActionSessionItem[] = [];
+	let nextActiveId = store.activeId;
+	for (const entry of store.sessions) {
+		const nextSession = reduceMagicActionSession({ dialogOpen: store.activeId === entry.id, run: entry.run }, event);
+		if (nextSession.run !== entry.run) changed = true;
+		if (nextSession.run.status === "stopped" && store.activeId !== entry.id) {
+			changed = true;
+			continue;
+		}
+		nextSessions.push(nextSession.run === entry.run ? entry : { ...entry, run: nextSession.run });
+	}
+	if (nextActiveId !== null && !nextSessions.some((entry) => entry.id === nextActiveId)) {
+		nextActiveId = null;
+		changed = true;
+	}
+	return changed ? { sessions: nextSessions, activeId: nextActiveId } : store;
+}
+
+export function openMagicActionStoreById(store: MagicActionStore, id: string): MagicActionStore {
+	if (!store.sessions.some((entry) => entry.id === id)) return store;
+	return store.activeId === id ? store : { ...store, activeId: id };
+}
+
+export function dismissMagicActionStore(store: MagicActionStore): MagicActionStore {
+	if (store.activeId === null) return store;
+	const active = store.sessions.find((entry) => entry.id === store.activeId);
+	if (active === undefined) return { ...store, activeId: null };
+	if (active.run.status === "running") return { ...store, activeId: null };
+	return {
+		sessions: store.sessions.filter((entry) => entry.id !== store.activeId),
+		activeId: null,
+	};
+}
+
+export function activeMagicActionSession(store: MagicActionStore): MagicActionSession {
+	if (store.activeId !== null) {
+		const open = store.sessions.find((entry) => entry.id === store.activeId);
+		if (open !== undefined) return { dialogOpen: true, run: open.run };
+	}
+	const fallback = store.sessions[0];
+	return fallback === undefined ? initialMagicActionSession : { dialogOpen: false, run: fallback.run };
+}
+
+export function describeSidebarMagicActionEntries(store: MagicActionStore, t: TFunction): readonly SidebarMagicActionEntry[] {
+	const entries: SidebarMagicActionEntry[] = [];
+	for (const item of store.sessions) {
+		const view = describeSidebarMagicAction({ dialogOpen: store.activeId === item.id, run: item.run }, t);
+		if (view !== null) entries.push({ id: item.id, ...view });
+	}
+	return entries;
 }

@@ -1,9 +1,9 @@
 import { t } from "../shared/i18n/core";
 import type { DataSourceStatusService } from "./datasource-status";
-import { createActivityJournal, journalSingleRun, sourceItem } from "./index-activity-journal";
+import { sourceItem } from "./index-activity-journal";
 import type { RefreshLockHolder } from "./refresh-lock";
-import { withRefreshLock, type SchedulePaths } from "./refresh-schedule";
-
+import { createRefreshQueue, type RefreshQueue } from "./refresh-queue";
+import type { SchedulePaths } from "./refresh-schedule";
 /** Why a manual sync did not start: another refresh holds the shared lock. */
 export function busyMessage(holder: RefreshLockHolder): string {
 	return holder.owner === "scheduled-job" ? t("main.lock.scheduledBusy") : t("main.lock.otherBusy");
@@ -15,15 +15,19 @@ export function busyMessage(holder: RefreshLockHolder): string {
  * scheduled job) and is journaled (so the sidebar progress block shows it).
  * Hand this, never the raw service, to anything that calls `sync`.
  */
-export function lockDataSources(dataSources: DataSourceStatusService, paths: SchedulePaths): DataSourceStatusService {
+export function lockDataSources(
+	dataSources: DataSourceStatusService,
+	paths: SchedulePaths,
+	queue: RefreshQueue = createRefreshQueue(paths),
+): DataSourceStatusService {
 	return {
 		...dataSources,
 		sync: (id) =>
-			withRefreshLock(
-				paths.lock,
-				"manual-sync",
-				() => journalSingleRun(createActivityJournal(paths.activity, { owner: "manual-sync" }), sourceItem(id), () => dataSources.sync(id)),
-				(holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
-			),
+			queue.enqueue({
+				item: sourceItem(id),
+				owner: "manual-sync",
+				work: () => dataSources.sync(id),
+				onBusy: (holder) => ({ id, ok: false, state: "failed", chunkCount: null, indexedAt: null, durationMs: 0, diagnostics: [], error: busyMessage(holder) }),
+			}),
 	};
 }

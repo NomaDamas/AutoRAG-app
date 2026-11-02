@@ -104,21 +104,33 @@ export function dismissErrorFixSession(session: ErrorFixSession): ErrorFixSessio
 }
 
 export interface SidebarErrorFixView {
-	readonly tone: "run" | "ok" | "error";
+	readonly tone: "run" | "queued" | "ok" | "error";
 	readonly percent: number | null;
 	readonly headline: string;
 	readonly detail: string | null;
 }
 
+export interface SidebarErrorFixEntry extends SidebarErrorFixView {
+	readonly id: string;
+}
+
 /**
- * Renders the error-fix session in the sidebar footer using the same visual
+ * Renders one error-fix session in the sidebar footer using the same visual
  * shape as `SidebarIndexActivity`: shown whenever a repair is running, or when
  * a minimized repair has finished in the background and has not been reviewed yet.
  */
-export function describeSidebarErrorFix(session: ErrorFixSession, t: TFunction): SidebarErrorFixView | null {
+export function describeSidebarErrorFix(session: ErrorFixSession, t: TFunction, queued = false): SidebarErrorFixView | null {
 	const { run } = session;
 	if (run.status === "idle") return null;
 	if (run.status === "running") {
+		if (queued && run.progress === null) {
+			return {
+				tone: "queued",
+				percent: 0,
+				headline: t("appError.fix.sidebar.queued"),
+				detail: t("appError.fix.queued"),
+			};
+		}
 		return {
 			tone: "run",
 			percent: null,
@@ -146,4 +158,121 @@ export function describeSidebarErrorFix(session: ErrorFixSession, t: TFunction):
 		headline: t("appError.fix.failedTitle"),
 		detail: null,
 	};
+}
+
+/* -------------------------------- Multi-session background queue store --- */
+
+export interface ErrorFixSessionItem {
+	readonly id: string;
+	readonly message: string;
+	readonly run: ErrorFixRun;
+}
+
+export interface ErrorFixStore {
+	readonly sessions: readonly ErrorFixSessionItem[];
+	/** `id` of the session currently open in `ErrorFixDialog`, or `null` when minimized / closed. */
+	readonly activeId: string | null;
+}
+
+export const initialErrorFixStore: ErrorFixStore = {
+	sessions: [],
+	activeId: null,
+};
+
+/**
+ * Enqueues a repair session without cancelling or overwriting any minimized
+ * background sessions. Reopens an existing running session when the exact same
+ * error message is triggered again.
+ */
+export function enqueueErrorFixStore(store: ErrorFixStore, runId: string, message: string): ErrorFixStore {
+	const existing = store.sessions.find((entry) => entry.run.status === "running" && entry.message === message);
+	if (existing !== undefined) {
+		return store.activeId === existing.id ? store : { ...store, activeId: existing.id };
+	}
+	return {
+		sessions: [...store.sessions, { id: runId, message, run: startErrorFixRun(runId) }],
+		activeId: runId,
+	};
+}
+
+export function reduceErrorFixStore(store: ErrorFixStore, event: ErrorFixEvent): ErrorFixStore {
+	let changed = false;
+	const nextSessions: ErrorFixSessionItem[] = [];
+	let nextActiveId = store.activeId;
+	for (const entry of store.sessions) {
+		const nextRun = reduceErrorFixRun(entry.run, event);
+		if (nextRun !== entry.run) changed = true;
+		// A background session that was cancelled leaves the queue immediately; an open dialog keeps showing "Stopped".
+		if (nextRun.status === "stopped" && store.activeId !== entry.id) {
+			changed = true;
+			continue;
+		}
+		nextSessions.push(nextRun === entry.run ? entry : { ...entry, run: nextRun });
+	}
+	if (nextActiveId !== null && !nextSessions.some((entry) => entry.id === nextActiveId)) {
+		nextActiveId = null;
+		changed = true;
+	}
+	return changed ? { sessions: nextSessions, activeId: nextActiveId } : store;
+}
+
+export function minimizeErrorFixStore(store: ErrorFixStore): ErrorFixStore {
+	return store.activeId === null ? store : { ...store, activeId: null };
+}
+
+export function openErrorFixStoreById(store: ErrorFixStore, id: string): ErrorFixStore {
+	if (!store.sessions.some((entry) => entry.id === id)) return store;
+	return store.activeId === id ? store : { ...store, activeId: id };
+}
+
+/**
+ * Closes the currently open modal: if its repair is still running, minimizes it
+ * to the background queue; once finished/failed/stopped, removes ONLY that
+ * session while leaving every other background repair untouched.
+ */
+export function dismissErrorFixStore(store: ErrorFixStore): ErrorFixStore {
+	if (store.activeId === null) return store;
+	const active = store.sessions.find((entry) => entry.id === store.activeId);
+	if (active === undefined) return { ...store, activeId: null };
+	if (active.run.status === "running") return { ...store, activeId: null };
+	return {
+		sessions: store.sessions.filter((entry) => entry.id !== store.activeId),
+		activeId: null,
+	};
+}
+
+export function removeErrorFixSessionFromStore(store: ErrorFixStore, id: string): ErrorFixStore {
+	if (!store.sessions.some((entry) => entry.id === id)) return store;
+	return {
+		sessions: store.sessions.filter((entry) => entry.id !== id),
+		activeId: store.activeId === id ? null : store.activeId,
+	};
+}
+
+/** Derives the active modal view (`ErrorFixSession`) for `ErrorFixDialog`. */
+export function activeErrorFixSession(store: ErrorFixStore): ErrorFixSession {
+	if (store.activeId !== null) {
+		const open = store.sessions.find((entry) => entry.id === store.activeId);
+		if (open !== undefined) return { message: open.message, dialogOpen: true, run: open.run };
+	}
+	const fallback = store.sessions[0];
+	return fallback === undefined ? initialErrorFixSession : { message: fallback.message, dialogOpen: false, run: fallback.run };
+}
+
+/** Maps every active, queued, and unreviewed background-completed session into sidebar entries. */
+export function describeSidebarErrorFixEntries(store: ErrorFixStore, t: TFunction): readonly SidebarErrorFixEntry[] {
+	const firstRunningIndex = store.sessions.findIndex((entry) => entry.run.status === "running");
+	const entries: SidebarErrorFixEntry[] = [];
+	for (let index = 0; index < store.sessions.length; index += 1) {
+		const item = store.sessions[index];
+		if (item === undefined) continue;
+		const queued = item.run.status === "running" && firstRunningIndex >= 0 && index > firstRunningIndex;
+		const view = describeSidebarErrorFix(
+			{ message: item.message, dialogOpen: store.activeId === item.id, run: item.run },
+			t,
+			queued,
+		);
+		if (view !== null) entries.push({ id: item.id, ...view });
+	}
+	return entries;
 }

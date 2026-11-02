@@ -44,6 +44,7 @@ import { fileExtension, type FileActionTarget } from "../state/file-actions";
 import { conversionErrorMessage, type ConvertRenameState } from "../state/convert-rename";
 import type { ReductionLevel } from "../../../shared/size-reduction";
 import { createReduceSizeDialogState, type ReduceSizeDialogState } from "../state/reduce-size-dialog";
+import { cancelBackgroundTask, enqueueBackgroundTask, updateBackgroundTaskProgress } from "./useBackgroundTasks";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -257,6 +258,7 @@ export interface FinderController {
 	setReduceDialogReplaceOriginal(replaceOriginal: boolean): void;
 	confirmReduceSize(): void;
 	cancelReduceSize(): void;
+	minimizeReduceSize(): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -287,6 +289,8 @@ export interface FinderController {
 	confirmConvertRename(keepOriginal: boolean): void;
 	/** Drop the pending question, or stop the conversion that is running. */
 	cancelConvertRename(): void;
+	/** Hide the active conversion modal while keeping the conversion running in the background queue. */
+	minimizeConvertRename(): void;
 	/** Open a temporary Evidence Folder in a new tab with the session's local evidence files. */
 	openEvidenceFolder(paths: readonly string[]): void;
 	/** Whether the close-Evidence-Folder confirm modal is showing. */
@@ -481,6 +485,8 @@ export function useFinderController(
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [reduceDialog, setReduceDialog] = useState<ReduceSizeDialogState | null>(null);
+	const backgroundReduceRef = useRef(new Map<string, ReduceSizeDialogState>());
+	const backgroundConvertRef = useRef(new Map<string, ConvertRenameState>());
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
@@ -543,6 +549,11 @@ export function useFinderController(
 	useEffect(() => {
 		if (source.actions.onProgress === undefined) return;
 		return source.actions.onProgress((event) => {
+			updateBackgroundTaskProgress(event.id, event.percent);
+			const tracked = backgroundReduceRef.current.get(event.id);
+			if (tracked !== undefined) {
+				backgroundReduceRef.current.set(event.id, { ...tracked, percent: event.percent });
+			}
 			setReduceDialog((current) =>
 				current !== null && current.id === event.id ? { ...current, percent: event.percent } : current,
 			);
@@ -1388,15 +1399,32 @@ export function useFinderController(
 	const confirmReduceSize = useLatestCallback(() => {
 		const pending = reduceDialog;
 		if (pending === null || pending.working) return;
-		setReduceDialog({ ...pending, working: true, percent: null });
-		source.actions
-			.run([pending.path], {
-				kind: "reduceSize",
-				id: pending.id,
-				level: pending.level,
-				replaceOriginal: pending.replaceOriginal,
-			})
-			.then((outcome) => {
+		const working: ReduceSizeDialogState = { ...pending, working: true, percent: null };
+		backgroundReduceRef.current.set(pending.id, working);
+		setReduceDialog(working);
+		void enqueueBackgroundTask({
+			id: pending.id,
+			kind: "reduce-size",
+			headline: pending.name,
+			queuedHeadline: pending.name,
+			doneHeadline: pending.name,
+			failedHeadline: pending.name,
+			detail: `${t("finder.reduce.title")} · ${t(`finder.reduce.levels.${pending.level}`)}`,
+			ariaLabel: t("sidebarActivity.reduceOpen"),
+			onSelect: () => {
+				const live = backgroundReduceRef.current.get(pending.id);
+				if (live !== undefined) setReduceDialog(live);
+			},
+			onCancel: () => {
+				void source.actions.cancel?.(pending.id).catch(reportError);
+			},
+			run: async () => {
+				const outcome = await source.actions.run([pending.path], {
+					kind: "reduceSize",
+					id: pending.id,
+					level: pending.level,
+					replaceOriginal: pending.replaceOriginal,
+				});
 				showToast(outcome.note);
 				if (outcome.output !== null) {
 					recordActionOutput("reduceSize", outcome.output);
@@ -1407,19 +1435,28 @@ export function useFinderController(
 						setFlashPath(outcome.output);
 					}
 				}
+			},
+		})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message === "Task cancelled") return;
+				reportError(error);
 			})
-			.catch(reportError)
 			.finally(() => {
+				backgroundReduceRef.current.delete(pending.id);
 				setReduceDialog((current) => (current?.id === pending.id ? null : current));
 			});
+	});
+
+	const minimizeReduceSize = useLatestCallback(() => {
+		setReduceDialog((current) => (current !== null && current.working ? null : current));
 	});
 
 	const cancelReduceSize = useLatestCallback(() => {
 		const pending = reduceDialog;
 		if (pending === null) return;
 		if (pending.working) {
-			void source.actions.cancel?.(pending.id).catch(reportError);
-			return;
+			backgroundReduceRef.current.delete(pending.id);
+			cancelBackgroundTask(pending.id);
 		}
 		setReduceDialog(null);
 	});
@@ -1880,10 +1917,27 @@ export function useFinderController(
 	const confirmConvertRename = useLatestCallback((keepOriginal: boolean) => {
 		const pending = convertRename;
 		if (pending === null || pending.working) return;
-		setConvertRename({ ...pending, working: true });
-		source.conversion
-			.run({ id: pending.id, path: pending.path, newName: pending.newName })
-			.then(async (outcome) => {
+		const working: ConvertRenameState = { ...pending, working: true };
+		backgroundConvertRef.current.set(pending.id, working);
+		setConvertRename(working);
+		void enqueueBackgroundTask({
+			id: pending.id,
+			kind: "convert-rename",
+			headline: pending.newName,
+			queuedHeadline: pending.newName,
+			doneHeadline: pending.newName,
+			failedHeadline: pending.newName,
+			detail: `${t("finder.convert.title")} · ${pending.from.toUpperCase()} → ${pending.to.toUpperCase()}`,
+			ariaLabel: t("sidebarActivity.convertOpen"),
+			onSelect: () => {
+				const live = backgroundConvertRef.current.get(pending.id);
+				if (live !== undefined) setConvertRename(live);
+			},
+			onCancel: () => {
+				void source.conversion.cancel(pending.id).catch(reportError);
+			},
+			run: async () => {
+				const outcome = await source.conversion.run({ id: pending.id, path: pending.path, newName: pending.newName });
 				if (keepOriginal) {
 					showToast(outcome.note);
 					return;
@@ -1891,21 +1945,29 @@ export function useFinderController(
 				const trashed = await source.trash([pending.path]);
 				dropRemoved(trashed.ok);
 				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
+			},
+		})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message === "Task cancelled") return;
+				showToast(conversionErrorMessage(error));
 			})
-			.catch((error: unknown) => showToast(conversionErrorMessage(error)))
 			.finally(() => {
-				setConvertRename(null);
+				backgroundConvertRef.current.delete(pending.id);
+				setConvertRename((current) => (current?.id === pending.id ? null : current));
 				refresh();
 			});
+	});
+
+	const minimizeConvertRename = useLatestCallback(() => {
+		setConvertRename((current) => (current !== null && current.working ? null : current));
 	});
 
 	const cancelConvertRename = useLatestCallback(() => {
 		const pending = convertRename;
 		if (pending === null) return;
 		if (pending.working) {
-			// The running conversion rejects as cancelled; its handler closes the dialog.
-			void source.conversion.cancel(pending.id).catch(reportError);
-			return;
+			backgroundConvertRef.current.delete(pending.id);
+			cancelBackgroundTask(pending.id);
 		}
 		setConvertRename(null);
 	});
@@ -2304,6 +2366,7 @@ export function useFinderController(
 		setReduceDialogReplaceOriginal,
 		confirmReduceSize,
 		cancelReduceSize,
+		minimizeReduceSize,
 		dragEntries,
 		copySelection,
 		cutSelection,
@@ -2319,6 +2382,7 @@ export function useFinderController(
 		convertRename,
 		confirmConvertRename,
 		cancelConvertRename,
+		minimizeConvertRename,
 		openEvidenceFolder,
 		closeEvidenceFolderConfirm: closingEvidenceTabId !== null,
 		confirmCloseEvidenceFolder,

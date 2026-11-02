@@ -2,17 +2,21 @@ import { useSyncExternalStore } from "react";
 import type { MagicAction } from "../../../shared/context-menu-contract";
 import type { MagicActionBridge, MagicActionEvent } from "../../../shared/magic-actions-contract";
 import {
-	beginMagicActionSession,
-	dismissMagicActionSession,
+	activeMagicActionSession,
+	dismissMagicActionStore,
+	enqueueMagicActionStore,
 	initialMagicActionSession,
-	openMagicActionSession,
-	reduceMagicActionSession,
+	initialMagicActionStore,
+	openMagicActionStoreById,
+	reduceMagicActionStore,
 	type MagicActionSession,
+	type MagicActionStore,
 } from "../state/magic-action";
 
 type MagicActionWindow = Window & { readonly autorag?: { readonly magicAction?: MagicActionBridge } };
 
-let current: MagicActionSession = initialMagicActionSession;
+let current: MagicActionStore = initialMagicActionStore;
+let cachedActiveSession: MagicActionSession = initialMagicActionSession;
 const listeners = new Set<() => void>();
 const onDoneListeners = new Set<() => void>();
 let unsubscribe: (() => void) | null = null;
@@ -22,9 +26,10 @@ function getBridge(): MagicActionBridge | undefined {
 	return (window as MagicActionWindow).autorag?.magicAction;
 }
 
-function publish(next: MagicActionSession): void {
+function publish(next: MagicActionStore): void {
 	if (next === current) return;
 	current = next;
+	cachedActiveSession = activeMagicActionSession(next);
 	for (const listener of listeners) listener();
 }
 
@@ -35,7 +40,7 @@ function ensureSubscribed(): void {
 	unsubscribe?.();
 	boundBridge = bridge;
 	unsubscribe = bridge.onEvent((event: MagicActionEvent) => {
-		publish(reduceMagicActionSession(current, event));
+		publish(reduceMagicActionStore(current, event));
 		if (event.type === "done") {
 			for (const cb of onDoneListeners) cb();
 		}
@@ -59,12 +64,9 @@ export function onMagicActionDone(cb: () => void): () => void {
 
 export function startMagicActionRun(action: MagicAction, paths: readonly string[]): void {
 	ensureSubscribed();
-	if (current.run.status === "running") {
-		void getBridge()?.cancel(current.run.runId);
-	}
 	const runId = crypto.randomUUID();
 	publish(
-		beginMagicActionSession({
+		enqueueMagicActionStore(current, {
 			runId,
 			actionId: action.id,
 			actionLabel: action.label,
@@ -77,7 +79,7 @@ export function startMagicActionRun(action: MagicAction, paths: readonly string[
 	bridge.start(runId, { actionId: action.id, paths }).catch((error: unknown) => {
 		const reason = error instanceof Error ? error.message : String(error);
 		publish(
-			reduceMagicActionSession(current, {
+			reduceMagicActionStore(current, {
 				type: "error",
 				runId,
 				actionLabel: action.label,
@@ -88,31 +90,42 @@ export function startMagicActionRun(action: MagicAction, paths: readonly string[
 }
 
 export function stopMagicActionRun(): void {
-	if (current.run.status === "running") {
-		void getBridge()?.cancel(current.run.runId);
+	const active = current.activeId === null ? undefined : current.sessions.find((entry) => entry.id === current.activeId);
+	if (active?.run.status === "running") {
+		void getBridge()?.cancel(active.run.runId);
 	}
 }
 
-export function openMagicActionDialog(): void {
-	publish(openMagicActionSession(current));
+export function openMagicActionDialog(id?: string): void {
+	const targetId = id ?? current.sessions[0]?.id;
+	if (targetId !== undefined) publish(openMagicActionStoreById(current, targetId));
 }
 
 export function dismissMagicActionDialog(): void {
-	publish(dismissMagicActionSession(current));
+	publish(dismissMagicActionStore(current));
 }
 
 export function resetMagicActionStoreForTests(): void {
 	unsubscribe?.();
 	unsubscribe = null;
 	boundBridge = undefined;
-	current = initialMagicActionSession;
+	current = initialMagicActionStore;
+	cachedActiveSession = initialMagicActionSession;
 	for (const listener of listeners) listener();
+}
+
+export function useMagicActionStore(): MagicActionStore {
+	return useSyncExternalStore(
+		subscribe,
+		() => current,
+		() => initialMagicActionStore,
+	);
 }
 
 export function useMagicActionSession(): MagicActionSession {
 	return useSyncExternalStore(
 		subscribe,
-		() => current,
+		() => cachedActiveSession,
 		() => initialMagicActionSession,
 	);
 }

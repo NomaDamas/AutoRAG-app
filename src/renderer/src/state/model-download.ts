@@ -70,3 +70,10 @@ export function useModelDownload(): ModelDownloadControls {
 		cancel: () => void bridgeOrNull()?.cancel().then(publish, () => undefined),
 	};
 }
+
+export function resetModelDownloadForTests(): void {
+	unsubscribe?.();
+	unsubscribe = null;
+	current = UNKNOWN;
+	for (const listener of listeners) listener();
+}

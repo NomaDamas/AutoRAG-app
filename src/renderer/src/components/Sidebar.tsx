@@ -11,9 +11,7 @@ import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
-import { SidebarIndexActivity } from "./SidebarIndexActivity";
-import { SidebarErrorFixActivity } from "./SidebarErrorFixActivity";
-import { SidebarMagicActionActivity } from "./SidebarMagicActionActivity";
+import { SidebarActivityQueue } from "./SidebarActivityQueue";
 import { SidebarSearch, type SearchMode } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button): 28px rows, 12px labels. */
@@ -51,6 +49,7 @@ export function Sidebar({
 	onOpenUsage,
 	onHideSidebar,
 	onOpenIndexing,
+	onOpenAiSettings,
 	sourceStatus,
 	searchQuery,
 	searchRef,
@@ -75,6 +74,8 @@ export function Sidebar({
 	readonly onHideSidebar: () => void;
 	/** The indexing block opens Settings on its Indexing page. */
 	readonly onOpenIndexing: () => void;
+	/** Model download entries open Settings on its AI page. */
+	readonly onOpenAiSettings?: (() => void) | undefined;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
@@ -226,9 +227,7 @@ export function Sidebar({
 				))}
 			</div>
 			<div className="side-footer flex flex-none flex-col px-12 py-10 border-t border-border">
-				<SidebarErrorFixActivity />
-				<SidebarMagicActionActivity />
-				<SidebarIndexActivity onOpen={onOpenIndexing} />
+				<SidebarActivityQueue onOpenIndexing={onOpenIndexing} onOpenAiSettings={onOpenAiSettings} />
 				<div className="flex items-center gap-4">
 					<button
 						type="button"

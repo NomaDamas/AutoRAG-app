@@ -402,8 +402,10 @@
       "failedTitle": "Couldn’t fix it with AI",
       "stopped": "Stopped.",
       "minimize": "Keep fixing in background",
+      "queued": "Waiting for the current repair to finish…",
       "sidebar": {
         "running": "Fixing with AI…",
+        "queued": "Waiting to fix with AI",
         "open": "Show Fix with AI status"
       }
     }
@@ -3083,6 +3085,24 @@
     "failed": "The download stopped",
     "indexingTitle": "Downloading the embedding model",
     "indexingNote": "The first index starts by itself when the download is done."
+  },
+  "sidebarActivity": {
+    "queueAria": "Running and queued tasks",
+    "queueHeader": "Queue ({{count}})",
+    "moreBadgeAria": "Show {{count}} more tasks",
+    "collapseAria": "Collapse queue",
+    "minimize": "Run in background",
+    "reduceRunning": "Reducing size · {{name}}",
+    "reduceQueued": "Waiting to reduce · {{name}}",
+    "reduceDone": "Size reduced · {{name}}",
+    "reduceFailed": "Couldn’t reduce size · {{name}}",
+    "reduceOpen": "Show Reduce Size status",
+    "convertRunning": "Converting · {{name}}",
+    "convertQueued": "Waiting to convert · {{name}}",
+    "convertDone": "Converted · {{name}}",
+    "convertFailed": "Conversion failed · {{name}}",
+    "convertOpen": "Show conversion status",
+    "modelDownloadOpen": "Show model download status"
   },
   "magicAction": {
     "running": "Running Magic Action…",

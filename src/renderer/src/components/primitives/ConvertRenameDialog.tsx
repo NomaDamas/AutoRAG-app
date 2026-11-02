@@ -14,10 +14,12 @@ export function ConvertRenameDialog({
 	state,
 	onConvert,
 	onCancel,
+	onMinimize,
 }: {
 	readonly state: ConvertRenameState;
 	readonly onConvert: (keepOriginal: boolean) => void;
 	readonly onCancel: () => void;
+	readonly onMinimize?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const title = `${state.from.toUpperCase()} → ${state.to.toUpperCase()}`;
@@ -26,7 +28,10 @@ export function ConvertRenameDialog({
 			className="fixed inset-0 z-80 flex items-center justify-center bg-black/30"
 			role="presentation"
 			onMouseDown={(event) => {
-				if (event.target === event.currentTarget && !state.working) onCancel();
+				if (event.target === event.currentTarget) {
+					if (!state.working) onCancel();
+					else onMinimize?.();
+				}
 			}}
 		>
 			<div
@@ -51,7 +56,13 @@ export function ConvertRenameDialog({
 					<button type="button" className="linear-btn" onClick={onCancel}>
 						{t("common.cancel")}
 					</button>
-					{state.working ? null : (
+					{state.working ? (
+						onMinimize === undefined ? null : (
+							<button type="button" data-action="minimize-convert" className="linear-btn" autoFocus onClick={onMinimize}>
+								{t("sidebarActivity.minimize")}
+							</button>
+						)
+					) : (
 						<>
 							<button type="button" className="linear-btn" onClick={() => onConvert(false)}>
 								{t("finder.convert.replace")}

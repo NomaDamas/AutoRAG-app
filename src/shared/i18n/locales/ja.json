@@ -402,8 +402,10 @@
       "failedTitle": "AIでは修正できませんでした",
       "stopped": "中断しました。",
       "minimize": "バックグラウンドで続行",
+      "queued": "前の修復が終わると開始します…",
       "sidebar": {
         "running": "AIで修正中…",
+        "queued": "AIで修正を待機中",
         "open": "AIで修正の状態を表示"
       }
     }
@@ -3083,6 +3085,24 @@
     "failed": "ダウンロードが止まりました",
     "indexingTitle": "埋め込みモデルをダウンロード中",
     "indexingNote": "ダウンロードが終わると、最初のインデックス作成が自動的に始まります。"
+  },
+  "sidebarActivity": {
+    "queueAria": "進行中および待機中のタスク",
+    "queueHeader": "進行状況・待機列 ({{count}})",
+    "moreBadgeAria": "ほか {{count}} 件のタスクを表示",
+    "collapseAria": "待機列を折りたたむ",
+    "minimize": "バックグラウンドで実行",
+    "reduceRunning": "サイズ削減中 · {{name}}",
+    "reduceQueued": "サイズ削減を待機中 · {{name}}",
+    "reduceDone": "サイズ削減完了 · {{name}}",
+    "reduceFailed": "サイズ削減に失敗 · {{name}}",
+    "reduceOpen": "サイズ削減の状態を表示",
+    "convertRunning": "変換中 · {{name}}",
+    "convertQueued": "変換を待機中 · {{name}}",
+    "convertDone": "変換完了 · {{name}}",
+    "convertFailed": "変換に失敗 · {{name}}",
+    "convertOpen": "変換の状態を表示",
+    "modelDownloadOpen": "モデルのダウンロード状態を表示"
   },
   "magicAction": {
     "running": "マジックアクションを実行中…",
