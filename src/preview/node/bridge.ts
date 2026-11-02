@@ -20,6 +20,7 @@ import {
 	type QuickLookWindowBridge,
 } from "../shared/contract";
 import type { VideoAudioPlan } from "../shared/video-audio";
+import { isVideoPlaybackProgress, type VideoPlaybackPlan } from "../shared/video-playback";
 
 function subscribe(ipcRenderer: IpcRenderer, channel: string, listener: (payload: unknown) => void): () => void {
 	const handler = (_event: IpcRendererEvent, payload: unknown): void => listener(payload);
@@ -90,6 +91,12 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		folderSize: (path): Promise<FolderSize> => ipcRenderer.invoke(PREVIEW_CHANNELS.folderSize, path),
 		audioMetadata: (path): Promise<AudioMetadata> => ipcRenderer.invoke(PREVIEW_CHANNELS.audioMetadata, path),
 		videoAudio: (path): Promise<VideoAudioPlan> => ipcRenderer.invoke(PREVIEW_CHANNELS.videoAudio, path),
+		videoPlayback: (path, id): Promise<VideoPlaybackPlan> => ipcRenderer.invoke(PREVIEW_CHANNELS.videoPlayback, path, id),
+		cancelVideoPlayback: (id) => ipcRenderer.send(PREVIEW_CHANNELS.videoPlaybackCancel, id),
+		onVideoPlaybackProgress: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.videoPlaybackProgress, (progress) => {
+				if (isVideoPlaybackProgress(progress)) listener(progress);
+			}),
 		dataPreview: (path, table): Promise<DataPreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.data, path, table),
 		archivePreview: (path): Promise<ArchivePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.archive, path),
 		certificatePreview: (path): Promise<CertificatePreview> => ipcRenderer.invoke(PREVIEW_CHANNELS.certificate, path),

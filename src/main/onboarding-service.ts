@@ -37,7 +37,8 @@ import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
 import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
-import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
+import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 import { classifyIndexFailure, modelDownloadFailure, skippedFileCount } from "./index-failure";
 import type { RunOutcome } from "./index-problem-service";
 
@@ -63,6 +64,7 @@ const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 	whatsapp: "WhatsApp",
 	mailcrawl: "Mail",
 	github: "GitHub",
+	notion: "Notion",
 	obsidian: "Obsidian",
 };
 
@@ -195,6 +197,7 @@ const SOURCE_IDS: Readonly<Record<string, true>> = {
 	whatsapp: true,
 	mailcrawl: true,
 	github: true,
+	notion: true,
 	obsidian: true,
 };
 

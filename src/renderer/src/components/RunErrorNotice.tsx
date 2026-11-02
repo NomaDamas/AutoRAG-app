@@ -18,6 +18,10 @@ export interface RunErrorNoticeProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source (an AI fix button names it by alias). */
 	readonly onOpenSource: (alias: string) => void;
+	/** Starts a new chat: the way out of a conversation that no longer fits the model. */
+	readonly onNewChat: () => void;
+	/** Puts the turn's question back in the composer, to ask it again about less at once. */
+	readonly onRephrase: () => void;
 	/** True on the live turn's error so "AI로 고치기" is offered; false on past turns. */
 	readonly fix?: boolean;
 }
@@ -30,18 +34,21 @@ const SECONDARY_BUTTON = "border-border bg-window text-ink hover:bg-hover";
  * A run's error under the question: neutral card surface (`bg-subtle` + `border-border`)
  * with color confined to the left status icon badge and the right action button.
  */
-export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, fix = true }: RunErrorNoticeProps): ReactElement {
+export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, onNewChat, onRephrase, fix = true }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
 	const session = useErrorFixSession();
 	const view = describeAppError(message, action, t);
 	const entries = view.actions.filter((entry) => entry.id !== "fix" || fix);
 	// Without the fix there is nothing to promise: an earlier turn's error just reads as what it is.
 	const hint = view.kind === "other" && !fix ? null : view.hint;
-	const warnTone = view.kind === "rate-limit" || view.kind === "network";
+	// Amber, not red: the model is fine and the person has a way on (wait, reconnect, or ask in a new chat).
+	const warnTone = view.kind === "rate-limit" || view.kind === "network" || view.kind === "context-overflow";
 	const isFixingThis = fix && session.run.status === "running" && session.message === message;
 
 	const run = (entry: ErrorAction): void => {
 		if (entry.id === "fix") startErrorFix(message);
+		else if (entry.id === "new-chat") onNewChat();
+		else if (entry.id === "rephrase") onRephrase();
 		else onOpenSettings(entry.id === "open-plan" ? "plan" : "ai");
 	};
 	return (

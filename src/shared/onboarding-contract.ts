@@ -101,7 +101,7 @@ export type PlanId = "free" | "air" | "pro" | "max" | "byok";
  * Local files are indexed through the folders step, so Spotlight/Apple Mail are
  * deliberately not offered here.
  */
-export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "obsidian";
+export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "notion" | "obsidian";
 
 export interface OnboardingFolderChoice {
 	readonly path: string;

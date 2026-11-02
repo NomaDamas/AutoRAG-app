@@ -265,6 +265,7 @@
       "open": "Open",
       "openWith": "Open With",
       "compress": "Compress",
+      "compressZip": "Compress as ZIP",
       "compress7z": "Compress as 7z",
       "extract": "Extract",
       "share": "Share",
@@ -336,11 +337,18 @@
       "last7Days": "Previous 7 days",
       "last30Days": "Previous 30 days",
       "older": "Earlier"
+    },
+    "context": {
+      "compacting": "The conversation is long — summarizing earlier messages…",
+      "compacted": "Earlier conversation summarized",
+      "compactedHint": "Earlier messages now reach the model only as a summary. Mention any detail it should still see.",
+      "trimmed": "Only part of an oversized search result was used"
     }
   },
   "appError": {
     "fixAction": "Fix with AI",
     "openModelSettings": "Open model settings",
+    "askNarrower": "Ask narrower",
     "showDetails": "Show details",
     "hideDetails": "Hide details",
     "other": {
@@ -359,6 +367,11 @@
       "title": "Your subscription or usage limit is blocking the AI model",
       "hint": "The subscription may have expired or the usage may be used up. Check Subscription & Usage, or pick another model in the model settings."
     },
+    "modelPlan": {
+      "title": "The selected AI model isn’t included in your plan",
+      "hint": "This model is only available on a higher plan. Upgrade your plan, or pick a model your current plan includes in the model settings.",
+      "hintNamed": "This model is only available on the {{plan}} plan. Upgrade to {{plan}}, or pick a model your current plan includes in the model settings."
+    },
     "modelNotFound": {
       "title": "The selected AI model can’t be found",
       "hint": "The model may have been retired or renamed. Pick another model in the model settings."
@@ -370,6 +383,10 @@
     "network": {
       "title": "Can’t reach the AI model’s server",
       "hint": "Check your internet connection and try again. If the connection is fine and it keeps failing, check the model settings."
+    },
+    "contextOverflow": {
+      "title": "Too much for the model to read at once",
+      "hint": "The conversation and search results grew past the model's limit, so no answer was made. Start a new chat, or ask again about something narrower."
     },
     "fix": {
       "title": "Fix with AI",
@@ -1020,6 +1037,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "Mail (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1030,6 +1048,7 @@
         "whatsapp": "{{chats}} chats · {{messages}} messages",
         "mailcrawl": "Signed in to {{accounts}} mail accounts",
         "github": "Signed in · Issues and Pull Requests",
+        "notion": "Notion app data detected",
         "obsidian": "{{vaults}} vaults found"
       }
     },
@@ -1955,6 +1974,7 @@
     },
     "player": {
       "videoFailed": "Couldn’t play the video",
+      "videoPreparing": "Preparing the video to play… {{percent}}%",
       "audioFailed": "Couldn’t play the audio",
       "playPause": "Play or Pause",
       "muteToggle": "Toggle Mute",
@@ -2712,6 +2732,7 @@
       "chunkCount": "{{count}} {{noun}}",
       "noDocsYet": "No documents read yet",
       "notFetchedYet": "No content fetched yet",
+      "notOnThisComputer": "Not available on this computer",
       "importedNone": "No {{noun}} imported",
       "liveQuery": "Queried live on search",
       "appNeeds": "{{name}} desktop app required"
@@ -2765,7 +2786,9 @@
       "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
       "promptLabel": "Connection id",
       "promptConfirm": "Add connection",
-      "macOnly": "Only available on macOS (EventKit)."
+      "macOnlyCalendar": "Only available on macOS (EventKit).",
+      "macOnlySpotlight": "Only available on macOS (Spotlight).",
+      "macOnlyWhatsapp": "Only available on macOS (WhatsApp)."
     },
     "sourceDetail": {
       "fallbackSummary": "Manage the settings for this connection.",
@@ -2797,7 +2820,9 @@
       "confirmTitle": "Disconnect this connection?",
       "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
       "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer.",
-      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer."
+      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer.",
+      "whatsappOnlyNote": "WhatsApp is read through wacrawl, which only finds the Mac app's database, so this connection is inactive on this computer. If you have a copied data folder, set it as the source path.",
+      "spotlightOnlyNote": "Spotlight can only be searched through mdfind on macOS, so this connection is inactive on this computer."
     },
     "scope": {
       "title": "Search scope",

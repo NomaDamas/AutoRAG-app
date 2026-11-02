@@ -3,7 +3,8 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, sep } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { createModelDownloadService, localModelPresent, minSyncModelCacheRoot, nativeQwen3Spec } from "./model-download";
+import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import {
 	app,

@@ -47,6 +47,28 @@ describe("describeAppError", () => {
 		]);
 	});
 
+	it("says a Max-only model needs Max, not that the subscription or credits ran out, and leads to the plan page", () => {
+		const view = describeAppError(
+			'dazzi API error (403): {"message":"The model `moonshotai/kimi-k3.1-pro` is available on the Max plan only. Upgrade to Max in the dashboard, or list the models your plan can use with GET /v1/models.","type":"invalid_request_error","code":"plan_upgrade_required"}',
+			null,
+			t,
+		);
+
+		expect(view.kind).toBe("model-plan");
+		expect(view.title).toBe(t("appError.modelPlan.title"));
+		expect(view.title).not.toBe(t("appError.modelSubscription.title"));
+		expect(view.hint).toBe(t("appError.modelPlan.hintNamed", { plan: "Max" }));
+		expect(view.hint).toContain("Max");
+		expect(view.actions.map((action) => [action.id, action.primary])).toEqual([
+			["open-plan", true],
+			["open-ai", false],
+		]);
+	});
+
+	it("falls back to a higher plan in general when the error does not name one", () => {
+		expect(describeAppError("403 plan_upgrade_required", null, t).hint).toBe(t("appError.modelPlan.hint"));
+	});
+
 	it("sends a model that no longer exists to pick another one", () => {
 		expect(ids("Unknown configured model: dazzi/old")).toEqual(["open-ai"]);
 	});
@@ -69,6 +91,18 @@ describe("describeAppError", () => {
 		expect(view.title).toBeNull();
 		expect(view.hint).toBeNull();
 		expect(view.actions).toEqual([{ id: "open-plan", label: t("aiSearch.openPlan"), primary: true }]);
+	});
+
+	it("explains a conversation that no longer fits the model and offers a new chat or a narrower question, never the AI fix", () => {
+		const view = describeAppError("400 context_length_exceeded: This model's maximum context length is 1048576 tokens.", "new-chat", t);
+
+		expect(view.kind).toBe("context-overflow");
+		expect(view.title).toBe(t("appError.contextOverflow.title"));
+		expect(view.hint).toBe(t("appError.contextOverflow.hint"));
+		expect(view.actions).toEqual([
+			{ id: "new-chat", label: t("aiSearch.newChat"), primary: true },
+			{ id: "rephrase", label: t("appError.askNarrower"), primary: false },
+		]);
 	});
 
 	it("speaks the interface language", async () => {

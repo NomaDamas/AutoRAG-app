@@ -194,6 +194,36 @@ export function openWithItems(applications: readonly OpenWithApplication[]): rea
 }
 
 /**
+ * The Inspector action bar for a multi-selection: Compress only, because
+ * packing several items into one archive is the one action that needs more
+ * than one (a single item is not worth an archive). One menu button picks the
+ * format, like the image and video menus; the in-process archiver writes both.
+ */
+export function selectionActions(capabilities: ActionCapabilities): readonly FileAction[] {
+	if (!capabilities.archive) return [];
+	return [
+		{
+			kind: "menu",
+			id: "compress",
+			label: t("inspector.actions.compress"),
+			icon: "compress",
+			items: [
+				{
+					id: "compress:zip",
+					label: t("inspector.actions.compressZip"),
+					target: { kind: "request", request: { kind: "compress", format: "zip" } },
+				},
+				{
+					id: "compress:7z",
+					label: t("inspector.actions.compress7z"),
+					target: { kind: "request", request: { kind: "compress", format: "7z" } },
+				},
+			],
+		},
+	];
+}
+
+/**
  * The Inspector action bar for `subject`. Capability-gated: an action whose
  * backing engine is missing never renders, so the bar never lies about the
  * machine.
@@ -201,22 +231,6 @@ export function openWithItems(applications: readonly OpenWithApplication[]): rea
 export function suggestedActions(subject: ActionSubject, capabilities: ActionCapabilities): readonly FileAction[] {
 	if (subject.kind === "folder") {
 		const actions: FileAction[] = [];
-		if (capabilities.archive) {
-			actions.push({
-				kind: "action",
-				id: "compress",
-				label: t("inspector.actions.compress"),
-				icon: "compress",
-				target: { kind: "request", request: { kind: "compress" } },
-			});
-			actions.push({
-				kind: "action",
-				id: "compress7z",
-				label: t("inspector.actions.compress7z"),
-				icon: "compress",
-				target: { kind: "request", request: { kind: "compress", format: "7z" } },
-			});
-		}
 		if (capabilities.share) {
 			actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 		}
@@ -265,22 +279,6 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			label: t("inspector.actions.reduceSize"),
 			icon: "reduce",
 			target: { kind: "request", request: { kind: "reduceSize" } },
-		});
-	}
-	if (capabilities.archive) {
-		actions.push({
-			kind: "action",
-			id: "compress",
-			label: t("inspector.actions.compress"),
-			icon: "compress",
-			target: { kind: "request", request: { kind: "compress" } },
-		});
-		actions.push({
-			kind: "action",
-			id: "compress7z",
-			label: t("inspector.actions.compress7z"),
-			icon: "compress",
-			target: { kind: "request", request: { kind: "compress", format: "7z" } },
 		});
 	}
 	if (capabilities.share) {

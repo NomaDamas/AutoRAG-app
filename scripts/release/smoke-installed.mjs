@@ -173,11 +173,8 @@ try {
 		}
 	}
 
-	// 2. The installed tools, on a bare PATH. The Kiwi sync needs the model, which the app no longer
-	// ships, so it is taken from the staged copy when one exists (the check prints a skip otherwise).
-	const verifyArgs = [join(ROOT, "scripts", "release", "verify-bundle.mjs"), join(resources, "tools")];
-	if (hasStagedModel) verifyArgs.push("--model-cache", stagedModelCache);
-	const verify = spawnSync(process.execPath, verifyArgs, { stdio: "inherit" });
+	// 2. The installed tools, on a bare PATH, including an offline sparse search with the bundled SPLADE model.
+	const verify = spawnSync(process.execPath, [join(ROOT, "scripts", "release", "verify-bundle.mjs"), join(resources, "tools")], { stdio: "inherit" });
 	expect(verify.status === 0, "installed tools pass verify-bundle");
 
 	// 3. Launch the installed app on a throwaway profile.

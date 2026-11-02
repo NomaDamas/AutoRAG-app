@@ -5,6 +5,7 @@ import { type AgentSession, SessionManager } from "@earendil-works/pi-coding-age
 import type { ApprovalMode } from "../shared/interaction-contract";
 import type { AgentInteraction } from "./agent-interaction";
 import { AttachmentContextAgent } from "./attachment-context";
+import { type ContextEvent, watchContext } from "./context-watch";
 import type { RunInteraction } from "./host-ui";
 import { watchLocalTrack } from "./local-track";
 
@@ -94,6 +95,9 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 	readonly #sessionDir: string | undefined;
 	readonly #userRequests: UserRequestSink;
 	#runtime: Runtime | undefined;
+	readonly #contextListeners = new Set<(event: ContextEvent) => void>();
+	/** Stops watching the bound session's context; a replaced session is watched afresh. */
+	#unwatchContext: (() => void) | undefined;
 
 	constructor(options: AutoRAGAgentOptions, interaction: AgentInteraction) {
 		super({
@@ -145,6 +149,18 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 
 	async #bind(session: AgentSession): Promise<void> {
 		await session.bindExtensions({ uiContext: this.#interaction.ui, mode: "rpc" });
+		this.#unwatchContext?.();
+		this.#unwatchContext = watchContext(session, (event) => {
+			for (const listener of [...this.#contextListeners]) listener(event);
+		});
+	}
+
+	/** Calls `listener` with what the conversation does to the model's view of it (see {@link ContextEvent}); returns the stop function. */
+	onContext(listener: (event: ContextEvent) => void): () => void {
+		this.#contextListeners.add(listener);
+		return () => {
+			this.#contextListeners.delete(listener);
+		};
 	}
 
 	/** The file this chat's conversation is kept in, once it has one. */
@@ -156,6 +172,8 @@ export class InteractiveSearchAgent extends AttachmentContextAgent {
 	async closeSession(): Promise<void> {
 		const runtime = this.#runtime;
 		this.#runtime = undefined;
+		this.#unwatchContext?.();
+		this.#unwatchContext = undefined;
 		await runtime?.dispose();
 	}
 

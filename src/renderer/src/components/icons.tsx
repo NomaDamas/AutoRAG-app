@@ -29,6 +29,7 @@ import {
 	ExternalLink,
 	Eye,
 	Film,
+	FoldVertical,
 	History,
 	Image as ImageGlyph,
 	Info,
@@ -48,6 +49,7 @@ import {
 	SquarePen,
 	Settings,
 	Share,
+	Scissors,
 	Shrink,
 	Sparkles,
 	Trash2,
@@ -186,6 +188,12 @@ export const InfoIcon = glyph(Info, 16, 1.8);
 
 /** A notice that something may not work as expected (a search over an index that is not ready). */
 export const WarningIcon = glyph(TriangleAlert, 14, 2);
+
+/** AI Search: the conversation's earlier turns were folded into a summary (issue #389). */
+export const CompactIcon = glyph(FoldVertical, 13, 2);
+
+/** AI Search: a search result was cut to fit the model's request. */
+export const TrimIcon = glyph(Scissors, 11, 2.2);
 
 export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 

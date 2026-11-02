@@ -1,5 +1,7 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { kakaoSupported } from "../shared/messenger-platform";
+import { datasourceSupported, kakaoSupported } from "../shared/messenger-platform";
 import type { DetectedSource, SourceDetection, SourceId } from "../shared/onboarding-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { ensureMessengerConfig } from "./messenger-config";
@@ -28,10 +30,10 @@ export interface SourceDetectionDeps {
 	readonly readFileText: (path: string) => Promise<string>;
 }
 
-/** Every connector the step can find on this host, in display order; KakaoTalk is a Mac-only app. */
+/** Every connector the step can find on this host, in display order; KakaoTalk and WhatsApp are Mac-only apps. */
 function sourceOrder(platform: NodeJS.Platform): readonly SourceId[] {
-	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
-	return kakaoSupported(platform) ? all : all.filter((id) => id !== "kakao");
+	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian"];
+	return all.filter((id) => datasourceSupported(id, platform));
 }
 const GITHUB_REPO_LIMIT = 5;
 const MAILCRAWL_ACCOUNT_LIMIT = 5;
@@ -139,9 +141,9 @@ async function detectSlack(deps: SourceDetectionDeps): Promise<DetectedSource | 
 		const messages = await query("select count(*) as n from messages");
 		return { id: "slack", facts: { workspaces, channels, messages } };
 	}
-	// Nothing archived yet. On Windows the desktop app itself is the source: `doctor` reports how many workspaces
-	// it has signed in, and the first index imports them with `sync --source wiretap`.
-	if (deps.platform !== "win32") return null;
+	// Nothing archived yet. On macOS and Windows the desktop app itself is the source: `doctor` reports how many
+	// workspaces it has signed in, and the first index imports them with `sync --source wiretap`.
+	if (deps.platform !== "win32" && deps.platform !== "darwin") return null;
 	const doctor = await runJsonObject(deps, "slacrawl", ["--json", "doctor"]);
 	const desktop = isJsonObject(doctor?.desktop_source) ? doctor.desktop_source : null;
 	const summary = isJsonObject(desktop?.summary) ? desktop.summary : null;
@@ -180,6 +182,41 @@ async function detectWhatsapp(deps: SourceDetectionDeps): Promise<DetectedSource
 	const messages = positiveInt(desktop.message_rows);
 	if (messages === 0) return null;
 	return { id: "whatsapp", facts: { chats: positiveInt(desktop.chat_rows), messages } };
+}
+
+/**
+ * Notion Desktop's local cache, which `notcrawl sync` (the skill's only sync command) reads with no token. `doctor`
+ * calls the cache available as soon as the app has run once: a fresh Notion.app writes a ~480 KB `notion.db` with no
+ * workspace in it, and a source that holds nothing would fail its first index. So `doctor` only gates the real probe,
+ * which imports the cache into a throwaway archive (its own config, never `~/.notcrawl`, deleted afterwards) and
+ * offers Notion when that archive holds pages. An API token alone does not count: that needs a Notion integration
+ * rather than the signed-in app.
+ */
+async function detectNotion(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
+	const doctor = await runJsonObject(deps, "notcrawl", ["doctor", "--json"]);
+	if (doctor === null || doctor.desktop_available !== true || positiveInt(doctor.desktop_size) === 0) return null;
+	const probeDir = await mkdtemp(join(tmpdir(), "dazzi-notion-probe-"));
+	try {
+		const config = join(probeDir, "config.toml");
+		await writeFile(
+			config,
+			[
+				`db_path = ${JSON.stringify(join(probeDir, "notcrawl.db"))}`,
+				`cache_dir = ${JSON.stringify(join(probeDir, "cache"))}`,
+				`markdown_dir = ${JSON.stringify(join(probeDir, "pages"))}`,
+				"[notion.desktop]",
+				"enabled = true",
+				"[notion.api]",
+				"enabled = false",
+				"",
+			].join("\n"),
+		);
+		await deps.run("notcrawl", ["--config", config, "sync", "--source", "desktop"]);
+		const status = await runJsonObject(deps, "notcrawl", ["--config", config, "status"]);
+		return positiveInt(status?.pages) > 0 ? { id: "notion", facts: {} } : null;
+	} finally {
+		await rm(probeDir, { recursive: true, force: true });
+	}
 }
 
 /**
@@ -271,6 +308,7 @@ export async function detectSources(
 		whatsapp: detectWhatsapp,
 		mailcrawl: detectMailcrawl,
 		github: detectGithub,
+		notion: detectNotion,
 		obsidian: detectObsidian,
 	};
 	const results = await Promise.all(

@@ -6,8 +6,11 @@ import { join } from "node:path";
  * The datasource CLIs (`discrawl`, `slacrawl`) read the app's own data, which exists only once the app has run.
  *
  * macOS: a `.app` bundle. Windows: Squirrel installs per user under `%LOCALAPPDATA%\<name>` (`app-<version>\` folders
- * next to `Update.exe`), a machine-wide install goes to Program Files, and the Microsoft Store variant is a package
- * under `%LOCALAPPDATA%\Packages`. Linux has no common location, so it reports "unknown" (`null`), never a wrong "missing".
+ * next to `Update.exe`: Discord, Slack), the Electron/NSIS per-user installers use `%LOCALAPPDATA%\Programs\<name>`
+ * (Notion, Obsidian) or `%APPDATA%\<name>` (Telegram Desktop), a machine-wide install goes to Program Files, and the
+ * Microsoft Store variant is a package under `%LOCALAPPDATA%\Packages`. A folder that only holds the app's data
+ * (`%APPDATA%\Notion`, `%APPDATA%\Telegram Desktop\tdata`) never counts: the executable has to be there. Linux has no
+ * common location, so it reports "unknown" (`null`), never a wrong "missing".
  */
 
 export interface DesktopAppEnv {
@@ -20,6 +23,9 @@ export interface DesktopAppEnv {
 const WINDOWS_APPS: Readonly<Record<string, { readonly folders: readonly string[]; readonly executable: string; readonly packagePrefixes: readonly string[] }>> = {
 	Discord: { folders: ["Discord"], executable: "Discord.exe", packagePrefixes: [] },
 	Slack: { folders: ["slack", "Slack"], executable: "slack.exe", packagePrefixes: ["com.tinyspeck.slackdesktop", "91750D7E.Slack"] },
+	Telegram: { folders: ["Telegram Desktop"], executable: "Telegram.exe", packagePrefixes: ["TelegramMessengerLLP.TelegramDesktop"] },
+	Notion: { folders: ["Notion"], executable: "Notion.exe", packagePrefixes: [] },
+	Obsidian: { folders: ["Obsidian"], executable: "Obsidian.exe", packagePrefixes: [] },
 };
 
 async function exists(path: string): Promise<boolean> {
@@ -30,7 +36,8 @@ async function windowsInstalled(name: string, env: NodeJS.ProcessEnv, home: stri
 	const spec = WINDOWS_APPS[name];
 	if (spec === undefined) return null;
 	const local = env.LOCALAPPDATA ?? join(home, "AppData", "Local");
-	const roots = [local, env.ProgramFiles, env["ProgramFiles(x86)"]].filter((root): root is string => typeof root === "string" && root.length > 0);
+	const roaming = env.APPDATA ?? join(home, "AppData", "Roaming");
+	const roots = [local, join(local, "Programs"), roaming, env.ProgramFiles, env["ProgramFiles(x86)"]].filter((root): root is string => typeof root === "string" && root.length > 0);
 	for (const root of roots) {
 		for (const folder of spec.folders) {
 			const base = join(root, folder);

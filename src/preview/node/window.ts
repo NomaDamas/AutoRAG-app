@@ -43,6 +43,7 @@ import {
 	type QuickLookZoom,
 } from "../shared/contract";
 import { looksLikeText } from "../shared/text-sample";
+import { needsPlaybackCopy, type VideoPlaybackPlan } from "../shared/video-playback";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
 import { quickLookKeyAction } from "../shared/keys";
 import { sniffLegacyContainer } from "../shared/legacy-office";
@@ -64,6 +65,7 @@ import { readTiffPreview } from "./tiff";
 import { readRasterPreview } from "./raster";
 import { readIworkPreview } from "./iwork";
 import { createKeynoteSlideCache, openKeynoteSlides, type KeynoteSlideCache } from "./keynote-render";
+import { createVideoPlayback } from "./video-playback";
 import { createOfficeRenderCache, openOffice, type OfficeRenderCache } from "./office-render";
 import { readEmbeddedThumbnail } from "./odf";
 import { PREVIEW_BYTE_CAP, PreviewReadError, readPreviewFile, SNIFF_BYTES, TEXT_BYTE_CAP } from "./read-file";
@@ -763,6 +765,29 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 	});
 	ipc.handle(PREVIEW_CHANNELS.audioMetadata, (event, path: unknown) => readAudioMetadata(shownPath(event, path).path));
 	ipc.handle(PREVIEW_CHANNELS.videoAudio, (event, path: unknown) => planVideoAudio(shownPath(event, path).path));
+	const videoPlayback = createVideoPlayback({ dir: join(app.getPath("userData"), "video-playback") });
+	const videoJobs = new Map<string, AbortController>();
+	ipc.handle(PREVIEW_CHANNELS.videoPlayback, async (event, path: unknown, id: unknown): Promise<VideoPlaybackPlan> => {
+		const shown = shownPath(event, path);
+		if (typeof id !== "string" || id === "" || !needsPlaybackCopy(extname(shown.path).slice(1))) return { kind: "native" };
+		videoJobs.get(id)?.abort();
+		const controller = new AbortController();
+		videoJobs.set(id, controller);
+		try {
+			return await videoPlayback.prepare(shown.path, {
+				signal: controller.signal,
+				onProgress: (fraction) => {
+					if (live(shown.state.window)) shown.state.window.webContents.send(PREVIEW_CHANNELS.videoPlaybackProgress, { id, fraction });
+				},
+			});
+		} finally {
+			if (videoJobs.get(id) === controller) videoJobs.delete(id);
+		}
+	});
+	ipc.on(PREVIEW_CHANNELS.videoPlaybackCancel, (event, id: unknown) => {
+		if (fromPreview(event) === null || typeof id !== "string") return;
+		videoJobs.get(id)?.abort();
+	});
 	ipc.handle(PREVIEW_CHANNELS.data, (event, path: unknown, table: unknown) => {
 		if (table !== null && typeof table !== "string") throw new Error(t("quickLook.errors.invalidTarget"));
 		return previewData(shownPath(event, path).path, table);

@@ -265,6 +265,7 @@
       "open": "開く",
       "openWith": "このアプリケーションで開く",
       "compress": "圧縮",
+      "compressZip": "ZIPで圧縮",
       "compress7z": "7zで圧縮",
       "extract": "展開",
       "share": "共有",
@@ -336,11 +337,18 @@
       "last7Days": "過去7日間",
       "last30Days": "過去30日間",
       "older": "それ以前"
+    },
+    "context": {
+      "compacting": "会話が長くなったため、これまでの内容を要約しています…",
+      "compacted": "これまでの会話を要約しました",
+      "compactedHint": "これまでの会話は要約としてモデルに渡されます。必要な詳細があれば改めて伝えてください。",
+      "trimmed": "大きすぎる検索結果は一部のみ使用しました"
     }
   },
   "appError": {
     "fixAction": "AIで修正",
     "openModelSettings": "モデル設定を開く",
+    "askNarrower": "範囲を絞って再質問",
     "showDetails": "詳細を表示",
     "hideDetails": "詳細を閉じる",
     "other": {
@@ -359,6 +367,11 @@
       "title": "サブスクリプションまたは使用量の上限のため、AIモデルを使用できません",
       "hint": "サブスクリプションの期限が切れているか、使用量を使い切った可能性があります。サブスクリプションと使用量を確認するか、モデル設定で別のモデルを選んでください。"
     },
+    "modelPlan": {
+      "title": "選択したAIモデルは現在のプランに含まれていません",
+      "hint": "上位プラン専用のモデルです。プランをアップグレードするか、モデル設定で現在のプランで使えるモデルを選んでください。",
+      "hintNamed": "{{plan}} プラン専用のモデルです。{{plan}} プランにアップグレードするか、モデル設定で現在のプランで使えるモデルを選んでください。"
+    },
     "modelNotFound": {
       "title": "選択したAIモデルが見つかりません",
       "hint": "モデルが終了したか、名前が変わった可能性があります。モデル設定で別のモデルを選んでください。"
@@ -370,6 +383,10 @@
     "network": {
       "title": "AIモデルのサーバーに接続できません",
       "hint": "インターネット接続を確認して、もう一度お試しください。接続が正常でも続く場合は、モデル設定を確認してください。"
+    },
+    "contextOverflow": {
+      "title": "モデルが一度に読める量を超えました",
+      "hint": "会話と検索結果が大きすぎて回答できませんでした。新規チャットを始めるか、範囲を絞って質問し直してください。"
     },
     "fix": {
       "title": "AIで修正",
@@ -1020,6 +1037,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "メール (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1030,6 +1048,7 @@
         "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
         "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
         "github": "ログイン済み · IssuesとPull Requests",
+        "notion": "Notion アプリのデータを検出",
         "obsidian": "Vault {{vaults}}件を検出"
       }
     },
@@ -1955,6 +1974,7 @@
     },
     "player": {
       "videoFailed": "動画を再生できませんでした",
+      "videoPreparing": "再生できるように動画を準備しています… {{percent}}%",
       "audioFailed": "音声を再生できませんでした",
       "playPause": "再生または一時停止",
       "muteToggle": "ミュートの切り替え",
@@ -2712,6 +2732,7 @@
       "chunkCount": "{{noun}} {{count}}個",
       "noDocsYet": "まだ読み込んだドキュメントなし",
       "notFetchedYet": "まだ内容を取得していません",
+      "notOnThisComputer": "このコンピューターでは利用できません",
       "importedNone": "取り込んだ{{noun}}なし",
       "liveQuery": "検索時に都度照会",
       "appNeeds": "{{name}} デスクトップアプリが必要"
@@ -2765,7 +2786,9 @@
       "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
       "promptLabel": "接続 ID",
       "promptConfirm": "接続を追加",
-      "macOnly": "macOS（EventKit）でのみ利用できます。"
+      "macOnlyCalendar": "macOS（EventKit）でのみ利用できます。",
+      "macOnlySpotlight": "macOS（Spotlight）でのみ利用できます。",
+      "macOnlyWhatsapp": "macOS（WhatsApp）でのみ利用できます。"
     },
     "sourceDetail": {
       "fallbackSummary": "この接続の設定を管理します。",
@@ -2797,7 +2820,9 @@
       "confirmTitle": "接続を解除しますか？",
       "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
       "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
-      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。"
+      "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。",
+      "whatsappOnlyNote": "WhatsApp は Mac アプリのデータベースだけを読み取れる wacrawl で取得するため、このコンピューターでは接続は無効です。コピーしたデータフォルダがある場合は、ソースパスに指定してください。",
+      "spotlightOnlyNote": "Spotlight は macOS の mdfind でのみ検索できるため、このコンピューターでは接続は無効です。"
     },
     "scope": {
       "title": "検索範囲",

@@ -265,6 +265,7 @@
       "open": "打开",
       "openWith": "打开方式",
       "compress": "压缩",
+      "compressZip": "压缩为 ZIP",
       "compress7z": "压缩为 7z",
       "extract": "解压",
       "share": "共享",
@@ -336,11 +337,18 @@
       "last7Days": "过去 7 天",
       "last30Days": "过去 30 天",
       "older": "更早"
+    },
+    "context": {
+      "compacting": "对话较长，正在总结之前的内容…",
+      "compacted": "已总结之前的对话",
+      "compactedHint": "之前的对话现在只以摘要形式提供给模型。如仍需要具体细节，请再次告诉它。",
+      "trimmed": "过大的搜索结果只使用了一部分"
     }
   },
   "appError": {
     "fixAction": "用 AI 修复",
     "openModelSettings": "打开模型设置",
+    "askNarrower": "缩小范围重新提问",
     "showDetails": "查看详情",
     "hideDetails": "收起详情",
     "other": {
@@ -359,6 +367,11 @@
       "title": "订阅或用量额度导致无法使用 AI 模型",
       "hint": "订阅可能已到期，或用量已用完。请查看订阅与用量，或在模型设置中选择其他模型。"
     },
+    "modelPlan": {
+      "title": "所选的 AI 模型不在当前套餐内",
+      "hint": "该模型仅限更高级的套餐使用。请升级套餐，或在模型设置中选择当前套餐可用的模型。",
+      "hintNamed": "该模型仅限 {{plan}} 套餐使用。请升级到 {{plan}} 套餐，或在模型设置中选择当前套餐可用的模型。"
+    },
     "modelNotFound": {
       "title": "找不到所选的 AI 模型",
       "hint": "该模型可能已下线或已改名。请在模型设置中选择其他模型。"
@@ -370,6 +383,10 @@
     "network": {
       "title": "无法连接到 AI 模型的服务器",
       "hint": "请检查网络连接后重试。如果网络正常仍反复失败，请检查模型设置。"
+    },
+    "contextOverflow": {
+      "title": "超出了模型一次能读取的量",
+      "hint": "对话和搜索结果过大，未能生成回答。请新建对话，或缩小范围后重新提问。"
     },
     "fix": {
       "title": "用 AI 修复",
@@ -1020,6 +1037,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "邮件 (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -1030,6 +1048,7 @@
         "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
         "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
         "github": "已登录 · Issues 与 Pull Requests",
+        "notion": "发现 Notion 应用数据",
         "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },
@@ -1955,6 +1974,7 @@
     },
     "player": {
       "videoFailed": "无法播放视频",
+      "videoPreparing": "正在准备视频以便播放… {{percent}}%",
       "audioFailed": "无法播放音频",
       "playPause": "播放或暂停",
       "muteToggle": "切换静音",
@@ -2712,6 +2732,7 @@
       "chunkCount": "{{noun}} {{count}}",
       "noDocsYet": "尚未读取任何文档",
       "notFetchedYet": "尚未获取任何内容",
+      "notOnThisComputer": "此电脑上不可用",
       "importedNone": "未导入任何{{noun}}",
       "liveQuery": "搜索时即时查询",
       "appNeeds": "需要 {{name}} 桌面应用"
@@ -2765,7 +2786,9 @@
       "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
       "promptLabel": "连接 id",
       "promptConfirm": "添加连接",
-      "macOnly": "仅在 macOS 上可用（EventKit）。"
+      "macOnlyCalendar": "仅在 macOS 上可用（EventKit）。",
+      "macOnlySpotlight": "仅在 macOS 上可用（Spotlight）。",
+      "macOnlyWhatsapp": "仅在 macOS 上可用（WhatsApp）。"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",
@@ -2797,7 +2820,9 @@
       "confirmTitle": "要断开此连接吗？",
       "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
       "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。",
-      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。"
+      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。",
+      "whatsappOnlyNote": "WhatsApp 通过只能找到 Mac 应用数据库的 wacrawl 读取，因此此连接在这台电脑上无效。如果你有复制出来的数据文件夹，请将其设为源路径。",
+      "spotlightOnlyNote": "Spotlight 只能通过 macOS 的 mdfind 搜索，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",

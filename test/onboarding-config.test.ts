@@ -120,6 +120,7 @@ describe("applyIndexingConfig", () => {
 				{ id: "whatsapp", facts: {} },
 				{ id: "mailcrawl", facts: { accounts: ["gmail", "work"] } },
 				{ id: "github", facts: { repos: ["me/repo"] } },
+				{ id: "notion", facts: {} },
 				{ id: "obsidian", facts: { vaults: ["/v1", "/v2"] } },
 			],
 			home: HOME,
@@ -129,7 +130,7 @@ describe("applyIndexingConfig", () => {
 		expect(next.datasourceAccess).toBeUndefined();
 		const { skills, unknown } = buildDatasourceSkills({ ...(next.datasources as DatasourcesConfig), excluded: { type: "whatsapp", instanceId: "x" } });
 		expect(unknown).toEqual([]);
-		const names = ["archive", "kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl-gmail", "mailcrawl-work", "github", "obsidian", "obsidian-2"];
+		const names = ["archive", "kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl-gmail", "mailcrawl-work", "github", "notion", "obsidian", "obsidian-2"];
 		for (const name of names) {
 			expect(skills.some((skill) => skill.describe().name === name), name).toBe(true);
 		}

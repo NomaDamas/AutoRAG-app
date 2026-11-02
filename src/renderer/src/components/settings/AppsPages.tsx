@@ -21,7 +21,8 @@ import type {
 	RefreshScheduleStatus,
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
-import { calendarSupported, isCalendarDatasourceType } from "../../../../shared/calendar-platform";
+import { isCalendarDatasourceType } from "../../../../shared/calendar-platform";
+import { newDatasourceEntry } from "../../../../shared/datasource-defaults";
 import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { hostPlatform } from "../../lib/shortcuts";
@@ -105,7 +106,8 @@ function sourceMeta(row: DataSourceRow): string {
 	if (row.install.app.required && row.install.app.installed === false) return t("settingsSources.meta.appNeeds", { name: row.install.app.name });
 	if (state === "empty") return t("settingsSources.meta.importedNone", { noun });
 	if (state === "live") return t("settingsSources.meta.liveQuery");
-	if (row.install.state === "unsupported" && isCalendarDatasourceType(row.type)) return row.install.detail;
+	if (row.install.state === "unsupported" && !datasourceSupported(row.type, hostPlatform())) return t("settingsSources.meta.notOnThisComputer");
+	if (row.install.state === "unsupported") return row.install.detail;
 	if (row.install.state === "missing") return row.install.detail;
 	return t("settingsSources.meta.notFetchedYet");
 }
@@ -412,7 +414,7 @@ export function AppsPage({
 	async function addConnection(templateId: string, alias: string): Promise<void> {
 		setAddError(null);
 		try {
-			const entry: Record<string, JsonValue> = templateId === alias ? {} : { type: templateId };
+			const entry = newDatasourceEntry(templateId, alias);
 			onSaved(await settings.configSet(["datasources", alias], entry));
 			setAddTemplate(null);
 			onOpenSource(alias);
@@ -451,15 +453,16 @@ export function AppsPage({
 								const template = TEMPLATE_BY_ID[templateId];
 								if (template === undefined) return null;
 								// KakaoTalk is read through a macOS-only program (lazykatok): it is not offered at all elsewhere.
-								if (!datasourceSupported(templateId, hostPlatform())) return null;
-								// Calendar reads EventKit and Spotlight runs mdfind, so both can only be connected on a Mac.
-								const available = (templateId !== "calendar" && templateId !== "spotlight") || calendarSupported(hostPlatform());
+								if (templateId === "kakao" && !datasourceSupported(templateId, hostPlatform())) return null;
+								// Calendar reads EventKit, WhatsApp reads the Mac app's database and Spotlight runs mdfind, so each can only be connected on a Mac; each names its own reason.
+								const macOnlyKey = templateId === "calendar" ? "settingsSources.apps.macOnlyCalendar" : templateId === "spotlight" ? "settingsSources.apps.macOnlySpotlight" : templateId === "whatsapp" ? "settingsSources.apps.macOnlyWhatsapp" : null;
+								const available = macOnlyKey === null || datasourceSupported(templateId, hostPlatform());
 								return (
 									<div className="settings-list-row" key={templateId}>
 										<SourceIcon type={templateId} label={template.label} />
 										<span className="settings-list-body">
 											<span className="settings-list-title">{template.label}</span>
-											<span className="settings-list-meta">{available ? t(template.summary) : t("settingsSources.apps.macOnly")}</span>
+											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
 										{connectedTypes.has(templateId) ? <span className="settings-badge">{t("settingsSources.apps.connected")}</span> : null}
 										<button type="button" className="linear-btn" disabled={!available} onClick={() => setAddTemplate(templateId)}>
@@ -573,6 +576,8 @@ export function SourceDetailPage({
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{row?.install.state === "unsupported" && isCalendarDatasourceType(type) ? <Note>{t("settingsSources.sourceDetail.macOnlyNote")}</Note> : null}
 			{row?.install.state === "unsupported" && type === "kakao" ? <Note>{t("settingsSources.sourceDetail.kakaoOnlyNote")}</Note> : null}
+			{row?.install.state === "unsupported" && type === "whatsapp" ? <Note>{t("settingsSources.sourceDetail.whatsappOnlyNote")}</Note> : null}
+			{row?.install.state === "unsupported" && type === "spotlight" ? <Note>{t("settingsSources.sourceDetail.spotlightOnlyNote")}</Note> : null}
 			<Section title={t("settingsSources.sourceDetail.statusSection")}>
 				<Row name={t("settingsSources.sourceDetail.enabledName")} hint={t("settingsSources.sourceDetail.enabledHint")}>
 					<Switch

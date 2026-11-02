@@ -40,13 +40,14 @@ The app consumes the librarian only through the dependency declared in
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
 ref is a release tag or, while the librarian has no tag that carries what the
-app needs, a full commit SHA (now the release tag `v2.13.2`: live Spotlight search without snapshots, MinSync 0.5.1 durable stages
-for incremental parsed mirrors plus streamed sync progress and skipped-file counts, `mailcrawl` 0.3.0 `--source files` retiring
-`mail-export`, pi 1.4.0, and Discord attachment downloads under `<AUTORAG_HOME>/attachments/discord/<connection>/` from v2.13.1;
-v2.13.0 is hybrid-first retrieval on top of v2.12.0's file-change approval gate with its `ask`/`auto`/`full` modes, the `ask_user`
-tool and `convert_files` — Filee file conversion, whose `convertWithFilee`, `resolveFileeOptions` and route matrix the app's
-convert-on-rename uses — and 2.11.1's file automations, `autorag automate`, the agent's `manage_automations`,
-`@autorag/librarian/profiles` and the helper-agent factory; v2.11.0 indexes Obsidian vaults with MinSync instead of `qmd`). It is
+app needs, a full commit SHA (now a commit SHA on top of v2.13.4: the librarian on MinSync 0.6.0, where SPLADE sparse retrieval
+replaces BM25 and Kiwi is gone, `minSync.embedder.id: "none"` builds a sparse-only index the app uses for keyword-only mode, and
+a `minsync` older than 0.6.0 is refused; it also brings the required decision model (`jev` can no longer be `false`; tests pass
+`test/baseline-jev.ts`), opt-in reranking, and the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings
+cards still show here as unsupported. v2.13.3 holds the Dazzi context-overflow retry to half the failed request; v2.13.2 is
+MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first
+retrieval on top of v2.12.0's file-change approval gate with its `ask`/`auto`/`full` modes, the `ask_user` tool and
+`convert_files`, and 2.11.1's file automations, `@autorag/librarian/profiles` and the helper-agent factory). It is
 raised deliberately with the alignment changes a new librarian release needs. The staging directory holds only what the librarian
 publishes (`files` of its `package.json`, without devDependencies), so the install
 resolves the librarian's dependencies into the app's one `node_modules` and
@@ -157,12 +158,13 @@ length and layout.
 `.dmg` and a Windows `.exe`. `scripts/release/` holds the pieces and
 `docs/release.md` explains them: `stage-tools.mjs` fetches or builds the newest
 dependency programs into `build/stage/<platform>/` (plus a `verify-model/` copy
-the bundle check uses but nothing ships), `verify-bundle.mjs` runs each of them on
+the install smoke uses but nothing ships), `verify-bundle.mjs` runs each of them on
 a bare `PATH`, `electron-builder.config.mjs` packs them into the app's
 `resources/`, and `smoke-installed.mjs` installs the real artifact and launches
 it. At run time `src/main/bundled-tools.ts` puts `resources/tools/bin` first on
-`PATH`; the embedding model is not bundled — the app downloads it on demand
-(`src/main/model-download.ts`) into MinSync's model cache
+`PATH` and seeds MinSync's SPLADE model, which the installer carries in `resources/tools/models`, into MinSync's model
+cache (`src/main/bundled-sparse-model.ts`); the dense embedding model is not bundled — the app downloads it on demand
+(`src/main/model-download.ts`) into the same cache
 (`~/.cache/minsync/models`). Stage each platform on a matching host; never commit
 `build/stage`, `build/.cache`, or `dist`. Signing credentials live only in GitHub
 secrets.
