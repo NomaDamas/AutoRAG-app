@@ -50,7 +50,14 @@ const at = (daysAgo, hour, minute) => {
 	date.setHours(hour, minute, 0, 0);
 	return date;
 };
-const monthDay = (date) => `${date.getMonth() + 1}월 ${date.getDate()}일`;
+// Mirrors historyTimeLabel in src/renderer/src/state/history.ts: the date label follows the running
+// interface language (the renderer mirrors it onto <html lang>) and drops the year within this year.
+const monthDay = (date, language) =>
+	new Intl.DateTimeFormat(language, {
+		...(date.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+		month: "long",
+		day: "numeric",
+	}).format(date);
 const clock = (date) => `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
 /** The store's own record shape; the list and the search both read these summaries back verbatim. */
@@ -134,7 +141,8 @@ check(
 );
 const expectedTitles = CHATS.map((chat) => chat.title);
 const expectedSnippets = CHATS.map((chat) => chat.snippet);
-const expectedTimes = [clock(today1), clock(today2), clock(yesterday), monthDay(withinWeek), monthDay(withinMonth), monthDay(older)];
+const interfaceLanguage = await page.evaluate(() => document.documentElement.lang);
+const expectedTimes = [clock(today1), clock(today2), clock(yesterday), monthDay(withinWeek, interfaceLanguage), monthDay(withinMonth, interfaceLanguage), monthDay(older, interfaceLanguage)];
 check("every seeded chat is listed, newest first", await waitForTexts(page, ".hist-copy b", expectedTitles), JSON.stringify(await texts(page, ".hist-copy b")));
 check("each row carries its first Quick answer as the snippet", JSON.stringify(await texts(page, ".hist-copy small")) === JSON.stringify(expectedSnippets));
 check("each row carries the reference time label", JSON.stringify(await texts(page, ".hist-time")) === JSON.stringify(expectedTimes), JSON.stringify(await texts(page, ".hist-time")));
