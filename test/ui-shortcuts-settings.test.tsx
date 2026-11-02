@@ -277,6 +277,30 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(currentSettings.shortcuts.overrides).toEqual({});
 		expect(host.querySelector('[data-action="shortcuts-preset-default"]')?.classList.contains("is-active")).toBe(true);
 	});
+
+	it("clears any pending conflict banner when switching to a Quick Preset", async () => {
+		await act(async () => {
+			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+		});
+		await settle();
+
+		// Trigger a conflict banner on focusSearch by pressing ⌘V (bound to paste)
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-shortcut-record="focusSearch"]')?.click();
+		});
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "v", code: "KeyV", metaKey: true, bubbles: true, cancelable: true }));
+		});
+		await settle();
+		expect(host.querySelector('[data-action="swap-shortcut-conflict"]')).not.toBeNull();
+
+		// Clicking Windows File Explorer preset clears the stale conflict banner immediately
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-windows-explorer"]')?.click();
+		});
+		await settle();
+		expect(host.querySelector('[data-action="swap-shortcut-conflict"]')).toBeNull();
+	});
 	it("opens the AI Shortcut Customizer modal with surface='shortcuts' and applies agent updates live", async () => {
 		await act(async () => {
 			root.render(<SettingsView initialCategory={"shortcuts" as never} />);

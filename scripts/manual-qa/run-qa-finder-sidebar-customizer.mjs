@@ -148,7 +148,11 @@ const sweep = () => {
 	try {
 		rmRetry(WORK);
 	} catch {
-		rmSync(WORK, { recursive: true, force: true });
+		try {
+			rmSync(WORK, { recursive: true, force: true });
+		} catch {
+			// Best-effort on forced exit
+		}
 	}
 };
 process.on("exit", sweep);
@@ -354,6 +358,8 @@ try {
 	);
 	await shot("09-settings-sidebar-zh");
 } finally {
+	await app?.close().catch(() => undefined);
+	app = undefined;
 	sweep();
 }
 

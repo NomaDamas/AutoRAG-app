@@ -90,6 +90,56 @@ describe("magic-action pi agent profile", () => {
 			"write",
 		]);
 	});
+
+	it("enforces case-insensitive and slash-normalized agentDir credential fences on win32", async () => {
+		const winProfile = magicActionProfile({
+			language: "ko",
+			mode: "organize",
+			actionLabel: "윈도우 정리",
+			prompt: "정리",
+			cwd: docsDir,
+			agentDir,
+			env: {},
+			platform: "win32",
+		});
+		const writeTool = winProfile.customTools?.find((t) => t.name === "write");
+		const bashTool = winProfile.customTools?.find((t) => t.name === "bash");
+		expect(writeTool).toBeDefined();
+		expect(bashTool).toBeDefined();
+
+		const upperAgentPath = join(agentDir.toUpperCase(), "injected.txt");
+		await expect(
+			writeTool!.execute("call-1", { i: "쓰기 시도", path: upperAgentPath, content: "x" } as never, undefined as never, undefined as never, undefined as never),
+		).rejects.toThrow(/off limits/i);
+
+		const forwardSlashAgent = `${agentDir.toUpperCase().replace(/\\/g, "/")}/secret-dump.txt`;
+		await expect(
+			bashTool!.execute("call-2", { i: "셸 시도", command: `echo hi > "${forwardSlashAgent}"` } as never, undefined as never, undefined as never, undefined as never),
+		).rejects.toThrow(/off limits/i);
+	});
+
+	it("exposes powershell.exe runtime and PowerShell $args guidance in app-customizer on win32", async () => {
+		const settings = createStubSettings();
+		const winKit = createAppCustomizerToolkit({
+			settings,
+			listLocations: async () => [],
+			listTags: async () => [],
+			platform: "win32",
+		});
+		const getTool = winKit.tools.find((t) => t.name === "get_app_settings")!;
+		const upsertTool = winKit.tools.find((t) => t.name === "upsert_magic_action")!;
+		const snapRes = await getTool.execute("c1", {} as never, undefined as never, undefined as never, undefined as never);
+		const firstBlock = snapRes.content[0];
+		expect(firstBlock?.type).toBe("text");
+		const rawSnap: unknown = firstBlock?.type === "text" ? JSON.parse(firstBlock.text) : null;
+		expect(rawSnap).toMatchObject({ platform: "win32", scriptShell: "powershell.exe" });
+		expect(upsertTool.description).toContain("powershell.exe");
+		expect(upsertTool.description).not.toContain('receiving selected files in "$@"');
+
+		const winProf = appCustomizerProfile({ language: "ko", toolkit: winKit, platform: "win32" });
+		expect(winProf.systemPrompt).toContain("powershell.exe");
+		expect(winProf.systemPrompt).toContain("$args");
+	});
 });
 
 describe("magic-action-service execution", () => {
@@ -148,6 +198,66 @@ describe("magic-action-service execution", () => {
 			expect(done.result.output).toContain(`count=2 first=${fileA} argc=2`);
 		}
 	});
+
+	it.runIf(process.platform === "win32")(
+		"executes Windows PowerShell Magic Actions safely with UTF-8 Korean output, trailing # comments, and tricky filenames without injection",
+		async () => {
+			const settings = createStubSettings();
+			const trickyFiles = [
+				join(docsDir, "Q4 Report (Final).txt"),
+				join(docsDir, "'FM2-AU.txt"),
+				join(docsDir, "$100_budget.txt"),
+				join(docsDir, "safe; Write-Output PWNED.txt"),
+				join(docsDir, "보고서_최종.txt"),
+			];
+			for (const f of trickyFiles) {
+				await writeFile(f, "test\n", "utf8");
+			}
+			await settings.set({
+				contextMenu: {
+					hiddenItems: [],
+					hiddenSections: [],
+					sectionOrder: ["magic", "open", "index", "clipboard", "actions", "services", "tags", "trash"],
+					magicActions: [
+						{
+							id: "win-ps-check",
+							label: "윈도우 PS 검증",
+							enabled: true,
+							selection: "multiple",
+							targetKind: "file",
+							extensions: ["txt"],
+							execution: {
+								kind: "script",
+								command:
+									'Write-Output "COUNT=$($args.Count)"; foreach ($i in 0..($args.Count - 1)) { Write-Output "ARG$i=$($args[$i])" }; Write-Output "KOR=한글정상"\n# 마지막 줄 주석',
+							},
+						},
+					],
+				},
+			});
+			const svc = createMagicActionService({
+				send: (ev) => events.push(ev),
+				resolveModel: async () => {
+					throw new Error("no model needed");
+				},
+				agentDir,
+				env: { ...process.env },
+				language: () => "ko",
+				settings,
+			});
+			await svc.start("run-win-ps", { actionId: "win-ps-check", paths: trickyFiles });
+			const done = events.at(-1);
+			expect(done?.type).toBe("done");
+			if (done?.type === "done") {
+				expect(done.result.output).toContain("COUNT=5");
+				trickyFiles.forEach((p, idx) => {
+					expect(done.result.output).toContain(`ARG${idx}=${p}`);
+				});
+				expect(done.result.output).toContain("KOR=한글정상");
+				expect(done.result.output).not.toMatch(/^PWNED$/m);
+			}
+		},
+	);
 
 	it("reports script non-zero exit code as an error event with stderr", async () => {
 		const settings = createStubSettings();

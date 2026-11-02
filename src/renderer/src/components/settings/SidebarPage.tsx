@@ -51,7 +51,7 @@ import {
 	type SidebarSettings,
 } from "../../../../shared/sidebar-contract";
 import { hostPlatform } from "../../lib/shortcuts";
-import { basename } from "../../state/paths";
+import { basename, normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
 import { TagDotMark } from "../primitives/TagDot";
 import { AppCustomizerModal } from "./AppCustomizerModal";
@@ -132,6 +132,11 @@ export function SidebarPage({
 	const hiddenItems = useMemo(() => new Set(sidebar.hiddenItems), [sidebar.hiddenItems]);
 	const hiddenSections = useMemo(() => new Set<string>(sidebar.hiddenSections), [sidebar.hiddenSections]);
 
+	const isWindows = hostPlatform() === "win32";
+	const homePath = useMemo(
+		() => locations.find((loc) => loc.section === "favorites" && loc.icon === "home")?.path ?? null,
+		[locations],
+	);
 	useEffect(() => {
 		let live = true;
 		const fs = getFsReader();
@@ -226,10 +231,10 @@ export function SidebarPage({
 	};
 
 	const addCustomFavorite = (rawPath: string): void => {
-		const trimmed = rawPath.trim();
-		if (trimmed.length === 0) return;
-		const nextCustom = [...sidebar.customFavorites.filter((item) => item.path !== trimmed), { path: trimmed }];
-		const nextHidden = sidebar.hiddenItems.filter((id) => id !== customSidebarItemId(trimmed));
+		const normalizedPath = normalizeTypedPath(rawPath, homePath);
+		if (normalizedPath.length === 0) return;
+		const nextCustom = [...sidebar.customFavorites.filter((item) => item.path !== normalizedPath), { path: normalizedPath }];
+		const nextHidden = sidebar.hiddenItems.filter((id) => id !== customSidebarItemId(normalizedPath));
 		setAddFolderOpen(false);
 		void updateSidebar({
 			...sidebar,
@@ -712,7 +717,11 @@ export function SidebarPage({
 					title={t("settingsCore.sidebar.addCustomModalTitle")}
 					description={t("settingsCore.sidebar.addCustomModalDesc")}
 					label={t("settingsCore.sidebar.addCustomPathLabel")}
-					placeholder={t("settingsCore.sidebar.addCustomPathPlaceholder")}
+					placeholder={t(
+						isWindows
+							? "settingsCore.sidebar.addCustomPathPlaceholderWindows"
+							: "settingsCore.sidebar.addCustomPathPlaceholder",
+					)}
 					confirmLabel={t("settingsCore.sidebar.addCustomConfirm")}
 					onCancel={() => setAddFolderOpen(false)}
 					onSubmit={addCustomFavorite}

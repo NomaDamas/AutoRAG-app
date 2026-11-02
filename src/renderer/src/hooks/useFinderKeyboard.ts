@@ -10,6 +10,7 @@ import type { StackRow } from "../state/version-family";
 import type { ViewMode } from "../state/view-mode";
 import { columnsForWidth, gridColumnCount } from "../state/virtual";
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
+import { hostPlatform } from "../lib/shortcuts";
 import { useShortcutSettings } from "./useShortcutSettings";
 
 /** Shortcuts that act on the window, not on rows: the only ones a Settings or AI Search tab answers. */
@@ -198,10 +199,12 @@ export interface FinderKeyboardInput {
 export function useFinderKeyboard(input: FinderKeyboardInput): void {
 	const { focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions } = input;
 	const shortcutSettings = useShortcutSettings();
+	const platform = hostPlatform();
 	useEffect(() => {
 		// Every pane mounts a controller; only the focused one answers the keyboard.
 		if (!focused) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
+			if (event.isComposing) return;
 			const target = event.target;
 			const typing =
 				target instanceof HTMLElement &&
@@ -227,12 +230,14 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 				{
 					key: event.key,
 					code: event.code,
-					meta: event.metaKey || event.ctrlKey,
+					meta: event.metaKey,
+					ctrl: event.ctrlKey,
 					shift: event.shiftKey,
 					alt: event.altKey,
 				},
 				{ zone, typing, viewMode: layout },
 				shortcutSettings,
+				platform,
 			);
 			if (action === null) {
 				return;
@@ -407,5 +412,5 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 			window.removeEventListener("mousedown", swallow);
 			window.removeEventListener("auxclick", swallow);
 		};
-	}, [focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions, shortcutSettings]);
+	}, [focused, zone, path, layout, selection, orderedKeys, stackRows, stackSections, focusedEntry, listRef, actions, shortcutSettings, platform]);
 }

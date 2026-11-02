@@ -20,6 +20,7 @@ import { type FinderLocation, type FinderSource, pickInitialPath } from "../data
 import { useTagCatalog } from "./useTagCatalog";
 import { useSidebarSettings } from "./useSidebarSettings";
 import { useContextMenuSettings } from "./useContextMenuSettings";
+import { useShortcutSettings } from "./useShortcutSettings";
 import { onMagicActionDone, startMagicActionRun } from "./useMagicAction";
 import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
@@ -2217,13 +2218,19 @@ export function useFinderController(
 		[pane, queries, t, trashLocationPath],
 	);
 
+	const shortcutSettings = useShortcutSettings();
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
 		const menu = contextMenu;
 		if (menu === null) {
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices });
+			return buildBackgroundContextMenu({
+				clipboardCount,
+				inTrash: inTrashLocation,
+				services: menuServices,
+				shortcuts: shortcutSettings,
+			});
 		}
 		const entry = menu.entry;
 		const targetPaths = menuTargets(entry);
@@ -2245,9 +2252,10 @@ export function useFinderController(
 			services: menuServices,
 			tags: { catalog: tagCatalog.catalog, shared: sharedTags(targetPaths.map((target) => tagsOf(target))) },
 			contextMenu: contextMenuSettings,
+			shortcuts: shortcutSettings,
 		});
 		// `t` changes identity with the language, so the menu re-labels on a switch.
-	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings]);
+	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings, shortcutSettings]);
 
 	const sidebarSettings = useSidebarSettings();
 	const sidebarGroups = useMemo(

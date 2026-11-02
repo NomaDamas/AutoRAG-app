@@ -431,4 +431,42 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer modal
 		const dialog = document.body.querySelector<HTMLElement>('[data-testid="app-customizer-modal"]');
 		expect(dialog?.querySelector(".customizer-modal__title")?.textContent).toBe(spec.modalTitle);
 	});
+
+	it("normalizes Windows Copy-as-path quoted strings, ~\\ home prefixes, and trailing slashes when adding custom folders", async () => {
+		const prevBridge: unknown = Reflect.get(globalThis, "autorag");
+		Reflect.set(globalThis, "autorag", { ...(typeof prevBridge === "object" && prevBridge !== null ? prevBridge : {}), platform: "win32" });
+		bridge.fs.locations.mockResolvedValue([
+			{ name: "me", path: "C:\\Users\\me", section: "favorites", icon: "home", available: true, scanned: false, ejectable: false },
+		]);
+		try {
+			await act(async () => {
+				root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			});
+			await settle();
+
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="add-custom-favorite"]')?.click();
+			});
+			await settle();
+
+			const input = document.body.querySelector<HTMLInputElement>(".settings-modal-backdrop input")!;
+			expect(input.getAttribute("placeholder")).toContain("C:\\Work");
+
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			await act(async () => {
+				setter?.call(input, '"~\\Projects\\ClientA\\"');
+				input.dispatchEvent(new Event("input", { bubbles: true }));
+				input.dispatchEvent(new Event("change", { bubbles: true }));
+			});
+			await act(async () => {
+				const buttons = [...document.body.querySelectorAll<HTMLButtonElement>(".settings-modal-backdrop button")];
+				buttons.at(-1)?.click();
+			});
+			await settle();
+
+			expect(currentSettings.sidebar.customFavorites).toEqual([{ path: "C:\\Users\\me\\Projects\\ClientA" }]);
+		} finally {
+			Reflect.set(globalThis, "autorag", prevBridge);
+		}
+	});
 });

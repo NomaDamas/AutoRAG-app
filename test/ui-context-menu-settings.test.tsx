@@ -287,4 +287,39 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 
 		expect(host.textContent).toContain("PDF 3줄 요약");
 	});
+
+	it("displays customized shortcut keycaps and Windows PowerShell guidance on win32", async () => {
+		const prevBridge: unknown = Reflect.get(globalThis, "autorag");
+		Reflect.set(globalThis, "autorag", { ...(typeof prevBridge === "object" && prevBridge !== null ? prevBridge : {}), platform: "win32" });
+		try {
+			currentSettings = {
+				...currentSettings,
+				shortcuts: { overrides: { quickLook: "Alt+P", rename: "F2" } },
+			};
+			await act(async () => {
+				root.render(<SettingsView initialCategory="contextMenu" />);
+			});
+			await settle();
+
+			expect(host.querySelector('[data-cmenu-row="builtin:quickLook"]')?.textContent).toContain("Alt+P");
+			expect(host.querySelector('[data-cmenu-row="builtin:rename"]')?.textContent).toContain("F2");
+
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="add-magic-action"]')?.click();
+			});
+			await settle();
+			const editor = document.body.querySelector('[data-testid="magic-action-editor-modal"]')!;
+			await act(async () => {
+				setInputValue(editor.querySelector<HTMLSelectElement>('[data-testid="magic-editor-kind"]')!, "script");
+			});
+			await settle();
+
+			const cmdInput = editor.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-command"]')!;
+			expect(cmdInput.getAttribute("placeholder")).toContain("Get-FileHash");
+			expect(editor.textContent).toContain("PowerShell");
+			expect(editor.textContent).not.toContain('"$@"');
+		} finally {
+			Reflect.set(globalThis, "autorag", prevBridge);
+		}
+	});
 });
