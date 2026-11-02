@@ -9,6 +9,7 @@ import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
+import { Keycap } from "./primitives/Keycap";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
 import { SidebarActivityQueue } from "./SidebarActivityQueue";
@@ -243,6 +244,7 @@ export function Sidebar({
 					>
 						<GearIcon />
 					</button>
+					{showHotkeys ? <Keycap label={settingsShortcut} /> : null}
 					<button
 						type="button"
 						className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}

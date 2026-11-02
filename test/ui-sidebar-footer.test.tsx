@@ -94,6 +94,13 @@ const click = (node: HTMLElement): void => {
 };
 
 describe("sidebar footer: settings and usage", () => {
+	it("shows the Settings shortcut as a visible keycap when hotkeys are enabled", async () => {
+		await renderSidebar();
+		const button = settingsButton();
+		expect(button.textContent?.trim()).toBe("");
+		expect(footer().querySelector(".keycap")?.textContent).toBe("⌘,");
+	});
+
 	it("shows settings as an icon-only button at the far left, with the name as tooltip and accessible label", async () => {
 		await renderSidebar();
 		const button = settingsButton();
