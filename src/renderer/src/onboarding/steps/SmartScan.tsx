@@ -63,7 +63,7 @@ export function SmartScanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 				<FolderArt />
 				{running ? <Loupe /> : null}
 			</div>
-			<div className="si-scan-below">
+			<div className={done ? "si-scan-below holding" : "si-scan-below"}>
 				{smartRun.status === "running" ? (
 					<p className="si-scan-path" role="status">
 						<span className="shimmer">

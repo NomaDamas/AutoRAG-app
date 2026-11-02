@@ -5885,30 +5885,34 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	grid-template-rows: 42px minmax(0,1fr);
 }
 
-/* The title and folder keep Figma's place in any frame (164 above : 253 below at 678px), and stay put across the states; what differs hangs under them. */
+/* Figma 04c/f centre the whole group in the frame, whatever its size. */
 .onb .si-minimal-scan {
-	display: grid;
-	grid-template-rows: minmax(0,164fr) auto auto minmax(max-content,253fr);
-	justify-items: center;
+	justify-content: center;
 	box-sizing: border-box;
-	padding: 0 24px;
-}
-
-.onb .si-minimal-scan h1 {
-	grid-row: 2;
-}
-
-.onb .si-minimal-scan .si-folder-scene {
-	grid-row: 3;
+	padding: 24px;
 }
 
 .onb .si-scan-below {
-	grid-row: 4;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	max-width: 100%;
-	padding-bottom: 24px;
+}
+
+/* A finished scan keeps the room of the running one, so the title does not jump in the moment before it dissolves. */
+.onb .si-scan-below.holding {
+	height: 116px;
+}
+
+/* Hangs below the group, so the group stays centred as designed. */
+.onb .si-scan-failed {
+	position: relative;
+}
+
+.onb .si-scan-failed .si-scan-manual {
+	position: absolute;
+	top: calc(100% + 12px);
+	white-space: nowrap;
 }
 
 .onb .si-minimal-scan h1 {
