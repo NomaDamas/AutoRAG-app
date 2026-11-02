@@ -910,11 +910,11 @@ and kept for the chat's life:
   refused and a change the validator rejects writes nothing; `edit`/`write` of anything else is allowed only for a file a data source in
   the config names (with its own `.bak-…` copy) and the app's workspace folder, never for the person's own documents; the shell is pi's
   shell with keys and tokens removed from its environment. There is no limit on how much the agent looks, no time limit on the run, and
-  `refresh_index` waits for the index run to end: only the person's Stop ends a run early. The session lives in the window-wide
-  `useErrorFix` store (`App.tsx` hosts the dialog), so dismissing or pressing "백그라운드로 전환" hides the modal without cancelling the
-  repair; while a run is active — or finished while minimized — `SidebarErrorFixActivity` renders in the sidebar footer in the exact
-  shape of `SidebarIndexActivity` (headline + shimmering `ProgressBar` + live `i` intent phrase, flipping to 100% green/orange when
-  done), and clicking it reopens the modal from any tab. While open and running, `ErrorFixDialog` shows a calm self-healing animation
+  `refresh_index` waits for the index run to end: only the person's Stop ends a run early. Sessions live in the window-wide multi-session
+  `useErrorFix` store (`App.tsx` hosts the dialog, `error-fix-service.ts` queues concurrent runs in FIFO order), so dismissing, pressing "백그라운드로 전환", or starting a second repair keeps every in-flight and unreviewed repair alive in the background without overwriting earlier ones;
+  `SidebarActivityQueue` (`SidebarErrorFixActivity` in isolated tests) surfaces each session in the unified bottom-left `+N` expandable queue
+  (headline + `ProgressBar` + live `i` intent phrase or queued status, flipping to 100% green/orange when
+  done), and clicking any session reopens the modal for that exact repair from any tab. While open and running, `ErrorFixDialog` shows a calm self-healing animation
   and one shimmering live status line (`"원인을 찾는 중…"` initially, then each tool call's live `i` intent phrase from
   `profile-progress.ts`), never dumping command lines, raw paths or JSON diffs onto the screen. When `fixed`, it settles into a
   healthy restored visual with the agent's plain summary and a single `Close` button. For `needs-user` or `cannot-fix`, `report_result`

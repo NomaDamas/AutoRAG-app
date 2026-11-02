@@ -132,7 +132,7 @@ export function IndexingPage({
 }): ReactElement {
 	useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
-	const [busy, setBusy] = useState<string | null>(null);
+	const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [refreshResult, setRefreshResult] = useState<ConfigRefreshResult | null>(null);
 	const rows = sources?.sources ?? [];
@@ -140,9 +140,14 @@ export function IndexingPage({
 	const local = sources?.local ?? null;
 	const [schedule, setSchedule] = useState<RefreshScheduleStatus | null>(null);
 	const activity = useIndexActivity();
-	const localRunning = busy === "refresh" || activityItem(activity, "local")?.state === "running";
-	const syncingOf = (row: DataSourceRow): boolean => row.status === "syncing" || activityItem(activity, `source:${row.id}`)?.state === "running";
-	// A run that ends, whoever started it, changes counts and timestamps: re-read them once.
+	const localState = activityItem(activity, "local")?.state ?? null;
+	const localRunning = pendingKeys.has("local") || localState === "running" || localState === "queued";
+	const rowActivityState = (row: DataSourceRow): "running" | "queued" | null => {
+		const item = activityItem(activity, `source:${row.id}`);
+		if (row.status === "syncing" || item?.state === "running") return "running";
+		if (pendingKeys.has(`source:${row.id}`) || item?.state === "queued") return "queued";
+		return null;
+	};
 	const wasRunning = useRef(false);
 	useEffect(() => {
 		const running = activity.state === "running";
@@ -178,8 +183,18 @@ export function IndexingPage({
 		}
 	}
 
+	function markPending(key: string, active: boolean): void {
+		setPendingKeys((prev) => {
+			if (prev.has(key) === active) return prev;
+			const next = new Set(prev);
+			if (active) next.add(key);
+			else next.delete(key);
+			return next;
+		});
+	}
+
 	async function refreshIndex(): Promise<void> {
-		setBusy("refresh");
+		markPending("local", true);
 		setLocalError(null);
 		try {
 			const result = await settings.configRefresh();
@@ -189,12 +204,13 @@ export function IndexingPage({
 		} catch (cause) {
 			setLocalError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
-			setBusy(null);
+			markPending("local", false);
 		}
 	}
 
 	async function syncOne(id: string): Promise<void> {
-		setBusy(id);
+		const key = `source:${id}`;
+		markPending(key, true);
 		setLocalError(null);
 		try {
 			const result = await settings.sourcesSync(id);
@@ -203,24 +219,15 @@ export function IndexingPage({
 		} catch (cause) {
 			setLocalError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
-			setBusy(null);
+			markPending(key, false);
 		}
 	}
 
 	async function syncAll(): Promise<void> {
-		setBusy("all");
 		setLocalError(null);
-		try {
-			for (const row of rows) {
-				if (!row.enabled) continue;
-				await settings.sourcesSync(row.id);
-			}
-			setSources(await settings.sourcesList());
-		} catch (cause) {
-			setLocalError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setBusy(null);
-		}
+		const targets = rows.filter((row) => row.enabled && rowActivityState(row) === null);
+		if (targets.length === 0) return;
+		await Promise.all(targets.map((row) => syncOne(row.id)));
 	}
 
 	const problem = localError ?? error;
@@ -263,7 +270,7 @@ export function IndexingPage({
 							className="settings-icon-btn"
 							aria-label={t("settingsSources.indexing.refreshLocalAria")}
 							title={t("settingsSources.indexing.refreshTitle")}
-							disabled={busy !== null}
+							disabled={localRunning}
 							onClick={() => void refreshIndex()}
 						>
 							<RefreshCw size={16} aria-hidden="true" focusable="false" />
@@ -276,13 +283,28 @@ export function IndexingPage({
 								<span className="settings-list-body">
 									<span className="settings-list-title">{sourceTitle(row)}</span>
 									<span className="settings-list-meta" title={schedule?.sources[row.id]?.error ?? undefined}>
-										{[syncingOf(row) ? t("settingsSources.common.syncing") : sourceMeta(row), lastAutoText(schedule?.sources[row.id], now)].filter((part) => part !== null).join(" · ")}
+										{[
+											rowActivityState(row) === "running"
+												? t("settingsSources.common.syncing")
+												: rowActivityState(row) === "queued"
+													? t("indexActivity.queued")
+													: sourceMeta(row),
+											lastAutoText(schedule?.sources[row.id], now),
+										]
+											.filter((part) => part !== null)
+											.join(" · ")}
 									</span>
 								</span>
 							</button>
 							<span className="settings-status">
-								<StatusDot tone={syncingOf(row) ? "run" : sourceTone(row)} />
-								{syncingOf(row) ? t("settingsSources.common.syncing") : row.enabled ? t("settingsSources.common.inUse") : t("settingsSources.common.off")}
+								<StatusDot tone={rowActivityState(row) === "running" ? "run" : rowActivityState(row) === "queued" ? "off" : sourceTone(row)} />
+								{rowActivityState(row) === "running"
+									? t("settingsSources.common.syncing")
+									: rowActivityState(row) === "queued"
+										? t("indexActivity.queued")
+										: row.enabled
+											? t("settingsSources.common.inUse")
+											: t("settingsSources.common.off")}
 							</span>
 							{TEMPLATE_BY_ID[row.type]?.polling !== false ? (
 								<select
@@ -302,7 +324,7 @@ export function IndexingPage({
 								className="settings-icon-btn"
 								aria-label={t("settingsSources.indexing.rowRefreshAria", { id: row.id })}
 								title={t("settingsSources.indexing.rowRefreshTitle")}
-								disabled={busy !== null || !row.enabled}
+								disabled={!row.enabled || rowActivityState(row) !== null}
 								onClick={() => void syncOne(row.id)}
 							>
 								<RefreshCw size={16} aria-hidden="true" focusable="false" />
@@ -314,10 +336,10 @@ export function IndexingPage({
 				<ScheduleNote status={schedule} />
 				<div className="settings-sync-footer">
 					<span className="settings-list-meta">{t("settingsSources.indexing.footer")}</span>
-					<button type="button" className="linear-btn" disabled={busy !== null || rows.length === 0} onClick={() => void syncAll()}>{t("settingsSources.indexing.syncAll")}</button>
+					<button type="button" className="linear-btn" disabled={rows.every((row) => !row.enabled || rowActivityState(row) !== null)} onClick={() => void syncAll()}>{t("settingsSources.indexing.syncAll")}</button>
 				</div>
 				<Row name={t("settingsSources.indexing.localRefreshName")} hint={t("settingsSources.indexing.localRefreshHint")}>
-					<button type="button" className="linear-btn" disabled={busy !== null} onClick={() => void refreshIndex()}>{t("settingsSources.indexing.localRefreshButton")}</button>
+					<button type="button" className="linear-btn" disabled={localRunning} onClick={() => void refreshIndex()}>{t("settingsSources.indexing.localRefreshButton")}</button>
 				</Row>
 				{refreshResult !== null ? (
 					<Note>
@@ -513,6 +535,9 @@ export function SourceDetailPage({
 	const [busy, setBusy] = useState(false);
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const activity = useIndexActivity();
+	const liveSourceState = activityItem(activity, `source:${alias}`)?.state ?? null;
+	const sourceSyncActive = busy || liveSourceState === "running" || liveSourceState === "queued";
 	const entry = asRecord(asRecord(snapshot.config.datasources)?.[alias]);
 	const type = entry !== null ? stringOf(entry.type) || alias : alias;
 	const template = TEMPLATE_BY_ID[type];
@@ -628,10 +653,16 @@ export function SourceDetailPage({
 				) : null}
 				<Row name={t("settingsSources.sourceDetail.refreshName")} hint={row !== null && row.index.indexedAt !== null ? t("settingsSources.sourceDetail.refreshLast", { date: new Date(row.index.indexedAt).toLocaleString() }) : t("settingsSources.sourceDetail.refreshNever")}>
 					<span className="settings-status">
-						<StatusDot tone={row === null ? "off" : sourceTone(row)} />
-						{row === null ? (sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.sourceDetail.stateNone")) : sourceMeta(row)}
+						<StatusDot tone={liveSourceState === "running" ? "run" : liveSourceState === "queued" ? "off" : row === null ? "off" : sourceTone(row)} />
+						{liveSourceState === "running"
+							? t("settingsSources.common.syncing")
+							: liveSourceState === "queued"
+								? t("indexActivity.queued")
+								: row === null
+									? (sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.sourceDetail.stateNone"))
+									: sourceMeta(row)}
 					</span>
-					<button type="button" className="linear-btn settings-btn-quiet" disabled={busy || row === null} onClick={() => void syncNow()}>{t("settingsSources.indexing.rowRefreshTitle")}</button>
+					<button type="button" className="linear-btn settings-btn-quiet" disabled={sourceSyncActive || row === null} onClick={() => void syncNow()}>{t("settingsSources.indexing.rowRefreshTitle")}</button>
 				</Row>
 				{template?.polling !== false ? (
 					<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>

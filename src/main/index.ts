@@ -45,14 +45,15 @@ import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
-import { createActivityJournal, journalSingleRun, LOCAL_ITEM, sourceItem } from "./index-activity-journal";
+import { LOCAL_ITEM, sourceItem } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
+import { createRefreshQueue } from "./refresh-queue";
 import { createIndexProblemService } from "./index-problem-service";
 import { modelDownloadFailure } from "./index-failure";
 import { createIndexReadiness } from "./index-readiness";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import type { RefreshLockHolder } from "./refresh-lock";
-import { schedulePaths, withRefreshLock } from "./refresh-schedule";
+import { schedulePaths } from "./refresh-schedule";
 import { createRefreshScheduler } from "./refresh-scheduler";
 import { createIconProvider } from "./file-icon";
 import { registerIconProtocol, THUMB_PRIVILEGED_SCHEME } from "./icon-register";
@@ -684,8 +685,8 @@ app.whenReady().then(async () => {
 	// Every datasource sync the app starts (Settings buttons, embedding rebuild) goes through this one wrapper:
 	// it takes the shared refresh lock and is journaled, so it shows in the indexing progress.
 	const schedulePath = schedulePaths(autoragConfigPath());
-	const lockedDataSources = lockDataSources(dataSources, schedulePath);
-	// One verdict for the whole process; a packaged app never honors the QA hardware override.
+	const refreshQueue = createRefreshQueue(schedulePath);
+	const lockedDataSources = lockDataSources(dataSources, schedulePath, refreshQueue);
 	const localSpec = createLocalSpecProbe({ env: process.env, allowOverride: !app.isPackaged });
 	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
 	// the whole app, so a download started in one place shows its progress everywhere.
@@ -717,24 +718,23 @@ app.whenReady().then(async () => {
 			diagnostics: [],
 			error: busyMessage(holder),
 		});
-	/** One local-index run under the shared refresh lock, journaled so it shows in the indexing progress. */
+	/** Enqueues a local-index run in the shared background refresh queue, journaled so it shows in the indexing progress. */
 	const runLocalIndex = <Busy extends ConfigRefreshResult | null>(
 		owner: string,
 		methods: readonly string[] | undefined,
 		onBusy: (holder: RefreshLockHolder) => Busy,
 		onResult: (result: ConfigRefreshResult) => void = () => undefined,
 	): Promise<ConfigRefreshResult | Busy> =>
-		withRefreshLock<ConfigRefreshResult | Busy>(
-			schedulePath.lock,
+		refreshQueue.enqueue<ConfigRefreshResult, Busy>({
+			item: LOCAL_ITEM,
 			owner,
-			() =>
-				journalSingleRun(createActivityJournal(schedulePath.activity, { owner }), LOCAL_ITEM, async () => {
-					const result = await refreshConfig(methods);
-					onResult(result);
-					return result;
-				}),
+			work: async () => {
+				const result = await refreshConfig(methods);
+				onResult(result);
+				return result;
+			},
 			onBusy,
-		);
+		});
 	// What is still wrong with the index once onboarding is over: kept across relaunches, shown by the Finder's sidebar, banner and Settings card.
 	const indexProblem = createIndexProblemService({
 		filePath: join(app.getPath("userData"), "index-problem.json"),
@@ -1111,32 +1111,22 @@ app.whenReady().then(async () => {
 		// Opening Dazzi after a failed first index: index the keywords now, which needs no embedder (not recorded: it says nothing about the embedder).
 		refreshKeyword: () => runLocalIndex("onboarding-index", ["parsed", "jikji"], () => null),
 		syncDatasources: async (aliases) => {
-			if (aliases.length === 0) return;
-			for (;;) {
-				const ran = await withRefreshLock(
-					schedulePath.lock,
-					"onboarding-datasources",
-					async () => {
-						const journal = createActivityJournal(schedulePath.activity, { owner: "onboarding-datasources" });
-						journal.begin(aliases.map(sourceItem));
-						try {
-							for (const alias of aliases) {
-								journal.start(sourceItem(alias).key);
-								try {
-									const result = await dataSources.sync(alias);
-									journal.finish(sourceItem(alias).key, result.ok, result.error);
-								} catch (error) {
-									journal.finish(sourceItem(alias).key, false, error instanceof Error ? error.message : String(error));
-								}
-							}
-						} finally {
-							journal.end();
-						}
-						return true;
-					},
-					() => false,
+			let pending = [...aliases];
+			while (pending.length > 0) {
+				const deferredAliases: string[] = [];
+				await Promise.all(
+					pending.map(async (alias) => {
+						const outcome = await refreshQueue.enqueue({
+							item: sourceItem(alias),
+							owner: "onboarding-datasources",
+							work: () => dataSources.sync(alias),
+							onBusy: () => ({ ok: false as const, error: "__LOCKED__" }),
+						});
+						if ("error" in outcome && outcome.error === "__LOCKED__") deferredAliases.push(alias);
+					}),
 				);
-				if (ran) return;
+				if (deferredAliases.length === 0) return;
+				pending = deferredAliases;
 				const wait = Promise.withResolvers<void>();
 				setTimeout(wait.resolve, 1_000);
 				await wait.promise;

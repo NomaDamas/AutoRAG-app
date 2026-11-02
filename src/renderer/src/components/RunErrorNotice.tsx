@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import type { SearchErrorAction } from "../../../shared/search-contract";
-import { startErrorFix, useErrorFixSession } from "../hooks/useErrorFix";
+import { startErrorFix, useErrorFixSession, useErrorFixStore } from "../hooks/useErrorFix";
 import { describeAppError, type ErrorAction } from "../state/app-error";
 import { cn } from "../lib/cn";
 import { ErrorDetails } from "./ErrorDetails";
@@ -37,13 +37,14 @@ const SECONDARY_BUTTON = "border-border bg-window text-ink hover:bg-hover";
 export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, onNewChat, onRephrase, fix = true }: RunErrorNoticeProps): ReactElement {
 	const { t } = useTranslation();
 	const session = useErrorFixSession();
+	const store = useErrorFixStore();
 	const view = describeAppError(message, action, t);
 	const entries = view.actions.filter((entry) => entry.id !== "fix" || fix);
 	// Without the fix there is nothing to promise: an earlier turn's error just reads as what it is.
 	const hint = view.kind === "other" && !fix ? null : view.hint;
 	// Amber, not red: the model is fine and the person has a way on (wait, reconnect, or ask in a new chat).
 	const warnTone = view.kind === "rate-limit" || view.kind === "network" || view.kind === "context-overflow";
-	const isFixingThis = fix && session.run.status === "running" && session.message === message;
+	const isFixingThis = fix && store.sessions.some((entry) => entry.run.status === "running" && entry.message === message);
 
 	const run = (entry: ErrorAction): void => {
 		if (entry.id === "fix") startErrorFix(message);

@@ -402,8 +402,10 @@
       "failedTitle": "AI 未能修复",
       "stopped": "已停止。",
       "minimize": "在后台继续修复",
+      "queued": "等待当前修复完成后开始…",
       "sidebar": {
         "running": "正在用 AI 修复…",
+        "queued": "等待 AI 修复",
         "open": "查看 AI 修复状态"
       }
     }
@@ -2915,5 +2917,23 @@
     "failed": "下载已中断",
     "indexingTitle": "正在下载嵌入模型",
     "indexingNote": "下载完成后会自动开始首次建立索引。"
+  },
+  "sidebarActivity": {
+    "queueAria": "进行中与等待中的任务",
+    "queueHeader": "进行中与队列 ({{count}})",
+    "moreBadgeAria": "查看其余 {{count}} 项任务",
+    "collapseAria": "收起队列",
+    "minimize": "在后台运行",
+    "reduceRunning": "正在缩减大小 · {{name}}",
+    "reduceQueued": "等待缩减大小 · {{name}}",
+    "reduceDone": "已缩减大小 · {{name}}",
+    "reduceFailed": "缩减大小失败 · {{name}}",
+    "reduceOpen": "查看缩减大小状态",
+    "convertRunning": "正在转换 · {{name}}",
+    "convertQueued": "等待转换 · {{name}}",
+    "convertDone": "转换完成 · {{name}}",
+    "convertFailed": "转换失败 · {{name}}",
+    "convertOpen": "查看转换状态",
+    "modelDownloadOpen": "查看模型下载状态"
   }
 }

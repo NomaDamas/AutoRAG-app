@@ -1,22 +1,27 @@
 import { useSyncExternalStore } from "react";
 import type { ErrorFixBridge, ErrorFixEvent } from "../../../shared/error-fix-contract";
 import {
-	beginErrorFixSession,
-	dismissErrorFixSession,
+	activeErrorFixSession,
+	dismissErrorFixStore,
+	enqueueErrorFixStore,
 	initialErrorFixSession,
-	openErrorFixSession,
-	reduceErrorFixSession,
+	initialErrorFixStore,
+	openErrorFixStoreById,
+	reduceErrorFixStore,
+	removeErrorFixSessionFromStore,
 	type ErrorFixSession,
+	type ErrorFixStore,
 } from "../state/error-fix";
 
 type ErrorFixWindow = Window & { readonly autorag?: { readonly errorFix?: ErrorFixBridge } };
 
 /**
- * Window-wide singleton for the "AI로 고치기" session so minimizing or closing
- * the modal keeps the repair running in the background while the sidebar shows
- * live progress, and clicking the sidebar block reopens the modal at any time.
+ * Window-wide multi-session store for "AI로 고치기": minimizing or starting a
+ * second repair keeps every in-flight and unreviewed background repair in the
+ * queue instead of cancelling or overwriting earlier sessions.
  */
-let current: ErrorFixSession = initialErrorFixSession;
+let current: ErrorFixStore = initialErrorFixStore;
+let cachedActiveSession: ErrorFixSession = initialErrorFixSession;
 const listeners = new Set<() => void>();
 let unsubscribe: (() => void) | null = null;
 let boundBridge: ErrorFixBridge | undefined;
@@ -25,9 +30,10 @@ function getBridge(): ErrorFixBridge | undefined {
 	return (window as ErrorFixWindow).autorag?.errorFix;
 }
 
-function publish(next: ErrorFixSession): void {
+function publish(next: ErrorFixStore): void {
 	if (next === current) return;
 	current = next;
+	cachedActiveSession = activeErrorFixSession(next);
 	for (const listener of listeners) listener();
 }
 
@@ -38,7 +44,7 @@ function ensureSubscribed(): void {
 	unsubscribe?.();
 	boundBridge = bridge;
 	unsubscribe = bridge.onEvent((event: ErrorFixEvent) => {
-		publish(reduceErrorFixSession(current, event));
+		publish(reduceErrorFixStore(current, event));
 	});
 }
 
@@ -50,46 +56,52 @@ function subscribe(listener: () => void): () => void {
 	};
 }
 
-/** Starts a repair (or reopens the modal if the exact same error is already being repaired). */
+/**
+ * Starts a repair (or reopens the modal if the exact same error is already
+ * being repaired). Other minimized repairs stay alive in the background queue.
+ */
 export function startErrorFix(message: string): void {
 	ensureSubscribed();
-	if (current.run.status === "running" && current.message === message) {
-		publish(openErrorFixSession(current));
+	const existing = current.sessions.find((entry) => entry.run.status === "running" && entry.message === message);
+	if (existing !== undefined) {
+		publish(openErrorFixStoreById(current, existing.id));
 		return;
 	}
-	if (current.run.status === "running") {
-		void getBridge()?.cancel(current.run.runId);
-	}
 	const runId = crypto.randomUUID();
-	publish(beginErrorFixSession(runId, message));
+	publish(enqueueErrorFixStore(current, runId, message));
 	const bridge = getBridge();
 	if (bridge === undefined) return;
 	bridge.start(runId, { message, surface: "ai-search" }).catch((error: unknown) => {
 		const reason = error instanceof Error ? error.message : String(error);
-		publish(reduceErrorFixSession(current, { type: "error", runId, message: reason, changes: [], backupPath: null }));
+		publish(reduceErrorFixStore(current, { type: "error", runId, message: reason, changes: [], backupPath: null }));
 	});
 }
 
-/** Retries the current session's error message from the dialog. */
+/** Retries the currently open dialog session's error message. */
 export function retryErrorFix(): void {
-	if (current.message !== null) startErrorFix(current.message);
+	const active = current.activeId === null ? undefined : current.sessions.find((entry) => entry.id === current.activeId);
+	if (active === undefined) return;
+	publish(removeErrorFixSessionFromStore(current, active.id));
+	startErrorFix(active.message);
 }
 
-/** Explicitly stops a running repair (only the Stop button calls this). */
+/** Explicitly stops the currently open running repair (only the Stop button calls this). */
 export function stopErrorFix(): void {
-	if (current.run.status === "running") {
-		void getBridge()?.cancel(current.run.runId);
+	const active = current.activeId === null ? undefined : current.sessions.find((entry) => entry.id === current.activeId);
+	if (active?.run.status === "running") {
+		void getBridge()?.cancel(active.run.runId);
 	}
 }
 
-/** Reopens a minimized or background-completed repair modal. */
-export function openErrorFixDialog(): void {
-	publish(openErrorFixSession(current));
+/** Reopens a minimized or background-completed repair modal (by id, or the first background session). */
+export function openErrorFixDialog(id?: string): void {
+	const targetId = id ?? current.sessions[0]?.id;
+	if (targetId !== undefined) publish(openErrorFixStoreById(current, targetId));
 }
 
-/** Hides the modal if still running (continues in background), or clears the finished session. */
+/** Hides the modal if still running (continues in background), or clears ONLY the reviewed finished session. */
 export function dismissErrorFixDialog(): void {
-	publish(dismissErrorFixSession(current));
+	publish(dismissErrorFixStore(current));
 }
 
 /** Resets store state between unit tests. */
@@ -97,14 +109,23 @@ export function resetErrorFixStoreForTests(): void {
 	unsubscribe?.();
 	unsubscribe = null;
 	boundBridge = undefined;
-	current = initialErrorFixSession;
+	current = initialErrorFixStore;
+	cachedActiveSession = initialErrorFixSession;
 	for (const listener of listeners) listener();
+}
+
+export function useErrorFixStore(): ErrorFixStore {
+	return useSyncExternalStore(
+		subscribe,
+		() => current,
+		() => initialErrorFixStore,
+	);
 }
 
 export function useErrorFixSession(): ErrorFixSession {
 	return useSyncExternalStore(
 		subscribe,
-		() => current,
+		() => cachedActiveSession,
 		() => initialErrorFixSession,
 	);
 }

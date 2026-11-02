@@ -48,7 +48,7 @@ interface Run {
 
 export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixService {
 	const runs = new Map<string, Run>();
-
+	let tail: Promise<void> = Promise.resolve();
 	async function execute(runId: string, run: Run, request: ErrorFixRequest, toolkit: ErrorFixToolkit): Promise<void> {
 		let session: AgentSession | null = null;
 		try {
@@ -101,12 +101,16 @@ export function createErrorFixService(deps: ErrorFixServiceDeps): ErrorFixServic
 				diagnostics: deps.diagnostics,
 				refreshIndex: () => (run.cancelled ? stopped() : deps.refreshIndex()),
 			});
-			try {
-				await execute(runId, run, request, toolkit);
-			} finally {
-				runs.delete(runId);
-			}
-			if (run.cancelled) deps.send({ type: "cancelled", runId, ...toolkit.trace() });
+			const job = tail.then(async () => {
+				try {
+					if (!run.cancelled) await execute(runId, run, request, toolkit);
+				} finally {
+					runs.delete(runId);
+				}
+				if (run.cancelled) deps.send({ type: "cancelled", runId, ...toolkit.trace() });
+			});
+			tail = job.catch(() => undefined);
+			await job;
 		},
 		cancel: async (runId) => {
 			const run = runs.get(runId);

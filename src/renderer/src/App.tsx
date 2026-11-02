@@ -696,6 +696,10 @@ export function App(): ReactElement {
 							requestSettingsCategory("indexing");
 							finder?.openSettings();
 						}}
+						onOpenAiSettings={() => {
+							requestSettingsCategory("ai");
+							finder?.openSettings();
+						}}
 						sourceStatus={sourceStatus}
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}
@@ -863,6 +867,7 @@ export function App(): ReactElement {
 					state={finder.convertRename}
 					onConvert={(keepOriginal) => finder?.confirmConvertRename(keepOriginal)}
 					onCancel={() => finder?.cancelConvertRename()}
+					onMinimize={() => finder?.minimizeConvertRename()}
 				/>
 			)}
 			{finder?.reduceDialog == null ? null : (
@@ -872,6 +877,7 @@ export function App(): ReactElement {
 					onChangeReplaceOriginal={(replaceOriginal) => finder.setReduceDialogReplaceOriginal(replaceOriginal)}
 					onStart={() => finder.confirmReduceSize()}
 					onCancel={() => finder.cancelReduceSize()}
+					onMinimize={() => finder.minimizeReduceSize()}
 				/>
 			)}
 			{finder?.emptyTrashConfirm === true ? (

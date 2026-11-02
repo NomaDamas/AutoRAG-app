@@ -70,3 +70,10 @@ export function dismissIndexProblem(): void {
 		console.error("index problem dismiss failed", error);
 	});
 }
+
+export function resetIndexProblemForTests(): void {
+	unsubscribe?.();
+	unsubscribe = null;
+	current = NO_INDEX_PROBLEM;
+	for (const listener of listeners) listener();
+}
