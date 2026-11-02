@@ -87,7 +87,7 @@ function pathMenu() {
 }
 const sortMenu = () => Object.entries(SORT_LABEL).map(([key, label]) => mi("", label, "set-sort", key, { check: S.sort.key === key, tail: S.sort.key === key ? `<span class="mi-tail">${svg(S.sort.asc ? "chevron-up" : "chevron-down", 16, 2.4)}</span>` : "" })).join("");
 const ruleMenu = (id) => mi("message-circle", "AI 검색에서 고치기", "rule-edit", id) + mi("play", "지금 실행", "rule-run", id) + msep + mi("trash", "규칙 삭제", "rule-delete", id, { cls: "is-danger" });
-const browseAddMenu = () => mi("folder-plus", "즐겨찾기에 폴더 추가", "noop") + mi("pencil", "사이드바 편집", "noop", "", { sub: "데스크탑의 설정 → 사이드바와 같아요" });
+const browseAddMenu = () => mi("folder-plus", "즐겨찾기에 폴더 추가", "set-sheet", "addFavorite") + mi("pencil", "사이드바 편집", "set-page", "sidebar", { sub: "설정 → 사이드바" });
 function selMoreMenu() {
 	const paths = [...S.select];
 	return mi("download", "다운로드", "download", paths.join("\n")) + mi("files", "복제", "duplicate", paths.join("\n")) + mi("file-archive", `${paths.length}개 항목 압축`, "compress", paths.join("\n")) + msep + `<div class="menu-tags">${TAGS.map((t) => `<button style="background:${TAG_COLOR[t.id]};color:${TAG_COLOR[t.id]}" data-act="tag-toggle" data-arg="${t.id}\n${esc(paths.join("\n"))}" aria-label="${t.label} 태그"></button>`).join("")}</div>` + msep + mi("sparkles", "인덱싱에 포함", "toggle-index", paths.join("\n"));
@@ -98,6 +98,7 @@ function menuHtml(o) {
 		item: () => itemMenu(o.paths),
 		view: viewMenu, add: addMenu, path: pathMenu, sort: sortMenu, rule: () => ruleMenu(o.id),
 		"browse-add": browseAddMenu, "sel-more": selMoreMenu, mode: modeMenu,
+		choice: () => choiceMenu(o.key), interval: () => intervalMenu(o.id),
 	}[o.menu]();
 	const style = o.pos ?? "";
 	return `<div class="menu" role="menu" style="${style}" data-k="menu-${o.menu}">${body}</div>`;
@@ -122,7 +123,7 @@ function modeMenu() {
 function sheetHtml(o) {
 	const view = {
 		info: () => infoSheet(o), evidence: () => evidenceSheet(o), history: historySheet, activity: activitySheet,
-		picker: () => pickerSheet(o), attach: () => attachSheet(o), folderInfo: () => folderInfoSheet(o),
+		picker: () => pickerSheet(o), attach: () => attachSheet(o), folderInfo: () => folderInfoSheet(o), settings: () => settingsSheet(o),
 	}[o.sheet]();
 	const cls = [view.medium ? "is-medium" : "", view.solid ? "is-solid" : ""].join(" ");
 	return `<div class="sheet ${cls}" role="dialog" aria-label="${esc(view.title)}" style="${view.height ? `height:${view.height}` : ""}" data-k="sheet-${o.sheet}"><span class="grabber" data-drag="sheet"></span><div class="sheet-head" data-drag="sheet">${view.left ?? gbtn("x", "dismiss", "", "닫기")}<h3>${esc(view.title)}${view.subtitle ? `<small>${esc(view.subtitle)}</small>` : ""}</h3>${view.right ?? `<span style="width:44px"></span>`}</div><div class="sheet-body">${view.body}</div>${view.foot ?? ""}</div>`;

@@ -273,7 +273,7 @@ const ACTIONS = {
 	},
 	collapse: (arg) => { S.collapsed.has(arg) ? S.collapsed.delete(arg) : S.collapsed.add(arg); render(); },
 	tag: (arg) => { push({ kind: "folder", path: "D:", tag: arg }); },
-	settings: () => push({ kind: "settings" }),
+	settings: () => { S.overlay = null; if (S.tab !== "browse") S.tab = "browse"; push({ kind: "settings" }); },
 	"menu-view": (_, el) => menuAt("view", el),
 	"menu-add": (_, el) => menuAt("add", el),
 	"menu-path": (_, el) => menuAt("path", el),
@@ -369,6 +369,7 @@ const ACTIONS = {
 		if (o.op === "new-folder") return doCreate(value || "새 폴더", true);
 		if (o.op === "delete") { o.paths.forEach((p) => node(p) && detach(node(p))); S.overlay = null; S.select = null; toast(`${o.paths.length}개 항목을 영구 삭제했어요`, { icon: "trash" }); }
 		if (o.op === "rule-delete") { RULES.splice(RULES.findIndex((r) => r.id === o.id), 1); S.overlay = null; back(); toast("규칙을 삭제했어요", { icon: "trash" }); }
+		if (o.op === "disconnect") { SET.sources = SET.sources.filter((s) => s.id !== o.id); S.overlay = null; back(); toast("연결을 해제했어요", { icon: "plug" }); }
 	},
 	favorite: () => { S.overlay = null; toast("즐겨찾기에 추가했어요", { icon: "star" }); },
 	undo: () => { const fn = S.undoFn; S.toast = null; S.undoFn = null; fn?.(); toast("실행 취소했어요", { icon: "undo-2" }); },
@@ -407,6 +408,57 @@ const ACTIONS = {
 	"rule-fix": () => { S.chat.draft = "‘새 한글 문서 → PDF 변환’ 규칙이 실패했어. 원인 찾아서 고쳐줘"; setTab("ai"); },
 	"rule-run": () => { S.overlay = null; toast("규칙을 지금 실행했어요", { icon: "play" }); },
 	"rule-delete": (arg) => alertBox({ title: "규칙을 삭제할까요?", text: "이 규칙이 더 이상 실행되지 않아요.", ok: "삭제", danger: true, op: "rule-delete", id: arg }),
+	/* 설정 */
+	"set-page": (arg) => { S.overlay = null; if (S.tab !== "browse") S.tab = "browse"; if (route().kind !== "settings" && route().kind !== "setting") { rememberScroll(); S.stacks.browse.push({ kind: "settings" }); } push({ kind: "setting", id: arg }); },
+	"set-source": (arg) => push({ kind: "source", id: arg }),
+	"set-toggle": (arg) => {
+		const [key, sub] = arg.split(".");
+		if (key === "magic") SET.magic[sub] = !SET.magic[sub];
+		else if (key === "mcp") SET.mcpServers[Number(sub)].on = !SET.mcpServers[Number(sub)].on;
+		else if (key === "source") { const s = SET.sources.find((x) => x.id === sub); s.on = !s.on; s.status = s.on ? "ok" : "off"; s.meta = s.on ? "다시 켰어요 · 다음 최신화를 기다리는 중" : "꺼짐"; }
+		else if (sub != null) SET[key][sub] = !SET[key][sub];
+		else SET[key] = !SET[key];
+		render();
+	},
+	"set-choice": (arg, el) => menuAt("choice", el, { key: arg }),
+	"set-interval": (arg, el) => menuAt("interval", el, { id: arg }),
+	"set-pick": (arg) => {
+		const [key, value] = arg.split("\n");
+		SET[key] = value;
+		S.overlay = null;
+		if (key === "theme") { document.documentElement.dataset.appearance = value; $("#theme-toggle").textContent = value === "dark" ? "라이트 모드" : "다크 모드"; }
+		render();
+	},
+	"set-pick-interval": (arg) => { const [id, v] = arg.split("\n"); SET.sources.find((x) => x.id === id).interval = v; S.overlay = null; render(); },
+	"set-sheet": (arg) => sheet("settings", { arg }),
+	"set-save": () => { S.overlay = null; toast("저장했어요", { icon: "circle-check" }); },
+	"set-add": () => {
+		const value = $("#set-input")?.value.trim();
+		const kind = S.overlay.arg;
+		S.overlay = null;
+		if (!value) return render();
+		if (kind === "addScope") SET.scopeFolders.push(value);
+		if (kind === "addExclude") SET.excludes.push(value);
+		if (kind === "addFavorite") SET.sidebarItems[value.split(/[\\/]/).pop() || value] = true;
+		toast(`‘${value}’ 추가했어요`, { icon: "plus" });
+	},
+	"set-browse": () => toast("폴더 선택 화면이 열려요 (시안)", { icon: "folder" }),
+	"set-scope-remove": (arg) => { SET.scopeFolders = SET.scopeFolders.filter((p) => p !== arg); toast(`‘${arg}’ 검색 폴더에서 뺐어요`, { icon: "circle-minus", undo: () => SET.scopeFolders.push(arg) }); },
+	"set-exclude-remove": (arg) => { SET.excludes = SET.excludes.filter((p) => p !== arg); render(); },
+	"set-lang-remove": (arg) => { SET.docLangs = SET.docLangs.filter((l) => l !== arg); render(); },
+	"set-lang-add": (_, el) => menuAt("choice", el, { key: "docLangAdd" }),
+	"set-lang-reset": () => { SET.docLangs = ["한국어", "English"]; render(); },
+	"set-preset": (arg) => toast(`‘${arg}’ 적용했어요`, { icon: "circle-check", undo: () => {} }),
+	"set-ai-custom": (arg) => { const ask = { sidebar: "음악과 동영상은 숨기고 다운로드를 맨 위로 올려줘", contextMenu: "이미지 여러 개 우클릭하면 해상도랑 용량 표로 정리해주는 매직 액션 만들어줘", shortcuts: "이름 변경은 F2로 바꿔줘" }[arg]; S.chat.draft = ask; setTab("ai"); },
+	"set-refresh": () => toast("최신화를 시작했어요 · 아래 진행 상황에서 볼 수 있어요", { icon: "refresh-cw" }),
+	"set-copy-address": () => { navigator.clipboard?.writeText("http://192.168.0.12:47833").catch(() => {}); toast("주소 복사됨", { icon: "link" }); },
+	"set-copied": () => toast("복사됨", { icon: "copy" }),
+	"set-link": (arg) => toast(`${arg} 페이지를 새 탭에서 열어요`, { icon: "external-link" }),
+	"set-desktop": (arg) => toast(`${arg}은(는) 데스크탑에서 진행돼요`, { icon: "monitor" }),
+	"set-managed": () => { SET.answerModel = "Dazzi 관리형"; toast("답변 모델을 Dazzi 관리형으로 바꿨어요", { icon: "sparkles" }); },
+	"set-service": (arg, el) => toast(`${arg}: 연결 정보 수정 · 연결 확인 · 모델 다시 검색 · 연결 해제`, { icon: "info" }),
+	"set-connect": (arg) => toast(`${arg} 연결을 추가했어요 · 처음 가져오는 중`, { icon: "plus" }),
+	"set-disconnect": (arg) => alertBox({ title: "연결을 해제할까요?", text: `‘${SET.sources.find((s) => s.id === arg).alias}’ 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.`, ok: "연결 해제", danger: true, op: "disconnect", id: arg }),
 };
 
 /* ------------------------------------------------------------------ Input -- */
@@ -606,6 +658,14 @@ const SCENES = {
 	"자동화 · 실패 규칙": () => { S.tab = "auto"; S.stacks.auto = [{ kind: "rules" }, { kind: "rule", id: "hwp" }]; },
 	"진행 중인 작업": () => { S.overlay = { type: "sheet", sheet: "activity" }; },
 	"설정": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }]; },
+	"설정 · 일반": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "general" }]; },
+	"설정 · 구독": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "plan" }]; },
+	"설정 · 사이드바": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "sidebar" }]; },
+	"설정 · 우클릭 메뉴": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "contextMenu" }]; },
+	"설정 · AI 모델": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "ai" }]; },
+	"설정 · 인덱싱": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "indexing" }]; },
+	"설정 · 연결된 앱": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "setting", id: "apps" }]; },
+	"설정 · Discord": () => { S.stacks.browse = [{ kind: "root" }, { kind: "settings" }, { kind: "source", id: "discord" }]; },
 };
 function openQlScene(path) { const n = node(path); S.overlay = { type: "ql", path, list: listing(node(n.parent)).filter((x) => !isFolder(x)).map((x) => x.path) }; }
 

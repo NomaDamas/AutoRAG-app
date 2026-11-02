@@ -67,7 +67,7 @@ error. `node docs/prototypes/mobile-remote/gen-icons.mjs` regenerates
 | Quick Look window | Full-screen viewer: swipe between siblings, tap to hide chrome, pull down to close |
 | Sidebar activity queue | Accessory above the tab bar (ring + headline + `+N`), tap for the 진행 및 대기열 sheet |
 | Approval dock | Glass card that replaces the composer until answered; red badge on the AI 검색 tab when another tab is open |
-| Settings | Account card from the avatar; only settings that make sense on a phone, the rest named as desktop-only |
+| Settings | Gear button on 둘러보기 (no avatar: Dazzi accounts have no profile picture). Every desktop page is drawn as an iOS settings list: 내 계정 (email + Dazzi mark), 구독 및 사용량, 일반, 사이드바, 우클릭 메뉴 (+ magic-action editor sheet), 단축키 (read-only list + AI 커스텀), AI 모델, 웹 검색, MCP 서버 (+ server sheet), 인덱싱, 검색 범위, 문서 읽기, 중복 파일 정리, 연결된 앱 and each datasource's detail page. Selects become value cells with a choice menu; modals become sheets. Remote-access on/off and port are read-only from a remote session, since changing them cuts that session. |
 
 ## Decisions
 

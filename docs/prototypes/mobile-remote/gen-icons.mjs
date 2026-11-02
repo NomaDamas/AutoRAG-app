@@ -23,6 +23,9 @@ const SLUGS = [
 	"list-checks", "rotate-ccw", "bell", "user", "credit-card", "mouse-pointer-click", "keyboard", "database",
 	"scan-eye", "mail", "folder-sync", "panel-left", "external-link", "upload", "clipboard-copy",
 	"skip-back", "skip-forward", "rotate-cw", "wifi", "volume-2", "square-check-big", "folder-down", "star",
+	"grip-vertical", "chevrons-up-down", "key-round", "log-out", "languages", "sun", "moon", "eye-off", "server",
+	"terminal", "bot", "sliders-horizontal", "receipt", "circle-minus", "file-search", "rss", "calendar",
+	"arrow-down", "monitor-smartphone", "scroll-text", "puzzle", "trash-2", "send", "lock",
 ];
 
 const root = new URL("../../../", import.meta.url);

@@ -14,7 +14,9 @@ function currentView() {
 		case "rules": return rulesView();
 		case "rule": return ruleView(RULES.find((x) => x.id === r.id));
 		case "search": return searchView();
-		case "settings": return settingsView();
+		case "settings": return settingsIndex();
+		case "setting": return settingsPage(r.id);
+		case "source": return sourcePage(r.id);
 		default: return { nav: "", body: "" };
 	}
 }
@@ -45,7 +47,7 @@ function browseRoot() {
 	});
 	const tags = TAGS.slice(0, 5).map((t) => cell({ tile: `<span class="cell-icon"><span class="tag-dot" style="background:${TAG_COLOR[t.id]}"></span></span>`, title: t.label, value: String(allFiles().filter((n) => n.tags?.includes(t.id)).length || ""), act: "tag", arg: t.id }));
 	return {
-		nav: `<span class="nav-spacer"></span>${navTitle("둘러보기")}${gbtn("folder-plus", "menu-browse-add", "", "추가")}<button class="avatar" data-act="settings" aria-label="설정">김</button>`,
+		nav: `<span class="nav-spacer"></span>${navTitle("둘러보기")}<div class="ggroup glass"><button class="gbtn" data-act="menu-browse-add" aria-label="추가">${svg("folder-plus", 21, 2.1)}</button><button class="gbtn" data-act="settings" aria-label="설정">${svg("settings", 21, 2.1)}</button></div>`,
 		body: `${large("둘러보기", `<span class="live-dot"></span>${esc(PC_NAME)}에 연결됨`)}${groups.join("")}${sectionHtml("tags", "태그", tags)}`,
 	};
 }
@@ -171,19 +173,4 @@ function searchView() {
 		? `<div class="recent-head">${esc(PC_NAME)} 전체 · ${hits.length}개</div><div class="rows">${hits.map((n) => rowHtml(n, { where: true, hl: q })).join("")}</div>`
 		: `<div class="empty"><b>“${esc(q)}” 이름의 파일이 없어요</b><span>내용으로 찾으려면 AI 검색에 물어보세요</span></div>`;
 	return { plain: true, nav, body: `${large("검색")}${scope}${S.search.scope === "content" ? "" : ask}${S.search.scope === "content" ? ask : rows}` };
-}
-
-/* ------------------------------------------------------------------ 설정 -- */
-
-function settingsView() {
-	const remote = cell({ icon: "wifi", title: "원격 접속", sub: "이 브라우저 · 192.168.0.12:47833", value: "켬", act: "noop" });
-	return {
-		nav: `${backBtn()}${navTitle("설정")}`,
-		body: `${large("설정")}
-<div class="section"><div class="group"><button class="cell profile" data-act="noop"><span class="avatar">김</span><div><b>김동규</b><small>dongkyu@example.com · Pro</small></div>${svg("chevron-right", 18, 2.4).replace('class="icon"', 'class="icon chev-r"')}</button><div class="usage"><span class="cap-bar"><i style="width:38%"></i></span><small><span>이번 달 AI 사용량</span><span>38%</span></small></div></div></div>
-${sectionHtml("s-basic", "기본", [cell({ icon: "settings", title: "일반", sub: "화면 테마 · 언어", act: "noop" }), remote], { collapsible: false })}
-${sectionHtml("s-ai", "AI", [cell({ icon: "cpu", title: "AI 모델", value: "Dazzi 관리형", act: "noop" }), cell({ icon: "globe", title: "웹 검색", value: "켬", act: "noop" })], { collapsible: false })}
-${sectionHtml("s-search", "검색", [cell({ icon: "database", title: "인덱싱", sub: "인덱싱 중 2/3 · 문서 읽는 중", act: "activity" }), cell({ icon: "folder-sync", title: "검색 범위", value: "폴더 6개", act: "noop" }), cell({ icon: "files", title: "중복 파일 정리", act: "noop" })], { collapsible: false })}
-${sectionHtml("s-apps", "연결된 앱", [cell({ icon: "message-circle", title: "Discord", sub: "5분마다 새로 고침", tail: `<span class="status-dot ok"></span>`, act: "noop" }), cell({ icon: "mail", title: "Gmail", sub: "1시간마다 새로 고침", tail: `<span class="status-dot ok"></span>`, act: "noop" })], { collapsible: false, foot: "단축키, 우클릭 메뉴, 사이드바 편집처럼 키보드와 마우스를 전제로 한 설정은 데스크탑에서 바꿀 수 있어요." })}`,
-	};
 }
