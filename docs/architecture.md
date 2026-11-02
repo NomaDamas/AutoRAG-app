@@ -764,8 +764,10 @@ Settings → 우클릭 메뉴 that inspects and edits Dazzi's `AppSettings` (`ge
 the locked `AI Search` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. The fourth
 is the magic-action helper (`src/main/agents/profiles/magic-action.ts`, `src/main/magic-action-service.ts`,
 `src/shared/magic-actions-contract.ts`), which runs user-defined right-click Magic Actions on selected files and
-folders — either executing an arbitrary shell script or driving a `read` / `organize` pi agent loop with live `i`
-intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
+folders — either executing an arbitrary shell script or driving a `read` / `organize` pi agent loop that shares
+the AutoRAG Agent's Skills and connected MCP servers (`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled
+by default via `useSkills` / `useMcp` and toggleable off per action) with live `i` intent progress and streamed
+Markdown output. A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions

@@ -3,12 +3,16 @@ import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname } from "node:path";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
+import type { ProfileModel } from "@autorag/librarian/profiles";
 import { normalizeContextMenuSettings, type MagicAction } from "../shared/context-menu-contract";
 import type { MagicActionEvent, MagicActionRunRequest } from "../shared/magic-actions-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
 import { isSecretKey } from "./autorag-config-service";
-import { buildMagicActionUserMessage, magicActionProfile } from "./agents/profiles/magic-action";
+import {
+	buildMagicActionUserMessage,
+	openMagicActionSession,
+	type OpenedMagicActionSession,
+} from "./agents/profiles/magic-action";
 import { subscribeProfileProgress, type ReplyLanguage } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
 
@@ -260,10 +264,12 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 		action: MagicAction,
 		mode: "read" | "organize",
 		prompt: string,
+		useSkills: boolean,
+		useMcp: boolean,
 		paths: readonly string[],
 		startedAtMs: number,
 	): Promise<void> {
-		let session: AgentSession | null = null;
+		let opened: OpenedMagicActionSession | null = null;
 		let unsubscribeProgress: (() => void) | null = null;
 		let unsubscribeDraft: (() => void) | null = null;
 
@@ -274,25 +280,23 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 				return;
 			}
 			const cwd = resolveWorkingDir(paths, home);
-			session = await createProfileSession({
-				profile: magicActionProfile({
-					language: deps.language(),
-					mode,
-					actionLabel: action.label,
-					prompt,
-					cwd,
-					agentDir: deps.agentDir,
-					env: deps.env,
-					cancelled: () => run.cancelled,
-				}),
+			opened = await openMagicActionSession({
+				language: deps.language(),
+				mode,
+				actionLabel: action.label,
+				prompt,
 				cwd,
 				agentDir: deps.agentDir,
 				env: deps.env,
+				useSkills,
+				useMcp,
+				cancelled: () => run.cancelled,
 				model,
 			});
+			const session = opened.session;
 
 			const onAbort = (): void => {
-				void session?.abort();
+				void session.abort();
 			};
 			run.abort.signal.addEventListener("abort", onAbort, { once: true });
 
@@ -357,7 +361,7 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 		} finally {
 			unsubscribeDraft?.();
 			unsubscribeProgress?.();
-			session?.dispose();
+			await opened?.dispose().catch(() => undefined);
 		}
 	}
 
@@ -396,6 +400,8 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 						action,
 						action.execution.mode,
 						action.execution.prompt,
+						action.execution.useSkills !== false,
+						action.execution.useMcp !== false,
 						request.paths,
 						startedAtMs,
 					);

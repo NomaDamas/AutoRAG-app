@@ -88,6 +88,44 @@ writeFileSync(join(DOCS_DIR, "notes.md"), "첫 번째 메모\n두 번째 메모\
 
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
+mkdirSync(join(AGENT_DIR, "skills", "meeting-checklist"), { recursive: true });
+writeFileSync(
+	join(AGENT_DIR, "skills", "meeting-checklist", "SKILL.md"),
+	"---\nname: meeting-checklist\ndescription: Format action-items markdown files with owner headings and checkboxes.\n---\nAlways use `- [ ]` checkboxes under each owner's `##` heading.\n",
+	"utf8",
+);
+const liveMcpScript = join(WORK, "aside-live-mcp.mjs");
+writeFileSync(
+	liveMcpScript,
+	[
+		'import { createInterface } from "node:readline";',
+		'const rl = createInterface({ input: process.stdin });',
+		'const send = (msg) => process.stdout.write(JSON.stringify(msg) + "\\n");',
+		'rl.on("line", (line) => {',
+		'  if (!line.trim()) return;',
+		'  const req = JSON.parse(line);',
+		'  if (req.method === "initialize") {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aside", version: "1.0.0" } } });',
+		'  } else if (req.method === "tools/list") {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: { tools: [{ name: "memory_search", description: "Search Aside browser memory notes about team members and QA environments", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false } }] } });',
+		'  } else if (req.method === "tools/call") {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: { content: [{ type: "text", text: "Aside Note: 박지영 윈도우 QA 대상 환경은 Windows 11 Build 26200 (ARM64/x64) 입니다." }] } });',
+		'  } else if (req.id !== undefined) {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: {} });',
+		'  }',
+		'});',
+	].join("\n"),
+	"utf8",
+);
+writeFileSync(
+	join(AGENT_DIR, "mcp.json"),
+	JSON.stringify({
+		mcpServers: {
+			aside: { command: "node", args: [liveMcpScript], exposure: "direct" },
+		},
+	}),
+	"utf8",
+);
 const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
 writeFileSync(minsyncStub, "#!/bin/sh\nexit 0\n");
 chmodSync(minsyncStub, 0o755);
@@ -215,7 +253,7 @@ try {
 		[
 			"우클릭 메뉴를 다음처럼 커스텀해줘:",
 			"1) 기본 항목 중 '7z로 압축'과 '경로 복사'를 숨기고, '태그'도 숨길 수 있으면 숨겨봐. 그리고 magic 섹션을 맨 위로 올려줘.",
-			"2) 단일 md 파일(extensions: ['md'], selection: 'single', targetKind: 'file')을 우클릭했을 때 실행되는 AI 매직 액션(label: '액션아이템 추출', executionKind: 'agent', agentMode: 'organize')을 추가해줘. 프롬프트는 '선택한 마크다운 회의록을 읽고 같은 폴더에 action-items.md 파일로 담당자별 할 일 목록을 저장한 뒤 요약해줘'로 설정해.",
+			"2) 단일 md 파일(extensions: ['md'], selection: 'single', targetKind: 'file')을 우클릭했을 때 실행되는 AI 매직 액션(label: '액션아이템 추출', executionKind: 'agent', agentMode: 'organize')을 추가해줘. 프롬프트는 '선택한 마크다운 회의록을 읽고, 연결된 aside MCP의 memory_search 도구로 윈도우 QA 환경 메모를 조회한 뒤, 같은 폴더에 action-items.md 파일로 담당자별 할 일과 조회한 빌드 번호를 함께 저장하고 요약해줘'로 설정해.",
 			"3) 여러 파일(selection: 'multiple', targetKind: 'file')을 우클릭했을 때 줄 수를 세어주는 스크립트 매직 액션(label: '줄 수 합산', executionKind: 'script', command: 'wc -l \"$@\"')도 추가해줘.",
 		].join(" "),
 	);
@@ -304,8 +342,11 @@ try {
 
 	const createdFile = join(DOCS_DIR, "action-items.md");
 	check(
-		"Real LLM Magic Action agent streamed `i` progress, wrote action-items.md on disk, and returned summary",
-		seenMagicProgress.length >= 1 && existsSync(createdFile) && readFileSync(createdFile, "utf8").includes("김민수"),
+		"Real LLM Magic Action agent called connected Aside MCP (`26200`), wrote action-items.md on disk, and streamed `i` progress",
+		seenMagicProgress.length >= 1 &&
+			existsSync(createdFile) &&
+			readFileSync(createdFile, "utf8").includes("김민수") &&
+			readFileSync(createdFile, "utf8").includes("26200"),
 		existsSync(createdFile) ? readFileSync(createdFile, "utf8") : "action-items.md missing",
 	);
 

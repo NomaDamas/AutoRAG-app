@@ -78,7 +78,32 @@ describe("context-menu-contract normalization, locked Tags invariant & MagicActi
 				kind: "agent",
 				mode: "read",
 				prompt: "이 문서를 핵심 3줄로 요약해줘",
+				useSkills: true,
+				useMcp: true,
 			},
+		});
+
+		const optedOut = normalizeContextMenuSettings({
+			magicActions: [
+				{
+					id: "no-mcp-skills",
+					label: "격리 요약",
+					execution: {
+						kind: "agent",
+						mode: "read",
+						prompt: "요약",
+						useSkills: false,
+						useMcp: false,
+					},
+				},
+			],
+		});
+		expect(optedOut.magicActions[0]?.execution).toEqual({
+			kind: "agent",
+			mode: "read",
+			prompt: "요약",
+			useSkills: false,
+			useMcp: false,
 		});
 		expect(isDefaultContextMenuSettings(normalized)).toBe(false);
 		expect(isDefaultContextMenuSettings(DEFAULT_CONTEXT_MENU_SETTINGS)).toBe(true);

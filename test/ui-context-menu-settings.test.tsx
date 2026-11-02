@@ -174,6 +174,11 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 
 		const editor = document.querySelector('[data-testid="magic-action-editor-modal"]');
 		expect(editor).not.toBeNull();
+		// Skills & MCP switches default to ON (`aria-checked="true"`)
+		const skillsSwitch = editor!.querySelector<HTMLButtonElement>('[data-sidebar-switch="magic-editor:useSkills"]');
+		const mcpSwitch = editor!.querySelector<HTMLButtonElement>('[data-sidebar-switch="magic-editor:useMcp"]');
+		expect(skillsSwitch?.getAttribute("aria-checked")).toBe("true");
+		expect(mcpSwitch?.getAttribute("aria-checked")).toBe("true");
 
 		await act(async () => {
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-label"]')!, "PDF 3줄 요약");
@@ -194,12 +199,31 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			selection: "single",
 			targetKind: "file",
 			extensions: ["pdf", "md"],
-			execution: { kind: "agent", mode: "read", prompt: "핵심 3줄 요약해줘" },
+			execution: { kind: "agent", mode: "read", prompt: "핵심 3줄 요약해줘", useSkills: true, useMcp: true },
 		});
 
 		const actionId = currentSettings.contextMenu.magicActions[0]!.id;
-		expect(host.querySelector(`[data-magic-row="${actionId}"]`)).not.toBeNull();
+		expect(host.querySelector(`[data-magic-row="${actionId}"]`)?.textContent).toContain("MCP");
 
+		// Edit the Magic Action and toggle MCP off
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>(`[data-action="edit-magic-${actionId}"]`)?.click();
+		});
+		await settle();
+		const editModal = document.querySelector('[data-testid="magic-action-editor-modal"]');
+		await act(async () => {
+			editModal?.querySelector<HTMLButtonElement>('[data-sidebar-switch="magic-editor:useMcp"]')?.click();
+		});
+		await settle();
+		await act(async () => {
+			editModal?.querySelector<HTMLButtonElement>('[data-action="save-magic-editor"]')?.click();
+		});
+		await settle();
+		expect(currentSettings.contextMenu.magicActions[0]?.execution).toMatchObject({
+			kind: "agent",
+			useSkills: true,
+			useMcp: false,
+		});
 		// Remove Magic Action
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>(`[data-action="remove-magic-${actionId}"]`)?.click();

@@ -87,6 +87,10 @@ export type MagicActionExecution =
 			readonly mode: MagicActionAgentMode;
 			/** Natural-language instruction for the pi agent loop on the selected target file(s). */
 			readonly prompt: string;
+			/** Share installed Skills (`<agentDir>/skills` & user skills) with the AutoRAG Agent. Defaults to `true`. */
+			readonly useSkills?: boolean;
+			/** Share connected MCP servers (`<agentDir>/mcp.json`, e.g. Aside MCP) with the AutoRAG Agent. Defaults to `true`. */
+			readonly useMcp?: boolean;
 	  };
 
 export interface MagicAction {
@@ -337,7 +341,9 @@ export function normalizeMagicAction(raw: unknown): MagicAction | null {
 		const prompt = typeof execRec.prompt === "string" ? execRec.prompt.trim() : "";
 		if (prompt.length === 0) return null;
 		const mode: MagicActionAgentMode = execRec.mode === "organize" ? "organize" : "read";
-		execution = { kind: "agent", mode, prompt };
+		const useSkills = execRec.useSkills !== false;
+		const useMcp = execRec.useMcp !== false;
+		execution = { kind: "agent", mode, prompt, useSkills, useMcp };
 	}
 	if (execution === null) return null;
 

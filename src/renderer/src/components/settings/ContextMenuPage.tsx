@@ -146,6 +146,12 @@ function MagicActionEditorModal({
 		initial?.execution.kind === "agent" ? initial.execution.mode : "read",
 	);
 	const [prompt, setPrompt] = useState(initial?.execution.kind === "agent" ? initial.execution.prompt : "");
+	const [useSkills, setUseSkills] = useState<boolean>(
+		initial?.execution.kind === "agent" ? initial.execution.useSkills !== false : true,
+	);
+	const [useMcp, setUseMcp] = useState<boolean>(
+		initial?.execution.kind === "agent" ? initial.execution.useMcp !== false : true,
+	);
 	const [command, setCommand] = useState(initial?.execution.kind === "script" ? initial.execution.command : "");
 	const [selection, setSelection] = useState<MagicActionSelectionRule>(initial?.selection ?? "any");
 	const [targetKind, setTargetKind] = useState<MagicActionTargetKind>(initial?.targetKind ?? "file");
@@ -168,7 +174,7 @@ function MagicActionEditorModal({
 			execution:
 				executionKind === "script"
 					? { kind: "script", command }
-					: { kind: "agent", mode: agentMode, prompt },
+					: { kind: "agent", mode: agentMode, prompt, useSkills, useMcp },
 		});
 		if (normalized !== null) onSave(normalized);
 	};
@@ -234,6 +240,32 @@ function MagicActionEditorModal({
 								onChange={(e) => setPrompt(e.target.value)}
 							/>
 						</label>
+						<div className="mt-14 flex flex-col gap-10 rounded-8 border border-border bg-chrome p-12">
+							<div className="flex items-center justify-between gap-12">
+								<div className="flex min-w-0 flex-col gap-2">
+									<span className="text-[12.5px] font-medium text-ink">{t("settingsCore.contextMenu.editor.useSkillsField")}</span>
+									<span className="text-badge text-ink-muted">{t("settingsCore.contextMenu.editor.useSkillsHint")}</span>
+								</div>
+								<Switch
+									checked={useSkills}
+									dataSwitchId="magic-editor:useSkills"
+									ariaLabel={t("settingsCore.contextMenu.editor.useSkillsField")}
+									onChange={() => setUseSkills((prev) => !prev)}
+								/>
+							</div>
+							<div className="flex items-center justify-between gap-12 border-t border-divider pt-10">
+								<div className="flex min-w-0 flex-col gap-2">
+									<span className="text-[12.5px] font-medium text-ink">{t("settingsCore.contextMenu.editor.useMcpField")}</span>
+									<span className="text-badge text-ink-muted">{t("settingsCore.contextMenu.editor.useMcpHint")}</span>
+								</div>
+								<Switch
+									checked={useMcp}
+									dataSwitchId="magic-editor:useMcp"
+									ariaLabel={t("settingsCore.contextMenu.editor.useMcpField")}
+									onChange={() => setUseMcp((prev) => !prev)}
+								/>
+							</div>
+						</div>
 					</>
 				) : (
 					<>
@@ -466,7 +498,12 @@ export function ContextMenuPage({
 				: action.extensions.length > 0
 					? action.extensions.map((e) => `.${e}`).join(", ")
 					: t("settingsCore.contextMenu.condAllExtensions");
-		return [sel, kind, ext].filter((part): part is string => part !== null).join(" · ");
+		const extras: string[] = [];
+		if (action.execution.kind === "agent") {
+			if (action.execution.useSkills !== false) extras.push(t("settingsCore.contextMenu.condSkills"));
+			if (action.execution.useMcp !== false) extras.push(t("settingsCore.contextMenu.condMcp"));
+		}
+		return [sel, kind, ext, ...extras].filter((part): part is string => part !== null).join(" · ");
 	};
 
 	const renderMagicActionRow = (action: MagicAction, index: number, prefix: string): ReactElement => {

@@ -939,6 +939,8 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		}),
 	});
 
+	const stringEnum = <const T extends readonly string[]>(values: T, description: string) =>
+		Type.Unsafe<T[number]>({ type: "string", enum: [...values], description });
 	const upsertMagicAction = defineTool({
 		name: "upsert_magic_action",
 		label: "Upsert Magic Action",
@@ -950,36 +952,40 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			description: Type.Optional(Type.String({ description: "Short description shown in Settings." })),
 			enabled: Type.Optional(Type.Boolean({ description: "Whether this Magic Action is enabled (default true)." })),
 			selection: Type.Optional(
-				Type.Union([Type.Literal("any"), Type.Literal("single"), Type.Literal("multiple")], {
-					description: "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items).",
-				}),
+				stringEnum(["any", "single", "multiple"], "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items)."),
 			),
 			targetKind: Type.Optional(
-				Type.Union([Type.Literal("any"), Type.Literal("file"), Type.Literal("folder")], {
-					description: "Target type filter: 'file', 'folder', or 'any'.",
-				}),
+				stringEnum(["any", "file", "folder"], "Target type filter: 'file', 'folder', or 'any'."),
 			),
 			extensions: Type.Optional(
 				Type.Array(Type.String(), {
 					description: "File extensions filter (e.g. ['pdf', 'docx'] or ['png', 'jpg']). Omit or pass [] to match all extensions.",
 				}),
 			),
-			executionKind: Type.Union([Type.Literal("script"), Type.Literal("agent")], {
-				description: "'script' runs a shell command/code; 'agent' runs a pi AI agent loop on the target files.",
-			}),
+			executionKind: stringEnum(["script", "agent"], "'script' runs a shell command/code; 'agent' runs a pi AI agent loop on the target files."),
 			command: Type.Optional(
 				Type.String({
 					description: "Required when executionKind='script'. Shell command to execute. Selected file paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON (JSON string array), DAZZI_FILE (first path), DAZZI_FILE_COUNT.",
 				}),
 			),
 			agentMode: Type.Optional(
-				Type.Union([Type.Literal("read"), Type.Literal("organize")], {
-					description: "Used when executionKind='agent': 'read' for read-only analysis/summary/Q&A; 'organize' when the agent may create, edit, convert, rename, move, or run tools on files.",
-				}),
+				stringEnum(["read", "organize"], "Used when executionKind='agent': 'read' for read-only analysis/summary/Q&A; 'organize' when the agent may create, edit, convert, rename, move, or run tools on files."),
 			),
 			prompt: Type.Optional(
 				Type.String({
 					description: "Required when executionKind='agent'. Instruction telling the agent what to do with the selected file(s).",
+				}),
+			),
+			useSkills: Type.Optional(
+				Type.Boolean({
+					description:
+						"Used when executionKind='agent'. Share installed Skills with the AutoRAG Agent (default: true; set false to disable skills for this action).",
+				}),
+			),
+			useMcp: Type.Optional(
+				Type.Boolean({
+					description:
+						"Used when executionKind='agent'. Share connected MCP servers (such as Aside MCP in mcp.json) with the AutoRAG Agent (default: true; set false to disable MCP servers for this action).",
 				}),
 			),
 		}),
@@ -992,6 +998,8 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 							kind: "agent" as const,
 							mode: params.agentMode === "organize" ? ("organize" as const) : ("read" as const),
 							prompt: params.prompt ?? "",
+							useSkills: params.useSkills ?? true,
+							useMcp: params.useMcp ?? true,
 						};
 			const normalized = normalizeMagicAction({
 				id: params.id,
@@ -1095,7 +1103,7 @@ function systemPrompt(language: ReplyLanguage): string {
 		"- **Finder Sidebar (`update_sidebar`)**: show or hide items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reorder Favorites or sections, pin or remove custom folders, or reset the sidebar to default.",
 		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `delete_magic_action`)**:",
 		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
-		"  - Create, update, or remove custom **Magic Actions** (`upsert_magic_action` / `delete_magic_action`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (`executionKind: 'script'`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`) OR run a pi AI agent loop (`executionKind: 'agent'`, `agentMode: 'read'` for analysis/summary or `'organize'` for file creation/editing/conversion/shell actions) with conditions (`selection: 'single' | 'multiple' | 'any'`, `targetKind: 'file' | 'folder' | 'any'`, `extensions: ['pdf', ...]`).",
+		"  - Create, update, or remove custom **Magic Actions** (`upsert_magic_action` / `delete_magic_action`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (`executionKind: 'script'`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`) OR run a pi AI agent loop (`executionKind: 'agent'`, `agentMode: 'read'` for analysis/summary or `'organize'` for file creation/editing/conversion/shell actions, with `useSkills` and `useMcp` both enabled `true` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn `useSkills: false` or `useMcp: false` off) with conditions (`selection: 'single' | 'multiple' | 'any'`, `targetKind: 'file' | 'folder' | 'any'`, `extensions: ['pdf', ...]`).",
 		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
 		"",
 		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",

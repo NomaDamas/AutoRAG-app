@@ -256,6 +256,10 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   (`execution.kind === "script"`, receiving target paths in `"$@"`, `DAZZI_FILES_JSON`,
   `DAZZI_FILE`, and `DAZZI_FILE_COUNT`) or an in-memory pi agent loop
   (`execution.kind === "agent"`, `mode: "read" | "organize"`, `src/main/agents/profiles/magic-action.ts`).
+  Agent Magic Actions share the AutoRAG Agent's installed Skills (`<agentDir>/skills` & user skills)
+  and connected MCP servers (`<agentDir>/mcp.json`, e.g. Aside MCP) by default (`useSkills: true`,
+  `useMcp: true`), and each can be toggled off per action in the Settings editor or via AI customization;
+  `app-customizer` itself never loads skills or MCP servers.
   Live progress (`i` intent shimmer) and streamed output appear in `MagicActionDialog`
   and can be minimized to `SidebarMagicActionActivity` in the sidebar footer.
   Automated checks: `test/context-menu-customization.test.ts`, `test/magic-action-service.test.ts`,

@@ -62,6 +62,44 @@ writeFileSync(join(DOCS_DIR, "beta.md"), "# Beta Note\nhello\n");
 
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(AGENT_DIR, { recursive: true });
+mkdirSync(join(AGENT_DIR, "skills", "aside-guide"), { recursive: true });
+writeFileSync(
+	join(AGENT_DIR, "skills", "aside-guide", "SKILL.md"),
+	"---\nname: aside-guide\ndescription: QA-SHARED-ASIDE-SKILL\n---\nUse Aside MCP memory_search when summarizing Q4 reports.\n",
+	"utf8",
+);
+const mcpFixture = join(WORK, "aside-mcp-fixture.mjs");
+writeFileSync(
+	mcpFixture,
+	[
+		'import { createInterface } from "node:readline";',
+		'const rl = createInterface({ input: process.stdin });',
+		'const send = (msg) => process.stdout.write(JSON.stringify(msg) + "\\n");',
+		'rl.on("line", (line) => {',
+		'  if (!line.trim()) return;',
+		'  const req = JSON.parse(line);',
+		'  if (req.method === "initialize") {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: { protocolVersion: "2024-11-05", capabilities: { tools: {} }, serverInfo: { name: "aside", version: "1.0.0" } } });',
+		'  } else if (req.method === "tools/list") {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: { tools: [{ name: "memory_search", description: "Search Aside browser memory", inputSchema: { type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false } }] } });',
+		'  } else if (req.method === "tools/call") {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: { content: [{ type: "text", text: "aside-note:Q4-target=$4.0M" }] } });',
+		'  } else if (req.id !== undefined) {',
+		'    send({ jsonrpc: "2.0", id: req.id, result: {} });',
+		'  }',
+		'});',
+	].join("\n"),
+	"utf8",
+);
+writeFileSync(
+	join(AGENT_DIR, "mcp.json"),
+	JSON.stringify({
+		mcpServers: {
+			aside: { command: "node", args: [mcpFixture], exposure: "direct" },
+		},
+	}),
+	"utf8",
+);
 writeMinsyncStub(join(AUTORAG_HOME, "bin"));
 
 const queue = [];
@@ -220,6 +258,12 @@ try {
 	await page.locator('[data-action="add-magic-action"]').click();
 	const editor = page.locator('[data-testid="magic-action-editor-modal"]');
 	await editor.waitFor();
+	check(
+		"Magic Action editor defaults both Shared Skills and Connected MCP switches to ON",
+		(await editor.locator('[data-sidebar-switch="magic-editor:useSkills"]').getAttribute("aria-checked")) === "true" &&
+			(await editor.locator('[data-sidebar-switch="magic-editor:useMcp"]').getAttribute("aria-checked")) === "true",
+	);
+	await shot("02a-magic-action-editor-agent-skills-mcp-default-on");
 	await editor.locator('[data-testid="magic-editor-label"]').fill("텍스트 묶음 줄 수 계산");
 	await editor.locator('[data-testid="magic-editor-kind"]').selectOption("script");
 	await editor.locator('[data-testid="magic-editor-command"]').fill('printf "BATCH_COUNT=%s FIRST=%s\\n" "$DAZZI_FILE_COUNT" "$(basename "$DAZZI_FILE")"');
@@ -280,6 +324,11 @@ try {
 	await modal.waitFor({ state: "detached" });
 	await shot("06-settings-context-menu-populated");
 
+	check(
+		"app-customizer profile does NOT load MCP tools (strictly isolated to the 6 settings tools)",
+		!seenRequests[0]?.tools.some((name) => name.startsWith("mcp__")),
+		JSON.stringify(seenRequests[0]?.tools),
+	);
 	const settingsFile = join(USER_DATA, "settings", "settings-state.json");
 	const persisted = JSON.parse(readFileSync(settingsFile, "utf8"));
 	check(
@@ -317,14 +366,20 @@ try {
 	);
 
 	// Click 'PDF 핵심 3줄 요약' to execute the agent Magic Action loop on report.pdf
+	const reqCountBeforeMagic = seenRequests.length;
 	queue.push(
 		{
 			tool: "read",
 			args: { i: "report.pdf 매출 지표를 읽는 중", path: join(DOCS_DIR, "report.pdf") },
-			delayMs: 300,
+			delayMs: 250,
 		},
 		{
-			text: "**Q4 요약 결과**\n- 매출: **$4.2M** (전년 대비 +28%)\n- 상태: 정상 성장",
+			tool: "mcp__aside__memory_search",
+			args: { i: "Aside 브라우저 메모리 확인 중", query: "Q4 Revenue" },
+			delayMs: 250,
+		},
+		{
+			text: "**Q4 요약 결과 (Aside 연동)**\n- 매출: **$4.2M** (목표 $4.0M 초과 달성, 전년 대비 +28%)",
 		},
 	);
 	await page.locator('[data-magic-action-id="pdf-summary"]').click();
@@ -339,6 +394,13 @@ try {
 	check(
 		"Agent Magic Action read real report.pdf and rendered Markdown summary in MagicActionDialog",
 		(await dialog.locator('[data-testid="magic-action-output"]').innerText()).includes("$4.2M"),
+	);
+	const magicReq = seenRequests[reqCountBeforeMagic];
+	check(
+		"magic-action session shared both <agentDir>/mcp.json (`mcp__aside__memory_search`) and <agentDir>/skills (`QA-SHARED-ASIDE-SKILL`)",
+		Boolean(magicReq?.tools?.includes("mcp__aside__memory_search")) &&
+			JSON.stringify(magicReq?.messages ?? []).includes("QA-SHARED-ASIDE-SKILL"),
+		JSON.stringify(magicReq?.tools),
 	);
 	await dialog.locator('[data-action="close-magic-action"]').click();
 	await dialog.waitFor({ state: "detached" });
