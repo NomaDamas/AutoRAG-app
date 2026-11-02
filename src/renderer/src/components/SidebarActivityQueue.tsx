@@ -4,6 +4,7 @@ import { useBackgroundTasks } from "../hooks/useBackgroundTasks";
 import { openErrorFixDialog, useErrorFixStore } from "../hooks/useErrorFix";
 import { useIndexActivity } from "../hooks/useIndexActivity";
 import { useIndexProblem } from "../hooks/useIndexProblem";
+import { openMagicActionDialog, useMagicActionStore } from "../hooks/useMagicAction";
 import { cn } from "../lib/cn";
 import { useModelDownload } from "../state/model-download";
 import { collectSidebarActivities, type SidebarActivityEntry } from "../state/sidebar-activity-queue";
@@ -158,6 +159,7 @@ export function SidebarActivityQueue({
 	const indexActivity = useIndexActivity();
 	const indexProblem = useIndexProblem();
 	const errorFix = useErrorFixStore();
+	const magicAction = useMagicActionStore();
 	const backgroundTasks = useBackgroundTasks();
 	const modelDownload = useModelDownload();
 
@@ -165,11 +167,13 @@ export function SidebarActivityQueue({
 		indexActivity,
 		indexProblem,
 		errorFix,
+		magicAction,
 		backgroundTasks,
 		modelDownload: modelDownload.status,
 		t,
 		onOpenIndexing,
 		onOpenErrorFix: (id) => openErrorFixDialog(id),
+		onOpenMagicAction: (id) => openMagicActionDialog(id),
 		onOpenAiSettings,
 	});
 

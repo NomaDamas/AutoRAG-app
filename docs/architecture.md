@@ -38,6 +38,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
   **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
+- **기본 → 단축키** — keyboard shortcut customization (`ShortcutsPage`,
+  `src/shared/shortcuts-contract.ts`) across Dazzi's fixed catalog of 26
+  default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
+  key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
+  conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
+  profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
+  `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
+  be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
   account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
@@ -450,7 +458,10 @@ after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
 
 - **Permissions** probe Full Disk Access for real (macOS) and re-check every two
-  seconds. Notifications post a real system notification; if macOS reports the
+  seconds. "시스템 설정 열기" opens the Privacy & Security › Full Disk Access pane
+  directly, with no explanation modal in between, and the row switches at once
+  to "다시 시작 필요" + "지금 다시 시작" because a grant only reaches a running app
+  after a relaunch (the probe clears it once the grant is real). Notifications post a real system notification; if macOS reports the
   app is not allowed, the step says so and opens the system notification
   settings (the unsigned dev binary is never allowed, so this only works in a
   signed build). Launch at login is the same setting as Settings › General and
@@ -758,9 +769,18 @@ session streams that phrase to the UI where it is rendered with the `.shimmer` t
 `low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
 second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
 app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
-`src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 that
-inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`, `update_general_settings`)
-while enforcing the locked `AI Search` and `Automations` invariant. A new profile adds one file there and, if it needs a UI,
+`src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 and
+Settings → 우클릭 메뉴 that inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`,
+`update_context_menu`, `upsert_magic_action`, `delete_magic_action`, `update_general_settings`) while enforcing
+the locked `AI Search` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. Alongside it,
+the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.ts`, routed when
+`AppCustomizerRequest.surface === "shortcuts"`) inspects and edits `AppSettings.shortcuts` (`get_shortcuts`,
+`update_shortcuts`) within the closed 26-action catalog. Finally, the `magic-action` helper
+(`src/main/agents/profiles/magic-action.ts`, `src/main/magic-action-service.ts`, `src/shared/magic-actions-contract.ts`)
+runs user-defined right-click Magic Actions on selected files and folders — either executing an arbitrary shell script
+or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
+(`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
+per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions

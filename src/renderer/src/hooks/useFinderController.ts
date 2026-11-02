@@ -19,6 +19,8 @@ import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { useTagCatalog } from "./useTagCatalog";
 import { useSidebarSettings } from "./useSidebarSettings";
+import { useContextMenuSettings } from "./useContextMenuSettings";
+import { onMagicActionDone, startMagicActionRun } from "./useMagicAction";
 import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
@@ -364,7 +366,13 @@ export interface FinderController {
 	/** The empty-space menu for `dir` (New / Paste); defaults to the folder in view. */
 	openBackgroundContextMenu(event: ReactMouseEvent<HTMLDivElement>, dir?: string): void;
 	closeContextMenu(): void;
-	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null, serviceId?: string | null, tagName?: string | null): void;
+	runMenuAction(
+		action: FinderMenuAction,
+		format?: NewFileFormatId | null,
+		serviceId?: string | null,
+		tagName?: string | null,
+		magicActionId?: string | null,
+	): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
@@ -748,6 +756,7 @@ export function useFinderController(
 			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
 	}, [store, path, source]);
+	useEffect(() => onMagicActionDone(() => refresh()), [refresh]);
 
 	// Only selected stack heads/members change the rows; a plain-row click must
 	// not re-run sort → stack → group → tree. The joined key is value-stable
@@ -1700,8 +1709,15 @@ export function useFinderController(
 				.catch(reportError);
 		});
 
+	const contextMenuSettings = useContextMenuSettings();
 	const runMenuAction = useLatestCallback(
-		(action: FinderMenuAction, format: NewFileFormatId | null = null, serviceId: string | null = null, tagName: string | null = null) => {
+		(
+			action: FinderMenuAction,
+			format: NewFileFormatId | null = null,
+			serviceId: string | null = null,
+			tagName: string | null = null,
+			magicActionId: string | null = null,
+		) => {
 			const menu = contextMenu;
 			if (menu === null) {
 				return;
@@ -1838,6 +1854,12 @@ export function useFinderController(
 				case "toggleTag":
 					if (tagName !== null) toggleTag(targets, tagName);
 					return;
+				case "magicAction": {
+					if (magicActionId === null) return;
+					const found = contextMenuSettings.magicActions.find((item) => item.id === magicActionId);
+					if (found !== undefined) startMagicActionRun(found, targets);
+					return;
+				}
 			}
 		});
 
@@ -2204,9 +2226,16 @@ export function useFinderController(
 			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices });
 		}
 		const entry = menu.entry;
+		const targetPaths = menuTargets(entry);
+		const byPath = new Map(viewEntries.map((row) => [row.path, row]));
+		const targetDescriptors = targetPaths.map((targetPath) => {
+			const row = byPath.get(targetPath);
+			return row !== undefined ? { name: row.name, kind: row.kind } : { name: basename(targetPath), kind: entry.kind };
+		});
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
-			selectionCount: menuTargets(entry).length,
+			targets: targetDescriptors,
+			selectionCount: targetPaths.length,
 			indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
 			clipboardCount,
 			inRecents: path === RECENTS_PATH || isTagPath(path),
@@ -2214,10 +2243,11 @@ export function useFinderController(
 			capabilities: actionCapabilities,
 			canCreateFolder: canCreateIn(menuCreateDir(menu)),
 			services: menuServices,
-			tags: { catalog: tagCatalog.catalog, shared: sharedTags(menuTargets(entry).map((target) => tagsOf(target))) },
+			tags: { catalog: tagCatalog.catalog, shared: sharedTags(targetPaths.map((target) => tagsOf(target))) },
+			contextMenu: contextMenuSettings,
 		});
 		// `t` changes identity with the language, so the menu re-labels on a switch.
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf]);
+	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings]);
 
 	const sidebarSettings = useSidebarSettings();
 	const sidebarGroups = useMemo(

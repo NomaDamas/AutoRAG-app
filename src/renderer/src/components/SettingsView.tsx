@@ -11,7 +11,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { Copy, CreditCard, FileText, Folder, Globe, PanelLeft, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MousePointerClick, PanelLeft, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
@@ -21,6 +21,8 @@ import { DuplicatesPage, ReadingPage, ScopePage, WebPage } from "./settings/Conf
 import { GeneralPage } from "./settings/GeneralPage";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
+import { ContextMenuPage } from "./settings/ContextMenuPage";
+import { ShortcutsPage } from "./settings/ShortcutsPage";
 import { TEMPLATE_BY_ID } from "./settings/datasourceTemplates";
 import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
@@ -28,7 +30,7 @@ import { attachSettingsNavigation } from "../state/settings-navigation";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "ai" | "web" | "mcp" | "indexing" | "scope" | "reading" | "duplicates" | "apps";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "ai" | "web" | "mcp" | "indexing" | "scope" | "reading" | "duplicates" | "apps";
 /** Legacy ids stay accepted so an old deep link still lands on a page. */
 type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
@@ -38,6 +40,8 @@ type NavLabelKey =
 	| "settingsCore.nav.plan"
 	| "settingsCore.nav.general"
 	| "settingsCore.nav.sidebar"
+	| "settingsCore.nav.contextMenu"
+	| "settingsCore.nav.shortcuts"
 	| "settingsCore.nav.ai"
 	| "settingsCore.nav.web"
 	| "settingsCore.nav.indexing"
@@ -71,6 +75,8 @@ const PAGES = [
 	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: CreditCard, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
 	{ id: "general", labelKey: "settingsCore.nav.general", icon: Settings, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.general" },
 	{ id: "sidebar", labelKey: "settingsCore.nav.sidebar", icon: PanelLeft, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.sidebar" },
+	{ id: "contextMenu", labelKey: "settingsCore.nav.contextMenu", icon: MousePointerClick, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.contextMenu" },
+	{ id: "shortcuts", labelKey: "settingsCore.nav.shortcuts", icon: Keyboard, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.shortcuts" },
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
 	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
@@ -243,6 +249,30 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 			case "sidebar":
 				return (
 					<SidebarPage
+						appSettings={appSettings}
+						onAppSettingsChanged={(next) => {
+							setAppSettings(next);
+							onSettingsChanged?.(next);
+						}}
+						onSettingsError={setError}
+						onOpenAiSettings={() => setCategory("ai")}
+					/>
+				);
+			case "contextMenu":
+				return (
+					<ContextMenuPage
+						appSettings={appSettings}
+						onAppSettingsChanged={(next) => {
+							setAppSettings(next);
+							onSettingsChanged?.(next);
+						}}
+						onSettingsError={setError}
+						onOpenAiSettings={() => setCategory("ai")}
+					/>
+				);
+			case "shortcuts":
+				return (
+					<ShortcutsPage
 						appSettings={appSettings}
 						onAppSettingsChanged={(next) => {
 							setAppSettings(next);

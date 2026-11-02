@@ -23,6 +23,14 @@ import { archiveFormatOf } from "../../../shared/archive-formats";
 import type { ServiceEntry } from "../../../shared/services-contract";
 import type { FsTagCatalog, FsTagColor } from "../../../shared/fs-contract";
 import { TAG_MENU_COLORS, tagKey } from "./tags";
+import {
+	DEFAULT_CONTEXT_MENU_SETTINGS,
+	matchesMagicAction,
+	normalizeContextMenuSettings,
+	type ContextMenuSectionId,
+	type ContextMenuSettings,
+	type MagicActionTargetDescriptor,
+} from "../../../shared/context-menu-contract";
 
 export type FinderMenuAction =
 	| "quickLook"
@@ -48,6 +56,7 @@ export type FinderMenuAction =
 	| "newFile"
 	| "service"
 	| "toggleTag"
+	| "magicAction"
 	// The automation rules list (자동화 tab): these never reach the Finder controller's runMenuAction.
 	| "editRule"
 	| "addRule"
@@ -64,6 +73,7 @@ export interface FinderMenuItem {
 	readonly keycap: string | null;
 	readonly tone: MenuTone;
 	readonly disabled: boolean;
+	readonly magicActionId?: string;
 }
 
 export interface FinderMenuSeparator {
@@ -133,12 +143,16 @@ export interface ContextMenuInput {
 	readonly services?: readonly ServiceEntry[];
 	/** Finder's tags and the tags (lower-case) every selected row carries; absent or unsupported hides the tag items. */
 	readonly tags?: { readonly catalog: FsTagCatalog; readonly shared: ReadonlySet<string> };
+	/** Every selected entry in order (used to evaluate multi-item Magic Action conditions). */
+	readonly targets?: readonly MagicActionTargetDescriptor[];
+	/** User customization of built-in item visibility, section order, and custom Magic Actions. */
+	readonly contextMenu?: ContextMenuSettings;
 }
 
 function item(
 	action: FinderMenuAction,
 	label: string,
-	options: { keycap?: string; tone?: MenuTone; disabled?: boolean } = {},
+	options: { keycap?: string; tone?: MenuTone; disabled?: boolean; magicActionId?: string } = {},
 ): FinderMenuItem {
 	return {
 		kind: "item",
@@ -147,6 +161,7 @@ function item(
 		keycap: options.keycap ?? null,
 		tone: options.tone ?? "default",
 		disabled: options.disabled ?? false,
+		...(options.magicActionId === undefined ? {} : { magicActionId: options.magicActionId }),
 	};
 }
 
@@ -215,95 +230,152 @@ function tagMenuEntries(input: ContextMenuInput): FinderMenuEntry[] {
 export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 	const isFolder = input.target.kind === "folder";
 	const multi = input.selectionCount > 1;
-	const entries: FinderMenuEntry[] = [
-		isFolder
-			? item("open", t("contextMenu.open"), { keycap: enterKeyLabel() })
-			: item("quickLook", t("finderState.contextMenu.quickLook"), { keycap: "space" }),
-	];
-	// The open group, Finder-style: 다른 앱으로 열기 sits directly under 열기.
-	// Like the row-action group below, it never appears inside the Trash.
-	if (!isFolder && input.inTrash !== true && input.capabilities.openWith) {
-		entries.push(item("openWith", t("contextMenu.openWith")));
-	}
-	if (input.inRecents === true) {
-		entries.push(SEPARATOR, item("showInEnclosingFolder", t("finderState.contextMenu.showInEnclosingFolder")));
+	const settings = input.contextMenu === undefined ? DEFAULT_CONTEXT_MENU_SETTINGS : normalizeContextMenuSettings(input.contextMenu);
+	const hiddenItems = new Set<string>(settings.hiddenItems);
+	const hiddenSections = new Set<string>(settings.hiddenSections);
+
+	const targetDescriptors: readonly MagicActionTargetDescriptor[] =
+		input.targets !== undefined && input.targets.length > 0
+			? input.targets
+			: Array.from({ length: Math.max(1, input.selectionCount) }, () => input.target);
+
+	// Build each section's own sub-groups; non-empty sub-groups are joined with SEPARATOR.
+	const sectionGroups: Record<ContextMenuSectionId, FinderMenuEntry[][]> = {
+		open: [],
+		magic: [],
+		index: [],
+		clipboard: [],
+		actions: [],
+		services: [],
+		tags: [],
+		trash: [],
+	};
+
+	if (!hiddenSections.has("open")) {
+		const openMain: FinderMenuEntry[] = [];
+		if (isFolder) {
+			if (!hiddenItems.has("builtin:open")) {
+				openMain.push(item("open", t("contextMenu.open"), { keycap: enterKeyLabel() }));
+			}
+		} else if (!hiddenItems.has("builtin:quickLook")) {
+			openMain.push(item("quickLook", t("finderState.contextMenu.quickLook"), { keycap: "space" }));
+		}
+		if (!isFolder && input.inTrash !== true && input.capabilities.openWith && !hiddenItems.has("builtin:openWith")) {
+			openMain.push(item("openWith", t("contextMenu.openWith")));
+		}
+		if (openMain.length > 0) sectionGroups.open.push(openMain);
+
+		if (input.inRecents === true && !hiddenItems.has("builtin:showInEnclosingFolder")) {
+			sectionGroups.open.push([item("showInEnclosingFolder", t("finderState.contextMenu.showInEnclosingFolder"))]);
+		}
 	}
 
-	if (!isFolder) {
-		entries.push(SEPARATOR);
-		entries.push(
+	if (!hiddenSections.has("magic") && input.inTrash !== true) {
+		const magicEntries: FinderMenuEntry[] = settings.magicActions
+			.filter((action) => matchesMagicAction(action, targetDescriptors))
+			.map((action) => item("magicAction", action.label, { magicActionId: action.id }));
+		if (magicEntries.length > 0) sectionGroups.magic.push(magicEntries);
+	}
+
+	if (!hiddenSections.has("index") && !isFolder && !hiddenItems.has("builtin:toggleIndex")) {
+		sectionGroups.index.push([
 			input.indexFailed === true
 				? item("retryIndex", t("contextMenu.retryIndex"), { tone: "warning" })
 				: item("toggleIndex", input.indexIncluded ? t("contextMenu.excludeFromIndex") : t("contextMenu.includeInIndex")),
-		);
+		]);
 	}
 
-	entries.push(
-		SEPARATOR,
-		item("copy", t("contextMenu.copy"), { keycap: formatShortcut({ key: "C" }) }),
-		item("paste", t("contextMenu.paste"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }),
-		item("cut", t("contextMenu.cut"), { keycap: formatShortcut({ key: "X" }) }),
-		item("duplicate", t("contextMenu.duplicate"), { keycap: formatShortcut({ key: "D" }) }),
-		item("rename", t("contextMenu.rename"), { keycap: formatShortcut({ key: "R" }), disabled: multi }),
-		item("copyPath", t("contextMenu.copyPath")),
-	);
+	if (!hiddenSections.has("clipboard")) {
+		const clip: FinderMenuEntry[] = [];
+		if (!hiddenItems.has("builtin:copy")) {
+			clip.push(item("copy", t("contextMenu.copy"), { keycap: formatShortcut({ key: "C" }) }));
+		}
+		if (!hiddenItems.has("builtin:paste")) {
+			clip.push(item("paste", t("contextMenu.paste"), { keycap: formatShortcut({ key: "V" }), disabled: input.clipboardCount === 0 }));
+		}
+		if (!hiddenItems.has("builtin:cut")) {
+			clip.push(item("cut", t("contextMenu.cut"), { keycap: formatShortcut({ key: "X" }) }));
+		}
+		if (!hiddenItems.has("builtin:duplicate")) {
+			clip.push(item("duplicate", t("contextMenu.duplicate"), { keycap: formatShortcut({ key: "D" }) }));
+		}
+		if (!hiddenItems.has("builtin:rename")) {
+			clip.push(item("rename", t("contextMenu.rename"), { keycap: formatShortcut({ key: "R" }), disabled: multi }));
+		}
+		if (!hiddenItems.has("builtin:copyPath")) {
+			clip.push(item("copyPath", t("contextMenu.copyPath")));
+		}
+		if (clip.length > 0) sectionGroups.clipboard.push(clip);
+	}
 
-	// The row-action group: the Inspector's headline actions, run on the whole
-	// selection. Capability-gated, and never offered inside the Trash — a
-	// trashed row goes back (Put Back) or away, not into an archive or a sheet.
-	const rowActions: FinderMenuItem[] = [];
-	if (input.inTrash !== true) {
-		if (input.canCreateFolder) {
+	if (!hiddenSections.has("actions") && input.inTrash !== true) {
+		const rowActions: FinderMenuItem[] = [];
+		if (input.canCreateFolder && !hiddenItems.has("builtin:newFolder")) {
 			rowActions.push(item("newFolder", t("contextMenu.newFolder")));
 		}
 		if (input.capabilities.archive) {
-			// Extraction is single-target: one archive row on its own.
-			if (!multi && archiveFormatOf(input.target.name) !== null) {
+			if (!multi && archiveFormatOf(input.target.name) !== null && !hiddenItems.has("builtin:extract")) {
 				rowActions.push(item("extract", t("contextMenu.extract")));
 			}
-			rowActions.push(
-				item(
-					"compress",
-					multi
-						? t("contextMenu.compressCount", { count: input.selectionCount })
-						: t("contextMenu.compress"),
-				),
-			);
-			rowActions.push(item("compress7z", t("contextMenu.compress7z")));
+			if (!hiddenItems.has("builtin:compress")) {
+				rowActions.push(
+					item(
+						"compress",
+						multi
+							? t("contextMenu.compressCount", { count: input.selectionCount })
+							: t("contextMenu.compress"),
+					),
+				);
+			}
+			if (!hiddenItems.has("builtin:compress7z")) {
+				rowActions.push(item("compress7z", t("contextMenu.compress7z")));
+			}
 		}
-		if (input.capabilities.share) {
+		if (input.capabilities.share && !hiddenItems.has("builtin:share")) {
 			rowActions.push(item("share", t("contextMenu.share")));
 		}
+		if (rowActions.length > 0) sectionGroups.actions.push(rowActions);
 	}
-	if (rowActions.length > 0) {
-		entries.push(SEPARATOR, ...rowActions);
-	}
-	const services = servicesSubmenu(input.services, input.inTrash === true);
-	if (services !== null) entries.push(SEPARATOR, services);
 
+	if (!hiddenSections.has("services") && !hiddenItems.has("builtin:services")) {
+		const services = servicesSubmenu(input.services, input.inTrash === true);
+		if (services !== null) sectionGroups.services.push([services]);
+	}
+
+	// Locked invariant: Tags (`tags` section / `builtin:tags`) can NEVER be hidden.
 	const tagItems = tagMenuEntries(input);
-	if (tagItems.length > 0) entries.push(SEPARATOR, ...tagItems);
+	if (tagItems.length > 0) sectionGroups.tags.push(tagItems);
 
-	entries.push(
-		SEPARATOR,
-		input.inTrash === true
-			? item(
-					"putBack",
-					multi
-						? t("contextMenu.putBackCount", { count: input.selectionCount })
-						: t("contextMenu.putBack"),
-				)
-			: item(
-					"trash",
-					multi
-						? t("contextMenu.moveToTrashCount", { count: input.selectionCount })
-						: t("contextMenu.moveToTrash"),
-					{
-						keycap: deleteKeyLabel(),
-						tone: "danger",
-					},
-				),
-	);
+	if (!hiddenSections.has("trash") && !hiddenItems.has("builtin:trash")) {
+		sectionGroups.trash.push([
+			input.inTrash === true
+				? item(
+						"putBack",
+						multi
+							? t("contextMenu.putBackCount", { count: input.selectionCount })
+							: t("contextMenu.putBack"),
+					)
+				: item(
+						"trash",
+						multi
+							? t("contextMenu.moveToTrashCount", { count: input.selectionCount })
+							: t("contextMenu.moveToTrash"),
+						{
+							keycap: deleteKeyLabel(),
+							tone: "danger",
+						},
+					),
+		]);
+	}
+
+	const entries: FinderMenuEntry[] = [];
+	for (const sectionId of settings.sectionOrder) {
+		for (const group of sectionGroups[sectionId]) {
+			if (group.length === 0) continue;
+			if (entries.length > 0) entries.push(SEPARATOR);
+			entries.push(...group);
+		}
+	}
 	return entries;
 }
 

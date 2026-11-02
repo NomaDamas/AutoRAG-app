@@ -7,8 +7,8 @@ import type { BackgroundTaskItem } from "../hooks/useBackgroundTasks";
 import { describeSidebarErrorFixEntries, type ErrorFixStore } from "./error-fix";
 import { describeIndexActivity, itemName, itemPhaseText } from "./index-activity";
 import { describeIndexProblem } from "./index-problem";
+import { describeSidebarMagicActionEntries, initialMagicActionStore, type MagicActionStore } from "./magic-action";
 import { downloadPercent } from "./model-download";
-
 export type SidebarActivityTone = "run" | "queued" | "ok" | "error";
 
 export interface SidebarActivityEntry {
@@ -32,11 +32,13 @@ export interface CollectSidebarActivitiesInput {
 	readonly indexActivity: IndexActivitySnapshot;
 	readonly indexProblem: IndexProblem;
 	readonly errorFix: ErrorFixStore;
+	readonly magicAction?: MagicActionStore | undefined;
 	readonly backgroundTasks: readonly BackgroundTaskItem[];
 	readonly modelDownload: ModelDownloadStatus;
 	readonly t: TFunction;
 	readonly onOpenIndexing: () => void;
 	readonly onOpenErrorFix: (id: string) => void;
+	readonly onOpenMagicAction?: ((id: string) => void) | undefined;
 	readonly onOpenAiSettings?: (() => void) | undefined;
 }
 
@@ -205,6 +207,23 @@ export function collectSidebarActivities(input: CollectSidebarActivitiesInput): 
 			sparkle: true,
 			shimmerHeadline: !isQueued && view.tone === "run",
 			onSelect: () => input.onOpenErrorFix(session.id),
+		});
+	}
+
+	// 1b. Magic Action sessions (running or completed in background awaiting review)
+	const magicAria = t("magicAction.sidebarOpen");
+	for (const entry of describeSidebarMagicActionEntries(input.magicAction ?? initialMagicActionStore, t)) {
+		raw.push({
+			id: `magic-action:${entry.id}`,
+			tone: entry.tone,
+			percent: entry.percent,
+			headline: entry.headline,
+			ariaLabel: magicAria,
+			title: joinTooltip([entry.detail, magicAria]),
+			className: "sidebar__magic-action",
+			sparkle: true,
+			shimmerHeadline: entry.tone === "run",
+			onSelect: () => input.onOpenMagicAction?.(entry.id),
 		});
 	}
 

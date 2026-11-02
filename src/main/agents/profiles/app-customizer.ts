@@ -26,6 +26,22 @@ import {
 	type SidebarSectionId,
 	type SidebarSettings,
 } from "../../../shared/sidebar-contract";
+import {
+	BUILTIN_CONTEXT_MENU_ITEM_IDS,
+	CONTEXT_MENU_SECTION_IDS,
+	DEFAULT_CONTEXT_MENU_SETTINGS,
+	isContextMenuSectionId,
+	isHideableContextMenuSectionId,
+	isLockedContextMenuItemId,
+	normalizeContextMenuItemId,
+	normalizeContextMenuSettings,
+	normalizeMagicAction,
+	type BuiltinContextMenuItemId,
+	type ContextMenuSectionId,
+	type ContextMenuSettings,
+	type HideableContextMenuSectionId,
+	type MagicAction,
+} from "../../../shared/context-menu-contract";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 
 export type { ReplyLanguage };
@@ -199,11 +215,81 @@ function summarizeGeneralChange(language: ReplyLanguage, fields: readonly string
 	}
 }
 
+function summarizeContextMenuChange(
+	language: ReplyLanguage,
+	fields: readonly string[],
+	opts: { readonly reset?: boolean; readonly upsertedLabel?: string; readonly deletedLabel?: string } = {},
+): string {
+	if (opts.reset === true) {
+		switch (language) {
+			case "ko":
+				return "우클릭 메뉴 구성을 기본값으로 복원";
+			case "ja":
+				return "右クリックメニューを初期設定に復元";
+			case "zh":
+				return "已将右键菜单恢复为默认设置";
+			default:
+				return "Reset context menu to default";
+		}
+	}
+	if (opts.upsertedLabel !== undefined) {
+		switch (language) {
+			case "ko":
+				return `매직 액션 저장: ${opts.upsertedLabel}`;
+			case "ja":
+				return `マジックアクションを保存: ${opts.upsertedLabel}`;
+			case "zh":
+				return `已保存魔法动作: ${opts.upsertedLabel}`;
+			default:
+				return `Saved Magic Action: ${opts.upsertedLabel}`;
+		}
+	}
+	if (opts.deletedLabel !== undefined) {
+		switch (language) {
+			case "ko":
+				return `매직 액션 삭제: ${opts.deletedLabel}`;
+			case "ja":
+				return `マジックアクションを削除: ${opts.deletedLabel}`;
+			case "zh":
+				return `已删除魔法动作: ${opts.deletedLabel}`;
+			default:
+				return `Deleted Magic Action: ${opts.deletedLabel}`;
+		}
+	}
+	const parts: string[] = [];
+	const hasVisibility = fields.includes("contextMenu.hiddenItems") || fields.includes("contextMenu.hiddenSections");
+	const hasOrder = fields.includes("contextMenu.sectionOrder") || fields.includes("contextMenu.magicActions");
+	switch (language) {
+		case "ko":
+			if (hasVisibility) parts.push("표시 항목 변경");
+			if (hasOrder) parts.push("순서 정렬");
+			return parts.length > 0 ? `우클릭 메뉴 ${parts.join(" · ")}` : "우클릭 메뉴 설정 업데이트";
+		case "ja":
+			if (hasVisibility) parts.push("表示項目の変更");
+			if (hasOrder) parts.push("並び順の更新");
+			return parts.length > 0 ? `右クリックメニュー: ${parts.join(" · ")}` : "右クリックメニュー設定を更新";
+		case "zh":
+			if (hasVisibility) parts.push("显示项已更新");
+			if (hasOrder) parts.push("排序已调整");
+			return parts.length > 0 ? `右键菜单：${parts.join(" · ")}` : "右键菜单设置已更新";
+		default:
+			if (hasVisibility) parts.push("visibility updated");
+			if (hasOrder) parts.push("order updated");
+			return parts.length > 0 ? `Context menu: ${parts.join(" · ")}` : "Updated context menu settings";
+	}
+}
+
 export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppCustomizerToolkit {
 	const home = deps.homeDir ?? homedir();
 	const lang = (): ReplyLanguage => deps.language?.() ?? "ko";
 	const isCancelled = (): boolean => deps.cancelled?.() === true;
 	const changes: AppCustomizerChange[] = [];
+	let mutationQueue: Promise<unknown> = Promise.resolve();
+	function serialized<T>(work: () => Promise<T>): Promise<T> {
+		const next = mutationQueue.then(work, work);
+		mutationQueue = next.catch(() => undefined);
+		return next;
+	}
 
 	function ensureLive(): void {
 		if (isCancelled()) throw new Error("The customization request was cancelled.");
@@ -219,6 +305,9 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		const hiddenItems = new Set(sidebar.hiddenItems);
 		const hiddenSections = new Set<string>(sidebar.hiddenSections);
 
+		const contextMenu = normalizeContextMenuSettings(appSettings.contextMenu);
+		const hiddenMenuItems = new Set<string>(contextMenu.hiddenItems);
+		const hiddenMenuSections = new Set<string>(contextMenu.hiddenSections);
 		const osFavoriteMap = new Map<string, FsLocation>();
 		for (const loc of locations) {
 			if (loc.section === "favorites") osFavoriteMap.set(placeSidebarItemId(loc.icon), loc);
@@ -317,6 +406,29 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				})),
 				raw: sidebar,
 			},
+			contextMenu: {
+				lockedItems: [
+					{
+						id: "builtin:tags",
+						label: "Tags (태그)",
+						visible: true,
+						locked: true,
+						note: "Always shown when tags are supported; cannot be hidden.",
+					},
+				],
+				builtinItems: BUILTIN_CONTEXT_MENU_ITEM_IDS.map((id) => ({
+					id,
+					visible: id === "builtin:tags" ? true : !hiddenMenuItems.has(id),
+					locked: id === "builtin:tags",
+				})),
+				sections: contextMenu.sectionOrder.map((sectionId) => ({
+					id: sectionId,
+					visible: sectionId === "tags" ? true : !hiddenMenuSections.has(sectionId),
+					locked: sectionId === "tags",
+				})),
+				magicActions: contextMenu.magicActions,
+				raw: contextMenu,
+			},
 			general: {
 				appearance: appSettings.appearance,
 				language: appSettings.language,
@@ -331,7 +443,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		name: "get_app_settings",
 		label: "Get App Settings",
 		description:
-			"Read Dazzi's current app settings (stored in settings-state.json, separate from AutoRAG config), including the full sidebar customization state (locked items, favorite folders, custom folders, cloud drives, mounted locations, tags, and section order) and general appearance/Finder preferences.",
+			"Read Dazzi's current app settings (stored in settings-state.json, separate from AutoRAG config), including the full sidebar customization state, the file right-click context menu customization & custom Magic Actions, and general appearance/Finder preferences.",
 		parameters: Type.Object({}),
 		execute: async () => {
 			ensureLive();
@@ -413,7 +525,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				}),
 			),
 		}),
-		execute: async (_callId, params) => {
+		execute: (_callId, params) => serialized(async () => {
 			ensureLive();
 			const [currentApp, locations, tags] = await Promise.all([
 				deps.settings.get(),
@@ -609,7 +721,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				sidebar: nextSidebar,
 				state: await buildInspectionSnapshot(),
 			});
-		},
+		}),
 	});
 
 	const updateGeneralSettings = defineTool({
@@ -624,7 +736,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			launchAtLogin: Type.Optional(Type.Boolean()),
 			autoInstallUpdates: Type.Optional(Type.Boolean()),
 		}),
-		execute: async (_callId, params) => {
+		execute: (_callId, params) => serialized(async () => {
 			ensureLive();
 			const patch: Partial<AppSettings> = {
 				...(params.appearance === undefined ? {} : { appearance: params.appearance }),
@@ -652,11 +764,329 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 					autoInstallUpdates: updated.autoInstallUpdates,
 				},
 			});
-		},
+		}),
+	});
+
+	const updateContextMenu = defineTool({
+		name: "update_context_menu",
+		label: "Update Context Menu",
+		description:
+			"Customize which built-in items and sections appear in the file right-click context menu, reorder sections or custom Magic Actions, or reset the context menu to default. IMPORTANT: `Tags` (`builtin:tags` / section `tags`) is mandatory and can NEVER be hidden, and keyboard shortcuts cannot be reassigned.",
+		parameters: Type.Object({
+			showItems: Type.Optional(
+				Type.Array(Type.String(), {
+					description:
+						"Built-in context menu item IDs or names to show (e.g. 'builtin:quickLook', 'builtin:openWith', 'builtin:toggleIndex', 'builtin:copy', 'builtin:paste', 'builtin:cut', 'builtin:duplicate', 'builtin:rename', 'builtin:copyPath', 'builtin:newFolder', 'builtin:extract', 'builtin:compress', 'builtin:compress7z', 'builtin:share', 'builtin:services', 'builtin:trash').",
+				}),
+			),
+			hideItems: Type.Optional(
+				Type.Array(Type.String(), {
+					description:
+						"Built-in context menu item IDs or names to hide. Note: 'builtin:tags' ('태그') is locked and cannot be hidden.",
+				}),
+			),
+			showSections: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Context menu sections to show ('open', 'magic', 'index', 'clipboard', 'actions', 'services', 'trash').",
+				}),
+			),
+			hideSections: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Context menu sections to hide ('open', 'magic', 'index', 'clipboard', 'actions', 'services', 'trash'). 'tags' cannot be hidden.",
+				}),
+			),
+			sectionOrder: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Desired order of context menu sections ('open', 'magic', 'index', 'clipboard', 'actions', 'services', 'tags', 'trash').",
+				}),
+			),
+			magicActionsOrder: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "Desired order of custom Magic Action IDs.",
+				}),
+			),
+			resetToDefault: Type.Optional(
+				Type.Boolean({
+					description: "When true, resets the entire file context menu configuration (including Magic Actions) back to factory defaults.",
+				}),
+			),
+		}),
+		execute: (_callId, params) => serialized(async () => {
+			ensureLive();
+			const currentApp = await deps.settings.get();
+			const current = normalizeContextMenuSettings(currentApp.contextMenu);
+			const warnings: string[] = [];
+			const touchedFields = new Set<string>();
+
+			if (params.resetToDefault === true) {
+				ensureLive();
+				await deps.settings.set({ contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS });
+				const change: AppCustomizerChange = {
+					kind: "contextMenu",
+					summary: summarizeContextMenuChange(lang(), ["contextMenu"], { reset: true }),
+					fields: ["contextMenu"],
+				};
+				changes.push(change);
+				return textResult({
+					ok: true,
+					resetToDefault: true,
+					change,
+					state: await buildInspectionSnapshot(),
+				});
+			}
+
+			const hiddenItems = new Set<BuiltinContextMenuItemId>(current.hiddenItems);
+			if (params.hideItems !== undefined && params.hideItems.length > 0) {
+				for (const raw of params.hideItems) {
+					if (isLockedContextMenuItemId(raw)) {
+						warnings.push(`'Tags' (builtin:tags / 태그) is a required core feature and cannot be hidden. Kept '${raw}' visible.`);
+						continue;
+					}
+					const resolved = normalizeContextMenuItemId(raw);
+					if (resolved === "") {
+						warnings.push(`Ignored unknown built-in context menu item '${raw}'.`);
+						continue;
+					}
+					hiddenItems.add(resolved);
+					touchedFields.add("contextMenu.hiddenItems");
+				}
+			}
+			if (params.showItems !== undefined && params.showItems.length > 0) {
+				for (const raw of params.showItems) {
+					const resolved = normalizeContextMenuItemId(raw);
+					if (resolved !== "") {
+						hiddenItems.delete(resolved);
+						touchedFields.add("contextMenu.hiddenItems");
+					}
+				}
+			}
+
+			const hiddenSections = new Set<HideableContextMenuSectionId>(current.hiddenSections);
+			if (params.hideSections !== undefined && params.hideSections.length > 0) {
+				for (const raw of params.hideSections) {
+					const normalizedSection = raw.trim().toLowerCase();
+					if (normalizedSection === "tags" || normalizedSection === "tag" || normalizedSection === "태그" || normalizedSection === "タグ" || normalizedSection === "标签") {
+						warnings.push("The 'Tags' section cannot be hidden because Tags must always remain available in the context menu.");
+						continue;
+					}
+					if (isHideableContextMenuSectionId(normalizedSection)) {
+						hiddenSections.add(normalizedSection);
+						touchedFields.add("contextMenu.hiddenSections");
+					}
+				}
+			}
+			if (params.showSections !== undefined && params.showSections.length > 0) {
+				for (const raw of params.showSections) {
+					const normalizedSection = raw.trim().toLowerCase();
+					if (isHideableContextMenuSectionId(normalizedSection)) {
+						hiddenSections.delete(normalizedSection);
+						touchedFields.add("contextMenu.hiddenSections");
+					}
+				}
+			}
+
+			let sectionOrder: ContextMenuSectionId[] = [...current.sectionOrder];
+			if (params.sectionOrder !== undefined && params.sectionOrder.length > 0) {
+				const valid = params.sectionOrder.map((s) => s.trim()).filter(isContextMenuSectionId);
+				sectionOrder = [
+					...valid,
+					...CONTEXT_MENU_SECTION_IDS.filter((s) => !valid.includes(s)),
+				];
+				touchedFields.add("contextMenu.sectionOrder");
+			}
+
+			let magicActions: MagicAction[] = [...current.magicActions];
+			if (params.magicActionsOrder !== undefined && params.magicActionsOrder.length > 0) {
+				const byId = new Map(magicActions.map((a) => [a.id, a]));
+				const ordered: MagicAction[] = [];
+				for (const id of params.magicActionsOrder) {
+					const found = byId.get(id.trim());
+					if (found !== undefined && !ordered.includes(found)) ordered.push(found);
+				}
+				for (const action of magicActions) {
+					if (!ordered.includes(action)) ordered.push(action);
+				}
+				magicActions = ordered;
+				touchedFields.add("contextMenu.magicActions");
+			}
+
+			const nextContextMenu: ContextMenuSettings = normalizeContextMenuSettings({
+				hiddenItems: [...hiddenItems],
+				hiddenSections: [...hiddenSections],
+				sectionOrder,
+				magicActions,
+			});
+
+			ensureLive();
+			await deps.settings.set({ contextMenu: nextContextMenu });
+
+			const fields = [...touchedFields];
+			if (fields.length > 0 || warnings.length > 0) {
+				changes.push({
+					kind: "contextMenu",
+					summary: summarizeContextMenuChange(lang(), fields),
+					fields: fields.length > 0 ? fields : ["contextMenu"],
+					...(warnings.length > 0 ? { warnings } : {}),
+				});
+			}
+
+			return textResult({
+				ok: true,
+				warnings,
+				contextMenu: nextContextMenu,
+				state: await buildInspectionSnapshot(),
+			});
+		}),
+	});
+
+	const stringEnum = <const T extends readonly string[]>(values: T, description: string) =>
+		Type.Unsafe<T[number]>({ type: "string", enum: [...values], description });
+	const upsertMagicAction = defineTool({
+		name: "upsert_magic_action",
+		label: "Upsert Magic Action",
+		description:
+			"Create or update a custom right-click Magic Action button on files/folders. A Magic Action can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
+		parameters: Type.Object({
+			id: Type.Optional(Type.String({ description: "Stable slug ID (optional on create; derived from label if omitted; pass existing id to update)." })),
+			label: Type.String({ description: "Menu button label shown on right-click (e.g. 'PDF 3줄 요약', '이미지 용량 정리', 'SHA-256 해시 복사')." }),
+			description: Type.Optional(Type.String({ description: "Short description shown in Settings." })),
+			enabled: Type.Optional(Type.Boolean({ description: "Whether this Magic Action is enabled (default true)." })),
+			selection: Type.Optional(
+				stringEnum(["any", "single", "multiple"], "When to show: 'single' (1 item), 'multiple' (2+ items batch), or 'any' (1 or more items)."),
+			),
+			targetKind: Type.Optional(
+				stringEnum(["any", "file", "folder"], "Target type filter: 'file', 'folder', or 'any'."),
+			),
+			extensions: Type.Optional(
+				Type.Array(Type.String(), {
+					description: "File extensions filter (e.g. ['pdf', 'docx'] or ['png', 'jpg']). Omit or pass [] to match all extensions.",
+				}),
+			),
+			executionKind: stringEnum(["script", "agent"], "'script' runs a shell command/code; 'agent' runs a pi AI agent loop on the target files."),
+			command: Type.Optional(
+				Type.String({
+					description: "Required when executionKind='script'. Shell command to execute. Selected file paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON (JSON string array), DAZZI_FILE (first path), DAZZI_FILE_COUNT.",
+				}),
+			),
+			agentMode: Type.Optional(
+				stringEnum(["read", "organize"], "Used when executionKind='agent': 'read' for read-only analysis/summary/Q&A; 'organize' when the agent may create, edit, convert, rename, move, or run tools on files."),
+			),
+			prompt: Type.Optional(
+				Type.String({
+					description: "Required when executionKind='agent'. Instruction telling the agent what to do with the selected file(s).",
+				}),
+			),
+			useSkills: Type.Optional(
+				Type.Boolean({
+					description:
+						"Used when executionKind='agent'. Share installed Skills with the AutoRAG Agent (default: true; set false to disable skills for this action).",
+				}),
+			),
+			useMcp: Type.Optional(
+				Type.Boolean({
+					description:
+						"Used when executionKind='agent'. Share connected MCP servers (such as Aside MCP in mcp.json) with the AutoRAG Agent (default: true; set false to disable MCP servers for this action).",
+				}),
+			),
+		}),
+		execute: (_callId, params) => serialized(async () => {
+			ensureLive();
+			const execution =
+				params.executionKind === "script"
+					? { kind: "script" as const, command: params.command ?? "" }
+					: {
+							kind: "agent" as const,
+							mode: params.agentMode === "organize" ? ("organize" as const) : ("read" as const),
+							prompt: params.prompt ?? "",
+							useSkills: params.useSkills ?? true,
+							useMcp: params.useMcp ?? true,
+						};
+			const normalized = normalizeMagicAction({
+				id: params.id,
+				label: params.label,
+				description: params.description,
+				enabled: params.enabled ?? true,
+				selection: params.selection ?? "any",
+				targetKind: params.targetKind ?? "file",
+				extensions: params.extensions ?? [],
+				execution,
+			});
+			if (normalized === null) {
+				return textResult({
+					ok: false,
+					error: "Invalid Magic Action: ensure label is non-empty and command (for script) or prompt (for agent) is provided.",
+				});
+			}
+			const currentApp = await deps.settings.get();
+			const current = normalizeContextMenuSettings(currentApp.contextMenu);
+			const existingIdx = current.magicActions.findIndex((item) => item.id === normalized.id);
+			const nextActions = [...current.magicActions];
+			if (existingIdx >= 0) nextActions[existingIdx] = normalized;
+			else nextActions.push(normalized);
+
+			const nextContextMenu = normalizeContextMenuSettings({
+				...current,
+				magicActions: nextActions,
+			});
+			ensureLive();
+			await deps.settings.set({ contextMenu: nextContextMenu });
+
+			const change: AppCustomizerChange = {
+				kind: "contextMenu",
+				summary: summarizeContextMenuChange(lang(), ["contextMenu.magicActions"], { upsertedLabel: normalized.label }),
+				fields: ["contextMenu.magicActions"],
+			};
+			changes.push(change);
+			return textResult({
+				ok: true,
+				magicAction: normalized,
+				contextMenu: nextContextMenu,
+			});
+		}),
+	});
+
+	const deleteMagicAction = defineTool({
+		name: "delete_magic_action",
+		label: "Delete Magic Action",
+		description: "Remove a custom right-click Magic Action by its ID or display label.",
+		parameters: Type.Object({
+			idOrLabel: Type.String({ description: "The ID or exact label of the Magic Action to delete." }),
+		}),
+		execute: (_callId, params) => serialized(async () => {
+			ensureLive();
+			const needle = params.idOrLabel.trim().toLowerCase();
+			const currentApp = await deps.settings.get();
+			const current = normalizeContextMenuSettings(currentApp.contextMenu);
+			const target = current.magicActions.find(
+				(action) => action.id.toLowerCase() === needle || action.label.toLowerCase() === needle,
+			);
+			if (target === undefined) {
+				return textResult({
+					ok: false,
+					error: `No Magic Action found matching '${params.idOrLabel}'.`,
+				});
+			}
+			const nextContextMenu = normalizeContextMenuSettings({
+				...current,
+				magicActions: current.magicActions.filter((action) => action.id !== target.id),
+			});
+			ensureLive();
+			await deps.settings.set({ contextMenu: nextContextMenu });
+			changes.push({
+				kind: "contextMenu",
+				summary: summarizeContextMenuChange(lang(), ["contextMenu.magicActions"], { deletedLabel: target.label }),
+				fields: ["contextMenu.magicActions"],
+			});
+			return textResult({
+				ok: true,
+				deleted: target,
+				contextMenu: nextContextMenu,
+			});
+		}),
 	});
 
 	return {
-		tools: [getAppSettings, updateSidebar, updateGeneralSettings],
+		tools: [getAppSettings, updateSidebar, updateContextMenu, upsertMagicAction, deleteMagicAction, updateGeneralSettings],
 		takeChanges: () => changes.splice(0),
 		peekChanges: () => [...changes],
 	};
@@ -670,18 +1100,21 @@ function systemPrompt(language: ReplyLanguage): string {
 		"",
 		"## Role & Scope",
 		"- You customize Dazzi's own app settings (stored in `settings-state.json`, completely separate from the AutoRAG index config).",
-		"- Your primary specialty is customizing the Finder Sidebar: showing or hiding items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reordering Favorites or sections (`favorites`, `cloud`, `locations`, `tags`), pinning or removing custom folders in Favorites, or resetting the sidebar to default.",
-		"- You can also adjust general Dazzi app preferences (`appearance`: `light` | `dark`, `language`: `ko` | `en` | `ja` | `zh`, `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`) via `update_general_settings`.",
+		"- **Finder Sidebar (`update_sidebar`)**: show or hide items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reorder Favorites or sections, pin or remove custom folders, or reset the sidebar to default.",
+		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `delete_magic_action`)**:",
+		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
+		"  - Create, update, or remove custom **Magic Actions** (`upsert_magic_action` / `delete_magic_action`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (`executionKind: 'script'`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`) OR run a pi AI agent loop (`executionKind: 'agent'`, `agentMode: 'read'` for analysis/summary or `'organize'` for file creation/editing/conversion/shell actions, with `useSkills` and `useMcp` both enabled `true` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn `useSkills: false` or `useMcp: false` off) with conditions (`selection: 'single' | 'multiple' | 'any'`, `targetKind: 'file' | 'folder' | 'any'`, `extensions: ['pdf', ...]`).",
+		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
 		"",
-		"## Non-Negotiable Invariant: Locked Core Items",
-		"- `AI Search` (`app:aiSearch`, 'AI 검색') and `Automations` (`app:automations`, '자동화') at the top of Favorites can NEVER be hidden or removed.",
-		"- If the person asks to hide `AI Search` or `Automations` (or asks to 'hide everything'), keep `AI Search` and `Automations` visible, apply the rest of their request if any, and explain politely that `AI Search` and `Automations` are essential core features of Dazzi that are always shown.",
+		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",
+		"- Sidebar: `AI Search` (`app:aiSearch`, 'AI 검색') and `Automations` (`app:automations`, '자동화') at the top of Favorites can NEVER be hidden or removed.",
+		"- Right-Click Context Menu: `Tags` (`builtin:tags`, '태그', and section `tags`) can NEVER be hidden or removed. Keyboard shortcuts on built-in items cannot be reassigned here.",
+		"- If the person asks to hide any locked item (or asks to 'hide everything'), keep the locked items visible, apply the rest of their request, and explain politely which core items always remain shown.",
 		"",
 		"## Workflow",
-		"1. Call `get_app_settings` when you need to inspect the current sidebar items, custom folders, or app preferences.",
-		"2. Call `update_sidebar` and/or `update_general_settings` to apply the requested changes immediately.",
+		"1. Call `get_app_settings` when you need to inspect the current sidebar, right-click context menu, Magic Actions, or app preferences.",
+		"2. Call `update_sidebar`, `update_context_menu`, `upsert_magic_action`, `delete_magic_action`, and/or `update_general_settings` to apply the requested changes immediately.",
 		"3. After tool calls finish, summarize clearly in 1-3 short sentences what you changed.",
-		"",
 		intentPromptLine(language),
 	].join("\n");
 }

@@ -396,3 +396,118 @@ describe("Services submenu", () => {
 		expect(servicesEntry(buildBackgroundContextMenu({ clipboardCount: 0, inTrash: true, services: [BLOOM] }))).toBeUndefined();
 	});
 });
+
+describe("buildContextMenu customization & Magic Actions", () => {
+	const TAG_CATALOG = {
+		supported: true,
+		colorNames: ["", "회색", "초록색", "보라색", "파란색", "노란색", "빨간색", "주황색"],
+		colorsDenied: false,
+		tags: [{ name: "Work", color: 6 as const, sidebar: true }],
+	};
+
+	it("hides configured built-in items and sections while ALWAYS keeping Tags visible, and keeps visual shortcuts unchanged", () => {
+		const entries = buildContextMenu({
+			...file,
+			tags: { catalog: TAG_CATALOG, shared: new Set() },
+			contextMenu: {
+				hiddenItems: ["builtin:tags" as never, "builtin:compress7z", "builtin:copyPath", "builtin:trash"],
+				hiddenSections: ["tags" as never, "index"],
+				sectionOrder: ["open", "magic", "index", "clipboard", "actions", "services", "tags", "trash"],
+				magicActions: [],
+			},
+		});
+		const itemActions = items(entries).map((i) => i.action);
+		expect(itemActions).not.toContain("compress7z");
+		expect(itemActions).not.toContain("copyPath");
+		expect(itemActions).not.toContain("toggleIndex");
+		expect(itemActions).not.toContain("trash");
+		// Copy keeps its ⌘C shortcut
+		expect(items(entries).find((i) => i.action === "copy")?.keycap).toBe("⌘C");
+		// Tags swatch row and Tags… submenu MUST remain present despite hiddenItems/hiddenSections attempts
+		expect(entries.some((e) => e.kind === "tags")).toBe(true);
+		expect(entries.some((e) => e.kind === "submenu" && e.label === "태그…")).toBe(true);
+	});
+
+	it("renders matching Magic Actions in the `magic` section in configured order and suppresses them in Trash", () => {
+		const magicActions = [
+			{
+				id: "pdf-summary",
+				label: "PDF 3줄 요약",
+				enabled: true,
+				selection: "single" as const,
+				targetKind: "file" as const,
+				extensions: ["pdf"],
+				execution: { kind: "agent" as const, mode: "read" as const, prompt: "Summarize" },
+			},
+			{
+				id: "batch-hash",
+				label: "일괄 해시 계산",
+				enabled: true,
+				selection: "multiple" as const,
+				targetKind: "file" as const,
+				extensions: ["pdf", "txt"],
+				execution: { kind: "script" as const, command: "shasum -a 256 \"$@\"" },
+			},
+		];
+
+		// Single PDF: shows `pdf-summary`, hides `batch-hash`
+		const singleMenu = items(
+			buildContextMenu({
+				...file,
+				targets: [{ name: "a.pdf", kind: "file" }],
+				contextMenu: {
+					hiddenItems: [],
+					hiddenSections: [],
+					sectionOrder: ["magic", "open", "index", "clipboard", "actions", "services", "tags", "trash"],
+					magicActions,
+				},
+			}),
+		);
+		expect(singleMenu[0]).toMatchObject({
+			action: "magicAction",
+			magicActionId: "pdf-summary",
+			label: "PDF 3줄 요약",
+		});
+		expect(singleMenu.some((i) => i.magicActionId === "batch-hash")).toBe(false);
+
+		// Multiple PDF+TXT: hides `pdf-summary` (single-only), shows `batch-hash`
+		const multiMenu = items(
+			buildContextMenu({
+				...file,
+				selectionCount: 2,
+				targets: [
+					{ name: "a.pdf", kind: "file" },
+					{ name: "b.txt", kind: "file" },
+				],
+				contextMenu: {
+					hiddenItems: [],
+					hiddenSections: [],
+					sectionOrder: ["magic", "open", "index", "clipboard", "actions", "services", "tags", "trash"],
+					magicActions,
+				},
+			}),
+		);
+		expect(multiMenu[0]).toMatchObject({
+			action: "magicAction",
+			magicActionId: "batch-hash",
+			label: "일괄 해시 계산",
+		});
+		expect(multiMenu.some((i) => i.magicActionId === "pdf-summary")).toBe(false);
+
+		// In Trash: Magic Actions never show
+		const trashMenu = items(
+			buildContextMenu({
+				...file,
+				inTrash: true,
+				targets: [{ name: "a.pdf", kind: "file" }],
+				contextMenu: {
+					hiddenItems: [],
+					hiddenSections: [],
+					sectionOrder: ["magic", "open", "index", "clipboard", "actions", "services", "tags", "trash"],
+					magicActions,
+				},
+			}),
+		);
+		expect(trashMenu.some((i) => i.action === "magicAction")).toBe(false);
+	});
+});

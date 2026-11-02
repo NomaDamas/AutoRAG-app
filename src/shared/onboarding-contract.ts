@@ -27,7 +27,6 @@ export const ONBOARDING_CHANNELS = {
 	save: "onboarding:save",
 	permissions: "onboarding:permissions",
 	openFullDiskAccess: "onboarding:openFullDiskAccess",
-	dragApp: "onboarding:dragApp",
 	relaunch: "onboarding:relaunch",
 	requestNotifications: "onboarding:requestNotifications",
 	openNotificationSettings: "onboarding:openNotificationSettings",
@@ -292,8 +291,6 @@ export interface OnboardingBridge {
 	permissions(): Promise<PermissionStatus>;
 	/** Opens System Settings › Privacy & Security › Full Disk Access. */
 	openFullDiskAccess(): Promise<void>;
-	/** Starts the OS drag of the app bundle (the guide's "drag this icon into the list"). */
-	dragApp(): void;
 	/** Quit and reopen the app (Full Disk Access applies to a running app only after a relaunch). */
 	relaunch(): Promise<void>;
 	/** Shows a real system notification; resolves whether the OS displayed it. */

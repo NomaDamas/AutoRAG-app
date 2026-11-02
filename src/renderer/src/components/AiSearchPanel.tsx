@@ -23,6 +23,8 @@ import type {
 } from "../../../shared/search-contract";
 import type { InteractionRequest } from "../../../shared/interaction-contract";
 import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
+import { chordFromKeyEvent, resolveEffectiveShortcuts } from "../../../shared/shortcuts-contract";
+import { useFormattedShortcut, useShortcutSettings } from "../hooks/useShortcutSettings";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
 import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
@@ -365,11 +367,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		if (body !== null) body.scrollTop = body.scrollHeight;
 	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices]);
 
+	const shortcutSettings = useShortcutSettings();
+	const historyShortcutLabel = useFormattedShortcut("aiToggleHistory");
+	const newChatShortcutLabel = useFormattedShortcut("aiNewChat");
 	useEffect(() => {
 		if (!active) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-			const meta = event.metaKey || event.ctrlKey;
-			if (meta && event.shiftKey && event.key.toLowerCase() === "h") {
+			const recorded = chordFromKeyEvent(event);
+			const effectiveShortcuts = resolveEffectiveShortcuts(shortcutSettings);
+			if (recorded.kind === "valid" && recorded.chord === effectiveShortcuts.aiToggleHistory) {
 				event.preventDefault();
 				toggleHistory();
 				return;
@@ -388,7 +394,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				void stop();
 				return;
 			}
-			if (meta && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "n") {
+			if (recorded.kind === "valid" && recorded.chord === effectiveShortcuts.aiNewChat) {
 				event.preventDefault();
 				newChat();
 			}
@@ -796,7 +802,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
-					title={t("aiSearch.historyShortcut", { shortcut: formatShortcut({ key: "H", shift: true }) })}
+					title={t("aiSearch.historyShortcut", { shortcut: historyShortcutLabel })}
 					aria-label={t("aiSearch.history")}
 					onClick={() => toggleHistory()}
 				>
@@ -805,7 +811,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-					title={t("aiSearch.newChatShortcut", { shortcut: formatShortcut({ key: "N" }) })}
+					title={t("aiSearch.newChatShortcut", { shortcut: newChatShortcutLabel })}
 					aria-label={t("aiSearch.newChat")}
 					onClick={() => newChat()}
 				>

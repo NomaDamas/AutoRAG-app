@@ -392,21 +392,7 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	justify-self: end;
 	min-width: 104px;
 }
-/* App mark and mini surfaces */
-
-.onb .app-mini {
-	display: grid;
-	place-items: center;
-	width: 38px;
-	height: 38px;
-}
-
-.onb .app-mark {
-	display: grid;
-	place-items: center;
-	width: 56px;
-	height: 56px;
-}
+/* App logo */
 
 .onb .app-logo {
 	width: 100%;
@@ -1266,10 +1252,6 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .permission-footnote svg {
 	flex: none;
-}
-
-.onb .settings-mock.win .system-toggle.on {
-	background: #0078d4;
 }
 
 .onb .folder-head {
@@ -2742,198 +2724,11 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	padding: 17px;
 }
 
-.onb .settings-mock {
-	display: grid;
-	grid-template-columns: 155px 1fr;
-	min-height: 310px;
-	border: 1px solid var(--onb-border);
-	border-radius: 9px;
-	overflow: hidden;
-	background: var(--onb-bg-stage);
-}
-
-.onb .settings-nav {
-	padding: 12px 8px;
-	background: var(--onb-bg-chrome);
-	border-right: 1px solid var(--onb-divider);
-}
-
-.onb .settings-nav strong {
-	display: block;
-	padding: 5px 8px 10px;
-	font-size: 10px;
-	color: var(--onb-muted);
-}
-
-.onb .settings-nav div {
-	padding: 7px 8px;
-	border-radius: 5px;
-	color: var(--onb-muted);
-	font-size: 10px;
-}
-
-.onb .settings-nav div.active {
-	background: var(--onb-blue);
-	color: #fff;
-}
-
-.onb .settings-pane {
-	padding: 17px;
-}
-
-.onb .settings-pane h3 {
-	margin: 0;
-	font-size: 14px;
-}
-
-.onb .settings-pane p {
-	margin: 5px 0 13px;
-	color: var(--onb-muted);
-	font-size: 9.5px;
-	line-height: 1.4;
-}
-
-.onb .system-row {
-	display: flex;
-	align-items: center;
-	gap: 9px;
-	padding: 9px;
-	border-top: 1px solid var(--onb-divider);
-	font-size: 10px;
-}
-
-.onb .system-row .system-app {
-	display: grid;
-	place-items: center;
-	width: 26px;
-	height: 26px;
-	border-radius: 7px;
-	background: var(--onb-bg-input);
-	color: var(--onb-muted);
-}
-
-.onb .system-row strong {
-	flex: 1;
-	font-weight: 500;
-}
-
-.onb .system-toggle {
-	width: 30px;
-	height: 18px;
-	border-radius: 10px;
-	background: var(--onb-border);
-	position: relative;
-}
-
-.onb .system-toggle:after {
-	content: "";
-	position: absolute;
-	top: 2px;
-	left: 2px;
-	width: 14px;
-	height: 14px;
-	border-radius: 50%;
-	background: #fff;
-}
-
-.onb .system-toggle.on {
-	background: var(--onb-green);
-}
-
-.onb .system-toggle.on:after {
-	left: 14px;
-}
-
-.onb .system-row.target {
-	background: var(--onb-blue-soft);
-	outline: 2px solid var(--onb-blue);
-	outline-offset: -2px;
-}
-
-.onb .guide {
-	display: grid;
-	grid-template-columns: 190px 1fr;
-	gap: 14px;
-}
-
-.onb .guide-copy h3 {
-	margin: 0 0 7px;
-	font-size: 14px;
-}
-
-.onb .guide-copy p {
-	margin: 0;
-	color: var(--onb-muted);
-	font-size: 10px;
-	line-height: 1.5;
-}
-
-.onb .guide-steps {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin-top: 17px;
-}
-
-.onb .guide-step {
-	display: flex;
-	gap: 8px;
-	color: var(--onb-body);
-	font-size: 10px;
-	line-height: 1.4;
-}
-
-.onb .guide-step b {
-	display: grid;
-	place-items: center;
-	flex: none;
-	width: 18px;
-	height: 18px;
-	border-radius: 50%;
-	background: var(--onb-blue);
-	color: #fff;
-	font-size: 9px;
-}
-
-.onb .guide-app {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	margin-top: 16px;
-	padding: 8px;
-	border: 1px dashed color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
-	border-radius: 7px;
-	color: var(--onb-blue);
-	font-size: 9px;
-}
-
 .onb .modal-actions {
 	display: flex;
 	justify-content: flex-end;
 	gap: 7px;
 	margin-top: 14px;
-}
-
-.onb .system-alert {
-	width: 320px;
-	padding: 22px;
-	text-align: center;
-}
-
-.onb .system-alert .app-mini {
-	margin: 0 auto 10px;
-}
-
-.onb .system-alert h3 {
-	margin: 0;
-	font-size: 14px;
-}
-
-.onb .system-alert p {
-	margin: 7px 0 17px;
-	color: var(--onb-muted);
-	font-size: 10px;
-	line-height: 1.45;
 }
 
 .onb .toast {
@@ -4324,11 +4119,6 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .permissions-screen .tag.req {
 	background: #ff3b30;
 	color: #fff;
-}
-
-.onb .permissions-why {
-	margin-top: -12px;
-	font-size: 10.5px;
 }
 
 /* Account step: one centred column (Figma 03 · account). */
