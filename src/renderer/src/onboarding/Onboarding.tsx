@@ -487,6 +487,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
 		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		// A plan just chosen has dropped out of the list, but the model step that follows it still steps back to it.
+		if (current.stepId === "model" && list.indexOf("model") > list.indexOf("embedding") && !shouldSkipPlanStep(false, embed, accountRef.current)) {
+			setDraft({ ...current, stepId: "plan", planConfirmed: false });
+			return;
+		}
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
 			// The scan screen moves on by itself, so stepping back passes over it.

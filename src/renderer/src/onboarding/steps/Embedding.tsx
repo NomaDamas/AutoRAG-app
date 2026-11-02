@@ -53,10 +53,7 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	const cardColumn = (id: EmbedCard["id"]): number => cards.findIndex((card) => card.id === id) + 1;
 
 	const choose = (card: EmbedCard): void => {
-		if (card.blocked !== null) {
-			// Say why the card cannot be chosen, instead of leaving a click that does nothing.
-			ctx.toast(localSpecMessage(card.blocked, t));
-		} else if (!card.disabled) {
+		if (!card.disabled) {
 			ctx.setEmbedMode(card.id);
 		}
 	};

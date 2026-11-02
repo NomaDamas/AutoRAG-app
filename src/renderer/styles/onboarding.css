@@ -2187,9 +2187,10 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	border-color: var(--onb-blue);
 }
 
+/* The note under the card says why; the card itself does not respond at all. */
 .onb .em-card.disabled {
 	background: var(--onb-bg-input);
-	cursor: not-allowed;
+	pointer-events: none;
 }
 
 .onb .em-card.disabled>* {
