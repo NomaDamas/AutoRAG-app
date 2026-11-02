@@ -450,7 +450,10 @@ after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
 
 - **Permissions** probe Full Disk Access for real (macOS) and re-check every two
-  seconds. Notifications post a real system notification; if macOS reports the
+  seconds. "시스템 설정 열기" opens the Privacy & Security › Full Disk Access pane
+  directly, with no explanation modal in between, and the row switches at once
+  to "다시 시작 필요" + "지금 다시 시작" because a grant only reaches a running app
+  after a relaunch (the probe clears it once the grant is real). Notifications post a real system notification; if macOS reports the
   app is not allowed, the step says so and opens the system notification
   settings (the unsigned dev binary is never allowed, so this only works in a
   signed build). Launch at login is the same setting as Settings › General and
