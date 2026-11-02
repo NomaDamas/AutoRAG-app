@@ -1299,12 +1299,12 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	flex: none;
 }
 
-/* Folders step (Figma 05b): an 856px column of two-up folder cards under a one-line lead. */
+/* Folders step (Figma 05b): an 858px column of two-up folder cards under a one-line lead. */
 .onb .screen.folders-screen {
 	justify-content: center;
 	padding-left: 24px;
 	padding-right: 24px;
-	padding-bottom: 13px;
+	padding-bottom: 9px;
 }
 
 .onb .folders-screen h1 {
@@ -1318,7 +1318,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .folders-stack {
 	width: 100%;
-	max-width: 856px;
+	max-width: 858px;
 	margin-top: 36px;
 }
 
@@ -1366,13 +1366,13 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	outline-offset: 2px;
 }
 
-/* Three rows show in full; every row after them scrolls (3 x 84px rows and 2 x 8px gaps). */
+/* Three rows show in full; every row after them scrolls (3 x 84px rows and 2 x 10px gaps). */
 .onb .folder-grid {
 	display: grid;
 	grid-template-columns: repeat(2,minmax(0,1fr));
 	grid-auto-rows: 84px;
-	gap: 8px;
-	max-height: 268px;
+	gap: 10px;
+	max-height: 272px;
 	overflow-y: auto;
 }
 
@@ -1388,6 +1388,11 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	border-radius: 12px;
 	background: var(--onb-bg-card);
 	cursor: pointer;
+	transition: border .15s, background .15s;
+}
+
+.onb .folder-card:hover {
+	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
 }
 
 .onb .folder-card.selected {
@@ -5358,7 +5363,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	max-width: 1092px;
 	min-height: 100%;
 	margin: 0 auto;
-	padding: 0 24px;
+	padding: 12px 24px 0;
 	box-sizing: border-box;
 }
 
@@ -5367,7 +5372,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	margin-bottom: 24px;
+	margin-bottom: 12px;
 	text-align: center;
 }
 
@@ -5603,6 +5608,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .si-screen:has(.si-head) .si-pill > svg:first-child {
 	flex: none;
+	fill: currentColor;
 }
 
 .onb .si-screen:has(.si-head) .si-pill.blue > svg:first-child {
