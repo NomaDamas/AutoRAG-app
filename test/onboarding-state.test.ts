@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import { DEFAULT_SIDEBAR_SETTINGS } from "../src/shared/sidebar-contract";
+import { DEFAULT_SHORTCUT_SETTINGS } from "../src/shared/shortcuts-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	remoteAccess: false,
 	remotePort: 47833,
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
+	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {

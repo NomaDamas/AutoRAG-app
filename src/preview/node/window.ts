@@ -98,6 +98,8 @@ export interface QuickLookWindowOptions {
 	readonly loadPage: (window: BrowserWindow) => void;
 	/** The app that opens `path`, or null; main hands this to the fs worker so no child spawns here. */
 	readonly defaultApp: (path: string) => Promise<string | null>;
+	/** Active Quick Look toggle chord (`Space` by default, or customized e.g. `Alt+P`). */
+	readonly quickLookChord?: () => string;
 }
 
 interface Session {
@@ -676,7 +678,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	// consume Space and arrows, so a page keydown listener never sees them.
 	const onInput = (event: Electron.Event, input: Electron.Input): void => {
 		if (input.type !== "keyDown") return;
-		const action = quickLookKeyAction(input, state.typing);
+		const action = quickLookKeyAction(input, state.typing, options.quickLookChord?.());
 		if (action === null) return;
 		event.preventDefault();
 		if (action === "close" && input.isAutoRepeat) return;

@@ -8,6 +8,7 @@
 import { type ApprovalMode, DEFAULT_APPROVAL_MODE } from "./interaction-contract";
 import type { McpLaunch, McpPlatform } from "./mcp-connect";
 import { DEFAULT_SIDEBAR_SETTINGS, type SidebarSettings } from "./sidebar-contract";
+import { DEFAULT_SHORTCUT_SETTINGS, type ShortcutSettings } from "./shortcuts-contract";
 
 export const SETTINGS_CHANNELS = {
 	get: "settings:get",
@@ -103,6 +104,8 @@ export interface AppSettings {
 	readonly remotePort: number;
 	/** User customization of sidebar visibility, ordering, and pinned folders (`settings-state.json`). */
 	readonly sidebar: SidebarSettings;
+	/** User customization of keyboard shortcuts (`settings-state.json`). */
+	readonly shortcuts: ShortcutSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -120,6 +123,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	remoteAccess: false,
 	remotePort: 47833,
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
+	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
 };
 
 /** Whether the backend a datasource needs is present on this machine. */

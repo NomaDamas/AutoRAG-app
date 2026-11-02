@@ -31,6 +31,7 @@ import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
+import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
@@ -278,6 +279,7 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 			loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
 			// Spawning osascript blocks the caller for the fork; the worker pays it.
 			defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
+			quickLookChord: () => currentQuickLookChord,
 		});
 	}
 	return window;
@@ -287,6 +289,7 @@ let fsWorker: FsWorkerHost | null = null;
 /** Remote browser access; null until its host is built (and while the setting is off). */
 let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
+let currentQuickLookChord = "Space";
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
 /** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
@@ -826,6 +829,7 @@ app.whenReady().then(async () => {
 				sendToAllWindows(INTERACTION_CHANNELS.modeChanged, settings.approvalMode);
 			}
 			setErrorReportingEnabled(settings.errorReporting);
+			currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -842,6 +846,7 @@ app.whenReady().then(async () => {
 	registerAnalyticsIpcHandlers(analytics);
 	void settingsService.get().then((settings) => {
 		previousSettings ??= settings;
+		currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
 	});
 	analytics.track("app_opened", {});
 	const indexActivity = createIndexActivityService({
