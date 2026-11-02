@@ -1398,8 +1398,8 @@ export function useFinderController(
 			kind: "reduce-size",
 			headline: pending.name,
 			queuedHeadline: pending.name,
-			doneHeadline: t("sidebarActivity.reduceDone", { name: pending.name }),
-			failedHeadline: t("sidebarActivity.reduceFailed", { name: pending.name }),
+			doneHeadline: pending.name,
+			failedHeadline: pending.name,
 			detail: `${t("finder.reduce.title")} · ${t(`finder.reduce.levels.${pending.level}`)}`,
 			ariaLabel: t("sidebarActivity.reduceOpen"),
 			onSelect: () => {
@@ -1903,8 +1903,8 @@ export function useFinderController(
 			kind: "convert-rename",
 			headline: pending.newName,
 			queuedHeadline: pending.newName,
-			doneHeadline: t("sidebarActivity.convertDone", { name: pending.newName }),
-			failedHeadline: t("sidebarActivity.convertFailed", { name: pending.newName }),
+			doneHeadline: pending.newName,
+			failedHeadline: pending.newName,
 			detail: `${t("finder.convert.title")} · ${pending.from.toUpperCase()} → ${pending.to.toUpperCase()}`,
 			ariaLabel: t("sidebarActivity.convertOpen"),
 			onSelect: () => {
