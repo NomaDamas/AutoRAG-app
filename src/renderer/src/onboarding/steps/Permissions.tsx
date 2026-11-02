@@ -8,11 +8,10 @@ interface PermissionsScreenProps {
 	readonly title: string;
 	readonly lead: string;
 	readonly children: ReactNode;
-	readonly after?: ReactNode;
 }
 
 /** The step's shared layout: a centred heading over a list of plain rows (Figma 02 · permissions). */
-function PermissionsScreen({ title, lead, children, after }: PermissionsScreenProps): ReactElement {
+function PermissionsScreen({ title, lead, children }: PermissionsScreenProps): ReactElement {
 	return (
 		<section className="screen permissions-screen">
 			<div className="permissions-head">
@@ -22,7 +21,6 @@ function PermissionsScreen({ title, lead, children, after }: PermissionsScreenPr
 				</p>
 			</div>
 			<div className="permission-list">{children}</div>
-			{after}
 		</section>
 	);
 }
@@ -70,15 +68,7 @@ function MacPermissions({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement 
 	}
 
 	return (
-		<PermissionsScreen
-			title={t("onboarding.permissions.title")}
-			lead={t("onboarding.permissions.leadMac")}
-			after={
-				<button type="button" className="inline-link permissions-why" onClick={() => ctx.openOverlay("fda")}>
-					{t("onboarding.permissions.fda.why")}
-				</button>
-			}
-		>
+		<PermissionsScreen title={t("onboarding.permissions.title")} lead={t("onboarding.permissions.leadMac")}>
 			<PermissionRow
 				icon="hard-drive"
 				tone="blue"

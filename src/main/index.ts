@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, sep } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
 import { minSyncModelCacheRoot } from "./bundled-sparse-model";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
@@ -13,7 +13,6 @@ import {
 	ClipboardItem,
 	dialog,
 	ipcMain,
-	nativeImage,
 	nativeTheme,
 	Notification,
 	powerSaveBlocker,
@@ -318,14 +317,6 @@ function sendToAllWindows(channel: string, payload: unknown): void {
 		if (!window.isDestroyed()) window.webContents.send(channel, payload);
 	}
 	remoteHost?.push(channel, payload);
-}
-
-/** The `.app` bundle to drag into Full Disk Access: the packaged app, else the Electron bundle. */
-function resolveAppBundlePath(): string {
-	const marker = `${sep}Contents${sep}MacOS${sep}`;
-	const executable = app.isPackaged ? app.getPath("exe") : process.execPath;
-	const at = executable.indexOf(marker);
-	return at >= 0 ? executable.slice(0, at) : executable;
 }
 
 /** macOS Full Disk Access probe: open (never read) a TCC-protected path. */
@@ -1183,19 +1174,6 @@ app.whenReady().then(async () => {
 		relaunch: () => {
 			app.relaunch();
 			app.exit(0);
-		},
-		appBundlePath: resolveAppBundlePath,
-		startDrag: (path) => {
-			const target = onboardingWindow ?? mainWindow;
-			if (target === null || target.isDestroyed()) return;
-			void app.getFileIcon(path).then(
-				(icon) => {
-					if (target.isDestroyed()) return;
-					const image = icon.isEmpty() ? nativeImage.createFromBitmap(Buffer.alloc(4), { width: 1, height: 1 }) : icon;
-					target.webContents.startDrag({ file: path, icon: image });
-				},
-				() => undefined,
-			);
 		},
 		pickFolders: async () => {
 			const options: OpenDialogOptions = {
