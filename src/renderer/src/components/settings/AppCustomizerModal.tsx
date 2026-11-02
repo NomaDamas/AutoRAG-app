@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Check, Lock, RotateCcw, Square, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
-import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent } from "../../../../shared/app-customizer-contract";
+import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
 
@@ -83,7 +83,7 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
 	);
 }
 
-export type AppCustomizerSurface = "sidebar" | "contextMenu";
+export type { AppCustomizerSurface };
 
 export function AppCustomizerModal({
 	surface = "sidebar",
@@ -91,14 +91,14 @@ export function AppCustomizerModal({
 	onSettingsUpdated,
 	onOpenAiSettings,
 }: {
-	readonly surface?: AppCustomizerSurface;
+	readonly surface?: AppCustomizerSurface | undefined;
 	readonly onClose: () => void;
 	readonly onSettingsUpdated: (settings: AppSettings) => void;
 	readonly onOpenAiSettings?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const titleId = useId();
-	const [sessionId, setSessionId] = useState(() => makeId("customizer-sess"));
+	const [sessionId, setSessionId] = useState(() => makeId(`customizer-${surface}-sess`));
 	const [turns, setTurns] = useState<readonly ChatTurn[]>([]);
 	const [input, setInput] = useState("");
 	const [activeRunId, setActiveRunId] = useState<string | null>(null);
@@ -218,11 +218,22 @@ export function AppCustomizerModal({
 			if (bridge === undefined) {
 				setActiveRunId(null);
 				setTurns((prev) =>
-					prev.map((turn) => (turn.id === runId ? { ...turn, status: "error", error: t("settingsCore.sidebar.modal.unavailable") } : turn)),
+					prev.map((turn) =>
+						turn.id === runId
+							? {
+									...turn,
+									status: "error",
+									error:
+										surface === "shortcuts"
+											? t("settingsCore.shortcuts.modal.unavailable")
+											: t("settingsCore.sidebar.modal.unavailable"),
+								}
+							: turn,
+					),
 				);
 				return;
 			}
-			void bridge.send(runId, { sessionId, message: trimmed }).catch((cause: unknown) => {
+			void bridge.send(runId, { sessionId, message: trimmed, surface }).catch((cause: unknown) => {
 				setActiveRunId((current) => (current === runId ? null : current));
 				setTurns((prev) =>
 					prev.map((turn) =>
@@ -233,7 +244,7 @@ export function AppCustomizerModal({
 				);
 			});
 		},
-		[sessionId, t],
+		[sessionId, surface, t],
 	);
 
 	const resetChat = useCallback((): void => {
@@ -243,9 +254,9 @@ export function AppCustomizerModal({
 		void getCustomizerBridge()?.reset(sessionId);
 		setActiveRunId(null);
 		setTurns([]);
-		setSessionId(makeId("customizer-sess"));
+		setSessionId(makeId(`customizer-${surface}-sess`));
 		textareaRef.current?.focus();
-	}, [sessionId]);
+	}, [sessionId, surface]);
 
 	const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
 		if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -255,6 +266,7 @@ export function AppCustomizerModal({
 	};
 
 	const isContextMenu = surface === "contextMenu";
+	const isShortcuts = surface === "shortcuts";
 	const suggestions = isContextMenu
 		? [
 				t("settingsCore.contextMenu.modal.promptSummarizePdf"),
@@ -262,12 +274,20 @@ export function AppCustomizerModal({
 				t("settingsCore.contextMenu.modal.promptCleanMenu"),
 				t("settingsCore.contextMenu.modal.promptReset"),
 			]
-		: [
-				t("settingsCore.sidebar.modal.promptMinimal"),
-				t("settingsCore.sidebar.modal.promptReorder"),
-				t("settingsCore.sidebar.modal.promptCleanSections"),
-				t("settingsCore.sidebar.modal.promptReset"),
-			];
+		: isShortcuts
+			? [
+					t("settingsCore.shortcuts.modal.promptMacFinder"),
+					t("settingsCore.shortcuts.modal.promptWindowsExplorer"),
+					t("settingsCore.shortcuts.modal.promptSwap"),
+					t("settingsCore.shortcuts.modal.promptReset"),
+				]
+			: [
+					t("settingsCore.sidebar.modal.promptMinimal"),
+					t("settingsCore.sidebar.modal.promptReorder"),
+					t("settingsCore.sidebar.modal.promptCleanSections"),
+					t("settingsCore.sidebar.modal.promptReset"),
+				];
+
 	const running = activeRunId !== null;
 
 	return createPortal(
@@ -291,10 +311,18 @@ export function AppCustomizerModal({
 						</span>
 						<div className="customizer-modal__titles">
 							<h2 id={titleId} className="customizer-modal__title">
-								{isContextMenu ? t("settingsCore.contextMenu.modal.title") : t("settingsCore.sidebar.modal.title")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.title")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.title")
+										: t("settingsCore.sidebar.modal.title")}
 							</h2>
 							<p className="customizer-modal__subtitle">
-								{isContextMenu ? t("settingsCore.contextMenu.modal.subtitle") : t("settingsCore.sidebar.modal.subtitle")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.subtitle")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.subtitle")
+										: t("settingsCore.sidebar.modal.subtitle")}
 							</p>
 						</div>
 					</div>
@@ -331,10 +359,18 @@ export function AppCustomizerModal({
 								<img src={dazziMark} alt="" className="customizer-modal__empty-logo" draggable={false} />
 							</div>
 							<h3 className="customizer-modal__empty-title">
-								{isContextMenu ? t("settingsCore.contextMenu.modal.emptyTitle") : t("settingsCore.sidebar.modal.emptyTitle")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.emptyTitle")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.emptyTitle")
+										: t("settingsCore.sidebar.modal.emptyTitle")}
 							</h3>
 							<p className="customizer-modal__empty-desc">
-								{isContextMenu ? t("settingsCore.contextMenu.modal.emptyDesc") : t("settingsCore.sidebar.modal.emptyDesc")}
+								{isContextMenu
+									? t("settingsCore.contextMenu.modal.emptyDesc")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.emptyDesc")
+										: t("settingsCore.sidebar.modal.emptyDesc")}
 							</p>
 							<div className="customizer-modal__suggestions">
 								{suggestions.map((promptText, idx) => (
@@ -372,7 +408,11 @@ export function AppCustomizerModal({
 										{turn.status === "running" && turn.draft === "" ? (
 											<div className="customizer-turn__progress" role="status">
 												<span className="shimmer">
-													{turn.progress.length > 0 ? turn.progress : t("settingsCore.sidebar.modal.thinking")}
+													{turn.progress.length > 0
+														? turn.progress
+														: isShortcuts
+															? t("settingsCore.shortcuts.modal.thinking")
+															: t("settingsCore.sidebar.modal.thinking")}
 												</span>
 											</div>
 										) : null}
@@ -395,7 +435,9 @@ export function AppCustomizerModal({
 															onOpenAiSettings();
 														}}
 													>
-														{t("settingsCore.sidebar.modal.openAiSettings")}
+														{isShortcuts
+															? t("settingsCore.shortcuts.modal.openAiSettings")
+															: t("settingsCore.sidebar.modal.openAiSettings")}
 													</button>
 												) : null}
 											</div>
@@ -414,7 +456,13 @@ export function AppCustomizerModal({
 							rows={1}
 							data-testid="app-customizer-input"
 							className="customizer-composer__input"
-							placeholder={isContextMenu ? t("settingsCore.contextMenu.modal.placeholder") : t("settingsCore.sidebar.modal.placeholder")}
+							placeholder={
+								isContextMenu
+									? t("settingsCore.contextMenu.modal.placeholder")
+									: isShortcuts
+										? t("settingsCore.shortcuts.modal.placeholder")
+										: t("settingsCore.sidebar.modal.placeholder")
+							}
 							value={input}
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={handleKeyDown}
@@ -446,7 +494,13 @@ export function AppCustomizerModal({
 					</div>
 					<div className="customizer-modal__footnote">
 						<Lock size={11} aria-hidden="true" />
-						<span>{isContextMenu ? t("settingsCore.contextMenu.modal.lockedNotice") : t("settingsCore.sidebar.modal.lockedNotice")}</span>
+						<span>
+							{isContextMenu
+								? t("settingsCore.contextMenu.modal.lockedNotice")
+								: isShortcuts
+									? t("settingsCore.shortcuts.modal.lockedNotice")
+									: t("settingsCore.sidebar.modal.lockedNotice")}
+						</span>
 					</div>
 				</footer>
 			</div>

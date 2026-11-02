@@ -114,8 +114,6 @@ export interface OnboardingServiceDeps {
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
 	readonly relaunch: () => void;
-	readonly appBundlePath: () => string;
-	readonly startDrag: (path: string) => void;
 	readonly pickFolders: () => Promise<readonly string[]>;
 	readonly showNotification: () => Promise<boolean>;
 	readonly notificationsSupported: () => boolean;
@@ -141,7 +139,6 @@ export interface OnboardingService {
 	save(draft: unknown): Promise<void>;
 	permissions(): Promise<PermissionStatus>;
 	openFullDiskAccess(): Promise<void>;
-	dragApp(): void;
 	relaunch(): Promise<void>;
 	requestNotifications(): Promise<boolean>;
 	openNotificationSettings(): Promise<void>;
@@ -570,7 +567,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 		},
 		openFullDiskAccess: () => deps.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
-		dragApp: () => deps.startDrag(deps.appBundlePath()),
 		relaunch: async () => deps.relaunch(),
 		requestNotifications: () => deps.showNotification(),
 		openNotificationSettings: () =>

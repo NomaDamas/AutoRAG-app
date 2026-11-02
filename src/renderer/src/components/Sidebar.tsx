@@ -6,6 +6,7 @@ import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
+import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
@@ -92,6 +93,7 @@ export function Sidebar({
 	readonly tagColorsDenied?: boolean;
 	readonly onGrantTagColors?: (() => void) | undefined;
 }): ReactElement {
+	const settingsShortcut = useFormattedShortcut("openSettings");
 	const { t } = useTranslation();
 	const localizedGroupLabel = (label: string): string => {
 		switch (label) {
@@ -237,7 +239,7 @@ export function Sidebar({
 						)}
 						aria-current={settingsActive ? "true" : undefined}
 						aria-label={t("places.settings")}
-						title={t("places.settingsHint", { shortcut: formatShortcut({ key: "," }) })}
+						title={t("places.settingsHint", { shortcut: settingsShortcut })}
 						onClick={onOpenSettings}
 					>
 						<GearIcon />

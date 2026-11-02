@@ -1,7 +1,7 @@
 import { homedir } from "node:os";
 import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, sep } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
 import { minSyncModelCacheRoot } from "./bundled-sparse-model";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
@@ -13,7 +13,6 @@ import {
 	ClipboardItem,
 	dialog,
 	ipcMain,
-	nativeImage,
 	nativeTheme,
 	Notification,
 	powerSaveBlocker,
@@ -33,6 +32,7 @@ import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
 import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
+import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
@@ -282,6 +282,7 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 			loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
 			// Spawning osascript blocks the caller for the fork; the worker pays it.
 			defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
+			quickLookChord: () => currentQuickLookChord,
 		});
 	}
 	return window;
@@ -291,6 +292,7 @@ let fsWorker: FsWorkerHost | null = null;
 /** Remote browser access; null until its host is built (and while the setting is off). */
 let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
+let currentQuickLookChord = "Space";
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
 /** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
@@ -318,14 +320,6 @@ function sendToAllWindows(channel: string, payload: unknown): void {
 		if (!window.isDestroyed()) window.webContents.send(channel, payload);
 	}
 	remoteHost?.push(channel, payload);
-}
-
-/** The `.app` bundle to drag into Full Disk Access: the packaged app, else the Electron bundle. */
-function resolveAppBundlePath(): string {
-	const marker = `${sep}Contents${sep}MacOS${sep}`;
-	const executable = app.isPackaged ? app.getPath("exe") : process.execPath;
-	const at = executable.indexOf(marker);
-	return at >= 0 ? executable.slice(0, at) : executable;
 }
 
 /** macOS Full Disk Access probe: open (never read) a TCC-protected path. */
@@ -838,6 +832,7 @@ app.whenReady().then(async () => {
 				sendToAllWindows(INTERACTION_CHANNELS.modeChanged, settings.approvalMode);
 			}
 			setErrorReportingEnabled(settings.errorReporting);
+			currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -854,6 +849,7 @@ app.whenReady().then(async () => {
 	registerAnalyticsIpcHandlers(analytics);
 	void settingsService.get().then((settings) => {
 		previousSettings ??= settings;
+		currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
 	});
 	analytics.track("app_opened", {});
 	const indexActivity = createIndexActivityService({
@@ -1193,19 +1189,6 @@ app.whenReady().then(async () => {
 		relaunch: () => {
 			app.relaunch();
 			app.exit(0);
-		},
-		appBundlePath: resolveAppBundlePath,
-		startDrag: (path) => {
-			const target = onboardingWindow ?? mainWindow;
-			if (target === null || target.isDestroyed()) return;
-			void app.getFileIcon(path).then(
-				(icon) => {
-					if (target.isDestroyed()) return;
-					const image = icon.isEmpty() ? nativeImage.createFromBitmap(Buffer.alloc(4), { width: 1, height: 1 }) : icon;
-					target.webContents.startDrag({ file: path, icon: image });
-				},
-				() => undefined,
-			);
 		},
 		pickFolders: async () => {
 			const options: OpenDialogOptions = {
