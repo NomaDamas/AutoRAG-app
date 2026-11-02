@@ -1,6 +1,7 @@
 import { Eject, PanelLeft } from "lucide-react";
 import type { DragEvent, ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
 import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
@@ -27,6 +28,29 @@ const HEAD_BUTTON_CLASS = cn(
 /** The 20px eject affordance on a mounted volume's row, flush right inside it. */
 const EJECT_BUTTON_CLASS =
 	"sidebar__eject absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-20 p-0 border-0 rounded-6 bg-transparent text-ink-muted cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover-icon hover:text-ink";
+
+/** A sidebar group heading in the interface language (shared with the phone shell's 둘러보기). */
+export function placeGroupLabel(t: TFunction, label: string): string {
+	switch (label) {
+		case "Favorites": return t("places.favorites", label);
+		case "Cloud": return t("places.cloud", label);
+		case "Connections": return t("places.connections", label);
+		case "Locations": return t("places.locations", label);
+		case TAGS_GROUP_LABEL: return t("places.tags", label);
+		default: return label;
+	}
+}
+
+/** A sidebar row's label in the interface language; user folders, volumes and tags keep their own names. */
+export function placeItemLabel(t: TFunction, item: NavItem): string {
+	if (item.view === "aiSearch") return t("places.aiSearch", item.label);
+	if (item.view === "automations") return t("places.automations", item.label);
+	// Windows calls these folders Videos and Recycle Bin; the other keys read the same everywhere.
+	if (item.kind === "movies" && hostPlatform() === "win32") return t("places.moviesWindows", item.label);
+	if (item.kind === "trash" && hostPlatform() === "win32") return t("places.trashWindows", item.label);
+	if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
+	return item.label;
+}
 
 /**
  * Sidebar (v7 `.sidebar` / `.side-head` / `.side-scroll` / `.side-footer`): the
@@ -96,25 +120,8 @@ export function Sidebar({
 }): ReactElement {
 	const settingsShortcut = useFormattedShortcut("openSettings");
 	const { t } = useTranslation();
-	const localizedGroupLabel = (label: string): string => {
-		switch (label) {
-			case "Favorites": return t("places.favorites", label);
-			case "Cloud": return t("places.cloud", label);
-			case "Connections": return t("places.connections", label);
-			case "Locations": return t("places.locations", label);
-			case TAGS_GROUP_LABEL: return t("places.tags", label);
-			default: return label;
-		}
-	};
-	const localizedItemLabel = (item: NavItem): string => {
-		if (item.view === "aiSearch") return t("places.aiSearch", item.label);
-		if (item.view === "automations") return t("places.automations", item.label);
-		// Windows calls these folders Videos and Recycle Bin; the other keys read the same everywhere.
-		if (item.kind === "movies" && hostPlatform() === "win32") return t("places.moviesWindows", item.label);
-		if (item.kind === "trash" && hostPlatform() === "win32") return t("places.trashWindows", item.label);
-		if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
-		return item.label;
-	};
+	const localizedGroupLabel = (label: string): string => placeGroupLabel(t, label);
+	const localizedItemLabel = (item: NavItem): string => placeItemLabel(t, item);
 	return (
 		<aside
 			className="sidebar flex w-full h-full flex-none flex-col min-h-0 bg-sidebar border-r border-border backdrop-blur-[18px]"

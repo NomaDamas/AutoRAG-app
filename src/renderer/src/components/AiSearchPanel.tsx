@@ -84,6 +84,10 @@ export interface AiDockHandle {
 	summarize(atts: readonly ChatAttachment[]): void;
 	/** Focus the composer (pending until the panel is the visible tab). */
 	focusComposer(): void;
+	/** Open or close the 대화 기록 list (the phone shell puts the button in its own nav bar). */
+	toggleHistory(): void;
+	/** Start a new conversation, like the panel's 새 대화 button. */
+	newChat(): void;
 }
 
 export interface AiSearchPanelProps {
@@ -714,6 +718,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		focusComposer(): void {
 			ensureFocus();
 		},
+		toggleHistory,
+		newChat,
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
