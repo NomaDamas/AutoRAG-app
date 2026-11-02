@@ -294,4 +294,49 @@ describe("resolveKeyAction with custom ShortcutSettings", () => {
 		expect(activeShortcutPreset(DEFAULT_SHORTCUT_SETTINGS)).toBe("default");
 		expect(activeShortcutPreset({ overrides: { focusSearch: "Mod+P" } })).toBeNull();
 	});
+
+	it("treats Ctrl as Mod on Windows/Linux and never conflates the OS Windows/Super (Meta) key with Ctrl", () => {
+		// Bare Windows key hold does not report Mod held
+		expect(
+			chordFromKeyEvent({ key: "Meta", code: "MetaLeft", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }, "win32"),
+		).toEqual({
+			kind: "modifier-only",
+			mod: false,
+			alt: false,
+			shift: false,
+		});
+
+		// Win+V (Windows Clipboard History) and Win+D (Show Desktop) are rejected on win32
+		expect(
+			chordFromKeyEvent({ key: "v", code: "KeyV", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false }, "win32").kind,
+		).toBe("invalid");
+		expect(
+			resolveKeyAction(
+				{ key: "v", code: "KeyV", meta: true, ctrl: false, shift: false, alt: false },
+				{ zone: "finder", typing: false },
+				DEFAULT_SHORTCUT_SETTINGS,
+				"win32",
+			),
+		).toBeNull();
+
+		// Win+ArrowLeft (Windows Aero Snap) does not trigger folder collapse
+		expect(
+			resolveKeyAction(
+				{ key: "ArrowLeft", code: "ArrowLeft", meta: true, ctrl: false, shift: false, alt: false },
+				{ zone: "finder", typing: false, viewMode: "list" },
+				DEFAULT_SHORTCUT_SETTINGS,
+				"win32",
+			),
+		).toBeNull();
+
+		// Ctrl+V and Ctrl+P work as Mod on win32
+		expect(
+			resolveKeyAction(
+				{ key: "v", code: "KeyV", meta: false, ctrl: true, shift: false, alt: false },
+				{ zone: "finder", typing: false },
+				DEFAULT_SHORTCUT_SETTINGS,
+				"win32",
+			),
+		).toEqual({ type: "paste", move: false });
+	});
 });

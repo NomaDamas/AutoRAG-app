@@ -44,7 +44,7 @@ import {
 } from "../state/evidence";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
-import { enterKeyLabel, formatShortcut } from "../lib/shortcuts";
+import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
@@ -373,7 +373,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		if (!active) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-			const recorded = chordFromKeyEvent(event);
+			if (event.isComposing) return;
+			const recorded = chordFromKeyEvent(event, hostPlatform());
 			const effectiveShortcuts = resolveEffectiveShortcuts(shortcutSettings);
 			if (recorded.kind === "valid" && recorded.chord === effectiveShortcuts.aiToggleHistory) {
 				event.preventDefault();

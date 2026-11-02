@@ -24,6 +24,7 @@ export interface AppCustomizerServiceDeps {
 	readonly env: NodeJS.ProcessEnv;
 	readonly cwd: string;
 	readonly homeDir?: string;
+	readonly platform?: NodeJS.Platform;
 	readonly language: () => ReplyLanguage;
 	readonly settings: Pick<SettingsBridge, "get" | "set">;
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
@@ -135,6 +136,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		if (surface === "shortcuts") {
 			const shortcutKit = createShortcutCustomizerToolkit({
 				settings: deps.settings,
+				...(deps.platform === undefined ? {} : { platform: deps.platform }),
 				language: () => deps.language(),
 				cancelled: () => entryRef?.cancelled === true,
 			});
@@ -152,12 +154,17 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				listLocations: deps.listLocations,
 				listTags: deps.listTags,
 				...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+				...(deps.platform === undefined ? {} : { platform: deps.platform }),
 				language: () => deps.language(),
 				cancelled: () => entryRef?.cancelled === true,
 			});
 			toolkit = sidebarKit;
 			session = await createProfileSession({
-				profile: appCustomizerProfile({ language: currentLang, toolkit: sidebarKit }),
+				profile: appCustomizerProfile({
+					language: currentLang,
+					toolkit: sidebarKit,
+					...(deps.platform === undefined ? {} : { platform: deps.platform }),
+				}),
 				cwd: deps.cwd,
 				agentDir: deps.agentDir,
 				env: deps.env,

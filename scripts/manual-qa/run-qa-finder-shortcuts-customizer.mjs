@@ -21,12 +21,12 @@
  * Run in a VM:
  *   bun run qa script --vm --skip-build scripts/manual-qa/run-qa-finder-shortcuts-customizer.mjs
  */
-import { appendFileSync, chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { chord, isMac, rmRetry } from "./platform.mjs";
+import { chord, isMac, rmRetry, writeMinsyncStub } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-shortcuts-customizer");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -61,10 +61,7 @@ for (const folder of ["Desktop", "Documents", "Downloads", "Music", "Movies", "P
 writeFileSync(join(DOCS_DIR, "report.txt"), "Shortcut QA fixture\n");
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(AGENT_DIR, { recursive: true });
-mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
-const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
-writeFileSync(minsyncStub, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "minsync 0.6.0"; exit 0; fi\nexit 0\n');
-chmodSync(minsyncStub, 0o755);
+writeMinsyncStub(join(AUTORAG_HOME, "bin"));
 
 const queue = [];
 const seenRequests = [];
@@ -162,7 +159,11 @@ const sweep = () => {
 	try {
 		rmRetry(WORK);
 	} catch {
-		rmSync(WORK, { recursive: true, force: true });
+		try {
+			rmSync(WORK, { recursive: true, force: true });
+		} catch {
+			// Best-effort on forced exit
+		}
 	}
 };
 process.on("exit", sweep);
@@ -391,6 +392,8 @@ try {
 	await page.locator("h1.linear-title", { hasText: "快捷键" }).waitFor();
 	await shot("11-settings-shortcuts-zh");
 } finally {
+	await app?.close().catch(() => undefined);
+	app = undefined;
 	sweep();
 }
 

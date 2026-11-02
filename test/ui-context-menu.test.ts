@@ -510,4 +510,47 @@ describe("buildContextMenu customization & Magic Actions", () => {
 		);
 		expect(trashMenu.some((i) => i.action === "magicAction")).toBe(false);
 	});
+
+	it("updates file and background right-click keycaps dynamically from ShortcutSettings presets and overrides", () => {
+		const winPresetMenu = items(
+			buildContextMenu({
+				...file,
+				platform: "win32",
+				shortcuts: {
+					overrides: {
+						quickLook: "Alt+P",
+						rename: "F2",
+						trash: "Delete",
+					},
+				},
+			}),
+		);
+		expect(winPresetMenu.find((i) => i.action === "quickLook")?.keycap).toBe("Alt+P");
+		expect(winPresetMenu.find((i) => i.action === "rename")?.keycap).toBe("F2");
+		expect(winPresetMenu.find((i) => i.action === "copy")?.keycap).toBe("Ctrl+C");
+		expect(winPresetMenu.find((i) => i.action === "trash")?.keycap).toBe("Del");
+
+		const macFolderMenu = items(
+			buildContextMenu({
+				...file,
+				target: { name: "Docs", kind: "folder" },
+				platform: "darwin",
+				shortcuts: {
+					overrides: {
+						openItem: "Mod+O",
+						trash: "Mod+Backspace",
+					},
+				},
+			}),
+		);
+		expect(macFolderMenu.find((i) => i.action === "open")?.keycap).toBe("⌘O");
+		expect(macFolderMenu.find((i) => i.action === "trash")?.keycap).toBe("⌘⌫");
+
+		const bgMenu = buildBackgroundContextMenu({
+			clipboardCount: 1,
+			platform: "win32",
+			shortcuts: { overrides: { paste: "Mod+Shift+V" } },
+		}).filter((e): e is FinderMenuItem => e.kind === "item");
+		expect(bgMenu.find((i) => i.action === "paste")?.keycap).toBe("Ctrl+Shift+V");
+	});
 });

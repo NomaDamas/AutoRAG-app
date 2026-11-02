@@ -148,7 +148,11 @@ const sweep = () => {
 	try {
 		rmRetry(WORK);
 	} catch {
-		rmSync(WORK, { recursive: true, force: true });
+		try {
+			rmSync(WORK, { recursive: true, force: true });
+		} catch {
+			// Best-effort on forced exit
+		}
 	}
 };
 process.on("exit", sweep);
@@ -178,7 +182,7 @@ try {
 	const sidebarLabels = async () =>
 		page.locator(".sidebar .sidebar__item-label").allInnerTexts();
 
-	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
+	await page.locator(".sidebar .sidebar__item-label", { hasText: "문서" }).waitFor({ timeout: 30_000 });
 	const initialLabels = await sidebarLabels();
 	check(
 		"Sidebar starts with AI 검색 and 자동화 at top of Favorites",
@@ -354,6 +358,8 @@ try {
 	);
 	await shot("09-settings-sidebar-zh");
 } finally {
+	await app?.close().catch(() => undefined);
+	app = undefined;
 	sweep();
 }
 

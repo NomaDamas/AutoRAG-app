@@ -40,7 +40,9 @@ import {
 	type MagicActionSelectionRule,
 	type MagicActionTargetKind,
 } from "../../../../shared/context-menu-contract";
-import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../../lib/shortcuts";
+import type { ShortcutId } from "../../../../shared/shortcuts-contract";
+import { hostPlatform } from "../../lib/shortcuts";
+import { formatContextMenuKeycap } from "../../state/context-menu";
 import { Switch } from "../primitives/Switch";
 import { AppCustomizerModal } from "./AppCustomizerModal";
 import { ModalActions, ModalShell, Note, Section, SettingsPageHead } from "./SettingsKit";
@@ -89,14 +91,14 @@ interface BuiltinRowSpec {
 		| "settingsCore.contextMenu.items.tags"
 		| "settingsCore.contextMenu.items.trash";
 	readonly icon: LucideIcon;
-	readonly keycap?: () => string;
+	readonly shortcutId?: ShortcutId;
 	readonly locked?: boolean;
 }
 
 const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, readonly BuiltinRowSpec[]>> = {
 	open: [
-		{ id: "builtin:quickLook", labelKey: "settingsCore.contextMenu.items.quickLook", icon: Eye, keycap: () => "space" },
-		{ id: "builtin:open", labelKey: "settingsCore.contextMenu.items.open", icon: FolderOpen, keycap: enterKeyLabel },
+		{ id: "builtin:quickLook", labelKey: "settingsCore.contextMenu.items.quickLook", icon: Eye, shortcutId: "quickLook" },
+		{ id: "builtin:open", labelKey: "settingsCore.contextMenu.items.open", icon: FolderOpen, shortcutId: "openItem" },
 		{ id: "builtin:openWith", labelKey: "settingsCore.contextMenu.items.openWith", icon: FolderOpen },
 		{ id: "builtin:showInEnclosingFolder", labelKey: "settingsCore.contextMenu.items.showInEnclosingFolder", icon: FolderOpen },
 	],
@@ -104,11 +106,11 @@ const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, rea
 		{ id: "builtin:toggleIndex", labelKey: "settingsCore.contextMenu.items.toggleIndex", icon: Sparkles },
 	],
 	clipboard: [
-		{ id: "builtin:copy", labelKey: "settingsCore.contextMenu.items.copy", icon: Copy, keycap: () => formatShortcut({ key: "C" }) },
-		{ id: "builtin:paste", labelKey: "settingsCore.contextMenu.items.paste", icon: Clipboard, keycap: () => formatShortcut({ key: "V" }) },
-		{ id: "builtin:cut", labelKey: "settingsCore.contextMenu.items.cut", icon: Clipboard, keycap: () => formatShortcut({ key: "X" }) },
-		{ id: "builtin:duplicate", labelKey: "settingsCore.contextMenu.items.duplicate", icon: Copy, keycap: () => formatShortcut({ key: "D" }) },
-		{ id: "builtin:rename", labelKey: "settingsCore.contextMenu.items.rename", icon: Pencil, keycap: () => formatShortcut({ key: "R" }) },
+		{ id: "builtin:copy", labelKey: "settingsCore.contextMenu.items.copy", icon: Copy, shortcutId: "copy" },
+		{ id: "builtin:paste", labelKey: "settingsCore.contextMenu.items.paste", icon: Clipboard, shortcutId: "paste" },
+		{ id: "builtin:cut", labelKey: "settingsCore.contextMenu.items.cut", icon: Clipboard, shortcutId: "cut" },
+		{ id: "builtin:duplicate", labelKey: "settingsCore.contextMenu.items.duplicate", icon: Copy, shortcutId: "duplicate" },
+		{ id: "builtin:rename", labelKey: "settingsCore.contextMenu.items.rename", icon: Pencil, shortcutId: "rename" },
 		{ id: "builtin:copyPath", labelKey: "settingsCore.contextMenu.items.copyPath", icon: Copy },
 	],
 	actions: [
@@ -125,7 +127,7 @@ const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, rea
 		{ id: "builtin:tags", labelKey: "settingsCore.contextMenu.items.tags", icon: Tag, locked: true },
 	],
 	trash: [
-		{ id: "builtin:trash", labelKey: "settingsCore.contextMenu.items.trash", icon: Trash2, keycap: deleteKeyLabel },
+		{ id: "builtin:trash", labelKey: "settingsCore.contextMenu.items.trash", icon: Trash2, shortcutId: "trash" },
 	],
 };
 
@@ -139,6 +141,7 @@ function MagicActionEditorModal({
 	readonly onSave: (action: MagicAction) => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const isWindows = hostPlatform() === "win32";
 	const [label, setLabel] = useState(initial?.label ?? "");
 	const [description, setDescription] = useState(initial?.description ?? "");
 	const [executionKind, setExecutionKind] = useState<"agent" | "script">(initial?.execution.kind ?? "agent");
@@ -275,11 +278,21 @@ function MagicActionEditorModal({
 								data-testid="magic-editor-command"
 								className="font-mono"
 								value={command}
-								placeholder={t("settingsCore.contextMenu.editor.commandPlaceholder")}
+								placeholder={t(
+									isWindows
+										? "settingsCore.contextMenu.editor.commandPlaceholderWindows"
+										: "settingsCore.contextMenu.editor.commandPlaceholder",
+								)}
 								onChange={(e) => setCommand(e.target.value)}
 							/>
 						</label>
-						<Note>{t("settingsCore.contextMenu.editor.commandHint")}</Note>
+						<Note>
+							{t(
+								isWindows
+									? "settingsCore.contextMenu.editor.commandHintWindows"
+									: "settingsCore.contextMenu.editor.commandHint",
+							)}
+						</Note>
 					</>
 				)}
 
@@ -356,6 +369,7 @@ export function ContextMenuPage({
 	readonly onOpenAiSettings?: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const platform = hostPlatform();
 	const [customizerOpen, setCustomizerOpen] = useState(false);
 	const [editorState, setEditorState] = useState<{ readonly open: boolean; readonly initial: MagicAction | null }>({
 		open: false,
@@ -767,7 +781,10 @@ export function ContextMenuPage({
 												const locked = spec.locked === true;
 												const visible = locked ? true : !hiddenItems.has(spec.id);
 												const itemLabel = t(spec.labelKey);
-												const keycap = spec.keycap?.();
+												const keycap =
+													spec.shortcutId === undefined
+														? undefined
+														: formatContextMenuKeycap(spec.shortcutId, appSettings.shortcuts, platform);
 												return (
 													<div
 														key={spec.id}

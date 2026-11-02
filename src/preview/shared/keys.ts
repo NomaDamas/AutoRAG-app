@@ -18,17 +18,25 @@ export interface QuickLookKey {
  * belong to it; Escape still closes, and a customized `toggleChord` (such as
  * `Alt+P` in the Windows File Explorer preset) toggles it closed too.
  */
-export function quickLookKeyAction(input: QuickLookKey, typing = false, toggleChord?: string): QuickLookAction | null {
+export function quickLookKeyAction(
+	input: QuickLookKey,
+	typing = false,
+	toggleChord?: string,
+	platform = "darwin",
+): QuickLookAction | null {
 	if (input.key === "Escape") return "close";
 	if (toggleChord !== undefined && toggleChord !== "Space" && !typing) {
-		const recorded = chordFromKeyEvent({
-			key: input.key,
-			code: input.code,
-			meta: input.meta,
-			ctrl: input.control,
-			alt: input.alt,
-			shift: input.shift,
-		});
+		const recorded = chordFromKeyEvent(
+			{
+				key: input.key,
+				code: input.code,
+				meta: input.meta,
+				ctrl: input.control,
+				alt: input.alt,
+				shift: input.shift,
+			},
+			platform,
+		);
 		if (recorded.kind === "valid" && recorded.chord === toggleChord) {
 			return "close";
 		}
