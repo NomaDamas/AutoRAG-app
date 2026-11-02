@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { PDFDocument } from "pdf-lib";
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appCustomizerProfile, createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
@@ -569,5 +570,60 @@ describe("magic-action-service execution", () => {
 			}
 		};
 		await expect.poll(() => isAlive(pid), { timeout: 10_000 }).toBe(false);
+	});
+
+	it("extracts readable Markdown text from real binary PDF files when `read` is called in read-only mode", async () => {
+		const registration = register();
+		const settings = createStubSettings();
+		const pdfDoc = await PDFDocument.create();
+		const page = pdfDoc.addPage([600, 400]);
+		page.drawText("AutoRAG Paper Finding: Hybrid SPLADE + Dense Retrieval improves Recall@10 by 19.4%.", { x: 40, y: 320, size: 12 });
+		const pdfPath = join(docsDir, "paper.pdf");
+		await writeFile(pdfPath, await pdfDoc.save());
+
+		await settings.set({
+			contextMenu: {
+				hiddenItems: [],
+				hiddenSections: [],
+				sectionOrder: ["magic", "open", "index", "clipboard", "actions", "services", "tags", "trash"],
+				magicActions: [
+					{
+						id: "paper-x-draft",
+						label: "논문 X 초안",
+						enabled: true,
+						selection: "single",
+						targetKind: "file",
+						extensions: ["pdf"],
+						execution: {
+							kind: "agent",
+							mode: "read",
+							prompt: "논문을 읽고 X 포스트 초안을 작성해줘.",
+							useMcp: false,
+						},
+					},
+				],
+			},
+		});
+
+		let extractedText = "";
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("read", { i: "논문 PDF 본문 추출 중", path: pdfPath })),
+			(ctx) => {
+				extractedText = JSON.stringify(ctx.messages.filter((m) => m.role === "toolResult"));
+				return fauxAssistantMessage("초안 완료");
+			},
+		]);
+
+		const svc = createMagicActionService({
+			send: (ev) => events.push(ev),
+			resolveModel: async () => ({ model: registration.getModel() }),
+			agentDir,
+			env: { ...process.env },
+			language: () => "ko",
+			settings,
+		});
+
+		await svc.start("run-real-pdf", { actionId: "paper-x-draft", paths: [pdfPath] });
+		expect(extractedText).toContain("Recall@10 by 19.4%");
 	});
 });

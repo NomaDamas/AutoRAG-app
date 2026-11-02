@@ -1,5 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import { realpath } from "node:fs/promises";
+import { constants, existsSync, readdirSync, readFileSync } from "node:fs";
+import { access, readFile, realpath, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { basename, isAbsolute, join, resolve, sep } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import { streamSimple } from "@earendil-works/pi-ai/compat";
@@ -16,6 +17,7 @@ import {
 	createReadToolDefinition,
 	createToolSearchExtension,
 	createWriteToolDefinition,
+	detectSupportedImageMimeTypeFromFile,
 	DefaultResourceLoader,
 	type ExtensionFactory,
 	type McpServerConfig,
@@ -30,6 +32,7 @@ import {
 	openPlanRuntime,
 	type ProfileModel,
 } from "@autorag/librarian/profiles";
+import { createDefaultParserRegistry, type ParserRegistry } from "@autorag/librarian";
 import type { MagicActionAgentMode } from "../../../shared/context-menu-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { isSecretKey } from "../../autorag-config-service";
@@ -43,7 +46,7 @@ const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
 };
 
 const CREDENTIAL_NAME =
-	/^(?:\.env(?:\..*)?|id_[a-z0-9]+(?:\.pub)?|.*\.(?:pem|key|p12|pfx|keychain-db)|(?:auth|models|mcp|mcp-auth)\.json|credentials(?:\..*)?|\.netrc|\.npmrc|\.pypirc)$/iu;
+	/^(?:\.env(?:\..*)?|id_[a-z0-9]+(?:\.pub)?|.*\.(?:pem|key|p12|pfx|keychain-db)|(?:auth|models|mcp|mcp-auth|accounts)\.json|credentials(?:\..*)?|\.netrc|\.npmrc|\.pypirc)$/iu;
 
 const MCP_SERVERS_SECTION = "mcp_servers";
 const MCP_RESULT_GUARD =
@@ -58,6 +61,12 @@ const MCP_TOOL_NAMES = [
 ] as const;
 
 const EMBEDDED_AUTH_MARKER = "<autorag-embedded-model>";
+
+let sharedParsers: ParserRegistry | undefined;
+function documentParsers(): ParserRegistry {
+	sharedParsers ??= createDefaultParserRegistry();
+	return sharedParsers;
+}
 
 export interface MagicActionProfileInput {
 	readonly language: ReplyLanguage;
@@ -150,8 +159,42 @@ function createMagicActionTools(input: MagicActionProfileInput): readonly ToolDe
 	const secretEnv = (env: NodeJS.ProcessEnv): NodeJS.ProcessEnv =>
 		Object.fromEntries(Object.entries(env).filter(([key]) => !isSecretKey(key)));
 
+	const parsedDocCache = new Map<string, Buffer>();
+	const readTool = createReadToolDefinition(input.cwd, {
+		operations: {
+			access: (filePath) => access(filePath, constants.R_OK),
+			detectImageMimeType: detectSupportedImageMimeTypeFromFile,
+			readFile: async (filePath) => {
+				const parser = documentParsers().getForVirtualPath(filePath);
+				if (parser !== undefined && parser.name !== "plain-text") {
+					const info = await stat(filePath).catch(() => null);
+					const cacheKey = info !== null ? `${filePath}:${info.mtimeMs}:${info.size}` : filePath;
+					const cached = parsedDocCache.get(cacheKey);
+					if (cached !== undefined) return cached;
+					const bytes = await readFile(filePath);
+					try {
+						const parsed = await parser.parse({ virtualPath: filePath, sourcePath: filePath, bytes });
+						if (parsed.markdown.trim().length > 0) {
+							const buf = Buffer.from(parsed.markdown, "utf8");
+							parsedDocCache.set(cacheKey, buf);
+							return buf;
+						}
+					} catch {
+						// Fall through to raw bytes when a synthetic/malformed file cannot be parsed
+					}
+					return bytes;
+				}
+				return readFile(filePath);
+			},
+		},
+	});
+	const enrichedReadTool: ToolDefinition = {
+		...(readTool as unknown as ToolDefinition),
+		description: `${readTool.description} Also automatically extracts Markdown text from PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx), HWP/HWPX, and mail (.eml) documents.`,
+	};
+
 	const readTools: ToolDefinition[] = [
-		guarded(createReadToolDefinition(input.cwd), (p) => guardPath(pathArg(p), "read")),
+		guarded(enrichedReadTool, (p) => guardPath(pathArg(p), "read")),
 		guarded(createLsToolDefinition(input.cwd), (p) => guardPath(pathArg(p), "read")),
 		guarded(createFindToolDefinition(input.cwd), (p) => guardPath(pathArg(p), "read")),
 		guarded(createGrepToolDefinition(input.cwd), (p) => guardPath(pathArg(p), "read")),
@@ -298,10 +341,39 @@ function installDynamicToolIntentStripper(session: AgentSession): void {
 	session.subscribe(() => patchTools());
 }
 
+function discoverAsideBuiltinSkillDirs(
+	servers: readonly [string, Record<string, unknown>][],
+	env: NodeJS.ProcessEnv,
+): string[] {
+	const hasAside = servers.some(([name, cfg]) => {
+		if (name.toLowerCase().includes("aside")) return true;
+		return typeof cfg.command === "string" && /\baside(?:\.exe)?$/iu.test(cfg.command.trim());
+	});
+	if (!hasAside) return [];
+	const home = env.HOME?.trim() || homedir();
+	const profilesRoot = join(home, ".aside", "u");
+	if (!existsSync(profilesRoot)) return [];
+	const out: string[] = [];
+	try {
+		for (const entry of readdirSync(profilesRoot)) {
+			const builtinDir = join(profilesRoot, entry, "skills", "builtin");
+			if (existsSync(builtinDir)) out.push(builtinDir);
+		}
+	} catch {
+		// Best-effort discovery
+	}
+	return out;
+}
+
 function createSharedMcpClient(
 	agentDir: string,
 	language: ReplyLanguage,
-): { readonly extensionFactories: readonly ExtensionFactory[]; readonly toolNames: readonly string[] } | undefined {
+	env: NodeJS.ProcessEnv,
+): {
+	readonly extensionFactories: readonly ExtensionFactory[];
+	readonly toolNames: readonly string[];
+	readonly extraSkillPaths: readonly string[];
+} | undefined {
 	const mcpPath = join(agentDir, "mcp.json");
 	if (!existsSync(mcpPath)) return undefined;
 	const errors: string[] = [];
@@ -321,7 +393,8 @@ function createSharedMcpClient(
 	const register: ExtensionFactory = (pi) => {
 		for (const [name, config] of servers) {
 			try {
-				pi.registerMcpServer(name, config as unknown as McpServerConfig);
+				const withTimeout = config.timeout === undefined ? { ...config, timeout: 300 } : config;
+				pi.registerMcpServer(name, withTimeout as unknown as McpServerConfig);
 			} catch (error) {
 				errors.push(`${mcpPath}: ${error instanceof Error ? error.message : String(error)}`);
 			}
@@ -347,10 +420,14 @@ function createSharedMcpClient(
 				}
 				return {
 					...message,
-					toolsAdded: message.toolsAdded.map((tool) => ({
-						...tool,
-						parameters: withWireIntentField(tool.parameters, language) as typeof tool.parameters,
-					})),
+					toolsAdded: message.toolsAdded.map((tool) =>
+						typeof tool.constrainedSampling === "object" && tool.constrainedSampling.type === "grammar"
+							? tool
+							: {
+									...tool,
+									parameters: withWireIntentField(tool.parameters, language) as typeof tool.parameters,
+								},
+					),
 				};
 			});
 			return messages.some((m, idx) => m !== event.messages[idx]) ? { messages } : undefined;
@@ -360,6 +437,7 @@ function createSharedMcpClient(
 	return {
 		extensionFactories: [register, mcp, createCodemodeExtension(), createToolSearchExtension(), guardAndIntent],
 		toolNames: [...MCP_TOOL_NAMES],
+		extraSkillPaths: discoverAsideBuiltinSkillDirs(servers, env),
 	};
 }
 
@@ -409,7 +487,7 @@ export async function openMagicActionSession(
 	input: MagicActionProfileInput & { readonly model: ProfileModel },
 ): Promise<OpenedMagicActionSession> {
 	const profile = magicActionProfile(input);
-	const mcp = input.useMcp !== false ? createSharedMcpClient(input.agentDir, input.language) : undefined;
+	const mcp = input.useMcp !== false ? createSharedMcpClient(input.agentDir, input.language, input.env) : undefined;
 
 	if (mcp === undefined) {
 		const session = await createProfileSession({
@@ -441,6 +519,9 @@ export async function openMagicActionSession(
 		noExtensions: true,
 		noPromptTemplates: true,
 		noThemes: true,
+		...(input.useSkills !== false && mcp.extraSkillPaths.length > 0
+			? { additionalSkillPaths: [...mcp.extraSkillPaths] }
+			: {}),
 		extensionFactories: [...mcp.extensionFactories],
 		systemPromptOverride: () => profile.systemPrompt,
 		appendSystemPromptOverride: () => [],
