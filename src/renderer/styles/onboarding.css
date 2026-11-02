@@ -379,14 +379,18 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 }
 
 /* The forward button is the one to press: solid blue with a white label and arrow (Figma 117:4102). */
-.onb .footer-actions .footer-btn:last-child:not(:disabled) {
+.onb .footer-actions .footer-btn:last-child {
 	border-color: var(--onb-blue);
 	background: var(--onb-blue);
 	color: #fff;
 }
 
-.onb .footer-actions .footer-btn:last-child:not(:disabled) svg {
+.onb .footer-actions .footer-btn:last-child svg {
 	color: #fff;
+}
+
+.onb .footer-actions .footer-btn:last-child:disabled {
+	opacity: .5;
 }
 
 /* Back's icon is the quiet one: faint, while its label and the forward icon stay body (Figma 77:1806). */
