@@ -18,6 +18,7 @@ import {
 	powerSaveBlocker,
 	protocol,
 	safeStorage,
+	screen,
 	ShareMenu,
 	shell,
 	type OpenDialogOptions,
@@ -108,6 +109,7 @@ import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
 import {
@@ -241,11 +243,10 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 }
 
 function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, phase: WindowPhase): BrowserWindow {
+	const workArea = screen.getPrimaryDisplay().workAreaSize;
+	const windowSize = appWindowSize(workArea, phase);
 	const window = new BrowserWindow({
-		// Onboarding uses the prototype's 1120×720 canvas; the Finder keeps its own size.
-		...(phase === "onboarding"
-			? { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true }
-			: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 }),
+		...windowSize,
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
