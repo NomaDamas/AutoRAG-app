@@ -126,7 +126,7 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		}
 		if (value.startsWith("autorag-preview://")) {
 			const parsed = new URL(value);
-			return url(routes.preview, { path: parsed.searchParams.get("path") });
+			return url(routes.preview, { path: parsed.searchParams.get("path"), v: parsed.searchParams.get("v") });
 		}
 		return value;
 	};

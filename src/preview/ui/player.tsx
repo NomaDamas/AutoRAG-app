@@ -340,12 +340,12 @@ function VideoCopyView({ file }: { readonly file: PreviewDocument }): ReactEleme
 		});
 		bridge.videoPlayback(file.path, id).then(
 			(plan) => {
-				if (!cancelled) setSrc(previewStreamUrl(plan.kind === "file" ? plan.path : file.path));
+				if (!cancelled) setSrc(plan.kind === "file" ? previewStreamUrl(plan.path) : previewStreamUrl(file.path, file));
 			},
 			(caught: unknown) => {
 				if (cancelled) return;
 				if (!(caught instanceof Error)) throw caught;
-				setSrc(previewStreamUrl(file.path));
+				setSrc(previewStreamUrl(file.path, file));
 			},
 		);
 		return () => {
@@ -354,7 +354,7 @@ function VideoCopyView({ file }: { readonly file: PreviewDocument }): ReactEleme
 			unsubscribe();
 			bridge.cancelVideoPlayback(id);
 		};
-	}, [bridge, file.path]);
+	}, [bridge, file.path, file.modifiedAt, file.size]);
 	if (src === null) {
 		return (
 			<div className="ql-video relative flex-1 min-h-0 grid place-items-center bg-ql-media">
@@ -367,7 +367,7 @@ function VideoCopyView({ file }: { readonly file: PreviewDocument }): ReactEleme
 
 export function VideoView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	if (needsPlaybackCopy(file.ext)) return <VideoCopyView file={file} />;
-	return <VideoPlayer file={file} src={previewStreamUrl(file.path)} withSidecar />;
+	return <VideoPlayer file={file} src={previewStreamUrl(file.path, file)} withSidecar />;
 }
 
 /** Peak heights (px) for the waveform, or null while decoding or when the file is too large. */
@@ -377,7 +377,7 @@ function useWaveform(file: PreviewDocument): readonly number[] | null {
 		if (file.size > WAVE_DECODE_CAP) return;
 		const controller = new AbortController();
 		const context = new OfflineAudioContext(1, 1, WAVE_SAMPLE_RATE);
-		void fetch(previewStreamUrl(file.path), { signal: controller.signal })
+		void fetch(previewStreamUrl(file.path, file), { signal: controller.signal })
 			.then((response) => response.arrayBuffer())
 			.then((buffer) => context.decodeAudioData(buffer))
 			.then((audio) => {
@@ -403,7 +403,7 @@ function useWaveform(file: PreviewDocument): readonly number[] | null {
 				if (!controller.signal.aborted) setPeaks(null);
 			});
 		return () => controller.abort();
-	}, [file.path, file.size]);
+	}, [file.path, file.size, file.modifiedAt]);
 	return peaks;
 }
 
@@ -469,7 +469,7 @@ export function AudioView({ file }: { readonly file: PreviewDocument }): ReactEl
 	];
 	return (
 		<div className="ql-audio relative flex-1 min-h-0">
-			<audio ref={setElement} src={previewStreamUrl(file.path)} autoPlay preload="auto" onError={() => setFailed(true)} />
+			<audio ref={setElement} src={previewStreamUrl(file.path, file)} autoPlay preload="auto" onError={() => setFailed(true)} />
 			<div className="absolute right-14 top-0 flex items-center gap-10 w-196 h-36 px-14 rounded-[18px] bg-ql-hud-volume text-ql-hud-ink [backdrop-filter:var(--backdrop-ql-float)]">
 				<Track
 					value={media.muted ? 0 : media.volume}
