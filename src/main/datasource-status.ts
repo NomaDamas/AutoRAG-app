@@ -1,5 +1,5 @@
 import { constants } from "node:fs";
-import { access, readFile, stat } from "node:fs/promises";
+import { access, mkdir, readFile, stat } from "node:fs/promises";
 import { delimiter, extname, join } from "node:path";
 import {
 	BUILTIN_DATASOURCE_SKILL_NAMES,
@@ -83,7 +83,7 @@ const BACKEND_BINARIES: Readonly<Record<string, string>> = {
 };
 
 /** Templates whose chunks AutoRAG itself persists under `.autorag/datasources/<id>/<instance>/chunks.json`. */
-const CHUNK_STORE_TEMPLATES = new Set(["cloud-drive", "mail-export", "spotlight", "rss", "github", "github-gist"]);
+const CHUNK_STORE_TEMPLATES = new Set(["cloud-drive", "rss", "github", "github-gist"]);
 
 /**
  * Desktop source app each template reads from, detected separately from the
@@ -150,10 +150,12 @@ async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<str
 
 const CALENDAR_UNSUPPORTED = "Apple Calendar & Reminders need macOS (EventKit)";
 const KAKAO_UNSUPPORTED = "KakaoTalk needs macOS: lazykatok reads the Mac app";
+const SPOTLIGHT_UNSUPPORTED = "Spotlight needs macOS (mdfind)";
 
 async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv, platform: NodeJS.Platform): Promise<DataSourceRow["install"]> {
 	const app = await desktopAppRequirement(type, env, platform);
 	if (type === "kakao" && !kakaoSupported(platform)) return { state: "unsupported", binary: null, path: null, detail: KAKAO_UNSUPPORTED, app };
+	if (type === "spotlight" && platform !== "darwin") return { state: "unsupported", binary: null, path: null, detail: SPOTLIGHT_UNSUPPORTED, app };
 	if (isCalendarDatasourceType(type)) {
 		if (!calendarSupported(platform)) return { state: "unsupported", binary: null, path: null, detail: CALENDAR_UNSUPPORTED, app };
 		const connector = isJsonObject(entry.connector) ? entry.connector : {};
@@ -224,6 +226,7 @@ function buildSkill(
 
 function agentState(id: string, type: string, skill: DatasourceSkill | undefined, enabled: boolean, platform: NodeJS.Platform): DataSourceRow["agent"] {
 	if (type === "kakao" && !kakaoSupported(platform)) return { state: "unsupported", skillName: null, tags: [], detail: KAKAO_UNSUPPORTED };
+	if (type === "spotlight" && platform !== "darwin") return { state: "unsupported", skillName: null, tags: [], detail: SPOTLIGHT_UNSUPPORTED };
 	if (isCalendarDatasourceType(type)) {
 		if (!calendarSupported(platform)) return { state: "unsupported", skillName: null, tags: [], detail: CALENDAR_UNSUPPORTED };
 		const skillName = `mcp-${calendarMcpServerName(id)}`;
@@ -312,7 +315,23 @@ async function indexState(
 		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Queried live through EventKit MCP" };
 	}
 	if (skill === undefined) return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: "Not indexed" };
+	if (type === "spotlight") {
+		if (install.state !== "installed") {
+			return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: install.detail };
+		}
+		const connector = isJsonObject(entry.connector) ? entry.connector : {};
+		const hasQueries =
+			Array.isArray(connector.queries) &&
+			connector.queries.some((query) => typeof query === "string" && query.trim().length > 0);
+		if (!hasQueries) {
+			return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: "Configure at least one Spotlight query" };
+		}
+		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Searched live through macOS Spotlight" };
+	}
 	if (LIVE_QUERY_TEMPLATES.has(type)) {
+		if (install.state !== "installed" && install.state !== "builtin") {
+			return { state: "not-indexed", chunkCount: null, unit: null, indexedAt: null, detail: install.detail };
+		}
 		return { state: "live", chunkCount: null, unit: null, indexedAt: null, detail: "Searched live through its own CLI" };
 	}
 	if (type === "hister") {
@@ -371,9 +390,11 @@ async function indexState(
 }
 
 /** Documents the last local-folder refresh parsed into the shared workspace mirror. */
-function localIndexState(workspacePath: string): DataSourcesSnapshot["local"] {
+function localIndexState(workspacePath: string, minSyncBinaryPath?: string): DataSourcesSnapshot["local"] {
 	try {
-		const entries = Object.values(loadMirrorIndex(workspacePath).entries);
+		const entries = Object.values(
+			loadMirrorIndex(workspacePath, minSyncBinaryPath === undefined ? {} : { minSyncBinaryPath }).entries,
+		);
 		const updatedAt = entries.map((entry) => entry.updatedAt).sort().at(-1) ?? null;
 		return { documentCount: entries.length, updatedAt };
 	} catch {
@@ -478,7 +499,8 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				};
 			}),
 		);
-		return { ...empty, refresh, local: localIndexState(config.workspacePath), sources };
+		const minSyncBinaryPath = (await findExecutable("minsync", deps.env)) ?? undefined;
+		return { ...empty, refresh, local: localIndexState(config.workspacePath, minSyncBinaryPath), sources };
 	};
 
 	const inFlight = new Map<string, Promise<DataSourceSyncResult>>();
@@ -542,6 +564,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				error: null,
 			};
 		}
+		await mkdir(config.workspacePath, { recursive: true });
 		// Only a sync that ran and failed is a bug to report; a missing install, credential or config is the user's to fix.
 		const failed = (error: string, diagnostics: readonly ConfigRefreshDiagnostic[] = []): DataSourceSyncResult => {
 			const durationMs = Date.now() - startedAt;

@@ -22,7 +22,7 @@ import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, Se
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
-import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor } from "./roleSupport";
+import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
 import { jevBackendFor } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
@@ -227,11 +227,11 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			</Section>
 			<Section title={t("settingsCore.ai.rolesTitle")} description={t("settingsCore.ai.rolesDesc")}>
 				<p className="settings-subsection-title">{t("settingsCore.ai.role.answer")}</p>
-				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
+				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} providerName={selectedProviderName("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
 				<p className="settings-subsection-title">{t("settingsCore.ai.subSearchAssistant")}</p>
-				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
-				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} providerName={selectedProviderName("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
+				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} providerName={selectedProviderName("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} providerName={selectedProviderName("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
 				<p className="settings-subsection-title">{t("settingsCore.ai.subDocUnderstanding")}</p>
 				<EmbeddingPicker />
 			</Section>
@@ -255,6 +255,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 							role={menu.arg ?? "answer"}
 							models={menu.arg === "jev" ? jevOptions : menu.arg === "rerank" ? rerankOptions : catalogModels}
 							specials={specialsFor(menu.arg ?? "answer")}
+							selected={roleSelectionFor(menu.arg ?? "answer", snapshot.config, connected)}
 							onPick={(entry) => {
 								closeMenu();
 								if (menu.arg === "decomposition") writeDecomposition(entry);
@@ -322,6 +323,12 @@ function thinkingValue(snapshot: AutoRagConfigSnapshot): string {
 	return stringOf(getAt(snapshot.config, ["thinking", "final"]));
 }
 
+function selectedProviderName(role: string, config: AutoRagConfigSnapshot["config"], connected: readonly ProviderSummary[]): string | null {
+	const sel = roleSelectionFor(role, config, connected);
+	if (sel?.kind !== "model") return null;
+	return connected.find((item) => item.id === sel.provider)?.name ?? null;
+}
+
 /* --------------------------------------------------------------- pieces -- */
 
 function RoleRow({
@@ -329,6 +336,7 @@ function RoleRow({
 	label,
 	hint,
 	current,
+	providerName,
 	onOpen,
 	thinking,
 }: {
@@ -336,6 +344,7 @@ function RoleRow({
 	readonly label: string;
 	readonly hint: string;
 	readonly current: string;
+	readonly providerName?: string | null;
 	readonly onOpen: (anchor: HTMLElement) => void;
 	readonly thinking?: { readonly onOpen: (anchor: HTMLElement) => void };
 }): ReactElement {
@@ -344,6 +353,7 @@ function RoleRow({
 		<Row name={label} hint={hint}>
 			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
 				<button type="button" className="settings-trigger" aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
+					{providerName ? <AppIcon small label={providerName} /> : null}
 					<span className="settings-trigger-label">{current}</span>
 					<ChevronDown size={14} aria-hidden="true" focusable="false" />
 				</button>

@@ -114,7 +114,14 @@ export function etaSaving(totalFiles: number, excludedFiles: number, mode: Embed
 /** Where the analysis stands; its proposals live in the draft, not here. */
 export type SmartRun =
 	| { readonly status: "idle" }
-	| { readonly status: "running"; readonly runId: string; /** The folder or file the agent is looking at, once it said. */ readonly current: string | null }
+	| {
+			readonly status: "running";
+			readonly runId: string;
+			/** The folder or file the agent is looking at, once it said. */
+			readonly current: string | null;
+			/** The agent's own short live progress phrase (`i`), when sent. */
+			readonly progress?: string | null;
+	  }
 	| { readonly status: "done" }
 	| { readonly status: "error"; readonly message: string };
 
@@ -124,8 +131,10 @@ export const initialSmartRun: SmartRun = { status: "idle" };
 export function reduceSmartRun(state: SmartRun, event: SmartIndexingEvent): SmartRun {
 	if (state.status !== "running" || event.runId !== state.runId) return state;
 	switch (event.type) {
+		case "progress":
+			return { ...state, progress: event.text };
 		case "exploring":
-			return { status: "running", runId: state.runId, current: event.path };
+			return { ...state, current: event.path };
 		case "result":
 			return { status: "done" };
 		case "error":

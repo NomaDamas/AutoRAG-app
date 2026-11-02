@@ -99,6 +99,23 @@ describe("deriveIndexActivity", () => {
 		expect(view.fraction).toBeCloseTo(0.7);
 	});
 
+	it("advances the local minsync fraction from librarian 2.13.2 streamed minsync progress when present", () => {
+		const view = deriveIndexActivity({
+			progress: progress({
+				pid: 100,
+				phase: "minsync",
+				parsedCounts: { scanned: 100, written: 80, deleted: 0, skipped: 20 },
+				minsync: { synced: 25, total: 100 },
+			}),
+			journal: null,
+			now: T0,
+			alive,
+			ownPids: [100],
+		});
+		// 25 of 100 files synced -> 25% of the minsync→datasources span (0.5 + 0.25 * 0.4 = 0.6).
+		expect(view.fraction).toBeCloseTo(0.6);
+	});
+
 	it("advances past a finished item even when the next one is a silent datasource sync", () => {
 		const journal = record({
 			items: [

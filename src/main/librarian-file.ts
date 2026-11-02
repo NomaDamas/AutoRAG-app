@@ -1,7 +1,7 @@
 import { readFileSync, statSync } from "node:fs";
 
 /**
- * Reads of files the librarian replaces by rename (`refresh-progress.json`, `parsed/index.json`).
+ * Reads of files the librarian replaces by rename (`refresh-progress.json`).
  *
  * It writes them as `<file>.<uuid>.tmp` + `rename(tmp, file)`. On Windows that rename fails with `EPERM` when
  * anything holds the destination open without delete sharing, and a Node *async* read does: `fs.promises.readFile`

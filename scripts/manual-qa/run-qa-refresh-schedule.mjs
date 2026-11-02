@@ -60,7 +60,7 @@ try {
 	const page = await finderWindow(app);
 	page.on("pageerror", (error) => errors.push(error.message));
 	await page.waitForSelector(".sidebar__item");
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: "Indexing" }).first().click();
 	const local = page.locator('select[aria-label="Local folder refresh interval"]');

@@ -140,7 +140,7 @@ try {
 	check("closing an instance that did not start the server leaves it running", alive(serverPid) && (await health(servers()[0] ?? {})) !== null);
 
 	// 4. indexing embeds through that server; a semantic query finds the right document
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: "Indexing" }).first().click();
 	await page.screenshot({ path: join(EVIDENCE, "02-indexing.png") });

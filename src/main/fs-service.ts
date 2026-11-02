@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
-import { cp, link, lstat, mkdir, mkdtemp, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, mkdtemp, readFile, readdir, readlink, realpath, rename as fsRename, rm, rmdir, stat, symlink, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, join, sep, win32 } from "node:path";
 import {
@@ -33,12 +33,14 @@ import { newFileContents } from "./file-templates";
 import { createFinderMetadataResolver, type FinderMetadataLookup } from "./finder-metadata";
 import { createFinderTags, type FinderTags } from "./finder-tags";
 import { createIconProvider, type IconProvider } from "./file-icon";
+import { copyTree } from "./copy-tree";
 import { createOsKindResolver } from "./file-kind";
 import { readFileDetails } from "./file-details";
 import { buildFsEntry, errorMessage, hasErrorCode, isAvailable, onDiskPath, pathExists, resolveCopyName } from "./fs-entry";
 import { createPlaces, type Places } from "./places";
 import { isRecycleBinDir, readRecycleBinName, readRecycleBinRecord } from "./recycle-bin";
 import { createRecentsStore, type RecentsStore } from "./recents-store";
+import { discordAttachmentPaths, type DiscordAttachmentPaths } from "./discord-attachments";
 import { isInsideSystemFolder, isSystemFolderName } from "./system-folders";
 import { createTrashStore, type TrashStore } from "./trash-store";
 
@@ -55,6 +57,8 @@ export interface FsShell {
 /** Subset of Electron's clipboard used by the service (injected for testability). */
 export interface FsOsClipboard {
 	writeText(text: string): void;
+	/** Put the files themselves on the OS clipboard, so other apps paste them as files. */
+	writeFiles(paths: readonly string[]): Promise<void>;
 }
 
 /** OS-native file-kind lookup: Finder's kind on macOS, Explorer's type on Windows. */
@@ -85,6 +89,8 @@ export interface FsServiceDeps {
 	readonly tags?: FinderTags;
 	/** Defaults to the OS places for `homeDir`; production injects one with Electron's known-folder paths. */
 	readonly places?: Places;
+	/** The AutoRAG home and config variables (AUTORAG_HOME, AUTORAG_CONFIG); defaults to process.env. */
+	readonly env?: Readonly<Record<string, string | undefined>>;
 	/** Defaults to the Windows `$Recycle.Bin\<SID>` shape; tests point it at a fixture folder. */
 	readonly recycleBin?: (dir: string) => boolean;
 	/**
@@ -184,6 +190,7 @@ interface SearchContext {
 	readonly needle: string;
 	readonly location: string;
 	readonly platform: NodeJS.Platform;
+	readonly discord: DiscordAttachmentPaths;
 	readonly results: FsSearchResult[];
 	readonly signal: AbortSignal | undefined;
 }
@@ -228,7 +235,7 @@ async function movePath(source: string, target: string): Promise<void> {
 	} catch (error) {
 		// Cross-device move: copy the tree, then remove the source.
 		if (!hasErrorCode(error, "EXDEV")) throw error;
-		await cp(source, target, { recursive: true });
+		await copyTree(source, target);
 		await rm(source, { recursive: true, force: true });
 	}
 }
@@ -256,6 +263,8 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 		if (context.results.length >= SEARCH_MAX_RESULTS) return;
 		// System folders are neither results nor walked; a symlink named like one is the user's own link.
 		if (dirent.isDirectory() && isSystemFolderName(dirent.name)) continue;
+		// A Discord connection's status file, `.discrawl/` and `.lock/` are the sync's, not attachments.
+		if (context.discord.isInternalEntry(dir, dirent.name)) continue;
 		const fullPath = join(dir, dirent.name);
 		// macOS stores Hangul names decomposed (NFD); compare in one form so a typed (NFC) query matches.
 		if (dirent.name.normalize("NFC").toLowerCase().includes(context.needle)) {
@@ -282,6 +291,10 @@ async function walkForSearch(dir: string, depth: number, context: SearchContext)
 export interface FsService extends FsCoreBridge {
 	listDir(path: string, signal?: AbortSignal): Promise<DirListing>;
 	search(query: string, options?: FsSearchOptions, signal?: AbortSignal): Promise<readonly FsSearchResult[]>;
+	/** Write one browser-uploaded file into `directory` under a free name (remote access). */
+	uploadFile(directory: string, name: string, data: Uint8Array): Promise<{ readonly path: string; readonly name: string }>;
+	/** Read one whole file for a browser download (remote access). */
+	readFileBytes(path: string): Promise<Uint8Array | null>;
 	/** Clean up any remaining temporary Evidence Folders on worker shutdown. */
 	disposeEvidenceFolders?(): Promise<void>;
 }
@@ -289,12 +302,14 @@ export interface FsService extends FsCoreBridge {
 export function createFsService(deps: FsServiceDeps): FsService {
 	const platform = deps.platform ?? process.platform;
 	const home = deps.homeDir ?? homedir();
+	const env = deps.env ?? process.env;
 	const recents = deps.recents ?? createRecentsStore({ directory: join(home, "recents") });
 	const osKind: OsKindLookup = deps.osKind ?? createOsKindResolver().kindFor;
 	const finderMetadata = deps.finderMetadata ?? createFinderMetadataResolver();
 	const finderTags = deps.tags ?? createFinderTags({ platform, homeDir: home });
 	const iconProvider: IconProvider = deps.icons ?? createIconProvider();
-	const places = deps.places ?? createPlaces({ homeDir: home, platform });
+	const places = deps.places ?? createPlaces({ homeDir: home, platform, env });
+	const discord = discordAttachmentPaths(env, home);
 	const recycleBin = deps.recycleBin ?? isRecycleBinDir;
 	const trashStore = deps.trashStore ?? createTrashStore({ directory: join(home, "trash-store") });
 	// In-app clipboard lives in this process's memory only (the fs worker in the app).
@@ -378,7 +393,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				/* cross-device or unsupported: fall back to copy */
 			}
 		}
-		await cp(sourcePath, targetPath, { recursive: true, dereference: true });
+		await copyTree(sourcePath, targetPath, { dereference: true });
 	}
 
 	async function createEvidenceFolder(paths: readonly string[], folderName?: string): Promise<string> {
@@ -506,7 +521,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		if (recycleBin(path)) {
 			return { path, entries: await recycleBinEntries(path, dirents) };
 		}
-		const entries = await buildListingEntries(dirents, path, signal);
+		const visible = dirents.filter((dirent) => !discord.isInternalEntry(path, dirent.name));
+		const entries = await buildListingEntries(visible, path, signal);
 		entries.sort(compareEntries);
 		return { path, entries };
 	}
@@ -565,7 +581,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				}),
 			);
 			for (const item of resolved) {
-				if (item.entry === null) removed.push(item.path);
+				// The sync rewrites its status file and logs all the time; the listing never shows them, so the patch must not add them.
+				if (item.entry === null || discord.isInternalEntry(dir, basename(item.path))) removed.push(item.path);
 				else entries.push(item.entry);
 			}
 		}
@@ -666,14 +683,14 @@ export function createFsService(deps: FsServiceDeps): FsService {
 
 	/**
 	 * Turn index paths into rows, attributing each to its location by longest prefix.
-	 * The index knows nothing of system folders, so hits inside one are dropped here.
+	 * The index knows nothing of system folders or a Discord sync's own entries, so hits inside them are dropped here.
 	 */
 	async function indexedHits(paths: readonly string[], scope: string | undefined): Promise<readonly FsSearchResult[]> {
 		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
 		const results: FsSearchResult[] = [];
 		for (const path of paths) {
 			if (results.length >= SEARCH_MAX_RESULTS) break;
-			if (isInsideSystemFolder(path, scope)) continue;
+			if (isInsideSystemFolder(path, scope) || discord.isInternalPath(path)) continue;
 			try {
 				results.push({ entry: await buildFsEntry(path, platform), location: searchLocation(path, known) });
 			} catch (error) {
@@ -703,13 +720,13 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			// The "파일 이름" chip scopes to the folder in view, which may sit
 			// outside the scanned places (e.g. inside a mounted disk).
 			const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, results, signal });
+			await walkForSearch(scope, 0, { needle, location: searchLocation(scope, known), platform, discord, results, signal });
 			return results;
 		}
 		for (const location of await locations()) {
 			// Recents is virtual and whole disks are too large to walk; only scanned places count.
 			if (!location.available || !location.scanned) continue;
-			await walkForSearch(location.path, 0, { needle, location: location.name, platform, results, signal });
+			await walkForSearch(location.path, 0, { needle, location: location.name, platform, discord, results, signal });
 			if (results.length >= SEARCH_MAX_RESULTS) break;
 		}
 		return results;
@@ -943,7 +960,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			}
 			const targetName = await resolveCopyName(destDir, desiredName, isDirectory);
 			const target = join(destDir, targetName);
-			await cp(sourcePath, target, { recursive: true, dereference: isSymlink });
+			await copyTree(sourcePath, target, { dereference: isSymlink });
 			steps.push({ kind: "created", path: target, make: { kind: "copy", from: isSymlink ? await realpath(sourcePath).catch(() => sourcePath) : sourcePath } });
 		});
 		if (steps.length > 0) record("copy", steps);
@@ -963,7 +980,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				}
 				const targetStat = await stat(preserved.targetPath);
 				const target = join(destDir, await resolveCopyName(destDir, preserved.name, targetStat.isDirectory()));
-				await cp(preserved.targetPath, target, { recursive: true, dereference: true });
+				await copyTree(preserved.targetPath, target, { dereference: true });
 				steps.push({ kind: "created", path: target, make: { kind: "copy", from: preserved.targetPath } });
 				return;
 			}
@@ -971,7 +988,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 				const effectiveStat = await stat(source).catch(() => sourceStat);
 				const realTarget = await realpath(source).catch(() => source);
 				const target = join(destDir, await resolveCopyName(destDir, basename(source), effectiveStat.isDirectory()));
-				await cp(source, target, { recursive: true, dereference: true });
+				await copyTree(source, target, { dereference: true });
 				await rm(source, { recursive: true, force: true });
 				steps.push({ kind: "created", path: target, make: { kind: "copy", from: realTarget } });
 				return;
@@ -994,7 +1011,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			if (await pathExists(path)) {
 				throw new Error(t("main.fs.renameCollision", { name: basename(path) }));
 			}
-			await cp(make.from, path, { recursive: true });
+			await copyTree(make.from, path);
 		}
 	}
 
@@ -1057,6 +1074,28 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	const redo = (): Promise<FsUndoOutcome> => replay(redoStack, undoStack);
 
 	/** Record an output the renderer observed an Action produce (extract, compress): undo moves it to the Trash. */
+	/** A browser upload keeps its own name, made safe and de-duplicated by Finder rules. */
+	async function uploadFile(directory: string, name: string, data: Uint8Array): Promise<{ readonly path: string; readonly name: string }> {
+		const safe = basename(name.trim().replace(/[/\\:\0]/gu, "-")) || "upload";
+		const unique = await resolveCopyName(directory, safe, false);
+		const target = join(directory, unique);
+		// Not recorded in the undo history: replaying an upload would have to keep
+		// the file's bytes in memory for every history entry.
+		await writeFile(target, data, { flag: "wx" });
+		return { path: target, name: unique };
+	}
+
+	async function readFileBytes(path: string): Promise<Uint8Array | null> {
+		try {
+			const info = await lstat(path);
+			if (!info.isFile()) return null;
+			return new Uint8Array(await readFile(path));
+		} catch (error) {
+			if (hasErrorCode(error, "ENOENT")) return null;
+			throw error;
+		}
+	}
+
 	async function recordCreated(path: string, operation: FsRecordedOperation): Promise<void> {
 		if (!isAbsolute(path)) {
 			throw new Error(`Invalid path "${path}": expected an absolute path`);
@@ -1074,7 +1113,7 @@ export function createFsService(deps: FsServiceDeps): FsService {
 			const dir = dirname(source);
 			const targetName = await resolveCopyName(dir, basename(source), effectiveStat.isDirectory());
 			const target = join(dir, targetName);
-			await cp(source, target, { recursive: true, dereference: isSymlink });
+			await copyTree(source, target, { dereference: isSymlink });
 			steps.push({ kind: "created", path: target, make: { kind: "copy", from: isSymlink ? await realpath(source).catch(() => source) : source } });
 		});
 		if (steps.length > 0) record("duplicate", steps);
@@ -1173,6 +1212,8 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		undo,
 		redo,
 		recordCreated,
+		uploadFile,
+		readFileBytes,
 		createFolder,
 		createFile,
 		createEvidenceFolder,
@@ -1223,6 +1264,9 @@ export function createFsService(deps: FsServiceDeps): FsService {
 		clipboardSet: async (clipboard) => {
 			inAppClipboard = { op: clipboard.op, paths: [...clipboard.paths] };
 			await rememberClipboardTargets(clipboard.paths);
+			// The in-app clipboard keeps cut/copy and symlink targets; the OS clipboard only lets other apps paste the files.
+			// A failed OS write must not break in-app copy/paste, so it is logged, not thrown.
+			await deps.clipboard.writeFiles(clipboard.paths).catch((error: unknown) => console.error("[clipboard] OS file clipboard:", error));
 		},
 		clipboardGet: async () => inAppClipboard,
 		copyPathsToClipboard: async (paths) => {

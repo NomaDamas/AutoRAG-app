@@ -366,6 +366,11 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	border-color: var(--onb-faint);
 }
 
+/* Back's icon is the quiet one: faint, while its label and the forward icon stay body (Figma 77:1806). */
+.onb .footer-actions .footer-btn:first-child svg {
+	color: var(--onb-faint);
+}
+
 .onb .footer-btn:disabled {
 	border-color: var(--onb-border);
 	background: transparent;
@@ -2884,6 +2889,33 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	box-shadow: none;
 }
 
+/* Provider flyouts escape the root menu without clipping. */
+.onb .settings-view .settings-menu:has(.onb-menu.role) {
+	overflow: visible;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu {
+	position: absolute;
+	z-index: 2;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="left"]::after,
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="right"]::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 8px;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="left"]::after {
+	left: 100%;
+}
+
+.onb .settings-view .settings-menu.onb-role-submenu[data-side="right"]::before {
+	right: 100%;
+}
+
 .onb .onb-menu {
 	display: flex;
 	flex-direction: column;
@@ -2897,14 +2929,20 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	padding-bottom: 8px;
 }
 
-/* Five models show (33px each) under the search; "auto" sits 8px under a rule. */
+/* Five rows show (33px each) under the search; "auto" sits 8px under a rule. */
 .onb .onb-menu.role {
-	width: 188px;
+	width: 244px;
 	height: 218px;
 }
 
 .onb .onb-menu.role.with-auto {
 	height: 256px;
+}
+
+.onb .onb-menu.role-submenu {
+	width: 256px;
+	max-height: 218px;
+	padding: 8px 0;
 }
 
 .onb .onb-menu-search {
@@ -2954,6 +2992,18 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	line-height: 14px;
 }
 
+.onb .onb-menu-group-title.is-provider {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.onb .onb-menu-group-title.is-provider > span:last-child {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .onb .onb-menu-item {
 	display: flex;
 	align-items: center;
@@ -2970,7 +3020,8 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	cursor: pointer;
 }
 
-.onb .onb-menu-item:hover {
+.onb .onb-menu-item:hover,
+.onb .onb-menu-item.open {
 	background: var(--onb-bg-stage);
 }
 
@@ -2980,6 +3031,19 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.onb .onb-menu-item > span.onb-provider-active-dot {
+	flex: none;
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--onb-blue);
+}
+
+.onb .onb-menu-chevron {
+	flex: none;
+	color: var(--onb-muted);
 }
 
 .onb .onb-menu-item.failed {
@@ -4991,7 +5055,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	color: var(--onb-ink);
 }
 
-.onb .account-btn.apple {
+.onb .account-btn.github {
 	border-color: #000;
 	background: #000;
 	color: #fff;
@@ -5003,6 +5067,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border-color: var(--onb-bg-input);
 	background: var(--onb-bg-input);
 	color: var(--onb-ink);
+}
+
+.onb .account-btn:disabled {
+	opacity: .45;
+	cursor: not-allowed;
 }
 
 .onb .account-divider {
@@ -5045,6 +5114,30 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .account-input::placeholder {
 	color: var(--onb-muted);
 	opacity: 1;
+}
+
+.onb .account-form {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	width: 100%;
+}
+
+.onb .account-code-input {
+	letter-spacing: 0.28em;
+	font-variant-numeric: tabular-nums;
+	text-align: center;
+}
+
+.onb .account-otp-actions {
+	text-align: center;
+	color: var(--onb-muted);
+	font-size: 11px;
+}
+
+.onb .inline-link:disabled {
+	opacity: .45;
+	cursor: not-allowed;
 }
 
 .onb .account-guest {

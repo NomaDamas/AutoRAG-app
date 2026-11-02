@@ -152,6 +152,63 @@ small {
 	}
 }
 
+/* Self-healing dialog — ambient aura breath, counter-rotating mend arcs, and healthy settle. */
+@keyframes healBreath {
+	0%,
+	100% {
+		opacity: 0.55;
+		transform: scale(0.92);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1.08);
+	}
+}
+
+@keyframes healOrbit {
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@keyframes healOrbitReverse {
+	from {
+		transform: rotate(360deg);
+	}
+	to {
+		transform: rotate(0deg);
+	}
+}
+
+@keyframes healMote {
+	0%,
+	100% {
+		opacity: 0.25;
+		transform: scale(0.8);
+	}
+	50% {
+		opacity: 0.95;
+		transform: scale(1.25);
+	}
+}
+
+@keyframes healPop {
+	0% {
+		opacity: 0;
+		transform: scale(0.82);
+	}
+	70% {
+		transform: scale(1.04);
+	}
+	100% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
 /* Split panes — a new pane fades and settles in from its split edge. */
 @keyframes paneIn {
 	from {
@@ -242,6 +299,44 @@ html:not([data-platform="darwin"]) .inspector-body {
 		0%,
 		100% {
 			box-shadow: 0 0 0 2px var(--accent-soft);
+		}
+	}
+
+	@keyframes healBreath {
+		0%,
+		100% {
+			opacity: 0.75;
+			transform: none;
+		}
+	}
+
+	@keyframes healOrbit {
+		from,
+		to {
+			transform: none;
+		}
+	}
+
+	@keyframes healOrbitReverse {
+		from,
+		to {
+			transform: none;
+		}
+	}
+
+	@keyframes healMote {
+		0%,
+		100% {
+			opacity: 0.6;
+			transform: none;
+		}
+	}
+
+	@keyframes healPop {
+		from,
+		to {
+			opacity: 1;
+			transform: none;
 		}
 	}
 

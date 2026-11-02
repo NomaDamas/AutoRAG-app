@@ -288,7 +288,7 @@ try {
 	await page.locator(".tabs .tab").first().click();
 
 	// 13. "AI 요약" follows the Interface language setting.
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator('select[aria-label="App Language"]').selectOption("en");
 	// The set IPC resolves and App adopts it (onSettingsChanged) before the tab closes.

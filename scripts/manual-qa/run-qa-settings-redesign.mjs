@@ -97,7 +97,7 @@ try {
 	page.on("pageerror", (error) => errors.push(error.message));
 	page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
 	await page.waitForSelector('[role="row"]');
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	const nav = (label) => page.locator(".settings-nav-item", { hasText: label }).first().click();
 	const title = () => page.locator(".settings-content .linear-title").first().innerText();
@@ -139,10 +139,12 @@ try {
 
 	await page.locator('[data-role="answer"]').click();
 	await page.waitForSelector(".settings-menu");
-	const menuText = await page.locator(".settings-menu").innerText();
-	check("answer picker lists real catalog models", menuText.includes("OpenRouter") && (await page.locator(".settings-menu .settings-menu-item").count()) > 10);
+	const menuText = await page.locator(".settings-menu").first().innerText();
+	await page.locator('[data-provider-trigger="openrouter"]').hover();
+	await page.waitForSelector('.settings-submenu[data-provider-submenu="openrouter"]');
+	check("answer picker lists providers and opens real catalog submenu", menuText.includes("OpenRouter") && (await page.locator(".settings-submenu .settings-menu-item").count()) > 10);
 	await page.locator(".settings-menu input").fill("qwen3.7-flash");
-	const pick = page.locator(".settings-menu .settings-menu-item").first();
+	const pick = page.locator(".settings-menu .settings-menu-item[data-model-id]").first();
 	const pickedId = await pick.locator("small").innerText();
 	await pick.click();
 	const answer = await waitFor(() => readConfig().model?.id === pickedId ? readConfig().model : null);
@@ -160,9 +162,11 @@ try {
 
 	await page.locator('[data-role="rerank"]').click();
 	await page.waitForSelector(".settings-menu");
-	const rerankItems = await page.locator(".settings-menu .settings-menu-item small").allInnerTexts();
+	await page.locator('[data-provider-trigger="openrouter"]').hover();
+	await page.waitForSelector('.settings-submenu[data-provider-submenu="openrouter"]');
+	const rerankItems = await page.locator(".settings-submenu .settings-menu-item small").allInnerTexts();
 	check("rerank picker only offers rerank models", rerankItems.length > 0 && rerankItems.every((id) => /rerank/u.test(id)), JSON.stringify(rerankItems));
-	await page.locator(".settings-menu .settings-menu-item small", { hasText: "rerank" }).first().click();
+	await page.locator(".settings-submenu .settings-menu-item small", { hasText: "rerank" }).first().click();
 	check("rerank choice writes rerank block", Boolean(await waitFor(() => typeof readConfig().rerank?.model === "string" && /rerank/u.test(readConfig().rerank.model))), JSON.stringify(readConfig().rerank));
 
 	await page.locator('[data-role="jev"]').click();

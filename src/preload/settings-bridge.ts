@@ -5,6 +5,13 @@ export function createSettingsBridge(ipcRenderer: IpcRenderer): SettingsBridge {
 	return {
 		get: () => ipcRenderer.invoke(SETTINGS_CHANNELS.get),
 		set: (patch) => ipcRenderer.invoke(SETTINGS_CHANNELS.set, patch),
+		onChanged: (listener) => {
+			const handler = (_event: IpcRendererEvent, settings: Parameters<typeof listener>[0]): void => listener(settings);
+			ipcRenderer.on(SETTINGS_CHANNELS.changed, handler);
+			return () => {
+				ipcRenderer.removeListener(SETTINGS_CHANNELS.changed, handler);
+			};
+		},
 		clearHistory: () => ipcRenderer.invoke(SETTINGS_CHANNELS.clearHistory),
 		permGet: (path) => ipcRenderer.invoke(SETTINGS_CHANNELS.permGet, path),
 		permSet: (path, value, cascade) => ipcRenderer.invoke(SETTINGS_CHANNELS.permSet, path, value, cascade),

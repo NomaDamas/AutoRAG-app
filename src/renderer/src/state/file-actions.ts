@@ -12,7 +12,6 @@
  * and ⌫/⌘⌫ already cover them.
  */
 
-import { hostPlatform } from "../lib/shortcuts";
 import { t } from "../../../shared/i18n/core";
 import type {
 	ActionCapabilities,
@@ -22,8 +21,9 @@ import type {
 	VideoContainer,
 } from "../../../shared/actions-contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
+import { extensionOfName } from "../../../shared/size-reduction";
 
-export type FileActionIcon = "open" | "openWith" | "compress" | "extract" | "share" | "askAi" | "image" | "video";
+export type FileActionIcon = "open" | "openWith" | "compress" | "extract" | "share" | "askAi" | "image" | "video" | "reduce";
 
 /** Where a click leads. `request` is the work main performs. */
 export type FileActionTarget =
@@ -68,8 +68,6 @@ export interface ActionSubject {
 
 const IMAGE_EXTENSIONS: readonly string[] = ["png", "jpg", "jpeg", "webp", "heic", "heif", "tif", "tiff", "gif", "bmp", "avif"];
 const VIDEO_EXTENSIONS: readonly string[] = ["mp4", "mov", "m4v", "mkv", "webm", "avi"];
-/** Lossy formats: `optimize` re-encodes them everywhere; PNG's lossless path is ffmpeg-only (below). */
-const LOSSY_IMAGE_FORMATS: readonly ImageFormat[] = ["jpeg", "webp", "heic"];
 /** Resize presets, longest edge in pixels. */
 const RESIZE_PRESETS: readonly number[] = [1920, 1280, 640];
 
@@ -138,18 +136,6 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 				target: { kind: "request", request: { kind: "resizeImage", maxEdge } },
 			});
 		}
-	}
-	// The ffmpeg backend also optimizes PNG losslessly (max deflate); sips cannot.
-	if (
-		source !== null &&
-		(LOSSY_IMAGE_FORMATS.includes(source) || (source === "png" && hostPlatform() !== "darwin")) &&
-		capabilities.imageFormats.includes(source)
-	) {
-		items.push({
-			id: "image:optimize",
-			label: t("inspector.actions.optimizeSize"),
-			target: { kind: "request", request: { kind: "optimizeImage" } },
-		});
 	}
 	return items;
 }
@@ -270,6 +256,16 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 		if (items.length > 0) {
 			actions.push({ kind: "menu", id: "videoConvert", label: t("inspector.actions.videoConvert"), icon: "video", items });
 		}
+	}
+	// Same format, fewer bytes: one entry for every type this machine can shrink (PDF, pictures, video, audio).
+	if (capabilities.reducibleExtensions.includes(extensionOfName(subject.name))) {
+		actions.push({
+			kind: "action",
+			id: "reduceSize",
+			label: t("inspector.actions.reduceSize"),
+			icon: "reduce",
+			target: { kind: "request", request: { kind: "reduceSize" } },
+		});
 	}
 	if (capabilities.archive) {
 		actions.push({

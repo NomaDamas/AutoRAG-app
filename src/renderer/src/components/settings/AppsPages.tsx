@@ -49,7 +49,7 @@ const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKe
 const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
 	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
 	{ title: "settingsSources.apps.groups.docsNotes", ids: ["notion", "obsidian", "clawgallery"] },
-	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl", "mail-export"] },
+	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl"] },
 	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
 	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
 ];
@@ -282,17 +282,19 @@ export function IndexingPage({
 								<StatusDot tone={syncingOf(row) ? "run" : sourceTone(row)} />
 								{syncingOf(row) ? t("settingsSources.common.syncing") : row.enabled ? t("settingsSources.common.inUse") : t("settingsSources.common.off")}
 							</span>
-							<select
-								className="settings-select-compact"
-								aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
-								value={String(intervalOf(row, snapshot))}
-								onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
-							>
-								<option value="0">{t("settingsSources.common.manual")}</option>
-								{INTERVAL_OPTIONS.map((option) => (
-									<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-								))}
-							</select>
+							{TEMPLATE_BY_ID[row.type]?.polling !== false ? (
+								<select
+									className="settings-select-compact"
+									aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
+									value={String(intervalOf(row, snapshot))}
+									onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
+								>
+									<option value="0">{t("settingsSources.common.manual")}</option>
+									{INTERVAL_OPTIONS.map((option) => (
+										<option key={option.ms} value={option.ms}>{t(option.label)}</option>
+									))}
+								</select>
+							) : null}
 							<button
 								type="button"
 								className="settings-icon-btn"
@@ -450,8 +452,8 @@ export function AppsPage({
 								if (template === undefined) return null;
 								// KakaoTalk is read through a macOS-only program (lazykatok): it is not offered at all elsewhere.
 								if (!datasourceSupported(templateId, hostPlatform())) return null;
-								// Calendar reads EventKit, so it can only be connected on a Mac.
-								const available = templateId !== "calendar" || calendarSupported(hostPlatform());
+								// Calendar reads EventKit and Spotlight runs mdfind, so both can only be connected on a Mac.
+								const available = (templateId !== "calendar" && templateId !== "spotlight") || calendarSupported(hostPlatform());
 								return (
 									<div className="settings-list-row" key={templateId}>
 										<SourceIcon type={templateId} label={template.label} />
@@ -626,19 +628,21 @@ export function SourceDetailPage({
 					</span>
 					<button type="button" className="linear-btn settings-btn-quiet" disabled={busy || row === null} onClick={() => void syncNow()}>{t("settingsSources.indexing.rowRefreshTitle")}</button>
 				</Row>
-				<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>
-					<select
-						className="linear-select"
-						aria-label={t("settingsSources.sourceDetail.intervalName")}
-						value={String(polling)}
-						onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
-					>
-						<option value="0">{t("settingsSources.common.manual")}</option>
-						{INTERVAL_OPTIONS.map((option) => (
-							<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-						))}
-					</select>
-				</Row>
+				{template?.polling !== false ? (
+					<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>
+						<select
+							className="linear-select"
+							aria-label={t("settingsSources.sourceDetail.intervalName")}
+							value={String(polling)}
+							onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
+						>
+							<option value="0">{t("settingsSources.common.manual")}</option>
+							{INTERVAL_OPTIONS.map((option) => (
+								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
+							))}
+						</select>
+					</Row>
+				) : null}
 			</Section>
 			<Section title={t("settingsSources.sourceDetail.generalSection")}>
 				<Row name={t("settingsSources.sourceDetail.descName")} hint={t("settingsSources.sourceDetail.descHint")} stack>

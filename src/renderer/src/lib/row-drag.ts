@@ -127,6 +127,7 @@ export function pressRow(event: ReactPointerEvent<HTMLElement>, source: RowDragS
 		window.removeEventListener("keydown", onKey, true);
 		window.removeEventListener("keyup", onKey, true);
 		window.removeEventListener("blur", onCancel);
+		window.removeEventListener("contextmenu", onCancel, true);
 		if (root.hasPointerCapture(pointerId)) root.releasePointerCapture(pointerId);
 		// The click that follows a drag's release must not select or open the row under it.
 		if (phase !== "pending") window.setTimeout(() => window.removeEventListener("click", swallowClick, true), 0);
@@ -198,4 +199,5 @@ export function pressRow(event: ReactPointerEvent<HTMLElement>, source: RowDragS
 	window.addEventListener("keydown", onKey, true);
 	window.addEventListener("keyup", onKey, true);
 	window.addEventListener("blur", onCancel);
+	window.addEventListener("contextmenu", onCancel, true);
 }

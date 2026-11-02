@@ -9,6 +9,7 @@ const MAC: ActionCapabilities = {
 	archive: true,
 	imageFormats: [],
 	videoContainers: [],
+	reducibleExtensions: [],
 };
 
 describe("toolbarShareControl", () => {

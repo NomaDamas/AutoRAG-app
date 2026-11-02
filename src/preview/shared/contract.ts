@@ -4,6 +4,7 @@ import type { ArchiveEntry } from "./archive-items";
 import type { KeyUsageName } from "./certificate";
 import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
+import type { VideoAudioPlan } from "./video-audio";
 
 /**
  * Quick Look runs in its own pre-warmed BrowserWindow (the sigma-file-manager
@@ -40,6 +41,8 @@ export const PREVIEW_CHANNELS = {
 	office: "preview:office",
 	/** Main -> preview window: Keynote finished drawing a deck's slides at full size (or could not). */
 	slides: "preview:slides",
+	/** Main -> preview window: a native document's OS thumbnail finished after the panel opened. */
+	thumbnail: "preview:thumbnail",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -48,6 +51,8 @@ export const PREVIEW_CHANNELS = {
 	folderSize: "preview:folder-size",
 	/** Preview window -> main (invoke): tags, cover art, and stream facts of the shown audio file. */
 	audioMetadata: "preview:audio-metadata",
+	/** Preview window -> main (invoke): whether the shown video's sound needs the ffmpeg-decoded sidecar, and which track. */
+	videoAudio: "preview:video-audio",
 	/** Preview window -> main (invoke): tables and first rows of the shown database or Parquet file. */
 	data: "preview:data",
 	/** Preview window -> main (invoke): the top-level children of the shown 7z, RAR, ISO, deb, rpm, CAB, or tar.bz2/xz/zst. */
@@ -61,6 +66,14 @@ export const PREVIEW_CHANNELS = {
 	/** Preview window -> main (send): a text field took or gave up focus; Space and the arrows stay with it while it has focus. */
 	textEntry: "preview:text-entry",
 } as const;
+
+/** Structured content decoded from an Apple pointer, archive, clipping, or directory package. */
+export type NativePreview =
+	| { readonly kind: "webloc"; readonly title: string; readonly url: string }
+	| { readonly kind: "webarchive"; readonly html: string }
+	| { readonly kind: "rtfd"; readonly rtf: Uint8Array; readonly attachments: readonly string[] }
+	| { readonly kind: "iconset"; readonly icons: readonly { readonly name: string; readonly bytes: Uint8Array }[] }
+	| { readonly kind: "textclipping"; readonly text: string };
 
 /**
  * One file the preview can render. `bytes` is null when the viewer streams
@@ -87,6 +100,10 @@ export interface PreviewDocument {
 	 * pointer file (`.gdoc`, ...); null for every other document.
 	 */
 	readonly thumbnail: string | null;
+	/** Decoded native content; absent for every ordinary document. */
+	readonly native?: NativePreview | null;
+	/** Directory packages have no single-file byte size to display. */
+	readonly package?: boolean;
 	/**
 	 * True while Keynote is drawing a deck's slides at full size; `pages` then
 	 * still holds the package's 356px renders. False for every other document.
@@ -115,6 +132,12 @@ export interface QuickLookOffice {
 	readonly office: OfficePage;
 }
 
+/** Main -> preview window: the OS thumbnail for the current native document. */
+export interface QuickLookThumbnail {
+	readonly seq: number;
+	readonly url: string;
+}
+
 /**
  * Main -> preview window: Keynote finished drawing some slides of the open deck
  * at full size. Each entry replaces the stored slide at `index`; `rendering`
@@ -139,6 +162,7 @@ export const ANCHOR_LIMITS = { excerpts: 32, chars: 8000 } as const;
 export interface QuickLookTarget {
 	readonly path: string;
 	readonly name: string;
+	readonly kind?: "file" | "folder";
 	/**
 	 * Evidence excerpts to find and highlight (an AI Search citation); the
 	 * viewer scrolls to the first one it finds. Absent for a plain preview.
@@ -392,6 +416,7 @@ export interface QuickLookWindowBridge {
 	onApp(listener: (app: QuickLookApp) => void): () => void;
 	onOffice(listener: (update: QuickLookOffice) => void): () => void;
 	onSlides(listener: (update: QuickLookSlides) => void): () => void;
+	onThumbnail(listener: (update: QuickLookThumbnail) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -400,6 +425,8 @@ export interface QuickLookWindowBridge {
 	sha256(path: string): Promise<string>;
 	folderSize(path: string): Promise<FolderSize>;
 	audioMetadata(path: string): Promise<AudioMetadata>;
+	/** How the shown video gets its sound: its own track, or an ffmpeg-decoded sidecar when the page cannot play the codec. */
+	videoAudio(path: string): Promise<VideoAudioPlan>;
 	/** Database tables and first rows, or a Parquet file's schema and first rows. `table` picks a database table (null: the first). */
 	dataPreview(path: string, table: string | null): Promise<DataPreview>;
 	/** The top-level children of a 7z, RAR, tar.bz2/xz/zst, ISO, deb, rpm, or CAB; the page has no engine to read them itself. */
@@ -426,9 +453,23 @@ export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
 }
 
+export function isQuickLookThumbnail(value: unknown): value is QuickLookThumbnail {
+	return isRecord(value) && typeof value.seq === "number" && typeof value.url === "string";
+}
+
 export function isQuickLookSlides(value: unknown): value is QuickLookSlides {
 	if (!isRecord(value) || typeof value.seq !== "number" || typeof value.rendering !== "boolean" || !Array.isArray(value.slides)) return false;
 	return value.slides.every((entry: unknown) => isRecord(entry) && Number.isInteger(entry.index) && (entry.index as number) >= 0 && entry.bytes instanceof Uint8Array);
+}
+
+function isNativePreview(value: unknown): value is NativePreview {
+	if (!isRecord(value) || typeof value.kind !== "string") return false;
+	if (value.kind === "webloc") return typeof value.title === "string" && typeof value.url === "string";
+	if (value.kind === "webarchive") return typeof value.html === "string";
+	if (value.kind === "textclipping") return typeof value.text === "string";
+	if (value.kind === "rtfd") return value.rtf instanceof Uint8Array && Array.isArray(value.attachments) && value.attachments.every((name) => typeof name === "string");
+	if (value.kind === "iconset") return Array.isArray(value.icons) && value.icons.every((icon: unknown) => isRecord(icon) && typeof icon.name === "string" && icon.bytes instanceof Uint8Array);
+	return false;
 }
 
 export function isPreviewDocument(value: unknown): value is PreviewDocument {
@@ -439,6 +480,8 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (value.bytes !== null && !(value.bytes instanceof Uint8Array)) return false;
 	if (value.office !== null && !isOfficePage(value.office)) return false;
 	if (value.thumbnail !== null && typeof value.thumbnail !== "string") return false;
+	if (value.native !== undefined && value.native !== null && !isNativePreview(value.native)) return false;
+	if (value.package !== undefined && typeof value.package !== "boolean") return false;
 	if (typeof value.slidesRendering !== "boolean") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }
@@ -511,6 +554,7 @@ function isAnchor(value: unknown): value is readonly string[] {
 export function isQuickLookTarget(value: unknown): value is QuickLookTarget {
 	if (!isRecord(value)) return false;
 	if (value.anchor !== undefined && !isAnchor(value.anchor)) return false;
+	if (value.kind !== undefined && value.kind !== "file" && value.kind !== "folder") return false;
 	return typeof value.path === "string" && value.path.length > 0 && typeof value.name === "string";
 }
 
@@ -586,10 +630,46 @@ export function isNavigateDelta(value: unknown): value is NavigateDelta {
 
 export const PREVIEW_SCHEME = "autorag-preview";
 
+/** The remote bootstrap publishes this so scheme URLs become same-origin HTTP (see src/main/remote/bootstrap.ts). */
+interface RemoteUrlProvider {
+	readonly routes?: { readonly preview?: string };
+	readonly url?: (route: string, params?: Readonly<Record<string, unknown>>) => string;
+}
+
+function remotePreviewUrl(filePath: string): string | null {
+	const remote = Reflect.get(globalThis, "__autoragRemote") as RemoteUrlProvider | undefined;
+	const route = remote?.routes?.preview;
+	if (route === undefined || typeof remote?.url !== "function") return null;
+	return remote.url(route, { path: filePath });
+}
+
 export function previewStreamUrl(filePath: string): string {
+	const remote = remotePreviewUrl(filePath);
+	if (remote !== null) return remote;
 	const url = new URL(`${PREVIEW_SCHEME}://local/`);
 	url.searchParams.set("path", filePath);
 	return url.toString();
+}
+
+/** The file's audio track `track` as a stereo WAV (see shared/video-audio.ts), over the same scheme. */
+export function previewVideoAudioUrl(filePath: string, track: number): string {
+	const url = new URL(`${PREVIEW_SCHEME}://local/`);
+	url.searchParams.set("path", filePath);
+	url.searchParams.set("audio", String(track));
+	return url.toString();
+}
+
+/** The audio track a preview URL asks for, or null for the file itself (and for anything but a plain track number). */
+export function videoAudioTrackFromUrl(raw: string): number | null {
+	let url: URL;
+	try {
+		url = new URL(raw);
+	} catch (error) {
+		if (error instanceof TypeError) return null;
+		throw error;
+	}
+	const value = url.searchParams.get("audio");
+	return value !== null && /^\d{1,4}$/.test(value) ? Number(value) : null;
 }
 
 export function pathFromPreviewUrl(raw: string): string | null {

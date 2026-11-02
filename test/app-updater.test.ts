@@ -10,6 +10,8 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
 	autoInstallOnAppQuit = true;
 	next: "none" | { version: string } | Error = "none";
 	downloads = 0;
+	/** `autoInstallOnAppQuit` as electron-updater sees it when `downloadUpdate` runs (MacUpdater hands the zip to Squirrel only if it is on). */
+	autoInstallDuringDownload: boolean[] = [];
 	installs: [boolean | undefined, boolean | undefined][] = [];
 	async checkForUpdates(): Promise<unknown> {
 		this.emit("checking-for-update");
@@ -29,6 +31,7 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
 	}
 	async downloadUpdate(): Promise<unknown> {
 		this.downloads += 1;
+		this.autoInstallDuringDownload.push(this.autoInstallOnAppQuit);
 		this.emit("download-progress", { percent: 42.4 });
 		if (this.next === "none" || this.next instanceof Error) throw new Error("downloadUpdate without an available update");
 		this.emit("update-downloaded", { version: this.next.version });
@@ -86,6 +89,16 @@ describe("app updater policy", () => {
 		await service.download();
 		expect(updater.downloads).toBe(1);
 		expect(service.snapshot().state).toEqual({ kind: "ready", version: "1.1.0" });
+	});
+
+	it("a download the user asked for is handed to the platform installer even with auto-install off", async () => {
+		const { updater, service } = setup("install", false);
+		updater.next = { version: "1.1.0" };
+		await service.check();
+		expect(updater.autoInstallOnAppQuit).toBe(false);
+		await service.download();
+		// On macOS electron-updater stages the zip with Squirrel.Mac only when this is on; without it the update never becomes ready.
+		expect(updater.autoInstallDuringDownload).toEqual([true]);
 	});
 
 	it("turning auto-install off takes effect on the next check, not only at launch", async () => {

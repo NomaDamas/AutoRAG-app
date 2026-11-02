@@ -15,8 +15,8 @@
  * role has a model that answered or is on auto.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
-import { Check, ChevronDown, ChevronUp, LoaderCircle, Plus, Search, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
+import { Check, ChevronDown, ChevronRight, ChevronUp, LoaderCircle, Plus, Search, X } from "lucide-react";
 import { jevBackendFor, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles, withoutAutorag } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import type { ModelCheckResult } from "../../../../shared/onboarding-contract";
@@ -457,7 +457,32 @@ function ConnectList({
 	);
 }
 
-/** A role's model menu: search on top, the models in a scrolling list, and "auto" pinned at the bottom for the helper roles. */
+interface RoleProviderBucket {
+	readonly provider: ProviderSummary;
+	readonly models: readonly ModelCatalogEntry[];
+}
+
+interface RoleSubmenuAnchor {
+	readonly providerId: string;
+	readonly trigger: HTMLButtonElement;
+}
+
+const ROLE_SUBMENU_WIDTH = 256;
+const ROLE_SUBMENU_GAP = 4;
+const ROLE_VIEWPORT_MARGIN = 12;
+
+function groupRoleOptions(options: readonly RoleOption[], filter?: (option: RoleOption) => boolean): RoleProviderBucket[] {
+	const grouped = new Map<string, { readonly provider: ProviderSummary; readonly models: ModelCatalogEntry[] }>();
+	for (const option of options) {
+		if (filter !== undefined && !filter(option)) continue;
+		const existing = grouped.get(option.provider.id);
+		if (existing !== undefined) existing.models.push(option.model);
+		else grouped.set(option.provider.id, { provider: option.provider, models: [option.model] });
+	}
+	return [...grouped.values()];
+}
+
+/** A role's model menu: providers open a model submenu; search returns models grouped by provider. */
 function RoleList({
 	t,
 	options,
@@ -476,31 +501,251 @@ function RoleList({
 	readonly onAuto: () => void;
 }): ReactElement {
 	const [query, setQuery] = useState("");
+	const [submenu, setSubmenu] = useState<RoleSubmenuAnchor | null>(null);
+	const submenuRef = useRef<HTMLDivElement>(null);
+	const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const lower = query.trim().toLowerCase();
-	const shown = options.filter(({ provider, model }) => lower.length === 0 || [model.name, model.id, provider.name].some((text) => text.toLowerCase().includes(lower)));
+	const searching = lower.length > 0;
+	const allBuckets = useMemo(() => groupRoleOptions(options), [options]);
+	const filteredBuckets = useMemo(() => {
+		if (!searching) return allBuckets;
+		return groupRoleOptions(options, ({ provider, model }) => [model.name, model.id, provider.name].some((text) => text.toLowerCase().includes(lower)));
+	}, [allBuckets, lower, options, searching]);
+	const activeBucket = !searching && submenu !== null ? (allBuckets.find((bucket) => bucket.provider.id === submenu.providerId) ?? null) : null;
+
+	const cancelClose = useCallback((): void => {
+		if (closeTimerRef.current !== null) {
+			clearTimeout(closeTimerRef.current);
+			closeTimerRef.current = null;
+		}
+	}, []);
+	const scheduleClose = useCallback((): void => {
+		cancelClose();
+		closeTimerRef.current = setTimeout(() => {
+			setSubmenu(null);
+			closeTimerRef.current = null;
+		}, 120);
+	}, [cancelClose]);
+	useEffect(() => () => cancelClose(), [cancelClose]);
+	useEffect(() => {
+		if (searching) setSubmenu(null);
+	}, [searching]);
+
+	const openProvider = useCallback(
+		(providerId: string, trigger: HTMLButtonElement, focusFirstModel = false): void => {
+			cancelClose();
+			setSubmenu({ providerId, trigger });
+			if (focusFirstModel) {
+				queueMicrotask(() => submenuRef.current?.querySelector<HTMLButtonElement>(".onb-menu-item")?.focus());
+			}
+		},
+		[cancelClose],
+	);
+
 	return (
-		<div className={cn("onb-menu role", auto && "with-auto")}>
+		<div className={cn("onb-menu role", auto && "with-auto")} onMouseLeave={scheduleClose} onMouseEnter={cancelClose}>
 			<MenuSearch value={query} placeholder={t("onboarding.model.searchModels")} onChange={setQuery} />
 			<div className="onb-menu-list">
-				{shown.length === 0 ? <p className="onb-menu-empty">{options.length === 0 ? t("onboarding.model.noModels") : t("onboarding.model.noMatch")}</p> : null}
-				{shown.map(({ provider, model }) => {
-					const key = keyOf(model.provider, model.id);
-					const chosen = current.kind === "model" && keyOf(current.provider, current.modelId) === key;
-					const failed = refused.has(key);
-					return (
-						<button key={key} type="button" className={cn("onb-menu-item", failed && "failed")} data-model-id={key} title={`${provider.name} · ${model.id}`} onClick={() => onPick(model)}>
-							<span>{model.name || model.id}</span>
-							{failed ? <b className="onb-menu-mark failed">!</b> : chosen ? <Check size={12} className="onb-menu-mark" aria-hidden="true" focusable="false" /> : null}
-						</button>
-					);
-				})}
+				{searching ? (
+					filteredBuckets.length === 0 ? (
+						<p className="onb-menu-empty">{t("onboarding.model.noMatch")}</p>
+					) : (
+						filteredBuckets.map((bucket) => (
+							<div key={bucket.provider.id} className="onb-menu-group">
+								<p className="onb-menu-group-title is-provider">
+									<span className="onb-menu-icon" aria-hidden="true">
+										<ProviderIcon provider={bucket.provider} size={14} />
+									</span>
+									<span>{bucket.provider.name}</span>
+								</p>
+								{bucket.models.map((model) => (
+									<RoleModelItem key={keyOf(model.provider, model.id)} provider={bucket.provider} model={model} current={current} refused={refused} onPick={onPick} />
+								))}
+							</div>
+						))
+					)
+				) : allBuckets.length === 0 ? (
+					<p className="onb-menu-empty">{t("onboarding.model.noModels")}</p>
+				) : (
+					allBuckets.map((bucket) => {
+						const open = activeBucket?.provider.id === bucket.provider.id;
+						const hasSelectedModel = current.kind === "model" && current.provider === bucket.provider.id;
+						return (
+							<button
+								key={bucket.provider.id}
+								type="button"
+								role="menuitem"
+								aria-haspopup="menu"
+								aria-expanded={open}
+								className={cn("onb-menu-item onb-provider-trigger", open && "open")}
+								data-provider-trigger={bucket.provider.id}
+								onMouseEnter={(event) => openProvider(bucket.provider.id, event.currentTarget)}
+								onClick={(event) => {
+									if (open) setSubmenu(null);
+									else openProvider(bucket.provider.id, event.currentTarget);
+								}}
+								onKeyDown={(event) => {
+									if (event.key === "ArrowRight") {
+										event.preventDefault();
+										openProvider(bucket.provider.id, event.currentTarget, true);
+									} else if (event.key === "ArrowLeft" && open) {
+										event.preventDefault();
+										setSubmenu(null);
+									}
+								}}
+							>
+								<span className="onb-menu-icon" aria-hidden="true">
+									<ProviderIcon provider={bucket.provider} size={16} />
+								</span>
+								<span>{bucket.provider.name}</span>
+								{hasSelectedModel ? <span className="onb-provider-active-dot" aria-hidden="true" /> : null}
+								<ChevronRight size={14} className="onb-menu-chevron" aria-hidden="true" focusable="false" />
+							</button>
+						);
+					})
+				)}
 			</div>
 			{auto ? (
-				<button type="button" className="onb-menu-item onb-menu-auto" data-role-auto onClick={onAuto}>
+				<button
+					type="button"
+					role="menuitemradio"
+					aria-checked={current.kind === "auto"}
+					className="onb-menu-item onb-menu-auto"
+					data-role-auto
+					onMouseEnter={() => {
+						cancelClose();
+						setSubmenu(null);
+					}}
+					onClick={onAuto}
+				>
 					<span>{t("onboarding.model.auto")}</span>
 					{current.kind === "auto" ? <Check size={12} className="onb-menu-mark" aria-hidden="true" focusable="false" /> : null}
 				</button>
 			) : null}
+			{activeBucket !== null && submenu !== null ? (
+				<RoleProviderSubmenu
+					refObj={submenuRef}
+					bucket={activeBucket}
+					trigger={submenu.trigger}
+					current={current}
+					refused={refused}
+					onPick={onPick}
+					onClose={() => {
+						const trigger = submenu.trigger;
+						setSubmenu(null);
+						trigger.focus();
+					}}
+				/>
+			) : null}
+		</div>
+	);
+}
+
+function RoleModelItem({
+	provider,
+	model,
+	current,
+	refused,
+	onPick,
+}: {
+	readonly provider: ProviderSummary;
+	readonly model: ModelCatalogEntry;
+	readonly current: RoleValue;
+	readonly refused: ReadonlySet<string>;
+	readonly onPick: (entry: ModelCatalogEntry) => void;
+}): ReactElement {
+	const key = keyOf(model.provider, model.id);
+	const chosen = current.kind === "model" && keyOf(current.provider, current.modelId) === key;
+	const failed = refused.has(key);
+	return (
+		<button
+			type="button"
+			role="menuitemradio"
+			aria-checked={chosen}
+			className={cn("onb-menu-item", failed && "failed")}
+			data-model-id={key}
+			title={`${provider.name} · ${model.id}`}
+			onClick={() => onPick(model)}
+		>
+			<span>{model.name || model.id}</span>
+			{failed ? <b className="onb-menu-mark failed">!</b> : chosen ? <Check size={12} className="onb-menu-mark" aria-hidden="true" focusable="false" /> : null}
+		</button>
+	);
+}
+
+function RoleProviderSubmenu({
+	refObj,
+	bucket,
+	trigger,
+	current,
+	refused,
+	onPick,
+	onClose,
+}: {
+	readonly refObj: RefObject<HTMLDivElement | null>;
+	readonly bucket: RoleProviderBucket;
+	readonly trigger: HTMLButtonElement;
+	readonly current: RoleValue;
+	readonly refused: ReadonlySet<string>;
+	readonly onPick: (entry: ModelCatalogEntry) => void;
+	readonly onClose: () => void;
+}): ReactElement {
+	const [position, setPosition] = useState<{ left: number; top: number; side: "left" | "right" } | null>(null);
+	const place = useCallback((): void => {
+		const panel = refObj.current;
+		if (panel === null || !trigger.isConnected) return;
+		const parentMenu = trigger.closest(".settings-menu");
+		const menuRect = (parentMenu ?? trigger).getBoundingClientRect();
+		const rowRect = trigger.getBoundingClientRect();
+		const width = panel.offsetWidth || ROLE_SUBMENU_WIDTH;
+		const height = panel.offsetHeight;
+		const leftCandidate = menuRect.left - ROLE_SUBMENU_GAP - width;
+		const rightCandidate = menuRect.right + ROLE_SUBMENU_GAP;
+		const side = leftCandidate >= ROLE_VIEWPORT_MARGIN || rightCandidate + width > window.innerWidth - ROLE_VIEWPORT_MARGIN ? "left" : "right";
+		const rawLeft = side === "left" ? leftCandidate : rightCandidate;
+		const viewportLeft = Math.max(ROLE_VIEWPORT_MARGIN, Math.min(rawLeft, window.innerWidth - width - ROLE_VIEWPORT_MARGIN));
+		const preferredTop = rowRect.top - 5;
+		const viewportTop = Math.max(ROLE_VIEWPORT_MARGIN, Math.min(preferredTop, window.innerHeight - height - ROLE_VIEWPORT_MARGIN));
+		// The onboarding menu's backdrop-filter makes it the containing block for this absolute flyout.
+		setPosition({ left: viewportLeft - menuRect.left, top: viewportTop - menuRect.top, side });
+	}, [refObj, trigger]);
+
+	useLayoutEffect(() => {
+		place();
+	}, [bucket.models.length, bucket.provider.id, place]);
+	useEffect(() => {
+		window.addEventListener("resize", place);
+		document.addEventListener("scroll", place, true);
+		return () => {
+			window.removeEventListener("resize", place);
+			document.removeEventListener("scroll", place, true);
+		};
+	}, [place]);
+
+	return (
+		<div
+			ref={refObj}
+			role="menu"
+			aria-label={bucket.provider.name}
+			data-provider-submenu={bucket.provider.id}
+			data-side={position?.side ?? "left"}
+			className="settings-menu onb-role-submenu"
+			style={position === null ? { left: -9999, top: 0, visibility: "hidden" } : { left: position.left, top: position.top }}
+			onKeyDown={(event) => {
+				if (event.key === "ArrowLeft") {
+					event.preventDefault();
+					event.stopPropagation();
+					onClose();
+				}
+			}}
+		>
+			<div className="onb-menu role-submenu">
+				<div className="onb-menu-list">
+					{bucket.models.map((model) => (
+						<RoleModelItem key={keyOf(model.provider, model.id)} provider={bucket.provider} model={model} current={current} refused={refused} onPick={onPick} />
+					))}
+				</div>
+			</div>
 		</div>
 	);
 }

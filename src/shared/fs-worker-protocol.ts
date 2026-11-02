@@ -86,6 +86,8 @@ export const REPLAY_UNSAFE_OPS: Readonly<Record<string, true>> = {
 	// Re-sent, items already permanently deleted would come back as failures.
 	emptyTrash: true,
 	createFile: true,
+	// Re-sent, a file the user already uploaded would land twice.
+	uploadFile: true,
 	undo: true,
 	createEvidenceFolder: true,
 	removeEvidenceFolder: true,

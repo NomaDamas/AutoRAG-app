@@ -12,7 +12,9 @@
  *   4. an extension with no route (mp3 → pdf) names the problem in a toast, opens
  *      no dialog, and does not rename the file
  *   5. a rename that keeps the format (txt → txt) is a plain rename, no dialog
- *   6. no `.dazzi-convert-*` staging folder is left behind
+ *   6. Cancel while a real, slow conversion runs (a 90 s 1080p clip to WebM) closes the
+ *      dialog, ends filee *and* the ffmpeg under it, and leaves only the source
+ *   7. no `.dazzi-convert-*` staging folder is left behind
  *
  * Needs filee-cli (on PATH, or the app downloads the pinned release on first use).
  * The fixture lives in the real ~/Downloads and this run removes only what it
@@ -20,6 +22,7 @@
  * `bun scripts/manual-qa/run-qa-finder-convert-rename.mjs`
  */
 
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -81,6 +84,14 @@ for (const name of ["cr-keep.hwpx", "cr-replace.hwpx", "cr-cancel.hwpx"]) {
 }
 writeFileSync(join(DIR, "cr-song.mp3"), "not really audio");
 writeFileSync(join(DIR, "cr-plain.txt"), "plain");
+const SLOW = join(DIR, "cr-slow.mp4");
+execFileSync("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=1920x1080:rate=30:duration=90", "-c:v", "libx264", "-preset", "ultrafast", SLOW]);
+/** Processes whose command line names the slow clip: filee-cli and the ffmpeg it started. */
+const slowProcesses = () =>
+	spawnSync("pgrep", ["-f", "cr-slow.mp4"], { encoding: "utf8" })
+		.stdout.split("\n")
+		.map((line) => Number(line.trim()))
+		.filter((pid) => pid > 0 && pid !== process.pid);
 
 const USER_DATA = join(tmpdir(), "pw-electron-qa-convert-rename");
 rmRetry(USER_DATA);
@@ -150,7 +161,28 @@ try {
 	await waitFor(() => existsSync(join(DIR, "cr-plain-2.txt")), "plain rename");
 	check("a rename that keeps the format is a plain rename", (await dialog(page).count()) === 0 && !existsSync(join(DIR, "cr-plain.txt")), names().join(", "));
 
-	/* ------------------------------------------------------- 6. no leftovers */
+	/* ------------------------------ 6. cancel a conversion that is really running */
+	if (!isWindows) {
+		await startRename(page, "cr-slow.mp4", "cr-slow.webm");
+		await dialog(page).waitFor({ timeout: 10_000 });
+		await dialog(page).getByRole("button", { name: "Keep original", exact: true }).click();
+		await waitFor(() => slowProcesses().length >= 2, "filee and ffmpeg encoding the clip", 60_000);
+		await page.screenshot({ path: join(EVIDENCE, "5-slow-working.png") });
+		check("the dialog shows progress while it converts", /Converting/.test(await dialog(page).innerText()), "working");
+		const cancelledAt = Date.now();
+		await dialog(page).getByRole("button", { name: "Cancel", exact: true }).click();
+		await dialog(page).waitFor({ state: "detached", timeout: 15_000 });
+		const closedIn = Date.now() - cancelledAt;
+		await waitFor(() => slowProcesses().length === 0, "filee and ffmpeg to end", 15_000);
+		await page.screenshot({ path: join(EVIDENCE, "6-slow-cancelled.png") });
+		check("cancel closes the dialog promptly", closedIn < 10_000, `${closedIn} ms`);
+		check("cancel ends filee and the ffmpeg under it", slowProcesses().length === 0, `${slowProcesses().join(",") || "none"}`);
+		check("cancel leaves only the source: no partial .webm, no staging", names().includes("cr-slow.mp4") && !names().includes("cr-slow.webm") && !names().some((name) => name.startsWith(".dazzi-convert-")), names().join(", "));
+		await sleep(1500);
+		check("nothing appears after the cancel", !names().includes("cr-slow.webm") && !names().some((name) => name.startsWith(".dazzi-convert-")), names().join(", "));
+	}
+
+	/* ------------------------------------------------------- 7. no leftovers */
 	check("no staging folder is left behind", !names().some((name) => name.startsWith(".dazzi-convert-")), names().join(", "));
 } finally {
 	await app?.close().catch(() => {});

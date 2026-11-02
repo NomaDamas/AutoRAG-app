@@ -3,9 +3,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FileeCliOptions, FileeConvertRequest, FileeConvertResult } from "@autorag/librarian";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { t } from "../src/shared/i18n/core";
 import { createConversionService, type ConversionService, type ConversionServiceDeps, type FileeSettings } from "../src/main/conversion-service";
 
 let root: string;
+const CANCELLED = t("main.convert.cancelled", { name: "a.hwpx" });
 
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "dazzi-convert-"));
@@ -42,10 +44,12 @@ function done(source: string, outputs: readonly string[]): FileeConvertResult {
 function service(
 	convert: ConversionServiceDeps["convert"],
 	settings: FileeSettings = {},
+	listTargets?: ConversionServiceDeps["listTargets"],
 ): ConversionService {
 	return createConversionService({
 		settings: () => settings,
 		resolveOptions: async (options) => ({ ...options, executable: "/fake/filee-cli" }),
+		listTargets: listTargets ?? (async () => null),
 		convert,
 	});
 }
@@ -209,5 +213,91 @@ describe("conversion service: run", () => {
 
 	it("cancel of an unknown or finished job does nothing", async () => {
 		await expect(service(fakeConverter({})).cancel("nope")).resolves.toBeUndefined();
+	});
+
+	it("fails at once, before staging or converting, when filee lists no route to the new format", async () => {
+		const path = await source("a.hwpx");
+		const calls: Call[] = [];
+		const asked: string[] = [];
+		const lister: ConversionServiceDeps["listTargets"] = async (format) => {
+			asked.push(format);
+			return new Set(["png", "txt"]);
+		};
+		await expect(service(fakeConverter({ "a.pdf": "x" }, calls), {}, lister).run({ id: "1", path, newName: "a.pdf" })).rejects.toThrow(/a\.hwpx.*pdf/);
+		expect(asked).toEqual(["hwpx"]);
+		expect(calls).toHaveLength(0);
+		expect(await readdir(root)).toEqual(["a.hwpx"]);
+	});
+
+	it("converts when filee lists the target, including one it reaches by downloading an engine", async () => {
+		const path = await source("a.hwpx");
+		const calls: Call[] = [];
+		await service(fakeConverter({ "a.pdf": "x" }, calls), {}, async () => new Set(["pdf"])).run({ id: "1", path, newName: "a.pdf" });
+		expect(calls).toHaveLength(1);
+	});
+
+	it("goes ahead when filee's listing is unavailable, and lets the conversion report its own failure", async () => {
+		const path = await source("a.hwpx");
+		const calls: Call[] = [];
+		await service(fakeConverter({ "a.pdf": "x" }, calls), {}, async () => null).run({ id: "1", path, newName: "a.pdf" });
+		expect(calls).toHaveLength(1);
+	});
+
+	it("cancel while filee is still being found stops before anything is spawned or staged", async () => {
+		const path = await source("a.hwpx");
+		const { promise: resolving, resolve: resolveStarted } = Promise.withResolvers<void>();
+		const { promise: release, resolve: releaseResolve } = Promise.withResolvers<void>();
+		const calls: Call[] = [];
+		const converter = createConversionService({
+			settings: () => ({}),
+			resolveOptions: async (options) => {
+				resolveStarted();
+				await release;
+				return { ...options, executable: "/fake/filee-cli" };
+			},
+			listTargets: async () => new Set(["pdf"]),
+			convert: fakeConverter({ "a.pdf": "x" }, calls),
+		});
+		const outcome = converter.run({ id: "job-1", path, newName: "a.pdf" });
+		const settled = outcome.then(
+			() => "resolved",
+			(error: unknown) => (error instanceof Error ? error.message : String(error)),
+		);
+		await resolving;
+		await converter.cancel("job-1");
+		releaseResolve();
+		expect(await settled).toBe(CANCELLED);
+		expect(calls).toHaveLength(0);
+		expect(await readdir(root)).toEqual(["a.hwpx"]);
+	});
+
+	it("cancel reaches a job whose run has only just been called", async () => {
+		const path = await source("a.hwpx");
+		const calls: Call[] = [];
+		const converter = service(fakeConverter({ "a.pdf": "x" }, calls));
+		const outcome = converter.run({ id: "job-1", path, newName: "a.pdf" });
+		await converter.cancel("job-1");
+		await expect(outcome).rejects.toThrow(CANCELLED);
+		expect(calls).toHaveLength(0);
+		expect(await readdir(root)).toEqual(["a.hwpx"]);
+	});
+
+	it("reports a cancelled run as cancelled, even when the converter fails for its own reason first", async () => {
+		const path = await source("a.hwpx");
+		const { promise: started, resolve: onStart } = Promise.withResolvers<void>();
+		const converter = service(async (_request, options) => {
+			onStart();
+			await new Promise<void>((resolve) => options.signal?.addEventListener("abort", () => resolve(), { once: true }));
+			return { preset: "x", target: "pdf", converted: 0, skipped: 0, failed: 1, files: [{ source: "x", state: "cancelled", outputs: [] }] };
+		});
+		const outcome = converter.run({ id: "job-1", path, newName: "a.pdf" });
+		const settled = outcome.then(
+			() => "resolved",
+			(error: unknown) => (error instanceof Error ? error.message : String(error)),
+		);
+		await started;
+		await converter.cancel("job-1");
+		expect(await settled).toBe(CANCELLED);
+		expect(await readdir(root)).toEqual(["a.hwpx"]);
 	});
 });

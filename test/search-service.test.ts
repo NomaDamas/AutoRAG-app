@@ -7,7 +7,7 @@ import { createChatStore, type ChatStore } from "../src/main/chat-store";
 import type { RunInteraction } from "../src/main/host-ui";
 import { createInteractionHub } from "../src/main/interaction-hub";
 import type { InteractionAnswer, InteractionRequest } from "../src/shared/interaction-contract";
-import { buildAgentOptions, type CliConfig } from "@autorag/librarian";
+import { buildAgentOptions, type CliConfig, type SearchDocumentDiagnostic } from "@autorag/librarian";
 import {
 	createSearchService,
 	DEFAULT_WEB_SEARCH_PROVIDER_ORDER,
@@ -15,7 +15,7 @@ import {
 	type LiveAgentEvent,
 } from "../src/main/search-service";
 import { setAppLanguage, t } from "../src/shared/i18n/core";
-import { SEARCH_CHANNELS, type ChatRecord, type SearchStreamEvent } from "../src/shared/search-contract";
+import { SEARCH_CHANNELS, type ChatRecord, type IndexNotice, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
 	readonly sessionId: string;
@@ -31,7 +31,7 @@ interface TestResponse {
 	readonly answer: string;
 	readonly searched: number;
 	readonly warnings: readonly "empty-query"[];
-	readonly diagnostics: readonly [];
+	readonly diagnostics: readonly SearchDocumentDiagnostic[];
 	readonly retrievalTrace: readonly [];
 }
 
@@ -320,6 +320,67 @@ describe("createSearchService", () => {
 			{ type: "error", searchId: "search-bad", message: "Error: AutoRAG search root does not exist: /gone" },
 			{ type: "done", searchId: "search-bad" },
 		]);
+	});
+
+	/** What the librarian returns when the model request failed: not a throw, but a degraded answer with this diagnostic. */
+	const modelFailed = (reason: string): TestResponse => ({
+		...createResponse("session-failed", `The search run for "refund approval" ended without a final answer.\n\nThe model request failed: ${reason}\n\nNext steps: fix the model provider error above and retry.`, 0),
+		results: [],
+		diagnostics: [
+			{ code: "no-final-answer", severity: "warning", message: "The agent ended its run without a final answer message." },
+			{ code: "model-request-failed", severity: "error", message: `The model request failed: ${reason}` },
+		],
+	});
+
+	it("reports a failed model request as the run's error, in the provider's words, instead of showing the librarian's degraded answer", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: modelFailed("401 Incorrect API key provided") };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-401", "chat-401", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick" || event.type === "deep")).toEqual([]);
+		expect(events).toContainEqual({ type: "error", searchId: "search-401", message: "401 Incorrect API key provided" });
+		expect(events.at(-1)).toEqual({ type: "done", searchId: "search-401" });
+		// The question stays in the chat; no answer was made, so none is stored.
+		expect((await store.get("chat-401"))?.messages.map((message) => message.role)).toEqual(["user"]);
+	});
+
+	it("keeps the Quick answer when only the Deep step's model request failed, and adds the error", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("session-q", "Quick answer [1]", 2) };
+			yield { type: "complete", response: modelFailed("429 You exceeded your current quota") };
+		});
+		const { events, send } = collectEvents();
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send, now });
+
+		await service.start("search-deep-fail", "chat-deep-fail", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick")).toHaveLength(1);
+		expect(events.filter((event) => event.type === "deep")).toEqual([]);
+		expect(events).toContainEqual({ type: "error", searchId: "search-deep-fail", message: "429 You exceeded your current quota" });
+		const assistant = (await store.get("chat-deep-fail"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.quick?.answer).toBe("Quick answer [1]");
+		expect(assistant.deep).toBeNull();
+	});
+
+	it("still answers normally when a diagnostic is only a warning", async () => {
+		const response: TestResponse = { ...createResponse("session-warn", "A fine answer", 3), diagnostics: [{ code: "no-final-answer", severity: "warning", message: "x" }] };
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-warn", "chat-warn", "refund approval", []);
+
+		expect(events.some((event) => event.type === "error")).toBe(false);
+		expect(events.some((event) => event.type === "quick")).toBe(true);
 	});
 
 	it("sends a complete answer that no preliminary preceded as the Quick phase and stores it once", async () => {
@@ -1228,6 +1289,25 @@ describe("createSearchService conversations", () => {
 		expect(opened).toHaveLength(1);
 	});
 
+	it("lets go of the open conversations so the next question builds an agent on the current config and resumes from the chat's file", async () => {
+		const { agent, opened } = conversationAgent("/sessions/chat-1.jsonl");
+		const sessions = fakeSessions();
+		const { send } = collectEvents();
+		const factory = vi.fn(() => agent);
+		const service = createSearchService({ agentFactory: factory, chatStore: await createStore(), send, now, sessions: sessions.index });
+		await service.start("search-1", "chat-1", "first", []);
+
+		await service.resetAgents();
+		await service.start("search-2", "chat-1", "second", []);
+
+		expect(agent.closeSession).toHaveBeenCalledTimes(1);
+		expect(factory).toHaveBeenCalledTimes(2);
+		expect(opened).toEqual([
+			{ resumeFile: undefined, seed: [] },
+			{ resumeFile: "/sessions/chat-1.jsonl", seed: [] },
+		]);
+	});
+
 	it("opens a chat that has history but no conversation with its earlier turns already in it", async () => {
 		const { agent, opened } = conversationAgent();
 		const sessions = fakeSessions();
@@ -1337,5 +1417,145 @@ describe("createSearchService conversations", () => {
 		await service.dispose();
 
 		expect(agent.closeSession).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("createSearchService index notice", () => {
+	const FEW: IndexNotice = { reason: "few", documents: 3 };
+	const flush = (): Promise<void> => {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		setImmediate(resolve);
+		return promise;
+	};
+
+	/** A fake agent whose run takes the local track when the test says so. */
+	function localTrackAgent(stream: (takeLocalTrack: () => void) => AsyncGenerator<TestStreamEvent, void, void>) {
+		const listeners = new Set<() => void>();
+		const takeLocalTrack = (): void => {
+			for (const listener of [...listeners]) listener();
+		};
+		const agent = {
+			...createFakeAgent(() => stream(takeLocalTrack)),
+			onLocalTrack: vi.fn((listener: () => void) => {
+				listeners.add(listener);
+				return () => void listeners.delete(listener);
+			}),
+		};
+		return { agent, listeners };
+	}
+
+	/** The run's own stream: the local track is taken, the notice has time to go out, then the answer arrives. */
+	function localRun(): (takeLocalTrack: () => void) => AsyncGenerator<TestStreamEvent, void, void> {
+		return async function*(takeLocalTrack) {
+			yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+			takeLocalTrack();
+			await flush();
+			yield { type: "complete", response: createResponse("session-notice", "Answer", 1) };
+		};
+	}
+
+	it("warns as soon as the run takes the local track, before any answer", async () => {
+		const { agent } = localTrackAgent(localRun());
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, indexReadiness: async () => FEW });
+
+		await service.start("search-notice", "chat-notice", "q", []);
+
+		const types = events.map((event) => event.type);
+		expect(events.filter((event) => event.type === "index-notice")).toEqual([{ type: "index-notice", searchId: "search-notice", notice: FEW }]);
+		expect(types.indexOf("index-notice")).toBeLessThan(types.indexOf("quick"));
+	});
+
+	it("says nothing when the index is ready", async () => {
+		const { agent } = localTrackAgent(localRun());
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, indexReadiness: async () => null });
+
+		await service.start("search-ready", "chat-ready", "q", []);
+
+		expect(events.some((event) => event.type === "index-notice")).toBe(false);
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+	});
+
+	it("does not look at the index for a run that never takes the local track", async () => {
+		const readiness = vi.fn(async () => FEW);
+		const { agent } = localTrackAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-direct", "From general knowledge", 0) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, indexReadiness: readiness });
+
+		await service.start("search-direct", "chat-direct", "q", []);
+
+		expect(readiness).not.toHaveBeenCalled();
+		expect(events.some((event) => event.type === "index-notice")).toBe(false);
+	});
+
+	it("answers normally when the agent cannot tell which track it took", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-plain", "Answer", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, indexReadiness: async () => FEW });
+
+		await service.start("search-plain", "chat-plain", "q", []);
+
+		expect(events.some((event) => event.type === "index-notice")).toBe(false);
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+	});
+
+	it("lets the run go on when the index cannot be read: not knowing is not a reason to warn", async () => {
+		const { agent } = localTrackAgent(localRun());
+		const { events, send } = collectEvents();
+		const service = createSearchService({
+			agentFactory: () => agent,
+			chatStore: await createStore(),
+			send,
+			now,
+			indexReadiness: async () => {
+				throw new Error("mirror unreadable");
+			},
+		});
+
+		await service.start("search-unreadable", "chat-unreadable", "q", []);
+
+		expect(events.some((event) => event.type === "index-notice")).toBe(false);
+		expect(events.some((event) => event.type === "error")).toBe(false);
+		expect(events.some((event) => event.type === "quick")).toBe(true);
+	});
+
+	it("drops a notice that settles after the person pressed Stop", async () => {
+		const readiness = Promise.withResolvers<IndexNotice>();
+		let taken: () => void = () => undefined;
+		const { agent } = localTrackAgent(async function*(takeLocalTrack) {
+			taken = takeLocalTrack;
+			yield { type: "progress", sessionId: "", query: "q", text: "Reviewing the query." };
+			await Promise.withResolvers<void>().promise;
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, indexReadiness: () => readiness.promise });
+		const run = service.start("search-stop", "chat-stop", "q", []);
+		await vi.waitFor(() => expect(events.some((event) => event.type === "progress")).toBe(true));
+
+		taken();
+		await service.cancel("search-stop");
+		readiness.resolve(FEW);
+		await flush();
+
+		expect(events.some((event) => event.type === "index-notice")).toBe(false);
+		await run;
+	});
+
+	it("stops listening to the agent when the run ends, and asks again on the chat's next run", async () => {
+		const { agent, listeners } = localTrackAgent(localRun());
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, indexReadiness: async () => FEW });
+
+		await service.start("search-first", "chat-again", "q", []);
+		expect(listeners.size).toBe(0);
+		await service.start("search-second", "chat-again", "q again", []);
+
+		expect(events.filter((event) => event.type === "index-notice").map((event) => event.searchId)).toEqual(["search-first", "search-second"]);
+		expect(listeners.size).toBe(0);
 	});
 });

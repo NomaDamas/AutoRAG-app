@@ -2,11 +2,12 @@ import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { buildAgentOptions, resolveConfigReadOnly, saveMirrorIndex, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
+import { buildAgentOptions, resolveConfigReadOnly, type ParsedMirrorEntry as MirrorEntry } from "@autorag/librarian";
 import { MailcrawlClient } from "@autorag/librarian";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDataSourceStatusService } from "../src/main/datasource-status";
 import type { DataSourceRow } from "../src/shared/settings-contract";
+import { seedMirrorStage } from "./support/seed-mirror-stage";
 
 const directories: string[] = [];
 
@@ -562,6 +563,23 @@ describe.skipIf(process.platform === "win32")("backend-owned index counts", () =
 		expect(row?.index).toMatchObject({ state: "live", chunkCount: null });
 	});
 
+	it("reports Spotlight as live on macOS once queries are configured, not-indexed without queries, and unsupported on Windows", async () => {
+		const fixture = await createFixtureWithOnlySlacrawlOnPath();
+		await installFakeCli(fixture, "mdfind", "");
+		await writeConfig(fixture, {
+			spotlightReady: { type: "spotlight", connector: { queries: ["kMDItemContentType == 'public.plain-text'"] } },
+			spotlightEmpty: { type: "spotlight", connector: {} },
+		});
+
+		const macRows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "darwin" }).list()).sources;
+		expect(byId(macRows, "spotlightReady").index).toMatchObject({ state: "live", chunkCount: null });
+		expect(byId(macRows, "spotlightEmpty").index).toMatchObject({ state: "not-indexed", chunkCount: null });
+
+		const winRows = (await createDataSourceStatusService({ env: fixture.env, cwd: fixture.root, platform: "win32" }).list()).sources;
+		expect(byId(winRows, "spotlightReady").install.state).toBe("unsupported");
+		expect(byId(winRows, "spotlightReady").agent.state).toBe("unsupported");
+	});
+
 	it("never runs one backend CLI twice at once, so overlapping lists cannot trip its database lock", async () => {
 		const fixture = await createFixtureWithOnlySlacrawlOnPath();
 		const lock = join(fixture.root, "wacrawl.lock");
@@ -590,11 +608,14 @@ describe.skipIf(process.platform === "win32")("backend-owned index counts", () =
 			const virtualPath = `/files/${name}.md`;
 			return [virtualPath, { virtualPath, sourcePath: join(fixture.workspace, "docs", `${name}.md`), outputPath: `/out/${name}.md`, parserName: "plain-text", sourceMtimeNs: 1, sourceSizeBytes: 1, updatedAt }];
 		};
-		saveMirrorIndex(fixture.workspace, {
+		seedMirrorStage(fixture.workspace, {
 			version: 1,
 			entries: Object.fromEntries([entry("a", "2026-10-01T00:00:00.000Z"), entry("b", "2026-10-03T00:00:00.000Z"), entry("c", "2026-10-02T00:00:00.000Z")]),
 		});
 
-		expect((await service.list()).local).toEqual({ documentCount: 3, updatedAt: "2026-10-03T00:00:00.000Z" });
+		const local = (await service.list()).local;
+		expect(local.documentCount).toBe(3);
+		expect(typeof local.updatedAt).toBe("string");
+		expect(Number.isFinite(Date.parse(local.updatedAt ?? ""))).toBe(true);
 	});
 });

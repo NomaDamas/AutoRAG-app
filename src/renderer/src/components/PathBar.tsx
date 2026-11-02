@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import { HardDrive, Home } from "lucide-react";
 import { cn } from "../lib/cn";
 import { fitPathBar, sameFit, type PathFit, type SegmentFit } from "../state/path-fit";
-import { volumeLabel, windowsRootPath, type Crumb } from "../state/paths";
+import { volumeLabel, windowsRootPath, type Crumb, type PathCompletion } from "../state/paths";
 import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
 
@@ -64,6 +64,7 @@ export function PathBar({
 	selectedName,
 	onNavigate,
 	onGoToPath,
+	completePath,
 	openEditor,
 	onEditorClosed,
 }: {
@@ -74,6 +75,8 @@ export function PathBar({
 	readonly onNavigate: (path: string) => void;
 	/** Go to a typed location; resolves false (editor stays open) when it cannot be opened. */
 	readonly onGoToPath: (input: string) => Promise<boolean>;
+	/** Direct child folders whose names complete the draft's last segment. */
+	readonly completePath: (input: string) => Promise<readonly PathCompletion[]>;
 	/** ⌘L: the Finder keymap opened the editor; counted up on every press so a repeat press re-selects. */
 	readonly openEditor: number;
 	/** The editor reports that it closed (Enter, Escape, blur), so the keymap can open it again. */
@@ -152,8 +155,31 @@ export function PathBar({
 	const [editFor, setEditFor] = useState<string | null>(null);
 	const [draft, setDraft] = useState("");
 	const editorRef = useRef<HTMLInputElement>(null);
+	const [candidates, setCandidates] = useState<readonly PathCompletion[]>([]);
+	const [activeCandidate, setActiveCandidate] = useState(0);
+	const [completionEnabled, setCompletionEnabled] = useState(false);
+	const completionSequence = useRef(0);
 	if (editFor !== null && editFor !== path) setEditFor(null);
 	const editing = editFor === path;
+	useEffect(() => {
+		if (!editing || !completionEnabled) {
+			setCandidates([]);
+			return;
+		}
+		const sequence = ++completionSequence.current;
+		void completePath(draft)
+			.then((next) => {
+				if (sequence !== completionSequence.current) return;
+				setCandidates(next);
+				setActiveCandidate(0);
+			})
+			.catch(() => {
+				if (sequence === completionSequence.current) setCandidates([]);
+			});
+		return () => {
+			completionSequence.current += 1;
+		};
+	}, [completePath, completionEnabled, draft, editing]);
 	const openedByEditor = useRef(0);
 	useLayoutEffect(() => {
 		if (editing) editorRef.current?.select();
@@ -165,6 +191,7 @@ export function PathBar({
 		openedByEditor.current = openEditor;
 		if (openEditor === 0) return;
 		setDraft(path);
+		setCompletionEnabled(false);
 		setEditFor(path);
 	}, [openEditor, path]);
 	useEffect(() => {
@@ -174,9 +201,30 @@ export function PathBar({
 	const startEditing = (event: MouseEvent<HTMLElement>): void => {
 		if (editing || (event.target as Element).closest("[data-crumb-path]") !== null) return;
 		setDraft(path);
+		setCompletionEnabled(false);
 		setEditFor(path);
 	};
+	const selectedCandidate = candidates[activeCandidate] ?? candidates[0];
+	const submitPath = (input: string, field: HTMLInputElement): void => {
+		void onGoToPath(input).then((ok) => {
+			if (ok) setEditFor(null);
+			else field.select();
+		});
+	};
 	const onEditorKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
+		if (event.key === "Tab" && selectedCandidate !== undefined) {
+			event.preventDefault();
+			event.stopPropagation();
+			setDraft(selectedCandidate.text);
+			return;
+		}
+		if ((event.key === "ArrowDown" || event.key === "ArrowUp") && candidates.length > 0) {
+			event.preventDefault();
+			event.stopPropagation();
+			const direction = event.key === "ArrowDown" ? 1 : -1;
+			setActiveCandidate((current) => (current + direction + candidates.length) % candidates.length);
+			return;
+		}
 		if (event.key !== "Enter" && event.key !== "Escape") return;
 		// Both keys belong to the field, not the Finder keymap (Escape would dismiss, Enter open).
 		event.preventDefault();
@@ -185,18 +233,18 @@ export function PathBar({
 			setEditFor(null);
 			return;
 		}
-		const input = event.currentTarget;
-		void onGoToPath(draft).then((ok) => {
-			if (ok) setEditFor(null);
-			else input.select();
-		});
+		submitPath(draft, event.currentTarget);
 	};
+	const ghostSuffix =
+		selectedCandidate !== undefined && selectedCandidate.text.length > draft.length && selectedCandidate.text.slice(0, draft.length).toLocaleLowerCase() === draft.toLocaleLowerCase()
+			? selectedCandidate.text.slice(draft.length)
+			: "";
 
 	return (
 		// `pr-24` keeps a strip of empty bar after the trail even when the trail
 		// fills the width, so the path can always be edited from the end.
 		<nav
-			className="pathbar relative flex h-24 flex-none cursor-text items-center overflow-hidden whitespace-nowrap border-t border-border bg-chrome pl-8 pr-24 text-badge text-ink-body"
+			className={cn("pathbar relative flex h-24 flex-none cursor-text items-center whitespace-nowrap border-t border-border bg-chrome pl-8 pr-24 text-badge text-ink-body", !editing && "overflow-hidden")}
 			aria-label={t("finderComponents.pathBar")}
 			onClick={startEditing}
 		>
@@ -236,20 +284,57 @@ export function PathBar({
 				</div>
 			</div>
 			{editing ? (
-				<input
-					ref={editorRef}
-					// biome-ignore lint/a11y/noAutofocus: the click that opened the editor asks for the caret
-					autoFocus
-					className="path-edit absolute inset-x-4 top-1/2 h-20 -translate-y-1/2 rounded-4 border border-accent bg-window px-5 text-badge text-ink outline-none"
-					type="text"
-					spellCheck={false}
-					autoComplete="off"
-					aria-label={t("finder.pathBar.edit")}
-					value={draft}
-					onChange={(event) => setDraft(event.target.value)}
-					onKeyDown={onEditorKeyDown}
-					onBlur={() => setEditFor(null)}
-				/>
+				<>
+					<div className="absolute inset-x-4 top-1/2 h-20 -translate-y-1/2">
+						<input
+							ref={editorRef}
+							// biome-ignore lint/a11y/noAutofocus: the click that opened the editor asks for the caret
+							autoFocus
+							className="path-edit relative size-full rounded-4 border border-accent bg-window px-5 text-badge text-ink outline-none"
+							type="text"
+							role="combobox"
+							aria-autocomplete="list"
+							aria-expanded={candidates.length > 0}
+							spellCheck={false}
+							autoComplete="off"
+							aria-label={t("finder.pathBar.edit")}
+							value={draft}
+							onChange={(event) => {
+								setDraft(event.target.value);
+								setCompletionEnabled(true);
+							}}
+							onKeyDown={onEditorKeyDown}
+							onBlur={() => setEditFor(null)}
+						/>
+						{ghostSuffix !== "" ? (
+							<div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center overflow-hidden whitespace-pre rounded-4 border border-transparent px-5 text-badge">
+								<span className="invisible">{draft}</span>
+								<span className="text-ink-faint" data-path-ghost>{ghostSuffix}</span>
+							</div>
+						) : null}
+					</div>
+					{candidates.length > 0 ? (
+						<div role="listbox" aria-label={t("finder.pathBar.suggestions")} className="absolute inset-x-4 bottom-full z-20 mb-4 max-h-224 overflow-y-auto rounded-6 border border-border bg-window p-2 whitespace-normal shadow-lg">
+							{candidates.map((candidate, index) => (
+								<button
+									key={candidate.path}
+									type="button"
+									role="option"
+									aria-selected={index === activeCandidate}
+									title={candidate.path}
+									className={cn("flex h-28 w-full cursor-pointer items-center gap-6 rounded-4 border-0 bg-transparent px-6 text-left text-badge text-ink-body", index === activeCandidate ? "bg-selection text-ink" : "hover:bg-hover")}
+									onMouseDown={(event) => event.preventDefault()}
+									onClick={() => {
+										if (editorRef.current !== null) submitPath(candidate.text, editorRef.current);
+									}}
+								>
+									<FileTile kind="folder" size={16} />
+									<span className="min-w-0 flex-1 truncate">{candidate.name}</span>
+								</button>
+							))}
+						</div>
+					) : null}
+				</>
 			) : null}
 		</nav>
 	);

@@ -63,6 +63,18 @@ still has the previous file's size when they lay out.
   ±15s, play, speed (1 → 1.25 → 1.5 → 2 → 0.5), loop, picture-in-picture, and
   a scrubber with elapsed and remaining time. Clicking the picture toggles
   playback; the HUD fades while playing and the pointer rests. ←/→ seek 5s.
+  Chromium plays the picture of a video whose sound is AC-3, E-AC-3, DTS,
+  TrueHD, ALAC, MP2, or WMA and no sound at all (no error; its decoded audio
+  byte count stays 0), which is what HDTV and disc rips carry. For those, main
+  (`planVideoAudio`, `node/video-audio.ts`) reads the track list from
+  `ffmpeg -i` and the page plays that track from `autorag-preview://…&audio=<n>`:
+  a stereo 48 kHz WAV with its length declared up front, decoded by ffmpeg from
+  the byte the player asks for, so seeking is a range request and nothing is
+  stored. A hidden `<audio>` follows the video's play state, position, speed,
+  and volume (`ui/audio-follow.ts`); the video stays the clock. A file with any
+  track the page plays itself, or no ffmpeg on the machine, is left exactly as
+  before; a video that turns out to decode its own sound drops the sidecar.
+  Closing or changing the panel detaches the source, which stops ffmpeg.
 - **Audio** — cover art (or a stand-in sleeve), title, artist, album, and time
   from the tags (`music-metadata`, read in the main process without a full
   scan), a 56-bar waveform decoded at 8kHz that doubles as a scrubber, stream
@@ -151,6 +163,21 @@ still has the previous file's size when they lay out.
   cold, none empty), unlike `.docx`/`.xlsx`/`.pptx`, which stay letter tiles.
 - **HTML** — a sandboxed frame with scripts off, at desktop width, in a 390px
   phone column, or as highlighted source.
+- **Apple locations, archives, clippings, and packages** — `.webloc` and
+  `.inetloc` show an inert title and URL; the existing Open action hands the
+  pointer to the OS. `.webarchive` is parsed in-process (XML or binary plist),
+  its archived images and style sheets are inlined, and `standaloneOfficeHtml`
+  plus a `sandbox=""` frame removes or blocks scripts, event handlers,
+  navigation directives, frames, and every network fetch. `.textclipping`
+  accepts plist, plain UTF-8, and classic `TEXT`/`utf8`/`utxt` resource forks.
+  `.rtfd` renders `TXT.rtf` through the RTF text converter and lists attachments
+  without opening them; `.iconset` draws its PNGs as a grid. These directory
+  packages, plus `.pvt`, `.lpdf`, and `.prefpane`, are file rows rather than
+  folders to browse into. The latter three and `.pict`/`.pct`/`.pic`/
+  `.pictclipping` use macOS Quick Look thumbnails in the Other panel and keep
+  the ordinary information panel on other platforms. The panel opens with the
+  cached thumbnail (or the information glyph) immediately; a slow Quick Look
+  render arrives afterward on the thumbnail channel instead of holding Space.
 - **Code** — numbered lines on the paper material with the reference's Xcode
   palette (highlight.js, plus call and constant classes the grammars leave
   out), wrap and copy in the toolbar, and a footer with language, encoding

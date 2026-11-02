@@ -66,7 +66,7 @@ class Writer {
 	readonly stack = new Set<number>();
 	out = "";
 
-	constructor(bytes: Uint8Array) {
+	constructor(bytes: Uint8Array, readonly maxOutput: number) {
 		this.bytes = bytes;
 		this.view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 		if (!isBinaryPlist(bytes) || bytes.length < HEADER.length + TRAILER + 1) fail();
@@ -102,7 +102,7 @@ class Writer {
 
 	emit(text: string): void {
 		this.out += text;
-		if (this.out.length > MAX_OUTPUT) throw new Fail("Binary property list is too large to show");
+		if (this.out.length > this.maxOutput) throw new Fail("Binary property list is too large to show");
 	}
 
 	write(index: number, depth: number): void {
@@ -208,8 +208,8 @@ class Writer {
 }
 
 /** Converts a binary plist to XML text. Throws an `Error` for anything malformed or too large. */
-export function bplistToXml(bytes: Uint8Array): string {
-	const writer = new Writer(bytes);
+export function bplistToXml(bytes: Uint8Array, maxOutput = MAX_OUTPUT): string {
+	const writer = new Writer(bytes, maxOutput);
 	writer.out =
 		'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">\n<plist version="1.0">\n';
 	try {

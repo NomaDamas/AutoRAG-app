@@ -73,10 +73,10 @@ packages it.
 `filee-cli` is the exception and follows the librarian's own pin, so the staged
 copy is the exact version (`FILEE_CLI_VERSION`) the librarian would otherwise
 download. Three tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
-the reason for each): `minsync` ≥ 0.4.12, `@nomadamas/mailcrawl` ≥ 0.2.2,
+the reason for each): `minsync` ≥ 0.5.1, `@nomadamas/mailcrawl` ≥ 0.3.0,
 `lazykatok` ≥ 0.3.3. All three reach the shared `minsync serve` embedding route;
-0.4.12 is also the first MinSync that keeps one failed chunk from aborting a
-healthy sync and cuts remote inputs below the model's context. The stager fails
+0.5.1 adds durable stage protocol v2 (`capabilities`/`plan`/`inspect`) and JSONL sync
+progress streaming, and `mailcrawl` 0.3.0 adds `--source files` local archive indexing. The stager fails
 rather than ship an older one.
 `components-<platform>.json` on the release lists exactly what shipped (name,
 version, source, sha256), and the build fails rather than ship a download that
@@ -345,6 +345,13 @@ per request.
 
 * One check 30 s after launch, then every 6 hours; Settings → 일반 → 앱 업데이트
   and the macOS app menu's "업데이트 확인…" check on demand.
+  The sidebar footer's right-hand icon is always a download arrow: dim and inert
+  while there is nothing to fetch (up to date, checking, failed, or a build that
+  cannot update), emphasised and clickable once a newer version exists (it
+  downloads in install mode, opens the installer link in notify mode), and
+  restart-to-install once the download is staged.
+  `scripts/manual-qa/run-qa-finder-app-update.mjs <Dazzi.app>` exercises that
+  against a signed pack and a local feed (macOS, not part of `run-all`).
 * "업데이트 자동 설치" on (the default): the update downloads in the background
   and installs when the app quits; a system notification says so once per
   version, and "지금 재시작" applies it at once. Off: the app reports the new

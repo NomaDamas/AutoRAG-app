@@ -13,8 +13,10 @@ import {
 	parsePromoCode,
 	shouldAdoptManagedModel,
 	type AccountPlanId,
+	type AccountSignInOptions,
 	type AccountSnapshot,
 	type AccountStatus,
+	type EmailOtpSendResult,
 	type ManagedModelResult,
 	type PaidPlanId,
 } from "../shared/account-contract";
@@ -60,7 +62,9 @@ export interface AccountServiceDeps {
 export interface AccountService {
 	status(): Promise<AccountStatus>;
 	refresh(): Promise<AccountStatus>;
-	signIn(): Promise<AccountStatus>;
+	signIn(options?: AccountSignInOptions): Promise<AccountStatus>;
+	sendEmailOtp(email: string): Promise<EmailOtpSendResult>;
+	verifyEmailOtp(email: string, code: string): Promise<AccountStatus>;
 	cancelSignIn(): Promise<AccountStatus>;
 	signOut(): Promise<AccountStatus>;
 	checkout(plan: PaidPlanId, promoCode?: string): Promise<void>;
@@ -87,6 +91,7 @@ interface CatalogModel {
 
 type CallbackResult =
 	| { readonly kind: "code"; readonly code: string }
+	| { readonly kind: "error"; readonly message: string }
 	| { readonly kind: "denied" | "timeout" | "cancelled" };
 
 /** The server could not be reached at all (as opposed to answering with an error). */
@@ -366,8 +371,12 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				return;
 			}
 			const code = url.searchParams.get("code");
-			if (url.searchParams.get("error") !== null) resolve({ kind: "denied" });
-			else if (code !== null && code.length > 0) resolve({ kind: "code", code });
+			const error = url.searchParams.get("error");
+			if (error === "access_denied") resolve({ kind: "denied" });
+			else if (error !== null && error.length > 0) {
+				const description = url.searchParams.get("error_description")?.trim();
+				resolve({ kind: "error", message: description && description.length > 0 ? description : error });
+			} else if (code !== null && code.length > 0) resolve({ kind: "code", code });
 			else {
 				response.writeHead(400, { "Content-Type": "text/plain; charset=utf-8" }).end(t("main.account.missingCode"));
 				return;
@@ -392,7 +401,15 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		}
 	}
 
-	async function runSignIn(abort: AbortController): Promise<AccountStatus> {
+	async function completeWithToken(token: string): Promise<void> {
+		await storeDazziPlanCredential(agentDir, token);
+		await syncCloudEmbedderKey(token);
+		revokedKey = null;
+		lastError = null;
+		await adoptManagedModelIfUnset();
+	}
+
+	async function runSignIn(abort: AbortController, options?: AccountSignInOptions): Promise<AccountStatus> {
 		const verifier = base64Url(randomBytes(32));
 		const challenge = base64Url(createHash("sha256").update(verifier).digest());
 		const state = base64Url(randomBytes(16));
@@ -402,35 +419,72 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				state,
 				async (uri) => {
 					redirectUri = uri;
-					const authorize = new URL(`${baseUrl()}/desktop/authorize`);
+					const path = options === undefined ? "/desktop/authorize" : "/api/desktop/oauth";
+					const authorize = new URL(`${baseUrl()}${path}`);
 					authorize.searchParams.set("client", "app");
 					authorize.searchParams.set("redirect_uri", uri);
 					authorize.searchParams.set("state", state);
 					authorize.searchParams.set("code_challenge", challenge);
 					authorize.searchParams.set("code_challenge_method", "S256");
+					if (options !== undefined) {
+						authorize.searchParams.set("provider", options.provider);
+					}
 					await deps.openExternal(authorize.toString());
 				},
 				abort.signal,
 			);
 			if (result.kind === "timeout") {
 				lastError = t("main.account.signInTimedOut");
+			} else if (result.kind === "error") {
+				lastError = result.message;
 			} else if (result.kind === "code") {
 				const response = await call("/api/desktop/token", { method: "POST", body: { code: result.code, code_verifier: verifier, redirect_uri: redirectUri } });
 				const token = isJsonObject(response.body) ? response.body.access_token : undefined;
 				if (response.status !== 200 || typeof token !== "string" || token.length === 0) {
 					lastError = errorMessageOf(response);
 				} else {
-					await storeDazziPlanCredential(agentDir, token);
-					await syncCloudEmbedderKey(token);
-					revokedKey = null;
-					lastError = null;
-					await adoptManagedModelIfUnset();
+					await completeWithToken(token);
 				}
 			}
 		} catch (error) {
 			lastError = error instanceof OfflineError ? t("main.account.unreachable") : error instanceof Error ? error.message : String(error);
 		} finally {
 			flow = null;
+		}
+		return refresh();
+	}
+
+	async function sendEmailOtp(rawEmail: string): Promise<EmailOtpSendResult> {
+		const email = rawEmail.trim();
+		try {
+			const response = await call("/api/desktop/email/send", { method: "POST", body: { email } });
+			if (response.status >= 200 && response.status < 300) {
+				const expires = isJsonObject(response.body) ? readNumber(response.body.expires_in_seconds, 600) : 600;
+				return { ok: true, email, expiresInSeconds: expires };
+			}
+			return { ok: false, error: errorMessageOf(response) };
+		} catch (error) {
+			return {
+				ok: false,
+				error: error instanceof OfflineError ? t("main.account.unreachable") : error instanceof Error ? error.message : String(error),
+			};
+		}
+	}
+
+	async function verifyEmailOtp(rawEmail: string, rawCode: string): Promise<AccountStatus> {
+		const email = rawEmail.trim();
+		const otp = rawCode.trim();
+		try {
+			const response = await call("/api/desktop/email/verify", { method: "POST", body: { email, otp, client: "app" } });
+			const token = isJsonObject(response.body) ? response.body.access_token : undefined;
+			if (response.status !== 200 || typeof token !== "string" || token.length === 0) {
+				lastError = errorMessageOf(response);
+				return publish();
+			}
+			await completeWithToken(token);
+		} catch (error) {
+			lastError = error instanceof OfflineError ? t("main.account.unreachable") : error instanceof Error ? error.message : String(error);
+			return publish();
 		}
 		return refresh();
 	}
@@ -514,15 +568,17 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	return {
 		status: buildStatus,
 		refresh,
-		signIn: () => {
+		signIn: (options) => {
 			if (flow !== null) return flow.promise;
 			lastError = null;
 			const abort = new AbortController();
-			const promise = runSignIn(abort);
+			const promise = runSignIn(abort, options);
 			flow = { promise, abort };
 			void publish();
 			return promise;
 		},
+		sendEmailOtp,
+		verifyEmailOtp,
 		dispose: async () => {
 			flow?.abort.abort();
 			await flow?.promise.catch(() => undefined);

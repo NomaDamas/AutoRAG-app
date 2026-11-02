@@ -619,3 +619,144 @@ describe("Recycle Bin $I records", () => {
 		expect(await readRecycleBinRecord(path)).toBeNull();
 	});
 });
+
+describe("Discord attachment rows", () => {
+	const connectionDir = (home: string, name: string): string => join(home, ".autorag", "attachments", "discord", name);
+
+	async function setup(datasources: unknown): Promise<string> {
+		const home = join(root, "jeffrey");
+		for (const dir of ["Desktop", "Documents", "Downloads", "Music", "Movies", "Pictures", ".Trash"]) {
+			await mkdir(join(home, dir), { recursive: true });
+		}
+		await mkdir(join(home, ".autorag"), { recursive: true });
+		await writeFile(join(home, ".autorag", "config.json"), JSON.stringify({ datasources }));
+		return home;
+	}
+
+	async function saveAttachment(home: string, connection: string): Promise<void> {
+		const channel = join(connectionDir(home, connection), "Guild", "general");
+		await mkdir(channel, { recursive: true });
+		await writeFile(join(channel, "report.pdf"), "pdf");
+	}
+
+	function placesFor(home: string, overrides: Partial<PlacesDeps> = {}) {
+		return createPlaces({
+			homeDir: home,
+			platform: "darwin",
+			volumesRoot: join(root, "Volumes"),
+			applicationsDir: join(root, "Applications"),
+			env: {},
+			run: runner({ mount: "" }).run,
+			...overrides,
+		});
+	}
+
+	it("lists a connected Discord source with saved attachments in the Connections section, apart from Cloud", async () => {
+		// Given an enabled Discord connection that saved a file, next to a connected iCloud
+		const home = await setup({ nomadamas: { type: "discord", enabled: true } });
+		await saveAttachment(home, "nomadamas");
+		await mkdir(join(home, "Library", "Mobile Documents", "com~apple~CloudDocs"), { recursive: true });
+
+		// When listing places
+		const locations = await placesFor(home).list();
+
+		// Then Cloud keeps only the OS's drives, and the Discord row is in Connections with its folder
+		expect(bySection(locations, "cloud").map((row) => [row.name, row.icon])).toEqual([["iCloud Drive", "icloud"]]);
+		expect(bySection(locations, "connections")).toEqual([
+			{
+				name: "Discord",
+				path: connectionDir(home, "nomadamas"),
+				section: "connections",
+				icon: "discord",
+				available: true,
+				scanned: true,
+				ejectable: false,
+			},
+		]);
+	});
+
+	it("shows no row for a connection that only has the sync's metadata", async () => {
+		// Given a sync that ran and downloaded nothing
+		const home = await setup({ nomadamas: { type: "discord" } });
+		const folder = connectionDir(home, "nomadamas");
+		await mkdir(join(folder, ".discrawl", "logs"), { recursive: true });
+		await mkdir(join(folder, ".lock"), { recursive: true });
+		await writeFile(join(folder, "download-status.json"), "{}");
+
+		// Then the sidebar has no Discord row
+		expect(bySection(await placesFor(home).list(), "connections")).toEqual([]);
+	});
+
+	it("shows no row when the connection is disabled or removed, however many files remain", async () => {
+		const home = await setup({ off: { type: "discord", enabled: false }, slack: { type: "slack" } });
+		await saveAttachment(home, "off");
+		await saveAttachment(home, "slack");
+
+		expect(bySection(await placesFor(home).list(), "connections")).toEqual([]);
+	});
+
+	it("names each row after its connection when several have attachments", async () => {
+		const home = await setup({ work: { type: "discord" }, friends: { type: "discord" } });
+		await saveAttachment(home, "work");
+		await saveAttachment(home, "friends");
+
+		const connections = bySection(await placesFor(home).list(), "connections");
+
+		expect(connections.map((row) => [row.name, row.path])).toEqual([
+			["Discord - work", connectionDir(home, "work")],
+			["Discord - friends", connectionDir(home, "friends")],
+		]);
+	});
+
+	it("follows AUTORAG_HOME", async () => {
+		const home = await setup({ nomadamas: { type: "discord" } });
+		const moved = join(root, "moved-home");
+		await mkdir(join(moved, "attachments", "discord", "nomadamas", "Guild", "general"), { recursive: true });
+		await writeFile(join(moved, "attachments", "discord", "nomadamas", "Guild", "general", "a.png"), "x");
+		await writeFile(join(moved, "config.json"), JSON.stringify({ datasources: { nomadamas: { type: "discord" } } }));
+
+		const connections = bySection(await placesFor(home, { env: { AUTORAG_HOME: moved } }).list(), "connections");
+
+		expect(connections.map((row) => row.path)).toEqual([join(moved, "attachments", "discord", "nomadamas")]);
+	});
+
+	it("lists the row on Windows too", async () => {
+		const home = await setup({ nomadamas: { type: "discord" } });
+		await saveAttachment(home, "nomadamas");
+		const fake = runner({
+			whoami: `"desktop\\me","S-1-5-21-1000"\r\n`,
+			reg: new Error("ERROR: The system was unable to find the specified registry key or value."),
+			"powershell.exe": JSON.stringify({ DeviceID: "C:", VolumeName: "", DriveType: 3, ProviderName: null }),
+		});
+
+		const connections = bySection(await placesFor(home, { platform: "win32", env: { SystemDrive: "C:" }, run: fake.run }).list(), "connections");
+
+		expect(connections.map((row) => [row.name, row.icon, row.path])).toEqual([["Discord", "discord", connectionDir(home, "nomadamas")]]);
+	});
+
+	it("moves its signature when the first attachment lands, the source is switched off, and when it is switched back on", async () => {
+		// Given a connected source that has downloaded nothing yet
+		const home = await setup({ nomadamas: { type: "discord" } });
+		const places = placesFor(home);
+		const empty = await places.signature();
+		expect(await places.signature()).toBe(empty);
+
+		// When the first attachment is saved, Then the signature moves
+		await saveAttachment(home, "nomadamas");
+		const saved = await places.signature();
+		expect(saved).not.toBe(empty);
+
+		// And a second file in the same folder changes nothing
+		await writeFile(join(connectionDir(home, "nomadamas"), "Guild", "general", "second.pdf"), "pdf");
+		expect(await places.signature()).toBe(saved);
+
+		// And switching the source off in the config moves it again
+		await writeFile(join(home, ".autorag", "config.json"), JSON.stringify({ datasources: { nomadamas: { type: "discord", enabled: false } } }));
+		const off = await places.signature();
+		expect(off).toBe(empty);
+
+		// And back on
+		await writeFile(join(home, ".autorag", "config.json"), JSON.stringify({ datasources: { nomadamas: { type: "discord", enabled: true } } }));
+		expect(await places.signature()).toBe(saved);
+	});
+});

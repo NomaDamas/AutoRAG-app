@@ -85,6 +85,13 @@ describe("SmartScanStep", () => {
 		expect(host.querySelector(".si-roaming-loupe")).not.toBeNull();
 	});
 
+	it("renders the agent's live progress phrase with the text shimmer effect", () => {
+		renderScan({ smartRun: { status: "running", runId: "r", current: "/docs/Zoom", progress: "다운로드 하위 폴더 살펴보는 중" } });
+
+		const shimmer = host.querySelector(".si-scan-path .shimmer");
+		expect(shimmer?.textContent).toBe("다운로드 하위 폴더 살펴보는 중");
+	});
+
 	it("cancels the analysis and falls back to choosing by hand", () => {
 		const cancelSmartScan = vi.fn();
 		renderScan({ cancelSmartScan, smartRun: { status: "running", runId: "r", current: null } });

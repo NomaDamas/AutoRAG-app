@@ -1,10 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, watch, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-	automationsHome,
 	cliFailureReason,
 	createAutomationService,
 	librarianCommand,
@@ -204,15 +203,6 @@ function daemonLock(dir: string, alive: () => boolean = () => false): { readonly
 async function baselineDone(probed: () => number): Promise<void> {
 	await vi.waitFor(() => expect(probed()).toBeGreaterThan(0), { timeout: 10_000 });
 }
-
-describe("automationsHome", () => {
-	it("resolves a trimmed AUTORAG_HOME and falls back to <home>/.autorag", () => {
-		expect(automationsHome({ AUTORAG_HOME: "  /tmp/custom-home \n" }, "/Users/tester")).toBe(resolve("/tmp/custom-home"));
-		expect(automationsHome({ AUTORAG_HOME: "" }, "/Users/tester")).toBe(join("/Users/tester", ".autorag"));
-		expect(automationsHome({}, "/Users/tester")).toBe(join("/Users/tester", ".autorag"));
-		expect(automationsHome({ AUTORAG_HOME: "relative/state" }, "/Users/tester")).toBe(join(process.cwd(), "relative/state"));
-	});
-});
 
 describe("librarianCommand", () => {
 	const installedEntry = "/Applications/Dazzi.app/Contents/Resources/app/node_modules/@autorag/librarian/dist/index.js";

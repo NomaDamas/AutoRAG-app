@@ -245,3 +245,21 @@ export function readDropPaths<F extends { readonly name: string }>(
 		.filter((attachment) => attachment.kind !== "url")
 		.map((attachment) => attachment.id);
 }
+
+/**
+ * Browser files have no host path, so only an upload-capable bridge may take
+ * them. Resolved paths always keep the existing desktop/in-app transfer, and
+ * directories stay out because uploading one File cannot copy its children.
+ */
+export function readDropFiles<F extends { readonly name: string }>(
+	data: DropData<F>,
+	pathForFile: (file: F) => string,
+	canUpload: boolean,
+): F[] {
+	if (!canUpload || readDropPaths(data, pathForFile).length > 0) return [];
+	return Array.from(data.items).flatMap((item) => {
+		if (item.kind !== "file" || item.webkitGetAsEntry?.()?.isDirectory === true) return [];
+		const file = item.getAsFile();
+		return file === null ? [] : [file];
+	});
+}

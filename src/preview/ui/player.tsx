@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { previewStreamUrl, type AudioMetadata, type PreviewDocument } from "../shared/contract";
+import { previewStreamUrl, previewVideoAudioUrl, type AudioMetadata, type PreviewDocument } from "../shared/contract";
 import { formatClock, formatFinderSize } from "../shared/format";
 import { useChrome } from "./chrome";
+import { followVideo } from "./audio-follow";
 import { FallbackView } from "./fallback";
 import { ContinueIcon, LoopIcon, PauseIcon, PictureInPictureIcon, PlayIcon, SkipIcon, SpeakerIcon } from "./icons";
 
@@ -164,6 +165,48 @@ function Track({
 }
 
 /**
+ * Sound for a video the page cannot decode (AC-3, DTS, ... : Chromium plays the
+ * picture and stays silent). Main says which audio track needs ffmpeg; it is played
+ * by a hidden `<audio>` that follows the video (see audio-follow.ts). A file whose
+ * audio the page plays itself gets nothing here, and a video that turns out to
+ * decode its own sound drops the sidecar.
+ */
+function useVideoAudioSidecar(element: HTMLVideoElement | null, path: string): void {
+	const { bridge } = useChrome();
+	useEffect(() => {
+		if (element === null) return;
+		let cancelled = false;
+		let drop: (() => void) | null = null;
+		bridge.videoAudio(path).then(
+			(plan) => {
+				if (cancelled || plan.kind !== "sidecar") return;
+				const audio = new Audio();
+				audio.preload = "auto";
+				audio.src = previewVideoAudioUrl(path, plan.track);
+				const unfollow = followVideo(element, audio, {
+					hasNativeAudio: () => Number(Reflect.get(element, "webkitAudioDecodedByteCount") ?? 0) > 0,
+					onNativeAudio: () => drop?.(),
+				});
+				drop = () => {
+					unfollow();
+					// Detaching the source ends the request, which stops ffmpeg.
+					audio.removeAttribute("src");
+					audio.load();
+					drop = null;
+				};
+			},
+			(caught: unknown) => {
+				if (!cancelled && !(caught instanceof Error)) throw caught;
+			},
+		);
+		return () => {
+			cancelled = true;
+			drop?.();
+		};
+	}, [bridge, element, path]);
+}
+
+/**
  * Video with the reference's floating HUD: volume, ±15s and play in the
  * middle, speed, loop, and picture-in-picture on the right, and a scrubber
  * with elapsed and remaining time. Clicking the picture plays or pauses.
@@ -175,6 +218,7 @@ export function VideoView({ file }: { readonly file: PreviewDocument }): ReactEl
 	const [idle, setIdle] = useState(false);
 	const media = useMedia(element);
 	useArrowSeek(media.skip);
+	useVideoAudioSidecar(element, file.path);
 	const timer = useRef<number | undefined>(undefined);
 	const wake = useCallback(() => {
 		setIdle(false);

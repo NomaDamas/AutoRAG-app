@@ -2,7 +2,18 @@ import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createOsKindResolver, kindQueryForPlatform, parseKindStdout, parseMacKindStdout } from "../src/main/file-kind";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import {
+	createOsKindResolver,
+	defaultRun,
+	kindQueryForPlatform,
+	parseKindStdout,
+	parseMacKindStdout,
+	parseWindowsKindStdout,
+	windowsKindQuery,
+	windowsRegistryExtension,
+} from "../src/main/file-kind";
 
 describe("kindQueryForPlatform", () => {
 	it("reads Spotlight metadata on macOS, the same string Finder's Kind column shows, with the type identifier beside it", () => {
@@ -10,14 +21,6 @@ describe("kindQueryForPlatform", () => {
 			command: "/usr/bin/mdls",
 			args: ["-name", "kMDItemKind", "-name", "kMDItemContentType", "-raw", "/tmp/a.mp4"],
 		});
-	});
-
-	it("reads the Explorer type description from the registry on Windows", () => {
-		const query = kindQueryForPlatform("win32", "C:\\docs\\a.mp4");
-		const script = query?.args[query.args.length - 1] ?? "";
-		expect(query?.command).toBe("powershell.exe");
-		expect(script).toContain("HKEY_CLASSES_ROOT");
-		expect(script).toContain("C:\\docs\\a.mp4");
 	});
 
 	it("has no OS query on an unsupported platform", () => {
@@ -257,5 +260,240 @@ describe("createOsKindResolver", () => {
 
 		// Then no process was spawned
 		expect(ran).toBe(false);
+	});
+});
+
+describe("windowsRegistryExtension", () => {
+	it("reads the extension the way Explorer does", () => {
+		expect(windowsRegistryExtension("C:\\docs\\report.PDF")).toBe(".pdf");
+		expect(windowsRegistryExtension("C:\\docs\\archive.tar.gz")).toBe(".gz");
+		expect(windowsRegistryExtension("C:\\docs\\.gitignore")).toBe(".gitignore");
+		expect(windowsRegistryExtension("C:\\dir.d\\README")).toBe("");
+		expect(windowsRegistryExtension("C:\\docs\\trailing.")).toBe("");
+		expect(windowsRegistryExtension("C:/docs/a.txt")).toBe(".txt");
+	});
+});
+
+describe("windowsKindQuery / parseWindowsKindStdout", () => {
+	it("answers every extension with one stdout line, in order", () => {
+		const query = windowsKindQuery([".txt", ".zzz", ".hwp"]);
+		expect(query.command).toBe("powershell.exe");
+		expect(query.extensions).toEqual([".txt", ".zzz", ".hwp"]);
+		expect(parseWindowsKindStdout("Text Document\r\n\r\n한글 문서\r\n", 3)).toEqual(["Text Document", null, "한글 문서"]);
+	});
+
+	it("treats missing trailing lines as unknown rather than shifting answers", () => {
+		expect(parseWindowsKindStdout("Text Document\r\n", 3)).toEqual(["Text Document", null, null]);
+	});
+});
+
+describe("createOsKindResolver on Windows", () => {
+	it("preserves leading blank lines from defaultRun when the first extension in a batch is unknown", async () => {
+		const stdout = await defaultRun({
+			command: process.execPath,
+			args: ["-e", "process.stdout.write('\\r\\nPDF Document\\r\\n')"],
+			extensions: [".zzz-unknown", ".pdf"],
+		});
+
+		expect(parseWindowsKindStdout(typeof stdout === "string" ? stdout : "", 2)).toEqual([null, "PDF Document"]);
+	});
+	/** A runner that answers each extension in a batch from a table and records every batch. */
+	function recordingRunner(answers: Record<string, string>) {
+		const batches: (readonly string[])[] = [];
+		const run = async (query: { readonly extensions?: readonly string[] }) => {
+			const extensions = query.extensions ?? [];
+			batches.push(extensions);
+			return extensions.map((extension) => answers[extension] ?? "").join("\r\n");
+		};
+		return { batches, run };
+	}
+
+	it("never spawns for extensionless files, which the registry cannot answer", async () => {
+		// Given 50 extensionless files, the shape that spawned 50 PowerShells before
+		const { batches, run } = recordingRunner({});
+		const resolver = createOsKindResolver({ platform: "win32", run });
+
+		// When each is resolved
+		const kinds = await Promise.all(Array.from({ length: 50 }, (_, index) => resolver.kindFor(`C:\\work\\Makefile${index}`, "")));
+
+		// Then none asked the OS and none has a kind
+		expect(kinds.every((kind) => kind === null)).toBe(true);
+		expect(batches).toEqual([]);
+	});
+
+	it("answers many distinct extensions with one process", async () => {
+		// Given a folder of 60 extensions, resolved in the same tick as the listing enrichment does
+		const extensions = Array.from({ length: 60 }, (_, index) => `.e${index}`);
+		const answers = Object.fromEntries(extensions.map((extension) => [extension, `Kind of ${extension}`]));
+		const { batches, run } = recordingRunner(answers);
+		const resolver = createOsKindResolver({ platform: "win32", run });
+
+		// When every file asks for its kind
+		const kinds = await Promise.all(extensions.map((extension, index) => resolver.kindFor(`C:\\f\\file${index}${extension}`, extension.slice(1))));
+
+		// Then one process answered all of them, each file with its own kind
+		expect(batches).toHaveLength(1);
+		expect(batches[0]).toEqual(extensions);
+		expect(kinds).toEqual(extensions.map((extension) => `Kind of ${extension}`));
+	});
+
+	it("shares one lookup between files of the same extension, whatever the case", async () => {
+		const { batches, run } = recordingRunner({ ".pdf": "PDF Document" });
+		const resolver = createOsKindResolver({ platform: "win32", run });
+
+		const kinds = await Promise.all([
+			resolver.kindFor("C:\\a.pdf", "pdf"),
+			resolver.kindFor("C:\\b.PDF", "pdf"),
+			resolver.kindFor("C:\\sub\\c.Pdf", "pdf"),
+		]);
+
+		expect(kinds).toEqual(["PDF Document", "PDF Document", "PDF Document"]);
+		expect(batches).toEqual([[".pdf"]]);
+	});
+
+	it("asks only for extensions it has not answered yet", async () => {
+		const { batches, run } = recordingRunner({ ".pdf": "PDF Document", ".hwp": "한글 문서" });
+		const resolver = createOsKindResolver({ platform: "win32", run });
+
+		await resolver.kindFor("C:\\a.pdf", "pdf");
+		const second = await Promise.all([resolver.kindFor("C:\\b.pdf", "pdf"), resolver.kindFor("C:\\c.hwp", "hwp")]);
+
+		expect(second).toEqual(["PDF Document", "한글 문서"]);
+		expect(batches).toEqual([[".pdf"], [".hwp"]]);
+	});
+
+	it("runs one process at a time and batches what arrives meanwhile", async () => {
+		// Given a runner we can hold open
+		const batches: (readonly string[])[] = [];
+		let active = 0;
+		let maxActive = 0;
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const resolver = createOsKindResolver({
+			platform: "win32",
+			run: async (query) => {
+				active += 1;
+				maxActive = Math.max(maxActive, active);
+				const extensions = query.extensions ?? [];
+				batches.push(extensions);
+				if (batches.length === 1) await gate;
+				active -= 1;
+				return extensions.map((extension) => `kind ${extension}`).join("\n");
+			},
+		});
+
+		// When a first extension is in flight and three more are requested meanwhile
+		const first = resolver.kindFor("C:\\a.aaa", "aaa");
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		const rest = Promise.all([resolver.kindFor("C:\\b.bbb", "bbb"), resolver.kindFor("C:\\c.ccc", "ccc"), resolver.kindFor("C:\\d.ddd", "ddd")]);
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		release();
+
+		// Then the process never overlapped, and the three waited for one shared next process
+		expect(await first).toBe("kind .aaa");
+		expect(await rest).toEqual(["kind .bbb", "kind .ccc", "kind .ddd"]);
+		expect(maxActive).toBe(1);
+		expect(batches).toEqual([[".aaa"], [".bbb", ".ccc", ".ddd"]]);
+	});
+
+	it("caps one process at 100 extensions", async () => {
+		const extensions = Array.from({ length: 250 }, (_, index) => `.x${index}`);
+		const { batches, run } = recordingRunner({});
+		const resolver = createOsKindResolver({ platform: "win32", run });
+
+		await Promise.all(extensions.map((extension, index) => resolver.kindFor(`C:\\f${index}${extension}`, "")));
+
+		expect(batches.map((batch) => batch.length)).toEqual([100, 100, 50]);
+	});
+
+	it("warns verbatim and retries later when the process fails, without caching the failure", async () => {
+		// Given a first process that fails and a second that works
+		const warnings: string[] = [];
+		let calls = 0;
+		const resolver = createOsKindResolver({
+			platform: "win32",
+			run: async (query) => {
+				calls += 1;
+				if (calls === 1) throw new Error("powershell.exe: Command failed: timed out");
+				return (query.extensions ?? []).map(() => "PDF Document").join("\n");
+			},
+			warn: (message) => warnings.push(message),
+		});
+
+		// When the first lookup fails
+		expect(await resolver.kindFor("C:\\a.pdf", "pdf")).toBeNull();
+
+		// Then the failure text is visible, and a later PDF still gets its kind
+		expect(warnings.join("\n")).toContain("Command failed: timed out");
+		expect(await resolver.kindFor("C:\\b.pdf", "pdf")).toBe("PDF Document");
+	});
+
+	it("does not remember a dotfile as having the empty extension", async () => {
+		const { batches, run } = recordingRunner({ ".gitignore": "GITIGNORE File" });
+		const resolver = createOsKindResolver({ platform: "win32", run });
+
+		expect(await resolver.kindFor("C:\\repo\\.gitignore", "gitignore")).toBe("GITIGNORE File");
+		expect(batches).toEqual([[".gitignore"]]);
+	});
+
+	it("settles every caller when cache eviction drops a waiting extension that is requested again in the same batch", async () => {
+		const { batches, run } = recordingRunner({ ".aaa": "Kind A", ".bbb": "Kind B", ".ccc": "Kind C" });
+		const resolver = createOsKindResolver({ platform: "win32", cacheLimit: 2, run });
+
+		const requests = Promise.all([
+			resolver.kindFor("C:\\first.aaa", "aaa"),
+			resolver.kindFor("C:\\one.bbb", "bbb"),
+			resolver.kindFor("C:\\two.ccc", "ccc"),
+			resolver.kindFor("C:\\second.aaa", "aaa"),
+		]);
+		const outcome = await Promise.race([
+			requests,
+			new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 300)),
+		]);
+
+		expect(outcome).toEqual(["Kind A", "Kind B", "Kind C", "Kind A"]);
+		expect(batches).toEqual([[".aaa", ".bbb", ".ccc"]]);
+	});
+});
+
+const runPowerShell = promisify(execFile);
+
+/** The lookup as it was before batching: one `Registry::` provider chain per extension. The batch must answer identically. */
+async function providerKind(extension: string): Promise<string | null> {
+	const script = [
+		"[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
+		`$ext = '${extension}'`,
+		"$progId = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $ext) -ErrorAction SilentlyContinue).'(default)'",
+		"if ([string]::IsNullOrEmpty($progId)) { return }",
+		"$typeName = (Get-ItemProperty -LiteralPath ('Registry::HKEY_CLASSES_ROOT\\' + $progId) -ErrorAction SilentlyContinue).'(default)'",
+		"if (-not [string]::IsNullOrEmpty($typeName)) { [Console]::Out.Write($typeName) }",
+	].join("; ");
+	const { stdout } = await runPowerShell("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8", windowsHide: true });
+	return parseKindStdout(stdout);
+}
+
+describe.skipIf(process.platform !== "win32")("the Windows registry lookup, on a real Windows", () => {
+	const extensions = [".zip", ".png", ".pdf", ".txt", ".exe", ".dll", ".hwp", ".mp4", ".json", ".zzz-no-such-extension"];
+
+	it("answers every extension exactly as the one-process-per-extension lookup did", async () => {
+		const expected = await Promise.all(extensions.map(providerKind));
+		const query = windowsKindQuery(extensions);
+		const { stdout } = await runPowerShell(query.command, [...query.args], { encoding: "utf8", windowsHide: true });
+
+		expect(parseWindowsKindStdout(stdout, extensions.length)).toEqual(expected);
+		// The comparison is only meaningful if Windows knows some of them and not the made-up one.
+		expect(expected.some((kind) => kind !== null)).toBe(true);
+		expect(expected.at(-1)).toBeNull();
+	});
+
+	it("resolves files end to end through the default runner, extensionless files without a process", async () => {
+		const resolver = createOsKindResolver();
+		const files = ["C:\\x\\first.zzz-no-such-extension", "C:\\x\\a.zip", "C:\\x\\b.exe", "C:\\x\\c.json", "C:\\x\\d.ZIP", "C:\\x\\Makefile"];
+		const kinds = await Promise.all(files.map((file) => resolver.kindFor(file, file.includes(".") ? file.split(".").pop()?.toLowerCase() ?? "" : "")));
+		const expected = await Promise.all([".zip", ".exe", ".json", ".zip"].map(providerKind));
+
+		expect(kinds).toEqual([null, ...expected, null]);
 	});
 });

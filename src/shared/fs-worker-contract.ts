@@ -44,6 +44,9 @@ export type FsWorkerOp =
 	| "openUrl"
 	| "clipboardSet"
 	| "clipboardGet"
+	/** Remote access only: one browser-uploaded file, and one whole file for a download. */
+	| "uploadFile"
+	| "readFile"
 	| "undo"
 	| "redo"
 	| "recordCreated"
@@ -62,7 +65,7 @@ export type FsWorkerOp =
 	| "diagnostics";
 
 /** The Electron-only ops the worker asks the main process for, over the host port. */
-export type FsWorkerHostOp = "trashItem" | "showItemInFolder" | "openPath" | "openExternal" | "writeText" | "icons" | "previewIcon";
+export type FsWorkerHostOp = "trashItem" | "showItemInFolder" | "openPath" | "openExternal" | "writeText" | "writeFiles" | "icons" | "previewIcon";
 
 /**
  * The filesystem worker: an Electron utility process that owns folder
@@ -106,8 +109,8 @@ export interface FsWorkerConfig {
 /** What the first message on `process.parentPort` hands the worker with each port. */
 export interface FsWorkerClientHello {
 	readonly type: "client";
-	/** Renderer clients receive live pushes; the main client does not. */
-	readonly kind: "renderer" | "main";
+	/** Renderer and remote clients receive live pushes; the main client does not. */
+	readonly kind: "renderer" | "main" | "remote";
 }
 
 /** One request the worker answered recently: the op and, when it had one, its path argument. */

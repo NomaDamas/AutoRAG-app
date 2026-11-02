@@ -46,13 +46,21 @@ const PHASE_START: Readonly<Record<IndexActivityPhase, number>> = {
 	finalizing: 0.99,
 };
 
+export interface ProgressMinsyncView {
+	readonly synced?: number;
+	readonly total?: number;
+	readonly filesSkipped?: number;
+}
+
 export interface ProgressView {
 	readonly state: "running" | "success" | "failed";
 	readonly phase: IndexActivityPhase | null;
 	readonly pid: number;
 	readonly startedAt: string;
 	readonly finishedAt: string | null;
+	readonly sourceTotal: number | null;
 	readonly counts: IndexActivityCounts | null;
+	readonly minsync: ProgressMinsyncView | null;
 	readonly error: string | null;
 }
 
@@ -67,18 +75,30 @@ export function parseRefreshProgress(text: string): ProgressView | null {
 	const { state, pid, startedAt } = parsed;
 	if ((state !== "running" && state !== "success" && state !== "failed") || typeof pid !== "number" || typeof startedAt !== "string") return null;
 	const phase = INDEX_ACTIVITY_PHASES.find((candidate) => candidate === parsed.phase) ?? null;
+	const rawSource = parsed.sourceFiles;
+	const sourceTotal = isJsonObject(rawSource) && typeof rawSource.total === "number" ? rawSource.total : null;
 	const raw = parsed.parsedCounts;
 	const counts =
 		isJsonObject(raw) && typeof raw.scanned === "number" && typeof raw.written === "number" && typeof raw.deleted === "number" && typeof raw.skipped === "number"
 			? { scanned: raw.scanned, written: raw.written, deleted: raw.deleted, skipped: raw.skipped }
 			: null;
+	const rawMinsync = parsed.minsync;
+	const minsync: ProgressMinsyncView | null = isJsonObject(rawMinsync)
+		? {
+				...(typeof rawMinsync.synced === "number" ? { synced: rawMinsync.synced } : {}),
+				...(typeof rawMinsync.total === "number" ? { total: rawMinsync.total } : {}),
+				...(typeof rawMinsync.filesSkipped === "number" ? { filesSkipped: rawMinsync.filesSkipped } : {}),
+			}
+		: null;
 	return {
 		state,
 		phase,
 		pid,
 		startedAt,
 		finishedAt: typeof parsed.finishedAt === "string" ? parsed.finishedAt : null,
+		sourceTotal,
 		counts,
+		minsync,
 		error: typeof parsed.error === "string" ? parsed.error : null,
 	};
 }
@@ -99,22 +119,38 @@ function time(iso: string | null): number {
 	return Number.isNaN(value) ? 0 : value;
 }
 
-function localFraction(phase: IndexActivityPhase | null, counts: IndexActivityCounts | null, minsyncCommitted = 0): number {
+function localFraction(
+	phase: IndexActivityPhase | null,
+	counts: IndexActivityCounts | null,
+	minsyncCommitted = 0,
+	progress: ProgressView | null = null,
+): number {
 	if (phase === null) return 0;
 	const base = PHASE_START[phase];
-	if (phase === "minsync" && minsyncCommitted > 0 && counts !== null && counts.written > 0) {
+	if (phase === "parsed" && counts !== null && progress?.sourceTotal !== null && progress?.sourceTotal !== undefined && progress.sourceTotal > 0) {
+		const span = PHASE_START.minsync - PHASE_START.parsed;
+		return base + span * Math.min(1, counts.scanned / progress.sourceTotal);
+	}
+	if (phase === "minsync") {
 		const span = PHASE_START.datasources - PHASE_START.minsync;
-		return base + span * Math.min(1, minsyncCommitted / counts.written);
+		const synced = progress?.minsync?.synced;
+		const total = progress?.minsync?.total;
+		if (synced !== undefined && total !== undefined && total > 0) {
+			return base + span * Math.min(1, synced / total);
+		}
+		if (minsyncCommitted > 0 && counts !== null && counts.written > 0) {
+			return base + span * Math.min(1, minsyncCommitted / counts.written);
+		}
 	}
 	return base;
 }
 
-function fractionOf(items: readonly IndexActivityItem[], minsyncCommitted = 0): number | null {
+function fractionOf(items: readonly IndexActivityItem[], minsyncCommitted = 0, progress: ProgressView | null = null): number | null {
 	const finished = items.filter((item) => item.state === "done" || item.state === "failed").length;
 	const local = items.find((item) => item.kind === "local" && item.state === "running");
 	// A datasource sync reports nothing while it runs: with nothing finished and no local phase to read, the position is unknown.
 	if (finished === 0 && (local === undefined || local.phase === null)) return null;
-	const partial = local === undefined ? 0 : localFraction(local.phase, local.counts, minsyncCommitted);
+	const partial = local === undefined ? 0 : localFraction(local.phase, local.counts, minsyncCommitted, progress);
 	return Math.min(1, (finished + partial) / items.length);
 }
 
@@ -161,7 +197,7 @@ export function deriveIndexActivity(input: DeriveInput): IndexActivitySnapshot {
 			startedAt: journalLive ? journal.startedAt : (progress?.startedAt ?? null),
 			finishedAt: null,
 			items,
-			fraction: fractionOf(items, minsyncCommitted),
+			fraction: fractionOf(items, minsyncCommitted, progressRunning ? progress : null),
 			error: null,
 		};
 	}

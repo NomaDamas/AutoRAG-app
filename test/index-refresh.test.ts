@@ -1,8 +1,9 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { saveMirrorIndex, type ParsedMirrorEntry } from "@autorag/librarian";
+import type { ParsedMirrorEntry } from "@autorag/librarian";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { seedMirrorStage } from "./support/seed-mirror-stage";
 import type * as Librarian from "@autorag/librarian";
 import { existsSync, readFileSync } from "node:fs";
 import { MailcrawlClient } from "@autorag/librarian";
@@ -243,7 +244,7 @@ function seedIndex(root: string, count: number): void {
 		const sourcePath = join(root, "docs", `n${index}.md`);
 		entries[`/docs/n${index}.md`] = { virtualPath: `/docs/n${index}.md`, sourcePath, outputPath: join(root, "workspace", `n${index}.md`), parserName: "plain-text", sourceMtimeNs: 1, sourceSizeBytes: 1, updatedAt: new Date(0).toISOString() };
 	}
-	saveMirrorIndex(join(root, "workspace"), { version: 1, entries, skipped: {} });
+	seedMirrorStage(join(root, "workspace"), { version: 1, entries, skipped: {} });
 }
 
 describe("refreshAutoragIndex against unreliable folders and files", () => {

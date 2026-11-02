@@ -19,6 +19,7 @@ import { FS_WORKER_CONFIG_FLAG } from "../shared/fs-worker-contract";
 import { createWorkerClient, serveWorkerPort, type WorkerConnection, type WorkerPort } from "../shared/fs-worker-protocol";
 import type { IconTarget } from "../main/file-icon";
 import { createFsWorkerService } from "./service";
+import { createClientWatchSets } from "./client-watch";
 
 /** Recent requests kept for diagnostics (QA asserts which folder was listed when). */
 const RECENT_REQUESTS = 200;
@@ -85,7 +86,10 @@ const service = createFsWorkerService({
 			openPath: (path) => host.call("openPath", [path]),
 			openExternal: (url) => host.call("openExternal", [url]),
 		},
-		clipboard: { writeText: (text) => void host.call("writeText", [text]) },
+		clipboard: {
+			writeText: (text) => void host.call("writeText", [text]),
+			writeFiles: async (paths) => void (await host.call("writeFiles", [paths])),
+		},
 		icons: {
 			async icons(targets: readonly IconTarget[]) {
 				return new Map(await host.call<[string, string][]>("icons", [targets]));
@@ -114,6 +118,7 @@ const handlers = {
 		? { qaOverflow: service.qaOverflow, qaHoldEnrichment: service.qaHoldEnrichment, qaReleaseEnrichment: service.qaReleaseEnrichment }
 		: {}),
 };
+const watchSets = createClientWatchSets(service.handlers.setWatchSet);
 
 parentPort.on("message", (event) => {
 	const message: unknown = event.data;
@@ -124,12 +129,14 @@ parentPort.on("message", (event) => {
 	}
 	if (isHello(message) && port !== undefined) {
 		const adapted = adaptPort(port);
-		const connection = serveWorkerPort(adapted, handlers, record);
-		if (message.kind === "renderer") renderers.add(connection);
+		const watches = watchSets.connect();
+		const connection = serveWorkerPort(adapted, { ...handlers, setWatchSet: watches.setWatchSet }, record);
+		if (message.kind === "renderer" || message.kind === "remote") renderers.add(connection);
 		adapted.onClose?.(() => {
 			renderers.delete(connection);
 			// The page went away: its listings and searches stop here.
 			connection.close();
+			void watches.close().catch((error: unknown) => console.error("[fs-worker] client watches:", error));
 		});
 		return;
 	}

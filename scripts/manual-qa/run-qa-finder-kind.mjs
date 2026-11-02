@@ -32,10 +32,12 @@ const fixtures = [
 const fallbackName = `ulw-kind-qa-${stamp}.weird`;
 
 const windowsKind = (path) => {
-	// Mirrors the app's own probe (src/main/file-kind.ts windowsKindScript):
-	// extension → ProgID → the ProgID's own (default) description, nothing else.
-	// A FriendlyTypeName/raw-ProgID fallback would expect strings the app never
-	// shows, and FriendlyTypeName is usually an unresolved indirect string.
+	// The same registry chain the app reads (src/main/file-kind.ts windowsKindQuery, which
+	// batches many extensions into one process): extension → ProgID → the ProgID's own
+	// (default) description, nothing else. This oracle stays one process per path on purpose,
+	// so it does not share the app's batching. A FriendlyTypeName/raw-ProgID fallback would
+	// expect strings the app never shows, and FriendlyTypeName is usually an unresolved
+	// indirect string.
 	const literal = path.replace(/'/g, "''");
 	const script = [
 		`$path = '${literal}'`,

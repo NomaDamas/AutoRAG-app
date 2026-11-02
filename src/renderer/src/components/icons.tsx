@@ -16,6 +16,7 @@ import {
 	Archive,
 	ArrowDownUp,
 	ArrowUp,
+	ChartNoAxesColumn,
 	Check,
 	ChevronLeft,
 	ChevronRight,
@@ -24,6 +25,7 @@ import {
 	Columns3,
 	Copy,
 	Database,
+	Download,
 	ExternalLink,
 	Eye,
 	Film,
@@ -38,16 +40,18 @@ import {
 	PanelLeft,
 	PanelRight,
 	Pencil,
-	Plus,
 	RefreshCw,
 	RotateCw,
 	Rows3,
 	Search,
 	Send,
+	SquarePen,
 	Settings,
 	Share,
+	Shrink,
 	Sparkles,
 	Trash2,
+	TriangleAlert,
 	Undo2,
 	Users,
 	X,
@@ -75,6 +79,11 @@ function glyph(Icon: LucideIcon, defaultSize: number, strokeWidth: number = GLYP
 }
 
 export const GearIcon = glyph(Settings, 16);
+
+/** Sidebar footer: AI usage (bars) and the app-update states (refresh / download). */
+export const UsageIcon = glyph(ChartNoAxesColumn, 16, 1.8);
+
+export const DownloadIcon = glyph(Download, 16, 1.8);
 
 export const SearchIcon = glyph(Search, 14, 2.2);
 
@@ -111,6 +120,8 @@ export const OpenWithIcon = glyph(AppWindow, 16, 1.9);
 
 export const CompressIcon = glyph(Archive, 16, 1.8);
 
+export const ReduceSizeIcon = glyph(Shrink, 16, 1.8);
+
 export const ExtractIcon = glyph(PackageOpen, 16, 1.8);
 
 export const ImageEditIcon = glyph(ImageGlyph, 16, 1.8);
@@ -119,7 +130,7 @@ export const VideoConvertIcon = glyph(Film, 16, 1.8);
 
 export const CloseIcon = glyph(X, 10, 3);
 
-export const PlusIcon = glyph(Plus, 14, 2.4);
+export const NewChatIcon = glyph(SquarePen, 15, 2);
 
 /**
  * Tab strip: the reference's `icon('close',11)` / `icon('plus',14)` at the
@@ -173,6 +184,9 @@ export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
 /** Toolbar inspector toggle — the mockup's info-circle glyph, not the panel glyph. */
 export const InfoIcon = glyph(Info, 16, 1.8);
 
+/** A notice that something may not work as expected (a search over an index that is not ready). */
+export const WarningIcon = glyph(TriangleAlert, 14, 2);
+
 export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 
 export const GroupIcon = glyph(Layers, 16, 1.9);
@@ -180,7 +194,6 @@ export const GroupIcon = glyph(Layers, 16, 1.9);
 export const DatabaseIcon = glyph(Database, 16, 1.8);
 
 export const UsersIcon = glyph(Users, 16, 1.8);
-
 
 /**
  * Folders render the filled glyph in `--folder`, never a tile (DESIGN.md §5).

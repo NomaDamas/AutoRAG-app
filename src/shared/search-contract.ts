@@ -73,6 +73,22 @@ export type AnswerPhaseName = "quick" | "deep";
 /** What the person can do about a run's error, when the main process knows: `open-plan` goes to Settings → Subscription & Usage. */
 export type SearchErrorAction = "open-plan";
 
+/**
+ * Why the documents a run is about to search may not all be there:
+ * - `indexing`: an index run (folders or a datasource) is still going;
+ * - `failed`: the last run stopped before it finished;
+ * - `empty`: nothing is indexed;
+ * - `few`: a handful of documents is indexed, below what a search can work with.
+ * The main process decides; the panel only words it.
+ */
+export type IndexNoticeReason = "indexing" | "failed" | "empty" | "few";
+
+export interface IndexNotice {
+	readonly reason: IndexNoticeReason;
+	/** Documents indexed across the folders and enabled sources; `null` when the size could not be read. */
+	readonly documents: number | null;
+}
+
 export type SearchStreamEvent =
 	| { readonly type: "progress"; readonly searchId: string; readonly text: string }
 	| { readonly type: "thinking"; readonly searchId: string; readonly phase: AnswerPhaseName }
@@ -83,6 +99,8 @@ export type SearchStreamEvent =
 	/** `action` accompanies an error the person can act on (the weekly credits are used up). */
 	| { readonly type: "error"; readonly searchId: string; readonly message: string; readonly action?: SearchErrorAction }
 	| { readonly type: "cancelled"; readonly searchId: string }
+	/** The run is searching the person's own documents (Jev routed it to the local branch) and the index is not ready. */
+	| { readonly type: "index-notice"; readonly searchId: string; readonly notice: IndexNotice }
 	/** A model request of the run took every steer sent so far. */
 	| { readonly type: "steer-delivered"; readonly searchId: string }
 	| { readonly type: "done"; readonly searchId: string };

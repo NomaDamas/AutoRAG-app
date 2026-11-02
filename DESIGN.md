@@ -36,7 +36,7 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
 - **Restraint & Typography:** Bold type is strictly reserved for primary titles and top-level section headers (`font-weight: 600`). All setting item labels, descriptions, and list rows maintain comfortable regular weights (`font-weight: 400` / `500`).
 - **One bundled typeface:** The UI is set in Pretendard Variable (SIL OFL 1.1), shipped in `src/renderer/styles/fonts/` and declared in `fonts.css`, so Latin and Korean glyph widths — and with them line breaks and the fit of fixed-size controls — are identical on every OS. `--font-sans` starts with it; the OS UI fonts after it only cover glyphs it lacks. `body` sets `font-variant-ligatures: none` because Pretendard rewrites `1x2` as `1×2`, and file names must be drawn as stored.
 - **Permanent Multi-Pane Architecture:** 
-  - Left navigation (Sidebar) lists the live OS places in three groups (`Favorites`, `Cloud`, `Locations`), with **AI Search** above Recents; see §1.5.
+  - Left navigation (Sidebar) lists the live OS places in groups (`Favorites`, `Cloud`, `Locations`), plus `Connections` when a connected app has a folder to show, with **AI Search** above Recents; see §1.5.
   - Center area hosts the tab strip. A tab shows a folder, Settings, or the AI Search chat — AI Search is a tab, not a bottom dock.
   - Right panel (Info / Evidence) is **permanently present**, preventing jarring layout shifts during file inspection.
 
@@ -68,6 +68,8 @@ Pure behavior is covered by `test/ui-sort.test.ts` and `test/ui-grouping.test.ts
 The path bar under the Finder list is one line at every window size and never shows an ellipsis. When the trail does not fit, labels give up space in a fixed order — middle segments left to right (`Users`, the home folder, …), then the root (`Macintosh HD`), then the parent of the current location, then the current location or selected file. A label first narrows with its last `--fade-label` (14px) faded out, so the word reads as cut off; once fewer than 32px would remain, the segment shows only its icon. If even the icon-only trail is too wide, it stays pinned to its end and fades in from the leading edge. Logic: `src/renderer/src/state/path-fit.ts`; visual check: `scripts/manual-qa/run-qa-finder-path-bar.mjs`.
 
 **Editing the path.** A folder segment navigates. A click anywhere else on the bar (the gap between segments, the strip after the trail, the volume or selected-file segment) swaps the trail for a text field holding the full path, all selected. The bar keeps a 24px right padding, so that strip exists even when the trail fills the width. Enter goes to the typed location: an absolute POSIX, drive or UNC path, `~/…`, a `file://` URL, a quoted path, or a path relative to the folder in view. A folder opens in the tab; a file opens its folder with the file selected. A location that does not exist shows a toast and leaves the field open with the text selected. Escape, a click elsewhere, or any navigation closes the field. Enter and Escape stay inside the field, and the trail stays mounted (invisible) under it, so the fit never goes stale. Resolution: `resolvePathInput` in `src/renderer/src/state/paths.ts` (`test/ui-paths.test.ts`); field behaviour: `test/ui-path-bar-edit.test.tsx`.
+
+While typing, direct child folders matching the last segment appear in a fixed-height list above the bar. The active candidate supplies an inline ghost suffix; ↑/↓ changes it, Tab accepts it without navigating, Enter opens the accepted path, and clicking a candidate opens it directly. Completion preserves `~/` and relative-path spelling and discards slower responses for superseded drafts. Resolution: `completePath` in `src/renderer/src/state/paths.ts` (`test/ui-path-completion.test.ts`); live Electron behaviour: `scripts/manual-qa/path-bar.e2e.ts`.
 
 A typed path can differ from the disk in case (`/volumes/ssd1/autorag`) or Unicode form (a Korean name typed NFC, stored NFD); a case-insensitive volume (the APFS and NTFS default) still opens it. The tab and the path bar still show the on-disk spelling: `fs.stat` maps every segment back to its directory entry, matched by case and Unicode form and confirmed by inode, and never resolves a symlink. The renderer then navigates to the path it gets back. Logic: `onDiskPath` in `src/main/fs-entry.ts` (`test/fs-entry.test.ts`).
 ### 1.3 Finder list density
@@ -157,9 +159,12 @@ The list is expanded by default and the "간략히 / 전체 정보" button colla
 Every sidebar row comes from the OS, through `fs:locations` (`src/main/places.ts`); nothing is a fixed provider or drive list, and a group with no rows is not rendered.
 - **Favorites** — the **AI Search** app row (§1.3a), then Recents, then Finder's standard places: the home folder, Applications, Desktop, Documents, Downloads, Music, Movies, Pictures, Trash (`~/.Trash`). On Windows the same slots use Explorer's names and the real known-folder paths (OneDrive folder redirection honored), Program Files, and the user's `$Recycle.Bin\<SID>`, whose `$R` payloads are listed under their original names (`src/main/recycle-bin.ts`); the Trash row restores and empties its contents (§ "Batch file operations"). A missing folder stays in its slot, dimmed.
 - **Cloud** — exactly the drives connected to the OS, one row per account: iCloud Drive plus every `~/Library/CloudStorage/<Provider>-<account>` File Provider domain on macOS (e.g. `Google Drive - me@example.com`, `OneDrive - Personal`); the `SyncRootManager` roots registered for the user's SID and a Google Drive virtual drive letter on Windows.
+- **Connections** (own group, between Cloud and Locations; not rendered when empty) — one **Discord** row per enabled Discord datasource (`datasources.<name>` that is not `false` or `enabled: false`, whose `type`, else its name, is `discord`) whose attachments folder holds something of the user's. It is a connection of the app, not a drive the OS mounts, so it is not in Cloud. The librarian saves a connection's attachments under `<AUTORAG_HOME>/attachments/discord/<connection>/<server>/<channel>/<original name>` (`~/.autorag/...` by default on macOS, Linux and Windows; the folder name is the librarian's `sanitizeIdSegment` of the name), and the row opens that folder like any other, so browsing, Quick Look and open all work. One connection reads "Discord"; several read "Discord - <name>". A sync that downloaded nothing still writes `download-status.json`, `.discrawl/` and `.lock/`, so the check looks for a file at any depth below the top level, ignoring those and dot entries: a folder with only the sync's bookkeeping, or only empty server/channel folders, shows no row. A disabled or removed connection shows none, whatever is left on disk. The same three entries are hidden from listings, from the live patch of a watched connection folder (the sync rewrites the status file constantly) and from file-name search (index hits and the walk), and only at the top of a connection folder: a `download-status.json` in a channel folder is the user's. The row's status dot follows the Discord datasources (`state/source-status.ts`: attention beats syncing). `src/main/discord-attachments.ts` repeats the librarian's folder rules because the worker must not load the librarian; the test compares its `sanitizeIdSegment` with the librarian's. It reads `AUTORAG_HOME` and `AUTORAG_CONFIG` from the worker's environment.
 - **Locations** — the boot disk (`/`, or the system drive) plus every browsable mounted volume: `/Volumes/*` mount points without `nobrowse`, or every other drive letter. Each carries an eject button flush right; ejecting moves tabs out of the volume first (so no watcher holds it), then runs `diskutil unmount` (macOS), `net use X: /delete` for network drives, or the shell Eject verb (Windows). A refusal surfaces verbatim in the toast.
 
-The fs worker (`src/fs-worker/`, see `docs/architecture.md` "Filesystem worker") polls a cheap mount signature (volume names and device ids, cloud domains) every 2s and pushes `fs:locationsChanged`, so a volume or cloud account that comes or goes updates the sidebar without a restart. The dupey scan walks only `scanned` places (Desktop, Documents, Downloads, cloud drives) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/ui-places.test.ts`; on-device check (attaches and ejects a real disk image): `scripts/manual-qa/run-qa-finder-sidebar-places.mjs`.
+The fs worker (`src/fs-worker/`, see `docs/architecture.md` "Filesystem worker") polls a cheap signature every 2s (volume names and device ids, cloud domains, and which Discord attachment folders are shown) and pushes `fs:locationsChanged`, so a volume, cloud account or Discord attachment folder that comes or goes updates the sidebar without a restart. The dupey scan walks only `scanned` places (Desktop, Documents, Downloads, cloud drives, the Discord attachment folders) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/discord-attachments.test.ts`, `test/ui-places.test.ts`, `test/ui-source-status.test.ts`; on-device checks: `scripts/manual-qa/run-qa-finder-sidebar-places.mjs` (attaches and ejects a real disk image) and `scripts/manual-qa/run-qa-finder-discord-attachments.mjs` (the Discord row against a throwaway AutoRAG home).
+
+**Sidebar customization.** Settings → 사이드바 (`SidebarPage`, `src/shared/sidebar-contract.ts`) lets the user show or hide individual sidebar places, cloud drives, mounted volumes, and Finder tags, reorder Favorites or sections, pin custom folders to Favorites, apply quick presets, or chat with the `app-customizer` helper agent (`AppCustomizerModal`). **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`) are locked at the top of Favorites (`LOCKED_SIDEBAR_ITEM_IDS`) and can never be hidden. Customization state lives in Dazzi's `settings-state.json` (`AppSettings.sidebar`) and updates the live Finder sidebar immediately over `settings:changed`. Automated checks: `test/sidebar-customization.test.ts`, `test/app-customizer-service.test.ts`, `test/ui-sidebar-settings.test.tsx`; on-device checks: `scripts/manual-qa/run-qa-finder-sidebar-customizer.mjs`, `scripts/manual-qa/run-qa-live-sidebar-customizer.mjs`.
 
 **Indexing progress.** Above the 설정 row sits one block (`SidebarIndexActivity`, `src/renderer/src/components/`): headline (`인덱싱 중 1/3`), the percent, a 4px bar, and a detail line naming the phase or datasource that runs. Tones follow StatusDot's palette: accent while running, `--ok-dot` for done, `--error-orange-dot` for failure. A run's origin (`자동 새로 고침`, `앱 밖에서 실행`) goes in the tooltip and in Settings, not in the headline, which must fit in 159px. Done lingers 4 s, failure 15 s, then the block unmounts and the footer is the plain 설정 row again. It is a button that opens 설정 > 인덱싱 (`requestSettingsCategory`), where the same snapshot renders as the 진행 상황 card with one row per item. The snapshot is derived in the main process (`src/main/index-activity.ts`) from `refresh-progress.json` and `app-refresh/activity.json` and pushed on change over `indexActivity:changed`; the renderer never polls. Automated checks: `test/index-activity.test.ts`, `test/index-activity-view.test.ts`.
 
@@ -222,7 +227,8 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 - **Which actions** a file offers comes from `src/renderer/src/state/file-actions.ts`:
   the base set is 열기 · 다른 앱으로 열기 · 압축 · 공유 · AI 요약, plus 압축 해제
-  for `.zip`, an 이미지 편집 menu for images, and a 동영상 변환 menu for video.
+  for `.zip`, an 이미지 편집 menu for images, a 동영상 변환 menu for video, and
+  용량 줄이기 for every type the machine can shrink (below).
   Quick Look, 경로 복사, and 휴지통 are deliberately absent — Space, the row
   context menu, ⌘⌫, and the Info chips already cover them.
 - The same headline actions sit in the row context menu (`state/context-menu.ts`):
@@ -254,6 +260,32 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `libx265` + `heif`, AVIF an AV1 encoder + `avif`), and GIF gets a per-image
   palette. Resizing (최대 ○px) keeps the source format and is not offered for
   GIF, because both engines resize one frame and would drop an animation.
+- **용량 줄이기** is one flat button (`reduceSize`) in the Inspector's bottom-right
+  bar, shown only when the file's extension is in `capabilities.reducibleExtensions`.
+  Clicking it opens `ReduceSizeDialog`, which lets the user pick **compression
+  strength** (`light` / `balanced` / `max`) and **output mode**:
+  - **원본 대체 (default)** moves the original safely to the OS Trash and replaces
+    it in place under its exact name — zero `-reduced` clutter.
+  - **사본으로 저장** writes a single `<stem>-reduced.<ext>` sibling (`reducedCopyName`),
+    recycling any prior `-reduced` copy through the Trash so `-reduced 2 .. 8`
+    duplicates never accumulate.
+  Every family stages in `.dazzi-reduce-*` first and keeps the same format:
+  PDF (`pdf-lib` + `fflate` level-9 `/FlateDecode` re-deflate + `/DCTDecode` JPEG
+  re-encode at 1600/1280/960px + Filee `compress-pdf`, picking the smallest valid
+  output and consulting Filee whenever `light` saves <15%), JPEG (`ffmpeg` `mjpeg`
+  when present — avoiding `sips`'s EXIF bloat — else `sips`, with automatic
+  step-down when an already-compressed source shrinks <12%), HEIC (`sips` on
+  macOS, `ffmpeg` elsewhere), PNG (perceptual 256/144/64-color `palettegen` +
+  Floyd-Steinberg/Sierra dithering + mixed-filter deflate) and WebP,
+  MP4/M4V/MOV/MKV (`libx264` crf 25/28/33 with VBV `-maxrate` capped at
+  65%/42%/24% of the probed source video bitrate + original/1080p/720p cap),
+  WebM (VP9 + Opus, VBV-capped), and MP3/M4A/AAC/Opus (bitrate stepped to
+  72%/50%/35% of the probed source audio bitrate, keeping cover art). Once started,
+  the same dialog turns into a live
+  progress card (`ProgressBar` — determinate `%` from `ffmpeg -progress pipe:1`,
+  shimmer on PDF/stills) with a Cancel button (or Esc) that kills the child
+  process tree via `actions:cancel`. Animated PNG/WebP are refused, and outputs
+  not smaller than the source are discarded.
 - **Adding an action** is two edits: one entry in `suggestedActions` (label,
   icon, and the `ActionRequest` it runs) and one `case` in
   `createActionService.run` (`src/main/action-service.ts`). The bar, the menu,

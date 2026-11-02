@@ -73,7 +73,7 @@ try {
 	let page = await finderWindow(app);
 
 	// 1. The Settings switch writes the workflows.
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	const toggle = page.getByRole("switch", { name: "Add to File Right-Click Menu" });
 	await toggle.waitFor({ timeout: 20_000 });
 	check("switch starts off, nothing installed", (await toggle.getAttribute("aria-checked")) === "false" && !existsSync(SERVICES));
@@ -107,7 +107,7 @@ try {
 	check("reveal: the file is selected", shown !== false && /selected/u.test((await row.getAttribute("class")) ?? "") || (await row.getAttribute("aria-selected")) === "true");
 
 	// Switching off removes exactly the workflows.
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click().catch(() => {});
+	await page.locator(".sidebar__item--settings").click().catch(() => {});
 	await toggle.click();
 	const removed = await until(() => readdirSync(SERVICES).length === 0);
 	check("switch off removes the workflows", removed !== false);

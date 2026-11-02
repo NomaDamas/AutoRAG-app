@@ -44,6 +44,7 @@ interface StubbedDeps {
 	readonly opened: string[];
 	readonly openedUrls: string[];
 	readonly clipboardText: string[];
+	readonly clipboardFiles: (readonly string[])[];
 	readonly recents: RecentsStore;
 }
 
@@ -53,6 +54,7 @@ function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): Stubbe
 	const opened: string[] = [];
 	const openedUrls: string[] = [];
 	const clipboardText: string[] = [];
+	const clipboardFiles: (readonly string[])[] = [];
 	return {
 		deps: {
 			shell: {
@@ -74,6 +76,9 @@ function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): Stubbe
 				writeText: (text: string) => {
 					clipboardText.push(text);
 				},
+				writeFiles: async (paths: readonly string[]) => {
+					clipboardFiles.push(paths);
+				},
 			},
 			homeDir,
 			platform,
@@ -93,6 +98,7 @@ function makeDeps(homeDir: string, platform: NodeJS.Platform = "darwin"): Stubbe
 		opened,
 		openedUrls,
 		clipboardText,
+		clipboardFiles,
 		recents: createRecentsStore({ directory: join(homeDir, "recents-store") }),
 	};
 }
@@ -107,7 +113,7 @@ function makeFailingTrashDeps(homeDir: string, message: string): FsServiceDeps {
 			openPath: async () => "",
 			openExternal: async () => { },
 		},
-		clipboard: { writeText: () => { } },
+		clipboard: { writeText: () => { }, writeFiles: async () => { } },
 		homeDir,
 	};
 }
@@ -120,6 +126,58 @@ beforeEach(async () => {
 
 afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
+});
+
+describe("remote upload and download", () => {
+	it("writes an uploaded file under its own name", async () => {
+		// Given a destination folder and the service.
+		const dir = join(root, "uploads");
+		await mkdir(dir, { recursive: true });
+		const service = createFsService(makeDeps(root).deps);
+
+		// When a browser uploads one file.
+		const created = await service.uploadFile(dir, "notes.txt", Buffer.from("hello"));
+
+		// Then it lands under its own name with the uploaded bytes.
+		expect(created.name).toBe("notes.txt");
+		expect(await readFile(created.path, "utf8")).toBe("hello");
+	});
+
+	it("numbers a colliding upload and strips path separators from the name", async () => {
+		// Given a folder that already holds the upload's name.
+		const dir = join(root, "collide");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "notes.txt"), "existing");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When two uploads arrive, one of them with a traversal-looking name.
+		const second = await service.uploadFile(dir, "notes.txt", Buffer.from("second"));
+		const escaped = await service.uploadFile(dir, "../../evil.txt", Buffer.from("x"));
+
+		// Then the collision is numbered and the separator is never part of the name.
+		expect(second.name).toBe("notes copy.txt");
+		expect(await readFile(join(dir, "notes.txt"), "utf8")).toBe("existing");
+		expect(escaped.path.startsWith(dir)).toBe(true);
+		expect(escaped.name.includes("/")).toBe(false);
+	});
+
+	it("reads a file's bytes and answers null for a directory or a missing path", async () => {
+		// Given a file, a folder and a missing path.
+		const dir = join(root, "downloads");
+		await mkdir(dir, { recursive: true });
+		await writeFile(join(dir, "a.txt"), "bytes");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When each is read for download.
+		const file = await service.readFileBytes(join(dir, "a.txt"));
+		const folder = await service.readFileBytes(dir);
+		const missing = await service.readFileBytes(join(dir, "gone.txt"));
+
+		// Then only the file yields bytes.
+		expect(Buffer.from(file ?? []).toString("utf8")).toBe("bytes");
+		expect(folder).toBeNull();
+		expect(missing).toBeNull();
+	});
 });
 
 describe("listDir", () => {
@@ -421,6 +479,46 @@ describe("copy", () => {
 
 		// Then the copy lands as "b copy.txt"
 		expect(await readFile(join(destDir, "b copy.txt"), "utf8")).toBe("payload");
+	});
+
+	it("refuses to copy a folder into itself, reporting the reason and writing nothing", async () => {
+		// Given a folder with a subfolder
+		const folder = join(root, "outer");
+		await mkdir(join(folder, "inner"), { recursive: true });
+		await writeFile(join(folder, "a.txt"), "alpha");
+
+		// When copying it into its own subfolder
+		const result = await createFsService(makeDeps(root).deps).copy([folder], join(folder, "inner"));
+
+		// Then the batch names the folder with the OS reason, and nothing was created
+		expect(result.ok).toEqual([]);
+		expect(result.failed).toHaveLength(1);
+		expect(result.failed[0]?.path).toBe(folder);
+		expect(result.failed[0]?.message).toMatch(/subdirectory of self/);
+		expect(await readdir(join(folder, "inner"))).toEqual([]);
+	});
+
+	it("copies a nested folder and undo then redo recreate the same tree", async () => {
+		// Given a folder with nested files
+		const srcDir = join(root, "tree-src");
+		const destDir = join(root, "tree-dest");
+		await mkdir(join(srcDir, "deep", "deeper"), { recursive: true });
+		await mkdir(destDir, { recursive: true });
+		await writeFile(join(srcDir, "top.txt"), "t");
+		await writeFile(join(srcDir, "deep", "mid.txt"), "m");
+		await writeFile(join(srcDir, "deep", "deeper", "low.txt"), "l");
+		const service = createFsService(makeDeps(root).deps);
+
+		// When it is copied, undone and redone
+		await service.copy([srcDir], destDir);
+		await service.undo();
+		const afterUndo = await readdir(destDir);
+		await service.redo();
+
+		// Then undo removed it and redo brought back every file
+		expect(afterUndo).toEqual([]);
+		expect(await readFile(join(destDir, "tree-src", "deep", "deeper", "low.txt"), "utf8")).toBe("l");
+		expect(await readFile(join(destDir, "tree-src", "top.txt"), "utf8")).toBe("t");
 	});
 
 	it("reports per-path failures verbatim instead of throwing", async () => {
@@ -1493,6 +1591,107 @@ describe("locations", () => {
 	});
 });
 
+describe("Discord attachment folders", () => {
+	/** A home whose Discord connection saved one attachment and left the sync's own entries beside it. */
+	async function discordHome(name: string): Promise<{ readonly home: string; readonly folder: string; readonly deps: FsServiceDeps }> {
+		const home = join(root, name);
+		const folder = join(home, ".autorag", "attachments", "discord", "nomadamas");
+		await mkdir(join(folder, "Guild", "general"), { recursive: true });
+		await mkdir(join(folder, ".discrawl", "logs"), { recursive: true });
+		await mkdir(join(folder, ".lock"), { recursive: true });
+		await writeFile(join(folder, "Guild", "general", "status-report.pdf"), "pdf");
+		await writeFile(join(folder, ".discrawl", "config.toml"), "version = 1");
+		await writeFile(join(folder, "download-status.json"), "{}");
+		await writeFile(join(folder, ".DS_Store"), "x");
+		const row: FsLocation = {
+			name: "Discord",
+			path: folder,
+			section: "connections",
+			icon: "discord",
+			available: true,
+			scanned: true,
+			ejectable: false,
+		};
+		return { home, folder, deps: { ...makeDeps(home).deps, env: {}, places: fakePlaces([row]) } };
+	}
+
+	it("lists a connection folder without the status file, .discrawl, and .lock", async () => {
+		// Given a connection folder with the sync's three entries next to a server folder
+		const { folder, deps } = await discordHome("discord-list");
+
+		// When listing it
+		const listing = await createFsService(deps).listDir(folder);
+
+		// Then only the user's entries remain; a Finder .DS_Store is not the sync's, so it stays for the hidden-files setting
+		expect(listing.entries.map((entry) => entry.name).sort()).toEqual([".DS_Store", "Guild"]);
+	});
+
+	it("keeps a file with the same name anywhere else", async () => {
+		// Given download-status.json and .lock in a folder that is not a connection folder
+		const { home, deps } = await discordHome("discord-elsewhere");
+		const other = join(home, "Documents");
+		await mkdir(join(other, ".lock"), { recursive: true });
+		await writeFile(join(other, "download-status.json"), "{}");
+		// And inside a channel folder of a connection
+		const channel = join(home, ".autorag", "attachments", "discord", "nomadamas", "Guild", "general");
+		await writeFile(join(channel, "download-status.json"), "mine");
+
+		// When listing both, Then the names are the user's own there
+		const service = createFsService(deps);
+		expect((await service.listDir(other)).entries.map((entry) => entry.name).sort()).toEqual([".lock", "download-status.json"]);
+		expect((await service.listDir(channel)).entries.map((entry) => entry.name).sort()).toEqual(["download-status.json", "status-report.pdf"]);
+	});
+
+	it("reports a bookkeeping entry as gone when the watcher asks for it, so a rewritten status file never appears", async () => {
+		// Given the sync rewrote download-status.json and touched .discrawl
+		const { folder, deps } = await discordHome("discord-patch");
+		const requested = [join(folder, "download-status.json"), join(folder, ".discrawl"), join(folder, "Guild")];
+
+		// When the watcher resolves those children
+		const patch = await createFsService(deps).readEntries(folder, requested);
+
+		// Then only the server folder is an entry and the other two are removed
+		expect(patch.entries.map((entry) => entry.name)).toEqual(["Guild"]);
+		expect([...patch.removed].sort()).toEqual([join(folder, ".discrawl"), join(folder, "download-status.json")].sort());
+	});
+
+	it("does not find the bookkeeping by file name, but finds the attachments", async () => {
+		// Given the connection folder is a scanned location
+		const { deps } = await discordHome("discord-search");
+		const service = createFsService(deps);
+
+		// When searching names that exist both as an attachment and as bookkeeping
+		const status = await service.search("status");
+		const config = await service.search("config");
+		const logs = await service.search("logs");
+
+		// Then only the attachment answers
+		expect(status.map((hit) => [hit.entry.name, hit.location])).toEqual([["status-report.pdf", "Discord"]]);
+		expect(config).toEqual([]);
+		expect(logs).toEqual([]);
+	});
+
+	it("drops the bookkeeping from index hits too", async () => {
+		// Given a file-name index that lists the bookkeeping and the attachment alike
+		const { folder, deps } = await discordHome("discord-index");
+		const fileNameSearch: FileNameSearchBackend = {
+			search: async () => [
+				join(folder, "download-status.json"),
+				join(folder, ".discrawl", "config.toml"),
+				join(folder, "Guild", "general", "status-report.pdf"),
+			],
+			ensureDaemon: async () => {},
+			stop: async () => {},
+		};
+
+		// When searching through the index
+		const hits = await createFsService({ ...deps, fileNameSearch }).search("status");
+
+		// Then only the attachment is a hit, attributed to the Discord row
+		expect(hits.map((hit) => [hit.entry.name, hit.location])).toEqual([["status-report.pdf", "Discord"]]);
+	});
+});
+
 describe("Windows Recycle Bin listing", () => {
 	it("shows each deleted item under its original name and hides the $I records", async () => {
 		// Given a Recycle Bin folder with one $R payload and its $I record
@@ -1515,6 +1714,43 @@ describe("Windows Recycle Bin listing", () => {
 });
 
 describe("shell and clipboard side effects", () => {
+	it("clipboardSet puts the copied files themselves on the OS clipboard and keeps the in-app clipboard", async () => {
+		// Given a stubbed OS clipboard
+		const stubs = makeDeps(root);
+		const service = createFsService(stubs.deps);
+
+		// When copying two files
+		await service.clipboardSet({ op: "copy", paths: ["/a/one.png", "/b/two.png"] });
+
+		// Then the OS clipboard holds the files (not their paths as text) and the in-app clipboard still pastes them
+		expect(stubs.clipboardFiles).toEqual([["/a/one.png", "/b/two.png"]]);
+		expect(stubs.clipboardText).toEqual([]);
+		expect(await service.clipboardGet()).toEqual({ op: "copy", paths: ["/a/one.png", "/b/two.png"] });
+	});
+
+	it("clipboardSet with a cut also exposes the files to other apps, and the cut stays in-app", async () => {
+		const stubs = makeDeps(root);
+		const service = createFsService(stubs.deps);
+
+		await service.clipboardSet({ op: "cut", paths: ["/a/one.png"] });
+
+		expect(stubs.clipboardFiles).toEqual([["/a/one.png"]]);
+		expect(await service.clipboardGet()).toEqual({ op: "cut", paths: ["/a/one.png"] });
+	});
+
+	it("keeps the in-app clipboard working when the OS clipboard write fails", async () => {
+		const stubs = makeDeps(root);
+		const failing: FsServiceDeps = { ...stubs.deps, clipboard: { writeText: () => {}, writeFiles: async () => { throw new Error("pasteboard busy"); } } };
+		const service = createFsService(failing);
+
+		const logged = vi.spyOn(console, "error").mockImplementation(() => {});
+		await service.clipboardSet({ op: "copy", paths: ["/a/one.png"] });
+		expect(logged).toHaveBeenCalledOnce();
+		logged.mockRestore();
+
+		expect(await service.clipboardGet()).toEqual({ op: "copy", paths: ["/a/one.png"] });
+	});
+
 	it("reveal forwards the path to shell.showItemInFolder", async () => {
 		// Given a stubbed shell
 		const stubs = makeDeps(root);
@@ -1564,7 +1800,7 @@ describe("shell and clipboard side effects", () => {
 				openPath: async () => "The file “deck.key” does not exist.",
 				openExternal: async () => { },
 			},
-			clipboard: { writeText: () => { } },
+			clipboard: { writeText: () => { }, writeFiles: async () => { } },
 			homeDir: root,
 		};
 

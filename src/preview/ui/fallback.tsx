@@ -112,7 +112,7 @@ export function FallbackView({ file, note, art }: { readonly file: PreviewDocume
 				<div className="flex flex-col flex-1 gap-3 min-w-0">
 					<div className="ql-other__name mb-4 overflow-hidden text-[22px] font-bold tracking-[-0.01em] text-ellipsis whitespace-nowrap select-text">{file.name}</div>
 					<div className="text-[14px] text-ql-ink-secondary">{describeExtension(file.ext)}</div>
-					<div className="text-[14px] text-ql-ink-secondary">{formatFinderSize(file.size)}</div>
+					{file.package === true ? null : <div className="text-[14px] text-ql-ink-secondary">{formatFinderSize(file.size)}</div>}
 					<div className="text-[14px] text-ql-ink-secondary">{t("quickLook.fallback.lastModified", { date: formatFinderDate(file.modifiedAt, true) })}</div>
 					{note === undefined ? null : <div className="ql__note mt-4 text-[12px] text-ql-ink-secondary">{note}</div>}
 					<div className="mt-10">

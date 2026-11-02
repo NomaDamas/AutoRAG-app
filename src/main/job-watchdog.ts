@@ -75,13 +75,14 @@ export function createJobWatchdog(options: JobWatchdogOptions): JobWatchdog {
 }
 
 /**
- * The files a running refresh keeps touching: the librarian's phase marker, the
- * parsed mirror's checkpoint (every 25 files), and MinSync's resume log (every batch).
+ * The files a running refresh keeps touching: the librarian's phase marker (every
+ * 25 parsed files and every 5 s MinSync heartbeat), MinSync's parse-stage directory,
+ * and MinSync's vector-sync resume log (every batch).
  */
 export function progressFiles(workspacePath: string): readonly string[] {
 	return [
 		join(workspacePath, ".autorag", "refresh-progress.json"),
-		join(workspacePath, ".autorag", "parsed", "index.json"),
+		join(workspacePath, ".autorag", "parsed", "stage"),
 		join(workspacePath, ".autorag", "minsync", ".minsync", "progress.jsonl"),
 	];
 }

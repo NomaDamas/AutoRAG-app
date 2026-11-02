@@ -3,6 +3,7 @@ import { lstat, mkdir, mkdtemp, rename, rm } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import {
 	convertWithFilee,
+	listFileeFormats,
 	resolveFileeOptions,
 	type FileeCliOptions,
 	type FileeConvertRequest,
@@ -12,6 +13,8 @@ import { readRawConfigObject } from "@autorag/librarian/core";
 import type { ConversionOutcome, ConversionPlan, ConversionRequest } from "../shared/conversion-contract";
 import { t } from "../shared/i18n/core";
 import { canonicalFormat, planConversion } from "./conversion-plan";
+import { parseFormatTargets } from "./filee-formats";
+import { withTreeKillingRun } from "./filee-process";
 
 /**
  * The `filee` block of the shared AutoRAG config — the same switches the agent's
@@ -33,6 +36,11 @@ export interface ConversionServiceDeps {
 	readonly settings: () => FileeSettings;
 	/** Finds (or installs) the filee-cli binary and returns options that can spawn it. */
 	readonly resolveOptions: (options: FileeCliOptions) => Promise<FileeCliOptions>;
+	/**
+	 * What filee can convert `format` to (`filee formats <format>`), or null when that cannot be
+	 * told — the conversion then runs and reports its own failure.
+	 */
+	readonly listTargets: (format: string, options: FileeCliOptions) => Promise<ReadonlySet<string> | null>;
 	readonly convert: (request: FileeConvertRequest, options: FileeCliOptions) => Promise<FileeConvertResult>;
 }
 
@@ -84,42 +92,77 @@ export function createConversionService(deps: ConversionServiceDeps): Conversion
 		if (basename(newName) !== newName || newName === "." || newName === "..") {
 			throw new Error(t("main.convert.invalidName", { name: newName }));
 		}
-		const info = await lstat(path).catch(() => null);
-		if (info === null || !info.isFile()) throw new Error(t("main.convert.sourceMissing", { name }));
-
-		const directory = dirname(path);
-		const target = join(directory, newName);
-		if (await exists(target)) throw new Error(t("main.convert.nameTaken", { name: newName }));
-		// A hidden folder beside the source: the result is renamed out of it, which
-		// never crosses a device, and a failed or cancelled run removes it whole.
-		const staging = await mkdtemp(join(directory, STAGING_PREFIX));
+		// Registered before the first await: a cancel that arrives while the file is still
+		// being checked, or filee is still being found, must find the job.
 		const controller = new AbortController();
 		running.set(request.id, controller);
+		const { signal } = controller;
+		const cancelled = (): Error => new Error(t("main.convert.cancelled", { name }));
+		const checkpoint = (): void => {
+			if (signal.aborted) throw cancelled();
+		};
+		let staging: string | null = null;
 		try {
-			const outputs = await convertInto(path, plan.to, staging, controller.signal, name);
+			const info = await lstat(path).catch(() => null);
+			checkpoint();
+			if (info === null || !info.isFile()) throw new Error(t("main.convert.sourceMissing", { name }));
+
+			const directory = dirname(path);
+			const target = join(directory, newName);
+			if (await exists(target)) throw new Error(t("main.convert.nameTaken", { name: newName }));
+			checkpoint();
+
+			// Finding filee can download it; asking it what it converts to costs a process start.
+			// Both come before the staging folder, so a route that cannot work fails with nothing on disk.
+			const settings = deps.settings();
+			const options = await resolve(signal, name, () =>
+				deps.resolveOptions({
+					signal,
+					...(settings.binaryPath === undefined ? {} : { executable: settings.binaryPath }),
+					...(settings.autoInstall === false ? { autoInstall: false } : {}),
+					...(settings.timeoutMs === undefined ? {} : { timeoutMs: settings.timeoutMs }),
+					...(settings.dataDir === undefined ? {} : { dataDir: settings.dataDir }),
+				}),
+			);
+			const targets = await deps.listTargets(plan.from, options).catch(() => null);
+			checkpoint();
+			if (targets !== null && !targets.has(canonicalFormat(plan.to))) {
+				throw new Error(t("main.convert.noRoute", { name, extension: plan.to }));
+			}
+
+			// A hidden folder beside the source: the result is renamed out of it, which
+			// never crosses a device, and a failed or cancelled run removes it whole.
+			staging = await mkdtemp(join(directory, STAGING_PREFIX));
+			checkpoint();
+			const outputs = await convertInto(path, plan.to, staging, options, signal, name);
+			checkpoint();
 			return await place(outputs, directory, newName);
 		} finally {
 			running.delete(request.id);
-			await rm(staging, { recursive: true, force: true });
+			if (staging !== null) await rm(staging, { recursive: true, force: true });
 		}
 	}
 
-	async function convertInto(path: string, extension: string, staging: string, signal: AbortSignal, name: string): Promise<readonly string[]> {
-		const settings = deps.settings();
-		let result: FileeConvertResult;
+	/** Runs `step`; a failure after a cancel is the cancel, not whatever the aborted step threw. */
+	async function resolve<T>(signal: AbortSignal, name: string, step: () => Promise<T>): Promise<T> {
 		try {
-			const options = await deps.resolveOptions({
-				signal,
-				...(settings.binaryPath === undefined ? {} : { executable: settings.binaryPath }),
-				...(settings.autoInstall === false ? { autoInstall: false } : {}),
-				...(settings.timeoutMs === undefined ? {} : { timeoutMs: settings.timeoutMs }),
-				...(settings.dataDir === undefined ? {} : { dataDir: settings.dataDir }),
-			});
-			result = await deps.convert({ inputs: [path], to: canonicalFormat(extension), outputDir: staging }, options);
+			return await step();
 		} catch (error) {
 			if (signal.aborted) throw new Error(t("main.convert.cancelled", { name }));
 			throw new Error(t("main.convert.failed", { name, reason: error instanceof Error ? error.message : String(error) }));
 		}
+	}
+
+	async function convertInto(
+		path: string,
+		extension: string,
+		staging: string,
+		options: FileeCliOptions,
+		signal: AbortSignal,
+		name: string,
+	): Promise<readonly string[]> {
+		const result = await resolve(signal, name, () => deps.convert({ inputs: [path], to: canonicalFormat(extension), outputDir: staging }, options));
+		if (signal.aborted) throw new Error(t("main.convert.cancelled", { name }));
 		const file = result.files[0];
 		if (file === undefined || file.state !== "done") {
 			throw new Error(t("main.convert.failed", { name, reason: file?.error ?? t("main.convert.unknownReason") }));
@@ -163,7 +206,8 @@ export function createConversionService(deps: ConversionServiceDeps): Conversion
 export function createFileeConversionService(settings: () => FileeSettings): ConversionService {
 	return createConversionService({
 		settings,
-		resolveOptions: (options) => resolveFileeOptions(options),
+		resolveOptions: async (options) => withTreeKillingRun(await resolveFileeOptions(options)),
+		listTargets: async (format, options) => parseFormatTargets(await listFileeFormats(format, options)),
 		convert: convertWithFilee,
 	});
 }

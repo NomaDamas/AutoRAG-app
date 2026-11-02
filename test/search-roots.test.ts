@@ -1,9 +1,10 @@
 import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { saveMirrorIndex, type ParsedMirrorEntry } from "@autorag/librarian";
+import type { ParsedMirrorEntry } from "@autorag/librarian";
 import { afterEach, describe, expect, it } from "vitest";
 import { EMPTY_ROOT_MIN_INDEXED, findUnavailableRoots } from "../src/main/search-roots";
+import { seedMirrorStage } from "./support/seed-mirror-stage";
 
 const directories: string[] = [];
 
@@ -35,7 +36,7 @@ async function fixture(indexed: number): Promise<{ readonly docs: string; readon
 			updatedAt: new Date(0).toISOString(),
 		};
 	}
-	saveMirrorIndex(workspace, { version: 1, entries, skipped: {} });
+	seedMirrorStage(workspace, { version: 1, entries, skipped: {} });
 	return { docs, workspace };
 }
 

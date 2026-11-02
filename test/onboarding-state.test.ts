@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
+import { DEFAULT_SIDEBAR_SETTINGS } from "../src/shared/sidebar-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
@@ -56,6 +57,9 @@ const DEFAULT_SETTINGS: AppSettings = {
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
 	approvalMode: "auto",
+	remoteAccess: false,
+	remotePort: 47833,
+	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {
@@ -603,12 +607,21 @@ describe("createOnboardingService persistence", () => {
 	it("reports what a run that finished before the first poll actually read", async () => {
 		const directory = await workDir();
 		const documents = join(directory, "Documents");
-		await mkdir(join(directory, ".autorag", "parsed"), { recursive: true });
-		const entry = (name: string, updatedAt: string) => ({ sourcePath: join(documents, name), updatedAt });
-		await writeFile(
-			join(directory, ".autorag", "parsed", "index.json"),
-			JSON.stringify({ entries: { a: entry("a.md", "2026-01-01T00:00:00Z"), b: entry("b.md", "2026-01-02T00:00:00Z") }, skipped: {} }),
-		);
+		const { seedMirrorStage } = await import("./support/seed-mirror-stage");
+		const entry = (name: string) => ({
+			virtualPath: `/Documents/${name}`,
+			sourcePath: join(documents, name),
+			outputPath: join(directory, `${name}.md`),
+			parserName: "plain-text",
+			sourceMtimeNs: 1,
+			sourceSizeBytes: 1,
+			updatedAt: new Date(0).toISOString(),
+		});
+		seedMirrorStage(directory, {
+			version: 1,
+			entries: { "/Documents/a.md": entry("a.md"), "/Documents/b.md": entry("b.md") },
+			skipped: {},
+		});
 		const service = createOnboardingService({ ...makeDeps(directory), folderTotals: () => 2 });
 
 		await service.startIndexing({ folders: [documents], embed: "none", sources: [], plan: "free" });

@@ -6,6 +6,8 @@ import { createProfileSession, type ProfileModel } from "@autorag/librarian/prof
 import { createFolderSurvey } from "./agents/profiles/folder-stats";
 import { createProposalCollector, type ExclusionProposal, type ReplyLanguage, smartIndexingProfile } from "./agents/profiles/smart-indexing";
 import { type FolderScanOptions, scanFolder } from "./onboarding-scan";
+import { errorText, modelFailure } from "./agents/session-failure";
+import { subscribeProfileProgress } from "./agents/profile-progress";
 
 /**
  * Runs the smart-indexing agent (`agents/profiles/smart-indexing.ts`) over the
@@ -64,20 +66,6 @@ async function existingFolders(candidates: readonly unknown[]): Promise<string[]
 	return folders;
 }
 
-/** The provider's error when the last model request failed; pi reports it on the message instead of throwing. */
-function modelFailure(session: AgentSession): string | null {
-	for (let index = session.messages.length - 1; index >= 0; index -= 1) {
-		const message = session.messages[index];
-		if (message?.role !== "assistant") continue;
-		return message.stopReason === "error" ? (message.errorMessage ?? "The model request failed.") : null;
-	}
-	return null;
-}
-
-function errorText(error: unknown): string {
-	return error instanceof Error ? error.message : String(error);
-}
-
 export function createSmartIndexingService(deps: SmartIndexingServiceDeps): SmartIndexingService {
 	const runs = new Map<string, Run>();
 
@@ -107,6 +95,9 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 				agentDir: deps.agentDir,
 				env: deps.env,
 				model,
+			});
+			subscribeProfileProgress(session, (text) => {
+				if (!run.cancelled) deps.send({ type: "progress", runId, text });
 			});
 			session.subscribe((event) => {
 				if (event.type !== "tool_execution_start" || EXPLORING_TOOLS[event.toolName] !== true || run.cancelled) return;

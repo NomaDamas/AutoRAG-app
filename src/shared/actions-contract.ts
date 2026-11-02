@@ -11,12 +11,16 @@
  * All paths crossing this boundary are absolute OS paths.
  */
 
+import { REDUCTION_LEVELS, type ReductionLevel } from "./size-reduction";
+
 /** IPC channel names. Keep in 1:1 sync with the main-process handlers. */
 export const ACTIONS_CHANNELS = {
 	capabilities: "actions:capabilities",
 	run: "actions:run",
 	share: "actions:share",
 	openWithApplications: "actions:open-with-applications",
+	cancel: "actions:cancel",
+	progress: "actions:progress",
 } as const;
 
 export type ActionsChannel = (typeof ACTIONS_CHANNELS)[keyof typeof ACTIONS_CHANNELS];
@@ -45,7 +49,12 @@ export type ActionRequest =
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
 	| { readonly kind: "resizeImage"; readonly maxEdge: number }
-	| { readonly kind: "optimizeImage" }
+	| {
+			readonly kind: "reduceSize";
+			readonly level?: ReductionLevel;
+			readonly replaceOriginal?: boolean;
+			readonly id?: string;
+	  }
 	| { readonly kind: "convertVideo"; readonly container: VideoContainer };
 
 /**
@@ -63,6 +72,12 @@ export interface ActionCapabilities {
 	readonly imageFormats: readonly ImageFormat[];
 	/** Containers the video engine can remux into (empty without ffmpeg). */
 	readonly videoContainers: readonly VideoContainer[];
+	/**
+	 * Extensions (lower-case, no dot) whose files `reduceSize` can shrink on this
+	 * machine without changing their format: PDF through Filee, pictures through
+	 * sips/ffmpeg, video and audio through ffmpeg encoders the build really has.
+	 */
+	readonly reducibleExtensions: readonly string[];
 }
 
 /**
@@ -86,6 +101,12 @@ export interface ActionOutcome {
 	readonly note: string;
 }
 
+
+/** Live progress of a running action identified by `id` (0–99 while encoding). */
+export interface ActionProgressEvent {
+	readonly id: string;
+	readonly percent: number;
+}
 /** Share-sheet anchor: the button's rect in window CSS pixels. */
 export interface ActionAnchor {
 	readonly x: number;
@@ -101,6 +122,10 @@ export interface ActionAnchor {
 export interface ActionsBridge {
 	capabilities(): Promise<ActionCapabilities>;
 	run(paths: readonly string[], request: ActionRequest): Promise<ActionOutcome>;
+	/** Stop a running cancellable action identified by `id`. */
+	cancel?(id: string): Promise<void>;
+	/** Subscribe to live progress updates for running actions. */
+	onProgress?(listener: (event: ActionProgressEvent) => void): () => void;
 	/**
 	 * Applications the OS registers for `path`'s type, default first. Empty
 	 * where the platform cannot enumerate them (the chooser is then the only way).
@@ -124,8 +149,15 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 		case "compress":
 			return !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
 		case "extract":
-		case "optimizeImage":
 			return true;
+		case "reduceSize": {
+			const validId = !("id" in value) || (typeof value.id === "string" && value.id.length > 0);
+			const validLevel =
+				!("level" in value) ||
+				(typeof value.level === "string" && (REDUCTION_LEVELS as readonly string[]).includes(value.level));
+			const validReplace = !("replaceOriginal" in value) || typeof value.replaceOriginal === "boolean";
+			return validId && validLevel && validReplace;
+		}
 		case "convertImage":
 			return "format" in value && typeof value.format === "string" && IMAGE_FORMATS.includes(value.format);
 		case "resizeImage":
@@ -170,4 +202,5 @@ export const NO_CAPABILITIES: ActionCapabilities = {
 	archive: false,
 	imageFormats: [],
 	videoContainers: [],
+	reducibleExtensions: [],
 };

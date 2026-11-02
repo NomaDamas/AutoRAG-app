@@ -13,11 +13,11 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { GOLDEN, GUEST_REPO, MAX_VMS, RUNS_DIR, RUN_PREFIX, SLOTS_DIR, VM_CPU, VM_DISPLAY, VM_MEMORY_MB } from "./config.mjs";
-import { GUEST_ENV, pullTree, pushTree, shellQuote, sshOk, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
+import { GUEST_ENV, pullTree, pushFile, pushTree, shellQuote, sshOk, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
 import { guestScriptPath, needsEmbeddingAssets, orphanVmNames, runVmName, vmCapacity, vmExitCode } from "./plan.mjs";
 import { createSlotPool } from "./slots.mjs";
 import { cloneVm, configureVm, destroyVm, listVms, startVm, tartAvailable, vmExists, waitForIp } from "./tart.mjs";
@@ -115,6 +115,38 @@ async function pushEmbeddingAssets(ip, signal) {
 }
 
 /**
+ * Ensure the guest carries the host's arm64 `minsync` and `filee-cli` binaries
+ * (`~/bin/*`) so librarian 2.13.2's MinSync 0.5.1 durable stage protocol v2 and
+ * offline `convert-rename` work without downloading inside the VM.
+ */
+async function pushHostTools(ip, job, signal) {
+	await sshOk(ip, 'mkdir -p "$HOME/bin"');
+	try {
+		const minsync = execFileSync("which", ["minsync"], { encoding: "utf8" }).trim();
+		if (minsync) {
+			log("copying host minsync binary into ~/bin/minsync in the guest");
+			await pushFile(ip, minsync, "bin/minsync");
+			await sshOk(ip, 'chmod 755 "$HOME/bin/minsync"');
+		}
+	} catch {
+		// optional
+	}
+	const wantsFilee = job.kind === "script" || job.lanes.length === 0 || job.lanes.includes("convert-rename");
+	if (!wantsFilee) return;
+	try {
+		const brewLibexec = "/opt/homebrew/opt/filee-cli/libexec";
+		if (existsSync(join(brewLibexec, "filee-cli"))) {
+			log("copying host filee-cli bundle into ~/tools/filee-cli in the guest");
+			await sshOk(ip, 'mkdir -p "$HOME/tools/filee-cli"');
+			await pushTree(ip, realpathSync(brewLibexec), "tools/filee-cli", { signal });
+			await sshOk(ip, 'chmod 755 "$HOME/tools/filee-cli/filee-cli" && ln -sf "$HOME/tools/filee-cli/filee-cli" "$HOME/bin/filee-cli"');
+		}
+	} catch {
+		// optional
+	}
+}
+
+/**
  * Run a job in a fresh VM. Resolves with its exit code. The sweep's evidence
  * lives under `.omo/evidence`; a script's artifacts land in `QA_OUT` (`~/qa-out`
  * in the guest), and either way they are pulled to `<runDir>/evidence`.
@@ -140,6 +172,8 @@ export async function runInVm({ root, job, slot, vmName, runDir }) {
 		log("syncing the checkout (node_modules and out/ included; .upstream, release artifacts, and evidence excluded)");
 		await pushTree(ip, root, GUEST_REPO, { excludes: ["/.upstream", "/.omo/evidence", "/.autorag", "/build/stage", "/build/.cache", "/dist", ".DS_Store"], signal: abort.signal });
 		await waitForReady(ip, log, abort.signal);
+		interrupted();
+		await pushHostTools(ip, job, abort.signal);
 		interrupted();
 		if (needsEmbeddingAssets(job)) await pushEmbeddingAssets(ip, abort.signal);
 		interrupted();

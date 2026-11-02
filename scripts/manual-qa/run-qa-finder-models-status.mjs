@@ -44,7 +44,7 @@ try {
 	const settingsOpen = () => page.locator(".settings-panel").count();
 	const answer = () => page.locator('[data-role="answer"] .settings-trigger-label').innerText();
 	const openModels = async () => {
-		await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+		await page.locator(".sidebar__item--settings").click();
 		await page.waitForSelector(".settings-panel");
 		await page.locator(".settings-nav-item", { hasText: "AI Models" }).click();
 		await page.locator('[data-role="answer"]').waitFor();

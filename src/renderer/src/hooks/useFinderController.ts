@@ -6,6 +6,7 @@ import { useRowPipeline } from "./useRowPipeline";
 import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
+import type { QuickLookTarget } from "../../../preview/shared/contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
@@ -17,6 +18,7 @@ import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { useTagCatalog } from "./useTagCatalog";
+import { useSidebarSettings } from "./useSidebarSettings";
 import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
@@ -37,7 +39,9 @@ import {
 import type { NewFileFormatId } from "../../../shared/new-file-contract";
 import { planTransfer } from "../state/file-transfer";
 import { fileExtension, type FileActionTarget } from "../state/file-actions";
-import type { ConvertRenameState } from "../state/convert-rename";
+import { conversionErrorMessage, type ConvertRenameState } from "../state/convert-rename";
+import type { ReductionLevel } from "../../../shared/size-reduction";
+import { createReduceSizeDialogState, type ReduceSizeDialogState } from "../state/reduce-size-dialog";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -50,7 +54,7 @@ import {
 	selectDupey,
 	type LayerStore,
 } from "../state/layers";
-import { activeNavPath, basename, breadcrumbTrail, dirname, resolvePathInput, type Crumb } from "../state/paths";
+import { activeNavPath, basename, breadcrumbTrail, completePath as completePathInput, dirname, resolvePathInput, type Crumb, type PathCompletion } from "../state/paths";
 import {
 	applyRowClick,
 	EMPTY_SELECTION,
@@ -231,6 +235,12 @@ export interface FinderController {
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
 	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
 	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
+	/** The "용량 줄이기" dialog (choosing level/mode, or actively reducing with live progress); null when closed. */
+	readonly reduceDialog: ReduceSizeDialogState | null;
+	setReduceDialogLevel(level: ReductionLevel): void;
+	setReduceDialogReplaceOriginal(replaceOriginal: boolean): void;
+	confirmReduceSize(): void;
+	cancelReduceSize(): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -284,6 +294,8 @@ export interface FinderController {
 	 * text names nothing that exists.
 	 */
 	goToPath(input: string): Promise<boolean>;
+	/** Direct child folder candidates for the path bar's inline completion. */
+	completePath(input: string): Promise<readonly PathCompletion[]>;
 	navigateNav(item: NavItem): void;
 	/** Unmount the volume behind a sidebar row; tabs inside it move out first. */
 	ejectNav(item: NavItem): void;
@@ -348,7 +360,7 @@ export interface FinderController {
 }
 
 export interface QuickLookBridge {
-	readonly onQuickLook: (target: { readonly path: string; readonly name: string }) => void;
+	readonly onQuickLook: (target: QuickLookTarget) => void;
 	readonly closeQuickLook: () => void;
 	readonly isQuickLookOpen: () => boolean;
 }
@@ -449,6 +461,7 @@ export function useFinderController(
 	const [pathEditingCount, setPathEditingCount] = useState(0);
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
+	const [reduceDialog, setReduceDialog] = useState<ReduceSizeDialogState | null>(null);
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
@@ -505,11 +518,20 @@ export function useFinderController(
 		};
 	}, [source]);
 
+	useEffect(() => {
+		if (source.actions.onProgress === undefined) return;
+		return source.actions.onProgress((event) => {
+			setReduceDialog((current) =>
+				current !== null && current.id === event.id ? { ...current, percent: event.percent } : current,
+			);
+		});
+	}, [source]);
+
 	const showToast = useLatestCallback((message: string) => toastRef.current?.(message));
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
-		(error: unknown) => toastRef.current?.(error instanceof Error ? error.message : String(error)),
+		(error: unknown) => toastRef.current?.(conversionErrorMessage(error)),
 		[],
 	);
 
@@ -931,6 +953,11 @@ export function useFinderController(
 		return true;
 	});
 
+	const completePath = useLatestCallback(async (input: string): Promise<readonly PathCompletion[]> => {
+		const home = locations.find((location) => location.icon === "home")?.path ?? null;
+		return completePathInput(input, { current: path, home }, (directory) => source.list(directory));
+	});
+
 	const navigateNav = useLatestCallback(
 		(item: NavItem) => {
 			if (!item.available) {
@@ -1276,7 +1303,13 @@ export function useFinderController(
 					}
 					source.actions.share([entry.path], anchor).catch(reportError);
 					return;
-				case "request":
+				case "request": {
+					if (target.request.kind === "reduceSize") {
+						if (reduceDialog !== null) return;
+						const opened = createReduceSizeDialogState(entry, crypto.randomUUID());
+						if (opened !== null) setReduceDialog(opened);
+						return;
+					}
 					source.actions
 						.run([entry.path], target.request)
 						.then((outcome) => {
@@ -1288,6 +1321,7 @@ export function useFinderController(
 						})
 						.catch(reportError);
 					return;
+				}
 				case "openWith":
 				case "askAi":
 					// Both open UI the caller owns (the application menu, the composer).
@@ -1297,6 +1331,53 @@ export function useFinderController(
 
 	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
 		source.actions.openWithApplications(entry.path));
+
+	const setReduceDialogLevel = useLatestCallback((level: ReductionLevel) => {
+		setReduceDialog((current) => (current === null || current.working ? current : { ...current, level }));
+	});
+
+	const setReduceDialogReplaceOriginal = useLatestCallback((replaceOriginal: boolean) => {
+		setReduceDialog((current) => (current === null || current.working ? current : { ...current, replaceOriginal }));
+	});
+
+	const confirmReduceSize = useLatestCallback(() => {
+		const pending = reduceDialog;
+		if (pending === null || pending.working) return;
+		setReduceDialog({ ...pending, working: true, percent: null });
+		source.actions
+			.run([pending.path], {
+				kind: "reduceSize",
+				id: pending.id,
+				level: pending.level,
+				replaceOriginal: pending.replaceOriginal,
+			})
+			.then((outcome) => {
+				showToast(outcome.note);
+				if (outcome.output !== null) {
+					recordActionOutput("reduceSize", outcome.output);
+					refresh();
+					if (!searchingRef.current && pathRef.current === dirname(pending.path)) {
+						scrollTarget.current = outcome.output;
+						patchSelection(single(outcome.output));
+						setFlashPath(outcome.output);
+					}
+				}
+			})
+			.catch(reportError)
+			.finally(() => {
+				setReduceDialog((current) => (current?.id === pending.id ? null : current));
+			});
+	});
+
+	const cancelReduceSize = useLatestCallback(() => {
+		const pending = reduceDialog;
+		if (pending === null) return;
+		if (pending.working) {
+			void source.actions.cancel?.(pending.id).catch(reportError);
+			return;
+		}
+		setReduceDialog(null);
+	});
 
 	const dragEntries = useLatestCallback(
 		(entry: FinderEntry) => finderDragEntries(entry, selection.keys, viewEntries));
@@ -1324,8 +1405,8 @@ export function useFinderController(
 	});
 
 	const presentQuickLook = useLatestCallback(
-		(target: { readonly path: string; readonly name: string }) => {
-			quickLookRef.current?.onQuickLook(target);
+		(target: { readonly path: string; readonly name: string; readonly kind?: "file" | "folder" }) => {
+			quickLookRef.current?.onQuickLook({ path: target.path, name: target.name, kind: target.kind ?? "file" });
 			source.quickLook(target.path).catch(reportError);
 		});
 
@@ -1334,10 +1415,10 @@ export function useFinderController(
 		if (entry === null) return;
 		// Like Finder, Space previews folders too; only files land in Recents.
 		if (entry.kind === "folder") {
-			quickLookRef.current?.onQuickLook({ path: entry.path, name: entry.name });
+			quickLookRef.current?.onQuickLook({ path: entry.path, name: entry.name, kind: "folder" });
 			return;
 		}
-		presentQuickLook({ path: entry.path, name: entry.name });
+		presentQuickLook({ path: entry.path, name: entry.name, kind: "file" });
 	});
 
 	/** Space with a preview open closes it, whatever opened it (a row, or an evidence title with no row to toggle). */
@@ -1594,7 +1675,7 @@ export function useFinderController(
 			const targets = menuTargets(entry);
 			switch (action) {
 				case "quickLook":
-					presentQuickLook({ path: entry.path, name: entry.name });
+					presentQuickLook({ path: entry.path, name: entry.name, kind: entry.kind });
 					return;
 				case "open":
 					navigate(entry.path);
@@ -1753,7 +1834,7 @@ export function useFinderController(
 				dropRemoved(trashed.ok);
 				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
 			})
-			.catch(reportError)
+			.catch((error: unknown) => showToast(conversionErrorMessage(error)))
 			.finally(() => {
 				setConvertRename(null);
 				refresh();
@@ -1839,6 +1920,10 @@ export function useFinderController(
 	const dismiss = useLatestCallback(() => {
 		if (convertRename !== null) {
 			cancelConvertRename();
+			return;
+		}
+		if (reduceDialog !== null) {
+			cancelReduceSize();
 			return;
 		}
 		if (closingEvidenceTabId !== null) {
@@ -2036,15 +2121,18 @@ export function useFinderController(
 		// `t` changes identity with the language, so the menu re-labels on a switch.
 	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf]);
 
-	const navTargets = useMemo(
-		() => [
-			...(locations.length > 0 ? locations : [{ name: basename(path), path }]),
-			...sidebarTags(tagCatalog.catalog).map((tag) => ({ name: tag.name, path: tagPath(tag.name) })),
-		],
-		[locations, path, tagCatalog],
+	const sidebarSettings = useSidebarSettings();
+	const sidebarGroups = useMemo(
+		() => navGroups(locations, sidebarTags(tagCatalog.catalog), sidebarSettings),
+		[locations, tagCatalog, sidebarSettings],
 	);
+	const navTargets = useMemo(() => {
+		const visibleItems = sidebarGroups.flatMap((group) => group.items).filter((item) => item.view === undefined);
+		return visibleItems.length > 0
+			? visibleItems.map((item) => ({ name: item.label, path: item.path }))
+			: [{ name: basename(path), path }];
+	}, [sidebarGroups, path]);
 	const activeNav = activeNavPath(path, navTargets);
-	const sidebarGroups = useMemo(() => navGroups(locations, sidebarTags(tagCatalog.catalog)), [locations, tagCatalog]);
 
 	// Handlers handed to the view: one stable identity each (see useLatestCallback),
 	// so no closure here keeps an earlier render's rows alive.
@@ -2144,6 +2232,11 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		loadOpenWithApplications,
+		reduceDialog,
+		setReduceDialogLevel,
+		setReduceDialogReplaceOriginal,
+		confirmReduceSize,
+		cancelReduceSize,
 		dragEntries,
 		copySelection,
 		cutSelection,
@@ -2170,6 +2263,7 @@ export function useFinderController(
 		searchRef,
 		navigate,
 		goToPath,
+		completePath,
 		navigateNav,
 		ejectNav,
 		selectTabId,

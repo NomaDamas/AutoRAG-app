@@ -237,7 +237,7 @@ const SPECS: Readonly<Record<string, ProbeSpec>> = {
 };
 
 /** Templates that have no countable index: the backend answers each query live. */
-export const LIVE_QUERY_TEMPLATES: ReadonlySet<string> = new Set(["lark", "calendar", "apple-events"]);
+export const LIVE_QUERY_TEMPLATES: ReadonlySet<string> = new Set(["lark", "calendar", "apple-events", "spotlight"]);
 
 /** Templates whose backend CLI can report a count through {@link probeBackendIndex}. */
 export function hasBackendProbe(type: string): boolean {

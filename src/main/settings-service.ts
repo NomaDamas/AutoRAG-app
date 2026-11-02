@@ -18,6 +18,7 @@ import type {
 } from "../shared/settings-contract";
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
 import { isApprovalMode } from "../shared/interaction-contract";
+import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
@@ -75,6 +76,7 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 				...persisted,
 				appearance: persisted.appearance === "dark" ? "dark" : "light",
 				approvalMode: isApprovalMode(persisted.approvalMode) ? persisted.approvalMode : defaults.approvalMode,
+				sidebar: persisted.sidebar === undefined ? defaults.sidebar : normalizeSidebarSettings(persisted.sidebar),
 			},
 			permissions: state.permissions ?? {},
 		};
@@ -145,7 +147,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 			const state = await mutate((current) => {
 				const appearance = patch.appearance === "dark" || patch.appearance === "light" ? patch.appearance : current.settings.appearance;
 				const approvalMode = isApprovalMode(patch.approvalMode) ? patch.approvalMode : current.settings.approvalMode;
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode };
+				const sidebar = patch.sidebar === undefined ? current.settings.sidebar : normalizeSidebarSettings(patch.sidebar);
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar };
 			});
 			deps.onSettingsChanged?.(state.settings);
 			return state.settings;

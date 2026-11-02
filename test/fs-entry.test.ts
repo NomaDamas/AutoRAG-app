@@ -70,6 +70,15 @@ describe("buildFsEntry application bundles", () => {
 		expect(await buildFsEntry(path, "linux")).toMatchObject({ kind: "folder", ext: "" });
 	});
 
+	it.each(["Notes.rtfd", "App.iconset", "Live.pvt", "Localized.lpdf", "Settings.prefpane"])("treats %s as a package on every platform", async (name) => {
+		const path = join(root, name);
+		await mkdir(path);
+
+		for (const platform of ["darwin", "win32", "linux"] as const) {
+			expect(await buildFsEntry(path, platform)).toMatchObject({ kind: "file", ext: name.split(".").pop()?.toLowerCase(), size: null });
+		}
+	});
+
 	it("keeps a plain file named like a bundle a file", async () => {
 		const path = join(root, "not-really.app");
 		await writeFile(path, "plain\n");

@@ -125,7 +125,8 @@ export function FloatingMenu({
 		const preferredLeft = startAligned ? box.left - 8 : box.right - width;
 		const left = Math.max(12, Math.min(preferredLeft, window.innerWidth - width - 12));
 		const below = box.bottom + 6;
-		const top = below + height > window.innerHeight - 12 ? Math.max(12, box.top - 6 - height) : below;
+		const rawTop = below + height > window.innerHeight - 12 ? box.top - 6 - height : below;
+		const top = Math.max(12, Math.min(rawTop, window.innerHeight - height - 12));
 		setPosition({ left, top });
 	}, [anchor]);
 	useLayoutEffect(() => {
@@ -135,7 +136,11 @@ export function FloatingMenu({
 		const onScroll = (): void => place();
 		window.addEventListener("resize", onScroll);
 		document.addEventListener("scroll", onScroll, true);
+		const element = ref.current;
+		const observer = typeof ResizeObserver === "function" && element !== null ? new ResizeObserver(() => place()) : null;
+		if (observer !== null && element !== null) observer.observe(element);
 		return () => {
+			observer?.disconnect();
 			window.removeEventListener("resize", onScroll);
 			document.removeEventListener("scroll", onScroll, true);
 		};

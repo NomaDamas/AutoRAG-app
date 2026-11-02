@@ -181,6 +181,7 @@ test/            Vitest unit tests
 | [`docs/architecture.md`](docs/architecture.md) | Settings, fs worker, onboarding, live sync, attachments, OS menus, QA lanes |
 | [`DESIGN.md`](DESIGN.md) | Styling contract, tokens, components |
 | [`docs/release.md`](docs/release.md) | Installers, bundled tools, signing |
+| [`docs/remote-access.md`](docs/remote-access.md) | Browser remote access over LAN, Tailscale, SSH tunnels, and Cloudflare Tunnel |
 | [`docs/finder-performance.md`](docs/finder-performance.md) | Listing and rendering performance |
 | [`AGENTS.md`](AGENTS.md) | Contributor and agent rules, i18n, QA VM |
 

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
 import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
 import { unzipSync, zipSync } from "fflate";
+import { PDFDocument, StandardFonts } from "pdf-lib";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ActionAnchor } from "../src/shared/actions-contract";
 import {
@@ -14,6 +15,7 @@ import {
 	type CommandRunner,
 } from "../src/main/action-service";
 import { ArchiveError, archiveEntryPath } from "../src/main/archive-guard.mjs";
+import type { PdfReducer } from "../src/main/pdf-reducer";
 import { t } from "../src/shared/i18n/core";
 
 let root: string;
@@ -30,6 +32,7 @@ interface Harness {
 	readonly service: ActionService;
 	readonly commands: { readonly command: string; readonly args: readonly string[] }[];
 	readonly shares: { readonly paths: readonly string[]; readonly anchor: ActionAnchor }[];
+	readonly trashed: string[];
 }
 
 /**
@@ -82,10 +85,13 @@ function makeService(
 		readonly registered?: readonly string[];
 		/** Make the Launch Services lookup fail. */
 		readonly lookupFails?: boolean;
+		/** The Filee-backed PDF reducer; absent means the machine has none. */
+		readonly pdf?: PdfReducer;
 	} = {},
 ): Harness {
 	const commands: { command: string; args: string[] }[] = [];
 	const shares: { paths: string[]; anchor: ActionAnchor }[] = [];
+	const trashed: string[] = [];
 	const imageOutput = options.imageOutput ?? "encoded";
 	const run: CommandRunner = async (command, args) => {
 		commands.push({ command, args: [...args] });
@@ -122,10 +128,16 @@ function makeService(
 					shares.push({ paths: [...paths], anchor });
 				},
 			},
+			...(options.pdf === undefined ? {} : { pdf: options.pdf }),
+			trash: async (target) => {
+				trashed.push(target);
+				await rm(target, { force: true });
+			},
 			run,
 		}),
 		commands,
 		shares,
+		trashed,
 	};
 }
 
@@ -358,18 +370,6 @@ describe("image actions", () => {
 		await expect(service.run([webp], { kind: "resizeImage", maxEdge: 1920 }, null)).rejects.toThrow(t("main.action.unsupportedResize"));
 	});
 
-	it("optimizes only lossy formats", async () => {
-		const { service } = makeService();
-		const photo = join(root, "photo.jpeg");
-		await writeFile(photo, "jpg");
-		const outcome = await service.run([photo], { kind: "optimizeImage" }, null);
-		expect(outcome.output).toBe(join(root, "photo-optimized.jpeg"));
-
-		const png = join(root, "flat.png");
-		await writeFile(png, "png");
-		await expect(service.run([png], { kind: "optimizeImage" }, null)).rejects.toThrow(t("main.action.unsupportedOptimize"));
-	});
-
 	it("converts HEIC to JPEG through sips", async () => {
 		const { service, commands } = makeService({ ffmpeg: false });
 		const source = join(root, "IMG_0001.HEIC");
@@ -450,29 +450,6 @@ describe("image actions on Windows (ffmpeg backend)", () => {
 		expect(args).toContain("-vf");
 		expect(args.join(" ")).toContain("force_original_aspect_ratio=decrease");
 		expect(args.join(" ")).toContain("min(iw,800)");
-	});
-
-	it("optimizes a JPEG and keeps the output only when it shrank", async () => {
-		const { service, commands } = makeService({ platform: "win32", imageOutput: "s" });
-		const source = join(root, "big.jpeg");
-		await writeFile(source, "jpeg-bytes");
-
-		const outcome = await service.run([source], { kind: "optimizeImage" }, null);
-		expect(outcome.output).toBe(join(root, "big-optimized.jpeg"));
-		expect(commands.at(-1)?.command).toBe("ffmpeg");
-	});
-
-	it("optimizes PNG losslessly and drops the output when it did not shrink", async () => {
-		const shrink = makeService({ platform: "win32", imageOutput: "s" });
-		const png = join(root, "flat.png");
-		await writeFile(png, "png-bytes");
-		await shrink.service.run([png], { kind: "optimizeImage" }, null);
-		expect((shrink.commands.at(-1)?.args ?? []).join(" ")).toContain("-compression_level 9");
-
-		const bigger = makeService({ platform: "win32", imageOutput: "much-larger-than-source" });
-		const other = join(root, "flat2.png");
-		await writeFile(other, "png");
-		await expect(bigger.service.run([other], { kind: "optimizeImage" }, null)).rejects.toThrow(t("main.action.alreadyOptimized"));
 	});
 
 	it("hides formats the ffmpeg build cannot encode", async () => {
@@ -728,6 +705,365 @@ describe("batch targets", () => {
 	});
 });
 
+const MEDIA_ENCODERS =
+	FFMPEG_ENCODERS +
+	" V....D libx264              libx264 H.264\n" +
+	" V....D libvpx-vp9           libvpx VP9\n" +
+	" A....D aac                  AAC\n" +
+	" A....D libmp3lame           libmp3lame MP3\n" +
+	" A....D libopus              libopus Opus\n";
+
+/** A PNG signature followed by empty chunks of the given types, in order (the CRC is not checked by readers of the chunk list). */
+function pngWith(types: readonly string[]): Buffer {
+	const chunk = (type: string): Buffer => Buffer.concat([Buffer.from([0, 0, 0, 0]), Buffer.from(type, "latin1"), Buffer.alloc(4)]);
+	return Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), ...types.map(chunk)]);
+}
+
+/** A reducer double: writes `bytes` bytes as Filee's `<stem>_compressed.pdf` and reports availability. */
+function fakePdf(bytes: number, available = true): PdfReducer & { readonly calls: string[] } {
+	const calls: string[] = [];
+	return {
+		calls,
+		available: async () => available,
+		reduce: async (source, outputDir) => {
+			calls.push(source);
+			const out = join(outputDir, `${stemOf(source)}_compressed.pdf`);
+			await writeFile(out, Buffer.alloc(bytes));
+			return out;
+		},
+	};
+}
+
+describe("reduceSize", () => {
+	it("keeps a picture's format (sips when ffmpeg is absent, ffmpeg mjpeg when present), names the result -reduced and reports the saving", async () => {
+		const noFfmpeg = makeService({ ffmpeg: false, imageOutput: "s" });
+		const photo = join(root, "photo.jpeg");
+		await writeFile(photo, "x".repeat(2048));
+		const outcome = await noFfmpeg.service.run([photo], { kind: "reduceSize" }, null);
+		expect(outcome.output).toBe(join(root, "photo-reduced.jpeg"));
+		expect((await stat(photo)).size).toBe(2048);
+		expect((await stat(outcome.output ?? "")).size).toBe(1);
+		expect(noFfmpeg.commands.at(-1)?.command).toBe("sips");
+		expect(outcome.note).toBe(t("main.action.reduced", { name: "photo-reduced.jpeg", before: "2.0 KB", after: "1 B", percent: 99 }));
+
+		const withFfmpeg = makeService({ imageOutput: "s" });
+		await withFfmpeg.service.run([photo], { kind: "reduceSize", level: "light" }, null);
+		expect(withFfmpeg.commands.at(-1)?.command).toBe("ffmpeg");
+	});
+
+	it("leaves nothing behind when the result is not smaller than the original", async () => {
+		const { service } = makeService({ imageOutput: "much-larger-than-source" });
+		const photo = join(root, "photo.jpg");
+		await writeFile(photo, "jpg");
+		await expect(service.run([photo], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.alreadyOptimized"));
+		expect(await readdir(root)).toEqual(["photo.jpg"]);
+	});
+
+	it("replaces the original in place (moving the original to Trash) with zero extra files when replaceOriginal is true", async () => {
+		const { service, trashed } = makeService({ encoders: MEDIA_ENCODERS, imageOutput: "small" });
+		const clip = join(root, "k-skill-ai-rookie.mp4");
+		await writeFile(clip, "x".repeat(4096));
+		const outcome = await service.run([clip], { kind: "reduceSize", level: "balanced", replaceOriginal: true }, null);
+		expect(outcome.output).toBe(clip);
+		expect(await readdir(root)).toEqual(["k-skill-ai-rookie.mp4"]);
+		expect((await stat(clip)).size).toBe(5);
+		expect(trashed).toEqual([clip]);
+	});
+
+	it("reuses one -reduced file via Trash in copy mode instead of spawning -reduced 2 .. 8 garbage", async () => {
+		const { service, trashed } = makeService({ imageOutput: "s" });
+		const photo = join(root, "photo.heic");
+		await writeFile(photo, "heic-bytes");
+		const first = await service.run([photo], { kind: "reduceSize", replaceOriginal: false }, null);
+		const second = await service.run([photo], { kind: "reduceSize", level: "max", replaceOriginal: false }, null);
+		expect(first.output).toBe(join(root, "photo-reduced.heic"));
+		expect(second.output).toBe(join(root, "photo-reduced.heic"));
+		expect((await readdir(root)).sort()).toEqual(["photo-reduced.heic", "photo.heic"]);
+		expect(trashed).toEqual([join(root, "photo-reduced.heic")]);
+	});
+
+	it("refuses types with no size reduction and several targets", async () => {
+		const { service } = makeService();
+		const note = join(root, "notes.txt");
+		await writeFile(note, "hi");
+		await expect(service.run([note], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.unsupportedReduce"));
+		await expect(service.run([note, note], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.singleTargetOnly"));
+	});
+
+	it("quantizes PNG at all three levels (256-color floyd_steinberg on light, 144 on balanced, 64 on max) so light genuinely shrinks", async () => {
+		const { service, commands } = makeService({ imageOutput: "s" });
+		const png = join(root, "flat.png");
+		await writeFile(png, "png-bytes");
+		await service.run([png], { kind: "reduceSize", level: "light" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=256");
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("dither=floyd_steinberg");
+		await service.run([png], { kind: "reduceSize", level: "balanced" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=144");
+		await service.run([png], { kind: "reduceSize", level: "max" }, null);
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("max_colors=64");
+	});
+
+	it("refuses an animated PNG or WebP, which a one-frame re-encode would flatten", async () => {
+		const { service } = makeService({ platform: "win32", imageOutput: "s" });
+		const apng = join(root, "anim.png");
+		await writeFile(apng, pngWith(["IHDR", "acTL", "IDAT"]));
+		const still = join(root, "still.png");
+		await writeFile(still, pngWith(["IHDR", "iCCP", "IDAT", "acTL"]));
+		await service.run([still], { kind: "reduceSize" }, null);
+		await expect(service.run([apng], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.animatedReduce"));
+		const webp = join(root, "anim.webp");
+		const header = Buffer.alloc(30);
+		header.write("RIFF", 0);
+		header.write("WEBP", 8);
+		header.write("VP8X", 12);
+		header[20] = 0x02;
+		await writeFile(webp, header);
+		await expect(service.run([webp], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.animatedReduce"));
+	});
+
+	it("reduces a PDF through the Filee reducer and keeps a staging folder out of the listing", async () => {
+		const pdf = fakePdf(100);
+		const { service } = makeService({ pdf });
+		const source = join(root, "scan.pdf");
+		await writeFile(source, Buffer.alloc(5000));
+		const outcome = await service.run([source], { kind: "reduceSize" }, null);
+		expect(outcome.output).toBe(join(root, "scan-reduced.pdf"));
+		expect(pdf.calls).toEqual([source]);
+		expect((await readdir(root)).sort()).toEqual(["scan-reduced.pdf", "scan.pdf"]);
+	});
+
+	it("drops a PDF result that did not shrink, and a PDF when Filee is unavailable", async () => {
+		const source = join(root, "small.pdf");
+		await writeFile(source, Buffer.alloc(50));
+		const bigger = makeService({ pdf: fakePdf(500) });
+		await expect(bigger.service.run([source], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.alreadyOptimized"));
+		expect(await readdir(root)).toEqual(["small.pdf"]);
+
+		const none = makeService({ pdf: fakePdf(1, false) });
+		await expect(none.service.run([source], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.unsupportedReduce"));
+	});
+
+	it("caps video -maxrate and audio bitrate relative to probed source streams across light, balanced, and max", async () => {
+		const commands: { command: string; args: string[] }[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			run: async (command, args) => {
+				commands.push({ command, args: [...args] });
+				if (command === "ffmpeg" && args[0] === "-version") return { stdout: "ffmpeg version 9", stderr: "" };
+				if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: MEDIA_ENCODERS, stderr: "" };
+				if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+				if (command === "sips") return { stdout: SIPS_FORMATS_LISTING, stderr: "" };
+				if (args.includes("null")) {
+					return {
+						stdout: "",
+						stderr:
+							"  Duration: 00:00:10.00, start: 0.000000, bitrate: 2128 kb/s\n" +
+							"  Stream #0:0: Video: h264, yuv420p, 1920x1080, 2000 kb/s, 30 fps\n" +
+							"  Stream #0:1: Audio: aac, 44100 Hz, stereo, 128 kb/s\n",
+					};
+				}
+				const target = args.at(-1);
+				if (target !== undefined) await writeFile(target, "s");
+				return { stdout: "", stderr: "" };
+			},
+		});
+		const clip = join(root, "clip.mov");
+		await writeFile(clip, "x".repeat(4096));
+
+		await service.run([clip], { kind: "reduceSize", level: "light" }, null);
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "25", "-maxrate", "1300k", "-bufsize", "2600k", "-movflags", "+faststart"]));
+
+		await service.run([clip], { kind: "reduceSize", level: "balanced" }, null);
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "28", "-maxrate", "840k", "-bufsize", "1680k"]));
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("min(iw,1920)");
+
+		await service.run([clip], { kind: "reduceSize", level: "max" }, null);
+		expect(commands.at(-1)?.args).toEqual(expect.arrayContaining(["-c:v", "libx264", "-crf", "33", "-maxrate", "480k", "-bufsize", "960k"]));
+		expect((commands.at(-1)?.args ?? []).join(" ")).toContain("min(iw,1280)");
+	});
+
+	it("uses VP9 and Opus for WebM, and refuses video the build has no encoder for", async () => {
+		const full = makeService({ encoders: MEDIA_ENCODERS, imageOutput: "s" });
+		const webm = join(root, "talk.webm");
+		await writeFile(webm, "x".repeat(4096));
+		await full.service.run([webm], { kind: "reduceSize" }, null);
+		expect(full.commands.at(-1)?.args).toEqual(expect.arrayContaining(["libvpx-vp9", "libopus"]));
+
+		const bare = makeService({ imageOutput: "s" });
+		const mp4 = join(root, "movie.mp4");
+		await writeFile(mp4, "x".repeat(4096));
+		await expect(bare.service.run([mp4], { kind: "reduceSize" }, null)).rejects.toThrow(t("main.action.unsupportedReduce"));
+	});
+
+	it("re-encodes audio at a lower bitrate and carries the cover art over", async () => {
+		const { service, commands } = makeService({ encoders: MEDIA_ENCODERS, imageOutput: "s" });
+		const song = join(root, "song.mp3");
+		await writeFile(song, "x".repeat(4096));
+		const outcome = await service.run([song], { kind: "reduceSize" }, null);
+		expect(outcome.output).toBe(join(root, "song-reduced.mp3"));
+		const args = commands.at(-1)?.args ?? [];
+		expect(args).toEqual(expect.arrayContaining(["libmp3lame", "-b:a", "128k", "-c:v", "copy"]));
+	});
+
+	it("never reports a size reduction the engines cannot do: capabilities list only what runs", async () => {
+		const bare = makeService({ ffmpeg: false });
+		expect((await bare.service.capabilities()).reducibleExtensions).toEqual(["jpg", "jpeg", "heic", "heif"]);
+		const media = makeService({ encoders: MEDIA_ENCODERS, pdf: fakePdf(1) });
+		expect((await media.service.capabilities()).reducibleExtensions).toEqual([
+			"pdf",
+			"jpg",
+			"jpeg",
+			"png",
+			"webp",
+			"heic",
+			"heif",
+			"mp4",
+			"m4v",
+			"mov",
+			"mkv",
+			"webm",
+			"mp3",
+			"m4a",
+			"aac",
+			"opus",
+		]);
+		const win = makeService({ platform: "win32", ffmpeg: false });
+		expect((await win.service.capabilities()).reducibleExtensions).toEqual([]);
+		const winPdf = makeService({ platform: "win32", ffmpeg: false, pdf: fakePdf(1, false) });
+		expect((await winPdf.service.capabilities()).reducibleExtensions).toEqual([]);
+	});
+
+	it("streams determinate ffmpeg progress for the job id and hides the half-written file until done", async () => {
+		const progress: { id: string; percent: number }[] = [];
+		let duringRun: string[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			onProgress: (event) => progress.push({ id: event.id, percent: event.percent }),
+			run: async (command, args, options) => {
+				if (command === "ffmpeg" && args[0] === "-version") return { stdout: "ffmpeg version 9", stderr: "" };
+				if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: MEDIA_ENCODERS, stderr: "" };
+				if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+				if (command === "sips") return { stdout: SIPS_FORMATS_LISTING, stderr: "" };
+				duringRun = (await readdir(root)).filter((name) => !name.startsWith("."));
+				options?.onStderr?.("  Duration: 00:00:04.00, start: 0.000000\n");
+				options?.onStdout?.("out_time_us=1000000\n");
+				options?.onStdout?.("out_time_us=3000000\nprogress=end\n");
+				const target = args.at(-1);
+				if (target !== undefined) await writeFile(target, "s");
+				return { stdout: "", stderr: "" };
+			},
+		});
+		const clip = join(root, "clip.mp4");
+		await writeFile(clip, "x".repeat(4096));
+		const outcome = await service.run([clip], { kind: "reduceSize", id: "job-mp4" }, null);
+		expect(duringRun).toEqual(["clip.mp4"]);
+		expect(outcome.output).toBe(join(root, "clip-reduced.mp4"));
+		expect(progress).toEqual([
+			{ id: "job-mp4", percent: 25 },
+			{ id: "job-mp4", percent: 75 },
+		]);
+	});
+
+	it("cancels a running PDF or video reduction, cleans staging, and rejects as cancelled", async () => {
+		let started!: () => void;
+		const entered = new Promise<void>((resolve) => {
+			started = resolve;
+		});
+		const pdf: PdfReducer = {
+			available: async () => true,
+			reduce: (_source, _out, signal) =>
+				new Promise((_resolve, reject) => {
+					started();
+					signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+				}),
+		};
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			pdf,
+			run: async () => ({ stdout: "", stderr: "" }),
+		});
+		const scan = join(root, "scan.pdf");
+		await writeFile(scan, Buffer.alloc(4096));
+		const running = service.run([scan], { kind: "reduceSize", id: "job-pdf" }, null);
+		await entered;
+		await service.cancel("job-pdf");
+		await expect(running).rejects.toThrow(t("main.action.reduceCancelled", { name: "scan.pdf" }));
+		expect(await readdir(root)).toEqual(["scan.pdf"]);
+	});
+
+	it("falls back to object-stream compaction when Filee left a digital PDF unshrunk", async () => {
+		const doc = await PDFDocument.create();
+		const font = await doc.embedFont(StandardFonts.Helvetica);
+		for (let i = 0; i < 12; i += 1) {
+			const page = doc.addPage([595, 842]);
+			for (let line = 0; line < 35; line += 1) {
+				page.drawText(`Section ${i}.${line}: digital PDF text line 1234567890`, { x: 40, y: 800 - line * 16, size: 10, font });
+			}
+		}
+		const digital = join(root, "digital.pdf");
+		const uncompacted = await doc.save({ useObjectStreams: false });
+		await writeFile(digital, uncompacted);
+		// Filee copies a digital-only PDF byte-for-byte ("Couldn't make it smaller, so it was copied as it is").
+		const copyPdf: PdfReducer = {
+			available: async () => true,
+			reduce: async (source, outputDir) => {
+				const out = join(outputDir, "digital_compressed.pdf");
+				await writeFile(out, await readFile(source));
+				return out;
+			},
+		};
+		const { service } = makeService({ pdf: copyPdf });
+		const outcome = await service.run([digital], { kind: "reduceSize" }, null);
+		expect(outcome.output).toBe(join(root, "digital-reduced.pdf"));
+		expect((await stat(outcome.output ?? "")).size).toBeLessThan(uncompacted.byteLength);
+	});
+
+	it("does not settle for a <10% object-stream shave on PDF light when Filee shrinks further", async () => {
+		const doc = await PDFDocument.create();
+		const page = doc.addPage([595, 842]);
+		page.drawText("Slide with tiny header shave", { x: 40, y: 800, size: 12 });
+		const pdfPath = join(root, "slides.pdf");
+		// Pad with a comment so object-stream save shaves <1%, simulating meetup.pdf's 0.11% shave.
+		const base = await doc.save({ useObjectStreams: true });
+		const padded = Buffer.concat([Buffer.from("% pad\n"), Buffer.from(base)]);
+		await writeFile(pdfPath, padded);
+		const filee = fakePdf(Math.floor(padded.length * 0.45));
+		const { service } = makeService({ pdf: filee });
+		const outcome = await service.run([pdfPath], { kind: "reduceSize", level: "light" }, null);
+		expect(filee.calls).toEqual([pdfPath]);
+		expect((await stat(outcome.output ?? "")).size).toBe(Math.floor(padded.length * 0.45));
+	});
+
+	it("steps down JPEG quality automatically on light when the source was already moderately compressed", async () => {
+		const qValues: string[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			run: async (command, args) => {
+				if (command === "ffmpeg" && args[0] === "-version") return { stdout: "ffmpeg version 9", stderr: "" };
+				if (command === "ffmpeg" && args.includes("-encoders")) return { stdout: MEDIA_ENCODERS, stderr: "" };
+				if (command === "ffmpeg" && args.includes("-muxers")) return { stdout: FFMPEG_MUXERS, stderr: "" };
+				if (command === "sips") return { stdout: SIPS_FORMATS_LISTING, stderr: "" };
+				const qIdx = args.indexOf("-q:v");
+				const q = qIdx >= 0 ? (args[qIdx + 1] ?? "") : "";
+				qValues.push(q);
+				const target = args.at(-1) ?? "";
+				// First pass (q=6) only shaves 2% (980 B vs 1000 B); stepped-down pass shrinks to 520 B!
+				await writeFile(target, Buffer.alloc(q === "6" ? 980 : 520));
+				return { stdout: "", stderr: "" };
+			},
+		});
+		const jpg = join(root, "already-q75.jpg");
+		await writeFile(jpg, Buffer.alloc(1000));
+		const outcome = await service.run([jpg], { kind: "reduceSize", level: "light" }, null);
+		expect(qValues.length).toBeGreaterThanOrEqual(2);
+		expect((await stat(outcome.output ?? "")).size).toBe(520);
+	});
+});
+
 describe("capabilities", () => {
 	it("reports the macOS engines, ordered by how common each format is, and probes once", async () => {
 		const { service, commands } = makeService({ ffmpeg: true });
@@ -738,6 +1074,7 @@ describe("capabilities", () => {
 			archive: true,
 			imageFormats: ["jpeg", "png", "webp", "heic", "avif", "gif", "tiff", "bmp"],
 			videoContainers: ["mp4", "mov", "mkv"],
+			reducibleExtensions: ["jpg", "jpeg", "png", "webp", "heic", "heif"],
 		});
 		await service.capabilities();
 		// One probe each per session: `-version`, `-encoders`, `-muxers`, and `sips --formats`.

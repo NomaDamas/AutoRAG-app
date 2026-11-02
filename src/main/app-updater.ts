@@ -177,6 +177,9 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 				return;
 			}
 			if (available === null) return;
+			// The user asked for this update: let the platform installer take the download (electron-updater's MacUpdater
+			// hands the zip to Squirrel.Mac only when this is on, so without it the update would never become ready).
+			updater.autoInstallOnAppQuit = true;
 			set({ kind: "downloading", version: available.version, percent: 0 });
 			try {
 				await updater.downloadUpdate();

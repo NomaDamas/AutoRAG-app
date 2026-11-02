@@ -267,7 +267,7 @@ try {
 	console.log("settings");
 	await page.keyboard.press(chord("2"));
 	await page.waitForSelector('[role="row"]');
-	await page.locator(".sidebar__item", { hasText: "Settings" }).click();
+	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await sleep(600);
 	await shot(page, "11-settings-general");
@@ -325,7 +325,7 @@ try {
 	await sleep(400);
 	await shot(page, "18-toolbar-icon-hover");
 
-	await page.locator(".sidebar__item", { hasText: "Settings" }).hover();
+	await page.locator(".sidebar__item", { hasText: "Recents" }).hover();
 	await sleep(400);
 	await shot(page, "19-sidebar-item-hover");
 
