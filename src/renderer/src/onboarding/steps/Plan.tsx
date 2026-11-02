@@ -5,7 +5,7 @@ import { isPaidPlanId, parsePromoCode } from "../../../../shared/account-contrac
 import type { PlanId } from "../../../../shared/onboarding-contract";
 import { i18n } from "../../../../shared/i18n";
 import { cn } from "../../lib/cn";
-import { Eyebrow, Multiline } from "../parts";
+import { Multiline } from "../parts";
 import type { OnboardingCtx } from "../context";
 import { canSelectCloudEmbedding, isPlanSelectable, planHeld } from "../flow";
 
@@ -41,7 +41,6 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 	return (
 		<section className="screen center plan-screen">
 			<div className="screen-copy">
-				<Eyebrow icon="zap">{t("onboarding.plan.eyebrow")}</Eyebrow>
 				<h1>{planHeld(draft.plan, account) ? t("onboarding.plan.titleReady") : t("onboarding.plan.title")}</h1>
 				<p>
 					<Multiline text={cloud ? (proHeld ? t("onboarding.plan.leadCloudReady") : t("onboarding.plan.leadCloud")) : t("onboarding.plan.lead")} />

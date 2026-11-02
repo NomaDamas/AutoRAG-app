@@ -1007,17 +1007,16 @@
       }
     },
     "plan": {
-      "eyebrow": "套餐",
-      "title": "你打算如何使用？",
+      "title": "请选择套餐",
       "titleReady": "套餐已就绪",
-      "lead": "请选择套餐。可随时在设置中更改。",
+      "lead": "可随时在设置中更改。",
       "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
       "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
       "perMonth": "/ 月",
       "continue": "继续",
-      "checkoutPro": "开始 Pro 7 天免费试用",
+      "checkoutPro": "开始 7 天免费试用",
       "checkoutAir": "打开 Air 结算页面",
       "noteHeld": "此账户正在使用",
       "noteTrialing": "试用中 · 至 {{date}}",
@@ -1041,19 +1040,19 @@
           "name": "Pro",
           "price": "$20",
           "note": "绑定银行卡可免费 7 天，之后每月 $20",
-          "tag": "不想再订阅其他 AI、希望 Dazzi 开箱即用的用户",
+          "tag": "不订阅其他 AI，只想使用 Dazzi 的用户",
           "trial": "7 天免费试用"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "每月 $200 · 随时取消",
-          "tag": "适合重度使用"
+          "tag": "适合重度使用的套餐"
         },
         "byok": {
           "name": "BYOK",
           "price": "仅 API 费用",
-          "tag": "用自己的密钥直接连接"
+          "tag": "用自己的 API 密钥直接连接"
         }
       },
       "checkoutMax": "打开 Max 结算页面",

@@ -1007,17 +1007,16 @@
       }
     },
     "plan": {
-      "eyebrow": "プラン",
-      "title": "どのように使いますか？",
+      "title": "プランを選択してください",
       "titleReady": "プランの準備ができました",
-      "lead": "プランを選んでください。設定でいつでも変更できます。",
+      "lead": "設定でいつでも変更できます。",
       "leadCloud": "リモート埋め込みはProまたはMaxで利用できます。Proは7日間無料で始められます。",
       "leadCloudReady": "リモート埋め込みを利用できます。そのまま進んでください。",
       "badgeTrial": "トライアル中",
       "badgeSubscribed": "購読中",
       "perMonth": "/ 月",
       "continue": "続ける",
-      "checkoutPro": "Proの7日間無料トライアルを開始",
+      "checkoutPro": "7日間の無料トライアルを開始",
       "checkoutAir": "Airの決済ページを開く",
       "noteHeld": "このアカウントで利用中",
       "noteTrialing": "トライアル中 · {{date}}まで",
@@ -1028,32 +1027,32 @@
         "free": {
           "name": "Free",
           "price": "無料",
-          "tag": "Dazziを試したい方向け",
+          "tag": "Dazziを試したい方",
           "training": "サービス向上のため入出力を利用する場合があります"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "月額$4 · いつでも解約可",
-          "tag": "すでに他のAIサブスクリプションを使っている方向け"
+          "tag": "すでに他のAIサブスクリプションを使っている方"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "カード登録で7日間無料、その後月額$20",
-          "tag": "他のAIサブスクリプションなしでDazziをそのまま使いたい方向け",
+          "tag": "他のAIサブスクリプションなしでDazziだけを使いたい方",
           "trial": "7日間無料トライアル"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "月額$200 · いつでも解約可",
-          "tag": "たくさん使う方向け"
+          "tag": "たくさん使う方向けのプラン"
         },
         "byok": {
           "name": "BYOK",
           "price": "API費用のみ",
-          "tag": "自分のキーで直接接続"
+          "tag": "自分のAPIキーで直接接続"
         }
       },
       "checkoutMax": "Maxの決済ページを開く",

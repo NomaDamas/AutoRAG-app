@@ -1007,17 +1007,16 @@
       }
     },
     "plan": {
-      "eyebrow": "Plan",
-      "title": "How will you use it?",
+      "title": "Choose a plan",
       "titleReady": "Your plan is ready",
-      "lead": "Pick a plan. You can change it anytime in Settings.",
+      "lead": "You can change it anytime in Settings.",
       "leadCloud": "Remote embedding needs Pro or Max. Pro starts with 7 days free.",
       "leadCloudReady": "Remote embedding is ready to use. Continue to the next step.",
       "badgeTrial": "Trial in progress",
       "badgeSubscribed": "Subscribed",
       "perMonth": "/ mo",
       "continue": "Continue",
-      "checkoutPro": "Start the 7-day free trial of Pro",
+      "checkoutPro": "Start the 7-day free trial",
       "checkoutAir": "Open the Air checkout page",
       "noteHeld": "Active on this account",
       "noteTrialing": "Trial · until {{date}}",
@@ -1028,7 +1027,7 @@
         "free": {
           "name": "Free",
           "price": "Free",
-          "tag": "To try Dazzi out",
+          "tag": "For trying Dazzi out",
           "training": "Inputs and outputs may be used to improve the service"
         },
         "air": {
@@ -1041,19 +1040,19 @@
           "name": "Pro",
           "price": "$20",
           "note": "7 days free with a card, then $20/mo",
-          "tag": "For people who want Dazzi to just work, with no other AI subscription",
+          "tag": "For using Dazzi alone, with no other AI subscription",
           "trial": "7-day free trial"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "$200/mo · cancel anytime",
-          "tag": "For heavy, all-day use"
+          "tag": "For heavy use"
         },
         "byok": {
           "name": "BYOK",
           "price": "API costs only",
-          "tag": "Connect directly with your own key"
+          "tag": "Connect directly with your own API key"
         }
       },
       "checkoutMax": "Open the Max checkout page",
