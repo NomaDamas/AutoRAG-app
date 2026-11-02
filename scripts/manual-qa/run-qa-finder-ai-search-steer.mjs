@@ -144,7 +144,7 @@ const waitFor = async (predicate, label, timeoutMs = 5000) => {
 await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await openAiSearch(page);
 const panel = page.locator(AI_PANEL);
-const composer = panel.locator('input[aria-label="Ask Dazzi"]');
+const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 const steerBubbles = panel.locator(".steer-msg");
 log("app ready");
 

@@ -102,16 +102,19 @@ describe("createIndexStatusService", () => {
 		expect(pending?.kind).toBe("pending");
 	});
 
-	it("reports a parsed file as included in keyword-only mode, where nothing is ever staged into MinSync", async () => {
+	it("in keyword-only mode, reports a file as included once it is staged into the sparse-only MinSync index", async () => {
 		const fixture = await createFixture();
 		const raw = JSON.parse(await readFile(fixture.configPath, "utf8"));
 		await writeFile(fixture.configPath, JSON.stringify({ ...raw, appIndexing: { semanticSearch: false } }));
-		const parsedOnly = await indexFile(fixture, "parsed-only.txt", false);
+		const staged = await indexFile(fixture, "staged.txt", true);
 		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
 
-		const [status] = await service.indexStatus([parsedOnly]);
+		const [included] = await service.indexStatus([staged]);
+		expect(included).toMatchObject({ kind: "included", excluded: false, toggleable: true });
 
-		expect(status).toMatchObject({ kind: "included", excluded: false, toggleable: true });
+		const parsedOnly = await indexFile(fixture, "parsed-only.txt", false);
+		const [pending] = await service.indexStatus([parsedOnly]);
+		expect(pending?.kind).toBe("pending");
 	});
 
 	it("reports files outside every search path as outside and not toggleable", async () => {

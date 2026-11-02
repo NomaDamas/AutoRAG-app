@@ -46,7 +46,9 @@ import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import { evidenceDetail, evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource } from "../state/evidence";
 import {
 	openWithItems,
+	selectionActions,
 	suggestedActions,
+	type FileAction,
 	type FileActionIcon,
 	type FileActionItem,
 	type FileActionTarget,
@@ -203,7 +205,7 @@ export function Inspector({
 					onOpenEvidenceFolder={onOpenEvidenceFolder}
 				/>
 			) : entries.length > 1 ? (
-				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} />
+				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} actionCapabilities={actionCapabilities} onAction={onAction} />
 			) : (
 				<InfoHalf
 					entry={entry}
@@ -368,7 +370,12 @@ function InfoHalf({
 			)}
 
 			{entry === null ? null : (
-				<ActionBar entry={entry} capabilities={actionCapabilities} onAction={onAction} onAskAi={onAskAi} loadOpenWithApplications={loadOpenWithApplications} />
+				<ActionBar
+					actions={suggestedActions(entry, actionCapabilities)}
+					onAction={onAction}
+					onAskAi={() => onAskAi(entry)}
+					loadOpenWithApplications={() => loadOpenWithApplications(entry)}
+				/>
 			)}
 		</div>
 	);
@@ -559,16 +566,21 @@ const STACK_POSES: readonly string[] = [
  * The aggregate Info half for a multi-selection: a fan of the selection's own
  * previews (focused file in front), the count title, the per-kind breakdown
  * with the total size, and the created/modified date ranges. Per-file actions
- * (index chip, versions, the action bar) are single-selection concerns and
- * stay out.
+ * (index chip, versions) are single-selection concerns and stay out; the
+ * action bar holds only Compress, which needs several items.
  */
 function MultiInfoHalf({
 	entries,
 	focusPath,
+	actionCapabilities,
+	onAction,
 }: {
 	readonly entries: readonly FinderEntry[];
 	readonly focusPath: string | null;
+	readonly actionCapabilities: ActionCapabilities;
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 }): ReactElement {
+	const actions = selectionActions(actionCapabilities);
 	const { t } = useTranslation();
 	const summary = summarizeSelection(entries);
 	const cards = stackCards(entries, focusPath);
@@ -615,6 +627,7 @@ function MultiInfoHalf({
 					</dl>
 				</div>
 			</div>
+			{actions.length === 0 ? null : <ActionBar actions={actions} onAction={onAction} />}
 		</div>
 	);
 }
@@ -625,28 +638,26 @@ function MultiInfoHalf({
  * variants anchored to its button; a flat action runs at once.
  */
 function ActionBar({
-	entry,
-	capabilities,
+	actions,
 	onAction,
 	onAskAi,
 	loadOpenWithApplications,
 }: {
-	readonly entry: FinderEntry;
-	readonly capabilities: ActionCapabilities;
+	readonly actions: readonly FileAction[];
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
-	readonly onAskAi: (entry: FinderEntry) => void;
-	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
+	/** Absent for a multi-selection, which has no AI Summary or open-with. */
+	readonly onAskAi?: () => void;
+	readonly loadOpenWithApplications?: () => Promise<readonly OpenWithApplication[]>;
 }): ReactElement {
 	const { t } = useTranslation();
-	const actions = suggestedActions(entry, capabilities);
 	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
 	function run(target: FileActionTarget, anchor: ActionAnchor): void {
 		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
-		if (target.kind === "askAi") onAskAi(entry);
+		if (target.kind === "askAi") onAskAi?.();
 		else if (target.kind === "openWith") {
 			// The OS's handlers for this file's type come first; "기타…" opens the full chooser.
 			// A failed lookup still leaves "기타…" reachable.
-			loadOpenWithApplications(entry)
+			(loadOpenWithApplications?.() ?? Promise.resolve([]))
 				.catch((): readonly OpenWithApplication[] => [])
 				.then((applications) => setMenu({ items: openWithItems(applications), anchor }));
 		} else onAction(target, anchor);
@@ -662,7 +673,6 @@ function ActionBar({
 							case "open": return t("inspector.actions.open", def);
 							case "openWith": return t("inspector.actions.openWith", def);
 							case "compress": return t("inspector.actions.compress", def);
-							case "compress7z": return t("inspector.actions.compress7z", def);
 							case "extract": return t("inspector.actions.extract", def);
 							case "share": return t("inspector.actions.share", def);
 							case "askAi": return t("inspector.actions.askAi", def);

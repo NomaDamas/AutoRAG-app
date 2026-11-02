@@ -1,14 +1,17 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
 import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
-import type { AppCustomizerEvent, AppCustomizerRequest } from "../shared/app-customizer-contract";
+import type { AppCustomizerChange, AppCustomizerEvent, AppCustomizerRequest, AppCustomizerSurface } from "../shared/app-customizer-contract";
 import type { FsLocation, FsTag } from "../shared/fs-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
 import {
 	appCustomizerProfile,
 	createAppCustomizerToolkit,
-	type AppCustomizerToolkit,
 	type ReplyLanguage,
 } from "./agents/profiles/app-customizer";
+import {
+	createShortcutCustomizerToolkit,
+	shortcutCustomizerProfile,
+} from "./agents/profiles/shortcut-customizer";
 import { subscribeProfileProgress } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
 
@@ -34,10 +37,15 @@ export interface AppCustomizerService {
 	dispose(): void;
 }
 
+interface SessionChangesTracker {
+	takeChanges(): readonly AppCustomizerChange[];
+}
+
 interface SessionEntry {
 	readonly sessionId: string;
+	readonly surface: AppCustomizerSurface;
 	readonly session: AgentSession;
-	readonly toolkit: AppCustomizerToolkit;
+	readonly toolkit: SessionChangesTracker;
 	readonly language: ReplyLanguage;
 	readonly modelKey: string;
 	busy: boolean;
@@ -97,11 +105,20 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		}
 	}
 
-	async function acquireSession(sessionId: string, model: ProfileModel): Promise<SessionEntry> {
+	async function acquireSession(
+		sessionId: string,
+		surface: AppCustomizerSurface,
+		model: ProfileModel,
+	): Promise<SessionEntry> {
 		const currentLang = deps.language();
 		const modelKey = `${model.model.provider}:${model.model.id}`;
 		const existing = sessions.get(sessionId);
-		if (existing !== undefined && existing.language === currentLang && existing.modelKey === modelKey) {
+		if (
+			existing !== undefined &&
+			existing.surface === surface &&
+			existing.language === currentLang &&
+			existing.modelKey === modelKey
+		) {
 			sessions.delete(sessionId);
 			sessions.set(sessionId, existing);
 			return existing;
@@ -113,23 +130,43 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		evictOldestIfNeeded();
 
 		let entryRef: SessionEntry | null = null;
-		const toolkit = createAppCustomizerToolkit({
-			settings: deps.settings,
-			listLocations: deps.listLocations,
-			listTags: deps.listTags,
-			...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
-			language: () => deps.language(),
-			cancelled: () => entryRef?.cancelled === true,
-		});
-		const session = await createProfileSession({
-			profile: appCustomizerProfile({ language: currentLang, toolkit }),
-			cwd: deps.cwd,
-			agentDir: deps.agentDir,
-			env: deps.env,
-			model,
-		});
+		let toolkit: SessionChangesTracker;
+		let session: AgentSession;
+		if (surface === "shortcuts") {
+			const shortcutKit = createShortcutCustomizerToolkit({
+				settings: deps.settings,
+				language: () => deps.language(),
+				cancelled: () => entryRef?.cancelled === true,
+			});
+			toolkit = shortcutKit;
+			session = await createProfileSession({
+				profile: shortcutCustomizerProfile({ language: currentLang, toolkit: shortcutKit }),
+				cwd: deps.cwd,
+				agentDir: deps.agentDir,
+				env: deps.env,
+				model,
+			});
+		} else {
+			const sidebarKit = createAppCustomizerToolkit({
+				settings: deps.settings,
+				listLocations: deps.listLocations,
+				listTags: deps.listTags,
+				...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+				language: () => deps.language(),
+				cancelled: () => entryRef?.cancelled === true,
+			});
+			toolkit = sidebarKit;
+			session = await createProfileSession({
+				profile: appCustomizerProfile({ language: currentLang, toolkit: sidebarKit }),
+				cwd: deps.cwd,
+				agentDir: deps.agentDir,
+				env: deps.env,
+				model,
+			});
+		}
 		const created: SessionEntry = {
 			sessionId,
+			surface,
 			session,
 			toolkit,
 			language: currentLang,
@@ -161,7 +198,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					deps.send({ type: "cancelled", runId, sessionId: request.sessionId, changes: [] });
 					return;
 				}
-				entry = await acquireSession(request.sessionId, model);
+				entry = await acquireSession(request.sessionId, request.surface ?? "sidebar", model);
 				entry.busy = true;
 				entry.cancelled = false;
 				entry.toolkit.takeChanges();

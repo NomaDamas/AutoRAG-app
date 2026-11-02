@@ -1,7 +1,7 @@
 /**
  * Prove an installed (or staged) tool set works on a machine with nothing else.
  *
- *   node scripts/release/verify-bundle.mjs <tools-dir> [--model-cache <dir>]
+ *   node scripts/release/verify-bundle.mjs <tools-dir>
  *
  * Every tool runs from an environment whose PATH holds only `<tools-dir>/bin`
  * plus the OS directories, with no Homebrew, no cargo, no global Node. A tool
@@ -9,9 +9,7 @@
  * here. `<tools-dir>` is `build/stage/<platform>/tools` for the staged tree, or
  * `<resources>/tools` inside an installed app.
  *
- * `--model-cache <dir>` is the staged `build/stage/<platform>/verify-model` in
- * Hugging Face Hub layout: the Kiwi/MinSync sync below embeds, so it needs the
- * real Qwen3 weights, and the installer no longer carries them.
+ * The SPLADE check needs no model cache of its own: the installer carries that model under `tools/models`.
  *
  * Beyond `--version` it exercises what is easy to break when packaging:
  * Node-based CLIs loading native add-ons (better-sqlite3, lancedb, sharp) and
@@ -19,6 +17,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -27,11 +26,9 @@ import { pathToFileURL } from "node:url";
 const args = process.argv.slice(2);
 const toolsDir = args[0] === undefined ? null : resolve(args[0]);
 if (toolsDir === null) {
-	process.stderr.write("usage: verify-bundle.mjs <tools-dir> [--model-cache <dir>]\n");
+	process.stderr.write("usage: verify-bundle.mjs <tools-dir>\n");
 	process.exit(2);
 }
-const modelCacheIndex = args.indexOf("--model-cache");
-const modelCacheDir = modelCacheIndex >= 0 ? resolve(args[modelCacheIndex + 1] ?? "") : null;
 
 const win = process.platform === "win32";
 const bin = join(toolsDir, "bin");
@@ -159,58 +156,44 @@ check("minsync serve is the shared embedding daemon", join(bin, `minsync${exe}`)
 if (hasApp) check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
 probe("transformers.js loads without onnxruntime-web", `import(${JSON.stringify(pathToFileURL(join(modules, "@huggingface", "transformers", "dist", "transformers.node.mjs")).href)}).then((m)=>console.log(typeof m.pipeline==='function'?'loaded':'broken'))`);
 
-// Kiwi: the bundled library and model must make MinSync's `multilingual` tokenizer work with no
-// ~/.local/kiwi and no KIWI_* of the developer's own. Indexing 환불정책을 and finding it by the stem 환불 is
-// what whitespace tokenization cannot do, so a pass proves the library loaded and the model is usable.
-// The sync embeds, so it needs the native Qwen3 model. The installer no longer carries it, so it is
-// passed in as `--model-cache build/stage/<platform>/verify-model`; without a cache, or with one that
-// has no snapshot, minsync would download 1.2 GB and prove nothing about being offline, so the sync is
-// skipped then with a printed note.
-// macOS ships Apache-2.0 Kiwi 0.24.0 (LICENSE + NOTICE); Windows ships Kiwi 0.22.2, which is LGPL-2.1+ and
-// so also needs the LGPL text and the source/unmodified statement beside it.
-if (existsSync(join(toolsDir, "kiwi"))) {
-	const library = join(toolsDir, "kiwi", "lib", win ? "kiwi.dll" : "libkiwi.dylib");
-	const model = join(toolsDir, "kiwi", "models", "cong", "base");
-	const present = existsSync(library) && existsSync(model);
-	if (!present) failures += 1;
-	process.stdout.write(`${present ? "ok  " : "FAIL"} kiwi library and model are staged${present ? "" : "  <- missing"}\n`);
-	const licenseFiles = win ? ["LICENSE", "LGPL-2.1.txt", "SOURCE.txt"] : ["LICENSE", "NOTICE"];
-	for (const license of licenseFiles) {
-		const found = existsSync(join(toolsDir, "licenses", "kiwi", license));
-		if (!found) failures += 1;
-		process.stdout.write(`${found ? "ok  " : "FAIL"} kiwi ${license} ships with it${found ? "" : "  <- missing"}\n`);
+// MinSync's SPLADE encoder ships in the installer (`tools/models`): every file at its pinned size and SHA-256, with
+// its Apache-2.0 LICENSE. A sparse-only sync and a Korean stem query then run from that copy alone: HF_HUB_OFFLINE
+// makes a missing file fail the check instead of being downloaded, and `--embedder none` needs no dense model, so a
+// pass proves a fresh machine searches its files offline, low-end machines included. 인증서 must find the note
+// written only as 인증서를: that is the stem match MinSync's sparse ranking makes without any tokenizer library.
+const sparseModel = JSON.parse(readFileSync(new URL("../../src/shared/sparse-model.json", import.meta.url), "utf8"));
+const sparseSnapshot = join(toolsDir, "models", sparseModel.repoDir, "snapshots", sparseModel.revision);
+const sparseFiles = sparseModel.files.map((file) => {
+	const path = join(sparseSnapshot, file.name);
+	return { file, ok: existsSync(path) && createHash("sha256").update(readFileSync(path)).digest("hex") === file.sha256 };
+});
+const sparseComplete = sparseFiles.every((entry) => entry.ok) && existsSync(join(toolsDir, "models", sparseModel.repoDir, "refs", "main"));
+if (!sparseComplete) failures += 1;
+process.stdout.write(`${sparseComplete ? "ok  " : "FAIL"} the SPLADE model (${sparseModel.repo}) is bundled at its pinned revision and hashes${sparseComplete ? "" : `  <- ${sparseFiles.filter((entry) => !entry.ok).map((entry) => entry.file.name).join(", ") || "refs/main"}`}\n`);
+const sparseLicense = existsSync(join(toolsDir, "licenses", "kure-sparse-nano", "LICENSE"));
+if (!sparseLicense) failures += 1;
+process.stdout.write(`${sparseLicense ? "ok  " : "FAIL"} the SPLADE model's Apache-2.0 LICENSE ships with it${sparseLicense ? "" : "  <- missing"}\n`);
+if (sparseComplete) {
+	const workspace = join(home, "sparse-workspace");
+	mkdirSync(workspace, { recursive: true });
+	const minsync = join(bin, `minsync${exe}`);
+	cpSync(join(toolsDir, "models"), join(home, "models"), { recursive: true });
+	const env = { ...cleanEnv(home), FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
+	const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000, windowsHide: true });
+	sh(["init", "--format", "json", "--embedder", "none"]);
+	writeFileSync(join(workspace, "certificate.md"), "인증서를 제출해야 환불이 승인됩니다.\n");
+	writeFileSync(join(workspace, "unrelated.md"), "The quarterly report covers revenue and hiring.\n");
+	const synced = sh(["sync", "--format", "json"]);
+	const queried = sh(["query", "--format", "json", "--mode", "sparse", "-k", "1", "인증서"]);
+	let top = null;
+	try {
+		top = JSON.parse(queried.stdout || "[]")[0]?.path ?? null;
+	} catch {
+		top = null;
 	}
-	if (win) {
-		// What SOURCE.txt promises ("unmodified") has to match the staged bytes: the manifest records the release asset's hash.
-		const source = join(toolsDir, "licenses", "kiwi", "SOURCE.txt");
-		const recorded = manifest.tools.find((tool) => tool.name === "kiwi")?.sha256;
-		const stated = existsSync(source) && recorded !== undefined && readFileSync(source, "utf8").includes(recorded);
-		if (!stated) failures += 1;
-		process.stdout.write(`${stated ? "ok  " : "FAIL"} kiwi SOURCE.txt names the sha256 of the release asset that shipped${stated ? "" : "  <- missing or different"}\n`);
-	}
-	const nativeModel = modelCacheDir !== null && existsSync(join(modelCacheDir, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots"));
-	if (present && !nativeModel) {
-		const why = modelCacheDir === null ? "no --model-cache was passed" : "the model cache has no Qwen3 snapshot";
-		process.stdout.write(`skip minsync Korean tokenization (${why}; stage it with \`--only verify-model\`)\n`);
-	}
-	if (present && nativeModel) {
-		const workspace = join(home, "kiwi-workspace");
-		mkdirSync(workspace, { recursive: true });
-		const minsync = join(bin, `minsync${exe}`);
-		// HF_HUB_OFFLINE: a missing file fails the check instead of being fetched from the network.
-		const env = { ...cleanEnv(home), KIWI_LIBRARY_PATH: library, KIWI_MODEL_PATH: model, FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
-		cpSync(modelCacheDir, join(home, "models"), { recursive: true });
-		const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000, windowsHide: true });
-		sh(["init", "--format", "json", "--embedder", "native:Qwen/Qwen3-Embedding-0.6B"]);
-		const configPath = join(workspace, ".minsync", "config.toml");
-		writeFileSync(configPath, readFileSync(configPath, "utf8").replace(/^language = .*$/m, 'language = "multilingual"'));
-		writeFileSync(join(workspace, "doc.md"), "환불정책을 안내합니다\n");
-		const synced = sh(["--format", "json", "sync"]);
-		const hits = JSON.parse(sh(["--format", "json", "query", "환불", "--mode", "bm25"]).stdout || "[]");
-		const ok = synced.status === 0 && Array.isArray(hits) && hits.length === 1;
-		if (!ok) failures += 1;
-		process.stdout.write(`${ok ? "ok  " : "FAIL"} minsync tokenizes Korean with the bundled Kiwi${ok ? "" : `  <- sync exit ${synced.status}: ${`${synced.stdout}${synced.stderr}`.slice(0, 200).replace(/\s+/g, " ")}; stem hits ${hits.length}`}\n`);
-	}
+	const ok = synced.status === 0 && typeof top === "string" && top.endsWith("certificate.md");
+	if (!ok) failures += 1;
+	process.stdout.write(`${ok ? "ok  " : "FAIL"} minsync ranks Korean offline with the bundled SPLADE model and no dense model${ok ? "" : `  <- sync exit ${synced.status}, query exit ${queried.status}: ${`${synced.stderr}${queried.stderr}`.slice(0, 200).replace(/\s+/g, " ")}; top hit ${top}`}\n`);
 }
 
 process.stdout.write(failures === 0 ? `\nbundle OK (${manifest.tools.length} components, ${manifest.platform})\n` : `\n${failures} check(s) FAILED\n`);

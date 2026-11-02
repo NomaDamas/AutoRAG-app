@@ -141,7 +141,7 @@ async function installRecorder(page) {
 			const prose = [...document.querySelectorAll(".assistant-msg .assistant-prose")];
 			const quick = prose[0] ?? null;
 			const deep = prose[1] ?? null;
-			const input = document.querySelector('input[aria-label="Ask Dazzi"]');
+			const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
 			const inProgress = document.querySelector('button[aria-label="Stop"]') !== null;
 			return {
 				thinking: document.querySelector(".water-wave-thinking") !== null,
@@ -176,7 +176,7 @@ async function installRecorder(page) {
 }
 
 const FINISHED = () => {
-	const input = document.querySelector('input[aria-label="Ask Dazzi"]');
+	const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
 	return input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 };
 
@@ -200,7 +200,7 @@ try {
 	running = await launch(GOOD_CONFIG, "stream");
 	let { page } = running;
 	await installRecorder(page);
-	await page.fill('input[aria-label="Ask Dazzi"]', QUERY);
+	await page.fill('textarea[aria-label="Ask Dazzi"]', QUERY);
 	await page.keyboard.press("Enter");
 	log(`submitted: ${QUERY}`);
 	await page.waitForFunction(() => document.querySelector(".water-wave-thinking"), null, { timeout: RUN_TIMEOUT_MS });
@@ -265,7 +265,7 @@ try {
 	// Scenario 2: a config whose search root is gone must fail visibly.
 	running = await launch(MISSING_ROOT_CONFIG, "missing-root");
 	page = running.page;
-	await page.fill('input[aria-label="Ask Dazzi"]', QUERY);
+	await page.fill('textarea[aria-label="Ask Dazzi"]', QUERY);
 	const submittedAt = Date.now();
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(() => document.querySelector(".ai .text-danger-text")?.textContent, null, { timeout: 5_000 });

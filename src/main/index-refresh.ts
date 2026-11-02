@@ -19,7 +19,7 @@ import { ensureMessengerConfigsFor } from "./messenger-config";
 import { takeSharedParseFailures } from "./parse-isolation";
 import { runWithRecovery } from "./refresh-recovery";
 import { findUnavailableRoots } from "./search-roots";
-import { methodsForSemantic, runWithoutSemanticIndexing } from "./semantic-policy";
+import { runWithoutSemanticIndexing } from "./semantic-policy";
 import { t } from "../shared/i18n/core";
 import { embedderStallReport, refreshFailureReport, reportError } from "./error-report-core";
 
@@ -94,11 +94,12 @@ async function runRefresh(
 	const input = configInput(deps);
 	const configPath = resolveConfigPath(input).configPath;
 	const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
-	// Keyword-only mode runs no MinSync: its parsed mirror and Jikji steps run instead.
+	// Keyword-only mode still runs MinSync: as a sparse-only index (`withSemanticPolicyApplied`), it needs no dense model.
 	const semantic = readAppIndexing(raw).semanticSearch;
-	const selected = methodsForSemantic(requested as readonly RefreshMethod[], semantic);
-	// MinSync would download the missing weights itself, with no progress and no way to stop it: the app's own download comes first.
-	if (selected.includes("minsync") && localModelMissing(raw)) {
+	const selected = requested as readonly RefreshMethod[];
+	// MinSync would download the missing dense weights itself, with no progress and no way to stop it: the app's own
+	// download comes first. A sparse-only index uses only the bundled SPLADE model, so keyword-only mode never waits.
+	if (semantic && selected.includes("minsync") && localModelMissing(raw)) {
 		const message = t("main.refresh.modelMissing");
 		return {
 			ok: false,

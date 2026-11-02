@@ -143,7 +143,7 @@ let idB = "";
 	await switchFor(page, "Show Hidden Files").click();
 	await sleep(400);
 	await page.locator(".sidebar__item", { hasText: "AI Search" }).click();
-	const composer = page.locator(`${AI_PANEL} input[aria-label="Ask Dazzi"]`);
+	const composer = page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`);
 	await composer.waitFor();
 	await composer.fill(CANARY);
 	await composer.press("Enter");

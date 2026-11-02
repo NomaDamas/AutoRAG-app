@@ -167,14 +167,14 @@ try {
 
 	await openAiSearch(page);
 	await page.fill(
-		'input[aria-label="Ask Dazzi"]',
+		'textarea[aria-label="Ask Dazzi"]',
 		"backup-guide.txt를 근거로 백업 방법을 설명해줘. 실행 명령은 ```bash 코드블럭, backup.json 설정 예시는 ```json 코드블럭, 파이썬 스크립트 예시는 ```python 코드블럭으로 각각 언어 태그를 붙여서 보여줘.",
 	);
 	await page.keyboard.press("Enter");
 	// The model may read the guide with a shell command; the file-change gate then shows an approval card. Allow it: this lane checks rendering.
 	const finished = () =>
 		page.evaluate(() => {
-			const input = document.querySelector('input[aria-label="Ask Dazzi"]');
+			const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
 			const done = input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 			return done || Boolean(document.querySelector(".ai .text-danger-text")?.textContent);
 		});

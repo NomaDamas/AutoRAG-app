@@ -180,7 +180,7 @@ app.process().stderr?.on("data", (chunk) => {
 await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await openAiSearch(page);
 const panel = page.locator(AI_PANEL);
-const composer = panel.locator('input[aria-label="Ask Dazzi"]');
+const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
 const modeButton = panel.locator('button[aria-label="File change approval mode"]');
 const approval = panel.locator('[role="alertdialog"]');
 const question = panel.locator('[role="dialog"]');
@@ -193,7 +193,7 @@ const mode = () => page.evaluate(() => window.autorag.interaction.getMode());
 const pending = () => page.evaluate(() => window.autorag.interaction.pending());
 // The run is over when the message box is back and not in its "running" state (the Stop button): while a card is open the box is not on screen at all.
 const finished = () =>
-	page.waitForFunction(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
+	page.waitForFunction(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
 // Every scenario below scripts a chat's FIRST question (the librarian answers it in two phases, Quick then Deep). A later question of the same
 // chat is a plain turn of the conversation, so each one starts a new chat; the conversation lane covers follow-ups and the gate on them.
 const ask = async (text) => {
@@ -214,7 +214,7 @@ check("the mode defaults to auto", (await mode()) === "auto", await mode());
 check("the menu button shows Auto", (await modeButton.innerText()).includes("Auto"), await modeButton.innerText());
 const geometry = await panel.evaluate((root) => {
 	const button = root.querySelector('button[aria-label="File change approval mode"]');
-	const input = root.querySelector('input[aria-label="Ask Dazzi"]');
+	const input = root.querySelector('textarea[aria-label="Ask Dazzi"]');
 	if (!button || !input) return null;
 	const a = button.getBoundingClientRect();
 	const b = input.getBoundingClientRect();
@@ -452,7 +452,7 @@ await ask("summarize one more time");
 await question.waitFor();
 const calls = seen.length;
 await question.getByRole("button", { name: "Stop" }).click();
-await page.waitForFunction(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null);
+await page.waitForFunction(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null);
 await sleep(600);
 check("Stop closes the question and returns the message box", (await question.count()) === 0 && (await composer.count()) === 1);
 check("nothing stays open in the main process", (await pending()).length === 0, JSON.stringify(await pending()));
@@ -474,13 +474,13 @@ koPage.setDefaultTimeout(15_000);
 await koPage.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await koPage.locator(".sidebar__item").first().click();
 // The panel's own label is translated too, so this part finds it by structure, not by its English name.
-await koPage.waitForSelector("form.composer input", { timeout: 30_000 });
+await koPage.waitForSelector("form.composer textarea", { timeout: 30_000 });
 await koPage.evaluate(() => window.autorag.interaction.setMode("ask"));
 const koPanel = koPage.locator("body");
-const koIdle = () => koPage.waitForFunction(() => document.querySelector("form.composer input") !== null && document.querySelector('button[aria-label="중지"]') === null, null, { timeout: 60_000 });
+const koIdle = () => koPage.waitForFunction(() => document.querySelector("form.composer textarea") !== null && document.querySelector('button[aria-label="중지"]') === null, null, { timeout: 60_000 });
 // The first words of every run are the librarian's own English sentence; the app shows them in the interface language.
 script([{ text: "빠른 답변", delayMs: 2500 }, { text: "검증된 답변" }]);
-await koPanel.locator("form.composer input").first().click();
+await koPanel.locator("form.composer textarea").first().click();
 await koPage.keyboard.type("안녕");
 await koPage.keyboard.press("Enter");
 const koRow = koPanel.locator(".water-wave-thinking");
@@ -493,7 +493,7 @@ await koIdle();
 script(deleteOld);
 // The scripted steps are a first question's (Quick, then Deep); a later question of the same chat is a plain conversation turn.
 await koPanel.locator('button[aria-label="새 대화"]').click();
-await koPanel.locator("form.composer input").first().click();
+await koPanel.locator("form.composer textarea").first().click();
 await koPage.keyboard.type("오래된 초안 지워줘");
 await koPage.keyboard.press("Enter");
 await koPanel.locator('[role="alertdialog"]').waitFor();
@@ -501,7 +501,7 @@ const koText = await koPanel.locator('[role="alertdialog"]').innerText();
 check("the approval card is in Korean", /[가-힣]/.test(koText) && !/Allow once|Deny/.test(koText), koText.slice(0, 200));
 await koPage.screenshot({ path: join(EVIDENCE, "11-approval-card-ko.png") });
 await koPage.keyboard.press("Escape");
-await koPage.waitForFunction(() => document.querySelector("form.composer input") !== null && document.querySelector("button[aria-label=\"중지\"]") === null, null, { timeout: 60_000 });
+await koPage.waitForFunction(() => document.querySelector("form.composer textarea") !== null && document.querySelector("button[aria-label=\"중지\"]") === null, null, { timeout: 60_000 });
 await koPage.locator('button[aria-label^="파일 변경"]').click();
 await koPage.waitForTimeout(400);
 await koPage.screenshot({ path: join(EVIDENCE, "12-mode-menu-ko.png") });

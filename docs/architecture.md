@@ -38,6 +38,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
   **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
+- **기본 → 단축키** — keyboard shortcut customization (`ShortcutsPage`,
+  `src/shared/shortcuts-contract.ts`) across Dazzi's fixed catalog of 26
+  default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
+  key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
+  conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
+  profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
+  `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
+  be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
   account service (not Pi's login); other services use the same Pi `/login` the AutoRAG
   agent uses: subscription sign-in (Claude Pro/Max, ChatGPT Plus/Pro, GitHub
@@ -76,31 +84,32 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   included, so choosing a model again needs no re-entry). `semantic-policy.ts`
   applies it to the config the app hands to the librarian, because the librarian
   has no switch for it:
-  - *Refresh*: `minsync` is replaced by `parsed` + `jikji`, so MinSync never runs, no
-    model is loaded or downloaded, and no `.minsync` index is built.
+  - *Refresh*: MinSync still runs, as a sparse-only index: the config handed to the
+    librarian sets `minSync.embedder.id: "none"`, so MinSync encodes SPLADE vectors with
+    the model the installer carries and no dense model is loaded or downloaded. Switching
+    between keyword-only and a dense embedder rebuilds the `.minsync` index (the librarian
+    re-initializes it).
   - *Datasources*: the kakao/slack/telegram/whatsapp sidecars get
     `connector.sidecar.semantic: false` (BM25 only), Discord answers from FTS,
     ClawGallery skips its visual vector sync and pins `defaultMode: "keyword"`, and for the duration of a refresh the
     embedding steps the librarian runs unconditionally (mailcrawl `index`,
     discrawl `embed`) are successful no-ops; their sync and update steps still run.
-    The Obsidian source is left unindexed instead: MinSync indexes a vault into a
-    MinSync workspace of its own and needs an embedder, so with keyword-only search
-    the app does not index Obsidian at all. GitHub Gist sets `connector.semantic: false`, which
+    An Obsidian vault is indexed by MinSync the same way, as a sparse-only index. GitHub Gist sets `connector.semantic: false`, which
     the librarian (Marker-Inc-Korea/AutoRAG#1936) maps to the gist skill's own
     switch: no vector index and no `<name>-semantic` method. The pre-#1936
     prototype patch for it is gone with the v2.10.4 pin.
-  - *Search*: MinSync's vector and hybrid methods answer nothing without being run
-    (the agent keeps its vector method outside the method registry, so
-    `semantic-policy.ts` reaches it through the agent's `minSyncMethod`, and refuses
-    to run keyword-only when a librarian release moves it). The shared embedder reports
-    no endpoint, so a datasource's hybrid-first method (mailcrawl, the kakao CLI) fails
-    its hybrid search with `embedding-unavailable` and answers from its own keyword
-    search; the app drops the pipeline's `onFallback` for it, so that deliberate
-    fallback is not reported as a failed method. There is no "method failed"
-    diagnostic for an index that is deliberately absent, and the agent's
-    past-question memory ranks by keywords only. Local file content is found by
-    Jikji and the file-name tools.
-  - *Status*: a parsed file counts as included, since nothing is staged into MinSync.
+  - *Search*: MinSync's methods over the sparse-only index describe themselves as `sparse`
+    and search with `--mode sparse` (SPLADE), so local file content is found by meaning-
+    aware keyword ranking as well as Jikji and the file-name tools. Dense vector and hybrid
+    methods answer nothing without being run (the agent keeps its MinSync method outside
+    the method registry, so `semantic-policy.ts` reaches it through the agent's
+    `minSyncMethod`, and refuses to run keyword-only when a librarian release moves it).
+    The shared embedder reports no endpoint, so a datasource's hybrid-first method
+    (mailcrawl, the kakao CLI) fails its hybrid search with `embedding-unavailable` and
+    answers from its own keyword search; the app drops the pipeline's `onFallback` for it,
+    so that deliberate fallback is not reported as a failed method. The agent's
+    past-question memory ranks by keywords only.
+  - *Status*: a parsed file counts as included once it is staged into the sparse-only MinSync index.
 - **Embedder preflight** — before a refresh that includes `minsync` parses a single
   document, `embedder-preflight.ts` sends one embedding request to a remote
   (`openai:` or `tei:`) embedder, built the way MinSync builds its own: `baseUrl` +
@@ -184,17 +193,11 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
-  - *The BM25 tokenizer needs Kiwi* (librarian 733e8a0 / MinSync 0.4.10). The
-    librarian always asks MinSync for the `multilingual` tokenizer, which loads
-    the Kiwi native library and model at run time; neither ships with the app.
-    Without them a new workspace is built with `simple` (whitespace) tokenization
-    and the refresh returns a `lexical-tokenizer-unavailable` warning (not an
-    error: `ok` stays true, so the UI shows it only as the `진단 N건` count after
-    a manual refresh in Settings → 인덱싱); the next
-    refresh after Kiwi is installed (`~/.local/kiwi`, or `KIWI_LIBRARY_PATH` and
-    `KIWI_MODEL_PATH`) re-indexes the workspace once with `multilingual`. A
-    workspace already on `multilingual` is never switched back when Kiwi
-    disappears.
+  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0). MinSync replaced its BM25 index with
+    learned-sparse retrieval (`nlpai-lab/KURE-Sparse-nano`), which matches Korean inflected forms
+    (`인증서를` for `인증서`) with no tokenizer library, so Kiwi is gone. The installer carries the model and
+    `bundled-sparse-model.ts` seeds it into MinSync's cache at startup. The first refresh after the upgrade
+    migrates a BM25-era index in place: sparse vectors are encoded for every chunk and dense vectors are kept.
   - Not covered: cancelling a refresh from the UI (the librarian has no abort
     signal, AutoRAG#1892), and an unreadable subfolder inside a readable root
     (AutoRAG#1889).
@@ -455,7 +458,10 @@ after every change, so a relaunch (for example after granting Full Disk Access)
 resumes at the same step.
 
 - **Permissions** probe Full Disk Access for real (macOS) and re-check every two
-  seconds. Notifications post a real system notification; if macOS reports the
+  seconds. "시스템 설정 열기" opens the Privacy & Security › Full Disk Access pane
+  directly, with no explanation modal in between, and the row switches at once
+  to "다시 시작 필요" + "지금 다시 시작" because a grant only reaches a running app
+  after a relaunch (the probe clears it once the grant is real). Notifications post a real system notification; if macOS reports the
   app is not allowed, the step says so and opens the system notification
   settings (the unsigned dev binary is never allowed, so this only works in a
   signed build). Launch at login is the same setting as Settings › General and
@@ -765,8 +771,10 @@ second is the error-fix helper behind "AI로 고치기" (see "An error in AI Sea
 app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
 `src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 that
 inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`, `update_general_settings`)
-while enforcing the locked `AI Search` and `Automations` invariant. A new profile adds one file there and, if it needs a UI,
-its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
+while enforcing the locked `AI Search` and `Automations` invariant. Alongside it, the `shortcut-customizer`
+helper (`src/main/agents/profiles/shortcut-customizer.ts`, routed when `AppCustomizerRequest.surface === "shortcuts"`)
+inspects and edits `AppSettings.shortcuts` (`get_shortcuts`, `update_shortcuts`) within the closed 26-action catalog.
+A new profile adds one file there and, if it needs a UI, its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions
 
@@ -812,7 +820,10 @@ of the message box (`src/shared/interaction-contract.ts` is the contract).
 - **Panel.** `InteractionDock` replaces the composer's form for the run it belongs to (draft text and attachments
   stay in the panel's state): a question card (single/multiple choice with descriptions, free text, 2–4 together
   in steps) or an approval card (what the call does, the command, four answers; initial focus on Deny, Esc
-  denies, Enter never approves). Stop stays reachable on the card. Pure logic: `state/interaction.ts`.
+  denies, Enter never approves). Stop stays reachable on the card. A call the judgment model could not classify
+  (`sessionScope: "unclassified"`) says so in the app's words — its own headline and a translated note — instead
+  of claiming a change to files and printing the gate's raw English reason (a missing key, a timeout). Pure
+  logic: `state/interaction.ts`.
 
 ### One conversation per chat
 
@@ -871,6 +882,20 @@ and kept for the chat's life:
   button opens Settings on Indexing through the panel's `onOpenSettings("indexing")`, as the error notice does for its pages; the warning belongs to the latest run and is not kept
   in the chat history. If a librarian release renames `searchProgress` the warning goes quiet and the real-agent test in
   `test/interactive-search-agent.test.ts` fails first.
+- **A conversation that outgrows the model** (issue #389; `src/main/context-watch.ts`). pi summarises a chat's earlier turns
+  when the context crosses its threshold, and after a request the provider refused as longer than the window (pi's
+  `isContextOverflow` reads the provider's words), which it then retries once; since librarian v2.13.3 the context guard holds
+  that retry to half the refused request, cutting the largest content first, so the session keeps the result whole and only
+  the request is cut. None of it is an agent event the librarian's `subscribe` forwards: `InteractiveSearchAgent` binds
+  `watchContext` to the chat's pi session, which maps the session's own `compaction_start` / `compaction_end` and wraps the
+  agent's last context step (the way pi wraps it for its own projections) to see which tool results and user messages a request
+  carries less text of than the conversation holds (`cutMessages`; a user message is paired by timestamp, and a timestamp two
+  messages share is skipped). The search service turns these into `compacting` (on / off) and `context-notice` events
+  (`ContextNotice`: `compacted`, or `trimmed` once a run and only for this run's own tool calls and prompts, which hold the
+  baseline evidence; with the Quick/Deep timing a steer has), stores the notices on the run's assistant message
+  (`ChatMessageAssistant.context`) and sends a run's error with the `new-chat` action when pi's overflow test reads it as one.
+  The panel draws them with `components/ContextNotice.tsx`, and `describeAppError` turns `new-chat` into the
+  `context-overflow` card (New chat, Ask narrower, no AI fix).
 - **An error in AI Search** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
   `classifyAppError` reads what the person can do from the wording (HTTP statuses only in the shapes the SDKs use, and never inside a
   path): no model or key (`model-missing`), a rejected key or login (`model-credentials`), a spent plan or billing problem
@@ -878,8 +903,10 @@ and kept for the chat's life:
   the model itself cannot be used: the box says so in plain words, offers **no** AI fix (the AI is what is down), and leads to the
   model settings and, where the subscription may be the cause, to Subscription & Usage. A rate limit and a lost connection say to wait
   or check the connection. Everything else is the app's own setup and gets **AI로 고치기** on the right of the box. The main process's
-  own `open-plan` action (the weekly credits are used up) outranks the wording. An error of an earlier turn is shown as history, with
-  its explanation and settings buttons but no fix.
+  own actions outrank the wording: `open-plan` (the weekly credits are used up) and `new-chat` (the conversation does not fit the
+  model even after pi summarised it: the `context-overflow` card, in the warning tokens, with New chat and Ask narrower, which puts
+  the question back in the composer, and no AI fix). An error of an earlier turn is shown as history, with its explanation and
+  settings buttons but no fix.
 - **Raw error text stays hidden behind "자세히 보기"** (`ErrorDetails`). By default the person sees only the plain-words title and hint;
   nothing of the raw error string is shown until they press "자세히 보기" ("Show details"), which expands the full selectable message for
   inspection or a bug report (only a pre-translated main-process plan message with `action: "open-plan"` is shown directly).
@@ -918,8 +945,12 @@ app again, the approval card on a resumed chat, a chat without a session file se
 nothing of another, clearing history deletes the files) and `run-qa-live-ai-search-interaction.mjs` (a real model
 through the Dazzi account decides to ask and to delete, remembers a codeword across questions, and after a restart),
 `run-qa-finder-ai-search-index-notice.mjs` (scripted model, real index states: the warning for an empty index, a stopped run, three
-documents and a run in progress, none for fifteen, English and Korean, and its button opening Settings on Indexing) and
-`run-qa-live-ai-search-index-notice.mjs` (the live Jev routes the question; the warning shows exactly when it picks the local branch).
+documents and a run in progress, none for fifteen, English and Korean, and its button opening Settings on Indexing),
+`run-qa-live-ai-search-index-notice.mjs` (the live Jev routes the question; the warning shows exactly when it picks the local branch),
+`run-qa-finder-ai-search-context.mjs` (scripted events: the summarising line, the divider, the cut-result note, the overflow
+error and its buttons, notices in an earlier turn and in a reopened chat, English and Korean, light and dark) and
+`run-qa-live-ai-search-context.mjs` (a real overflow: Spotlight hands the live Dazzi model files of noise past its window; one
+scenario recovers by summary and a cut retry, the other fails and shows the error).
 
 ## File automations
 

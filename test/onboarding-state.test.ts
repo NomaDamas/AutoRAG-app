@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import { DEFAULT_SIDEBAR_SETTINGS } from "../src/shared/sidebar-contract";
+import { DEFAULT_SHORTCUT_SETTINGS } from "../src/shared/shortcuts-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
@@ -60,6 +61,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	remoteAccess: false,
 	remotePort: 47833,
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
+	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {
@@ -91,8 +93,6 @@ function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingS
 		send: () => undefined,
 		openExternal: async () => undefined,
 		relaunch: () => undefined,
-		appBundlePath: () => "/Applications/AutoRAG.app",
-		startDrag: () => undefined,
 		pickFolders: async () => [],
 		showNotification: async () => true,
 		notificationsSupported: () => true,
@@ -691,6 +691,39 @@ describe("createOnboardingService persistence", () => {
 		gate.resolve({ ok: true, methods: ["parsed", "minsync"], scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [], error: null });
 		for (let tick = 0; tick < 100 && syncedAliases.length === 0; tick += 1) await flush();
 		expect(syncedAliases).toEqual([["mailcrawl-gmail", "mailcrawl-work", "obsidian", "obsidian-2"]]);
+	});
+
+	it("indexes a detected Notion through the `notion` alias once onboarding completes", async () => {
+		const directory = await workDir();
+		const syncedAliases: string[][] = [];
+		const notion: DetectedSource = { id: "notion", facts: {} };
+		const service = createOnboardingService({
+			...makeDeps(directory),
+			detectSources: async (onFound): Promise<SourceDetection> => {
+				onFound?.(notion);
+				return { sources: [notion] };
+			},
+			refresh: async () => ({ ok: true, methods: ["parsed", "minsync"], scanned: 1, written: 1, deleted: 0, skipped: 0, diagnostics: [], error: null }),
+			syncDatasources: async (aliases) => {
+				syncedAliases.push([...aliases]);
+			},
+		});
+
+		await service.detectSources();
+		await service.startIndexing({ folders: ["/Users/me/Documents"], sources: [{ id: "notion" }], plan: "free" });
+		for (let tick = 0; tick < 100 && service.isIndexing(); tick += 1) await flush();
+		await service.complete();
+		for (let tick = 0; tick < 100 && syncedAliases.length === 0; tick += 1) await flush();
+
+		expect(syncedAliases).toEqual([["notion"]]);
+	});
+
+	it("keeps a draft that switched Notion on", async () => {
+		const directory = await workDir();
+		const draft = { ...DRAFT, sources: [{ id: "notion", on: true }] } as const;
+		await createOnboardingService(makeDeps(directory)).save(draft);
+
+		expect((await createOnboardingService(makeDeps(directory)).load()).draft?.sources).toEqual([{ id: "notion", on: true }]);
 	});
 
 	it("triggers background datasource indexing on complete() when local indexing already finished", async () => {

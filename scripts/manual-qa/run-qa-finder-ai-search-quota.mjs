@@ -149,7 +149,7 @@ modelSide.length = 0;
 
 await openAiSearch(page);
 const panel = page.locator(AI_PANEL);
-await panel.locator('input[aria-label="Ask Dazzi"]').click();
+await panel.locator('textarea[aria-label="Ask Dazzi"]').click();
 await page.keyboard.type("what does a.txt say?");
 await page.keyboard.press("Enter");
 const notice = panel.locator(".text-danger-text", { hasText: "credits are used up" });
@@ -159,7 +159,7 @@ const text = await notice.innerText();
 const resetsText = await page.evaluate((iso) => new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }), RESETS_AT);
 check("the notice says nothing was sent and names the server's reset time", /nothing was sent/.test(text) && text.includes(resetsText), `${text.replace(/\s+/g, " ").slice(0, 200)} | expected ${resetsText}`);
 check("no request reached the model side (no model call, no judgment-model call)", modelSide.length === 0, JSON.stringify(modelSide));
-check("the run ended: the message box is idle again", (await panel.locator('button[aria-label="Stop"]').count()) === 0 && (await panel.locator('input[aria-label="Ask Dazzi"]').count()) === 1);
+check("the run ended: the message box is idle again", (await panel.locator('button[aria-label="Stop"]').count()) === 0 && (await panel.locator('textarea[aria-label="Ask Dazzi"]').count()) === 1);
 const button = panel.getByRole("button", { name: "Open Subscription & Usage" });
 check("the notice offers a button to Subscription & Usage", (await button.count()) === 1);
 await shot("01-quota-notice");

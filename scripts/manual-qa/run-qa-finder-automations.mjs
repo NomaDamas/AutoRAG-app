@@ -100,7 +100,7 @@ const INSPECTOR = 'aside[aria-label="Inspector"]';
 // The AI Search panel is labelled in the interface language; the host `data-ai-tab` and `aria-hidden` are not.
 const AI_PANEL = '[data-ai-tab] section.ai:not([aria-hidden="true"])';
 // The composer is the one text input of the visible AI Search panel, whatever language its label is in.
-const COMPOSER = `${AI_PANEL} .compose-box input`;
+const COMPOSER = `${AI_PANEL} .compose-box textarea`;
 const tabs = (page) =>
 	page.$$eval(".tabs .tab", (elements) =>
 		elements.map((element) => ({
@@ -212,7 +212,7 @@ async function english() {
 			draft === "Edit this automation rule — downloads-pdf-summary (PDF files are created in Downloads). What to change: ",
 			JSON.stringify(draft),
 		);
-		check("the composer is focused", await page.evaluate(() => document.activeElement?.closest(".compose-box") !== null && document.activeElement?.tagName === "INPUT"));
+		check("the composer is focused", await page.evaluate(() => document.activeElement?.closest(".compose-box") !== null && document.activeElement?.tagName === "TEXTAREA"));
 		await sleep(800);
 		check("nothing was sent: no user bubble, no running search", (await page.locator(`${AI_PANEL} .user-msg`).count()) === 0 && (await page.locator('button[aria-label="Stop"]').count()) === 0);
 		await page.screenshot({ path: join(EVIDENCE, "05-edit-draft-en.png") });

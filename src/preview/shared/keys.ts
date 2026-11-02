@@ -1,8 +1,10 @@
+import { chordFromKeyEvent } from "../../shared/shortcuts-contract";
 import type { QuickLookAction } from "./contract";
 
 /** The modifier-aware key shape both Electron `Input` and DOM events reduce to. */
 export interface QuickLookKey {
 	readonly key: string;
+	readonly code?: string | undefined;
 	readonly meta: boolean;
 	readonly control: boolean;
 	readonly alt: boolean;
@@ -13,13 +15,26 @@ export interface QuickLookKey {
  * Keys the Quick Look window owns regardless of which element has focus.
  * Left/right stay with the page so a focused video can still seek. While a
  * text field has focus (`typing`: the password prompt) Space and the arrows
- * belong to it; Escape still closes.
+ * belong to it; Escape still closes, and a customized `toggleChord` (such as
+ * `Alt+P` in the Windows File Explorer preset) toggles it closed too.
  */
-export function quickLookKeyAction(input: QuickLookKey, typing = false): QuickLookAction | null {
+export function quickLookKeyAction(input: QuickLookKey, typing = false, toggleChord?: string): QuickLookAction | null {
+	if (input.key === "Escape") return "close";
+	if (toggleChord !== undefined && toggleChord !== "Space" && !typing) {
+		const recorded = chordFromKeyEvent({
+			key: input.key,
+			code: input.code,
+			meta: input.meta,
+			ctrl: input.control,
+			alt: input.alt,
+			shift: input.shift,
+		});
+		if (recorded.kind === "valid" && recorded.chord === toggleChord) {
+			return "close";
+		}
+	}
 	if (input.meta || input.control || input.alt) return null;
 	switch (input.key) {
-		case "Escape":
-			return "close";
 		case " ":
 			return typing ? null : "close";
 		case "ArrowDown":

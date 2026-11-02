@@ -1049,7 +1049,6 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		changeEmbedding,
 		excludeFolders,
 		setTipIndex,
-		dragApp: () => bridge.dragApp(),
 		relaunch: () => {
 			// The debounced save may still be pending; persist first so the relaunch
 			// resumes with the latest draft (the step and every toggle).
@@ -1062,7 +1061,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		},
 		openFullDiskAccess: () => {
 			void bridge.openFullDiskAccess();
-			setOverlay("fda");
+			// A Full Disk Access grant reaches a running app only after a relaunch, so the row offers the restart straight away.
+			setFdaPending(true);
+			showToast(t("onboarding.toast.fdaPending"));
 		},
 	};
 
@@ -1137,39 +1138,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			{draft.stepId === "smartScan" ? null : <footer className="footer">{footer}</footer>}
 			<div className={cn("toast", toast !== null && "show")}>{toast}</div>
 			<div className="scrim" hidden={overlay === null}>
-				{renderOverlay(overlay, {
-					t,
-					ctx,
-					onClose: () => setOverlay(null),
-					onFdaAllowed: () => {
-						void bridge.permissions().then((status) => {
-							setPermission(status);
-							if (status.fullDiskAccess) {
-								setOverlay("restart");
-							} else {
-								setFdaPending(true);
-								setOverlay(null);
-								showToast(t("onboarding.toast.fdaPending"));
-							}
-						});
-					},
-					onFdaLater: () => {
-						setFdaPending(true);
-						setOverlay(null);
-						showToast(t("onboarding.toast.fdaPending"));
-					},
-				})}
+				{renderOverlay(overlay, { t, ctx, onClose: () => setOverlay(null) })}
 			</div>
 		</div>
-	);
-}
-
-/** The app-mark the Full Disk Access guide's drag target uses (the prototype's `appIcon()`). */
-function GuideAppMark({ onDrag }: { readonly onDrag: () => void }): ReactElement {
-	return (
-		<span className="app-mark" draggable onDragStart={onDrag} style={{ cursor: "grab" }}>
-			<AppLogo />
-		</span>
 	);
 }
 
@@ -1177,116 +1148,11 @@ interface OverlayHandlers {
 	readonly t: Translate;
 	readonly ctx: OnboardingCtx;
 	readonly onClose: () => void;
-	readonly onFdaAllowed: () => void;
-	readonly onFdaLater: () => void;
 }
 
 function renderOverlay(kind: OverlayKind | null, h: OverlayHandlers): ReactElement | null {
 	const { t } = h;
 	switch (kind) {
-		case "fda":
-			return (
-				<div className="modal">
-					<div className="modal-head">
-						<Icon name="settings" size={15} />
-						<strong>{t("onboarding.overlay.fda.title")}</strong>
-						<button type="button" className="quiet" onClick={h.onClose}>
-							<Icon name="x" size={15} />
-						</button>
-					</div>
-					<div className="modal-body">
-						<div className="guide">
-							<div className="guide-copy">
-								<h3>{t("onboarding.overlay.fda.heading")}</h3>
-								<p>{t("onboarding.overlay.fda.lead")}</p>
-								<div className="guide-steps">
-									<div className="guide-step">
-										<b>1</b>
-										<span>{t("onboarding.overlay.fda.step1")}</span>
-									</div>
-									<div className="guide-step">
-										<b>2</b>
-										<span>{t("onboarding.overlay.fda.step2")}</span>
-									</div>
-									<div className="guide-step">
-										<b>3</b>
-										<span>{t("onboarding.overlay.fda.step3")}</span>
-									</div>
-								</div>
-								<div className="guide-app">
-									<GuideAppMark onDrag={h.ctx.dragApp} />
-									<span>{t("onboarding.overlay.fda.drag")}</span>
-								</div>
-							</div>
-							<div className="settings-mock">
-								<div className="settings-nav">
-									<strong>{t("onboarding.overlay.fda.mock.navTitle")}</strong>
-									<div>{t("onboarding.overlay.fda.mock.notifications")}</div>
-									<div>{t("onboarding.overlay.fda.mock.files")}</div>
-									<div className="active">{t("onboarding.overlay.fda.mock.fda")}</div>
-									<div>{t("onboarding.overlay.fda.mock.automation")}</div>
-								</div>
-								<div className="settings-pane">
-									<h3>{t("onboarding.overlay.fda.mock.fda")}</h3>
-									<p>{t("onboarding.overlay.fda.mock.paneLead")}</p>
-									<div className="system-row">
-										<span className="system-app">⌘</span>
-										<strong>{t("onboarding.overlay.fda.mock.terminal")}</strong>
-										<span className="system-toggle on" />
-									</div>
-									<div className="system-row">
-										<span className="system-app">VS</span>
-										<strong>Visual Studio Code</strong>
-										<span className="system-toggle" />
-									</div>
-									<div className="system-row target">
-										<span className="system-app">
-											<Icon name="sparkles" size={13} />
-										</span>
-										<strong>Dazzi</strong>
-										<button
-											type="button"
-											className={cn("system-toggle", h.ctx.permissions?.fullDiskAccess === true && "on pulse")}
-											onClick={() => h.ctx.openOverlay("restart")}
-										/>
-									</div>
-									<div className="system-row">
-										<span className="system-app">↗</span>
-										<strong>{t("onboarding.overlay.fda.mock.backup")}</strong>
-										<span className="system-toggle" />
-									</div>
-								</div>
-							</div>
-						</div>
-						<div className="modal-actions">
-							<button type="button" className="secondary" onClick={h.onFdaLater}>
-								{t("onboarding.overlay.later")}
-							</button>
-							<button type="button" className="primary" onClick={h.onFdaAllowed}>
-								{t("onboarding.overlay.fda.allowed")}
-							</button>
-						</div>
-					</div>
-				</div>
-			);
-		case "restart":
-			return (
-				<div className="modal system-alert">
-					<div className="app-mini">
-						<AppLogo />
-					</div>
-					<h3>{t("onboarding.overlay.restart.title")}</h3>
-					<p>{t("onboarding.overlay.restart.lead")}</p>
-					<div className="modal-actions">
-						<button type="button" className="secondary" onClick={h.onFdaLater}>
-							{t("onboarding.overlay.later")}
-						</button>
-						<button type="button" className="primary" onClick={() => void h.ctx.relaunch()}>
-							{t("onboarding.overlay.restart.action")}
-						</button>
-					</div>
-				</div>
-			);
 		case "pay": {
 			const plan = h.ctx.draft.plan;
 			return (

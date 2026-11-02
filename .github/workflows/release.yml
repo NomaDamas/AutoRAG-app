@@ -93,7 +93,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/release/stage-tools.mjs
       - name: Verify the staged tools run on a bare PATH
-        run: node scripts/release/verify-bundle.mjs build/stage/darwin-arm64/tools --model-cache build/stage/darwin-arm64/verify-model
+        run: node scripts/release/verify-bundle.mjs build/stage/darwin-arm64/tools
 
       # Signing and notarization switch on by themselves when these secrets exist;
       # without them the .dmg is ad-hoc signed (it runs, but Gatekeeper warns).
@@ -239,7 +239,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/release/stage-tools.mjs
       - name: Verify the staged tools run on a bare PATH
-        run: node scripts/release/verify-bundle.mjs build/stage/win32-x64/tools --model-cache build/stage/win32-x64/verify-model
+        run: node scripts/release/verify-bundle.mjs build/stage/win32-x64/tools
 
       # Azure Trusted Signing switches on when these secrets exist; without them
       # the installer is unsigned and Windows SmartScreen warns.

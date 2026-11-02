@@ -342,6 +342,8 @@ export function sourceTile(id: SourceId): { readonly brand?: string; readonly ic
 			return { icon: "mail", color: "red" };
 		case "github":
 			return { brand: "github", icon: "git-branch", color: "green" };
+		case "notion":
+			return { brand: "notion", icon: "notebook-pen", color: "purple" };
 		case "obsidian":
 			return { brand: "obsidian", icon: "notebook-pen", color: "purple" };
 	}
@@ -364,7 +366,7 @@ export function sourceDetail(id: SourceId, facts: SourceFacts, translate: Transl
  * Probes finish in whatever order they like, so the list sorts on arrival and a
  * row never jumps because a slower probe landed later.
  */
-const SOURCE_LIST_ORDER: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "obsidian"];
+const SOURCE_LIST_ORDER: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian"];
 
 export function bySourceOrder(a: { readonly id: SourceId }, b: { readonly id: SourceId }): number {
 	return SOURCE_LIST_ORDER.indexOf(a.id) - SOURCE_LIST_ORDER.indexOf(b.id);
@@ -407,8 +409,8 @@ export const TIPS: readonly TipArt[] = [
 
 /**
  * Brands the "connect later" row can offer. `sourceId` ties a chip to a detectable
- * connector so it disappears once that connector is found; the rest (Notion, Google
- * Drive) cannot be detected here and are always offered for Settings.
+ * connector so it disappears once that connector is found; the rest (Google Drive)
+ * cannot be detected here and is always offered for Settings.
  */
 const CONNECTABLE_BRANDS: readonly { readonly brand: string; readonly label: string; readonly sourceId?: SourceId }[] = [
 	{ brand: "kakaotalk", label: "KakaoTalk", sourceId: "kakao" },
@@ -417,8 +419,8 @@ const CONNECTABLE_BRANDS: readonly { readonly brand: string; readonly label: str
 	{ brand: "telegram", label: "Telegram", sourceId: "telegram" },
 	{ brand: "whatsapp", label: "WhatsApp", sourceId: "whatsapp" },
 	{ brand: "github", label: "GitHub", sourceId: "github" },
+	{ brand: "notion", label: "Notion", sourceId: "notion" },
 	{ brand: "obsidian", label: "Obsidian", sourceId: "obsidian" },
-	{ brand: "notion", label: "Notion" },
 	{ brand: "googledrive", label: "Google Drive" },
 ];
 

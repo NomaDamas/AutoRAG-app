@@ -128,7 +128,7 @@ try {
 	await page.waitForSelector(PANEL);
 
 	// 4. Chat state survives tab switches.
-	await page.locator(`${PANEL} input[aria-label="Ask Dazzi"]`).fill("draft survives tab switch");
+	await page.locator(`${PANEL} textarea[aria-label="Ask Dazzi"]`).fill("draft survives tab switch");
 	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
 	now = await tabs(page);
@@ -137,7 +137,7 @@ try {
 	await page.waitForSelector(PANEL);
 	check(
 		"the composer draft survives switching tabs",
-		(await page.locator(`${PANEL} input[aria-label="Ask Dazzi"]`).inputValue()) === "draft survives tab switch",
+		(await page.locator(`${PANEL} textarea[aria-label="Ask Dazzi"]`).inputValue()) === "draft survives tab switch",
 	);
 
 	// 5. ⌘K from a folder tab adopts the existing AI tab.

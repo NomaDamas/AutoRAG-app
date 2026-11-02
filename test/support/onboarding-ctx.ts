@@ -85,7 +85,6 @@ export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): Onboardin
 		changeEmbedding: noop,
 		excludeFolders: noop,
 		setTipIndex: noop,
-		dragApp: noop,
 		relaunch: noop,
 		openFullDiskAccess: noop,
 		...overrides,

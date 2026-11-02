@@ -31,6 +31,7 @@ import {
 	allowSessionAnswer,
 	answeredCount,
 	approvalHeadlineKey,
+	approvalNoteKey,
 	approvalReasonVisible,
 	buildAnswer,
 	canSubmit,
@@ -325,6 +326,7 @@ function ApprovalCard({ request, onStop }: { readonly request: ApprovalRequest; 
 	const [note, setNote] = useState("");
 	const headlineId = useId();
 	const reasonVisible = useMemo(() => approvalReasonVisible(request), [request]);
+	const noteKey = approvalNoteKey(request);
 
 	return (
 		<div className={DOCK_CARD} role="alertdialog" aria-labelledby={headlineId}>
@@ -352,6 +354,7 @@ function ApprovalCard({ request, onStop }: { readonly request: ApprovalRequest; 
 			</pre>
 
 			{reasonVisible ? <p className="m-0 text-meta leading-[1.45] text-ink-muted">{request.reason}</p> : null}
+			{noteKey === null ? null : <p className="m-0 text-meta leading-[1.45] text-ink-muted">{t(noteKey)}</p>}
 
 			{noteOpen ? (
 				<div className="flex items-center gap-6">

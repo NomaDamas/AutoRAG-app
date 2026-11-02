@@ -17,8 +17,8 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { calendarSupported, isCalendarDatasourceType } from "../shared/calendar-platform";
-import { kakaoSupported } from "../shared/messenger-platform";
+import { isCalendarDatasourceType } from "../shared/calendar-platform";
+import { datasourceEntrySupported, datasourceSupported } from "../shared/messenger-platform";
 import { calendarMcpServerName, syncCalendarMcpConfig } from "./calendar-mcp";
 import { backendIndexUnit, LIVE_QUERY_TEMPLATES, probeBackendIndex } from "./datasource-index-probe";
 import { readAppIndexing } from "./app-indexing";
@@ -100,10 +100,13 @@ const DESKTOP_APPS: Readonly<Record<string, string>> = {
 	obsidian: "Obsidian",
 };
 
-/** The desktop app each template reads from. `installed` is null where the platform has no known location for it (never a wrong "missing"). */
+/**
+ * The desktop app each template reads from. `installed` is null where the platform has no known location for it (never a wrong "missing").
+ * Not required where the template itself cannot run (WhatsApp on Windows): there is no app to install for it.
+ */
 async function desktopAppRequirement(type: string, env: NodeJS.ProcessEnv, platform: NodeJS.Platform): Promise<DataSourceAppRequirement> {
 	const name = DESKTOP_APPS[type];
-	if (name === undefined) return { required: false, installed: null, name: "" };
+	if (name === undefined || !datasourceSupported(type, platform)) return { required: false, installed: null, name: "" };
 	const home = platform === "win32" ? (env.USERPROFILE ?? env.HOME ?? "") : (env.HOME ?? "");
 	return { required: true, installed: await desktopAppInstalled(name, { platform, env, home }), name };
 }
@@ -150,14 +153,28 @@ async function findExecutable(name: string, env: NodeJS.ProcessEnv): Promise<str
 
 const CALENDAR_UNSUPPORTED = "Apple Calendar & Reminders need macOS (EventKit)";
 const KAKAO_UNSUPPORTED = "KakaoTalk needs macOS: lazykatok reads the Mac app";
+const WHATSAPP_UNSUPPORTED = "WhatsApp needs macOS: wacrawl reads the Mac app's database, or the folder set as Source path";
 const SPOTLIGHT_UNSUPPORTED = "Spotlight needs macOS (mdfind)";
+
+/** Why a template cannot run off macOS, keyed by template name. */
+const UNSUPPORTED_DETAIL: Readonly<Record<string, string>> = {
+	kakao: KAKAO_UNSUPPORTED,
+	whatsapp: WHATSAPP_UNSUPPORTED,
+	spotlight: SPOTLIGHT_UNSUPPORTED,
+	calendar: CALENDAR_UNSUPPORTED,
+	"apple-events": CALENDAR_UNSUPPORTED,
+};
+
+/** Why this entry cannot run on `platform`, or null when it can. */
+function unsupportedDetail(type: string, entry: DatasourceSkillConfig, platform: NodeJS.Platform): string | null {
+	return datasourceEntrySupported(type, entry, platform) ? null : (UNSUPPORTED_DETAIL[type] ?? `${type} is not supported on ${platform}`);
+}
 
 async function installState(type: string, entry: DatasourceSkillConfig, env: NodeJS.ProcessEnv, platform: NodeJS.Platform): Promise<DataSourceRow["install"]> {
 	const app = await desktopAppRequirement(type, env, platform);
-	if (type === "kakao" && !kakaoSupported(platform)) return { state: "unsupported", binary: null, path: null, detail: KAKAO_UNSUPPORTED, app };
-	if (type === "spotlight" && platform !== "darwin") return { state: "unsupported", binary: null, path: null, detail: SPOTLIGHT_UNSUPPORTED, app };
+	const unsupported = unsupportedDetail(type, entry, platform);
+	if (unsupported !== null) return { state: "unsupported", binary: null, path: null, detail: unsupported, app };
 	if (isCalendarDatasourceType(type)) {
-		if (!calendarSupported(platform)) return { state: "unsupported", binary: null, path: null, detail: CALENDAR_UNSUPPORTED, app };
 		const connector = isJsonObject(entry.connector) ? entry.connector : {};
 		const configured = typeof connector.command === "string" && connector.command.trim().length > 0 ? connector.command.trim() : "npx";
 		const path = await findExecutable(configured, env);
@@ -224,11 +241,10 @@ function buildSkill(
 	return buildDatasourceSkills({ [id]: withConnectorOcrDisabled({ ...entry, enabled: true }) }, workspacePath, embedding).skills[0];
 }
 
-function agentState(id: string, type: string, skill: DatasourceSkill | undefined, enabled: boolean, platform: NodeJS.Platform): DataSourceRow["agent"] {
-	if (type === "kakao" && !kakaoSupported(platform)) return { state: "unsupported", skillName: null, tags: [], detail: KAKAO_UNSUPPORTED };
-	if (type === "spotlight" && platform !== "darwin") return { state: "unsupported", skillName: null, tags: [], detail: SPOTLIGHT_UNSUPPORTED };
+function agentState(id: string, type: string, entry: DatasourceSkillConfig, skill: DatasourceSkill | undefined, enabled: boolean, platform: NodeJS.Platform): DataSourceRow["agent"] {
+	const unsupported = unsupportedDetail(type, entry, platform);
+	if (unsupported !== null) return { state: "unsupported", skillName: null, tags: [], detail: unsupported };
 	if (isCalendarDatasourceType(type)) {
-		if (!calendarSupported(platform)) return { state: "unsupported", skillName: null, tags: [], detail: CALENDAR_UNSUPPORTED };
 		const skillName = `mcp-${calendarMcpServerName(id)}`;
 		const tags = ["calendar", "reminders", "mcp"];
 		if (!enabled) return { state: "disabled", skillName, tags, detail: "Turned off in the Dazzi config" };
@@ -486,7 +502,7 @@ export function createDataSourceStatusService(deps: DataSourceStatusDeps): DataS
 				const skill = BUILTIN_DATASOURCE_SKILL_NAMES.includes(type) ? buildSkill(id, entry, config.workspacePath) : undefined;
 				const install = await installState(type, entry, deps.env, platform);
 				const index = await indexState(id, type, entry, skill, install, config.workspacePath, deps.env);
-				const agent = agentState(id, type, skill, enabled, platform);
+				const agent = agentState(id, type, entry, skill, enabled, platform);
 				return {
 					id,
 					type,

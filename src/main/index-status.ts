@@ -2,7 +2,7 @@ import { access, realpath } from "node:fs/promises";
 import { basename, isAbsolute, resolve, sep } from "node:path";
 import { createDefaultParserRegistry, emptyMirrorIndex, loadMirrorIndex, minSyncDocumentPath, minSyncWorkspaceRoot, type DefaultParserRegistryOptions } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly, writeConfigObject } from "@autorag/librarian/core";
-import { applyAppIndexing, readAppIndexing } from "./app-indexing";
+import { applyAppIndexing } from "./app-indexing";
 import { refreshAutoragIndex } from "./index-refresh";
 import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
@@ -57,8 +57,6 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
 		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
 		const config = await applyAppIndexing(resolveConfigReadOnly(input), raw);
-		// Keyword-only mode stages nothing into MinSync: a parsed file is as indexed as it gets.
-		const semantic = readAppIndexing(raw).semanticSearch;
 		const [exclusions, roots] = await Promise.all([
 			Promise.all((config.excludePaths ?? []).map(canonical)),
 			Promise.all(config.searchPaths.map(canonical)),
@@ -82,9 +80,8 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			const excluded = exclusion !== undefined;
 			const toggleable = exclusion === undefined || exclusion === real;
 			const entry = entries.get(real);
-			const staged =
-				entry !== undefined &&
-				(!semantic || (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false)));
+			// Both modes stage parsed files into MinSync (keyword-only as a sparse-only index): a file is in the index once staged.
+			const staged = entry !== undefined && (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false));
 			if (excluded) {
 				return entry === undefined
 					? {

@@ -16,12 +16,15 @@ import type {
 	ChatAttachment,
 	ChatSummary,
 	CitationEvidence,
+	ContextNotice,
 	IndexNotice,
 	SearchErrorAction,
 	SearchStreamEvent,
 } from "../../../shared/search-contract";
 import type { InteractionRequest } from "../../../shared/interaction-contract";
 import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
+import { chordFromKeyEvent, resolveEffectiveShortcuts } from "../../../shared/shortcuts-contract";
+import { useFormattedShortcut, useShortcutSettings } from "../hooks/useShortcutSettings";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
 import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
@@ -46,8 +49,10 @@ import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, 
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
+import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
 import { IndexNoticeBanner } from "./IndexNotice";
+import { CompactingStatus, ContextNoticeView } from "./ContextNotice";
 import { RunErrorNotice } from "./RunErrorNotice";
 
 const autorag = window.autorag;
@@ -138,6 +143,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [errorAction, setErrorAction] = useState<{ readonly message: string; readonly action: SearchErrorAction } | null>(null);
 	/** The warning that the index this run searches is not ready; belongs to the latest run and ends with the next question. */
 	const [indexNotice, setIndexNotice] = useState<IndexNotice | null>(null);
+	/** pi is summarising the chat's earlier turns for the current run (issue #389). */
+	const [compacting, setCompacting] = useState(false);
+	/** What the current run did to the model's view of the chat, in order. */
+	const [contextNotices, setContextNotices] = useState<readonly ContextNotice[]>([]);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
 	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
@@ -170,7 +179,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragOver, setDragOver] = useState(false);
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
-	const inputRef = useRef<HTMLInputElement | null>(null);
+	const inputRef = useRef<HTMLTextAreaElement | null>(null);
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -205,6 +214,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	errorActionRef.current = errorAction;
 	const deepElapsedRef = useRef(deepElapsed);
 	deepElapsedRef.current = deepElapsed;
+	const contextNoticesRef = useRef(contextNotices);
+	contextNoticesRef.current = contextNotices;
 
 	useEffect(() => {
 		if (!active) {
@@ -278,21 +289,30 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				case "steer-delivered":
 					setSteers(deliverSteers);
 					break;
+				case "compacting":
+					setCompacting(event.active);
+					break;
+				case "context-notice":
+					setContextNotices((current) => [...current, event.notice]);
+					break;
 				case "error":
 					setError(event.message);
 					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
 					setProgress("");
+					setCompacting(false);
 					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 				case "cancelled":
 					setStopped(true);
 					setProgress("");
+					setCompacting(false);
 					setSteers(settleSteers);
 					setSearchId(null);
 					break;
 				case "done":
 					setProgress("");
+					setCompacting(false);
 					setSteers(settleSteers);
 					setSearchId(null);
 					break;
@@ -345,13 +365,17 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices]);
 
+	const shortcutSettings = useShortcutSettings();
+	const historyShortcutLabel = useFormattedShortcut("aiToggleHistory");
+	const newChatShortcutLabel = useFormattedShortcut("aiNewChat");
 	useEffect(() => {
 		if (!active) return;
 		const onKeyDown = (event: globalThis.KeyboardEvent): void => {
-			const meta = event.metaKey || event.ctrlKey;
-			if (meta && event.shiftKey && event.key.toLowerCase() === "h") {
+			const recorded = chordFromKeyEvent(event);
+			const effectiveShortcuts = resolveEffectiveShortcuts(shortcutSettings);
+			if (recorded.kind === "valid" && recorded.chord === effectiveShortcuts.aiToggleHistory) {
 				event.preventDefault();
 				toggleHistory();
 				return;
@@ -370,7 +394,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				void stop();
 				return;
 			}
-			if (meta && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "n") {
+			if (recorded.kind === "valid" && recorded.chord === effectiveShortcuts.aiNewChat) {
 				event.preventDefault();
 				newChat();
 			}
@@ -432,6 +456,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				error: errorRef.current,
 				errorAction: errorRef.current !== null && errorActionRef.current?.message === errorRef.current ? errorActionRef.current.action : null,
 				deepElapsed: deepElapsedRef.current,
+				contextNotices: contextNoticesRef.current,
 			};
 			setPastTurns((current) => [...current, finished]);
 		}
@@ -443,6 +468,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeepDraft("");
 		setError(null);
 		setIndexNotice(null);
+		setCompacting(false);
+		setContextNotices([]);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
@@ -565,6 +592,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setDeepDraft("");
 		setError(null);
 		setIndexNotice(null);
+		setCompacting(false);
+		setContextNotices([]);
 		setStopped(false);
 		setProgress("");
 		setEvidenceSource(null);
@@ -601,6 +630,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				error: null,
 				errorAction: null,
 				deepElapsed: null,
+				contextNotices: turn.assistant?.context ?? [],
 			})),
 		);
 		setQuick(assistant?.quick ?? null);
@@ -615,6 +645,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setStopped(assistant?.stopped ?? false);
 		setError(null);
 		setIndexNotice(null);
+		setCompacting(false);
+		setContextNotices(assistant?.context ?? []);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
@@ -631,6 +663,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		// backend was still doing.
 		setSearchId(null);
 		setProgress("");
+		setCompacting(false);
 		setStopped(true);
 		setSteers(settleSteers);
 		// Stop ends the whole turn: questions queued behind it go back to the composer, unasked.
@@ -655,6 +688,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		pendingFocusRef.current = true;
 	}
 
+	/** Leaves `text` in the composer unsent and focuses it: the person finishes or edits it and sends it themselves. */
+	function prefill(text: string): void {
+		setQuery(text);
+		ensureFocus();
+	}
+
 	useImperativeHandle(ref, () => ({
 		sendQuery(text: string): void {
 			const trimmed = text.trim();
@@ -662,10 +701,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setQuery(trimmed);
 			void runSearch(trimmed, attachmentsRef.current);
 		},
-		prefill(text: string): void {
-			setQuery(text);
-			ensureFocus();
-		},
+		prefill,
 		attach(atts: readonly ChatAttachment[]): void {
 			setAttachments((current) => mergeAttachments(current, atts));
 			ensureFocus();
@@ -738,6 +774,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
+	const contextBeforeQuick = contextNotices.filter((notice) => notice.timing === "before-quick");
+	const contextAfterQuick = contextNotices.filter((notice) => notice.timing === "after-quick");
 	const steerLabels = {
 		pending: t("aiSearch.steerPending"),
 		delivered: t("aiSearch.steerDelivered"),
@@ -764,7 +802,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), historyOpen && "bg-selected-nav text-ink")}
-					title={t("aiSearch.historyShortcut", { shortcut: formatShortcut({ key: "H", shift: true }) })}
+					title={t("aiSearch.historyShortcut", { shortcut: historyShortcutLabel })}
 					aria-label={t("aiSearch.history")}
 					onClick={() => toggleHistory()}
 				>
@@ -773,7 +811,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				<button
 					type="button"
 					className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-					title={t("aiSearch.newChatShortcut", { shortcut: formatShortcut({ key: "N" }) })}
+					title={t("aiSearch.newChatShortcut", { shortcut: newChatShortcutLabel })}
 					aria-label={t("aiSearch.newChat")}
 					onClick={() => newChat()}
 				>
@@ -866,6 +904,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							imageActions={imageActions}
 							onOpenSettings={onOpenSettings}
 							onOpenSource={onOpenSource}
+							onNewChat={newChat}
+							onRephrase={prefill}
 						/>
 					))}
 
@@ -879,10 +919,14 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										))}
 									</div>
 								) : null}
-								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{submittedQuery}</div>
+								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{submittedQuery}</div>
 							</div>
 						</div>
 					)}
+
+					{contextBeforeQuick.map((notice, index) => (
+						<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
+					))}
 
 					{error === null ? null : (
 						<RunErrorNotice
@@ -890,6 +934,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							action={errorAction?.message === error ? errorAction.action : null}
 							onOpenSettings={onOpenSettings}
 							onOpenSource={onOpenSource}
+							onNewChat={newChat}
+							onRephrase={() => prefill(submittedQuery ?? "")}
 							fix
 						/>
 					)}
@@ -922,7 +968,12 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{steersAfterQuick.map((steer) => (
 								<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 							))}
-							{shimmer ? (
+							{contextAfterQuick.map((notice, index) => (
+								<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
+							))}
+							{searching && compacting ? (
+								<CompactingStatus />
+							) : shimmer ? (
 								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
 									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
 										{progress === "" ? t("aiSearch.thinking") : progress}
@@ -1015,53 +1066,59 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							<span className="flex-none"><kbd className="font-sans font-semibold text-ink">Esc</kbd> {t("aiSearch.stop")}</span>
 						</div>
 					) : null}
-					<div className="compose-box flex min-h-40 items-center gap-7 rounded-12 border border-border bg-input px-11 py-4 transition-colors duration-(--dur-color) ease-out focus-within:border-accent">
-						<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-						<input
-							ref={inputRef}
+					<div
+						className="compose-box flex flex-col gap-6 rounded-14 border border-border bg-input px-14 pt-12 pb-8 transition-colors duration-(--dur-color) ease-out focus-within:border-accent"
+						onMouseDown={(event) => {
+							// A click on the box's own padding or toolbar gap lands in the field, like any chat composer.
+							if (!(event.target instanceof HTMLElement) || event.target.closest("button, textarea") !== null) return;
+							event.preventDefault();
+							inputRef.current?.focus();
+						}}
+					>
+						<ComposerField
+							fieldRef={inputRef}
 							value={query}
-							onChange={(event) => setQuery(event.target.value)}
-							onKeyDown={(event) => {
-								// ⌥Enter queues; plain Enter goes through the form. A Hangul IME's composing Enter is no send.
-								if (event.key !== "Enter" || !event.altKey || event.nativeEvent.isComposing) return;
-								event.preventDefault();
-								send(true);
-							}}
+							onChange={setQuery}
+							onAltEnter={() => send(true)}
 							placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
-							aria-label={t("aiSearch.askDazzi")}
-							className="h-30 min-w-0 flex-1 border-0 bg-transparent text-body text-ink-body outline-none placeholder:text-ink-muted"
+							ariaLabel={t("aiSearch.askDazzi")}
 						/>
-						{searching && query.trim().length > 0 ? (
-							<button
-								type="submit"
-								className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-								title={t("aiSearch.steerSend")}
-								aria-label={t("aiSearch.steerSend")}
-							>
-								<ArrowUpIcon />
-							</button>
-						) : null}
-						{searching ? (
-							<button
-								type="button"
-								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-								title={t("aiSearch.stop")}
-								aria-label={t("aiSearch.stop")}
-								onClick={() => void stop()}
-							>
-								<Square size={10} strokeWidth={3} fill="currentColor" />
-							</button>
-						) : (
-							<button
-								type="submit"
-								className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-								title={t("aiSearch.askDazzi")}
-								aria-label={t("aiSearch.askDazzi")}
-								disabled={query.trim().length === 0 && attachments.length === 0}
-							>
-								<ArrowUpIcon />
-							</button>
-						)}
+						<div className="composer-toolbar flex items-center justify-between gap-8">
+							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+							<div className="composer-actions flex items-center gap-7">
+								{searching && query.trim().length > 0 ? (
+									<button
+										type="submit"
+										className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+										title={t("aiSearch.steerSend")}
+										aria-label={t("aiSearch.steerSend")}
+									>
+										<ArrowUpIcon />
+									</button>
+								) : null}
+								{searching ? (
+									<button
+										type="button"
+										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+										title={t("aiSearch.stop")}
+										aria-label={t("aiSearch.stop")}
+										onClick={() => void stop()}
+									>
+										<Square size={10} strokeWidth={3} fill="currentColor" />
+									</button>
+								) : (
+									<button
+										type="submit"
+										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+										title={t("aiSearch.askDazzi")}
+										aria-label={t("aiSearch.askDazzi")}
+										disabled={query.trim().length === 0 && attachments.length === 0}
+									>
+										<ArrowUpIcon />
+									</button>
+								)}
+							</div>
+						</div>
 					</div>
 					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
@@ -1127,7 +1184,7 @@ function SteerBubble({
 			<div className="flex max-w-bubble-max flex-col items-end gap-5">
 				<div
 					className={cn(
-						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
+						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words whitespace-pre-wrap transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
 						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
 						steer.status === "delivered" && "border-border bg-input text-ink-body",
 						steer.status === "dropped" && "border-border bg-input text-ink-muted line-through",
@@ -1161,6 +1218,8 @@ interface PastTurn {
 	readonly error: string | null;
 	readonly errorAction: SearchErrorAction | null;
 	readonly deepElapsed: number | null;
+	/** What the turn's run did to the model's view of the chat (issue #389). */
+	readonly contextNotices: readonly ContextNotice[];
 }
 
 function PastTurnView({
@@ -1173,6 +1232,8 @@ function PastTurnView({
 	imageActions,
 	onOpenSettings,
 	onOpenSource,
+	onNewChat,
+	onRephrase,
 }: {
 	readonly turn: PastTurn;
 	readonly turnIndex: number;
@@ -1183,10 +1244,15 @@ function PastTurnView({
 	readonly imageActions: ImageActions;
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	readonly onOpenSource: (alias: string) => void;
+	readonly onNewChat: () => void;
+	/** Puts a question back in the composer. */
+	readonly onRephrase: (question: string) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
 	const after = turn.steers.filter((steer) => steer.timing === "after-quick");
+	const contextBefore = turn.contextNotices.filter((notice) => notice.timing === "before-quick");
+	const contextAfter = turn.contextNotices.filter((notice) => notice.timing === "after-quick");
 	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
 		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
 			<ProseBlocks
@@ -1213,10 +1279,23 @@ function PastTurnView({
 							))}
 						</div>
 					) : null}
-					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words">{turn.question}</div>
+					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
 				</div>
 			</div>
-			{turn.error === null ? null : <RunErrorNotice message={turn.error} action={turn.errorAction} onOpenSettings={onOpenSettings} onOpenSource={onOpenSource} fix={false} />}
+			{contextBefore.map((notice, index) => (
+				<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
+			))}
+			{turn.error === null ? null : (
+				<RunErrorNotice
+					message={turn.error}
+					action={turn.errorAction}
+					onOpenSettings={onOpenSettings}
+					onOpenSource={onOpenSource}
+					onNewChat={onNewChat}
+					onRephrase={() => onRephrase(turn.question)}
+					fix={false}
+				/>
+			)}
 			{before.map((steer) => (
 				<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 			))}
@@ -1224,6 +1303,9 @@ function PastTurnView({
 				{turn.quickText === "" ? null : prose(turn.quickText, turn.quick, "quick")}
 				{after.map((steer) => (
 					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+				))}
+				{contextAfter.map((notice, index) => (
+					<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
 				))}
 				{turn.deepText === "" ? null : (
 					<div className="flex flex-col gap-6">

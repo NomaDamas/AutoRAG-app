@@ -18,7 +18,6 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 		save: (draft) => ipcRenderer.invoke(ONBOARDING_CHANNELS.save, draft),
 		permissions: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.permissions),
 		openFullDiskAccess: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.openFullDiskAccess),
-		dragApp: () => ipcRenderer.send(ONBOARDING_CHANNELS.dragApp, null),
 		relaunch: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.relaunch),
 		requestNotifications: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.requestNotifications),
 		openNotificationSettings: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.openNotificationSettings),

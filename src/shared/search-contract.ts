@@ -70,8 +70,24 @@ export interface AnswerPhase {
 
 export type AnswerPhaseName = "quick" | "deep";
 
-/** What the person can do about a run's error, when the main process knows: `open-plan` goes to Settings → Subscription & Usage. */
-export type SearchErrorAction = "open-plan";
+/**
+ * What the person can do about a run's error, when the main process knows: `open-plan` goes to Settings → Subscription &
+ * Usage; `new-chat` answers a conversation that no longer fits the model even after pi summarised it (start a new chat,
+ * or ask about less at once).
+ */
+export type SearchErrorAction = "open-plan" | "new-chat";
+
+/**
+ * What a run did to the model's view of the chat (issue #389), shown in the conversation where it happened: before or
+ * after the run's Quick answer.
+ * - `compacted`: the conversation no longer fit the model, so pi replaced its earlier turns with a summary; the model
+ *   may miss details from them.
+ * - `trimmed`: a result this run fetched was larger than a model request can carry, so the model saw only part of it.
+ */
+export interface ContextNotice {
+	readonly kind: "compacted" | "trimmed";
+	readonly timing: SteerTiming;
+}
 
 /**
  * Why the documents a run is about to search may not all be there:
@@ -96,13 +112,16 @@ export type SearchStreamEvent =
 	| { readonly type: "deep-draft"; readonly searchId: string; readonly text: string }
 	| { readonly type: "quick"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
 	| { readonly type: "deep"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
-	/** `action` accompanies an error the person can act on (the weekly credits are used up). */
+	/** `action` accompanies an error the person can act on (the weekly credits are used up, the conversation outgrew the model). */
 	| { readonly type: "error"; readonly searchId: string; readonly message: string; readonly action?: SearchErrorAction }
 	| { readonly type: "cancelled"; readonly searchId: string }
 	/** The run is searching the person's own documents (Jev routed it to the local branch) and the index is not ready. */
 	| { readonly type: "index-notice"; readonly searchId: string; readonly notice: IndexNotice }
 	/** A model request of the run took every steer sent so far. */
 	| { readonly type: "steer-delivered"; readonly searchId: string }
+	/** pi is summarising the chat's earlier turns (`active`), or has stopped: the run is not stuck meanwhile. */
+	| { readonly type: "compacting"; readonly searchId: string; readonly active: boolean }
+	| { readonly type: "context-notice"; readonly searchId: string; readonly notice: ContextNotice }
 	| { readonly type: "done"; readonly searchId: string };
 
 /** When a steer reached the run: before or after its Quick answer was shown. */
@@ -124,6 +143,8 @@ export interface ChatMessageAssistant {
 	readonly deep: AnswerPhase | null;
 	readonly stopped: boolean;
 	readonly at: string;
+	/** What the run did to the model's view of the chat, in order; absent when nothing. */
+	readonly context?: readonly ContextNotice[];
 }
 
 export type ChatMessage = ChatMessageUser | ChatMessageAssistant;

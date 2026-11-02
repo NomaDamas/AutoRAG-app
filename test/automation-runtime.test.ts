@@ -1,3 +1,4 @@
+import { baselineJev } from "./baseline-jev";
 import { randomUUID } from "node:crypto";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -164,6 +165,7 @@ describe("the librarian agent's manage_automations tool", () => {
 		process.env.AUTORAG_HOME = home;
 		try {
 			const agent = new AttachmentContextAgent({
+				jev: baselineJev(),
 				model: registration.getModel() as never,
 				searchPaths: [corpus],
 				workspacePath: directory,

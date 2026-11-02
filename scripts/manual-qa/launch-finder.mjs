@@ -105,7 +105,7 @@ export const AI_PANEL = 'section[aria-label="AI Search"]:not([aria-hidden="true"
  */
 export async function openAiSearch(page, timeoutMs = 30_000) {
 	await page.locator(".sidebar__item", { hasText: "AI Search" }).click({ timeout: timeoutMs });
-	await page.waitForSelector(`${AI_PANEL} input[aria-label="Ask Dazzi"]`, { timeout: timeoutMs });
+	await page.waitForSelector(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`, { timeout: timeoutMs });
 }
 
 /**

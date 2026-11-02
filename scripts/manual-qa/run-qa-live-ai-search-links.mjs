@@ -166,13 +166,13 @@ try {
 
 	await openAiSearch(page);
 	await page.fill(
-		'input[aria-label="Ask Dazzi"]',
+		'textarea[aria-label="Ask Dazzi"]',
 		"links.txt를 근거로 Dazzi 공식 문서 주소와 요금 안내 주소를 알려줘. 공식 문서는 마크다운 링크 [제목](주소) 형식으로, 요금 안내는 주소 자체를 그대로 한 줄에 써줘.",
 	);
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(
 		() => {
-			const input = document.querySelector('input[aria-label="Ask Dazzi"]');
+			const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
 			const done = input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 			return done || document.querySelector(".ai .text-danger-text")?.textContent;
 		},

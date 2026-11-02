@@ -249,7 +249,7 @@ await openHistory(page);
 const body = await page.locator(`${AI_PANEL} .ai-body`).boundingBox();
 await page.mouse.click(body.x + 30, body.y + body.height - 40);
 check("clicking behind the popover closes it", await popoverClosed(page));
-check("the click-catcher swallowed the click", (await page.locator(`${AI_PANEL} .composer input`).inputValue()) === "");
+check("the click-catcher swallowed the click", (await page.locator(`${AI_PANEL} .composer textarea`).inputValue()) === "");
 await page.screenshot({ path: join(EVIDENCE, "history-backdrop.png") });
 
 // 7. The advertised ⌘⇧H shortcut toggles the popover.

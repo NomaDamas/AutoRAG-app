@@ -2,9 +2,10 @@
  * Manual QA: the Inspector action bar follows the file's own type.
  *
  * Proves, against the real app (production build, isolated HOME and userData):
- *  1. a text file offers 열기 / 다른 앱으로 열기 / 압축 / 7z로 압축 / 공유 / AI 요약 — and no
+ *  1. a text file offers 열기 / 다른 앱으로 열기 / 공유 / AI 요약 — and no
  *     Quick Look, copy-path, or trash button (those live elsewhere)
- *  2. 압축 really writes a zip next to the source
+ *  2. a single file or folder has no 압축; a multi-selection shows only 압축, one menu
+ *     button (ZIP으로 압축 / 7z로 압축) whose items write one real zip / 7z of every row
  *  3. a zip offers 압축 해제, which restores the folder
  *  4. a PNG offers 이미지 편집 -> JPEG로 변환, which writes a JPEG (real sips)
  *  4b. an iPhone-style IMG_0001.HEIC (macOS only: sips writes the fixture)
@@ -26,7 +27,7 @@ import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { zipSync } from "fflate";
+import { unzipSync, zipSync } from "fflate";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { isMac, rmRetry } from "./platform.mjs";
 
@@ -62,6 +63,8 @@ function hasFfmpeg() {
 function fixture() {
 	mkdirSync(join(QA_ROOT, "docs"), { recursive: true });
 	writeFileSync(join(QA_ROOT, "notes.txt"), "hello action\n");
+	writeFileSync(join(QA_ROOT, "multi-a.txt"), "multi a\n");
+	writeFileSync(join(QA_ROOT, "multi-b.txt"), "multi b\n");
 	writeFileSync(join(QA_ROOT, "photo.png"), PNG_1X1);
 	writeFileSync(join(QA_ROOT, "docs", "readme.md"), "# docs\n");
 	// An iPhone-style photo: sips encodes the HEIC (Windows ffmpeg rarely has a heif muxer).
@@ -127,6 +130,23 @@ async function selectFile(page, name) {
 	await page.waitForSelector(".inspector-actions");
 }
 
+/** Search "multi-" and select both result rows (click, then shift-click), so the Inspector shows the multi-selection. */
+async function selectBoth(page) {
+	const input = page.locator(".sidebar-search input");
+	await input.click();
+	await input.fill("multi-");
+	await input.press("Enter");
+	const rowOf = (name) =>
+		page
+			.locator('[role="row"]')
+			.filter({ has: page.locator(".row__label", { hasText: new RegExp(`^${escapeRegExp(name)}$`) }) })
+			.first();
+	await rowOf("multi-a.txt").waitFor({ timeout: 15_000 });
+	await rowOf("multi-a.txt").click();
+	await rowOf("multi-b.txt").click({ modifiers: ["Shift"] });
+	await page.waitForSelector(".inspector-actions");
+}
+
 fixture();
 const ffmpeg = hasFfmpeg();
 /** The share sheet is macOS-only; the Windows button is hidden by capability. */
@@ -146,22 +166,44 @@ try {
 	await page.waitForSelector(".sidebar-search input", { timeout: 30_000 });
 
 	// 1. Text file: the base set. 공유 only appears where the OS has a share sheet.
+	//    A single item is never offered 압축 — it is a multi-selection action.
 	await selectFile(page, "notes.txt");
 	const textActions = await actionLabels(page);
-	const expectedTextActions = canShare
-		? ["Open", "Open With", "Compress", "Compress as 7z", "Share", "AI Summary"]
-		: ["Open", "Open With", "Compress", "Compress as 7z", "AI Summary"];
+	const expectedTextActions = canShare ? ["Open", "Open With", "Share", "AI Summary"] : ["Open", "Open With", "AI Summary"];
 	check("text actions", JSON.stringify(textActions), JSON.stringify(expectedTextActions));
 	check("no Quick Look button", textActions.includes("Quick Look"), false);
+	check("single file has no Compress", textActions.includes("Compress"), false);
 	await page.screenshot({ path: join(EVIDENCE, "1-text-actions.png") });
+	await selectFile(page, "docs");
+	check("single folder has no Compress", (await actionLabels(page)).includes("Compress"), false);
 
-	// 2. 압축 writes a real zip.
+	// 2. A multi-selection offers 압축 alone, as one menu button; each item writes one real archive.
+	await selectBoth(page);
+	check("multi-selection shows only Compress", JSON.stringify(await actionLabels(page)), JSON.stringify(["Compress"]));
 	await page.getByRole("button", { name: "Compress", exact: true }).click();
-	const zipPath = join(QA_ROOT, "notes.txt.zip");
-	await waitFor(() => existsSync(zipPath), { label: "notes.txt.zip to appear" });
-	check("compress wrote a zip", existsSync(zipPath), true);
+	const compressItems = await page.locator('[role="menu"][aria-label="More actions"] [role="menuitem"] span').allInnerTexts();
+	check("compress menu offers zip and 7z", JSON.stringify(compressItems), JSON.stringify(["Compress as ZIP", "Compress as 7z"]));
+	await sleep(1200);
+	check("compress menu is still open after settling", await page.locator('[role="menu"][aria-label="More actions"]').count(), 1);
+	await page.screenshot({ path: join(EVIDENCE, "2a-compress-menu.png") });
+	await page.getByRole("menuitem", { name: "Compress as ZIP", exact: true }).click();
+	const zipPath = join(QA_ROOT, "Archive.zip");
+	await waitFor(() => existsSync(zipPath), { label: "Archive.zip to appear" });
+	await sleep(300);
+	check("compress as zip wrote one zip holding both files", JSON.stringify(Object.keys(unzipSync(new Uint8Array(readFileSync(zipPath)))).sort()), JSON.stringify(["multi-a.txt", "multi-b.txt"]));
+	check("compress as zip wrote no 7z", existsSync(join(QA_ROOT, "Archive.7z")), false);
 	await page.waitForSelector(".toast", { timeout: 5000 }).catch(() => {});
-	await page.screenshot({ path: join(EVIDENCE, "2-compressed.png") });
+	await page.screenshot({ path: join(EVIDENCE, "2b-compressed-zip.png") });
+
+	await selectBoth(page);
+	await page.getByRole("button", { name: "Compress", exact: true }).click();
+	await page.getByRole("menuitem", { name: "Compress as 7z", exact: true }).click();
+	const sevenPath = join(QA_ROOT, "Archive.7z");
+	await waitFor(() => existsSync(sevenPath), { label: "Archive.7z to appear" });
+	await sleep(300);
+	check("compress as 7z wrote 7z bytes", readFileSync(sevenPath).subarray(0, 6).toString("hex"), "377abcaf271c");
+	await page.waitForSelector(".toast", { timeout: 5000 }).catch(() => {});
+	await page.screenshot({ path: join(EVIDENCE, "2c-compressed-7z.png") });
 
 	// 3. A zip extracts in place.
 	await selectFile(page, "bundle.zip");

@@ -38,7 +38,8 @@ import { computeIndexingProgress } from "./onboarding-progress";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
 import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
-import { minSyncModelCacheRoot, modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
+import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 import { classifyIndexFailure, modelDownloadFailure, skippedFileCount } from "./index-failure";
 import type { RunOutcome } from "./index-problem-service";
 
@@ -64,6 +65,7 @@ const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 	whatsapp: "WhatsApp",
 	mailcrawl: "Mail",
 	github: "GitHub",
+	notion: "Notion",
 	obsidian: "Obsidian",
 };
 
@@ -113,8 +115,6 @@ export interface OnboardingServiceDeps {
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
 	readonly relaunch: () => void;
-	readonly appBundlePath: () => string;
-	readonly startDrag: (path: string) => void;
 	readonly pickFolders: () => Promise<readonly string[]>;
 	readonly showNotification: () => Promise<boolean>;
 	readonly notificationsSupported: () => boolean;
@@ -140,7 +140,6 @@ export interface OnboardingService {
 	save(draft: unknown): Promise<void>;
 	permissions(): Promise<PermissionStatus>;
 	openFullDiskAccess(): Promise<void>;
-	dragApp(): void;
 	relaunch(): Promise<void>;
 	requestNotifications(): Promise<boolean>;
 	openNotificationSettings(): Promise<void>;
@@ -196,6 +195,7 @@ const SOURCE_IDS: Readonly<Record<string, true>> = {
 	whatsapp: true,
 	mailcrawl: true,
 	github: true,
+	notion: true,
 	obsidian: true,
 };
 
@@ -568,7 +568,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			};
 		},
 		openFullDiskAccess: () => deps.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
-		dragApp: () => deps.startDrag(deps.appBundlePath()),
 		relaunch: async () => deps.relaunch(),
 		requestNotifications: () => deps.showNotification(),
 		openNotificationSettings: () =>

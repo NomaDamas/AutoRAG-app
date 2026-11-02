@@ -265,6 +265,7 @@
       "open": "打开",
       "openWith": "打开方式",
       "compress": "压缩",
+      "compressZip": "压缩为 ZIP",
       "compress7z": "压缩为 7z",
       "extract": "解压",
       "share": "共享",
@@ -336,11 +337,18 @@
       "last7Days": "过去 7 天",
       "last30Days": "过去 30 天",
       "older": "更早"
+    },
+    "context": {
+      "compacting": "对话较长，正在总结之前的内容…",
+      "compacted": "已总结之前的对话",
+      "compactedHint": "之前的对话现在只以摘要形式提供给模型。如仍需要具体细节，请再次告诉它。",
+      "trimmed": "过大的搜索结果只使用了一部分"
     }
   },
   "appError": {
     "fixAction": "用 AI 修复",
     "openModelSettings": "打开模型设置",
+    "askNarrower": "缩小范围重新提问",
     "showDetails": "查看详情",
     "hideDetails": "收起详情",
     "other": {
@@ -359,6 +367,11 @@
       "title": "订阅或用量额度导致无法使用 AI 模型",
       "hint": "订阅可能已到期，或用量已用完。请查看订阅与用量，或在模型设置中选择其他模型。"
     },
+    "modelPlan": {
+      "title": "所选的 AI 模型不在当前套餐内",
+      "hint": "该模型仅限更高级的套餐使用。请升级套餐，或在模型设置中选择当前套餐可用的模型。",
+      "hintNamed": "该模型仅限 {{plan}} 套餐使用。请升级到 {{plan}} 套餐，或在模型设置中选择当前套餐可用的模型。"
+    },
     "modelNotFound": {
       "title": "找不到所选的 AI 模型",
       "hint": "该模型可能已下线或已改名。请在模型设置中选择其他模型。"
@@ -370,6 +383,10 @@
     "network": {
       "title": "无法连接到 AI 模型的服务器",
       "hint": "请检查网络连接后重试。如果网络正常仍反复失败，请检查模型设置。"
+    },
+    "contextOverflow": {
+      "title": "超出了模型一次能读取的量",
+      "hint": "对话和搜索结果过大，未能生成回答。请新建对话，或缩小范围后重新提问。"
     },
     "fix": {
       "title": "用 AI 修复",
@@ -422,7 +439,9 @@
     "questionAria": "Dazzi 的提问",
     "approval": {
       "headlineChange": "Dazzi 想更改你的文件——允许吗？",
-      "headlineRun": "Dazzi 想运行这个——允许吗？"
+      "headlineRun": "Dazzi 想运行这个——允许吗？",
+      "headlineUnclassified": "Dazzi 想运行这条命令——允许吗？",
+      "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定。"
     },
     "category": {
       "delete": "删除",
@@ -855,8 +874,7 @@
       "footnote": "开启后才能继续。",
       "fda": {
         "name": "完全磁盘访问权限",
-        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。",
-        "why": "为什么需要完全磁盘访问？"
+        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。"
       },
       "notifications": {
         "name": "通知",
@@ -984,6 +1002,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "邮件 (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -994,6 +1013,7 @@
         "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
         "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
         "github": "已登录 gh · Issues 和 Pull Requests",
+        "notion": "发现 Notion 应用数据",
         "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },
@@ -1228,31 +1248,6 @@
     },
     "overlay": {
       "later": "稍后",
-      "fda": {
-        "title": "完全磁盘访问权限",
-        "heading": "在系统设置中开启",
-        "lead": "只需允许一次即可读取 macOS 受保护的区域。即使退出应用，引导也会从此步骤继续。",
-        "step1": "打开 隐私与安全性 → 完全磁盘访问权限。",
-        "step2": "将 Dazzi 添加到列表并打开开关。",
-        "step3": "如果 macOS 提示，请退出后重新打开。",
-        "drag": "如果不在列表中，请将此图标拖到列表中",
-        "allowed": "我已允许",
-        "mock": {
-          "navTitle": "隐私与安全性",
-          "notifications": "通知",
-          "files": "文件和文件夹",
-          "fda": "完全磁盘访问权限",
-          "automation": "自动化",
-          "paneLead": "以下应用可以访问整个磁盘上的文件。",
-          "terminal": "终端",
-          "backup": "备份"
-        }
-      },
-      "restart": {
-        "title": "要重新打开 Dazzi 吗？",
-        "lead": "完全磁盘访问权限需要退出并重新打开应用后才能生效。引导会从当前步骤继续。",
-        "action": "退出并重新打开"
-      },
       "pay": {
         "title": "{{plan}} 结算",
         "lead": "付款在浏览器的结算页面完成。不会在此应用中输入银行卡信息。",
@@ -1939,6 +1934,7 @@
     },
     "player": {
       "videoFailed": "无法播放视频",
+      "videoPreparing": "正在准备视频以便播放… {{percent}}%",
       "audioFailed": "无法播放音频",
       "playPause": "播放或暂停",
       "muteToggle": "切换静音",
@@ -2055,6 +2051,7 @@
       "plan": "订阅与用量",
       "general": "通用",
       "sidebar": "侧边栏",
+      "shortcuts": "快捷键",
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
@@ -2074,6 +2071,7 @@
         "plan": "套餐 付款 额度 用量 订阅 billing",
         "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言",
         "sidebar": "侧边栏 个人收藏 云盘 位置 标签 文件夹 隐藏 显示 顺序 自定义 AI",
+        "shortcuts": "快捷键 键盘 热键 按键 录制 自定义 AI shortcut hotkey",
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
         "indexing": "更新 同步 增量 索引 更新周期 sync",
@@ -2140,6 +2138,87 @@
         "lockedNotice": "AI 搜索与自动化是核心功能，始终保留在侧边栏中。",
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "应用定制服务不可用。"
+      }
+    },
+    "shortcuts": {
+      "description": "通过直接按键录制、界面点选或与 AI 对话来编辑 Dazzi 的默认快捷键。",
+      "aiHeroTitle": "使用 AI 定制快捷键",
+      "aiHeroDesc": "用自然语言描述即可更改，例如：“把重命名改为 F2，新建文件夹改为 Cmd+N”。",
+      "aiHeroButton": "使用 AI 定制",
+      "presetsTitle": "快速预设",
+      "presetMacFinder": "Mac Finder",
+      "presetWindowsExplorer": "Windows 文件资源管理器",
+      "presetDefault": "默认",
+      "filterPlaceholder": "按操作名称或按键筛选…",
+      "filterEmpty": "没有匹配的快捷键项目。",
+      "sectionsTitle": "快捷键列表",
+      "sectionsDesc": "点击快捷键按钮后直接在键盘上按下组合键即可录制，也可点击编辑图标手动选择组合键。仅限编辑内置快捷键项目。",
+      "customizedCount": "已自定义 {{count}} 项",
+      "customizedBadge": "已修改",
+      "lockedBadge": "固定",
+      "lockedHint": "Esc 是用于关闭对话框、中止运行和取消按键录制的系统保留键。",
+      "defaultHint": "默认：{{shortcut}}",
+      "recordButtonHint": "点击后按下新快捷键（当前：{{shortcut}}）",
+      "recordingPrompt": "请按下按键…（按 Esc 取消）",
+      "uiEditHint": "手动选择 {{name}} 的按键组合",
+      "resetOneHint": "将 {{name}} 恢复为默认值（{{shortcut}}）",
+      "saveUi": "保存",
+      "cancelUi": "取消",
+      "swapConflict": "互换",
+      "conflictNotice": "“{{shortcut}}”已被“{{target}}”占用。",
+      "invalidMissingModifier": "字母、数字或符号键需配合 ⌘/Ctrl 或 ⌥/Alt 使用（Space、Enter、Backspace、Delete 及 F1–F12 可单独使用）。",
+      "invalidReservedEscape": "Esc 为系统取消专用键，无法分配。",
+      "invalidReservedNavigation": "单独的方向键用于列表导航，请配合 ⌘/Ctrl 或 ⌥/Alt 使用。",
+      "invalidGeneric": "该按键组合不可用，请尝试其他按键。",
+      "groups": {
+        "window": "窗口与导航",
+        "view": "视图切换",
+        "files": "文件操作",
+        "aiSearch": "AI 搜索"
+      },
+      "actions": {
+        "dismiss": "关闭与取消",
+        "focusSearch": "聚焦搜索框",
+        "focusComposer": "打开 AI 搜索",
+        "openSettings": "打开设置",
+        "newTab": "新建标签页",
+        "reopenTab": "重新打开关闭的标签页",
+        "closeTab": "关闭标签页",
+        "editPath": "编辑路径栏",
+        "parentFolder": "前往上级文件夹",
+        "viewIcons": "图标视图",
+        "viewList": "列表视图",
+        "viewColumns": "分栏视图",
+        "quickLook": "快速查看",
+        "openItem": "打开所选项",
+        "newFolder": "新建文件夹",
+        "newFile": "新建文本文件",
+        "rename": "重命名",
+        "duplicate": "创建副本",
+        "copy": "复制",
+        "cut": "剪切",
+        "paste": "粘贴",
+        "pasteMove": "将项目移到此处",
+        "trash": "移到废纸篓",
+        "undo": "撤销",
+        "redo": "重做",
+        "aiNewChat": "新建 AI 对话",
+        "aiToggleHistory": "切换对话历史"
+      },
+      "modal": {
+        "title": "AI 快捷键定制助手",
+        "subtitle": "直接用自然语言描述您想更改或互换的快捷键。",
+        "emptyTitle": "您想更改哪些快捷键？",
+        "emptyDesc": "可在 Dazzi 内置的 26 项默认快捷键范围内自由修改或互换，更改立即生效。",
+        "promptMacFinder": "切换为 Mac Finder 默认快捷键预设",
+        "promptWindowsExplorer": "切换为 Windows 文件资源管理器快捷键预设",
+        "promptSwap": "把创建副本和重命名的快捷键互换",
+        "promptReset": "将所有快捷键恢复为默认设置",
+        "thinking": "正在检查快捷键配置",
+        "placeholder": "例如：把重命名改为 F2，聚焦搜索框改为 Cmd+P…",
+        "lockedNotice": "仅限修改内置默认快捷键列表中的项目，Esc 与单独方向键保持系统固定。",
+        "openAiSettings": "打开 AI 模型设置",
+        "unavailable": "快捷键定制服务不可用。"
       }
     },
     "general": {
@@ -2696,6 +2775,7 @@
       "chunkCount": "{{noun}} {{count}}",
       "noDocsYet": "尚未读取任何文档",
       "notFetchedYet": "尚未获取任何内容",
+      "notOnThisComputer": "此电脑上不可用",
       "importedNone": "未导入任何{{noun}}",
       "liveQuery": "搜索时即时查询",
       "appNeeds": "需要 {{name}} 桌面应用"
@@ -2749,7 +2829,9 @@
       "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
       "promptLabel": "连接 id",
       "promptConfirm": "添加连接",
-      "macOnly": "仅在 macOS 上可用（EventKit）。"
+      "macOnlyCalendar": "仅在 macOS 上可用（EventKit）。",
+      "macOnlySpotlight": "仅在 macOS 上可用（Spotlight）。",
+      "macOnlyWhatsapp": "仅在 macOS 上可用（WhatsApp）。"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",
@@ -2781,7 +2863,9 @@
       "confirmTitle": "要断开此连接吗？",
       "confirmBody": "将把 '{{alias}}' 连接从 Dazzi 搜索中移除。源应用的数据不会被删除。",
       "macOnlyNote": "Apple 日历和提醒事项只能通过 macOS 的 EventKit 读取，因此此连接在这台电脑上无效。",
-      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。"
+      "kakaoOnlyNote": "KakaoTalk 通过仅支持 Mac 应用的 lazykatok 读取，因此此连接在这台电脑上无效。",
+      "whatsappOnlyNote": "WhatsApp 通过只能找到 Mac 应用数据库的 wacrawl 读取，因此此连接在这台电脑上无效。如果你有复制出来的数据文件夹，请将其设为源路径。",
+      "spotlightOnlyNote": "Spotlight 只能通过 macOS 的 mdfind 搜索，因此此连接在这台电脑上无效。"
     },
     "scope": {
       "title": "搜索范围",

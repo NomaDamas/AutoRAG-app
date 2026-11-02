@@ -177,7 +177,7 @@ const startApp = async (language, userDataDir) => {
 };
 await startApp("en", USER_DATA);
 let panel = page.locator(AI_PANEL);
-await panel.locator('input[aria-label="Ask Dazzi"]').waitFor();
+await panel.locator('textarea[aria-label="Ask Dazzi"]').waitFor();
 /** The composer and New chat button carry translated aria-labels; the lane reads them from the locale files it is checking against. */
 const locale = (language, key) => key.split(".").reduce((node, part) => node[part], JSON.parse(readFileSync(join(ROOT, "src/shared/i18n/locales", `${language}.json`), "utf8")));
 let ui = { askDazzi: locale("en", "aiSearch.askDazzi"), newChat: locale("en", "aiSearch.newChat") };
@@ -202,12 +202,12 @@ const shot = async (name) => {
 };
 const ask = async (text) => {
 	await panel.locator(`button[aria-label="${ui.newChat}"]`).click();
-	await panel.locator(`input[aria-label="${ui.askDazzi}"]`).click();
+	await panel.locator(`textarea[aria-label="${ui.askDazzi}"]`).click();
 	await page.keyboard.type(text);
 	await page.keyboard.press("Enter");
 };
 const finished = () =>
-	page.waitForFunction(() => document.querySelector('input[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
+	page.waitForFunction(() => document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null && document.querySelector('button[aria-label="Stop"]') === null, null, { timeout: 60_000 });
 const pageTitle = (title) => page.locator("h1.linear-title", { hasText: title }).waitFor();
 const backToAiSearch = () => page.locator('[data-ai-search="true"] .tab__title').click();
 const fixButton = (name) => panel.getByRole("button", { name, exact: true });
@@ -276,7 +276,7 @@ await shot("03-fix-done");
 await dialog.getByRole("button", { name: "Close", exact: true }).last().click();
 await dialog.waitFor({ state: "detached" });
 script([{ text: "a.txt says hello." }]);
-await panel.locator(`input[aria-label="${ui.askDazzi}"]`).click();
+await panel.locator(`textarea[aria-label="${ui.askDazzi}"]`).click();
 await page.keyboard.type("what does a.txt say?");
 await page.keyboard.press("Enter");
 await finished();

@@ -133,11 +133,11 @@ try {
 	writeFileSync(CONFIG, `${JSON.stringify(cfg, null, 2)}\n`);
 
 	await openAiSearch(page);
-	await page.fill('input[aria-label="Ask Dazzi"]', "plans.txt를 근거로 Free, Pro, Team 플랜의 월 요금, 사용자 수, 저장공간을 마크다운 표(| 로 구분하는 표)로 정리해줘.");
+	await page.fill('textarea[aria-label="Ask Dazzi"]', "plans.txt를 근거로 Free, Pro, Team 플랜의 월 요금, 사용자 수, 저장공간을 마크다운 표(| 로 구분하는 표)로 정리해줘.");
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(
 		() => {
-			const input = document.querySelector('input[aria-label="Ask Dazzi"]');
+			const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
 			const done = input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 			return done || document.querySelector(".ai .text-danger-text")?.textContent;
 		},

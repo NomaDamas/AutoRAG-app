@@ -265,6 +265,7 @@
       "open": "열기",
       "openWith": "다른 앱으로 열기",
       "compress": "압축",
+      "compressZip": "ZIP으로 압축",
       "compress7z": "7z로 압축",
       "extract": "압축 해제",
       "share": "공유",
@@ -336,11 +337,18 @@
       "last7Days": "지난 7일",
       "last30Days": "지난 30일",
       "older": "그 이전"
+    },
+    "context": {
+      "compacting": "대화가 길어 이전 내용을 요약하는 중…",
+      "compacted": "이전 대화를 요약했어요",
+      "compactedHint": "이전 대화는 요약본으로 이어가요. 빠진 세부 내용이 있으면 다시 알려 주세요.",
+      "trimmed": "너무 큰 검색 결과는 일부만 사용했어요"
     }
   },
   "appError": {
     "fixAction": "AI로 고치기",
     "openModelSettings": "모델 설정 열기",
+    "askNarrower": "범위 좁혀 다시 묻기",
     "showDetails": "자세히 보기",
     "hideDetails": "자세히 닫기",
     "other": {
@@ -359,6 +367,11 @@
       "title": "구독 또는 사용량 한도 때문에 AI 모델을 쓸 수 없어요",
       "hint": "구독이 만료됐거나 사용량을 모두 썼을 수 있어요. 구독 및 사용량을 확인하거나, 모델 설정에서 다른 모델을 선택하세요."
     },
+    "modelPlan": {
+      "title": "선택한 AI 모델은 지금 플랜에 포함되어 있지 않아요",
+      "hint": "더 높은 플랜에서만 쓸 수 있는 모델이에요. 플랜을 올리거나, 모델 설정에서 지금 플랜으로 쓸 수 있는 모델을 선택하세요.",
+      "hintNamed": "{{plan}} 플랜 전용 모델이에요. {{plan}} 플랜으로 올리거나, 모델 설정에서 지금 플랜으로 쓸 수 있는 모델을 선택하세요."
+    },
     "modelNotFound": {
       "title": "선택한 AI 모델을 찾을 수 없어요",
       "hint": "모델이 종료됐거나 이름이 바뀌었을 수 있어요. 모델 설정에서 다른 모델을 선택하세요."
@@ -370,6 +383,10 @@
     "network": {
       "title": "AI 모델 서버에 연결할 수 없어요",
       "hint": "인터넷 연결을 확인하고 다시 시도하세요. 연결이 정상인데도 계속되면 모델 설정을 확인하세요."
+    },
+    "contextOverflow": {
+      "title": "모델이 한 번에 읽을 수 있는 양을 넘었어요",
+      "hint": "대화와 검색 결과가 너무 커서 답하지 못했어요. 새 대화를 시작하거나, 범위를 좁혀 다시 물어보세요."
     },
     "fix": {
       "title": "AI로 고치기",
@@ -422,7 +439,9 @@
     "questionAria": "Dazzi의 질문",
     "approval": {
       "headlineChange": "Dazzi가 파일을 바꾸려고 해요 — 허용할까요?",
-      "headlineRun": "Dazzi가 실행하려고 해요 — 허용할까요?"
+      "headlineRun": "Dazzi가 실행하려고 해요 — 허용할까요?",
+      "headlineUnclassified": "Dazzi가 이 명령을 실행하려고 해요 — 허용할까요?",
+      "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했어요. 내용을 살펴보고 판단해 주세요."
     },
     "category": {
       "delete": "삭제",
@@ -855,8 +874,7 @@
       "footnote": "켜야 다음 단계로 갈 수 있습니다.",
       "fda": {
         "name": "전체 디스크 접근",
-        "desc": "문서, 다운로드, 메일, 외장 디스크 등 보호된 영역을 읽기 위해 필요한 권한입니다.\n한 번 허용하면 폴더별 권한 요청이 반복되지 않습니다.",
-        "why": "왜 전체 디스크 접근이 필요한가요?"
+        "desc": "문서, 다운로드, 메일, 외장 디스크 등 보호된 영역을 읽기 위해 필요한 권한입니다.\n한 번 허용하면 폴더별 권한 요청이 반복되지 않습니다."
       },
       "notifications": {
         "name": "알림",
@@ -984,6 +1002,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "메일 (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -994,6 +1013,7 @@
         "whatsapp": "대화 {{chats}}개 · 메시지 {{messages}}개",
         "mailcrawl": "메일 계정 {{accounts}}개 로그인 확인됨",
         "github": "gh 로그인됨 · Issues와 Pull Requests",
+        "notion": "Notion 앱 데이터 감지됨",
         "obsidian": "Vault {{vaults}}개 발견"
       }
     },
@@ -1228,31 +1248,6 @@
     },
     "overlay": {
       "later": "나중에",
-      "fda": {
-        "title": "전체 디스크 접근 권한",
-        "heading": "시스템 설정에서 켜기",
-        "lead": "macOS 보호 영역을 읽으려면 한 번만 허용하면 됩니다. 앱을 종료해도 온보딩은 이 단계에서 이어집니다.",
-        "step1": "개인정보 보호 및 보안 → 전체 디스크 접근 권한을 엽니다.",
-        "step2": "Dazzi를 목록에 추가하고 토글을 켭니다.",
-        "step3": "macOS가 요청하면 종료 후 다시 엽니다.",
-        "drag": "목록에 없으면 이 아이콘을 목록으로 드래그",
-        "allowed": "허용했어요",
-        "mock": {
-          "navTitle": "개인정보 보호 및 보안",
-          "notifications": "알림",
-          "files": "파일 및 폴더",
-          "fda": "전체 디스크 접근 권한",
-          "automation": "자동화",
-          "paneLead": "아래 앱이 전체 디스크의 파일에 접근할 수 있습니다.",
-          "terminal": "터미널",
-          "backup": "백업"
-        }
-      },
-      "restart": {
-        "title": "Dazzi를 다시 열까요?",
-        "lead": "전체 디스크 접근 권한을 적용하려면 앱을 종료하고 다시 열어야 합니다. 온보딩은 현재 단계에서 이어집니다.",
-        "action": "종료 후 다시 열기"
-      },
       "pay": {
         "title": "{{plan}} 결제",
         "lead": "결제는 브라우저의 결제 페이지에서 진행됩니다. 카드 정보는 이 앱에 입력하지 않습니다.",
@@ -1939,6 +1934,7 @@
     },
     "player": {
       "videoFailed": "동영상을 재생할 수 없습니다",
+      "videoPreparing": "재생할 수 있도록 동영상을 준비하는 중… {{percent}}%",
       "audioFailed": "오디오를 재생할 수 없습니다",
       "playPause": "재생 또는 일시정지",
       "muteToggle": "음소거 전환",
@@ -2055,6 +2051,7 @@
       "plan": "구독 및 사용량",
       "general": "일반",
       "sidebar": "사이드바",
+      "shortcuts": "단축키",
       "ai": "AI 모델",
       "web": "웹 검색",
       "indexing": "인덱싱",
@@ -2074,6 +2071,7 @@
         "plan": "요금제 결제 크레딧 사용량 구독 billing",
         "general": "화면 테마 언어 숨김 파일 로그인 업데이트 통계 문서 언어",
         "sidebar": "사이드바 즐겨찾기 클라우드 위치 태그 폴더 숨기기 표시 순서 커스텀 AI",
+        "shortcuts": "단축키 키보드 핫키 키바인딩 녹화 커스텀 AI shortcut hotkey",
         "ai": "LLM 모델 공급자 서비스 API 키 구독 임베딩 Jev 질문 나누기 정렬",
         "web": "웹 검색 인터넷 검색 서비스 페이지 읽기",
         "indexing": "최신화 동기화 증분 색인 갱신 주기 sync",
@@ -2140,6 +2138,87 @@
         "lockedNotice": "AI 검색과 자동화는 필수 기능으로 항상 사이드바에 유지됩니다.",
         "openAiSettings": "AI 모델 설정 열기",
         "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
+      }
+    },
+    "shortcuts": {
+      "description": "Dazzi의 기본 단축키를 키보드 녹화, UI 선택, 또는 AI 대화로 편집합니다.",
+      "aiHeroTitle": "AI로 단축키 커스텀",
+      "aiHeroDesc": "\"이름 변경은 F2로 바꾸고 새 폴더는 커맨드 N으로 해줘\"처럼 말로 간편하게 바꿀 수 있습니다.",
+      "aiHeroButton": "AI로 커스텀하기",
+      "presetsTitle": "빠른 구성",
+      "presetMacFinder": "Mac Finder",
+      "presetWindowsExplorer": "Windows 파일 탐색기",
+      "presetDefault": "기본값",
+      "filterPlaceholder": "동작 이름이나 단축키로 검색…",
+      "filterEmpty": "일치하는 단축키 항목이 없습니다.",
+      "sectionsTitle": "단축키 목록",
+      "sectionsDesc": "단축키 버튼을 누른 뒤 키보드에서 바로 키를 눌러 녹화하거나, 편집 아이콘으로 직접 조합을 선택할 수 있습니다. 기본 동작 목록 안에서만 편집할 수 있습니다.",
+      "customizedCount": "{{count}}개 사용자 지정",
+      "customizedBadge": "수정됨",
+      "lockedBadge": "고정",
+      "lockedHint": "Esc는 창 닫기, 작업 취소, 단축키 녹화 취소에 쓰이는 필수 시스템 키입니다.",
+      "defaultHint": "기본값: {{shortcut}}",
+      "recordButtonHint": "클릭 후 새 단축키를 누르세요 (현재: {{shortcut}})",
+      "recordingPrompt": "키를 누르세요… (Esc 취소)",
+      "uiEditHint": "{{name}} 키 조합 직접 선택",
+      "resetOneHint": "{{name}} 기본값({{shortcut}})으로 복원",
+      "saveUi": "저장",
+      "cancelUi": "취소",
+      "swapConflict": "맞바꾸기",
+      "conflictNotice": "'{{shortcut}}' 단축키는 이미 '{{target}}'에서 사용 중입니다.",
+      "invalidMissingModifier": "문자·숫자·기호 키는 ⌘/Ctrl 또는 ⌥/Alt와 함께 눌러 주세요 (Space, Enter, Backspace, Delete, F1–F12는 단독 가능).",
+      "invalidReservedEscape": "Esc 키는 취소 전용 시스템 키라 지정할 수 없습니다.",
+      "invalidReservedNavigation": "단독 방향키는 목록 이동 전용입니다. ⌘/Ctrl 또는 ⌥/Alt와 함께 눌러 주세요.",
+      "invalidGeneric": "사용할 수 없는 키 조합입니다. 다른 키를 눌러 주세요.",
+      "groups": {
+        "window": "창 및 탐색",
+        "view": "보기 전환",
+        "files": "파일 작업",
+        "aiSearch": "AI 검색"
+      },
+      "actions": {
+        "dismiss": "닫기 및 취소",
+        "focusSearch": "검색창 포커스",
+        "focusComposer": "AI 검색 열기",
+        "openSettings": "설정 열기",
+        "newTab": "새 탭",
+        "reopenTab": "닫은 탭 다시 열기",
+        "closeTab": "탭 닫기",
+        "editPath": "경로 직접 입력",
+        "parentFolder": "상위 폴더로 이동",
+        "viewIcons": "아이콘 보기",
+        "viewList": "목록 보기",
+        "viewColumns": "계층 보기",
+        "quickLook": "훑어보기 (Quick Look)",
+        "openItem": "선택 항목 열기",
+        "newFolder": "새 폴더",
+        "newFile": "새 텍스트 파일",
+        "rename": "이름 변경",
+        "duplicate": "복제",
+        "copy": "복사",
+        "cut": "잘라내기",
+        "paste": "붙여넣기",
+        "pasteMove": "여기로 항목 이동",
+        "trash": "휴지통으로 이동",
+        "undo": "실행 취소",
+        "redo": "다시 실행",
+        "aiNewChat": "새 대화 시작",
+        "aiToggleHistory": "대화 기록 토글"
+      },
+      "modal": {
+        "title": "AI 단축키 커스텀 어시스턴트",
+        "subtitle": "원하는 단축키 변경이나 맞바꾸기를 말로 요청해 보세요.",
+        "emptyTitle": "어떤 단축키를 바꿔 볼까요?",
+        "emptyDesc": "기본 제공되는 26개 단축키 안에서 원하는 키 조합으로 바꾸거나 맞바꿀 수 있습니다.",
+        "promptMacFinder": "Mac Finder 기본 단축키 구성으로 맞춰줘",
+        "promptWindowsExplorer": "Windows 파일 탐색기 단축키 구성으로 바꿔줘",
+        "promptSwap": "복제랑 이름 변경 단축키를 서로 맞바꿔줘",
+        "promptReset": "모든 단축키를 기본값으로 되돌려줘",
+        "thinking": "단축키 구성을 살펴보는 중",
+        "placeholder": "예: 이름 변경은 F2로 바꾸고 검색창 포커스는 커맨드 P로 해줘…",
+        "lockedNotice": "기본 제공 단축키 목록 안에서만 변경 가능하며, Esc 및 기본 방향키는 시스템에 고정됩니다.",
+        "openAiSettings": "AI 모델 설정 열기",
+        "unavailable": "단축키 커스텀 서비스를 사용할 수 없습니다."
       }
     },
     "general": {
@@ -2696,6 +2775,7 @@
       "chunkCount": "{{noun}} {{count}}개",
       "noDocsYet": "아직 읽은 문서 없음",
       "notFetchedYet": "아직 내용을 가져오지 않았습니다",
+      "notOnThisComputer": "이 컴퓨터에서는 사용할 수 없습니다",
       "importedNone": "가져온 {{noun}} 없음",
       "liveQuery": "검색할 때 바로 조회",
       "appNeeds": "{{name}} 컴퓨터 앱 필요"
@@ -2749,7 +2829,9 @@
       "promptDesc": "연결 id를 정하고 추가합니다. 비워두면 템플릿 이름을 사용합니다.",
       "promptLabel": "연결 id",
       "promptConfirm": "연결 추가",
-      "macOnly": "macOS에서만 사용할 수 있습니다 (EventKit)."
+      "macOnlyCalendar": "macOS에서만 사용할 수 있습니다 (EventKit).",
+      "macOnlySpotlight": "macOS에서만 사용할 수 있습니다 (Spotlight).",
+      "macOnlyWhatsapp": "macOS에서만 사용할 수 있습니다 (WhatsApp)."
     },
     "sourceDetail": {
       "fallbackSummary": "이 연결의 설정을 관리합니다.",
@@ -2781,7 +2863,9 @@
       "confirmTitle": "연결을 해제할까요?",
       "confirmBody": "'{{alias}}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 지워지지 않습니다.",
       "macOnlyNote": "Apple 캘린더와 미리알림은 macOS의 EventKit으로만 읽을 수 있어, 이 컴퓨터에서는 연결되지 않습니다.",
-      "kakaoOnlyNote": "카카오톡은 Mac 앱에서만 읽을 수 있는 lazykatok으로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다."
+      "kakaoOnlyNote": "카카오톡은 Mac 앱에서만 읽을 수 있는 lazykatok으로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다.",
+      "whatsappOnlyNote": "WhatsApp은 Mac 앱의 데이터베이스를 읽는 wacrawl로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다. 복사해 둔 데이터 폴더가 있다면 ‘소스 경로’에 지정하세요.",
+      "spotlightOnlyNote": "Spotlight는 macOS의 mdfind로만 검색할 수 있어, 이 컴퓨터에서는 연결되지 않습니다."
     },
     "scope": {
       "title": "검색 범위",

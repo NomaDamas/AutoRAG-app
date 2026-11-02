@@ -265,6 +265,7 @@
       "open": "Open",
       "openWith": "Open With",
       "compress": "Compress",
+      "compressZip": "Compress as ZIP",
       "compress7z": "Compress as 7z",
       "extract": "Extract",
       "share": "Share",
@@ -336,11 +337,18 @@
       "last7Days": "Previous 7 days",
       "last30Days": "Previous 30 days",
       "older": "Earlier"
+    },
+    "context": {
+      "compacting": "The conversation is long — summarizing earlier messages…",
+      "compacted": "Earlier conversation summarized",
+      "compactedHint": "Earlier messages now reach the model only as a summary. Mention any detail it should still see.",
+      "trimmed": "Only part of an oversized search result was used"
     }
   },
   "appError": {
     "fixAction": "Fix with AI",
     "openModelSettings": "Open model settings",
+    "askNarrower": "Ask narrower",
     "showDetails": "Show details",
     "hideDetails": "Hide details",
     "other": {
@@ -359,6 +367,11 @@
       "title": "Your subscription or usage limit is blocking the AI model",
       "hint": "The subscription may have expired or the usage may be used up. Check Subscription & Usage, or pick another model in the model settings."
     },
+    "modelPlan": {
+      "title": "The selected AI model isn’t included in your plan",
+      "hint": "This model is only available on a higher plan. Upgrade your plan, or pick a model your current plan includes in the model settings.",
+      "hintNamed": "This model is only available on the {{plan}} plan. Upgrade to {{plan}}, or pick a model your current plan includes in the model settings."
+    },
     "modelNotFound": {
       "title": "The selected AI model can’t be found",
       "hint": "The model may have been retired or renamed. Pick another model in the model settings."
@@ -370,6 +383,10 @@
     "network": {
       "title": "Can’t reach the AI model’s server",
       "hint": "Check your internet connection and try again. If the connection is fine and it keeps failing, check the model settings."
+    },
+    "contextOverflow": {
+      "title": "Too much for the model to read at once",
+      "hint": "The conversation and search results grew past the model's limit, so no answer was made. Start a new chat, or ask again about something narrower."
     },
     "fix": {
       "title": "Fix with AI",
@@ -422,7 +439,9 @@
     "questionAria": "Question from Dazzi",
     "approval": {
       "headlineChange": "Dazzi wants to change your files — allow this?",
-      "headlineRun": "Dazzi wants to run this — allow?"
+      "headlineRun": "Dazzi wants to run this — allow?",
+      "headlineUnclassified": "Dazzi wants to run this command — allow?",
+      "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide."
     },
     "category": {
       "delete": "Delete",
@@ -855,8 +874,7 @@
       "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder.",
-        "why": "Why is Full Disk Access needed?"
+        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder."
       },
       "notifications": {
         "name": "Notifications",
@@ -984,6 +1002,7 @@
         "whatsapp": "WhatsApp",
         "mailcrawl": "Mail (mailcrawl)",
         "github": "GitHub",
+        "notion": "Notion",
         "obsidian": "Obsidian"
       },
       "detail": {
@@ -994,6 +1013,7 @@
         "whatsapp": "{{chats}} chats · {{messages}} messages",
         "mailcrawl": "Signed in to {{accounts}} mail accounts",
         "github": "Signed in to gh · Issues and Pull Requests",
+        "notion": "Notion app data detected",
         "obsidian": "{{vaults}} vaults found"
       }
     },
@@ -1228,31 +1248,6 @@
     },
     "overlay": {
       "later": "Later",
-      "fda": {
-        "title": "Full Disk Access",
-        "heading": "Turn it on in System Settings",
-        "lead": "You only need to allow it once to read macOS protected areas. Onboarding continues from this step even if you quit the app.",
-        "step1": "Open Privacy & Security → Full Disk Access.",
-        "step2": "Add Dazzi to the list and turn on the toggle.",
-        "step3": "If macOS asks, quit and reopen.",
-        "drag": "If it's not in the list, drag this icon onto the list",
-        "allowed": "I've allowed it",
-        "mock": {
-          "navTitle": "Privacy & Security",
-          "notifications": "Notifications",
-          "files": "Files & Folders",
-          "fda": "Full Disk Access",
-          "automation": "Automation",
-          "paneLead": "The apps below can access files on your entire disk.",
-          "terminal": "Terminal",
-          "backup": "Backup"
-        }
-      },
-      "restart": {
-        "title": "Reopen Dazzi?",
-        "lead": "Full Disk Access takes effect after you quit and reopen the app. Onboarding continues from the current step.",
-        "action": "Quit and reopen"
-      },
       "pay": {
         "title": "{{plan}} checkout",
         "lead": "Payment happens on the checkout page in your browser. You never enter card details in this app.",
@@ -1939,6 +1934,7 @@
     },
     "player": {
       "videoFailed": "Couldn’t play the video",
+      "videoPreparing": "Preparing the video to play… {{percent}}%",
       "audioFailed": "Couldn’t play the audio",
       "playPause": "Play or Pause",
       "muteToggle": "Toggle Mute",
@@ -2055,6 +2051,7 @@
       "plan": "Subscription & Usage",
       "general": "General",
       "sidebar": "Sidebar",
+      "shortcuts": "Shortcuts",
       "ai": "AI Models",
       "web": "Web Search",
       "indexing": "Indexing",
@@ -2074,6 +2071,7 @@
         "plan": "plan billing credits usage subscription",
         "general": "display theme appearance language hidden files login updates statistics document language",
         "sidebar": "sidebar favorites cloud locations tags folders hide show order customize AI",
+        "shortcuts": "shortcuts keyboard hotkeys keybindings record customize AI",
         "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
         "web": "web search internet search service page reading",
         "indexing": "refresh sync incremental index update interval schedule",
@@ -2140,6 +2138,87 @@
         "lockedNotice": "AI Search and Automations are essential features and always remain visible.",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "App customizer service is unavailable."
+      }
+    },
+    "shortcuts": {
+      "description": "Customize Dazzi's default keyboard shortcuts by pressing keys directly, picking modifiers in the UI, or chatting with AI.",
+      "aiHeroTitle": "Customize Shortcuts with AI",
+      "aiHeroDesc": "Ask in plain words — for example, \"Change Rename to F2 and New Folder to Cmd+N.\"",
+      "aiHeroButton": "Customize with AI",
+      "presetsTitle": "Quick Presets",
+      "presetMacFinder": "Mac Finder",
+      "presetWindowsExplorer": "Windows File Explorer",
+      "presetDefault": "Default",
+      "filterPlaceholder": "Filter by action or key…",
+      "filterEmpty": "No matching shortcuts.",
+      "sectionsTitle": "Keyboard Shortcuts",
+      "sectionsDesc": "Click a shortcut pill and press keys on your keyboard to record immediately, or use the edit icon to pick modifiers and keys. Only built-in shortcut actions can be edited.",
+      "customizedCount": "{{count}} customized",
+      "customizedBadge": "Modified",
+      "lockedBadge": "Locked",
+      "lockedHint": "Esc is a reserved system key used to close dialogs, cancel runs, and exit key recording.",
+      "defaultHint": "Default: {{shortcut}}",
+      "recordButtonHint": "Click and press new keys (current: {{shortcut}})",
+      "recordingPrompt": "Press keys… (Esc to cancel)",
+      "uiEditHint": "Choose key combination for {{name}}",
+      "resetOneHint": "Restore {{name}} to default ({{shortcut}})",
+      "saveUi": "Save",
+      "cancelUi": "Cancel",
+      "swapConflict": "Swap",
+      "conflictNotice": "'{{shortcut}}' is already used by '{{target}}'.",
+      "invalidMissingModifier": "Combine letters, numbers, or symbols with ⌘/Ctrl or ⌥/Alt (Space, Enter, Backspace, Delete, and F1–F12 work alone).",
+      "invalidReservedEscape": "Esc is reserved for cancelling and dismissing.",
+      "invalidReservedNavigation": "Plain arrow keys are reserved for list navigation. Add ⌘/Ctrl or ⌥/Alt.",
+      "invalidGeneric": "That key combination cannot be used. Try another key.",
+      "groups": {
+        "window": "Window & Navigation",
+        "view": "View Modes",
+        "files": "File Operations",
+        "aiSearch": "AI Search"
+      },
+      "actions": {
+        "dismiss": "Dismiss / Cancel",
+        "focusSearch": "Focus Search",
+        "focusComposer": "Open AI Search",
+        "openSettings": "Open Settings",
+        "newTab": "New Tab",
+        "reopenTab": "Reopen Closed Tab",
+        "closeTab": "Close Tab",
+        "editPath": "Edit Path Bar",
+        "parentFolder": "Enclosing Folder",
+        "viewIcons": "View as Icons",
+        "viewList": "View as List",
+        "viewColumns": "View as Columns",
+        "quickLook": "Quick Look",
+        "openItem": "Open Selected Item",
+        "newFolder": "New Folder",
+        "newFile": "New Text File",
+        "rename": "Rename",
+        "duplicate": "Duplicate",
+        "copy": "Copy",
+        "cut": "Cut",
+        "paste": "Paste",
+        "pasteMove": "Move Item Here",
+        "trash": "Move to Trash",
+        "undo": "Undo",
+        "redo": "Redo",
+        "aiNewChat": "New AI Chat",
+        "aiToggleHistory": "Toggle Chat History"
+      },
+      "modal": {
+        "title": "AI Shortcut Customizer",
+        "subtitle": "Describe the shortcut changes or swaps you want in plain words.",
+        "emptyTitle": "Which shortcuts would you like to change?",
+        "emptyDesc": "Rebind or swap any of Dazzi's 26 default-bound shortcuts — changes take effect right away.",
+        "promptMacFinder": "Switch to Mac Finder default shortcuts",
+        "promptWindowsExplorer": "Switch to Windows File Explorer shortcuts",
+        "promptSwap": "Swap the Duplicate and Rename shortcuts",
+        "promptReset": "Reset all keyboard shortcuts back to default",
+        "thinking": "Checking shortcuts",
+        "placeholder": "e.g. Set Rename to F2 and Focus Search to Cmd+P…",
+        "lockedNotice": "Only existing default-bound shortcuts can be edited; Esc and plain arrow keys stay reserved.",
+        "openAiSettings": "Open AI Model Settings",
+        "unavailable": "Shortcut customizer service is unavailable."
       }
     },
     "general": {
@@ -2696,6 +2775,7 @@
       "chunkCount": "{{count}} {{noun}}",
       "noDocsYet": "No documents read yet",
       "notFetchedYet": "No content fetched yet",
+      "notOnThisComputer": "Not available on this computer",
       "importedNone": "No {{noun}} imported",
       "liveQuery": "Queried live on search",
       "appNeeds": "{{name}} desktop app required"
@@ -2749,7 +2829,9 @@
       "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
       "promptLabel": "Connection id",
       "promptConfirm": "Add connection",
-      "macOnly": "Only available on macOS (EventKit)."
+      "macOnlyCalendar": "Only available on macOS (EventKit).",
+      "macOnlySpotlight": "Only available on macOS (Spotlight).",
+      "macOnlyWhatsapp": "Only available on macOS (WhatsApp)."
     },
     "sourceDetail": {
       "fallbackSummary": "Manage the settings for this connection.",
@@ -2781,7 +2863,9 @@
       "confirmTitle": "Disconnect this connection?",
       "confirmBody": "The '{{alias}}' connection will be removed from Dazzi search. The source app's data is not deleted.",
       "macOnlyNote": "Apple Calendar and Reminders can only be read through EventKit on macOS, so this connection is inactive on this computer.",
-      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer."
+      "kakaoOnlyNote": "KakaoTalk is read through lazykatok, which only works with the Mac app, so this connection is inactive on this computer.",
+      "whatsappOnlyNote": "WhatsApp is read through wacrawl, which only finds the Mac app's database, so this connection is inactive on this computer. If you have a copied data folder, set it as the source path.",
+      "spotlightOnlyNote": "Spotlight can only be searched through mdfind on macOS, so this connection is inactive on this computer."
     },
     "scope": {
       "title": "Search scope",

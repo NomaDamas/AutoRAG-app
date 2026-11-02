@@ -75,7 +75,14 @@ const FIXED: ErrorFixResult = {
 
 function render(
 	message: string,
-	props: { action?: "open-plan" | null; fix?: boolean; onOpenSettings?: (page: string) => void; onOpenSource?: (alias: string) => void } = {},
+	props: {
+		action?: "open-plan" | "new-chat" | null;
+		fix?: boolean;
+		onOpenSettings?: (page: string) => void;
+		onOpenSource?: (alias: string) => void;
+		onNewChat?: () => void;
+		onRephrase?: () => void;
+	} = {},
 ): void {
 	act(() =>
 		root.render(
@@ -86,6 +93,8 @@ function render(
 					action={props.action ?? null}
 					onOpenSettings={props.onOpenSettings ?? vi.fn()}
 					onOpenSource={props.onOpenSource ?? vi.fn()}
+					onNewChat={props.onNewChat ?? vi.fn()}
+					onRephrase={props.onRephrase ?? vi.fn()}
 					fix={props.fix ?? true}
 				/>
 			</>,
@@ -157,6 +166,26 @@ describe("RunErrorNotice", () => {
 		const fixBtn = buttons().find((button) => button.textContent?.includes(t("appError.fixAction")));
 		expect(fixBtn?.className).toContain("bg-accent");
 		expect(fixBtn?.className).not.toContain("text-danger-text");
+	});
+
+	it("explains a conversation that outgrew the model, in warning colours, and starts a new chat or puts the question back to narrow it", () => {
+		const onNewChat = vi.fn();
+		const onRephrase = vi.fn();
+		const onOpenSettings = vi.fn();
+		render("400 context_length_exceeded: maximum context length is 1048576 tokens", { action: "new-chat", onNewChat, onRephrase, onOpenSettings });
+
+		expect(host.textContent).toContain(t("appError.contextOverflow.title"));
+		expect(host.textContent).toContain(t("appError.contextOverflow.hint"));
+		expect(labels()).toEqual([t("appError.showDetails"), t("aiSearch.newChat"), t("appError.askNarrower")]);
+		expect(host.querySelector("[data-notice-icon]")?.className).toContain("bg-warn-bg");
+
+		press(t("appError.askNarrower"));
+		press(t("aiSearch.newChat"));
+
+		expect(onRephrase).toHaveBeenCalledOnce();
+		expect(onNewChat).toHaveBeenCalledOnce();
+		expect(onOpenSettings).not.toHaveBeenCalled();
+		expect(dialog()).toBeNull();
 	});
 });
 

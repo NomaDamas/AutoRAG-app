@@ -5,6 +5,7 @@ import type { KeyUsageName } from "./certificate";
 import type { Bounds, QuickLookFit } from "./fit";
 import type { ZoomDirection, ZoomGeometry } from "./zoom";
 import type { VideoAudioPlan } from "./video-audio";
+import type { VideoPlaybackPlan, VideoPlaybackProgress } from "./video-playback";
 
 /**
  * Quick Look runs in its own pre-warmed BrowserWindow (the sigma-file-manager
@@ -53,6 +54,12 @@ export const PREVIEW_CHANNELS = {
 	audioMetadata: "preview:audio-metadata",
 	/** Preview window -> main (invoke): whether the shown video's sound needs the ffmpeg-decoded sidecar, and which track. */
 	videoAudio: "preview:video-audio",
+	/** Preview window -> main (invoke): rewrite the shown video into an MP4 the page plays (an AVI), reporting progress on `videoPlaybackProgress`. */
+	videoPlayback: "preview:video-playback",
+	/** Preview window -> main (send): stop the rewrite started under this id. */
+	videoPlaybackCancel: "preview:video-playback-cancel",
+	/** Main -> preview window: how far a video rewrite has come. */
+	videoPlaybackProgress: "preview:video-playback-progress",
 	/** Preview window -> main (invoke): tables and first rows of the shown database or Parquet file. */
 	data: "preview:data",
 	/** Preview window -> main (invoke): the top-level children of the shown 7z, RAR, ISO, deb, rpm, CAB, or tar.bz2/xz/zst. */
@@ -427,6 +434,10 @@ export interface QuickLookWindowBridge {
 	audioMetadata(path: string): Promise<AudioMetadata>;
 	/** How the shown video gets its sound: its own track, or an ffmpeg-decoded sidecar when the page cannot play the codec. */
 	videoAudio(path: string): Promise<VideoAudioPlan>;
+	/** The MP4 ffmpeg makes from a video the page cannot open (an AVI), or "native" to play the file itself. `id` names the job for `cancelVideoPlayback` and for progress. */
+	videoPlayback(path: string, id: string): Promise<VideoPlaybackPlan>;
+	cancelVideoPlayback(id: string): void;
+	onVideoPlaybackProgress(listener: (progress: VideoPlaybackProgress) => void): () => void;
 	/** Database tables and first rows, or a Parquet file's schema and first rows. `table` picks a database table (null: the first). */
 	dataPreview(path: string, table: string | null): Promise<DataPreview>;
 	/** The top-level children of a 7z, RAR, tar.bz2/xz/zst, ISO, deb, rpm, or CAB; the page has no engine to read them itself. */

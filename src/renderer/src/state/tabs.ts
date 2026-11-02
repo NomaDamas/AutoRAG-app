@@ -1,5 +1,5 @@
 /**
- * Finder tab model: one path + its own back/forward history and selection.
+ * Finder tab model: one path + its own back/forward history, selection, sort, and grouping.
  *
  * Reference: handoff README §2 "Tab strip" and the state sketch's `Tab`.
  */
@@ -7,6 +7,8 @@
 import { isTagPath, tagNameOf } from "../../../shared/fs-contract";
 import { t } from "../../../shared/i18n/core";
 import { EMPTY_SELECTION, type SelectionState } from "./selection";
+import type { GroupKey } from "./grouping";
+import type { SortState } from "./sort";
 import { basename, parentPrefix } from "./paths";
 
 export interface FinderTab {
@@ -19,6 +21,10 @@ export interface FinderTab {
 	readonly flash: boolean;
 	/** Column view: folders opened pane by pane, each the parent of the next (state/columns.ts). */
 	readonly chain: readonly string[];
+	/** The tab's own sort (null: the folder's natural order). Moving, splitting, and navigating never reset it. */
+	readonly sort: SortState | null;
+	/** The tab's own Group choice; null until the user picks one, which the Finder reads as the session's launch default. */
+	readonly grouping: GroupKey | null;
 	/** Root path of the temporary Evidence Folder this tab owns; cleaned up when the tab closes or leaves it. */
 	readonly evidenceFolder?: string;
 }
@@ -30,7 +36,7 @@ export interface TabsState {
 }
 
 function blankTab(id: number, path: string): FinderTab {
-	return { id, path, back: [], fwd: [], selection: EMPTY_SELECTION, flash: false, chain: [] };
+	return { id, path, back: [], fwd: [], selection: EMPTY_SELECTION, flash: false, chain: [], sort: null, grouping: null };
 }
 
 /**
@@ -71,6 +77,18 @@ export function activeTab(state: TabsState): FinderTab {
 
 export function patchActiveTab(state: TabsState, patch: (tab: FinderTab) => FinderTab): TabsState {
 	return { ...state, tabs: state.tabs.map((tab) => (tab.id === state.activeId ? retainEvidenceFolder(patch(tab)) : tab)) };
+}
+
+/** The active tab's sort: the Sort menu and the column headers. Returns `state` itself when nothing changes. */
+export function setActiveTabSort(state: TabsState, sort: SortState | null): TabsState {
+	const current = activeTab(state).sort;
+	const unchanged = current === sort || (current !== null && sort !== null && current.key === sort.key && current.dir === sort.dir && current.flipped === sort.flipped);
+	return unchanged ? state : patchActiveTab(state, (tab) => ({ ...tab, sort }));
+}
+
+/** The active tab's Group choice. Returns `state` itself when nothing changes. */
+export function setActiveTabGrouping(state: TabsState, grouping: GroupKey): TabsState {
+	return activeTab(state).grouping === grouping ? state : patchActiveTab(state, (tab) => ({ ...tab, grouping }));
 }
 
 /**
@@ -206,7 +224,7 @@ export function evacuateTabs(state: TabsState, volume: string, fallback: string)
 		...state,
 		tabs: state.tabs.map((tab) =>
 			inside(tab.path)
-				? { ...blankTab(tab.id, fallback), back: tab.back.filter((path) => !inside(path)) }
+				? { ...blankTab(tab.id, fallback), back: tab.back.filter((path) => !inside(path)), sort: tab.sort, grouping: tab.grouping }
 				: tab,
 		),
 	};

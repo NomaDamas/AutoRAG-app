@@ -22,7 +22,7 @@ import type { ModelDownloadControls } from "../state/model-download";
 import type { Translate } from "./flow";
 import type { SmartRun } from "./smart-scope";
 
-export type OverlayKind = "fda" | "restart" | "notifications" | "winfw" | "win" | "pay";
+export type OverlayKind = "pay";
 
 /** A folder listed while browsing the scope screen. */
 export interface SubFolder {
@@ -34,7 +34,7 @@ export interface OnboardingCtx {
 	readonly draft: OnboardingDraft;
 	readonly platform: string;
 	readonly permissions: PermissionStatus | null;
-	/** The user said they allowed Full Disk Access but the probe still fails. */
+	/** The user opened Full Disk Access in System Settings; the app must restart before the grant applies. */
 	readonly fdaPending: boolean;
 	/** Any selected folder still has an unfinished scan. */
 	readonly scanning: boolean;
@@ -117,7 +117,6 @@ export interface OnboardingCtx {
 	excludeFolders(paths: readonly string[]): void;
 	setTipIndex(index: number): void;
 
-	dragApp(): void;
 	relaunch(): void;
 	openFullDiskAccess(): void;
 }
