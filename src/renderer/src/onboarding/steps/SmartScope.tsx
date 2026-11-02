@@ -5,7 +5,7 @@
  * selected folder it lies under; a whole selected folder dragged over is unselected and listed on its own.
  */
 
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement, type WheelEvent } from "react";
 import { ChevronRight, CircleHelp, Folder } from "lucide-react";
 import type { FolderCandidate } from "../../../../shared/onboarding-contract";
 import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
@@ -26,6 +26,11 @@ interface Moving {
 /** The part of a left-out folder's path below the folder it lies under, with "/" between its parts. */
 function insidePath(item: SmartExclusion): string {
 	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "").replace(/\\/gu, "/");
+}
+
+/** The panels only scroll sideways, so a mouse wheel moves them that way too. */
+function scrollSideways(event: WheelEvent<HTMLElement>): void {
+	if (event.deltaX === 0) event.currentTarget.scrollLeft += event.deltaY;
 }
 
 /** How the AI decides; shown while the pointer (or focus) rests on its label. */
@@ -203,7 +208,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 								</span>
 							))}
 						</nav>
-						<div className="si-pills">
+						<div className="si-pills" onWheel={scrollSideways}>
 							{shown.map((folder) =>
 								pill(
 									{ path: folder.path, from: "include", top: current === null },
@@ -222,7 +227,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 						<div className="si-panel-title">{t("onboarding.smartScope.exclude.title")}</div>
 						<span className="si-panel-meta">{formatSize(totals.bytes)}</span>
 					</div>
-					<div className="si-panel-body">
+					<div className="si-panel-body" onWheel={scrollSideways}>
 						{unselected.length > 0 ? (
 							<div className="si-group">
 								<p className="si-group-title">{t("onboarding.smartScope.exclude.group", { name: t("onboarding.smartScope.include.all"), count: unselected.length })}</p>

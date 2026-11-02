@@ -5512,18 +5512,28 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 16px;
 }
 
+/* Panels scroll sideways: groups stand side by side on the right, and the left keeps its breadcrumb still above its pills. */
 .onb .si-panel-body {
 	display: flex;
 	flex: 1;
-	flex-direction: column;
-	gap: 20px;
+	align-items: flex-start;
+	gap: 24px;
 	min-height: 0;
-	overflow-y: auto;
+	overflow-x: auto;
+	overflow-y: hidden;
 	padding: 0 20px 16px;
 }
 
 .onb .si-panel-body:has(.si-crumbs) {
+	flex-direction: column;
 	gap: 12px;
+	overflow-x: hidden;
+}
+
+.onb .si-crumbs + .si-pills {
+	max-width: 100%;
+	overflow-x: auto;
+	overflow-y: hidden;
 }
 
 .onb .si-crumbs,
@@ -5559,6 +5569,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .si-group {
 	display: flex;
+	flex: none;
 	flex-direction: column;
 	gap: 12px;
 }
@@ -5570,10 +5581,13 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 16px;
 }
 
+/* Five pills to a column, then the next column: rows and left edges line up across columns. */
 .onb .si-screen:has(.si-head) .si-pills {
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
+	display: grid;
+	grid-auto-flow: column;
+	grid-template-rows: repeat(5,31px);
+	grid-auto-columns: max-content;
+	justify-items: start;
 	gap: 8px;
 	padding: 0;
 }
@@ -5582,7 +5596,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	display: inline-flex;
 	align-items: center;
 	gap: 8px;
-	max-width: 100%;
+	max-width: 440px;
 	padding: 4px 12px;
 	box-sizing: border-box;
 	border: 1px solid var(--onb-border);
