@@ -21,6 +21,7 @@ import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
+import { MagicActionDialog } from "./components/MagicActionDialog";
 import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
@@ -34,6 +35,8 @@ import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
 import type { SidebarSettings } from "../../shared/sidebar-contract";
+import { ContextMenuSettingsContext } from "./hooks/useContextMenuSettings";
+import type { ContextMenuSettings } from "../../shared/context-menu-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
@@ -176,6 +179,7 @@ export function App(): ReactElement {
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
 	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
+	const [contextMenuSettings, setContextMenuSettings] = useState<ContextMenuSettings>(DEFAULT_SETTINGS.contextMenu);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
 	previewRef.current = preview;
@@ -560,6 +564,7 @@ export function App(): ReactElement {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
 			setSidebarSettings(settings.sidebar);
+			setContextMenuSettings(settings.contextMenu);
 			void setAppLanguage(settings.language);
 		};
 		void autorag.settings.get().then(applySettings);
@@ -673,6 +678,7 @@ export function App(): ReactElement {
 	return (
 		<TagCatalogContext value={tagCatalog}>
 		<SidebarSettingsContext value={sidebarSettings}>
+		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<AutomationsContext value={automations}>
 		<div className="desk flex h-full bg-window">
 			<div
@@ -924,9 +930,11 @@ export function App(): ReactElement {
 						finder?.openSettings();
 					}}
 				/>
+				<MagicActionDialog />
 			</div>
 		</div>
 		</AutomationsContext>
+		</ContextMenuSettingsContext>
 		</SidebarSettingsContext>
 		</TagCatalogContext>
 	);

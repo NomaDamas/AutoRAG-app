@@ -39,7 +39,7 @@ export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRe
 
 /** One setting mutation performed by a tool call during a turn. */
 export interface AppCustomizerChange {
-	readonly kind: "sidebar" | "general";
+	readonly kind: "sidebar" | "contextMenu" | "general";
 	/** Short human-readable description of the change. */
 	readonly summary: string;
 	/** Settings keys modified (e.g. `["sidebar.hiddenItems"]`, `["appearance"]`). */

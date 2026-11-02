@@ -120,7 +120,6 @@ const initialConfig = {
 	memoryPath: join(WORK, "memory.json"),
 	minSync: { enabled: true, autoInstall: false, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
 	jikji: false,
-	jev: false,
 	webSearch: { enabled: false },
 	queryDecomposition: false,
 	model: {
@@ -293,8 +292,16 @@ try {
 		JSON.stringify(afterAgentLabels),
 	);
 	check(
-		"Pi agent was offered only the 3 app-customizer tools (get_app_settings, update_general_settings, update_sidebar)",
-		JSON.stringify(seenRequests[0]?.tools) === JSON.stringify(["get_app_settings", "update_general_settings", "update_sidebar"]),
+		"Pi agent was offered only the structured app-customizer tools (no raw shell/fs tools)",
+		JSON.stringify(seenRequests[0]?.tools) ===
+			JSON.stringify([
+				"delete_magic_action",
+				"get_app_settings",
+				"update_context_menu",
+				"update_general_settings",
+				"update_sidebar",
+				"upsert_magic_action",
+			]),
 		JSON.stringify(seenRequests[0]?.tools),
 	);
 

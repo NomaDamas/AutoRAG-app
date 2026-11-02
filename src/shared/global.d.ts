@@ -6,6 +6,7 @@ import type { AppCustomizerBridge } from "./app-customizer-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { ConversionBridge } from "./conversion-contract";
 import type { ErrorFixBridge } from "./error-fix-contract";
+import type { MagicActionBridge } from "./magic-actions-contract";
 import type { FsBridge } from "./fs-contract";
 import type { IndexActivityBridge } from "./index-activity-contract";
 import type { InteractionBridge } from "./interaction-contract";
@@ -34,6 +35,7 @@ declare global {
 			readonly automations: AutomationBridge;
 			readonly conversion: ConversionBridge;
 			readonly errorFix: ErrorFixBridge;
+			readonly magicAction: MagicActionBridge;
 			readonly indexActivity: IndexActivityBridge;
 			readonly interaction: InteractionBridge;
 			readonly indexProblem: IndexProblemBridge;

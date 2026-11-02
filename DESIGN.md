@@ -242,6 +242,26 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   items — 압축 packs the whole selection into one `Archive.zip`, 공유 opens one
   sheet, and 압축 해제 disappears. The menu's 다른 앱으로 열기 is the Inspector's
   `기타…`: the full application chooser, one launch for the whole selection.
+- **Context menu customization & Magic Actions.** Settings → 우클릭 메뉴
+  (`ContextMenuPage`, `src/shared/context-menu-contract.ts`, `src/shared/magic-actions-contract.ts`)
+  follows the exact layout and workflow of Settings → 사이드바: the user can show or
+  hide built-in right-click items and sections, reorder sections, apply quick presets,
+  create/edit/reorder custom **Magic Actions**, or converse with the `app-customizer`
+  pi helper agent (`AppCustomizerModal` with `surface="contextMenu"`). **Tags**
+  (`builtin:tags` and the `tags` section) is locked (`LOCKED_CONTEXT_MENU_ITEM_IDS`)
+  and can never be hidden; keyboard shortcuts on built-in items remain standard
+  visual hints and are not reassigned here. Each Magic Action filters by selection
+  cardinality (`single` / `multiple` / `any`), target kind (`file` / `folder` / `any`),
+  and optional file extensions, and executes either an arbitrary shell script
+  (`execution.kind === "script"`, receiving target paths in `"$@"`, `DAZZI_FILES_JSON`,
+  `DAZZI_FILE`, and `DAZZI_FILE_COUNT`) or an in-memory pi agent loop
+  (`execution.kind === "agent"`, `mode: "read" | "organize"`, `src/main/agents/profiles/magic-action.ts`).
+  Live progress (`i` intent shimmer) and streamed output appear in `MagicActionDialog`
+  and can be minimized to `SidebarMagicActionActivity` in the sidebar footer.
+  Automated checks: `test/context-menu-customization.test.ts`, `test/magic-action-service.test.ts`,
+  `test/ui-context-menu.test.ts`, `test/ui-context-menu-settings.test.tsx`, `test/ui-magic-action-dialog.test.tsx`;
+  on-device checks: `scripts/manual-qa/run-qa-finder-context-menu-customizer.mjs`,
+  `scripts/manual-qa/run-qa-live-context-menu-magic-actions.mjs`.
 - **다른 앱으로 열기** opens an in-app menu, not the native chooser. The first
   rows are the applications the OS itself registers for the file's type
   (Launch Services `URLsForApplicationsToOpenURL`, via

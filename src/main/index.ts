@@ -30,6 +30,7 @@ import { ONBOARDING_CHANNELS, ONBOARDING_PENDING_FLAG, type NetworkCheck } from 
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS } from "../shared/app-customizer-contract";
+import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
@@ -104,6 +105,7 @@ import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
+import { createMagicActionService } from "./magic-action-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
@@ -112,6 +114,7 @@ import {
 	registerActionsIpcHandlers,
 	registerAnalyticsIpcHandlers,
 	registerAppCustomizerIpcHandlers,
+	registerMagicActionIpcHandlers,
 	registerAppUpdateIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
@@ -904,6 +907,7 @@ app.whenReady().then(async () => {
 		modelDownload: MODEL_DOWNLOAD_CHANNELS,
 		errorFix: ERROR_FIX_CHANNELS,
 		appCustomizer: APP_CUSTOMIZER_CHANNELS,
+		magicAction: MAGIC_ACTION_CHANNELS,
 		automations: AUTOMATION_CHANNELS,
 		indexActivity: INDEX_ACTIVITY_CHANNELS,
 		indexProblem: INDEX_PROBLEM_CHANNELS,
@@ -1044,6 +1048,17 @@ app.whenReady().then(async () => {
 	});
 	registerAppCustomizerIpcHandlers(appCustomizerService);
 	app.once("will-quit", () => appCustomizerService.dispose());
+	const magicActionService = createMagicActionService({
+		send: (event) => sendToMainWindow(MAGIC_ACTION_CHANNELS.event, event),
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		homeDir: home,
+		language: () => currentLanguage,
+		settings: settingsService,
+	});
+	registerMagicActionIpcHandlers(magicActionService);
+	app.once("will-quit", () => magicActionService.dispose());
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,

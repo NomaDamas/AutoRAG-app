@@ -83,11 +83,15 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
 	);
 }
 
+export type AppCustomizerSurface = "sidebar" | "contextMenu";
+
 export function AppCustomizerModal({
+	surface = "sidebar",
 	onClose,
 	onSettingsUpdated,
 	onOpenAiSettings,
 }: {
+	readonly surface?: AppCustomizerSurface;
 	readonly onClose: () => void;
 	readonly onSettingsUpdated: (settings: AppSettings) => void;
 	readonly onOpenAiSettings?: (() => void) | undefined;
@@ -250,13 +254,20 @@ export function AppCustomizerModal({
 		}
 	};
 
-	const suggestions = [
-		t("settingsCore.sidebar.modal.promptMinimal"),
-		t("settingsCore.sidebar.modal.promptReorder"),
-		t("settingsCore.sidebar.modal.promptCleanSections"),
-		t("settingsCore.sidebar.modal.promptReset"),
-	];
-
+	const isContextMenu = surface === "contextMenu";
+	const suggestions = isContextMenu
+		? [
+				t("settingsCore.contextMenu.modal.promptSummarizePdf"),
+				t("settingsCore.contextMenu.modal.promptBatchScript"),
+				t("settingsCore.contextMenu.modal.promptCleanMenu"),
+				t("settingsCore.contextMenu.modal.promptReset"),
+			]
+		: [
+				t("settingsCore.sidebar.modal.promptMinimal"),
+				t("settingsCore.sidebar.modal.promptReorder"),
+				t("settingsCore.sidebar.modal.promptCleanSections"),
+				t("settingsCore.sidebar.modal.promptReset"),
+			];
 	const running = activeRunId !== null;
 
 	return createPortal(
@@ -280,9 +291,11 @@ export function AppCustomizerModal({
 						</span>
 						<div className="customizer-modal__titles">
 							<h2 id={titleId} className="customizer-modal__title">
-								{t("settingsCore.sidebar.modal.title")}
+								{isContextMenu ? t("settingsCore.contextMenu.modal.title") : t("settingsCore.sidebar.modal.title")}
 							</h2>
-							<p className="customizer-modal__subtitle">{t("settingsCore.sidebar.modal.subtitle")}</p>
+							<p className="customizer-modal__subtitle">
+								{isContextMenu ? t("settingsCore.contextMenu.modal.subtitle") : t("settingsCore.sidebar.modal.subtitle")}
+							</p>
 						</div>
 					</div>
 					<div className="customizer-modal__head-actions">
@@ -317,8 +330,12 @@ export function AppCustomizerModal({
 							<div className="customizer-modal__empty-orb" aria-hidden="true">
 								<img src={dazziMark} alt="" className="customizer-modal__empty-logo" draggable={false} />
 							</div>
-							<h3 className="customizer-modal__empty-title">{t("settingsCore.sidebar.modal.emptyTitle")}</h3>
-							<p className="customizer-modal__empty-desc">{t("settingsCore.sidebar.modal.emptyDesc")}</p>
+							<h3 className="customizer-modal__empty-title">
+								{isContextMenu ? t("settingsCore.contextMenu.modal.emptyTitle") : t("settingsCore.sidebar.modal.emptyTitle")}
+							</h3>
+							<p className="customizer-modal__empty-desc">
+								{isContextMenu ? t("settingsCore.contextMenu.modal.emptyDesc") : t("settingsCore.sidebar.modal.emptyDesc")}
+							</p>
 							<div className="customizer-modal__suggestions">
 								{suggestions.map((promptText, idx) => (
 									<button
@@ -397,7 +414,7 @@ export function AppCustomizerModal({
 							rows={1}
 							data-testid="app-customizer-input"
 							className="customizer-composer__input"
-							placeholder={t("settingsCore.sidebar.modal.placeholder")}
+							placeholder={isContextMenu ? t("settingsCore.contextMenu.modal.placeholder") : t("settingsCore.sidebar.modal.placeholder")}
 							value={input}
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={handleKeyDown}
@@ -429,7 +446,7 @@ export function AppCustomizerModal({
 					</div>
 					<div className="customizer-modal__footnote">
 						<Lock size={11} aria-hidden="true" />
-						<span>{t("settingsCore.sidebar.modal.lockedNotice")}</span>
+						<span>{isContextMenu ? t("settingsCore.contextMenu.modal.lockedNotice") : t("settingsCore.sidebar.modal.lockedNotice")}</span>
 					</div>
 				</footer>
 			</div>

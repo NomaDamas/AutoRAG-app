@@ -12,6 +12,7 @@ import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
 import { SidebarIndexActivity } from "./SidebarIndexActivity";
 import { SidebarErrorFixActivity } from "./SidebarErrorFixActivity";
+import { SidebarMagicActionActivity } from "./SidebarMagicActionActivity";
 import { SidebarSearch, type SearchMode } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button): 28px rows, 12px labels. */
@@ -224,6 +225,7 @@ export function Sidebar({
 			</div>
 			<div className="side-footer flex flex-none flex-col px-12 py-10 border-t border-border">
 				<SidebarErrorFixActivity />
+				<SidebarMagicActionActivity />
 				<SidebarIndexActivity onOpen={onOpenIndexing} />
 				<div className="flex items-center gap-4">
 					<button
