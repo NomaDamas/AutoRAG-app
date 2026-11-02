@@ -750,7 +750,7 @@
       "account": "Continue",
       "folders": "Continue",
       "smartScan": "Continue",
-      "smartScope": "Confirm and continue",
+      "smartScope": "Continue with this scope",
       "embedding": "Continue",
       "sources": "Continue",
       "model": "Continue",
