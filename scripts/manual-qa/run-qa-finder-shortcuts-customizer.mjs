@@ -216,6 +216,45 @@ try {
 		(await page.locator('[data-shortcut-row="dismiss"]').count()) === 1,
 	);
 
+	// 1b. Verify the 3 Quick Presets: Mac Finder, Windows 파일 탐색기, 기본값
+	const presetActions = await page
+		.locator(".sidebar-presets-bar .sidebar-preset-pill")
+		.evaluateAll((els) => els.map((e) => e.getAttribute("data-action")));
+	check(
+		"Quick Presets bar strictly shows Mac Finder, Windows 파일 탐색기, and 기본값",
+		JSON.stringify(presetActions) ===
+			JSON.stringify(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer", "shortcuts-preset-default"]),
+		JSON.stringify(presetActions),
+	);
+
+	await page.locator('[data-action="shortcuts-preset-mac-finder"]').click();
+	await page.waitForTimeout(200);
+	await shot("01b-preset-mac-finder");
+	const macPresetState = JSON.parse(readFileSync(join(USER_DATA, "settings", "settings-state.json"), "utf8"));
+	check(
+		"Mac Finder preset maps ⇧⌘G editPath, ⌘↑ parentFolder, ⌘O openItem, ↩ rename, ⌘⌫ trash",
+		macPresetState.settings.shortcuts.overrides.rename === "Enter" &&
+			macPresetState.settings.shortcuts.overrides.trash === "Mod+Backspace" &&
+			macPresetState.settings.shortcuts.overrides.editPath === "Mod+Shift+G",
+		JSON.stringify(macPresetState.settings.shortcuts.overrides),
+	);
+
+	await page.locator('[data-action="shortcuts-preset-windows-explorer"]').click();
+	await page.waitForTimeout(200);
+	await shot("01c-preset-windows-explorer");
+	const winPresetState = JSON.parse(readFileSync(join(USER_DATA, "settings", "settings-state.json"), "utf8"));
+	check(
+		"Windows File Explorer preset maps Alt+D editPath, F2 rename, Delete trash, Ctrl+Y redo, Alt+P quickLook",
+		winPresetState.settings.shortcuts.overrides.rename === "F2" &&
+			winPresetState.settings.shortcuts.overrides.editPath === "Alt+D" &&
+			winPresetState.settings.shortcuts.overrides.redo === "Mod+Y" &&
+			winPresetState.settings.shortcuts.overrides.quickLook === "Alt+P",
+		JSON.stringify(winPresetState.settings.shortcuts.overrides),
+	);
+
+	await page.locator('[data-action="shortcuts-preset-default"]').click();
+	await page.waitForTimeout(200);
+
 	// 2. Direct Key-Press Recording on focusSearch -> press Mod+P
 	const focusSearchBtn = page.locator('[data-shortcut-record="focusSearch"]');
 	await focusSearchBtn.click();

@@ -240,6 +240,43 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(currentSettings.shortcuts.overrides.focusSearch).toBeUndefined();
 	});
 
+	it("renders the three quick presets (Mac Finder, Windows File Explorer, Default) and switches cleanly between them", async () => {
+		await act(async () => {
+			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+		});
+		await settle();
+
+		const presetButtons = Array.from(host.querySelectorAll<HTMLButtonElement>(".sidebar-presets-bar .sidebar-preset-pill"));
+		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual([
+			"shortcuts-preset-mac-finder",
+			"shortcuts-preset-windows-explorer",
+			"shortcuts-preset-default",
+		]);
+		expect(presetButtons[2]?.classList.contains("is-active")).toBe(true);
+
+		await act(async () => {
+			presetButtons[0]?.click();
+		});
+		await settle();
+		expect(currentSettings.shortcuts.overrides.rename).toBe("Enter");
+		expect(currentSettings.shortcuts.overrides.trash).toBe("Mod+Backspace");
+		expect(host.querySelector('[data-action="shortcuts-preset-mac-finder"]')?.classList.contains("is-active")).toBe(true);
+
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-windows-explorer"]')?.click();
+		});
+		await settle();
+		expect(currentSettings.shortcuts.overrides.rename).toBe("F2");
+		expect(currentSettings.shortcuts.overrides.editPath).toBe("Alt+D");
+		expect(host.querySelector('[data-action="shortcuts-preset-windows-explorer"]')?.classList.contains("is-active")).toBe(true);
+
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-default"]')?.click();
+		});
+		await settle();
+		expect(currentSettings.shortcuts.overrides).toEqual({});
+		expect(host.querySelector('[data-action="shortcuts-preset-default"]')?.classList.contains("is-active")).toBe(true);
+	});
 	it("opens the AI Shortcut Customizer modal with surface='shortcuts' and applies agent updates live", async () => {
 		await act(async () => {
 			root.render(<SettingsView initialCategory={"shortcuts" as never} />);

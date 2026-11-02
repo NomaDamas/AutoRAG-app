@@ -227,9 +227,9 @@ try {
 		readFileSync(CONFIG, "utf8") === configJsonBefore,
 	);
 
-	// Turn 2: Ask the real model in the same conversation to restore all shortcuts to default
+	// Turn 2: Ask the real model in the same conversation to switch to Windows File Explorer preset
 	await input.click();
-	await page.keyboard.type("모든 단축키를 다시 기본값으로 모두 복원해줘.");
+	await page.keyboard.type("이번에는 Windows 파일 탐색기 단축키 구성으로 바꿔줘.");
 	await page.keyboard.press("Enter");
 
 	await page.waitForFunction(
@@ -242,13 +242,39 @@ try {
 		null,
 		{ timeout: 120_000 },
 	);
-	await shot("03-live-shortcut-turn2-reset-done");
+	await shot("03-live-shortcut-turn2-windows-preset");
+
+	const persistedWin = JSON.parse(readFileSync(settingsStatePath, "utf8"));
+	check(
+		"Real LLM applied the Windows File Explorer preset in Turn 2",
+		persistedWin.settings.shortcuts.overrides.rename === "F2" &&
+			persistedWin.settings.shortcuts.overrides.editPath === "Alt+D" &&
+			persistedWin.settings.shortcuts.overrides.redo === "Mod+Y",
+		JSON.stringify(persistedWin.settings.shortcuts.overrides),
+	);
+
+	// Turn 3: Restore all shortcuts to default
+	await input.click();
+	await page.keyboard.type("모든 단축키를 다시 기본값으로 모두 복원해줘.");
+	await page.keyboard.press("Enter");
+
+	await page.waitForFunction(
+		() => {
+			const turns = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn');
+			const lastReply = turns[2]?.querySelector(".customizer-turn__reply");
+			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			return lastReply !== null && lastReply !== undefined && sendBtn !== null;
+		},
+		null,
+		{ timeout: 120_000 },
+	);
+	await shot("03b-live-shortcut-turn3-reset-done");
 
 	const persisted2 = JSON.parse(readFileSync(settingsStatePath, "utf8"));
 	const defaultSearchKeycap = isMac ? "⌘F" : "Ctrl+F";
 	const liveKeycapAfterTurn2 = (await page.locator(".side-search .keycap").innerText()).trim();
 	check(
-		"Real LLM restored all shortcuts to default in Turn 2 on the same multi-turn session",
+		"Real LLM restored all shortcuts to default in Turn 3 on the same multi-turn session",
 		Object.keys(persisted2.settings.shortcuts.overrides).length === 0 && liveKeycapAfterTurn2 === defaultSearchKeycap,
 		JSON.stringify({ overrides: persisted2.settings.shortcuts.overrides, liveKeycapAfterTurn2 }),
 	);

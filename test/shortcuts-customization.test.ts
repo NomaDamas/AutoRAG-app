@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSettingsService } from "../src/main/settings-service";
 import { resolveKeyAction } from "../src/renderer/src/state/keymap";
 import {
+	activeShortcutPreset,
 	chordFromKeyEvent,
 	DEFAULT_SHORTCUT_SETTINGS,
 	findShortcutConflict,
@@ -12,13 +13,16 @@ import {
 	isDefaultShortcutSettings,
 	isLockedShortcutId,
 	isShortcutId,
+	MAC_FINDER_SHORTCUT_OVERRIDES,
 	normalizeShortcutActionId,
 	normalizeShortcutSettings,
 	parseShortcutChord,
 	resolveEffectiveShortcuts,
 	SHORTCUT_CATALOG,
 	SHORTCUT_IDS,
+	shortcutSettingsForPreset,
 	swapShortcutBinding,
+	WINDOWS_EXPLORER_SHORTCUT_OVERRIDES,
 } from "../src/shared/shortcuts-contract";
 
 const cleanups: Array<() => Promise<void> | void> = [];
@@ -226,5 +230,68 @@ describe("resolveKeyAction with custom ShortcutSettings", () => {
 		expect(resolveKeyAction({ key: "Escape", meta: false, shift: false, alt: false }, { zone: "finder", typing: true }, custom)).toEqual({
 			type: "dismiss",
 		});
+	});
+
+	it("maps Mac Finder and Windows File Explorer presets cleanly without conflicts and dispatches every mapped binding", () => {
+		const mac = shortcutSettingsForPreset("macFinder");
+		expect(mac.overrides).toEqual(MAC_FINDER_SHORTCUT_OVERRIDES);
+		expect(activeShortcutPreset(mac)).toBe("macFinder");
+
+		// Mac Finder: Return renames, ⌘O opens, ⌘⌫ trashes, ⌘↑ goes to parent folder, ⇧⌘G edits path
+		expect(resolveKeyAction({ key: "Enter", meta: false, shift: false, alt: false }, { zone: "finder", typing: false }, mac)).toEqual({
+			type: "rename",
+		});
+		expect(resolveKeyAction({ key: "o", meta: true, shift: false, alt: false }, { zone: "finder", typing: false }, mac)).toEqual({
+			type: "open",
+		});
+		expect(resolveKeyAction({ key: "Backspace", meta: true, shift: false, alt: false }, { zone: "finder", typing: false }, mac)).toEqual({
+			type: "trash",
+		});
+		expect(resolveKeyAction({ key: "ArrowUp", meta: true, shift: false, alt: false }, { zone: "finder", typing: false }, mac)).toEqual({
+			type: "parentFolder",
+		});
+		expect(resolveKeyAction({ key: "g", meta: true, shift: true, alt: false }, { zone: "finder", typing: true }, mac)).toEqual({
+			type: "editPath",
+		});
+
+		const win = shortcutSettingsForPreset("windowsExplorer");
+		expect(win.overrides).toEqual(WINDOWS_EXPLORER_SHORTCUT_OVERRIDES);
+		expect(activeShortcutPreset(win)).toBe("windowsExplorer");
+
+		// Windows File Explorer: F2 renames, Enter opens, Delete trashes, Ctrl+Y redoes, Alt+D edits path, Alt+P Quick Look, Ctrl+Shift+2/6/5 views
+		expect(resolveKeyAction({ key: "F2", meta: false, shift: false, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "rename",
+		});
+		expect(resolveKeyAction({ key: "Enter", meta: false, shift: false, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "open",
+		});
+		expect(resolveKeyAction({ key: "Delete", meta: false, shift: false, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "trash",
+		});
+		expect(resolveKeyAction({ key: "Backspace", meta: false, shift: false, alt: false }, { zone: "finder", typing: false }, win)).toBeNull();
+		expect(resolveKeyAction({ key: "y", meta: true, shift: false, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "redo",
+		});
+		expect(resolveKeyAction({ key: "d", code: "KeyD", meta: false, shift: false, alt: true }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "editPath",
+		});
+		expect(resolveKeyAction({ key: "p", code: "KeyP", meta: false, shift: false, alt: true }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "quickLook",
+		});
+		expect(resolveKeyAction({ key: "2", code: "Digit2", meta: true, shift: true, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "setViewMode",
+			mode: "icons",
+		});
+		expect(resolveKeyAction({ key: "6", code: "Digit6", meta: true, shift: true, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "setViewMode",
+			mode: "list",
+		});
+		expect(resolveKeyAction({ key: "5", code: "Digit5", meta: true, shift: true, alt: false }, { zone: "finder", typing: false }, win)).toEqual({
+			type: "setViewMode",
+			mode: "columns",
+		});
+
+		expect(activeShortcutPreset(DEFAULT_SHORTCUT_SETTINGS)).toBe("default");
+		expect(activeShortcutPreset({ overrides: { focusSearch: "Mod+P" } })).toBeNull();
 	});
 });

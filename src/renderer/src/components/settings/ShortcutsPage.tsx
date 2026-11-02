@@ -18,19 +18,18 @@ import {
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
+	activeShortcutPreset,
 	chordFromKeyEvent,
 	decomposeShortcutChord,
-	DEFAULT_SHORTCUT_SETTINGS,
-	FAMILIAR_SHORTCUT_OVERRIDES,
 	findShortcutConflict,
 	formatHeldModifiers,
 	formatShortcutChord,
-	isDefaultShortcutSettings,
 	normalizeShortcutSettings,
 	resolveEffectiveShortcuts,
 	SELECTABLE_SHORTCUT_KEYS,
 	SHORTCUT_CATALOG,
 	shortcutChordParts,
+	shortcutSettingsForPreset,
 	swapShortcutBinding,
 	validateShortcutParts,
 	type ShortcutCatalogItem,
@@ -334,11 +333,7 @@ export function ShortcutsPage({
 		GROUP_ORDER.reduce((sum, group) => sum + groupedItems[group].length, 0) + (showLockedDismiss ? 1 : 0);
 
 	const customizedCount = Object.keys(shortcuts.overrides).length;
-	const isDefault = isDefaultShortcutSettings(shortcuts);
-	const isFamiliarActive =
-		shortcuts.overrides.rename === FAMILIAR_SHORTCUT_OVERRIDES.rename &&
-		shortcuts.overrides.redo === FAMILIAR_SHORTCUT_OVERRIDES.redo &&
-		customizedCount === Object.keys(FAMILIAR_SHORTCUT_OVERRIDES).length;
+	const activePreset = activeShortcutPreset(shortcuts);
 
 	return (
 		<>
@@ -370,29 +365,30 @@ export function ShortcutsPage({
 				<div className="sidebar-presets-bar__actions">
 					<button
 						type="button"
-						className={`sidebar-preset-pill${isDefault ? " is-active" : ""}`}
+						className={`sidebar-preset-pill${activePreset === "macFinder" ? " is-active" : ""}`}
+						data-action="shortcuts-preset-mac-finder"
+						aria-pressed={activePreset === "macFinder"}
+						onClick={() => void updateShortcuts(shortcutSettingsForPreset("macFinder"))}
+					>
+						{t("settingsCore.shortcuts.presetMacFinder")}
+					</button>
+					<button
+						type="button"
+						className={`sidebar-preset-pill${activePreset === "windowsExplorer" ? " is-active" : ""}`}
+						data-action="shortcuts-preset-windows-explorer"
+						aria-pressed={activePreset === "windowsExplorer"}
+						onClick={() => void updateShortcuts(shortcutSettingsForPreset("windowsExplorer"))}
+					>
+						{t("settingsCore.shortcuts.presetWindowsExplorer")}
+					</button>
+					<button
+						type="button"
+						className={`sidebar-preset-pill${activePreset === "default" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-default"
-						onClick={() => void updateShortcuts(DEFAULT_SHORTCUT_SETTINGS)}
+						aria-pressed={activePreset === "default"}
+						onClick={() => void updateShortcuts(shortcutSettingsForPreset("default"))}
 					>
 						{t("settingsCore.shortcuts.presetDefault")}
-					</button>
-					<button
-						type="button"
-						className={`sidebar-preset-pill${isFamiliarActive ? " is-active" : ""}`}
-						data-action="shortcuts-preset-familiar"
-						onClick={() => void updateShortcuts({ overrides: FAMILIAR_SHORTCUT_OVERRIDES })}
-					>
-						{t("settingsCore.shortcuts.presetFamiliar")}
-					</button>
-					<button
-						type="button"
-						className="sidebar-preset-pill is-reset"
-						data-action="shortcuts-reset-default"
-						disabled={isDefault}
-						onClick={() => void updateShortcuts(DEFAULT_SHORTCUT_SETTINGS)}
-					>
-						<RotateCcw size={11} aria-hidden="true" />
-						<span>{t("settingsCore.shortcuts.resetDefault")}</span>
 					</button>
 				</div>
 			</div>

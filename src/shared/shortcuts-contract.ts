@@ -118,10 +118,50 @@ export const DEFAULT_SHORTCUT_SETTINGS: ShortcutSettings = {
 	overrides: {},
 };
 
-/** Optional quick preset familiar to Explorer/cross-platform users (`F2` rename, `Mod+Y` redo). */
-export const FAMILIAR_SHORTCUT_OVERRIDES: Readonly<Partial<Record<ShortcutId, string>>> = {
+export type ShortcutPresetId = "default" | "macFinder" | "windowsExplorer";
+
+/**
+ * Official macOS Finder bindings mapped onto Dazzi's 26-action catalog:
+ * - `editPath`: `⇧⌘G` (`Go > Go to Folder…`)
+ * - `parentFolder`: `⌘↑` (`Go > Enclosing Folder`)
+ * - `openItem`: `⌘O` (`File > Open`, freeing Return for Rename)
+ * - `rename`: `↩` (`Return` renames the selected item)
+ * - `trash`: `⌘⌫` (`File > Move to Trash`)
+ */
+export const MAC_FINDER_SHORTCUT_OVERRIDES: Readonly<Partial<Record<ShortcutId, string>>> = {
+	editPath: "Mod+Shift+G",
+	parentFolder: "Mod+ArrowUp",
+	openItem: "Mod+O",
+	rename: "Enter",
+	trash: "Mod+Backspace",
+};
+
+/**
+ * Official Windows 11/10 File Explorer bindings mapped onto Dazzi's 26-action catalog:
+ * - `editPath`: `Alt+D` (Select address bar)
+ * - `viewIcons`: `Ctrl+Shift+2` (Large icons)
+ * - `viewList`: `Ctrl+Shift+6` (Details table view)
+ * - `viewColumns`: `Ctrl+Shift+5` (Compact multi-column list)
+ * - `quickLook`: `Alt+P` (Toggle preview pane)
+ * - `rename`: `F2` (Rename selected item)
+ * - `trash`: `Delete` (Move to Recycle Bin)
+ * - `redo`: `Ctrl+Y` (Redo last operation)
+ */
+export const WINDOWS_EXPLORER_SHORTCUT_OVERRIDES: Readonly<Partial<Record<ShortcutId, string>>> = {
+	editPath: "Alt+D",
+	viewIcons: "Mod+Shift+2",
+	viewList: "Mod+Shift+6",
+	viewColumns: "Mod+Shift+5",
+	quickLook: "Alt+P",
 	rename: "F2",
+	trash: "Delete",
 	redo: "Mod+Y",
+};
+
+export const SHORTCUT_PRESETS: Readonly<Record<ShortcutPresetId, ShortcutSettings>> = {
+	default: DEFAULT_SHORTCUT_SETTINGS,
+	macFinder: { overrides: MAC_FINDER_SHORTCUT_OVERRIDES },
+	windowsExplorer: { overrides: WINDOWS_EXPLORER_SHORTCUT_OVERRIDES },
 };
 
 const SHORTCUT_ID_MAP: Readonly<Record<string, true>> = Object.fromEntries(
@@ -1091,4 +1131,30 @@ export function normalizeShortcutSettings(raw: unknown): ShortcutSettings {
 export function isDefaultShortcutSettings(settings: ShortcutSettings): boolean {
 	const normalized = normalizeShortcutSettings(settings);
 	return Object.keys(normalized.overrides).length === 0;
+}
+
+export function shortcutSettingsForPreset(preset: ShortcutPresetId): ShortcutSettings {
+	return normalizeShortcutSettings(SHORTCUT_PRESETS[preset]);
+}
+
+function overridesEqual(
+	a: Readonly<Partial<Record<ShortcutId, string>>>,
+	b: Readonly<Partial<Record<ShortcutId, string>>>,
+): boolean {
+	const aKeys = Object.keys(a) as ShortcutId[];
+	const bKeys = Object.keys(b) as ShortcutId[];
+	if (aKeys.length !== bKeys.length) return false;
+	for (const key of aKeys) {
+		if (a[key] !== b[key]) return false;
+	}
+	return true;
+}
+
+/** Identifies which built-in preset matches `settings`, or `null` when custom bindings are active. */
+export function activeShortcutPreset(settings: ShortcutSettings): ShortcutPresetId | null {
+	const normalized = normalizeShortcutSettings(settings);
+	if (Object.keys(normalized.overrides).length === 0) return "default";
+	if (overridesEqual(normalized.overrides, MAC_FINDER_SHORTCUT_OVERRIDES)) return "macFinder";
+	if (overridesEqual(normalized.overrides, WINDOWS_EXPLORER_SHORTCUT_OVERRIDES)) return "windowsExplorer";
+	return null;
 }

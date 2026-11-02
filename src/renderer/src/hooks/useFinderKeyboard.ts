@@ -287,7 +287,9 @@ export function useFinderKeyboard(input: FinderKeyboardInput): void {
 					return;
 				case "quickLook":
 					event.preventDefault();
-					actions.quickLookSelection();
+					if (!actions.closeOpenQuickLook()) {
+						actions.quickLookSelection();
+					}
 					return;
 				case "moveSelection": {
 					event.preventDefault();

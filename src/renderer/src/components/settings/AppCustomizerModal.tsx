@@ -266,8 +266,8 @@ export function AppCustomizerModal({
 	const isShortcuts = surface === "shortcuts";
 	const suggestions = isShortcuts
 		? [
-				t("settingsCore.shortcuts.modal.promptFamiliar"),
-				t("settingsCore.shortcuts.modal.promptNewFolder"),
+				t("settingsCore.shortcuts.modal.promptMacFinder"),
+				t("settingsCore.shortcuts.modal.promptWindowsExplorer"),
 				t("settingsCore.shortcuts.modal.promptSwap"),
 				t("settingsCore.shortcuts.modal.promptReset"),
 			]

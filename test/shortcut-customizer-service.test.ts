@@ -108,16 +108,25 @@ describe("shortcut-customizer pi agent profile & toolkit", () => {
 		expect(saved2.shortcuts.overrides.duplicate).toBe("F2");
 		expect(saved2.shortcuts.overrides.rename).toBe("Mod+D");
 
-		// 3. Reset all
+		// 3. Apply Windows Explorer and Mac Finder presets via tool
+		await updateShortcuts.execute("call-3a", { preset: "windowsExplorer" }, undefined, undefined, undefined as never);
+		expect((await settings.get()).shortcuts.overrides.rename).toBe("F2");
+		expect((await settings.get()).shortcuts.overrides.editPath).toBe("Alt+D");
+
+		await updateShortcuts.execute("call-3b", { preset: "macFinder" }, undefined, undefined, undefined as never);
+		expect((await settings.get()).shortcuts.overrides.rename).toBe("Enter");
+		expect((await settings.get()).shortcuts.overrides.trash).toBe("Mod+Backspace");
+
+		// 4. Reset all
 		await updateShortcuts.execute(
-			"call-3",
+			"call-4",
 			{ resetAll: true },
 			undefined,
 			undefined,
 			undefined as never,
 		);
-		const saved3 = await settings.get();
-		expect(saved3.shortcuts.overrides).toEqual({});
+		const saved4 = await settings.get();
+		expect(saved4.shortcuts.overrides).toEqual({});
 	});
 
 	it("routes surface='shortcuts' in createAppCustomizerService to shortcut-customizer while streaming progress and updating AppSettings", async () => {

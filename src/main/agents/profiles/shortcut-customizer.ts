@@ -4,10 +4,12 @@ import type { AgentProfile } from "@autorag/librarian/profiles";
 import type { AppCustomizerChange } from "../../../shared/app-customizer-contract";
 import type { SettingsBridge } from "../../../shared/settings-contract";
 import {
+	activeShortcutPreset,
 	DEFAULT_SHORTCUT_SETTINGS,
 	findShortcutConflict,
 	formatShortcutChord,
 	isLockedShortcutId,
+	MAC_FINDER_SHORTCUT_OVERRIDES,
 	normalizeShortcutActionId,
 	normalizeShortcutSettings,
 	parseShortcutChord,
@@ -15,8 +17,11 @@ import {
 	SHORTCUT_BY_ID,
 	SHORTCUT_CATALOG,
 	shortcutScopesOverlap,
+	shortcutSettingsForPreset,
 	swapShortcutBinding,
+	WINDOWS_EXPLORER_SHORTCUT_OVERRIDES,
 	type ShortcutId,
+	type ShortcutPresetId,
 	type ShortcutSettings,
 } from "../../../shared/shortcuts-contract";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
@@ -170,8 +175,33 @@ function summarizeShortcutChange(
 	language: ReplyLanguage,
 	touchedIds: readonly ShortcutId[],
 	resetAll: boolean,
+	preset?: ShortcutPresetId,
 ): string {
-	if (resetAll) {
+	if (preset === "macFinder") {
+		switch (language) {
+			case "ko":
+				return "Mac Finder 단축키 구성 적용";
+			case "ja":
+				return "Mac Finder ショートカット構成を適用";
+			case "zh":
+				return "已应用 Mac Finder 快捷键预设";
+			default:
+				return "Applied Mac Finder shortcut preset";
+		}
+	}
+	if (preset === "windowsExplorer") {
+		switch (language) {
+			case "ko":
+				return "Windows 파일 탐색기 단축키 구성 적용";
+			case "ja":
+				return "Windows エクスプローラー構成を適用";
+			case "zh":
+				return "已应用 Windows 文件资源管理器快捷键预设";
+			default:
+				return "Applied Windows File Explorer shortcut preset";
+		}
+	}
+	if (resetAll || preset === "default") {
 		switch (language) {
 			case "ko":
 				return "모든 단축키를 기본값으로 복원";
@@ -217,6 +247,12 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 
 		return {
 			platform,
+			activePreset: activeShortcutPreset(shortcuts),
+			presets: {
+				default: {},
+				macFinder: MAC_FINDER_SHORTCUT_OVERRIDES,
+				windowsExplorer: WINDOWS_EXPLORER_SHORTCUT_OVERRIDES,
+			},
 			lockedShortcuts: [
 				{
 					id: "dismiss",
@@ -261,6 +297,12 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 		description:
 			"Edit or reset keyboard shortcuts within Dazzi's fixed catalog of default-bound actions. Arbitrary new actions cannot be added, and `Esc` (`dismiss`) cannot be changed.",
 		parameters: Type.Object({
+			preset: Type.Optional(
+				Type.Union([Type.Literal("default"), Type.Literal("macFinder"), Type.Literal("windowsExplorer")], {
+					description:
+						"Apply one of the three built-in quick presets (`macFinder` for macOS Finder defaults, `windowsExplorer` for Windows File Explorer defaults, or `default` for Dazzi defaults) before any additional per-action `bindings`.",
+				}),
+			),
 			bindings: Type.Optional(
 				Type.Array(
 					Type.Object({
@@ -297,8 +339,11 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 			ensureLive();
 			const currentSettings = await deps.settings.get();
 			let working: ShortcutSettings =
-				params.resetAll === true ? DEFAULT_SHORTCUT_SETTINGS : normalizeShortcutSettings(currentSettings.shortcuts);
-
+				params.preset !== undefined
+					? shortcutSettingsForPreset(params.preset)
+					: params.resetAll === true
+						? DEFAULT_SHORTCUT_SETTINGS
+						: normalizeShortcutSettings(currentSettings.shortcuts);
 			const warnings: string[] = [];
 			const touchedIds: ShortcutId[] = [];
 			const recordTouched = (id: ShortcutId): void => {
@@ -399,16 +444,21 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 			ensureLive();
 			await deps.settings.set({ shortcuts: working });
 
-			if (params.resetAll === true || touchedIds.length > 0 || warnings.length > 0) {
+			if (params.preset !== undefined || params.resetAll === true || touchedIds.length > 0 || warnings.length > 0) {
 				const fields =
-					params.resetAll === true
+					params.preset !== undefined || params.resetAll === true
 						? ["shortcuts.overrides"]
 						: touchedIds.length > 0
 							? touchedIds.map((id) => `shortcuts.overrides.${id}`)
 							: ["shortcuts"];
 				changes.push({
 					kind: "shortcuts",
-					summary: summarizeShortcutChange(lang(), touchedIds, params.resetAll === true && touchedIds.length === 0),
+					summary: summarizeShortcutChange(
+						lang(),
+						touchedIds,
+						params.resetAll === true && touchedIds.length === 0,
+						touchedIds.length === 0 ? params.preset : undefined,
+					),
 					fields,
 					...(warnings.length > 0 ? { warnings } : {}),
 				});
@@ -448,6 +498,11 @@ function systemPrompt(language: ReplyLanguage, platform: string): string {
 		"",
 		"## Fixed Shortcut Catalog (26 Default-Bound Actions)",
 		catalogLines,
+		"",
+		"## Built-in Quick Presets (`preset` parameter on `update_shortcuts`)",
+		"- `macFinder` (Mac Finder): `editPath`=`Mod+Shift+G` (`⇧⌘G`), `parentFolder`=`Mod+ArrowUp` (`⌘↑`), `openItem`=`Mod+O` (`⌘O`), `rename`=`Enter` (`↩`), `trash`=`Mod+Backspace` (`⌘⌫`).",
+		"- `windowsExplorer` (Windows File Explorer / 파일 탐색기): `editPath`=`Alt+D`, `viewIcons`=`Mod+Shift+2`, `viewList`=`Mod+Shift+6`, `viewColumns`=`Mod+Shift+5`, `quickLook`=`Alt+P`, `rename`=`F2`, `trash`=`Delete`, `redo`=`Mod+Y`.",
+		"- `default` (기본값): restores all 26 Dazzi default shortcuts.",
 		"",
 		"## Non-Negotiable Invariants",
 		"1. **Closed Action Catalog**: You can ONLY edit, swap, or reset shortcuts for the 26 existing actions listed above. You can NEVER create new actions, macros, custom shell commands, or shortcuts for features that do not already have a default shortcut in Dazzi. If the person asks to add a shortcut for an unsupported/new feature, apply any valid requests and politely explain that only existing default-bound shortcuts can be customized.",

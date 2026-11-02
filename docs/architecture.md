@@ -42,7 +42,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   `src/shared/shortcuts-contract.ts`) across Dazzi's fixed catalog of 26
   default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
   key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
-  conflict swap, quick presets, and the `shortcut-customizer` helper agent
+  conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
   profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
   `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
   be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
