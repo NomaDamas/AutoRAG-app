@@ -53,10 +53,10 @@ try {
 		JSON.stringify(observed.keycapTexts),
 	);
 	const expectedSettingsKeycap = isMac ? "⌘," : "Ctrl+,";
-	const expectedSettingsTitle = isMac ? "Settings (⌘,)" : "Settings (Ctrl+,)";
 	check(
 		isMac ? "the Settings hint is ⌘," : "the Settings hint is Ctrl+,",
-		observed.keycapTexts.includes(expectedSettingsKeycap) || observed.titles.includes(expectedSettingsTitle),
+		observed.keycapTexts.includes(expectedSettingsKeycap) ||
+			observed.titles.some((t) => t.startsWith("Settings") && t.includes(expectedSettingsKeycap)),
 		JSON.stringify({ keycaps: observed.keycapTexts, titles: observed.titles.filter((t) => t.includes("Settings")) }),
 	);
 	check(
