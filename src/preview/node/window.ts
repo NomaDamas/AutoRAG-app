@@ -42,6 +42,7 @@ import {
 	type QuickLookTarget,
 	type QuickLookZoom,
 } from "../shared/contract";
+import { focusTextEntry as focusPreviewTextEntry } from "./text-entry-focus";
 import { looksLikeText } from "../shared/text-sample";
 import { needsPlaybackCopy, type VideoPlaybackPlan } from "../shared/video-playback";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
@@ -265,9 +266,7 @@ async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
  */
 function focusTextEntry(state: Session): void {
 	const { window } = state;
-	if (!state.typing || !live(window) || !window.isVisible()) return;
-	window.focus();
-	window.webContents.focus();
+	focusPreviewTextEntry(window, () => state.typing && live(window));
 }
 
 function present(state: Session, report: QuickLookReady): void {
