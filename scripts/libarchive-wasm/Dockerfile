@@ -30,10 +30,14 @@ RUN tar xf /opt/xz-5.6.4.tar.gz && rm /opt/xz-5.6.4.tar.gz && cd /opt/xz-5.6.4 &
 
 WORKDIR /opt
 ADD https://github.com/libarchive/libarchive/releases/download/v3.7.7/libarchive-3.7.7.zip /opt
+# The one local change: an entry name libarchive cannot convert to UTF-8 must not
+# reach the glue as NULL, which would drop the entry. See README.md.
+ADD lib/archive_entry.patch /opt/archive_entry.patch
 ENV CPPFLAGS "-I/usr/local/include"
 ENV LDLIBS "-lz -lbz2 -lssl -lcrypto"
 ENV LDFLAGS "-L/usr/local/lib"
 RUN unzip /opt/libarchive-3.7.7.zip && rm /opt/libarchive-3.7.7.zip && cd /opt/libarchive-3.7.7 && \
+    patch -p1 < /opt/archive_entry.patch && \
     emconfigure ./configure --disable-shared --enable-static \
     --enable-bsdtar=static --enable-bsdcat=static --enable-bsdcpio=static \
     --enable-posix-regex-lib=libc --disable-xattr --disable-acl \

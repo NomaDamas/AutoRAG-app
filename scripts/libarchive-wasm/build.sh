@@ -10,7 +10,7 @@ trap 'rm -rf "$work"' EXIT
 
 mkdir -p "$work/lib/build"
 cp "$here/Dockerfile" "$work/Dockerfile"
-cp "$here/build.bash" "$here/libarchive.c" "$here/exported_functions.json" "$work/lib/"
+cp "$here/build.bash" "$here/libarchive.c" "$here/exported_functions.json" "$here/archive_entry.patch" "$work/lib/"
 
 docker build -t autorag-libarchive-wasm-build -f "$work/Dockerfile" "$work"
 docker run --rm -v "$work/lib:/workdir" autorag-libarchive-wasm-build ./build.bash
