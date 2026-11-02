@@ -392,7 +392,6 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 	ipcMain.handle(ONBOARDING_CHANNELS.save, (_event, draft: unknown) => service.save(draft));
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
-	ipcMain.on(ONBOARDING_CHANNELS.dragApp, () => service.dragApp());
 	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
 	ipcMain.handle(ONBOARDING_CHANNELS.requestNotifications, () => service.requestNotifications());
 	ipcMain.handle(ONBOARDING_CHANNELS.openNotificationSettings, () => service.openNotificationSettings());

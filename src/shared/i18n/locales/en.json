@@ -890,8 +890,7 @@
       "footnote": "Turn it on to continue.",
       "fda": {
         "name": "Full Disk Access",
-        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder.",
-        "why": "Why is Full Disk Access needed?"
+        "desc": "Needed to read protected areas such as Documents, Downloads, Mail and external disks.\nOnce allowed, you won't be asked again folder by folder."
       },
       "notifications": {
         "name": "Notifications",
@@ -1256,31 +1255,6 @@
     },
     "overlay": {
       "later": "Later",
-      "fda": {
-        "title": "Full Disk Access",
-        "heading": "Turn it on in System Settings",
-        "lead": "You only need to allow it once to read macOS protected areas. Onboarding continues from this step even if you quit the app.",
-        "step1": "Open Privacy & Security → Full Disk Access.",
-        "step2": "Add Dazzi to the list and turn on the toggle.",
-        "step3": "If macOS asks, quit and reopen.",
-        "drag": "If it's not in the list, drag this icon onto the list",
-        "allowed": "I've allowed it",
-        "mock": {
-          "navTitle": "Privacy & Security",
-          "notifications": "Notifications",
-          "files": "Files & Folders",
-          "fda": "Full Disk Access",
-          "automation": "Automation",
-          "paneLead": "The apps below can access files on your entire disk.",
-          "terminal": "Terminal",
-          "backup": "Backup"
-        }
-      },
-      "restart": {
-        "title": "Reopen Dazzi?",
-        "lead": "Full Disk Access takes effect after you quit and reopen the app. Onboarding continues from the current step.",
-        "action": "Quit and reopen"
-      },
       "pay": {
         "title": "{{plan}} checkout",
         "lead": "Payment happens on the checkout page in your browser. You never enter card details in this app.",

@@ -136,7 +136,6 @@ function harness(options: {
 		changeEmbedding: noop,
 		excludeFolders: noop,
 		setTipIndex: noop,
-		dragApp: noop,
 		relaunch: noop,
 		openFullDiskAccess: noop,
 	};
