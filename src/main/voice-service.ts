@@ -26,7 +26,7 @@ export interface MicrophoneAccess {
 	openSettings(): Promise<void>;
 }
 
-/** The two `systemPreferences` calls the adapter uses on macOS. */
+/** The two `systemPreferences` calls the adapter uses (`askForMediaAccess` exists on macOS only). */
 export interface MediaAccessPreferences {
 	getMediaAccessStatus(mediaType: "microphone"): string;
 	askForMediaAccess(mediaType: "microphone"): Promise<boolean>;
@@ -37,14 +37,10 @@ export interface MicrophoneAccessDeps {
 	readonly preferences: MediaAccessPreferences;
 	/** Electron `shell.openExternal`: the settings pages are URL schemes. */
 	readonly openExternal: (url: string) => Promise<void>;
-	/** Runs a program and resolves its stdout; rejects on a non-zero exit (Windows `reg.exe`). */
-	readonly run?: (command: string, args: readonly string[]) => Promise<string>;
 }
 
 const MAC_MICROPHONE_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone";
 const WINDOWS_MICROPHONE_SETTINGS = "ms-settings:privacy-microphone";
-/** Windows keeps Settings › Privacy › Microphone here: `Value` on the key is "Microphone access", on `NonPackaged` "Let desktop apps access your microphone". */
-const WINDOWS_CONSENT_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
 
 /**
  * The operating system's microphone permission for this platform.
@@ -52,12 +48,12 @@ const WINDOWS_CONSENT_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\
  * macOS: the TCC status, the system's own Allow / Don't Allow prompt (shown
  * once per app; after a refusal only System Settings can change it).
  *
- * Windows: the two privacy switches the person sets in Settings. Electron's
- * `getMediaAccessStatus` cannot be used there: it reports the WinRT device
- * access of the calling app, which for an unpackaged desktop app is "granted"
- * whatever the switches say (measured on Windows 11 build 26200). A value the
- * person never set is absent from the registry and means on. Windows has no
- * prompt of an app's own: a switch that is off is turned on in Settings.
+ * Windows: the privacy switches in Settings › Privacy & security › Microphone.
+ * Electron reports them: with "Microphone access", "Let apps access your
+ * microphone" or "Let desktop apps access your microphone" off it answers
+ * "denied" (and `getUserMedia` fails with NotAllowedError), with all three on
+ * "granted" (measured on Windows 11 build 26200 by turning each switch off in
+ * the Settings app). Windows has no prompt of an app's own.
  *
  * Linux: Electron offers neither call; the browser layer's own permission decides.
  */
@@ -70,16 +66,10 @@ export function systemMicrophoneAccess(deps: MicrophoneAccessDeps): MicrophoneAc
 		};
 	}
 	if (deps.platform === "win32") {
-		const run = deps.run;
-		const switchIsOff = async (key: string): Promise<boolean> => {
-			if (run === undefined) return false;
-			// A missing value is normal on a profile that never touched the switch: `reg query` exits non-zero then.
-			const output = await run("reg.exe", ["query", key, "/v", "Value"]).catch(() => "");
-			return /^\s*Value\s+REG_SZ\s+Deny\s*$/imu.test(output);
-		};
 		return {
-			status: async () => ((await switchIsOff(WINDOWS_CONSENT_KEY)) || (await switchIsOff(`${WINDOWS_CONSENT_KEY}\\NonPackaged`)) ? "denied" : "granted"),
-			ask: async () => true,
+			status: async () => deps.preferences.getMediaAccessStatus("microphone"),
+			// Windows has no prompt of an app's own: a desktop app is never "not-determined", and a switch that is off is turned on in Settings.
+			ask: async () => false,
 			openSettings: () => deps.openExternal(WINDOWS_MICROPHONE_SETTINGS),
 		};
 	}

@@ -1079,7 +1079,6 @@ app.whenReady().then(async () => {
 				platform: process.platform,
 				preferences: systemPreferences,
 				openExternal: (url) => shell.openExternal(url),
-				run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
 			}),
 		}),
 	);
