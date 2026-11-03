@@ -172,6 +172,17 @@ describe("parseRetrieveOutput", () => {
     expect(parsed.unsearched).toEqual(["mailcrawl", "nomadamas"]);
   });
 
+  it("keeps why a source was skipped, so an empty list is not shown as 'no results'", () => {
+    const out = JSON.stringify({
+      ok: true,
+      results: [],
+      unsearched: [{ surface: "minsync", methods: ["hybrid"], reason: "Error: ENOENT: no such file or directory, lstat '/Users/kim/gone.txt'" }],
+    });
+    const parsed = parseRetrieveOutput(out, HOME);
+    if (!parsed.ok) throw new Error(parsed.error);
+    expect(parsed.unsearchedReasons).toEqual([{ surface: "minsync", reason: "Error: ENOENT: no such file or directory, lstat '/Users/kim/gone.txt'" }]);
+  });
+
   it("falls back to a generic hit for an unknown datasource", () => {
     const out = JSON.stringify({ ok: true, results: [result("/notion/default/pages/9", "notion-hybrid", { datasourceId: "notion", title: "회의록" })] });
     const parsed = parseRetrieveOutput(out, HOME);

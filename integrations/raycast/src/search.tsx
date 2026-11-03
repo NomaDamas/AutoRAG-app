@@ -130,8 +130,14 @@ export default function Command(props: LaunchProps<{ arguments: Arguments.Search
   } else if (data !== undefined && !data.ok)
     empty = { title: "Search failed", description: data.error, icon: Icon.ExclamationMark };
   else if (searching) empty = { title: "Searching…", icon: Icon.MagnifyingGlass };
-  else if (trimmed.length > 0 && data?.ok === true && data.hits.length === 0)
-    empty = { title: "No results", icon: Icon.MagnifyingGlass };
+  else if (trimmed.length > 0 && data?.ok === true && data.hits.length === 0) {
+    // Nothing came back because a source failed, not because nothing matched: say which and why.
+    const skipped = data.unsearchedReasons[0];
+    empty =
+      skipped === undefined
+        ? { title: "No results", icon: Icon.MagnifyingGlass }
+        : { title: `Could not search ${skipped.surface}`, description: skipped.reason, icon: Icon.ExclamationMark };
+  }
 
   const hits = trimmed.length > 0 && data?.ok === true ? data.hits : [];
   const notes =

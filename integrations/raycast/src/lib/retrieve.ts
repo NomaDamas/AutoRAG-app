@@ -33,6 +33,8 @@ export type RetrieveResult =
       readonly stale: boolean;
       readonly hits: readonly Hit[];
       readonly unsearched: readonly string[];
+      /** Why each of those sources was skipped, as the CLI reported it. */
+      readonly unsearchedReasons: readonly { readonly surface: string; readonly reason: string }[];
     }
   | { readonly ok: false; readonly error: string };
 
@@ -185,10 +187,18 @@ export function parseRetrieveOutput(stdout: string, home: string): RetrieveResul
     seen.add(hit.key);
     hits.push(hit);
   }
-  const unsearched = Array.isArray(body.unsearched)
-    ? (body.unsearched as { surface?: unknown }[])
-        .map((entry) => text(entry.surface))
-        .filter((surface): surface is string => surface !== undefined)
-    : [];
-  return { ok: true, stale: body.stale === true, hits, unsearched };
+  const unsearchedReasons: { surface: string; reason: string }[] = [];
+  for (const entry of Array.isArray(body.unsearched)
+    ? (body.unsearched as { surface?: unknown; reason?: unknown }[])
+    : []) {
+    const surface = text(entry.surface);
+    if (surface !== undefined) unsearchedReasons.push({ surface, reason: text(entry.reason) ?? "" });
+  }
+  return {
+    ok: true,
+    stale: body.stale === true,
+    hits,
+    unsearched: unsearchedReasons.map((entry) => entry.surface),
+    unsearchedReasons,
+  };
 }
