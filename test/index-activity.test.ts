@@ -45,7 +45,9 @@ describe("deriveIndexActivity", () => {
 		expect(view.state).toBe("running");
 		expect(view.origin).toBe("external");
 		expect(view.items[0]).toMatchObject({ key: "local", state: "running", phase: "minsync" });
-		expect(view.fraction).toBeCloseTo(0.5);
+		// MinSync has not reported how many files it has to index, so the position is unknown rather than guessed.
+		expect(view.fraction).toBeNull();
+		expect(view.progress).toMatchObject({ stage: "embed", indeterminate: true, etaState: "calculating" });
 	});
 
 	it("attributes a refresh started from this app's own process to the app", () => {
@@ -74,7 +76,7 @@ describe("deriveIndexActivity", () => {
 			],
 		});
 		const view = deriveIndexActivity({
-			progress: progress({ pid: 200, phase: "minsync", parsedCounts: { scanned: 10, written: 4, deleted: 1, skipped: 2 } }),
+			progress: progress({ pid: 200, phase: "minsync", parsedCounts: { scanned: 10, written: 4, deleted: 1, skipped: 2 }, minsync: { synced: 25, total: 100 } }),
 			journal,
 			now: T0,
 			alive,
@@ -82,21 +84,8 @@ describe("deriveIndexActivity", () => {
 		});
 		expect(view.origin).toBe("scheduled");
 		expect(view.items[0]).toMatchObject({ key: "local", phase: "minsync", counts: { scanned: 10, written: 4, deleted: 1, skipped: 2 } });
-		// local halfway (0.5) of three items.
-		expect(view.fraction).toBeCloseTo(0.5 / 3);
-	});
-
-	it("advances the local minsync fraction from MinSync's committed-file count when available", () => {
-		const view = deriveIndexActivity({
-			progress: progress({ pid: 100, phase: "minsync", parsedCounts: { scanned: 100, written: 80, deleted: 0, skipped: 20 } }),
-			journal: null,
-			minsyncCommitted: 40,
-			now: T0,
-			alive,
-			ownPids: [100],
-		});
-		// 40 of 80 written files embedded -> halfway through the minsync→datasources span (0.5 + 0.5 * 0.4 = 0.7).
-		expect(view.fraction).toBeCloseTo(0.7);
+		// The read stage is done (40% of the bar) and a quarter of the 50% embedding share: 0.525 of the local item, over three items.
+		expect(view.fraction).toBeCloseTo(0.525 / 3);
 	});
 
 	it("advances the local minsync fraction from librarian 2.13.2 streamed minsync progress when present", () => {
@@ -112,8 +101,9 @@ describe("deriveIndexActivity", () => {
 			alive,
 			ownPids: [100],
 		});
-		// 25 of 100 files synced -> 25% of the minsync→datasources span (0.5 + 0.25 * 0.4 = 0.6).
-		expect(view.fraction).toBeCloseTo(0.6);
+		// 25 of 100 files synced: the read stage's 40% plus a quarter of the embedding stage's 50%.
+		expect(view.fraction).toBeCloseTo(0.525);
+		expect(view.progress?.stages.find((stage) => stage.id === "embed")?.counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 100 });
 	});
 
 	it("advances past a finished item even when the next one is a silent datasource sync", () => {

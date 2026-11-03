@@ -639,6 +639,49 @@
       "finalizing": "仕上げ中"
     }
   },
+  "indexProgress": {
+    "stage": {
+      "discover": "探索",
+      "parse": "解析",
+      "embed": "埋め込み",
+      "finalize": "仕上げ"
+    },
+    "line": {
+      "discover": "ファイルを探しています",
+      "finalize": "検索インデックスを仕上げています",
+      "counts": "{{stage}} {{done}} / {{total}} 件のファイル ({{percent}}%)",
+      "countsOpen": "{{stage}} {{done}} 件のファイル (全体数を確認中)"
+    },
+    "skipped": "スキップ {{count}} 件",
+    "failed": "失敗 {{count}} 件",
+    "bytes": "容量 {{done}} / {{total}} ({{percent}}%)",
+    "bytesDone": "容量 {{done}} 処理済み",
+    "eta": {
+      "calculating": "{{stage}} 残り時間を計算中",
+      "remaining": "{{stage}} 残り約 {{duration}}"
+    },
+    "duration": {
+      "minutes": "{{count}}分",
+      "hours": "{{hours}}時間",
+      "hoursMinutes": "{{hours}}時間{{minutes}}分",
+      "days": "{{count}}日"
+    },
+    "ago": {
+      "now": "たった今",
+      "seconds": "{{count}}秒前",
+      "minutes": "{{count}}分前",
+      "hours": "{{count}}時間前"
+    },
+    "activity": {
+      "lastDone": "最後の完了 {{ago}}",
+      "none": "まだ完了したファイルはありません",
+      "heartbeat": "稼働シグナル {{ago}}"
+    },
+    "warn": {
+      "stalledAlive": "{{minutes}}分間、完了したファイルがありません。稼働シグナルは届いているため、大きなファイルを処理中かもしれません。",
+      "stalledSilent": "{{minutes}}分間、完了したファイルがなく、稼働シグナルも途絶えました。停止している可能性があります。"
+    }
+  },
   "indexProblem": {
     "retrying": "再試行しています",
     "fixEmbedding": "埋め込み方式を変更",
