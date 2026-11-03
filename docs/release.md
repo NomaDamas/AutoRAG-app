@@ -231,28 +231,63 @@ several minutes.
 
 ### Windows: code signing
 
-Windows has no equivalent of a free certificate. Options, cheapest first:
+An unsigned installer is what Windows reports as "unknown publisher" (SmartScreen: "Windows
+protected your PC"). The workflow signs with **Azure Artifact Signing** (formerly Trusted
+Signing; Basic SKU, about $10/month) once all of the values below exist. electron-builder
+then signs every `.exe` it packs: `Dazzi.exe`, the bundled tools under `resources/tools`,
+`elevate.exe`, the uninstaller, and the installer.
 
-1. **Azure Trusted Signing** (about $10/month, supported by the workflow). Create a
-   Trusted Signing account and a certificate profile in Azure, complete identity
-   validation (an organization with 3+ years of history, or an individual), create
-   an app registration with the *Trusted Signing Certificate Profile Signer* role, then:
+1. **Eligibility.** Public Trust is open to *organizations* in South Korea; *individual*
+   developers only in the US and Canada. A Korean 개인사업자 such as 노마다마스 applies through
+   **Organization → Public** with its 사업자등록증명 (in date, issued within 12 months). Microsoft
+   does not document sole proprietorships either way, and its pages disagree on a three-year
+   history requirement (a Microsoft moderator answered "no minimum org age" in 2026-08; the MSIX
+   guidance still says three years). 노마다마스 opened on 2026-10-06, so ask Azure Support before
+   the first attempt: validation allows three document uploads, and a failed request cannot be
+   retried with the same entity without support. The certificate's CN is the validated legal
+   name exactly as registered (`노마다마스`); it cannot be customized.
+2. **What validation asks for.** A paid (pay-as-you-go) subscription, not free or trial; the
+   *Artifact Signing Identity Verifier* role on the account; a website of the business
+   (`https://nomadamas.org`); primary and secondary mailboxes on that domain that accept external
+   links (the domain's mail runs through Cloudflare Email Routing, so both must forward to a
+   monitored inbox); the business identifier (사업자등록번호) and address exactly as on the
+   certificate; and the representative's Microsoft Verified ID (government ID + face check).
+   Processing takes 1–20 business days.
+3. **Resources.** Register the `Microsoft.CodeSigning` provider, create an Artifact Signing
+   account in *Korea Central* (endpoint `https://krc.codesigning.azure.net`), and after
+   validation completes, a **Public Trust** certificate profile. Create an app registration
+   with a client secret and give it the *Artifact Signing Certificate Profile Signer* role on
+   the account.
+4. **Store the values.** `AZURE_CODESIGN_PUBLISHER` is the certificate's CN as shown in the
+   profile's subject preview:
 
 ```sh
 gh secret set AZURE_TENANT_ID     --repo NomaDamas/AutoRAG-app
 gh secret set AZURE_CLIENT_ID     --repo NomaDamas/AutoRAG-app
 gh secret set AZURE_CLIENT_SECRET --repo NomaDamas/AutoRAG-app
-gh variable set AZURE_CODESIGN_ENDPOINT --repo NomaDamas/AutoRAG-app --body https://eus.codesigning.azure.net
-gh variable set AZURE_CODESIGN_ACCOUNT  --repo NomaDamas/AutoRAG-app --body <account name>
-gh variable set AZURE_CODESIGN_PROFILE  --repo NomaDamas/AutoRAG-app --body <certificate profile name>
+gh variable set AZURE_CODESIGN_ENDPOINT  --repo NomaDamas/AutoRAG-app --body https://krc.codesigning.azure.net
+gh variable set AZURE_CODESIGN_ACCOUNT   --repo NomaDamas/AutoRAG-app --body <account name>
+gh variable set AZURE_CODESIGN_PROFILE   --repo NomaDamas/AutoRAG-app --body <certificate profile name>
+gh variable set AZURE_CODESIGN_PUBLISHER --repo NomaDamas/AutoRAG-app --body 노마다마스
 ```
 
-2. A traditional OV/EV code-signing certificate from a CA. EV removes the SmartScreen
-   warning immediately; OV and Azure builds earn reputation over some downloads.
-   Since 2023 these private keys live on hardware tokens or cloud HSMs, so a plain
-   `.pfx` secret is usually not possible; tell me which CA and the config is a small change.
+All seven or none: `scripts/release/windows-signing.mjs` fails the pack when only some are set,
+so a typo in one name can never ship an unsigned installer. The publisher matters for updates as
+well as for the install prompt: electron-builder writes it into `resources/app-update.yml` as
+`publisherName`, and electron-updater then refuses an update installer whose certificate CN differs
+(`ERR_UPDATER_INVALID_SIGNATURE`). Artifact Signing cannot report its CN at build time, so a signed
+build without `AZURE_CODESIGN_PUBLISHER` would ship an updater that accepts any installer.
 
-3. Ship unsigned and document the SmartScreen "More info → Run anyway" step.
+`smoke-installed.mjs` is the gate on Windows: with `AZURE_CODESIGN_PUBLISHER` set it fails unless
+the installer and every installed `.exe` pass `Get-AuthenticodeSignature` as `Valid` with that CN,
+and `app-update.yml` carries the `publisherName`. Without it the run prints how many executables are
+unsigned and continues. Each run writes the results to `authenticode.json` in its evidence directory.
+
+A signature removes "unknown publisher" at once; SmartScreen's "Windows protected your PC" can still
+appear for a new certificate until downloads build reputation (Artifact Signing issues no EV
+certificates). Alternatives: an OV/EV certificate from a CA on a cloud HSM (the config change is
+`win.signtoolOptions`; EV skips the reputation wait), or shipping unsigned with the "More info → Run
+anyway" step documented.
 
 ## Download distribution (optional Cloudflare R2 mirror)
 

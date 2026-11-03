@@ -241,8 +241,9 @@ jobs:
       - name: Verify the staged tools run on a bare PATH
         run: node scripts/release/verify-bundle.mjs build/stage/win32-x64/tools
 
-      # Azure Trusted Signing switches on when these secrets exist; without them
-      # the installer is unsigned and Windows SmartScreen warns.
+      # Azure Artifact Signing switches on when these secrets and variables exist; without any of them
+      # the installer is unsigned and Windows shows "unknown publisher". Setting only some of them fails
+      # the pack (scripts/release/windows-signing.mjs) rather than shipping an unsigned installer.
       - name: Package installer
         env:
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
@@ -251,9 +252,14 @@ jobs:
           AZURE_CODESIGN_ENDPOINT: ${{ vars.AZURE_CODESIGN_ENDPOINT }}
           AZURE_CODESIGN_ACCOUNT: ${{ vars.AZURE_CODESIGN_ACCOUNT }}
           AZURE_CODESIGN_PROFILE: ${{ vars.AZURE_CODESIGN_PROFILE }}
+          AZURE_CODESIGN_PUBLISHER: ${{ vars.AZURE_CODESIGN_PUBLISHER }}
         run: bun run release:pack:win
 
+      # With AZURE_CODESIGN_PUBLISHER set, the smoke fails unless the installer and every installed .exe are
+      # validly signed by that publisher and app-update.yml pins updates to it.
       - name: Smoke-test the installed app
+        env:
+          AZURE_CODESIGN_PUBLISHER: ${{ vars.AZURE_CODESIGN_PUBLISHER }}
         run: node scripts/release/smoke-installed.mjs
 
       - name: Name release files
