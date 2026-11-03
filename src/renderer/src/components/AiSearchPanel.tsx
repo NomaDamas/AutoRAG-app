@@ -34,6 +34,7 @@ import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { appendTranscript } from "../../../shared/voice-contract";
 import { useVoiceInput } from "../state/useVoiceInput";
+import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
@@ -1182,6 +1183,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
+			{voice.permission === null ? null : (
+				<MicrophonePermissionDialog state={voice.permission} platform={autorag.platform} onOpenSettings={voice.openSettings} onClose={voice.dismissPermission} />
+			)}
 		</section>
 	);
 });

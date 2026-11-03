@@ -16,34 +16,74 @@ const TRANSCRIPTION_MODEL = "google/stt-v2-standard";
 /** The service answers within seconds; this is the ceiling for a stuck connection. */
 const REQUEST_TIMEOUT_MS = 60_000;
 
-/** The slice of Electron's `systemPreferences` the microphone check needs (injected for tests). */
+/** The operating system's microphone permission for the app (injected for tests). */
 export interface MicrophoneAccess {
 	/** `granted`, `denied`, `restricted` or `not-determined`. */
-	status(): string;
+	status(): Promise<string>;
 	/** Shows the operating system's prompt; resolves true when the person allowed it. */
 	ask(): Promise<boolean>;
+	/** Opens the operating system's microphone privacy settings, where a refusal is undone. */
+	openSettings(): Promise<void>;
 }
 
-/** The two `systemPreferences` calls the adapter uses; Electron has the first on macOS and Windows, the second on macOS only. */
+/** The two `systemPreferences` calls the adapter uses on macOS. */
 export interface MediaAccessPreferences {
 	getMediaAccessStatus(mediaType: "microphone"): string;
 	askForMediaAccess(mediaType: "microphone"): Promise<boolean>;
 }
 
+export interface MicrophoneAccessDeps {
+	readonly platform: NodeJS.Platform;
+	readonly preferences: MediaAccessPreferences;
+	/** Electron `shell.openExternal`: the settings pages are URL schemes. */
+	readonly openExternal: (url: string) => Promise<void>;
+	/** Runs a program and resolves its stdout; rejects on a non-zero exit (Windows `reg.exe`). */
+	readonly run?: (command: string, args: readonly string[]) => Promise<string>;
+}
+
+const MAC_MICROPHONE_SETTINGS = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone";
+const WINDOWS_MICROPHONE_SETTINGS = "ms-settings:privacy-microphone";
+/** Windows keeps Settings › Privacy › Microphone here: `Value` on the key is "Microphone access", on `NonPackaged` "Let desktop apps access your microphone". */
+const WINDOWS_CONSENT_KEY = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
+
 /**
- * The operating system's microphone permission for this platform. macOS
- * reports it and can raise its prompt; Windows reports it (a privacy switch the
- * person controls) but the app has no prompt to raise; on Linux Electron offers
- * neither, so the web layer's own permission decides.
+ * The operating system's microphone permission for this platform.
+ *
+ * macOS: the TCC status, the system's own Allow / Don't Allow prompt (shown
+ * once per app; after a refusal only System Settings can change it).
+ *
+ * Windows: the two privacy switches the person sets in Settings. Electron's
+ * `getMediaAccessStatus` cannot be used there: it reports the WinRT device
+ * access of the calling app, which for an unpackaged desktop app is "granted"
+ * whatever the switches say (measured on Windows 11 build 26200). A value the
+ * person never set is absent from the registry and means on. Windows has no
+ * prompt of an app's own: a switch that is off is turned on in Settings.
+ *
+ * Linux: Electron offers neither call; the browser layer's own permission decides.
  */
-export function systemMicrophoneAccess(platform: NodeJS.Platform, preferences: MediaAccessPreferences): MicrophoneAccess {
-	if (platform === "darwin") {
-		return { status: () => preferences.getMediaAccessStatus("microphone"), ask: () => preferences.askForMediaAccess("microphone") };
+export function systemMicrophoneAccess(deps: MicrophoneAccessDeps): MicrophoneAccess {
+	if (deps.platform === "darwin") {
+		return {
+			status: async () => deps.preferences.getMediaAccessStatus("microphone"),
+			ask: () => deps.preferences.askForMediaAccess("microphone"),
+			openSettings: () => deps.openExternal(MAC_MICROPHONE_SETTINGS),
+		};
 	}
-	if (platform === "win32") {
-		return { status: () => preferences.getMediaAccessStatus("microphone"), ask: async () => true };
+	if (deps.platform === "win32") {
+		const run = deps.run;
+		const switchIsOff = async (key: string): Promise<boolean> => {
+			if (run === undefined) return false;
+			// A missing value is normal on a profile that never touched the switch: `reg query` exits non-zero then.
+			const output = await run("reg.exe", ["query", key, "/v", "Value"]).catch(() => "");
+			return /^\s*Value\s+REG_SZ\s+Deny\s*$/imu.test(output);
+		};
+		return {
+			status: async () => ((await switchIsOff(WINDOWS_CONSENT_KEY)) || (await switchIsOff(`${WINDOWS_CONSENT_KEY}\\NonPackaged`)) ? "denied" : "granted"),
+			ask: async () => true,
+			openSettings: () => deps.openExternal(WINDOWS_MICROPHONE_SETTINGS),
+		};
 	}
-	return { status: () => "granted", ask: async () => true };
+	return { status: async () => "granted", ask: async () => true, openSettings: async () => {} };
 }
 
 export interface VoiceServiceDeps {
@@ -57,6 +97,7 @@ export interface VoiceServiceDeps {
 export interface VoiceService {
 	transcribe(clip: VoiceClip): Promise<VoiceTranscript>;
 	prepare(): Promise<VoiceReadiness>;
+	openMicrophoneSettings(): Promise<void>;
 }
 
 export function createVoiceService(deps: VoiceServiceDeps): VoiceService {
@@ -97,12 +138,12 @@ export function createVoiceService(deps: VoiceServiceDeps): VoiceService {
 	async function prepare(): Promise<VoiceReadiness> {
 		// Signed out is checked first: the hosted service would refuse the clip, so neither a recording nor the system prompt is worth it.
 		if ((await deps.readKey()) === null) return "signed-out";
-		const status = deps.microphone.status();
+		const status = await deps.microphone.status();
 		if (status === "granted") return "ready";
 		// A denied or restricted microphone cannot be asked again: the operating system only reports it, and its settings are where it changes.
 		if (status !== "not-determined") return "microphone-denied";
 		return (await deps.microphone.ask()) ? "ready" : "microphone-denied";
 	}
 
-	return { transcribe, prepare };
+	return { transcribe, prepare, openMicrophoneSettings: () => deps.microphone.openSettings() };
 }

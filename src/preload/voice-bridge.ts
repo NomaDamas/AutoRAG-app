@@ -6,5 +6,6 @@ export function createVoiceBridge(ipcRenderer: IpcRenderer): VoiceBridge {
 	return {
 		transcribe: (clip) => ipcRenderer.invoke(VOICE_CHANNELS.transcribe, clip),
 		prepare: () => ipcRenderer.invoke(VOICE_CHANNELS.prepare),
+		openMicrophoneSettings: () => ipcRenderer.invoke(VOICE_CHANNELS.openMicrophoneSettings),
 	};
 }

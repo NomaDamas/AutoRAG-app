@@ -1070,12 +1070,17 @@ app.whenReady().then(async () => {
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
-	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone prompt.
+	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone permission.
 	registerVoiceIpcHandlers(
 		createVoiceService({
 			env: process.env,
 			readKey: () => readDazziPlanCredential(getAgentDir()),
-			microphone: systemMicrophoneAccess(process.platform, systemPreferences),
+			microphone: systemMicrophoneAccess({
+				platform: process.platform,
+				preferences: systemPreferences,
+				openExternal: (url) => shell.openExternal(url),
+				run: async (command, args) => (await execFileAsync(command, [...args], { windowsHide: true })).stdout,
+			}),
 		}),
 	);
 	void accountService.refresh().catch(() => undefined);

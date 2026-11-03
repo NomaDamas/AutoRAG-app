@@ -17,14 +17,27 @@ export interface VoiceInputOptions {
 	readonly onError: (message: string) => void;
 }
 
+/**
+ * The microphone-permission dialog. `needed`: the OS refuses the app the
+ * microphone. `waiting`: the system settings were opened; the app checks again
+ * when it regains focus. `still-denied`: it came back and the switch is still
+ * off. null: no dialog.
+ */
+export type VoicePermission = "needed" | "waiting" | "still-denied" | null;
+
 export interface VoiceInput {
 	readonly phase: VoicePhase;
 	/** Whole seconds recorded so far while `listening`. */
 	readonly seconds: number;
+	readonly permission: VoicePermission;
 	/** Starts recording; while recording, ends it and sends the clip; while transcribing, does nothing. */
 	toggle(): void;
 	/** Ends a recording without sending it. */
 	cancel(): void;
+	/** The dialog's main button: opens the OS microphone settings and waits for the person to come back. */
+	openSettings(): void;
+	/** Closes the dialog without recording. */
+	dismissPermission(): void;
 }
 
 /** Containers `MediaRecorder` may offer, best first: the speech service decodes all of them. */
@@ -60,10 +73,18 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 	optionsRef.current = options;
 	/** False after unmount, so a late transcript never sets state or reaches the composer. */
 	const mountedRef = useRef(true);
+	const [permission, setPermission] = useState<VoicePermission>(null);
+	/** The dialog's state for the focus listener, which outlives the render that set it. */
+	const permissionRef = useRef<VoicePermission>(null);
 
 	function move(next: VoicePhase): void {
 		phaseRef.current = next;
 		setPhase(next);
+	}
+
+	function showPermission(next: VoicePermission): void {
+		permissionRef.current = next;
+		setPermission(next);
 	}
 
 	function clearTimer(): void {
@@ -123,15 +144,18 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 			return;
 		}
 		if (readiness === "microphone-denied") {
-			fail(t("aiSearch.voiceDenied"));
+			move("idle");
+			showPermission("needed");
 			return;
 		}
 		let stream: MediaStream;
 		try {
 			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 		} catch (error) {
-			const denied = error instanceof Error && (error.name === "NotAllowedError" || error.name === "SecurityError");
-			fail(t(denied ? "aiSearch.voiceDenied" : "aiSearch.voiceUnavailable"));
+			move("idle");
+			// The OS refused the stream although its switch looked on (a policy, or a choice made since): the same way out.
+			if (error instanceof Error && (error.name === "NotAllowedError" || error.name === "SecurityError")) showPermission("needed");
+			else optionsRef.current.onError(t("aiSearch.voiceUnavailable"));
 			return;
 		}
 		if (!mountedRef.current) {
@@ -164,6 +188,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 			if (recording !== null && recording.recorder.state === "recording") recording.recorder.stop();
 			return;
 		}
+		showPermission(null);
 		void start();
 	}
 
@@ -174,6 +199,27 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		if (recording.recorder.state === "recording") recording.recorder.stop();
 		else finish(recording);
 	}
+
+	// Back from the system settings: the app regains focus, and if the microphone is now allowed the recording the person asked for starts.
+	useEffect(() => {
+		if (permission !== "waiting" && permission !== "still-denied") return;
+		const recheck = (): void => {
+			void optionsRef.current.voice
+				.prepare()
+				.catch((): VoiceReadiness => "microphone-denied")
+				.then((readiness) => {
+					if (!mountedRef.current || permissionRef.current === null) return;
+					if (readiness === "microphone-denied") {
+						showPermission("still-denied");
+						return;
+					}
+					showPermission(null);
+					void start();
+				});
+		};
+		window.addEventListener("focus", recheck);
+		return () => window.removeEventListener("focus", recheck);
+	}, [permission]);
 
 	useEffect(() => {
 		mountedRef.current = true;
@@ -189,5 +235,10 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		};
 	}, []);
 
-	return { phase, seconds, toggle, cancel };
+	function openSettings(): void {
+		showPermission("waiting");
+		void optionsRef.current.voice.openMicrophoneSettings().catch(() => showPermission("still-denied"));
+	}
+
+	return { phase, seconds, permission, toggle, cancel, openSettings, dismissPermission: () => showPermission(null) };
 }

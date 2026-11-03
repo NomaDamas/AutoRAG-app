@@ -4,6 +4,7 @@ import type { AppSettings } from "./settings-contract";
 export const VOICE_CHANNELS = {
 	transcribe: "voice:transcribe",
 	prepare: "voice:prepare",
+	openMicrophoneSettings: "voice:openMicrophoneSettings",
 } as const;
 
 export type VoiceChannel = (typeof VOICE_CHANNELS)[keyof typeof VOICE_CHANNELS];
@@ -78,9 +79,11 @@ export function appendTranscript(draft: string, transcript: string): string {
 }
 
 /**
- * What stands between the microphone button and a recording: nothing (`ready`),
- * no Dazzi sign-in (the hosted service would refuse the clip, so nothing is
- * recorded), or a microphone the operating system will not let the app use.
+ * What stands between the microphone button and a recording. `ready`: record.
+ * `signed-out`: the hosted service would refuse the clip, so nothing is
+ * recorded. `microphone-denied`: the operating system refuses the app the
+ * microphone and only its settings can change that (macOS after a "Don't
+ * Allow", Windows with a privacy switch off).
  */
 export type VoiceReadiness = "ready" | "signed-out" | "microphone-denied";
 
@@ -90,8 +93,10 @@ export interface VoiceBridge {
 	transcribe(clip: VoiceClip): Promise<VoiceTranscript>;
 	/**
 	 * Checked before every recording: whether the person is signed in, and
-	 * whether the app may use the microphone, asking the operating system the
-	 * first time (macOS shows its own prompt).
+	 * whether the app may use the microphone. On macOS the first call raises the
+	 * system's own Allow / Don't Allow prompt and waits for the answer.
 	 */
 	prepare(): Promise<VoiceReadiness>;
+	/** Opens the operating system's microphone privacy settings (macOS Privacy & Security › Microphone, Windows Settings › Privacy › Microphone). */
+	openMicrophoneSettings(): Promise<void>;
 }

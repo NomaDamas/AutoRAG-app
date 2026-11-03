@@ -50,11 +50,12 @@ let fake: Fake;
 let key: string | null;
 let service: VoiceService;
 
+const GRANTED = { status: async () => "granted", ask: async () => true, openSettings: async () => {} };
 beforeEach(async () => {
 	setAppLanguage("en");
 	fake = await startFake();
 	key = "dz_test_key";
-	service = createVoiceService({ env: { AUTORAG_BASE_URL: `${fake.url}/` }, readKey: async () => key, microphone: { status: () => "granted", ask: async () => true } });
+	service = createVoiceService({ env: { AUTORAG_BASE_URL: `${fake.url}/` }, readKey: async () => key, microphone: GRANTED });
 });
 
 afterEach(async () => {
@@ -109,7 +110,7 @@ describe("transcribe", () => {
 	});
 
 	it("says the service is unreachable instead of leaking the network error", async () => {
-		const offline = createVoiceService({ env: { AUTORAG_BASE_URL: "http://127.0.0.1:1" }, readKey: async () => key, microphone: { status: () => "granted", ask: async () => true } });
+		const offline = createVoiceService({ env: { AUTORAG_BASE_URL: "http://127.0.0.1:1" }, readKey: async () => key, microphone: GRANTED });
 		await expect(offline.transcribe(CLIP)).rejects.toThrow("Cannot reach the Dazzi service. Check your connection and try again.");
 	});
 
@@ -121,7 +122,7 @@ describe("transcribe", () => {
 
 describe("prepare", () => {
 	const make = (signedIn: boolean, status: string, ask: () => Promise<boolean>) =>
-		createVoiceService({ env: {}, readKey: async () => (signedIn ? "dz_test_key" : null), microphone: { status: () => status, ask } });
+		createVoiceService({ env: {}, readKey: async () => (signedIn ? "dz_test_key" : null), microphone: { status: async () => status, ask, openSettings: async () => {} } });
 
 	it("is ready without asking the system when the account is signed in and the microphone already granted", async () => {
 		let asked = 0;
@@ -135,7 +136,7 @@ describe("prepare", () => {
 		const service = createVoiceService({
 			env: {},
 			readKey: async () => null,
-			microphone: { status: () => { consulted += 1; return "not-determined"; }, ask: async () => { asked += 1; return true; } },
+			microphone: { status: async () => { consulted += 1; return "not-determined"; }, ask: async () => { asked += 1; return true; }, openSettings: async () => {} },
 		});
 		await expect(service.prepare()).resolves.toBe("signed-out");
 		expect(asked).toBe(0);
@@ -164,29 +165,75 @@ describe("systemMicrophoneAccess", () => {
 		getMediaAccessStatus: (type: string) => { calls.push(`status:${type}`); return "denied"; },
 		askForMediaAccess: async (type: string) => { calls.push(`ask:${type}`); return true; },
 	};
+	const opened: string[] = [];
+	const openExternal = async (url: string) => { opened.push(url); };
+	/** `reg query` output exactly as Windows 11 prints it (captured on a real PC). */
+	const regValue = (path: string, value: string) => `\r\n${path}\r\n    Value    REG_SZ    ${value}\r\n\r\n`;
+	const ROOT = "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
+	const windows = (values: Readonly<Record<string, string>>) => ({
+		run: async (command: string, args: readonly string[]) => {
+			calls.push(`${command} ${args.join(" ")}`);
+			const key = args[1] ?? "";
+			const value = values[key];
+			if (value === undefined) throw new Error("ERROR: The system was unable to find the specified registry key or value.");
+			return regValue(key, value);
+		},
+	});
 
 	beforeEach(() => {
 		calls.length = 0;
+		opened.length = 0;
 	});
 
-	it("macOS reports the system's status and raises its prompt", async () => {
-		const access = systemMicrophoneAccess("darwin", prefs);
-		expect(access.status()).toBe("denied");
+	it("macOS reports the system's status, raises its prompt, and opens Privacy & Security › Microphone", async () => {
+		const access = systemMicrophoneAccess({ platform: "darwin", preferences: prefs, openExternal });
+		await expect(access.status()).resolves.toBe("denied");
 		await expect(access.ask()).resolves.toBe(true);
+		await access.openSettings();
 		expect(calls).toEqual(["status:microphone", "ask:microphone"]);
+		expect(opened).toEqual(["x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"]);
 	});
 
-	it("Windows reports the system's status but has no prompt of the app's to raise", async () => {
-		const access = systemMicrophoneAccess("win32", prefs);
-		expect(access.status()).toBe("denied");
+	it("Windows is granted while both the microphone switch and the desktop-apps switch are on", async () => {
+		const access = systemMicrophoneAccess({ platform: "win32", preferences: prefs, openExternal, ...windows({ [ROOT]: "Allow", [`${ROOT}\\NonPackaged`]: "Allow" }) });
+		await expect(access.status()).resolves.toBe("granted");
+	});
+
+	it("Windows is denied when the person turned off microphone access, or only the desktop apps' access", async () => {
+		const all = systemMicrophoneAccess({ platform: "win32", preferences: prefs, openExternal, ...windows({ [ROOT]: "Deny", [`${ROOT}\\NonPackaged`]: "Allow" }) });
+		await expect(all.status()).resolves.toBe("denied");
+		const desktop = systemMicrophoneAccess({ platform: "win32", preferences: prefs, openExternal, ...windows({ [ROOT]: "Allow", [`${ROOT}\\NonPackaged`]: "Deny" }) });
+		await expect(desktop.status()).resolves.toBe("denied");
+	});
+
+	it("Windows treats a switch that was never set as on (a fresh profile has no value), and never asks Electron, which always says granted", async () => {
+		const access = systemMicrophoneAccess({ platform: "win32", preferences: prefs, openExternal, ...windows({}) });
+		await expect(access.status()).resolves.toBe("granted");
+		expect(calls.some((call) => call.startsWith("status:"))).toBe(false);
+	});
+
+	it("Windows has no prompt of the app's own and opens Settings › Privacy › Microphone", async () => {
+		const access = systemMicrophoneAccess({ platform: "win32", preferences: prefs, openExternal, ...windows({}) });
 		await expect(access.ask()).resolves.toBe(true);
-		expect(calls).toEqual(["status:microphone"]);
+		await access.openSettings();
+		expect(opened).toEqual(["ms-settings:privacy-microphone"]);
 	});
 
 	it("Linux has neither call (Electron does not provide them there): the browser's own permission decides", async () => {
-		const access = systemMicrophoneAccess("linux", prefs);
-		expect(access.status()).toBe("granted");
+		const access = systemMicrophoneAccess({ platform: "linux", preferences: prefs, openExternal });
+		await expect(access.status()).resolves.toBe("granted");
 		await expect(access.ask()).resolves.toBe(true);
+		await access.openSettings();
 		expect(calls).toEqual([]);
+		expect(opened).toEqual([]);
+	});
+});
+
+describe("openMicrophoneSettings", () => {
+	it("hands over to the platform's settings page", async () => {
+		let opened = 0;
+		const service = createVoiceService({ env: {}, readKey: async () => "dz", microphone: { status: async () => "granted", ask: async () => true, openSettings: async () => { opened += 1; } } });
+		await service.openMicrophoneSettings();
+		expect(opened).toBe(1);
 	});
 });

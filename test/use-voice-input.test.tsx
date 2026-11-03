@@ -76,6 +76,7 @@ beforeEach(() => {
 	getUserMedia = vi.fn(async () => stream);
 	bridge = {
 		prepare: vi.fn(async () => "ready" as const),
+		openMicrophoneSettings: vi.fn(async () => {}),
 		transcribe: vi.fn(async (clip: VoiceClip) => {
 			transcribed.push(clip);
 			return { text: "지난달 매출 보고서 찾아 줘", seconds: 3 };
@@ -165,13 +166,69 @@ describe("useVoiceInput", () => {
 		expect(input.phase).toBe("idle");
 	});
 
-	it("shows the system-settings hint and never records when the microphone is denied", async () => {
+	it("opens the permission dialog instead of recording when the system refuses the microphone, and never opens it for anything else", async () => {
 		bridge = { ...bridge, prepare: vi.fn(async () => "microphone-denied" as const) };
 		await mount();
 		await act(async () => input.toggle());
 		await flush();
-		expect(errors).toEqual(["The microphone is not available. Allow Dazzi's microphone in System Settings under Privacy & Security."]);
+		expect(input.permission).toBe("needed");
+		expect(errors).toEqual([]);
 		expect(getUserMedia).not.toHaveBeenCalled();
+		expect(input.phase).toBe("idle");
+	});
+
+	it("the dialog's settings button opens the system's microphone settings and the dialog waits for the person to come back", async () => {
+		bridge = { ...bridge, prepare: vi.fn(async () => "microphone-denied" as const), openMicrophoneSettings: vi.fn(async () => {}) };
+		await mount();
+		await act(async () => input.toggle());
+		await flush();
+		await act(async () => input.openSettings());
+		await flush();
+		expect(bridge.openMicrophoneSettings).toHaveBeenCalledOnce();
+		expect(input.permission).toBe("waiting");
+		expect(getUserMedia).not.toHaveBeenCalled();
+	});
+
+	it("starts recording by itself once the person allowed the microphone in the system settings and came back to the app", async () => {
+		const prepare = vi.fn<() => Promise<"ready" | "microphone-denied" | "signed-out">>(async () => "microphone-denied");
+		bridge = { ...bridge, prepare, openMicrophoneSettings: vi.fn(async () => {}) };
+		await mount();
+		await act(async () => input.toggle());
+		await flush();
+		await act(async () => input.openSettings());
+		await flush();
+		prepare.mockResolvedValue("ready");
+		await act(async () => window.dispatchEvent(new Event("focus")));
+		await flush();
+		expect(input.permission).toBe(null);
+		expect(input.phase).toBe("listening");
+		expect(getUserMedia).toHaveBeenCalledOnce();
+	});
+
+	it("keeps the dialog open when the person came back without allowing it, and closes it without recording when dismissed", async () => {
+		bridge = { ...bridge, prepare: vi.fn(async () => "microphone-denied" as const), openMicrophoneSettings: vi.fn(async () => {}) };
+		await mount();
+		await act(async () => input.toggle());
+		await flush();
+		await act(async () => input.openSettings());
+		await flush();
+		await act(async () => window.dispatchEvent(new Event("focus")));
+		await flush();
+		expect(input.permission).toBe("still-denied");
+		await act(async () => input.dismissPermission());
+		await act(async () => window.dispatchEvent(new Event("focus")));
+		await flush();
+		expect(input.permission).toBe(null);
+		expect(getUserMedia).not.toHaveBeenCalled();
+	});
+
+	it("opens the dialog when the operating system refuses the stream even though its switch looked on", async () => {
+		getUserMedia.mockRejectedValueOnce(Object.assign(new Error("Permission denied"), { name: "NotAllowedError" }));
+		await mount();
+		await act(async () => input.toggle());
+		await flush();
+		expect(input.permission).toBe("needed");
+		expect(errors).toEqual([]);
 		expect(input.phase).toBe("idle");
 	});
 

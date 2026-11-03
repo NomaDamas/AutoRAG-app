@@ -102,13 +102,14 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 	});
 }
 
-/** Dictation: transcribe one recorded clip, and the readiness check (sign-in, microphone permission) that comes before recording. */
+/** Dictation: transcribe one recorded clip, the readiness check (sign-in, microphone permission) before recording, and the OS microphone settings. */
 export function registerVoiceIpcHandlers(service: VoiceService): void {
 	ipcMain.handle(VOICE_CHANNELS.transcribe, (_event, clip: unknown) => {
 		if (!isVoiceClip(clip)) throw new Error(t("main.ipc.invalidVoiceRequest"));
 		return service.transcribe(clip);
 	});
 	ipcMain.handle(VOICE_CHANNELS.prepare, () => service.prepare());
+	ipcMain.handle(VOICE_CHANNELS.openMicrophoneSettings, () => service.openMicrophoneSettings());
 }
 
 /** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */
