@@ -21,6 +21,8 @@ interface Calls {
 	ensure: number;
 	stop: number;
 	scanned: string[];
+	/** The `excludeDirs` each scan came with, in the order of `scanned`; undefined when it came with none. */
+	scanExcludes: (readonly string[] | undefined)[];
 	shutdowns: number;
 	excluded: [string, boolean][];
 	locationsSeen: (readonly FsLocation[])[];
@@ -55,8 +57,9 @@ function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLoca
 				calls.stop += 1;
 			},
 		},
-		scanDuplicates: async (dir) => {
+		scanDuplicates: async (dir, options) => {
 			calls.scanned.push(dir);
+			calls.scanExcludes.push(options?.excludeDirs);
 			return { ...SCAN, dir };
 		},
 		indexStatus: {
@@ -84,7 +87,7 @@ interface Harness {
 const closers: (() => void)[] = [];
 
 function harness(options: { fail?: { search?: Error }; hang?: boolean; shutdownMs?: number } = {}): Harness {
-	const calls: Calls = { search: [], content: [], aborted: 0, ensure: 0, stop: 0, scanned: [], shutdowns: 0, excluded: [], locationsSeen: [] };
+	const calls: Calls = { search: [], content: [], aborted: 0, ensure: 0, stop: 0, scanned: [], scanExcludes: [], shutdowns: 0, excluded: [], locationsSeen: [] };
 	const refreshed: (string | null)[] = [];
 	const reports: ErrorReport[] = [];
 	let spawned = 0;
@@ -195,6 +198,17 @@ describe("createLibrarianClient", () => {
 			{ ...STATUS, path: "/d/b.txt" },
 		]);
 		expect(h.calls.scanned).toEqual(["/photos"]);
+		expect(h.calls.scanExcludes).toEqual([undefined]);
+	});
+
+	it("hands the folders a duplicate scan skips to the thread", async () => {
+		const h = harness();
+
+		await h.client.scanDuplicates("/cloud", { excludeDirs: ["Documents", "Desktop"] });
+		await expect(h.client.scanDuplicates("/cloud", { excludeDirs: [] })).resolves.toMatchObject({ dir: "/cloud" });
+
+		expect(h.calls.scanned).toEqual(["/cloud", "/cloud"]);
+		expect(h.calls.scanExcludes).toEqual([["Documents", "Desktop"], []]);
 	});
 
 	it("passes an exclusion toggle through and delivers the refresh outcome the thread pushes", async () => {

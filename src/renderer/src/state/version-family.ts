@@ -7,6 +7,7 @@
  * own flat row and also appear as children when the stack is open.
  */
 
+import { scanScopeCovers } from "../../../shared/version-scan-scope";
 import type { FinderEntry } from "../data/entries";
 import { locationOf } from "./entry-values";
 import { basename, dirname } from "./paths";
@@ -81,12 +82,24 @@ export interface VersionFamilyError {
 	readonly code: "dupey-missing" | "scan-failed";
 	readonly message: string;
 	readonly installCommand: string | null;
+	/** Set when one folder's scan failed (not the feature as a whole); the banner words it around this folder. */
+	readonly scan?: { readonly name: string; readonly reason: "timeout" | "error" };
+}
+
+/** One folder whose dupey scan failed; the families of the other folders are unaffected. */
+export interface VersionFamilyScanFailure {
+	readonly name: string;
+	readonly path: string;
+	readonly excludeDirs: readonly string[];
+	readonly reason: "timeout" | "error";
+	readonly message: string;
 }
 
 export interface VersionFamiliesResult {
 	readonly families: readonly VersionFamilyData[];
 	readonly scannedAt: string | null;
 	readonly error: VersionFamilyError | null;
+	readonly scanFailures: readonly VersionFamilyScanFailure[];
 }
 
 export const EMPTY_VERSION_FAMILIES: VersionFamilies = {
@@ -98,7 +111,24 @@ export const EMPTY_VERSION_FAMILIES_RESULT: VersionFamiliesResult = {
 	families: [],
 	scannedAt: null,
 	error: null,
+	scanFailures: [],
 };
+
+/**
+ * The error to show above the folder in view. A feature-wide error (dupey missing, the snapshot request failed) shows
+ * everywhere; a folder's scan failure only while that folder, or one below it that the failed scan covered, is open.
+ */
+export function versionFamilyErrorFor(result: VersionFamiliesResult, viewedPath: string): VersionFamilyError | null {
+	if (result.error !== null) return result.error;
+	const failure = result.scanFailures.find((candidate) => scanScopeCovers(candidate, viewedPath));
+	if (failure === undefined) return null;
+	return {
+		code: "scan-failed",
+		message: failure.message,
+		installCommand: null,
+		scan: { name: failure.name, reason: failure.reason },
+	};
+}
 
 export function buildVersionFamilies(families: readonly VersionFamilyData[]): VersionFamilies {
 	const byHead = new Map<string, VersionFamilyData>();

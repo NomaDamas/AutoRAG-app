@@ -23,6 +23,11 @@ export interface StoredVersionFamilies {
 	readonly locations: readonly string[];
 	readonly families: readonly FsVersionFamily[];
 	readonly stamps?: Readonly<Record<string, FileStamp>>;
+	/**
+	 * Cloud drives whose whole-root scan failed. They are scanned folder by folder from then on, so a restart does not
+	 * start another whole-root scan that is bound to fail the same way (and ask the drive to download files for it).
+	 */
+	readonly splitLocations?: readonly string[];
 }
 
 export interface VersionFamilyStore {

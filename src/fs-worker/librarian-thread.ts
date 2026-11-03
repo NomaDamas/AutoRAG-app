@@ -22,7 +22,8 @@ serveLibrarian(adaptNodePort(parentPort), {
 	services: (host) => ({
 		fileNameSearch: createFileNameSearch({ userDataDir, locations: host.locations }),
 		contentSearch: createDefaultContentSearch(process.env, process.cwd()),
-		scanDuplicates: (dir) => scanWithDupey(dir),
+		scanDuplicates: (dir, options) =>
+			scanWithDupey(dir, options?.excludeDirs === undefined ? {} : { excludeDirs: options.excludeDirs }),
 		indexStatus: createIndexStatusService({ env: process.env, cwd: process.cwd(), onRefreshed: host.indexRefreshed }),
 	}),
 	// The librarian ends the MinSync children it started on `exit`, which a terminated thread never receives.

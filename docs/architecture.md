@@ -746,6 +746,21 @@ content changed after the scan is shown as a normal row (detached) until the
 next scan. An external rename of a stack member re-points the stack within a 2 s
 window. Search results are not live.
 
+A dupey scan that fails is the failing folder's problem, not the feature's.
+`version-family-service.ts` scans each `scanned` location with one dupey call. A
+location whose call fails keeps the families of the last good scan, is listed in
+`scanFailures` of the layer data, and the other locations are written as usual;
+the renderer shows the failure (`versionFamilyErrorFor`) only while that folder, or
+one below it, is open. Only the missing CLI is a feature-wide `error`. A cloud
+drive (sidebar section `cloud`, e.g. iCloud Drive) whose whole-root call fails
+is scanned folder by folder from then on (`splitLocations` in the snapshot): each
+top-level folder is a call of its own, and the files in the root are one more call
+that skips those folders (`dupey scan --exclude-dir`). A folder that hit dupey's
+time limit is not asked again by the scheduled scans, only by "Check again". The
+split trades away stacks whose files sit in two different top-level folders of
+such a drive: the new scans no longer find them. The app cannot make dupey skip a
+file that is not downloaded yet; it has no such option.
+
 ## Helper agents
 
 AI Search is answered by the AutoRAG agent (`@autorag/librarian`). Every other

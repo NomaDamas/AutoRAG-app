@@ -8,12 +8,21 @@
  * deleted duplicate leaves the UI immediately and stays gone across a scan
  * that was already reading the disk.
  *
+ * A scan that fails stays that folder's problem. Each location is scanned on its
+ * own; a location whose scan failed keeps the families the last good scan found
+ * there and is reported in `scanFailures` (shown only while that folder is in
+ * view), and every other location's result is written as usual. A cloud drive
+ * (iCloud Drive and the like) whose whole-root scan fails is scanned folder by
+ * folder from then on, so one slow or huge folder no longer costs the rest.
+ *
  * A modification that lands after dupey read a file but before its post-scan
  * probe keeps the old relation until the next scan unless a live event for it
  * was seen (the fence covers watched folders only). Renames whose destination
  * is outside every watched folder degrade to prune after 2000 ms.
  */
 
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import type { DupeyScanResult } from "@autorag/librarian";
 import type {
 	FsEntry,
@@ -21,21 +30,34 @@ import type {
 	FsVersionFamiliesResult,
 	FsVersionFamily,
 	FsVersionFamilyError,
+	FsVersionFamilyScanFailure,
 	FsVersionMember,
 	FsVersionRelation,
 } from "../shared/fs-contract";
 import type { FsDirChange } from "../shared/live-contract";
+import { type DupeyScanOptions, scanScopeCovers, type VersionScanScope } from "../shared/version-scan-scope";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND, type DupeyProbe } from "./dupey";
 import { DIRTY_STAMP, lstatProbe, remapRenames, sameContent, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
 import { type StoredVersionFamilies, VERSION_FAMILY_STORE_VERSION, type VersionFamilyStore } from "./version-family-store";
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
 
+/** dupey kills itself with this message when a scan outlasts the librarian's time limit (`timeoutMs`, 120 s by default). */
+export function isDupeyTimeout(message: string): boolean {
+	return /dupey timed out/i.test(message);
+}
+
 interface DupeyMemberInfo {
 	readonly path?: string;
 	readonly relation?: string;
 	readonly exact_hash?: string;
 	readonly joined_with?: string;
+}
+
+/** The immediate subfolders of `dir`. A symbolic link is not one: dupey does not follow them either. */
+async function defaultListFolders(dir: string): Promise<readonly string[]> {
+	const entries = await readdir(dir, { withFileTypes: true });
+	return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
 
 function clampRelation(value: string | undefined): FsVersionRelation {
@@ -118,7 +140,12 @@ export interface VersionFamilyServiceDeps {
 	 * Scans one folder with the dupey CLI. Injected, not imported: the scan lives in `@autorag/librarian`, which takes
 	 * ~2 s to load, and the fs worker answers folder listings on the thread this module runs on (see `librarian-client.ts`).
 	 */
-	readonly scanDuplicates: (dir: string) => Promise<DupeyScanResult>;
+	readonly scanDuplicates: (dir: string, options?: DupeyScanOptions) => Promise<DupeyScanResult>;
+	/**
+	 * Names of the immediate subfolders of a folder: a directory listing that reads no file's content. Defaults to
+	 * `readdir`; used to split a cloud drive whose whole-root scan failed.
+	 */
+	readonly listFolders?: (dir: string) => Promise<readonly string[]>;
 	readonly dupey?: DupeyProbe;
 	/** Current interval in minutes, read from app Settings on every arm. */
 	readonly intervalMinutes: () => number;
@@ -134,7 +161,11 @@ export interface VersionFamilyServiceDeps {
 export interface VersionFamilyService {
 	/** Snapshot read (memory, then disk). Never scans. */
 	result(): Promise<FsVersionFamiliesResult>;
-	/** Runs a scan, persists the snapshot, and reports the outcome. */
+	/**
+	 * Runs a scan, persists the snapshot, and reports the outcome. This is the person asking ("Check again"), so folders
+	 * that timed out earlier are tried again; the scheduled scans leave them alone until then. A scan already running is
+	 * joined, not started twice.
+	 */
 	refresh(): Promise<FsVersionFamiliesResult>;
 	/** Startup scan plus the repeating interval. */
 	start(): Promise<FsVersionFamiliesResult>;
@@ -154,6 +185,7 @@ export interface VersionFamilyService {
 
 export function createVersionFamilyService(deps: VersionFamilyServiceDeps): VersionFamilyService {
 	const { scanDuplicates } = deps;
+	const listFolders = deps.listFolders ?? defaultListFolders;
 	const dupey = deps.dupey ?? createDupeyProbe();
 	const probe = deps.probe ?? lstatProbe();
 	const now = deps.now ?? (() => new Date());
@@ -163,6 +195,13 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	let snapshot: StoredVersionFamilies | null | undefined;
 	let published: FsVersionFamiliesResult | undefined;
 	let lastError: FsVersionFamilyError | null = null;
+	let lastFailures: readonly FsVersionFamilyScanFailure[] = [];
+	/** Cloud drives scanned folder by folder; seeded from the snapshot before the first scan. */
+	const splitLocations = new Set<string>();
+	let splitLoaded = false;
+	/** Scans that hit dupey's time limit, by scope. A scheduled scan reuses them instead of asking the drive for the same files again. */
+	const timedOut = new Map<string, FsVersionFamilyScanFailure>();
+	let scanning: Promise<FsVersionFamiliesResult> | null = null;
 	let timer: unknown = null;
 	let mutationSeq = 0;
 	const touchedAt = new Map<string, number>();
@@ -196,6 +235,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			families: stored?.families ?? [],
 			scannedAt: stored?.scannedAt ?? null,
 			error: lastError,
+			scanFailures: lastFailures,
 		};
 	}
 
@@ -204,6 +244,10 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	}
 
 	function sameError(a: FsVersionFamilyError | null, b: FsVersionFamilyError | null): boolean {
+		return JSON.stringify(a) === JSON.stringify(b);
+	}
+
+	function sameFailures(a: readonly FsVersionFamilyScanFailure[], b: readonly FsVersionFamilyScanFailure[]): boolean {
 		return JSON.stringify(a) === JSON.stringify(b);
 	}
 
@@ -268,6 +312,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			previous !== undefined &&
 			(previous.scannedAt !== current.scannedAt ||
 				!sameError(previous.error, current.error) ||
+				!sameFailures(previous.scanFailures, current.scanFailures) ||
 				!sameFamilies(previous.families, current.families));
 		emit(current);
 		return changed;
@@ -377,64 +422,203 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		});
 	}
 
-	async function scanLocations(): Promise<{
+	/** Seeds `splitLocations` from the snapshot, once: a restart must not retry the whole-root scan that already failed. */
+	async function loadSplitLocations(): Promise<void> {
+		if (splitLoaded) return;
+		splitLoaded = true;
+		for (const path of (await load())?.splitLocations ?? []) splitLocations.add(path);
+	}
+
+	function unitKey(unit: VersionScanScope): string {
+		return [unit.path, ...unit.excludeDirs].join("\u0000");
+	}
+
+	/** dupey families to the app's: entries built, members that vanished dropped, every path stamped. */
+	async function familiesFrom(
+		scan: DupeyScanResult,
+	): Promise<{ readonly families: readonly FsVersionFamily[]; readonly stamps: Record<string, FileStamp> }> {
+		const families: FsVersionFamily[] = [];
+		const stamps: Record<string, FileStamp> = {};
+		for (const raw of scan.families) {
+			const mapped = mapDupeyFamily(raw);
+			if (mapped === null || mapped.members.length === 0) continue;
+			const entries: FsEntry[] = [];
+			try {
+				entries.push(await deps.buildEntry(mapped.head));
+			} catch {
+				continue;
+			}
+			for (const member of mapped.members) {
+				try {
+					entries.push(await deps.buildEntry(member.path));
+				} catch {
+					continue;
+				}
+			}
+			const members = mapped.members.filter((member) => entries.some((entry) => entry.path === member.path));
+			if (members.length === 0) continue;
+			const family = { head: mapped.head, members, entries };
+			const paths = [family.head, ...family.members.map((member) => member.path)];
+			const currentStamps = await Promise.all(paths.map(async (path) => [path, await probe(path)] as const));
+			if (currentStamps.some(([, stamp]) => stamp === null)) continue;
+			for (const [path, stamp] of currentStamps) {
+				if (stamp !== null) stamps[path] = stamp;
+			}
+			families.push(family);
+		}
+		return { families, stamps };
+	}
+
+	interface UnitScan {
+		readonly name: string;
+		readonly scope: VersionScanScope;
+	}
+
+	type UnitResult =
+		| { readonly ok: true; readonly families: readonly FsVersionFamily[]; readonly stamps: Record<string, FileStamp> }
+		| { readonly ok: false; readonly failure: FsVersionFamilyScanFailure };
+
+	/** One dupey call over one scope. Never throws: a failure comes back as the scope's `FsVersionFamilyScanFailure`. */
+	async function scanUnit(unit: UnitScan, retryTimedOut: boolean): Promise<UnitResult> {
+		const { scope } = unit;
+		const key = unitKey(scope);
+		const known = timedOut.get(key);
+		if (known !== undefined && !retryTimedOut) return { ok: false, failure: known };
+		try {
+			const scan =
+				scope.excludeDirs.length === 0
+					? await scanDuplicates(scope.path)
+					: await scanDuplicates(scope.path, { excludeDirs: scope.excludeDirs });
+			const built = await familiesFrom(scan);
+			timedOut.delete(key);
+			return { ok: true, ...built };
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			console.error(`dupey scan failed for ${scope.path}: ${message}`);
+			const failure: FsVersionFamilyScanFailure = {
+				name: unit.name,
+				path: scope.path,
+				excludeDirs: scope.excludeDirs,
+				reason: isDupeyTimeout(message) ? "timeout" : "error",
+				message,
+			};
+			if (failure.reason === "timeout") timedOut.set(key, failure);
+			else timedOut.delete(key);
+			return { ok: false, failure };
+		}
+	}
+
+	interface LocationScan {
+		readonly families: readonly FsVersionFamily[];
+		readonly stamps: Record<string, FileStamp>;
+		/** Scans of this location that ran to the end. */
+		readonly read: number;
+		readonly failures: readonly FsVersionFamilyScanFailure[];
+	}
+
+	/**
+	 * A whole location is one dupey call. A cloud drive whose call fails is scanned folder by folder instead: each of its
+	 * top-level folders is its own call, and the files in its root are one more that skips those folders. A folder that
+	 * is too slow or too large then fails alone, and the others still report. The price is that a family whose files sit
+	 * in two different top-level folders is no longer found: dupey only groups files it scanned in one call.
+	 */
+	async function scanLocation(location: FsLocation, retryTimedOut: boolean): Promise<LocationScan> {
+		const cloud = location.section === "cloud";
+		const whole: UnitScan = { name: location.name, scope: { path: location.path, excludeDirs: [] } };
+		let wholeFailure: FsVersionFamilyScanFailure | null = null;
+		if (!(cloud && splitLocations.has(location.path))) {
+			const result = await scanUnit(whole, retryTimedOut);
+			if (result.ok) return { families: result.families, stamps: result.stamps, read: 1, failures: [] };
+			if (!cloud) return { families: [], stamps: {}, read: 0, failures: [result.failure] };
+			wholeFailure = result.failure;
+			timedOut.delete(unitKey(whole.scope));
+		}
+		let folders: readonly string[];
+		try {
+			folders = await listFolders(location.path);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			const failure = wholeFailure ?? { ...whole.scope, name: whole.name, reason: "error" as const, message };
+			return { families: [], stamps: {}, read: 0, failures: [failure] };
+		}
+		// Nothing to split into: the whole-root call that just failed is all there is.
+		if (folders.length === 0 && wholeFailure !== null) {
+			return { families: [], stamps: {}, read: 0, failures: [wholeFailure] };
+		}
+		splitLocations.add(location.path);
+		const units: UnitScan[] = [
+			{ name: location.name, scope: { path: location.path, excludeDirs: folders } },
+			...folders.map((folder) => ({ name: folder, scope: { path: join(location.path, folder), excludeDirs: [] } })),
+		];
+		const families: FsVersionFamily[] = [];
+		const stamps: Record<string, FileStamp> = {};
+		const failures: FsVersionFamilyScanFailure[] = [];
+		let read = 0;
+		for (const unit of units) {
+			const result = await scanUnit(unit, retryTimedOut);
+			if (!result.ok) {
+				failures.push(result.failure);
+				continue;
+			}
+			read += 1;
+			families.push(...result.families);
+			Object.assign(stamps, result.stamps);
+		}
+		return { families, stamps, read, failures };
+	}
+
+	async function scanLocations(retryTimedOut: boolean): Promise<{
 		readonly families: readonly FsVersionFamily[];
 		readonly locations: readonly string[];
-		readonly errors: readonly string[];
+		readonly read: number;
+		readonly failures: readonly FsVersionFamilyScanFailure[];
 		readonly stamps: Record<string, FileStamp>;
 	}> {
+		await loadSplitLocations();
 		const families: FsVersionFamily[] = [];
 		const locations: string[] = [];
-		const errors: string[] = [];
+		const failures: FsVersionFamilyScanFailure[] = [];
 		const stamps: Record<string, FileStamp> = {};
+		let read = 0;
 		for (const location of await deps.locations()) {
 			// Only content folders and cloud drives: Recents is virtual, and a
 			// home folder or whole disk is far too large for dupey to scan.
 			if (!location.available || !location.scanned) continue;
 			locations.push(location.path);
-			try {
-				const scan = await scanDuplicates(location.path);
-				for (const raw of scan.families) {
-					const mapped = mapDupeyFamily(raw);
-					if (mapped === null || mapped.members.length === 0) continue;
-					const entries: FsEntry[] = [];
-					try {
-						entries.push(await deps.buildEntry(mapped.head));
-					} catch {
-						continue;
-					}
-					for (const member of mapped.members) {
-						try {
-							entries.push(await deps.buildEntry(member.path));
-						} catch {
-							continue;
-						}
-					}
-					const members = mapped.members.filter((member) =>
-						entries.some((entry) => entry.path === member.path),
-					);
-					if (members.length === 0) continue;
-					const family = { head: mapped.head, members, entries };
-					const paths = [family.head, ...family.members.map((member) => member.path)];
-					const currentStamps = await Promise.all(paths.map(async (path) => [path, await probe(path)] as const));
-					if (currentStamps.some(([, stamp]) => stamp === null)) continue;
-					for (const [path, stamp] of currentStamps) {
-						if (stamp !== null) stamps[path] = stamp;
-					}
-					families.push(family);
-				}
-			} catch (error) {
-				const message = `dupey scan failed for ${location.path}: ${
-					error instanceof Error ? error.message : String(error)
-				}`;
-				console.error(message);
-				errors.push(message);
-			}
+			// One location's failure is that location's failure: the loop goes on.
+			const scan = await scanLocation(location, retryTimedOut);
+			families.push(...scan.families);
+			Object.assign(stamps, scan.stamps);
+			failures.push(...scan.failures);
+			read += scan.read;
 		}
-		return { families, locations, errors, stamps };
+		return { families, locations, read, failures, stamps };
 	}
 
-	async function refresh(): Promise<FsVersionFamiliesResult> {
+	/**
+	 * The last snapshot's families that a scan which failed over their folder cannot speak for. They stay published (and
+	 * are still verified against the disk like any other), so a timeout does not make a folder's stacks disappear.
+	 */
+	function keepFromFailedScopes(
+		stored: StoredVersionFamilies | null,
+		failures: readonly FsVersionFamilyScanFailure[],
+	): { readonly families: readonly FsVersionFamily[]; readonly stamps: Record<string, FileStamp> } {
+		const families: FsVersionFamily[] = [];
+		const stamps: Record<string, FileStamp> = {};
+		if (stored === null || failures.length === 0) return { families, stamps };
+		for (const family of stored.families) {
+			const paths = familyPaths(family);
+			if (!failures.some((failure) => paths.every((path) => scanScopeCovers(failure, path)))) continue;
+			families.push(family);
+			for (const path of paths) {
+				const stamp = stored.stamps?.[path];
+				if (stamp !== undefined) stamps[path] = stamp;
+			}
+		}
+		return { families, stamps };
+	}
+
+	async function runScan(retryTimedOut: boolean): Promise<FsVersionFamiliesResult> {
 		const status = await dupey.status();
 		if (!status.available) {
 			return serialize(async () => {
@@ -444,6 +628,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 					message: `dupey CLI is required for version stacks: ${status.error ?? "not found on PATH"}`,
 					installCommand: DUPEY_INSTALL_COMMAND,
 				};
+				lastFailures = [];
 				const changed = (await publishVerified(await load())) || previous === undefined;
 				if (changed) deps.onChanged?.();
 				return published ?? envelope(null);
@@ -452,69 +637,85 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		// A scan reads the disk over seconds; a trash that landed meanwhile must
 		// win, or the deleted duplicate comes back until the next interval.
 		const startedAtSeq = mutationSeq;
-		const { families: scanned, locations, errors, stamps: scannedStamps } = await scanLocations();
-		const scanError =
-			errors.length === 0 ? null : { code: "scan-failed" as const, message: errors.join("\n"), installCommand: null };
-		if (scanned.length > 0 || errors.length === 0) {
-			await serialize(async () => {
-				lastError = scanError;
-				const honored = new Set(trashedPaths);
-				const fencedPaths = new Set(
-					scanned.flatMap((family) =>
-						familyPaths(family).filter((path) => (touchedAt.get(path) ?? -1) > startedAtSeq),
-					),
-				);
-				for (const path of fencedPaths) scannedStamps[path] = DIRTY_STAMP;
-				const stored: StoredVersionFamilies = {
-					version: VERSION_FAMILY_STORE_VERSION,
-					scannedAt: now().toISOString(),
-					locations,
-					families: pruneVersionFamilies(scanned, honored),
-					stamps: scannedStamps,
-				};
-				const verified = await verifyStored(stored);
-				const persisted: StoredVersionFamilies = {
-					...stored,
-					families: pruneVersionFamilies(stored.families, new Set(verified.vanished)),
-					stamps: Object.fromEntries(
-						Object.entries(stored.stamps ?? {}).filter(([path]) => !verified.vanished.includes(path)),
-					),
-				};
-				await deps.store.write(persisted);
-				snapshot = persisted;
-				emit(
-					{ ...verified.result, families: pruneVersionFamilies(verified.result.families, honored) },
-				);
-				deps.onChanged?.();
-				for (const path of honored) {
-					if ((touchedAt.get(path) ?? -1) <= startedAtSeq) {
-						trashedPaths.delete(path);
-					}
-				}
-				for (const [path, sequence] of touchedAt) {
-					if (sequence <= startedAtSeq) touchedAt.delete(path);
-				}
-			});
-		}
-		if (scanned.length === 0 && scanError !== null) {
+		const { families: scanned, locations, read, failures, stamps: scannedStamps } = await scanLocations(retryTimedOut);
+		if (read === 0 && failures.length > 0) {
+			// Nothing was read: the snapshot (and its scannedAt) stays as it was, and the failures are reported.
 			return serialize(async () => {
-				lastError = scanError;
+				lastError = null;
+				lastFailures = failures;
 				const previous = published;
 				const currentBase =
 					previous ?? (await verifyStored(await load())).result;
-				const current: FsVersionFamiliesResult = { ...currentBase, error: scanError };
+				const current: FsVersionFamiliesResult = { ...currentBase, error: null, scanFailures: failures };
 				const changed =
 					previous === undefined ||
 					previous.scannedAt !== current.scannedAt ||
 					!sameError(previous.error, current.error) ||
+					!sameFailures(previous.scanFailures, current.scanFailures) ||
 					!sameFamilies(previous.families, current.families);
 				published = current;
 				if (changed) deps.onChanged?.();
 				return current;
 			});
 		}
-		const current = await result();
-		return current;
+		await serialize(async () => {
+			lastError = null;
+			lastFailures = failures;
+			const kept = keepFromFailedScopes(await load(), failures);
+			const merged = [...scanned, ...kept.families];
+			const stampsOfMerged = { ...kept.stamps, ...scannedStamps };
+			const honored = new Set(trashedPaths);
+			const fencedPaths = new Set(
+				merged.flatMap((family) =>
+					familyPaths(family).filter((path) => (touchedAt.get(path) ?? -1) > startedAtSeq),
+				),
+			);
+			for (const path of fencedPaths) stampsOfMerged[path] = DIRTY_STAMP;
+			const split = [...splitLocations].filter((path) => locations.includes(path));
+			const stored: StoredVersionFamilies = {
+				version: VERSION_FAMILY_STORE_VERSION,
+				scannedAt: now().toISOString(),
+				locations,
+				families: pruneVersionFamilies(merged, honored),
+				stamps: stampsOfMerged,
+				...(split.length === 0 ? {} : { splitLocations: split }),
+			};
+			const verified = await verifyStored(stored);
+			const persisted: StoredVersionFamilies = {
+				...stored,
+				families: pruneVersionFamilies(stored.families, new Set(verified.vanished)),
+				stamps: Object.fromEntries(
+					Object.entries(stored.stamps ?? {}).filter(([path]) => !verified.vanished.includes(path)),
+				),
+			};
+			await deps.store.write(persisted);
+			snapshot = persisted;
+			emit(
+				{ ...verified.result, families: pruneVersionFamilies(verified.result.families, honored) },
+			);
+			deps.onChanged?.();
+			for (const path of honored) {
+				if ((touchedAt.get(path) ?? -1) <= startedAtSeq) {
+					trashedPaths.delete(path);
+				}
+			}
+			for (const [path, sequence] of touchedAt) {
+				if (sequence <= startedAtSeq) touchedAt.delete(path);
+			}
+		});
+		return result();
+	}
+
+	/** One scan at a time: a cloud drive scanned folder by folder can outlast the interval. */
+	function scan(retryTimedOut: boolean): Promise<FsVersionFamiliesResult> {
+		scanning ??= runScan(retryTimedOut).finally(() => {
+			scanning = null;
+		});
+		return scanning;
+	}
+
+	async function refresh(): Promise<FsVersionFamiliesResult> {
+		return scan(true);
 	}
 
 	function arm(): void {
@@ -524,7 +725,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		}
 		const minutes = Math.max(1, Math.floor(deps.intervalMinutes()));
 		timer = setTimer(() => {
-			void refresh();
+			void scan(false);
 		}, minutes * 60_000);
 	}
 
@@ -672,7 +873,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		async start(): Promise<FsVersionFamiliesResult> {
 			arm();
 			for (const path of pendingRename) schedulePendingRename(path);
-			return refresh();
+			return scan(false);
 		},
 		stop(): void {
 			if (timer !== null) {

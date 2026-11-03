@@ -37,6 +37,7 @@ function familyResult(): FsVersionFamiliesResult {
 		}],
 		scannedAt: "2026-09-30T00:00:00.000Z",
 		error: null,
+		scanFailures: [],
 	};
 }
 
@@ -138,6 +139,7 @@ describe("live Finder source adapters", () => {
 			}],
 			scannedAt: "2026-09-30T00:00:00.000Z",
 			error: null,
+			scanFailures: [],
 		});
 	});
 

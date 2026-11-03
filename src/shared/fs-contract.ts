@@ -546,6 +546,11 @@ export interface FsVersionFamily {
 	readonly entries: readonly FsEntry[];
 }
 
+/**
+ * A failure of the version-family feature as a whole: the dupey CLI is missing (`dupey-missing`), or the snapshot
+ * could not be requested at all (`scan-failed`, raised by the renderer). A scan that fails for one folder is an
+ * `FsVersionFamilyScanFailure` instead and never becomes one of these.
+ */
 export interface FsVersionFamilyError {
 	readonly code: "dupey-missing" | "scan-failed";
 	readonly message: string;
@@ -554,12 +559,32 @@ export interface FsVersionFamilyError {
 }
 
 /**
+ * One folder whose dupey scan failed. The rest of the scan went on, so the failure only concerns this folder: the
+ * renderer shows it while the folder is in view, and the families the folder held in the last good scan stay published.
+ */
+export interface FsVersionFamilyScanFailure {
+	/** Display name of the folder: the location's name, or the folder's own name inside a cloud drive. */
+	readonly name: string;
+	/** The folder dupey was asked to scan. */
+	readonly path: string;
+	/** Immediate subfolders of `path` that scan skipped (see `VersionScanScope`). */
+	readonly excludeDirs: readonly string[];
+	/** `timeout`: dupey was killed at its time limit, which a large or not-yet-downloaded cloud folder reaches. */
+	readonly reason: "timeout" | "error";
+	/** dupey's own message (the librarian's text, not translated). */
+	readonly message: string;
+}
+
+/**
  * Version families never degrade silently: the renderer renders `error` when
- * the dupey CLI is missing or a scan fails. `scannedAt` is the persisted
- * snapshot's timestamp, so the UI can tell how old the families are.
+ * the dupey CLI is missing, and each `scanFailures` entry while its folder is
+ * in view. `scannedAt` is the persisted snapshot's timestamp, so the UI can
+ * tell how old the families are.
  */
 export interface FsVersionFamiliesResult {
 	readonly families: readonly FsVersionFamily[];
 	readonly scannedAt: string | null;
 	readonly error: FsVersionFamilyError | null;
+	/** Folders the last scan could not check; empty when every scanned folder was read. */
+	readonly scanFailures: readonly FsVersionFamilyScanFailure[];
 }

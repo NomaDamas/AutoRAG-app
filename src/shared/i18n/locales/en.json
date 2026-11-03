@@ -123,7 +123,9 @@
       "reset": "Reset Columns"
     },
     "versionBanner": {
-      "retry": "Check again"
+      "retry": "Check again",
+      "scanTimeout": "Couldn't check \"{{name}}\" for versions to group: the scan took too long. Version grouping in your other folders is unaffected.",
+      "scanFailed": "Couldn't check \"{{name}}\" for versions to group: {{detail}}"
     },
     "pathBar": {
       "edit": "Go to path",

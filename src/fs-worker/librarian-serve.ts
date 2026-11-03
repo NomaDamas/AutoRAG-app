@@ -12,6 +12,7 @@ import { createWorkerClient, serveWorkerPort, type WorkerClient, type WorkerHand
 import { setAppLanguage } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
 import type { FsLocation } from "../shared/fs-contract";
+import type { DupeyScanOptions } from "../shared/version-scan-scope";
 import type { IndexStatus } from "../shared/index-contract";
 import { installErrorReporter } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
@@ -21,7 +22,7 @@ import { LIBRARIAN_OP, LIBRARIAN_PUSH, LIBRARIAN_REQUEST } from "./librarian-con
 export interface LibrarianServices {
 	readonly fileNameSearch: FileNameSearchBackend;
 	readonly contentSearch: ContentSearch;
-	scanDuplicates(dir: string): Promise<DupeyScanResult>;
+	scanDuplicates(dir: string, options?: DupeyScanOptions): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -74,7 +75,10 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 		[LIBRARIAN_OP.contentSearch]: (args, signal) => services.contentSearch.search(stringArg(args, 0, "query"), typeof args[1] === "number" ? args[1] : undefined, signal),
 		[LIBRARIAN_OP.fileNameEnsureDaemon]: () => services.fileNameSearch.ensureDaemon(),
 		[LIBRARIAN_OP.fileNameStop]: () => services.fileNameSearch.stop(),
-		[LIBRARIAN_OP.scanDuplicates]: (args) => services.scanDuplicates(stringArg(args, 0, "dir")),
+		[LIBRARIAN_OP.scanDuplicates]: (args) =>
+			args[1] === undefined
+				? services.scanDuplicates(stringArg(args, 0, "dir"))
+				: services.scanDuplicates(stringArg(args, 0, "dir"), { excludeDirs: stringsArg(args, 1, "excludeDirs") }),
 		[LIBRARIAN_OP.indexStatus]: (args) => services.indexStatus.indexStatus(stringsArg(args, 0, "paths")),
 		[LIBRARIAN_OP.setIndexExcluded]: (args) => {
 			if (typeof args[1] !== "boolean") throw new TypeError("excluded must be a boolean");

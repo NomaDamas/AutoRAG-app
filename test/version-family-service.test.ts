@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -7,6 +7,7 @@ import { createDupeyProbe, DUPEY_INSTALL_COMMAND } from "../src/main/dupey";
 import {
 	createVersionFamilyService,
 	DEFAULT_SCAN_INTERVAL_MINUTES,
+	isDupeyTimeout,
 	mapDupeyFamily,
 	pruneVersionFamilies,
 	type VersionFamilyServiceDeps,
@@ -232,7 +233,7 @@ describe("version-family service — SSOT", () => {
 		expect(h.changes).toBe(1);
 	});
 
-	it("reports scan-failed and keeps the stored snapshot when every root fails", async () => {
+	it("reports the failed folders and keeps the stored snapshot when every root fails", async () => {
 		const h = harness({
 			store: {
 				read: async () => ({
@@ -251,8 +252,10 @@ describe("version-family service — SSOT", () => {
 		});
 		const service = createVersionFamilyService(h.deps);
 		const result = await service.refresh();
-		expect(result.error?.code).toBe("scan-failed");
-		expect(result.error?.message).toContain("dupey scan exploded");
+		expect(result.error).toBeNull();
+		expect(result.scanFailures).toEqual([
+			{ name: "Desktop", path: "/home/Desktop", excludeDirs: [], reason: "error", message: "dupey scan exploded" },
+		]);
 		expect(result.families.map((f) => f.head)).toEqual(["/home/Desktop/old.txt"]);
 		expect(result.scannedAt).toBe("2026-09-28T00:00:00.000Z");
 	});
@@ -321,6 +324,271 @@ describe("version-family service — location scope", () => {
 		const result = await service.refresh();
 		expect(scanned).toEqual(["/home/Desktop"]);
 		expect(result.families).toHaveLength(1);
+	});
+});
+
+describe("version-family service — a failed scan stays local", () => {
+	const place = (name: string, path: string, section: FsLocation["section"] = "favorites"): FsLocation => ({
+		name,
+		path,
+		section,
+		icon: "documents",
+		available: true,
+		scanned: true,
+		ejectable: false,
+	});
+	const timeout = (): Error => new Error("dupey timed out.");
+	const stack = (head: string, member: string): FsVersionFamily => ({
+		head,
+		members: [{ path: member, relation: "exact" }],
+		entries: [fsEntry(head), fsEntry(member)],
+	});
+	const stored = (families: FsVersionFamily[], extra: Partial<StoredVersionFamilies> = {}): StoredVersionFamilies => ({
+		version: 2,
+		scannedAt: "2026-09-28T00:00:00.000Z",
+		locations: [],
+		families,
+		stamps: Object.fromEntries(
+			families.flatMap((entry) => [entry.head, ...entry.members.map((member) => member.path)]).map((path) => [path, fixtureStamp(path)]),
+		),
+		...extra,
+	});
+	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
+	it("writes the other locations' families when one location's scan fails", async () => {
+		const h = harness({
+			locations: async () => [place("Desktop", "/home/Desktop"), place("Documents", "/home/Documents")],
+			scanDuplicates: async (dir) => {
+				if (dir === "/home/Desktop") throw timeout();
+				return scanOf([family("/home/Documents/a.txt", "/home/Documents/b.txt")]);
+			},
+		});
+		const result = await createVersionFamilyService(h.deps).refresh();
+		// The failure is the folder's, not the feature's: no feature-wide error is raised.
+		expect(result.error).toBeNull();
+		expect(result.scanFailures).toEqual([
+			{ name: "Desktop", path: "/home/Desktop", excludeDirs: [], reason: "timeout", message: "dupey timed out." },
+		]);
+		expect(result.families.map((entry) => entry.head)).toEqual(["/home/Documents/a.txt"]);
+		expect(h.persisted()?.families.map((entry) => entry.head)).toEqual(["/home/Documents/a.txt"]);
+		expect(h.persisted()?.scannedAt).toBe("2026-09-29T10:00:00.000Z");
+	});
+
+	it("keeps what the last good scan found in a location whose scan fails, and replaces the rest", async () => {
+		const h = harness(
+			{
+				locations: async () => [place("Desktop", "/home/Desktop"), place("Documents", "/home/Documents")],
+				scanDuplicates: async (dir) => {
+					if (dir === "/home/Desktop") throw timeout();
+					return scanOf([family("/home/Documents/c.txt", "/home/Documents/d.txt")]);
+				},
+			},
+			stored([
+				stack("/home/Desktop/old.txt", "/home/Desktop/old2.txt"),
+				stack("/home/Documents/gone.txt", "/home/Documents/gone2.txt"),
+			]),
+		);
+		const result = await createVersionFamilyService(h.deps).refresh();
+		expect(result.families.map((entry) => entry.head).sort()).toEqual([
+			"/home/Desktop/old.txt",
+			"/home/Documents/c.txt",
+		]);
+		expect(h.persisted()?.stamps?.["/home/Desktop/old.txt"]).toEqual(fixtureStamp("/home/Desktop/old.txt"));
+		expect(result.scanFailures.map((failure) => failure.path)).toEqual(["/home/Desktop"]);
+	});
+
+	it("leaves the snapshot and its scannedAt alone when no location could be read", async () => {
+		const h = harness(
+			{ scanDuplicates: async () => { throw timeout(); } },
+			stored([stack("/home/Desktop/old.txt", "/home/Desktop/old2.txt")]),
+		);
+		const result = await createVersionFamilyService(h.deps).refresh();
+		expect(h.writes).toBe(0);
+		expect(result.scannedAt).toBe("2026-09-28T00:00:00.000Z");
+		expect(result.families.map((entry) => entry.head)).toEqual(["/home/Desktop/old.txt"]);
+		expect(result.scanFailures).toHaveLength(1);
+	});
+
+	it("clears a failure on the next scan that reads the folder", async () => {
+		let failing = true;
+		const h = harness({
+			scanDuplicates: async () => {
+				if (failing) throw new Error("dupey failed with exit code 1");
+				return scanOf([family("/home/Desktop/a.txt", "/home/Desktop/b.txt")]);
+			},
+		});
+		const service = createVersionFamilyService(h.deps);
+		expect((await service.refresh()).scanFailures[0]?.reason).toBe("error");
+		failing = false;
+		const recovered = await service.refresh();
+		expect(recovered.scanFailures).toEqual([]);
+		expect(recovered.families).toHaveLength(1);
+	});
+
+	describe("a cloud drive", () => {
+		interface CloudRun {
+			readonly calls: [string, readonly string[] | undefined][];
+			readonly h: Harness;
+			readonly service: ReturnType<typeof createVersionFamilyService>;
+		}
+
+		/** iCloud Drive: the whole-root scan times out, so does Desktop on its own; Documents reads fine. */
+		function cloud(options: { desktopFails?: () => boolean; seed?: StoredVersionFamilies | null; folders?: string[] } = {}): CloudRun {
+			const calls: [string, readonly string[] | undefined][] = [];
+			const desktopFails = options.desktopFails ?? (() => true);
+			const h = harness(
+				{
+					locations: async () => [place("iCloud Drive", "/icloud", "cloud")],
+					listFolders: async () => options.folders ?? ["Documents", "Desktop"],
+					scanDuplicates: async (dir, scanOptions) => {
+						calls.push([dir, scanOptions?.excludeDirs]);
+						if (dir === "/icloud" && scanOptions === undefined) throw timeout();
+						if (dir === "/icloud/Desktop" && desktopFails()) throw timeout();
+						if (dir === "/icloud/Documents") return scanOf([family("/icloud/Documents/a.txt", "/icloud/Documents/b.txt")]);
+						if (dir === "/icloud/Desktop") return scanOf([family("/icloud/Desktop/x.txt", "/icloud/Desktop/y.txt")]);
+						return scanOf([]);
+					},
+				},
+				options.seed ?? null,
+			);
+			return { calls, h, service: createVersionFamilyService(h.deps) };
+		}
+
+		it("scans folder by folder when the whole root fails, so one slow folder does not cost the rest", async () => {
+			const run = cloud();
+			const result = await run.service.refresh();
+			expect(run.calls).toEqual([
+				["/icloud", undefined],
+				["/icloud", ["Documents", "Desktop"]],
+				["/icloud/Documents", undefined],
+				["/icloud/Desktop", undefined],
+			]);
+			expect(result.families.map((entry) => entry.head)).toEqual(["/icloud/Documents/a.txt"]);
+			expect(result.scanFailures).toEqual([
+				{ name: "Desktop", path: "/icloud/Desktop", excludeDirs: [], reason: "timeout", message: "dupey timed out." },
+			]);
+			expect(result.error).toBeNull();
+			expect(run.h.persisted()?.splitLocations).toEqual(["/icloud"]);
+		});
+
+		it("does not scan the whole root again, nor re-run a folder that timed out, until it is asked to", async () => {
+			let desktopFails = true;
+			const run = cloud({ desktopFails: () => desktopFails });
+			await run.service.start();
+			run.calls.length = 0;
+
+			run.h.timers[0]?.fire();
+			await settle();
+			expect(run.calls).toEqual([
+				["/icloud", ["Documents", "Desktop"]],
+				["/icloud/Documents", undefined],
+			]);
+			expect((await run.service.result()).scanFailures.map((failure) => failure.path)).toEqual(["/icloud/Desktop"]);
+
+			// "Check again": Desktop is read once more, and now succeeds.
+			desktopFails = false;
+			run.calls.length = 0;
+			const retried = await run.service.refresh();
+			expect(run.calls.map(([dir]) => dir)).toEqual(["/icloud", "/icloud/Documents", "/icloud/Desktop"]);
+			expect(retried.scanFailures).toEqual([]);
+			expect(retried.families.map((entry) => entry.head).sort()).toEqual([
+				"/icloud/Desktop/x.txt",
+				"/icloud/Documents/a.txt",
+			]);
+		});
+
+		it("starts from the folder scans after a restart instead of asking the drive for the whole root again", async () => {
+			const run = cloud({ seed: stored([], { locations: ["/icloud"], splitLocations: ["/icloud"] }) });
+			await run.service.refresh();
+			expect(run.calls.map(([dir]) => dir)).toEqual(["/icloud", "/icloud/Documents", "/icloud/Desktop"]);
+			expect(run.calls[0]?.[1]).toEqual(["Documents", "Desktop"]);
+		});
+
+		it("splits along the real top-level folders of the drive, never the files", async () => {
+			const root = await mkdtemp(join(tmpdir(), "vf-cloud-"));
+			for (const name of ["Docs", "Desk"]) await mkdir(join(root, name));
+			await writeFile(join(root, "loose.txt"), "x", "utf8");
+			const calls: [string, readonly string[] | undefined][] = [];
+			const h = harness({
+				locations: async () => [place("Drive", root, "cloud")],
+				scanDuplicates: async (dir, scanOptions) => {
+					calls.push([dir, scanOptions?.excludeDirs]);
+					if (scanOptions === undefined) throw timeout();
+					return scanOf([]);
+				},
+			});
+			await createVersionFamilyService(h.deps).refresh();
+			expect(calls.slice(0, 2).map(([dir]) => dir)).toEqual([root, root]);
+			expect([...(calls[1]?.[1] ?? [])].sort()).toEqual(["Desk", "Docs"]);
+			expect(calls.slice(2).map(([dir]) => dir).sort()).toEqual([join(root, "Desk"), join(root, "Docs")]);
+		});
+
+		it("reports the whole-root failure when the drive has no folders to split into", async () => {
+			const run = cloud({ folders: [] });
+			const result = await run.service.refresh();
+			expect(run.calls).toEqual([["/icloud", undefined]]);
+			expect(result.scanFailures).toEqual([
+				{ name: "iCloud Drive", path: "/icloud", excludeDirs: [], reason: "timeout", message: "dupey timed out." },
+			]);
+		});
+
+		it("keeps the folder's last good families while its scan times out", async () => {
+			const run = cloud({
+				seed: stored([stack("/icloud/Desktop/old.txt", "/icloud/Desktop/old2.txt")], { locations: ["/icloud"] }),
+			});
+			const result = await run.service.refresh();
+			expect(result.families.map((entry) => entry.head).sort()).toEqual([
+				"/icloud/Desktop/old.txt",
+				"/icloud/Documents/a.txt",
+			]);
+		});
+	});
+
+	it("does not split a location that is not a cloud drive", async () => {
+		const listed: string[] = [];
+		const h = harness({
+			listFolders: async (dir) => {
+				listed.push(dir);
+				return ["a"];
+			},
+			scanDuplicates: async () => {
+				throw timeout();
+			},
+		});
+		const result = await createVersionFamilyService(h.deps).refresh();
+		expect(listed).toEqual([]);
+		expect(result.scanFailures).toHaveLength(1);
+	});
+
+	it("leaves a timed-out location alone on the schedule, and tries it again when asked", async () => {
+		const h = harness({
+			scanDuplicates: async (dir) => {
+				h.scans.push(dir);
+				throw timeout();
+			},
+		});
+		const service = createVersionFamilyService(h.deps);
+		await service.start();
+		h.timers[0]?.fire();
+		await settle();
+		expect(h.scans).toEqual(["/home/Desktop"]);
+		expect((await service.result()).scanFailures).toHaveLength(1);
+		await service.refresh();
+		expect(h.scans).toEqual(["/home/Desktop", "/home/Desktop"]);
+	});
+
+	it("runs one scan at a time", async () => {
+		const h = harness();
+		const service = createVersionFamilyService(h.deps);
+		await Promise.all([service.refresh(), service.refresh()]);
+		expect(h.scans).toEqual(["/home/Desktop"]);
+	});
+});
+
+describe("isDupeyTimeout", () => {
+	it("recognizes the librarian's time-limit message and nothing else", () => {
+		expect(isDupeyTimeout("dupey timed out.")).toBe(true);
+		expect(isDupeyTimeout("dupey failed with exit code 1: boom")).toBe(false);
 	});
 });
 
