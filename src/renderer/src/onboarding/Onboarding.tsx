@@ -263,9 +263,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return;
 			}
 			setPermission(perms);
-			// The role step was folded into the model step; a draft saved on it resumes there.
+			// Steps that were folded away resume where their work now happens: roles in the model step, permissions
+			// at the account, and the folder choice in the scan that now makes it.
 			const saved = snapshot.draft ?? seedDraft(folders, perms);
-			const draft = saved.stepId === "roles" ? { ...saved, stepId: "model" as const } : saved;
+			const moved = { roles: "model", permissions: "account", folders: "smartScan" } as const;
+			const draft = saved.stepId in moved ? { ...saved, stepId: moved[saved.stepId as keyof typeof moved] } : saved;
 			// A resumed draft may hold folders added through the dialog; list them
 			// again (they are not built-in candidates) so they stay visible.
 			const known = new Set(folders.map((candidate) => candidate.path));
@@ -310,7 +312,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				setSmartRun((previous) => reduceSmartRun(previous, event));
 				if (event.type === "result" && event.runId === smartRunIdRef.current) {
 					const analysed = smartRootsRef.current;
-					setDraft((current) => (current === null ? current : { ...current, smartScope: event.exclusions, smartScopeRoots: analysed }));
+					// A folder proposed as a whole is one of the analysed folders themselves: it starts unticked, the others ticked.
+					const whole = new Set(event.exclusions.filter((item) => item.path === item.root).map((item) => item.path));
+					setDraft((current) =>
+						current === null
+							? current
+							: {
+									...current,
+									folders: current.folders.map((folder) => (analysed.includes(folder.path) ? { ...folder, selected: !whole.has(folder.path) } : folder)),
+									smartScope: event.exclusions,
+									smartScopeRoots: analysed,
+								},
+					);
 				}
 			}),
 		[],
@@ -443,10 +456,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
 		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
 		const following = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
-		// With proposals that still cover the selection there is nothing to scan: go straight to them.
-		const selected = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-		// Without the recommendation, or with proposals that still cover the selection, there is nothing to scan: go straight to the scope.
-		const skipScan = following === "smartScan" && (current.smartSuggest === false || !needsAnalysis(selected, current.smartScopeRoots, current.smartScope));
+		const all = current.folders.map((folder) => folder.path);
+		// Without the recommendation, or with proposals that still cover every folder, there is nothing to scan: go straight to the scope.
+		const skipScan = following === "smartScan" && (current.smartSuggest === false || !needsAnalysis(all, current.smartScopeRoots, current.smartScope));
 		const target = skipScan ? "smartScope" : following;
 		// Turning the recommendation off drops what the AI proposed, keeping only folders the user left out by hand.
 		const manual = following === "smartScan" && current.smartSuggest === false;
@@ -466,7 +478,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, [currentAdvance, openCheckout]);
 
-	/** The scope screen's way back: drops the proposals and runs the recommendation again on the selected folders. */
+	/** The scope screen's way back: drops the proposals and runs the recommendation again on every folder. */
 	const rescan = useCallback((): void => {
 		const runId = smartRunIdRef.current;
 		smartRunIdRef.current = null;
@@ -505,7 +517,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		if (index > 0) {
 			// The scan screen moves on by itself, so stepping back passes over it.
 			const previous = list[index - 1];
-			const target = previous === "smartScan" ? "folders" : previous;
+			const target = previous === "smartScan" ? list[index - 2] : previous;
 			if (target !== undefined) {
 				setDraft({ ...current, stepId: target });
 			}
@@ -542,8 +554,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			const left = new Set(paths.map(trimTrailingSeparators));
 			const folders = current.folders.map((folder) => (left.has(trimTrailingSeparators(folder.path)) ? { ...folder, selected: false } : folder));
 			if (!folders.some((folder) => folder.selected)) {
-				// Nothing is left to index: choose folders again.
-				setDraft({ ...current, folders, stepId: "folders" });
+				// Nothing is left to index: choose folders again on the scope screen.
+				setDraft({ ...current, folders, stepId: "smartScope" });
 				return;
 			}
 			const updated = { ...current, folders };
@@ -572,14 +584,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		return () => window.clearInterval(id);
 	}, [stepId, permission?.platform, permission?.fullDiskAccess]);
 
-	// Pre-scan every candidate on the folders step; on a resume past it, still scan the
-	// selected folders so later steps' totals and ETA are real.
+	// Pre-scan every candidate while the scope is decided (an unticked one still shows its size there); later,
+	// still scan the selected folders so those steps' totals and ETA are real.
 	useEffect(() => {
 		if (stepId === "welcome" || stepId === "permissions" || stepId === "account" || stepId === "model") {
 			return;
 		}
 		const wanted =
-			stepId === "folders"
+			stepId === "smartScan" || stepId === "smartScope"
 				? candidates.map((candidate) => candidate.path)
 				: (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
 		const missing = wanted.filter((path) => !scannedRef.current.has(path));
@@ -603,7 +615,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId]);
 
 	const startSmartScan = useCallback((): void => {
-		const folders = (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
+		const folders = (draftRef.current?.folders ?? []).map((folder) => folder.path);
 		if (folders.length === 0) {
 			return;
 		}
@@ -618,16 +630,15 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, []);
 
-	// Entering the scan screen starts the analysis of the folders chosen in the step before. Proposals from an earlier
-	// pass are kept while they cover every selected folder; one that was cancelled or failed is left as it is, with a
-	// button to run it again.
+	// Entering the scan screen starts the analysis of every detected folder. Proposals from an earlier pass are kept
+	// while they cover every folder; one that was cancelled or failed is left as it is, with a button to run it again.
 	useEffect(() => {
 		const current = draftRef.current;
 		if (stepId !== "smartScan" || current === null) {
 			return;
 		}
-		const selected = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-		if (!needsAnalysis(selected, current.smartScopeRoots, current.smartScope)) {
+		const all = current.folders.map((folder) => folder.path);
+		if (!needsAnalysis(all, current.smartScopeRoots, current.smartScope)) {
 			return;
 		}
 		if (smartRunRef.current.status !== "idle" || smartRunIdRef.current !== null) {

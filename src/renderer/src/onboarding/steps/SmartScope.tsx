@@ -2,7 +2,8 @@
  * Step 6 — smart-indexing scope (Figma 05c): what the first index reads on the left, what it leaves out on the
  * right. Folders move between the two by dragging. The left panel browses: its top level is the selected folders,
  * and a pill with sub-folders opens them under a breadcrumb. The right panel groups what is left out by the
- * selected folder it lies under; a whole selected folder dragged over is unselected and listed on its own.
+ * selected folder it lies under; a whole selected folder dragged over (or left out by the AI) is unselected and
+ * listed on its own.
  */
 
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement, type WheelEvent } from "react";
@@ -234,7 +235,10 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 							<div className="si-group">
 								<p className="si-group-title">{t("onboarding.smartScope.exclude.group", { name: t("onboarding.smartScope.include.all"), count: unselected.length })}</p>
 								<div className="si-pills">
-									{unselected.map((candidate) => pill({ path: candidate.path, from: "exclude", top: true }, candidate.name, sizeOf(candidate.path), "red", candidate.displayPath))}
+									{unselected.map((candidate) => {
+										const why = draft.smartScope?.find((item) => item.path === candidate.path && item.root === candidate.path)?.reason;
+										return pill({ path: candidate.path, from: "exclude", top: true }, candidate.name, sizeOf(candidate.path), "red", why === undefined ? candidate.displayPath : `${why}\n${candidate.displayPath}`, undefined, why !== undefined);
+									})}
 								</div>
 							</div>
 						) : null}

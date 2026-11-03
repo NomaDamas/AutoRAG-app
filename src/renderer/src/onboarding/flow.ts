@@ -40,12 +40,15 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
  * model step also picks the helper roles (question splitting, Jev, reranking)
  * the Dazzi plan would otherwise provide. A finished detection that found no
  * source leaves nothing to ask, so the sources step drops out too.
+ *
+ * There is no folder or permission step: the scan looks through every detected
+ * folder and proposes which to index, and the scope step is where the user reviews it.
  */
 export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean, noSources = false): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
 	const modelFirst = plan === "byok" && !signedIn;
 	const tail: OnboardingStepId[] = plan !== "byok" || modelFirst ? ["indexing"] : ["model", "indexing"];
-	const head: OnboardingStepId[] = ["welcome", "permissions", "account", ...(modelFirst ? (["model"] as const) : []), "folders", "smartScan", "smartScope", "embedding"];
+	const head: OnboardingStepId[] = ["welcome", "account", ...(modelFirst ? (["model"] as const) : []), "smartScan", "smartScope", "embedding"];
 	const middle = mid.filter((id) => !(planConfirmed && id === "plan") && !(noSources && id === "sources"));
 	return head.concat(middle).concat(tail);
 }
@@ -131,7 +134,7 @@ export function canAdvance(state: AdvanceState): boolean {
 			if (isPaidPlanId(state.plan) && !state.promoValid) return false;
 			return state.signedIn || state.plan === "byok";
 		case "smartScan":
-			// The folders were chosen in the step before; the next screen is where the AI's proposals are reviewed.
+			// The next screen is where the AI's proposals are reviewed.
 			return !state.smartScanning;
 		case "folders":
 		case "smartScope":

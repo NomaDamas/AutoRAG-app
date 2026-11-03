@@ -37,9 +37,7 @@ describe("onboarding flow", () => {
 	it("orders steps for a local, unconfirmed plan", () => {
 		expect(buildFlow("pro", false, "local", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -52,9 +50,7 @@ describe("onboarding flow", () => {
 	it("drops the plan once confirmed and puts the plan before sources for cloud", () => {
 		expect(buildFlow("pro", true, "local", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -63,9 +59,7 @@ describe("onboarding flow", () => {
 		]);
 		expect(buildFlow("pro", false, "cloud", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -78,9 +72,7 @@ describe("onboarding flow", () => {
 	it("treats the keyword-only mode like local embedding for ordering", () => {
 		expect(buildFlow("pro", false, "none", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -90,10 +82,8 @@ describe("onboarding flow", () => {
 		]);
 		expect(buildFlow("byok", false, "none", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
 			"model",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -107,10 +97,8 @@ describe("onboarding flow", () => {
 		const flow = buildFlow("byok", true, "local", false);
 		expect(flow).toEqual([
 			"welcome",
-			"permissions",
 			"account",
 			"model",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -123,9 +111,7 @@ describe("onboarding flow", () => {
 	it("keeps the model step after the plan for a signed-in user who picks BYOK there, because the scan already ran", () => {
 		expect(buildFlow("byok", false, "local", true)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
