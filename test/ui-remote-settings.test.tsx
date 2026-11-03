@@ -4,8 +4,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { RemoteAccessStatus, RemotePairedDevice, RemotePairingCode } from "../src/shared/remote-contract";
-import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot } from "../src/shared/settings-contract";
-import { GeneralPage } from "../src/renderer/src/components/settings/GeneralPage";
+import { DEFAULT_SETTINGS, type AppSettings } from "../src/shared/settings-contract";
+import { RemoteAccessPage } from "../src/renderer/src/components/settings/RemoteAccessPage";
 
 const mockRemote = vi.hoisted(() => {
 	const listeners = new Set<(status: RemoteAccessStatus) => void>();
@@ -36,7 +36,6 @@ const mockRemote = vi.hoisted(() => {
 		platform: "darwin",
 		remote,
 		settings,
-		appUpdate: { get: () => new Promise(() => undefined), onChange: () => () => undefined },
 	});
 	return {
 		remote,
@@ -49,13 +48,6 @@ const mockRemote = vi.hoisted(() => {
 });
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
-
-const SNAPSHOT: AutoRagConfigSnapshot = {
-	configPath: "/tmp/config.json",
-	configExists: true,
-	error: null,
-	config: { datasources: {}, searchPaths: ["/docs"] },
-};
 
 let container: HTMLDivElement;
 let root: Root;
@@ -114,12 +106,10 @@ function activeStatus(overrides: Partial<RemoteAccessStatus> = {}): RemoteAccess
 async function render(settings: Partial<AppSettings>): Promise<void> {
 	await act(async () => {
 		root.render(
-			<GeneralPage
+			<RemoteAccessPage
 				appSettings={{ ...DEFAULT_SETTINGS, language: "en", ...settings }}
 				onAppSettingsChanged={() => undefined}
 				onSettingsError={() => undefined}
-				snapshot={SNAPSHOT}
-				onSaved={() => undefined}
 			/>,
 		);
 	});
@@ -140,7 +130,7 @@ function routeAddress(): string | null {
 	return container.querySelector('[data-testid="remote-route-address"]')?.textContent ?? null;
 }
 
-describe("RemoteAccessSection in GeneralPage", () => {
+describe("Settings → Remote Access page", () => {
 	it("shows only the Enable switch while remote access is off", async () => {
 		mockRemote.remote.status.mockResolvedValue({ serving: false, origin: null, port: 47833, sessions: 0, devices: [] });
 		await render({ remoteAccess: false });
@@ -148,7 +138,8 @@ describe("RemoteAccessSection in GeneralPage", () => {
 		expect(container.querySelector('[role="switch"][aria-label="Enable Remote Access"]')).not.toBeNull();
 		expect(container.querySelector('input[aria-label="Browser Address"]')).toBeNull();
 		expect(container.querySelector('input[aria-label="Port"]')).toBeNull();
-		expect(container.querySelector(".settings-remote-hub")).toBeNull();
+		expect(container.textContent).not.toContain("Connect a Device");
+		expect(container.textContent).not.toContain("Paired Devices");
 	});
 
 	it("pairs through the chosen route: the QR link follows the route address, one code for every route", async () => {

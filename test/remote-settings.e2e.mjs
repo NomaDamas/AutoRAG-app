@@ -30,7 +30,9 @@ const locales = Object.fromEntries(
 		]),
 	),
 );
-const en = locales.en.settingsCore.general;
+const en = locales.en.settingsCore.remote;
+const navRemote = (language) => locales[language].settingsCore.nav.remote;
+const navGeneral = (language) => locales[language].settingsCore.nav.general;
 const app = await launchFinder({ userDataDir, env: { HOME: home, USERPROFILE: home } });
 const originalClipboard = await app.evaluate(({ clipboard }) => clipboard.readText());
 let page;
@@ -38,23 +40,26 @@ try {
 	page = await finderWindow(app, 30_000);
 	await page.setViewportSize({ width: 1440, height: 1000 });
 	await page.getByRole("button", { name: locales.en.places.settings, exact: true }).click();
-	const address = () => page.getByRole("textbox", { name: en.remoteAddress, exact: true });
-	const port = page.getByRole("spinbutton", { name: en.remotePort, exact: true });
-	const toggle = page.getByRole("switch", { name: en.remoteAccess, exact: true });
-	const section = () => page.locator(".settings-section").filter({ has: toggle });
+	await page.locator(".settings-sidebar").getByRole("button", { name: navRemote("en"), exact: true }).click();
+	await expect(page.locator("h1.linear-title")).toHaveText(navRemote("en"));
+	const address = () => page.getByRole("textbox", { name: en.address, exact: true });
+	const port = page.getByRole("spinbutton", { name: en.port, exact: true });
+	const toggle = page.getByRole("switch", { name: en.access, exact: true });
+	const section = () => page.locator(".settings-content-wrap");
 	const routeAddress = page.getByTestId("remote-route-address");
 
 	// 1. Fresh profile starts off: only the switch, no address, port, or hub.
 	await expect(toggle).toHaveAttribute("aria-checked", "false");
 	await expect(address()).toHaveCount(0);
 	await expect(port).toHaveCount(0);
-	await expect(page.locator(".settings-remote-hub")).toHaveCount(0);
+	await expect(page.locator(".settings-remote-card")).toHaveCount(0);
+	await expect(page.locator(".settings-remote-devices")).toHaveCount(0);
 	await section().screenshot({ path: join(out, "01-en-desktop-stopped.png") });
 
 	// 2. Enable -> the Connect a Device card; the token address and port wait behind Details.
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
-	await expect(page.getByTestId("remote-pairing-code").or(page.getByRole("button", { name: en.remotePairStart, exact: true }))).toBeVisible({
+	await expect(page.getByTestId("remote-pairing-code").or(page.getByRole("button", { name: en.pairStart, exact: true }))).toBeVisible({
 		timeout: 10_000,
 	});
 	await expect(address()).toBeHidden();
@@ -86,25 +91,25 @@ try {
 	assert.notEqual(status.port, 47833, "port 0 asks the OS for a free port");
 	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remoteAccess), true);
 
-	await details.getByRole("button", { name: en.remoteCopyAddress, exact: true }).click();
-	await expect(details.getByRole("button", { name: en.remoteAddressCopied, exact: true })).toBeVisible();
+	await details.getByRole("button", { name: en.copyAddress, exact: true }).click();
+	await expect(details.getByRole("button", { name: en.addressCopied, exact: true })).toBeVisible();
 	assert.equal(await app.evaluate(({ clipboard }) => clipboard.readText()), shownAddress);
 	await details.locator("summary").click();
 
 	// 4. Same Wi-Fi route + a 6-digit pairing code -> QR code of `<LAN address>/?pair=CODE`.
-	await page.getByRole("tab", { name: en.remoteRouteLan, exact: true }).click();
+	await page.getByRole("tab", { name: en.routeLan, exact: true }).click();
 	await expect(routeAddress).toHaveText(/^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/u);
 	const lanAddress = (await routeAddress.textContent())?.trim() ?? "";
 	assert.equal(new URL(lanAddress).port, String(status.port));
-	await page.getByRole("button", { name: en.remotePairStart, exact: true }).click();
+	await page.getByRole("button", { name: en.pairStart, exact: true }).click();
 	const codeLocator = page.getByTestId("remote-pairing-code");
 	await expect(codeLocator).toBeVisible();
 	const spacedCode = (await codeLocator.textContent())?.trim() ?? "";
 	assert.match(spacedCode, /^\d{3} \d{3}$/u);
 	const rawCode = spacedCode.replace(/\s+/g, "");
 	await expect(page.locator("svg.settings-remote-qr")).toBeVisible();
-	await page.getByRole("button", { name: en.remotePairLinkCopy, exact: true }).click();
-	await expect(page.getByRole("button", { name: en.remotePairLinkCopied, exact: true })).toBeVisible();
+	await page.getByRole("button", { name: en.pairLinkCopy, exact: true }).click();
+	await expect(page.getByRole("button", { name: en.pairLinkCopied, exact: true })).toBeVisible();
 	assert.equal(await app.evaluate(({ clipboard }) => clipboard.readText()), `${lanAddress}/?pair=${rawCode}`);
 	await section().screenshot({ path: join(out, "02-host-pairing-qr.png") });
 
@@ -144,7 +149,7 @@ try {
 		// 6. Verify host Settings live-updates Paired Devices with "iPhone · Safari", rename it, and pair a 2nd browser via ?pair=CODE QR link!
 		await expect(page.locator(".settings-remote-device-row").filter({ hasText: "iPhone · Safari" })).toBeVisible({ timeout: 10_000 });
 		await page.getByRole("button", { name: "Rename iPhone · Safari", exact: true }).click();
-		const renameInput = page.getByRole("textbox", { name: en.remoteDeviceNameInput, exact: true });
+		const renameInput = page.getByRole("textbox", { name: en.deviceNameInput, exact: true });
 		await renameInput.fill("Jeffrey iPhone");
 		await renameInput.press("Enter");
 		await expect(page.locator(".settings-remote-device-row").filter({ hasText: "Jeffrey iPhone" })).toBeVisible();
@@ -152,7 +157,7 @@ try {
 		// Issue a second pairing code and open the QR link (`<LAN address>/?pair=CODE`) in a second browser
 		// The phone spent the code: the host drops it, so a second device needs a fresh one
 		await expect(codeLocator).toBeHidden({ timeout: 10_000 });
-		await page.getByRole("button", { name: en.remotePairStart, exact: true }).click();
+		await page.getByRole("button", { name: en.pairStart, exact: true }).click();
 		await expect(codeLocator).toBeVisible();
 		const secondCode = ((await codeLocator.textContent()) ?? "").replace(/\D/g, "");
 		assert.equal(secondCode.length, 6);
@@ -165,15 +170,16 @@ try {
 
 		// Check remote Settings inside the QR-paired browser: its own origin (no token) behind Details
 		await qrPage.locator(".sidebar__item--settings").click();
+		await qrPage.locator(".settings-sidebar").getByRole("button", { name: navRemote("en"), exact: true }).click();
 		await qrPage.locator("details.settings-remote-details > summary").click();
-		const remoteAddress = qrPage.getByRole("textbox", { name: en.remoteAddress, exact: true });
+		const remoteAddress = qrPage.getByRole("textbox", { name: en.address, exact: true });
 		await expect(remoteAddress).toHaveValue(lanAddress);
-		await expect(qrPage.locator(".settings-remote-device-badge")).toHaveText(en.remoteDeviceCurrent);
-		await expect(qrPage.getByRole("button", { name: en.remoteTunnelStart, exact: true })).toHaveCount(0);
+		await expect(qrPage.locator(".settings-remote-device-badge")).toHaveText(en.deviceCurrent);
+		await expect(qrPage.getByRole("button", { name: en.tunnelStart, exact: true })).toHaveCount(0);
 		for (const width of [1440, 390]) {
 			await qrPage.setViewportSize({ width, height: 1000 });
 			const isolate = width === 390 ? await qrPage.addStyleTag({ content: ".settings-view { position: fixed; inset: 0; z-index: 2147483647; }" }) : null;
-			const section = qrPage.locator(".settings-section").filter({ has: qrPage.getByRole("switch", { name: en.remoteAccess, exact: true }) });
+			const section = qrPage.locator(".settings-content-wrap");
 			await section.screenshot({ path: join(out, `05-remote-paired-settings-${width}.png`) });
 			assert.equal(await section.evaluate((element) => element.scrollWidth > element.clientWidth), false);
 			await isolate?.evaluate((element) => element.remove());
@@ -181,8 +187,8 @@ try {
 
 		// 7. Revoke "Jeffrey iPhone" from host -> verify phone browser loses access immediately and reloads to AccessGate!
 		const iphoneRow = page.locator(".settings-remote-device-row").filter({ hasText: "Jeffrey iPhone" });
-		await iphoneRow.getByRole("button", { name: en.remoteDeviceRevoke, exact: true }).click();
-		await iphoneRow.getByRole("button", { name: en.remoteDeviceRevokeConfirm, exact: true }).click();
+		await iphoneRow.getByRole("button", { name: en.deviceRevoke, exact: true }).click();
+		await iphoneRow.getByRole("button", { name: en.deviceRevokeConfirm, exact: true }).click();
 		await expect(iphoneRow).toBeHidden();
 
 		// Revocation closes the phone's event stream and the page reloads itself to the AccessGate;
@@ -193,12 +199,12 @@ try {
 		await phone.screenshot({ path: join(out, "06-revoked-device-returned-to-gate.png") });
 
 		// 8. The Tailscale and Internet routes on host Settings
-		await page.getByRole("tab", { name: en.remoteRouteTailscale, exact: true }).click();
+		await page.getByRole("tab", { name: en.routeTailscale, exact: true }).click();
 		await section().screenshot({ path: join(out, "07-host-tailscale-tab.png") });
-		await page.getByRole("tab", { name: en.remoteRouteInternet, exact: true }).click();
+		await page.getByRole("tab", { name: en.routeInternet, exact: true }).click();
 		await expect(page.locator("details.settings-remote-domain, .settings-remote-pane[data-route='internet']").first()).toBeVisible();
 		await section().screenshot({ path: join(out, "08-host-tunnel-tab.png") });
-		await page.getByRole("tab", { name: en.remoteRouteLan, exact: true }).click();
+		await page.getByRole("tab", { name: en.routeLan, exact: true }).click();
 
 		await phoneContext.close();
 		await qrContext.close();
@@ -209,24 +215,32 @@ try {
 
 	// 9. Verify all 4 locales (en, ko, ja, zh) x 2 appearances (light, dark) x 2 widths (1440, 390) have zero horizontal overflow!
 	await details.locator("summary").click();
-	let previous = en;
+	let previous = "en";
 	for (const language of ["en", "ko", "ja", "zh"]) {
-		await page.getByRole("combobox", { name: previous.appLanguage, exact: true }).selectOption(language);
-		const strings = locales[language].settingsCore.general;
-		await expect(page.getByRole("switch", { name: strings.remoteAccess, exact: true })).toBeVisible();
-		previous = strings;
+		const generalStrings = locales[previous].settingsCore.general;
+		await page.setViewportSize({ width: 1440, height: 1000 });
+		await page.locator(".settings-sidebar").getByRole("button", { name: navGeneral(previous), exact: true }).click();
+		await page.getByRole("combobox", { name: generalStrings.appLanguage, exact: true }).selectOption(language);
+		const general = locales[language].settingsCore.general;
+		const strings = locales[language].settingsCore.remote;
+		previous = language;
 		for (const appearance of ["light", "dark"]) {
 			await page.setViewportSize({ width: 1440, height: 1000 });
-			await page.getByRole("combobox", { name: strings.appearanceName, exact: true }).selectOption(appearance);
+			await page.locator(".settings-sidebar").getByRole("button", { name: navGeneral(language), exact: true }).click();
+			await page.getByRole("combobox", { name: general.appearanceName, exact: true }).selectOption(appearance);
+			await page.locator(".settings-sidebar").getByRole("button", { name: navRemote(language), exact: true }).click();
+			await expect(page.getByRole("switch", { name: strings.access, exact: true })).toBeVisible();
+			const pageDetails = page.locator("details.settings-remote-details");
+			if (!(await pageDetails.evaluate((element) => element.open))) await pageDetails.locator("summary").click();
 			for (const width of [1440, 390]) {
 				await page.setViewportSize({ width, height: 1000 });
 				const isolate = width === 390 ? await page.addStyleTag({ content: ".settings-view { position: fixed; inset: 0; z-index: 2147483647; }" }) : null;
-				const section = page.locator(".settings-section").filter({ has: page.getByRole("switch", { name: strings.remoteAccess, exact: true }) });
-				const urlField = page.getByRole("textbox", { name: strings.remoteAddress, exact: true });
+				const content = page.locator(".settings-content-wrap");
+				const urlField = page.getByRole("textbox", { name: strings.address, exact: true });
 				await expect(urlField).toHaveValue(shownAddress);
-				await section.screenshot({ path: join(out, `locale-${language}-${width}-${appearance}.png`), mask: [urlField] });
-				const overflow = await section.evaluate((element) => element.scrollWidth > element.clientWidth);
-				assert.equal(overflow, false, `${language} ${width} ${appearance}: remote section overflows`);
+				await content.screenshot({ path: join(out, `locale-${language}-${width}-${appearance}.png`), mask: [urlField] });
+				const overflow = await content.evaluate((element) => element.scrollWidth > element.clientWidth);
+				assert.equal(overflow, false, `${language} ${width} ${appearance}: remote page overflows`);
 				await isolate?.evaluate((element) => element.remove());
 			}
 		}
@@ -234,14 +248,15 @@ try {
 
 	// 10. Revoke remaining devices and disable Remote Access -> returns cleanly to Stopped.
 	await page.setViewportSize({ width: 1440, height: 1000 });
-	const revokeAllBtn = page.getByRole("button", { name: previous.remoteDevicesRevokeAll, exact: true });
+	const last = locales[previous].settingsCore.remote;
+	const revokeAllBtn = page.getByRole("button", { name: last.devicesRevokeAll, exact: true });
 	if (await revokeAllBtn.isVisible()) {
 		await revokeAllBtn.click();
-		await page.getByRole("button", { name: previous.remoteDevicesRevokeAllConfirm, exact: true }).click();
+		await page.getByRole("button", { name: last.devicesRevokeAllConfirm, exact: true }).click();
 	}
-	await page.getByRole("switch", { name: previous.remoteAccess, exact: true }).click();
-	await expect(page.getByRole("textbox", { name: previous.remoteAddress, exact: true })).toHaveCount(0);
-	await expect(page.locator(".settings-remote-hub")).toHaveCount(0);
+	await page.getByRole("switch", { name: last.access, exact: true }).click();
+	await expect(page.getByRole("textbox", { name: last.address, exact: true })).toHaveCount(0);
+	await expect(page.locator(".settings-remote-card")).toHaveCount(0);
 	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remoteAccess), false);
 	console.log("PASS: 16 locale/width/theme captures + clean revoke-all and disable verified.");
 } catch (error) {

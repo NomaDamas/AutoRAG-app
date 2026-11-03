@@ -4,8 +4,8 @@
  * App-level preferences write through `window.autorag.settings.set` (the same
  * store the Finder reads), and the document-language list edits the shared
  * AutoRAG config's global `languages` array through `LanguageSettings` (leaf
- * `configPatch` writes, so unknown config keys survive). Remote access uses
- * that same settings path: the status bridge observes the server, never starts it.
+ * `configPatch` writes, so unknown config keys survive). Remote access has its
+ * own page (`RemoteAccessPage`).
  */
 
 import { useEffect, useState, type ReactElement } from "react";
@@ -14,7 +14,6 @@ import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
-import { RemoteAccessSection } from "./RemoteAccessSection";
 import { Row, Section, SettingsPageHead } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 import { hostPlatform } from "../../lib/shortcuts";
@@ -39,7 +38,7 @@ export function GeneralPage({
 			onAppSettingsChanged(await autorag.settings.set(patch));
 		} catch (cause) {
 			// A rejected change (the right-click menu could not be written) leaves the stored setting as it was.
-			onSettingsError(t(patch.remoteAccess !== undefined || patch.remotePort !== undefined ? "settingsCore.general.remoteSettingsError" : "settingsCore.general.osMenuError", { error: cause instanceof Error ? cause.message : String(cause) }));
+			onSettingsError(t("settingsCore.general.osMenuError", { error: cause instanceof Error ? cause.message : String(cause) }));
 		}
 	}
 	return (
@@ -72,7 +71,6 @@ export function GeneralPage({
 					<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
 				</Row>
 			</Section>
-			<RemoteAccessSection appSettings={appSettings} setApp={setApp} onSettingsError={onSettingsError} />
 			<Section title={t("settingsCore.general.launchTitle")}>
 				<Row name={t("settingsCore.general.launchAtLogin")} hint={t("settingsCore.general.launchAtLoginHint")}>
 					<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel={t("settingsCore.general.launchAtLogin")} />

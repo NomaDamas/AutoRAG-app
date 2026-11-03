@@ -8,7 +8,7 @@ awake.
 
 ## Enable remote access and pair a device
 
-1. On the host computer, open **Settings > General > Remote Access** and turn on
+1. On the host computer, open **Settings > Remote Access** and turn on
    **Enable Remote Access**. It is off by default; the switch saves the
    preference, so an enabled host serves again when Dazzi starts. While it is
    off, nothing else is shown.

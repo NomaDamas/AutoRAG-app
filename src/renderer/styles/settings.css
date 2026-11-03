@@ -2771,17 +2771,8 @@
 
 /* ---------------------------------------------------------- Remote Access -- */
 
-.settings-view .settings-remote-hub {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-12);
-	margin-top: var(--space-10);
-	margin-bottom: var(--space-8);
-	min-width: 0;
-}
-
 .settings-view .settings-remote-via {
-	margin: 0;
+	margin: var(--space-8) 0 0;
 	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
@@ -2801,13 +2792,11 @@
 	gap: var(--space-16);
 }
 
-.settings-view .settings-remote-card__head {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-2);
+.settings-view .settings-remote-card,
+.settings-view .settings-remote-devices {
+	margin-top: var(--space-10);
 }
 
-.settings-view .settings-remote-card__title,
 .settings-view .settings-remote-detail__name {
 	font-size: var(--font-size-meta);
 	font-weight: var(--weight-semibold);
@@ -3064,17 +3053,8 @@
 
 .settings-view .settings-remote-devices__head {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
+	justify-content: flex-end;
 	margin-bottom: var(--space-8);
-}
-
-.settings-view .settings-remote-devices__title {
-	font-size: var(--font-size-meta);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
 }
 
 .settings-view .settings-remote-empty {

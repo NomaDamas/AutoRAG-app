@@ -42,6 +42,7 @@ const PAGE_KEY: Readonly<Record<ErrorFixSettingsPage, LocaleKey>> = {
 	general: "settingsCore.nav.general",
 	sidebar: "settingsCore.nav.sidebar",
 	shortcuts: "settingsCore.nav.shortcuts",
+	remote: "settingsCore.nav.remote",
 	web: "settingsCore.nav.web",
 	contextMenu: "settingsCore.nav.contextMenu" as LocaleKey,
 	mcp: "settingsCore.nav.mcp",

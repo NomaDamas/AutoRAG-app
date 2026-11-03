@@ -1,5 +1,5 @@
 /**
- * Settings → General → Remote Access, inspired by Ovis (`devswha/ovis`).
+ * Settings → Remote Access (its own page under 기본), inspired by Ovis (`devswha/ovis`).
  *
  * Off: only the Enable switch. On: one "Connect a device" card and the paired-device list.
  * The card separates the two things a new device needs:
@@ -21,7 +21,7 @@ import {
 } from "../../../../shared/remote-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { QrCode } from "./QrCode";
-import { Row, Section, StatusDot } from "./SettingsKit";
+import { Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 
 type ConnectRoute = "lan" | "tailscale" | "internet";
@@ -51,16 +51,23 @@ function defaultRoute(status: RemoteAccessStatus | null): ConnectRoute {
 	return "lan";
 }
 
-export function RemoteAccessSection({
+export function RemoteAccessPage({
 	appSettings,
-	setApp,
+	onAppSettingsChanged,
 	onSettingsError,
 }: {
 	readonly appSettings: AppSettings;
-	readonly setApp: (patch: Partial<AppSettings>) => Promise<void>;
+	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-}): ReactElement | null {
+}): ReactElement {
 	const { t } = useTranslation();
+	const setApp = async (patch: Partial<AppSettings>): Promise<void> => {
+		try {
+			onAppSettingsChanged(await window.autorag.settings.set(patch));
+		} catch (cause) {
+			onSettingsError(t("settingsCore.remote.settingsError", { error: cause instanceof Error ? cause.message : String(cause) }));
+		}
+	};
 	const remoteBridge = window.autorag.remote;
 	const canManageRemote = typeof remoteBridge?.status === "function";
 	const isRemoteClient = window.autoragIsRemote === true;
@@ -95,7 +102,7 @@ export function RemoteAccessSection({
 				if (status.pairing !== undefined) setLocalPairing(status.pairing);
 			},
 			(cause: unknown) => {
-				onSettingsError(t("settingsCore.general.remoteStatusError", { error: cause instanceof Error ? cause.message : String(cause) }));
+				onSettingsError(t("settingsCore.remote.statusError", { error: cause instanceof Error ? cause.message : String(cause) }));
 			},
 		);
 	}, [canManageRemote, onSettingsError, remoteBridge, t]);
@@ -140,8 +147,6 @@ export function RemoteAccessSection({
 
 	const lanOrigins = useMemo(() => remoteStatus?.lanOrigins ?? [], [remoteStatus]);
 
-	if (!canManageRemote) return null;
-
 	const serving = remoteStatus?.serving === true;
 	const enabled = appSettings.remoteAccess || serving;
 	const devices: readonly RemotePairedDevice[] = remoteStatus?.devices ?? [];
@@ -165,7 +170,7 @@ export function RemoteAccessSection({
 			await navigator.clipboard.writeText(text);
 			setCopied(text);
 		} catch {
-			onSettingsError(t("settingsCore.general.remoteCopyError"));
+			onSettingsError(t("settingsCore.remote.copyError"));
 		}
 	};
 	const reportError = (cause: unknown): void => onSettingsError(cause instanceof Error ? cause.message : String(cause));
@@ -202,7 +207,7 @@ export function RemoteAccessSection({
 		const trimmed = domainDraft.trim();
 		const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
 		if (normalized === null) {
-			setDomainError(t("settingsCore.general.remoteDomainInvalid", { value: trimmed }));
+			setDomainError(t("settingsCore.remote.domainInvalid", { value: trimmed }));
 			return;
 		}
 		setDomainError(null);
@@ -251,11 +256,11 @@ export function RemoteAccessSection({
 
 	const viaLabel =
 		remoteStatus?.via === "device"
-			? t("settingsCore.general.remoteViaDevice")
+			? t("settingsCore.remote.viaDevice")
 			: remoteStatus?.via === "tailscale"
-				? t("settingsCore.general.remoteViaTailscale")
+				? t("settingsCore.remote.viaTailscale")
 				: remoteStatus?.via === "token"
-					? t("settingsCore.general.remoteViaToken")
+					? t("settingsCore.remote.viaToken")
 					: null;
 
 	const tunnelError = (status: RemoteTunnelStatus): string | null => {
@@ -264,24 +269,24 @@ export function RemoteAccessSection({
 			case "missing_binary":
 				return null;
 			case "login_required":
-				return t("settingsCore.general.remoteTunnelErrLogin");
+				return t("settingsCore.remote.tunnelErrLogin");
 			case "server_stopped":
-				return t("settingsCore.general.remoteTunnelErrServer");
+				return t("settingsCore.remote.tunnelErrServer");
 			case "timeout":
-				return t("settingsCore.general.remoteTunnelErrTimeout");
+				return t("settingsCore.remote.tunnelErrTimeout");
 			case "disconnected":
-				return t("settingsCore.general.remoteTunnelErrDisconnected");
+				return t("settingsCore.remote.tunnelErrDisconnected");
 			case "exited":
-				return t("settingsCore.general.remoteTunnelErrExited", { reason: status.error ?? "" });
+				return t("settingsCore.remote.tunnelErrExited", { reason: status.error ?? "" });
 			case "setup_failed":
-				return t("settingsCore.general.remoteTunnelErrSetup", { reason: status.error ?? "" });
+				return t("settingsCore.remote.tunnelErrSetup", { reason: status.error ?? "" });
 		}
 	};
 
 	const routes: readonly { readonly id: ConnectRoute; readonly label: string }[] = [
-		{ id: "lan", label: t("settingsCore.general.remoteRouteLan") },
-		{ id: "tailscale", label: t("settingsCore.general.remoteRouteTailscale") },
-		...(showInternetRoute ? [{ id: "internet" as const, label: t("settingsCore.general.remoteRouteInternet") }] : []),
+		{ id: "lan", label: t("settingsCore.remote.routeLan") },
+		{ id: "tailscale", label: t("settingsCore.remote.routeTailscale") },
+		...(showInternetRoute ? [{ id: "internet" as const, label: t("settingsCore.remote.routeInternet") }] : []),
 	];
 
 	const copyButton = (value: string, label: string, copiedLabel: string): ReactElement => (
@@ -292,12 +297,12 @@ export function RemoteAccessSection({
 
 	const lanPane = (
 		<>
-			<p className="settings-remote-desc">{t("settingsCore.general.remoteRouteLanHint")}</p>
-			{lanOrigins.length === 0 ? <p className="settings-remote-desc">{t("settingsCore.general.remoteLanMissing")}</p> : null}
+			<p className="settings-remote-desc">{t("settingsCore.remote.routeLanHint")}</p>
+			{lanOrigins.length === 0 ? <p className="settings-remote-desc">{t("settingsCore.remote.lanMissing")}</p> : null}
 			{lanOrigins.length > 1 ? (
 				<select
 					className="linear-select settings-remote-origin-select"
-					aria-label={t("settingsCore.general.remoteRouteAddress")}
+					aria-label={t("settingsCore.remote.routeAddress")}
 					value={lanAddress ?? ""}
 					onChange={(event) => setPickedLan(event.currentTarget.value)}
 				>
@@ -317,26 +322,26 @@ export function RemoteAccessSection({
 				tailscale.servingUrl !== null ? (
 					<div className="settings-remote-status-line">
 						<StatusDot tone="ok" />
-						<span>{t("settingsCore.general.remoteTailscaleServing")}</span>
+						<span>{t("settingsCore.remote.tailscaleServing")}</span>
 					</div>
 				) : tailscale.serveCommand !== null ? (
 					<>
-						<p className="settings-remote-desc">{t("settingsCore.general.remoteTailscaleCommandDesc")}</p>
+						<p className="settings-remote-desc">{t("settingsCore.remote.tailscaleCommandDesc")}</p>
 						<div className="settings-remote-command">
 							<code>{tailscale.serveCommand}</code>
-							{copyButton(tailscale.serveCommand, t("settingsCore.general.remoteCopyCommand"), t("settingsCore.general.remoteCommandCopied"))}
+							{copyButton(tailscale.serveCommand, t("settingsCore.remote.copyCommand"), t("settingsCore.remote.commandCopied"))}
 						</div>
 					</>
 				) : null
 			) : (
 				<p className="settings-remote-desc">
-					{tailscale?.state === "stopped" ? t("settingsCore.general.remoteTailscaleStopped") : t("settingsCore.general.remoteTailscaleMissing")}
+					{tailscale?.state === "stopped" ? t("settingsCore.remote.tailscaleStopped") : t("settingsCore.remote.tailscaleMissing")}
 				</p>
 			)}
 			<div className="settings-remote-actions">
 				<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>
 					<RefreshCw size={13} aria-hidden="true" />
-					<span>{t("settingsCore.general.remoteTailscaleRefresh")}</span>
+					<span>{t("settingsCore.remote.tailscaleRefresh")}</span>
 				</button>
 			</div>
 		</>
@@ -349,23 +354,23 @@ export function RemoteAccessSection({
 					<StatusDot tone={tunnel.state === "online" ? "ok" : tunnel.state === "starting" ? "run" : tunnel.state === "error" ? "warn" : "off"} />
 					<span>
 						{tunnel.mode === "custom"
-							? t("settingsCore.general.remoteTunnelCustomTitle", { hostname: tunnel.hostname ?? "" })
-							: t("settingsCore.general.remoteTunnelQuickTitle")}
+							? t("settingsCore.remote.tunnelCustomTitle", { hostname: tunnel.hostname ?? "" })
+							: t("settingsCore.remote.tunnelQuickTitle")}
 					</span>
 				</div>
 				<p className="settings-remote-desc">
 					{!tunnel.available
-						? t("settingsCore.general.remoteTunnelMissingBinary")
+						? t("settingsCore.remote.tunnelMissingBinary")
 						: tunnel.mode === "custom"
-							? t("settingsCore.general.remoteTunnelCustomHint")
-							: t("settingsCore.general.remoteTunnelQuickHint")}
+							? t("settingsCore.remote.tunnelCustomHint")
+							: t("settingsCore.remote.tunnelQuickHint")}
 				</p>
 				{tunnelError(tunnel) !== null ? <p className="settings-remote-error">{tunnelError(tunnel)}</p> : null}
 				{isRemoteClient ? null : (
 					<div className="settings-remote-actions">
 						{tunnel.state === "online" ? (
 							<button type="button" className="linear-btn" disabled={tunnelBusy} onClick={() => void handleTunnel("stop")}>
-								{t("settingsCore.general.remoteTunnelStop")}
+								{t("settingsCore.remote.tunnelStop")}
 							</button>
 						) : (
 							<button
@@ -374,20 +379,20 @@ export function RemoteAccessSection({
 								disabled={!tunnel.available || tunnelBusy || tunnel.state === "starting" || (tunnel.mode === "custom" && !tunnel.loggedIn)}
 								onClick={() => void handleTunnel("start")}
 							>
-								{tunnelBusy || tunnel.state === "starting" ? t("settingsCore.general.remoteTunnelStarting") : t("settingsCore.general.remoteTunnelStart")}
+								{tunnelBusy || tunnel.state === "starting" ? t("settingsCore.remote.tunnelStarting") : t("settingsCore.remote.tunnelStart")}
 							</button>
 						)}
 					</div>
 				)}
 				{isRemoteClient || !tunnel.available ? null : (
 					<details className="settings-remote-domain" open={appSettings.remoteTunnelHostname !== ""}>
-						<summary>{t("settingsCore.general.remoteDomainToggle")}</summary>
-						<p className="settings-remote-sub">{t("settingsCore.general.remoteDomainHint")}</p>
+						<summary>{t("settingsCore.remote.domainToggle")}</summary>
+						<p className="settings-remote-sub">{t("settingsCore.remote.domainHint")}</p>
 						<div className="settings-remote-field">
 							<input
 								type="text"
 								className="settings-source-desc__input"
-								aria-label={t("settingsCore.general.remoteDomainLabel")}
+								aria-label={t("settingsCore.remote.domainLabel")}
 								placeholder="dazzi.example.com"
 								spellCheck={false}
 								value={domainDraft}
@@ -407,13 +412,13 @@ export function RemoteAccessSection({
 						{domainError !== null ? <p className="settings-remote-error">{domainError}</p> : null}
 						{tunnel.mode === "custom" ? (
 							tunnel.loggedIn ? (
-								<p className="settings-remote-sub">{t("settingsCore.general.remoteDomainLoggedIn")}</p>
+								<p className="settings-remote-sub">{t("settingsCore.remote.domainLoggedIn")}</p>
 							) : (
 								<div className="settings-remote-actions">
 									<button type="button" className="linear-btn" disabled={loggingIn} onClick={() => void handleTunnel("login")}>
-										{t("settingsCore.general.remoteDomainLogin")}
+										{t("settingsCore.remote.domainLogin")}
 									</button>
-									<span className="settings-remote-sub">{t("settingsCore.general.remoteDomainLoginHint")}</span>
+									<span className="settings-remote-sub">{t("settingsCore.remote.domainLoginHint")}</span>
 								</div>
 							)
 						) : null}
@@ -422,27 +427,38 @@ export function RemoteAccessSection({
 			</>
 		);
 
+	const head = <SettingsPageHead title={t("settingsCore.nav.remote")} description={t("settingsCore.remote.description")} />;
+	if (!canManageRemote) {
+		return (
+			<>
+				{head}
+				<Section>
+					<p className="linear-section-desc">{t("settingsCore.remote.unavailable")}</p>
+				</Section>
+			</>
+		);
+	}
+
 	return (
-		<Section title={t("settingsCore.general.remoteTitle")} description={t("settingsCore.general.remoteSecurityHint")}>
-			<Row name={t("settingsCore.general.remoteAccess")} hint={t("settingsCore.general.remoteAccessHint")}>
-				<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.general.remoteAccess")} />
-			</Row>
+		<>
+			{head}
+			<Section description={t("settingsCore.remote.securityHint")}>
+				<Row name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
+					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.remote.access")} />
+				</Row>
+				{enabled && viaLabel !== null ? <p className="settings-remote-via">{viaLabel}</p> : null}
+			</Section>
 
 			{enabled ? (
-				<div className="settings-remote-hub">
-					{viaLabel !== null ? <p className="settings-remote-via">{viaLabel}</p> : null}
+				<Section title={t("settingsCore.remote.connectTitle")} description={t("settingsCore.remote.connectHint")}>
 					<div className="settings-remote-card">
-						<div className="settings-remote-card__head">
-							<span className="settings-remote-card__title">{t("settingsCore.general.remoteConnectTitle")}</span>
-							<span className="settings-remote-sub">{t("settingsCore.general.remoteConnectHint")}</span>
-						</div>
 						{!serving ? (
-							<p className="settings-remote-desc">{t("settingsCore.general.remoteStarting")}</p>
+							<p className="settings-remote-desc">{t("settingsCore.remote.starting")}</p>
 						) : (
 							<>
 								<div className="settings-remote-step">
-									<span className="settings-remote-step__label">{t("settingsCore.general.remoteRouteLabel")}</span>
-									<div className="settings-remote-tabs" role="tablist" aria-label={t("settingsCore.general.remoteRouteLabel")}>
+									<span className="settings-remote-step__label">{t("settingsCore.remote.routeLabel")}</span>
+									<div className="settings-remote-tabs" role="tablist" aria-label={t("settingsCore.remote.routeLabel")}>
 										{routes.map((item) => (
 											<button
 												key={item.id}
@@ -463,41 +479,41 @@ export function RemoteAccessSection({
 												<code className="settings-remote-url-line" data-testid="remote-route-address" title={routeAddress}>
 													{routeAddress}
 												</code>
-												{copyButton(routeAddress, t("settingsCore.general.remoteCopyAddress"), t("settingsCore.general.remoteAddressCopied"))}
+												{copyButton(routeAddress, t("settingsCore.remote.copyAddress"), t("settingsCore.remote.addressCopied"))}
 											</div>
 										) : null}
 									</div>
 								</div>
 
 								<div className="settings-remote-step">
-									<span className="settings-remote-step__label">{t("settingsCore.general.remotePairTitle")}</span>
-									<p className="settings-remote-sub">{t("settingsCore.general.remotePairHint")}</p>
+									<span className="settings-remote-step__label">{t("settingsCore.remote.pairTitle")}</span>
+									<p className="settings-remote-sub">{t("settingsCore.remote.pairHint")}</p>
 									{spacedCode === null ? (
 										<div className="settings-remote-actions">
 											<button type="button" className="linear-btn settings-btn-primary" onClick={() => void handleStartPairing()}>
-												{t("settingsCore.general.remotePairStart")}
+												{t("settingsCore.remote.pairStart")}
 											</button>
 										</div>
 									) : (
 										<div className="settings-remote-pair-box" role="status">
 											{pairLink !== null ? (
-												<QrCode value={pairLink} label={t("settingsCore.general.remotePairQrLabel", { code: activeCode?.code ?? "" })} size={136} />
+												<QrCode value={pairLink} label={t("settingsCore.remote.pairQrLabel", { code: activeCode?.code ?? "" })} size={136} />
 											) : null}
 											<div className="settings-remote-pair-meta">
 												<div className="settings-remote-code" data-testid="remote-pairing-code">
 													{spacedCode}
 												</div>
 												<div className="settings-remote-expiry">
-													{countdown ? t("settingsCore.general.remotePairExpires", { time: countdown }) : t("settingsCore.general.remotePairExpired")}
+													{countdown ? t("settingsCore.remote.pairExpires", { time: countdown }) : t("settingsCore.remote.pairExpired")}
 												</div>
-												{pairLink === null ? <p className="settings-remote-sub">{t("settingsCore.general.remotePairNoAddress")}</p> : null}
+												{pairLink === null ? <p className="settings-remote-sub">{t("settingsCore.remote.pairNoAddress")}</p> : null}
 												<div className="settings-remote-actions">
 													{pairLink !== null
-														? copyButton(pairLink, t("settingsCore.general.remotePairLinkCopy"), t("settingsCore.general.remotePairLinkCopied"))
+														? copyButton(pairLink, t("settingsCore.remote.pairLinkCopy"), t("settingsCore.remote.pairLinkCopied"))
 														: null}
 													<button type="button" className="linear-btn" onClick={() => void handleStartPairing()}>
 														<RefreshCw size={13} aria-hidden="true" />
-														<span>{t("settingsCore.general.remotePairNewCode")}</span>
+														<span>{t("settingsCore.remote.pairNewCode")}</span>
 													</button>
 												</div>
 											</div>
@@ -508,36 +524,36 @@ export function RemoteAccessSection({
 						)}
 
 						<details className="settings-remote-details">
-							<summary>{t("settingsCore.general.remoteDetails")}</summary>
+							<summary>{t("settingsCore.remote.details")}</summary>
 							<div className="settings-remote-detail">
-								<span className="settings-remote-detail__name">{t("settingsCore.general.remoteAddress")}</span>
-								<span className="settings-remote-sub">{t("settingsCore.general.remoteAddressHint")}</span>
+								<span className="settings-remote-detail__name">{t("settingsCore.remote.address")}</span>
+								<span className="settings-remote-sub">{t("settingsCore.remote.addressHint")}</span>
 								<div className="settings-remote-field">
 									<input
 										type="text"
 										className="settings-source-desc__input min-w-0"
-										aria-label={t("settingsCore.general.remoteAddress")}
-										value={browserAddress ?? t("settingsCore.general.remoteStopped")}
+										aria-label={t("settingsCore.remote.address")}
+										value={browserAddress ?? t("settingsCore.remote.stopped")}
 										readOnly
 										onClick={(event) => event.currentTarget.select()}
 									/>
 									{browserAddress !== null ? (
-										copyButton(browserAddress, t("settingsCore.general.remoteCopyAddress"), t("settingsCore.general.remoteAddressCopied"))
+										copyButton(browserAddress, t("settingsCore.remote.copyAddress"), t("settingsCore.remote.addressCopied"))
 									) : (
 										<button type="button" className="linear-btn shrink-0" disabled>
-											{t("settingsCore.general.remoteCopyAddress")}
+											{t("settingsCore.remote.copyAddress")}
 										</button>
 									)}
 								</div>
 							</div>
 							<div className="settings-remote-detail">
-								<span className="settings-remote-detail__name">{t("settingsCore.general.remotePort")}</span>
-								<span className="settings-remote-sub">{t("settingsCore.general.remotePortHint")}</span>
+								<span className="settings-remote-detail__name">{t("settingsCore.remote.port")}</span>
+								<span className="settings-remote-sub">{t("settingsCore.remote.portHint")}</span>
 								<div className="settings-remote-field">
 									<input
 										type="number"
 										className="settings-source-desc__input settings-remote-port"
-										aria-label={t("settingsCore.general.remotePort")}
+										aria-label={t("settingsCore.remote.port")}
 										min={0}
 										max={65535}
 										step={1}
@@ -563,18 +579,21 @@ export function RemoteAccessSection({
 							</div>
 						</details>
 					</div>
+				</Section>
+			) : null}
 
+			{enabled ? (
+				<Section title={t("settingsCore.remote.devicesTitle")}>
 					<div className="settings-remote-devices">
-						<div className="settings-remote-devices__head">
-							<span className="settings-remote-devices__title">{t("settingsCore.general.remoteDevicesTitle")}</span>
-							{devices.length > 0 ? (
+						{devices.length > 0 ? (
+							<div className="settings-remote-devices__head">
 								<button type="button" className="linear-btn settings-remote-revoke-btn" onClick={() => void handleRevokeAll()}>
-									{confirmRevokeAll ? t("settingsCore.general.remoteDevicesRevokeAllConfirm") : t("settingsCore.general.remoteDevicesRevokeAll")}
+									{confirmRevokeAll ? t("settingsCore.remote.devicesRevokeAllConfirm") : t("settingsCore.remote.devicesRevokeAll")}
 								</button>
-							) : null}
-						</div>
+							</div>
+						) : null}
 						{devices.length === 0 ? (
-							<p className="settings-remote-empty">{t("settingsCore.general.remoteDevicesEmpty")}</p>
+							<p className="settings-remote-empty">{t("settingsCore.remote.devicesEmpty")}</p>
 						) : (
 							<ul className="settings-remote-device-list">
 								{devices.map((device) => (
@@ -590,16 +609,16 @@ export function RemoteAccessSection({
 												<input
 													type="text"
 													className="settings-source-desc__input"
-													aria-label={t("settingsCore.general.remoteDeviceNameInput")}
+													aria-label={t("settingsCore.remote.deviceNameInput")}
 													maxLength={48}
 													value={renaming.label}
 													onChange={(event) => setRenaming({ id: device.id, label: event.currentTarget.value })}
 													autoFocus
 												/>
-												<button type="submit" className="linear-btn" aria-label={t("settingsCore.general.remoteDeviceSave")}>
+												<button type="submit" className="linear-btn" aria-label={t("settingsCore.remote.deviceSave")}>
 													<Check size={13} aria-hidden="true" />
 												</button>
-												<button type="button" className="linear-btn" aria-label={t("settingsCore.general.remoteDeviceCancel")} onClick={() => setRenaming(null)}>
+												<button type="button" className="linear-btn" aria-label={t("settingsCore.remote.deviceCancel")} onClick={() => setRenaming(null)}>
 													<X size={13} aria-hidden="true" />
 												</button>
 											</form>
@@ -608,15 +627,15 @@ export function RemoteAccessSection({
 												<div className="settings-remote-device-info">
 													<div className="settings-remote-device-name">
 														<span>{device.label}</span>
-														{device.current ? <span className="settings-remote-device-badge">{t("settingsCore.general.remoteDeviceCurrent")}</span> : null}
+														{device.current ? <span className="settings-remote-device-badge">{t("settingsCore.remote.deviceCurrent")}</span> : null}
 													</div>
 													<div className="settings-remote-device-seen">
-														{t("settingsCore.general.remoteDeviceLastSeen", {
+														{t("settingsCore.remote.deviceLastSeen", {
 															when: formatRelativeSeen(device.lastSeenAt, {
-																never: t("settingsCore.general.remoteDeviceNever"),
-																justNow: t("settingsCore.general.remoteDeviceJustNow"),
-																minutesAgo: (count) => t("settingsCore.general.remoteDeviceMinutesAgo", { count }),
-																hoursAgo: (count) => t("settingsCore.general.remoteDeviceHoursAgo", { count }),
+																never: t("settingsCore.remote.deviceNever"),
+																justNow: t("settingsCore.remote.deviceJustNow"),
+																minutesAgo: (count) => t("settingsCore.remote.deviceMinutesAgo", { count }),
+																hoursAgo: (count) => t("settingsCore.remote.deviceHoursAgo", { count }),
 															}),
 														})}
 													</div>
@@ -625,14 +644,14 @@ export function RemoteAccessSection({
 													<button
 														type="button"
 														className="linear-btn"
-														aria-label={t("settingsCore.general.remoteDeviceRename", { name: device.label })}
+														aria-label={t("settingsCore.remote.deviceRename", { name: device.label })}
 														onClick={() => setRenaming({ id: device.id, label: device.label })}
 													>
 														<Pencil size={12} aria-hidden="true" />
 													</button>
 													<button type="button" className="linear-btn settings-remote-revoke-btn" onClick={() => void handleRevokeDevice(device.id)}>
 														<Trash2 size={12} aria-hidden="true" />
-														<span>{confirmRevokeId === device.id ? t("settingsCore.general.remoteDeviceRevokeConfirm") : t("settingsCore.general.remoteDeviceRevoke")}</span>
+														<span>{confirmRevokeId === device.id ? t("settingsCore.remote.deviceRevokeConfirm") : t("settingsCore.remote.deviceRevoke")}</span>
 													</button>
 												</div>
 											</>
@@ -642,8 +661,8 @@ export function RemoteAccessSection({
 							</ul>
 						)}
 					</div>
-				</div>
+				</Section>
 			) : null}
-		</Section>
+		</>
 	);
 }
