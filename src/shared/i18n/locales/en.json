@@ -892,7 +892,7 @@
       }
     },
     "smartScan": {
-      "title": "Looking for the scope to recommend…",
+      "title": "Finding the scope to recommend",
       "done": "Finished looking",
       "failedTitle": "Could not finish looking",
       "lead": "Looking only at folder names and structure, without opening your files.",
