@@ -163,7 +163,7 @@ describe("navigation stacks", () => {
 	it("pushes and pops per tab, never popping the root", () => {
 		const pushed = pushRoute(INITIAL_STACKS, "browse", { kind: "folder", path: "/a" });
 		expect(pushed.browse).toHaveLength(2);
-		expect(pushed.recents).toBe(INITIAL_STACKS.recents);
+		expect(pushed.settings).toBe(INITIAL_STACKS.settings);
 		expect(popRoute(popRoute(pushed, "browse"), "browse").browse).toEqual(INITIAL_STACKS.browse);
 	});
 

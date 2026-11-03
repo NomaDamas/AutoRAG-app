@@ -3125,7 +3125,8 @@
       "ai": "AI 検索",
       "automations": "自動化",
       "search": "検索",
-      "aria": "アプリのタブ"
+      "aria": "アプリのタブ",
+      "settings": "設定"
     },
     "connectedTo": "{{name}} に接続中",
     "back": "戻る",
@@ -3279,11 +3280,19 @@
       "open": "進行中と待機中の作業"
     },
     "rules": {
-      "add": "AI 検索でルールを追加"
+      "add": "AI 検索でルールを追加",
+      "section": "ルール",
+      "foot": "ファイルが追加・変更されたときに Dazzi が行うことを決めておきます。ルールは AI 検索で言葉で作成・編集します。",
+      "daemonToggle": "バックグラウンドで実行"
     },
     "ai": {
       "history": "会話履歴",
-      "newChat": "新しい会話"
+      "newChat": "新しい会話",
+      "sources": "出典 {{count}} 件",
+      "suggestions": "こんなふうに聞いてみましょう",
+      "suggest1": "先週受け取った見積書を探して",
+      "suggest2": "ダウンロードフォルダを整理して",
+      "suggest3": "最近の議事録を要約して"
     },
     "settingsHub": {
       "title": "設定",

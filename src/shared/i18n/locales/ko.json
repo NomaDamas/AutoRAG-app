@@ -3125,7 +3125,8 @@
       "ai": "AI 검색",
       "automations": "자동화",
       "search": "검색",
-      "aria": "앱 탭"
+      "aria": "앱 탭",
+      "settings": "설정"
     },
     "connectedTo": "{{name}}에 연결됨",
     "back": "뒤로",
@@ -3279,11 +3280,19 @@
       "open": "진행 및 대기 중인 작업"
     },
     "rules": {
-      "add": "AI 검색에서 규칙 추가"
+      "add": "AI 검색에서 규칙 추가",
+      "section": "규칙",
+      "foot": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요. 규칙은 AI 검색에서 말로 만들고 고칩니다.",
+      "daemonToggle": "백그라운드 실행"
     },
     "ai": {
       "history": "대화 기록",
-      "newChat": "새 대화"
+      "newChat": "새 대화",
+      "sources": "출처 {{count}}개",
+      "suggestions": "이렇게 물어보세요",
+      "suggest1": "지난주에 받은 견적서 찾아줘",
+      "suggest2": "다운로드 폴더 정리해줘",
+      "suggest3": "최근 회의록 요약해줘"
     },
     "settingsHub": {
       "title": "설정",

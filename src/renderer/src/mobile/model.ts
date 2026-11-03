@@ -245,8 +245,9 @@ export function toolItems(entries: readonly FinderEntry[], archive: boolean): re
 
 /* ------------------------------------------------------- Navigation -- */
 
-export type MobileTab = "browse" | "recents" | "ai" | "automations";
-export const MOBILE_TABS: readonly MobileTab[] = ["browse", "recents", "ai", "automations"];
+/** Recents is not a tab: 둘러보기's 즐겨찾기 lists it, and it opens there like any place. */
+export type MobileTab = "browse" | "ai" | "automations" | "settings";
+export const MOBILE_TABS: readonly MobileTab[] = ["browse", "ai", "automations", "settings"];
 
 export type MobileRoute =
 	| { readonly kind: "places" }
@@ -262,9 +263,9 @@ export type MobileStacks = Readonly<Record<MobileTab, readonly MobileRoute[]>>;
 
 export const INITIAL_STACKS: MobileStacks = {
 	browse: [{ kind: "places" }],
-	recents: [{ kind: "recents" }],
 	ai: [{ kind: "chat" }],
 	automations: [{ kind: "rules" }],
+	settings: [{ kind: "settings" }],
 };
 
 export function pushRoute(stacks: MobileStacks, tab: MobileTab, route: MobileRoute): MobileStacks {

@@ -824,7 +824,7 @@ function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "nea
  * that tab's answer. A local source's title reveals the file in the Finder; a
  * web source's title opens the page in the OS browser.
  */
-export function EvidencePanel({
+function EvidencePanel({
 	evidence,
 	selected,
 	onSelect,

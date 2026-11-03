@@ -23,7 +23,6 @@ import {
 	ArrowDownUp,
 	Bot,
 	ChevronLeft,
-	Clock,
 	Copy,
 	Download,
 	Ellipsis,
@@ -66,7 +65,6 @@ import type { CitationEvidence, ChatAttachment } from "../../../shared/search-co
 import { DEFAULT_SETTINGS, type AppSettings } from "../../../shared/settings-contract";
 import { DEFAULT_SIDEBAR_SETTINGS, type SidebarSettings } from "../../../shared/sidebar-contract";
 import { AiSearchPanel, type AiDockHandle } from "../components/AiSearchPanel";
-import { AutomationsView } from "../components/AutomationsView";
 import { ErrorFixDialog } from "../components/ErrorFixDialog";
 import { MagicActionDialog } from "../components/MagicActionDialog";
 import { placeGroupLabel, placeItemLabel } from "../components/Sidebar";
@@ -84,7 +82,7 @@ import { useIndexProblem } from "../hooks/useIndexProblem";
 import { openMagicActionDialog, startMagicActionRun, useMagicActionStore } from "../hooks/useMagicAction";
 import { cn } from "../lib/cn";
 import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "../state/ai-delivery";
-import { rulesWatching } from "../state/automations";
+import { ruleTitle, rulesWatching } from "../state/automations";
 import { batchToast, formatSize, historyToast, indexToast } from "../state/format";
 import { useModelDownload } from "../state/model-download";
 import { basename, dirname } from "../state/paths";
@@ -117,6 +115,7 @@ import { Alert, MenuItem, MenuLabel, MenuLayer, MenuSeparator, QuickLook, type M
 import { Cell, GlassButton, GlassText, LargeTitle, NavTitle, ProgressRing, Section } from "./parts";
 import { EntryList, PlacesBody, RecentsBody, RowMeta, SearchField, tagCss, type RowActions, type RowContext } from "./screens";
 import { ActivitySheet, EvidenceSheet, FolderPicker, InfoSheet, type PickerRoot } from "./sheets";
+import { RuleBody, RulesBody } from "./rules";
 import { useMobileFiles } from "./useMobileFiles";
 
 /* ----------------------------------------------------------- Remote URLs -- */
@@ -231,6 +230,8 @@ export function MobileApp(): ReactElement {
 	const [appSettings, setAppSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
 	const [account, setAccount] = useState<AccountStatus | null>(null);
 	const searchInput = useRef<HTMLInputElement>(null);
+	/** The page's previous scrollTop, to tell scrolling down (shrink the tab bar) from up (restore it). */
+	const lastScroll = useRef(0);
 
 	const showToast = useCallback((message: string, action?: ToastState["action"]) => setToast({ message, action }), []);
 	const showError = useCallback((message: string) => setToast({ message: t("mobile.toast.failed", { message }) }), [t]);
@@ -280,24 +281,28 @@ export function MobileApp(): ReactElement {
 		source.list(RECENTS_PATH).then(setRecents, (cause: unknown) => showError(messageOf(cause)));
 	}, [showError, source]);
 	useEffect(() => {
-		if (tab === "recents") loadRecents();
-	}, [loadRecents, tab]);
+		if (route.kind === "recents") loadRecents();
+	}, [loadRecents, route.kind]);
 
 	const leaveSelection = useCallback(() => {
 		setSelecting(false);
 		setSelected(new Set());
 	}, []);
 
+	// A new page starts at its top, so the tab bar it inherits must be full size again: shrinking follows the
+	// page being scrolled, and a page left minimized would hide the tabs on a screen too short to scroll back.
 	const go = useCallback((next: MobileRoute) => {
 		setStacks((current) => pushRoute(current, tab, next));
 		setMotion("push");
 		setScrolled(false);
+		setMinimized(false);
 		leaveSelection();
 	}, [leaveSelection, tab]);
 	const back = useCallback(() => {
 		setStacks((current) => popRoute(current, tab));
 		setMotion("pop");
 		setScrolled(false);
+		setMinimized(false);
 		leaveSelection();
 	}, [leaveSelection, tab]);
 	const switchTab = useCallback((next: MobileTab) => {
@@ -313,6 +318,7 @@ export function MobileApp(): ReactElement {
 		setStacks((current) => ({ ...current, browse: revealStack(path, ancestorPaths(path)) }));
 		setTab("browse");
 		setMotion("push");
+		setMinimized(false);
 		setSearchOpen(false);
 		setOverlay(null);
 		leaveSelection();
@@ -324,6 +330,7 @@ export function MobileApp(): ReactElement {
 
 	useEffect(() => {
 		pageRef.current?.scrollTo({ top: 0 });
+		lastScroll.current = 0;
 	}, [route, tab]);
 	useEffect(() => {
 		if (flashPath === null) return;
@@ -410,8 +417,8 @@ export function MobileApp(): ReactElement {
 	const modelDownload = useModelDownload();
 	const openSettingsPage = useCallback((category: SettingsCategory) => {
 		requestSettingsCategory(category);
-		setStacks((current) => ({ ...current, browse: [{ kind: "places" }, { kind: "settings" }, { kind: "settingsPage", category }] }));
-		setTab("browse");
+		setStacks((current) => ({ ...current, settings: [{ kind: "settings" }, { kind: "settingsPage", category }] }));
+		setTab("settings");
 		setOverlay(null);
 	}, []);
 	const activities = collectSidebarActivities({
@@ -438,7 +445,7 @@ export function MobileApp(): ReactElement {
 
 	const afterBatch = useCallback((verb: Parameters<typeof batchToast>[0], result: FsBatchResult, undoable: boolean) => {
 		files.refresh();
-		if (tab === "recents") loadRecents();
+		if (route.kind === "recents") loadRecents();
 		const message = batchToast(verb, result);
 		if (!undoable || result.ok.length === 0) {
 			showToast(message);
@@ -573,9 +580,9 @@ export function MobileApp(): ReactElement {
 		previewUrl: previewUrlFor,
 		inTrash,
 		flashPath,
-		where: tab === "recents" || searchOpen ? (entry) => basename(dirname(entry.path)) || dirname(entry.path) : undefined,
+		where: route.kind === "recents" || searchOpen ? (entry) => basename(dirname(entry.path)) || dirname(entry.path) : undefined,
 	};
-	const listFor = (): readonly FinderEntry[] => (searchOpen ? (hits ?? []) : tab === "recents" ? (recents ?? []) : (listing ?? []));
+	const listFor = (): readonly FinderEntry[] => (searchOpen ? (hits ?? []) : route.kind === "recents" ? (recents ?? []) : (listing ?? []));
 	const rowActions: RowActions = {
 		onOpen: (entry) => open(entry, listFor()),
 		onToggleSelect: (entry) => setSelected((current) => {
@@ -614,7 +621,7 @@ export function MobileApp(): ReactElement {
 	let nav: ReactNode = null;
 	let body: ReactNode = null;
 	let plain = false;
-	let hosted: "ai" | "rules" | "settings" | null = null;
+	let hosted: "ai" | "settings" | null = null;
 
 	const backButton = stack.length > 1 ? (
 		<GlassButton label={t("mobile.back")} onClick={back}><ChevronLeft size={24} strokeWidth={2.4} /></GlassButton>
@@ -664,7 +671,7 @@ export function MobileApp(): ReactElement {
 			<>
 				<span className="phone-spacer" />
 				<NavTitle title={t("mobile.tabs.browse")} />
-				<GlassButton label={t("mobile.settings")} onClick={() => go({ kind: "settings" })}><SettingsIcon size={21} strokeWidth={2.1} /></GlassButton>
+				<span className="phone-spacer" />
 			</>
 		);
 		body = (
@@ -681,7 +688,7 @@ export function MobileApp(): ReactElement {
 						else next.add(label);
 						return next;
 					})}
-					onOpen={(item) => (item.kind === "recents" ? switchTab("recents") : go({ kind: "folder", path: item.path }))}
+					onOpen={(item) => go(item.kind === "recents" ? { kind: "recents" } : { kind: "folder", path: item.path })}
 				/>
 			</>
 		);
@@ -727,8 +734,9 @@ export function MobileApp(): ReactElement {
 		const groupsByDay = groupRecents(recents ?? [], Date.now());
 		nav = selecting ? selectNav(t("mobile.tabs.recents")) : (
 			<>
-				<span className="phone-spacer" />
+				{backButton}
 				<NavTitle title={t("mobile.tabs.recents")} />
+				<span className="phone-spacer" />
 				{viewButton}
 			</>
 		);
@@ -750,19 +758,41 @@ export function MobileApp(): ReactElement {
 			</>
 		);
 	} else if (route.kind === "rules") {
-		hosted = "rules";
 		nav = (
 			<>
 				<span className="phone-spacer" />
-				<NavTitle always title={t("mobile.tabs.automations")} />
-				<GlassButton label={t("mobile.rules.add")} onClick={() => automations.props.onAdd()}><Plus size={22} strokeWidth={2.2} /></GlassButton>
+				<NavTitle title={t("mobile.tabs.automations")} />
+				<GlassButton label={t("automations.menu.add")} onClick={() => automations.props.onAdd()}><Plus size={22} strokeWidth={2.2} /></GlassButton>
 			</>
+		);
+		body = (
+			<RulesBody
+				state={automationsView.state}
+				daemonBusy={automationsView.daemonBusy}
+				onSetDaemon={automations.props.onSetDaemon}
+				onOpen={(rule) => go({ kind: "rule", id: rule.id })}
+				onAdd={() => automations.props.onAdd()}
+			/>
+		);
+	} else if (route.kind === "rule") {
+		const rule = automationsView.state.rules.find((item) => item.id === route.id);
+		nav = (
+			<>
+				{backButton}
+				<NavTitle title={rule === undefined ? t("mobile.tabs.automations") : ruleTitle(rule)} />
+			</>
+		);
+		body = rule === undefined ? (
+			<div className="phone-empty">{t("automations.inspector.empty")}</div>
+		) : (
+			<RuleBody rule={rule} onOpenFolder={(path) => revealIn(path)} onEdit={() => automations.edit(rule)} onDelete={() => automations.askDelete(rule)} />
 		);
 	} else if (route.kind === "settings") {
 		nav = (
 			<>
-				{backButton}
+				<span className="phone-spacer" />
 				<NavTitle title={t("mobile.settingsHub.title")} />
+				<span className="phone-spacer" />
 			</>
 		);
 		const snapshot = account?.account ?? null;
@@ -815,7 +845,7 @@ export function MobileApp(): ReactElement {
 				const model = itemMenu({
 					entries,
 					inTrash,
-					outsideFolder: tab === "recents" || searchOpen,
+					outsideFolder: route.kind === "recents" || searchOpen,
 					allIndexed: entries.every((entry) => files.indexStatus.get(entry.path)?.kind === "included"),
 					magicActions,
 					archive: capabilities.archive,
@@ -1067,7 +1097,7 @@ export function MobileApp(): ReactElement {
 							} else if (/^https?:/u.test(path)) window.open(path, "_blank", "noopener");
 							else revealIn(dirname(path), path);
 						}}
-						onToast={(message) => showToast(message)}
+						onShowInFolder={(path) => revealIn(dirname(path), path)}
 						imageActions={imageActions}
 						onClose={close}
 					/>
@@ -1108,7 +1138,7 @@ export function MobileApp(): ReactElement {
 	);
 	const tabIcon = (id: MobileTab): ReactElement => {
 		if (id === "browse") return <FolderOpen size={24} strokeWidth={2} />;
-		if (id === "recents") return <Clock size={24} strokeWidth={2} />;
+		if (id === "settings") return <SettingsIcon size={24} strokeWidth={2} />;
 		if (id === "ai") return <Sparkles size={24} strokeWidth={2} />;
 		return <Zap size={24} strokeWidth={2} />;
 	};
@@ -1160,7 +1190,6 @@ export function MobileApp(): ReactElement {
 		</div>
 	);
 
-	const lastScroll = useRef(0);
 	return (
 		<div ref={frameRef} className={cn("phone-app", plain && "is-plain", scrolled && "is-scrolled")} data-testid="mobile-app">
 			{hosted === null ? (
@@ -1187,6 +1216,11 @@ export function MobileApp(): ReactElement {
 					visible={tab === "ai"}
 					selectedEvidence={evidence.length === 0 ? null : evidenceNumber}
 					onSelectEvidence={setSelectedEvidence}
+					onCitation={(number) => {
+						setSelectedEvidence(number);
+						setOverlay({ type: "evidence" });
+					}}
+					phone
 					onPublish={(next) => setEvidence(next)}
 					imageActions={imageActions}
 					language={appSettings.language}
@@ -1194,11 +1228,6 @@ export function MobileApp(): ReactElement {
 					onOpenSource={(alias) => openSettingsPage(`source:${alias}`)}
 				/>
 			</div>
-			{hosted === "rules" ? (
-				<div className="phone-hosted is-rules">
-					<AutomationsView {...automations.props} />
-				</div>
-			) : null}
 			{hosted === "settings" && route.kind === "settingsPage" ? (
 				<HostedSettings category={route.category as SettingsCategory} onNavigate={(category) => go({ kind: "settingsPage", category })} />
 			) : null}

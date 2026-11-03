@@ -32,7 +32,7 @@
  * (`.hl-code`); shared with Quick Look's code lines. */
 @import "../../preview/ui/syntax.css" layer(base);
 
-/* Phone shell's changes to the desktop components it hosts (AI 검색, 자동화,
+/* Phone shell's changes to the desktop components it hosts (AI 검색,
  * Settings). Unlayered so they outrank those components' utilities; every
  * rule is scoped to `.phone-app .phone-hosted`. */
 @import "./mobile-hosted.css";

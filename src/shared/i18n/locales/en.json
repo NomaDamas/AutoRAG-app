@@ -3125,7 +3125,8 @@
       "ai": "AI Search",
       "automations": "Automations",
       "search": "Search",
-      "aria": "App tabs"
+      "aria": "App tabs",
+      "settings": "Settings"
     },
     "connectedTo": "Connected to {{name}}",
     "back": "Back",
@@ -3279,11 +3280,19 @@
       "open": "Running and queued tasks"
     },
     "rules": {
-      "add": "Add a rule in AI Search"
+      "add": "Add a rule in AI Search",
+      "section": "Rules",
+      "foot": "Tell Dazzi what to do when files appear or change. You create and edit rules by asking in AI Search.",
+      "daemonToggle": "Run in background"
     },
     "ai": {
       "history": "History",
-      "newChat": "New chat"
+      "newChat": "New chat",
+      "sources": "{{count}} sources",
+      "suggestions": "Try asking",
+      "suggest1": "Find the quote I got last week",
+      "suggest2": "Tidy up my Downloads folder",
+      "suggest3": "Summarize my latest meeting notes"
     },
     "settingsHub": {
       "title": "Settings",

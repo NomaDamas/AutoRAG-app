@@ -50,9 +50,9 @@ export function NavTitle({ title, subtitle, always = false, onClick }: { readonl
 	);
 }
 
-export function LargeTitle({ title, subtitle, onTitle, titleLabel }: { readonly title: string; readonly subtitle?: ReactNode; readonly onTitle?: ((event: React.MouseEvent<HTMLButtonElement>) => void) | undefined; readonly titleLabel?: string | undefined }): ReactElement {
+export function LargeTitle({ title, subtitle, onTitle, titleLabel, wrap = false }: { readonly title: string; readonly subtitle?: ReactNode; readonly onTitle?: ((event: React.MouseEvent<HTMLButtonElement>) => void) | undefined; readonly titleLabel?: string | undefined; readonly wrap?: boolean }): ReactElement {
 	return (
-		<div className="phone-large">
+		<div className={cn("phone-large", wrap && "is-wrap")}>
 			<h1>
 				{onTitle === undefined ? (
 					<span className="phone-h1-text">{title}</span>

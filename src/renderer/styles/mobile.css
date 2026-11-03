@@ -46,7 +46,8 @@
 	--phone-doc-edge: rgba(0, 0, 0, 0.16);
 	--phone-ease: cubic-bezier(0.32, 0.72, 0, 1);
 	--phone-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
-	--phone-sa-top: env(safe-area-inset-top, 0px);
+	/* Same floor at both ends: a browser tab reports no inset, and the bar's buttons would touch the top edge while the tab bar keeps 10px. */
+	--phone-sa-top: max(env(safe-area-inset-top, 0px), 10px);
 	--phone-sa-bottom: max(env(safe-area-inset-bottom, 0px), 10px);
 
 	position: fixed;
@@ -154,12 +155,12 @@ html[data-appearance="dark"] .phone-app {
 .phone-spacer { flex: 1; }
 .phone-nav-title {
 	position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-	max-width: calc(100% - 200px); text-align: center; opacity: 0; transition: opacity 0.18s;
+	width: max-content; max-width: calc(100% - 200px); text-align: center; opacity: 0; transition: opacity 0.18s;
 	border: 0; background: none; padding: 0;
 }
 .phone-nav-title.is-always, .phone-app.is-scrolled .phone-nav-title { opacity: 1; }
-.phone-nav-title b { display: flex; align-items: center; justify-content: center; gap: 3px; font-size: 16px; font-weight: 650; white-space: nowrap; }
-.phone-nav-title b span { overflow: hidden; text-overflow: ellipsis; }
+.phone-nav-title b { display: flex; align-items: center; justify-content: center; gap: 3px; min-width: 0; font-size: 16px; font-weight: 650; white-space: nowrap; }
+.phone-nav-title b span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .phone-nav-title small { display: block; font-size: 12px; color: var(--phone-label-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .phone-gbtn {
@@ -176,10 +177,13 @@ html[data-appearance="dark"] .phone-app {
 
 /* ------------------------------------------------------- Large headings -- */
 
-.phone-large { padding: 2px 20px 10px; }
-.phone-large h1 { display: flex; align-items: center; gap: 6px; margin: 0; font-size: 32px; line-height: 1.15; font-weight: 750; letter-spacing: -0.025em; }
+.phone-large { min-width: 0; padding: 2px 20px 10px; }
+.phone-large h1 { display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; font-size: 32px; line-height: 1.15; font-weight: 750; letter-spacing: -0.025em; }
 .phone-large h1 button { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; }
-.phone-large h1 .phone-h1-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.phone-large h1 .phone-h1-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A rule's title is a sentence, not a name: it wraps instead of ending in an ellipsis. */
+.phone-large.is-wrap h1 { font-size: 26px; line-height: 1.25; }
+.phone-large.is-wrap h1 .phone-h1-text { white-space: normal; overflow-wrap: anywhere; }
 .phone-large h1 .phone-chev { color: var(--phone-label-3); margin-top: 4px; }
 .phone-large .phone-sub { display: flex; align-items: center; gap: 6px; margin-top: 4px; font-size: 14px; color: var(--phone-label-2); }
 .phone-live-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--phone-green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--phone-green) 22%, transparent); }
@@ -499,6 +503,41 @@ html[data-appearance="dark"] .phone-sheet:not(.is-solid) .phone-group { backgrou
 .phone-acct-mark { width: 46px; height: 46px; flex: none; border-radius: 12px; }
 .phone-plan-badge { flex: none; height: 24px; padding: 0 10px; border-radius: 12px; background: var(--phone-accent); color: #fff; font-size: 12.5px; font-weight: 700; line-height: 24px; }
 .phone-tile-icon { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; color: #fff; }
+
+/* ------------------------------------------------------------- 자동화 -- */
+
+.phone-daemon { display: flex; align-items: center; gap: 12px; margin: 10px 16px 0; padding: 14px 16px; border-radius: 24px; background: var(--phone-cell); }
+.phone-daemon > div { flex: 1; min-width: 0; }
+.phone-daemon b { display: block; font-size: 16px; font-weight: 600; }
+.phone-daemon small { display: block; margin-top: 2px; font-size: 13px; color: var(--phone-label-2); }
+.phone-notice { margin: 12px 16px 0; padding: 12px 16px; border-radius: 18px; font-size: 14px; line-height: 1.45; }
+.phone-notice.is-warn { background: var(--error-orange-bg); color: var(--error-orange-text); }
+.phone-mono { padding: 12px 16px; box-shadow: inset 0 0.5px 0 var(--phone-sep); font-family: var(--font-mono); font-size: 13px; line-height: 1.5; color: var(--phone-label); word-break: break-all; user-select: text; -webkit-user-select: text; }
+.phone-btn-row { display: flex; gap: 8px; padding: 18px 16px 0; }
+.phone-btn-row button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; height: 48px; border: 0; border-radius: 24px; background: var(--phone-cell); color: var(--phone-accent); font-size: 15px; font-weight: 650; }
+.phone-btn-row button.is-primary { background: var(--phone-accent); color: #fff; }
+.phone-btn-row button.is-danger { color: var(--phone-red); }
+.phone-cell .phone-dot { margin: 0 auto; }
+.phone-large .phone-sub .phone-dot { width: 8px; height: 8px; }
+
+/* ------------------------------------------------------------- 근거 sheet -- */
+
+.phone-ev-tabs { display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto; scrollbar-width: none; }
+.phone-ev-tabs::-webkit-scrollbar { display: none; }
+.phone-ev-tabs button { flex: none; height: 34px; min-width: 44px; padding: 0 12px; border: 0; border-radius: 17px; background: var(--phone-fill); font-size: 15px; font-weight: 650; color: var(--phone-label); }
+.phone-ev-tabs button[aria-selected="true"] { background: var(--phone-accent); color: #fff; }
+.phone-excerpt { margin: 0 16px; padding: 16px; border-radius: 22px; background: var(--phone-cell); font-size: 15.5px; line-height: 1.6; color: var(--phone-label); user-select: text; -webkit-user-select: text; }
+html[data-appearance="dark"] .phone-sheet:not(.is-solid) .phone-excerpt { background: #2C2C2E; }
+.phone-excerpt mark { background: var(--accent-doc-mark); color: inherit; border-radius: 3px; padding: 0 2px; }
+.phone-ev-where { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 12px; box-shadow: inset 0 -0.5px 0 var(--phone-sep); }
+.phone-ev-where > div { min-width: 0; }
+.phone-ev-where b { display: block; font-size: 15px; font-weight: 650; line-height: 1.35; word-break: break-word; }
+.phone-ev-where small { display: block; overflow: hidden; font-size: 12.5px; color: var(--phone-label-2); text-overflow: ellipsis; white-space: nowrap; }
+.phone-ev-kind { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 10px; background: var(--phone-accent-soft); color: var(--phone-accent); }
+.phone-ev-summary { margin-bottom: 8px; }
+.phone-ev-score { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: 12.5px; color: var(--phone-label-2); }
+.phone-ev-score .phone-cap { flex: 1; margin: 0; }
+.phone-ev-score .phone-cap i { background: var(--phone-accent); }
 
 @media (prefers-reduced-motion: reduce) {
 	.phone-app *, .phone-app *::before, .phone-app *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }

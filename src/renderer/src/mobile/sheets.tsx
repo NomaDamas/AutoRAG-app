@@ -7,19 +7,20 @@
 
 import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Copy, Download, Eye, FolderInput, FolderPlus, Sparkles } from "lucide-react";
+import { Copy, Download, Eye, FileText, FolderInput, FolderOpen, FolderPlus, Globe, Sparkles } from "lucide-react";
 import type { AutomationRule } from "../../../shared/automation-contract";
 import type { FsFileDetails } from "../../../shared/fs-contract";
 import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import type { ImageActions } from "../components/AnswerImage";
-import { EvidencePanel } from "../components/Inspector";
+import { EvidenceExcerpt, InlineWithImages } from "../components/EvidenceBlocks";
 import type { FinderEntry } from "../data/entries";
 import type { FinderSource } from "../data/source";
 import { cn } from "../lib/cn";
 import { ruleTitle, whenText } from "../state/automations";
 import { buildInfoRows } from "../state/inspector-info";
-import { basename } from "../state/paths";
+import { evidenceDetail, evidenceHeading, evidenceSourceUrl, isLocalEvidenceSource } from "../state/evidence";
+import { basename, dirname } from "../state/paths";
 import type { SidebarActivityEntry } from "../state/sidebar-activity-queue";
 import { tagDotsOf, type TagColors } from "../state/tags";
 import type { VersionFamilyView } from "../state/version-family";
@@ -219,21 +220,67 @@ export function FolderPicker({ source, roots, start, verb, count, onClose, onPic
 
 /* -------------------------------------------------------------- Evidence -- */
 
-export function EvidenceSheet({ evidence, selected, onSelect, onReveal, onToast, imageActions, onClose }: {
+export function EvidenceSheet({ evidence, selected, onSelect, onReveal, onShowInFolder, imageActions, onClose }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
 	readonly onSelect: (number: number) => void;
+	/** A local file opens in Quick Look at the cited excerpts; a web page in a new tab. */
 	readonly onReveal: (path: string, excerpts?: readonly string[]) => void;
-	readonly onToast: (message: string) => void;
+	/** Show the source's folder in 둘러보기. */
+	readonly onShowInFolder: (path: string) => void;
 	readonly imageActions: ImageActions;
 	readonly onClose: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const item = evidence.find((entry) => entry.number === selected) ?? evidence[0];
+	if (item === undefined) {
+		return (
+			<Sheet title={t("inspector.evidence")} closeLabel={t("common.close")} onClose={onClose} medium testId="phone-evidence">
+				<div className="phone-empty">{t("inspector.evidencePanel.emptyTitle")}</div>
+			</Sheet>
+		);
+	}
+	const source = item.source;
+	const local = isLocalEvidenceSource(source);
+	const url = source === null ? null : evidenceSourceUrl(source);
+	const detail = evidenceDetail(item.confidence);
+	const images = { folder: local ? dirname(source) : null, actions: imageActions };
+	const excerpts = [...item.excerpts, ...(item.summary.length > 0 ? [item.summary] : [])];
 	return (
-		<Sheet title={t("inspector.evidence")} closeLabel={t("common.close")} onClose={onClose} medium testId="phone-evidence">
-			<div className="phone-hosted-evidence inspector">
-				<EvidencePanel evidence={evidence} selected={selected} onSelect={onSelect} onReveal={onReveal} onToast={onToast} imageActions={imageActions} evidenceFolderCount={0} />
+		<Sheet title={t("inspector.evidence")} subtitle={t("mobile.ai.sources", { count: evidence.length })} closeLabel={t("common.close")} onClose={onClose} medium testId="phone-evidence">
+			<div className="phone-ev-tabs" role="tablist" aria-label={t("inspector.evidence")}>
+				{evidence.map((entry) => (
+					<button key={entry.number} type="button" role="tab" aria-selected={entry.number === item.number} onClick={() => onSelect(entry.number)}>{entry.number}</button>
+				))}
 			</div>
+			<div className="phone-excerpt" data-testid="phone-excerpt">
+				<div className="phone-ev-where">
+					<span className="phone-ev-kind" aria-hidden="true">{url === null ? <FileText size={20} strokeWidth={2} /> : <Globe size={20} strokeWidth={2} />}</span>
+					<div>
+						<b className="phone-selectable">{evidenceHeading(item.title, item.source)}</b>
+						<small>{url ?? (local ? dirname(source) : source) ?? ""}</small>
+					</div>
+				</div>
+				{item.summary.length === 0 ? null : <InlineWithImages text={item.summary} images={images} className="phone-ev-summary" />}
+				{item.excerpts.map((excerpt, index) => (
+					<EvidenceExcerpt key={`${index}`} text={excerpt} images={images} />
+				))}
+				{item.confidence === undefined || detail === null ? null : (
+					<div className="phone-ev-score">
+						<span>{detail}</span>
+						<span className="phone-cap"><i style={{ width: `${Math.round(item.confidence * 100)}%` }} /></span>
+					</div>
+				)}
+			</div>
+			{source === null || (!local && url === null) ? null : (
+				<div className="phone-btn-row">
+					{local ? <button type="button" onClick={() => onShowInFolder(source)}><FolderOpen size={18} strokeWidth={2.2} />{t("mobile.menu.reveal")}</button> : null}
+					<button type="button" className="is-primary" onClick={() => onReveal(source, local ? excerpts : undefined)}>
+						{url === null ? <Eye size={18} strokeWidth={2.2} /> : <Globe size={18} strokeWidth={2.2} />}
+						{url === null ? t("inspector.evidencePanel.openPreview") : t("inspector.evidencePanel.openInBrowser")}
+					</button>
+				</div>
+			)}
 		</Sheet>
 	);
 }
