@@ -5829,13 +5829,20 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	white-space: pre-line;
 }
 
+/* Every card gives its list the same 137px; Max, with three lines, centres them in it (Figma 120:482). */
 .onb .plan-screen .plan-features {
 	display: flex;
+	flex: none;
 	flex-direction: column;
 	gap: 8px;
+	height: 137px;
 	margin: 0;
 	padding: 0;
 	list-style: none;
+}
+
+.onb .plan-screen .plan-card[data-plan="max"] .plan-features {
+	justify-content: center;
 }
 
 .onb .plan-screen .plan-features li {
