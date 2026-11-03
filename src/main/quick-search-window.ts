@@ -61,6 +61,11 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	const darwin = process.platform === "darwin";
 	let window: BrowserWindow | null = null;
 	let destroyed = false;
+	/** Set on `before-quit`: the quit closes every window, and this one must not refuse. */
+	let quitting = false;
+	app.once("before-quit", () => {
+		quitting = true;
+	});
 	/** A Dazzi window was in front when the launcher was summoned: dismissing it must not hide the app on macOS. */
 	let appWasActive = false;
 
@@ -99,9 +104,9 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 		created.on("blur", () => {
 			if (!created.isDestroyed() && created.isVisible()) created.hide();
 		});
-		// The window is reused: closing it (⌘W, Alt+F4) only hides it.
+		// The window is reused: closing it (⌘W, Alt+F4) only hides it. A quit closes it for real, or the quit would stall.
 		created.on("close", (event) => {
-			if (destroyed) return;
+			if (destroyed || quitting) return;
 			event.preventDefault();
 			hide("restore");
 		});
