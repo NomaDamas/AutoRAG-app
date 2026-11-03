@@ -1,15 +1,16 @@
 /**
- * Read-only Tailscale discovery and `tailscale serve` owner header verification,
+ * Tailscale discovery, the `tailscale serve` route for Dazzi, and `tailscale serve` owner header verification,
  * adapted from Ovis (`devswha/ovis`, MIT).
  *
- * Only runs `tailscale status --json` and `tailscale serve status --json` (2.5s timeout),
- * never mutating the user's tailnet.
+ * Reads `tailscale status --json` and `tailscale serve status --json` (2.5s timeout). The only change it makes is the
+ * one the user asks for with a button: add or remove the single HTTPS serve route that points at Dazzi's port, never
+ * `serve reset`, never Funnel, never another route.
  */
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { BlockList, isIP } from "node:net";
 import { delimiter, join } from "node:path";
-import type { RemoteTailscaleStatus } from "../../shared/remote-contract";
+import type { RemoteTailscaleServeError, RemoteTailscaleStatus } from "../../shared/remote-contract";
 import { isLoopbackAddress } from "./auth";
 
 const TIMEOUT_MS = 2500;
@@ -59,8 +60,10 @@ const MISSING_STATUS: RemoteTailscaleStatus = {
 	tailnetIp: null,
 	owner: null,
 	servingUrl: null,
+	servingPort: null,
 	serveCommand: null,
 	serveUrl: null,
+	servePort: null,
 };
 
 function parseJson<T>(text: string | null): T | null {
@@ -112,6 +115,7 @@ export function parseTailscale(
 	const serve = parseJson<ServeJson>(output.serve);
 	const taken = new Set(Object.keys(serve?.TCP ?? {}).map(Number).filter(Number.isFinite));
 	let servingUrl: string | null = null;
+	let servingPort: number | null = null;
 	for (const [hostPort, site] of Object.entries(serve?.Web ?? {})) {
 		const separator = hostPort.lastIndexOf(":");
 		if (separator <= 0) continue;
@@ -120,6 +124,7 @@ export function parseTailscale(
 		if (!serve?.TCP?.[String(webPort)]?.HTTPS) continue;
 		if (proxiesToPort(site.Handlers?.["/"]?.Proxy, port)) {
 			servingUrl = httpsUrl(host, webPort);
+			servingPort = webPort;
 			break;
 		}
 	}
@@ -130,8 +135,10 @@ export function parseTailscale(
 		tailnetIp,
 		owner,
 		servingUrl,
+		servingPort,
 		serveCommand: freePort === null ? null : `tailscale serve --bg --https=${freePort} http://127.0.0.1:${port}`,
 		serveUrl: freePort === null || dnsName === null ? null : httpsUrl(dnsName, freePort),
+		servePort: freePort,
 	};
 }
 
@@ -155,6 +162,53 @@ function runCommand(binary: string, args: readonly string[]): Promise<string | n
 			resolve(error === null ? stdout : null);
 		});
 	});
+}
+
+export interface TailscaleCommandResult {
+	readonly code: number;
+	readonly stdout: string;
+	readonly stderr: string;
+}
+
+export type TailscaleCommandRunner = (binary: string, args: readonly string[]) => Promise<TailscaleCommandResult>;
+
+/** Serve can wait on tailscaled to fetch the node's HTTPS certificate the first time. */
+const SERVE_TIMEOUT_MS = 30_000;
+
+const runServeCommand: TailscaleCommandRunner = (binary, args) =>
+	new Promise((resolve) => {
+		execFile(binary, [...args], { timeout: SERVE_TIMEOUT_MS, windowsHide: true, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+			const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;
+			resolve({ code, stdout: String(stdout), stderr: String(stderr) });
+		});
+	});
+
+/** Tailscale's first line of explanation, and the admin-console link it prints when Serve/HTTPS is off for the tailnet. */
+function serveFailure(result: TailscaleCommandResult): RemoteTailscaleServeError {
+	const text = `${result.stderr}\n${result.stdout}`;
+	const lines = text.split("\n").map((line) => line.trim()).filter(Boolean);
+	const enableUrl = /https:\/\/login\.tailscale\.com\/\S+/u.exec(text)?.[0] ?? null;
+	const reason = lines.find((line) => !line.startsWith("http") && !/^to enable/iu.test(line)) ?? `tailscale exited with code ${result.code}`;
+	return { reason, enableUrl };
+}
+
+export type TailscaleServeResult = { readonly ok: true } | ({ readonly ok: false } & RemoteTailscaleServeError);
+
+/** `tailscale serve --bg --yes --https=<httpsPort> http://127.0.0.1:<port>`: Dazzi inside the tailnet only. */
+export async function startTailscaleServe(input: {
+	readonly binary: string;
+	readonly httpsPort: number;
+	readonly port: number;
+	readonly run?: TailscaleCommandRunner;
+}): Promise<TailscaleServeResult> {
+	const result = await (input.run ?? runServeCommand)(input.binary, ["serve", "--bg", "--yes", `--https=${input.httpsPort}`, `http://127.0.0.1:${input.port}`]);
+	return result.code === 0 ? { ok: true } : { ok: false, ...serveFailure(result) };
+}
+
+/** `tailscale serve --yes --https=<httpsPort> off`: removes the one route, leaving every other serve route as it was. */
+export async function stopTailscaleServe(input: { readonly binary: string; readonly httpsPort: number; readonly run?: TailscaleCommandRunner }): Promise<TailscaleServeResult> {
+	const result = await (input.run ?? runServeCommand)(input.binary, ["serve", "--yes", `--https=${input.httpsPort}`, "off"]);
+	return result.code === 0 ? { ok: true } : { ok: false, ...serveFailure(result) };
 }
 
 export async function readTailscaleStatus(port: number): Promise<RemoteTailscaleStatus> {

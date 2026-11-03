@@ -2430,8 +2430,7 @@
       "pairQrLabel": "コード {{code}} のペアリング QR コード",
       "pairLinkCopy": "ペアリングリンクをコピー",
       "pairLinkCopied": "リンクをコピーしました",
-      "tailscaleServing": "Tailscale HTTPS プロキシが稼働中です。",
-      "tailscaleCommandDesc": "この PC のターミナルで次のコマンドを実行すると、Tailnet 内の端末専用の HTTPS アドレスを公開できます。",
+      "tailscaleServing": "Tailnet に HTTPS で公開中",
       "tailscaleStopped": "Tailscale はインストールされていますが未接続です。tailscale up を実行してから再確認してください。",
       "tailscaleMissing": "Tailscale が見つかりません。Tailscale なしで外部から接続する場合は「インターネット」を選んでください。",
       "tailscaleRefresh": "再確認",
@@ -2496,7 +2495,16 @@
       "portInUse": "ポート {{port}} を別のプログラムが使用しているため、リモートアクセスサーバーを開始できませんでした。インストール済みの Dazzi が同時に起動している可能性があります。",
       "serverFailed": "リモートアクセスサーバーを開始できませんでした: {{reason}}",
       "useFreePort": "ポート {{port}} で開始",
-      "retryStart": "再試行"
+      "retryStart": "再試行",
+      "tailscaleNotServing": "まだ Tailnet に公開していません",
+      "tailscaleServingHint": "自分の Tailscale アカウントでログインした端末は、下のアドレスをそのまま開けます。他のユーザーにはペアリングコードが必要です。",
+      "tailscaleServeHint": "ボタンを押すと、自分の Tailnet の端末だけが開ける HTTPS アドレスを作成します。インターネットには公開されません。",
+      "tailscaleServeStart": "Tailnet に HTTPS で公開",
+      "tailscaleServeStarting": "公開しています…",
+      "tailscaleServeStop": "公開を停止",
+      "tailscaleServeFailed": "Tailscale に拒否されました: {{reason}}",
+      "tailscaleServeEnable": "Tailscale 管理コンソールで有効にする",
+      "tailscaleCommandToggle": "ターミナルで自分で実行する"
     },
     "account": {
       "description": "Dazzi アカウントとログイン状態です。",

@@ -2430,8 +2430,7 @@
       "pairQrLabel": "配对码 {{code}} 的二维码",
       "pairLinkCopy": "复制配对链接",
       "pairLinkCopied": "链接已复制",
-      "tailscaleServing": "Tailscale HTTPS 代理正在运行。",
-      "tailscaleCommandDesc": "在此电脑终端运行以下命令，即可在您的 Tailnet 内发布专属 HTTPS 地址。",
+      "tailscaleServing": "已通过 HTTPS 在 Tailnet 中发布",
       "tailscaleStopped": "此电脑已安装 Tailscale 但尚未连接。请运行 tailscale up 后重新检查。",
       "tailscaleMissing": "未检测到 Tailscale。如需在无 Tailscale 的情况下从外部访问，请选择“外部网络”。",
       "tailscaleRefresh": "重新检查",
@@ -2496,7 +2495,16 @@
       "portInUse": "端口 {{port}} 已被其他程序占用，无法启动远程访问服务器。可能已安装的 Dazzi 正在同时运行。",
       "serverFailed": "无法启动远程访问服务器：{{reason}}",
       "useFreePort": "使用端口 {{port}} 启动",
-      "retryStart": "重试"
+      "retryStart": "重试",
+      "tailscaleNotServing": "尚未在 Tailnet 中发布",
+      "tailscaleServingHint": "登录你的 Tailscale 账户的设备可以直接打开下面的地址。其他用户需要配对码。",
+      "tailscaleServeHint": "点击按钮会创建一个只有你 Tailnet 中的设备才能打开的 HTTPS 地址，不会公开到互联网。",
+      "tailscaleServeStart": "通过 HTTPS 发布到 Tailnet",
+      "tailscaleServeStarting": "正在发布…",
+      "tailscaleServeStop": "停止发布",
+      "tailscaleServeFailed": "Tailscale 拒绝了请求：{{reason}}",
+      "tailscaleServeEnable": "在 Tailscale 管理控制台中开启",
+      "tailscaleCommandToggle": "在终端中自行运行"
     },
     "account": {
       "description": "Dazzi 账户和登录状态。",

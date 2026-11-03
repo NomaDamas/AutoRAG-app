@@ -2430,8 +2430,7 @@
       "pairQrLabel": "코드 {{code}} 페어링 QR 코드",
       "pairLinkCopy": "페어링 링크 복사",
       "pairLinkCopied": "링크 복사됨",
-      "tailscaleServing": "Tailscale HTTPS 프록시가 실행 중입니다.",
-      "tailscaleCommandDesc": "터미널에서 아래 명령어를 한 번 실행하면 내 Tailnet 기기들만 열 수 있는 HTTPS 주소로 연결됩니다.",
+      "tailscaleServing": "Tailnet에 HTTPS로 공개 중",
       "tailscaleStopped": "Tailscale이 설치되어 있으나 연결되지 않았습니다. tailscale up 실행 후 다시 확인하세요.",
       "tailscaleMissing": "Tailscale이 설치되어 있지 않습니다. Tailscale 없이 외부에서 접속하려면 '외부 인터넷' 경로를 선택하세요.",
       "tailscaleRefresh": "상태 새로고침",
@@ -2496,7 +2495,16 @@
       "portInUse": "포트 {{port}}을(를) 다른 프로그램이 쓰고 있어 원격 접속 서버를 시작하지 못했습니다. 설치된 Dazzi가 함께 실행 중일 수 있습니다.",
       "serverFailed": "원격 접속 서버를 시작하지 못했습니다: {{reason}}",
       "useFreePort": "포트 {{port}}(으)로 시작",
-      "retryStart": "다시 시도"
+      "retryStart": "다시 시도",
+      "tailscaleNotServing": "아직 Tailnet에 공개하지 않음",
+      "tailscaleServingHint": "내 Tailscale 계정으로 로그인한 기기는 아래 주소를 바로 열 수 있습니다. 다른 사용자는 페어링 코드가 필요합니다.",
+      "tailscaleServeHint": "버튼을 누르면 내 Tailnet 기기만 열 수 있는 HTTPS 주소를 만듭니다. 인터넷에는 공개되지 않습니다.",
+      "tailscaleServeStart": "Tailnet에 HTTPS로 공개",
+      "tailscaleServeStarting": "공개하는 중…",
+      "tailscaleServeStop": "공개 중지",
+      "tailscaleServeFailed": "Tailscale이 거부했습니다: {{reason}}",
+      "tailscaleServeEnable": "Tailscale 관리 페이지에서 켜기",
+      "tailscaleCommandToggle": "터미널 명령어로 직접 실행"
     },
     "account": {
       "description": "Dazzi 계정과 로그인 상태입니다.",

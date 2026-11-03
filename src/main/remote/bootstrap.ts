@@ -347,6 +347,8 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		startTunnel: remoteStatus,
 		stopTunnel: remoteStatus,
 		loginTunnel: remoteStatus,
+		startTailscaleServe: remoteStatus,
+		stopTailscaleServe: remoteStatus,
 		onChange: (listener) => subscribe("remote.onChange", () => { void remoteStatus().then(listener, () => {}); }),
 	};
 	for (const target of targets) autorag[target] = bridgeFor(target);

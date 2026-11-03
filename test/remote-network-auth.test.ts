@@ -6,7 +6,7 @@ import { PassThrough } from "node:stream";
 import type { NetworkInterfaceInfo } from "node:os";
 import { describe, expect, it } from "vitest";
 import { normalizeTunnelHostname } from "../src/shared/remote-contract";
-import { parseTailscale, verifyTailscaleOwnerHeader } from "../src/main/remote/tailscale";
+import { parseTailscale, startTailscaleServe, stopTailscaleServe, verifyTailscaleOwnerHeader } from "../src/main/remote/tailscale";
 import { discoverLanOrigins } from "../src/main/remote/lan";
 import { createTunnelManager, extractTryCloudflareUrl } from "../src/main/remote/tunnel";
 import {
@@ -25,8 +25,10 @@ describe("Tailscale read-only integration & Serve owner verification", () => {
 			tailnetIp: null,
 			owner: null,
 			servingUrl: null,
+			servingPort: null,
 			serveCommand: null,
 			serveUrl: null,
+			servePort: null,
 		});
 
 		expect(parseTailscale({ status: JSON.stringify({ BackendState: "Stopped" }), serve: null }, 47833).state).toBe("stopped");
@@ -58,8 +60,10 @@ describe("Tailscale read-only integration & Serve owner verification", () => {
 			tailnetIp: "100.101.102.103",
 			owner: "owner@example.com",
 			servingUrl: null,
+			servingPort: null,
 			serveCommand: "tailscale serve --bg --https=8443 http://127.0.0.1:47833",
 			serveUrl: "https://macbook.tailnet-abc.ts.net:8443",
+			servePort: 8443,
 		});
 
 		// When tailscale serve already proxies "/" to Dazzi's port over HTTPS:
@@ -131,6 +135,50 @@ describe("Tailscale read-only integration & Serve owner verification", () => {
 				owner: "owner@example.com",
 			}),
 		).toEqual({ kind: "none" });
+	});
+});
+
+describe("Tailscale serve from the app (one click instead of a terminal command)", () => {
+	const recorder = (results: readonly { code: number; stdout?: string; stderr?: string }[]) => {
+		const calls: string[][] = [];
+		let index = 0;
+		const run = async (_binary: string, args: readonly string[]) => {
+			calls.push([...args]);
+			const result = results[Math.min(index, results.length - 1)] ?? { code: 0 };
+			index += 1;
+			return { code: result.code, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
+		};
+		return { calls, run };
+	};
+
+	it("publishes Dazzi's port on the suggested HTTPS port, in the background, without an interactive prompt", async () => {
+		const { calls, run } = recorder([{ code: 0 }]);
+		await expect(startTailscaleServe({ binary: "/usr/local/bin/tailscale", httpsPort: 8443, port: 49593, run })).resolves.toEqual({ ok: true });
+		expect(calls).toEqual([["serve", "--bg", "--yes", "--https=8443", "http://127.0.0.1:49593"]]);
+	});
+
+	it("passes Tailscale's own reason through when serve is refused (HTTPS certificates off, not signed in)", async () => {
+		const { run } = recorder([{ code: 1, stderr: "Serve is not enabled on your tailnet.\nTo enable, visit:\n\n https://login.tailscale.com/f/serve?node=n1\n" }]);
+		await expect(startTailscaleServe({ binary: "tailscale", httpsPort: 443, port: 47833, run })).resolves.toEqual({
+			ok: false,
+			reason: "Serve is not enabled on your tailnet.",
+			enableUrl: "https://login.tailscale.com/f/serve?node=n1",
+		});
+	});
+
+	it("removes only the route Dazzi added, never the rest of the user's serve config", async () => {
+		const { calls, run } = recorder([{ code: 0 }]);
+		await expect(stopTailscaleServe({ binary: "tailscale", httpsPort: 8443, run })).resolves.toEqual({ ok: true });
+		expect(calls).toEqual([["serve", "--yes", "--https=8443", "off"]]);
+		expect(calls.flat()).not.toContain("reset");
+	});
+
+	it("reports the HTTPS port it would publish on, skipping one another service already uses", () => {
+		const status = JSON.stringify({ BackendState: "Running", Self: { DNSName: "mac.tail.ts.net.", UserID: 1, TailscaleIPs: ["100.65.93.57"] }, User: { "1": { LoginName: "me@x.com" } } });
+		const serve = JSON.stringify({ TCP: { "443": { HTTPS: true } }, Web: { "mac.tail.ts.net:443": { Handlers: { "/": { Proxy: "http://127.0.0.1:7317" } } } } });
+		expect(parseTailscale({ status, serve }, 49593)).toMatchObject({ servingUrl: null, servePort: 8443, serveUrl: "https://mac.tail.ts.net:8443" });
+		const servingDazzi = JSON.stringify({ TCP: { "8443": { HTTPS: true } }, Web: { "mac.tail.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:49593" } } } } });
+		expect(parseTailscale({ status, serve: servingDazzi }, 49593)).toMatchObject({ servingUrl: "https://mac.tail.ts.net:8443", servingPort: 8443, servePort: null });
 	});
 });
 

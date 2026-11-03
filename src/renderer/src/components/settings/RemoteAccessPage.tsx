@@ -87,6 +87,7 @@ export function RemoteAccessPage({
 	const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 	const [confirmRevokeAll, setConfirmRevokeAll] = useState(false);
 	const [applyingPort, setApplyingPort] = useState(false);
+	const [serveBusy, setServeBusy] = useState(false);
 
 	useEffect(() => {
 		setRemotePort(String(appSettings.remotePort));
@@ -217,6 +218,16 @@ export function RemoteAccessPage({
 			busy(false);
 		}
 	};
+	const handleTailscaleServe = async (action: "start" | "stop"): Promise<void> => {
+		setServeBusy(true);
+		try {
+			setRemoteStatus(await (action === "start" ? remoteBridge.startTailscaleServe() : remoteBridge.stopTailscaleServe()));
+		} catch (cause) {
+			reportError(cause);
+		} finally {
+			setServeBusy(false);
+		}
+	};
 	const saveDomain = (): void => {
 		const trimmed = domainDraft.trim();
 		const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
@@ -330,34 +341,75 @@ export function RemoteAccessPage({
 		</>
 	);
 
+	const serveError = tailscale?.serveError ?? null;
 	const tailscalePane = (
 		<>
 			{tailscale?.state === "running" ? (
-				tailscale.servingUrl !== null ? (
+				<>
 					<div className="settings-remote-status-line">
-						<StatusDot tone="ok" />
-						<span>{t("settingsCore.remote.tailscaleServing")}</span>
+						<StatusDot tone={tailscale.servingUrl !== null ? "ok" : serveBusy ? "run" : "off"} />
+						<span>{tailscale.servingUrl !== null ? t("settingsCore.remote.tailscaleServing") : t("settingsCore.remote.tailscaleNotServing")}</span>
 					</div>
-				) : tailscale.serveCommand !== null ? (
-					<>
-						<p className="settings-remote-desc">{t("settingsCore.remote.tailscaleCommandDesc")}</p>
-						<div className="settings-remote-command">
-							<code>{tailscale.serveCommand}</code>
-							{copyButton(tailscale.serveCommand, t("settingsCore.remote.copyCommand"), t("settingsCore.remote.commandCopied"))}
+					<p className="settings-remote-desc">
+						{tailscale.servingUrl !== null ? t("settingsCore.remote.tailscaleServingHint") : t("settingsCore.remote.tailscaleServeHint")}
+					</p>
+					{serveError !== null ? (
+						<div className="settings-remote-server-error" role="alert">
+							<p className="settings-remote-error">{t("settingsCore.remote.tailscaleServeFailed", { reason: serveError.reason })}</p>
+							{serveError.enableUrl !== null && !isRemoteClient ? (
+								<div className="settings-remote-actions">
+									<button type="button" className="linear-btn" onClick={() => void window.autorag.fs.openUrl(serveError.enableUrl ?? "")}>
+										{t("settingsCore.remote.tailscaleServeEnable")}
+									</button>
+								</div>
+							) : null}
 						</div>
-					</>
-				) : null
+					) : null}
+					{isRemoteClient ? null : (
+						<div className="settings-remote-actions">
+							{tailscale.servingUrl !== null ? (
+								<button type="button" className="linear-btn" disabled={serveBusy} onClick={() => void handleTailscaleServe("stop")}>
+									{t("settingsCore.remote.tailscaleServeStop")}
+								</button>
+							) : (
+								<button
+									type="button"
+									className="linear-btn settings-btn-primary"
+									disabled={serveBusy || tailscale.servePort === null || tailscale.servePort === undefined}
+									onClick={() => void handleTailscaleServe("start")}
+								>
+									{serveBusy ? t("settingsCore.remote.tailscaleServeStarting") : t("settingsCore.remote.tailscaleServeStart")}
+								</button>
+							)}
+							<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>
+								<RefreshCw size={13} aria-hidden="true" />
+								<span>{t("settingsCore.remote.tailscaleRefresh")}</span>
+							</button>
+						</div>
+					)}
+					{tailscale.servingUrl === null && tailscale.serveCommand !== null && !isRemoteClient ? (
+						<details className="settings-remote-domain">
+							<summary>{t("settingsCore.remote.tailscaleCommandToggle")}</summary>
+							<div className="settings-remote-command">
+								<code>{tailscale.serveCommand}</code>
+								{copyButton(tailscale.serveCommand, t("settingsCore.remote.copyCommand"), t("settingsCore.remote.commandCopied"))}
+							</div>
+						</details>
+					) : null}
+				</>
 			) : (
-				<p className="settings-remote-desc">
-					{tailscale?.state === "stopped" ? t("settingsCore.remote.tailscaleStopped") : t("settingsCore.remote.tailscaleMissing")}
-				</p>
+				<>
+					<p className="settings-remote-desc">
+						{tailscale?.state === "stopped" ? t("settingsCore.remote.tailscaleStopped") : t("settingsCore.remote.tailscaleMissing")}
+					</p>
+					<div className="settings-remote-actions">
+						<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>
+							<RefreshCw size={13} aria-hidden="true" />
+							<span>{t("settingsCore.remote.tailscaleRefresh")}</span>
+						</button>
+					</div>
+				</>
 			)}
-			<div className="settings-remote-actions">
-				<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>
-					<RefreshCw size={13} aria-hidden="true" />
-					<span>{t("settingsCore.remote.tailscaleRefresh")}</span>
-				</button>
-			</div>
 		</>
 	);
 

@@ -50,6 +50,8 @@ export const REMOTE_CHANNELS = {
 	startTunnel: "remote:startTunnel",
 	stopTunnel: "remote:stopTunnel",
 	loginTunnel: "remote:loginTunnel",
+	startTailscaleServe: "remote:startTailscaleServe",
+	stopTailscaleServe: "remote:stopTailscaleServe",
 	changed: "remote:changed",
 } as const;
 
@@ -68,15 +70,33 @@ export interface RemotePairedDevice {
 	readonly current?: boolean;
 }
 
-/** Read-only Tailscale status on the host (`tailscale status --json` + `tailscale serve status --json`). */
+/**
+ * Tailscale on the host (`tailscale status --json` + `tailscale serve status --json`). Dazzi only changes the serve
+ * config when the user presses its button, and then only the one HTTPS route that points at Dazzi's port.
+ */
 export interface RemoteTailscaleStatus {
 	readonly state: "running" | "stopped" | "missing";
 	readonly dnsName: string | null;
 	readonly tailnetIp: string | null;
 	readonly owner: string | null;
+	/** `https://<node>.ts.net[:port]` when an HTTPS serve route already proxies to Dazzi's port. */
 	readonly servingUrl: string | null;
+	/** The HTTPS port of that route, which the stop button removes. */
+	readonly servingPort?: number | null;
+	/** The same publish step as a terminal command, for people who prefer to run it themselves. */
 	readonly serveCommand: string | null;
+	/** Where Dazzi would be published (`https://<node>.ts.net[:servePort]`), before it is. */
 	readonly serveUrl: string | null;
+	/** The first HTTPS port no other serve route uses; what the publish button uses. */
+	readonly servePort?: number | null;
+	/** Why the last publish or stop failed, in Tailscale's own words; cleared by the next success. */
+	readonly serveError?: RemoteTailscaleServeError | null;
+}
+
+export interface RemoteTailscaleServeError {
+	readonly reason: string;
+	/** The admin-console page Tailscale prints when Serve or HTTPS certificates are off for the tailnet. */
+	readonly enableUrl: string | null;
 }
 
 /** Why an outbound tunnel could not start; the Settings UI translates each one. */
@@ -163,6 +183,10 @@ export interface RemoteAccessBridge {
 	stopTunnel(): Promise<RemoteAccessStatus>;
 	/** Runs `cloudflared tunnel login` (opens the Cloudflare authorization page in the browser). */
 	loginTunnel(): Promise<RemoteAccessStatus>;
+	/** `tailscale serve --bg --https=<servePort> http://127.0.0.1:<port>`: publishes Dazzi inside the tailnet. */
+	startTailscaleServe(): Promise<RemoteAccessStatus>;
+	/** Removes only the HTTPS route that points at Dazzi (`tailscale serve --https=<servingPort> off`). */
+	stopTailscaleServe(): Promise<RemoteAccessStatus>;
 	onChange(listener: (status: RemoteAccessStatus) => void): () => void;
 }
 

@@ -86,6 +86,8 @@ function createRemoteBridge(ipcRenderer: IpcRenderer): RemoteAccessBridge {
 		startTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.startTunnel),
 		stopTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.stopTunnel),
 		loginTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.loginTunnel),
+		startTailscaleServe: () => ipcRenderer.invoke(REMOTE_CHANNELS.startTailscaleServe),
+		stopTailscaleServe: () => ipcRenderer.invoke(REMOTE_CHANNELS.stopTailscaleServe),
 		onChange: (listener) => {
 			const handler = (_event: IpcRendererEvent, status: RemoteAccessStatus): void => listener(status);
 			ipcRenderer.on(REMOTE_CHANNELS.changed, handler);

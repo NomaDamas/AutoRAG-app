@@ -16,9 +16,9 @@ awake.
    device opens:
    - **Same Wi-Fi:** the host's LAN address (`http://192.168.x.y:<port>`). When
      the host has several, choose one from the list.
-   - **Tailscale:** the `https://<machine>.<tailnet>.ts.net` address when
-     `tailscale serve` already proxies Dazzi, otherwise the tailnet IP
-     (`http://100.x.y.z:<port>`) next to the one-line `tailscale serve` command.
+   - **Tailscale:** the tailnet IP (`http://100.x.y.z:<port>`) until you click
+     **Publish over HTTPS in Tailnet**, then the
+     `https://<machine>.<tailnet>.ts.net` address.
    - **Internet:** a Cloudflare tunnel (see below). Its address appears once
      the tunnel is online.
 3. Click **Get Pairing Code**. The same 6-digit code works on every route. The
@@ -105,18 +105,26 @@ manage in Cloudflare:
 
 [Tailscale](https://tailscale.com) creates an encrypted WireGuard mesh (tailnet)
 between your signed-in devices. Dazzi reads `tailscale status --json` and
-`tailscale serve status --json` and never changes Tailscale's configuration:
+`tailscale serve status --json`, and changes Tailscale's configuration only when
+you press its button:
 
-- If `tailscale serve` already proxies HTTPS to Dazzi's port, the **Tailscale**
-  route shows the `https://<machine>.<tailnet>.ts.net` address and its QR code.
-  Devices signed in as the host's Tailscale owner open Finder directly; devices
-  of another tailnet user see a notice and can still pair with a code.
-- Otherwise Dazzi shows the one-line command that publishes HTTPS inside your
-  tailnet (for example `tailscale serve --bg --https=443 http://127.0.0.1:47833`)
-  and uses the tailnet IP as the address meanwhile. Do **not** use
-  `tailscale funnel` without understanding that Funnel exposes the endpoint to
-  the public internet (Dazzi never trusts Funnel headers and always requires
-  pairing or the token).
+- **Publish over HTTPS in Tailnet** runs
+  `tailscale serve --bg --yes --https=<port> http://127.0.0.1:<Dazzi port>` on the
+  first HTTPS port (443, 8443, 47833, 17317) no other serve route uses, so an
+  existing route such as `https://<machine>.ts.net` → another app is left alone.
+  The **Tailscale** route then shows the `https://<machine>.<tailnet>.ts.net[:port]`
+  address and its QR code. Devices signed in as the host's Tailscale owner open
+  Finder directly; devices of another tailnet user see a notice and can still
+  pair with a code.
+- **Stop Publishing** runs `tailscale serve --yes --https=<port> off` for that one
+  route only; Dazzi never runs `tailscale serve reset`.
+- If Tailscale refuses (for example, HTTPS certificates or Serve are off for the
+  tailnet), Settings shows Tailscale's reason and, when Tailscale prints one, a
+  button that opens its admin-console page to turn it on.
+- **Run it yourself in a terminal** shows the same command for people who prefer
+  it. Dazzi never uses `tailscale funnel`, which exposes the endpoint to the
+  public internet (Dazzi never trusts Funnel headers and always requires pairing
+  or the token).
 
 ### Option 4: SSH local port forwarding
 

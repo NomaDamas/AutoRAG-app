@@ -2430,8 +2430,7 @@
       "pairQrLabel": "QR code for pairing code {{code}}",
       "pairLinkCopy": "Copy Pairing Link",
       "pairLinkCopied": "Link Copied",
-      "tailscaleServing": "Tailscale HTTPS proxy is active.",
-      "tailscaleCommandDesc": "Run this command once in a terminal on this computer to publish HTTPS inside your tailnet.",
+      "tailscaleServing": "Published over HTTPS in your tailnet",
       "tailscaleStopped": "Tailscale is installed on this computer, but not connected. Run tailscale up, then check again.",
       "tailscaleMissing": "Tailscale is not installed. To connect from outside without Tailscale, choose the Internet route.",
       "tailscaleRefresh": "Check Again",
@@ -2496,7 +2495,16 @@
       "portInUse": "Could not start the remote access server: another program is using port {{port}}. The installed Dazzi may be running at the same time.",
       "serverFailed": "Could not start the remote access server: {{reason}}",
       "useFreePort": "Start on port {{port}}",
-      "retryStart": "Try Again"
+      "retryStart": "Try Again",
+      "tailscaleNotServing": "Not published in your tailnet yet",
+      "tailscaleServingHint": "Devices signed in to your Tailscale account open the address below directly. Other users need a pairing code.",
+      "tailscaleServeHint": "Publishing creates an HTTPS address that only devices in your tailnet can open. Nothing is exposed to the internet.",
+      "tailscaleServeStart": "Publish over HTTPS in Tailnet",
+      "tailscaleServeStarting": "Publishing…",
+      "tailscaleServeStop": "Stop Publishing",
+      "tailscaleServeFailed": "Tailscale refused: {{reason}}",
+      "tailscaleServeEnable": "Turn it on in the Tailscale admin console",
+      "tailscaleCommandToggle": "Run it yourself in a terminal"
     },
     "account": {
       "description": "Your Dazzi account and sign-in status.",
