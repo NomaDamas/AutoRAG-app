@@ -366,21 +366,13 @@ try {
 	// no charge); BYOK needs no account and keeps the lane offline.
 	await page.waitForSelector(".onb .plan-card");
 	await page.waitForTimeout(400);
-	// The plan screen's content is centred in the stage, top and bottom.
-	const gaps = await page.evaluate(() => {
-		const stage = document.querySelector(".onb .stage").getBoundingClientRect();
-		const content = document.querySelector(".onb .screen .eyebrow").getBoundingClientRect();
-		const last = document.querySelector(".onb .screen .promo").getBoundingClientRect();
-		return { top: content.top - stage.top, bottom: stage.bottom - last.bottom };
-	});
-	check("plan content is centred between the title bar and the footer", Math.abs(gaps.top - gaps.bottom) <= 2, JSON.stringify(gaps));
 	await shot("07-plan");
 	await page.locator(".onb .plan-card").nth(2).click();
 	check("a paid plan without an account cannot continue", await primary.isDisabled());
 	check("the plan step says to sign in first", (await page.locator(".onb .screen .promo .auth-note").count()) === 1);
 	await shot("07b-plan-needs-account");
 	// BYOK again: its model was connected right after the account, so the plan leads straight to the index.
-	await page.locator(".onb .plan-card").last().click();
+	await page.locator(".onb .plan-byok button").click();
 	await primary.click();
 
 	// roles: without a Dazzi plan the reranker and Jev are chosen here, from what was connected.

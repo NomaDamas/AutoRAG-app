@@ -1017,9 +1017,8 @@
       }
     },
     "plan": {
-      "title": "Choose a plan",
+      "title": "Which plan would you like?",
       "titleReady": "Your plan is ready",
-      "lead": "You can change it anytime in Settings.",
       "leadCloud": "Remote embedding needs Pro or Max. Pro starts with 7 days free.",
       "leadCloudReady": "Remote embedding is ready to use. Continue to the next step.",
       "badgeTrial": "Trial in progress",
@@ -1027,7 +1026,7 @@
       "perMonth": "/ mo",
       "continue": "Continue",
       "checkoutPro": "Start the 7-day free trial",
-      "checkoutAir": "Open the Air checkout page",
+      "checkoutAir": "Continue with Air",
       "noteHeld": "Active on this account",
       "noteTrialing": "Trial · until {{date}}",
       "noteCancelScheduled": "Cancels · usable until {{date}}",
@@ -1037,27 +1036,32 @@
         "free": {
           "name": "Free",
           "price": "Free",
-          "tag": "For trying Dazzi out",
-          "training": "Inputs and outputs may be used to improve the service"
+          "tag": "For trying Dazzi's Finder replacement right after signing up",
+          "training": "Inputs and outputs may be used to improve the service",
+          "features": "Start as soon as you sign up\nChat, embedding, reranking and Jev included\n5 lightweight chat models\nSmall credits that reset every week",
+          "tagPc": "For trying Dazzi's File Explorer replacement right after signing up"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "$4/mo · cancel anytime",
-          "tag": "For people who already use another AI subscription"
+          "tag": "For people who already pay for an AI subscription\nand want to replace everyday file browsing",
+          "features": "Everything in Free, plus\nChat runs on your own AI subscription\nEmbedding, reranking and Jev included\nMore weekly credits than Free"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "7 days free with a card, then $20/mo",
           "tag": "For using Dazzi alone, with no other AI subscription",
-          "trial": "7-day free trial"
+          "trial": "7-day free trial",
+          "features": "Everything in Air, plus\nChat, embedding, reranking and Jev included\nFaster requests and generous weekly credits\n7-day free trial"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "$200/mo · cancel anytime",
-          "tag": "For heavy use"
+          "tag": "For power users running heavy folder work and many tasks at once",
+          "features": "Premium models only in Max\nChat, embedding, reranking and Jev included\nThe most weekly credits, for long jobs"
         },
         "byok": {
           "name": "BYOK",
@@ -1065,12 +1069,15 @@
           "tag": "Connect directly with your own API key"
         }
       },
-      "checkoutMax": "Open the Max checkout page",
+      "checkoutMax": "Continue with Max",
       "promo": {
         "prompt": "Have a promo code?",
         "label": "Promo code",
         "invalid": "Letters, numbers, - and _ only."
-      }
+      },
+      "tierLabel": "Plan",
+      "byokLead": "Have an API key?",
+      "byokLink": "Connect with your own API key"
     },
     "model": {
       "title": "Connect your AI models",

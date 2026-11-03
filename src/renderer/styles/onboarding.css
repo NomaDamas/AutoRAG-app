@@ -161,11 +161,10 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	padding-top: 31px;
 }
 
-/* The plan screen is centred in the stage top and bottom, not hung from the top. */
-/* The heading and cards keep Figma's place in any frame (166 above : 174 below); the promo hangs in the space below, so it does not move them. */
+/* The heading and cards keep Figma's place in any frame (91 above : 108 below); the BYOK link and promo hang in the space below, so they do not move them. */
 .onb .screen.plan-screen {
 	display: grid;
-	grid-template-rows: minmax(0,166fr) auto auto minmax(max-content,174fr);
+	grid-template-rows: minmax(0,91fr) auto auto minmax(max-content,108fr);
 	justify-content: stretch;
 	justify-items: center;
 	padding-top: 0;
@@ -180,7 +179,7 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	grid-row: 3;
 }
 
-.onb .plan-screen .promo {
+.onb .plan-screen .plan-foot {
 	grid-row: 4;
 	align-self: start;
 }
@@ -5668,20 +5667,22 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	font-weight: 700;
 }
 
-/* Plan step (Figma 08c): five 186px cards in a row, each 16px round; Pro keeps a soft blue glow and a centred trial pill. */
+/* Plan step (Figma 08c, 117:4106 and 120:473): three 290px cards, the third switching between Pro and Max, then the BYOK link. */
 .onb .plan-screen h1 {
-	margin: 0 0 12px;
+	margin: 0;
 }
 
 .onb .screen.center.plan-screen .screen-copy>p {
 	max-width: none;
+	margin-top: 12px;
 	color: var(--onb-body);
 	line-height: 21px;
 }
 
 .onb .plan-screen .plan-list {
-	grid-template-columns: repeat(5,186px);
+	grid-template-columns: repeat(3,290px);
 	justify-content: center;
+	gap: 24px;
 	width: auto;
 	max-width: none;
 	margin-top: 44px;
@@ -5689,10 +5690,15 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .plan-screen .plan-card {
 	box-sizing: border-box;
-	min-height: 168px;
-	padding: 16px 16px 20px;
-	border-color: var(--onb-border);
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	height: 338px;
+	min-height: 0;
+	padding: 24px 20px;
+	border: 1px solid var(--onb-border);
 	border-radius: 16px;
+	background: var(--onb-bg-card);
 	transition: border .15s, background .15s;
 }
 
@@ -5705,8 +5711,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
 }
 
-.onb .plan-screen .plan-card.has-trial {
-	border-color: var(--onb-border);
+/* The Pro/Max card has no outline until chosen, only a soft blue glow. */
+.onb .plan-screen .plan-card.tier {
+	border-color: transparent;
 	filter: drop-shadow(0 0 4px rgba(10,100,216,.35));
 }
 
@@ -5717,9 +5724,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .plan-screen .plan-trial {
-	top: -15px;
+	top: -14px;
 	left: 50%;
-	padding: 8px 12px;
+	padding: 6px 12px;
 	border-radius: 50px;
 	box-shadow: none;
 	font-size: 12px;
@@ -5730,10 +5737,17 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .plan-screen .radio {
-	top: 16px;
-	right: 16px;
+	top: 24px;
+	right: 20px;
 	box-sizing: border-box;
 	background: var(--onb-bg-card);
+}
+
+.onb .plan-screen .plan-top {
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	height: 143px;
 }
 
 .onb .plan-screen .plan-name {
@@ -5743,36 +5757,133 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 17px;
 }
 
+.onb .plan-screen .plan-tier-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.onb .plan-screen .plan-tiers {
+	display: inline-flex;
+	box-sizing: border-box;
+	height: 38px;
+	padding: 5px 6px;
+	border-radius: 10px;
+	background: var(--onb-bg-input);
+}
+
+.onb .plan-screen .plan-tier {
+	height: 28px;
+	padding: 0 12px;
+	border: 0;
+	border-radius: 8px;
+	background: none;
+	color: var(--onb-muted);
+	font: inherit;
+	font-size: 13px;
+	font-weight: 700;
+	line-height: 17px;
+	cursor: pointer;
+}
+
+.onb .plan-screen .plan-tier.on {
+	background: var(--onb-bg-card);
+	color: var(--onb-ink);
+}
+
+.onb .plan-screen .plan-tier:not(.on):hover {
+	color: var(--onb-body);
+}
+
 .onb .plan-screen .plan-price {
 	align-items: flex-end;
 	gap: 5px;
-	height: 32px;
-	margin-top: 12px;
+	height: auto;
+	margin-top: 16px;
 }
 
 .onb .plan-screen .plan-price b {
-	font-size: 28px;
+	color: var(--onb-ink);
+	font-size: 31px;
 	font-weight: 700;
-	line-height: 32px;
-	letter-spacing: -.98px;
-}
-
-.onb .plan-screen .plan-price b.sm {
-	align-self: center;
-	font-size: 20px;
-	line-height: 22px;
-	letter-spacing: 0;
+	line-height: 34.7px;
+	letter-spacing: -1.39px;
 }
 
 .onb .plan-screen .plan-price span {
-	font-size: 12px;
-	line-height: 16px;
+	color: var(--onb-muted);
+	font-size: 13px;
+	line-height: 21px;
 }
 
 .onb .plan-screen .plan-desc {
-	margin-top: 8px;
-	font-size: 12px;
-	line-height: 16px;
+	margin-top: 12px;
+	color: var(--onb-body);
+	font-size: 13px;
+	line-height: 21px;
+	white-space: pre-line;
+}
+
+.onb .plan-screen .plan-features {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.onb .plan-screen .plan-features li {
+	display: flex;
+	align-items: flex-start;
+	gap: 12px;
+	color: var(--onb-ink);
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .plan-screen .plan-features svg {
+	flex: none;
+	margin-top: 1.5px;
+	color: var(--onb-body);
+}
+
+.onb .plan-screen .plan-foot {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin-top: 20px;
+}
+
+.onb .plan-screen .plan-byok {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	margin: 0;
+	color: var(--onb-muted);
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.onb .plan-screen .plan-byok button {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--onb-blue);
+	font: inherit;
+	text-decoration: underline;
+	cursor: pointer;
+}
+
+.onb .plan-screen .plan-byok button:hover {
+	opacity: .8;
+}
+
+.onb .plan-screen .plan-byok.selected button {
+	font-weight: 500;
 }
 
 /* The scan screen (Figma 04c/e/f) has no footer; title and folder stay put across running, finished and failed. */

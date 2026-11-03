@@ -1017,9 +1017,8 @@
       }
     },
     "plan": {
-      "title": "请选择套餐",
+      "title": "要使用哪个套餐？",
       "titleReady": "套餐已就绪",
-      "lead": "可随时在设置中更改。",
       "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
       "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
       "badgeTrial": "试用进行中",
@@ -1027,7 +1026,7 @@
       "perMonth": "/ 月",
       "continue": "继续",
       "checkoutPro": "开始 7 天免费试用",
-      "checkoutAir": "打开 Air 结算页面",
+      "checkoutAir": "继续使用 Air",
       "noteHeld": "此账户正在使用",
       "noteTrialing": "试用中 · 至 {{date}}",
       "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
@@ -1037,27 +1036,32 @@
         "free": {
           "name": "Free",
           "price": "免费",
-          "tag": "想先试试 Dazzi 的用户",
-          "training": "输入与输出可能用于改进服务"
+          "tag": "适合注册后立即体验 Finder 替代功能的用户",
+          "training": "输入与输出可能用于改进服务",
+          "features": "注册即可开始\n聊天、嵌入、重排序和 Jev 全部可用\n5 款轻量聊天模型\n每周重置的少量额度",
+          "tagPc": "适合注册后立即体验文件资源管理器替代功能的用户"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "每月 $4 · 随时取消",
-          "tag": "已经在使用其他 AI 订阅的用户"
+          "tag": "适合已有 AI 订阅，\n想替代日常文件浏览的用户",
+          "features": "包含 Free 的全部功能，另有\n聊天使用你自己的 AI 订阅\n提供嵌入、重排序和 Jev\n比 Free 更多的每周额度"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "绑定银行卡可免费 7 天，之后每月 $20",
-          "tag": "不订阅其他 AI，只想使用 Dazzi 的用户",
-          "trial": "7 天免费试用"
+          "tag": "适合不订阅其他 AI、只想用 Dazzi 的用户",
+          "trial": "7 天免费试用",
+          "features": "包含 Air 的全部功能，另有\n提供聊天、嵌入、重排序和 Jev\n更高的请求速度和充足的每周额度\n7 天免费试用"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "每月 $200 · 随时取消",
-          "tag": "适合重度使用的套餐"
+          "tag": "适合处理大量文件夹任务、同时运行多项工作的高级用户",
+          "features": "Max 专属高级模型\n提供聊天、嵌入、重排序和 Jev\n最多的每周额度，适合长时间任务"
         },
         "byok": {
           "name": "BYOK",
@@ -1065,12 +1069,15 @@
           "tag": "用自己的 API 密钥直接连接"
         }
       },
-      "checkoutMax": "打开 Max 结算页面",
+      "checkoutMax": "继续使用 Max",
       "promo": {
         "prompt": "有优惠码？",
         "label": "优惠码",
         "invalid": "仅限字母、数字、- 和 _。"
-      }
+      },
+      "tierLabel": "套餐",
+      "byokLead": "已有 API 密钥？",
+      "byokLink": "用自己的 API 密钥直接连接"
     },
     "model": {
       "title": "连接要使用的 AI 模型",
