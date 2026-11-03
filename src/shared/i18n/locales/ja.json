@@ -212,6 +212,8 @@
     "putBackCount": "{{count}}個の項目を元に戻す",
     "emptyTrash": "ゴミ箱を空にする",
     "newFolder": "新規フォルダー",
+    "pinToSidebar": "サイドバーに固定",
+    "unpinFromSidebar": "サイドバーから削除",
     "new": "新規作成",
     "trashShort": "ゴミ箱"
   },

@@ -212,6 +212,8 @@
     "putBackCount": "{{count}}개 항목 원래 위치로 복원",
     "emptyTrash": "휴지통 비우기",
     "newFolder": "새 폴더",
+    "pinToSidebar": "사이드바에 고정",
+    "unpinFromSidebar": "사이드바에서 제거",
     "new": "새로 만들기",
     "trashShort": "휴지통"
   },

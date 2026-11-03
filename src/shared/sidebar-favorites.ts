@@ -7,7 +7,12 @@
  * caller normalizes and persists it.
  */
 
-import { customSidebarItemId, type SidebarSettings } from "./sidebar-contract";
+import {
+	customSidebarItemId,
+	placeSidebarItemId,
+	STANDARD_FAVORITE_KINDS,
+	type SidebarSettings,
+} from "./sidebar-contract";
 
 /**
  * `rows` ordered by `favoritesOrder`: a listed id sorts by its position, and an
@@ -22,6 +27,51 @@ export function sortByFavoritesOrder<T extends { readonly id: string }>(
 		.map((row, idx) => ({ row, order: orderIndex.get(row.id) ?? favoritesOrder.length + idx }))
 		.sort((a, b) => a.order - b.order)
 		.map(({ row }) => row);
+}
+
+/**
+ * Every customizable Favorite id in display order, hidden or not: the standard
+ * place kinds, then the custom pins, sorted by `favoritesOrder`. This is the
+ * list Settings → 사이드바 shows and the base a reorder writes back.
+ */
+export function favoriteIdsInOrder(sidebar: SidebarSettings): string[] {
+	const ids = [
+		...STANDARD_FAVORITE_KINDS.map(placeSidebarItemId),
+		...sidebar.customFavorites.map((entry) => customSidebarItemId(entry.path)),
+	];
+	return sortByFavoritesOrder(
+		ids.map((id) => ({ id })),
+		sidebar.favoritesOrder,
+	).map((row) => row.id);
+}
+
+/**
+ * `order` with `id` moved to gap `gap` of the rows now shown.
+ *
+ * `shown` lists the customizable rows the sidebar draws, top to bottom, `id`
+ * included when it is drawn. A gap counts the rows above it, so 0 is above the
+ * first row and `shown.length` below the last one; hidden entries of `order`
+ * keep their place relative to the rows they sat beside.
+ */
+export function placeFavoriteAtGap(
+	order: readonly string[],
+	shown: readonly string[],
+	id: string,
+	gap: number,
+): string[] {
+	const others = shown.filter((shownId) => shownId !== id);
+	const at = shown.indexOf(id);
+	// Taking `id` out of the list moves every gap below its old row up by one.
+	const target = Math.max(0, Math.min(at >= 0 && at < gap ? gap - 1 : gap, others.length));
+	const rest = [...order.filter((orderId) => orderId !== id), ...others.filter((other) => !order.includes(other))];
+	const anchor = others[target];
+	if (anchor !== undefined) {
+		rest.splice(rest.indexOf(anchor), 0, id);
+		return rest;
+	}
+	const last = others[others.length - 1];
+	rest.splice(last === undefined ? rest.length : rest.indexOf(last) + 1, 0, id);
+	return rest;
 }
 
 /**

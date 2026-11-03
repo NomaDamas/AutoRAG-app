@@ -212,6 +212,8 @@
     "putBackCount": "Put Back {{count}} items",
     "emptyTrash": "Empty Trash",
     "newFolder": "New Folder",
+    "pinToSidebar": "Pin to Sidebar",
+    "unpinFromSidebar": "Remove from Sidebar",
     "new": "New",
     "trashShort": "Trash"
   },

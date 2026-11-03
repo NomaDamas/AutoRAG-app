@@ -69,6 +69,11 @@ export interface NavItem {
 	readonly view?: "aiSearch" | "automations";
 	/** A Finder tag's virtual folder: the row draws this colour as its dot (0 = a tag with no colour). */
 	readonly tag?: { readonly name: string; readonly color: FsTagColor };
+	/**
+	 * The row's `SidebarSettings` item id (`place:<kind>` or `custom:<path>`), set on the
+	 * Favorites rows the user can reorder or unpin; absent on every other row, and on the app rows.
+	 */
+	readonly sidebarId?: string;
 }
 
 export interface NavGroup {
@@ -159,6 +164,7 @@ export function navGroups(
 						kind: location.icon,
 						available: location.available,
 						ejectable: location.ejectable,
+						sidebarId: placeSidebarItemId(location.icon),
 					},
 				}));
 			const homePath = locations.find((location) => location.section === "favorites" && location.icon === "home")?.path ?? null;
@@ -175,6 +181,7 @@ export function navGroups(
 							icon: Folder,
 							available: true,
 							ejectable: false,
+							sidebarId: customSidebarItemId(custom.path),
 						},
 					},
 				];

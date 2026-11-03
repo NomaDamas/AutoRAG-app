@@ -7,6 +7,7 @@ import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
+import { useFavoritesDrop, type FavoritesDropTarget } from "../hooks/useFavoritesDrop";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
@@ -84,6 +85,7 @@ export function Sidebar({
 	aiSearchDrop,
 	tagColorsDenied = false,
 	onGrantTagColors,
+	favorites,
 }: {
 	readonly groups: readonly NavGroup[];
 	/** Path of the row that owns the current folder. */
@@ -117,9 +119,12 @@ export function Sidebar({
 	/** macOS refused the app Finder's tag registry: the Tags group offers the Full Disk Access grant. */
 	readonly tagColorsDenied?: boolean;
 	readonly onGrantTagColors?: (() => void) | undefined;
+	/** Pin (drop a folder between rows), reorder (drag a row), and unpin (right-click) in Favorites; absent turns them off. */
+	readonly favorites?: FavoritesDropTarget | undefined;
 }): ReactElement {
 	const settingsShortcut = useFormattedShortcut("openSettings");
 	const { t } = useTranslation();
+	const favoritesDrop = useFavoritesDrop(favorites);
 	const localizedGroupLabel = (label: string): string => placeGroupLabel(t, label);
 	const localizedItemLabel = (item: NavItem): string => placeItemLabel(t, item);
 	return (
@@ -150,7 +155,11 @@ export function Sidebar({
 			/>
 			<div className="side-scroll flex flex-1 flex-col gap-10 min-h-0 px-10 pt-6 pb-12 overflow-auto">
 				{groups.map((group) => (
-					<div key={group.label} className="side-group flex flex-col gap-1">
+					<div
+						key={group.label}
+						className="side-group flex flex-col gap-1"
+						{...(group.label === "Favorites" ? favoritesDrop.groupProps : {})}
+					>
 						<div className="side-label px-8 pt-4 pb-4 text-ink-muted text-badge font-semibold tracking-label">
 							{localizedGroupLabel(group.label)}
 						</div>
@@ -161,8 +170,19 @@ export function Sidebar({
 							const drop = item.view === "aiSearch" ? aiSearchDrop : null;
 							// The path tooltip disambiguates same-named locations; an app row has no path to show.
 							const pathTitle = item.kind === undefined ? undefined : item.path;
+							const dropLine = favoritesDrop.lineEdge(item);
 							return (
-								<div key={item.path} className="relative">
+								<div key={item.path} className="relative" {...favoritesDrop.rowProps(item)}>
+									{dropLine === null ? null : (
+										<span
+											aria-hidden="true"
+											data-drop-line={dropLine}
+											className={cn(
+												"sidebar__drop-line pointer-events-none absolute inset-x-8 z-10 h-2 rounded-full bg-accent shadow-[0_0_0_2px_var(--accent-soft)]",
+												dropLine === "top" ? "-top-1" : "-bottom-1",
+											)}
+										/>
+									)}
 									<button
 										type="button"
 										className={cn(

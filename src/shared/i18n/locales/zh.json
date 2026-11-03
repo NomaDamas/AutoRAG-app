@@ -212,6 +212,8 @@
     "putBackCount": "将 {{count}} 个项目放回原处",
     "emptyTrash": "清倒废纸篓",
     "newFolder": "新建文件夹",
+    "pinToSidebar": "固定到边栏",
+    "unpinFromSidebar": "从边栏中移除",
     "new": "新建",
     "trashShort": "废纸篓"
   },

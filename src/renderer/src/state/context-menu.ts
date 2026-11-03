@@ -62,6 +62,8 @@ export type FinderMenuAction =
 	| "emptyTrash"
 	| "newFolder"
 	| "newFile"
+	| "pinToSidebar"
+	| "unpinFromSidebar"
 	| "service"
 	| "toggleTag"
 	| "magicAction"
@@ -147,6 +149,12 @@ export interface ContextMenuInput {
 	readonly capabilities: ActionCapabilities;
 	/** Whether 새 폴더 can create in the folder the menu acts on. */
 	readonly canCreateFolder: boolean;
+	/**
+	 * What the sidebar offers for the single folder the menu opened on: "pin" adds 사이드바에 고정,
+	 * "unpin" adds 사이드바에서 제거 (a folder the user pinned). Absent offers neither: a file, a
+	 * selection, or a folder the sidebar already shows as an OS place.
+	 */
+	readonly sidebarPin?: "pin" | "unpin";
 	/** The OS services offered for the selection; absent or empty hides 서비스. */
 	readonly services?: readonly ServiceEntry[];
 	/** Finder's tags and the tags (lower-case) every selected row carries; absent or unsupported hides the tag items. */
@@ -344,6 +352,12 @@ export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 		if (input.canCreateFolder && !hiddenItems.has("builtin:newFolder")) {
 			rowActions.push(item("newFolder", t("contextMenu.newFolder")));
 		}
+		if (isFolder && !multi && input.sidebarPin === "pin") {
+			rowActions.push(item("pinToSidebar", t("contextMenu.pinToSidebar")));
+		}
+		if (isFolder && !multi && input.sidebarPin === "unpin") {
+			rowActions.push(item("unpinFromSidebar", t("contextMenu.unpinFromSidebar")));
+		}
 		if (input.capabilities.archive) {
 			if (!multi && archiveFormatOf(input.target.name) !== null && !hiddenItems.has("builtin:extract")) {
 				rowActions.push(item("extract", t("contextMenu.extract")));
@@ -454,6 +468,11 @@ export function buildBackgroundContextMenu(input: BackgroundMenuInput): FinderMe
 		...(services === null ? [] : [SEPARATOR, services]),
 		...(input.inTrash === true ? [SEPARATOR, item("emptyTrash", t("contextMenu.emptyTrash"), { tone: "danger" })] : []),
 	];
+}
+
+/** The right-click menu of a sidebar row the user pinned: the one thing to do with it is take the pin away. */
+export function buildSidebarPinMenu(): FinderMenuEntry[] {
+	return [item("unpinFromSidebar", t("contextMenu.unpinFromSidebar"))];
 }
 
 /* ------------------------------------------------------------- positioning */
