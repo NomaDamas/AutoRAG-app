@@ -1072,6 +1072,7 @@ folder to Finder:
 ```sh
 dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
 dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
+dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Search tab asks at once, the paths attached
 dazzi                          # bring Dazzi to the front
 ```
 
@@ -1080,6 +1081,15 @@ does not exist is reported like `open` does (`dazzi: nope: No such file or
 directory`), the ones that exist still open, and the exit status is 1. At most 200
 paths per call (the request limit in `src/shared/os-request-contract.ts`); more is
 an error rather than a silent cut.
+
+`--ask QUESTION` (or `--ask=QUESTION`) sends the action `ask` with the question
+in `--autorag-query=`: the renderer opens a new AI Search tab and sends the
+question with the existing paths as its attachments in one run
+(`deliverToDock` → `sendQuery(text, attachments)`), so a tab that is still
+answering never swallows it. The question needs no path; a missing attachment is
+reported and dropped while the question is still asked; an empty question exits 2.
+Questions are capped at 16,000 characters (`OS_REQUEST_MAX_QUERY_LENGTH`).
+`--ask` is macOS-only for now: `dazzi.cmd` rejects it as an unknown option.
 
 The launcher is a script that ships inside the app (`build/cli/dazzi` →
 `Dazzi.app/Contents/Resources/bin/dazzi`; `dazzi.cmd` in `resources\bin` on
