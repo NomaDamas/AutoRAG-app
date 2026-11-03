@@ -5842,10 +5842,12 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 21px;
 }
 
+/* A faint check drawn heavier than the icon set default (Figma: 2.25 on 18px, 3 in the 24px grid). */
 .onb .plan-screen .plan-features svg {
 	flex: none;
 	margin-top: 1.5px;
-	color: var(--onb-body);
+	color: var(--onb-faint);
+	stroke-width: 3;
 }
 
 .onb .plan-screen .plan-foot {
