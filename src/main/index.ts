@@ -836,7 +836,10 @@ app.whenReady().then(async () => {
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
-			void applyRemoteAccess(settings.remoteAccess);
+			// A failed start (port taken) is shown in Settings through the status's `serverError`, not thrown at nobody.
+			applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+			});
 			void remoteHost?.setTunnelHostname(settings.remoteTunnelHostname);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
@@ -940,8 +943,9 @@ app.whenReady().then(async () => {
 	}
 	const remoteStatus = (): Promise<RemoteAccessStatus> => ensureRemoteHost().status();
 	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
+	// The Settings switch reports the outcome as status (`serving` / `serverError`) instead of rejecting the call.
 	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
-		await applyRemoteAccess(true);
+		await applyRemoteAccess(true).catch(() => undefined);
 		return remoteStatus();
 	});
 	ipcMain.handle(REMOTE_CHANNELS.stop, async () => {

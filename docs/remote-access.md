@@ -36,7 +36,13 @@ awake.
   screen. Treat it as a password.
 - **Port**: the default is `47833`; `0` asks the operating system for a free
   port. Press Enter or leave the field to save a whole number from `0` to
-  `65535`, then restart Dazzi.
+  `65535`; a running server moves to the new port right away.
+
+If the port is already taken — most often by a second Dazzi, such as the
+installed app running beside a development build — the server does not start
+and **Connect a Device** says which port is in use. **Start on port N** saves a
+port that is free at that moment and starts on it; **Try Again** retries the
+saved port after the other program has quit.
 
 Devices signed in to the host owner's Tailscale account, reaching Dazzi through
 `tailscale serve`, are admitted without a code.

@@ -2777,6 +2777,12 @@
 	color: var(--text-muted);
 }
 
+.settings-view .settings-remote-server-error {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
 .settings-view .settings-remote-card,
 .settings-view .settings-remote-devices {
 	border: 1px solid var(--border);

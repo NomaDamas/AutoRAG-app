@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
+import { createServer as createNetServer } from "node:net";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import dazziMarkPath from "../../renderer/src/assets/dazzi-mark.png?asset";
 import type { AppSettings } from "../../shared/settings-contract";
@@ -10,6 +11,7 @@ import {
 	type RemotePairedDevice,
 	type RemotePairingCode,
 	type RemotePush,
+	type RemoteServerError,
 	type RemoteTailscaleStatus,
 } from "../../shared/remote-contract";
 import { APP_VERSION } from "../../shared/app-info";
@@ -94,6 +96,26 @@ function invokeIpc(channel: string, sender: Electron.WebContents | null, args: r
 
 const TAILSCALE_CACHE_TTL_MS = 30_000;
 
+/** A port the OS hands out right now on `host`: what Settings offers when the configured one is taken. */
+function probeFreePort(host: string): Promise<number | null> {
+	return new Promise((resolve) => {
+		const probe = createNetServer();
+		probe.once("error", () => resolve(null));
+		probe.listen(0, host, () => {
+			const address = probe.address();
+			const port = typeof address === "object" && address !== null ? address.port : null;
+			probe.close(() => resolve(port));
+		});
+	});
+}
+
+async function describeStartFailure(error: unknown, port: number, host: string): Promise<RemoteServerError> {
+	if ((error as NodeJS.ErrnoException | null)?.code === "EADDRINUSE") {
+		return { code: "port_in_use", port, suggestedPort: await probeFreePort(host) };
+	}
+	return { code: "failed", port, message: error instanceof Error ? error.message : String(error) };
+}
+
 export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	const log = deps.log ?? ((message: string) => console.error(`[remote] ${message}`));
 	const deviceStore = new DeviceStore(deps.stateDir);
@@ -103,6 +125,10 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	let baseOrigin: string | null = null;
 	let boundPort: number | null = null;
 	let server: RemoteServer | null = null;
+	/** Why the last start did not serve; null once a start succeeds or remote access is stopped. */
+	let serverError: RemoteServerError | null = null;
+	/** The start in flight: concurrent callers (launch, the settings toggle, a port change) share it. */
+	let starting: Promise<string> | null = null;
 	const sessions = new Map<string, FsWorkerRemoteClient>();
 	let fallback: FsWorkerRemoteClient | null = null;
 	let cachedTailscale: { value: RemoteTailscaleStatus; at: number; port: number } | null = null;
@@ -152,6 +178,7 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 			tunnel: tunnel.status(),
 			pairing: deviceStore.activePairing(),
 			devices: deviceStore.list(null),
+			serverError,
 		};
 	};
 
@@ -223,81 +250,117 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		});
 	};
 
-	return {
-		async start() {
-			if (server !== null) return origin ?? "";
-			token = randomBytes(24).toString("base64url");
-			const listenPort = await deps.port();
-			const defaultBootstrap = await buildBootstrapFor();
-			void getTailscale(listenPort, true);
-			server = createRemoteServer({
-				rendererRoot: deps.rendererRoot,
-				token,
-				host: deps.host,
-				port: listenPort,
-				bootstrapScript: defaultBootstrap,
-				bootstrapScriptFor: (auth) => buildBootstrapFor(auth),
-				devices: deviceStore,
-				tailscaleOwner: () => cachedTailscale?.value.owner ?? null,
-				gatePrefs: async () => {
-					const current = await deps.settings();
-					return { language: current.language, appearance: current.appearance };
-				},
-				...(gateLogo === undefined ? {} : { gateLogoDataUrl: gateLogo }),
-				dispatch,
-				onSessionOpen: () => emitChanged(),
-				onSessionClose: (sessionId) => {
-					sessions.get(sessionId)?.close();
-					sessions.delete(sessionId);
-					emitChanged();
-				},
-				preview: (filePath, range) => previewResponseForPath(filePath, range, remotePreviewMime(filePath) ?? undefined),
-				thumbnail: (query) => {
-					const path = query.get("path");
-					const mtime = query.get("mtime");
-					if (path === null || mtime === null) return { status: 400, contentType: null, body: null };
-					const size = query.get("size");
-					const identity = iconIdentityFromUrl(
-						`autorag-thumb://local/?path=${encodeURIComponent(path)}&mtime=${encodeURIComponent(mtime)}${size === null ? "" : `&size=${encodeURIComponent(size)}`}`,
-					);
-					if (identity === null) return { status: 400, contentType: null, body: null };
-					const bytes = deps.icons.read(identity.path, identity.mtimeMs, identity.size);
-					return bytes === null ? { status: 404, contentType: null, body: null } : { status: 200, contentType: "image/png", body: bytes };
-				},
-				upload: async (folder, name, bytes) => {
-					await sharedWorker().client.call("uploadFile", [folder, name, bytes]);
-				},
-				download: async (filePath) => {
-					const bytes = await sharedWorker().client.call<Uint8Array | null>("readFile", [filePath]);
-					return bytes === null
-						? { status: 404, contentType: null, body: null }
-						: { status: 200, contentType: "application/octet-stream", body: bytes };
-				},
-				log,
+	const lifecycle = {
+		start(): Promise<string> {
+			// Each start re-reads the port setting: a server on another port moves (Settings asks to restart Dazzi,
+			// but the switch and a launch should not keep a stale port either).
+			const run = async (): Promise<string> => {
+				const listenPort = await deps.port();
+				if (server !== null && (listenPort === 0 || listenPort === boundPort)) return origin ?? "";
+				if (server !== null) await stopServer();
+				return startServer(listenPort);
+			};
+			const next = (starting ?? Promise.resolve("")).catch(() => "").then(run);
+			const current = next.finally(() => {
+				if (starting === current) starting = null;
 			});
-			const started = await server.start();
-			boundPort = started.port;
-			baseOrigin = started.origin;
-			origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
-			void getTailscale(started.port, true).then(() => emitChanged(), () => undefined);
-			log(`serving at ${started.origin}`);
-			emitChanged();
-			return origin;
+			starting = current;
+			return current;
 		},
-		async stop() {
+		async stop(): Promise<void> {
+			await starting?.catch(() => undefined);
 			await tunnel.stop();
-			for (const session of sessions.values()) session.close();
-			sessions.clear();
-			fallback?.close();
-			fallback = null;
-			const current = server;
-			server = null;
-			origin = null;
-			baseOrigin = null;
-			boundPort = null;
-			await current?.stop();
+			await stopServer();
+			serverError = null;
 			emitChanged();
 		},
+	};
+
+	async function startServer(listenPort: number): Promise<string> {
+		token = randomBytes(24).toString("base64url");
+		const defaultBootstrap = await buildBootstrapFor();
+		void getTailscale(listenPort, true);
+		const candidate = createRemoteServer({
+			rendererRoot: deps.rendererRoot,
+			token,
+			host: deps.host,
+			port: listenPort,
+			bootstrapScript: defaultBootstrap,
+			bootstrapScriptFor: (auth) => buildBootstrapFor(auth),
+			devices: deviceStore,
+			tailscaleOwner: () => cachedTailscale?.value.owner ?? null,
+			gatePrefs: async () => {
+				const current = await deps.settings();
+				return { language: current.language, appearance: current.appearance };
+			},
+			...(gateLogo === undefined ? {} : { gateLogoDataUrl: gateLogo }),
+			dispatch,
+			onSessionOpen: () => emitChanged(),
+			onSessionClose: (sessionId) => {
+				sessions.get(sessionId)?.close();
+				sessions.delete(sessionId);
+				emitChanged();
+			},
+			preview: (filePath, range) => previewResponseForPath(filePath, range, remotePreviewMime(filePath) ?? undefined),
+			thumbnail: (query) => {
+				const path = query.get("path");
+				const mtime = query.get("mtime");
+				if (path === null || mtime === null) return { status: 400, contentType: null, body: null };
+				const size = query.get("size");
+				const identity = iconIdentityFromUrl(
+					`autorag-thumb://local/?path=${encodeURIComponent(path)}&mtime=${encodeURIComponent(mtime)}${size === null ? "" : `&size=${encodeURIComponent(size)}`}`,
+				);
+				if (identity === null) return { status: 400, contentType: null, body: null };
+				const bytes = deps.icons.read(identity.path, identity.mtimeMs, identity.size);
+				return bytes === null ? { status: 404, contentType: null, body: null } : { status: 200, contentType: "image/png", body: bytes };
+			},
+			upload: async (folder, name, bytes) => {
+				await sharedWorker().client.call("uploadFile", [folder, name, bytes]);
+			},
+			download: async (filePath) => {
+				const bytes = await sharedWorker().client.call<Uint8Array | null>("readFile", [filePath]);
+				return bytes === null
+					? { status: 404, contentType: null, body: null }
+					: { status: 200, contentType: "application/octet-stream", body: bytes };
+			},
+			log,
+		});
+		let started: { readonly port: number; readonly origin: string };
+		try {
+			started = await candidate.start();
+		} catch (error) {
+			await candidate.stop().catch(() => undefined);
+			serverError = await describeStartFailure(error, listenPort, deps.host);
+			emitChanged();
+			throw error;
+		}
+		server = candidate;
+		serverError = null;
+		boundPort = started.port;
+		baseOrigin = started.origin;
+		origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
+		void getTailscale(started.port, true).then(() => emitChanged(), () => undefined);
+		log(`serving at ${started.origin}`);
+		emitChanged();
+		return origin;
+	}
+
+	async function stopServer(): Promise<void> {
+		for (const session of sessions.values()) session.close();
+		sessions.clear();
+		fallback?.close();
+		fallback = null;
+		const current = server;
+		server = null;
+		origin = null;
+		baseOrigin = null;
+		boundPort = null;
+		await current?.stop();
+	}
+
+	return {
+		start: lifecycle.start,
+		stop: lifecycle.stop,
 		push(channel, payload) {
 			server?.broadcast({ channel, payload } satisfies RemotePush);
 		},

@@ -119,6 +119,15 @@ export type RemoteAccessVia = "token" | "device" | "tailscale";
 /** Why an unauthenticated browser request reached the AccessGate instead of Finder. */
 export type RemoteAccessRefusal = "pairing_required" | "other_user";
 
+/**
+ * Why the remote server is not serving although remote access is on. `port_in_use`: another program (often another
+ * Dazzi, such as the installed app beside a dev build) already listens on the port; `suggestedPort` is one that was free
+ * a moment ago, or null when none could be found. `failed`: any other listen error, with the system's message.
+ */
+export type RemoteServerError =
+	| { readonly code: "port_in_use"; readonly port: number; readonly suggestedPort: number | null }
+	| { readonly code: "failed"; readonly port: number; readonly message: string };
+
 /** What Settings shows about remote access, how devices connect, and the addresses a browser opens. */
 export interface RemoteAccessStatus {
 	readonly serving: boolean;
@@ -136,6 +145,8 @@ export interface RemoteAccessStatus {
 	readonly devices?: readonly RemotePairedDevice[];
 	/** Present in a remote browser session to describe how it authenticated. */
 	readonly via?: RemoteAccessVia;
+	/** Set while remote access is on but the server could not start; cleared by the next successful start or by stop. */
+	readonly serverError?: RemoteServerError | null;
 }
 
 export interface RemoteAccessBridge {

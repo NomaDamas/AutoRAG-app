@@ -2417,7 +2417,7 @@
       "address": "Browser Address",
       "stopped": "Stopped",
       "port": "Port",
-      "portHint": "Default: 47833. Use 0 for an available port. Restart Dazzi after changing the port.",
+      "portHint": "Default: 47833. Use 0 for an available port. Changing it restarts the server on the new port right away.",
       "copyAddress": "Copy Address",
       "addressCopied": "Address Copied",
       "copyError": "Could not copy the address. Select it and copy manually.",
@@ -2492,7 +2492,11 @@
       "domainInvalid": "Not a domain name: {{value}}",
       "domainLogin": "Sign in to Cloudflare",
       "domainLoginHint": "Approve the account that owns this domain in the browser.",
-      "domainLoggedIn": "Signed in to Cloudflare."
+      "domainLoggedIn": "Signed in to Cloudflare.",
+      "portInUse": "Could not start the remote access server: another program is using port {{port}}. The installed Dazzi may be running at the same time.",
+      "serverFailed": "Could not start the remote access server: {{reason}}",
+      "useFreePort": "Start on port {{port}}",
+      "retryStart": "Try Again"
     },
     "account": {
       "description": "Your Dazzi account and sign-in status.",

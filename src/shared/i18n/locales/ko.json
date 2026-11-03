@@ -2417,7 +2417,7 @@
       "address": "브라우저 주소",
       "stopped": "중지됨",
       "port": "포트",
-      "portHint": "기본값은 47833입니다. 0이면 사용 가능한 포트를 선택합니다. 포트를 바꾼 뒤 Dazzi를 재시작하세요.",
+      "portHint": "기본값은 47833입니다. 0이면 사용 가능한 포트를 고릅니다. 바꾸면 바로 그 포트로 다시 시작합니다.",
       "copyAddress": "주소 복사",
       "addressCopied": "주소 복사됨",
       "copyError": "주소를 복사하지 못했습니다. 주소를 선택해 직접 복사하세요.",
@@ -2492,7 +2492,11 @@
       "domainInvalid": "도메인 형식이 아닙니다: {{value}}",
       "domainLogin": "Cloudflare 로그인",
       "domainLoginHint": "브라우저에서 이 도메인이 속한 계정을 승인하세요.",
-      "domainLoggedIn": "Cloudflare에 로그인되어 있습니다."
+      "domainLoggedIn": "Cloudflare에 로그인되어 있습니다.",
+      "portInUse": "포트 {{port}}을(를) 다른 프로그램이 쓰고 있어 원격 접속 서버를 시작하지 못했습니다. 설치된 Dazzi가 함께 실행 중일 수 있습니다.",
+      "serverFailed": "원격 접속 서버를 시작하지 못했습니다: {{reason}}",
+      "useFreePort": "포트 {{port}}(으)로 시작",
+      "retryStart": "다시 시도"
     },
     "account": {
       "description": "Dazzi 계정과 로그인 상태입니다.",

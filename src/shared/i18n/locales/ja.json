@@ -2417,7 +2417,7 @@
       "address": "ブラウザーのアドレス",
       "stopped": "停止中",
       "port": "ポート",
-      "portHint": "既定値は 47833 です。0 を指定すると空いているポートを選びます。変更後は Dazzi を再起動してください。",
+      "portHint": "既定値は 47833 です。0 を指定すると空いているポートを選びます。変更するとすぐにそのポートで再開します。",
       "copyAddress": "アドレスをコピー",
       "addressCopied": "コピーしました",
       "copyError": "アドレスをコピーできませんでした。選択して手動でコピーしてください。",
@@ -2492,7 +2492,11 @@
       "domainInvalid": "ドメイン名ではありません: {{value}}",
       "domainLogin": "Cloudflare にログイン",
       "domainLoginHint": "ブラウザーでこのドメインを所有するアカウントを承認してください。",
-      "domainLoggedIn": "Cloudflare にログイン済みです。"
+      "domainLoggedIn": "Cloudflare にログイン済みです。",
+      "portInUse": "ポート {{port}} を別のプログラムが使用しているため、リモートアクセスサーバーを開始できませんでした。インストール済みの Dazzi が同時に起動している可能性があります。",
+      "serverFailed": "リモートアクセスサーバーを開始できませんでした: {{reason}}",
+      "useFreePort": "ポート {{port}} で開始",
+      "retryStart": "再試行"
     },
     "account": {
       "description": "Dazzi アカウントとログイン状態です。",

@@ -2417,7 +2417,7 @@
       "address": "浏览器地址",
       "stopped": "已停止",
       "port": "端口",
-      "portHint": "默认端口为 47833。设为 0 可选择可用端口。更改后请重启 Dazzi。",
+      "portHint": "默认端口为 47833。设为 0 可选择可用端口。更改后会立即在新端口上重新启动。",
       "copyAddress": "复制地址",
       "addressCopied": "地址已复制",
       "copyError": "无法复制地址。请选中地址后手动复制。",
@@ -2492,7 +2492,11 @@
       "domainInvalid": "不是有效的域名：{{value}}",
       "domainLogin": "登录 Cloudflare",
       "domainLoginHint": "请在浏览器中授权拥有此域名的账号。",
-      "domainLoggedIn": "已登录 Cloudflare。"
+      "domainLoggedIn": "已登录 Cloudflare。",
+      "portInUse": "端口 {{port}} 已被其他程序占用，无法启动远程访问服务器。可能已安装的 Dazzi 正在同时运行。",
+      "serverFailed": "无法启动远程访问服务器：{{reason}}",
+      "useFreePort": "使用端口 {{port}} 启动",
+      "retryStart": "重试"
     },
     "account": {
       "description": "Dazzi 账户和登录状态。",

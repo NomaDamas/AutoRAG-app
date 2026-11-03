@@ -86,6 +86,7 @@ export function RemoteAccessPage({
 	const [renaming, setRenaming] = useState<{ readonly id: string; readonly label: string } | null>(null);
 	const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 	const [confirmRevokeAll, setConfirmRevokeAll] = useState(false);
+	const [applyingPort, setApplyingPort] = useState(false);
 
 	useEffect(() => {
 		setRemotePort(String(appSettings.remotePort));
@@ -174,6 +175,19 @@ export function RemoteAccessPage({
 		}
 	};
 	const reportError = (cause: unknown): void => onSettingsError(cause instanceof Error ? cause.message : String(cause));
+	const serverError = enabled && !serving ? (remoteStatus?.serverError ?? null) : null;
+	/** Save a port and (re)start on it now: the host moves a running server to the new port. */
+	const applyPort = async (port: number): Promise<void> => {
+		setApplyingPort(true);
+		try {
+			await setApp({ remotePort: port });
+			setRemoteStatus(await remoteBridge.start());
+		} catch (cause) {
+			reportError(cause);
+		} finally {
+			setApplyingPort(false);
+		}
+	};
 
 	const handleStartPairing = async (): Promise<void> => {
 		try {
@@ -452,7 +466,30 @@ export function RemoteAccessPage({
 			{enabled ? (
 				<Section title={t("settingsCore.remote.connectTitle")} description={t("settingsCore.remote.connectHint")}>
 					<div className="settings-remote-card">
-						{!serving ? (
+						{!serving && serverError !== null ? (
+							<div className="settings-remote-server-error" role="alert">
+								<p className="settings-remote-error">
+									{serverError.code === "port_in_use"
+										? t("settingsCore.remote.portInUse", { port: serverError.port })
+										: t("settingsCore.remote.serverFailed", { reason: serverError.message })}
+								</p>
+								<div className="settings-remote-actions">
+									{serverError.code === "port_in_use" && serverError.suggestedPort !== null ? (
+										<button
+											type="button"
+											className="linear-btn settings-btn-primary"
+											disabled={applyingPort}
+											onClick={() => void applyPort(serverError.suggestedPort ?? 0)}
+										>
+											{t("settingsCore.remote.useFreePort", { port: serverError.suggestedPort })}
+										</button>
+									) : null}
+									<button type="button" className="linear-btn" disabled={applyingPort} onClick={() => void applyPort(appSettings.remotePort)}>
+										{t("settingsCore.remote.retryStart")}
+									</button>
+								</div>
+							</div>
+						) : !serving ? (
 							<p className="settings-remote-desc">{t("settingsCore.remote.starting")}</p>
 						) : (
 							<>
@@ -562,7 +599,7 @@ export function RemoteAccessPage({
 										onChange={(event) => setRemotePort(event.currentTarget.value)}
 										onBlur={(event) => {
 											const input = event.currentTarget;
-											if (input.reportValidity() && input.valueAsNumber !== appSettings.remotePort) void setApp({ remotePort: input.valueAsNumber });
+											if (input.reportValidity() && input.valueAsNumber !== appSettings.remotePort) void applyPort(input.valueAsNumber);
 										}}
 										onKeyDown={(event) => {
 											if (event.key === "Enter") {
