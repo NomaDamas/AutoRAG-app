@@ -6,7 +6,7 @@
  *      locked on, hides selected built-in items (`builtin:compress7z`, `builtin:copyPath`),
  *      reorders `magic` to the top, and manually adds a batch script Magic Action
  *      (`multiple` files, `txt|md` extensions).
- *   2. The AI App Customizer docked as the right sidebar of Settings
+ *   2. The AI App Customizer in the window's right sidebar
  *      (`[data-testid="app-customizer-panel"][data-surface="contextMenu"]`) streams live
  *      `.shimmer` `i` progress while calling `get_app_settings`, `update_context_menu`
  *      (attempting to hide `태그` — kept locked!), and `upsert_magic_action` to add a
@@ -284,7 +284,7 @@ try {
 	await editor.locator('[data-action="save-magic-editor"]').click();
 	await editor.waitFor({ state: "detached" });
 
-	// 2. Use the AI Customizer docked beside ContextMenuPage to create a single-PDF Agent Magic Action + try hiding Tags
+	// 2. Use the AI Customizer in the right sidebar beside ContextMenuPage to create a single-PDF Agent Magic Action + try hiding Tags
 	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="contextMenu"]');
 	await panel.waitFor();
 	await shot("03-context-menu-ai-panel-empty");
@@ -330,7 +330,7 @@ try {
 	await panel.locator(".customizer-turn__reply", { hasText: "PDF 핵심 3줄 요약" }).waitFor({ timeout: 15_000 });
 	await shot("05-context-menu-ai-done");
 	check(
-		"The new Magic Action shows up in the page beside the docked panel without closing it",
+		"The new Magic Action shows up in the page beside the assistant without closing it",
 		(await page.locator(".settings-content", { hasText: "PDF 핵심 3줄 요약" }).count()) === 1 && (await panel.isVisible()),
 	);
 

@@ -8,7 +8,8 @@
  * page the writers it needs, so a write from one page reconciles the others.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MousePointerClick, PanelLeft, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
@@ -21,6 +22,7 @@ import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, ReadingPage, ScopePage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
+import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { ContextMenuPage } from "./settings/ContextMenuPage";
@@ -126,7 +128,7 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** Settings pages that dock an AI customization assistant as their right sidebar. */
+/** Settings pages whose AI customization assistant fills the window's right sidebar. */
 function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
 	return page === "sidebar" || page === "contextMenu" || page === "shortcuts" ? page : null;
 }
@@ -142,11 +144,19 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const [loading, setLoading] = useState(true);
 	/** False until the first datasource scan has answered (or failed): the pages say "checking" instead of "none". */
 	const [sourcesReady, setSourcesReady] = useState(false);
-	/** Collapsing is one choice for every assistant section, kept while the Settings tab is open. */
-	const [customizerCollapsed, setCustomizerCollapsed] = useState(false);
+	/** Bumped when the user opens the assistant from a page's hero: the composer takes focus then, never on a plain visit. */
 	const [customizerFocus, setCustomizerFocus] = useState(0);
 	/** Assistants stay mounted once shown, so a conversation and a running turn survive switching sections. */
 	const [mountedSurfaces, setMountedSurfaces] = useState<readonly AppCustomizerSurface[]>([]);
+	/** The right sidebar hosts this node while a customizable section is open; the assistants render into it. */
+	const [dockNode] = useState(() => {
+		const node = document.createElement("div");
+		node.className = "customizer-dock__node";
+		return node;
+	});
+	const assistant = useContext(SettingsAssistantContext);
+	const publishDock = assistant?.publish;
+	const showAssistant = assistant?.show;
 	const scanSeq = useRef(0);
 
 	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
@@ -215,10 +225,10 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		onSettingsChanged?.(next);
 	}, [onSettingsChanged]);
 	const openCustomizer = useCallback((): void => {
-		setCustomizerCollapsed(false);
+		showAssistant?.();
 		setCustomizerFocus((count) => count + 1);
-	}, []);
-	const collapseCustomizer = useCallback((): void => setCustomizerCollapsed(true), []);
+	}, [showAssistant]);
+	const collapseCustomizer = assistant?.hide;
 	const openAiSettings = useCallback((): void => setCategory("ai"), []);
 
 	const entries = useMemo(() => datasourceEntries(snapshot), [snapshot]);
@@ -232,11 +242,17 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	useEffect(() => {
 		if (sourceAlias !== null && snapshot !== null && entries.every((entry) => entry.alias !== sourceAlias)) setCategory("apps");
 	}, [sourceAlias, snapshot, entries]);
-	const activeSurface = sourceAlias === null ? customizerSurfaceOf(normalizeCategory(category)) : null;
-	const customizerShown = activeSurface !== null && !customizerCollapsed;
+	const activeSurface = sourceAlias === null && assistant !== null ? customizerSurfaceOf(normalizeCategory(category)) : null;
+	/** Without a right sidebar to host it (no window shell) there is no assistant, so the page hero never offers it. */
+	const customizerShown = assistant === null || assistant.shown;
 	useEffect(() => {
 		if (activeSurface !== null) setMountedSurfaces((current) => (current.includes(activeSurface) ? current : [...current, activeSurface]));
 	}, [activeSurface]);
+	const dock = useMemo<SettingsAssistantDock | null>(() => (activeSurface === null ? null : { surface: activeSurface, node: dockNode }), [activeSurface, dockNode]);
+	useEffect(() => {
+		publishDock?.(dock);
+		return () => publishDock?.(null);
+	}, [publishDock, dock]);
 
 	const filteredPages = useMemo(() => {
 		const needle = query.trim().toLowerCase();
@@ -316,7 +332,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	});
 
 	return (
-		<div className={`settings-view settings-panel${customizerShown ? " has-customizer" : ""}`} role="region" aria-label={t("settings.title")}>
+		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
 			<aside className="settings-sidebar" aria-label={t("settingsCore.view.navAria")}>
 				<label className="settings-search">
 					<span className="settings-search__icon" aria-hidden="true">
@@ -358,17 +374,20 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 					{content}
 				</div>
 			</main>
-			{mountedSurfaces.map((surface) => (
-				<AppCustomizerPanel
-					key={surface}
-					surface={surface}
-					hidden={!customizerShown || surface !== activeSurface}
-					focusRequest={surface === activeSurface ? customizerFocus : 0}
-					onCollapse={collapseCustomizer}
-					onSettingsUpdated={applyAppSettings}
-					onOpenAiSettings={openAiSettings}
-				/>
-			))}
+			{createPortal(
+				mountedSurfaces.map((surface) => (
+					<AppCustomizerPanel
+						key={surface}
+						surface={surface}
+						hidden={surface !== activeSurface}
+						focusRequest={surface === activeSurface ? customizerFocus : 0}
+						onCollapse={collapseCustomizer ?? (() => undefined)}
+						onSettingsUpdated={applyAppSettings}
+						onOpenAiSettings={openAiSettings}
+					/>
+				)),
+				dockNode,
+			)}
 		</div>
 	);
 }

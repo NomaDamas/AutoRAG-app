@@ -8,7 +8,7 @@
  * shared `config.json`) through structured tool calling.
  *
  * Conversation sessions stay in memory keyed by `sessionId` so follow-up
- * turns in the customization panel docked in Settings remember earlier turns until reset.
+ * turns in the customization panel in Settings' right sidebar remember earlier turns until reset.
  */
 
 import type { AppSettings } from "./settings-contract";

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsView } from "../src/renderer/src/components/SettingsView";
+import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import type { FsLocation, FsTagCatalog } from "../src/shared/fs-contract";
@@ -134,10 +134,10 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
-describe("Settings → 사이드바 (Sidebar customization & docked AI Customizer panel)", () => {
+describe("Settings → 사이드바 (Sidebar customization & AI Customizer in the right sidebar)", () => {
 	it("renders the Sidebar tab with AI Search & Automations locked on, and toggles hideable items & presets", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
@@ -220,17 +220,17 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 		expect(currentSettings.sidebar.favoritesOrder).toEqual([]);
 	});
 
-	it("docks the AI App Customizer as a right sidebar of Settings, sends a message to the pi agent, shows live shimmer progress, and renders applied changes", async () => {
+	it("shows the AI App Customizer in the window's right sidebar, sends a message to the pi agent, shows live shimmer progress, and renders applied changes", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
-		// No modal: the assistant is docked beside the page content, with no backdrop and no dialog role.
-		const dialog = host.querySelector<HTMLElement>('.settings-view > [data-testid="app-customizer-panel"]:not([hidden])');
+		// No modal: the assistant fills the window's right sidebar, outside the Settings page, and is not a dialog.
+		const dialog = host.querySelector<HTMLElement>('[data-testid="settings-assistant-slot"] [data-testid="app-customizer-panel"]:not([hidden])');
 		expect(dialog).not.toBeNull();
+		expect(dialog?.closest(".settings-view")).toBeNull();
 		expect(dialog?.getAttribute("role")).not.toBe("dialog");
-		expect(host.querySelector('.settings-view > .settings-content ~ [data-testid="app-customizer-panel"]:not([hidden])')).toBe(dialog);
 		// The hero that opened the old modal is redundant while the panel is shown
 		expect(host.querySelector('[data-action="open-app-customizer"]')).toBeNull();
 
@@ -292,7 +292,7 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 
 	it("adds and removes a custom folder in Favorites", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
@@ -326,7 +326,7 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 
 	it("renders all 4 sidebar sections inside one unified .sidebar-sections-stack and uses the transparent Dazzi sunflower mark on AI surfaces", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
@@ -357,9 +357,9 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__btn-logo")).not.toBeNull();
 	});
 
-	it("collapses the docked panel, reopens it from the hero, and follows the Settings section it belongs to", async () => {
+	it("hides with the right sidebar, reopens from the hero, and follows the Settings section it belongs to", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
@@ -373,36 +373,52 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 		});
 		expect(panelOf()).not.toBeNull();
 
+		// A turn started before hiding the right sidebar is still there after reopening it
+		await act(async () => {
+			panelOf()?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
+		});
+		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
+
 		await act(async () => {
 			panelOf()?.querySelector<HTMLButtonElement>('[data-action="collapse-app-customizer"]')?.click();
 		});
 		expect(panelOf()).toBeNull();
+		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
 		const reopen = host.querySelector<HTMLButtonElement>('[data-action="open-app-customizer"]');
 		expect(reopen).not.toBeNull();
 		await act(async () => {
 			reopen?.click();
 		});
 		expect(panelOf()?.getAttribute("data-surface")).toBe("sidebar");
+		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
+		expect(bridge.appCustomizer.cancel).not.toHaveBeenCalled();
 		expect(document.activeElement?.getAttribute("data-testid")).toBe("app-customizer-input");
 		expect(host.querySelector('[data-action="open-app-customizer"]')).toBeNull();
 
 		const nav = (label: string): HTMLButtonElement | undefined =>
 			[...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((btn) => btn.textContent?.trim() === label);
 
-		// Sections without an assistant show no panel
+		// Sections without an assistant leave the right sidebar to the Inspector
 		await act(async () => {
 			nav("일반")?.click();
 		});
 		await settle();
-		expect(panelOf()).toBeNull();
+		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
 
-		// Each customizable section docks its own assistant surface
+		// Each customizable section shows its own assistant surface
 		await act(async () => {
 			nav("단축키")?.click();
 		});
 		await settle();
 		expect(panelOf()?.getAttribute("data-surface")).toBe("shortcuts");
 		expect(panelOf()?.querySelector(".customizer-panel__title")?.textContent).toBe("AI 단축키 커스텀 어시스턴트");
+
+		await act(async () => {
+			nav("사이드바")?.click();
+		});
+		await settle();
+		expect(panelOf()?.getAttribute("data-surface")).toBe("sidebar");
+		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
 
 		await act(async () => {
 			nav("우클릭 메뉴")?.click();
@@ -465,7 +481,7 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 		currentSettings = { ...currentSettings, language: spec.lang };
 
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
@@ -494,7 +510,7 @@ describe("Settings → 사이드바 (Sidebar customization & docked AI Customize
 		]);
 		try {
 			await act(async () => {
-				root.render(<SettingsView initialCategory={"sidebar" as never} />);
+				root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 			});
 			await settle();
 

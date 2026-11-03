@@ -1,5 +1,5 @@
 /**
- * Manual QA — Sidebar customization & the docked AI App Customizer panel in the real app.
+ * Manual QA — Sidebar customization & the AI App Customizer in the window's right sidebar, in the real app.
  *
  * Drives the built Electron app end-to-end with real Playwright mouse/keyboard
  * input and a loopback OpenAI-compatible model endpoint:
@@ -8,7 +8,7 @@
  *      a custom folder, and immediately updates the live Finder sidebar and
  *      `<userData>/settings/settings-state.json` (leaving AutoRAG `config.json`
  *      untouched).
- *   2. The AI App Customizer is docked as the right sidebar of Settings
+ *   2. The AI App Customizer fills the window's right sidebar (the Inspector's column)
  *      (`[data-testid="app-customizer-panel"]`, no modal): it streams live
  *      `.shimmer` `i` intent progress while the `app-customizer` pi agent calls
  *      `get_app_settings` and `update_sidebar`, refuses to hide `AI Search` or
@@ -222,17 +222,20 @@ try {
 	await panel.waitFor();
 	const layout = await page.evaluate(() => {
 		const content = document.querySelector(".settings-content")?.getBoundingClientRect();
-		const side = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')?.getBoundingClientRect();
-		return content && side ? { contentRight: Math.round(content.right), panelLeft: Math.round(side.left), panelWidth: Math.round(side.width), windowWidth: window.innerWidth, panelRight: Math.round(side.right) } : null;
+		const side = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		const box = side?.getBoundingClientRect();
+		return content && side && box
+			? { contentRight: Math.round(content.right), panelLeft: Math.round(box.left), panelRight: Math.round(box.right), windowWidth: window.innerWidth, insideSettings: side.closest(".settings-view") !== null, inspectorShown: document.querySelector("aside.inspector") !== null }
+			: null;
 	});
 	check(
-		"AI Customizer is docked as the right sidebar of Settings, flush with the window's right edge",
-		layout !== null && layout.panelLeft >= layout.contentRight && layout.panelRight === layout.windowWidth,
+		"AI Customizer fills the window's right sidebar (outside the Settings page, flush with the window's right edge, in place of the Inspector)",
+		layout !== null && layout.panelLeft >= layout.contentRight && layout.panelRight === layout.windowWidth && !layout.insideSettings && !layout.inspectorShown,
 		JSON.stringify(layout),
 	);
-	check("The page hero is hidden while the docked panel is shown", (await page.locator('[data-action="open-app-customizer"]').count()) === 0);
+	check("The page hero is hidden while the assistant is in the right sidebar", (await page.locator('[data-action="open-app-customizer"]').count()) === 0);
 	const panelLogoWidth = await panel.locator("img.customizer-panel__logo").evaluate((img) => img.naturalWidth);
-	check("Docked panel displays the transparent Dazzi sunflower mark image", panelLogoWidth > 0, `naturalWidth=${panelLogoWidth}`);
+	check("The assistant displays the transparent Dazzi sunflower mark image", panelLogoWidth > 0, `naturalWidth=${panelLogoWidth}`);
 
 	// Toggle Music and Movies off in Settings UI
 	await page.locator('[data-sidebar-switch="place:music"]').click();
@@ -264,7 +267,7 @@ try {
 		JSON.stringify({ sidebar: persisted.settings.sidebar, configUnchanged: readFileSync(CONFIG, "utf8") === settledConfigBefore }),
 	);
 
-	// 2. Converse with the pi agent profile in the docked panel
+	// 2. Converse with the pi agent profile in the right sidebar
 	await shot("03-customizer-panel-empty");
 
 	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Search & Automations, pinning Projects, hiding pictures) -> reply
@@ -299,7 +302,7 @@ try {
 	await shot("05-customizer-panel-turn1-done");
 	// While the agent's change lands, the switch beside the panel reflects it without closing anything
 	check(
-		"Settings toggles beside the docked panel reflect the agent change live (그림 switch off)",
+		"Settings toggles beside the assistant reflect the agent change live (그림 switch off)",
 		(await page.locator('[data-sidebar-switch="place:pictures"]').getAttribute("aria-checked")) === "false",
 	);
 
@@ -342,20 +345,27 @@ try {
 	await panel.locator(".customizer-turn__reply", { hasText: "Switched Dazzi to Dark mode and English." }).waitFor({ timeout: 15_000 });
 	await shot("06-customizer-panel-turn2-dark-en");
 
-	// Collapse the panel with the mouse, check the hero comes back, reopen it, and the conversation is still there
+	// Hide the right sidebar from the panel, check the hero comes back, reopen it, and the conversation is still there
 	await panel.locator('[data-action="collapse-app-customizer"]').click();
 	await panel.waitFor({ state: "hidden" });
 	await shot("07-settings-sidebar-dark-en");
 	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
-	check("Collapsing the panel restores the AI hero with the transparent Dazzi mark", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
+	check("Hiding the right sidebar restores the AI hero with the transparent Dazzi mark", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
 	await page.locator('[data-action="open-app-customizer"]').click();
 	await panel.waitFor();
 	check(
-		"Reopening the docked panel keeps both turns and focuses the composer",
+		"Reopening the assistant keeps both turns and focuses the composer",
 		(await panel.locator(".customizer-turn").count()) === 2 &&
 			(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))) === "app-customizer-input",
 	);
 	await shot("07b-customizer-panel-reopened");
+	// The toolbar's right-sidebar toggle hides and shows the same assistant
+	const toggle = page.getByRole("button", { name: "Toggle inspector", exact: true });
+	await toggle.click();
+	await panel.waitFor({ state: "hidden" });
+	await toggle.click();
+	await panel.waitFor();
+	check("The toolbar's right-sidebar toggle hides and restores the assistant with its conversation", (await panel.locator(".customizer-turn").count()) === 2);
 
 	const enLabels = await sidebarLabels();
 	check(

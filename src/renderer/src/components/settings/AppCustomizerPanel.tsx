@@ -152,10 +152,10 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
 }
 
 /**
- * The AI customization assistant docked as the right sidebar of Settings for one customizable section
- * (`surface`). Settings keeps one panel per visited surface mounted and hides the others, so a conversation and a
- * running turn survive switching sections or collapsing the panel; the page beside it stays fully interactive and
- * reflects every change the agent makes.
+ * The AI customization assistant for one customizable Settings section (`surface`), shown in the window's right
+ * sidebar (`SettingsAssistantDock.tsx`). Settings keeps one panel per visited surface mounted and hides the others,
+ * so a conversation and a running turn survive switching sections or hiding the sidebar; the page beside it stays
+ * fully interactive and reflects every change the agent makes.
  */
 export function AppCustomizerPanel({
 	surface,

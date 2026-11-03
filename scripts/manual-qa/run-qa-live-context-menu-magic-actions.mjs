@@ -260,16 +260,19 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const replies = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn__reply');
+			const panel = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+			const settled = panel?.querySelector(".customizer-turn__reply, .customizer-turn__error");
 			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
-			return replies.length >= 1 && sendBtn !== null;
+			return settled !== null && settled !== undefined && sendBtn !== null;
 		},
 		null,
-		{ timeout: 150_000 },
+		{ timeout: 240_000 },
 	);
 	await shot("02-live-cmenu-turn1-done");
 
-	const custReply = await panel.locator(".customizer-turn__reply").first().innerText();
+	const custError = await panel.locator(".customizer-turn__error").count();
+	check("Real LLM finished the context-menu turn without an error", custError === 0, custError === 0 ? "" : await panel.locator(".customizer-turn__error").first().innerText());
+	const custReply = custError === 0 ? await panel.locator(".customizer-turn__reply").first().innerText() : "";
 	console.log(`live customizer reply:\n${custReply}`);
 	console.log(`live customizer progress: ${JSON.stringify(seenCustomizerProgress)}`);
 

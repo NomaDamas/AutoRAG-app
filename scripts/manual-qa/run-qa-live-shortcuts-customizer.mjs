@@ -278,7 +278,7 @@ try {
 		JSON.stringify({ overrides: persisted2.settings.shortcuts.overrides, liveKeycapAfterTurn2 }),
 	);
 
-	// Collapse the docked panel and verify direct key-press recording in the live session too!
+	// Hide the right sidebar and verify direct key-press recording in the live session too!
 	await panel.locator('[data-action="collapse-app-customizer"]').click();
 	await panel.waitFor({ state: "hidden" });
 	await page.locator('[data-shortcut-record="newTab"]').click();

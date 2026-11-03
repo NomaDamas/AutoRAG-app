@@ -153,11 +153,6 @@
 	margin: 0 auto;
 }
 
-/* Beside the docked 340px customizer panel the content gives up side padding before its column narrows. */
-.settings-view.has-customizer .settings-content {
-	padding-inline: var(--space-24);
-}
-
 /* ----------------------------------------------------- Linear-style rows -- */
 
 .linear-header {
@@ -2065,16 +2060,27 @@
 /* ------------------------------------------- AI App Customizer side panel -- */
 
 /*
- * Docked as the right column of `.settings-view` on the customizable pages
- * (사이드바, 우클릭 메뉴, 단축키), so the page stays interactive and shows every
- * change the agent makes. 340px keeps the 680px content column whole at the
- * window's 1360px minimum width (220 nav + 340 panel + 2×56 content padding).
+ * On the customizable pages (사이드바, 우클릭 메뉴, 단축키) the window's right
+ * sidebar — the Inspector's column, with its width, resize grip, and toolbar
+ * toggle — holds the assistant instead, so the page stays interactive and
+ * shows every change the agent makes. `.customizer-dock` is the right sidebar's
+ * content; `.customizer-dock__node` is the node Settings renders into and the
+ * window moves into it (`SettingsAssistantDock.tsx`).
  */
+.customizer-dock,
+.customizer-dock__node {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+}
+
 .customizer-panel {
 	display: flex;
-	flex: none;
+	flex: 1;
 	flex-direction: column;
-	width: 340px;
+	min-width: 0;
 	min-height: 0;
 	border-left: 1px solid var(--border);
 	background: var(--bg-window);

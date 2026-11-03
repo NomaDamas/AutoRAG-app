@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsView } from "../src/renderer/src/components/SettingsView";
+import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
@@ -119,10 +119,10 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
-describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and docked AI Shortcut Customizer panel)", () => {
+describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and AI Shortcut Customizer in the right sidebar)", () => {
 	it("records a shortcut by pressing keys directly, cancels on Escape, and swaps on conflict", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -197,7 +197,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 
 	it("supports pointer-only UI editing with modifier toggles and key selector, plus per-row and full reset", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -242,7 +242,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 
 	it("renders the three quick presets (Mac Finder, Windows File Explorer, Default) and switches cleanly between them", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -280,7 +280,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 
 	it("clears any pending conflict banner when switching to a Quick Preset", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -303,7 +303,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 	});
 	it("docks the AI Shortcut Customizer panel with surface='shortcuts' and applies agent updates live", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 

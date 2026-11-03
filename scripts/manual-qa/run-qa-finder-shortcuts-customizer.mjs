@@ -325,7 +325,7 @@ try {
 	check("Pressing customized F2 in Finder opens inline rename on the selected file", renameInputCount >= 1, `inputs=${renameInputCount}`);
 	await page.keyboard.press("Escape");
 
-	// Return to Settings -> 단축키, where the AI Shortcut Customizer is docked as the right sidebar
+	// Return to Settings -> 단축키, where the AI Shortcut Customizer fills the window's right sidebar
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "단축키" }).click();
 	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="shortcuts"]');
@@ -360,12 +360,8 @@ try {
 
 	await panel.locator(".customizer-turn__reply", { hasText: "새 폴더 단축키를" }).waitFor({ timeout: 15_000 });
 	await shot("08-shortcut-customizer-turn-done");
-	const newFolderKeycap = await page.locator('[data-shortcut-record="newFolder"]').innerText();
-	check(
-		"The newFolder keycap beside the docked panel updates live from ⌘⇧N to ⌘N",
-		newFolderKeycap.includes("N") && !newFolderKeycap.includes("⇧"),
-		newFolderKeycap,
-	);
+	const newFolderKeycap = await page.locator('[data-shortcut-record="newFolder"]').evaluate((el) => (el.textContent ?? "").replace(/\s+/g, ""));
+	check("The newFolder keycap beside the assistant updates live from ⌘⇧N to ⌘N", newFolderKeycap === "⌘N", newFolderKeycap);
 
 	check(
 		"Pi shortcut-customizer profile offered strictly get_shortcuts and update_shortcuts tools",

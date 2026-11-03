@@ -366,7 +366,7 @@ export function ContextMenuPage({
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	/** Whether the docked AI assistant is shown beside the page; the hero offers to reopen it only while collapsed. */
+	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
 	readonly customizerOpen: boolean;
 	readonly onOpenCustomizer: () => void;
 }): ReactElement {

@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsView } from "../src/renderer/src/components/SettingsView";
+import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
@@ -132,7 +132,7 @@ afterEach(async () => {
 describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Actions)", () => {
 	it("renders Tags locked on, toggles built-in items & presets, reorders sections, and adds/edits/removes custom Magic Actions", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
@@ -234,7 +234,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 
 	it("docks the AI Customizer panel in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
@@ -293,7 +293,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				shortcuts: { overrides: { quickLook: "Alt+P", rename: "F2" } },
 			};
 			await act(async () => {
-				root.render(<SettingsView initialCategory="contextMenu" />);
+				root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 			});
 			await settle();
 

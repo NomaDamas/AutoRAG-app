@@ -26,6 +26,7 @@ import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
+import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
@@ -606,6 +607,12 @@ export function App(): ReactElement {
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
+	/** On a customizable Settings section the right sidebar is that section's AI assistant instead of the Inspector. */
+	const { host: settingsAssistant, dock: settingsAssistantDock } = useSettingsAssistantHost({
+		rightSidebarVisible: inspectorVisible,
+		setRightSidebarVisible: setInspectorVisible,
+		settingsFocused: path === SETTINGS_PATH,
+	});
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -686,6 +693,7 @@ export function App(): ReactElement {
 		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
+		<SettingsAssistantContext value={settingsAssistant}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
@@ -814,7 +822,9 @@ export function App(): ReactElement {
 								})
 							}
 						/>
-						{inspectorVisible && automationsTabActive ? (
+						{inspectorVisible && settingsAssistantDock !== null ? (
+							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : inspectorVisible && automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : inspectorVisible ? (
 							<Inspector
@@ -945,6 +955,7 @@ export function App(): ReactElement {
 				<MagicActionDialog />
 			</div>
 		</div>
+		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
 		</ContextMenuSettingsContext>
