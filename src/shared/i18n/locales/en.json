@@ -2154,7 +2154,6 @@
         "placeholder": "e.g. Hide Music and Movies and put Downloads at the top…",
         "send": "Send",
         "stop": "Stop",
-        "lockedNotice": "AI Search and Automations are essential features and always remain visible.",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "App customizer service is unavailable.",
         "collapse": "Hide assistant"
@@ -2267,8 +2266,7 @@
         "promptBatchScript": "Create a Magic Action for multiple selected files that computes their SHA-256 hashes",
         "promptCleanMenu": "Hide Compress as 7z, Copy Path, and Cut from the right-click menu",
         "promptReset": "Reset the right-click context menu back to default",
-        "placeholder": "e.g. Add a right-click action for multiple images that lists their dimensions and sizes…",
-        "lockedNotice": "Tags always remains visible, and built-in keyboard shortcuts stay unchanged."
+        "placeholder": "e.g. Add a right-click action for multiple images that lists their dimensions and sizes…"
       }
     },
     "shortcuts": {
@@ -2347,7 +2345,6 @@
         "promptReset": "Reset all keyboard shortcuts back to default",
         "thinking": "Checking shortcuts",
         "placeholder": "e.g. Set Rename to F2 and Focus Search to Cmd+P…",
-        "lockedNotice": "Only existing default-bound shortcuts can be edited; Esc and plain arrow keys stay reserved.",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "Shortcut customizer service is unavailable."
       }

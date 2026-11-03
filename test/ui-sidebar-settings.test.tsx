@@ -344,10 +344,12 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
 
+		// The assistant shows the Dazzi mark once, centered in its empty state, and no notice under the composer
 		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
-		expect(panel?.querySelector<HTMLImageElement>("img.customizer-panel__logo")).not.toBeNull();
-		expect(panel?.querySelector<HTMLImageElement>("img.customizer-panel__empty-logo")).not.toBeNull();
-		expect(panel?.querySelectorAll<HTMLImageElement>("img.customizer-suggestion-chip__logo").length).toBe(4);
+		const marks = [...(panel?.querySelectorAll<HTMLImageElement>("img") ?? [])];
+		expect(marks.map((img) => img.className)).toEqual(["customizer-panel__empty-logo"]);
+		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(4);
+		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 검색과 자동화는 필수 기능");
 
 		// Collapsing the panel brings back the hero, whose button and banner use the transparent Dazzi mark
 		await act(async () => {

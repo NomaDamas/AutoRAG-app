@@ -234,8 +234,12 @@ try {
 		JSON.stringify(layout),
 	);
 	check("The page hero is hidden while the assistant is in the right sidebar", (await page.locator('[data-action="open-app-customizer"]').count()) === 0);
-	const panelLogoWidth = await panel.locator("img.customizer-panel__logo").evaluate((img) => img.naturalWidth);
-	check("The assistant displays the transparent Dazzi sunflower mark image", panelLogoWidth > 0, `naturalWidth=${panelLogoWidth}`);
+	const panelMarks = await panel.locator("img").evaluateAll((imgs) => imgs.map((img) => ({ cls: img.className, width: img.naturalWidth })));
+	check(
+		"The assistant shows the transparent Dazzi mark once, centered in its empty state, and no notice under the composer",
+		panelMarks.length === 1 && panelMarks[0].cls === "customizer-panel__empty-logo" && panelMarks[0].width > 0 && (await panel.locator(".customizer-panel__foot").innerText()).trim().length === 0,
+		JSON.stringify(panelMarks),
+	);
 
 	// Toggle Music and Movies off in Settings UI
 	await page.locator('[data-sidebar-switch="place:music"]').click();

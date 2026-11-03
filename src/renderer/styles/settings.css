@@ -2100,30 +2100,6 @@
 	background: var(--bg-chrome);
 }
 
-.customizer-panel__brand {
-	display: flex;
-	align-items: center;
-	gap: var(--space-10);
-	min-width: 0;
-}
-
-.customizer-panel__icon {
-	display: grid;
-	place-items: center;
-	flex: none;
-	width: 28px;
-	height: 28px;
-	background: transparent;
-}
-
-.customizer-panel__logo {
-	display: block;
-	width: 26px;
-	height: 26px;
-	object-fit: contain;
-	background: transparent;
-}
-
 .customizer-panel__titles {
 	min-width: 0;
 }
@@ -2252,15 +2228,6 @@
 	border-color: var(--accent-pending-border);
 	background: var(--accent-drop-hover);
 	color: var(--text-primary);
-}
-
-.customizer-suggestion-chip__logo {
-	display: block;
-	flex: none;
-	width: 15px;
-	height: 15px;
-	object-fit: contain;
-	background: transparent;
 }
 
 .customizer-panel__turns {
@@ -2448,15 +2415,6 @@
 
 .customizer-composer__send.is-stop {
 	background: var(--text-primary);
-}
-
-.customizer-panel__footnote {
-	display: flex;
-	align-items: center;
-	gap: var(--space-5);
-	padding: 0 var(--space-2);
-	font-size: var(--font-size-badge);
-	color: var(--text-muted);
 }
 
 /* ------------------------------------------------ Shortcuts Customization -- */

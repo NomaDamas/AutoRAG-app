@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, Lock, PanelRightClose, RotateCcw, Square } from "lucide-react";
+import { ArrowUp, Check, PanelRightClose, RotateCcw, Square } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
@@ -32,7 +32,6 @@ interface SurfaceCopy {
 	readonly suggestions: readonly [LocaleKey, LocaleKey, LocaleKey, LocaleKey];
 	readonly thinking: LocaleKey;
 	readonly placeholder: LocaleKey;
-	readonly lockedNotice: LocaleKey;
 	readonly openAiSettings: LocaleKey;
 	readonly unavailable: LocaleKey;
 }
@@ -52,7 +51,6 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		],
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		placeholder: "settingsCore.sidebar.assistant.placeholder",
-		lockedNotice: "settingsCore.sidebar.assistant.lockedNotice",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
 	},
@@ -69,7 +67,6 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		],
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		placeholder: "settingsCore.contextMenu.assistant.placeholder",
-		lockedNotice: "settingsCore.contextMenu.assistant.lockedNotice",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
 	},
@@ -86,7 +83,6 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		],
 		thinking: "settingsCore.shortcuts.assistant.thinking",
 		placeholder: "settingsCore.shortcuts.assistant.placeholder",
-		lockedNotice: "settingsCore.shortcuts.assistant.lockedNotice",
 		openAiSettings: "settingsCore.shortcuts.assistant.openAiSettings",
 		unavailable: "settingsCore.shortcuts.assistant.unavailable",
 	},
@@ -329,18 +325,13 @@ export function AppCustomizerPanel({
 			hidden={hidden}
 		>
 			<header className="customizer-panel__head">
-				<div className="customizer-panel__brand">
-					<span className="customizer-panel__icon" aria-hidden="true">
-						<img src={dazziMark} alt="" className="customizer-panel__logo" draggable={false} />
-					</span>
-					<div className="customizer-panel__titles">
-						<h2 id={titleId} className="customizer-panel__title">
-							{t(copy.title)}
-						</h2>
-						<p className="customizer-panel__subtitle" title={t(copy.subtitle)}>
-							{t(copy.subtitle)}
-						</p>
-					</div>
+				<div className="customizer-panel__titles">
+					<h2 id={titleId} className="customizer-panel__title">
+						{t(copy.title)}
+					</h2>
+					<p className="customizer-panel__subtitle" title={t(copy.subtitle)}>
+						{t(copy.subtitle)}
+					</p>
 				</div>
 				<div className="customizer-panel__head-actions">
 					{turns.length > 0 ? (
@@ -385,7 +376,6 @@ export function AppCustomizerPanel({
 									data-action="customizer-suggestion"
 									onClick={() => sendMessage(t(key))}
 								>
-									<img src={dazziMark} alt="" className="customizer-suggestion-chip__logo" aria-hidden="true" draggable={false} />
 									<span>{t(key)}</span>
 								</button>
 							))}
@@ -472,10 +462,6 @@ export function AppCustomizerPanel({
 							<ArrowUp size={15} strokeWidth={2.2} />
 						</button>
 					)}
-				</div>
-				<div className="customizer-panel__footnote">
-					<Lock size={11} aria-hidden="true" />
-					<span>{t(copy.lockedNotice)}</span>
 				</div>
 			</footer>
 		</aside>
