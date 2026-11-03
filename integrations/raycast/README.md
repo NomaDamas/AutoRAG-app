@@ -4,7 +4,7 @@ Search what Dazzi has indexed and ask Dazzi's AI Search without switching to the
 
 | Command | What it does |
 | --- | --- |
-| **Search Dazzi** | Searches your files, mail, chats, and web history in Dazzi's local index. No model is involved and nothing leaves your Mac. A file can be opened, shown in Dazzi or Finder, or previewed with Quick Look; a web page opens in the browser. ⌘↵ asks Dazzi the same text. |
+| **Search Dazzi** | Searches your files, mail, chats, and web history in Dazzi's local index. No model is involved and nothing leaves your Mac. ↵ opens a file, ⌘↵ shows it in Dazzi; Show in Finder and Quick Look are in the action panel, and a web page opens in the browser. ⌘⇧↵ asks Dazzi the same text with the selected file attached. |
 | **Ask Dazzi** | Sends the question to Dazzi, which answers it in a new AI Search tab. |
 | **Ask Dazzi About Selected Files** | The same, with the files selected in Finder attached to the question. |
 | **Open in Dazzi** | Opens the folders selected in Finder in Dazzi, and shows selected files in their folder. |

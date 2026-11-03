@@ -53,11 +53,12 @@ function detailMarkdown(hit: Hit): string {
 
 function HitActions({ hit, query }: { hit: Hit; query: string }) {
   const question = validateQuestion(query);
+  // ⌘↵ belongs to the panel's second action (Show in Dazzi / Open in Browser); Ask Dazzi gets ⌘⇧↵ of its own.
   const ask = question.ok ? (
     <Action
       title="Ask Dazzi"
       icon={Icon.SpeechBubble}
-      shortcut={{ modifiers: ["cmd"], key: "return" }}
+      shortcut={{ modifiers: ["cmd", "shift"], key: "return" }}
       onAction={() => runLauncher(askArgs(question.question, hit.path === undefined ? [] : [hit.path]), "Asked Dazzi")}
     />
   ) : null;
