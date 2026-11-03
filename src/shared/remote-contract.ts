@@ -85,6 +85,7 @@ export const REMOTE_NATIVE_ONLY_METHODS: Readonly<Record<string, readonly string
 	actions: ["run", "cancel", "share", "openWithApplications"],
 	preview: ["show", "hide", "prefetch"],
 	conversion: ["plan", "run", "cancel"],
+	voice: ["transcribe", "prepare"],
 	services: ["list", "run"],
 	// `osRequests.take` only drains a queue this app fills; a browser can read it.
 

@@ -82,6 +82,7 @@ const TARGETS = [
 	"osRequests",
 	"smartIndexing",
 	"analytics",
+	"voice",
 ] as const;
 
 export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): string {

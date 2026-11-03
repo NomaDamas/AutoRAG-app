@@ -20,6 +20,7 @@ import {
 	safeStorage,
 	ShareMenu,
 	shell,
+	systemPreferences,
 	type OpenDialogOptions,
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
@@ -131,8 +132,11 @@ import {
 	registerServicesIpcHandlers,
 	registerSmartIndexingIpcHandlers,
 	registerSettingsIpcHandlers,
+	registerVoiceIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createVoiceService, systemMicrophoneAccess } from "./voice-service";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
 import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
@@ -1066,6 +1070,14 @@ app.whenReady().then(async () => {
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
+	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone prompt.
+	registerVoiceIpcHandlers(
+		createVoiceService({
+			env: process.env,
+			readKey: () => readDazziPlanCredential(getAgentDir()),
+			microphone: systemMicrophoneAccess(process.platform, systemPreferences),
+		}),
+	);
 	void accountService.refresh().catch(() => undefined);
 	app.once("will-quit", () => void accountService.dispose());
 

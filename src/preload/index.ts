@@ -25,6 +25,7 @@ import { createSearchBridge } from "./search-bridge";
 import { createSmartIndexingBridge } from "./smart-indexing-bridge";
 import { createSettingsBridge } from "./settings-bridge";
 import { createServicesBridge } from "./services-bridge";
+import { createVoiceBridge } from "./voice-bridge";
 import { installAppearancePreload } from "./appearance";
 import { connectFsWorker } from "./worker-link";
 
@@ -51,6 +52,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	appUpdate: createAppUpdateBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
 	automations: createAutomationBridge(ipcRenderer),
+	voice: createVoiceBridge(ipcRenderer),
 	conversion: createConversionBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
 	interaction: createInteractionBridge(ipcRenderer),
