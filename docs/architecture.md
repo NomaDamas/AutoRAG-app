@@ -1216,16 +1216,29 @@ reads and sends it.
 - **Language.** The recognition language follows the Interface language (`voiceLanguageCode`:
   `ko-KR`, `en-US`, `ja-JP`, `cmn-Hans-CN`).
 - **Before recording.** `prepare()` answers `ready`, `signed-out` (the service would refuse the clip, so
-  nothing is recorded and the system's microphone prompt is not raised) or `microphone-denied`. macOS
-  reports the permission and raises its prompt the first time (`NSMicrophoneUsageDescription`, and the
-  `com.apple.security.device.audio-input` entitlement for the hardened runtime); Windows reports its
-  privacy switch; on Linux Electron offers neither and the browser layer decides
+  nothing is recorded and the system's microphone prompt is not raised) or `microphone-denied`
   (`systemMicrophoneAccess`).
+- **Microphone permission.**
+  - macOS: the first press raises the system's own Allow / Don't Allow prompt
+    (`askForMediaAccess`; `NSMicrophoneUsageDescription`, and the `com.apple.security.device.audio-input`
+    entitlement for the hardened runtime). macOS shows that prompt once per app.
+  - Windows: Electron's `getMediaAccessStatus` follows the three switches in Settings › Privacy &
+    security › Microphone ("Microphone access", "Let apps access your microphone", "Let desktop apps
+    access your microphone"): any of them off is `denied`. Measured on Windows 11 by turning each off in
+    the Settings app. Run from a non-interactive session (SSH, a service) it always says `granted`, so
+    test it on the desktop. Windows has no prompt of an app's own.
+  - Linux: Electron offers neither call; the browser layer's own permission decides.
+  - When the microphone is refused (`microphone-denied`, or `getUserMedia` failing with
+    `NotAllowedError`) the composer opens `MicrophonePermissionDialog` instead of recording. Its main
+    button opens the system's microphone settings (`x-apple.systempreferences:…Privacy_Microphone`,
+    `ms-settings:privacy-microphone`). When the window regains focus the dialog checks again: if the
+    microphone is now allowed it closes and the recording the person asked for starts; if not it says the
+    microphone is still off. "Not now" and Esc close it without recording.
 - **Recording.** `useVoiceInput` (`MediaRecorder`, `audio/webm;codecs=opus` first) holds the microphone
-  only while recording and releases it on stop, cancel, error and unmount. Errors are shown as a line
-  under the field, not as the run's error card.
-- **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`.
-  Both are native-only in a remote browser session.
+  only while recording and releases it on stop, cancel, error and unmount. Other errors are shown as a
+  line under the field, not as the run's error card.
+- **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`,
+  `openMicrophoneSettings()`. All are native-only in a remote browser session.
 
 To test it without speaking, launch Chromium with `--no-sandbox --use-fake-device-for-media-stream
 --use-file-for-fake-audio-capture=<48 kHz stereo wav>%noloop`: with the audio sandbox on, the fake
