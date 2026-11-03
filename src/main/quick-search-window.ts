@@ -76,7 +76,8 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 			height: QUICK_SEARCH_HEIGHT,
 			frame: false,
 			resizable: false,
-			minimizable: false,
+			// Windows minimizes it on a dismissal, which is what hands the foreground back (see `hide`).
+			minimizable: !darwin,
 			maximizable: false,
 			fullscreenable: false,
 			skipTaskbar: true,
@@ -117,9 +118,10 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	const hide = (mode: QuickSearchHideMode): void => {
 		const current = window;
 		if (current === null || current.isDestroyed() || !current.isVisible()) return;
-		// Windows keeps a hidden window as the foreground one (measured: the title stays "Quick Search"); blurring first
-		// activates the next window in z-order, which is the app the person summoned the launcher over.
-		if (mode === "restore" && process.platform === "win32") current.blur();
+		// Windows activates nothing when the foreground window hides (measured: the foreground title went empty, or
+		// stayed "Quick Search"). Minimizing first makes it activate the next window in z-order, which is the app the
+		// person summoned the launcher over; the next summon restores the window before showing it.
+		if (mode === "restore" && process.platform === "win32") current.minimize();
 		current.hide();
 		if (mode === "restore" && darwin && !appWasActive) app.hide();
 	};
@@ -159,6 +161,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 			const focused = BrowserWindow.getFocusedWindow();
 			appWasActive = focused !== null && focused !== current;
 			const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+			if (current.isMinimized()) current.restore();
 			current.setBounds(launcherBounds(display.workArea));
 			current.show();
 			current.focus();
