@@ -836,7 +836,9 @@ app.whenReady().then(async () => {
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
-			void applyRemoteAccess(settings.remoteAccess);
+			void applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+			});
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);

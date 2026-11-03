@@ -36,19 +36,27 @@ export const REMOTE_BOOTSTRAP_PATH = "/remote/bootstrap.js";
  * to its own origin over HTTP/HTTPS and WebSocket (the Electron CSP allows only
  * `autorag-preview:`/`blob:` beyond self, and `img-src`/`media-src`/`font-src`
  * must also accept the same origin's preview and thumbnail endpoints whether
- * served over plain HTTP or an HTTPS proxy such as `tailscale serve`).
+ * served over plain HTTP or an HTTPS proxy such as `tailscale serve`). The
+ * phone shell's previewer frames a PDF or text file from the preview endpoint,
+ * so `frame-src` gains the page's own origin too.
+ *
+ * A browser also gets a device-width viewport: without it a phone lays the page
+ * out at a 980px desktop width and the phone shell's breakpoint never matches.
+ * The desktop window does not read the tag, so it lives here, remote-only.
  */
 export function rewriteIndexHtml(html: string): string {
 	const script = `<script src="${REMOTE_BOOTSTRAP_PATH}"></script>`;
+	const viewport = `<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />`;
 	let out = html.replace(/<meta\s+http-equiv="Content-Security-Policy"\s+content="([^"]*)"/, (_match, content: string) => {
 		const csp = content
 			.replaceAll("autorag-preview: autorag-thumb:", "http: https: ws: wss:")
 			.replaceAll("autorag-preview:", "http: https:")
-			.replaceAll("autorag-thumb:", "http: https:");
+			.replaceAll("autorag-thumb:", "http: https:")
+			.replace("frame-src blob:", "frame-src 'self' blob:");
 		return `<meta http-equiv="Content-Security-Policy" content="${csp}"`;
 	});
 	if (out.includes("<head>")) {
-		out = out.replace("<head>", `<head>\n\t\t${script}`);
+		out = out.replace("<head>", `<head>\n\t\t${viewport}\n\t\t${script}`);
 	}
 	return out;
 }

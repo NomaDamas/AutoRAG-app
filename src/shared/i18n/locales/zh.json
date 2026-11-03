@@ -1312,7 +1312,6 @@
     "searchTitle": "搜索“{{query}}”",
     "resizeSidebar": "调整边栏大小",
     "resizeInspector": "调整检查器大小",
-    "composerPlaceholder": "在文件、邮件和即时通讯中提问（可拖放文件）",
     "removeAttachment": "移除附件",
     "locationOpenFailed": "无法打开“{{name}}”的位置。",
     "ejected": "已推出“{{name}}”。",
@@ -3119,5 +3118,199 @@
     "emptyOutput": "已完成，无文本输出。",
     "targetsCount": "共 {{count}} 项",
     "sidebarOpen": "查看魔法动作结果"
+  },
+  "mobile": {
+    "tabs": {
+      "browse": "浏览",
+      "recents": "最近使用",
+      "ai": "AI 搜索",
+      "automations": "自动化",
+      "search": "搜索",
+      "aria": "应用标签",
+      "settings": "设置"
+    },
+    "connectedTo": "已连接到 {{name}}",
+    "back": "返回",
+    "more": "更多",
+    "moreFor": "{{name}} 的菜单",
+    "add": "添加",
+    "settings": "设置",
+    "collapse": "折叠 {{name}}",
+    "itemCount": "{{count}} 项",
+    "itemCountSize": "{{count}} 项 · {{size}}",
+    "emptyFolder": "空文件夹",
+    "emptyFolderHint": "用 + 新建文件夹，或从此设备上传文件",
+    "emptyTrash": "废纸篓是空的",
+    "loadFailed": "无法打开此文件夹：{{message}}",
+    "loading": "正在加载…",
+    "sort": {
+      "title": "排序方式",
+      "name": "名称",
+      "date": "修改日期",
+      "size": "大小",
+      "kind": "种类"
+    },
+    "view": {
+      "options": "显示选项",
+      "grid": "图标",
+      "list": "列表",
+      "select": "选择"
+    },
+    "folderInfo": "文件夹信息",
+    "askFolder": "询问此文件夹",
+    "pathMenu": "转到上级文件夹",
+    "select": {
+      "all": "全选",
+      "none": "取消全选",
+      "done": "完成",
+      "title": "选择项目",
+      "count": "已选择 {{count}} 项",
+      "move": "移动",
+      "copy": "拷贝",
+      "ask": "问 AI",
+      "trash": "废纸篓",
+      "restore": "还原"
+    },
+    "swipe": {
+      "trash": "废纸篓",
+      "more": "更多"
+    },
+    "menu": {
+      "copy": "拷贝",
+      "move": "移动",
+      "download": "下载",
+      "quickLook": "快速查看",
+      "info": "显示简介",
+      "reveal": "在所在文件夹中显示",
+      "askOne": "AI 摘要",
+      "askFolder": "询问此文件夹",
+      "askMany": "询问 AI 关于 {{count}} 项",
+      "magic": "魔法操作",
+      "tools": "快速操作",
+      "toolsHint": "压缩 · 索引 · 复制",
+      "agent": "AI 智能体",
+      "script": "脚本"
+    },
+    "picker": {
+      "move": "移动 {{count}} 项",
+      "copy": "拷贝 {{count}} 项",
+      "subtitle": "选择位置",
+      "choose": "请选择文件夹",
+      "moveHere": "移动到 {{folder}}",
+      "copyHere": "拷贝到 {{folder}}",
+      "noSubfolders": "没有子文件夹",
+      "places": "位置"
+    },
+    "rename": {
+      "title": "重命名",
+      "ok": "完成"
+    },
+    "newFolder": {
+      "title": "新建文件夹",
+      "ok": "创建",
+      "placeholder": "新建文件夹"
+    },
+    "confirm": {
+      "emptyTrash": "清倒废纸篓？",
+      "emptyTrashBody": "废纸篓中的项目将被永久删除，且无法撤销。",
+      "emptyTrashOk": "清倒废纸篓"
+    },
+    "toast": {
+      "undo": "撤销",
+      "show": "显示",
+      "downloading": "正在下载“{{name}}”…",
+      "downloadingMany": "正在下载 {{count}} 项…",
+      "created": "已创建“{{name}}”",
+      "renamed": "已重命名为“{{name}}”",
+      "uploaded": "已上传“{{name}}”",
+      "uploadFailed": "无法上传“{{name}}”",
+      "uploadedMany": "已上传 {{count}} 个文件",
+      "magicStarted": "正在运行“{{name}}”",
+      "failed": "失败：{{message}}"
+    },
+    "info": {
+      "title": "简介",
+      "quickLook": "快速查看",
+      "download": "下载",
+      "ask": "AI 摘要",
+      "askFolder": "询问",
+      "move": "移动",
+      "indexed": "纳入 AI 搜索",
+      "indexedOn": "可以按内容查找",
+      "indexedOff": "只能按名称查找",
+      "indexLocked": "遵循上级文件夹的设置",
+      "versions": "版本",
+      "versionsFoot": "dupey 找到的同一文稿的其他版本。",
+      "latest": "最新",
+      "near": "相似",
+      "exact": "相同",
+      "tags": "标签",
+      "noTags": "无",
+      "folderRules": "此文件夹的自动化"
+    },
+    "ql": {
+      "done": "完成",
+      "position": "{{index}} / {{total}}",
+      "noPreview": "此格式无法在浏览器中预览。",
+      "openTab": "在新标签页中打开"
+    },
+    "search": {
+      "placeholder": "文件名或内容",
+      "clear": "清除",
+      "results": "{{machine}} 全部 · {{count}} 项",
+      "none": "没有名为“{{query}}”的文件",
+      "noneHint": "要按内容查找，请询问 AI 搜索",
+      "askAi": "向 AI 搜索询问“{{query}}”",
+      "askAiHint": "搜索文件内容、邮件和即时通讯",
+      "typeHint": "搜索此电脑上的文件名",
+      "exit": "关闭搜索"
+    },
+    "recents": {
+      "empty": "没有最近使用的项目",
+      "buckets": {
+        "today": "今天",
+        "yesterday": "昨天",
+        "week": "本周",
+        "month": "本月",
+        "older": "更早"
+      }
+    },
+    "activity": {
+      "title": "进行中与排队",
+      "count": "{{count}} 项任务",
+      "empty": "没有正在进行的任务",
+      "open": "进行中和排队的任务"
+    },
+    "rules": {
+      "add": "在 AI 搜索中添加规则",
+      "section": "规则",
+      "foot": "设定文件新建或变更时 Dazzi 自动执行的操作。规则在 AI 搜索中用自然语言创建和修改。",
+      "daemonToggle": "在后台运行"
+    },
+    "ai": {
+      "history": "对话记录",
+      "newChat": "新对话",
+      "sources": "{{count}} 个来源",
+      "suggestions": "可以这样问",
+      "suggest1": "找一下上周收到的报价单",
+      "suggest2": "整理一下下载文件夹",
+      "suggest3": "总结一下最近的会议纪要"
+    },
+    "settingsHub": {
+      "title": "设置",
+      "connection": "远程访问 · {{address}} · Dazzi {{version}}",
+      "signedOut": "未登录"
+    },
+    "create": {
+      "newFolder": "新建文件夹",
+      "newText": "新建文本文稿",
+      "newMarkdown": "新建 Markdown 文稿",
+      "upload": "从此设备上传",
+      "uploadHint": "照片 · 文件"
+    },
+    "evidence": {
+      "showInFolder": "在文件夹中显示",
+      "preview": "预览"
+    }
   }
 }
