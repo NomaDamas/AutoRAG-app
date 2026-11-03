@@ -33,6 +33,10 @@ const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly shortcutId: Sho
 const NAV_BUTTON =
 	"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 bg-transparent text-ink-body transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover-icon enabled:hover:text-ink disabled:text-ink-faint disabled:cursor-default";
 
+/** The right cluster's actions (Share, Put Back, 휴지통 비우기): the view and Sort/Group controls' muted ink, so no action outranks them. */
+const ACTION_BUTTON =
+	"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 bg-transparent text-ink-muted transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover-icon enabled:hover:text-ink disabled:text-ink-faint disabled:cursor-default";
+
 /**
  * Toolbar (v7 handoff): back/forward, the folder title, the view segmented
  * control, the Sort and Group pop-ups (issue #47), and the top-right cluster —
@@ -204,35 +208,35 @@ export function Toolbar({
 					<>
 						<button
 							type="button"
-							className={NAV_BUTTON}
+							className={ACTION_BUTTON}
 							title={t("toolbar.putBack")}
 							aria-label={t("toolbar.putBack")}
 							disabled={!canPutBack}
 							onClick={onPutBack}
 						>
-							<PutBackIcon size={18} />
+							<PutBackIcon size={16} />
 						</button>
 						<button
 							type="button"
-							className={NAV_BUTTON}
+							className={ACTION_BUTTON}
 							title={t("toolbar.emptyTrash")}
 							aria-label={t("toolbar.emptyTrash")}
 							onClick={onEmptyTrash}
 						>
-							<EmptyTrashIcon size={18} />
+							<EmptyTrashIcon size={16} />
 						</button>
 					</>
 				) : null}
 				{shareAvailable ? (
 					<button
 						type="button"
-						className={NAV_BUTTON}
+						className={ACTION_BUTTON}
 						title={t("toolbar.share")}
 						aria-label={t("toolbar.share")}
 						disabled={!canShare}
 						onClick={(event) => onShare(anchorOf(event.currentTarget))}
 					>
-						<ShareIcon size={18} />
+						<ShareIcon size={16} />
 					</button>
 				) : null}
 			</div>
