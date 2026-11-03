@@ -164,7 +164,10 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 	if (stepId !== "plan") {
 		return `onboarding.stepLabel.${stepId}`;
 	}
-	if (held || plan === "free" || plan === "byok") {
+	if (plan === "free") {
+		return "onboarding.plan.startFree";
+	}
+	if (held || plan === "byok") {
 		return "onboarding.plan.continue";
 	}
 	return plan === "pro" ? "onboarding.plan.checkoutPro" : plan === "max" ? "onboarding.plan.checkoutMax" : "onboarding.plan.checkoutAir";

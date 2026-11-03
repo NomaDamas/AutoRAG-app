@@ -778,7 +778,6 @@
     },
     "welcome": {
       "title": "Finding files is now {{app}}'s job",
-      "lead": "No need to open folders one by one.\n{{app}} reads your files and finds just what you need.",
       "usageStats": "Send anonymous usage statistics to help improve Dazzi. They are not designed to include files, searches or document content, and you can turn it off anytime in Settings.",
       "errorReports": "Send error reports when the app crashes or indexing fails, to help fix problems. They are not designed to include file paths, file names or document content, and you can change this anytime in Settings.",
       "usageStatsPolicy": "Privacy Policy",
@@ -1077,7 +1076,8 @@
       },
       "tierLabel": "Plan",
       "byokLead": "Have an API key?",
-      "byokLink": "Connect with your own API key"
+      "byokLink": "Connect with your own API key",
+      "startFree": "Start for free"
     },
     "model": {
       "title": "Connect your AI models",

@@ -254,7 +254,7 @@ describe("onboarding flow", () => {
 
 	it("labels the plan primary button by what the account already holds", () => {
 		expect(primaryLabelKey("welcome", "pro", false)).toBe("onboarding.stepLabel.welcome");
-		expect(primaryLabelKey("plan", "free", false)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "free", false)).toBe("onboarding.plan.startFree");
 		expect(primaryLabelKey("plan", "byok", false)).toBe("onboarding.plan.continue");
 		expect(primaryLabelKey("plan", "pro", true)).toBe("onboarding.plan.continue");
 		expect(primaryLabelKey("plan", "pro", false)).toBe("onboarding.plan.checkoutPro");

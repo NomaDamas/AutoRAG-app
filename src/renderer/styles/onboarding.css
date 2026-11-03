@@ -161,10 +161,10 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	padding-top: 31px;
 }
 
-/* The heading and cards keep Figma's place in any frame (91 above : 108 below); the BYOK link and promo hang in the space below, so they do not move them. */
+/* The heading and cards keep Figma's place in any frame (87 above : 112 below); the BYOK link and promo hang in the space below, so they do not move them. */
 .onb .screen.plan-screen {
 	display: grid;
-	grid-template-rows: minmax(0,91fr) auto auto minmax(max-content,108fr);
+	grid-template-rows: minmax(0,87fr) auto auto minmax(max-content,112fr);
 	justify-content: stretch;
 	justify-items: center;
 	padding-top: 0;
@@ -5189,10 +5189,10 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 /* Welcome (Figma 01 · welcome): a centred heading over a 744px two-by-two grid of feature cards. */
-/* The heading and cards keep Figma's place in any frame (62 above : 75 below); the opt-ins hang in the space below, so they do not move them. */
+/* The heading and cards keep Figma's place in any frame (67 above : 120 below); the opt-ins hang in the space below, so they do not move them. */
 .onb .screen.welcome-screen {
 	display: grid;
-	grid-template-rows: minmax(0,62fr) auto auto minmax(max-content,75fr);
+	grid-template-rows: minmax(0,67fr) auto auto minmax(max-content,120fr);
 	justify-content: stretch;
 	justify-items: center;
 	padding: 0 24px;
@@ -5203,7 +5203,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .welcome-screen h1 {
-	margin: 0 0 12px;
+	margin: 0;
 }
 
 .onb .screen.center.welcome-screen .screen-copy>p {
@@ -5214,7 +5214,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .welcome-screen .feature-grid {
 	grid-row: 3;
-	margin-top: 28px;
+	margin-top: 36px;
 	width: 100%;
 	max-width: 744px;
 	height: auto;
@@ -5326,28 +5326,29 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .feature-copy strong {
 	color: var(--onb-ink);
-	font-size: 13px;
-	font-weight: 400;
-	line-height: 21px;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 19px;
 }
 
 .onb .welcome-screen .feature-copy small {
 	margin: 0;
 	color: var(--onb-muted);
-	font-size: 11px;
+	font-size: 12px;
 	line-height: 16px;
 }
 
 /* The two opt-ins sit quietly under the cards. */
+/* Each opt-in is one line, centred under the cards, 6px apart (Figma 121:669). */
 .onb .welcome-consents {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	width: 100%;
+	align-items: center;
+	gap: 6px;
 	grid-row: 4;
 	align-self: start;
-	max-width: 744px;
-	margin-top: 12px;
+	max-width: 100%;
+	margin-top: 20px;
 	padding-bottom: 16px;
 }
 
@@ -5356,6 +5357,16 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	color: var(--onb-faint);
 	font-size: 10px;
 	line-height: 14px;
+	white-space: nowrap;
+}
+
+.onb .welcome-consents .usage-consent input {
+	margin-top: 0;
+}
+
+.onb .welcome-consents .inline-link {
+	margin-left: 4px;
+	text-decoration: none;
 }
 
 /* Smart-indexing scope (Figma 05c): a centred heading, two 320px panels folders drag between, and a summary bar. */
@@ -5691,16 +5702,17 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	width: auto;
 	max-width: none;
 	margin-top: 44px;
+	padding-top: 0;
 }
 
 .onb .plan-screen .plan-card {
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	gap: 12px;
 	height: 338px;
 	min-height: 0;
-	padding: 24px 20px;
+	padding: 20px 20px 24px;
 	border: 1px solid var(--onb-border);
 	border-radius: 16px;
 	background: var(--onb-bg-card);
@@ -5716,8 +5728,10 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	border-color: color-mix(in srgb,var(--onb-blue) 45%,var(--onb-border));
 }
 
-/* The Pro/Max card has no outline until chosen, only a soft blue glow. */
+/* The Pro/Max card has no outline until chosen, only a soft blue glow; its switch takes 4px more at the top. */
 .onb .plan-screen .plan-card.tier {
+	gap: 8px;
+	padding: 24px 20px;
 	border-color: transparent;
 	filter: drop-shadow(0 0 4px rgba(10,100,216,.35));
 }
@@ -5729,7 +5743,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .plan-screen .plan-trial {
-	top: -14px;
+	top: -10px;
 	left: 50%;
 	padding: 6px 12px;
 	border-radius: 50px;
@@ -5742,7 +5756,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .plan-screen .radio {
-	top: 24px;
+	top: 20px;
 	right: 20px;
 	box-sizing: border-box;
 	background: var(--onb-bg-card);
@@ -5752,7 +5766,15 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	display: flex;
 	flex: none;
 	flex-direction: column;
-	height: 143px;
+	height: 134px;
+}
+
+.onb .plan-screen .plan-card.tier .radio {
+	top: 24px;
+}
+
+.onb .plan-screen .plan-card.tier .plan-top {
+	height: 135px;
 }
 
 .onb .plan-screen .plan-name {
@@ -5823,9 +5845,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .plan-screen .plan-desc {
 	margin-top: 12px;
-	color: var(--onb-body);
-	font-size: 13px;
-	line-height: 21px;
+	color: var(--onb-muted);
+	font-size: 12px;
+	line-height: 16px;
 	white-space: pre-line;
 }
 
@@ -5843,6 +5865,19 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .plan-screen .plan-card[data-plan="max"] .plan-features {
 	justify-content: center;
+}
+
+/* Free's list takes what it needs; its training note follows 24px under it. */
+.onb .plan-screen .plan-card[data-plan="free"] .plan-features {
+	height: auto;
+}
+
+.onb .plan-screen .plan-training {
+	margin-top: 12px;
+	padding-top: 0;
+	color: var(--onb-faint);
+	font-size: 10px;
+	line-height: 14px;
 }
 
 .onb .plan-screen .plan-features li {
@@ -5893,6 +5928,27 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .plan-screen .plan-byok button:hover {
+	opacity: .8;
+}
+
+/* The promo link: 7px under the BYOK line, quiet grey, no underline. */
+.onb .plan-screen .promo {
+	height: auto;
+	margin-top: 7px;
+}
+
+.onb .plan-screen .promo-toggle {
+	padding: 6px 10px;
+	color: var(--onb-faint);
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 14px;
+	text-decoration: none;
+}
+
+.onb .plan-screen .promo-toggle:hover {
+	background: none;
+	color: var(--onb-faint);
 	opacity: .8;
 }
 

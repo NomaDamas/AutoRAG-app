@@ -2,7 +2,7 @@
 
 import type { ReactElement, ReactNode } from "react";
 import { BrandMark, brandVars, Icon } from "../marks";
-import { Multiline, openExternal } from "../parts";
+import { openExternal } from "../parts";
 import { WELCOME_BRANDS } from "../flow";
 import { accountLegalUrl } from "../../../../shared/account-contract";
 import { APP_NAME } from "../../../../shared/app-info";
@@ -40,9 +40,6 @@ export function WelcomeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 		<section className="screen center welcome-screen">
 			<div className="screen-copy">
 				<h1>{t("onboarding.welcome.title", { app: APP_NAME })}</h1>
-				<p>
-					<Multiline text={t("onboarding.welcome.lead", { app: APP_NAME })} />
-				</p>
 			</div>
 			<div className="feature-grid">
 				<FeatureCard
