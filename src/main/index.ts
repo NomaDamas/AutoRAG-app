@@ -140,7 +140,7 @@ import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
+import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
 import { createQuickSearchShortcut, type QuickSearchShortcut } from "./quick-search-shortcut";
@@ -845,7 +845,9 @@ app.whenReady().then(async () => {
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
-			void applyRemoteAccess(settings.remoteAccess);
+			void applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+			});
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -1284,7 +1286,11 @@ app.whenReady().then(async () => {
 		language: currentLanguage,
 		loadPage: (window) => loadRendererPage(window, "quick-search.html"),
 		revealInApp: (path) => osRequests.push({ action: "reveal", paths: [path] }),
-		ask: (query) => osRequests.pushQuery(query),
+		// Same checks as `dazzi --ask`: a blank, oversized, or NUL-carrying question queues nothing.
+		ask: (query) => {
+			const request = normalizeOsLaunchRequest({ action: "ask", paths: [], query });
+			if (request !== null) void osRequests.push(request);
+		},
 		attach: (paths) => osRequests.push({ action: "ask", paths }),
 		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
 		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),

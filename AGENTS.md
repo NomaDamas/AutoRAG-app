@@ -20,10 +20,14 @@ macOS 26 draws a legacy `icon.icns` shrunk inside a grey plate, so never point
 `mac.icon` back at the `.icns`.
 
 This repository is the standalone Electron Finder app: one repository, one
-app. It is not a monorepo, and no other package is built or released from
-here. Keep changes focused on `src/`, `test/`, `scripts/`, and repository
-documentation. Do not add secrets, private corpus data, generated output, or a
-vendored copy of another checkout.
+app. It is not a monorepo. The one exception is `integrations/raycast/`, the
+Raycast extension: a separate npm project with its own `package.json`,
+lockfile, and `node_modules`, which the app's install, build, tests, and
+release never touch. It reaches Dazzi only through what the bundle ships
+(`Contents/Resources/bin/dazzi` and `tools/bin/autorag`), never through app
+source imports. Otherwise keep changes focused on `src/`, `test/`, `scripts/`,
+and repository documentation. Do not add secrets, private corpus data,
+generated output, or a vendored copy of another checkout.
 
 ## The librarian is a separate public repository
 
@@ -405,12 +409,16 @@ switch branches in place.
 - `scripts/manual-qa/` — real Electron QA scripts.
 - `scripts/qa-vm.mjs`, `scripts/qa-vm/` — the `bun run qa` runner: golden
   macOS VM image setup, the two-slot VM pool, and the VM/host path choice.
+- `integrations/raycast/` — the Raycast extension (its own npm project; `npm test`,
+  `npm run lint`, `npm run dev` from that directory). The live lane that drives
+  Raycast is `scripts/manual-qa/run-qa-live-raycast.mjs` (host only).
 
 Keep bridge contract changes synchronized across the shared contract, IPC
 registration, preload bridge, and both Finder source adapters.
 
 The app test script explicitly excludes the ignored `.upstream/autorag`
-checkout so it does not execute the librarian's tests from this app root.
+checkout so it does not execute the librarian's tests from this app root, and
+`vitest.config.ts` excludes `integrations/**`, whose projects run their own tests.
 
 ## Constraints
 

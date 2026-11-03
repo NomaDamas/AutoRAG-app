@@ -38,7 +38,7 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
 - **Permanent Multi-Pane Architecture:** 
   - Left navigation (Sidebar) lists the live OS places in groups (`Favorites`, `Cloud`, `Locations`), plus `Connections` when a connected app has a folder to show, with **AI Search** above Recents; see §1.5.
   - Center area hosts the tab strip. A tab shows a folder, Settings, or the AI Search chat — AI Search is a tab, not a bottom dock.
-  - Right panel (Info / Evidence) is **permanently present**, preventing jarring layout shifts during file inspection.
+  - Right panel (Info / Evidence) is a **right sidebar** that mirrors the left one: a full-height column from the window top, so the toolbar spans only the center column and its view, Sort, Group, and Share controls end at the inspector's edge. Its head (as tall as the toolbar, a drag region) carries the hide button flush left; while it is hidden the toolbar's last button shows it again, the way the show-sidebar button sits at the toolbar's start. The choice and the width persist (`autorag.shell.inspector`, `autorag.shell.inspectorWidth`), and the column keeps its width while the window grid slides it shut. Layout: `components/InspectorColumn.tsx`; live check: `scripts/manual-qa/right-sidebar.e2e.ts`.
 
 
 ### 1.2 Sort and grouping controls

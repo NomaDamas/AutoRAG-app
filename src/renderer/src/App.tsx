@@ -16,6 +16,7 @@ import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
+import { InspectorColumn } from "./components/InspectorColumn";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
@@ -481,10 +482,11 @@ export function App(): ReactElement {
 					if (target.kind === "folder") finder.openFolder(target.path);
 					else finder.revealEvidence(target.path);
 				}
-			} else if (request.action === "query") {
-				// The quick-search launcher's "Ask Dazzi": a new AI Search tab runs the question, like the sidebar's 내용 search.
+			} else if (request.query !== null) {
+				// `dazzi --ask`, Raycast, and the quick-search launcher's "Ask Dazzi": a new AI Search tab asks at once, like
+				// the sidebar's content search, so a tab that is still answering never swallows the question.
 				finder.openAiSearch();
-				deliverToAi({ query: request.text });
+				deliverToAi({ attach: request.attachments, query: request.query });
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();
@@ -677,10 +679,8 @@ export function App(): ReactElement {
 			deliverToAi({ attach: dropped });
 		},
 	};
-	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
-	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr)`;
-	/** Inner grid under the toolbar: workspace + inspector. */
-	const finderColumns = `minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
+	/** Window grid: left sidebar, the content column (toolbar over the workspace), right sidebar (the inspector). */
+	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr) ${inspectorVisible ? inspectorWidth : 0}px`;
 	const canCloseTabs = canCloseWorkspaceTab(workspace);
 	const split = workspace.panes.length > 1;
 
@@ -740,8 +740,8 @@ export function App(): ReactElement {
 						grouping={finder?.grouping ?? "none"}
 						onApplySort={(key, direction) => finder?.applySort(key, direction)}
 						onSetGrouping={(key) => finder?.setGrouping(key)}
-						inspectorVisible={inspectorVisible}
-						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
+						inspectorHidden={!inspectorVisible}
+						onShowInspector={() => setInspectorVisible(true)}
 						shareAvailable={shareControl.shown}
 						canShare={shareControl.enabled}
 						onShare={(anchor) => {
@@ -754,7 +754,7 @@ export function App(): ReactElement {
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 					/>
-					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns, gridTemplateRows: "minmax(0, 1fr)" }}>
+					<div className="flex min-h-0 flex-1">
 						<WorkspaceView
 							workspace={workspace}
 							draggingTabId={draggingTabId}
@@ -818,9 +818,12 @@ export function App(): ReactElement {
 								})
 							}
 						/>
-						{inspectorVisible && automationsTabActive ? (
+					</div>
+				</div>
+				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)}>
+						{automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
-						) : inspectorVisible ? (
+						) : (
 							<Inspector
 								entry={inspectorEntry}
 								entries={finder?.selectedEntries ?? []}
@@ -849,9 +852,8 @@ export function App(): ReactElement {
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
 								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
 							/>
-						) : null}
-					</div>
-				</div>
+						)}
+				</InspectorColumn>
 				{toast === null && automations.undoToast === null ? null : (
 					<Toast message={automations.undoToast?.message ?? toast ?? ""} action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }} />
 				)}

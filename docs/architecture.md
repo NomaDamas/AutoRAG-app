@@ -1052,7 +1052,8 @@ summons a small window over any app. Pieces:
   `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
   (`AbortSignal` through the worker and the librarian thread).
 - Handoffs to the Finder reuse the os-request queue: *Show in Dazzi* is a `reveal`, *Ask about these files* an `ask`
-  (drafts on the nearest AI Search tab), *Ask Dazzi* a `query` (a new AI Search tab sends it).
+  (drafts on the nearest AI Search tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
+  `dazzi --ask` (a new AI Search tab sends it).
 - `contentSearch` (`src/main/content-search.ts`, in the librarian thread) is model-free: `AutoRAGLite.searchSelected`
   over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
   Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
@@ -1105,6 +1106,7 @@ folder to Finder:
 ```sh
 dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
 dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
+dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Search tab asks at once, the paths attached
 dazzi                          # bring Dazzi to the front
 ```
 
@@ -1113,6 +1115,15 @@ does not exist is reported like `open` does (`dazzi: nope: No such file or
 directory`), the ones that exist still open, and the exit status is 1. At most 200
 paths per call (the request limit in `src/shared/os-request-contract.ts`); more is
 an error rather than a silent cut.
+
+`--ask QUESTION` (or `--ask=QUESTION`) sends the action `ask` with the question
+in `--autorag-query=`: the renderer opens a new AI Search tab and sends the
+question with the existing paths as its attachments in one run
+(`deliverToDock` → `sendQuery(text, attachments)`), so a tab that is still
+answering never swallows it. The question needs no path; a missing attachment is
+reported and dropped while the question is still asked; an empty question exits 2.
+Questions are capped at 16,000 characters (`OS_REQUEST_MAX_QUERY_LENGTH`).
+`--ask` is macOS-only for now: `dazzi.cmd` rejects it as an unknown option.
 
 The launcher is a script that ships inside the app (`build/cli/dazzi` →
 `Dazzi.app/Contents/Resources/bin/dazzi`; `dazzi.cmd` in `resources\bin` on

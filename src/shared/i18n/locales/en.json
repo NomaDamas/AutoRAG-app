@@ -62,7 +62,6 @@
     "group": "Group",
     "showInspector": "Show inspector",
     "hideInspector": "Hide inspector",
-    "toggleInspector": "Toggle inspector",
     "share": "Share",
     "putBack": "Put Back",
     "emptyTrash": "Empty Trash"
@@ -1347,7 +1346,6 @@
     "searchTitle": "Search \"{{query}}\"",
     "resizeSidebar": "Resize sidebar",
     "resizeInspector": "Resize inspector",
-    "composerPlaceholder": "Ask across files, mail, and messengers (drop files here)",
     "removeAttachment": "Remove attachment",
     "locationOpenFailed": "Couldn't open the location \"{{name}}\".",
     "ejected": "Ejected \"{{name}}\".",
@@ -3162,5 +3160,199 @@
     "emptyOutput": " Finished with no text output.",
     "targetsCount": "{{count}} item(s)",
     "sidebarOpen": "Open Magic Action result"
+  },
+  "mobile": {
+    "tabs": {
+      "browse": "Browse",
+      "recents": "Recents",
+      "ai": "AI Search",
+      "automations": "Automations",
+      "search": "Search",
+      "aria": "App tabs",
+      "settings": "Settings"
+    },
+    "connectedTo": "Connected to {{name}}",
+    "back": "Back",
+    "more": "More",
+    "moreFor": "Menu for {{name}}",
+    "add": "Add",
+    "settings": "Settings",
+    "collapse": "Collapse {{name}}",
+    "itemCount": "{{count}} items",
+    "itemCountSize": "{{count}} items · {{size}}",
+    "emptyFolder": "Empty folder",
+    "emptyFolderHint": "Use + to make a folder or upload files from this device",
+    "emptyTrash": "The Trash is empty",
+    "loadFailed": "Couldn't open this folder: {{message}}",
+    "loading": "Loading…",
+    "sort": {
+      "title": "Sort by",
+      "name": "Name",
+      "date": "Date modified",
+      "size": "Size",
+      "kind": "Kind"
+    },
+    "view": {
+      "options": "View options",
+      "grid": "Icons",
+      "list": "List",
+      "select": "Select"
+    },
+    "folderInfo": "Folder info",
+    "askFolder": "Ask about this folder",
+    "pathMenu": "Go to an enclosing folder",
+    "select": {
+      "all": "Select all",
+      "none": "Deselect all",
+      "done": "Done",
+      "title": "Select items",
+      "count": "{{count}} selected",
+      "move": "Move",
+      "copy": "Copy",
+      "ask": "Ask AI",
+      "trash": "Trash",
+      "restore": "Restore"
+    },
+    "swipe": {
+      "trash": "Trash",
+      "more": "More"
+    },
+    "menu": {
+      "copy": "Copy",
+      "move": "Move",
+      "download": "Download",
+      "quickLook": "Quick Look",
+      "info": "Get Info",
+      "reveal": "Show in Enclosing Folder",
+      "askOne": "AI summary",
+      "askFolder": "Ask about this folder",
+      "askMany": "Ask AI about {{count}} items",
+      "magic": "Magic actions",
+      "tools": "Quick actions",
+      "toolsHint": "Compress · Indexing · Duplicate",
+      "agent": "AI agent",
+      "script": "Script"
+    },
+    "picker": {
+      "move": "Move {{count}} items",
+      "copy": "Copy {{count}} items",
+      "subtitle": "Choose a location",
+      "choose": "Choose a folder",
+      "moveHere": "Move to {{folder}}",
+      "copyHere": "Copy to {{folder}}",
+      "noSubfolders": "No subfolders",
+      "places": "Places"
+    },
+    "rename": {
+      "title": "Rename",
+      "ok": "Done"
+    },
+    "newFolder": {
+      "title": "New folder",
+      "ok": "Create",
+      "placeholder": "New folder"
+    },
+    "confirm": {
+      "emptyTrash": "Empty the Trash?",
+      "emptyTrashBody": "Items in the Trash are deleted permanently. This can't be undone.",
+      "emptyTrashOk": "Empty Trash"
+    },
+    "toast": {
+      "undo": "Undo",
+      "show": "Show",
+      "downloading": "Downloading ‘{{name}}’…",
+      "downloadingMany": "Downloading {{count}} items…",
+      "created": "Created ‘{{name}}’",
+      "renamed": "Renamed to ‘{{name}}’",
+      "uploaded": "Uploaded ‘{{name}}’",
+      "uploadFailed": "Couldn't upload ‘{{name}}’",
+      "uploadedMany": "Uploaded {{count}} files",
+      "magicStarted": "Running ‘{{name}}’",
+      "failed": "Failed: {{message}}"
+    },
+    "info": {
+      "title": "Info",
+      "quickLook": "Quick Look",
+      "download": "Download",
+      "ask": "AI summary",
+      "askFolder": "Ask",
+      "move": "Move",
+      "indexed": "Include in AI Search",
+      "indexedOn": "Its contents can be found",
+      "indexedOff": "Only its name can be found",
+      "indexLocked": "Follows the enclosing folder's setting",
+      "versions": "Versions",
+      "versionsFoot": "Other versions of this document dupey found.",
+      "latest": "Latest",
+      "near": "Similar",
+      "exact": "Identical",
+      "tags": "Tags",
+      "noTags": "None",
+      "folderRules": "Automations for this folder"
+    },
+    "ql": {
+      "done": "Done",
+      "position": "{{index}} / {{total}}",
+      "noPreview": "This format can't be previewed in the browser.",
+      "openTab": "Open in new tab"
+    },
+    "search": {
+      "placeholder": "File names or contents",
+      "clear": "Clear",
+      "results": "All of {{machine}} · {{count}}",
+      "none": "No files named “{{query}}”",
+      "noneHint": "Ask AI Search to find it by its contents",
+      "askAi": "Ask AI Search about “{{query}}”",
+      "askAiHint": "Searches file contents, mail, and messengers",
+      "typeHint": "Search file names on this computer",
+      "exit": "Close search"
+    },
+    "recents": {
+      "empty": "No recent items",
+      "buckets": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "week": "This week",
+        "month": "This month",
+        "older": "Earlier"
+      }
+    },
+    "activity": {
+      "title": "Activity",
+      "count": "{{count}} tasks",
+      "empty": "Nothing is running",
+      "open": "Running and queued tasks"
+    },
+    "rules": {
+      "add": "Add a rule in AI Search",
+      "section": "Rules",
+      "foot": "Tell Dazzi what to do when files appear or change. You create and edit rules by asking in AI Search.",
+      "daemonToggle": "Run in background"
+    },
+    "ai": {
+      "history": "History",
+      "newChat": "New chat",
+      "sources": "Sources: {{count}}",
+      "suggestions": "Try asking",
+      "suggest1": "Find the quote I got last week",
+      "suggest2": "Tidy up my Downloads folder",
+      "suggest3": "Summarize my latest meeting notes"
+    },
+    "settingsHub": {
+      "title": "Settings",
+      "connection": "Remote access · {{address}} · Dazzi {{version}}",
+      "signedOut": "Not signed in"
+    },
+    "create": {
+      "newFolder": "New folder",
+      "newText": "New text document",
+      "newMarkdown": "New Markdown document",
+      "upload": "Upload from this device",
+      "uploadHint": "Photos · Files"
+    },
+    "evidence": {
+      "showInFolder": "Show in folder",
+      "preview": "Preview"
+    }
   }
 }

@@ -62,7 +62,6 @@
     "group": "그룹",
     "showInspector": "정보 보기",
     "hideInspector": "정보 가리기",
-    "toggleInspector": "정보 창 토글",
     "share": "공유",
     "putBack": "원래 위치로 복원",
     "emptyTrash": "휴지통 비우기"
@@ -1347,7 +1346,6 @@
     "searchTitle": "\"{{query}}\" 검색",
     "resizeSidebar": "사이드바 크기 조절",
     "resizeInspector": "정보 창 크기 조절",
-    "composerPlaceholder": "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)",
     "removeAttachment": "첨부 제거",
     "locationOpenFailed": "\"{{name}}\" 위치를 열 수 없습니다.",
     "ejected": "\"{{name}}\" 을(를) 추출했습니다.",
@@ -3162,5 +3160,199 @@
     "emptyOutput": "출력된 텍스트가 없습니다.",
     "targetsCount": "대상 {{count}}개",
     "sidebarOpen": "매직 액션 실행 결과 열기"
+  },
+  "mobile": {
+    "tabs": {
+      "browse": "둘러보기",
+      "recents": "최근 항목",
+      "ai": "AI 검색",
+      "automations": "자동화",
+      "search": "검색",
+      "aria": "앱 탭",
+      "settings": "설정"
+    },
+    "connectedTo": "{{name}}에 연결됨",
+    "back": "뒤로",
+    "more": "더보기",
+    "moreFor": "{{name}} 메뉴",
+    "add": "추가",
+    "settings": "설정",
+    "collapse": "{{name}} 접기",
+    "itemCount": "{{count}}개 항목",
+    "itemCountSize": "{{count}}개 항목 · {{size}}",
+    "emptyFolder": "빈 폴더",
+    "emptyFolderHint": "＋ 버튼으로 새 폴더를 만들거나 이 기기의 파일을 올리세요",
+    "emptyTrash": "휴지통이 비어 있어요",
+    "loadFailed": "이 폴더를 열 수 없어요: {{message}}",
+    "loading": "불러오는 중…",
+    "sort": {
+      "title": "정렬 기준",
+      "name": "이름",
+      "date": "수정일",
+      "size": "크기",
+      "kind": "종류"
+    },
+    "view": {
+      "options": "보기 옵션",
+      "grid": "아이콘",
+      "list": "목록",
+      "select": "선택"
+    },
+    "folderInfo": "폴더 정보",
+    "askFolder": "이 폴더에 묻기",
+    "pathMenu": "상위 폴더로 이동",
+    "select": {
+      "all": "모두 선택",
+      "none": "선택 해제",
+      "done": "완료",
+      "title": "항목 선택",
+      "count": "{{count}}개 선택됨",
+      "move": "이동",
+      "copy": "복사",
+      "ask": "AI에게",
+      "trash": "휴지통",
+      "restore": "복원"
+    },
+    "swipe": {
+      "trash": "휴지통",
+      "more": "더보기"
+    },
+    "menu": {
+      "copy": "복사",
+      "move": "이동",
+      "download": "다운로드",
+      "quickLook": "훑어보기",
+      "info": "정보 보기",
+      "reveal": "상위 폴더에서 보기",
+      "askOne": "AI 요약",
+      "askFolder": "이 폴더에 묻기",
+      "askMany": "{{count}}개 항목을 AI에게 묻기",
+      "magic": "매직 액션",
+      "tools": "빠른 작업",
+      "toolsHint": "압축 · 인덱싱 · 복제",
+      "agent": "AI 에이전트",
+      "script": "스크립트"
+    },
+    "picker": {
+      "move": "{{count}}개 항목 이동",
+      "copy": "{{count}}개 항목 복사",
+      "subtitle": "위치 선택",
+      "choose": "폴더를 고르세요",
+      "moveHere": "{{folder}}(으)로 이동",
+      "copyHere": "{{folder}}(으)로 복사",
+      "noSubfolders": "하위 폴더 없음",
+      "places": "위치"
+    },
+    "rename": {
+      "title": "이름 변경",
+      "ok": "완료"
+    },
+    "newFolder": {
+      "title": "새 폴더",
+      "ok": "만들기",
+      "placeholder": "새 폴더"
+    },
+    "confirm": {
+      "emptyTrash": "휴지통을 비울까요?",
+      "emptyTrashBody": "휴지통의 항목이 영구 삭제돼요. 실행 취소할 수 없어요.",
+      "emptyTrashOk": "휴지통 비우기"
+    },
+    "toast": {
+      "undo": "실행 취소",
+      "show": "보기",
+      "downloading": "‘{{name}}’ 다운로드 중…",
+      "downloadingMany": "{{count}}개 항목 다운로드 중…",
+      "created": "‘{{name}}’ 만듦",
+      "renamed": "이름을 ‘{{name}}’(으)로 바꿈",
+      "uploaded": "‘{{name}}’ 올림",
+      "uploadFailed": "‘{{name}}’을(를) 올리지 못했어요",
+      "uploadedMany": "{{count}}개 파일 올림",
+      "magicStarted": "‘{{name}}’ 실행 중",
+      "failed": "실패: {{message}}"
+    },
+    "info": {
+      "title": "정보",
+      "quickLook": "훑어보기",
+      "download": "다운로드",
+      "ask": "AI 요약",
+      "askFolder": "묻기",
+      "move": "이동",
+      "indexed": "AI 검색에 포함",
+      "indexedOn": "내용까지 찾을 수 있어요",
+      "indexedOff": "이름으로만 찾을 수 있어요",
+      "indexLocked": "상위 폴더 설정을 따라요",
+      "versions": "버전",
+      "versionsFoot": "dupey가 찾은 같은 문서의 다른 버전이에요.",
+      "latest": "최신",
+      "near": "비슷함",
+      "exact": "같음",
+      "tags": "태그",
+      "noTags": "없음",
+      "folderRules": "이 폴더의 자동화"
+    },
+    "ql": {
+      "done": "완료",
+      "position": "{{index}} / {{total}}",
+      "noPreview": "이 형식은 브라우저에서 미리볼 수 없어요.",
+      "openTab": "새 탭에서 열기"
+    },
+    "search": {
+      "placeholder": "파일 이름이나 내용",
+      "clear": "지우기",
+      "results": "{{machine}} 전체 · {{count}}개",
+      "none": "“{{query}}” 이름의 파일이 없어요",
+      "noneHint": "내용으로 찾으려면 AI 검색에 물어보세요",
+      "askAi": "“{{query}}” AI 검색에 묻기",
+      "askAiHint": "파일 내용, 메일, 메신저까지 찾아요",
+      "typeHint": "이 컴퓨터의 파일 이름을 검색해요",
+      "exit": "검색 닫기"
+    },
+    "recents": {
+      "empty": "최근 항목 없음",
+      "buckets": {
+        "today": "오늘",
+        "yesterday": "어제",
+        "week": "이번 주",
+        "month": "이번 달",
+        "older": "이전"
+      }
+    },
+    "activity": {
+      "title": "진행 및 대기열",
+      "count": "{{count}}개 작업",
+      "empty": "진행 중인 작업이 없어요",
+      "open": "진행 및 대기 중인 작업"
+    },
+    "rules": {
+      "add": "AI 검색에서 규칙 추가",
+      "section": "규칙",
+      "foot": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요. 규칙은 AI 검색에서 말로 만들고 고칩니다.",
+      "daemonToggle": "백그라운드 실행"
+    },
+    "ai": {
+      "history": "대화 기록",
+      "newChat": "새 대화",
+      "sources": "출처 {{count}}개",
+      "suggestions": "이렇게 물어보세요",
+      "suggest1": "지난주에 받은 견적서 찾아줘",
+      "suggest2": "다운로드 폴더 정리해줘",
+      "suggest3": "최근 회의록 요약해줘"
+    },
+    "settingsHub": {
+      "title": "설정",
+      "connection": "원격 접속 · {{address}} · Dazzi {{version}}",
+      "signedOut": "로그인하지 않음"
+    },
+    "create": {
+      "newFolder": "새 폴더",
+      "newText": "새 텍스트 문서",
+      "newMarkdown": "새 Markdown 문서",
+      "upload": "이 기기에서 올리기",
+      "uploadHint": "사진 보관함 · 파일"
+    },
+    "evidence": {
+      "showInFolder": "폴더에서 보기",
+      "preview": "미리보기"
+    }
   }
 }

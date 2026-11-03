@@ -22,7 +22,7 @@ afterEach(() => {
 	host.remove();
 });
 
-function renderToolbar(onApplySort = vi.fn(), shareAvailable = false): void {
+function renderToolbar(onApplySort = vi.fn(), shareAvailable = false, inspectorHidden = false): void {
 	act(() =>
 		root.render(
 			<Toolbar
@@ -37,8 +37,8 @@ function renderToolbar(onApplySort = vi.fn(), shareAvailable = false): void {
 				grouping="none"
 				onApplySort={onApplySort}
 				onSetGrouping={() => {}}
-				inspectorVisible={false}
-				onToggleInspector={() => {}}
+				inspectorHidden={inspectorHidden}
+				onShowInspector={() => {}}
 				shareAvailable={shareAvailable}
 				canShare={false}
 				onShare={() => {}}
@@ -96,15 +96,25 @@ describe("Toolbar right cluster", () => {
 	const clusterLabels = (): (string | null)[] =>
 		[...host.querySelectorAll(".tgroup button")].map((button) => button.getAttribute("aria-label"));
 
-	it("holds the inspector toggle and Share, and no AI Search toggle", () => {
+	it("holds Share, and no inspector or AI Search toggle, while the inspector is shown", () => {
 		renderToolbar(vi.fn(), true);
-		expect(clusterLabels()).toEqual(["Toggle inspector", "Share"]);
+		expect(clusterLabels()).toEqual(["Share"]);
+		// The inspector hides from its own head, like the left sidebar; the toolbar stops at its edge.
+		expect(host.querySelector('[aria-label="Show inspector"]')).toBeNull();
+		expect(host.querySelector('[aria-label="Hide inspector"]')).toBeNull();
 		expect(host.querySelector('[aria-label="Show AI Search"]')).toBeNull();
 		expect(host.querySelector('[title^="AI Search"]')).toBeNull();
 	});
 
-	it("holds only the inspector toggle where the OS has no share sheet", () => {
+	it("holds nothing where the OS has no share sheet", () => {
 		renderToolbar();
-		expect(clusterLabels()).toEqual(["Toggle inspector"]);
+		expect(clusterLabels()).toEqual([]);
+	});
+
+	it("ends with the show-inspector button only while the inspector is hidden, mirroring the show-sidebar button", () => {
+		renderToolbar(vi.fn(), true, true);
+		const labels = [...host.querySelectorAll(".toolbar button")].map((button) => button.getAttribute("aria-label"));
+		expect(labels.at(-1)).toBe("Show inspector");
+		expect(clusterLabels()).toEqual(["Share"]);
 	});
 });

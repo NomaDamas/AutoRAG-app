@@ -24,6 +24,15 @@
  * (DESIGN.md §3a). Every rule sits under `.onb`. */
 @import "./onboarding.css" layer(base);
 
+/* Phone shell — the remote browser session on a phone-sized screen
+ * (src/renderer/src/mobile). Every rule sits under `.phone-app`. */
+@import "./mobile.css" layer(base);
+
 /* Syntax colours for code blocks in AI Search answers and evidence excerpts
  * (`.hl-code`); shared with Quick Look's code lines. */
 @import "../../preview/ui/syntax.css" layer(base);
+
+/* Phone shell's changes to the desktop components it hosts (AI 검색,
+ * Settings). Unlayered so they outrank those components' utilities; every
+ * rule is scoped to `.phone-app .phone-hosted`. */
+@import "./mobile-hosted.css";
