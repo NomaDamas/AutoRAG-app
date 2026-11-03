@@ -21,6 +21,7 @@ import { isApprovalMode } from "../shared/interaction-contract";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
 import { normalizeShortcutSettings } from "../shared/shortcuts-contract";
+import { normalizeQuickSearchSettings } from "../shared/quick-search-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
@@ -81,6 +82,7 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 				sidebar: persisted.sidebar === undefined ? defaults.sidebar : normalizeSidebarSettings(persisted.sidebar),
 				contextMenu: persisted.contextMenu === undefined ? defaults.contextMenu : normalizeContextMenuSettings(persisted.contextMenu),
 				shortcuts: persisted.shortcuts === undefined ? defaults.shortcuts : normalizeShortcutSettings(persisted.shortcuts),
+				quickSearch: persisted.quickSearch === undefined ? defaults.quickSearch : normalizeQuickSearchSettings(persisted.quickSearch),
 			},
 			permissions: state.permissions ?? {},
 		};
@@ -157,7 +159,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 				const sidebar = patch.sidebar === undefined ? current.settings.sidebar : normalizeSidebarSettings(patch.sidebar);
 				const contextMenu = patch.contextMenu === undefined ? current.settings.contextMenu : normalizeContextMenuSettings(patch.contextMenu);
 				const shortcuts = patch.shortcuts === undefined ? current.settings.shortcuts : normalizeShortcutSettings(patch.shortcuts);
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts };
+				const quickSearch = patch.quickSearch === undefined ? current.settings.quickSearch : normalizeQuickSearchSettings(patch.quickSearch);
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch };
 				return current;
 			});
 			deps.onSettingsChanged?.(state.settings);

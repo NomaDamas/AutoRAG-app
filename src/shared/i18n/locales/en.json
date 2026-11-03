@@ -603,6 +603,40 @@
     "ask": "Ask Dazzi",
     "reveal": "Show in Dazzi"
   },
+  "quickSearch": {
+    "title": "Quick Search",
+    "placeholder": "Search file names and contents",
+    "searching": "Searching",
+    "sections": {
+      "recent": "Recent",
+      "names": "File Names",
+      "content": "Contents",
+      "ask": "Ask Dazzi"
+    },
+    "askRow": "Ask Dazzi: “{{query}}”",
+    "emptyRecents": "Type to search. Files you opened recently show up here.",
+    "noResults": "No matching files.",
+    "contentOff": "Content search is off in keyword-only mode.",
+    "contentUnavailable": "The document index is not ready yet, so there are no content matches.",
+    "copiedFiles": "Copied {{count}} file(s). Paste them into any app.",
+    "copiedPaths": "Copied {{count}} path(s).",
+    "actionsTitle": "Actions",
+    "actions": {
+      "open": "Open",
+      "preview": "Quick Look",
+      "revealOs": "Show in Finder/Explorer",
+      "showInApp": "Show in Dazzi",
+      "copyFile": "Copy File",
+      "copyPath": "Copy Path",
+      "askAbout": "Ask Dazzi About This File",
+      "askQuery": "Ask Dazzi"
+    },
+    "hints": {
+      "preview": "Preview",
+      "copy": "Copy",
+      "actions": "Actions"
+    }
+  },
   "toasts": {
     "trashSingle": "Moved {{name}} to Trash",
     "trashCount": "Moved {{count}} items to Trash",
@@ -2362,6 +2396,14 @@
       "finderDesc": "Behavior of the file browsing screen.",
       "showHiddenFiles": "Show Hidden Files",
       "showHiddenFilesHint": "Show system files that start with a dot (.) in Finder.",
+      "quickSearchTitle": "Quick Search",
+      "quickSearchDesc": "Open the Dazzi search bar with a shortcut, whatever app you are in.",
+      "quickSearchEnabled": "Use the Quick Search Shortcut",
+      "quickSearchEnabledHint": "Press {{shortcut}} to open the search bar. Press it again or Esc to close it.",
+      "quickSearchShortcut": "Shortcut",
+      "quickSearchShortcutHint": "Click, then press a new key combination.",
+      "quickSearchNeedsModifier": "This shortcut works in every app, so hold ⌘/Ctrl or ⌥/Alt with the key.",
+      "quickSearchTaken": "{{shortcut}} is already used by another app or the system. Choose another combination.",
       "remoteTitle": "Remote Access",
       "remoteSecurityHint": "HTTP is not encrypted. Use only a trusted network or an encrypted tunnel.",
       "remoteAccess": "Enable Remote Access",

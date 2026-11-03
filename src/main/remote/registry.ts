@@ -26,6 +26,7 @@ const FS_WORKER_METHODS: Readonly<Record<string, string>> = {
 	previewIcon: "previewIcon",
 	exists: "exists",
 	search: "search",
+	contentSearch: "contentSearch",
 	locations: "locations",
 	tags: "tags",
 	setTags: "setTags",

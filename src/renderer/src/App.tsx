@@ -483,8 +483,8 @@ export function App(): ReactElement {
 					else finder.revealEvidence(target.path);
 				}
 			} else if (request.query !== null) {
-				// `dazzi --ask` / Raycast: a new AI Search tab asks at once, like the sidebar's content search, so a
-				// tab that is still answering never swallows the question.
+				// `dazzi --ask`, Raycast, and the quick-search launcher's "Ask Dazzi": a new AI Search tab asks at once, like
+				// the sidebar's content search, so a tab that is still answering never swallows the question.
 				finder.openAiSearch();
 				deliverToAi({ attach: request.attachments, query: request.query });
 			} else {

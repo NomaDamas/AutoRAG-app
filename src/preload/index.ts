@@ -9,6 +9,7 @@ import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
 import { REMOTE_CHANNELS, type RemoteAccessBridge } from "../shared/remote-contract";
+import { QUICK_SEARCH_CHANNELS, type QuickSearchSettingsBridge } from "../shared/quick-search-contract";
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
 import { createErrorFixBridge } from "./error-fix-bridge";
@@ -67,6 +68,10 @@ contextBridge.exposeInMainWorld("autorag", {
 	settings: createSettingsBridge(ipcRenderer),
 	services: createServicesBridge(ipcRenderer),
 	remote: createRemoteBridge(ipcRenderer),
+	quickSearch: {
+		status: () => ipcRenderer.invoke(QUICK_SEARCH_CHANNELS.status),
+		setRecording: (recording: boolean) => ipcRenderer.invoke(QUICK_SEARCH_CHANNELS.recording, recording),
+	} satisfies QuickSearchSettingsBridge,
 	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.
 	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });
