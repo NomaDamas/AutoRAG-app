@@ -1,5 +1,7 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
+import dazziMarkPath from "../../renderer/src/assets/dazzi-mark.png?asset";
 import type { AppSettings } from "../../shared/settings-contract";
 import {
 	remotePreviewMime,
@@ -27,8 +29,17 @@ import type { WorkerClient } from "../../shared/fs-worker-protocol";
 
 /**
  * Wires the remote server, device pairing registry, read-only Tailscale status,
- * LAN IPv4 discovery, and Cloudflare Quick Tunnel to the running app.
+ * LAN IPv4 discovery, and the Cloudflare tunnel (Quick Tunnel or own domain) to the running app.
  */
+
+/** The sunflower mark the AccessGate draws above "Dazzi", inlined because the gate page allows only `data:` images. */
+function gateLogoDataUrl(): string | undefined {
+	try {
+		return `data:image/png;base64,${readFileSync(dazziMarkPath).toString("base64")}`;
+	} catch {
+		return undefined;
+	}
+}
 
 /** Bridge target -> the IPC channel map whose keys are the bridge method names. */
 export type RemoteTargetChannels = Readonly<Record<string, Readonly<Record<string, string>>>>;
@@ -66,6 +77,10 @@ export interface RemoteHost {
 	refreshNetwork(): Promise<RemoteAccessStatus>;
 	startTunnel(): Promise<RemoteAccessStatus>;
 	stopTunnel(): Promise<RemoteAccessStatus>;
+	/** `cloudflared tunnel login`, run from the desktop only (it opens a browser on the host). */
+	loginTunnel(): Promise<RemoteAccessStatus>;
+	/** The own-domain hostname setting changed (`""` = Quick Tunnel). */
+	setTunnelHostname(hostname: string): Promise<void>;
 }
 
 /** Calls the IPC handler the desktop renderer would reach, with a stand-in sender. */
@@ -82,6 +97,7 @@ const TAILSCALE_CACHE_TTL_MS = 30_000;
 export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	const log = deps.log ?? ((message: string) => console.error(`[remote] ${message}`));
 	const deviceStore = new DeviceStore(deps.stateDir);
+	const gateLogo = gateLogoDataUrl();
 	let token = "";
 	let origin: string | null = null;
 	let baseOrigin: string | null = null;
@@ -102,8 +118,13 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	deviceStore.onChanged(emitChanged);
 
 	const tunnel: TunnelManager = createTunnelManager({
+		stateDir: deps.stateDir,
 		onChange: emitChanged,
 	});
+	void deps.settings().then(
+		(settings) => tunnel.setHostname(settings.remoteTunnelHostname),
+		() => undefined,
+	);
 
 	const getTailscale = async (port: number, force = false): Promise<RemoteTailscaleStatus> => {
 		const now = Date.now();
@@ -134,6 +155,8 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		};
 	};
 
+	// What a browser session may call on `remote.*`. Tunnel control stays with the desktop: it spawns
+	// cloudflared on the host and its login opens a browser there.
 	const remoteMethods: Readonly<Record<string, (...args: readonly unknown[]) => unknown>> = {
 		status: () => buildStatus(),
 		startPairing: () => deviceStore.startPairing(),
@@ -142,15 +165,6 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		revokeDevice: (id) => deviceStore.revoke(String(id)),
 		revokeAllDevices: () => deviceStore.revokeAll().length,
 		refreshNetwork: () => buildStatus(true),
-		startTunnel: async () => {
-			if (boundPort === null || boundPort <= 0) throw new Error("Remote server is not running");
-			await tunnel.start(boundPort);
-			return buildStatus();
-		},
-		stopTunnel: async () => {
-			await tunnel.stop();
-			return buildStatus();
-		},
 	};
 
 	const dispatcher = createRemoteDispatcher({
@@ -229,6 +243,7 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 					const current = await deps.settings();
 					return { language: current.language, appearance: current.appearance };
 				},
+				...(gateLogo === undefined ? {} : { gateLogoDataUrl: gateLogo }),
 				dispatch,
 				onSessionOpen: () => emitChanged(),
 				onSessionClose: (sessionId) => {
@@ -294,13 +309,17 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		revokeAllDevices: () => deviceStore.revokeAll().length,
 		refreshNetwork: () => buildStatus(true),
 		startTunnel: async () => {
-			if (boundPort === null || boundPort <= 0) throw new Error("Enable Remote Access before starting Quick Tunnel");
-			await tunnel.start(boundPort);
+			await tunnel.start(boundPort ?? 0);
 			return buildStatus(false);
 		},
 		stopTunnel: async () => {
 			await tunnel.stop();
 			return buildStatus(false);
 		},
+		loginTunnel: async () => {
+			await tunnel.login();
+			return buildStatus(false);
+		},
+		setTunnelHostname: (hostname) => tunnel.setHostname(hostname),
 	};
 }

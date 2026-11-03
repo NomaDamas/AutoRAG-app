@@ -1,6 +1,7 @@
 /**
  * End-to-end live verification of Remote Access (Ovis-inspired pairing, QR codes,
- * Tailscale/Tunnel tabs, Paired Devices management, and real browser Finder sessions).
+ * the route picker (Same Wi-Fi / Tailscale / Internet), Paired Devices management,
+ * and real browser Finder sessions).
  *
  * Run through the QA runner:
  *   bun run qa script test/remote-settings.e2e.mjs
@@ -40,29 +41,41 @@ try {
 	const address = () => page.getByRole("textbox", { name: en.remoteAddress, exact: true });
 	const port = page.getByRole("spinbutton", { name: en.remotePort, exact: true });
 	const toggle = page.getByRole("switch", { name: en.remoteAccess, exact: true });
+	const section = () => page.locator(".settings-section").filter({ has: toggle });
+	const routeAddress = page.getByTestId("remote-route-address");
 
-	// 1. Fresh profile starts stopped.
+	// 1. Fresh profile starts off: only the switch, no address, port, or hub.
 	await expect(toggle).toHaveAttribute("aria-checked", "false");
-	await expect(address()).toHaveValue(en.remoteStopped);
-	await expect(page.getByRole("button", { name: en.remoteCopyAddress, exact: true })).toBeDisabled();
-	await page.locator(".settings-section").filter({ has: toggle }).screenshot({ path: join(out, "01-en-desktop-stopped.png") });
+	await expect(address()).toHaveCount(0);
+	await expect(port).toHaveCount(0);
+	await expect(page.locator(".settings-remote-hub")).toHaveCount(0);
+	await section().screenshot({ path: join(out, "01-en-desktop-stopped.png") });
 
-	// 2. Port validation & commit.
-	await port.fill("0");
-	await port.press("Enter");
-	await page.waitForFunction(async () => (await window.autorag.settings.get()).remotePort === 0);
-	await expect(port).toHaveValue("0");
+	// 2. Enable -> the Connect a Device card; the token address and port wait behind Details.
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", "true");
+	await expect(page.getByTestId("remote-pairing-code").or(page.getByRole("button", { name: en.remotePairStart, exact: true }))).toBeVisible({
+		timeout: 10_000,
+	});
+	await expect(address()).toBeHidden();
+	await page.locator("details.settings-remote-details > summary").click();
+	await expect(address()).toHaveValue(/^http:\/\/.+:\d+\/\?token=.+/u, { timeout: 10_000 });
+
+	// 3. Port validation & commit, then restart the server on the free port it asks for.
 	await port.fill("-1");
 	await port.press("Enter");
 	assert.equal(await port.evaluate((input) => input.validity.valid), false);
-	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remotePort), 0);
+	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remotePort), 47833);
 	await port.fill("0");
 	await port.press("Enter");
-	await expect(port).toHaveValue("0");
-
-	// 3. Enable Remote Access -> server binds and shows live token address + Pairing/Tailscale/Tunnel hub.
+	await page.waitForFunction(async () => (await window.autorag.settings.get()).remotePort === 0);
+	await toggle.click();
+	await expect(toggle).toHaveAttribute("aria-checked", "false");
+	await expect(address()).toHaveCount(0);
 	await toggle.click();
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
+	const details = page.locator("details.settings-remote-details");
+	if (!(await details.evaluate((element) => element.open))) await details.locator("summary").click();
 	await expect(address()).toHaveValue(/^http:\/\/.+:\d+\/\?token=.+/u, { timeout: 10_000 });
 	const status = await page.evaluate(() => window.autorag.remote.status());
 	const shownAddress = await address().inputValue();
@@ -70,13 +83,19 @@ try {
 	assert.equal(status.serving, true);
 	assert.equal(shownAddress, status.origin);
 	assert.equal(new URL(shownAddress).port, String(status.port));
+	assert.notEqual(status.port, 47833, "port 0 asks the OS for a free port");
 	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remoteAccess), true);
 
-	await page.getByRole("button", { name: en.remoteCopyAddress, exact: true }).click();
-	await expect(page.getByRole("button", { name: en.remoteAddressCopied, exact: true })).toBeVisible();
+	await details.getByRole("button", { name: en.remoteCopyAddress, exact: true }).click();
+	await expect(details.getByRole("button", { name: en.remoteAddressCopied, exact: true })).toBeVisible();
 	assert.equal(await app.evaluate(({ clipboard }) => clipboard.readText()), shownAddress);
+	await details.locator("summary").click();
 
-	// 4. Generate a 6-digit pairing code on the host -> verify QR code SVG and spaced code render.
+	// 4. Same Wi-Fi route + a 6-digit pairing code -> QR code of `<LAN address>/?pair=CODE`.
+	await page.getByRole("tab", { name: en.remoteRouteLan, exact: true }).click();
+	await expect(routeAddress).toHaveText(/^http:\/\/\d+\.\d+\.\d+\.\d+:\d+$/u);
+	const lanAddress = (await routeAddress.textContent())?.trim() ?? "";
+	assert.equal(new URL(lanAddress).port, String(status.port));
 	await page.getByRole("button", { name: en.remotePairStart, exact: true }).click();
 	const codeLocator = page.getByTestId("remote-pairing-code");
 	await expect(codeLocator).toBeVisible();
@@ -84,7 +103,10 @@ try {
 	assert.match(spacedCode, /^\d{3} \d{3}$/u);
 	const rawCode = spacedCode.replace(/\s+/g, "");
 	await expect(page.locator("svg.settings-remote-qr")).toBeVisible();
-	await page.locator(".settings-section").filter({ has: toggle }).screenshot({ path: join(out, "02-host-pairing-qr.png") });
+	await page.getByRole("button", { name: en.remotePairLinkCopy, exact: true }).click();
+	await expect(page.getByRole("button", { name: en.remotePairLinkCopied, exact: true })).toBeVisible();
+	assert.equal(await app.evaluate(({ clipboard }) => clipboard.readText()), `${lanAddress}/?pair=${rawCode}`);
+	await section().screenshot({ path: join(out, "02-host-pairing-qr.png") });
 
 	if (!existsSync(chromium.executablePath())) {
 		execFileSync(process.execPath, ["./node_modules/playwright/cli.js", "install", "chromium"], { stdio: "inherit" });
@@ -127,7 +149,9 @@ try {
 		await renameInput.press("Enter");
 		await expect(page.locator(".settings-remote-device-row").filter({ hasText: "Jeffrey iPhone" })).toBeVisible();
 
-		// Issue a second pairing code and open via QR link (`/?pair=CODE`) in a second isolated browser context
+		// Issue a second pairing code and open the QR link (`<LAN address>/?pair=CODE`) in a second browser
+		// The phone spent the code: the host drops it, so a second device needs a fresh one
+		await expect(codeLocator).toBeHidden({ timeout: 10_000 });
 		await page.getByRole("button", { name: en.remotePairStart, exact: true }).click();
 		await expect(codeLocator).toBeVisible();
 		const secondCode = ((await codeLocator.textContent()) ?? "").replace(/\D/g, "");
@@ -135,15 +159,17 @@ try {
 
 		const qrContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, permissions: ["clipboard-read", "clipboard-write"] });
 		const qrPage = await qrContext.newPage();
-		await qrPage.goto(`${origin}/?pair=${secondCode}`);
+		await qrPage.goto(`${lanAddress}/?pair=${secondCode}`);
 		await expect(qrPage.locator(".sidebar__item--settings")).toBeVisible({ timeout: 15_000 });
 		assert.equal(qrPage.url().includes("pair="), false, "?pair=CODE is stripped from URL history immediately");
 
-		// Check remote Settings inside the QR-paired browser
+		// Check remote Settings inside the QR-paired browser: its own origin (no token) behind Details
 		await qrPage.locator(".sidebar__item--settings").click();
+		await qrPage.locator("details.settings-remote-details > summary").click();
 		const remoteAddress = qrPage.getByRole("textbox", { name: en.remoteAddress, exact: true });
-		await expect(remoteAddress).toHaveValue(origin);
+		await expect(remoteAddress).toHaveValue(lanAddress);
 		await expect(qrPage.locator(".settings-remote-device-badge")).toHaveText(en.remoteDeviceCurrent);
+		await expect(qrPage.getByRole("button", { name: en.remoteTunnelStart, exact: true })).toHaveCount(0);
 		for (const width of [1440, 390]) {
 			await qrPage.setViewportSize({ width, height: 1000 });
 			const isolate = width === 390 ? await qrPage.addStyleTag({ content: ".settings-view { position: fixed; inset: 0; z-index: 2147483647; }" }) : null;
@@ -159,27 +185,30 @@ try {
 		await iphoneRow.getByRole("button", { name: en.remoteDeviceRevokeConfirm, exact: true }).click();
 		await expect(iphoneRow).toBeHidden();
 
-		// Trigger an action on the revoked phone page -> bootstrap receives 403 and reloads to AccessGate
+		// Revocation closes the phone's event stream and the page reloads itself to the AccessGate;
+		// an explicit reload can race that navigation (ERR_ABORTED), which is fine.
 		await phone.getByRole("button", { name: locales.en.places.settings, exact: true }).click().catch(() => undefined);
-		await phone.reload();
+		await phone.reload().catch(() => undefined);
 		await expect(phone.getByTestId("remote-access-gate")).toBeVisible({ timeout: 10_000 });
 		await phone.screenshot({ path: join(out, "06-revoked-device-returned-to-gate.png") });
 
-		// 8. Check Tailscale & Quick Tunnel tabs on host Settings
-		await page.getByRole("tab", { name: en.remoteTabTailscale, exact: true }).click();
-		await page.locator(".settings-section").filter({ has: toggle }).screenshot({ path: join(out, "07-host-tailscale-tab.png") });
-		await page.getByRole("tab", { name: en.remoteTabTunnel, exact: true }).click();
-		await page.locator(".settings-section").filter({ has: toggle }).screenshot({ path: join(out, "08-host-tunnel-tab.png") });
-		await page.getByRole("tab", { name: en.remoteTabPair, exact: true }).click();
+		// 8. The Tailscale and Internet routes on host Settings
+		await page.getByRole("tab", { name: en.remoteRouteTailscale, exact: true }).click();
+		await section().screenshot({ path: join(out, "07-host-tailscale-tab.png") });
+		await page.getByRole("tab", { name: en.remoteRouteInternet, exact: true }).click();
+		await expect(page.locator("details.settings-remote-domain, .settings-remote-pane[data-route='internet']").first()).toBeVisible();
+		await section().screenshot({ path: join(out, "08-host-tunnel-tab.png") });
+		await page.getByRole("tab", { name: en.remoteRouteLan, exact: true }).click();
 
 		await phoneContext.close();
 		await qrContext.close();
-		console.log("PASS: live pairing (manual 6-digit + QR ?pair=CODE), Finder folder browse, device rename, instant revocation, and Tailscale/Tunnel tabs verified.");
+		console.log("PASS: live pairing (manual 6-digit + LAN QR ?pair=CODE), Finder folder browse, device rename, instant revocation, and route tabs verified.");
 	} finally {
 		await browser.close();
 	}
 
 	// 9. Verify all 4 locales (en, ko, ja, zh) x 2 appearances (light, dark) x 2 widths (1440, 390) have zero horizontal overflow!
+	await details.locator("summary").click();
 	let previous = en;
 	for (const language of ["en", "ko", "ja", "zh"]) {
 		await page.getByRole("combobox", { name: previous.appLanguage, exact: true }).selectOption(language);
@@ -211,7 +240,8 @@ try {
 		await page.getByRole("button", { name: previous.remoteDevicesRevokeAllConfirm, exact: true }).click();
 	}
 	await page.getByRole("switch", { name: previous.remoteAccess, exact: true }).click();
-	await expect(page.getByRole("textbox", { name: previous.remoteAddress, exact: true })).toHaveValue(previous.remoteStopped);
+	await expect(page.getByRole("textbox", { name: previous.remoteAddress, exact: true })).toHaveCount(0);
+	await expect(page.locator(".settings-remote-hub")).toHaveCount(0);
 	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remoteAccess), false);
 	console.log("PASS: 16 locale/width/theme captures + clean revoke-all and disable verified.");
 } catch (error) {

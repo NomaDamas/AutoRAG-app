@@ -49,6 +49,7 @@ export const REMOTE_CHANNELS = {
 	refreshNetwork: "remote:refreshNetwork",
 	startTunnel: "remote:startTunnel",
 	stopTunnel: "remote:stopTunnel",
+	loginTunnel: "remote:loginTunnel",
 	changed: "remote:changed",
 } as const;
 
@@ -78,12 +79,38 @@ export interface RemoteTailscaleStatus {
 	readonly serveUrl: string | null;
 }
 
-/** Outbound Cloudflare Quick Tunnel (`cloudflared tunnel --url http://127.0.0.1:<port>`) for zero-VPN HTTPS access. */
+/** Why an outbound tunnel could not start; the Settings UI translates each one. */
+export type RemoteTunnelErrorCode = "missing_binary" | "server_stopped" | "timeout" | "exited" | "disconnected" | "login_required" | "setup_failed";
+
+/**
+ * Outbound Cloudflare tunnel for HTTPS access without Tailscale.
+ * `quick`: an account-less `https://<random>.trycloudflare.com` address that changes on every start.
+ * `custom`: a named tunnel on the user's own Cloudflare domain (`remoteTunnelHostname`), stable across restarts.
+ */
 export interface RemoteTunnelStatus {
 	readonly available: boolean;
+	readonly mode: "quick" | "custom";
+	/** The configured custom hostname (`remote.example.com`), or null for Quick Tunnel. */
+	readonly hostname: string | null;
+	/** `cloudflared tunnel login` has written `~/.cloudflared/cert.pem` (required for `custom`). */
+	readonly loggedIn: boolean;
 	readonly state: "off" | "starting" | "online" | "error";
 	readonly url: string | null;
 	readonly error: string | null;
+	readonly errorCode: RemoteTunnelErrorCode | null;
+}
+
+/**
+ * A bare DNS hostname the user owns on Cloudflare (`remote.example.com`): at least two labels, letters/digits/hyphens,
+ * no scheme, port, path, or wildcard. Returns the lower-cased name, or null when it is not one.
+ */
+export function normalizeTunnelHostname(value: string): string | null {
+	const name = value.trim().toLowerCase().replace(/\.$/, "");
+	if (name.length === 0 || name.length > 253) return null;
+	const labels = name.split(".");
+	if (labels.length < 2) return null;
+	const label = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
+	return labels.every((part) => label.test(part)) && !/^\d+$/.test(labels.at(-1) ?? "") ? name : null;
 }
 
 /** How the current browser request authenticated to the remote server. */
@@ -123,6 +150,8 @@ export interface RemoteAccessBridge {
 	refreshNetwork(): Promise<RemoteAccessStatus>;
 	startTunnel(): Promise<RemoteAccessStatus>;
 	stopTunnel(): Promise<RemoteAccessStatus>;
+	/** Runs `cloudflared tunnel login` (opens the Cloudflare authorization page in the browser). */
+	loginTunnel(): Promise<RemoteAccessStatus>;
 	onChange(listener: (status: RemoteAccessStatus) => void): () => void;
 }
 

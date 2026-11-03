@@ -85,6 +85,7 @@ function createRemoteBridge(ipcRenderer: IpcRenderer): RemoteAccessBridge {
 		refreshNetwork: () => ipcRenderer.invoke(REMOTE_CHANNELS.refreshNetwork),
 		startTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.startTunnel),
 		stopTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.stopTunnel),
+		loginTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.loginTunnel),
 		onChange: (listener) => {
 			const handler = (_event: IpcRendererEvent, status: RemoteAccessStatus): void => listener(status);
 			ipcRenderer.on(REMOTE_CHANNELS.changed, handler);

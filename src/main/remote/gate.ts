@@ -2,107 +2,36 @@
  * Self-contained AccessGate HTML served to unauthenticated browsers at `GET /`,
  * adapted from Ovis (`devswha/ovis`, MIT `AccessGate.tsx`).
  *
- * Features:
- * - Automatic one-shot exchange of `?pair=CODE` from a scanned QR code or link,
- *   immediately stripping `pair` from `location` via `history.replaceState` so
- *   spent codes never linger in browser history or referrers.
- * - 6-digit numeric pairing code input (`inputmode="numeric"`, `autocomplete="one-time-code"`).
+ * - One-shot exchange of `?pair=CODE` from a scanned QR code or link; `pair` is taken off
+ *   `location` with `history.replaceState` so a spent code never stays in history.
+ * - 6-digit pairing code input (`inputmode="numeric"`, `autocomplete="one-time-code"`).
  * - Collapsible access-token fallback (`POST /remote/auth`).
- * - Cookie confirmation check via `GET /remote/health` before reloading into Finder.
- * - Localized into `ko`, `en`, `ja`, and `zh` with light/dark theme tokens.
+ * - Cookie confirmation through `GET /remote/health` before reloading into Finder.
+ * - Copy comes from the shared locale files (`main.remoteGate.*`) in the host's interface language.
  */
 import { APP_FULL_NAME, APP_NAME } from "../../shared/app-info";
+import { i18n } from "../../shared/i18n/core";
 import { REMOTE_CSRF_HEADER, REMOTE_ROUTES, type RemoteAccessRefusal } from "../../shared/remote-contract";
 import type { AppSettings } from "../../shared/settings-contract";
 
-export interface GateStrings {
-	readonly subtitle: string;
-	readonly otherUserNotice: string;
-	readonly codeLabel: string;
-	readonly codePlaceholder: string;
-	readonly codeShortError: string;
-	readonly codeInvalidError: string;
-	readonly codeSubmit: string;
-	readonly codeSubmitting: string;
-	readonly tokenToggle: string;
-	readonly tokenLabel: string;
-	readonly tokenSubmit: string;
-	readonly tokenSubmitting: string;
-	readonly tokenInvalidError: string;
-	readonly rateLimitedError: string;
-	readonly cookieBlockedError: string;
+function gateStrings(language: AppSettings["language"]) {
+	const t = i18n.getFixedT(language);
+	return {
+		otherUserNotice: t("main.remoteGate.otherUserNotice"),
+		codeLabel: t("main.remoteGate.codeLabel"),
+		codeShortError: t("main.remoteGate.codeShortError"),
+		codeInvalidError: t("main.remoteGate.codeInvalidError"),
+		codeSubmit: t("main.remoteGate.codeSubmit"),
+		codeSubmitting: t("main.remoteGate.codeSubmitting"),
+		tokenToggle: t("main.remoteGate.tokenToggle"),
+		tokenLabel: t("main.remoteGate.tokenLabel"),
+		tokenSubmit: t("main.remoteGate.tokenSubmit"),
+		tokenSubmitting: t("main.remoteGate.tokenSubmitting"),
+		tokenInvalidError: t("main.remoteGate.tokenInvalidError"),
+		rateLimitedError: t("main.remoteGate.rateLimitedError"),
+		cookieBlockedError: t("main.remoteGate.cookieBlockedError"),
+	};
 }
-
-const DEFAULT_STRINGS: Record<AppSettings["language"], GateStrings> = {
-	ko: {
-		subtitle: "호스트 PC의 Dazzi 설정 → 일반 → 원격 접속에서 발급한 6자리 페어링 코드를 입력하거나 QR 코드를 스캔하세요.",
-		otherUserNotice: "Tailscale 계정이 호스트 소유자와 다릅니다. 호스트에서 발급한 페어링 코드로 이 기기를 승인할 수 있습니다.",
-		codeLabel: "페어링 코드 (6자리)",
-		codePlaceholder: "000 000",
-		codeShortError: "6자리 숫자를 모두 입력해 주세요.",
-		codeInvalidError: "코드가 올바르지 않거나 만료되었습니다. 호스트 PC에서 새 코드를 발급하세요.",
-		codeSubmit: "이 기기 페어링",
-		codeSubmitting: "연결 중…",
-		tokenToggle: "액세스 토큰으로 직접 열기",
-		tokenLabel: "액세스 토큰",
-		tokenSubmit: "잠금 해제",
-		tokenSubmitting: "확인 중…",
-		tokenInvalidError: "액세스 토큰이 일치하지 않습니다.",
-		rateLimitedError: "시도 횟수가 너무 많습니다. 잠시 후 다시 시도해 주세요.",
-		cookieBlockedError: "브라우저 쿠키를 확인할 수 없습니다. 쿠키 허용 설정을 확인한 뒤 다시 시도해 주세요.",
-	},
-	en: {
-		subtitle: "Enter the 6-digit pairing code from Settings → General → Remote Access on the host computer, or scan its QR code.",
-		otherUserNotice: "Tailscale reports a different account than this computer's owner. You can still pair this device with a pairing code.",
-		codeLabel: "Pairing code (6 digits)",
-		codePlaceholder: "000 000",
-		codeShortError: "Enter all 6 digits of the pairing code.",
-		codeInvalidError: "That code is wrong, used up, or expired. Generate a new code on the host computer.",
-		codeSubmit: "Pair this device",
-		codeSubmitting: "Pairing…",
-		tokenToggle: "Have an access token instead?",
-		tokenLabel: "Access token",
-		tokenSubmit: "Unlock",
-		tokenSubmitting: "Unlocking…",
-		tokenInvalidError: "Access token does not match.",
-		rateLimitedError: "Too many attempts. Please wait a moment and try again.",
-		cookieBlockedError: "Could not confirm the session cookie. Check that cookies are enabled in this browser.",
-	},
-	ja: {
-		subtitle: "ホスト PC の「設定 → 一般 → リモートアクセス」で発行した 6 桁のペアリングコードを入力するか、QR コードを読み取ってください。",
-		otherUserNotice: "Tailscale のアカウントがこの PC の所有者と異なります。ペアリングコードを使ってこの端末を承認できます。",
-		codeLabel: "ペアリングコード（6桁）",
-		codePlaceholder: "000 000",
-		codeShortError: "6桁の数字をすべて入力してください。",
-		codeInvalidError: "コードが正しくないか、使用済みまたは期限切れです。ホスト PC で新しいコードを発行してください。",
-		codeSubmit: "この端末をペアリング",
-		codeSubmitting: "ペアリング中…",
-		tokenToggle: "アクセストークンをお持ちですか？",
-		tokenLabel: "アクセストークン",
-		tokenSubmit: "ロック解除",
-		tokenSubmitting: "確認中…",
-		tokenInvalidError: "アクセストークンが一致しません。",
-		rateLimitedError: "試行回数が多すぎます。しばらく待ってから再試行してください。",
-		cookieBlockedError: "セッション Cookie を確認できませんでした。ブラウザーの Cookie 設定を確認してください。",
-	},
-	zh: {
-		subtitle: "输入主机 Dazzi“设置 → 通用 → 远程访问”中生成的 6 位配对码，或扫描二维码连接。",
-		otherUserNotice: "Tailscale 账号与该电脑所有者不一致。您仍可使用主机生成的配对码授权此设备。",
-		codeLabel: "配对码（6 位数字）",
-		codePlaceholder: "000 000",
-		codeShortError: "请输入完整的 6 位数字配对码。",
-		codeInvalidError: "配对码错误、已失效或已过期。请在主机上生成新代码。",
-		codeSubmit: "配对此设备",
-		codeSubmitting: "正在配对…",
-		tokenToggle: "使用访问令牌解锁？",
-		tokenLabel: "访问令牌",
-		tokenSubmit: "解锁",
-		tokenSubmitting: "正在验证…",
-		tokenInvalidError: "访问令牌不匹配。",
-		rateLimitedError: "尝试次数过多，请稍后再试。",
-		cookieBlockedError: "无法确认浏览器 Cookie，请检查浏览器是否允许 Cookie 后重试。",
-	},
-};
 
 function escapeHtml(value: string): string {
 	return value
@@ -116,9 +45,10 @@ export function renderAccessGateHtml(options: {
 	readonly language: AppSettings["language"];
 	readonly appearance: AppSettings["appearance"];
 	readonly reason: RemoteAccessRefusal;
-	readonly strings?: GateStrings;
+	/** The Dazzi mark as a `data:image/png;base64,...` URL (the page's CSP allows only `data:` images). */
+	readonly logoDataUrl: string | null;
 }): string {
-	const copy = options.strings ?? DEFAULT_STRINGS[options.language] ?? DEFAULT_STRINGS.ko;
+	const copy = gateStrings(options.language);
 	const dark = options.appearance === "dark";
 	const clientPayload = JSON.stringify({
 		routes: {
@@ -174,30 +104,24 @@ export function renderAccessGateHtml(options: {
 			padding: 28px 24px 24px;
 			box-shadow: 0 12px 32px rgba(0, 0, 0, ${dark ? "0.38" : "0.08"});
 		}
-		.gate-badge {
-			display: inline-flex;
+		.gate-head {
+			display: flex;
+			flex-direction: column;
 			align-items: center;
-			justify-content: center;
-			width: 42px;
-			height: 42px;
-			border-radius: 11px;
-			background: var(--accent);
-			color: #fff;
-			font-weight: 700;
-			font-size: 20px;
-			margin-bottom: 14px;
+			gap: 10px;
+			margin-bottom: 22px;
+		}
+		.gate-logo {
+			display: block;
+			width: 64px;
+			height: 64px;
 		}
 		h1 {
-			margin: 0 0 8px;
-			font-size: 20px;
-			font-weight: 600;
+			margin: 0;
+			font-size: 22px;
+			font-weight: 650;
 			letter-spacing: -0.01em;
-		}
-		.gate-subtitle {
-			margin: 0 0 20px;
-			font-size: 13.5px;
-			line-height: 1.5;
-			color: var(--muted);
+			text-align: center;
 		}
 		.gate-notice {
 			margin: 0 0 16px;
@@ -277,10 +201,11 @@ export function renderAccessGateHtml(options: {
 </head>
 <body>
 	<main class="gate-card" data-testid="remote-access-gate">
-		<div class="gate-badge" aria-hidden="true">D</div>
-		<h1 id="gate-title">${escapeHtml(APP_NAME)}</h1>
+		<div class="gate-head">
+			${options.logoDataUrl === null ? "" : `<img class="gate-logo" src="${options.logoDataUrl}" alt="" aria-hidden="true" />`}
+			<h1 id="gate-title">${escapeHtml(APP_NAME)}</h1>
+		</div>
 		${options.reason === "other_user" ? `<p class="gate-notice" role="status">${escapeHtml(copy.otherUserNotice)}</p>` : ""}
-		<p class="gate-subtitle">${escapeHtml(copy.subtitle)}</p>
 		<form id="pair-form" aria-labelledby="gate-title" novalidate>
 			<label for="pair-code">${escapeHtml(copy.codeLabel)}</label>
 			<input
@@ -291,7 +216,7 @@ export function renderAccessGateHtml(options: {
 				autocomplete="one-time-code"
 				pattern="[0-9 ]*"
 				maxlength="7"
-				placeholder="${escapeHtml(copy.codePlaceholder)}"
+				placeholder="000 000"
 				autofocus
 			/>
 			<button id="pair-submit" type="submit" class="gate-btn">${escapeHtml(copy.codeSubmit)}</button>

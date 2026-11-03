@@ -21,6 +21,7 @@ import { isApprovalMode } from "../shared/interaction-contract";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
 import { normalizeShortcutSettings } from "../shared/shortcuts-contract";
+import { normalizeTunnelHostname } from "../shared/remote-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
@@ -157,7 +158,15 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 				const sidebar = patch.sidebar === undefined ? current.settings.sidebar : normalizeSidebarSettings(patch.sidebar);
 				const contextMenu = patch.contextMenu === undefined ? current.settings.contextMenu : normalizeContextMenuSettings(patch.contextMenu);
 				const shortcuts = patch.shortcuts === undefined ? current.settings.shortcuts : normalizeShortcutSettings(patch.shortcuts);
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts };
+				let remoteTunnelHostname = current.settings.remoteTunnelHostname;
+				if (patch.remoteTunnelHostname !== undefined) {
+					const trimmed = patch.remoteTunnelHostname.trim();
+					const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
+					// A rejected change leaves the stored hostname as it was; the renderer shows the reason.
+					if (normalized === null) throw new Error(`Not a domain name: ${trimmed}`);
+					remoteTunnelHostname = normalized;
+				}
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, remoteTunnelHostname };
 				return current;
 			});
 			deps.onSettingsChanged?.(state.settings);

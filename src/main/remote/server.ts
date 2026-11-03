@@ -67,6 +67,8 @@ export interface RemoteServerDeps {
 	readonly devices?: DeviceStore;
 	readonly tailscaleOwner?: () => string | null;
 	readonly gatePrefs?: () => Promise<{ readonly language: AppSettings["language"]; readonly appearance: AppSettings["appearance"] }>;
+	/** The Dazzi mark drawn on the AccessGate, as a `data:` URL. */
+	readonly gateLogoDataUrl?: string;
 	/** One bridge method, already authorized. */
 	readonly dispatch: (call: RemoteCall, sessionId: string) => Promise<unknown>;
 	/** A browser session's push stream opened or closed (its worker client's lifetime). */
@@ -415,6 +417,7 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 					language: prefs.language,
 					appearance: prefs.appearance,
 					reason: auth.reason,
+					logoDataUrl: deps.gateLogoDataUrl ?? null,
 				});
 				send(response, 200, "text/html; charset=utf-8", Buffer.from(html));
 				return;

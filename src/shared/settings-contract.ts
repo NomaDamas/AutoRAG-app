@@ -103,6 +103,8 @@ export interface AppSettings {
 	readonly remoteAccess: boolean;
 	/** The port the remote server binds; 0 picks a free one. */
 	readonly remotePort: number;
+	/** Own Cloudflare domain for the external tunnel (`remote.example.com`); empty uses an account-less Quick Tunnel. */
+	readonly remoteTunnelHostname: string;
 	/** User customization of sidebar visibility, ordering, and pinned folders (`settings-state.json`). */
 	readonly sidebar: SidebarSettings;
 	/** User customization of the file right-click context menu and custom Magic Actions (`settings-state.json`). */
@@ -125,6 +127,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	approvalMode: DEFAULT_APPROVAL_MODE,
 	remoteAccess: false,
 	remotePort: 47833,
+	remoteTunnelHostname: "",
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,

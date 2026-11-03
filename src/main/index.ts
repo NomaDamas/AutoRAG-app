@@ -837,6 +837,7 @@ app.whenReady().then(async () => {
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
 			void applyRemoteAccess(settings.remoteAccess);
+			void remoteHost?.setTunnelHostname(settings.remoteTunnelHostname);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -955,6 +956,7 @@ app.whenReady().then(async () => {
 	ipcMain.handle(REMOTE_CHANNELS.refreshNetwork, () => ensureRemoteHost().refreshNetwork());
 	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
 	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.loginTunnel, () => ensureRemoteHost().loginTunnel());
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});

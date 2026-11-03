@@ -8,83 +8,111 @@ awake.
 
 ## Enable remote access and pair a device
 
-1. On the host computer, open **Settings > General > Remote Access**.
-2. Choose a **Port** if needed. The default is `47833`; `0` asks the operating
-   system for an available port. Press Enter or leave the field to save a valid
-   whole number from `0` to `65535`.
-3. Turn on **Enable Remote Access**. It is off by default. This switch saves the
-   preference, so an enabled host serves again when Dazzi starts.
-4. Connect another device using one of three built-in ways:
-   - **Pairing Code + QR Code (recommended for phones and laptops):** Click
-     **Get Pairing Code** under the **Pairing Code** tab. Point your phone's
-     camera at the QR code (which automatically selects your active Tunnel,
-     Tailscale, or LAN Wi-Fi address and appends `?pair=CODE`), or open the
-     host's address in a browser and enter the 6-digit code on the Dazzi sign-in
-     screen. Once paired, the browser receives a persistent 1-year `HttpOnly`
-     device credential (`dazzi_device`) that survives Dazzi restarts until you
-     revoke it in **Paired Devices**.
-   - **Browser Address (`?token=...`):** Copy **Browser Address** to open a
-     session on the same machine or over an SSH tunnel using the current server
-     run's 256-bit access token. You can also paste that token into **Have an
-     access token instead?** on the remote sign-in screen.
-   - **Tailscale Serve owner login:** When `tailscale serve` proxies HTTPS on
-     the host to Dazzi's port, devices signed in to the host owner's Tailscale
-     account are admitted automatically without entering a code.
+1. On the host computer, open **Settings > General > Remote Access** and turn on
+   **Enable Remote Access**. It is off by default; the switch saves the
+   preference, so an enabled host serves again when Dazzi starts. While it is
+   off, nothing else is shown.
+2. In **Connect a Device**, pick a **Route**. It decides which address the new
+   device opens:
+   - **Same Wi-Fi:** the host's LAN address (`http://192.168.x.y:<port>`). When
+     the host has several, choose one from the list.
+   - **Tailscale:** the `https://<machine>.<tailnet>.ts.net` address when
+     `tailscale serve` already proxies Dazzi, otherwise the tailnet IP
+     (`http://100.x.y.z:<port>`) next to the one-line `tailscale serve` command.
+   - **Internet:** a Cloudflare tunnel (see below). Its address appears once
+     the tunnel is online.
+3. Click **Get Pairing Code**. The same 6-digit code works on every route. The
+   QR code is the chosen route's address plus `?pair=CODE`: scan it with the
+   phone's camera, or open the address and type the code on the Dazzi sign-in
+   screen. Switching the route changes the QR code, not the code. Once paired,
+   the browser keeps a 1-year `HttpOnly` device credential (`dazzi_device`)
+   that survives Dazzi restarts until you revoke it in **Paired Devices**.
 
-In a remote browser session, General settings shows that page's origin
-(`http://host:port` or `https://...`), without the secret token, plus the active
-authentication mode (`Connected as a paired device`, `Connected via Tailscale`,
-or `Connected with the access token`) and the **Paired Devices** list.
+**Details** holds the rest:
+
+- **Browser Address** (`?token=...`) opens a session with the current server
+  run's 256-bit access token, for the same machine or an SSH tunnel. The token
+  can also be pasted into **Have an access token instead?** on the sign-in
+  screen. Treat it as a password.
+- **Port**: the default is `47833`; `0` asks the operating system for a free
+  port. Press Enter or leave the field to save a whole number from `0` to
+  `65535`, then restart Dazzi.
+
+Devices signed in to the host owner's Tailscale account, reaching Dazzi through
+`tailscale serve`, are admitted without a code.
+
+In a remote browser session, the same settings page shows how that browser got
+in (`Connected as a paired device`, `Connected via this computer's Tailscale
+login`, or `Connected with the access token`) and the **Paired Devices** list.
+Tunnel controls stay on the host.
 
 ## Connect from outside your home or office
 
 **Never forward Dazzi's raw HTTP port on your router to the public internet:**
-unencrypted HTTP exposes traffic on untrusted networks. Instead, use either the
-built-in **Quick Tunnel** (no Tailscale or VPN needed) or **Tailscale**.
+unencrypted HTTP exposes traffic on untrusted networks. Use the **Internet**
+route (Cloudflare tunnel, no VPN needed) or **Tailscale** instead.
 
 | Method | Best for | Router port forwarding | Client software needed |
 | --- | --- | --- | --- |
-| **Quick Tunnel (built-in `cloudflared`)** | Phones, locked-down work laptops, or anywhere Tailscale is not installed | None | Browser only |
-| **Tailscale (`tailscale serve` HTTPS or direct IP)** | Personal laptops, phones, and tablets on your tailnet | None | Tailscale app on host and client |
+| **Internet: Cloudflare temporary address** | Trying it out; no account | None | Browser only |
+| **Internet: own domain on Cloudflare** | A fixed address you bookmark | None | Browser only |
+| **Tailscale (`tailscale serve` HTTPS or tailnet IP)** | Devices already on your tailnet | None | Tailscale app on host and client |
 | **SSH local port forward** | Developers who already have SSH access to the host | Only if SSH is remote | Any SSH client |
 
-### Option 1: Built-in Cloudflare Quick Tunnel (without Tailscale)
+Both Internet modes need `cloudflared` on the host (for example
+`brew install cloudflared` on macOS or `winget install Cloudflare.cloudflared`
+on Windows). Dazzi always runs it with an empty `--config`, so an existing
+`~/.cloudflared/config.yml` never reroutes Dazzi's traffic. Every visitor still
+meets Dazzi's sign-in gate and needs a pairing code, a device credential, or the
+access token.
 
-When you want to reach Dazzi from anywhere using only a web browser — with no
-VPN app on the client, no Cloudflare account, and no router configuration:
+### Option 1: Cloudflare temporary address (no account)
 
-1. Install `cloudflared` on the host computer (for example
-   `brew install cloudflared` on macOS or `winget install Cloudflare.cloudflared`
-   on Windows).
-2. In **Settings > General > Remote Access**, turn on **Enable Remote Access**,
-   open the **Quick Tunnel** tab, and click **Start Tunnel**.
-3. Dazzi starts an outbound `https://<name>.trycloudflare.com` tunnel to its
-   local port and updates the QR code automatically.
-4. Click **Get Pairing Code** (or scan the tunnel QR code directly) to pair your
-   phone or remote browser. Every visitor reaching the tunnel URL hits Dazzi's
-   sign-in gate and cannot access Finder without a valid 6-digit pairing code or
-   access token.
-5. Click **Stop Tunnel** (or turn off Remote Access) when finished.
+1. Choose the **Internet** route and click **Start Tunnel**.
+2. Dazzi runs `cloudflared tunnel --url http://127.0.0.1:<port>` and shows the
+   `https://<words>.trycloudflare.com` address it receives, with its QR code.
+3. The address changes every time the tunnel starts, and Cloudflare gives no
+   uptime guarantee for it. Click **Stop Tunnel** (or turn off Remote Access)
+   when finished.
 
-### Option 2: Tailscale (private mesh + zero-code owner login)
+### Option 2: Your own domain on Cloudflare (fixed address)
+
+For an address that stays the same, use a hostname on a domain whose DNS you
+manage in Cloudflare:
+
+1. Under the **Internet** route, open **Use my own domain** and enter a hostname
+   such as `dazzi.example.com`. Dazzi accepts a bare hostname only (no scheme,
+   path, IP address, or wildcard) and stores it lower-case. Clearing the field
+   returns to the temporary address.
+2. Click **Sign in to Cloudflare** once. This runs `cloudflared tunnel login`,
+   which opens Cloudflare in the host's browser; approve the account that owns
+   the domain. It writes `~/.cloudflared/cert.pem` (or `TUNNEL_ORIGIN_CERT`).
+3. Click **Start Tunnel**. On the first start Dazzi creates the named tunnel
+   `dazzi-<hostname>` (for `dazzi.example.com`, `dazzi-dazzi-example-com`),
+   keeps its credentials file in Dazzi's settings directory, and runs
+   `cloudflared tunnel route dns` for the hostname. It does not pass
+   `--overwrite-dns`: if the hostname already has a DNS record, setup stops and
+   shows cloudflared's reason instead of replacing that record. Later starts
+   reuse the tunnel, so `https://<hostname>` stays the same.
+
+### Option 3: Tailscale (private mesh + zero-code owner login)
 
 [Tailscale](https://tailscale.com) creates an encrypted WireGuard mesh (tailnet)
-between your signed-in devices. Dazzi inspects `tailscale status --json` and
-`tailscale serve status --json` read-only in the **Tailscale** tab:
+between your signed-in devices. Dazzi reads `tailscale status --json` and
+`tailscale serve status --json` and never changes Tailscale's configuration:
 
-- If `tailscale serve` is already proxying HTTPS to Dazzi's port, the
-  **Tailscale** tab displays the live `https://<machine>.<tailnet>.ts.net` URL
-  and QR code immediately. Devices signed in as the host's Tailscale owner open
-  Finder directly; devices belonging to another tailnet user see a notice and
-  can still be admitted with a 6-digit pairing code.
-- Otherwise, Dazzi shows the exact one-line command to publish HTTPS inside your
+- If `tailscale serve` already proxies HTTPS to Dazzi's port, the **Tailscale**
+  route shows the `https://<machine>.<tailnet>.ts.net` address and its QR code.
+  Devices signed in as the host's Tailscale owner open Finder directly; devices
+  of another tailnet user see a notice and can still pair with a code.
+- Otherwise Dazzi shows the one-line command that publishes HTTPS inside your
   tailnet (for example `tailscale serve --bg --https=443 http://127.0.0.1:47833`)
-  alongside your direct `http://100.x.y.z:<port>` Tailscale IPv4 address. Do
-  **not** use `tailscale funnel` without understanding that Funnel exposes the
-  endpoint to the public internet (Dazzi never auto-trusts Funnel headers and
-  always requires pairing or the token).
+  and uses the tailnet IP as the address meanwhile. Do **not** use
+  `tailscale funnel` without understanding that Funnel exposes the endpoint to
+  the public internet (Dazzi never trusts Funnel headers and always requires
+  pairing or the token).
 
-### Option 3: SSH local port forwarding
+### Option 4: SSH local port forwarding
 
 If you already reach the host over SSH, forward a local port on the client to
 `127.0.0.1` on the host:
@@ -94,7 +122,7 @@ ssh -N -L 47833:127.0.0.1:47833 user@dazzi-host
 ```
 
 Open `http://localhost:47833` in the client's browser and enter a 6-digit
-pairing code (or open the full `?token=...` Browser Address).
+pairing code (or open the full `?token=...` Browser Address from **Details**).
 
 ## Security model
 

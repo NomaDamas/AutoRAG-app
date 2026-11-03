@@ -343,14 +343,10 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 			await call("remote", "refreshNetwork", []).catch(() => null);
 			return remoteStatus();
 		},
-		startTunnel: async () => {
-			await call("remote", "startTunnel", []).catch(() => null);
-			return remoteStatus();
-		},
-		stopTunnel: async () => {
-			await call("remote", "stopTunnel", []).catch(() => null);
-			return remoteStatus();
-		},
+		// Tunnel control belongs to the desktop that runs cloudflared; a browser sees its status only.
+		startTunnel: remoteStatus,
+		stopTunnel: remoteStatus,
+		loginTunnel: remoteStatus,
 		onChange: (listener) => subscribe("remote.onChange", () => { void remoteStatus().then(listener, () => {}); }),
 	};
 	for (const target of targets) autorag[target] = bridgeFor(target);
