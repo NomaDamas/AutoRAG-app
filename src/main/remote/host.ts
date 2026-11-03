@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
+import { join } from "node:path";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import dazziMarkPath from "../../renderer/src/assets/dazzi-mark.png?asset";
 import type { AppSettings } from "../../shared/settings-contract";
@@ -22,6 +23,7 @@ import { discoverLanOrigins } from "./lan";
 import { createRemoteDispatcher } from "./registry";
 import { createRemoteServer, type RemoteAuthenticatedContext, type RemoteServer } from "./server";
 import { findTailscaleBinary, readTailscaleStatus, startTailscaleServe, stopTailscaleServe } from "./tailscale";
+import { writePrivateState } from "./private-state";
 import { createTunnelManager, type TunnelManager } from "./tunnel";
 import { previewResponseForPath } from "../../preview/node/protocol";
 import { iconIdentityFromUrl } from "../icon-protocol";
@@ -157,6 +159,29 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		() => undefined,
 	);
 
+	/**
+	 * Ports earlier runs listened on (`remote-ports.json`), newest first. A Tailscale serve route still pointing at one
+	 * of them is Dazzi's own leftover and is re-pointed at this run instead of being treated as another app's.
+	 */
+	const portsFile = join(deps.stateDir, "remote-ports.json");
+	const readPastPorts = (): number[] => {
+		try {
+			const parsed: unknown = JSON.parse(readFileSync(portsFile, "utf8"));
+			return Array.isArray(parsed) ? parsed.filter((value): value is number => Number.isInteger(value) && value > 0 && value <= 65535) : [];
+		} catch {
+			return [];
+		}
+	};
+	let pastPorts = readPastPorts();
+	const rememberPort = (port: number): void => {
+		pastPorts = [port, ...pastPorts.filter((value) => value !== port)].slice(0, 8);
+		try {
+			writePrivateState(portsFile, pastPorts);
+		} catch (error) {
+			log(`could not record the remote port: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	};
+
 	/** The last publish/stop failure; shown until the next success or a manual re-check. */
 	let serveError: RemoteTailscaleServeError | null = null;
 	const getTailscale = async (port: number, force = false): Promise<RemoteTailscaleStatus> => {
@@ -164,7 +189,7 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		if (!force && cachedTailscale !== null && cachedTailscale.port === port && now - cachedTailscale.at < TAILSCALE_CACHE_TTL_MS) {
 			return { ...cachedTailscale.value, serveError };
 		}
-		const value = await readTailscaleStatus(port);
+		const value = await readTailscaleStatus(port, pastPorts);
 		cachedTailscale = { value, at: Date.now(), port };
 		return { ...value, serveError };
 	};
@@ -193,6 +218,22 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		const next = await buildStatus(true);
 		emitChanged();
 		return next;
+	};
+
+	/**
+	 * A route Dazzi published in an earlier run still points at that run's port (the app restarted, or the port moved),
+	 * so the `ts.net` address answers 502. Re-point it at this run: the user already chose to publish, and only a route
+	 * whose target is one of Dazzi's own past ports qualifies, never another app's.
+	 */
+	const reclaimTailscaleRoute = async (port: number): Promise<void> => {
+		const binary = findTailscaleBinary();
+		if (binary === null) return;
+		const current = await getTailscale(port, true);
+		if (current.state !== "running" || current.servingUrl !== null || current.reclaimable !== true || current.servePort == null) return;
+		const result = await startTailscaleServe({ binary, httpsPort: current.servePort, port });
+		serveError = result.ok ? null : { reason: result.reason, enableUrl: result.enableUrl };
+		if (result.ok) log(`re-pointed the Tailscale route on :${current.servePort} at port ${port}`);
+		await getTailscale(port, true);
 	};
 
 	const buildStatus = async (forceNetwork = false): Promise<RemoteAccessStatus> => {
@@ -370,9 +411,10 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		server = candidate;
 		serverError = null;
 		boundPort = started.port;
+		rememberPort(started.port);
 		baseOrigin = started.origin;
 		origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
-		void getTailscale(started.port, true).then(() => emitChanged(), () => undefined);
+		void reclaimTailscaleRoute(started.port).then(() => emitChanged(), () => undefined);
 		log(`serving at ${started.origin}`);
 		emitChanged();
 		return origin;

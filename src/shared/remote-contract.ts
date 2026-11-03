@@ -89,6 +89,8 @@ export interface RemoteTailscaleStatus {
 	readonly serveUrl: string | null;
 	/** The first HTTPS port no other serve route uses; what the publish button uses. */
 	readonly servePort?: number | null;
+	/** `servePort` is a route an earlier Dazzi run published, now pointing at a port Dazzi no longer listens on. */
+	readonly reclaimable?: boolean;
 	/** Why the last publish or stop failed, in Tailscale's own words; cleared by the next success. */
 	readonly serveError?: RemoteTailscaleServeError | null;
 }

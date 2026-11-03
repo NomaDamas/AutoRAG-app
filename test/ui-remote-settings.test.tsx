@@ -306,4 +306,17 @@ describe("Settings → Remote Access page", () => {
 		expect(container.querySelector('[role="alert"]')?.textContent).toContain("Tailscale refused: Serve is not enabled on your tailnet.");
 		expect(button("Turn it on in the Tailscale admin console")).toBeDefined();
 	});
+
+	it("does not offer the Tailscale route at all when Tailscale is not installed on this computer", async () => {
+		const status = activeStatus();
+		mockRemote.remote.status.mockResolvedValue({
+			...status,
+			tailscale: { state: "missing", dnsName: null, tailnetIp: null, owner: null, servingUrl: null, serveCommand: null, serveUrl: null },
+		});
+		await render({ remoteAccess: true });
+
+		const tabs = Array.from(container.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);
+		expect(tabs).toEqual(["Same Wi-Fi", "Internet"]);
+		expect(routeAddress()).toBe("http://192.168.0.42:47833");
+	});
 });

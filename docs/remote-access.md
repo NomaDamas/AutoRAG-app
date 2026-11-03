@@ -118,6 +118,14 @@ you press its button:
   pair with a code.
 - **Stop Publishing** runs `tailscale serve --yes --https=<port> off` for that one
   route only; Dazzi never runs `tailscale serve reset`.
+- Dazzi's port can change between runs (`0` picks a free one, or the default is
+  taken). Dazzi remembers the ports it listened on (`remote-ports.json` in its
+  settings folder); when a serve route still points at one of those, the next
+  start re-points that same route at the new port, so the `ts.net` address keeps
+  working instead of answering `502`. A route that points anywhere else belongs to
+  another app and is never changed.
+- When neither the `tailscale` CLI nor the Tailscale app is on the computer, the
+  **Tailscale** route is not shown.
 - If Tailscale refuses (for example, HTTPS certificates or Serve are off for the
   tailnet), Settings shows Tailscale's reason and, when Tailscale prints one, a
   button that opens its admin-console page to turn it on.

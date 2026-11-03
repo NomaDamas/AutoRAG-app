@@ -155,7 +155,11 @@ export function RemoteAccessPage({
 	const tailscale = remoteStatus?.tailscale;
 	const tunnel: RemoteTunnelStatus | undefined = remoteStatus?.tunnel;
 	const showInternetRoute = !isRemoteClient || tunnel?.state === "online";
-	const route: ConnectRoute = pickedRoute === "internet" && !showInternetRoute ? "lan" : (pickedRoute ?? defaultRoute(remoteStatus));
+	// No Tailscale CLI or app on this computer: the route is not offered at all.
+	const showTailscaleRoute = tailscale !== undefined && tailscale.state !== "missing";
+	const hiddenRoute = (candidate: ConnectRoute): boolean => (candidate === "internet" && !showInternetRoute) || (candidate === "tailscale" && !showTailscaleRoute);
+	const preferred = pickedRoute ?? defaultRoute(remoteStatus);
+	const route: ConnectRoute = hiddenRoute(preferred) ? "lan" : preferred;
 	const lanAddress = pickedLan !== "" && lanOrigins.includes(pickedLan) ? pickedLan : (lanOrigins[0] ?? null);
 	const tailscaleAddress =
 		tailscale?.state === "running"
@@ -310,7 +314,7 @@ export function RemoteAccessPage({
 
 	const routes: readonly { readonly id: ConnectRoute; readonly label: string }[] = [
 		{ id: "lan", label: t("settingsCore.remote.routeLan") },
-		{ id: "tailscale", label: t("settingsCore.remote.routeTailscale") },
+		...(showTailscaleRoute ? [{ id: "tailscale" as const, label: t("settingsCore.remote.routeTailscale") }] : []),
 		...(showInternetRoute ? [{ id: "internet" as const, label: t("settingsCore.remote.routeInternet") }] : []),
 	];
 
@@ -400,7 +404,7 @@ export function RemoteAccessPage({
 			) : (
 				<>
 					<p className="settings-remote-desc">
-						{tailscale?.state === "stopped" ? t("settingsCore.remote.tailscaleStopped") : t("settingsCore.remote.tailscaleMissing")}
+						{t("settingsCore.remote.tailscaleStopped")}
 					</p>
 					<div className="settings-remote-actions">
 						<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>

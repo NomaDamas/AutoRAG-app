@@ -2432,7 +2432,6 @@
       "pairLinkCopied": "링크 복사됨",
       "tailscaleServing": "Tailnet에 HTTPS로 공개 중",
       "tailscaleStopped": "Tailscale이 설치되어 있으나 연결되지 않았습니다. tailscale up 실행 후 다시 확인하세요.",
-      "tailscaleMissing": "Tailscale이 설치되어 있지 않습니다. Tailscale 없이 외부에서 접속하려면 '외부 인터넷' 경로를 선택하세요.",
       "tailscaleRefresh": "상태 새로고침",
       "copyCommand": "명령어 복사",
       "commandCopied": "명령어 복사됨",

@@ -2432,7 +2432,6 @@
       "pairLinkCopied": "Link Copied",
       "tailscaleServing": "Published over HTTPS in your tailnet",
       "tailscaleStopped": "Tailscale is installed on this computer, but not connected. Run tailscale up, then check again.",
-      "tailscaleMissing": "Tailscale is not installed. To connect from outside without Tailscale, choose the Internet route.",
       "tailscaleRefresh": "Check Again",
       "copyCommand": "Copy Command",
       "commandCopied": "Copied",

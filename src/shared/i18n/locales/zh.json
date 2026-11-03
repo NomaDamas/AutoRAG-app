@@ -2432,7 +2432,6 @@
       "pairLinkCopied": "链接已复制",
       "tailscaleServing": "已通过 HTTPS 在 Tailnet 中发布",
       "tailscaleStopped": "此电脑已安装 Tailscale 但尚未连接。请运行 tailscale up 后重新检查。",
-      "tailscaleMissing": "未检测到 Tailscale。如需在无 Tailscale 的情况下从外部访问，请选择“外部网络”。",
       "tailscaleRefresh": "重新检查",
       "copyCommand": "复制命令",
       "commandCopied": "已复制",

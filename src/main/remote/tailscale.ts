@@ -95,10 +95,16 @@ function httpsUrl(host: string, port: number): string {
 	return `https://${host}${port === 443 ? "" : `:${port}`}`;
 }
 
+/**
+ * `previousPorts`: ports an earlier Dazzi run listened on. A serve route still pointing at one of them is Dazzi's own
+ * leftover (the app quit or moved port without unpublishing), so it is reused for this run instead of taking another
+ * HTTPS port; a route pointing anywhere else belongs to another app and is never touched.
+ */
 export function parseTailscale(
 	output: TailscaleCommandOutput | null,
 	port: number,
 	candidates: readonly number[] = HTTPS_PORTS,
+	previousPorts: readonly number[] = [],
 ): RemoteTailscaleStatus {
 	if (output === null) return MISSING_STATUS;
 	const status = parseStatusJson(output.status);
@@ -116,19 +122,22 @@ export function parseTailscale(
 	const taken = new Set(Object.keys(serve?.TCP ?? {}).map(Number).filter(Number.isFinite));
 	let servingUrl: string | null = null;
 	let servingPort: number | null = null;
+	let leftoverPort: number | null = null;
 	for (const [hostPort, site] of Object.entries(serve?.Web ?? {})) {
 		const separator = hostPort.lastIndexOf(":");
 		if (separator <= 0) continue;
 		const host = hostPort.slice(0, separator);
 		const webPort = Number(hostPort.slice(separator + 1));
 		if (!serve?.TCP?.[String(webPort)]?.HTTPS) continue;
-		if (proxiesToPort(site.Handlers?.["/"]?.Proxy, port)) {
+		const proxy = site.Handlers?.["/"]?.Proxy;
+		if (proxiesToPort(proxy, port)) {
 			servingUrl = httpsUrl(host, webPort);
 			servingPort = webPort;
 			break;
 		}
+		if (leftoverPort === null && previousPorts.some((previous) => previous !== port && proxiesToPort(proxy, previous))) leftoverPort = webPort;
 	}
-	const freePort = servingUrl === null && port > 0 ? (candidates.find((candidate) => !taken.has(candidate)) ?? null) : null;
+	const freePort = servingUrl !== null || port <= 0 ? null : (leftoverPort ?? candidates.find((candidate) => !taken.has(candidate)) ?? null);
 	return {
 		state: "running",
 		dnsName,
@@ -139,6 +148,7 @@ export function parseTailscale(
 		serveCommand: freePort === null ? null : `tailscale serve --bg --https=${freePort} http://127.0.0.1:${port}`,
 		serveUrl: freePort === null || dnsName === null ? null : httpsUrl(dnsName, freePort),
 		servePort: freePort,
+		reclaimable: freePort !== null && freePort === leftoverPort,
 	};
 }
 
@@ -211,7 +221,7 @@ export async function stopTailscaleServe(input: { readonly binary: string; reado
 	return result.code === 0 ? { ok: true } : { ok: false, ...serveFailure(result) };
 }
 
-export async function readTailscaleStatus(port: number): Promise<RemoteTailscaleStatus> {
+export async function readTailscaleStatus(port: number, previousPorts: readonly number[] = []): Promise<RemoteTailscaleStatus> {
 	const binary = findTailscaleBinary();
 	if (binary === null) return MISSING_STATUS;
 	const [status, serve] = await Promise.all([
@@ -219,7 +229,7 @@ export async function readTailscaleStatus(port: number): Promise<RemoteTailscale
 		runCommand(binary, ["serve", "status", "--json"]),
 	]);
 	if (status === null && serve === null) return { ...MISSING_STATUS, state: "stopped" };
-	return parseTailscale({ status, serve }, port);
+	return parseTailscale({ status, serve }, port, HTTPS_PORTS, previousPorts);
 }
 
 /**

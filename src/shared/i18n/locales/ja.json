@@ -2432,7 +2432,6 @@
       "pairLinkCopied": "リンクをコピーしました",
       "tailscaleServing": "Tailnet に HTTPS で公開中",
       "tailscaleStopped": "Tailscale はインストールされていますが未接続です。tailscale up を実行してから再確認してください。",
-      "tailscaleMissing": "Tailscale が見つかりません。Tailscale なしで外部から接続する場合は「インターネット」を選んでください。",
       "tailscaleRefresh": "再確認",
       "copyCommand": "コマンドをコピー",
       "commandCopied": "コピーしました",

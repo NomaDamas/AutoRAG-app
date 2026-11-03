@@ -6,7 +6,7 @@ import { PassThrough } from "node:stream";
 import type { NetworkInterfaceInfo } from "node:os";
 import { describe, expect, it } from "vitest";
 import { normalizeTunnelHostname } from "../src/shared/remote-contract";
-import { parseTailscale, startTailscaleServe, stopTailscaleServe, verifyTailscaleOwnerHeader } from "../src/main/remote/tailscale";
+import { findTailscaleBinary, parseTailscale, startTailscaleServe, stopTailscaleServe, verifyTailscaleOwnerHeader } from "../src/main/remote/tailscale";
 import { discoverLanOrigins } from "../src/main/remote/lan";
 import { createTunnelManager, extractTryCloudflareUrl } from "../src/main/remote/tunnel";
 import {
@@ -64,6 +64,7 @@ describe("Tailscale read-only integration & Serve owner verification", () => {
 			serveCommand: "tailscale serve --bg --https=8443 http://127.0.0.1:47833",
 			serveUrl: "https://macbook.tailnet-abc.ts.net:8443",
 			servePort: 8443,
+			reclaimable: false,
 		});
 
 		// When tailscale serve already proxies "/" to Dazzi's port over HTTPS:
@@ -179,6 +180,34 @@ describe("Tailscale serve from the app (one click instead of a terminal command)
 		expect(parseTailscale({ status, serve }, 49593)).toMatchObject({ servingUrl: null, servePort: 8443, serveUrl: "https://mac.tail.ts.net:8443" });
 		const servingDazzi = JSON.stringify({ TCP: { "8443": { HTTPS: true } }, Web: { "mac.tail.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:49593" } } } } });
 		expect(parseTailscale({ status, serve: servingDazzi }, 49593)).toMatchObject({ servingUrl: "https://mac.tail.ts.net:8443", servingPort: 8443, servePort: null });
+	});
+});
+
+describe("a Dazzi route left behind by an earlier run", () => {
+	const status = JSON.stringify({ BackendState: "Running", Self: { DNSName: "mac.tail.ts.net.", UserID: 1, TailscaleIPs: ["100.65.93.57"] }, User: { "1": { LoginName: "me@x.com" } } });
+	// 443 belongs to another app; 8443 still points at the port the previous Dazzi run listened on.
+	const leftover = JSON.stringify({
+		TCP: { "443": { HTTPS: true }, "8443": { HTTPS: true } },
+		Web: {
+			"mac.tail.ts.net:443": { Handlers: { "/": { Proxy: "http://127.0.0.1:7317" } } },
+			"mac.tail.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:49593" } } },
+		},
+	});
+
+	it("re-points that route at this run instead of piling up a new port, and never takes another app's route", () => {
+		const parsed = parseTailscale({ status, serve: leftover }, 63540, [443, 8443, 47833], [49593]);
+		expect(parsed).toMatchObject({ servingUrl: null, servePort: 8443, serveUrl: "https://mac.tail.ts.net:8443", reclaimable: true });
+		expect(parsed.serveCommand).toBe("tailscale serve --bg --https=8443 http://127.0.0.1:63540");
+	});
+
+	it("still picks a fresh port when the leftover route is not one Dazzi made", () => {
+		expect(parseTailscale({ status, serve: leftover }, 63540, [443, 8443, 47833], [])).toMatchObject({ servePort: 47833, reclaimable: false });
+	});
+});
+
+describe("finding Tailscale on this computer", () => {
+	it("is not found when neither the CLI nor the macOS app is installed", () => {
+		expect(findTailscaleBinary({ PATH: "/nonexistent" }, "linux")).toBeNull();
 	});
 });
 
