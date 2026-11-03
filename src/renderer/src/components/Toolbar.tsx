@@ -14,9 +14,9 @@ import {
 	ColumnsViewIcon,
 	GroupIcon,
 	IconsViewIcon,
-	InfoIcon,
 	ListRowsIcon,
 	PanelLeftIcon,
+	PanelRightIcon,
 	ShareIcon,
 	SortIcon,
 	PutBackIcon,
@@ -36,10 +36,12 @@ const NAV_BUTTON =
 /**
  * Toolbar (v7 handoff): back/forward, the folder title, the view segmented
  * control, the Sort and Group pop-ups (issue #47), and the top-right cluster —
- * Put Back and 휴지통 비우기 while the folder is the Trash (issue #86), the
- * inspector toggle, and Share (the OS share sheet for the
- * focused row; hidden where the platform has none). Instant search lives in
- * the sidebar now (`SidebarSearch`), so this bar holds no search field.
+ * Put Back and 휴지통 비우기 while the folder is the Trash (issue #86) and Share
+ * (the OS share sheet for the focused row; hidden where the platform has none).
+ * The bar spans only the content column: each sidebar hides from its own head,
+ * and while one is hidden the bar's outer end carries the button that shows it
+ * again. Instant search lives in the sidebar (`SidebarSearch`), so this bar
+ * holds no search field.
  */
 export function Toolbar({
 	title,
@@ -53,8 +55,8 @@ export function Toolbar({
 	grouping,
 	onApplySort,
 	onSetGrouping,
-	inspectorVisible,
-	onToggleInspector,
+	inspectorHidden,
+	onShowInspector,
 	shareAvailable,
 	canShare,
 	onShare,
@@ -78,8 +80,8 @@ export function Toolbar({
 	readonly grouping: GroupKey;
 	readonly onApplySort: (key: SortKey, direction: SortDirection) => void;
 	readonly onSetGrouping: (key: GroupKey) => void;
-	readonly inspectorVisible: boolean;
-	readonly onToggleInspector: () => void;
+	readonly inspectorHidden: boolean;
+	readonly onShowInspector: () => void;
 	/** The OS has a share sheet, so the Share item is shown at all. */
 	readonly shareAvailable: boolean;
 	/** A row is focused, so the shown Share item is enabled. */
@@ -125,7 +127,7 @@ export function Toolbar({
 	// macOS keeps room for the traffic lights before the icons; Windows has none, so they start at the left edge.
 	const trafficLights = hostPlatform() !== "win32";
 	return (
-		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} pr-[calc(12px+var(--window-controls-gutter))] bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]`}>
+		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} ${inspectorHidden ? "pr-[calc(12px+var(--window-controls-gutter))]" : "pr-12"} bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]`}>
 			{sidebarHidden ? (
 				<>
 					{trafficLights ? <span className="w-[70px] flex-none" aria-hidden="true" /> : null}
@@ -221,21 +223,6 @@ export function Toolbar({
 						</button>
 					</>
 				) : null}
-				<button
-					type="button"
-					className={[
-						"flex flex-none items-center justify-center size-toolbar-icon p-0 border-0 rounded-6 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-						inspectorVisible
-							? "bg-transparent text-accent"
-							: "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
-					].join(" ")}
-					title={inspectorVisible ? t("toolbar.hideInspector") : t("toolbar.showInspector")}
-					aria-label={t("toolbar.toggleInspector")}
-					aria-pressed={inspectorVisible}
-					onClick={onToggleInspector}
-				>
-					<InfoIcon size={18} />
-				</button>
 				{shareAvailable ? (
 					<button
 						type="button"
@@ -249,6 +236,17 @@ export function Toolbar({
 					</button>
 				) : null}
 			</div>
+			{inspectorHidden ? (
+				<button
+					type="button"
+					className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
+					title={t("toolbar.showInspector")}
+					aria-label={t("toolbar.showInspector")}
+					onClick={onShowInspector}
+				>
+					<PanelRightIcon size={18} />
+				</button>
+			) : null}
 			{menu === null ? null : (
 				<ToolbarMenu
 					kind={menu.kind}
