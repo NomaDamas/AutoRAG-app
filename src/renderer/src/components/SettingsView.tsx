@@ -228,7 +228,6 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		showAssistant?.();
 		setCustomizerFocus((count) => count + 1);
 	}, [showAssistant]);
-	const collapseCustomizer = assistant?.hide;
 	const openAiSettings = useCallback((): void => setCategory("ai"), []);
 
 	const entries = useMemo(() => datasourceEntries(snapshot), [snapshot]);
@@ -381,7 +380,6 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 						surface={surface}
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
-						onCollapse={collapseCustomizer ?? (() => undefined)}
 						onSettingsUpdated={applyAppSettings}
 						onOpenAiSettings={openAiSettings}
 					/>

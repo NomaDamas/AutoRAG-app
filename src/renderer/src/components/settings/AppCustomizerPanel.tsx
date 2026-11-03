@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUp, Check, PanelRightClose, RotateCcw, Square } from "lucide-react";
+import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
@@ -26,7 +26,6 @@ interface ChatTurn {
 
 interface SurfaceCopy {
 	readonly title: LocaleKey;
-	readonly subtitle: LocaleKey;
 	readonly emptyTitle: LocaleKey;
 	readonly emptyDesc: LocaleKey;
 	readonly suggestions: readonly [LocaleKey, LocaleKey, LocaleKey, LocaleKey];
@@ -40,7 +39,6 @@ interface SurfaceCopy {
 const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 	sidebar: {
 		title: "settingsCore.sidebar.assistant.title",
-		subtitle: "settingsCore.sidebar.assistant.subtitle",
 		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
 		emptyDesc: "settingsCore.sidebar.assistant.emptyDesc",
 		suggestions: [
@@ -56,7 +54,6 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 	},
 	contextMenu: {
 		title: "settingsCore.contextMenu.assistant.title",
-		subtitle: "settingsCore.contextMenu.assistant.subtitle",
 		emptyTitle: "settingsCore.contextMenu.assistant.emptyTitle",
 		emptyDesc: "settingsCore.contextMenu.assistant.emptyDesc",
 		suggestions: [
@@ -72,7 +69,6 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 	},
 	shortcuts: {
 		title: "settingsCore.shortcuts.assistant.title",
-		subtitle: "settingsCore.shortcuts.assistant.subtitle",
 		emptyTitle: "settingsCore.shortcuts.assistant.emptyTitle",
 		emptyDesc: "settingsCore.shortcuts.assistant.emptyDesc",
 		suggestions: [
@@ -149,15 +145,15 @@ function CustomizerReplyBody({ text }: { readonly text: string }): ReactElement 
 
 /**
  * The AI customization assistant for one customizable Settings section (`surface`), shown in the window's right
- * sidebar (`SettingsAssistantDock.tsx`). Settings keeps one panel per visited surface mounted and hides the others,
- * so a conversation and a running turn survive switching sections or hiding the sidebar; the page beside it stays
- * fully interactive and reflects every change the agent makes.
+ * sidebar (`SettingsAssistantDock.tsx`). It has no header of its own: the page beside it already names the section,
+ * and the toolbar's right-sidebar toggle shows and hides it. Settings keeps one panel per visited surface mounted and
+ * hides the others, so a conversation and a running turn survive switching sections or hiding the sidebar; the page
+ * beside it stays fully interactive and reflects every change the agent makes.
  */
 export function AppCustomizerPanel({
 	surface,
 	hidden,
 	focusRequest,
-	onCollapse,
 	onSettingsUpdated,
 	onOpenAiSettings,
 }: {
@@ -165,13 +161,11 @@ export function AppCustomizerPanel({
 	readonly hidden: boolean;
 	/** Bumped when the user explicitly opens the panel; the composer takes focus then, never on a plain page visit. */
 	readonly focusRequest: number;
-	readonly onCollapse: () => void;
 	readonly onSettingsUpdated: (settings: AppSettings) => void;
 	readonly onOpenAiSettings: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const copy = SURFACE_COPY[surface];
-	const titleId = useId();
 	const [sessionId, setSessionId] = useState(() => makeId(`customizer-${surface}-sess`));
 	const [turns, setTurns] = useState<readonly ChatTurn[]>([]);
 	const [input, setInput] = useState("");
@@ -317,48 +311,7 @@ export function AppCustomizerPanel({
 	const running = activeRunId !== null;
 
 	return (
-		<aside
-			className="customizer-panel"
-			aria-labelledby={titleId}
-			data-testid="app-customizer-panel"
-			data-surface={surface}
-			hidden={hidden}
-		>
-			<header className="customizer-panel__head">
-				<div className="customizer-panel__titles">
-					<h2 id={titleId} className="customizer-panel__title">
-						{t(copy.title)}
-					</h2>
-					<p className="customizer-panel__subtitle" title={t(copy.subtitle)}>
-						{t(copy.subtitle)}
-					</p>
-				</div>
-				<div className="customizer-panel__head-actions">
-					{turns.length > 0 ? (
-						<button
-							type="button"
-							className="customizer-panel__icon-btn"
-							data-action="reset-customizer-chat"
-							title={t("settingsCore.sidebar.assistant.newChat")}
-							aria-label={t("settingsCore.sidebar.assistant.newChat")}
-							onClick={resetChat}
-						>
-							<RotateCcw size={14} />
-						</button>
-					) : null}
-					<button
-						type="button"
-						className="customizer-panel__icon-btn"
-						data-action="collapse-app-customizer"
-						title={t("settingsCore.sidebar.assistant.collapse")}
-						aria-label={t("settingsCore.sidebar.assistant.collapse")}
-						onClick={onCollapse}
-					>
-						<PanelRightClose size={15} />
-					</button>
-				</div>
-			</header>
-
+		<aside className="customizer-panel" aria-label={t(copy.title)} data-testid="app-customizer-panel" data-surface={surface} hidden={hidden}>
 			<div ref={scrollRef} className="customizer-panel__body">
 				{turns.length === 0 ? (
 					<div className="customizer-panel__empty">
@@ -438,6 +391,18 @@ export function AppCustomizerPanel({
 						onChange={(event) => setInput(event.target.value)}
 						onKeyDown={handleKeyDown}
 					/>
+					{turns.length > 0 ? (
+						<button
+							type="button"
+							className="customizer-composer__new-chat"
+							data-action="reset-customizer-chat"
+							title={t("settingsCore.sidebar.assistant.newChat")}
+							aria-label={t("settingsCore.sidebar.assistant.newChat")}
+							onClick={resetChat}
+						>
+							<RotateCcw size={14} />
+						</button>
+					) : null}
 					{running ? (
 						<button
 							type="button"

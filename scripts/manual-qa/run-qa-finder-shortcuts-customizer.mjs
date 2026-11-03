@@ -377,7 +377,7 @@ try {
 		JSON.stringify(persistedAfterAgent.settings.shortcuts),
 	);
 
-	await panel.locator('[data-action="collapse-app-customizer"]').click();
+	await page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
 
 	// 4. Verify English Dark, Japanese Light, and Simplified Chinese Light localizations

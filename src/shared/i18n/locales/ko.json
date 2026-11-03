@@ -2142,7 +2142,6 @@
       "emptyTags": "고정된 Finder 태그가 없습니다.",
       "assistant": {
         "title": "AI 앱 커스텀 어시스턴트",
-        "subtitle": "원하는 사이드바 구성이나 화면 설정을 자유롭게 말씀해 주세요.",
         "newChat": "새 대화",
         "emptyTitle": "어떤 구성을 원하시나요?",
         "emptyDesc": "표시할 폴더, 섹션 순서, 화면 모드를 말하면 즉시 반영됩니다.",
@@ -2155,8 +2154,7 @@
         "send": "보내기",
         "stop": "중단",
         "openAiSettings": "AI 모델 설정 열기",
-        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다.",
-        "collapse": "어시스턴트 숨기기"
+        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
       }
     },
     "contextMenu": {
@@ -2259,7 +2257,6 @@
       },
       "assistant": {
         "title": "AI 우클릭 메뉴 & 매직 액션 어시스턴트",
-        "subtitle": "원하는 우클릭 버튼, 자동화 스크립트, AI 파일 액션을 말로 설명해 주세요.",
         "emptyTitle": "우클릭 메뉴에 어떤 기능을 넣어볼까요?",
         "emptyDesc": "특정 확장자나 여러 파일에 작동하는 AI 에이전트 액션·스크립트를 만들거나 불필요한 메뉴를 정리할 수 있습니다.",
         "promptSummarizePdf": "PDF나 마크다운 파일 하나를 우클릭했을 때 핵심 3줄 요약을 보여주는 매직 액션 추가해줘",
@@ -2336,7 +2333,6 @@
       },
       "assistant": {
         "title": "AI 단축키 커스텀 어시스턴트",
-        "subtitle": "원하는 단축키 변경이나 맞바꾸기를 말로 요청해 보세요.",
         "emptyTitle": "어떤 단축키를 바꿔 볼까요?",
         "emptyDesc": "기본 제공되는 26개 단축키 안에서 원하는 키 조합으로 바꾸거나 맞바꿀 수 있습니다.",
         "promptMacFinder": "Mac Finder 기본 단축키 구성으로 맞춰줘",

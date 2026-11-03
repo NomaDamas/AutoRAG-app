@@ -2090,49 +2090,11 @@
 	display: none;
 }
 
-.customizer-panel__head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-10);
-	padding: var(--space-12) var(--space-12) var(--space-12) var(--space-16);
-	border-bottom: 1px solid var(--border-divider);
-	background: var(--bg-chrome);
-}
-
-.customizer-panel__titles {
-	min-width: 0;
-}
-
-.customizer-panel__title {
-	margin: 0;
-	font-size: var(--font-size-sm);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.customizer-panel__subtitle {
-	margin: var(--space-2) 0 0;
-	font-size: var(--font-size-badge);
-	color: var(--text-muted);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.customizer-panel__head-actions {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-2);
-	flex: none;
-}
-
-.customizer-panel__icon-btn {
+/* Starts a new conversation; sits beside send once there is one to discard. */
+.customizer-composer__new-chat {
 	display: grid;
 	place-items: center;
+	flex: none;
 	width: 28px;
 	height: 28px;
 	padding: 0;
@@ -2144,7 +2106,7 @@
 	transition: background var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out);
 }
 
-.customizer-panel__icon-btn:hover {
+.customizer-composer__new-chat:hover {
 	background: var(--bg-hover-strong);
 	color: var(--text-primary);
 }

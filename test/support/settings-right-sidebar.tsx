@@ -4,13 +4,15 @@ import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHo
 
 /**
  * Settings as the window shows it: the focused tab beside the window's right sidebar, which hosts the section's AI
- * assistant (App does the same with the Inspector's column). The right sidebar starts shown, like a fresh profile.
+ * assistant (App does the same with the Inspector's column), and the toolbar button that shows or hides that sidebar.
+ * The right sidebar starts shown, like a fresh profile.
  */
 export function SettingsWithRightSidebar({ initialCategory }: { readonly initialCategory?: SettingsCategory }): ReactElement {
 	const [rightSidebarVisible, setRightSidebarVisible] = useState(true);
 	const { host, dock } = useSettingsAssistantHost({ rightSidebarVisible, setRightSidebarVisible, settingsFocused: true });
 	return (
 		<SettingsAssistantContext value={host}>
+			<button type="button" data-testid="toggle-right-sidebar" aria-pressed={rightSidebarVisible} onClick={() => setRightSidebarVisible((visible) => !visible)} />
 			<SettingsView {...(initialCategory === undefined ? {} : { initialCategory })} />
 			{rightSidebarVisible && dock !== null ? <SettingsAssistantSlot dock={dock} /> : null}
 		</SettingsAssistantContext>

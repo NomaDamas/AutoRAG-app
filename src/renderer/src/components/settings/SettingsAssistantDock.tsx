@@ -22,8 +22,6 @@ export interface SettingsAssistantHost {
 	readonly shown: boolean;
 	/** Show the right sidebar (and with it the assistant). */
 	show(): void;
-	/** Hide the right sidebar. */
-	hide(): void;
 	/** Settings' current dock; null on a section without an assistant. */
 	publish(dock: SettingsAssistantDock | null): void;
 }
@@ -49,7 +47,6 @@ export function useSettingsAssistantHost({
 		() => ({
 			shown,
 			show: () => setRightSidebarVisible(true),
-			hide: () => setRightSidebarVisible(false),
 			publish: setPublished,
 		}),
 		[shown, setRightSidebarVisible],

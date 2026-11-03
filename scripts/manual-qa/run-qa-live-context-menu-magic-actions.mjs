@@ -276,7 +276,7 @@ try {
 	console.log(`live customizer reply:\n${custReply}`);
 	console.log(`live customizer progress: ${JSON.stringify(seenCustomizerProgress)}`);
 
-	await panel.locator('[data-action="collapse-app-customizer"]').click();
+	await page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
 	await shot("03-live-settings-after-ai");
 

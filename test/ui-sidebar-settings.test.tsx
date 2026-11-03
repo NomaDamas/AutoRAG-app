@@ -344,16 +344,22 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
 
-		// The assistant shows the Dazzi mark once, centered in its empty state, and no notice under the composer
+		// The assistant has no header band: it shows the Dazzi mark once, centered in its empty state, and no notice
 		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
 		const marks = [...(panel?.querySelectorAll<HTMLImageElement>("img") ?? [])];
 		expect(marks.map((img) => img.className)).toEqual(["customizer-panel__empty-logo"]);
+		expect(panel?.querySelector("header")).toBeNull();
+		expect(panel?.querySelector("h2")).toBeNull();
+		expect(panel?.textContent).not.toContain("원하는 사이드바 구성이나 화면 설정을");
+		expect(panel?.getAttribute("aria-label")).toBe("AI 앱 커스텀 어시스턴트");
 		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(4);
 		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 검색과 자동화는 필수 기능");
+		// New chat appears only once there is a conversation to discard
+		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
 
-		// Collapsing the panel brings back the hero, whose button and banner use the transparent Dazzi mark
+		// Hiding the right sidebar brings back the hero, whose button and banner use the transparent Dazzi mark
 		await act(async () => {
-			panel?.querySelector<HTMLButtonElement>('[data-action="collapse-app-customizer"]')?.click();
+			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
 		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__logo")).not.toBeNull();
 		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__btn-logo")).not.toBeNull();
@@ -380,9 +386,10 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			panelOf()?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
 		});
 		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
+		expect(panelOf()?.querySelector('.customizer-panel__foot [data-action="reset-customizer-chat"]')).not.toBeNull();
 
 		await act(async () => {
-			panelOf()?.querySelector<HTMLButtonElement>('[data-action="collapse-app-customizer"]')?.click();
+			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
 		expect(panelOf()).toBeNull();
 		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
@@ -413,7 +420,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		});
 		await settle();
 		expect(panelOf()?.getAttribute("data-surface")).toBe("shortcuts");
-		expect(panelOf()?.querySelector(".customizer-panel__title")?.textContent).toBe("AI 단축키 커스텀 어시스턴트");
+		expect(panelOf()?.getAttribute("aria-label")).toBe("AI 단축키 커스텀 어시스턴트");
 
 		await act(async () => {
 			nav("사이드바")?.click();
@@ -496,10 +503,10 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(host.textContent).toContain(spec.lockedBadge);
 
 		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
-		expect(panel?.querySelector(".customizer-panel__title")?.textContent).toBe(spec.modalTitle);
+		expect(panel?.getAttribute("aria-label")).toBe(spec.modalTitle);
 
 		await act(async () => {
-			panel?.querySelector<HTMLButtonElement>('[data-action="collapse-app-customizer"]')?.click();
+			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
 		expect(host.querySelector('[data-action="open-app-customizer"]')?.textContent).toContain(spec.heroBtn);
 	});

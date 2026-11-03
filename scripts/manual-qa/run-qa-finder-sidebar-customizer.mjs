@@ -236,8 +236,8 @@ try {
 	check("The page hero is hidden while the assistant is in the right sidebar", (await page.locator('[data-action="open-app-customizer"]').count()) === 0);
 	const panelMarks = await panel.locator("img").evaluateAll((imgs) => imgs.map((img) => ({ cls: img.className, width: img.naturalWidth })));
 	check(
-		"The assistant shows the transparent Dazzi mark once, centered in its empty state, and no notice under the composer",
-		panelMarks.length === 1 && panelMarks[0].cls === "customizer-panel__empty-logo" && panelMarks[0].width > 0 && (await panel.locator(".customizer-panel__foot").innerText()).trim().length === 0,
+		"The assistant has no header band, shows the transparent Dazzi mark once (centered in its empty state), and no notice under the composer",
+		panelMarks.length === 1 && panelMarks[0].cls === "customizer-panel__empty-logo" && panelMarks[0].width > 0 && (await panel.locator("header, h2").count()) === 0 && (await panel.locator(".customizer-panel__foot").innerText()).trim().length === 0,
 		JSON.stringify(panelMarks),
 	);
 
@@ -349,8 +349,8 @@ try {
 	await panel.locator(".customizer-turn__reply", { hasText: "Switched Dazzi to Dark mode and English." }).waitFor({ timeout: 15_000 });
 	await shot("06-customizer-panel-turn2-dark-en");
 
-	// Hide the right sidebar from the panel, check the hero comes back, reopen it, and the conversation is still there
-	await panel.locator('[data-action="collapse-app-customizer"]').click();
+	// Hide the right sidebar from the toolbar, check the hero comes back, reopen it, and the conversation is still there
+	await page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
 	await shot("07-settings-sidebar-dark-en");
 	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
@@ -363,13 +363,13 @@ try {
 			(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))) === "app-customizer-input",
 	);
 	await shot("07b-customizer-panel-reopened");
-	// The toolbar's right-sidebar toggle hides and shows the same assistant
-	const toggle = page.getByRole("button", { name: "Toggle inspector", exact: true });
+	// A second round trip through the same toggle keeps the conversation
+	const toggle = page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first();
 	await toggle.click();
 	await panel.waitFor({ state: "hidden" });
 	await toggle.click();
 	await panel.waitFor();
-	check("The toolbar's right-sidebar toggle hides and restores the assistant with its conversation", (await panel.locator(".customizer-turn").count()) === 2);
+	check("A second hide/show through the toolbar toggle keeps the conversation", (await panel.locator(".customizer-turn").count()) === 2);
 
 	const enLabels = await sidebarLabels();
 	check(
