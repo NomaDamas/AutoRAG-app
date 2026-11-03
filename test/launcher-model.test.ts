@@ -131,12 +131,23 @@ describe("launcherKeyAction", () => {
 		expect(launcherKeyAction(key("ArrowDown"), { panelOpen: true, textSelected: false }, "darwin")).toEqual({ type: "panelMove", delta: 1 });
 		expect(launcherKeyAction(key("Enter", { code: "Enter" }), { panelOpen: true, textSelected: false }, "darwin")).toEqual({ type: "panelRun" });
 	});
+
+	it("gives Space to the query while typing and to the preview while browsing, from an empty query, or with it open", () => {
+		const space = key(" ", { code: "Space" });
+		expect(launcherKeyAction(space, idle, "darwin")).toBeNull();
+		expect(launcherKeyAction(space, { ...idle, browsing: true }, "darwin")).toEqual({ type: "run", action: "preview" });
+		expect(launcherKeyAction(space, { ...idle, queryEmpty: true }, "darwin")).toEqual({ type: "run", action: "preview" });
+		expect(launcherKeyAction(space, { ...idle, previewOpen: true }, "darwin")).toEqual({ type: "run", action: "preview" });
+		expect(launcherKeyAction(space, { panelOpen: true, textSelected: false, browsing: true }, "darwin")).toBeNull();
+		expect(launcherKeyAction(key("y", { code: "KeyY", meta: true }), idle, "darwin")).toEqual({ type: "run", action: "preview" });
+		expect(launcherKeyAction(key("y", { code: "KeyY", ctrl: true }), idle, "win32")).toEqual({ type: "run", action: "preview" });
+	});
 });
 
 describe("actionsFor", () => {
 	it("offers the file actions for a file and only the question for the Ask row", () => {
 		const [file, ask] = buildLauncherRows({ query: "q", recents: [], names: [entry("/d/q.md")], content: [] });
-		expect(actionsFor(file).map((action) => action.id)).toEqual(["open", "revealOs", "showInApp", "copyFile", "copyPath", "askAbout"]);
+		expect(actionsFor(file).map((action) => action.id)).toEqual(["open", "preview", "revealOs", "showInApp", "copyFile", "copyPath", "askAbout"]);
 		expect(actionsFor(ask).map((action) => action.id)).toEqual(["askQuery"]);
 		expect(actionsFor(undefined)).toEqual([]);
 	});

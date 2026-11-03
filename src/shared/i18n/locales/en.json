@@ -624,6 +624,7 @@
     "actionsTitle": "Actions",
     "actions": {
       "open": "Open",
+      "preview": "Quick Look",
       "revealOs": "Show in Finder/Explorer",
       "showInApp": "Show in Dazzi",
       "copyFile": "Copy File",
@@ -632,6 +633,7 @@
       "askQuery": "Ask Dazzi"
     },
     "hints": {
+      "preview": "Preview",
       "copy": "Copy",
       "actions": "Actions"
     }

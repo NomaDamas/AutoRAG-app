@@ -6,6 +6,9 @@
  * always-on-top window without a taskbar button. Dismissing it (Escape, a click elsewhere, a copy) gives the foreground
  * back to the app the person was in: Windows does that itself when the focused window hides; on macOS the app hides
  * itself unless one of Dazzi's own windows was in front when the launcher was summoned.
+ *
+ * Space previews the focused row in a Quick Look panel of the launcher's own (`attachPreview`), floated above it. Focus
+ * moving between the launcher and that panel is not a dismissal; focus leaving both is.
  */
 
 import { app, BrowserWindow, ipcMain, nativeTheme, screen } from "electron";
@@ -32,7 +35,12 @@ export interface QuickSearchWindowDeps {
 	/** Settings' status read and its recording pause, answered by the global shortcut. */
 	readonly status: () => QuickSearchStatus;
 	readonly setRecording: (recording: boolean) => void;
+	/** Pre-creates the hidden Quick Look panel owned by the launcher window; returns the panel's window. */
+	readonly attachPreview: (owner: BrowserWindow) => BrowserWindow;
 }
+
+/** How long focus may take to land on the other window before a blur counts as leaving Dazzi. */
+const FOCUS_SETTLE_MS = 80;
 
 export interface QuickSearchWindow {
 	/** The shortcut's action: show and focus the launcher, or hide it when it is already in front. */
@@ -60,6 +68,7 @@ function isPathList(value: unknown): value is readonly string[] {
 export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearchWindow {
 	const darwin = process.platform === "darwin";
 	let window: BrowserWindow | null = null;
+	let preview: BrowserWindow | null = null;
 	let destroyed = false;
 	/** Set on `before-quit`: the quit closes every window, and this one must not refuse. */
 	let quitting = false;
@@ -101,10 +110,17 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 		if (darwin) created.setWindowButtonVisibility(false);
 		created.webContents.on("will-navigate", (event) => event.preventDefault());
 		created.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-		// Clicking anywhere else dismisses it; that click already gave the other app the foreground.
-		created.on("blur", () => {
-			if (!created.isDestroyed() && created.isVisible()) created.hide();
-		});
+		// Clicking anywhere else dismisses it; that click already gave the other app the foreground. Focus that went
+		// to the launcher's own preview stays inside the launcher, so the check waits for it to land.
+		const dismissIfFocusLeft = (): void => {
+			setTimeout(() => {
+				if (created.isDestroyed() || !created.isVisible()) return;
+				const focused = BrowserWindow.getFocusedWindow();
+				if (focused !== null && (focused === created || focused === preview)) return;
+				created.hide();
+			}, FOCUS_SETTLE_MS);
+		};
+		created.on("blur", dismissIfFocusLeft);
 		// The window is reused: closing it (⌘W, Alt+F4) only hides it. A quit closes it for real, or the quit would stall.
 		created.on("close", (event) => {
 			if (destroyed || quitting) return;
@@ -112,6 +128,8 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 			hide("restore");
 		});
 		deps.loadPage(created);
+		preview = deps.attachPreview(created);
+		preview.on("blur", dismissIfFocusLeft);
 		return created;
 	};
 
@@ -154,12 +172,12 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 		toggle() {
 			if (window === null || window.isDestroyed()) window = create();
 			const current = window;
-			if (current.isVisible() && current.isFocused()) {
+			if (current.isVisible() && (current.isFocused() || preview?.isFocused() === true)) {
 				hide("restore");
 				return;
 			}
 			const focused = BrowserWindow.getFocusedWindow();
-			appWasActive = focused !== null && focused !== current;
+			appWasActive = focused !== null && focused !== current && focused !== preview;
 			const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
 			if (current.isMinimized()) current.restore();
 			current.setBounds(launcherBounds(display.workArea));

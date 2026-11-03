@@ -37,6 +37,14 @@ interface Results {
 
 const NO_RESULTS: Results = { query: "", names: [], content: [], contentState: "ok" };
 
+/** The row's icon in page CSS pixels: the preview zooms out of it and back into it. */
+function rowIconRect(list: HTMLElement | null, index: number): { x: number; y: number; width: number; height: number } | null {
+	const icon = list?.querySelector(`[data-row-index="${index}"] .tile, [data-row-index="${index}"] svg`);
+	if (icon === null || icon === undefined) return null;
+	const box = icon.getBoundingClientRect();
+	return box.width > 0 && box.height > 0 ? { x: box.x, y: box.y, width: box.width, height: box.height } : null;
+}
+
 /** The passage with every query term marked, for the snippet line. */
 function markTerms(snippet: string, query: string): ReactElement[] {
 	const terms = query.trim().split(/\s+/u).filter((term) => term.length > 1).map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
@@ -57,6 +65,10 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 	const [panel, setPanel] = useState<{ readonly index: number } | null>(null);
 	const [icons, setIcons] = useState<ReadonlyMap<string, string>>(new Map());
 	const [notice, setNotice] = useState<string | null>(null);
+	/** The row the Quick Look panel shows; null while it is closed. */
+	const [previewPath, setPreviewPath] = useState<string | null>(null);
+	/** The person moved through the rows since they last typed: Space previews instead of typing a space. */
+	const [browsing, setBrowsing] = useState(false);
 
 	const rows = useMemo(
 		() => buildLauncherRows({ query, recents, names: results.query === query.trim() ? results.names : [], content: results.query === query.trim() ? results.content : [] }),
@@ -71,6 +83,8 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 		const refresh = (): void => {
 			setPanel(null);
 			setNotice(null);
+			setPreviewPath(null);
+			setBrowsing(false);
 			inputRef.current?.focus();
 			inputRef.current?.select();
 			void bridge.recents().then(
@@ -141,6 +155,55 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 		listRef.current?.querySelector(`[data-row-index="${selection.focus}"]`)?.scrollIntoView({ block: "nearest" });
 	}, [selection.focus]);
 
+	// While the preview is open it follows the focused row, as Finder's Quick Look follows the selection; a row that is
+	// not a file (the Ask row) or a query that emptied the list closes it.
+	const previewTarget = previewPath === null ? null : focused?.kind === "file" ? focused.entry : null;
+	useEffect(() => {
+		if (previewPath === null) return;
+		if (previewTarget === null) {
+			setPreviewPath(null);
+			void bridge.preview.hide(null).catch(() => undefined);
+			return;
+		}
+		if (previewTarget.path === previewPath) return;
+		setPreviewPath(previewTarget.path);
+		void bridge.preview.show({ path: previewTarget.path, name: previewTarget.name, kind: previewTarget.kind }, rowIconRect(listRef.current, selection.focus)).catch((error: unknown) => setNotice(error instanceof Error ? error.message : String(error)));
+	}, [bridge, previewPath, previewTarget, selection.focus]);
+
+	// The panel closes itself (Escape or Space with it focused) and steps through the rows with its arrow keys.
+	useEffect(() => {
+		const offClosed = bridge.preview.onClosed(() => {
+			setPreviewPath(null);
+			inputRef.current?.focus();
+		});
+		const offNavigate = bridge.preview.onNavigate((delta) => {
+			setBrowsing(true);
+			setSelection((current) => moveSelection(current, delta, rows.length, false));
+		});
+		return () => {
+			offClosed();
+			offNavigate();
+		};
+	}, [bridge, rows.length]);
+
+	const togglePreview = useCallback(
+		(index: number): void => {
+			if (previewPath !== null) {
+				setPreviewPath(null);
+				void bridge.preview.hide(rowIconRect(listRef.current, index)).catch(() => undefined);
+				return;
+			}
+			const row = rows[index];
+			if (row?.kind !== "file") return;
+			setPreviewPath(row.entry.path);
+			void bridge.preview.show({ path: row.entry.path, name: row.entry.name, kind: row.entry.kind }, rowIconRect(listRef.current, index)).catch((error: unknown) => {
+				setPreviewPath(null);
+				setNotice(error instanceof Error ? error.message : String(error));
+			});
+		},
+		[bridge, previewPath, rows],
+	);
+
 	const flash = useCallback((text: string) => setNotice(text), []);
 
 	const run = useCallback(
@@ -158,6 +221,9 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 						if (first === null) return;
 						await bridge.open(first);
 						bridge.hide("handoff");
+						return;
+					case "preview":
+						togglePreview(index);
 						return;
 					case "revealOs":
 						if (first === null) return;
@@ -188,25 +254,28 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 				flash(error instanceof Error ? error.message : String(error));
 			}
 		},
-		[bridge, flash, query, rows, selection, t],
+		[bridge, flash, query, rows, selection, t, togglePreview],
 	);
 
 	const onKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
 		const input = inputRef.current;
 		const textSelected = input !== null && document.activeElement === input && input.selectionStart !== input.selectionEnd;
-		const action = launcherKeyAction(event.nativeEvent, { panelOpen: panel !== null, textSelected }, platform);
+		const action = launcherKeyAction(event.nativeEvent, { panelOpen: panel !== null, textSelected, browsing, queryEmpty: query.length === 0, previewOpen: previewPath !== null }, platform);
 		if (action === null) return;
 		event.preventDefault();
 		switch (action.type) {
 			case "dismiss":
 				if (panel !== null) setPanel(null);
+				else if (previewPath !== null) togglePreview(selection.focus);
 				else if (query.length > 0) setQuery("");
 				else bridge.hide("restore");
 				return;
 			case "move":
+				setBrowsing(true);
 				setSelection((current) => moveSelection(current, action.delta, rows.length, action.extend));
 				return;
 			case "jump":
+				setBrowsing(true);
 				setSelection(action.to === "first" ? { anchor: 0, focus: 0 } : { anchor: rows.length - 1, focus: rows.length - 1 });
 				return;
 			case "run":
@@ -229,6 +298,7 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 
 	const onRowClick = (event: MouseEvent, index: number): void => {
 		setPanel(null);
+		setBrowsing(true);
 		setSelection((current) => (event.shiftKey ? { anchor: current.anchor, focus: index } : { anchor: index, focus: index }));
 		inputRef.current?.focus();
 	};
@@ -273,7 +343,10 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 					ref={inputRef}
 					className="qs__input"
 					value={query}
-					onChange={(event) => setQuery(event.target.value)}
+					onChange={(event) => {
+						setBrowsing(false);
+						setQuery(event.target.value);
+					}}
 					placeholder={t("quickSearch.placeholder")}
 					aria-label={t("quickSearch.placeholder")}
 					aria-controls="qs-results"
@@ -357,6 +430,7 @@ export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }):
 					{notice ?? (focused?.kind === "file" ? dirname(focused.entry.path) : "")}
 				</span>
 				{focused?.kind === "ask" ? hint("askQuery", "Enter", t("quickSearch.actions.askQuery")) : hint("open", "Enter", t("quickSearch.actions.open"))}
+				{focused?.kind === "file" ? hint("preview", "Space", t("quickSearch.hints.preview")) : null}
 				{focused?.kind === "file" ? hint("copyFile", "Mod+C", t("quickSearch.hints.copy")) : null}
 				<button type="button" className="qs__hint" onMouseDown={(event) => event.preventDefault()} onClick={() => setPanel((current) => (current === null && actions.length > 0 ? { index: 0 } : null))}>
 					<span className="qs__key">{formatShortcutChord("Mod+K", platform)}</span>

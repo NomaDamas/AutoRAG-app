@@ -1057,9 +1057,15 @@ summons a small window over any app. Pieces:
   over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
   Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
   was not searched.
+- Preview: the launcher owns a second Quick Look panel (`attachQuickLook(launcher, { level: "screen-saver",
+  closeWithOwner: true })`; `src/preview/node/window.ts` keeps one session per owner window and routes each IPC call to
+  the session whose owner or panel sent it). The page drives it through the same `PreviewBridge` the Finder uses and
+  makes it follow the focused row. Focus moving between the launcher and its panel is not a dismissal: a blur hides the
+  launcher only when, a moment later, neither window has focus; the panel closes with the launcher.
 
 QA: `scripts/manual-qa/run-qa-quick-search.mjs` (lane `quick-search`) builds a real index, presses the real OS chord
-over TextEdit, drives the launcher from the keyboard and the mouse, and reads the copies back from the OS clipboard.
+over TextEdit, drives the launcher from the keyboard and the mouse, previews rows in the real Quick Look panel, and
+reads the copies back from the OS clipboard.
 
 ## Right-click menu in Finder and Explorer
 

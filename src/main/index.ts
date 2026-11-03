@@ -34,7 +34,7 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
@@ -278,18 +278,21 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 
 	loadRendererPage(window, "index.html");
 	// Only the Finder previews files; the onboarding window has nothing to preview.
-	if (phase === "finder") {
-		attachQuickLook(window, {
-			preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
-			appearance,
-			language: currentLanguage,
-			loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
-			// Spawning osascript blocks the caller for the fork; the worker pays it.
-			defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
-			quickLookChord: () => currentQuickLookChord,
-		});
-	}
+	if (phase === "finder") attachQuickLook(window, quickLookOptions(appearance));
 	return window;
+}
+
+/** The Quick Look panel's options; the Finder and the quick-search launcher each own one panel. */
+function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
+	return {
+		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+		appearance,
+		language: currentLanguage,
+		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+		// Spawning osascript blocks the caller for the fork; the worker pays it.
+		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
+		quickLookChord: () => currentQuickLookChord,
+	};
 }
 
 let fsWorker: FsWorkerHost | null = null;
@@ -1285,6 +1288,8 @@ app.whenReady().then(async () => {
 		attach: (paths) => osRequests.push({ action: "ask", paths }),
 		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
 		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
+		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
+		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
 	});
 	quickSearchShortcut = createQuickSearchShortcut({
 		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),

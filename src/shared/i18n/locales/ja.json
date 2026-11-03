@@ -624,6 +624,7 @@
     "actionsTitle": "操作",
     "actions": {
       "open": "開く",
+      "preview": "クイックルック",
       "revealOs": "Finder/エクスプローラで表示",
       "showInApp": "Dazziで表示",
       "copyFile": "ファイルをコピー",
@@ -632,6 +633,7 @@
       "askQuery": "Dazziに聞く"
     },
     "hints": {
+      "preview": "プレビュー",
       "copy": "コピー",
       "actions": "操作"
     }

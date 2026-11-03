@@ -1,3 +1,4 @@
+import type { PreviewBridge } from "../preview/shared/contract";
 import type { ContentSearchResult } from "./content-search-contract";
 import type { FsEnrichmentTarget, FsEntry, FsEntryEnrichment, FsSearchResult } from "./fs-contract";
 import { decomposeShortcutChord, parseShortcutChord } from "./shortcuts-contract";
@@ -108,6 +109,8 @@ export interface QuickSearchBridge {
 	reveal(path: string): Promise<void>;
 	copyFiles(paths: readonly string[]): Promise<void>;
 	copyPaths(paths: readonly string[]): Promise<void>;
+	/** The launcher's own Quick Look panel (Space), the same preview the Finder shows; it closes when the launcher hides. */
+	readonly preview: PreviewBridge;
 }
 
 /** `window.autorag.quickSearch` in the Finder: Settings reads the status and pauses the shortcut while recording. */

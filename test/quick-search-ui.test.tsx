@@ -23,7 +23,11 @@ interface Calls {
 	attached: string[][];
 	hidden: string[];
 	revealed: string[];
+	previews: string[];
 }
+
+/** The preview panel's side of the bridge: what the page asked it, plus its own close and arrow keys. */
+const panel = { closed: () => {}, navigate: (_delta: 1 | -1) => {} };
 
 function fakeBridge(calls: Calls): QuickSearchBridge {
 	return {
@@ -59,6 +63,23 @@ function fakeBridge(calls: Calls): QuickSearchBridge {
 		copyPaths: async (paths) => {
 			calls.paths.push([...paths]);
 		},
+		preview: {
+			show: async (target) => {
+				calls.previews.push(`show ${target.path}`);
+			},
+			hide: async () => {
+				calls.previews.push("hide");
+			},
+			prefetch: () => {},
+			onClosed: (listener) => {
+				panel.closed = listener;
+				return () => {};
+			},
+			onNavigate: (listener) => {
+				panel.navigate = listener;
+				return () => {};
+			},
+		},
 	};
 }
 
@@ -69,7 +90,7 @@ let calls: Calls;
 beforeEach(async () => {
 	await setAppLanguage("en");
 	vi.useFakeTimers({ shouldAdvanceTime: true });
-	calls = { opened: [], copied: [], paths: [], asked: [], attached: [], hidden: [], revealed: [] };
+	calls = { opened: [], copied: [], paths: [], asked: [], attached: [], hidden: [], revealed: [], previews: [] };
 	host = document.createElement("div");
 	document.body.append(host);
 	root = createRoot(host);
@@ -143,6 +164,7 @@ describe("quick search launcher page", () => {
 		expect(host.querySelector(".qs__panel")).not.toBeNull();
 		await press("ArrowDown");
 		await press("ArrowDown");
+		await press("ArrowDown");
 		await press("Enter", { code: "Enter" });
 
 		expect(calls.revealed).toEqual(["/d/report.md"]);
@@ -167,5 +189,46 @@ describe("quick search launcher page", () => {
 		expect(calls.hidden).toEqual([]);
 		await press("Escape", { code: "Escape" });
 		expect(calls.hidden).toEqual(["restore"]);
+	});
+
+	it("Space previews the focused row once the person browses, follows the arrows, and Escape closes it before the launcher", async () => {
+		await type("report");
+		// Right after typing, Space belongs to the query.
+		await press(" ", { code: "Space" });
+		expect(calls.previews).toEqual([]);
+
+		await press("ArrowDown");
+		await press(" ", { code: "Space" });
+		expect(calls.previews).toEqual(["show /d/report-2.md"]);
+
+		await press("ArrowDown");
+		expect(calls.previews).toEqual(["show /d/report-2.md", "show /d/q3.pdf"]);
+		// The panel's own ↑ steps the launcher's selection, and the preview follows it.
+		await act(async () => panel.navigate(-1));
+		expect(calls.previews.at(-1)).toBe("show /d/report-2.md");
+		// The Ask row has nothing to preview: reaching it closes the panel.
+		await press("ArrowDown");
+		await press("ArrowDown");
+		expect(calls.previews.at(-1)).toBe("hide");
+
+		await press("ArrowUp");
+		await press(" ", { code: "Space" });
+		await press("Escape", { code: "Escape" });
+		expect(calls.previews.slice(-2)).toEqual(["show /d/q3.pdf", "hide"]);
+		expect(input().value).toBe("report");
+		expect(calls.hidden).toEqual([]);
+	});
+
+	it("previews from the empty query and with ⌘Y while typing, and stops following once the panel closed itself", async () => {
+		await press(" ", { code: "Space" });
+		expect(calls.previews).toEqual(["show /r/recent.md"]);
+		await act(async () => panel.closed());
+
+		await type("report");
+		await press("y", { code: "KeyY", metaKey: true });
+		expect(calls.previews.at(-1)).toBe("show /d/report.md");
+		await act(async () => panel.closed());
+		await press("ArrowDown");
+		expect(calls.previews.at(-1)).toBe("show /d/report.md");
 	});
 });

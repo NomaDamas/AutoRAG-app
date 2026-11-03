@@ -245,6 +245,7 @@ keyboard and everything works with the mouse.
 | `↑` / `↓`, `⇧↑` / `⇧↓` | Move the selection / extend it (copies and drags carry the whole range) |
 | `⌘↑` / `⌘↓` | First / last row |
 | `↩` | Open the file (Ask row: ask the question) and hand the foreground to it |
+| `Space`, `⌘Y` | Quick Look the focused row; it follows `↑`/`↓` and closes on `Space` again. `Space` previews only while it cannot be part of the query (empty field, after moving through the rows, or with the preview open); `⌘Y` previews any time |
 | `⌘↩` | Show in Finder / Explorer |
 | `⇧⌘↩` | Show the file selected in the Dazzi Finder |
 | `⌥↩` | Ask Dazzi the typed question in a new AI Search tab |
@@ -252,7 +253,7 @@ keyboard and everything works with the mouse.
 | `⌘C` | Copy the selected files (they paste as files in other apps); copies the text instead while text in the field is selected |
 | `⇧⌘C` | Copy the selected paths as text |
 | `⌘K` | Action panel for the row (arrows + `↩`, or click) |
-| `Esc` | Close the panel → clear the query → hide and give the foreground back to the previous app |
+| `Esc` | Close the panel → close the preview → clear the query → hide and give the foreground back to the previous app |
 
 Mouse: click selects, `⇧`-click extends, double-click opens, a row drags out as the real file(s), the footer hints and
 the panel entries are buttons. On Windows the chords use `Ctrl` for `⌘` and `Alt` for `⌥`.

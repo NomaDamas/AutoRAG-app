@@ -624,6 +624,7 @@
     "actionsTitle": "동작",
     "actions": {
       "open": "열기",
+      "preview": "미리보기",
       "revealOs": "Finder/탐색기에서 보기",
       "showInApp": "Dazzi에서 보기",
       "copyFile": "파일 복사",
@@ -632,6 +633,7 @@
       "askQuery": "Dazzi에게 묻기"
     },
     "hints": {
+      "preview": "미리보기",
       "copy": "복사",
       "actions": "동작"
     }

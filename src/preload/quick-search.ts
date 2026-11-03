@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import { createPreviewBridge } from "../preview/node/bridge";
 import type { ContentSearchResult } from "../shared/content-search-contract";
 import { FS_CHANNELS, RECENTS_PATH, type DirListing, type FsEntryEnrichment, type FsSearchResult } from "../shared/fs-contract";
 import { isAppLanguage, LANGUAGE_CHANNELS, languageFromArgv } from "../shared/language-contract";
@@ -54,6 +55,7 @@ const bridge: QuickSearchBridge = {
 	reveal: (path) => worker.call<void>("reveal", [path]),
 	copyFiles: (paths) => worker.call<void>("clipboardSet", [{ op: "copy", paths }]),
 	copyPaths: (paths) => worker.call<void>("copyPathsToClipboard", [paths]),
+	preview: createPreviewBridge(ipcRenderer),
 };
 
 contextBridge.exposeInMainWorld("launcher", bridge);

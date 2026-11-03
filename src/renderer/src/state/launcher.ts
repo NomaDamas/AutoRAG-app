@@ -109,7 +109,7 @@ export function selectedPaths(rows: readonly LauncherRow[], selection: LauncherS
 	return paths;
 }
 
-export type LauncherActionId = "open" | "revealOs" | "showInApp" | "copyFile" | "copyPath" | "askAbout" | "askQuery";
+export type LauncherActionId = "open" | "preview" | "revealOs" | "showInApp" | "copyFile" | "copyPath" | "askAbout" | "askQuery";
 
 export interface LauncherAction {
 	readonly id: LauncherActionId;
@@ -120,6 +120,7 @@ export interface LauncherAction {
 
 const FILE_ACTIONS: readonly LauncherAction[] = [
 	{ id: "open", label: "quickSearch.actions.open", chord: "Enter" },
+	{ id: "preview", label: "quickSearch.actions.preview", chord: "Space" },
 	{ id: "revealOs", label: "quickSearch.actions.revealOs", chord: "Mod+Enter" },
 	{ id: "showInApp", label: "quickSearch.actions.showInApp", chord: "Mod+Shift+Enter" },
 	{ id: "copyFile", label: "quickSearch.actions.copyFile", chord: "Mod+C" },
@@ -149,16 +150,21 @@ const CHORD_ACTIONS: Readonly<Record<string, LauncherActionId>> = {
 	"Alt+Enter": "askQuery",
 	"Mod+Alt+Enter": "askAbout",
 	"Mod+C": "copyFile",
+	"Mod+Y": "preview",
 	"Mod+Shift+C": "copyPath",
 };
 
 /**
  * What a keydown in the launcher does; null leaves it to the text field. `textSelected` is true when the query field
  * has a selection: ⌘C then copies that text, as it would in any text field.
+ *
+ * Space previews the focused row (Finder's Quick Look) only when it cannot be part of the query: nothing is typed yet,
+ * the person moved through the rows (`browsing`, cleared by the next keystroke into the field), or a preview is open
+ * and Space closes it. Otherwise it types a space. ⌘Y / Ctrl+Y previews at any time.
  */
 export function launcherKeyAction(
 	event: RecordableKeyEvent,
-	context: { readonly panelOpen: boolean; readonly textSelected: boolean },
+	context: { readonly panelOpen: boolean; readonly textSelected: boolean; readonly browsing?: boolean; readonly queryEmpty?: boolean; readonly previewOpen?: boolean },
 	platform: string,
 ): LauncherKeyAction | null {
 	const decoded = chordFromKeyEvent(event, platform);
@@ -177,6 +183,7 @@ export function launcherKeyAction(
 	if (chord === "Mod+ArrowUp") return { type: "jump", to: "first" };
 	if (chord === "Mod+ArrowDown") return { type: "jump", to: "last" };
 	if (chord === "Mod+C" && context.textSelected) return null;
+	if (chord === "Space") return context.browsing === true || context.queryEmpty === true || context.previewOpen === true ? { type: "run", action: "preview" } : null;
 	const action = CHORD_ACTIONS[chord];
 	return action === undefined ? null : { type: "run", action };
 }

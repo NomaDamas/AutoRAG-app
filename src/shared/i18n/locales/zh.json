@@ -624,6 +624,7 @@
     "actionsTitle": "操作",
     "actions": {
       "open": "打开",
+      "preview": "快速查看",
       "revealOs": "在访达/资源管理器中显示",
       "showInApp": "在 Dazzi 中显示",
       "copyFile": "复制文件",
@@ -632,6 +633,7 @@
       "askQuery": "询问 Dazzi"
     },
     "hints": {
+      "preview": "预览",
       "copy": "复制",
       "actions": "操作"
     }

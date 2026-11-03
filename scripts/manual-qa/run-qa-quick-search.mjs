@@ -14,8 +14,10 @@ import { homeEnv, isMac, sh, sleep } from "./platform.mjs";
  *   2. The real system-wide shortcut: with another app in front (TextEdit on macOS), an OS-level ⌥Space / Alt+Space
  *      (System Events / WScript SendKeys) summons the launcher over it.
  *   3. Keyboard only: type, see name matches and content matches with a snippet, move with the arrows, extend with
- *      Shift, copy the files (⌘C) and the paths (⇧⌘C) — both read back from the real OS clipboard — open the action
- *      panel (⌘K), Escape twice to close; the app that was in front gets the foreground back.
+ *      Shift, copy the files (⌘C) and the paths (⇧⌘C) — both read back from the real OS clipboard — preview the
+ *      focused row with Space (the real Quick Look panel, following ↓, surviving a click into it, closed by Escape
+ *      before the launcher), open the action panel (⌘K), Escape twice to close; the app that was in front gets the
+ *      foreground back.
  *   4. Mouse: click a row, double-click opens it (recorded in Recents), the Ask row hands the question to a new AI
  *      Search tab in the Finder.
  *   5. Settings → General: the section is there, the switch releases the global shortcut.
@@ -185,11 +187,60 @@ try {
 	check("copying keeps the launcher open", await launcherVisible());
 	await page.screenshot({ path: join(OUT, "03-range-copied.png") });
 
+	// Space previews the focused row in the launcher's own Quick Look panel; the arrows move it along.
+	const shownPreview = () =>
+		app.evaluate(({ BrowserWindow }) => {
+			const shown = BrowserWindow.getAllWindows().filter((window) => window.webContents.getURL().includes("quick-look.html") && window.isVisible());
+			return shown.length === 1 ? { title: shown[0].getTitle(), focused: shown[0].isFocused() } : shown.length === 0 ? null : { title: `${shown.length} panels`, focused: false };
+		});
+	const focusedName = async () => (await page.locator(".qs__row[data-focus=true] .qs__name").innerText()).trim();
+	const firstFocus = await focusedName();
+	await page.keyboard.press("Space");
+	const opened = await waitFor(async () => {
+		const shown = await shownPreview();
+		return shown?.title === firstFocus ? shown : null;
+	}, 10_000);
+	check("Space previews the focused row in Quick Look", opened !== null, `${JSON.stringify(await shownPreview())} focused row ${firstFocus}`);
+	check("the query keeps its text (Space did not type)", (await page.locator(".qs__input").inputValue()) === "md");
+	check("the launcher stays open under the preview", await launcherVisible());
+	await sleep(700);
+	await page.screenshot({ path: join(OUT, "04-preview-open.png") });
+	if (isMac) execFileSync("screencapture", ["-x", join(OUT, "04-preview-screen.png")]);
+	await page.keyboard.press("ArrowDown");
+	const nextFocus = await focusedName();
+	const followed = await waitFor(async () => (await shownPreview())?.title === nextFocus, 10_000);
+	check("↓ moves the preview to the next row", Boolean(followed) && nextFocus !== firstFocus, `${firstFocus} -> ${nextFocus}: ${JSON.stringify(await shownPreview())}`);
+	const previewPage = await waitFor(async () => {
+		for (const candidate of app.windows()) {
+			if (!candidate.url().includes("quick-look.html")) continue;
+			if ((await candidate.locator(".qlw__name").innerText().catch(() => "")).trim() === nextFocus) return candidate;
+		}
+		return null;
+	}, 5000);
+	check("the preview draws the file", previewPage !== null && (await previewPage.locator(".ql__stage").count()) > 0);
+	if (previewPage !== null) {
+		await previewPage.locator(".ql__stage").click({ position: { x: 40, y: 40 } });
+		await sleep(500);
+		check("a click into the preview does not dismiss the launcher", (await launcherVisible()) && (await shownPreview()) !== null);
+		// The panel reads keys in `before-input-event`, which only OS-level input reaches (Playwright's CDP keys skip it).
+		await app.evaluate(({ BrowserWindow }) => {
+			const panelWindow = BrowserWindow.getAllWindows().find((window) => window.webContents.getURL().includes("quick-look.html") && window.isVisible());
+			panelWindow?.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+			panelWindow?.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+		});
+		check("Escape in the preview closes only the preview", Boolean(await waitFor(async () => (await shownPreview()) === null, 5000)) && (await launcherVisible()), JSON.stringify(await shownPreview()));
+		check("closing the preview gives the keyboard back to the launcher", Boolean(await waitFor(() => app.evaluate(({ BrowserWindow }) => BrowserWindow.getFocusedWindow()?.getTitle() === "Quick Search"), 3000)));
+	}
+	await page.keyboard.press("Space");
+	await waitFor(async () => (await shownPreview()) !== null, 10_000);
+	await page.keyboard.press("Escape");
+	check("Escape in the launcher closes the preview before anything else", Boolean(await waitFor(async () => (await shownPreview()) === null, 5000)) && (await page.locator(".qs__input").inputValue()) === "md" && (await launcherVisible()), JSON.stringify({ preview: await shownPreview(), query: await page.locator(".qs__input").inputValue() }));
+
 	await page.keyboard.press("Meta+K");
 	await page.locator(".qs__panel").waitFor();
 	const panelItems = await page.locator(".qs__panel .qs__name").allInnerTexts();
-	check("⌘K lists the actions for the row", panelItems.length === 6, JSON.stringify(panelItems));
-	await page.screenshot({ path: join(OUT, "04-action-panel.png") });
+	check("⌘K lists the actions for the row", panelItems.length === 7, JSON.stringify(panelItems));
+	await page.screenshot({ path: join(OUT, "05-action-panel.png") });
 	await page.keyboard.press("Escape");
 	check("Escape closes the panel first", (await page.locator(".qs__panel").count()) === 0 && (await launcherVisible()));
 	await page.keyboard.press("Escape");
@@ -197,6 +248,20 @@ try {
 	await page.keyboard.press("Escape");
 	check("a third Escape hides the launcher", Boolean(await waitFor(async () => !(await launcherVisible()), 3000)));
 	if (isMac) check("the app that was in front gets the foreground back", Boolean(await waitFor(() => frontmost() === outsider, 4000)), frontmost());
+	if (isMac) {
+		// Focus leaving the launcher and its preview for another app is a dismissal: both go away. The launcher is a
+		// non-activating panel, so TextEdit stays the active app under it; a different app has to take the focus.
+		sh(`osascript -e 'tell application "System Events" to key code 49 using {option down}'`);
+		await waitFor(launcherVisible, 8000);
+		await page.locator(".qs__input").fill("md");
+		await waitFor(async () => (await page.locator(".qs__row[role=option]").count()) >= 2, 10_000);
+		await page.keyboard.press("ArrowDown");
+		await page.keyboard.press("Space");
+		await waitFor(async () => (await shownPreview()) !== null, 10_000);
+		sh(`open -a Finder`);
+		const gone = await waitFor(async () => !(await launcherVisible()) && (await shownPreview()) === null, 5000);
+		check("switching to another app dismisses the launcher and its preview", Boolean(gone), JSON.stringify({ launcher: await launcherVisible(), preview: await shownPreview(), front: frontmost() }));
+	}
 
 	log("keyboard steps done");
 	// ── 4. Mouse ──
