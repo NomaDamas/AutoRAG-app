@@ -117,6 +117,9 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	const hide = (mode: QuickSearchHideMode): void => {
 		const current = window;
 		if (current === null || current.isDestroyed() || !current.isVisible()) return;
+		// Windows keeps a hidden window as the foreground one (measured: the title stays "Quick Search"); blurring first
+		// activates the next window in z-order, which is the app the person summoned the launcher over.
+		if (mode === "restore" && process.platform === "win32") current.blur();
 		current.hide();
 		if (mode === "restore" && darwin && !appWasActive) app.hide();
 	};
