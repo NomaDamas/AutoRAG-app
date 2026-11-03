@@ -60,6 +60,8 @@ export function onboardingCtx(overrides: Partial<OnboardingCtx> = {}): Onboardin
 		cancelSmartScan: noop,
 		setSmartExcluded: noop,
 		excludeFolder: noop,
+		smartSuggest: true,
+		setSmartSuggest: noop,
 		listSubfolders: async () => [],
 		measureFolders: noop,
 		setEmbedMode: noop,

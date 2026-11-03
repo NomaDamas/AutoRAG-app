@@ -254,6 +254,15 @@ describe("FoldersStep, where the folders to look through are chosen", () => {
 		expect(addFolders).toHaveBeenCalledTimes(1);
 	});
 
+	it("offers the sub-folder recommendation as a switch, on until turned off", () => {
+		const setSmartSuggest = vi.fn();
+		renderPicker({ setSmartSuggest });
+
+		expect(one(".folder-suggest .switch").classList.contains("on")).toBe(true);
+		click(one(".folder-suggest .switch"));
+		expect(setSmartSuggest).toHaveBeenCalledWith(false);
+	});
+
 	it("does not show the smart-indexing panels: those come after the scan", () => {
 		renderPicker();
 

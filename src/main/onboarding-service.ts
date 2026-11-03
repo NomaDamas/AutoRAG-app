@@ -276,6 +276,7 @@ function isOnboardingDraft(value: unknown): value is OnboardingDraft {
 	if (value.model !== null && !isModelChoice(value.model)) return false;
 	if (value.smartScope !== undefined && (!Array.isArray(value.smartScope) || !value.smartScope.every(isSmartExclusionChoice))) return false;
 	if (value.smartScopeRoots !== undefined && (!Array.isArray(value.smartScopeRoots) || !value.smartScopeRoots.every(isAbsoluteString))) return false;
+	if (value.smartSuggest !== undefined && typeof value.smartSuggest !== "boolean") return false;
 	if (value.resumeAt !== undefined && value.resumeAt !== "indexing") return false;
 	return true;
 }

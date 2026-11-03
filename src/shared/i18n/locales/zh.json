@@ -892,7 +892,7 @@
       }
     },
     "smartScan": {
-      "title": "探索推荐的索引范围",
+      "title": "正在查找要排除的子文件夹",
       "done": "探索完成",
       "failedTitle": "探索失败",
       "lead": "不打开文件内容，只查看文件夹名称和结构。",
@@ -910,28 +910,32 @@
       "add": "直接添加文件夹",
       "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
       "scanning": "统计中…",
-      "scanError": "无法读取"
+      "scanError": "无法读取",
+      "suggestTitle": "获取建议排除的子文件夹",
+      "suggestLine": "继续后，AI 会查看所选文件夹的子文件夹并推荐可排除的项目。结果将在下一个画面中确认。"
     },
     "smartScope": {
       "policy": {
         "title": "请确认索引范围",
-        "lead": "拖动文件夹即可将其纳入索引或排除。",
+        "lead": "拖动文件夹即可纳入或排除。",
         "eta": "约 {{minutes}} 分钟"
       },
       "include": {
-        "title": "要包含的文件夹",
+        "title": "要纳入的上级文件夹",
         "meta": "{{count}} 个文件夹",
         "all": "全部"
       },
       "exclude": {
-        "title": "要排除的文件夹",
+        "title": "要排除的子文件夹",
         "group": "{{name}} ({{count}})",
         "noDocs": "无文档",
         "refused": {
           "isRoot": "不能排除所选文件夹本身，请选择其中的子文件夹。",
           "outside": "只能排除所选文件夹内的子文件夹。",
           "covered": "该文件夹已被排除。"
-        }
+        },
+        "empty": "没有已排除的子文件夹。\n拖动文件夹即可排除。",
+        "aiTag": "AI 推荐"
       },
       "criteria": {
         "label": "推荐标准",

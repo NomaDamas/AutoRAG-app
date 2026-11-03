@@ -1305,7 +1305,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	justify-content: center;
 	padding-left: 24px;
 	padding-right: 24px;
-	padding-bottom: 9px;
+	padding-bottom: 0;
 }
 
 .onb .folders-screen h1 {
@@ -1319,8 +1319,8 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 
 .onb .folders-stack {
 	width: 100%;
-	max-width: 858px;
-	margin-top: 36px;
+	max-width: 808px;
+	margin-top: 28px;
 }
 
 .onb .folder-head {
@@ -1329,7 +1329,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	justify-content: space-between;
 	width: 100%;
 	height: 19px;
-	margin-bottom: 8px;
+	margin-bottom: 12px;
 	color: var(--onb-ink);
 	font-size: 12px;
 	line-height: 16px;
@@ -1352,8 +1352,8 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 }
 
 .onb .folder-all .check-box {
-	width: 16px;
-	height: 16px;
+	width: 13px;
+	height: 13px;
 }
 
 .onb .folder-all input:checked + .check-box {
@@ -1367,13 +1367,13 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	outline-offset: 2px;
 }
 
-/* Three rows show in full; every row after them scrolls (3 x 84px rows and 2 x 10px gaps). */
+/* Three rows show in full; every row after them scrolls (3 x 80px rows and 2 x 8px gaps). */
 .onb .folder-grid {
 	display: grid;
 	grid-template-columns: repeat(2,minmax(0,1fr));
-	grid-auto-rows: 84px;
-	gap: 10px;
-	max-height: 272px;
+	grid-auto-rows: 80px;
+	gap: 8px;
+	max-height: 256px;
 	overflow-y: auto;
 }
 
@@ -1383,7 +1383,7 @@ html[data-appearance="dark"] .onb .source-icon.brand {
 	align-items: center;
 	box-sizing: border-box;
 	gap: 16px;
-	min-height: 84px;
+	min-height: 80px;
 	padding: 10px 10px 10px 12px;
 	border: 1px solid var(--onb-border);
 	border-radius: 12px;
@@ -5539,7 +5539,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-screen:has(.si-head) .si-panel-title {
 	color: var(--onb-body);
 	font-size: 14px;
-	font-weight: 700;
+	font-weight: 500;
 	line-height: 19px;
 }
 
@@ -5701,6 +5701,90 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	margin-left: 4px;
 	color: var(--onb-ink);
 	font-weight: 700;
+}
+
+/* Folders step: the switch for the AI's sub-folder recommendation (Figma 124:1397 on, 120:1041 off). */
+.onb .folder-suggest {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-top: 20px;
+	padding: 16px 22px;
+	border: 1px solid var(--onb-bg-input);
+	border-radius: 12px;
+	background: var(--onb-bg-card);
+}
+
+.onb .folder-suggest-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.onb .folder-suggest-copy strong {
+	color: var(--onb-ink);
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 19px;
+}
+
+.onb .folder-suggest-copy small {
+	color: var(--onb-faint);
+	font-size: 12px;
+	line-height: 16px;
+}
+
+.onb .folder-suggest .switch {
+	flex: none;
+	width: 40px;
+	height: 23px;
+	border-radius: 11.5px;
+	background: #6e6e73;
+	cursor: pointer;
+}
+
+.onb .folder-suggest .switch:after {
+	top: 3px;
+	left: 3px;
+	width: 17px;
+	height: 17px;
+	box-shadow: none;
+}
+
+.onb .folder-suggest .switch.on {
+	background: var(--onb-blue);
+}
+
+.onb .folder-suggest .switch.on:after {
+	left: 20px;
+}
+
+/* Nothing left out yet: a note in the middle of the right panel. */
+.onb .si-screen:has(.si-head) .si-empty {
+	align-self: center;
+	margin: auto;
+	color: var(--onb-faint);
+	font-size: 13px;
+	line-height: 21px;
+	text-align: center;
+	white-space: pre-line;
+}
+
+.onb .si-screen:has(.si-head) .si-pill-ai {
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	box-sizing: border-box;
+	height: 16px;
+	padding: 0 6px;
+	border-radius: 4px;
+	background: rgba(0,217,255,.2);
+	color: var(--onb-blue);
+	font-size: 9px;
+	font-weight: 700;
+	line-height: 12px;
 }
 
 /* Plan step (Figma 08c, 117:4106 and 120:473): three 290px cards, the third switching between Pro and Max, then the BYOK link. */

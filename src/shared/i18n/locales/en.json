@@ -892,7 +892,7 @@
       }
     },
     "smartScan": {
-      "title": "Finding the scope to recommend",
+      "title": "Finding sub-folders to leave out",
       "done": "Finished looking",
       "failedTitle": "Could not finish looking",
       "lead": "Looking only at folder names and structure, without opening your files.",
@@ -910,12 +910,14 @@
       "add": "Add a folder",
       "stats": "{{files}} · {{size}} · ~{{minutes}} min",
       "scanning": "Counting…",
-      "scanError": "Can't read"
+      "scanError": "Can't read",
+      "suggestTitle": "Get sub-folders to leave out",
+      "suggestLine": "When you continue, AI looks through the sub-folders of the folders you chose and suggests ones to leave out. You review the result on the next screen."
     },
     "smartScope": {
       "policy": {
         "title": "Review the indexing scope",
-        "lead": "Drag folders to include them in the index or leave them out.",
+        "lead": "Drag folders to include or exclude them.",
         "eta": "~{{minutes}} min"
       },
       "include": {
@@ -924,14 +926,16 @@
         "all": "All"
       },
       "exclude": {
-        "title": "Folders to leave out",
+        "title": "Sub-folders to leave out",
         "group": "{{name}} ({{count}})",
         "noDocs": "no documents",
         "refused": {
           "isRoot": "A selected folder cannot be left out itself. Pick a sub-folder inside it.",
           "outside": "Only sub-folders of the selected folders can be left out.",
           "covered": "That folder is already left out."
-        }
+        },
+        "empty": "No sub-folders are left out.\nDrag a folder here to leave it out.",
+        "aiTag": "AI pick"
       },
       "criteria": {
         "label": "How it recommends",

@@ -80,6 +80,9 @@ export interface OnboardingCtx {
 	setSmartExcluded(path: string, excluded: boolean): void;
 	/** Leaves out a folder inside a selected one (dragged to the excluded side); it is measured once added. */
 	excludeFolder(path: string): void;
+	/** Whether continuing from the folders step asks the AI for sub-folders to leave out. */
+	readonly smartSuggest: boolean;
+	setSmartSuggest(on: boolean): void;
 	/** The folders directly inside `path`, without hidden ones; empty when it cannot be read. */
 	listSubfolders(path: string): Promise<readonly SubFolder[]>;
 	/** Measures folders not measured yet; each result arrives in `scans`. */

@@ -148,6 +148,8 @@ export interface OnboardingDraft {
 	readonly smartScope?: readonly SmartExclusion[];
 	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
 	readonly smartScopeRoots?: readonly string[];
+	/** Whether the AI proposes sub-folders to leave out after the folders step; absent means yes. Off goes straight to the scope screen. */
+	readonly smartSuggest?: boolean;
 	/**
 	 * Set while the user is on an earlier step only to fix what stopped the first index (the embedding choice):
 	 * leaving that step goes straight back to the index instead of on through the flow.

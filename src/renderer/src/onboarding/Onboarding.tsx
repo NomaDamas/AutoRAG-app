@@ -445,7 +445,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		const following = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
 		// With proposals that still cover the selection there is nothing to scan: go straight to them.
 		const selected = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-		const target = following === "smartScan" && !needsAnalysis(selected, current.smartScopeRoots, current.smartScope) ? "smartScope" : following;
+		// Without the recommendation, or with proposals that still cover the selection, there is nothing to scan: go straight to the scope.
+		const skipScan = following === "smartScan" && (current.smartSuggest === false || !needsAnalysis(selected, current.smartScopeRoots, current.smartScope));
+		const target = skipScan ? "smartScope" : following;
+		// Turning the recommendation off drops what the AI proposed, keeping only folders the user left out by hand.
+		const manual = following === "smartScan" && current.smartSuggest === false;
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
 		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
 		if (consent !== null && errorConsent !== null) {
@@ -453,8 +457,10 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			void autorag.settings.set({ usageAnalytics: consent, errorReporting: errorConsent }).catch((error: unknown) => console.error("[onboarding] privacy choices not saved:", error));
 		}
 		if (detour) setIndexStatus(null);
+		const base = detour ? leaveDetour(current) : current;
+		const { smartScopeRoots: _analysed, ...unanalysed } = base;
 		setDraft({
-			...(detour ? leaveDetour(current) : current),
+			...(manual ? { ...unanalysed, smartScope: (base.smartScope ?? []).filter((item) => item.reason === "") } : base),
 			...(current.stepId === "plan" ? { planConfirmed: true } : {}),
 			...(target === undefined ? {} : { stepId: target }),
 		});
@@ -901,6 +907,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			setDraft((current) =>
 				current === null || current.smartScope === undefined ? current : { ...current, smartScope: setScopeExcluded(current.smartScope, path, excluded) },
 			),
+		smartSuggest: draft?.smartSuggest !== false,
+		setSmartSuggest: (on) => patch({ smartSuggest: on }),
 		excludeFolder: (path) => {
 			const current = draftRef.current;
 			if (current === null) {
@@ -1143,8 +1151,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				</div>
 				<div className="footer-actions">
 					{draft.stepId === "welcome" ? null : (
-						<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={draft.stepId === "smartScope" ? rescan : back}>
-							{t(draft.stepId === "smartScope" ? "onboarding.smartScope.rescan" : "onboarding.footerBack")}
+						<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={draft.stepId === "smartScope" && draft.smartSuggest !== false ? rescan : back}>
+							{t(draft.stepId === "smartScope" && draft.smartSuggest !== false ? "onboarding.smartScope.rescan" : "onboarding.footerBack")}
 							<FooterBackKey />
 						</button>
 					)}

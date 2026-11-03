@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { Multiline } from "../parts";
+import { Multiline, Switch } from "../parts";
 import { etaMinutes, formatSize } from "../flow";
 import type { OnboardingCtx } from "../context";
 
@@ -93,6 +93,13 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						<Icon name="plus" size={15} />
 						<span>{t("onboarding.folders.add")}</span>
 					</div>
+				</div>
+				<div className="folder-suggest">
+					<div className="folder-suggest-copy">
+						<strong>{t("onboarding.folders.suggestTitle")}</strong>
+						<small>{t("onboarding.folders.suggestLine")}</small>
+					</div>
+					<Switch on={ctx.smartSuggest} label={t("onboarding.folders.suggestTitle")} onClick={() => ctx.setSmartSuggest(!ctx.smartSuggest)} />
 				</div>
 			</div>
 		</section>

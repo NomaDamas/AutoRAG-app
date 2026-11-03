@@ -131,7 +131,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 		},
 	});
 
-	const pill = (item: Moving, label: string, size: string, tone: "blue" | "red", title: string, open?: () => void): ReactElement => (
+	const pill = (item: Moving, label: string, size: string, tone: "blue" | "red", title: string, open?: () => void, suggested = false): ReactElement => (
 		<div
 			key={item.path}
 			className={cn("si-pill", tone)}
@@ -163,6 +163,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 			<span className="si-pill-label">{label}</span>
 			{open === undefined ? null : <ChevronRight size={12} className="si-pill-open" aria-hidden="true" focusable="false" />}
 			<span className="si-pill-size">{size}</span>
+			{suggested ? <span className="si-pill-ai">{t("onboarding.smartScope.exclude.aiTag")}</span> : null}
 		</div>
 	);
 
@@ -177,7 +178,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				<h1>{t("onboarding.smartScope.policy.title")}</h1>
 				<div className="si-lead">
 					<p>{t("onboarding.smartScope.policy.lead")}</p>
-					<Criteria t={t} />
+					{draft.smartSuggest === false ? null : <Criteria t={t} />}
 				</div>
 			</div>
 			<div className="si-dual-panels">
@@ -228,6 +229,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 						<span className="si-panel-meta">{formatSize(totals.bytes)}</span>
 					</div>
 					<div className="si-panel-body" onWheel={scrollSideways}>
+						{unselected.length === 0 && groups.length === 0 ? <p className="si-empty">{t("onboarding.smartScope.exclude.empty")}</p> : null}
 						{unselected.length > 0 ? (
 							<div className="si-group">
 								<p className="si-group-title">{t("onboarding.smartScope.exclude.group", { name: t("onboarding.smartScope.include.all"), count: unselected.length })}</p>
@@ -247,6 +249,8 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 											item.files === 0 ? t("onboarding.smartScope.exclude.noDocs") : formatSize(item.bytes),
 											"red",
 											item.reason === "" ? item.path : `${item.reason}\n${item.path}`,
+											undefined,
+											item.reason !== "",
 										),
 									)}
 								</div>

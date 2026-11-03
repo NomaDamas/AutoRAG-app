@@ -129,6 +129,8 @@ function harness(options: {
 		cancelSmartScan: noop,
 		setSmartExcluded: noop,
 		excludeFolder: noop,
+		smartSuggest: true,
+		setSmartSuggest: noop,
 		listSubfolders: async () => [],
 		measureFolders: noop,
 		requestNotifications: noop,
