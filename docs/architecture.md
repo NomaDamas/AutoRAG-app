@@ -1197,6 +1197,40 @@ Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90
 encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
 `test/conversion-live.test.ts` does the same against the real binaries without the UI.
 
+## Voice input in AI Search
+
+A microphone button in the AI Search composer dictates a question: it records, sends the clip to the
+hosted service, and appends the text to the draft. Nothing is sent as a question; the person
+reads and sends it.
+
+- **Where the audio goes.** `src/main/voice-service.ts` posts the clip as multipart to the Dazzi
+  server's `POST /v1/audio/transcriptions` (model `google/stt-v2-standard`, Google Cloud
+  Speech-to-Text V2, `latest_long`) with the account key from Pi's `auth.json`. The server holds the
+  Google service account, meters the call against the weekly credits (`transcription` operation,
+  $0.016 per audio minute), and answers `{ text, duration }`. The key and the Google credentials never
+  reach the renderer. The audio leaves the computer, so unlike indexing there is no on-device path.
+- **Limits.** The service takes 10 MB and 60 seconds per request. A recording ends itself at 55 s
+  (`VOICE_MAX_SECONDS`) and is sent; a clip over 10 MB is refused in `isVoiceClip` before the request.
+  Speech the service cannot make out is not an error: the text is empty and the composer says nothing
+  was heard.
+- **Language.** The recognition language follows the Interface language (`voiceLanguageCode`:
+  `ko-KR`, `en-US`, `ja-JP`, `cmn-Hans-CN`).
+- **Before recording.** `prepare()` answers `ready`, `signed-out` (the service would refuse the clip, so
+  nothing is recorded and the system's microphone prompt is not raised) or `microphone-denied`. macOS
+  reports the permission and raises its prompt the first time (`NSMicrophoneUsageDescription`, and the
+  `com.apple.security.device.audio-input` entitlement for the hardened runtime); Windows reports its
+  privacy switch; on Linux Electron offers neither and the browser layer decides
+  (`systemMicrophoneAccess`).
+- **Recording.** `useVoiceInput` (`MediaRecorder`, `audio/webm;codecs=opus` first) holds the microphone
+  only while recording and releases it on stop, cancel, error and unmount. Errors are shown as a line
+  under the field, not as the run's error card.
+- **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`.
+  Both are native-only in a remote browser session.
+
+To test it without speaking, launch Chromium with `--no-sandbox --use-fake-device-for-media-stream
+--use-file-for-fake-audio-capture=<48 kHz stereo wav>%noloop`: with the audio sandbox on, the fake
+device delivers silence.
+
 ## Manual QA
 
 The Finder QA scripts are under `scripts/manual-qa/`. Build first, then run a
