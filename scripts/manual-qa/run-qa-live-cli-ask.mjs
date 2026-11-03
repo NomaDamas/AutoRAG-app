@@ -261,12 +261,16 @@ try {
 	check("run completed", false, String(error?.stack ?? error).slice(0, 800));
 } finally {
 	if (app !== undefined) await app.close().catch(() => undefined);
-	for (const pid of laneProcesses()) {
-		try {
-			process.kill(Number(pid), "SIGTERM");
-		} catch {
-			// already gone
+	// The cold-start app is not Playwright's: stop it, and make sure it is gone before its profile is deleted.
+	for (const signal of ["SIGTERM", "SIGKILL"]) {
+		for (const pid of laneProcesses()) {
+			try {
+				process.kill(Number(pid), signal);
+			} catch {
+				// already gone
+			}
 		}
+		if ((await until(async () => laneProcesses().length === 0, 10_000)) !== false) break;
 	}
 	service.close();
 	rmSync(WORK, { recursive: true, force: true });
