@@ -99,6 +99,22 @@ export function FileList({
 		/>
 	);
 
+	// One flat, keyed list. Rows nested one array per layout item are matched by that item's position, so a row that
+	// moves to another item (a window that slides by one, rows inserted above it) is remounted; keyed at one level, it
+	// keeps its element.
+	const nodes: ReactElement[] = [];
+	for (let itemIndex = window.start; itemIndex < window.end; itemIndex += 1) {
+		const item = layout.items[itemIndex];
+		if (item === undefined) continue;
+		if (item.kind === "header") {
+			nodes.push(<GroupHeader key={`group-${item.section}`} label={sections[item.section]?.label ?? ""} />);
+			continue;
+		}
+		sections[item.section]?.rows.slice(item.start, item.start + item.count).forEach((entry, rowIndex) => {
+			nodes.push(row(entry, ((layout.rowBases[itemIndex] ?? 0) + rowIndex) % 2 === 1));
+		});
+	}
+
 	return (
 		<div
 			className={cn(LIST_SCROLLER_CLASS, dropBackground && "bg-accent-drop-hover")}
@@ -119,15 +135,7 @@ export function FileList({
 					paddingBottom: padBottom,
 				}}
 			>
-				{layout.items.slice(window.start, window.end).map((item, renderedIndex) =>
-					item.kind === "header" ? (
-						<GroupHeader key={`group-${item.section}`} label={sections[item.section]?.label ?? ""} />
-					) : (
-						sections[item.section]?.rows.slice(item.start, item.start + item.count).map((entry, rowIndex) =>
-							row(entry, (((layout.rowBases[window.start + renderedIndex] ?? 0) + rowIndex) % 2) === 1),
-						)
-					),
-				)}
+				{nodes}
 			</div>
 			{rowCount === 0 ? (
 				<div className="list__empty py-40 px-12 text-ink-muted text-body text-center">{emptyText}</div>
