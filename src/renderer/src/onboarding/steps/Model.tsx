@@ -15,6 +15,7 @@ import type { ModelCheckResult, OnboardingModelChoice } from "../../../../shared
 import type { AutoRagConfigSnapshot, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { RolePicker } from "../../components/settings/ModelPicker";
 import { ConnectMenu, useProviderConnect } from "../../components/settings/ProviderConnect";
+import { providerMark } from "../../components/settings/ProviderIcon";
 import { errorText } from "../../components/settings/configSupport";
 import { FloatingMenu } from "../../components/settings/SettingsKit";
 import type { OnboardingCtx } from "../context";
@@ -178,7 +179,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 					<div className="detected-title">{t("onboarding.model.connectedTitle")}</div>
 					{connected.map((provider) => (
 						<div key={provider.id} className="detected-row" data-provider-row={provider.id}>
-							<span className="source-icon" aria-hidden="true">{provider.name.charAt(0).toUpperCase()}</span>
+							<span className="source-icon" aria-hidden="true">{providerMark(provider, 16) ?? provider.name.charAt(0).toUpperCase()}</span>
 							<div>
 								<strong>{provider.name}</strong>
 								<small>{provider.baseUrl ?? t(provider.subscription ? "settingsCore.ai.subscriptionAccount" : `settingsCore.ai.kind.${provider.kind}`)}</small>

@@ -1063,6 +1063,12 @@
 	border-radius: var(--radius-4);
 	font-size: 9.5px;
 }
+
+/* A provider logo keeps the 2/3 share of the tile it has at the other sizes. */
+.settings-view .settings-menu-group.is-provider .settings-app-icon.is-sm .settings-app-icon-logo {
+	width: 10px;
+	height: 10px;
+}
 .settings-view .settings-menu-item {
 	display: flex;
 	align-items: center;

@@ -18,7 +18,8 @@ import type {
 	ModelCatalogEntry,
 	ProviderSummary,
 } from "../../../../shared/settings-contract";
-import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { ProviderIcon } from "./ProviderIcon";
+import { FloatingMenu, ModalActions, ModalShell, Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
@@ -218,7 +219,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 						const meta = `${provider.subscription ? t("settingsCore.ai.subscriptionAccount") : t(KIND_LABEL_KEY[provider.kind])}${provider.baseUrl === null ? "" : ` · ${provider.baseUrl}`}${used.length > 0 ? ` · ${t("settingsCore.ai.usedFor", { roles: used.join(", ") })}` : ""}`;
 						return (
 							<div className="settings-list-row" key={provider.id}>
-								<AppIcon label={provider.name} />
+								<ProviderIcon provider={provider} />
 								<span className="settings-list-body">
 									<span className="settings-list-title">{provider.name}</span>
 									<span className="settings-list-meta">{meta}</span>
@@ -369,7 +370,7 @@ function RoleRow({
 		<Row name={label} hint={hint}>
 			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
 				<button type="button" className="settings-trigger" aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
-					{provider ? <AppIcon small label={provider.name} /> : null}
+					{provider ? <ProviderIcon small provider={provider} /> : null}
 					<span className="settings-trigger-label">{current}</span>
 					<ChevronDown size={14} aria-hidden="true" focusable="false" />
 				</button>
