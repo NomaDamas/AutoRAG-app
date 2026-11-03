@@ -595,6 +595,20 @@ resumes at the same step.
   `progress.jsonl`) reads first and applies its snapshot only if its run is still
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
+  The numbers on the screen, in the sidebar activity entry and in Settings >
+  Indexing are one `IndexProgressSnapshot` (`src/shared/index-progress-contract.ts`),
+  computed by `computeIndexProgress` (`src/shared/index-progress.ts`) from what the
+  processes wrote down: the librarian's `refresh-progress.json` (`sourceFiles.total`,
+  `parsedCounts`, `minsync.synced/total`, `updatedAt`, which MinSync's 5 s heartbeat
+  rewrites) and MinSync's `progress.jsonl` (header, then one
+  `{"item":"files/<path>.md","version":...,"outcome":"committed|failed|deleted"}` line
+  per file, no sizes, no timestamps; measured with MinSync 0.6.1). The file-by-file
+  tally and the size of every staged document (read once per run from
+  `.autorag/minsync/files`) come from `src/main/index-progress-tracker.ts`, which the
+  onboarding service and the activity service each own one of, and which keeps the
+  rolling-rate samples between polls. Nothing in it is filled from elapsed time;
+  the old `computeIndexingProgress` (`onboarding-progress.ts`), which did that,
+  is gone.
 
 Account and plan are real. The account step signs in against the hosted AutoRAG
 service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and
