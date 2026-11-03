@@ -481,6 +481,10 @@ export function App(): ReactElement {
 					if (target.kind === "folder") finder.openFolder(target.path);
 					else finder.revealEvidence(target.path);
 				}
+			} else if (request.action === "query") {
+				// The quick-search launcher's "Ask Dazzi": a new AI Search tab runs the question, like the sidebar's 내용 search.
+				finder.openAiSearch();
+				deliverToAi({ query: request.text });
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();

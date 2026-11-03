@@ -15,6 +15,7 @@ import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/sett
 import type { RemoteAccessStatus } from "../../../../shared/remote-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
+import { QuickSearchSettingsSection } from "./QuickSearchSettings";
 import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 import { hostPlatform } from "../../lib/shortcuts";
@@ -110,6 +111,7 @@ export function GeneralPage({
 					<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
 				</Row>
 			</Section>
+			{typeof autorag.quickSearch?.status === "function" ? <QuickSearchSettingsSection settings={appSettings.quickSearch} setApp={setApp} /> : null}
 			{canManageRemote ? <Section title={t("settingsCore.general.remoteTitle")} description={t("settingsCore.general.remoteSecurityHint")}>
 				<Row name={t("settingsCore.general.remoteAccess")} hint={t("settingsCore.general.remoteAccessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.general.remoteAccess")} />

@@ -118,6 +118,17 @@ describe("createOsRequestService open", () => {
 	});
 });
 
+describe("createOsRequestService question", () => {
+	it("queues a question from the launcher as typed, and none for blank text", () => {
+		let queued = 0;
+		const service = createOsRequestService({ kindOf: async () => "file", onQueued: () => (queued += 1) });
+		service.pushQuery("  what is our refund policy?  ");
+		service.pushQuery("   ");
+		expect(queued).toBe(1);
+		expect(service.take()).toEqual([{ action: "query", text: "what is our refund policy?" }]);
+	});
+});
+
 describe("os request channel", () => {
 	async function listening(received: OsLaunchRequest[]): Promise<string> {
 		const dir = await mkdtemp(join(tmpdir(), "os-ch-"));

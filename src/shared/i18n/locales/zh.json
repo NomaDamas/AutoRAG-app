@@ -604,6 +604,38 @@
     "ask": "向 Dazzi 提问",
     "reveal": "在 Dazzi 中显示"
   },
+  "quickSearch": {
+    "title": "快速搜索",
+    "placeholder": "按文件名或内容搜索",
+    "searching": "正在搜索",
+    "sections": {
+      "recent": "最近使用",
+      "names": "文件名",
+      "content": "内容",
+      "ask": "询问 Dazzi"
+    },
+    "askRow": "询问 Dazzi：“{{query}}”",
+    "emptyRecents": "输入内容开始搜索。最近打开的文件会显示在这里。",
+    "noResults": "没有匹配的文件。",
+    "contentOff": "仅关键词模式下内容搜索已关闭。",
+    "contentUnavailable": "文档索引尚未就绪，暂无内容匹配。",
+    "copiedFiles": "已复制 {{count}} 个文件，可粘贴到任意应用。",
+    "copiedPaths": "已复制 {{count}} 个路径。",
+    "actionsTitle": "操作",
+    "actions": {
+      "open": "打开",
+      "revealOs": "在访达/资源管理器中显示",
+      "showInApp": "在 Dazzi 中显示",
+      "copyFile": "复制文件",
+      "copyPath": "复制路径",
+      "askAbout": "就此文件询问 Dazzi",
+      "askQuery": "询问 Dazzi"
+    },
+    "hints": {
+      "copy": "复制",
+      "actions": "操作"
+    }
+  },
   "toasts": {
     "trashSingle": "已将 {{name}} 移到废纸篓",
     "trashCount": "已将 {{count}} 个项目移到废纸篓",
@@ -2364,6 +2396,14 @@
       "finderDesc": "文件浏览界面的行为。",
       "showHiddenFiles": "显示隐藏文件",
       "showHiddenFilesHint": "在 Finder 中显示以点(.)开头的系统文件。",
+      "quickSearchTitle": "快速搜索",
+      "quickSearchDesc": "无论正在使用哪个应用，都可以用快捷键打开 Dazzi 搜索栏。",
+      "quickSearchEnabled": "使用快速搜索快捷键",
+      "quickSearchEnabledHint": "按 {{shortcut}} 打开搜索栏，再按一次或按 Esc 关闭。",
+      "quickSearchShortcut": "快捷键",
+      "quickSearchShortcutHint": "点击后按下新的组合键。",
+      "quickSearchNeedsModifier": "此快捷键在所有应用中生效，请与 ⌘/Ctrl 或 ⌥/Alt 一起按下。",
+      "quickSearchTaken": "{{shortcut}} 已被其他应用或系统占用，请选择其他组合键。",
       "remoteTitle": "远程访问",
       "remoteSecurityHint": "HTTP 未加密。仅在可信网络或加密隧道中使用。",
       "remoteAccess": "允许远程访问",

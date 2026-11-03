@@ -604,6 +604,38 @@
     "ask": "Dazziに質問",
     "reveal": "Dazziで表示"
   },
+  "quickSearch": {
+    "title": "クイック検索",
+    "placeholder": "ファイル名や内容で検索",
+    "searching": "検索中",
+    "sections": {
+      "recent": "最近の項目",
+      "names": "ファイル名",
+      "content": "内容",
+      "ask": "Dazziに聞く"
+    },
+    "askRow": "Dazziに聞く：「{{query}}」",
+    "emptyRecents": "入力して検索します。最近開いたファイルがここに表示されます。",
+    "noResults": "一致するファイルはありません。",
+    "contentOff": "キーワードのみのモードのため、内容検索はオフです。",
+    "contentUnavailable": "文書インデックスの準備がまだのため、内容の一致はありません。",
+    "copiedFiles": "{{count}}件のファイルをコピーしました。ほかのアプリに貼り付けられます。",
+    "copiedPaths": "{{count}}件のパスをコピーしました。",
+    "actionsTitle": "操作",
+    "actions": {
+      "open": "開く",
+      "revealOs": "Finder/エクスプローラで表示",
+      "showInApp": "Dazziで表示",
+      "copyFile": "ファイルをコピー",
+      "copyPath": "パスをコピー",
+      "askAbout": "このファイルについてDazziに聞く",
+      "askQuery": "Dazziに聞く"
+    },
+    "hints": {
+      "copy": "コピー",
+      "actions": "操作"
+    }
+  },
   "toasts": {
     "trashSingle": "{{name}}をゴミ箱に移動しました",
     "trashCount": "{{count}}個の項目をゴミ箱に移動しました",
@@ -2364,6 +2396,14 @@
       "finderDesc": "ファイル閲覧画面の動作です。",
       "showHiddenFiles": "隠しファイルを表示",
       "showHiddenFilesHint": "ドット(.)で始まるシステムファイルを Finder に表示します。",
+      "quickSearchTitle": "クイック検索",
+      "quickSearchDesc": "どのアプリを使っていても、ショートカットでDazziの検索バーを開きます。",
+      "quickSearchEnabled": "クイック検索のショートカットを使う",
+      "quickSearchEnabledHint": "{{shortcut}}で検索バーが開きます。もう一度押すかEscで閉じます。",
+      "quickSearchShortcut": "ショートカット",
+      "quickSearchShortcutHint": "クリックしてから新しいキーの組み合わせを押してください。",
+      "quickSearchNeedsModifier": "すべてのアプリで使うショートカットのため、⌘/Ctrlまたは⌥/Altと一緒に押してください。",
+      "quickSearchTaken": "{{shortcut}}はほかのアプリかシステムが使用中です。別の組み合わせを選んでください。",
       "remoteTitle": "リモートアクセス",
       "remoteSecurityHint": "HTTP は暗号化されません。信頼できるネットワークまたは暗号化されたトンネルでのみ使用してください。",
       "remoteAccess": "リモートアクセスを許可",

@@ -1034,6 +1034,33 @@ the run's first model prompt. The query string, which the librarian uses for
 baseline retrieval and records in its retrieval memory, stays the user's own
 words.
 
+## Quick-search launcher
+
+A system-wide shortcut (`globalShortcut`, Settings → General → Quick Search, stored as `AppSettings.quickSearch`)
+summons a small window over any app. Pieces:
+
+- `src/main/quick-search-shortcut.ts` keeps the registration in step with the settings: moves to a new chord, reports
+  one another app holds (`status().error === "taken"`, shown in Settings), and releases the chord while Settings
+  records a new one (`quick-search:recording`) so the keys reach the recorder.
+- `src/main/quick-search-window.ts` creates the window hidden at startup (`quick-search.html`, preload
+  `quick-search.mjs`): a `panel` window on macOS, an always-on-top window without a taskbar button on Windows. Hiding
+  with `restore` gives the foreground back (macOS hides the app unless a Dazzi window was in front); actions that open
+  something (`handoff`) leave it to what they opened. On Windows/Linux it is destroyed with the last app window so
+  closing the Finder still quits.
+- The page (`src/renderer/src/launcher/QuickSearch.tsx`, model in `state/launcher.ts`) talks to the fs worker over its
+  own port, like the Finder: `search` (file names), `contentSearch` (below), `enrichEntries`, `open`, `reveal`,
+  `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
+  (`AbortSignal` through the worker and the librarian thread).
+- Handoffs to the Finder reuse the os-request queue: *Show in Dazzi* is a `reveal`, *Ask about these files* an `ask`
+  (drafts on the nearest AI Search tab), *Ask Dazzi* a `query` (a new AI Search tab sends it).
+- `contentSearch` (`src/main/content-search.ts`, in the librarian thread) is model-free: `AutoRAGLite.searchSelected`
+  over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
+  Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
+  was not searched.
+
+QA: `scripts/manual-qa/run-qa-quick-search.mjs` (lane `quick-search`) builds a real index, presses the real OS chord
+over TextEdit, drives the launcher from the keyboard and the mouse, and reads the copies back from the OS clipboard.
+
 ## Right-click menu in Finder and Explorer
 
 Settings → General → **Add to the file right-click menu** (off by default)

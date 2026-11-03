@@ -13,6 +13,8 @@ export interface OsRequestServiceDeps {
 export interface OsRequestService {
 	/** Check the paths and queue the request; a request with no surviving path queues nothing. */
 	push(request: OsLaunchRequest): Promise<void>;
+	/** A question to ask in a new AI Search tab (the quick-search launcher's "Ask Dazzi"); blank text queues nothing. */
+	pushQuery(text: string): void;
 	/** Everything queued so far, oldest first; the queue is empty afterwards. */
 	take(): readonly OsRendererRequest[];
 }
@@ -50,6 +52,12 @@ export function createOsRequestService(deps: OsRequestServiceDeps): OsRequestSer
 				const attachments: ChatAttachment[] = found.map(({ path, kind }) => ({ kind, id: path, name: basename(path) }));
 				queue.push({ action: "ask", attachments });
 			}
+			deps.onQueued();
+		},
+		pushQuery(text) {
+			const trimmed = text.trim();
+			if (trimmed.length === 0) return;
+			queue.push({ action: "query", text: trimmed });
 			deps.onQueued();
 		},
 		take: () => queue.splice(0),

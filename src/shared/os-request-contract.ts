@@ -26,11 +26,12 @@ export interface OsLaunchRequest {
 	readonly paths: readonly string[];
 }
 
-/** The request after the main process checked the paths against the disk. */
+/** The request after the main process checked the paths against the disk. `query` comes from the quick-search launcher only. */
 export type OsRendererRequest =
 	| { readonly action: "ask"; readonly attachments: readonly ChatAttachment[] }
 	| { readonly action: "reveal"; readonly path: string }
-	| { readonly action: "open"; readonly targets: readonly OsOpenTarget[] };
+	| { readonly action: "open"; readonly targets: readonly OsOpenTarget[] }
+	| { readonly action: "query"; readonly text: string };
 
 /** One existing path of an `open` request, with what it is on disk. */
 export interface OsOpenTarget {

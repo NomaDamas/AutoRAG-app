@@ -12,6 +12,7 @@ import {
 	clipboard,
 	ClipboardItem,
 	dialog,
+	globalShortcut,
 	ipcMain,
 	nativeTheme,
 	Notification,
@@ -142,6 +143,8 @@ import { promisify } from "node:util";
 import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
+import { createQuickSearchShortcut, type QuickSearchShortcut } from "./quick-search-shortcut";
+import { createQuickSearchWindow, type QuickSearchWindow } from "./quick-search-window";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
@@ -294,6 +297,8 @@ let fsWorker: FsWorkerHost | null = null;
 let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let currentQuickLookChord = "Space";
+/** The system-wide quick-search shortcut; null until startup built the launcher it summons. */
+let quickSearchShortcut: QuickSearchShortcut | null = null;
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
 /** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
@@ -833,6 +838,7 @@ app.whenReady().then(async () => {
 			}
 			setErrorReportingEnabled(settings.errorReporting);
 			currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
+			quickSearchShortcut?.apply(settings.quickSearch);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -1268,6 +1274,34 @@ app.whenReady().then(async () => {
 		sendToMainWindow(OS_REQUEST_CHANNELS.available, null);
 	};
 	if (launchRequest !== null) void osRequests.push(launchRequest);
+	// The quick-search launcher: a system-wide shortcut summons it over any app (Settings → General).
+	const launcher: QuickSearchWindow = createQuickSearchWindow({
+		preload: join(import.meta.dirname, "../preload/quick-search.mjs"),
+		appearance: currentAppearance,
+		language: currentLanguage,
+		loadPage: (window) => loadRendererPage(window, "quick-search.html"),
+		revealInApp: (path) => osRequests.push({ action: "reveal", paths: [path] }),
+		ask: (query) => osRequests.pushQuery(query),
+		attach: (paths) => osRequests.push({ action: "ask", paths }),
+		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
+		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
+	});
+	quickSearchShortcut = createQuickSearchShortcut({
+		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
+		unregister: (accelerator) => globalShortcut.unregister(accelerator),
+		onPress: () => launcher.toggle(),
+	});
+	quickSearchShortcut.apply(settings.quickSearch);
+	// Windows and Linux quit when the last app window closes; the hidden launcher must not keep the app alive.
+	app.on("browser-window-created", (_event, created) => {
+		created.once("closed", () => {
+			if (process.platform !== "darwin" && appWindows().length === 0) launcher.destroy();
+		});
+	});
+	app.once("will-quit", () => {
+		quickSearchShortcut?.dispose();
+		launcher.destroy();
+	});
 	if (settings.osMenuIntegration) {
 		// Refresh on every start: the executable path or interface language may have changed.
 		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));
