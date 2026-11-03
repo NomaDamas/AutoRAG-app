@@ -95,6 +95,7 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 			toggleable: true,
 			detail: "",
 		}),
+		contentSearch: async () => ({ state: "ok", hits: [] }),
 	};
 }
 

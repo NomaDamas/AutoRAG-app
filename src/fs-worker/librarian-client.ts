@@ -18,6 +18,7 @@ import type { FsLocation } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
 import type { ErrorReport } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
+import type { ContentSearch } from "../main/content-search";
 import { LIBRARIAN_OP, LIBRARIAN_PUSH, LIBRARIAN_REQUEST, type LibrarianThread } from "./librarian-contract";
 
 export interface LibrarianClientDeps {
@@ -39,6 +40,7 @@ export interface LibrarianClientDeps {
 
 export interface LibrarianClient {
 	readonly fileNameSearch: FileNameSearchBackend;
+	readonly contentSearch: ContentSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
@@ -92,14 +94,15 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 		return started;
 	}
 
-	async function call<T>(op: string, args: readonly unknown[] = []): Promise<T> {
+	async function call<T>(op: string, args: readonly unknown[] = [], signal?: AbortSignal): Promise<T> {
 		if (disposed) throw new Error(t("main.worker.librarianStopped"));
 		running ??= start();
 		const current = running;
 		const failed = Promise.withResolvers<never>();
 		current.inFlight.add(failed.reject);
 		try {
-			return await Promise.race([current.ready.then(() => current.client.call<T>(op, args)), failed.promise]);
+			// An aborted call is cancelled in the thread too, so a superseded search stops its MinSync query.
+			return await Promise.race([current.ready.then(() => current.client.call<T>(op, args, signal === undefined ? {} : { signal })), failed.promise]);
 		} finally {
 			current.inFlight.delete(failed.reject);
 		}
@@ -127,6 +130,9 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 					console.warn(`[librarian] file-name index did not stop: ${error instanceof Error ? error.message : String(error)}`);
 				}
 			},
+		},
+		contentSearch: {
+			search: (query, limit, signal) => call(LIBRARIAN_OP.contentSearch, limit === undefined ? [query] : [query, limit], signal),
 		},
 		scanDuplicates: (dir) => call(LIBRARIAN_OP.scanDuplicates, [dir]),
 		indexStatus: {
