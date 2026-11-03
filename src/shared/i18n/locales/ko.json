@@ -3249,7 +3249,8 @@
     "ql": {
       "done": "완료",
       "position": "{{index}} / {{total}}",
-      "noPreview": "이 형식은 브라우저에서 미리볼 수 없어요."
+      "noPreview": "이 형식은 브라우저에서 미리볼 수 없어요.",
+      "openTab": "새 탭에서 열기"
     },
     "search": {
       "placeholder": "파일 이름이나 내용",

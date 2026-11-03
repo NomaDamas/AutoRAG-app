@@ -4,9 +4,10 @@
  * data it shows and callbacks; the shell owns the state.
  */
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { Check as CheckGlyph, ChevronRight, Download, Ellipsis, House, Info, Music, Sparkles, Trash2, X } from "lucide-react";
+import { Check as CheckGlyph, ChevronRight, Download, Ellipsis, ExternalLink, House, Info, Music, Sparkles, Trash2, X } from "lucide-react";
+import { locateLines } from "../../../preview/shared/text-marks";
 import type { FinderEntry } from "../data/entries";
 import { cn } from "../lib/cn";
 import { previewKind } from "./model";
@@ -218,7 +219,7 @@ export function Alert({ title, text, input, okLabel, cancelLabel, danger = false
 
 /* ------------------------------------------------------------ Quick Look -- */
 
-export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo, onDownload, onAsk, onMore, onTrash }: {
+export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo, onDownload, onAsk, onMore, onTrash, anchor = null }: {
 	readonly entries: readonly FinderEntry[];
 	readonly index: number;
 	readonly previewUrl: (entry: FinderEntry) => string | null;
@@ -229,6 +230,8 @@ export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo
 	readonly onAsk: (entry: FinderEntry) => void;
 	readonly onMore: (entry: FinderEntry, anchor: HTMLElement) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
+	/** Evidence excerpts (an AI Search citation): a text file marks and scrolls to the first one it finds. */
+	readonly anchor?: readonly string[] | null | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [immersive, setImmersive] = useState(false);
@@ -265,7 +268,7 @@ export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo
 			<div
 				className="phone-ql-stage"
 				onPointerDown={(event) => {
-					if ((event.target as HTMLElement).closest("button, video, audio, iframe") !== null) return;
+					if ((event.target as HTMLElement).closest("button, video, audio, iframe, .phone-ql-text") !== null) return;
 					start.current = { x: event.clientX, y: event.clientY, axis: null };
 				}}
 				onPointerMove={(event) => {
@@ -293,7 +296,7 @@ export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo
 				<div className={cn("phone-ql-track", dx !== null && "is-dragging")} style={{ transform: `translateX(calc(${-index * 100}% + ${dx ?? 0}px))` }}>
 					{entries.map((item, position) => (
 						<div key={item.path} className="phone-ql-slide">
-							{Math.abs(position - index) <= 1 ? <QuickLookContent entry={item} url={previewUrl(item)} active={position === index} onDownload={() => onDownload(item)} /> : null}
+							{Math.abs(position - index) <= 1 ? <QuickLookContent entry={item} url={previewUrl(item)} active={position === index} anchor={position === index ? anchor : null} onDownload={() => onDownload(item)} /> : null}
 						</div>
 					))}
 				</div>
@@ -301,6 +304,9 @@ export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo
 			<div className="phone-ql-bottom">
 				<div className="phone-ggroup phone-glass">
 					<button type="button" className="phone-gbtn" aria-label={t("mobile.menu.download")} onClick={() => onDownload(entry)}><Download size={22} strokeWidth={2} /></button>
+					{previewUrl(entry) === null ? null : (
+						<button type="button" className="phone-gbtn" aria-label={t("mobile.ql.openTab")} title={t("mobile.ql.openTab")} data-testid="phone-ql-open-tab" onClick={() => openInTab(previewUrl(entry))}><ExternalLink size={22} strokeWidth={2} /></button>
+					)}
 					<button type="button" className="phone-gbtn" aria-label={t("mobile.menu.askOne")} onClick={() => onAsk(entry)}><Sparkles size={22} strokeWidth={2} /></button>
 					<button type="button" className="phone-gbtn" aria-label={t("mobile.more")} onClick={(event) => onMore(entry, event.currentTarget)}><Ellipsis size={22} strokeWidth={2} /></button>
 					<button type="button" className="phone-gbtn" aria-label={t("mobile.select.trash")} onClick={() => onTrash(entry)}><Trash2 size={22} strokeWidth={2} /></button>
@@ -310,11 +316,60 @@ export function QuickLook({ entries, index, previewUrl, onIndex, onClose, onInfo
 	);
 }
 
-function QuickLookContent({ entry, url, active, onDownload }: { readonly entry: FinderEntry; readonly url: string | null; readonly active: boolean; readonly onDownload: () => void }): ReactElement {
+/** The browser's own viewer in a new tab: a phone's PDF reader, zoom and share sheet beat anything framed. */
+function openInTab(url: string | null): void {
+	if (url !== null) window.open(url, "_blank", "noopener");
+}
+
+/**
+ * A text file drawn as lines, the cited lines marked and scrolled into view
+ * (the desktop Quick Look's `locateLines`). A framed `text/plain` page has no
+ * marks and renders in the browser's tiny monospace default.
+ */
+function TextPreview({ url, anchor }: { readonly url: string; readonly anchor: readonly string[] | null }): ReactElement {
+	const { t } = useTranslation();
+	const [text, setText] = useState<string | null>(null);
+	const [failed, setFailed] = useState(false);
+	const firstMark = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		let live = true;
+		fetch(url)
+			.then(async (response) => {
+				if (!response.ok) throw new Error(String(response.status));
+				const body = await response.text();
+				if (live) setText(body);
+			})
+			.catch(() => {
+				if (live) setFailed(true);
+			});
+		return () => {
+			live = false;
+		};
+	}, [url]);
+	const marked = useMemo(() => (text === null || anchor === null ? new Set<number>() : locateLines(text, anchor)), [anchor, text]);
+	useEffect(() => {
+		firstMark.current?.scrollIntoView({ block: "center" });
+	}, [marked]);
+	if (failed) return <div className="phone-ql-none"><span>{t("mobile.ql.noPreview")}</span></div>;
+	if (text === null) return <div className="phone-ql-none"><span>{t("mobile.loading")}</span></div>;
+	const first = marked.size === 0 ? -1 : Math.min(...marked);
+	return (
+		<div className="phone-ql-text phone-selectable" data-testid="phone-ql-text">
+			{text.split("\n").map((line, number) => (
+				<div key={number} ref={number === first ? firstMark : undefined} className={cn("phone-ql-line", marked.has(number) && "is-mark")}>
+					{line.length === 0 ? "\u00a0" : line}
+				</div>
+			))}
+		</div>
+	);
+}
+
+function QuickLookContent({ entry, url, active, anchor, onDownload }: { readonly entry: FinderEntry; readonly url: string | null; readonly active: boolean; readonly anchor: readonly string[] | null | undefined; readonly onDownload: () => void }): ReactElement {
 	const { t } = useTranslation();
 	const kind = previewKind(entry);
 	if (url !== null && kind === "image") return <img src={url} alt={entry.name} draggable={false} />;
 	if (url !== null && kind === "video") return <video src={url} controls playsInline preload={active ? "metadata" : "none"} />;
+	if (url !== null && kind === "text") return active ? <TextPreview url={url} anchor={anchor ?? null} /> : <></>;
 	if (url !== null && kind === "audio") {
 		return (
 			<div className="phone-ql-audio">
@@ -324,7 +379,7 @@ function QuickLookContent({ entry, url, active, onDownload }: { readonly entry: 
 			</div>
 		);
 	}
-	if (url !== null && (kind === "pdf" || kind === "text")) return active ? <iframe title={entry.name} src={url} sandbox="allow-same-origin allow-scripts" /> : <></>;
+	if (url !== null && kind === "pdf") return active ? <iframe title={entry.name} src={url} /> : <></>;
 	return (
 		<div className="phone-ql-none">
 			<Thumb entry={entry} previewUrl={null} large />

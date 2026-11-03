@@ -157,7 +157,7 @@ type Overlay =
 	| { readonly type: "menu"; readonly kind: MenuKind; readonly anchor: MenuAnchor; readonly entries: readonly FinderEntry[]; readonly open?: "magic" | "tools" | "tags" | undefined }
 	| { readonly type: "info"; readonly entry: FinderEntry }
 	| { readonly type: "picker"; readonly verb: "move" | "copy"; readonly entries: readonly FinderEntry[] }
-	| { readonly type: "ql"; readonly list: readonly FinderEntry[]; readonly index: number }
+	| { readonly type: "ql"; readonly list: readonly FinderEntry[]; readonly index: number; readonly anchor?: readonly string[] }
 	| { readonly type: "alert"; readonly kind: "rename" | "newFolder" | "emptyTrash" | "deleteRule"; readonly entry?: FinderEntry; readonly rule?: AutomationRule }
 	| { readonly type: "evidence" }
 	| { readonly type: "activity" };
@@ -1047,6 +1047,7 @@ export function MobileApp(): ReactElement {
 						onAsk={(entry) => askAi([entry])}
 						onMore={(entry, anchor) => frameRef.current !== null && setOverlay({ type: "menu", kind: "item", entries: [entry], anchor: anchorUnder(anchor, frameRef.current) })}
 						onTrash={(entry) => trash([entry])}
+						anchor={overlay.anchor}
 					/>
 				);
 			case "alert":
@@ -1094,11 +1095,19 @@ export function MobileApp(): ReactElement {
 						selected={evidenceNumber}
 						onSelect={setSelectedEvidence}
 						onReveal={(path, excerpts) => {
-							if (excerpts !== undefined && previewKind({ kind: "file", path }) !== null) {
-								const name = basename(path);
-								setOverlay({ type: "ql", list: [{ name, path, kind: "file", ext: name.split(".").pop()?.toLowerCase() ?? "", size: null, mtimeMs: 0, birthtimeMs: 0 }], index: 0 });
-							} else if (/^https?:/u.test(path)) window.open(path, "_blank", "noopener");
-							else revealIn(dirname(path), path);
+							if (/^https?:/u.test(path)) {
+								window.open(path, "_blank", "noopener");
+								return;
+							}
+							const name = basename(path);
+							const entry: FinderEntry = { name, path, kind: "file", ext: name.split(".").pop()?.toLowerCase() ?? "", size: null, mtimeMs: 0, birthtimeMs: 0 };
+							// A phone browser frames a PDF as its first page only; its own viewer in a new tab scrolls, zooms and searches.
+							if (previewKind(entry) === "pdf") {
+								window.open(previewUrlFor(entry) ?? "", "_blank", "noopener");
+								return;
+							}
+							// Every other file previews here, the cited lines marked in text; a type no browser draws gets the download card, not a jump to its folder.
+							setOverlay({ type: "ql", list: [entry], index: 0, ...(excerpts === undefined ? {} : { anchor: excerpts }) });
 						}}
 						onShowInFolder={(path) => revealIn(dirname(path), path)}
 						imageActions={imageActions}

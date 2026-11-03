@@ -3249,7 +3249,8 @@
     "ql": {
       "done": "完了",
       "position": "{{index}} / {{total}}",
-      "noPreview": "この形式はブラウザでプレビューできません。"
+      "noPreview": "この形式はブラウザでプレビューできません。",
+      "openTab": "新しいタブで開く"
     },
     "search": {
       "placeholder": "ファイル名または内容",

@@ -470,6 +470,9 @@ html[data-appearance="dark"] .phone-sheet:not(.is-solid) .phone-group { backgrou
 .phone-ql-slide video { max-width: 100%; max-height: 100%; border-radius: 4px; background: #000; }
 .phone-ql-slide iframe { width: 100%; height: 100%; border: 0; border-radius: 6px; background: #fff; }
 .phone-ql-slide audio { width: 100%; }
+.phone-ql-text { align-self: stretch; justify-self: stretch; overflow: auto; overscroll-behavior: contain; padding: 14px 0; border-radius: 6px; background: var(--phone-cell); color: var(--phone-label); font: 13px/1.55 var(--font-mono); -webkit-overflow-scrolling: touch; }
+.phone-ql-line { padding: 0 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.phone-ql-line.is-mark { background: var(--accent-preview-mark); box-shadow: inset 3px 0 0 var(--phone-accent); }
 .phone-ql-audio { display: flex; flex-direction: column; align-items: center; gap: 22px; width: 100%; padding: 0 22px; }
 .phone-ql-art { display: grid; place-items: center; width: 70%; aspect-ratio: 1; border-radius: 22px; background: linear-gradient(140deg, var(--accent-hover), #5E5CE6); color: rgba(255, 255, 255, 0.85); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.28); }
 .phone-ql-audio h5 { margin: 0; font-size: 19px; font-weight: 700; text-align: center; line-height: 1.3; word-break: break-all; }

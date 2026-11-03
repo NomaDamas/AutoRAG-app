@@ -3249,7 +3249,8 @@
     "ql": {
       "done": "Done",
       "position": "{{index}} / {{total}}",
-      "noPreview": "This format can't be previewed in the browser."
+      "noPreview": "This format can't be previewed in the browser.",
+      "openTab": "Open in new tab"
     },
     "search": {
       "placeholder": "File names or contents",

@@ -3249,7 +3249,8 @@
     "ql": {
       "done": "完成",
       "position": "{{index}} / {{total}}",
-      "noPreview": "此格式无法在浏览器中预览。"
+      "noPreview": "此格式无法在浏览器中预览。",
+      "openTab": "在新标签页中打开"
     },
     "search": {
       "placeholder": "文件名或内容",
