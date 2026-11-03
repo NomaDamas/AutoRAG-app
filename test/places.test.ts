@@ -1,10 +1,17 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import type * as FsPromises from "node:fs/promises";
+import { access, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPlaces, type PlaceCommandRunner, type PlacesDeps } from "../src/main/places";
 import { readRecycleBinName, readRecycleBinRecord } from "../src/main/recycle-bin";
 import type { FsLocation } from "../src/shared/fs-contract";
+
+// access() passes through to the real one; the Windows drive tests below replace it per test.
+vi.mock("node:fs/promises", async (importOriginal) => {
+	const actual = await importOriginal<typeof FsPromises>();
+	return { ...actual, access: vi.fn(actual.access) };
+});
 
 let root: string;
 
@@ -548,6 +555,78 @@ describe("Windows places", () => {
 
 		// When ejecting it, Then the failure is not reported as success
 		await expect(createPlaces(deps).eject("E:\\")).rejects.toThrow("E: is still mounted");
+	});
+
+	describe("a drive letter whose access() fails with a non-ENOENT error", () => {
+		/** What libuv raises for a Win32 error it has no errno for (an empty card reader, a dead share): Sentry ELECTRON-M. */
+		function unknownAccessError(path: string): NodeJS.ErrnoException {
+			return Object.assign(new Error(`UNKNOWN: unknown error, access '${path}'`), {
+				code: "UNKNOWN",
+				errno: -4094,
+				syscall: "access",
+				path,
+			});
+		}
+
+		/** Drive C: answers, E: fails with `failure`, every other letter does not exist. */
+		function driveTable(failure: () => unknown): typeof access {
+			return (async (path: string) => {
+				if (path === "C:\\") return;
+				if (path === "E:\\") throw failure();
+				throw Object.assign(new Error(`ENOENT: no such file or directory, access '${path}'`), { code: "ENOENT" });
+			}) as typeof access;
+		}
+
+		afterEach(() => {
+			// Back to the real access() the vi.fn wraps, and a clean console spy.
+			vi.mocked(access).mockReset();
+			vi.restoreAllMocks();
+		});
+
+		it("still lists the other drives, marks the failing one, and warns once per drive", async () => {
+			// Given C: answering and E: failing with UNKNOWN / -4094 the way the Sentry event did
+			vi.mocked(access).mockImplementation(driveTable(() => unknownAccessError("E:\\")));
+			const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			const { deps } = winDeps({}, { reg: NO_SYNC_ROOTS, "powershell.exe": C_ONLY });
+			const places = createPlaces(deps);
+
+			// When asking for the signature twice and listing the places
+			const first = await places.signature();
+			await places.signature();
+			const locations = await places.list();
+
+			// Then nothing rejects, the readable drive is listed, and E: is marked rather than dropped or counted as ready
+			expect(JSON.parse(first)[0]).toBe("CE!");
+			expect(bySection(locations, "locations").map((location) => location.name)).toEqual(["Local Disk (C:)"]);
+			// And the warning names the drive once, not once per 2 s poll
+			expect(warn.mock.calls.filter(([message]) => String(message).includes("drive E:"))).toHaveLength(1);
+		});
+
+		it("moves the signature when media arrives in the drive that was unavailable", async () => {
+			// Given E: unavailable
+			const fake = vi.mocked(access);
+			fake.mockImplementation(driveTable(() => unknownAccessError("E:\\")));
+			vi.spyOn(console, "warn").mockImplementation(() => undefined);
+			const { deps } = winDeps({}, { reg: NO_SYNC_ROOTS, "powershell.exe": C_ONLY });
+			const places = createPlaces(deps);
+			const before = await places.signature();
+
+			// When E: starts answering
+			fake.mockImplementation((async () => undefined) as typeof access);
+			const after = await places.signature();
+
+			// Then the sidebar is told to re-read
+			expect(after).not.toBe(before);
+		});
+
+		it("does not swallow an error that is not a system error", async () => {
+			// Given access() failing with a plain Error that has no errno code
+			vi.mocked(access).mockImplementation(driveTable(() => new TypeError("bug")));
+			const { deps } = winDeps({}, { reg: NO_SYNC_ROOTS, "powershell.exe": C_ONLY });
+
+			// When reading the signature, Then it still rejects
+			await expect(createPlaces(deps).signature()).rejects.toThrow("bug");
+		});
 	});
 });
 
