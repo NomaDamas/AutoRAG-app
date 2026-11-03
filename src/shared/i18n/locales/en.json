@@ -1038,33 +1038,32 @@
       "plan": {
         "free": {
           "name": "Free",
-          "price": "Free",
-          "tag": "For trying Dazzi's Finder replacement right after signing up",
+          "price": "$0",
+          "tag": "For those who want to try it right after signing up",
           "training": "Inputs and outputs may be used to improve the service",
-          "features": "Start as soon as you sign up\nChat, embedding, reranking and Jev included\n5 lightweight chat models\nSmall credits that reset every week",
-          "tagPc": "For trying Dazzi's File Explorer replacement right after signing up"
+          "features": "AI search that understands what’s inside your files\nChat with your files, just by asking\n5 lightweight chat models included\nFree credits that refill every week"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "$4/mo · cancel anytime",
-          "tag": "For people who already pay for an AI subscription\nand want to replace everyday file browsing",
-          "features": "Everything in Free, plus\nChat runs on your own AI subscription\nEmbedding, reranking and Jev included\nMore weekly credits than Free"
+          "tag": "For people who want to bring the AI subscription they already pay for",
+          "features": "Everything in Free, plus\nChat with the models from your own AI subscription\nDazzi provides the AI that powers search\nMore weekly credits than Free"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "7 days free with a card, then $20/mo",
-          "tag": "For using Dazzi alone, with no other AI subscription",
+          "tag": "For people who want Dazzi to be the only AI they need",
           "trial": "7-day free trial",
-          "features": "Everything in Air, plus\nChat, embedding, reranking and Jev included\nFaster requests and generous weekly credits\n7-day free trial"
+          "features": "Everything in Air, plus\nPowerful chat models included, no subscription to connect\nFaster requests and more credits than Air\n7-day free trial"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "$200/mo · cancel anytime",
-          "tag": "For power users running heavy folder work and many tasks at once",
-          "features": "Premium models only in Max\nChat, embedding, reranking and Jev included\nThe most weekly credits, for long jobs"
+          "tag": "For power users who run large folders and many tasks at once",
+          "features": "Everything in Pro, plus\nPremium models only on Max\nThe highest weekly credits, built for long tasks"
         },
         "byok": {
           "name": "BYOK",

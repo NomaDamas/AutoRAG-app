@@ -67,7 +67,7 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 			else status = t("onboarding.plan.noteHeld");
 		}
 		const badge = held ? <span className="tag rec">{snapshot?.trialing === true ? t("onboarding.plan.badgeTrial") : t("onboarding.plan.badgeSubscribed")}</span> : null;
-		const desc = plan.id === "free" && ctx.platform === "win32" ? t("onboarding.plan.plan.free.tagPc") : t(`onboarding.plan.plan.${plan.id}.tag`);
+		const desc = t(`onboarding.plan.plan.${plan.id}.tag`);
 		return (
 			<div
 				key={tiered ? "tier" : plan.id}
