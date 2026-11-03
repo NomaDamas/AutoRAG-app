@@ -322,6 +322,14 @@
     "dropPrompt": "여기로 끌어서 AI에게 물어보기",
     "steerPlaceholder": "검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)",
     "steerSend": "검색 바로잡기",
+    "voiceStart": "음성으로 입력",
+    "voiceStop": "녹음 끝내고 받아쓰기",
+    "voiceListening": "듣는 중… {{seconds}}초",
+    "voiceTranscribing": "받아쓰는 중…",
+    "voiceNoSpeech": "말소리를 듣지 못했어요. 다시 말해 주세요.",
+    "voiceDenied": "마이크를 사용할 수 없어요. 시스템 설정의 개인정보 보호 및 보안에서 Dazzi의 마이크를 허용해 주세요.",
+    "voiceUnavailable": "이 기기에서는 마이크를 쓸 수 없어요.",
+    "voiceFailed": "음성을 받아쓰지 못했어요: {{message}}",
     "steerHintLead": "검색 중에도 입력할 수 있어요",
     "steerHintEnter": "바로잡기",
     "steerHintAltEnter": "다음 질문",
@@ -1522,7 +1530,8 @@
       "unknownAction": "알 수 없는 파일 작업입니다",
       "invalidAnchor": "공유 위치가 올바르지 않습니다",
       "invalidServiceRequest": "서비스 요청이 올바르지 않습니다",
-      "invalidConversionRequest": "변환 요청이 올바르지 않습니다."
+      "invalidConversionRequest": "변환 요청이 올바르지 않습니다.",
+      "invalidVoiceRequest": "음성 입력 요청이 올바르지 않습니다."
     },
     "dialogs": {
       "notificationBody": "알림이 켜졌습니다.",
@@ -1635,6 +1644,9 @@
       "checkMenu": "업데이트 확인…",
       "readyNotification": "Dazzi {{version}}이(가) 준비되었습니다. 앱을 종료하면 설치됩니다.",
       "availableNotification": "Dazzi {{version}}을(를) 내려받을 수 있습니다."
+    },
+    "voice": {
+      "unreadableTranscript": "받아쓴 내용을 읽을 수 없어요. 잠시 후 다시 시도해 주세요."
     },
     "account": {
       "httpStatus": "Dazzi 서비스가 HTTP {{status}}로 응답했습니다.",

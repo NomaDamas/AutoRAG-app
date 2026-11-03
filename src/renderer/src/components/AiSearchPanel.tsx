@@ -32,6 +32,8 @@ import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { appendTranscript } from "../../../shared/voice-contract";
+import { useVoiceInput } from "../state/useVoiceInput";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
@@ -45,7 +47,7 @@ import {
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -180,6 +182,18 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	/** What went wrong with dictation (not signed in, microphone refused, nothing heard): a line by the composer, never the run's error card. */
+	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+	const voice = useVoiceInput({
+		voice: autorag.voice,
+		language,
+		onTranscript: (text) => {
+			setQuery((draft) => appendTranscript(draft, text));
+			setVoiceNotice(null);
+			inputRef.current?.focus();
+		},
+		onError: setVoiceNotice,
+	});
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -1084,9 +1098,41 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
 							ariaLabel={t("aiSearch.askDazzi")}
 						/>
+						{voiceNotice === null ? null : (
+							<p className="voice-notice m-0 select-text text-meta leading-normal text-danger-text" role="alert">
+								{voiceNotice}
+							</p>
+						)}
 						<div className="composer-toolbar flex items-center justify-between gap-8">
 							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
 							<div className="composer-actions flex items-center gap-7">
+								{voice.phase === "listening" ? (
+									<span className="voice-timer flex items-center gap-5 text-badge text-danger-text select-none" role="status" aria-live="polite">
+										<span className="size-6 flex-none rounded-full bg-danger-text animate-[pulseDot_1.4s_ease-in-out_infinite]" aria-hidden="true" />
+										{t("aiSearch.voiceListening", { seconds: voice.seconds })}
+									</span>
+								) : voice.phase === "transcribing" ? (
+									<span className="voice-timer text-badge text-ink-muted select-none" role="status" aria-live="polite">
+										{t("aiSearch.voiceTranscribing")}
+									</span>
+								) : null}
+								<button
+									type="button"
+									className={cn(
+										"voice-button flex size-32 flex-none items-center justify-center rounded-full border-0 cursor-pointer transition-colors duration-(--dur-color) ease-out disabled:cursor-default disabled:opacity-50",
+										voice.phase === "listening" ? "bg-danger-text text-on-accent" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",
+									)}
+									title={voice.phase === "listening" ? t("aiSearch.voiceStop") : t("aiSearch.voiceStart")}
+									aria-label={voice.phase === "listening" ? t("aiSearch.voiceStop") : t("aiSearch.voiceStart")}
+									aria-pressed={voice.phase === "listening"}
+									disabled={voice.phase === "transcribing"}
+									onClick={() => {
+										setVoiceNotice(null);
+										voice.toggle();
+									}}
+								>
+									<MicIcon />
+								</button>
 								{searching && query.trim().length > 0 ? (
 									<button
 										type="submit"

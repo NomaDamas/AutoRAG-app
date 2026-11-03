@@ -322,6 +322,14 @@
     "dropPrompt": "拖动到此处以提问 AI",
     "steerPlaceholder": "搜索方向不对？随时纠正（例如：只看上周的消息）",
     "steerSend": "纠正搜索",
+    "voiceStart": "语音输入",
+    "voiceStop": "结束录音并转写",
+    "voiceListening": "正在聆听… {{seconds}} 秒",
+    "voiceTranscribing": "正在转写…",
+    "voiceNoSpeech": "没有听到语音，请再说一次。",
+    "voiceDenied": "无法使用麦克风。请在系统设置的“隐私与安全性”中允许 Dazzi 使用麦克风。",
+    "voiceUnavailable": "此设备没有可用的麦克风。",
+    "voiceFailed": "无法转写语音：{{message}}",
     "steerHintLead": "搜索时也可以输入",
     "steerHintEnter": "纠正",
     "steerHintAltEnter": "下一个问题",
@@ -1522,7 +1530,8 @@
       "unknownAction": "未知的文件操作。",
       "invalidAnchor": "共享位置无效。",
       "invalidServiceRequest": "服务请求无效。",
-      "invalidConversionRequest": "转换请求无效。"
+      "invalidConversionRequest": "转换请求无效。",
+      "invalidVoiceRequest": "语音输入请求无效。"
     },
     "dialogs": {
       "notificationBody": "通知已开启。",
@@ -1635,6 +1644,9 @@
       "checkMenu": "检查更新…",
       "readyNotification": "Dazzi {{version}} 已就绪。退出应用时将自动安装。",
       "availableNotification": "Dazzi {{version}} 可供下载。"
+    },
+    "voice": {
+      "unreadableTranscript": "Dazzi 服务返回了此应用无法读取的转写内容。"
     },
     "account": {
       "httpStatus": "Dazzi 服务返回了 HTTP {{status}}。",

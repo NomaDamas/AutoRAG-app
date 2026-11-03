@@ -322,6 +322,14 @@
     "dropPrompt": "ここにドラッグしてAIに質問",
     "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
     "steerSend": "検索を修正",
+    "voiceStart": "音声で入力",
+    "voiceStop": "録音を終了して文字起こし",
+    "voiceListening": "聞き取り中… {{seconds}}秒",
+    "voiceTranscribing": "文字起こし中…",
+    "voiceNoSpeech": "音声が聞き取れませんでした。もう一度お話しください。",
+    "voiceDenied": "マイクを使用できません。システム設定の「プライバシーとセキュリティ」でDazziのマイクを許可してください。",
+    "voiceUnavailable": "このデバイスではマイクを使用できません。",
+    "voiceFailed": "音声を文字起こしできませんでした: {{message}}",
     "steerHintLead": "検索中も入力できます",
     "steerHintEnter": "修正",
     "steerHintAltEnter": "次の質問",
@@ -1522,7 +1530,8 @@
       "unknownAction": "不明なファイル操作です。",
       "invalidAnchor": "共有位置が正しくありません。",
       "invalidServiceRequest": "サービスリクエストが正しくありません。",
-      "invalidConversionRequest": "変換リクエストが正しくありません。"
+      "invalidConversionRequest": "変換リクエストが正しくありません。",
+      "invalidVoiceRequest": "音声入力のリクエストが正しくありません。"
     },
     "dialogs": {
       "notificationBody": "通知がオンになりました。",
@@ -1635,6 +1644,9 @@
       "checkMenu": "アップデートを確認…",
       "readyNotification": "Dazzi {{version}} の準備ができました。アプリを終了するとインストールされます。",
       "availableNotification": "Dazzi {{version}} をダウンロードできます。"
+    },
+    "voice": {
+      "unreadableTranscript": "Dazziサービスから、このアプリで読み取れない文字起こしが返されました。"
     },
     "account": {
       "httpStatus": "Dazziサービスが HTTP {{status}} で応答しました。",
