@@ -51,6 +51,7 @@ import {
 	type SidebarSectionId,
 	type SidebarSettings,
 } from "../../../shared/sidebar-contract";
+import { sortByFavoritesOrder } from "../../../shared/sidebar-favorites";
 import { basename, normalizeTypedPath } from "../state/paths";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH } from "../state/tabs";
 
@@ -179,11 +180,7 @@ export function navGroups(
 				];
 			});
 			const combined = [...osFavorites, ...customRows].filter((entry) => !hiddenItems.has(entry.id));
-			const orderIndex = new Map<string, number>(cfg.favoritesOrder.map((id, idx) => [id, idx]));
-			const ordered = combined
-				.map((entry, idx) => ({ entry, order: orderIndex.get(entry.id) ?? cfg.favoritesOrder.length + idx }))
-				.sort((a, b) => a.order - b.order)
-				.map(({ entry }) => entry.item);
+			const ordered = sortByFavoritesOrder(combined, cfg.favoritesOrder).map((entry) => entry.item);
 
 			return {
 				label: "Favorites",
