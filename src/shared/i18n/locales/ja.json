@@ -1188,20 +1188,12 @@
         "minsync": "埋め込み中",
         "finalizing": "整理中"
       },
-      "phase": {
-        "parsed": "文書の読み込み",
-        "minsync": "埋め込み",
-        "finalizing": "整理"
-      },
       "title": "Dazziがファイルを読み込んでいます",
       "titleDone": "すべての準備が整いました",
       "metaDone": "合計所要時間を確認中",
       "metaTotal": "合計{{minutes}}分",
       "metaFiles": "{{count}}ファイル",
       "metaEstimating": "残り時間を計算中",
-      "metaUnderMinute": "残り1分未満",
-      "metaRemaining": "残り約{{minutes}}分",
-      "metaProgress": "{{processed}} / {{total}}ファイル",
       "gateOkTitle": "もう終了しても大丈夫です",
       "gateOkDetail": "{{files}}ファイルをすべて読み込みました。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
       "gateTitleMac": "Dazziを終了したりMacの電源を切らないでください",

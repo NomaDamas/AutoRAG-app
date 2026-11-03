@@ -1188,20 +1188,12 @@
         "minsync": "正在嵌入",
         "finalizing": "正在整理"
       },
-      "phase": {
-        "parsed": "读取文档",
-        "minsync": "嵌入",
-        "finalizing": "整理"
-      },
       "title": "Dazzi 正在读取你的文件",
       "titleDone": "一切就绪",
       "metaDone": "正在确认总用时",
       "metaTotal": "总计 {{minutes}} 分钟",
       "metaFiles": "{{count}} 个文件",
       "metaEstimating": "正在计算剩余时间",
-      "metaUnderMinute": "剩余不到 1 分钟",
-      "metaRemaining": "剩余约 {{minutes}} 分钟",
-      "metaProgress": "{{processed}} / {{total}} 个文件",
       "gateOkTitle": "现在可以退出了",
       "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
       "gateTitleMac": "请勿退出 Dazzi 或关闭 Mac",

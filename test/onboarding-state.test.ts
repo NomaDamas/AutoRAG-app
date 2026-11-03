@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import { DEFAULT_SIDEBAR_SETTINGS } from "../src/shared/sidebar-contract";
@@ -634,6 +634,81 @@ describe("createOnboardingService persistence", () => {
 
 		expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, totalFiles: 2, processedFiles: 2, recentFile: "b.md", recentFolder: "Documents" });
 		service.dispose();
+	});
+
+	it("reports the librarian's own counts and MinSync's journal, never more files done than there are", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		// The pre-scan expected 20,484 files; the librarian listed 10 and MinSync has finished 3 of them.
+		const service = createOnboardingService({ ...makeDeps(directory), refresh: () => gate.promise, folderTotals: () => 20_484 });
+		const run = (name: string) => join(directory, ".autorag", name);
+		await mkdir(join(directory, ".autorag", "minsync", ".minsync"), { recursive: true });
+		await writeFile(
+			run("refresh-progress.json"),
+			JSON.stringify({
+				version: 1,
+				runId: "r1",
+				pid: process.pid,
+				state: "running",
+				phase: "minsync",
+				startedAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				sourceFiles: { total: 10 },
+				parsedCounts: { scanned: 10, written: 10, deleted: 0, skipped: 0 },
+				minsync: { total: 10 },
+			}),
+			"utf8",
+		);
+		const record = (item: string) => `{"item":"files/${item}.md","version":"sha256:aa","outcome":"committed"}\n`;
+		await writeFile(run("minsync/.minsync/progress.jsonl"), `{"format":3,"stage":"vector","run_token":"t"}\n${record("a")}${record("b")}${record("c")}`, "utf8");
+
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		try {
+			await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free" });
+			vi.advanceTimersByTime(1_000);
+			await flush();
+			const running = await service.indexStatus();
+			expect(running.state).toBe("running");
+			expect(running.detail?.stage).toBe("embed");
+			expect(running.detail?.stages.find((stage) => stage.id === "embed")?.counts).toEqual({ done: 3, skipped: 0, failed: 0, total: 10 });
+			expect(running.detail?.pulse.lastFile).toBe("c");
+			// One unit for both numbers: the librarian's count, not the pre-scan's 20,484.
+			expect(running).toMatchObject({ totalFiles: 10, processedFiles: 10 });
+			expect(running.progress).toBeCloseTo(40 + 50 * 0.3, 5);
+			// Too little movement has been observed to project an end; it says so, and never shows 0 minutes.
+			expect(running.remainingMinutes).toBeNull();
+			expect(running.detail?.etaState).toBe("calculating");
+			gate.resolve({ ok: true, methods: [], scanned: 10, written: 10, deleted: 0, skipped: 0, diagnostics: [], error: null });
+			for (let tick = 0; tick < 50 && service.isIndexing(); tick += 1) await flush();
+			expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, totalFiles: 10, processedFiles: 10, detail: null });
+		} finally {
+			vi.useRealTimers();
+			service.dispose();
+		}
+	});
+
+	it("ignores the progress file an earlier run left behind", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const service = createOnboardingService({ ...makeDeps(directory), refresh: () => gate.promise, folderTotals: () => 5 });
+		await mkdir(join(directory, ".autorag"), { recursive: true });
+		const hourAgo = new Date(Date.now() - 3_600_000).toISOString();
+		await writeFile(
+			join(directory, ".autorag", "refresh-progress.json"),
+			JSON.stringify({ version: 1, runId: "old", pid: 1, state: "success", phase: "finalizing", startedAt: hourAgo, updatedAt: hourAgo, finishedAt: hourAgo }),
+			"utf8",
+		);
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		try {
+			await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free" });
+			vi.advanceTimersByTime(1_000);
+			await flush();
+			expect(await service.indexStatus()).toMatchObject({ state: "running", phase: null, progress: 0, detail: null });
+		} finally {
+			vi.useRealTimers();
+			gate.resolve({ ok: true, methods: [], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: null });
+			service.dispose();
+		}
 	});
 
 	it("allows completing onboarding while indexing is still running in the background", async () => {

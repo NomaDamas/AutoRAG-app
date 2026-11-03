@@ -1188,20 +1188,12 @@
         "minsync": "임베딩 중",
         "finalizing": "정리 중"
       },
-      "phase": {
-        "parsed": "문서 읽기",
-        "minsync": "임베딩",
-        "finalizing": "정리"
-      },
       "title": "Dazzi가 파일을 읽고 있어요",
       "titleDone": "모든 준비가 끝났어요",
       "metaDone": "총 소요 시간 확인 중",
       "metaTotal": "총 {{minutes}}분",
       "metaFiles": "{{count}}개 파일",
       "metaEstimating": "남은 시간 계산 중",
-      "metaUnderMinute": "1분 미만 남음",
-      "metaRemaining": "약 {{minutes}}분 남음",
-      "metaProgress": "{{processed}} / {{total}}개 파일",
       "gateOkTitle": "이제 종료해도 괜찮아요",
       "gateOkDetail": "{{files}}개 파일을 모두 읽었어요. 새로 바뀐 파일은 백그라운드에서 이어서 읽습니다.",
       "gateTitleMac": "Dazzi를 종료하거나 Mac을 끄지 마세요",

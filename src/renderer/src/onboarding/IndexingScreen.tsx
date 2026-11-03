@@ -1,9 +1,11 @@
 /** Step 9 — the immersive first-index screen, driven by the real IndexingStatus. */
 
 import { useEffect, useRef, type CSSProperties, type ReactElement } from "react";
+import { useNow } from "../hooks/useNow";
 import { cn } from "../lib/cn";
+import { describeIndexProgress } from "../state/index-progress";
 import { downloadPercent } from "../state/model-download";
-import { TIPS, formatSize, indexingPhases, phaseIndex, resolveEmbed, canSelectCloudEmbedding, type TipArt } from "./flow";
+import { TIPS, formatSize, indexingStages, resolveEmbed, canSelectCloudEmbedding, type TipArt } from "./flow";
 import { BrandMark, brandVars, Icon } from "./marks";
 import { TipArt as TipArtView } from "./parts";
 import type { OnboardingCtx } from "./context";
@@ -212,6 +214,8 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const { t, indexStatus, platform } = ctx;
 	const status = indexStatus;
 	const pause = usePauseControl(ctx);
+	// "3 min ago" keeps counting between the status pushes.
+	const now = useNow(status?.state === "running");
 	if (pause.spec !== null) return <PauseView ctx={ctx} pause={pause} />;
 	const success = status?.state === "success";
 	const running = status?.state === "running";
@@ -220,12 +224,14 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const downloading = running && download.state === "downloading";
 	const progress = success ? 100 : downloading ? downloadPercent(download) : (status?.progress ?? 0);
 	const phase = status?.phase ?? null;
-	// The keyword-only path never embeds, so its strip has no embedding phase.
+	// The keyword-only path never embeds, so its strip has no embedding stage.
 	const embed = resolveEmbed(ctx.draft.embed, canSelectCloudEmbedding(ctx.account));
-	const phases = indexingPhases(embed);
-	const activeIndex = phase === null ? -1 : phaseIndex(embed, phase);
+	// Every number below comes from the same snapshot Settings and the sidebar read: measured counts only.
+	const detail = status?.detail ?? null;
+	const view = detail === null ? null : describeIndexProgress(detail, now, t);
+	const stages = detail === null ? indexingStages(embed).map((id, index) => ({ id, state: running && index === 0 ? ("running" as const) : ("pending" as const) })) : detail.stages;
+	const waiting = running && (detail === null || detail.indeterminate);
 	const totalFiles = status?.totalFiles ?? 0;
-	const processed = status?.processedFiles ?? 0;
 	const sources = status?.sources ?? [];
 	// Files the run finished without are not "read"; the screen says how many they were instead of counting them.
 	const skipped = success ? (status?.skipped ?? 0) : 0;
@@ -288,7 +294,6 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 		);
 	}
 
-	const remaining = status?.remainingMinutes ?? null;
 	let meta: ReactElement;
 	if (downloading) {
 		meta = (
@@ -312,19 +317,17 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 			</>
 		);
 	} else {
+		// Nothing is filled in by elapsed time: a stage that cannot be measured names itself instead of showing a percent.
+		const eta = view?.etaLine ?? (detail === null || detail.stage === "discover" ? t("onboarding.indexing.metaEstimating") : null);
 		meta = (
 			<>
-				<b>{Math.floor(progress)}%</b>
-				<span>·</span>
-				<span>
-					{remaining === null
-						? t("onboarding.indexing.metaEstimating")
-						: remaining <= 1
-							? t("onboarding.indexing.metaUnderMinute")
-							: t("onboarding.indexing.metaRemaining", { minutes: remaining })}
-				</span>
-				<span>·</span>
-				<span>{t("onboarding.indexing.metaProgress", { processed: processed.toLocaleString(), total: totalFiles.toLocaleString() })}</span>
+				<b>{waiting ? (view?.stageName ?? t("indexProgress.stage.discover")) : `${Math.floor(progress)}%`}</b>
+				{eta === null ? null : (
+					<>
+						<span>·</span>
+						<span>{eta}</span>
+					</>
+				)}
 			</>
 		);
 	}
@@ -337,18 +340,38 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 				{statusPill}
 			</div>
 			<h1 className="ix-title">{success ? t("onboarding.indexing.titleDone") : t("onboarding.indexing.title")}</h1>
-			<div className="ix-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.floor(progress)}>
+			<div
+				className={cn("ix-bar", waiting && !downloading && "waiting")}
+				role="progressbar"
+				aria-valuemin={0}
+				aria-valuemax={100}
+				aria-valuenow={waiting && !downloading ? undefined : Math.floor(progress)}
+			>
 				<span style={{ width: `${progress}%` }} />
 			</div>
 			<div className="ix-meta">{meta}</div>
+			{running && !downloading && view !== null ? (
+				<div className="ix-detail" data-testid="ix-detail">
+					{[view.countLine, [view.extraLine, view.bytesLine].filter((part) => part !== null).join(" · "), view.activityLine]
+						.filter((line): line is string => line !== null && line.length > 0)
+						.map((line) => (
+							<span key={line}>{line}</span>
+						))}
+					{view.warning === null ? null : (
+						<span className="warn" role="alert" data-testid="ix-stalled">
+							{view.warning}
+						</span>
+					)}
+				</div>
+			) : null}
 			<div className="ix-phases">
-				{phases.map((id, i) => {
-					const done = success || i < activeIndex;
-					const active = !success && i === activeIndex && running;
+				{stages.map((stage) => {
+					const done = success || stage.state === "done";
+					const active = !success && stage.state === "running" && running;
 					return (
-						<span key={id} className={cn("ix-phase", done && "done", active && "active")}>
+						<span key={stage.id} className={cn("ix-phase", done && "done", active && "active")}>
 							<i />
-							{t(`onboarding.indexing.phase.${id}`)}
+							{t(`indexProgress.stage.${stage.id}`)}
 						</span>
 					);
 				})}

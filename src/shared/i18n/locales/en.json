@@ -1188,20 +1188,12 @@
         "minsync": "Embedding",
         "finalizing": "Tidying up"
       },
-      "phase": {
-        "parsed": "Reading documents",
-        "minsync": "Embedding",
-        "finalizing": "Tidying up"
-      },
       "title": "Dazzi is reading your files",
       "titleDone": "Everything's ready",
       "metaDone": "Checking total time",
       "metaTotal": "{{minutes}} min total",
       "metaFiles": "{{count}} files",
       "metaEstimating": "Calculating time remaining",
-      "metaUnderMinute": "Less than a minute left",
-      "metaRemaining": "~{{minutes}} min left",
-      "metaProgress": "{{processed}} / {{total}} files",
       "gateOkTitle": "You can quit now",
       "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
       "gateTitleMac": "Don't quit Dazzi or turn off your Mac",
