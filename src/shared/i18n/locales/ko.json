@@ -2140,7 +2140,7 @@
       "emptyConnections": "연결된 앱 첨부 폴더가 없습니다.",
       "emptyLocations": "마운트된 디스크가 없습니다.",
       "emptyTags": "고정된 Finder 태그가 없습니다.",
-      "modal": {
+      "assistant": {
         "title": "AI 앱 커스텀 어시스턴트",
         "subtitle": "원하는 사이드바 구성이나 화면 설정을 자유롭게 말씀해 주세요.",
         "newChat": "새 대화",
@@ -2156,7 +2156,8 @@
         "stop": "중단",
         "lockedNotice": "AI 검색과 자동화는 필수 기능으로 항상 사이드바에 유지됩니다.",
         "openAiSettings": "AI 모델 설정 열기",
-        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
+        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다.",
+        "collapse": "어시스턴트 숨기기"
       }
     },
     "contextMenu": {
@@ -2257,7 +2258,7 @@
         "extensionsPlaceholder": "비워두면 전체 허용 · 예: pdf, docx, md",
         "save": "저장"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 우클릭 메뉴 & 매직 액션 어시스턴트",
         "subtitle": "원하는 우클릭 버튼, 자동화 스크립트, AI 파일 액션을 말로 설명해 주세요.",
         "emptyTitle": "우클릭 메뉴에 어떤 기능을 넣어볼까요?",
@@ -2335,7 +2336,7 @@
         "aiNewChat": "새 대화 시작",
         "aiToggleHistory": "대화 기록 토글"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 단축키 커스텀 어시스턴트",
         "subtitle": "원하는 단축키 변경이나 맞바꾸기를 말로 요청해 보세요.",
         "emptyTitle": "어떤 단축키를 바꿔 볼까요?",

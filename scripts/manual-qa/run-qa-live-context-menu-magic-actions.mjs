@@ -240,14 +240,13 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "우클릭 메뉴" }).click();
 	await page.locator("h1.linear-title", { hasText: "우클릭 메뉴" }).waitFor();
-	await page.locator('[data-action="open-context-menu-customizer"]').click();
 
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("01-live-cmenu-modal-open");
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="contextMenu"]');
+	await panel.waitFor();
+	await shot("01-live-cmenu-panel-open");
 
 	// Ask real 2026+ LLM to customize the context menu & create two Magic Actions (one organize agent, one multi-file script)
-	const input = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
 	await page.keyboard.type(
 		[
@@ -261,7 +260,7 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const replies = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn__reply');
+			const replies = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn__reply');
 			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
 			return replies.length >= 1 && sendBtn !== null;
 		},
@@ -270,12 +269,12 @@ try {
 	);
 	await shot("02-live-cmenu-turn1-done");
 
-	const custReply = await modal.locator(".customizer-turn__reply").first().innerText();
+	const custReply = await panel.locator(".customizer-turn__reply").first().innerText();
 	console.log(`live customizer reply:\n${custReply}`);
 	console.log(`live customizer progress: ${JSON.stringify(seenCustomizerProgress)}`);
 
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	await panel.locator('[data-action="collapse-app-customizer"]').click();
+	await panel.waitFor({ state: "hidden" });
 	await shot("03-live-settings-after-ai");
 
 	const settingsPath = join(USER_DATA, "settings", "settings-state.json");

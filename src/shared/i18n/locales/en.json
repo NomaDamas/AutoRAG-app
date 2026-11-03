@@ -2140,7 +2140,7 @@
       "emptyConnections": "No connected app attachment folders.",
       "emptyLocations": "No mounted volumes found.",
       "emptyTags": "No pinned Finder tags.",
-      "modal": {
+      "assistant": {
         "title": "AI App Customizer",
         "subtitle": "Describe how you want your sidebar or app preferences configured.",
         "newChat": "New Chat",
@@ -2156,7 +2156,8 @@
         "stop": "Stop",
         "lockedNotice": "AI Search and Automations are essential features and always remain visible.",
         "openAiSettings": "Open AI Model Settings",
-        "unavailable": "App customizer service is unavailable."
+        "unavailable": "App customizer service is unavailable.",
+        "collapse": "Hide assistant"
       }
     },
     "contextMenu": {
@@ -2257,7 +2258,7 @@
         "extensionsPlaceholder": "Leave blank for all · e.g. pdf, docx, md",
         "save": "Save"
       },
-      "modal": {
+      "assistant": {
         "title": "AI Context Menu & Magic Action Assistant",
         "subtitle": "Describe the right-click buttons, scripts, or AI file actions you want.",
         "emptyTitle": "What should appear when you right-click?",
@@ -2335,7 +2336,7 @@
         "aiNewChat": "New AI Chat",
         "aiToggleHistory": "Toggle Chat History"
       },
-      "modal": {
+      "assistant": {
         "title": "AI Shortcut Customizer",
         "subtitle": "Describe the shortcut changes or swaps you want in plain words.",
         "emptyTitle": "Which shortcuts would you like to change?",

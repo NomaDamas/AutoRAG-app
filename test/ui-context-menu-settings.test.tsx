@@ -232,22 +232,18 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(0);
 	});
 
-	it("opens the AI Customizer modal in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
+	it("docks the AI Customizer panel in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
 		await act(async () => {
 			root.render(<SettingsView initialCategory="contextMenu" />);
 		});
 		await settle();
 
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="open-context-menu-customizer"]')?.click();
-		});
-		await settle();
+		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		expect(panel).not.toBeNull();
+		expect(panel?.getAttribute("data-surface")).toBe("contextMenu");
+		expect(panel?.textContent).toContain("매직 액션");
 
-		const modal = document.querySelector('[data-testid="app-customizer-modal"]');
-		expect(modal).not.toBeNull();
-		expect(modal?.textContent).toContain("매직 액션");
-
-		const suggestion = modal?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
+		const suggestion = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		await act(async () => {
 			suggestion?.click();
 		});

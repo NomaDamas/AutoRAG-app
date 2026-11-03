@@ -1,5 +1,5 @@
 /**
- * Manual QA — Sidebar customization & AI App Customizer modal in the real app.
+ * Manual QA — Sidebar customization & the docked AI App Customizer panel in the real app.
  *
  * Drives the built Electron app end-to-end with real Playwright mouse/keyboard
  * input and a loopback OpenAI-compatible model endpoint:
@@ -8,11 +8,13 @@
  *      a custom folder, and immediately updates the live Finder sidebar and
  *      `<userData>/settings/settings-state.json` (leaving AutoRAG `config.json`
  *      untouched).
- *   2. Opening the AI App Customizer modal (`[data-action="open-app-customizer"]`)
- *      streams live `.shimmer` `i` intent progress while the `app-customizer`
- *      pi agent calls `get_app_settings` and `update_sidebar`, refuses to hide
- *      `AI Search` or `Automations`, updates the live Finder sidebar and
- *      Settings toggles in real time, and supports multi-turn follow-up.
+ *   2. The AI App Customizer is docked as the right sidebar of Settings
+ *      (`[data-testid="app-customizer-panel"]`, no modal): it streams live
+ *      `.shimmer` `i` intent progress while the `app-customizer` pi agent calls
+ *      `get_app_settings` and `update_sidebar`, refuses to hide `AI Search` or
+ *      `Automations`, updates the live Finder sidebar and the Settings toggles
+ *      beside it in real time, supports multi-turn follow-up, and collapses to
+ *      the page hero and reopens with the conversation intact.
  *   3. Verifies both Korean Light and English Dark visual states.
  *
  * Run in a VM:
@@ -216,8 +218,21 @@ try {
 		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "connections", "locations", "tags"]),
 		JSON.stringify(sectionIds),
 	);
-	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
-	check("AI Customizer hero displays the transparent Dazzi sunflower mark image", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="sidebar"]');
+	await panel.waitFor();
+	const layout = await page.evaluate(() => {
+		const content = document.querySelector(".settings-content")?.getBoundingClientRect();
+		const side = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')?.getBoundingClientRect();
+		return content && side ? { contentRight: Math.round(content.right), panelLeft: Math.round(side.left), panelWidth: Math.round(side.width), windowWidth: window.innerWidth, panelRight: Math.round(side.right) } : null;
+	});
+	check(
+		"AI Customizer is docked as the right sidebar of Settings, flush with the window's right edge",
+		layout !== null && layout.panelLeft >= layout.contentRight && layout.panelRight === layout.windowWidth,
+		JSON.stringify(layout),
+	);
+	check("The page hero is hidden while the docked panel is shown", (await page.locator('[data-action="open-app-customizer"]').count()) === 0);
+	const panelLogoWidth = await panel.locator("img.customizer-panel__logo").evaluate((img) => img.naturalWidth);
+	check("Docked panel displays the transparent Dazzi sunflower mark image", panelLogoWidth > 0, `naturalWidth=${panelLogoWidth}`);
 
 	// Toggle Music and Movies off in Settings UI
 	await page.locator('[data-sidebar-switch="place:music"]').click();
@@ -249,11 +264,8 @@ try {
 		JSON.stringify({ sidebar: persisted.settings.sidebar, configUnchanged: readFileSync(CONFIG, "utf8") === settledConfigBefore }),
 	);
 
-	// 2. Open AI App Customizer Modal and converse with the pi agent profile
-	await page.locator('[data-action="open-app-customizer"]').click();
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("03-customizer-modal-empty");
+	// 2. Converse with the pi agent profile in the docked panel
+	await shot("03-customizer-panel-empty");
 
 	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Search & Automations, pinning Projects, hiding pictures) -> reply
 	queue.push(
@@ -273,18 +285,23 @@ try {
 		},
 	);
 
-	const input = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
 	await page.keyboard.type("그림 폴더도 숨기고 Projects 폴더를 맨 위에 추가해줘. AI 검색도 숨겨봐.");
 	await page.keyboard.press("Enter");
 
 	// Capture live shimmer progress
-	await modal.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
-	await shot("04-customizer-modal-shimmer-progress");
+	await panel.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
+	await shot("04-customizer-panel-shimmer-progress");
 
 	// Wait for turn reply
-	await modal.locator(".customizer-turn__reply", { hasText: "Projects 폴더를 즐겨찾기 상단에 고정했습니다" }).waitFor({ timeout: 15_000 });
-	await shot("05-customizer-modal-turn1-done");
+	await panel.locator(".customizer-turn__reply", { hasText: "Projects 폴더를 즐겨찾기 상단에 고정했습니다" }).waitFor({ timeout: 15_000 });
+	await shot("05-customizer-panel-turn1-done");
+	// While the agent's change lands, the switch beside the panel reflects it without closing anything
+	check(
+		"Settings toggles beside the docked panel reflect the agent change live (그림 switch off)",
+		(await page.locator('[data-sidebar-switch="place:pictures"]').getAttribute("aria-checked")) === "false",
+	);
 
 	const afterAgentLabels = await sidebarLabels();
 	check(
@@ -309,7 +326,7 @@ try {
 		JSON.stringify(seenRequests[0]?.tools),
 	);
 
-	// Turn 2 in the same modal conversation: switch appearance to dark & language to English via agent
+	// Turn 2 in the same panel conversation: switch appearance to dark & language to English via agent
 	queue.push(
 		{
 			tool: "update_general_settings",
@@ -322,13 +339,23 @@ try {
 	await input.click();
 	await page.keyboard.type("다크 모드와 영어로 바꿔줘");
 	await page.keyboard.press("Enter");
-	await modal.locator(".customizer-turn__reply", { hasText: "Switched Dazzi to Dark mode and English." }).waitFor({ timeout: 15_000 });
-	await shot("06-customizer-modal-turn2-dark-en");
+	await panel.locator(".customizer-turn__reply", { hasText: "Switched Dazzi to Dark mode and English." }).waitFor({ timeout: 15_000 });
+	await shot("06-customizer-panel-turn2-dark-en");
 
-	// Close modal and capture dark-mode English Sidebar settings page
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	// Collapse the panel with the mouse, check the hero comes back, reopen it, and the conversation is still there
+	await panel.locator('[data-action="collapse-app-customizer"]').click();
+	await panel.waitFor({ state: "hidden" });
 	await shot("07-settings-sidebar-dark-en");
+	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
+	check("Collapsing the panel restores the AI hero with the transparent Dazzi mark", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
+	await page.locator('[data-action="open-app-customizer"]').click();
+	await panel.waitFor();
+	check(
+		"Reopening the docked panel keeps both turns and focuses the composer",
+		(await panel.locator(".customizer-turn").count()) === 2 &&
+			(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))) === "app-customizer-input",
+	);
+	await shot("07b-customizer-panel-reopened");
 
 	const enLabels = await sidebarLabels();
 	check(

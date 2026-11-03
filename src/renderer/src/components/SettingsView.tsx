@@ -13,12 +13,14 @@ import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MousePointerClick, PanelLeft, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
+import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, ReadingPage, ScopePage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
+import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { ContextMenuPage } from "./settings/ContextMenuPage";
@@ -124,6 +126,11 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+/** Settings pages that dock an AI customization assistant as their right sidebar. */
+function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
+	return page === "sidebar" || page === "contextMenu" || page === "shortcuts" ? page : null;
+}
+
 export function SettingsView({ initialCategory = "general", onSettingsChanged }: { readonly initialCategory?: SettingsCategory; readonly onSettingsChanged?: (settings: AppSettings) => void }): ReactElement {
 	const { t } = useTranslation();
 	const [category, setCategory] = useState<SettingsCategory>(() => normalizeCategory(initialCategory));
@@ -135,6 +142,11 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const [loading, setLoading] = useState(true);
 	/** False until the first datasource scan has answered (or failed): the pages say "checking" instead of "none". */
 	const [sourcesReady, setSourcesReady] = useState(false);
+	/** Collapsing is one choice for every assistant section, kept while the Settings tab is open. */
+	const [customizerCollapsed, setCustomizerCollapsed] = useState(false);
+	const [customizerFocus, setCustomizerFocus] = useState(0);
+	/** Assistants stay mounted once shown, so a conversation and a running turn survive switching sections. */
+	const [mountedSurfaces, setMountedSurfaces] = useState<readonly AppCustomizerSurface[]>([]);
 	const scanSeq = useRef(0);
 
 	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
@@ -198,6 +210,16 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 			onSettingsChanged?.(next);
 		});
 	}, [onSettingsChanged]);
+	const applyAppSettings = useCallback((next: AppSettings): void => {
+		setAppSettings(next);
+		onSettingsChanged?.(next);
+	}, [onSettingsChanged]);
+	const openCustomizer = useCallback((): void => {
+		setCustomizerCollapsed(false);
+		setCustomizerFocus((count) => count + 1);
+	}, []);
+	const collapseCustomizer = useCallback((): void => setCustomizerCollapsed(true), []);
+	const openAiSettings = useCallback((): void => setCategory("ai"), []);
 
 	const entries = useMemo(() => datasourceEntries(snapshot), [snapshot]);
 	const saveSnapshot = useCallback((next: AutoRagConfigSnapshot): void => {
@@ -210,6 +232,11 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	useEffect(() => {
 		if (sourceAlias !== null && snapshot !== null && entries.every((entry) => entry.alias !== sourceAlias)) setCategory("apps");
 	}, [sourceAlias, snapshot, entries]);
+	const activeSurface = sourceAlias === null ? customizerSurfaceOf(normalizeCategory(category)) : null;
+	const customizerShown = activeSurface !== null && !customizerCollapsed;
+	useEffect(() => {
+		if (activeSurface !== null) setMountedSurfaces((current) => (current.includes(activeSurface) ? current : [...current, activeSurface]));
+	}, [activeSurface]);
 
 	const filteredPages = useMemo(() => {
 		const needle = query.trim().toLowerCase();
@@ -247,41 +274,11 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 			case "general":
 				return <GeneralPage appSettings={appSettings} onAppSettingsChanged={(next) => { setAppSettings(next); onSettingsChanged?.(next); }} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 			case "sidebar":
-				return (
-					<SidebarPage
-						appSettings={appSettings}
-						onAppSettingsChanged={(next) => {
-							setAppSettings(next);
-							onSettingsChanged?.(next);
-						}}
-						onSettingsError={setError}
-						onOpenAiSettings={() => setCategory("ai")}
-					/>
-				);
+				return <SidebarPage appSettings={appSettings} onAppSettingsChanged={applyAppSettings} onSettingsError={setError} customizerOpen={customizerShown} onOpenCustomizer={openCustomizer} />;
 			case "contextMenu":
-				return (
-					<ContextMenuPage
-						appSettings={appSettings}
-						onAppSettingsChanged={(next) => {
-							setAppSettings(next);
-							onSettingsChanged?.(next);
-						}}
-						onSettingsError={setError}
-						onOpenAiSettings={() => setCategory("ai")}
-					/>
-				);
+				return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={applyAppSettings} onSettingsError={setError} customizerOpen={customizerShown} onOpenCustomizer={openCustomizer} />;
 			case "shortcuts":
-				return (
-					<ShortcutsPage
-						appSettings={appSettings}
-						onAppSettingsChanged={(next) => {
-							setAppSettings(next);
-							onSettingsChanged?.(next);
-						}}
-						onSettingsError={setError}
-						onOpenAiSettings={() => setCategory("ai")}
-					/>
-				);
+				return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={applyAppSettings} onSettingsError={setError} customizerOpen={customizerShown} onOpenCustomizer={openCustomizer} />;
 			case "ai":
 				return <AiPage snapshot={snapshot} onSaved={saveSnapshot} />;
 			case "web":
@@ -319,7 +316,7 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	});
 
 	return (
-		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
+		<div className={`settings-view settings-panel${customizerShown ? " has-customizer" : ""}`} role="region" aria-label={t("settings.title")}>
 			<aside className="settings-sidebar" aria-label={t("settingsCore.view.navAria")}>
 				<label className="settings-search">
 					<span className="settings-search__icon" aria-hidden="true">
@@ -361,6 +358,17 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 					{content}
 				</div>
 			</main>
+			{mountedSurfaces.map((surface) => (
+				<AppCustomizerPanel
+					key={surface}
+					surface={surface}
+					hidden={!customizerShown || surface !== activeSurface}
+					focusRequest={surface === activeSurface ? customizerFocus : 0}
+					onCollapse={collapseCustomizer}
+					onSettingsUpdated={applyAppSettings}
+					onOpenAiSettings={openAiSettings}
+				/>
+			))}
 		</div>
 	);
 }

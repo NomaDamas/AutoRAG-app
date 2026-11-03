@@ -153,6 +153,11 @@
 	margin: 0 auto;
 }
 
+/* Beside the docked 340px customizer panel the content gives up side padding before its column narrows. */
+.settings-view.has-customizer .settings-content {
+	padding-inline: var(--space-24);
+}
+
 /* ----------------------------------------------------- Linear-style rows -- */
 
 .linear-header {
@@ -2057,76 +2062,77 @@
 	color: var(--text-faint);
 }
 
-/* ------------------------------------------------ AI App Customizer Modal -- */
+/* ------------------------------------------- AI App Customizer side panel -- */
 
-.customizer-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: 60;
-	display: grid;
-	place-items: center;
-	background: var(--scrim-modal);
-	backdrop-filter: blur(4px);
-}
-
-.customizer-modal {
+/*
+ * Docked as the right column of `.settings-view` on the customizable pages
+ * (사이드바, 우클릭 메뉴, 단축키), so the page stays interactive and shows every
+ * change the agent makes. 340px keeps the 680px content column whole at the
+ * window's 1360px minimum width (220 nav + 340 panel + 2×56 content padding).
+ */
+.customizer-panel {
 	display: flex;
+	flex: none;
 	flex-direction: column;
-	width: min(560px, calc(100vw - 48px));
-	height: min(600px, calc(100vh - 64px));
-	border: 1px solid var(--border);
-	border-radius: var(--radius-12);
+	width: 340px;
+	min-height: 0;
+	border-left: 1px solid var(--border);
 	background: var(--bg-window);
-	box-shadow: var(--shadow-window);
-	overflow: hidden;
 }
 
-.customizer-modal__head {
+.customizer-panel[hidden] {
+	display: none;
+}
+
+.customizer-panel__head {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: var(--space-12);
-	padding: var(--space-14) var(--space-16);
+	gap: var(--space-10);
+	padding: var(--space-12) var(--space-12) var(--space-12) var(--space-16);
 	border-bottom: 1px solid var(--border-divider);
 	background: var(--bg-chrome);
 }
 
-.customizer-modal__brand {
+.customizer-panel__brand {
 	display: flex;
 	align-items: center;
 	gap: var(--space-10);
 	min-width: 0;
 }
 
-.customizer-modal__icon {
+.customizer-panel__icon {
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 32px;
-	height: 32px;
+	width: 28px;
+	height: 28px;
 	background: transparent;
 }
 
-.customizer-modal__logo {
+.customizer-panel__logo {
 	display: block;
-	width: 30px;
-	height: 30px;
+	width: 26px;
+	height: 26px;
 	object-fit: contain;
 	background: transparent;
 }
 
-.customizer-modal__titles {
+.customizer-panel__titles {
 	min-width: 0;
 }
 
-.customizer-modal__title {
+.customizer-panel__title {
 	margin: 0;
-	font-size: var(--font-size-body);
+	font-size: var(--font-size-sm);
 	font-weight: var(--weight-semibold);
 	color: var(--text-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
-.customizer-modal__subtitle {
+.customizer-panel__subtitle {
 	margin: var(--space-2) 0 0;
 	font-size: var(--font-size-badge);
 	color: var(--text-muted);
@@ -2135,14 +2141,14 @@
 	white-space: nowrap;
 }
 
-.customizer-modal__head-actions {
+.customizer-panel__head-actions {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-4);
+	gap: var(--space-2);
 	flex: none;
 }
 
-.customizer-modal__icon-btn {
+.customizer-panel__icon-btn {
 	display: grid;
 	place-items: center;
 	width: 28px;
@@ -2156,21 +2162,21 @@
 	transition: background var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out);
 }
 
-.customizer-modal__icon-btn:hover {
+.customizer-panel__icon-btn:hover {
 	background: var(--bg-hover-strong);
 	color: var(--text-primary);
 }
 
-.customizer-modal__body {
+.customizer-panel__body {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--space-20);
+	padding: var(--space-16);
 }
 
-.customizer-modal__empty {
+.customizer-panel__empty {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -2179,7 +2185,7 @@
 	text-align: center;
 }
 
-.customizer-modal__empty-orb {
+.customizer-panel__empty-orb {
 	display: grid;
 	place-items: center;
 	width: 56px;
@@ -2188,7 +2194,7 @@
 	background: transparent;
 }
 
-.customizer-modal__empty-logo {
+.customizer-panel__empty-logo {
 	display: block;
 	width: 52px;
 	height: 52px;
@@ -2196,14 +2202,14 @@
 	background: transparent;
 }
 
-.customizer-modal__empty-title {
+.customizer-panel__empty-title {
 	margin: 0 0 var(--space-6);
 	font-size: 15px;
 	font-weight: var(--weight-semibold);
 	color: var(--text-primary);
 }
 
-.customizer-modal__empty-desc {
+.customizer-panel__empty-desc {
 	margin: 0 0 var(--space-18);
 	max-width: 380px;
 	font-size: var(--font-size-meta);
@@ -2211,7 +2217,7 @@
 	color: var(--text-muted);
 }
 
-.customizer-modal__suggestions {
+.customizer-panel__suggestions {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
@@ -2251,7 +2257,7 @@
 	background: transparent;
 }
 
-.customizer-modal__turns {
+.customizer-panel__turns {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-18);
@@ -2365,7 +2371,7 @@
 	line-height: 1.45;
 }
 
-.customizer-modal__foot {
+.customizer-panel__foot {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
@@ -2438,7 +2444,7 @@
 	background: var(--text-primary);
 }
 
-.customizer-modal__footnote {
+.customizer-panel__footnote {
 	display: flex;
 	align-items: center;
 	gap: var(--space-5);

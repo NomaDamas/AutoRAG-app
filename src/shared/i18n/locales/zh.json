@@ -2140,7 +2140,7 @@
       "emptyConnections": "没有已连接应用的附件文件夹。",
       "emptyLocations": "未找到已挂载的磁盘。",
       "emptyTags": "没有固定的 Finder 标签。",
-      "modal": {
+      "assistant": {
         "title": "AI 应用定制助手",
         "subtitle": "自由描述您想要的侧边栏布局或界面设置。",
         "newChat": "新对话",
@@ -2156,7 +2156,8 @@
         "stop": "停止",
         "lockedNotice": "AI 搜索与自动化是核心功能，始终保留在侧边栏中。",
         "openAiSettings": "打开 AI 模型设置",
-        "unavailable": "应用定制服务不可用。"
+        "unavailable": "应用定制服务不可用。",
+        "collapse": "隐藏助手"
       }
     },
     "contextMenu": {
@@ -2257,7 +2258,7 @@
         "extensionsPlaceholder": "留空允许全部 · 例如：pdf, docx, md",
         "save": "保存"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 右键菜单与魔法动作助手",
         "subtitle": "自由描述您想要的右键按钮、自动化脚本或 AI 文件动作。",
         "emptyTitle": "想在右键菜单里加入什么功能？",
@@ -2335,7 +2336,7 @@
         "aiNewChat": "新建 AI 对话",
         "aiToggleHistory": "切换对话历史"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 快捷键定制助手",
         "subtitle": "直接用自然语言描述您想更改或互换的快捷键。",
         "emptyTitle": "您想更改哪些快捷键？",

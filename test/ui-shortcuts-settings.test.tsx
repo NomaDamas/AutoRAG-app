@@ -119,7 +119,7 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
-describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and AI Shortcut Customizer modal)", () => {
+describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and docked AI Shortcut Customizer panel)", () => {
 	it("records a shortcut by pressing keys directly, cancels on Escape, and swaps on conflict", async () => {
 		await act(async () => {
 			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
@@ -301,22 +301,16 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		await settle();
 		expect(host.querySelector('[data-action="swap-shortcut-conflict"]')).toBeNull();
 	});
-	it("opens the AI Shortcut Customizer modal with surface='shortcuts' and applies agent updates live", async () => {
+	it("docks the AI Shortcut Customizer panel with surface='shortcuts' and applies agent updates live", async () => {
 		await act(async () => {
 			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
-		const openModalBtn = host.querySelector<HTMLButtonElement>('[data-action="open-shortcut-customizer"]');
-		expect(openModalBtn).not.toBeNull();
-		await act(async () => {
-			openModalBtn?.click();
-		});
+		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		expect(panel?.getAttribute("data-surface")).toBe("shortcuts");
 
-		const modal = document.body.querySelector('[data-testid="app-customizer-modal"]');
-		expect(modal).not.toBeNull();
-
-		const suggestionChip = modal?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
+		const suggestionChip = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		expect(suggestionChip).not.toBeNull();
 		await act(async () => {
 			suggestionChip?.click();

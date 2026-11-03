@@ -168,21 +168,20 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "사이드바" }).click();
 	await page.locator("h1.linear-title", { hasText: "사이드바" }).waitFor();
-	await page.locator('[data-action="open-app-customizer"]').click();
 
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("01-live-modal-opened");
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="sidebar"]');
+	await panel.waitFor();
+	await shot("01-live-panel-opened");
 
 	// Turn 1: Ask the real model to hide Music & Movies, move Downloads to top, and try hiding AI Search & Automations
-	const input = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
 	await page.keyboard.type("사이드바에서 음악과 동영상 폴더를 숨기고, 다운로드를 즐겨찾기 맨 위로 올려줘. 그리고 AI 검색이랑 자동화도 숨길 수 있으면 숨겨줘.");
 	await page.keyboard.press("Enter");
 
 	await page.waitForFunction(
 		() => {
-			const replies = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn__reply');
+			const replies = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn__reply');
 			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
 			return replies.length >= 1 && sendBtn !== null;
 		},
@@ -191,7 +190,7 @@ try {
 	);
 	await shot("02-live-turn1-done");
 
-	const reply1 = await modal.locator(".customizer-turn__reply").first().innerText();
+	const reply1 = await panel.locator(".customizer-turn__reply").first().innerText();
 	console.log(`live model reply 1:\n${reply1}`);
 	console.log(`live progress phrases: ${JSON.stringify(seenProgress)}`);
 
@@ -232,7 +231,7 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const turns = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn');
+			const turns = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn');
 			const lastReply = turns[1]?.querySelector(".customizer-turn__reply");
 			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
 			return lastReply !== null && lastReply !== undefined && sendBtn !== null;

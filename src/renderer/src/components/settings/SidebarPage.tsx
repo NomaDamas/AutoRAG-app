@@ -54,7 +54,6 @@ import { hostPlatform } from "../../lib/shortcuts";
 import { basename, normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
 import { TagDotMark } from "../primitives/TagDot";
-import { AppCustomizerModal } from "./AppCustomizerModal";
 import { PromptModal, Section, SettingsPageHead } from "./SettingsKit";
 
 type SidebarBridgeWindow = Window & {
@@ -115,17 +114,19 @@ export function SidebarPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	onOpenAiSettings,
+	customizerOpen,
+	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	readonly onOpenAiSettings?: () => void;
+	/** Whether the docked AI assistant is shown beside the page; the hero offers to reopen it only while collapsed. */
+	readonly customizerOpen: boolean;
+	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
 	const [tags, setTags] = useState<readonly FsTag[]>([]);
-	const [customizerOpen, setCustomizerOpen] = useState(false);
 	const [addFolderOpen, setAddFolderOpen] = useState(false);
 
 	const sidebar = useMemo(() => normalizeSidebarSettings(appSettings.sidebar), [appSettings.sidebar]);
@@ -344,26 +345,28 @@ export function SidebarPage({
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.sidebar")} description={t("settingsCore.sidebar.description")} />
 
-			<div className="sidebar-ai-hero">
-				<div className="sidebar-ai-hero__body">
-					<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-					</span>
-					<div className="sidebar-ai-hero__copy">
-						<div className="sidebar-ai-hero__title">{t("settingsCore.sidebar.aiHeroTitle")}</div>
-						<p className="sidebar-ai-hero__desc">{t("settingsCore.sidebar.aiHeroDesc")}</p>
+			{customizerOpen ? null : (
+				<div className="sidebar-ai-hero">
+					<div className="sidebar-ai-hero__body">
+						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+						</span>
+						<div className="sidebar-ai-hero__copy">
+							<div className="sidebar-ai-hero__title">{t("settingsCore.sidebar.aiHeroTitle")}</div>
+							<p className="sidebar-ai-hero__desc">{t("settingsCore.sidebar.aiHeroDesc")}</p>
+						</div>
 					</div>
+					<button
+						type="button"
+						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
+						data-action="open-app-customizer"
+						onClick={onOpenCustomizer}
+					>
+						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
+						<span>{t("settingsCore.sidebar.aiHeroButton")}</span>
+					</button>
 				</div>
-				<button
-					type="button"
-					className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-					data-action="open-app-customizer"
-					onClick={() => setCustomizerOpen(true)}
-				>
-					<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-					<span>{t("settingsCore.sidebar.aiHeroButton")}</span>
-				</button>
-			</div>
+			)}
 
 			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.sidebar.presetsTitle")}>
 				<span className="sidebar-presets-bar__label">{t("settingsCore.sidebar.presetsTitle")}</span>
@@ -736,14 +739,6 @@ export function SidebarPage({
 					confirmLabel={t("settingsCore.sidebar.addCustomConfirm")}
 					onCancel={() => setAddFolderOpen(false)}
 					onSubmit={addCustomFavorite}
-				/>
-			) : null}
-
-			{customizerOpen ? (
-				<AppCustomizerModal
-					onClose={() => setCustomizerOpen(false)}
-					onSettingsUpdated={(next) => onAppSettingsChanged(next)}
-					onOpenAiSettings={onOpenAiSettings}
 				/>
 			) : null}
 		</>

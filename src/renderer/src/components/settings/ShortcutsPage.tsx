@@ -39,7 +39,6 @@ import {
 	type ShortcutSettings,
 } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
-import { AppCustomizerModal } from "./AppCustomizerModal";
 import { Section, SettingsPageHead } from "./SettingsKit";
 
 type ShortcutsBridgeWindow = Window & {
@@ -100,18 +99,20 @@ export function ShortcutsPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	onOpenAiSettings,
+	customizerOpen,
+	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	readonly onOpenAiSettings?: () => void;
+	/** Whether the docked AI assistant is shown beside the page; the hero offers to reopen it only while collapsed. */
+	readonly customizerOpen: boolean;
+	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
 	const isMac = platform === "darwin";
 
-	const [customizerOpen, setCustomizerOpen] = useState(false);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [recordingId, setRecordingId] = useState<ShortcutId | null>(null);
 	const [heldMods, setHeldMods] = useState<HeldModifiers>({ mod: false, alt: false, shift: false });
@@ -348,26 +349,28 @@ export function ShortcutsPage({
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} description={t("settingsCore.shortcuts.description")} />
 
-			<div className="sidebar-ai-hero">
-				<div className="sidebar-ai-hero__body">
-					<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-					</span>
-					<div className="sidebar-ai-hero__copy">
-						<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
-						<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
+			{customizerOpen ? null : (
+				<div className="sidebar-ai-hero">
+					<div className="sidebar-ai-hero__body">
+						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+						</span>
+						<div className="sidebar-ai-hero__copy">
+							<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
+							<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
+						</div>
 					</div>
+					<button
+						type="button"
+						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
+						data-action="open-shortcut-customizer"
+						onClick={onOpenCustomizer}
+					>
+						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
+						<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
+					</button>
 				</div>
-				<button
-					type="button"
-					className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-					data-action="open-shortcut-customizer"
-					onClick={() => setCustomizerOpen(true)}
-				>
-					<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-					<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
-				</button>
-			</div>
+			)}
 
 			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.shortcuts.presetsTitle")}>
 				<span className="sidebar-presets-bar__label">{t("settingsCore.shortcuts.presetsTitle")}</span>
@@ -733,15 +736,6 @@ export function ShortcutsPage({
 					</div>
 				)}
 			</Section>
-
-			{customizerOpen ? (
-				<AppCustomizerModal
-					surface="shortcuts"
-					onClose={() => setCustomizerOpen(false)}
-					onSettingsUpdated={onAppSettingsChanged}
-					onOpenAiSettings={onOpenAiSettings}
-				/>
-			) : null}
 		</>
 	);
 }

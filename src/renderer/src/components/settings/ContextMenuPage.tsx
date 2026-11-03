@@ -44,7 +44,6 @@ import type { ShortcutId } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { formatContextMenuKeycap } from "../../state/context-menu";
 import { Switch } from "../primitives/Switch";
-import { AppCustomizerModal } from "./AppCustomizerModal";
 import { ModalActions, ModalShell, Note, Section, SettingsPageHead } from "./SettingsKit";
 
 type ContextMenuBridgeWindow = Window & {
@@ -361,16 +360,18 @@ export function ContextMenuPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	onOpenAiSettings,
+	customizerOpen,
+	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	readonly onOpenAiSettings?: () => void;
+	/** Whether the docked AI assistant is shown beside the page; the hero offers to reopen it only while collapsed. */
+	readonly customizerOpen: boolean;
+	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
-	const [customizerOpen, setCustomizerOpen] = useState(false);
 	const [editorState, setEditorState] = useState<{ readonly open: boolean; readonly initial: MagicAction | null }>({
 		open: false,
 		initial: null,
@@ -615,26 +616,28 @@ export function ContextMenuPage({
 				description={t("settingsCore.contextMenu.description")}
 			/>
 
-			<div className="sidebar-ai-hero">
-				<div className="sidebar-ai-hero__body">
-					<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-					</span>
-					<div className="sidebar-ai-hero__copy">
-						<div className="sidebar-ai-hero__title">{t("settingsCore.contextMenu.aiHeroTitle")}</div>
-						<p className="sidebar-ai-hero__desc">{t("settingsCore.contextMenu.aiHeroDesc")}</p>
+			{customizerOpen ? null : (
+				<div className="sidebar-ai-hero">
+					<div className="sidebar-ai-hero__body">
+						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+						</span>
+						<div className="sidebar-ai-hero__copy">
+							<div className="sidebar-ai-hero__title">{t("settingsCore.contextMenu.aiHeroTitle")}</div>
+							<p className="sidebar-ai-hero__desc">{t("settingsCore.contextMenu.aiHeroDesc")}</p>
+						</div>
 					</div>
+					<button
+						type="button"
+						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
+						data-action="open-context-menu-customizer"
+						onClick={onOpenCustomizer}
+					>
+						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
+						<span>{t("settingsCore.contextMenu.aiHeroButton")}</span>
+					</button>
 				</div>
-				<button
-					type="button"
-					className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-					data-action="open-context-menu-customizer"
-					onClick={() => setCustomizerOpen(true)}
-				>
-					<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-					<span>{t("settingsCore.contextMenu.aiHeroButton")}</span>
-				</button>
-			</div>
+			)}
 
 			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.contextMenu.presetsTitle")}>
 				<span className="sidebar-presets-bar__label">{t("settingsCore.contextMenu.presetsTitle")}</span>
@@ -834,15 +837,6 @@ export function ContextMenuPage({
 					initial={editorState.initial}
 					onCancel={() => setEditorState({ open: false, initial: null })}
 					onSave={saveMagicAction}
-				/>
-			) : null}
-
-			{customizerOpen ? (
-				<AppCustomizerModal
-					surface="contextMenu"
-					onClose={() => setCustomizerOpen(false)}
-					onSettingsUpdated={(next) => onAppSettingsChanged(next)}
-					onOpenAiSettings={onOpenAiSettings}
 				/>
 			) : null}
 		</>

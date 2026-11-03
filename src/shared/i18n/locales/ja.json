@@ -2140,7 +2140,7 @@
       "emptyConnections": "接続済みアプリの添付フォルダはありません。",
       "emptyLocations": "マウントされたディスクはありません。",
       "emptyTags": "ピン留めされた Finder タグはありません。",
-      "modal": {
+      "assistant": {
         "title": "AI アプリカスタムアシスタント",
         "subtitle": "希望するサイドバーの構成や画面設定を自由に入力してください。",
         "newChat": "新しい会話",
@@ -2156,7 +2156,8 @@
         "stop": "停止",
         "lockedNotice": "AI 検索と自動化は必須機能のため常にサイドバーに表示されます。",
         "openAiSettings": "AI モデル設定を開く",
-        "unavailable": "アプリカスタムサービスを利用できません。"
+        "unavailable": "アプリカスタムサービスを利用できません。",
+        "collapse": "アシスタントを隠す"
       }
     },
     "contextMenu": {
@@ -2257,7 +2258,7 @@
         "extensionsPlaceholder": "空欄ですべて対象 · 例: pdf, docx, md",
         "save": "保存"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 右クリックメニュー＆マジックアクションアシスタント",
         "subtitle": "追加したい右クリックボタン、スクリプト、AIファイル操作を自由に入力してください。",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
@@ -2335,7 +2336,7 @@
         "aiNewChat": "新しいチャット",
         "aiToggleHistory": "チャット履歴を切替"
       },
-      "modal": {
+      "assistant": {
         "title": "AI ショートカットカスタムアシスタント",
         "subtitle": "変更したいショートカットや入れ替えを自由に入力してください。",
         "emptyTitle": "どのショートカットを変更しますか？",
