@@ -5339,7 +5339,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 /* The two opt-ins sit quietly under the cards. */
-/* Each opt-in is one line, centred under the cards, 6px apart (Figma 121:669). */
+/* Each opt-in is one line, centred 36px under the cards, 6px apart (Figma 121:669). */
 .onb .welcome-consents {
 	display: flex;
 	flex-direction: column;
@@ -5348,15 +5348,15 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	grid-row: 4;
 	align-self: start;
 	max-width: 100%;
-	margin-top: 20px;
+	margin-top: 36px;
 	padding-bottom: 16px;
 }
 
 .onb .welcome-consents .usage-consent {
 	margin: 0;
 	color: var(--onb-faint);
-	font-size: 10px;
-	line-height: 14px;
+	font-size: 10.5px;
+	line-height: 15.75px;
 	white-space: nowrap;
 }
 
@@ -5844,6 +5844,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .plan-screen .plan-desc {
+	max-width: 230px;
 	margin-top: 12px;
 	color: var(--onb-muted);
 	font-size: 12px;
