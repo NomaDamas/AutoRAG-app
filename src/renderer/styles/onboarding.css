@@ -5539,7 +5539,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-screen:has(.si-head) .si-panel-title {
 	color: var(--onb-body);
 	font-size: 14px;
-	font-weight: 500;
+	font-weight: 700;
 	line-height: 19px;
 }
 
