@@ -481,6 +481,11 @@ export function App(): ReactElement {
 					if (target.kind === "folder") finder.openFolder(target.path);
 					else finder.revealEvidence(target.path);
 				}
+			} else if (request.query !== null) {
+				// `dazzi --ask` / Raycast: a new AI Search tab asks at once, like the sidebar's content search, so a
+				// tab that is still answering never swallows the question.
+				finder.openAiSearch();
+				deliverToAi({ attach: request.attachments, query: request.query });
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();
