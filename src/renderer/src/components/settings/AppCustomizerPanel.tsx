@@ -30,7 +30,6 @@ interface SurfaceCopy {
 	readonly emptyDesc: LocaleKey;
 	readonly suggestions: readonly [LocaleKey, LocaleKey, LocaleKey, LocaleKey];
 	readonly thinking: LocaleKey;
-	readonly placeholder: LocaleKey;
 	readonly openAiSettings: LocaleKey;
 	readonly unavailable: LocaleKey;
 }
@@ -42,13 +41,12 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
 		emptyDesc: "settingsCore.sidebar.assistant.emptyDesc",
 		suggestions: [
-			"settingsCore.sidebar.assistant.promptMinimal",
+			"settingsCore.sidebar.assistant.promptHideMedia",
 			"settingsCore.sidebar.assistant.promptReorder",
-			"settingsCore.sidebar.assistant.promptCleanSections",
+			"settingsCore.sidebar.assistant.promptDarkMode",
 			"settingsCore.sidebar.assistant.promptReset",
 		],
 		thinking: "settingsCore.sidebar.assistant.thinking",
-		placeholder: "settingsCore.sidebar.assistant.placeholder",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
 	},
@@ -57,13 +55,12 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		emptyTitle: "settingsCore.contextMenu.assistant.emptyTitle",
 		emptyDesc: "settingsCore.contextMenu.assistant.emptyDesc",
 		suggestions: [
-			"settingsCore.contextMenu.assistant.promptSummarizePdf",
-			"settingsCore.contextMenu.assistant.promptBatchScript",
-			"settingsCore.contextMenu.assistant.promptCleanMenu",
+			"settingsCore.contextMenu.assistant.promptSummarizeDoc",
+			"settingsCore.contextMenu.assistant.promptCompareFiles",
+			"settingsCore.contextMenu.assistant.promptTrimMenu",
 			"settingsCore.contextMenu.assistant.promptReset",
 		],
 		thinking: "settingsCore.sidebar.assistant.thinking",
-		placeholder: "settingsCore.contextMenu.assistant.placeholder",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
 		unavailable: "settingsCore.sidebar.assistant.unavailable",
 	},
@@ -74,11 +71,10 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		suggestions: [
 			"settingsCore.shortcuts.assistant.promptMacFinder",
 			"settingsCore.shortcuts.assistant.promptWindowsExplorer",
-			"settingsCore.shortcuts.assistant.promptSwap",
+			"settingsCore.shortcuts.assistant.promptRenameF2",
 			"settingsCore.shortcuts.assistant.promptReset",
 		],
 		thinking: "settingsCore.shortcuts.assistant.thinking",
-		placeholder: "settingsCore.shortcuts.assistant.placeholder",
 		openAiSettings: "settingsCore.shortcuts.assistant.openAiSettings",
 		unavailable: "settingsCore.shortcuts.assistant.unavailable",
 	},
@@ -386,7 +382,7 @@ export function AppCustomizerPanel({
 						rows={2}
 						data-testid="app-customizer-input"
 						className="customizer-composer__input"
-						placeholder={t(copy.placeholder)}
+						aria-label={t("settingsCore.sidebar.assistant.inputLabel")}
 						value={input}
 						onChange={(event) => setInput(event.target.value)}
 						onKeyDown={handleKeyDown}

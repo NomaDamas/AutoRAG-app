@@ -2145,16 +2145,16 @@
         "newChat": "新对话",
         "emptyTitle": "您希望如何定制 Dazzi？",
         "emptyDesc": "告诉助手要显示的文件夹、分区顺序或外观模式，更改会实时生效。",
-        "promptMinimal": "在侧边栏中隐藏音乐、影片、图片和应用程序文件夹",
+        "promptHideMedia": "把工作中用不到的音乐、影片和图片文件夹从侧边栏隐藏",
         "promptReorder": "把下载和文稿移到个人收藏的最上方",
-        "promptCleanSections": "隐藏云盘和标签分区，让侧边栏更清爽",
-        "promptReset": "将侧边栏布局恢复为默认状态",
+        "promptDarkMode": "把界面切换成深色模式",
+        "promptReset": "把侧边栏恢复成最初的样子",
         "thinking": "正在检查设置",
-        "placeholder": "例如：隐藏音乐和影片，并把下载放到最上面…",
         "send": "发送",
         "stop": "停止",
         "openAiSettings": "打开 AI 模型设置",
-        "unavailable": "应用定制服务不可用。"
+        "unavailable": "应用定制服务不可用。",
+        "inputLabel": "告诉助手你的需求"
       }
     },
     "contextMenu": {
@@ -2258,12 +2258,11 @@
       "assistant": {
         "title": "AI 右键菜单与魔法动作助手",
         "emptyTitle": "想在右键菜单里加入什么功能？",
-        "emptyDesc": "可创建针对特定扩展名或多文件批量执行的 AI 动作与脚本，或精简内置菜单项。",
-        "promptSummarizePdf": "添加一个针对单个 PDF 或 Markdown 文件的右键魔法动作，用三句话总结核心内容",
-        "promptBatchScript": "创建一个选中多个文件右键时计算 SHA-256 哈希值的脚本动作",
-        "promptCleanMenu": "在右键菜单中隐藏压缩为 7z、复制路径和剪切",
-        "promptReset": "将右键菜单恢复为默认状态",
-        "placeholder": "例如：选中多张图片右键时生成分辨率与文件大小对比表…"
+        "emptyDesc": "可以自己做右键菜单，帮你总结、对比或整理文件，也可以把用不到的菜单项隐藏起来。",
+        "promptSummarizeDoc": "做一个魔法动作：右键 PDF 或 Word 文档时，用三句话总结要点",
+        "promptCompareFiles": "做一个魔法动作：选中两个文件右键时，列出它们之间的不同之处",
+        "promptTrimMenu": "把右键菜单里不常用的项目隐藏，只留下常用的",
+        "promptReset": "把右键菜单恢复成最初的样子"
       }
     },
     "shortcuts": {
@@ -2335,12 +2334,11 @@
         "title": "AI 快捷键定制助手",
         "emptyTitle": "您想更改哪些快捷键？",
         "emptyDesc": "可在 Dazzi 内置的 26 项默认快捷键范围内自由修改或互换，更改立即生效。",
-        "promptMacFinder": "切换为 Mac Finder 默认快捷键预设",
-        "promptWindowsExplorer": "切换为 Windows 文件资源管理器快捷键预设",
-        "promptSwap": "把创建副本和重命名的快捷键互换",
-        "promptReset": "将所有快捷键恢复为默认设置",
+        "promptMacFinder": "让我用和 Mac 访达一样的快捷键",
+        "promptWindowsExplorer": "换成我在 Windows 文件资源管理器里习惯的快捷键",
+        "promptRenameF2": "把重命名改成按 F2 键",
+        "promptReset": "把所有快捷键恢复成最初的样子",
         "thinking": "正在检查快捷键配置",
-        "placeholder": "例如：把重命名改为 F2，聚焦搜索框改为 Cmd+P…",
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "快捷键定制服务不可用。"
       }

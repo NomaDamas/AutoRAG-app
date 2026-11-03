@@ -356,6 +356,10 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 검색과 자동화는 필수 기능");
 		// New chat appears only once there is a conversation to discard
 		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
+		// The four suggestions above already show what to ask, so the composer carries no example text, only a name
+		const composer = panel?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
+		expect(composer?.getAttribute("placeholder")).toBeNull();
+		expect(composer?.getAttribute("aria-label")).toBe("어시스턴트에게 요청");
 
 		// Hiding the right sidebar brings back the hero, whose button and banner use the transparent Dazzi mark
 		await act(async () => {

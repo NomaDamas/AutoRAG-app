@@ -2145,16 +2145,16 @@
         "newChat": "새 대화",
         "emptyTitle": "어떤 구성을 원하시나요?",
         "emptyDesc": "표시할 폴더, 섹션 순서, 화면 모드를 말하면 즉시 반영됩니다.",
-        "promptMinimal": "음악, 동영상, 그림, 응용 프로그램 폴더를 사이드바에서 숨겨줘",
+        "promptHideMedia": "업무에 안 쓰는 음악, 동영상, 사진 폴더는 사이드바에서 숨겨줘",
         "promptReorder": "다운로드와 문서를 즐겨찾기 맨 위로 올려줘",
-        "promptCleanSections": "클라우드와 태그 섹션은 숨기고 깔끔하게 정리해줘",
-        "promptReset": "사이드바 구성을 기본 상태로 되돌려줘",
+        "promptDarkMode": "화면을 어두운 다크 모드로 바꿔줘",
+        "promptReset": "사이드바를 처음 상태로 되돌려줘",
         "thinking": "설정을 살펴보는 중",
-        "placeholder": "예: 음악이랑 동영상은 숨기고 다운로드를 맨 위로 올려줘…",
         "send": "보내기",
         "stop": "중단",
         "openAiSettings": "AI 모델 설정 열기",
-        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
+        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다.",
+        "inputLabel": "어시스턴트에게 요청"
       }
     },
     "contextMenu": {
@@ -2258,12 +2258,11 @@
       "assistant": {
         "title": "AI 우클릭 메뉴 & 매직 액션 어시스턴트",
         "emptyTitle": "우클릭 메뉴에 어떤 기능을 넣어볼까요?",
-        "emptyDesc": "특정 확장자나 여러 파일에 작동하는 AI 에이전트 액션·스크립트를 만들거나 불필요한 메뉴를 정리할 수 있습니다.",
-        "promptSummarizePdf": "PDF나 마크다운 파일 하나를 우클릭했을 때 핵심 3줄 요약을 보여주는 매직 액션 추가해줘",
-        "promptBatchScript": "여러 파일을 선택해 우클릭했을 때 SHA-256 해시값을 계산해주는 스크립트 액션 만들어줘",
-        "promptCleanMenu": "우클릭 메뉴에서 7z로 압축, 경로 복사, 잘라내기를 숨겨서 깔끔하게 만들어줘",
-        "promptReset": "우클릭 메뉴 구성을 기본 상태로 되돌려줘",
-        "placeholder": "예: 이미지 여러 개 우클릭하면 해상도랑 용량 표로 정리해주는 매직 액션 만들어줘…"
+        "emptyDesc": "파일을 우클릭했을 때 요약·비교·정리를 해 주는 나만의 메뉴를 만들거나, 잘 안 쓰는 메뉴를 숨길 수 있습니다.",
+        "promptSummarizeDoc": "PDF나 워드 문서를 우클릭하면 핵심 내용을 세 줄로 요약해 주는 매직 액션을 만들어줘",
+        "promptCompareFiles": "파일 두 개를 선택해 우클릭하면 서로 달라진 내용을 정리해 주는 매직 액션을 만들어줘",
+        "promptTrimMenu": "우클릭 메뉴에서 잘 안 쓰는 항목은 숨기고 자주 쓰는 것만 남겨줘",
+        "promptReset": "우클릭 메뉴를 처음 상태로 되돌려줘"
       }
     },
     "shortcuts": {
@@ -2335,12 +2334,11 @@
         "title": "AI 단축키 커스텀 어시스턴트",
         "emptyTitle": "어떤 단축키를 바꿔 볼까요?",
         "emptyDesc": "기본 제공되는 26개 단축키 안에서 원하는 키 조합으로 바꾸거나 맞바꿀 수 있습니다.",
-        "promptMacFinder": "Mac Finder 기본 단축키 구성으로 맞춰줘",
-        "promptWindowsExplorer": "Windows 파일 탐색기 단축키 구성으로 바꿔줘",
-        "promptSwap": "복제랑 이름 변경 단축키를 서로 맞바꿔줘",
-        "promptReset": "모든 단축키를 기본값으로 되돌려줘",
+        "promptMacFinder": "Mac Finder에서 쓰던 단축키 그대로 쓰게 해줘",
+        "promptWindowsExplorer": "Windows 파일 탐색기에서 쓰던 단축키로 바꿔줘",
+        "promptRenameF2": "이름 바꾸기를 F2 키로 바꿔줘",
+        "promptReset": "모든 단축키를 처음 상태로 되돌려줘",
         "thinking": "단축키 구성을 살펴보는 중",
-        "placeholder": "예: 이름 변경은 F2로 바꾸고 검색창 포커스는 커맨드 P로 해줘…",
         "openAiSettings": "AI 모델 설정 열기",
         "unavailable": "단축키 커스텀 서비스를 사용할 수 없습니다."
       }
