@@ -91,6 +91,8 @@ export interface OnboardingCtx {
 	setSourceOn(id: SourceId, on: boolean): void;
 
 	choosePlan(plan: PlanId): void;
+	/** Choose BYOK and go on at once to what follows the plan step (connecting the model, when it is not connected yet). */
+	connectOwnKey(): void;
 	setPromoCode(code: string): void;
 	signIn(options: AccountSignInOptions): void;
 	sendEmailOtp(email: string): Promise<EmailOtpSendResult>;

@@ -75,12 +75,12 @@ describe("plan step", () => {
 		expect(host.querySelector(".plan-trial")).toBeNull();
 	});
 
-	it("chooses BYOK from the link under the cards", () => {
-		const choosePlan = vi.fn();
-		render({ plan: "free", choosePlan });
+	it("goes straight on with BYOK from the link under the cards", () => {
+		const connectOwnKey = vi.fn();
+		render({ plan: "free", connectOwnKey });
 
 		act(() => host.querySelector<HTMLButtonElement>(".plan-byok button")?.click());
-		expect(choosePlan).toHaveBeenCalledWith("byok");
+		expect(connectOwnKey).toHaveBeenCalledTimes(1);
 	});
 
 	it("puts the free trial on the Pro card as its own call-out, once", () => {

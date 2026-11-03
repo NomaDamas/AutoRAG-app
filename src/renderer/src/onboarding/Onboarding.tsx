@@ -999,6 +999,21 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			}
 			patch({ plan });
 		},
+		connectOwnKey: () => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const signedIn = accountRef.current?.state === "signedIn";
+			const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
+			if (!isPlanSelectable("byok", embed)) {
+				return;
+			}
+			// What "continue" from the plan step would open, with BYOK chosen there.
+			const list = buildFlow("byok", false, embed, signedIn, noSourcesRef.current);
+			const following = list[list.indexOf("plan") + 1];
+			setDraft({ ...current, plan: "byok", planConfirmed: true, ...(following === undefined ? {} : { stepId: following }) });
+		},
 		signIn,
 		sendEmailOtp,
 		verifyEmailOtp,

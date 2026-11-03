@@ -373,7 +373,6 @@ try {
 	await shot("07b-plan-needs-account");
 	// BYOK again: its model was connected right after the account, so the plan leads straight to the index.
 	await page.locator(".onb .plan-byok button").click();
-	await primary.click();
 
 	// roles: without a Dazzi plan the reranker and Jev are chosen here, from what was connected.
 	await page.waitForSelector("[data-role-trigger]", { timeout: 10_000 });

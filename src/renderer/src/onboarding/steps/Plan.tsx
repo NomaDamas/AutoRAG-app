@@ -145,10 +145,9 @@ export function PlanStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElement
 			<div className="plan-list">{shown.map(card)}</div>
 			<div className="plan-foot">
 				{byokSelectable ? (
-					<p className={cn("plan-byok", draft.plan === "byok" && "selected")}>
+					<p className="plan-byok">
 						<span>{t("onboarding.plan.byokLead")}</span>
-						<button type="button" aria-pressed={draft.plan === "byok"} onClick={() => choose("byok")}>
-							{draft.plan === "byok" ? <Icon name="check" size={14} /> : null}
+						<button type="button" onClick={ctx.connectOwnKey}>
 							{t("onboarding.plan.byokLink")}
 						</button>
 					</p>

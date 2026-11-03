@@ -222,12 +222,14 @@ html:not([data-platform="darwin"]) .onb .titlebar {
 	color: var(--onb-ink);
 }
 
+/* The lead under a screen title, on every screen: 14px regular. */
 .onb .screen-copy>p {
 	margin: 0;
 	max-width: 305px;
 	color: var(--onb-muted);
-	font-size: 13px;
-	line-height: 1.62;
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 21px;
 }
 
 .onb .micro-note {
@@ -4678,7 +4680,8 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .permissions-head p {
 	margin: 0;
 	color: var(--onb-muted);
-	font-size: 13px;
+	font-size: 14px;
+	font-weight: 400;
 	line-height: 21px;
 }
 
@@ -5395,7 +5398,8 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 .onb .si-lead p {
 	margin: 0;
 	color: var(--onb-body);
-	font-size: 13px;
+	font-size: 14px;
+	font-weight: 400;
 	line-height: 21px;
 }
 
@@ -5448,6 +5452,7 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 }
 
 .onb .si-criteria-part b {
+	color: var(--onb-ink);
 	font-size: 12px;
 	font-weight: 500;
 	line-height: 16px;
@@ -5455,9 +5460,9 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .si-criteria-item {
 	display: list-item;
-	margin-left: 16.5px;
+	margin-left: 18px;
 	list-style: disc;
-	font-size: 11px;
+	font-size: 12px;
 	line-height: 16px;
 }
 
@@ -5882,10 +5887,6 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 
 .onb .plan-screen .plan-byok button:hover {
 	opacity: .8;
-}
-
-.onb .plan-screen .plan-byok.selected button {
-	font-weight: 500;
 }
 
 /* The scan screen (Figma 04c/e/f) has no footer; title and folder stay put across running, finished and failed. */

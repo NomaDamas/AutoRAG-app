@@ -111,6 +111,7 @@ function harness(options: {
 		setCloudConsent,
 		setSourceOn: noop,
 		choosePlan: noop,
+		connectOwnKey: noop,
 		setPromoCode: noop,
 		signIn: noop,
 		sendEmailOtp: async () => ({ ok: true, email: "", expiresInSeconds: 600 }),
