@@ -59,9 +59,14 @@ export function windowsSignatureProblems(files, publisher) {
  * `Get-AuthenticodeSignature` for each path (Windows only): `{ path, status, subject }`, status being the
  * SignatureStatus name (`Valid`, `NotSigned`, `HashMismatch`, `UnknownError`, ...). Paths travel in an
  * environment variable and the answer as UTF-8 JSON, so non-ASCII paths and publisher names survive.
+ *
+ * PSModulePath is cleared like electron-updater does (its issue #7127): GitHub's Windows steps run under
+ * pwsh 7, whose module path leaks into Windows PowerShell 5.1 and breaks the cmdlet for every file. That
+ * failure dropped every row and answered `[]` with exit 0, so the result must hold one row per path.
  */
 export function readAuthenticode(paths) {
 	const script = [
+		"$ErrorActionPreference = 'Stop'",
 		"[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)",
 		"$paths = ConvertFrom-Json $env:DAZZI_SIGNATURE_PATHS",
 		"$rows = @(foreach ($p in $paths) { $s = Get-AuthenticodeSignature -LiteralPath $p; [pscustomobject]@{ path = $p; status = $s.Status.ToString(); subject = [string]$s.SignerCertificate.Subject } })",
@@ -69,10 +74,12 @@ export function readAuthenticode(paths) {
 	].join("; ");
 	const result = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
 		encoding: "utf8",
-		env: { ...process.env, DAZZI_SIGNATURE_PATHS: JSON.stringify(paths) },
+		env: { ...process.env, PSModulePath: "", DAZZI_SIGNATURE_PATHS: JSON.stringify(paths) },
 		maxBuffer: 64 * 1024 * 1024,
 		windowsHide: true,
 	});
 	if (result.status !== 0) throw new Error(`Get-AuthenticodeSignature failed (exit ${result.status}): ${result.stderr || result.error?.message}`);
-	return JSON.parse(result.stdout);
+	const rows = JSON.parse(result.stdout);
+	if (!Array.isArray(rows) || rows.length !== paths.length) throw new Error(`Get-AuthenticodeSignature answered ${Array.isArray(rows) ? rows.length : "no"} result(s) for ${paths.length} file(s): ${result.stderr}`);
+	return rows;
 }
