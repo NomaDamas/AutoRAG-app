@@ -8,7 +8,9 @@ import { posix } from "node:path";
  *   tab, `[--] path...` opens folders / reveals files. It hands the request to the running app over its local
  *   socket, or starts the app with it.
  * - `Contents/Resources/tools/bin/autorag`: the bundled librarian CLI. `lite retrieve <query> --json` searches the
- *   same local index the app keeps, without a model and without sending anything off the machine.
+ *   same local index the app keeps without a chat model. It runs every retrieval method the shared AutoRAG config
+ *   enables, and when that config turns on reranking (`rerank`, set by Dazzi's account models) the candidate
+ *   chunks are sent to that rerank endpoint.
  */
 
 /** The longest question the app accepts (`OS_REQUEST_MAX_QUERY_LENGTH` in the app's os-request contract). */

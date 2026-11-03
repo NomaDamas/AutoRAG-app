@@ -13,7 +13,7 @@
       "name": "search",
       "title": "Search Dazzi",
       "subtitle": "Dazzi",
-      "description": "Search the documents, mail, chats, and web history Dazzi has indexed, without a model.",
+      "description": "Search the documents, mail, chats, and web history Dazzi has indexed, without a chat model.",
       "mode": "view",
       "arguments": [
         {
