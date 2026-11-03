@@ -1120,7 +1120,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							value={query}
 							onChange={setQuery}
 							onAltEnter={() => send(true)}
-							placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
+							placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
 							ariaLabel={t("aiSearch.askDazzi")}
 						/>
 						<div className="composer-toolbar flex items-center justify-between gap-8">

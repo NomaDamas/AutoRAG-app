@@ -1313,7 +1313,6 @@
     "searchTitle": "Search \"{{query}}\"",
     "resizeSidebar": "Resize sidebar",
     "resizeInspector": "Resize inspector",
-    "composerPlaceholder": "Ask across files, mail, and messengers (drop files here)",
     "removeAttachment": "Remove attachment",
     "locationOpenFailed": "Couldn't open the location \"{{name}}\".",
     "ejected": "Ejected \"{{name}}\".",
@@ -3288,7 +3287,7 @@
     "ai": {
       "history": "History",
       "newChat": "New chat",
-      "sources": "{{count}} sources",
+      "sources": "Sources: {{count}}",
       "suggestions": "Try asking",
       "suggest1": "Find the quote I got last week",
       "suggest2": "Tidy up my Downloads folder",
@@ -3305,6 +3304,10 @@
       "newMarkdown": "New Markdown document",
       "upload": "Upload from this device",
       "uploadHint": "Photos · Files"
+    },
+    "evidence": {
+      "showInFolder": "Show in folder",
+      "preview": "Preview"
     }
   }
 }

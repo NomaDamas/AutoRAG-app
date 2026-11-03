@@ -25,7 +25,7 @@
 @import "./onboarding.css" layer(base);
 
 /* Phone shell — the remote browser session on a phone-sized screen
- * (docs/prototypes/mobile-remote). Every rule sits under `.phone-app`. */
+ * (src/renderer/src/mobile). Every rule sits under `.phone-app`. */
 @import "./mobile.css" layer(base);
 
 /* Syntax colours for code blocks in AI Search answers and evidence excerpts

@@ -274,10 +274,10 @@ export function EvidenceSheet({ evidence, selected, onSelect, onReveal, onShowIn
 			</div>
 			{source === null || (!local && url === null) ? null : (
 				<div className="phone-btn-row">
-					{local ? <button type="button" onClick={() => onShowInFolder(source)}><FolderOpen size={18} strokeWidth={2.2} />{t("mobile.menu.reveal")}</button> : null}
+					{local ? <button type="button" onClick={() => onShowInFolder(source)}><FolderOpen size={18} strokeWidth={2.2} />{t("mobile.evidence.showInFolder")}</button> : null}
 					<button type="button" className="is-primary" onClick={() => onReveal(source, local ? excerpts : undefined)}>
 						{url === null ? <Eye size={18} strokeWidth={2.2} /> : <Globe size={18} strokeWidth={2.2} />}
-						{url === null ? t("inspector.evidencePanel.openPreview") : t("inspector.evidencePanel.openInBrowser")}
+						{url === null ? t("mobile.evidence.preview") : t("inspector.evidencePanel.openInBrowser")}
 					</button>
 				</div>
 			)}

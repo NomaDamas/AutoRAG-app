@@ -1313,7 +1313,6 @@
     "searchTitle": "\"{{query}}\" 검색",
     "resizeSidebar": "사이드바 크기 조절",
     "resizeInspector": "정보 창 크기 조절",
-    "composerPlaceholder": "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)",
     "removeAttachment": "첨부 제거",
     "locationOpenFailed": "\"{{name}}\" 위치를 열 수 없습니다.",
     "ejected": "\"{{name}}\" 을(를) 추출했습니다.",
@@ -3305,6 +3304,10 @@
       "newMarkdown": "새 Markdown 문서",
       "upload": "이 기기에서 올리기",
       "uploadHint": "사진 보관함 · 파일"
+    },
+    "evidence": {
+      "showInFolder": "폴더에서 보기",
+      "preview": "미리보기"
     }
   }
 }

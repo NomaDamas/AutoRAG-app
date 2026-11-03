@@ -1313,7 +1313,6 @@
     "searchTitle": "\"{{query}}\" を検索",
     "resizeSidebar": "サイドバーのサイズを変更",
     "resizeInspector": "インスペクタのサイズを変更",
-    "composerPlaceholder": "ファイル・メール・メッセンジャー全体に質問（ファイルのドラッグ＆ドロップ可）",
     "removeAttachment": "添付を削除",
     "locationOpenFailed": "\"{{name}}\" の場所を開けませんでした。",
     "ejected": "\"{{name}}\" を取り出しました。",
@@ -3305,6 +3304,10 @@
       "newMarkdown": "新規 Markdown 書類",
       "upload": "このデバイスからアップロード",
       "uploadHint": "写真 · ファイル"
+    },
+    "evidence": {
+      "showInFolder": "フォルダで表示",
+      "preview": "プレビュー"
     }
   }
 }

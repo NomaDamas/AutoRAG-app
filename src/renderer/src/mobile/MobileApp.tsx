@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, t
 import { useTranslation } from "react-i18next";
 import {
 	ArrowDownUp,
+	BookOpen,
 	Bot,
 	ChevronLeft,
 	Copy,
@@ -753,8 +754,10 @@ export function MobileApp(): ReactElement {
 				<GlassButton label={t("mobile.ai.history")} onClick={() => aiRef.current?.toggleHistory()}><History size={21} strokeWidth={2.1} /></GlassButton>
 				<NavTitle always title={t("mobile.tabs.ai")} />
 				<span className="phone-spacer" />
-				{evidence.length === 0 ? null : <GlassText onClick={() => setOverlay({ type: "evidence" })}>{t("inspector.evidence")}</GlassText>}
-				<GlassButton label={t("mobile.ai.newChat")} onClick={() => aiRef.current?.newChat()}><SquarePen size={20} strokeWidth={2.1} /></GlassButton>
+				<div className="phone-ggroup phone-glass">
+					{evidence.length === 0 ? null : <button type="button" className="phone-gbtn" aria-label={t("inspector.evidence")} title={t("inspector.evidence")} onClick={() => setOverlay({ type: "evidence" })}><BookOpen size={20} strokeWidth={2.1} /></button>}
+					<button type="button" className="phone-gbtn" aria-label={t("mobile.ai.newChat")} title={t("mobile.ai.newChat")} onClick={() => aiRef.current?.newChat()}><SquarePen size={20} strokeWidth={2.1} /></button>
+				</div>
 			</>
 		);
 	} else if (route.kind === "rules") {

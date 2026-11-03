@@ -2,7 +2,7 @@
  * 자동화 on a phone: the rules as an inset list with the background switch on
  * top, and one page per rule (언제 · 무엇을 · 마지막 실행) — the desktop's
  * table, inspector and Quick Look folded into the iOS list/detail pattern
- * (docs/prototypes/mobile-remote). Every word comes from the same
+ * of iPhone Settings. Every word comes from the same
  * `state/automations.ts` helpers the desktop surfaces use, and every action
  * goes through the shared `useAutomationsShell`.
  */

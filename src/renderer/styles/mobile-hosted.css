@@ -8,7 +8,7 @@
  * `.phone-app .phone-hosted`, which the desktop window never renders.
  * ========================================================================== */
 
-/* AI 검색 (docs/prototypes/mobile-remote "AI 검색"): the phone nav bar carries 대화 기록 and
+/* AI 검색: the phone nav bar carries 대화 기록 and
  * 새 대화, so the panel's own head goes; the chat reads like Messages — page background, accent
  * bubbles on the right, plain answer text, sources as cards, a pill composer floating over it. */
 .phone-app .phone-hosted.is-ai { background: var(--phone-plain); }

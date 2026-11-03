@@ -1313,7 +1313,6 @@
     "searchTitle": "搜索“{{query}}”",
     "resizeSidebar": "调整边栏大小",
     "resizeInspector": "调整检查器大小",
-    "composerPlaceholder": "在文件、邮件和即时通讯中提问（可拖放文件）",
     "removeAttachment": "移除附件",
     "locationOpenFailed": "无法打开“{{name}}”的位置。",
     "ejected": "已推出“{{name}}”。",
@@ -3305,6 +3304,10 @@
       "newMarkdown": "新建 Markdown 文稿",
       "upload": "从此设备上传",
       "uploadHint": "照片 · 文件"
+    },
+    "evidence": {
+      "showInFolder": "在文件夹中显示",
+      "preview": "预览"
     }
   }
 }
