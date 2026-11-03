@@ -5660,6 +5660,11 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	color: #ff3b30;
 }
 
+/* A folder inside a top-level one is drawn as an outline only (Figma 126:1500). */
+.onb .si-screen:has(.si-head) .si-pill.sub > svg:first-child {
+	fill: none;
+}
+
 .onb .si-screen:has(.si-head) .si-pill-label {
 	overflow: hidden;
 	color: var(--onb-ink);

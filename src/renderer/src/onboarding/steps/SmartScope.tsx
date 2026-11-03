@@ -135,7 +135,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const pill = (item: Moving, label: string, size: string, tone: "blue" | "red", title: string, open?: () => void, suggested = false): ReactElement => (
 		<div
 			key={item.path}
-			className={cn("si-pill", tone)}
+			className={cn("si-pill", tone, !item.top && "sub")}
 			data-path={item.path}
 			title={title}
 			draggable
