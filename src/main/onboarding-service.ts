@@ -333,11 +333,15 @@ function toIndexingPhase(value: unknown): IndexingPhase | null {
 	return null;
 }
 
-interface ParsedMirrorSnapshot {
-	/** Entries plus skipped files the mirror lists. Across runs, so only a finished run that reported no count of its own falls back to it. */
-	readonly listedFiles: number;
+/** The newest file the parsed mirror lists. */
+interface RecentParsedFile {
 	readonly recentFile: string | null;
 	readonly recentSourcePath: string | null;
+}
+
+interface ParsedMirrorSnapshot extends RecentParsedFile {
+	/** Entries plus skipped files the mirror lists. Across runs, so only a finished run that reported no count of its own falls back to it. */
+	readonly listedFiles: number;
 }
 
 /** Find the newest entry of the parsed mirror. While a run is live, how many files the read stage handled comes from the librarian's counts, not from here. */
@@ -380,7 +384,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let powerBlockerId: number | null = null;
 	let workspacePath: string | null = null;
 	let phase: IndexingPhase | null = null;
-	let phaseStartedAt = 0;
 	/** Bumped by every `startIndexing`; a poll tick belongs to the run it began in and is dropped once that run is over. */
 	let runId = 0;
 	let selectedFolders: readonly string[] = [];
@@ -389,7 +392,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let sourceNames: readonly string[] = [];
 	let pendingDatasourceAliases: readonly string[] = [];
 	let localIndexDone = false;
-	let parsedSnapshot: ParsedMirrorSnapshot = { listedFiles: 0, recentFile: null, recentSourcePath: null };
+	let parsedSnapshot: RecentParsedFile = { recentFile: null, recentSourcePath: null };
 	/** The librarian's last readable `refresh-progress.json` of this run. */
 	let refreshView: ProgressView | null = null;
 	let progressSignature = "";
@@ -461,11 +464,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const startedAtMs = status.startedAt === null ? 0 : Date.parse(status.startedAt);
 			if (view !== null && !(Date.parse(view.startedAt) < startedAtMs - 5_000)) {
 				refreshView = view;
-				const nextPhase = toIndexingPhase(view.phase);
-				if (nextPhase !== null && nextPhase !== phase) {
-					phase = nextPhase;
-					phaseStartedAt = now();
-				}
+				phase = toIndexingPhase(view.phase) ?? phase;
 				inspectStage = view.counts !== null;
 			}
 		}
@@ -473,7 +472,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		if (inspectStage && existsSync(join(root, "parsed", "stage"))) {
 			const stageSnapshot = snapshotParsedStage(workspacePath);
 			parsedSnapshot = {
-				listedFiles: stageSnapshot.listedFiles,
 				recentFile: stageSnapshot.recentFile ?? parsedSnapshot.recentFile,
 				recentSourcePath: stageSnapshot.recentSourcePath ?? parsedSnapshot.recentSourcePath,
 			};
@@ -724,7 +722,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			localIndexDone = false;
 			phase = null;
 			progressSignature = "";
-			parsedSnapshot = { listedFiles: 0, recentFile: null, recentSourcePath: null };
+			parsedSnapshot = { recentFile: null, recentSourcePath: null };
 			refreshView = null;
 			tracker.reset();
 			const startedAt = new Date(now()).toISOString();
