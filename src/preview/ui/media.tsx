@@ -14,14 +14,14 @@ export function ImageView({ file }: { readonly file: PreviewDocument }): ReactEl
 	const { t } = useTranslation();
 	const [failed, setFailed] = useState(false);
 	if (failed) return <FallbackView file={file} note={t("quickLook.media.imageOpenFailed")} />;
-	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={previewStreamUrl(file.path)} onError={() => setFailed(true)} />;
+	return <img className="ql__image block max-w-full max-h-full min-h-0 object-contain" alt="" decoding="async" src={previewStreamUrl(file.path, file)} onError={() => setFailed(true)} />;
 }
 
 export function FontView({ file }: { readonly file: PreviewDocument }): ReactElement {
 	const { t } = useTranslation();
 	const [ready, setReady] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const url = previewStreamUrl(file.path);
+	const url = previewStreamUrl(file.path, file);
 	useEffect(() => {
 		let cancelled = false;
 		const face = new FontFace("QuickLookSample", `url(${url})`);

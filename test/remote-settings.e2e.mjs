@@ -137,7 +137,8 @@ try {
 		// Enter actual 6-digit pairing code -> unlocks full Dazzi Finder UI with HttpOnly dazzi_device cookie!
 		await phone.locator("#pair-code").fill(rawCode);
 		await phone.locator("#pair-submit").click();
-		await expect(phone.locator(".sidebar__item--settings")).toBeVisible({ timeout: 15_000 });
+		// At 390px the remote browser opens the phone shell; widening switches to the desktop Finder shell.
+		await expect(phone.getByTestId("mobile-app")).toBeVisible({ timeout: 15_000 });
 		assert.equal(phone.url().includes("token="), false, "Paired browser URL stays clean with no ?token=");
 
 		// Browse host Documents folder from the paired browser!
@@ -176,14 +177,16 @@ try {
 		await expect(remoteAddress).toHaveValue(lanAddress);
 		await expect(qrPage.locator(".settings-remote-device-badge")).toHaveText(en.deviceCurrent);
 		await expect(qrPage.getByRole("button", { name: en.tunnelStart, exact: true })).toHaveCount(0);
-		for (const width of [1440, 390]) {
-			await qrPage.setViewportSize({ width, height: 1000 });
-			const isolate = width === 390 ? await qrPage.addStyleTag({ content: ".settings-view { position: fixed; inset: 0; z-index: 2147483647; }" }) : null;
-			const section = qrPage.locator(".settings-content-wrap");
-			await section.screenshot({ path: join(out, `05-remote-paired-settings-${width}.png`) });
-			assert.equal(await section.evaluate((element) => element.scrollWidth > element.clientWidth), false);
-			await isolate?.evaluate((element) => element.remove());
-		}
+		await qrPage.setViewportSize({ width: 1440, height: 1000 });
+		await qrPage.locator(".settings-content-wrap").screenshot({ path: join(out, "05-remote-paired-settings-1440.png") });
+		assert.equal(await qrPage.locator(".settings-content-wrap").evaluate((element) => element.scrollWidth > element.clientWidth), false);
+		// At 390px the phone shell hosts our Remote Access page through its Settings tab.
+		await qrPage.setViewportSize({ width: 390, height: 844 });
+		await qrPage.getByRole("tab", { name: locales.en.mobile.tabs.settings, exact: true }).click();
+		await qrPage.getByTestId("phone-settings-page").filter({ hasText: navRemote("en") }).click();
+		await expect(qrPage.locator(".settings-remote-device-badge")).toHaveText(en.deviceCurrent);
+		await qrPage.locator(".settings-content-wrap").screenshot({ path: join(out, "05-remote-paired-settings-390.png") });
+		assert.equal(await qrPage.locator(".settings-content-wrap").evaluate((element) => element.scrollWidth > element.clientWidth), false);
 
 		// 7. Revoke "Jeffrey iPhone" from host -> verify phone browser loses access immediately and reloads to AccessGate!
 		const iphoneRow = page.locator(".settings-remote-device-row").filter({ hasText: "Jeffrey iPhone" });

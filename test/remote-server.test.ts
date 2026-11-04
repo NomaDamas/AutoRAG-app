@@ -63,6 +63,22 @@ async function start(overrides: Partial<Parameters<typeof createRemoteServer>[0]
 }
 
 describe("remote server", () => {
+	it("serves on another port when the configured one is taken, instead of staying stopped", async () => {
+		// Given another program (the installed Dazzi beside a dev build) already listening on the configured port.
+		const holder = await start();
+		const taken = Number(new URL(holder.origin).port);
+		const logs: string[] = [];
+
+		// When a second server starts on that same port.
+		const { origin } = await start({ port: taken, log: (line) => logs.push(line) });
+
+		// Then it serves on a different, working port and says why.
+		const port = Number(new URL(origin).port);
+		expect(port).not.toBe(taken);
+		expect((await fetch(`${origin}/?token=secret-token`)).status).toBe(200);
+		expect(logs.some((line) => line.includes(`port ${taken} is in use`))).toBe(true);
+	});
+
 	it("refuses every request without the session token", async () => {
 		// Given a running remote server.
 		const { origin } = await start();

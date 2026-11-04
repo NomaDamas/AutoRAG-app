@@ -56,11 +56,12 @@ export function PdfView({ file, anchor = null }: { readonly file: PreviewDocumen
 	const [prompt, setPrompt] = useState<{ readonly attempt: number; readonly incorrect: boolean; readonly unlock: (password: string) => void } | null>(null);
 	const [asked, setAsked] = useState(false);
 
+	const url = previewStreamUrl(file.path, file);
 	useEffect(() => {
 		ensurePdfWorker();
 		let cancelled = false;
 		let attempts = 0;
-		const task = getDocument({ url: previewStreamUrl(file.path), disableAutoFetch: true });
+		const task = getDocument({ url, disableAutoFetch: true });
 		task.onPassword = (unlock: (password: string) => void, reason: number) => {
 			attempts += 1;
 			if (!cancelled) {
@@ -83,7 +84,7 @@ export function PdfView({ file, anchor = null }: { readonly file: PreviewDocumen
 			cancelled = true;
 			void task.destroy();
 		};
-	}, [file.path]);
+	}, [url]);
 
 	const pdf = opened?.pdf ?? null;
 	useEffect(() => {

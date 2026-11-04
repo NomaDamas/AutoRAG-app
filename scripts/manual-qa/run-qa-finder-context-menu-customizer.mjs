@@ -28,7 +28,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { isMac, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { isMac, isWindows, rmRetry, writeMinsyncStub } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-context-menu-customizer");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -194,7 +194,11 @@ const sweep = () => {
 	try {
 		rmRetry(WORK);
 	} catch {
-		rmSync(WORK, { recursive: true, force: true });
+		try {
+			rmSync(WORK, { recursive: true, force: true });
+		} catch {
+			// Best-effort on forced exit
+		}
 	}
 };
 process.on("exit", sweep);
@@ -266,7 +270,13 @@ try {
 	await shot("02a-magic-action-editor-agent-skills-mcp-default-on");
 	await editor.locator('[data-testid="magic-editor-label"]').fill("텍스트 묶음 줄 수 계산");
 	await editor.locator('[data-testid="magic-editor-kind"]').selectOption("script");
-	await editor.locator('[data-testid="magic-editor-command"]').fill('printf "BATCH_COUNT=%s FIRST=%s\\n" "$DAZZI_FILE_COUNT" "$(basename "$DAZZI_FILE")"');
+	await editor
+		.locator('[data-testid="magic-editor-command"]')
+		.fill(
+			isWindows
+				? 'Write-Output "BATCH_COUNT=$($env:DAZZI_FILE_COUNT) FIRST=$(Split-Path -Leaf $args[0])"'
+				: 'printf "BATCH_COUNT=%s FIRST=%s\\n" "$DAZZI_FILE_COUNT" "$(basename "$DAZZI_FILE")"',
+		);
 	await editor.locator('[data-testid="magic-editor-selection"]').selectOption("multiple");
 	await editor.locator('[data-testid="magic-editor-extensions"]').fill("txt, md");
 	await shot("02-magic-action-editor-script");
@@ -445,6 +455,8 @@ try {
 		(await page.locator('[data-context-menu-section="tags"]').innerText()).includes("Always shown"),
 	);
 } finally {
+	await app?.close().catch(() => undefined);
+	app = undefined;
 	sweep();
 }
 

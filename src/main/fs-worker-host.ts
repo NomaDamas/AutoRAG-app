@@ -122,12 +122,26 @@ export function createFsWorkerHost(deps: FsWorkerHostDeps): FsWorkerHost {
 	let disposing: Promise<void> | null = null;
 	let restartTimer: NodeJS.Timeout | null = null;
 
-	/** One port for `contents` on the current worker. */
+	/**
+	 * One port for `contents` on the current worker. A page between documents
+	 * (reloading, navigating, or its renderer gone) has no frame to take a port:
+	 * Electron throws instead of returning, and from the restart timer that throw
+	 * took main down (ELECTRON-K). Such a page gets nothing now; its next
+	 * document's preload asks through {@link FsWorkerHost.connect}. The worker is
+	 * handed its end only once the page has the other, so no channel dangles.
+	 */
 	const sendPort = (contents: WebContents): void => {
 		if (worker === null || contents.isDestroyed()) return;
 		const { port1, port2 } = new MessageChannelMain();
+		try {
+			contents.postMessage(FS_WORKER_CHANNELS.port, null, [port2]);
+		} catch (error) {
+			port1.close();
+			port2.close();
+			console.warn(`[fs-worker] page ${contents.id} has no frame for a port; it asks again on its next load: ${String(error)}`);
+			return;
+		}
 		worker.postMessage({ type: "client", kind: "renderer" }, [port1]);
-		contents.postMessage(FS_WORKER_CHANNELS.port, null, [port2]);
 	};
 
 	/** One port for a remote session on the current worker. */

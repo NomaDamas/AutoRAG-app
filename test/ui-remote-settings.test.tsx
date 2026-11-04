@@ -225,28 +225,26 @@ describe("Settings → Remote Access page", () => {
 		expect(mockRemote.remote.revokeDevice).toHaveBeenCalledWith("0123456789abcdef");
 	});
 
-	it("says which port is taken instead of waiting forever, and starts on a free port with one click", async () => {
-		const blocked: RemoteAccessStatus = {
+	it("says why the server did not start instead of waiting forever, and retries on request", async () => {
+		const failed: RemoteAccessStatus = {
 			serving: false,
 			origin: null,
 			port: 47833,
 			sessions: 0,
 			devices: [],
-			serverError: { code: "port_in_use", port: 47833, suggestedPort: 51234 },
+			serverError: { port: 47833, message: "listen EACCES: permission denied 0.0.0.0:80" },
 		};
-		mockRemote.remote.status.mockResolvedValue(blocked);
+		mockRemote.remote.status.mockResolvedValue(failed);
 		mockRemote.settings.set.mockImplementation(async (patch) => ({ ...DEFAULT_SETTINGS, language: "en", remoteAccess: true, ...patch }));
-		mockRemote.remote.start.mockResolvedValue(activeStatus({ port: 51234, origin: "http://localhost:51234/?token=t", lanOrigins: ["http://192.168.0.42:51234"] }));
+		mockRemote.remote.start.mockResolvedValue(activeStatus());
 		await render({ remoteAccess: true });
 
-		expect(container.querySelector('[role="alert"]')?.textContent).toContain("another program is using port 47833");
+		expect(container.querySelector('[role="alert"]')?.textContent).toContain("listen EACCES: permission denied");
 		expect(container.textContent).not.toContain("Starting the remote access server");
-		await click(button("Start on port 51234"));
+		await click(button("Try Again"));
 
-		expect(mockRemote.settings.set).toHaveBeenCalledWith({ remotePort: 51234 });
 		expect(mockRemote.remote.start).toHaveBeenCalledTimes(1);
 		expect(container.querySelector('[role="alert"]')).toBeNull();
-		expect(routeAddress()).toBe("http://192.168.0.42:51234");
+		expect(routeAddress()).toBe("http://192.168.0.42:47833");
 	});
-
 });

@@ -45,37 +45,52 @@ async function host(port: () => number) {
 }
 
 describe("remote host start-up", () => {
-	it("reports a taken port as not serving, with the port and a free one to use instead", async () => {
+	it("serves on a nearby port when the configured one is taken, and the status says where", async () => {
 		const taken = await occupyPort();
 		const remote = await host(() => taken);
-
-		await expect(remote.start()).rejects.toThrow(/EADDRINUSE/u);
-
-		const status = await remote.status();
-		expect(status.serving).toBe(false);
-		expect(status.origin).toBeNull();
-		expect(status.serverError).toMatchObject({ code: "port_in_use", port: taken });
-		const suggested = status.serverError?.code === "port_in_use" ? status.serverError.suggestedPort : null;
-		expect(suggested).not.toBeNull();
-		expect(suggested).not.toBe(taken);
-	});
-
-	it("starts once the port is free or changed, instead of staying stuck on the failed attempt", async () => {
-		const taken = await occupyPort();
-		let port = taken;
-		const remote = await host(() => port);
-		await expect(remote.start()).rejects.toThrow();
-
-		const free = (await remote.status()).serverError;
-		port = free?.code === "port_in_use" && free.suggestedPort !== null ? free.suggestedPort : 0;
 		await remote.start();
 
 		const status = await remote.status();
 		expect(status.serving).toBe(true);
 		expect(status.serverError ?? null).toBeNull();
-		expect(status.port).toBe(port);
-		const response = await fetch(`http://127.0.0.1:${status.port}/`);
-		expect(response.status).not.toBe(0);
+		expect(status.port).not.toBe(taken);
+		expect(status.origin).toContain(`:${status.port}/`);
+	});
+
+	it("reports a listen failure as not serving and starts once it is fixed, instead of staying stuck", async () => {
+		let host_ = "203.0.113.7"; // TEST-NET-3: not an address of this machine, so listen fails (EADDRNOTAVAIL)
+		const stateDir = await mkdtemp(join(tmpdir(), "dazzi-remote-host-"));
+		const remote = createRemoteHost({
+			rendererRoot: stateDir,
+			stateDir,
+			get host() {
+				return host_;
+			},
+			port: async () => 0,
+			icons: { read: () => null } as never,
+			workerHost: { remoteClient: () => ({ client: { call: async () => null, onPush: () => undefined }, close: () => undefined }) } as never,
+			targets: {},
+			window: () => null,
+			settings: async () => DEFAULT_SETTINGS,
+			log: () => undefined,
+		});
+		cleanups.push(async () => {
+			await remote.stop();
+			await rm(stateDir, { recursive: true, force: true });
+		});
+
+		await expect(remote.start()).rejects.toThrow();
+		const failed = await remote.status();
+		expect(failed.serving).toBe(false);
+		expect(failed.origin).toBeNull();
+		expect(failed.serverError?.message).toMatch(/EADDRNOTAVAIL|address/iu);
+
+		host_ = "127.0.0.1";
+		await remote.start();
+		const status = await remote.status();
+		expect(status.serving).toBe(true);
+		expect(status.serverError ?? null).toBeNull();
+		expect((await fetch(`http://127.0.0.1:${status.port}/remote/health`)).status).toBe(200);
 	});
 
 	it("moves a running server to a new port when the port setting changes", async () => {

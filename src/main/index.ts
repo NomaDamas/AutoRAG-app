@@ -12,6 +12,7 @@ import {
 	clipboard,
 	ClipboardItem,
 	dialog,
+	globalShortcut,
 	ipcMain,
 	nativeTheme,
 	Notification,
@@ -33,7 +34,7 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
@@ -139,9 +140,11 @@ import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
+import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
+import { createQuickSearchShortcut, type QuickSearchShortcut } from "./quick-search-shortcut";
+import { createQuickSearchWindow, type QuickSearchWindow } from "./quick-search-window";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
@@ -275,18 +278,21 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 
 	loadRendererPage(window, "index.html");
 	// Only the Finder previews files; the onboarding window has nothing to preview.
-	if (phase === "finder") {
-		attachQuickLook(window, {
-			preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
-			appearance,
-			language: currentLanguage,
-			loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
-			// Spawning osascript blocks the caller for the fork; the worker pays it.
-			defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
-			quickLookChord: () => currentQuickLookChord,
-		});
-	}
+	if (phase === "finder") attachQuickLook(window, quickLookOptions(appearance));
 	return window;
+}
+
+/** The Quick Look panel's options; the Finder and the quick-search launcher each own one panel. */
+function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
+	return {
+		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+		appearance,
+		language: currentLanguage,
+		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+		// Spawning osascript blocks the caller for the fork; the worker pays it.
+		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
+		quickLookChord: () => currentQuickLookChord,
+	};
 }
 
 let fsWorker: FsWorkerHost | null = null;
@@ -294,6 +300,8 @@ let fsWorker: FsWorkerHost | null = null;
 let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let currentQuickLookChord = "Space";
+/** The system-wide quick-search shortcut; null until startup built the launcher it summons. */
+let quickSearchShortcut: QuickSearchShortcut | null = null;
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
 /** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
@@ -833,6 +841,7 @@ app.whenReady().then(async () => {
 			}
 			setErrorReportingEnabled(settings.errorReporting);
 			currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
+			quickSearchShortcut?.apply(settings.quickSearch);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
@@ -1283,6 +1292,40 @@ app.whenReady().then(async () => {
 		sendToMainWindow(OS_REQUEST_CHANNELS.available, null);
 	};
 	if (launchRequest !== null) void osRequests.push(launchRequest);
+	// The quick-search launcher: a system-wide shortcut summons it over any app (Settings → General).
+	const launcher: QuickSearchWindow = createQuickSearchWindow({
+		preload: join(import.meta.dirname, "../preload/quick-search.mjs"),
+		appearance: currentAppearance,
+		language: currentLanguage,
+		loadPage: (window) => loadRendererPage(window, "quick-search.html"),
+		revealInApp: (path) => osRequests.push({ action: "reveal", paths: [path] }),
+		// Same checks as `dazzi --ask`: a blank, oversized, or NUL-carrying question queues nothing.
+		ask: (query) => {
+			const request = normalizeOsLaunchRequest({ action: "ask", paths: [], query });
+			if (request !== null) void osRequests.push(request);
+		},
+		attach: (paths) => osRequests.push({ action: "ask", paths }),
+		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
+		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
+		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
+		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
+	});
+	quickSearchShortcut = createQuickSearchShortcut({
+		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
+		unregister: (accelerator) => globalShortcut.unregister(accelerator),
+		onPress: () => launcher.toggle(),
+	});
+	quickSearchShortcut.apply(settings.quickSearch);
+	// Windows and Linux quit when the last app window closes; the hidden launcher must not keep the app alive.
+	app.on("browser-window-created", (_event, created) => {
+		created.once("closed", () => {
+			if (process.platform !== "darwin" && appWindows().length === 0) launcher.destroy();
+		});
+	});
+	app.once("will-quit", () => {
+		quickSearchShortcut?.dispose();
+		launcher.destroy();
+	});
 	if (settings.osMenuIntegration) {
 		// Refresh on every start: the executable path or interface language may have changed.
 		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));

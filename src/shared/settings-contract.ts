@@ -10,6 +10,7 @@ import type { McpLaunch, McpPlatform } from "./mcp-connect";
 import { DEFAULT_SIDEBAR_SETTINGS, type SidebarSettings } from "./sidebar-contract";
 import { DEFAULT_CONTEXT_MENU_SETTINGS, type ContextMenuSettings } from "./context-menu-contract";
 import { DEFAULT_SHORTCUT_SETTINGS, type ShortcutSettings } from "./shortcuts-contract";
+import { DEFAULT_QUICK_SEARCH_SETTINGS, type QuickSearchSettings } from "./quick-search-contract";
 
 export const SETTINGS_CHANNELS = {
 	get: "settings:get",
@@ -111,6 +112,8 @@ export interface AppSettings {
 	readonly contextMenu: ContextMenuSettings;
 	/** User customization of keyboard shortcuts (`settings-state.json`). */
 	readonly shortcuts: ShortcutSettings;
+	/** The system-wide quick-search launcher shortcut (Settings → General). */
+	readonly quickSearch: QuickSearchSettings;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -131,6 +134,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
+	quickSearch: DEFAULT_QUICK_SEARCH_SETTINGS,
 };
 
 /** Whether the backend a datasource needs is present on this machine. */

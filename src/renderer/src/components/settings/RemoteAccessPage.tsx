@@ -416,22 +416,8 @@ export function RemoteAccessPage({
 					<div className="settings-remote-card">
 						{!serving && serverError !== null ? (
 							<div className="settings-remote-server-error" role="alert">
-								<p className="settings-remote-error">
-									{serverError.code === "port_in_use"
-										? t("settingsCore.remote.portInUse", { port: serverError.port })
-										: t("settingsCore.remote.serverFailed", { reason: serverError.message })}
-								</p>
+								<p className="settings-remote-error">{t("settingsCore.remote.serverFailed", { reason: serverError.message })}</p>
 								<div className="settings-remote-actions">
-									{serverError.code === "port_in_use" && serverError.suggestedPort !== null ? (
-										<button
-											type="button"
-											className="linear-btn settings-btn-primary"
-											disabled={applyingPort}
-											onClick={() => void applyPort(serverError.suggestedPort ?? 0)}
-										>
-											{t("settingsCore.remote.useFreePort", { port: serverError.suggestedPort })}
-										</button>
-									) : null}
 									<button type="button" className="linear-btn" disabled={applyingPort} onClick={() => void applyPort(appSettings.remotePort)}>
 										{t("settingsCore.remote.retryStart")}
 									</button>

@@ -7,7 +7,7 @@ function target(): AiDeliveryTarget & { readonly calls: string[] } {
 	return {
 		calls,
 		prefill: vi.fn((text: string) => void calls.push(`prefill:${text}`)),
-		sendQuery: vi.fn((text: string) => void calls.push(`send:${text}`)),
+		sendQuery: vi.fn((text: string, atts: readonly ChatAttachment[] = []) => void calls.push(`send:${text}${atts.length > 0 ? `+${atts.length}` : ""}`)),
 		attach: vi.fn((atts: readonly ChatAttachment[]) => void calls.push(`attach:${atts.length}`)),
 		summarize: vi.fn((atts: readonly ChatAttachment[]) => void calls.push(`summarize:${atts.length}`)),
 		focusComposer: vi.fn(() => void calls.push("focus")),
@@ -59,12 +59,15 @@ describe("a draft for the AI Search composer", () => {
 		expect(dock.calls).toEqual(["focus"]);
 	});
 
-	it("still delivers an attachment, a query, and a summary exactly as before", () => {
+	it("still attaches dropped files as drafts and only focuses the composer", () => {
 		const attached = target();
 		deliverToDock(attached, mergeDelivery(null, { attach: [file("/a.pdf")] }));
 		expect(attached.calls).toEqual(["attach:1", "focus"]);
+	});
+
+	it("sends a question with its attachments as one run, so the attachments are in the question", () => {
 		const asked = target();
-		deliverToDock(asked, mergeDelivery(null, { attach: [file("/a.pdf")], query: "q" }));
-		expect(asked.calls).toEqual(["attach:1", "send:q"]);
+		deliverToDock(asked, mergeDelivery(null, { attach: [file("/a.pdf"), file("/b.pdf")], query: "q" }));
+		expect(asked.calls).toEqual(["send:q+2"]);
 	});
 });

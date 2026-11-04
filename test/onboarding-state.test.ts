@@ -7,6 +7,7 @@ import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-co
 import { DEFAULT_SIDEBAR_SETTINGS } from "../src/shared/sidebar-contract";
 import { DEFAULT_CONTEXT_MENU_SETTINGS } from "../src/shared/context-menu-contract";
 import { DEFAULT_SHORTCUT_SETTINGS } from "../src/shared/shortcuts-contract";
+import { DEFAULT_QUICK_SEARCH_SETTINGS } from "../src/shared/quick-search-contract";
 import type { OnboardingServiceDeps } from "../src/main/onboarding-service";
 import { createOnboardingService, readOnboardingPending } from "../src/main/onboarding-service";
 import { storeDazziPlanCredential } from "../src/main/dazzi-plan-credential";
@@ -65,6 +66,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
+	quickSearch: DEFAULT_QUICK_SEARCH_SETTINGS,
 };
 
 function makeDeps(userDataDir: string, env: NodeJS.ProcessEnv = {}): OnboardingServiceDeps {

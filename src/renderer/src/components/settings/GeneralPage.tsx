@@ -14,6 +14,7 @@ import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
+import { QuickSearchSettingsSection } from "./QuickSearchSettings";
 import { Row, Section, SettingsPageHead } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 import { hostPlatform } from "../../lib/shortcuts";
@@ -71,6 +72,7 @@ export function GeneralPage({
 					<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
 				</Row>
 			</Section>
+			{typeof autorag.quickSearch?.status === "function" ? <QuickSearchSettingsSection settings={appSettings.quickSearch} setApp={setApp} /> : null}
 			<Section title={t("settingsCore.general.launchTitle")}>
 				<Row name={t("settingsCore.general.launchAtLogin")} hint={t("settingsCore.general.launchAtLoginHint")}>
 					<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel={t("settingsCore.general.launchAtLogin")} />

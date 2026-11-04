@@ -647,18 +647,36 @@ interface RemoteUrlProvider {
 	readonly url?: (route: string, params?: Readonly<Record<string, unknown>>) => string;
 }
 
-function remotePreviewUrl(filePath: string): string | null {
+/** Which content of a file a URL names; a file rewritten in place gets a new one. */
+export interface PreviewFileVersion {
+	readonly modifiedAt: string;
+	readonly size: number;
+}
+
+function versionTag(version: PreviewFileVersion | undefined): string | undefined {
+	return version === undefined ? undefined : `${version.modifiedAt}:${version.size}`;
+}
+
+function remotePreviewUrl(filePath: string, version: string | undefined): string | null {
 	const remote = Reflect.get(globalThis, "__autoragRemote") as RemoteUrlProvider | undefined;
 	const route = remote?.routes?.preview;
 	if (route === undefined || typeof remote?.url !== "function") return null;
-	return remote.url(route, { path: filePath });
+	return remote.url(route, { path: filePath, v: version });
 }
 
-export function previewStreamUrl(filePath: string): string {
-	const remote = remotePreviewUrl(filePath);
+/**
+ * The file's bytes over the preview scheme. Pass the version the panel read
+ * (`PreviewDocument` carries it): the Quick Look window is one long-lived page
+ * whose image cache is keyed by URL, so a picture rewritten under the same
+ * path would otherwise come back as the old decode. The server ignores it.
+ */
+export function previewStreamUrl(filePath: string, version?: PreviewFileVersion): string {
+	const tag = versionTag(version);
+	const remote = remotePreviewUrl(filePath, tag);
 	if (remote !== null) return remote;
 	const url = new URL(`${PREVIEW_SCHEME}://local/`);
 	url.searchParams.set("path", filePath);
+	if (tag !== undefined) url.searchParams.set("v", tag);
 	return url.toString();
 }
 

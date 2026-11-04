@@ -62,7 +62,6 @@
     "group": "그룹",
     "showInspector": "정보 보기",
     "hideInspector": "정보 가리기",
-    "toggleInspector": "정보 창 토글",
     "share": "공유",
     "putBack": "원래 위치로 복원",
     "emptyTrash": "휴지통 비우기"
@@ -1313,7 +1312,6 @@
     "searchTitle": "\"{{query}}\" 검색",
     "resizeSidebar": "사이드바 크기 조절",
     "resizeInspector": "정보 창 크기 조절",
-    "composerPlaceholder": "파일, 메일, 메신저 전체에서 물어보세요 (파일 드래그 앤 드롭 가능)",
     "removeAttachment": "첨부 제거",
     "locationOpenFailed": "\"{{name}}\" 위치를 열 수 없습니다.",
     "ejected": "\"{{name}}\" 을(를) 추출했습니다.",
@@ -2172,7 +2170,8 @@
         "lockedNotice": "AI 검색과 자동화는 필수 기능으로 항상 사이드바에 유지됩니다.",
         "openAiSettings": "AI 모델 설정 열기",
         "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
-      }
+      },
+      "addCustomPathPlaceholderWindows": "~\\Projects 또는 C:\\Work"
     },
     "contextMenu": {
       "description": "파일과 폴더를 우클릭했을 때 표시할 메뉴 항목과 나만의 매직 액션(스크립트 및 AI 에이전트 루프)을 구성합니다.",
@@ -2268,7 +2267,9 @@
         "targetKindField": "대상 종류",
         "extensionsField": "확장자 필터 (선택)",
         "extensionsPlaceholder": "비워두면 전체 허용 · 예: pdf, docx, md",
-        "save": "저장"
+        "save": "저장",
+        "commandPlaceholderWindows": "예: Get-FileHash -Algorithm SHA256 -LiteralPath $args 또는 python ~\\scripts\\process.py @args",
+        "commandHintWindows": "Windows PowerShell에서 실행되며 선택한 경로들이 $args 배열과 환경 변수 $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, $env:DAZZI_FILE_COUNT로 전달됩니다."
       },
       "modal": {
         "title": "AI 우클릭 메뉴 & 매직 액션 어시스턴트",
@@ -2406,7 +2407,15 @@
       "docLanguagesTitle": "문서 언어",
       "docLanguagesDesc": "문서를 읽고 검색할 때 우선 사용할 언어입니다.",
       "docLanguagesHint": "여러 개를 선택할 수 있습니다.",
-      "osMenuError": "우클릭 메뉴를 설정하지 못했습니다: {{error}}"
+      "osMenuError": "우클릭 메뉴를 설정하지 못했습니다: {{error}}",
+      "quickSearchTitle": "빠른 검색",
+      "quickSearchDesc": "어떤 앱을 쓰고 있든 단축키로 Dazzi 검색창을 띄웁니다.",
+      "quickSearchEnabled": "빠른 검색 단축키 사용",
+      "quickSearchEnabledHint": "{{shortcut}}을(를) 누르면 검색창이 열립니다. 다시 누르거나 Esc를 누르면 닫힙니다.",
+      "quickSearchShortcut": "단축키",
+      "quickSearchShortcutHint": "클릭한 뒤 새 키 조합을 누르세요.",
+      "quickSearchNeedsModifier": "다른 앱에서도 동작하는 단축키라 ⌘/Ctrl 또는 ⌥/Alt와 함께 눌러야 합니다.",
+      "quickSearchTaken": "{{shortcut}}은(는) 다른 앱이나 시스템이 이미 쓰고 있습니다. 다른 조합을 고르세요."
     },
     "remote": {
       "description": "다른 기기의 브라우저에서 이 Dazzi를 열고, 연결된 기기를 관리합니다.",
@@ -2483,9 +2492,7 @@
       "domainLogin": "Cloudflare 로그인",
       "domainLoginHint": "브라우저에서 이 도메인이 속한 계정을 승인하세요.",
       "domainLoggedIn": "Cloudflare에 로그인되어 있습니다.",
-      "portInUse": "포트 {{port}}을(를) 다른 프로그램이 쓰고 있어 원격 접속 서버를 시작하지 못했습니다. 설치된 Dazzi가 함께 실행 중일 수 있습니다.",
       "serverFailed": "원격 접속 서버를 시작하지 못했습니다: {{reason}}",
-      "useFreePort": "포트 {{port}}(으)로 시작",
       "retryStart": "다시 시도"
     },
     "account": {
@@ -3199,5 +3206,233 @@
     "emptyOutput": "출력된 텍스트가 없습니다.",
     "targetsCount": "대상 {{count}}개",
     "sidebarOpen": "매직 액션 실행 결과 열기"
+  },
+  "quickSearch": {
+    "title": "빠른 검색",
+    "placeholder": "파일 이름이나 내용으로 검색",
+    "searching": "검색 중",
+    "sections": {
+      "recent": "최근 항목",
+      "names": "파일 이름",
+      "content": "내용",
+      "ask": "Dazzi에게 묻기"
+    },
+    "askRow": "Dazzi에게 묻기: “{{query}}”",
+    "emptyRecents": "검색어를 입력하세요. 최근에 연 파일이 여기에 표시됩니다.",
+    "noResults": "일치하는 파일이 없습니다.",
+    "contentOff": "키워드 전용 모드라 내용 검색은 꺼져 있습니다.",
+    "contentUnavailable": "문서 색인이 아직 준비되지 않아 내용 검색 결과가 없습니다.",
+    "copiedFiles": "파일 {{count}}개를 복사했습니다. 다른 앱에 붙여넣으세요.",
+    "copiedPaths": "경로 {{count}}개를 복사했습니다.",
+    "actionsTitle": "동작",
+    "actions": {
+      "open": "열기",
+      "preview": "미리보기",
+      "revealOs": "Finder/탐색기에서 보기",
+      "showInApp": "Dazzi에서 보기",
+      "copyFile": "파일 복사",
+      "copyPath": "경로 복사",
+      "askAbout": "이 파일에 대해 Dazzi에게 묻기",
+      "askQuery": "Dazzi에게 묻기"
+    },
+    "hints": {
+      "preview": "미리보기",
+      "copy": "복사",
+      "actions": "동작"
+    }
+  },
+  "mobile": {
+    "tabs": {
+      "browse": "둘러보기",
+      "recents": "최근 항목",
+      "ai": "AI 검색",
+      "automations": "자동화",
+      "search": "검색",
+      "aria": "앱 탭",
+      "settings": "설정"
+    },
+    "connectedTo": "{{name}}에 연결됨",
+    "back": "뒤로",
+    "more": "더보기",
+    "moreFor": "{{name}} 메뉴",
+    "add": "추가",
+    "settings": "설정",
+    "collapse": "{{name}} 접기",
+    "itemCount": "{{count}}개 항목",
+    "itemCountSize": "{{count}}개 항목 · {{size}}",
+    "emptyFolder": "빈 폴더",
+    "emptyFolderHint": "＋ 버튼으로 새 폴더를 만들거나 이 기기의 파일을 올리세요",
+    "emptyTrash": "휴지통이 비어 있어요",
+    "loadFailed": "이 폴더를 열 수 없어요: {{message}}",
+    "loading": "불러오는 중…",
+    "sort": {
+      "title": "정렬 기준",
+      "name": "이름",
+      "date": "수정일",
+      "size": "크기",
+      "kind": "종류"
+    },
+    "view": {
+      "options": "보기 옵션",
+      "grid": "아이콘",
+      "list": "목록",
+      "select": "선택"
+    },
+    "folderInfo": "폴더 정보",
+    "askFolder": "이 폴더에 묻기",
+    "pathMenu": "상위 폴더로 이동",
+    "select": {
+      "all": "모두 선택",
+      "none": "선택 해제",
+      "done": "완료",
+      "title": "항목 선택",
+      "count": "{{count}}개 선택됨",
+      "move": "이동",
+      "copy": "복사",
+      "ask": "AI에게",
+      "trash": "휴지통",
+      "restore": "복원"
+    },
+    "swipe": {
+      "trash": "휴지통",
+      "more": "더보기"
+    },
+    "menu": {
+      "copy": "복사",
+      "move": "이동",
+      "download": "다운로드",
+      "quickLook": "훑어보기",
+      "info": "정보 보기",
+      "reveal": "상위 폴더에서 보기",
+      "askOne": "AI 요약",
+      "askFolder": "이 폴더에 묻기",
+      "askMany": "{{count}}개 항목을 AI에게 묻기",
+      "magic": "매직 액션",
+      "tools": "빠른 작업",
+      "toolsHint": "압축 · 인덱싱 · 복제",
+      "agent": "AI 에이전트",
+      "script": "스크립트"
+    },
+    "picker": {
+      "move": "{{count}}개 항목 이동",
+      "copy": "{{count}}개 항목 복사",
+      "subtitle": "위치 선택",
+      "choose": "폴더를 고르세요",
+      "moveHere": "{{folder}}(으)로 이동",
+      "copyHere": "{{folder}}(으)로 복사",
+      "noSubfolders": "하위 폴더 없음",
+      "places": "위치"
+    },
+    "rename": {
+      "title": "이름 변경",
+      "ok": "완료"
+    },
+    "newFolder": {
+      "title": "새 폴더",
+      "ok": "만들기",
+      "placeholder": "새 폴더"
+    },
+    "confirm": {
+      "emptyTrash": "휴지통을 비울까요?",
+      "emptyTrashBody": "휴지통의 항목이 영구 삭제돼요. 실행 취소할 수 없어요.",
+      "emptyTrashOk": "휴지통 비우기"
+    },
+    "toast": {
+      "undo": "실행 취소",
+      "show": "보기",
+      "downloading": "‘{{name}}’ 다운로드 중…",
+      "downloadingMany": "{{count}}개 항목 다운로드 중…",
+      "created": "‘{{name}}’ 만듦",
+      "renamed": "이름을 ‘{{name}}’(으)로 바꿈",
+      "uploaded": "‘{{name}}’ 올림",
+      "uploadFailed": "‘{{name}}’을(를) 올리지 못했어요",
+      "uploadedMany": "{{count}}개 파일 올림",
+      "magicStarted": "‘{{name}}’ 실행 중",
+      "failed": "실패: {{message}}"
+    },
+    "info": {
+      "title": "정보",
+      "quickLook": "훑어보기",
+      "download": "다운로드",
+      "ask": "AI 요약",
+      "askFolder": "묻기",
+      "move": "이동",
+      "indexed": "AI 검색에 포함",
+      "indexedOn": "내용까지 찾을 수 있어요",
+      "indexedOff": "이름으로만 찾을 수 있어요",
+      "indexLocked": "상위 폴더 설정을 따라요",
+      "versions": "버전",
+      "versionsFoot": "dupey가 찾은 같은 문서의 다른 버전이에요.",
+      "latest": "최신",
+      "near": "비슷함",
+      "exact": "같음",
+      "tags": "태그",
+      "noTags": "없음",
+      "folderRules": "이 폴더의 자동화"
+    },
+    "ql": {
+      "done": "완료",
+      "position": "{{index}} / {{total}}",
+      "noPreview": "이 형식은 브라우저에서 미리볼 수 없어요.",
+      "openTab": "새 탭에서 열기"
+    },
+    "search": {
+      "placeholder": "파일 이름이나 내용",
+      "clear": "지우기",
+      "results": "{{machine}} 전체 · {{count}}개",
+      "none": "“{{query}}” 이름의 파일이 없어요",
+      "noneHint": "내용으로 찾으려면 AI 검색에 물어보세요",
+      "askAi": "“{{query}}” AI 검색에 묻기",
+      "askAiHint": "파일 내용, 메일, 메신저까지 찾아요",
+      "typeHint": "이 컴퓨터의 파일 이름을 검색해요",
+      "exit": "검색 닫기"
+    },
+    "recents": {
+      "empty": "최근 항목 없음",
+      "buckets": {
+        "today": "오늘",
+        "yesterday": "어제",
+        "week": "이번 주",
+        "month": "이번 달",
+        "older": "이전"
+      }
+    },
+    "activity": {
+      "title": "진행 및 대기열",
+      "count": "{{count}}개 작업",
+      "empty": "진행 중인 작업이 없어요",
+      "open": "진행 및 대기 중인 작업"
+    },
+    "rules": {
+      "add": "AI 검색에서 규칙 추가",
+      "section": "규칙",
+      "foot": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요. 규칙은 AI 검색에서 말로 만들고 고칩니다.",
+      "daemonToggle": "백그라운드 실행"
+    },
+    "ai": {
+      "history": "대화 기록",
+      "newChat": "새 대화",
+      "sources": "출처 {{count}}개",
+      "suggestions": "이렇게 물어보세요",
+      "suggest1": "지난주에 받은 견적서 찾아줘",
+      "suggest2": "다운로드 폴더 정리해줘",
+      "suggest3": "최근 회의록 요약해줘"
+    },
+    "settingsHub": {
+      "title": "설정",
+      "connection": "원격 접속 · {{address}} · Dazzi {{version}}",
+      "signedOut": "로그인하지 않음"
+    },
+    "create": {
+      "newFolder": "새 폴더",
+      "newText": "새 텍스트 문서",
+      "newMarkdown": "새 Markdown 문서",
+      "upload": "이 기기에서 올리기",
+      "uploadHint": "사진 보관함 · 파일"
+    },
+    "evidence": {
+      "showInFolder": "폴더에서 보기",
+      "preview": "미리보기"
+    }
   }
 }

@@ -521,12 +521,9 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 					else response.end();
 				});
 			});
-			await new Promise<void>((resolve, reject) => {
-				server?.once("error", reject);
-				server?.listen(deps.port, deps.host, () => resolve());
-			});
-			const address = server.address() as AddressInfo;
-			return { port: address.port, origin: `http://${deps.host === "0.0.0.0" ? "localhost" : deps.host}:${address.port}` };
+			const port = await listenNearPort(server, deps.port, deps.host);
+			if (port !== deps.port && deps.port !== 0) deps.log(`port ${deps.port} is in use; serving on ${port} instead`);
+			return { port, origin: `http://${deps.host === "0.0.0.0" ? "localhost" : deps.host}:${port}` };
 		},
 		broadcast(payload) {
 			for (const sink of sessions.values()) sink(payload);
@@ -542,6 +539,43 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 			await new Promise<void>((resolve) => current.close(() => resolve()));
 		},
 	};
+}
+
+/** How many ports after the configured one a taken port falls back through before the OS picks one. */
+const PORT_FALLBACKS = 10;
+
+/**
+ * Listen on `port`, or, when another program holds it (a second Dazzi, the
+ * installed app next to a dev build), on the next free port after it, then on
+ * one the OS picks. The session token is new on every start, so an address
+ * from an earlier run never worked anyway; a different port loses nothing.
+ * Any error other than a taken port rejects.
+ */
+async function listenNearPort(server: Server, port: number, host: string): Promise<number> {
+	const candidates = port === 0 ? [0] : [...Array.from({ length: PORT_FALLBACKS }, (_, offset) => port + offset).filter((value) => value <= 65_535), 0];
+	let lastError: unknown = null;
+	for (const candidate of candidates) {
+		const { promise, resolve, reject } = Promise.withResolvers<void>();
+		const onError = (error: Error): void => {
+			server.off("listening", onListening);
+			reject(error);
+		};
+		const onListening = (): void => {
+			server.off("error", onError);
+			resolve();
+		};
+		server.once("error", onError);
+		server.once("listening", onListening);
+		server.listen(candidate, host);
+		try {
+			await promise;
+			return (server.address() as AddressInfo).port;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+			lastError = error;
+		}
+	}
+	throw lastError;
 }
 
 export { REMOTE_BOOTSTRAP_PATH };

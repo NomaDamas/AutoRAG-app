@@ -36,10 +36,10 @@ awake.
   `65535`; a running server moves to the new port right away.
 
 If the port is already taken — most often by a second Dazzi, such as the
-installed app running beside a development build — the server does not start
-and **Connect a Device** says which port is in use. **Start on port N** saves a
-port that is free at that moment and starts on it; **Try Again** retries the
-saved port after the other program has quit.
+installed app running beside a development build — the server serves on the
+next free port after it (then on one the operating system picks), and the
+addresses in **Connect a Device** show that port. If the server cannot listen
+at all, **Connect a Device** shows the system's reason and **Try Again**.
 
 In a remote browser session, the same settings page shows how that browser got
 in (`Connected as a paired device` or `Connected with the access token`) and the
@@ -158,6 +158,46 @@ Browser actions that need native operating-system integration differ:
   host's system clipboard and is lost when the page reloads or closes.
 - Native sign-in, checkout, app-update installation, and host permission or
   folder-picker dialogs still require the desktop app.
+
+The browser is an interface to the host's real files. Moving or trashing a
+file there changes the host immediately; it does not just remove a downloaded
+copy on the client.
+
+### On a phone
+
+A browser whose screen is phone-sized (the shorter side is 500 CSS px or less,
+or a desktop browser narrowed to that width) gets a phone layout instead of the
+desktop Finder. It runs the same host services; only the layout changes:
+
+- Four tabs (**둘러보기 / Browse**, **AI 검색 / AI Search**, **자동화 /
+  Automations**, **설정 / Settings**) and a search button replace the sidebar
+  and the tab strip. Browse lists the sidebar's places, **최근 항목 / Recents**
+  among them; each folder opens as a full screen, and the folder title opens a
+  list of its parent folders.
+- Tap opens a folder or a preview. Long-press (or **⋯**) opens the item menu:
+  copy, move, and download on top, then preview, info, AI, magic actions, a
+  **빠른 작업 / Quick actions** submenu (compress, extract, indexing,
+  duplicate), rename, copy path, tags, and trash. A left swipe shows trash and
+  more.
+- **이동 / Move** and **복사 / Copy** pick the destination folder in a sheet.
+  **선택 / Select** (from **⋯** in the bar) works on several items at once.
+- The info sheet replaces the inspector; the previewer is full screen and
+  swipes between the folder's files; uploads come from **＋ → 이 기기에서
+  올리기 / Upload from this device**.
+- AI Search keeps the desktop panel's chat, laid out for a phone: example
+  questions on an empty chat, and each answer's sources as cards under it.
+  Tapping a citation number or a source card opens that source's evidence
+  sheet. A red badge on the tab counts questions and approvals waiting for an
+  answer.
+- Automations lists the rules with the background switch on top; each rule
+  opens its own page (when it runs, what it does, its last run) with
+  **AI 검색에서 편집 / Edit in AI Search** and delete.
+- Settings lists the desktop's settings pages and opens them one at a time.
+- Background work (indexing, magic actions, fixes) shows above the tab bar; tap
+  it for the full queue.
+
+The desktop app never shows this layout; it is only for remote browser
+sessions.
 
 ## Uploads and downloads
 

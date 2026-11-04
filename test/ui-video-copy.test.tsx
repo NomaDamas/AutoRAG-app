@@ -159,16 +159,18 @@ describe("the video panel for an avi", () => {
 
 	it("plays the file itself when main makes no copy", async () => {
 		const { bridge, calls } = bridgeWith();
-		await show(fileAt("/Movies/old.avi"), bridge);
+		const file = fileAt("/Movies/old.avi");
+		await show(file, bridge);
 		await act(async () => calls.finish({ kind: "native" }));
-		expect(videoSrc()).toBe(previewStreamUrl("/Movies/old.avi"));
+		expect(videoSrc()).toBe(previewStreamUrl(file.path, file));
 	});
 
 	it("plays the file itself when the request fails", async () => {
 		const { bridge, calls } = bridgeWith();
-		await show(fileAt("/Movies/old.avi"), bridge);
+		const file = fileAt("/Movies/old.avi");
+		await show(file, bridge);
 		await act(async () => calls.fail(new Error("not showing")));
-		expect(videoSrc()).toBe(previewStreamUrl("/Movies/old.avi"));
+		expect(videoSrc()).toBe(previewStreamUrl(file.path, file));
 	});
 
 	it("stops the work under the same id when the panel leaves the file", async () => {
@@ -182,8 +184,9 @@ describe("the video panel for an avi", () => {
 
 	it("does not ask for a copy of a video the page opens itself", async () => {
 		const { bridge, calls } = bridgeWith();
-		await show(fileAt("/Movies/clip.mkv"), bridge);
+		const file = fileAt("/Movies/clip.mkv");
+		await show(file, bridge);
 		expect(calls.started).toEqual([]);
-		expect(videoSrc()).toBe(previewStreamUrl("/Movies/clip.mkv"));
+		expect(videoSrc()).toBe(previewStreamUrl(file.path, file));
 	});
 });

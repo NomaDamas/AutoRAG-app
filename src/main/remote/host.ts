@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { createServer as createNetServer } from "node:net";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import dazziMarkPath from "../../renderer/src/assets/dazzi-mark.png?asset";
 import type { AppSettings } from "../../shared/settings-contract";
@@ -92,24 +91,8 @@ function invokeIpc(channel: string, sender: Electron.WebContents | null, args: r
 	return Promise.resolve((handler as (event: IpcMainInvokeEvent, ...rest: unknown[]) => unknown)(event, ...args));
 }
 
-/** A port the OS hands out right now on `host`: what Settings offers when the configured one is taken. */
-function probeFreePort(host: string): Promise<number | null> {
-	return new Promise((resolve) => {
-		const probe = createNetServer();
-		probe.once("error", () => resolve(null));
-		probe.listen(0, host, () => {
-			const address = probe.address();
-			const port = typeof address === "object" && address !== null ? address.port : null;
-			probe.close(() => resolve(port));
-		});
-	});
-}
-
-async function describeStartFailure(error: unknown, port: number, host: string): Promise<RemoteServerError> {
-	if ((error as NodeJS.ErrnoException | null)?.code === "EADDRINUSE") {
-		return { code: "port_in_use", port, suggestedPort: await probeFreePort(host) };
-	}
-	return { code: "failed", port, message: error instanceof Error ? error.message : String(error) };
+function describeStartFailure(error: unknown, port: number): RemoteServerError {
+	return { port, message: error instanceof Error ? error.message : String(error) };
 }
 
 export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
@@ -120,6 +103,8 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	let origin: string | null = null;
 	let baseOrigin: string | null = null;
 	let boundPort: number | null = null;
+	/** The port setting the running server was started for (`boundPort` differs when that port was taken). */
+	let requestedPort: number | null = null;
 	let server: RemoteServer | null = null;
 	/** Why the last start did not serve; null once a start succeeds or remote access is stopped. */
 	let serverError: RemoteServerError | null = null;
@@ -235,11 +220,12 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 
 	const lifecycle = {
 		start(): Promise<string> {
-			// Each start re-reads the port setting: a server on another port moves (Settings asks to restart Dazzi,
-			// but the switch and a launch should not keep a stale port either).
+			// Each start re-reads the port setting: a server started for another port moves. Compare with the port that
+			// was asked for, not the one bound: a taken port falls back to a nearby one, and that must not restart the
+			// server (and change its token) on every settings change.
 			const run = async (): Promise<string> => {
 				const listenPort = await deps.port();
-				if (server !== null && (listenPort === 0 || listenPort === boundPort)) return origin ?? "";
+				if (server !== null && (listenPort === 0 || listenPort === requestedPort)) return origin ?? "";
 				if (server !== null) await stopServer();
 				return startServer(listenPort);
 			};
@@ -311,13 +297,14 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 			started = await candidate.start();
 		} catch (error) {
 			await candidate.stop().catch(() => undefined);
-			serverError = await describeStartFailure(error, listenPort, deps.host);
+			serverError = describeStartFailure(error, listenPort);
 			emitChanged();
 			throw error;
 		}
 		server = candidate;
 		serverError = null;
 		boundPort = started.port;
+		requestedPort = listenPort;
 		baseOrigin = started.origin;
 		origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
 		log(`serving at ${started.origin}`);
@@ -335,6 +322,7 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		origin = null;
 		baseOrigin = null;
 		boundPort = null;
+		requestedPort = null;
 		await current?.stop();
 	}
 

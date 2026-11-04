@@ -198,7 +198,7 @@ export function ShortcutsPage({
 			event.stopPropagation();
 			event.stopImmediatePropagation();
 
-			const decoded = chordFromKeyEvent(event);
+			const decoded = chordFromKeyEvent(event, platform);
 			if (decoded.kind === "cancel") {
 				setRecordingId(null);
 				setHeldMods({ mod: false, alt: false, shift: false });
@@ -221,7 +221,7 @@ export function ShortcutsPage({
 			event.preventDefault();
 			event.stopPropagation();
 			setHeldMods({
-				mod: event.metaKey || event.ctrlKey,
+				mod: isMac ? event.metaKey || event.ctrlKey : event.ctrlKey,
 				alt: event.altKey,
 				shift: event.shiftKey,
 			});
@@ -246,7 +246,7 @@ export function ShortcutsPage({
 			window.removeEventListener("keyup", onKeyUp, { capture: true });
 			window.removeEventListener("mousedown", onPointerDown, { capture: true });
 		};
-	}, [recordingId, applyRecordedChord]);
+	}, [recordingId, applyRecordedChord, platform, isMac]);
 
 	const startRecording = (id: ShortcutId): void => {
 		if (recordingId === id) {
@@ -291,6 +291,15 @@ export function ShortcutsPage({
 		setPendingConflict((prev) => (prev?.id === id ? null : prev));
 		setInvalidNotice((prev) => (prev?.id === id ? null : prev));
 		await updateShortcuts({ overrides: nextOverrides });
+	};
+
+	const applyPreset = (preset: "macFinder" | "windowsExplorer" | "default"): void => {
+		setRecordingId(null);
+		setHeldMods({ mod: false, alt: false, shift: false });
+		setPendingConflict(null);
+		setInvalidNotice(null);
+		setUiEditor(null);
+		void updateShortcuts(shortcutSettingsForPreset(preset));
 	};
 
 	const normalizedQuery = filterQuery.trim().toLowerCase();
@@ -368,7 +377,7 @@ export function ShortcutsPage({
 						className={`sidebar-preset-pill${activePreset === "macFinder" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-mac-finder"
 						aria-pressed={activePreset === "macFinder"}
-						onClick={() => void updateShortcuts(shortcutSettingsForPreset("macFinder"))}
+						onClick={() => applyPreset("macFinder")}
 					>
 						{t("settingsCore.shortcuts.presetMacFinder")}
 					</button>
@@ -377,7 +386,7 @@ export function ShortcutsPage({
 						className={`sidebar-preset-pill${activePreset === "windowsExplorer" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-windows-explorer"
 						aria-pressed={activePreset === "windowsExplorer"}
-						onClick={() => void updateShortcuts(shortcutSettingsForPreset("windowsExplorer"))}
+						onClick={() => applyPreset("windowsExplorer")}
 					>
 						{t("settingsCore.shortcuts.presetWindowsExplorer")}
 					</button>
@@ -386,7 +395,7 @@ export function ShortcutsPage({
 						className={`sidebar-preset-pill${activePreset === "default" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-default"
 						aria-pressed={activePreset === "default"}
-						onClick={() => void updateShortcuts(shortcutSettingsForPreset("default"))}
+						onClick={() => applyPreset("default")}
 					>
 						{t("settingsCore.shortcuts.presetDefault")}
 					</button>

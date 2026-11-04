@@ -15,9 +15,23 @@ import {
 } from "./agents/profiles/magic-action";
 import { subscribeProfileProgress, type ReplyLanguage } from "./agents/profile-progress";
 import { errorText, modelFailure } from "./agents/session-failure";
+import { POWERSHELL_UTF8_OUTPUT } from "./powershell-output";
 
 const MAX_CAPTURE_CHARS = 32 * 1024;
 const SCRIPT_TIMEOUT_MS = 10 * 60 * 1000;
+const WINDOWS_POWERSHELL_BOOTSTRAP = [
+	`[Console]::InputEncoding = $OutputEncoding = ${POWERSHELL_UTF8_OUTPUT}`,
+	"$dazziScript = $env:DAZZI_SCRIPT",
+	"Remove-Item Env:\\DAZZI_SCRIPT -ErrorAction SilentlyContinue",
+	"$dazziFiles = [System.Collections.Generic.List[string]]::new()",
+	"if ($env:DAZZI_FILES_JSON) { foreach ($dazziItem in (ConvertFrom-Json -InputObject $env:DAZZI_FILES_JSON)) { [void]$dazziFiles.Add([string]$dazziItem) } }",
+	"$dazziArgs = $dazziFiles.ToArray()",
+	"try { $dazziSb = [ScriptBlock]::Create($dazziScript) } catch { [Console]::Error.WriteLine($_); exit 1 }",
+	"$global:LASTEXITCODE = 0",
+	"try { & $dazziSb @dazziArgs } catch { [Console]::Error.WriteLine($_); exit 1 }",
+	"if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }",
+	"if (-not $?) { exit 1 }",
+].join("; ");
 
 export interface MagicActionServiceDeps {
 	readonly send: (event: MagicActionEvent) => void;
@@ -141,20 +155,14 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 			DAZZI_FILE_COUNT: String(paths.length),
 			DAZZI_FILE: paths[0] ?? "",
 			DAZZI_FILES_JSON: JSON.stringify(paths),
+			...(platform === "win32" ? { DAZZI_SCRIPT: command } : {}),
 		};
 
 		const shellCmd =
 			platform === "win32"
 				? {
 						bin: "powershell.exe",
-						args: [
-							"-NoProfile",
-							"-NonInteractive",
-							"-Command",
-							`& { param([Parameter(ValueFromRemainingArguments=$true)][string[]]$DazziFiles) $args = $DazziFiles; ${command} }`,
-							"--",
-							...paths,
-						],
+						args: ["-NoProfile", "-NonInteractive", "-Command", WINDOWS_POWERSHELL_BOOTSTRAP],
 					}
 				: {
 						bin: "/bin/sh",
@@ -174,10 +182,13 @@ export function createMagicActionService(deps: MagicActionServiceDeps): MagicAct
 			windowsHide: true,
 		});
 
+		child.stdin?.on("error", () => {
+			// Ignore async EPIPE/EOF when command exits without reading stdin
+		});
 		try {
 			child.stdin?.end(`${JSON.stringify(paths)}\n`);
 		} catch {
-			// Ignore EPIPE when command does not read stdin
+			// Ignore synchronous stream errors when command does not read stdin
 		}
 
 		const timer = setTimeout(() => {
