@@ -73,6 +73,11 @@ html[data-row-drag="copy"] * {
 	cursor: copy !important;
 }
 
+html[data-row-drag="link"],
+html[data-row-drag="link"] * {
+	cursor: alias !important;
+}
+
 input::placeholder {
 	color: var(--text-muted);
 }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, createRef, type ReactElement, type SyntheticEvent } from "react";
+import { act, createRef, type PointerEvent as ReactPointerEvent, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ContextMenu } from "../src/renderer/src/components/primitives/ContextMenu";
@@ -8,7 +8,8 @@ import { navGroups } from "../src/renderer/src/data/places";
 import { SidebarSettingsContext } from "../src/renderer/src/hooks/useSidebarSettings";
 import { useSidebarPins } from "../src/renderer/src/hooks/useSidebarPins";
 import { useSidebarRowMenu } from "../src/renderer/src/hooks/useSidebarRowMenu";
-import { FINDER_DRAG_TYPE } from "../src/renderer/src/state/attachments";
+import { pressRow } from "../src/renderer/src/lib/row-drag";
+import { FINDER_DRAG_TYPE, type FinderDragEntry } from "../src/renderer/src/state/attachments";
 import { shownFavoriteIds, SIDEBAR_ITEM_DRAG_TYPE } from "../src/renderer/src/state/sidebar-pins";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { FsLocation } from "../src/shared/fs-contract";
@@ -319,6 +320,142 @@ describe("Favorites: the pinned row's menu", () => {
 		const os = fire("contextmenu", rowOf("place:documents"));
 		expect(os.defaultPrevented).toBe(false);
 		expect(onRowMenu).toHaveBeenCalledTimes(1);
+	});
+});
+
+/**
+ * A held in-app row drag (`lib/row-drag.ts`), driven by pointer events as the Finder's rows drive it:
+ * what the cursor shows is `html[data-row-drag]`, the drop lands on whatever `elementFromPoint` answers.
+ */
+describe("Finder row drag over Favorites", () => {
+	const FOLDER: FinderDragEntry = { path: "/Users/me/Projects", name: "Projects", kind: "folder" };
+	const FILE: FinderDragEntry = { path: "/Users/me/notes.txt", name: "notes.txt", kind: "file" };
+	let under: Element | null = null;
+
+	/** happy-dom's DragEvent drops its init (`dataTransfer`, `clientY`); a browser's keeps both. */
+	class InitDragEvent extends MouseEvent {
+		readonly dataTransfer: DataTransfer | null;
+		constructor(type: string, init: DragEventInit = {}) {
+			super(type, init);
+			this.dataTransfer = init.dataTransfer ?? null;
+		}
+	}
+
+	/** A DataTransfer built by script, as Chromium has it: `dropEffect` stays "none" whatever a target writes. */
+	class ScriptDataTransfer {
+		private readonly store = new Map<string, string>();
+		effectAllowed = "uninitialized";
+		items: unknown[] = [];
+		get dropEffect(): string {
+			return "none";
+		}
+		set dropEffect(_ignored: string) {}
+		get types(): string[] {
+			return [...this.store.keys()];
+		}
+		getData(format: string): string {
+			return this.store.get(format) ?? "";
+		}
+		setData(format: string, data: string): void {
+			this.store.set(format, data);
+		}
+	}
+
+	beforeEach(() => {
+		under = null;
+		vi.stubGlobal("DragEvent", InitDragEvent);
+		vi.stubGlobal("DataTransfer", ScriptDataTransfer);
+		Object.defineProperty(document, "elementFromPoint", { configurable: true, value: () => under });
+		Object.defineProperty(document.documentElement, "setPointerCapture", { configurable: true, value: () => undefined });
+		Object.defineProperty(document.documentElement, "hasPointerCapture", { configurable: true, value: () => false });
+		Object.defineProperty(document.documentElement, "releasePointerCapture", { configurable: true, value: () => undefined });
+	});
+
+	afterEach(async () => {
+		vi.unstubAllGlobals();
+		Reflect.deleteProperty(document, "elementFromPoint");
+		Reflect.deleteProperty(document.documentElement, "setPointerCapture");
+		Reflect.deleteProperty(document.documentElement, "hasPointerCapture");
+		Reflect.deleteProperty(document.documentElement, "releasePointerCapture");
+		// A drag still held ends with the window losing focus; the click swallow it set up goes on the next task.
+		window.dispatchEvent(new Event("blur"));
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		delete document.documentElement.dataset.rowDrag;
+	});
+
+	const pointer = (type: string, init: { x: number; y: number; alt?: boolean }): void =>
+		act(() => {
+			const event = new MouseEvent(type, { bubbles: true, clientX: init.x, clientY: init.y, altKey: init.alt === true });
+			Object.defineProperty(event, "pointerId", { value: 1 });
+			window.dispatchEvent(event);
+		});
+
+	/** Press on a row at (300, 300), then move well past the threshold over `target` at y. */
+	function drag(entries: readonly FinderDragEntry[], target: Element, y: number, alt = false): void {
+		under = target;
+		const press = { button: 0, pointerId: 1, clientX: 300, clientY: 300, altKey: alt } as unknown as ReactPointerEvent<HTMLElement>;
+		pressRow(press, { entries: () => entries, startNative: vi.fn() });
+		pointer("pointermove", { x: 40, y, alt });
+	}
+
+	const cursor = (): string | undefined => document.documentElement.dataset.rowDrag;
+
+	it("shows the copy cursor over the gap between two Favorites rows, as a pin is not a move", () => {
+		const { onPin } = renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
+		layoutRows();
+		drag([FOLDER], rowOf("place:desktop"), 150);
+		expect(lines()).toEqual([{ edge: "top", id: "place:documents" }]);
+		expect(cursor()).toBe("copy");
+		pointer("pointerup", { x: 40, y: 150 });
+		expect(onPin).toHaveBeenCalledWith(["/Users/me/Projects"], 2);
+		expect(cursor()).toBeUndefined();
+	});
+
+	it("shows the same copy cursor with ⌥ held: pinning has no other verb", () => {
+		renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
+		layoutRows();
+		drag([FOLDER], rowOf("place:desktop"), 150, true);
+		expect(cursor()).toBe("copy");
+	});
+
+	it("shows no-drop over Favorites when the drag holds only files, which a pin does not take", () => {
+		const { onPin } = renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
+		layoutRows();
+		drag([FILE], rowOf("place:desktop"), 150);
+		expect(cursor()).toBe("none");
+		expect(lines()).toEqual([]);
+		pointer("pointerup", { x: 40, y: 150 });
+		expect(onPin).not.toHaveBeenCalled();
+	});
+
+	it("keeps the move cursor, and ⌥ copy, for a target that accepts without naming a verb", () => {
+		renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
+		layoutRows();
+		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Search") as Element;
+		drag([FOLDER], aiSearch, 90);
+		expect(cursor()).toBe("move");
+		pointer("pointermove", { x: 41, y: 90, alt: true });
+		expect(cursor()).toBe("copy");
+	});
+
+	it("follows the verb a target wrote, and forgets it for the next target", () => {
+		renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
+		layoutRows();
+		const move = document.createElement("div");
+		move.addEventListener("dragover", (event) => {
+			event.preventDefault();
+			if (event.dataTransfer !== null) event.dataTransfer.dropEffect = "move";
+		});
+		host.append(move);
+		drag([FOLDER], rowOf("place:desktop"), 150);
+		expect(cursor()).toBe("copy");
+		under = move;
+		pointer("pointermove", { x: 41, y: 150, alt: true });
+		// The target wrote "move": ⌥ does not turn it into a copy.
+		expect(cursor()).toBe("move");
+		under = host;
+		pointer("pointermove", { x: 42, y: 150 });
+		expect(cursor()).toBe("none");
 	});
 });
 
