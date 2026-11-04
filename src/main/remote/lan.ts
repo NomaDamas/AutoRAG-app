@@ -4,7 +4,15 @@
  * without replacing `localhost` by hand.
  */
 import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
-import { isTailnetIp } from "./tailscale";
+
+/** `100.64.0.0/10` (RFC 6598 carrier-grade NAT): never a usable LAN address on this machine. */
+function isCgnatAddress(address: string): boolean {
+	const octets = address.split(".");
+	if (octets.length !== 4) return false;
+	const first = Number(octets[0]);
+	const second = Number(octets[1]);
+	return Number.isInteger(first) && Number.isInteger(second) && first === 100 && second >= 64 && second <= 127;
+}
 
 export function discoverLanOrigins(
 	port: number,
@@ -18,7 +26,7 @@ export function discoverLanOrigins(
 			if (entry.internal) continue;
 			if (entry.family !== "IPv4") continue;
 			const ip = entry.address.trim();
-			if (!ip || ip.startsWith("127.") || ip.startsWith("169.254.") || isTailnetIp(ip)) continue;
+			if (!ip || ip.startsWith("127.") || ip.startsWith("169.254.") || isCgnatAddress(ip)) continue;
 			seen.add(`http://${ip}:${port}`);
 		}
 	}

@@ -67,8 +67,8 @@ export function clearCookieHeader(name: string): string {
 
 /**
  * Same-origin CSRF check for state-changing requests (`POST`, `PATCH`, `DELETE`).
- * Protects cookie-authenticated sessions (`dazzi_device`, `dazzi_remote`) and
- * Tailscale Serve sessions from cross-site form/fetch attacks.
+ * Protects cookie-authenticated sessions (`dazzi_device`, `dazzi_remote`) from
+ * cross-site form/fetch attacks.
  */
 export function isSameOriginMutation(request: {
 	readonly method?: string | undefined;
@@ -96,7 +96,7 @@ export function isSameOriginMutation(request: {
 	if (!host) return false;
 	try {
 		const parsedOrigin = new URL(origin);
-		const expectedProto = isSecureIncomingRequest(request.headers) ? "https:" : parsedOrigin.protocol === "https:" && host.endsWith(".ts.net") ? "https:" : "http:";
+		const expectedProto = isSecureIncomingRequest(request.headers) ? "https:" : "http:";
 		// Compare authority (`host`) strictly; allow http or https when matching host behind a TLS proxy.
 		if (parsedOrigin.host.toLowerCase() !== host.toLowerCase()) return false;
 		return parsedOrigin.protocol === expectedProto || parsedOrigin.protocol === "https:";

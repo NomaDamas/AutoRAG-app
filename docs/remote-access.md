@@ -16,9 +16,6 @@ awake.
    device opens:
    - **Same Wi-Fi:** the host's LAN address (`http://192.168.x.y:<port>`). When
      the host has several, choose one from the list.
-   - **Tailscale:** the tailnet IP (`http://100.x.y.z:<port>`) until you click
-     **Publish over HTTPS in Tailnet**, then the
-     `https://<machine>.<tailnet>.ts.net` address.
    - **Internet:** a Cloudflare tunnel (see below). Its address appears once
      the tunnel is online.
 3. Click **Get Pairing Code**. The same 6-digit code works on every route. The
@@ -44,25 +41,20 @@ and **Connect a Device** says which port is in use. **Start on port N** saves a
 port that is free at that moment and starts on it; **Try Again** retries the
 saved port after the other program has quit.
 
-Devices signed in to the host owner's Tailscale account, reaching Dazzi through
-`tailscale serve`, are admitted without a code.
-
 In a remote browser session, the same settings page shows how that browser got
-in (`Connected as a paired device`, `Connected via this computer's Tailscale
-login`, or `Connected with the access token`) and the **Paired Devices** list.
-Tunnel controls stay on the host.
+in (`Connected as a paired device` or `Connected with the access token`) and the
+**Paired Devices** list. Tunnel controls stay on the host.
 
 ## Connect from outside your home or office
 
 **Never forward Dazzi's raw HTTP port on your router to the public internet:**
 unencrypted HTTP exposes traffic on untrusted networks. Use the **Internet**
-route (Cloudflare tunnel, no VPN needed) or **Tailscale** instead.
+route (Cloudflare tunnel, no VPN needed) instead.
 
 | Method | Best for | Router port forwarding | Client software needed |
 | --- | --- | --- | --- |
 | **Internet: Cloudflare temporary address** | Trying it out; no account | None | Browser only |
 | **Internet: own domain on Cloudflare** | A fixed address you bookmark | None | Browser only |
-| **Tailscale (`tailscale serve` HTTPS or tailnet IP)** | Devices already on your tailnet | None | Tailscale app on host and client |
 | **SSH local port forward** | Developers who already have SSH access to the host | Only if SSH is remote | Any SSH client |
 
 Both Internet modes need `cloudflared` on the host (for example
@@ -101,40 +93,7 @@ manage in Cloudflare:
    shows cloudflared's reason instead of replacing that record. Later starts
    reuse the tunnel, so `https://<hostname>` stays the same.
 
-### Option 3: Tailscale (private mesh + zero-code owner login)
-
-[Tailscale](https://tailscale.com) creates an encrypted WireGuard mesh (tailnet)
-between your signed-in devices. Dazzi reads `tailscale status --json` and
-`tailscale serve status --json`, and changes Tailscale's configuration only when
-you press its button:
-
-- **Publish over HTTPS in Tailnet** runs
-  `tailscale serve --bg --yes --https=<port> http://127.0.0.1:<Dazzi port>` on the
-  first HTTPS port (443, 8443, 47833, 17317) no other serve route uses, so an
-  existing route such as `https://<machine>.ts.net` → another app is left alone.
-  The **Tailscale** route then shows the `https://<machine>.<tailnet>.ts.net[:port]`
-  address and its QR code. Devices signed in as the host's Tailscale owner open
-  Finder directly; devices of another tailnet user see a notice and can still
-  pair with a code.
-- **Stop Publishing** runs `tailscale serve --yes --https=<port> off` for that one
-  route only; Dazzi never runs `tailscale serve reset`.
-- Dazzi's port can change between runs (`0` picks a free one, or the default is
-  taken). Dazzi remembers the ports it listened on (`remote-ports.json` in its
-  settings folder); when a serve route still points at one of those, the next
-  start re-points that same route at the new port, so the `ts.net` address keeps
-  working instead of answering `502`. A route that points anywhere else belongs to
-  another app and is never changed.
-- When neither the `tailscale` CLI nor the Tailscale app is on the computer, the
-  **Tailscale** route is not shown.
-- If Tailscale refuses (for example, HTTPS certificates or Serve are off for the
-  tailnet), Settings shows Tailscale's reason and, when Tailscale prints one, a
-  button that opens its admin-console page to turn it on.
-- **Run it yourself in a terminal** shows the same command for people who prefer
-  it. Dazzi never uses `tailscale funnel`, which exposes the endpoint to the
-  public internet (Dazzi never trusts Funnel headers and always requires pairing
-  or the token).
-
-### Option 4: SSH local port forwarding
+### Option 3: SSH local port forwarding
 
 If you already reach the host over SSH, forward a local port on the client to
 `127.0.0.1` on the host:

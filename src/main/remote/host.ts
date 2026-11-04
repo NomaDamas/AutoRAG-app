@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { createServer as createNetServer } from "node:net";
-import { join } from "node:path";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
 import dazziMarkPath from "../../renderer/src/assets/dazzi-mark.png?asset";
 import type { AppSettings } from "../../shared/settings-contract";
@@ -13,8 +12,6 @@ import {
 	type RemotePairingCode,
 	type RemotePush,
 	type RemoteServerError,
-	type RemoteTailscaleServeError,
-	type RemoteTailscaleStatus,
 } from "../../shared/remote-contract";
 import { APP_VERSION } from "../../shared/app-info";
 import { buildRemoteBootstrapScript } from "./bootstrap";
@@ -22,8 +19,6 @@ import { DeviceStore } from "./devices";
 import { discoverLanOrigins } from "./lan";
 import { createRemoteDispatcher } from "./registry";
 import { createRemoteServer, type RemoteAuthenticatedContext, type RemoteServer } from "./server";
-import { findTailscaleBinary, readTailscaleStatus, startTailscaleServe, stopTailscaleServe } from "./tailscale";
-import { writePrivateState } from "./private-state";
 import { createTunnelManager, type TunnelManager } from "./tunnel";
 import { previewResponseForPath } from "../../preview/node/protocol";
 import { iconIdentityFromUrl } from "../icon-protocol";
@@ -33,8 +28,8 @@ import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
 import type { WorkerClient } from "../../shared/fs-worker-protocol";
 
 /**
- * Wires the remote server, device pairing registry, read-only Tailscale status,
- * LAN IPv4 discovery, and the Cloudflare tunnel (Quick Tunnel or own domain) to the running app.
+ * Wires the remote server, device pairing registry, LAN IPv4 discovery,
+ * and the Cloudflare tunnel (Quick Tunnel or own domain) to the running app.
  */
 
 /** The sunflower mark the AccessGate draws above "Dazzi", inlined because the gate page allows only `data:` images. */
@@ -84,10 +79,6 @@ export interface RemoteHost {
 	stopTunnel(): Promise<RemoteAccessStatus>;
 	/** `cloudflared tunnel login`, run from the desktop only (it opens a browser on the host). */
 	loginTunnel(): Promise<RemoteAccessStatus>;
-	/** Publish Dazzi in the tailnet with `tailscale serve` (desktop only: it changes the host's Tailscale config). */
-	startTailscaleServe(): Promise<RemoteAccessStatus>;
-	/** Remove the serve route that points at Dazzi. */
-	stopTailscaleServe(): Promise<RemoteAccessStatus>;
 	/** The own-domain hostname setting changed (`""` = Quick Tunnel). */
 	setTunnelHostname(hostname: string): Promise<void>;
 }
@@ -100,8 +91,6 @@ function invokeIpc(channel: string, sender: Electron.WebContents | null, args: r
 	const event = { sender } as IpcMainInvokeEvent;
 	return Promise.resolve((handler as (event: IpcMainInvokeEvent, ...rest: unknown[]) => unknown)(event, ...args));
 }
-
-const TAILSCALE_CACHE_TTL_MS = 30_000;
 
 /** A port the OS hands out right now on `host`: what Settings offers when the configured one is taken. */
 function probeFreePort(host: string): Promise<number | null> {
@@ -138,7 +127,6 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	let starting: Promise<string> | null = null;
 	const sessions = new Map<string, FsWorkerRemoteClient>();
 	let fallback: FsWorkerRemoteClient | null = null;
-	let cachedTailscale: { value: RemoteTailscaleStatus; at: number; port: number } | null = null;
 
 	const emitChanged = (): void => {
 		if (deps.onStatusChanged === undefined) return;
@@ -159,87 +147,9 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		() => undefined,
 	);
 
-	/**
-	 * Ports earlier runs listened on (`remote-ports.json`), newest first. A Tailscale serve route still pointing at one
-	 * of them is Dazzi's own leftover and is re-pointed at this run instead of being treated as another app's.
-	 */
-	const portsFile = join(deps.stateDir, "remote-ports.json");
-	const readPastPorts = (): number[] => {
-		try {
-			const parsed: unknown = JSON.parse(readFileSync(portsFile, "utf8"));
-			return Array.isArray(parsed) ? parsed.filter((value): value is number => Number.isInteger(value) && value > 0 && value <= 65535) : [];
-		} catch {
-			return [];
-		}
-	};
-	let pastPorts = readPastPorts();
-	const rememberPort = (port: number): void => {
-		pastPorts = [port, ...pastPorts.filter((value) => value !== port)].slice(0, 8);
-		try {
-			writePrivateState(portsFile, pastPorts);
-		} catch (error) {
-			log(`could not record the remote port: ${error instanceof Error ? error.message : String(error)}`);
-		}
-	};
-
-	/** The last publish/stop failure; shown until the next success or a manual re-check. */
-	let serveError: RemoteTailscaleServeError | null = null;
-	const getTailscale = async (port: number, force = false): Promise<RemoteTailscaleStatus> => {
-		const now = Date.now();
-		if (!force && cachedTailscale !== null && cachedTailscale.port === port && now - cachedTailscale.at < TAILSCALE_CACHE_TTL_MS) {
-			return { ...cachedTailscale.value, serveError };
-		}
-		const value = await readTailscaleStatus(port, pastPorts);
-		cachedTailscale = { value, at: Date.now(), port };
-		return { ...value, serveError };
-	};
-
-	/** Publish or unpublish Dazzi's port in the tailnet, then re-read Tailscale so Settings shows the result. */
-	const changeTailscaleServe = async (action: "start" | "stop"): Promise<RemoteAccessStatus> => {
-		const binary = findTailscaleBinary();
-		const port = boundPort ?? 0;
-		const current = await getTailscale(port, true);
-		if (binary === null || current.state !== "running") {
-			serveError = { reason: "Tailscale is not running on this computer", enableUrl: null };
-		} else if (action === "start") {
-			if (server === null || port <= 0) serveError = { reason: "The remote access server is not running", enableUrl: null };
-			else if (current.servingUrl !== null) serveError = null;
-			else if (current.servePort === null || current.servePort === undefined) serveError = { reason: "Every HTTPS port Dazzi can use is taken by another serve route", enableUrl: null };
-			else {
-				const result = await startTailscaleServe({ binary, httpsPort: current.servePort, port });
-				serveError = result.ok ? null : { reason: result.reason, enableUrl: result.enableUrl };
-			}
-		} else if (current.servingPort !== null && current.servingPort !== undefined) {
-			const result = await stopTailscaleServe({ binary, httpsPort: current.servingPort });
-			serveError = result.ok ? null : { reason: result.reason, enableUrl: result.enableUrl };
-		} else {
-			serveError = null;
-		}
-		const next = await buildStatus(true);
-		emitChanged();
-		return next;
-	};
-
-	/**
-	 * A route Dazzi published in an earlier run still points at that run's port (the app restarted, or the port moved),
-	 * so the `ts.net` address answers 502. Re-point it at this run: the user already chose to publish, and only a route
-	 * whose target is one of Dazzi's own past ports qualifies, never another app's.
-	 */
-	const reclaimTailscaleRoute = async (port: number): Promise<void> => {
-		const binary = findTailscaleBinary();
-		if (binary === null) return;
-		const current = await getTailscale(port, true);
-		if (current.state !== "running" || current.servingUrl !== null || current.reclaimable !== true || current.servePort == null) return;
-		const result = await startTailscaleServe({ binary, httpsPort: current.servePort, port });
-		serveError = result.ok ? null : { reason: result.reason, enableUrl: result.enableUrl };
-		if (result.ok) log(`re-pointed the Tailscale route on :${current.servePort} at port ${port}`);
-		await getTailscale(port, true);
-	};
-
-	const buildStatus = async (forceNetwork = false): Promise<RemoteAccessStatus> => {
+	const buildStatus = async (): Promise<RemoteAccessStatus> => {
 		const configuredPort = await deps.port();
 		const activePort = boundPort ?? configuredPort;
-		const tailscale = await getTailscale(activePort, forceNetwork);
 		const lanOrigins = server !== null && activePort > 0 ? discoverLanOrigins(activePort) : [];
 		return {
 			serving: server !== null,
@@ -248,7 +158,6 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 			port: activePort,
 			sessions: sessions.size,
 			lanOrigins,
-			tailscale,
 			tunnel: tunnel.status(),
 			pairing: deviceStore.activePairing(),
 			devices: deviceStore.list(null),
@@ -265,7 +174,7 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		renameDevice: (id, label) => deviceStore.rename(String(id), label),
 		revokeDevice: (id) => deviceStore.revoke(String(id)),
 		revokeAllDevices: () => deviceStore.revokeAll().length,
-		refreshNetwork: () => buildStatus(true),
+		refreshNetwork: () => buildStatus(),
 	};
 
 	const dispatcher = createRemoteDispatcher({
@@ -353,7 +262,6 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	async function startServer(listenPort: number): Promise<string> {
 		token = randomBytes(24).toString("base64url");
 		const defaultBootstrap = await buildBootstrapFor();
-		void getTailscale(listenPort, true);
 		const candidate = createRemoteServer({
 			rendererRoot: deps.rendererRoot,
 			token,
@@ -362,7 +270,6 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 			bootstrapScript: defaultBootstrap,
 			bootstrapScriptFor: (auth) => buildBootstrapFor(auth),
 			devices: deviceStore,
-			tailscaleOwner: () => cachedTailscale?.value.owner ?? null,
 			gatePrefs: async () => {
 				const current = await deps.settings();
 				return { language: current.language, appearance: current.appearance };
@@ -411,10 +318,8 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		server = candidate;
 		serverError = null;
 		boundPort = started.port;
-		rememberPort(started.port);
 		baseOrigin = started.origin;
 		origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
-		void reclaimTailscaleRoute(started.port).then(() => emitChanged(), () => undefined);
 		log(`serving at ${started.origin}`);
 		emitChanged();
 		return origin;
@@ -439,29 +344,24 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 		push(channel, payload) {
 			server?.broadcast({ channel, payload } satisfies RemotePush);
 		},
-		status: () => buildStatus(false),
+		status: () => buildStatus(),
 		startPairing: () => deviceStore.startPairing(),
 		devices: () => deviceStore.list(null),
 		renameDevice: (id, label) => deviceStore.rename(id, label),
 		revokeDevice: (id) => deviceStore.revoke(id),
 		revokeAllDevices: () => deviceStore.revokeAll().length,
-		refreshNetwork: () => {
-			serveError = null;
-			return buildStatus(true);
-		},
-		startTailscaleServe: () => changeTailscaleServe("start"),
-		stopTailscaleServe: () => changeTailscaleServe("stop"),
+		refreshNetwork: () => buildStatus(),
 		startTunnel: async () => {
 			await tunnel.start(boundPort ?? 0);
-			return buildStatus(false);
+			return buildStatus();
 		},
 		stopTunnel: async () => {
 			await tunnel.stop();
-			return buildStatus(false);
+			return buildStatus();
 		},
 		loginTunnel: async () => {
 			await tunnel.login();
-			return buildStatus(false);
+			return buildStatus();
 		},
 		setTunnelHostname: (hostname) => tunnel.setHostname(hostname),
 	};

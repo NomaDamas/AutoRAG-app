@@ -3,9 +3,8 @@
  *
  * Off: only the Enable switch. On: one "Connect a device" card and the paired-device list.
  * The card separates the two things a new device needs:
- * 1. A route, which decides the address it opens: the same Wi-Fi (LAN address), Tailscale
- *    (`https://*.ts.net` or the tailnet IP), or the internet through a Cloudflare tunnel
- *    (a temporary trycloudflare.com address, or the user's own domain).
+ * 1. A route, which decides the address it opens: the same Wi-Fi (LAN address), or the internet
+ *    through a Cloudflare tunnel (a temporary trycloudflare.com address, or the user's own domain).
  * 2. The pairing code, the same for every route: the QR code is that route's address plus `?pair=CODE`.
  * The browser address (with its token) and the port sit behind "Details".
  */
@@ -24,7 +23,7 @@ import { QrCode } from "./QrCode";
 import { Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 
-type ConnectRoute = "lan" | "tailscale" | "internet";
+type ConnectRoute = "lan" | "internet";
 
 interface RelativeSeenLabels {
 	readonly never: string;
@@ -42,12 +41,9 @@ function formatRelativeSeen(iso: string | null, labels: RelativeSeenLabels): str
 	return new Date(iso).toLocaleDateString();
 }
 
-/** The route a fresh card opens on: whichever already has a working address, the internet tunnel first. */
+/** The route a fresh card opens on: the internet tunnel when it is online, otherwise the LAN. */
 function defaultRoute(status: RemoteAccessStatus | null): ConnectRoute {
 	if (status?.tunnel?.state === "online") return "internet";
-	if (status?.tailscale?.servingUrl) return "tailscale";
-	if ((status?.lanOrigins?.length ?? 0) > 0) return "lan";
-	if (status?.tailscale?.state === "running") return "tailscale";
 	return "lan";
 }
 
@@ -80,14 +76,12 @@ export function RemoteAccessPage({
 	const [pickedLan, setPickedLan] = useState<string>("");
 	const [localPairing, setLocalPairing] = useState<RemotePairingCode | null>(null);
 	const [countdown, setCountdown] = useState<string>("");
-	const [refreshingNet, setRefreshingNet] = useState(false);
 	const [tunnelBusy, setTunnelBusy] = useState(false);
 	const [loggingIn, setLoggingIn] = useState(false);
 	const [renaming, setRenaming] = useState<{ readonly id: string; readonly label: string } | null>(null);
 	const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
 	const [confirmRevokeAll, setConfirmRevokeAll] = useState(false);
 	const [applyingPort, setApplyingPort] = useState(false);
-	const [serveBusy, setServeBusy] = useState(false);
 
 	useEffect(() => {
 		setRemotePort(String(appSettings.remotePort));
@@ -152,21 +146,14 @@ export function RemoteAccessPage({
 	const serving = remoteStatus?.serving === true;
 	const enabled = appSettings.remoteAccess || serving;
 	const devices: readonly RemotePairedDevice[] = remoteStatus?.devices ?? [];
-	const tailscale = remoteStatus?.tailscale;
 	const tunnel: RemoteTunnelStatus | undefined = remoteStatus?.tunnel;
 	const showInternetRoute = !isRemoteClient || tunnel?.state === "online";
-	// No Tailscale CLI or app on this computer: the route is not offered at all.
-	const showTailscaleRoute = tailscale !== undefined && tailscale.state !== "missing";
-	const hiddenRoute = (candidate: ConnectRoute): boolean => (candidate === "internet" && !showInternetRoute) || (candidate === "tailscale" && !showTailscaleRoute);
+	const hiddenRoute = (candidate: ConnectRoute): boolean => candidate === "internet" && !showInternetRoute;
 	const preferred = pickedRoute ?? defaultRoute(remoteStatus);
 	const route: ConnectRoute = hiddenRoute(preferred) ? "lan" : preferred;
 	const lanAddress = pickedLan !== "" && lanOrigins.includes(pickedLan) ? pickedLan : (lanOrigins[0] ?? null);
-	const tailscaleAddress =
-		tailscale?.state === "running"
-			? (tailscale.servingUrl ?? (tailscale.tailnetIp !== null && (remoteStatus?.port ?? 0) > 0 ? `http://${tailscale.tailnetIp}:${remoteStatus?.port}` : null))
-			: null;
 	const internetAddress = tunnel?.state === "online" ? tunnel.url : null;
-	const routeAddress = route === "lan" ? lanAddress : route === "tailscale" ? tailscaleAddress : internetAddress;
+	const routeAddress = route === "lan" ? lanAddress : internetAddress;
 	const browserAddress = serving ? remoteStatus.origin : null;
 	const spacedCode = activeCode ? `${activeCode.code.slice(0, 3)} ${activeCode.code.slice(3)}` : null;
 	const pairLink = activeCode !== null && routeAddress !== null ? `${routeAddress.replace(/\/$/, "")}/?pair=${activeCode.code}` : null;
@@ -201,16 +188,6 @@ export function RemoteAccessPage({
 			reportError(cause);
 		}
 	};
-	const handleRefreshNetwork = async (): Promise<void> => {
-		setRefreshingNet(true);
-		try {
-			setRemoteStatus(await remoteBridge.refreshNetwork());
-		} catch (cause) {
-			reportError(cause);
-		} finally {
-			setRefreshingNet(false);
-		}
-	};
 	const handleTunnel = async (action: "start" | "stop" | "login"): Promise<void> => {
 		const busy = action === "login" ? setLoggingIn : setTunnelBusy;
 		busy(true);
@@ -220,16 +197,6 @@ export function RemoteAccessPage({
 			reportError(cause);
 		} finally {
 			busy(false);
-		}
-	};
-	const handleTailscaleServe = async (action: "start" | "stop"): Promise<void> => {
-		setServeBusy(true);
-		try {
-			setRemoteStatus(await (action === "start" ? remoteBridge.startTailscaleServe() : remoteBridge.stopTailscaleServe()));
-		} catch (cause) {
-			reportError(cause);
-		} finally {
-			setServeBusy(false);
 		}
 	};
 	const saveDomain = (): void => {
@@ -286,11 +253,9 @@ export function RemoteAccessPage({
 	const viaLabel =
 		remoteStatus?.via === "device"
 			? t("settingsCore.remote.viaDevice")
-			: remoteStatus?.via === "tailscale"
-				? t("settingsCore.remote.viaTailscale")
-				: remoteStatus?.via === "token"
-					? t("settingsCore.remote.viaToken")
-					: null;
+			: remoteStatus?.via === "token"
+				? t("settingsCore.remote.viaToken")
+				: null;
 
 	const tunnelError = (status: RemoteTunnelStatus): string | null => {
 		switch (status.errorCode) {
@@ -314,7 +279,6 @@ export function RemoteAccessPage({
 
 	const routes: readonly { readonly id: ConnectRoute; readonly label: string }[] = [
 		{ id: "lan", label: t("settingsCore.remote.routeLan") },
-		...(showTailscaleRoute ? [{ id: "tailscale" as const, label: t("settingsCore.remote.routeTailscale") }] : []),
 		...(showInternetRoute ? [{ id: "internet" as const, label: t("settingsCore.remote.routeInternet") }] : []),
 	];
 
@@ -342,78 +306,6 @@ export function RemoteAccessPage({
 					))}
 				</select>
 			) : null}
-		</>
-	);
-
-	const serveError = tailscale?.serveError ?? null;
-	const tailscalePane = (
-		<>
-			{tailscale?.state === "running" ? (
-				<>
-					<div className="settings-remote-status-line">
-						<StatusDot tone={tailscale.servingUrl !== null ? "ok" : serveBusy ? "run" : "off"} />
-						<span>{tailscale.servingUrl !== null ? t("settingsCore.remote.tailscaleServing") : t("settingsCore.remote.tailscaleNotServing")}</span>
-					</div>
-					<p className="settings-remote-desc">
-						{tailscale.servingUrl !== null ? t("settingsCore.remote.tailscaleServingHint") : t("settingsCore.remote.tailscaleServeHint")}
-					</p>
-					{serveError !== null ? (
-						<div className="settings-remote-server-error" role="alert">
-							<p className="settings-remote-error">{t("settingsCore.remote.tailscaleServeFailed", { reason: serveError.reason })}</p>
-							{serveError.enableUrl !== null && !isRemoteClient ? (
-								<div className="settings-remote-actions">
-									<button type="button" className="linear-btn" onClick={() => void window.autorag.fs.openUrl(serveError.enableUrl ?? "")}>
-										{t("settingsCore.remote.tailscaleServeEnable")}
-									</button>
-								</div>
-							) : null}
-						</div>
-					) : null}
-					{isRemoteClient ? null : (
-						<div className="settings-remote-actions">
-							{tailscale.servingUrl !== null ? (
-								<button type="button" className="linear-btn" disabled={serveBusy} onClick={() => void handleTailscaleServe("stop")}>
-									{t("settingsCore.remote.tailscaleServeStop")}
-								</button>
-							) : (
-								<button
-									type="button"
-									className="linear-btn settings-btn-primary"
-									disabled={serveBusy || tailscale.servePort === null || tailscale.servePort === undefined}
-									onClick={() => void handleTailscaleServe("start")}
-								>
-									{serveBusy ? t("settingsCore.remote.tailscaleServeStarting") : t("settingsCore.remote.tailscaleServeStart")}
-								</button>
-							)}
-							<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>
-								<RefreshCw size={13} aria-hidden="true" />
-								<span>{t("settingsCore.remote.tailscaleRefresh")}</span>
-							</button>
-						</div>
-					)}
-					{tailscale.servingUrl === null && tailscale.serveCommand !== null && !isRemoteClient ? (
-						<details className="settings-remote-domain">
-							<summary>{t("settingsCore.remote.tailscaleCommandToggle")}</summary>
-							<div className="settings-remote-command">
-								<code>{tailscale.serveCommand}</code>
-								{copyButton(tailscale.serveCommand, t("settingsCore.remote.copyCommand"), t("settingsCore.remote.commandCopied"))}
-							</div>
-						</details>
-					) : null}
-				</>
-			) : (
-				<>
-					<p className="settings-remote-desc">
-						{t("settingsCore.remote.tailscaleStopped")}
-					</p>
-					<div className="settings-remote-actions">
-						<button type="button" className="linear-btn" disabled={refreshingNet} onClick={() => void handleRefreshNetwork()}>
-							<RefreshCw size={13} aria-hidden="true" />
-							<span>{t("settingsCore.remote.tailscaleRefresh")}</span>
-						</button>
-					</div>
-				</>
-			)}
 		</>
 	);
 
@@ -566,7 +458,7 @@ export function RemoteAccessPage({
 										))}
 									</div>
 									<div className="settings-remote-pane" data-route={route}>
-										{route === "lan" ? lanPane : route === "tailscale" ? tailscalePane : internetPane}
+										{route === "lan" ? lanPane : internetPane}
 										{routeAddress !== null ? (
 											<div className="settings-remote-field">
 												<code className="settings-remote-url-line" data-testid="remote-route-address" title={routeAddress}>

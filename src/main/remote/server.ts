@@ -27,7 +27,6 @@ import {
 import type { DeviceStore } from "./devices";
 import { renderAccessGateHtml } from "./gate";
 import { readRemoteStatic, REMOTE_BOOTSTRAP_PATH, rewriteIndexHtml } from "./static";
-import { verifyTailscaleOwnerHeader } from "./tailscale";
 
 /**
  * The opt-in remote server: while enabled it serves the same renderer bundle
@@ -36,7 +35,6 @@ import { verifyTailscaleOwnerHeader } from "./tailscale";
  * Authentication modes (adapted from Ovis `devswha/ovis`):
  * 1. Session token (`x-remote-token` header, `?token=` query, or `dazzi_remote` HttpOnly cookie).
  * 2. Paired device credential (`dazzi_device` HttpOnly cookie backed by SHA-256 hash in `DeviceStore`).
- * 3. Local `tailscale serve` owner identity (`Tailscale-User-Login` from loopback + tailnet IP).
  *
  * Unauthenticated `GET /` renders the self-contained AccessGate (`gate.ts`) so a phone or
  * remote browser can scan a `?pair=CODE` QR code, type a 6-digit pairing code, or unlock with
@@ -65,7 +63,6 @@ export interface RemoteServerDeps {
 	readonly bootstrapScript: string;
 	readonly bootstrapScriptFor?: (auth: RemoteAuthenticatedContext) => Promise<string> | string;
 	readonly devices?: DeviceStore;
-	readonly tailscaleOwner?: () => string | null;
 	readonly gatePrefs?: () => Promise<{ readonly language: AppSettings["language"]; readonly appearance: AppSettings["appearance"] }>;
 	/** The Dazzi mark drawn on the AccessGate, as a `data:` URL. */
 	readonly gateLogoDataUrl?: string;
@@ -185,29 +182,6 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 					deviceId: matched.id,
 					includeQueryToken: false,
 				};
-			}
-		}
-
-		// 3. Verified local `tailscale serve` owner header
-		const owner = deps.tailscaleOwner?.() ?? null;
-		if (owner !== null) {
-			const tsCheck = verifyTailscaleOwnerHeader({
-				remoteAddress: request.socket?.remoteAddress,
-				tailscaleUserLogin: firstHeader(request.headers["tailscale-user-login"]),
-				forwardedFor: firstHeader(request.headers["x-forwarded-for"]),
-				funnelRequest: firstHeader(request.headers["tailscale-funnel-request"]),
-				owner,
-			});
-			if (tsCheck.kind === "owner") {
-				return {
-					authenticated: true,
-					via: "tailscale",
-					deviceId: null,
-					includeQueryToken: false,
-				};
-			}
-			if (tsCheck.kind === "other_user") {
-				return { authenticated: false, reason: "other_user" };
 			}
 		}
 
@@ -410,7 +384,7 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 				request.method === "GET" &&
 				url.pathname === "/" &&
 				!url.searchParams.has("token") &&
-				(deps.devices !== undefined || deps.tailscaleOwner !== undefined || deps.gatePrefs !== undefined)
+				(deps.devices !== undefined || deps.gatePrefs !== undefined)
 			) {
 				const prefs = (await deps.gatePrefs?.()) ?? { language: "ko" as const, appearance: "light" as const };
 				const html = renderAccessGateHtml({

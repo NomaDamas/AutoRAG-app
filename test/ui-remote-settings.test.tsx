@@ -22,8 +22,6 @@ const mockRemote = vi.hoisted(() => {
 		startTunnel: vi.fn<() => Promise<RemoteAccessStatus>>(),
 		stopTunnel: vi.fn<() => Promise<RemoteAccessStatus>>(),
 		loginTunnel: vi.fn<() => Promise<RemoteAccessStatus>>(),
-		startTailscaleServe: vi.fn<() => Promise<RemoteAccessStatus>>(),
-		stopTailscaleServe: vi.fn<() => Promise<RemoteAccessStatus>>(),
 		onChange: (fn: (status: RemoteAccessStatus) => void) => {
 			listeners.add(fn);
 			return () => {
@@ -81,17 +79,6 @@ function activeStatus(overrides: Partial<RemoteAccessStatus> = {}): RemoteAccess
 		port: 47833,
 		sessions: 1,
 		lanOrigins: ["http://192.168.0.42:47833"],
-		tailscale: {
-			state: "running",
-			dnsName: "mac.tailnet.ts.net",
-			tailnetIp: "100.88.1.2",
-			owner: "user@example.com",
-			servingUrl: null,
-			servingPort: null,
-			serveCommand: "tailscale serve --bg --https=443 http://127.0.0.1:47833",
-			serveUrl: "https://mac.tailnet.ts.net",
-			servePort: 443,
-		},
 		tunnel: QUICK_OFF,
 		pairing: null,
 		devices: [
@@ -163,13 +150,6 @@ describe("Settings → Remote Access page", () => {
 		expect(mockRemote.remote.startPairing).toHaveBeenCalledTimes(1);
 		expect(container.querySelector('[data-testid="remote-pairing-code"]')?.textContent).toBe("482 910");
 		expect(container.querySelector("svg.settings-remote-qr")).not.toBeNull();
-
-		// Tailscale: the tailnet IP as the address until it is published; the command stays available behind a disclosure.
-		await click(button("Tailscale"));
-		expect(button("Publish over HTTPS in Tailnet")).toBeDefined();
-		expect(container.querySelector("details code")?.textContent).toBe("tailscale serve --bg --https=443 http://127.0.0.1:47833");
-		expect(routeAddress()).toBe("http://100.88.1.2:47833");
-		expect(container.querySelector('[data-testid="remote-pairing-code"]')?.textContent).toBe("482 910");
 
 		// Internet: no address until the tunnel is online, then the trycloudflare address.
 		await click(button("Internet"));
@@ -269,54 +249,4 @@ describe("Settings → Remote Access page", () => {
 		expect(routeAddress()).toBe("http://192.168.0.42:51234");
 	});
 
-	it("publishes Dazzi in the tailnet with one click, shows its HTTPS address, and can stop it", async () => {
-		const status = activeStatus();
-		const published: RemoteAccessStatus = {
-			...status,
-			tailscale: { ...status.tailscale!, servingUrl: "https://mac.tailnet.ts.net", servingPort: 443, serveCommand: null, servePort: null },
-		};
-		mockRemote.remote.status.mockResolvedValue(status);
-		mockRemote.remote.startTailscaleServe.mockResolvedValue(published);
-		mockRemote.remote.stopTailscaleServe.mockResolvedValue(status);
-		await render({ remoteAccess: true });
-		await click(button("Tailscale"));
-		expect(routeAddress()).toBe("http://100.88.1.2:47833");
-
-		await click(button("Publish over HTTPS in Tailnet"));
-		expect(mockRemote.remote.startTailscaleServe).toHaveBeenCalledTimes(1);
-		expect(container.textContent).toContain("Published over HTTPS in your tailnet");
-		expect(routeAddress()).toBe("https://mac.tailnet.ts.net");
-
-		await click(button("Stop Publishing"));
-		expect(mockRemote.remote.stopTailscaleServe).toHaveBeenCalledTimes(1);
-		expect(routeAddress()).toBe("http://100.88.1.2:47833");
-	});
-
-	it("shows Tailscale's reason and its admin link when serving is turned off for the tailnet", async () => {
-		const status = activeStatus();
-		mockRemote.remote.status.mockResolvedValue(status);
-		mockRemote.remote.startTailscaleServe.mockResolvedValue({
-			...status,
-			tailscale: { ...status.tailscale!, serveError: { reason: "Serve is not enabled on your tailnet.", enableUrl: "https://login.tailscale.com/f/serve?node=n1" } },
-		});
-		await render({ remoteAccess: true });
-		await click(button("Tailscale"));
-		await click(button("Publish over HTTPS in Tailnet"));
-
-		expect(container.querySelector('[role="alert"]')?.textContent).toContain("Tailscale refused: Serve is not enabled on your tailnet.");
-		expect(button("Turn it on in the Tailscale admin console")).toBeDefined();
-	});
-
-	it("does not offer the Tailscale route at all when Tailscale is not installed on this computer", async () => {
-		const status = activeStatus();
-		mockRemote.remote.status.mockResolvedValue({
-			...status,
-			tailscale: { state: "missing", dnsName: null, tailnetIp: null, owner: null, servingUrl: null, serveCommand: null, serveUrl: null },
-		});
-		await render({ remoteAccess: true });
-
-		const tabs = Array.from(container.querySelectorAll('[role="tab"]')).map((tab) => tab.textContent);
-		expect(tabs).toEqual(["Same Wi-Fi", "Internet"]);
-		expect(routeAddress()).toBe("http://192.168.0.42:47833");
-	});
 });

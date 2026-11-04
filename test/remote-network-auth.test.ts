@@ -6,7 +6,6 @@ import { PassThrough } from "node:stream";
 import type { NetworkInterfaceInfo } from "node:os";
 import { describe, expect, it } from "vitest";
 import { normalizeTunnelHostname } from "../src/shared/remote-contract";
-import { findTailscaleBinary, parseTailscale, startTailscaleServe, stopTailscaleServe, verifyTailscaleOwnerHeader } from "../src/main/remote/tailscale";
 import { discoverLanOrigins } from "../src/main/remote/lan";
 import { createTunnelManager, extractTryCloudflareUrl } from "../src/main/remote/tunnel";
 import {
@@ -17,202 +16,8 @@ import {
 	parseCookieHeader,
 } from "../src/main/remote/auth";
 
-describe("Tailscale read-only integration & Serve owner verification", () => {
-	it("parses missing, stopped, and running tailscale status with >2^53 UserID precision", () => {
-		expect(parseTailscale(null, 47833)).toEqual({
-			state: "missing",
-			dnsName: null,
-			tailnetIp: null,
-			owner: null,
-			servingUrl: null,
-			servingPort: null,
-			serveCommand: null,
-			serveUrl: null,
-			servePort: null,
-		});
-
-		expect(parseTailscale({ status: JSON.stringify({ BackendState: "Stopped" }), serve: null }, 47833).state).toBe("stopped");
-
-		// 64-bit integer UserID exceeding Number.MAX_SAFE_INTEGER
-		const statusJson = `{
-			"BackendState": "Running",
-			"Self": {
-				"DNSName": "macbook.tailnet-abc.ts.net.",
-				"UserID": 90071992547409931,
-				"TailscaleIPs": ["100.101.102.103", "fd7a:115c:a1e0::1"]
-			},
-			"User": {
-				"90071992547409931": { "LoginName": "owner@example.com" }
-			}
-		}`;
-		const serveOccupied443 = JSON.stringify({
-			TCP: { "443": { HTTPS: true } },
-			Web: {
-				"macbook.tailnet-abc.ts.net:443": {
-					Handlers: { "/": { Proxy: "http://127.0.0.1:3000" } },
-				},
-			},
-		});
-		const parsed = parseTailscale({ status: statusJson, serve: serveOccupied443 }, 47833);
-		expect(parsed).toEqual({
-			state: "running",
-			dnsName: "macbook.tailnet-abc.ts.net",
-			tailnetIp: "100.101.102.103",
-			owner: "owner@example.com",
-			servingUrl: null,
-			servingPort: null,
-			serveCommand: "tailscale serve --bg --https=8443 http://127.0.0.1:47833",
-			serveUrl: "https://macbook.tailnet-abc.ts.net:8443",
-			servePort: 8443,
-			reclaimable: false,
-		});
-
-		// When tailscale serve already proxies "/" to Dazzi's port over HTTPS:
-		const serveActive = JSON.stringify({
-			TCP: { "443": { HTTPS: true } },
-			Web: {
-				"macbook.tailnet-abc.ts.net:443": {
-					Handlers: { "/": { Proxy: "http://127.0.0.1:47833" } },
-				},
-			},
-		});
-		const served = parseTailscale({ status: statusJson, serve: serveActive }, 47833);
-		expect(served.servingUrl).toBe("https://macbook.tailnet-abc.ts.net");
-		expect(served.serveCommand).toBeNull();
-	});
-
-	it("trusts Tailscale-User-Login only from loopback peer with a CGNAT/ULA tailnet X-Forwarded-For", () => {
-		// Valid owner login via local tailscaled
-		expect(
-			verifyTailscaleOwnerHeader({
-				remoteAddress: "127.0.0.1",
-				tailscaleUserLogin: "Owner@example.com",
-				forwardedFor: "100.88.1.4",
-				funnelRequest: null,
-				owner: "owner@example.com",
-			}),
-		).toEqual({ kind: "owner", login: "Owner@example.com" });
-
-		// Different tailnet user -> explicit other_user refusal
-		expect(
-			verifyTailscaleOwnerHeader({
-				remoteAddress: "::ffff:127.0.0.1",
-				tailscaleUserLogin: "friend@example.com",
-				forwardedFor: "100.88.1.5",
-				funnelRequest: null,
-				owner: "owner@example.com",
-			}),
-		).toEqual({ kind: "other_user" });
-
-		// Forged header from LAN peer -> ignored (none)
-		expect(
-			verifyTailscaleOwnerHeader({
-				remoteAddress: "192.168.1.55",
-				tailscaleUserLogin: "owner@example.com",
-				forwardedFor: "100.88.1.4",
-				funnelRequest: null,
-				owner: "owner@example.com",
-			}),
-		).toEqual({ kind: "none" });
-
-		// Reverse proxy (e.g. Cloudflare/nginx) passing public X-Forwarded-For -> ignored
-		expect(
-			verifyTailscaleOwnerHeader({
-				remoteAddress: "127.0.0.1",
-				tailscaleUserLogin: "owner@example.com",
-				forwardedFor: "203.0.113.10",
-				funnelRequest: null,
-				owner: "owner@example.com",
-			}),
-		).toEqual({ kind: "none" });
-
-		// Funnel request -> never auto-trusted without pairing/token
-		expect(
-			verifyTailscaleOwnerHeader({
-				remoteAddress: "127.0.0.1",
-				tailscaleUserLogin: "owner@example.com",
-				forwardedFor: "100.88.1.4",
-				funnelRequest: "?1",
-				owner: "owner@example.com",
-			}),
-		).toEqual({ kind: "none" });
-	});
-});
-
-describe("Tailscale serve from the app (one click instead of a terminal command)", () => {
-	const recorder = (results: readonly { code: number; stdout?: string; stderr?: string }[]) => {
-		const calls: string[][] = [];
-		let index = 0;
-		const run = async (_binary: string, args: readonly string[]) => {
-			calls.push([...args]);
-			const result = results[Math.min(index, results.length - 1)] ?? { code: 0 };
-			index += 1;
-			return { code: result.code, stdout: result.stdout ?? "", stderr: result.stderr ?? "" };
-		};
-		return { calls, run };
-	};
-
-	it("publishes Dazzi's port on the suggested HTTPS port, in the background, without an interactive prompt", async () => {
-		const { calls, run } = recorder([{ code: 0 }]);
-		await expect(startTailscaleServe({ binary: "/usr/local/bin/tailscale", httpsPort: 8443, port: 49593, run })).resolves.toEqual({ ok: true });
-		expect(calls).toEqual([["serve", "--bg", "--yes", "--https=8443", "http://127.0.0.1:49593"]]);
-	});
-
-	it("passes Tailscale's own reason through when serve is refused (HTTPS certificates off, not signed in)", async () => {
-		const { run } = recorder([{ code: 1, stderr: "Serve is not enabled on your tailnet.\nTo enable, visit:\n\n https://login.tailscale.com/f/serve?node=n1\n" }]);
-		await expect(startTailscaleServe({ binary: "tailscale", httpsPort: 443, port: 47833, run })).resolves.toEqual({
-			ok: false,
-			reason: "Serve is not enabled on your tailnet.",
-			enableUrl: "https://login.tailscale.com/f/serve?node=n1",
-		});
-	});
-
-	it("removes only the route Dazzi added, never the rest of the user's serve config", async () => {
-		const { calls, run } = recorder([{ code: 0 }]);
-		await expect(stopTailscaleServe({ binary: "tailscale", httpsPort: 8443, run })).resolves.toEqual({ ok: true });
-		expect(calls).toEqual([["serve", "--yes", "--https=8443", "off"]]);
-		expect(calls.flat()).not.toContain("reset");
-	});
-
-	it("reports the HTTPS port it would publish on, skipping one another service already uses", () => {
-		const status = JSON.stringify({ BackendState: "Running", Self: { DNSName: "mac.tail.ts.net.", UserID: 1, TailscaleIPs: ["100.65.93.57"] }, User: { "1": { LoginName: "me@x.com" } } });
-		const serve = JSON.stringify({ TCP: { "443": { HTTPS: true } }, Web: { "mac.tail.ts.net:443": { Handlers: { "/": { Proxy: "http://127.0.0.1:7317" } } } } });
-		expect(parseTailscale({ status, serve }, 49593)).toMatchObject({ servingUrl: null, servePort: 8443, serveUrl: "https://mac.tail.ts.net:8443" });
-		const servingDazzi = JSON.stringify({ TCP: { "8443": { HTTPS: true } }, Web: { "mac.tail.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:49593" } } } } });
-		expect(parseTailscale({ status, serve: servingDazzi }, 49593)).toMatchObject({ servingUrl: "https://mac.tail.ts.net:8443", servingPort: 8443, servePort: null });
-	});
-});
-
-describe("a Dazzi route left behind by an earlier run", () => {
-	const status = JSON.stringify({ BackendState: "Running", Self: { DNSName: "mac.tail.ts.net.", UserID: 1, TailscaleIPs: ["100.65.93.57"] }, User: { "1": { LoginName: "me@x.com" } } });
-	// 443 belongs to another app; 8443 still points at the port the previous Dazzi run listened on.
-	const leftover = JSON.stringify({
-		TCP: { "443": { HTTPS: true }, "8443": { HTTPS: true } },
-		Web: {
-			"mac.tail.ts.net:443": { Handlers: { "/": { Proxy: "http://127.0.0.1:7317" } } },
-			"mac.tail.ts.net:8443": { Handlers: { "/": { Proxy: "http://127.0.0.1:49593" } } },
-		},
-	});
-
-	it("re-points that route at this run instead of piling up a new port, and never takes another app's route", () => {
-		const parsed = parseTailscale({ status, serve: leftover }, 63540, [443, 8443, 47833], [49593]);
-		expect(parsed).toMatchObject({ servingUrl: null, servePort: 8443, serveUrl: "https://mac.tail.ts.net:8443", reclaimable: true });
-		expect(parsed.serveCommand).toBe("tailscale serve --bg --https=8443 http://127.0.0.1:63540");
-	});
-
-	it("still picks a fresh port when the leftover route is not one Dazzi made", () => {
-		expect(parseTailscale({ status, serve: leftover }, 63540, [443, 8443, 47833], [])).toMatchObject({ servePort: 47833, reclaimable: false });
-	});
-});
-
-describe("finding Tailscale on this computer", () => {
-	it("is not found when neither the CLI nor the macOS app is installed", () => {
-		expect(findTailscaleBinary({ PATH: "/nonexistent" }, "linux")).toBeNull();
-	});
-});
-
 describe("LAN IPv4 origin discovery", () => {
-	it("collects private LAN IPv4 addresses and excludes loopback, link-local, and Tailscale CGNAT", () => {
+	it("collects private LAN IPv4 addresses and excludes loopback, link-local, and CGNAT (100.64.0.0/10)", () => {
 		const interfaces: Record<string, NetworkInterfaceInfo[]> = {
 			lo0: [{ address: "127.0.0.1", netmask: "255.0.0.0", family: "IPv4", mac: "00:00:00:00:00:00", internal: true, cidr: "127.0.0.1/8" }],
 			en0: [
@@ -230,7 +35,7 @@ describe("LAN IPv4 origin discovery", () => {
 	});
 });
 
-describe("Cloudflare tunnel manager (non-Tailscale public HTTPS)", () => {
+describe("Cloudflare tunnel manager (public HTTPS)", () => {
 	const fakeProcess = () => {
 		const proc = Object.assign(new EventEmitter(), {
 			stdout: new PassThrough(),

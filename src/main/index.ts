@@ -961,8 +961,6 @@ app.whenReady().then(async () => {
 	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
 	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
 	ipcMain.handle(REMOTE_CHANNELS.loginTunnel, () => ensureRemoteHost().loginTunnel());
-	ipcMain.handle(REMOTE_CHANNELS.startTailscaleServe, () => ensureRemoteHost().startTailscaleServe());
-	ipcMain.handle(REMOTE_CHANNELS.stopTailscaleServe, () => ensureRemoteHost().stopTailscaleServe());
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});

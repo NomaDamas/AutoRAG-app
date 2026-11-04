@@ -17,7 +17,6 @@ import type { AppSettings } from "../../shared/settings-contract";
 function gateStrings(language: AppSettings["language"]) {
 	const t = i18n.getFixedT(language);
 	return {
-		otherUserNotice: t("main.remoteGate.otherUserNotice"),
 		codeLabel: t("main.remoteGate.codeLabel"),
 		codeShortError: t("main.remoteGate.codeShortError"),
 		codeInvalidError: t("main.remoteGate.codeInvalidError"),
@@ -205,7 +204,6 @@ export function renderAccessGateHtml(options: {
 			${options.logoDataUrl === null ? "" : `<img class="gate-logo" src="${options.logoDataUrl}" alt="" aria-hidden="true" />`}
 			<h1 id="gate-title">${escapeHtml(APP_NAME)}</h1>
 		</div>
-		${options.reason === "other_user" ? `<p class="gate-notice" role="status">${escapeHtml(copy.otherUserNotice)}</p>` : ""}
 		<form id="pair-form" aria-labelledby="gate-title" novalidate>
 			<label for="pair-code">${escapeHtml(copy.codeLabel)}</label>
 			<input

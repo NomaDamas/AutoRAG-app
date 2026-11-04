@@ -1,5 +1,5 @@
 /**
- * Non-Tailscale remote access over an outbound Cloudflare tunnel. Nothing listens on
+ * Remote access from outside the LAN over an outbound Cloudflare tunnel. Nothing listens on
  * the router and the phone needs no app; every visitor still meets Dazzi's own gate
  * (pairing code, `dazzi_device` cookie, or access token).
  *

@@ -303,25 +303,4 @@ describe("remote server", () => {
 		expect(throttled.status).toBe(429);
 	});
 
-	it("admits local Tailscale Serve owner login without a code and refuses another tailnet user with reason other_user", async () => {
-		const { origin } = await start({
-			tailscaleOwner: () => "owner@example.com",
-		});
-
-		const ownerRes = await fetch(`${origin}${REMOTE_ROUTES.health}`, {
-			headers: {
-				"tailscale-user-login": "owner@example.com",
-				"x-forwarded-for": "100.100.10.20",
-			},
-		});
-		expect(await ownerRes.json()).toEqual({ ok: true, authenticated: true, via: "tailscale" });
-
-		const strangerRes = await fetch(`${origin}${REMOTE_ROUTES.health}`, {
-			headers: {
-				"tailscale-user-login": "colleague@example.com",
-				"x-forwarded-for": "100.100.10.21",
-			},
-		});
-		expect(await strangerRes.json()).toEqual({ ok: true, authenticated: false, reason: "other_user" });
-	});
 });

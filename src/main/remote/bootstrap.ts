@@ -323,7 +323,6 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 			port: Number(location.port || hostStatus?.port || 0),
 			sessions: hostStatus?.sessions ?? 1,
 			lanOrigins: hostStatus?.lanOrigins ?? [],
-			tailscale: hostStatus?.tailscale,
 			tunnel: hostStatus?.tunnel,
 			pairing: hostStatus?.pairing ?? null,
 			devices: mapDevices(hostStatus?.devices ?? []),
@@ -347,8 +346,6 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		startTunnel: remoteStatus,
 		stopTunnel: remoteStatus,
 		loginTunnel: remoteStatus,
-		startTailscaleServe: remoteStatus,
-		stopTailscaleServe: remoteStatus,
 		onChange: (listener) => subscribe("remote.onChange", () => { void remoteStatus().then(listener, () => {}); }),
 	};
 	for (const target of targets) autorag[target] = bridgeFor(target);

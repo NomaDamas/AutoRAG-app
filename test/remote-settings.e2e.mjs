@@ -1,6 +1,6 @@
 /**
  * End-to-end live verification of Remote Access (Ovis-inspired pairing, QR codes,
- * the route picker (Same Wi-Fi / Tailscale / Internet), Paired Devices management,
+ * the route picker (Same Wi-Fi / Internet), Paired Devices management,
  * and real browser Finder sessions).
  *
  * Run through the QA runner:
@@ -198,9 +198,7 @@ try {
 		await expect(phone.getByTestId("remote-access-gate")).toBeVisible({ timeout: 10_000 });
 		await phone.screenshot({ path: join(out, "06-revoked-device-returned-to-gate.png") });
 
-		// 8. The Tailscale and Internet routes on host Settings
-		await page.getByRole("tab", { name: en.routeTailscale, exact: true }).click();
-		await section().screenshot({ path: join(out, "07-host-tailscale-tab.png") });
+		// 8. The Internet route on host Settings
 		await page.getByRole("tab", { name: en.routeInternet, exact: true }).click();
 		await expect(page.locator("details.settings-remote-domain, .settings-remote-pane[data-route='internet']").first()).toBeVisible();
 		await section().screenshot({ path: join(out, "08-host-tunnel-tab.png") });

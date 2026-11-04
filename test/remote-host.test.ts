@@ -5,14 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRemoteHost } from "../src/main/remote/host";
 import { DEFAULT_SETTINGS } from "../src/shared/settings-contract";
-import type * as Tailscale from "../src/main/remote/tailscale";
 
 vi.mock("electron", () => ({ ipcMain: { handle: vi.fn() } }));
-// Only the CLI read is replaced; the server keeps the real tailnet-address checks.
-vi.mock("../src/main/remote/tailscale", async (importOriginal) => ({
-	...(await importOriginal<typeof Tailscale>()),
-	readTailscaleStatus: async () => ({ state: "missing", dnsName: null, tailnetIp: null, owner: null, servingUrl: null, serveCommand: null, serveUrl: null }),
-}));
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => {

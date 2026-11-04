@@ -271,7 +271,7 @@ describe("the Remote Access page", () => {
 		const search = host.querySelector<HTMLInputElement>(".settings-sidebar input");
 		expect(search).not.toBeNull();
 		await act(async () => {
-			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "tailscale");
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "pairing");
 			search?.dispatchEvent(new Event("input", { bubbles: true }));
 		});
 		const labels = [...host.querySelectorAll(".settings-nav-item")].map((item) => item.textContent?.trim());
