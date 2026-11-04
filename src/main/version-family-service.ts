@@ -50,6 +50,9 @@ import {
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
 
+/** Stands for the dupey call a stopped service did not make; nothing reads it. */
+const STOPPED_MESSAGE = "version-family service stopped";
+
 /**
  * The message of a scan that outlasted its time limit (`DUPEY_TIMEOUT_MS`, 120 s): the dupey runner (`dupey-runner.ts`)
  * ends the process and fails the call with it. A scan the app stopped fails with another message, so it is no time-out.
@@ -181,6 +184,10 @@ export interface VersionFamilyService {
 	refresh(): Promise<FsVersionFamiliesResult>;
 	/** Startup scan plus the repeating interval. */
 	start(): Promise<FsVersionFamiliesResult>;
+	/**
+	 * Clears the timers and abandons the scan in flight: it starts no further dupey call and writes nothing. `start`
+	 * undoes it. The dupey process a call already has running is the runner's to end (`dupey-runner.ts`).
+	 */
 	stop(): void;
 	/** Re-reads the interval from Settings and re-arms the timer. */
 	reschedule(): void;
@@ -227,6 +234,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	let scanningRetries = false;
 	/** The "Check again" waiting for a scheduled scan to end. */
 	let queuedRetry: Promise<FsVersionFamiliesResult> | null = null;
+	/** `stop` was called and `start` has not been since: scans in flight give up. */
+	let stopped = false;
 	let timer: unknown = null;
 	let mutationSeq = 0;
 	const touchedAt = new Map<string, number>();
@@ -552,6 +561,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		const key = unitKey(scope);
 		const known = timedOut.get(key);
 		if (known !== undefined && !retryTimedOut) return { ok: false, failure: known.failure };
+		if (stopped) return { ok: false, failure: { name: unit.name, path: scope.path, excludeDirs: scope.excludeDirs, reason: "error", message: STOPPED_MESSAGE } };
 		try {
 			const scan =
 				scope.excludeDirs.length === 0
@@ -569,6 +579,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				reason: isDupeyTimeout(message) ? "timeout" : "error",
 				message,
 			};
+			// A scan the app ended says nothing about the folder, and nothing reads its result.
+			if (stopped) return { ok: false, failure };
 			console.error(`dupey scan failed for ${scope.path}: ${message}`);
 			if (failure.reason === "timeout") timedOut.set(key, { failure, at: now().toISOString() });
 			else timedOut.delete(key);
@@ -650,6 +662,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		const failures: FsVersionFamilyScanFailure[] = [];
 		let read = 0;
 		for (const unit of units) {
+			if (stopped) break;
 			const result = await scanUnit(unit, retryTimedOut);
 			if (!result.ok) {
 				failures.push(result.failure);
@@ -676,6 +689,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		const stamps: Record<string, FileStamp> = {};
 		let read = 0;
 		for (const location of await deps.locations()) {
+			if (stopped) break;
 			// Only content folders and cloud drives: Recents is virtual, and a
 			// home folder or whole disk is far too large for dupey to scan.
 			if (!location.available || !location.scanned) continue;
@@ -733,9 +747,12 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		// win, or the deleted duplicate comes back until the next interval.
 		const startedAtSeq = mutationSeq;
 		const { families: scanned, locations, read, failures, stamps: scannedStamps } = await scanLocations(retryTimedOut);
+		// Stopped while scanning: what was read is partial and the app is on its way out.
+		if (stopped) return result();
 		if (read === 0 && failures.length > 0) {
 			// Nothing was read: the snapshot (and its scannedAt) stays as it was, and the failures are reported.
 			return serialize(async () => {
+				if (stopped) return published ?? envelope(null);
 				lastError = null;
 				lastFailures = failures;
 				await persistScanMemory(locations);
@@ -755,6 +772,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			});
 		}
 		await serialize(async () => {
+			if (stopped) return;
 			lastError = null;
 			lastFailures = failures;
 			const kept = keepFromFailedScopes(await load(), failures);
@@ -984,11 +1002,13 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		reverify,
 		applyDirChanges,
 		async start(): Promise<FsVersionFamiliesResult> {
+			stopped = false;
 			arm();
 			for (const path of pendingRename) schedulePendingRename(path);
 			return scan(false);
 		},
 		stop(): void {
+			stopped = true;
 			if (timer !== null) {
 				clearTimer(timer);
 				timer = null;

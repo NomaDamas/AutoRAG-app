@@ -951,6 +951,72 @@ describe("version-family service — a failed scan stays local", () => {
 		});
 	});
 
+	describe("stop", () => {
+		it("abandons a scan in flight: no further dupey call, nothing written", async () => {
+			const gate = Promise.withResolvers<void>();
+			const calls: string[] = [];
+			const h = harness({
+				locations: async () => [place("Desktop", "/home/Desktop"), place("Documents", "/home/Documents")],
+				scanDuplicates: async (dir) => {
+					calls.push(dir);
+					await gate.promise;
+					// What the runner makes of a dupey that was ended on shutdown.
+					throw new Error("dupey was stopped.");
+				},
+			});
+			const service = createVersionFamilyService(h.deps);
+			const scanning = service.start();
+			await vi.waitFor(() => expect(calls).toEqual(["/home/Desktop"]));
+
+			service.stop();
+			gate.resolve();
+			await scanning;
+
+			expect(calls).toEqual(["/home/Desktop"]);
+			expect(h.writes).toBe(0);
+			expect(h.changes).toBe(0);
+		});
+
+		it("does not remember a scan it ended as a time-out", async () => {
+			const gate = Promise.withResolvers<void>();
+			const calls: string[] = [];
+			const h = harness({
+				scanDuplicates: async (dir) => {
+					calls.push(dir);
+					// The first call is the one the app ended; dupey's own time-out text is all the caller could go by.
+					if (calls.length === 1) {
+						await gate.promise;
+						throw timeout();
+					}
+					return scanOf([]);
+				},
+			});
+			const service = createVersionFamilyService(h.deps);
+			const scanning = service.start();
+			await vi.waitFor(() => expect(calls).toHaveLength(1));
+
+			service.stop();
+			gate.resolve();
+			await scanning;
+			expect(h.writes).toBe(0);
+			expect(h.persisted()).toBeNull();
+
+			// Started again, the folder is scanned: it was never a folder that timed out.
+			await service.start();
+			expect(calls).toEqual(["/home/Desktop", "/home/Desktop"]);
+		});
+
+		it("scans again after start", async () => {
+			const h = harness();
+			const service = createVersionFamilyService(h.deps);
+			service.stop();
+
+			await service.start();
+
+			expect(h.scans).toEqual(["/home/Desktop"]);
+		});
+	});
+
 	it("runs one scan at a time", async () => {
 		const h = harness();
 		const service = createVersionFamilyService(h.deps);
