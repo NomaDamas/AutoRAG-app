@@ -1,27 +1,36 @@
-import { LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, type IndexingPhase, type IndexingStatus } from "../shared/onboarding-contract";
+import { NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../shared/onboarding-contract";
 
 /**
- * Phase → percent/remaining. The read phase is measured from the parsed mirror
- * (files actually handled); the later phases have no per-file work to count, so
- * their share of the bar is estimated from elapsed time against the same
- * files-per-minute the local ETA uses. Progress never reaches 100 until the
- * refresh reports success, so a slow tail never looks finished.
+ * The first index is keyword-only, so the bar it fills has one measurable worker
+ * at a time: the parsed mirror reads (and lists) each source, then MinSync's
+ * bundled SPLADE encoder writes the sparse index. There is no dense embedding
+ * phase, so the read share of the bar is larger than the old local/cloud layout
+ * and the SPLADE tail is measured either from MinSync's own crash-resume log
+ * (committed files) or, before anything is committed, from elapsed time against
+ * the same keyword-only rate the ETA uses. Progress never reaches 100 here: the
+ * run's success is the only 100, so a slow tail never looks finished.
  */
 
-export interface PhaseProgressInput {
-	readonly state: IndexingStatus["state"];
-	readonly phase: IndexingPhase | null;
+/** Phases of the keyword-only refresh, as `refresh-progress.json` reports them. */
+export type IndexingRunPhase = "parsed" | "minsync" | "finalizing";
+
+/** Only the three states that change the bar; anything else is treated as running. */
+export type IndexingRunState = "idle" | "running" | "success" | "failed";
+
+export interface IndexingProgressInput {
+	readonly state: IndexingRunState;
+	readonly phase: IndexingRunPhase | null;
+	/** Files the parsed mirror has handled (read or skipped). */
 	readonly processedFiles: number;
-	/** Files MinSync has already committed during the `minsync` phase (`progress.jsonl`). */
-	readonly embeddedFiles?: number;
+	/** Files the pre-scan expects the first index to read (left-out folders already subtracted). */
 	readonly totalFiles: number;
+	/** Files MinSync has already committed during `minsync` (`progress.jsonl`). */
+	readonly minsyncFiles: number;
 	/** Time spent in the current phase. */
 	readonly phaseElapsedMs: number;
-	/** False for keyword-only indexing: no embedding phase, so reading takes 90% of the bar. Default true. */
-	readonly embedding?: boolean;
 }
 
-export interface PhaseProgressResult {
+export interface IndexingProgressResult {
 	readonly progress: number;
 	readonly remainingMinutes: number | null;
 }
@@ -31,43 +40,41 @@ function clamp01(value: number): number {
 	return value >= 1 ? 1 : value;
 }
 
-export function computeIndexingProgress(input: PhaseProgressInput): PhaseProgressResult {
+export function computeIndexingProgress(input: IndexingProgressInput): IndexingProgressResult {
 	if (input.state === "success") return { progress: 100, remainingMinutes: null };
 	if (input.state === "idle") return { progress: 0, remainingMinutes: null };
-	const embedding = input.embedding !== false;
-	const filesPerMinute = embedding ? LOCAL_FILES_PER_MINUTE : NONE_FILES_PER_MINUTE;
-	const readShare = embedding ? 50 : 90;
-	const expectedMs = input.totalFiles > 0 ? (input.totalFiles / filesPerMinute) * 60_000 : null;
+	const totalFiles = Math.max(0, input.totalFiles);
+	const processedFiles = Math.max(0, input.processedFiles);
+	const minsyncFiles = Math.max(0, input.minsyncFiles);
+	// Before the pre-scan reports a total there is no ceiling to measure against, so the ETA is the floor the folder walk alone costs.
+	const expectedMs = totalFiles > 0 ? (totalFiles / NONE_FILES_PER_MINUTE) * 60_000 : null;
 	const ratio = expectedMs === null ? 0 : clamp01(input.phaseElapsedMs / expectedMs);
-	const remainingFrom = (elapsed: number): number | null =>
-		expectedMs === null ? null : Math.max(0, Math.ceil((expectedMs - elapsed) / 60_000));
-	const result = ((): PhaseProgressResult => {
+	const remainingFrom = (elapsed: number): number | null => (expectedMs === null ? null : Math.max(0, Math.ceil((expectedMs - elapsed) / 60_000)));
+	const result = ((): IndexingProgressResult => {
 		switch (input.phase) {
 			case "parsed": {
-				const measured = input.totalFiles > 0 ? clamp01(input.processedFiles / input.totalFiles) * readShare : 0;
-				const remaining =
-					input.totalFiles > 0 ? Math.max(0, Math.ceil((input.totalFiles - input.processedFiles) / filesPerMinute)) : null;
-				return { progress: measured, remainingMinutes: remaining };
+				if (totalFiles === 0) return { progress: 0, remainingMinutes: NONE_MIN_MINUTES };
+				const measured = clamp01(processedFiles / totalFiles) * 60;
+				return { progress: measured, remainingMinutes: Math.max(0, Math.ceil((totalFiles - processedFiles) / NONE_FILES_PER_MINUTE)) };
 			}
 			case "minsync": {
-				const minsyncTotal = Math.max(input.processedFiles, input.totalFiles);
-				const measuredRatio =
-					input.embeddedFiles !== undefined && input.embeddedFiles > 0 && minsyncTotal > 0
-						? clamp01(input.embeddedFiles / minsyncTotal)
-						: 0;
-				const minsyncRatio = Math.max(ratio, measuredRatio);
-				const remaining =
-					measuredRatio > ratio && minsyncTotal > 0 && input.embeddedFiles !== undefined
-						? Math.max(0, Math.ceil((minsyncTotal - input.embeddedFiles) / LOCAL_FILES_PER_MINUTE))
-						: remainingFrom(input.phaseElapsedMs);
-				return { progress: 50 + 45 * minsyncRatio, remainingMinutes: remaining };
+				// MinSync's own committed files are the exact measure; before any is committed, elapsed time against the rate is the best estimate.
+				const measuredRatio = minsyncFiles > 0 ? clamp01(minsyncFiles / Math.max(processedFiles, totalFiles)) : 0;
+				if (measuredRatio > 0) {
+					const minsyncTotal = Math.max(processedFiles, totalFiles);
+					return {
+						progress: 60 + 35 * measuredRatio,
+						remainingMinutes: Math.max(0, Math.ceil((minsyncTotal - minsyncFiles) / NONE_FILES_PER_MINUTE)),
+					};
+				}
+				return { progress: 60 + 35 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
 			}
 			case "finalizing":
-				return { progress: (embedding ? 95 : 90) + (embedding ? 4 : 9) * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
+				return { progress: 95 + 4 * ratio, remainingMinutes: remainingFrom(input.phaseElapsedMs) };
 			default:
-				return { progress: 0, remainingMinutes: input.totalFiles > 0 ? Math.ceil(input.totalFiles / filesPerMinute) : null };
+				return { progress: 0, remainingMinutes: totalFiles > 0 ? Math.ceil(totalFiles / NONE_FILES_PER_MINUTE) : NONE_MIN_MINUTES };
 		}
 	})();
 	// A failed run has no remaining estimate, even though its last phase is known.
-	return input.state === "failed" ? { progress: result.progress, remainingMinutes: null } : result;
+	return input.state === "failed" ? { progress: Math.min(result.progress, 99), remainingMinutes: null } : result;
 }

@@ -9,7 +9,6 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
 import type { InteractionHub } from "./interaction-hub";
-import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
 import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
@@ -36,10 +35,9 @@ import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
 import type { AccountService } from "./account-service";
-import type { OnboardingService } from "./onboarding-service";
+import type { FirstRunService } from "./first-run-service";
 import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
-import type { SmartIndexingService } from "./smart-indexing-service";
 import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
@@ -194,14 +192,6 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.historyGet, (_event, chatId: string) => service.historyGet(chatId));
 	ipcMain.handle(SEARCH_CHANNELS.historySearch, (_event, query: string) => service.historySearch(query));
 	ipcMain.handle(SEARCH_CHANNELS.historyClear, () => service.historyClear());
-}
-
-export function registerSmartIndexingIpcHandlers(service: SmartIndexingService): void {
-	ipcMain.handle(SMART_INDEXING_CHANNELS.analyze, (_event, runId: unknown, roots: unknown) => {
-		if (typeof runId !== "string" || !Array.isArray(roots)) throw new TypeError("smartIndexing:analyze expects a run id and an array of folders");
-		return service.analyze(runId, roots);
-	});
-	ipcMain.handle(SMART_INDEXING_CHANNELS.cancel, (_event, runId: unknown) => (typeof runId === "string" ? service.cancel(runId) : undefined));
 }
 
 interface ConfigUpdatePayload {
@@ -400,31 +390,14 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
 }
 
-/** First-run onboarding: every payload is validated inside the service. */
-export function registerOnboardingIpcHandlers(service: OnboardingService): void {
+/** The zero-question first run: load, permissions, start/status/complete. The service validates its own state. */
+export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
-	ipcMain.handle(ONBOARDING_CHANNELS.save, (_event, draft: unknown) => service.save(draft));
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
 	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
-	ipcMain.handle(ONBOARDING_CHANNELS.requestNotifications, () => service.requestNotifications());
-	ipcMain.handle(ONBOARDING_CHANNELS.openNotificationSettings, () => service.openNotificationSettings());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkNetwork, () => service.checkNetwork());
-	ipcMain.handle(ONBOARDING_CHANNELS.setLaunchAtLogin, (_event, enabled: unknown) => {
-		if (typeof enabled !== "boolean") throw new TypeError("onboarding:setLaunchAtLogin expects a boolean");
-		return service.setLaunchAtLogin(enabled);
-	});
-	ipcMain.handle(ONBOARDING_CHANNELS.folderCandidates, () => service.folderCandidates());
-	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
-	ipcMain.handle(ONBOARDING_CHANNELS.scanFolders, (_event, paths: unknown) => {
-		if (!Array.isArray(paths)) throw new TypeError("onboarding:scanFolders expects an array of paths");
-		return service.scanFolders(paths);
-	});
-	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
-	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkModel, () => service.checkModel());
-	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
-	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
+	ipcMain.handle(ONBOARDING_CHANNELS.start, () => service.start());
+	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
 }
 

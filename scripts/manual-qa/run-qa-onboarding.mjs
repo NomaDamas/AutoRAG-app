@@ -1,555 +1,270 @@
-// Drives first-run onboarding end to end in the built app: every step, the real
-// Full Disk Access probe, folder pre-scan, the shared-config write, a real first
-// index (local embedder), and the end of onboarding.
+// Drives the zero-question first run end to end in the built app: the real Full
+// Disk Access gate, the folder pre-scan, the keyword-only config write, the real
+// first index (parsed mirror + MinSync's bundled SPLADE encoder, no dense model),
+// the generated tour, and the plans sheet that ends the first run.
 //
-// A first run now opens TWO windows: the Finder (usable at once) and the
-// onboarding window beside it (1120×720). This lane drives the onboarding
-// window, checks the Finder stays interactive and untouched while it runs, and
-// checks the index finishing ends onboarding by itself — the onboarding window
-// is then closed the way a user closes it.
-
-// AUTORAG_HOME and AUTORAG_CONFIG point inside a temp dir, so the user's own
-// config and index are never touched. Electron resolves the home folder from
-// the OS (not $HOME), so the lane deselects the real Desktop/Documents
-// candidates and adds two fixture folders through a stubbed folder dialog. The
-// local native embedding model is referenced from the real MinSync cache when
-// present (otherwise the first index downloads it).
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+// There is now ONE window: the Finder window itself opens with the pending flag
+// and hosts the first-run overlay (`.fr-root`), so this lane drives that window
+// through `data-screen` = permission → setup → ready → tour → plans. Nothing is
+// asked beyond Full Disk Access: the run starts on its own and the tour is the
+// only interaction.
+//
+// The first run scans the OS's own default folders (Desktop, Documents,
+// Downloads, iCloud Drive), and Electron resolves those from the OS — on macOS
+// `HOME` in the launch env does not move `app.getPath("documents")` (verified) —
+// so the fixtures go in this process's home. The QA runner boots a throwaway VM
+// home, where that is disposable; a host run writes them into the real home, so
+// existing files are never overwritten and every created file is removed at the
+// end. AUTORAG_HOME / AUTORAG_CONFIG point inside a temp dir either way, so the
+// user's own config and index are never touched.
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder, onboardingWindow, ROOT } from "./launch-finder.mjs";
-import { homeDir, isWindows, rmRetry } from "./platform.mjs";
+import { AI_PANEL, finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { homeDir, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding");
 mkdirSync(EVIDENCE, { recursive: true });
-const WORK = mkdtempSync(join(tmpdir(), "autorag-onboarding-"));
-const FIXTURES = join(WORK, "fixtures");
-const AUTORAG_HOME = join(WORK, "autorag-home");
-const CONFIG = join(WORK, "config", "config.json");
-const DESK = join(FIXTURES, "회의");
-const DOCS = join(FIXTURES, "reports");
-mkdirSync(join(DESK, "node_modules"), { recursive: true });
-mkdirSync(DOCS, { recursive: true });
-writeFileSync(join(DESK, "node_modules", "skip.md"), "# skipped dependency folder\n");
-writeFileSync(join(DESK, "회의록.md"), "# 3분기 회의록\n\n마케팅 비용은 전분기보다 18% 줄었습니다.\n");
-writeFileSync(join(DESK, "image.bin"), "not a supported document");
-writeFileSync(join(DOCS, "report-q3.md"), "# Q3 report\n\nOperating cost fell because of the vendor change.\n");
-writeFileSync(join(DOCS, "notes.txt"), "Budget summary for the third quarter.\n");
-mkdirSync(AUTORAG_HOME, { recursive: true });
-mkdirSync(join(WORK, "config"), { recursive: true });
-const realMinsyncModels =
-	process.env.FASTEMBED_CACHE_DIR?.trim() ||
-	(process.platform === "win32"
-		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "minsync", "models")
-		: join(homeDir(), ".cache", "minsync", "models"));
-// The first argument (or QA_ONBOARDING_EMBED) picks the embedding card: none (default, keyword-only) or local. `bun run qa script` forwards arguments into the VM, environment variables do not. Cloud needs an account, so it is not drivable here.
-const EMBED = process.argv[2]?.trim() || process.env.QA_ONBOARDING_EMBED?.trim() || "none";
-const EMBED_CARD = { none: 0, local: 2 }[EMBED];
-if (EMBED_CARD === undefined) throw new Error(`the embed mode must be none or local, got ${EMBED}`);
+
 const failures = [];
 const check = (name, ok, detail = "") => {
 	console.log(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 	if (!ok) failures.push(name);
 };
+const info = (message) => console.log(`INFO ${message}`);
 
-// A local OpenAI-compatible endpoint for the BYOK step: records the auth header,
-// lists one model and answers a chat completion with one short reply, so the
-// connect form, the model choice and the smart scan all run offline on the real
-// request paths.
-const stubHits = [];
-// While true the stub's chat endpoint refuses, as a provider does for a retired model or a bad key.
-let stubRefuses = true;
-const stubChunk = (delta, finish) =>
-	`data: ${JSON.stringify({ id: "qa", object: "chat.completion.chunk", created: 1, model: "qa-stub-model", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
-const stub = createServer((request, response) => {
-	stubHits.push(request.headers.authorization ?? "");
-	if (request.method === "POST" && request.url?.endsWith("/chat/completions")) {
-		let body = "";
-		request.on("data", (chunk) => (body += chunk));
-		request.on("end", () => {
-			if (stubRefuses) {
-				response.writeHead(401, { "content-type": "application/json" });
-				response.end(JSON.stringify({ error: { message: "qa stub refuses this model", type: "invalid_request_error" } }));
-				return;
-			}
-			response.writeHead(200, { "content-type": "text/event-stream" });
-			// The model check sends no tools and only wants an answer.
-			if (!body.includes('"tools"')) {
-				response.end(stubChunk({ role: "assistant", content: "OK" }, null) + stubChunk({}, "stop") + "data: [DONE]\n\n");
-				return;
-			}
-			// First turn: the smart-scan agent reports that nothing needs to be left out; once the tool result is back, it stops.
-			const reported = body.includes('"role":"tool"');
-			const toolCall = { index: 0, id: "call_qa", type: "function", function: { name: "propose_exclusions", arguments: '{"exclusions":[]}' } };
-			response.end(
-				(reported ? stubChunk({ role: "assistant", content: "Done." }, null) + stubChunk({}, "stop") : stubChunk({ role: "assistant", tool_calls: [toolCall] }, null) + stubChunk({}, "tool_calls")) + "data: [DONE]\n\n",
-			);
-		});
-		return;
-	}
-	response.writeHead(request.url === "/v1/models" ? 200 : 404, { "content-type": "application/json" });
-	response.end(JSON.stringify({ object: "list", data: [{ id: "qa-stub-model", object: "model" }] }));
-});
-await new Promise((resolve) => stub.listen(0, "127.0.0.1", resolve));
-const stubUrl = `http://127.0.0.1:${stub.address().port}/v1`;
-const PI_AGENT_DIR = join(WORK, "pi-agent");
-mkdirSync(PI_AGENT_DIR, { recursive: true });
-const ko = JSON.parse(readFileSync(join(ROOT, "src/shared/i18n/locales/ko.json"), "utf8"));
-// A provider key in the host's environment (an OPENAI_API_KEY on a developer machine) would show that provider as
-// already connected; the lane starts from nothing connected, so every such key is blanked.
-const blankedKeys = Object.fromEntries(Object.keys(process.env).filter((name) => /_API_KEY$/u.test(name)).map((name) => [name, ""]));
+// ── fixtures ─────────────────────────────────────────────────────────────────
+// Distinctive facts so the generated tour question (`demo`) and the duplicate
+// family have real material; realistic Korean and English documents.
+const HOME = homeDir();
+const DOCS = join(HOME, "Documents");
+const DESK = join(HOME, "Desktop");
+// A host run writes the fixtures into the developer's real home and indexes whatever already lives
+// there; the QA runner boots a throwaway VM home by default. Warn so a host run is never a surprise.
+if (process.platform === "darwin") {
+	const inVm = spawnSync("sysctl", ["-n", "kern.hv_vmm_present"], { encoding: "utf8" }).stdout?.trim() === "1";
+	if (!inVm) console.warn("[onboarding] WARNING: not in a VM; the first run will scan and index this machine's real Desktop/Documents/Downloads");
+}
+mkdirSync(DOCS, { recursive: true });
+mkdirSync(DESK, { recursive: true });
+const createdFixtures = [];
+/** Write a fixture, never clobbering a file that was already there, and remember what to remove. */
+const put = (dir, name, text) => {
+	const path = join(dir, name);
+	if (existsSync(path)) return path;
+	writeFileSync(path, text);
+	createdFixtures.push(path);
+	return path;
+};
+put(DOCS, "3분기-회의록.md", "# 3분기 회의록\n\n마케팅 비용은 전분기보다 18% 줄었습니다.\n신규 고객은 412명 늘었습니다.\n");
+put(DOCS, "q3-report.md", "# Q3 report\n\nOperating cost fell because of the vendor change.\nRevenue grew 12% quarter over quarter.\n");
+// A duplicate pair: the same quarterly summary with one number changed, so dupey groups them.
+const summary = "# Quarterly summary\n\nMarketing spend fell 18% against the prior quarter.\nNew customers grew by 412.\n";
+put(DOCS, "report.md", summary);
+put(DOCS, "report (1).md", summary.replace("412", "413"));
+put(DESK, "budget-notes.txt", "Budget summary for the third quarter.\n");
+
+const WORK = mkdtempSync(join(tmpdir(), "autorag-onboarding-"));
+const AUTORAG_HOME = join(WORK, "autorag-home");
+const CONFIG = join(WORK, "config", "config.json");
+mkdirSync(AUTORAG_HOME, { recursive: true });
+mkdirSync(join(WORK, "config"), { recursive: true });
 const env = {
-	...blankedKeys,
-	// Pi's credentials and the provider list live here: the lane never touches the developer's own sign-ins.
-	PI_CODING_AGENT_DIR: PI_AGENT_DIR,
 	AUTORAG_HOME,
 	AUTORAG_CONFIG: CONFIG,
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
-	...(existsSync(realMinsyncModels) ? { FASTEMBED_CACHE_DIR: realMinsyncModels } : {}),
 };
 const userDataDir = join(WORK, "user-data");
-const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
+
 const errors = [];
+/** Screenshot the window (the overlay and the Finder UI behind it) once its spring motion has settled. */
+const shot = async (page, name) => {
+	await page.waitForTimeout(900);
+	await page.screenshot({ path: join(EVIDENCE, name) });
+};
+/** Read the overlay's current screen, or null once it is gone. */
+const screen = (page) => page.evaluate(() => document.querySelector(".fr-root")?.getAttribute("data-screen") ?? null);
+/** Wait for a coach bubble for `id`; false when it never arrives (an optional step was skipped). */
+const stepArrives = (page, id, timeout = 12_000) =>
+	page.waitForSelector(`.fr-coach[data-step="${id}"]`, { timeout }).then(() => true, () => false);
+/** Per-step assertions on the surface the coach points at. */
+const checkStep = async (page, id) => {
+	if (id === "cite") check("the cite step points at a citation chip", (await page.locator(".cite").count()) > 0);
+	if (id === "evidenceFolder") check("the evidence-folder step offers its button", (await page.locator('[data-action="evidence-folder"]').count()) === 1);
+	if (id === "versions") check("the versions step shows the inspector Versions section", (await page.locator('[data-section="versions"]').count()) === 1);
+};
+/** Move past a coach step: Enter in the composer at `ask`, the bubble's next button otherwise (the evidence-folder step's own button when the bubble has none). */
+const advance = async (page, id) => {
+	if (id === "ask") return page.locator(`${AI_PANEL} textarea`).first().press("Enter");
+	const next = page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`);
+	if ((await next.count()) > 0) return next.click();
+	return page.locator(`.fr-coach[data-step="${id}"] [data-action="evidence-folder"]`).first().click();
+};
+
+const DEMO_STEPS = ["question", "ask", "answer", "cite", "evidence", "evidenceFolder"];
+
+let app;
 try {
-	const page = await onboardingWindow(app, 20_000);
-	const finder = await finderWindow(app, 20_000);
+	app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
+	const page = await finderWindow(app, 30_000);
 	page.on("pageerror", (error) => errors.push(error.message));
 	page.on("console", (message) => {
 		if (message.type() === "error") errors.push(message.text());
 	});
-	await page.waitForSelector(".onb .screen", { timeout: 20_000 });
-	// Both windows load /index.html, so they are told apart the way `onboardingWindow`/`finderWindow` do:
-	// by the launch argument the preload reads. A Quick Look panel is not one of them.
-	const windowInfo = (onboarding, focus = false) =>
-		app.evaluate(
-			async ({ BrowserWindow, screen }, [wantOnboarding, wantFocus]) => {
-				for (const window of BrowserWindow.getAllWindows()) {
-					if (!window.webContents.getURL().endsWith("/index.html")) continue;
-					const pending = await window.webContents.executeJavaScript("window.autorag?.onboarding?.pending === true").catch(() => null);
-					if (pending !== wantOnboarding) continue;
-					if (wantFocus) window.focus();
-					const work = screen.getDisplayMatching(window.getBounds()).workAreaSize;
-					return { visible: window.isVisible(), content: window.getContentSize(), min: window.getMinimumSize(), work: [work.width, work.height] };
-				}
-				return null;
-			},
-			[onboarding, focus],
-		);
-	const windowSize = () => windowInfo(true);
-	/** `focus: true` brings the Finder to the front first, the way clicking its window does, before real input is sent to it. */
-	const finderWindowSize = (focus = false) => windowInfo(false, focus);
-	// Windows reports the content size inside the frame and title bar, so it can be smaller than the clamped window: allow that chrome (up to 40 px a side, 140 px tall).
-	const fits = (info, [width, height]) => {
-		if (info === null) return false;
-		const [wantW, wantH] = [Math.min(width, info.work[0]), Math.min(height, info.work[1])];
-		return process.platform === "win32" ? info.content[0] <= wantW && wantW - info.content[0] <= 40 && info.content[1] <= wantH && wantH - info.content[1] <= 140 : info.content[0] === wantW && info.content[1] === wantH;
-	};
-	// Closing the window the way a user does: the traffic light, not `page.close()` (which speaks the debugging protocol).
-	const closeOnboardingWindow = () =>
-		app.evaluate(async ({ BrowserWindow }) => {
-			for (const window of BrowserWindow.getAllWindows()) {
-				if (!window.webContents.getURL().endsWith("/index.html")) continue;
-				const pending = await window.webContents.executeJavaScript("window.autorag?.onboarding?.pending === true").catch(() => null);
-				if (pending !== true) continue;
-				window.close();
-				return true;
-			}
-			return false;
-		});
-	// macOS clamps a window to the display's work area (a portrait monitor is 1080 wide).
-	const size = await windowSize();
-	const finderSize = await finderWindowSize();
-	check("both windows open at launch: the Finder and onboarding", size !== null && finderSize !== null, JSON.stringify({ onboarding: size, finder: finderSize }));
-	check("both windows are visible at launch", size?.visible === true && finderSize?.visible === true, JSON.stringify({ onboarding: size?.visible, finder: finderSize?.visible }));
-	check("onboarding window opens at the onboarding size", fits(size, [1120, 720]) && size?.min[0] === 960, JSON.stringify(size));
-	check("the Finder window opens at its own default size", fits(finderSize, [1440, 900]) && finderSize?.min[0] === Math.min(1360, finderSize.work[0]), JSON.stringify(finderSize));
-	// The Finder is a window of its own now: it paints its normal UI and takes real
-	// input while onboarding is still on its first step.
-	await finder.waitForSelector(".sidebar__item", { timeout: 20_000 });
-	// Real input lands in the window in front, so bring the Finder forward the way clicking it would.
-	await finderWindowSize(true);
-	const sidebarSearch = finder.locator(".side-search input");
-	await sidebarSearch.click();
-	await sidebarSearch.pressSequentially("qa");
-	check("the Finder takes real input while onboarding shows its welcome step", (await sidebarSearch.inputValue()) === "qa", await sidebarSearch.inputValue());
-	await sidebarSearch.fill("");
-	await finder.screenshot({ path: join(EVIDENCE, "01b-finder-at-launch.png") });
-	// Every screenshot also checks the footer: the progress dashes sit on the window's centre line whatever the width of the back and primary buttons.
-	const shot = async (name) => {
-		const offset = await page.evaluate(() => {
-			const dashes = document.querySelector(".onb .footer .progress-dashes")?.getBoundingClientRect();
-			const window_ = document.querySelector(".onb")?.getBoundingClientRect();
-			return dashes && window_ ? Math.abs(dashes.left + dashes.width / 2 - (window_.left + window_.width / 2)) : null;
-		});
-		if (offset !== null) check(`progress dashes are centred on ${name}`, offset <= 0.5, `${offset.toFixed(2)}px off`);
-		await page.locator(".onb").screenshot({ path: join(EVIDENCE, `${name}.png`) });
-	};
-	const primary = page.locator(".onb .footer button.primary");
-	const heading = () => page.locator(".onb .screen h1").first().innerText();
 
-	// welcome
-	check("welcome headline", (await heading()).includes("파일에게"));
-	check("back is disabled on the first step", await page.locator(".onb .footer-btn >> nth=0").isDisabled());
-	await shot("01-welcome");
+	await page.waitForSelector(".fr-root[data-screen]", { timeout: 30_000 });
+	info(`the first run opened on the ${await screen(page)} screen`);
+
+	// permission: macOS only, shown while Full Disk Access is not granted.
+	if ((await screen(page)) === "permission") {
+		await shot(page, "01-permission.png");
+		const status = await page.evaluate(() => window.autorag.onboarding.permissions());
+		check("the permission screen is macOS-only", status.platform === "darwin", JSON.stringify(status));
+		check("the permission screen means Full Disk Access is not granted", status.fullDiskAccess === false, JSON.stringify(status));
+		check("the permission card offers every way on", (await page.locator('[data-action="open-fda"], [data-action="relaunch"]').count()) === 2);
+		throw new Error("grant Full Disk Access to the Electron binary in this VM (System Settings › Privacy & Security › Full Disk Access, then relaunch) and rerun the onboarding lane");
+	}
+	// Past the permission screen the gate is either not macOS or already granted.
+	const gate = await page.evaluate(() => window.autorag.onboarding.permissions());
+	check("the permission gate matches the platform", process.platform === "darwin" ? gate.fullDiskAccess === true : gate.fullDiskAccess === null, JSON.stringify(gate));
+
+	// setup: one progress bar while main pre-scans, plans exclusions, writes the
+	// keyword-only config, runs the first index and prepares the tour.
+	await page.waitForSelector('.fr-root[data-screen="setup"]', { timeout: 60_000 });
+	await page.waitForSelector('.fr-setup [role="progressbar"]', { timeout: 60_000 });
+	check("the setup screen shows a title", (await page.locator(".fr-setup h1.fr-title").count()) === 1);
+	await shot(page, "02-setup-start.png");
+	const progress = () => page.evaluate(() => Number(document.querySelector('.fr-setup [role="progressbar"]')?.getAttribute("aria-valuenow") ?? 0));
+	await page.waitForFunction(() => Number(document.querySelector('.fr-setup [role="progressbar"]')?.getAttribute("aria-valuenow") ?? 0) > 0, null, { timeout: 180_000 });
+	check("the setup progress bar advances past 0", (await progress()) > 0, String(await progress()));
+	await shot(page, "03-setup-progress.png");
+	check("the setup screen never failed", (await page.locator('[data-action="setup-retry"]').count()) === 0, await page.locator(".fr-setup").innerText().catch(() => ""));
+
+	// ready: the run finished on its own, whatever the balance of the default folders.
+	await page.waitForSelector('.fr-root[data-screen="ready"]', { timeout: 600_000 });
+	check("the ready screen is shown", (await page.locator(".fr-ready").count()) === 1);
+	const status = await page.evaluate(() => window.autorag.onboarding.status());
+	info(`ready in ${status.finishedAt ?? "?"} (started ${status.startedAt ?? "?"}); demo=${status.demo === null ? "none" : "yes"}`);
+	check("the run reached the ready stage", status.stage === "ready", JSON.stringify(status.stage));
+	check("the progress bar reached 100", status.progress === 100, String(status.progress));
+	check("the ready stage carries no error", status.error === null, String(status.error));
+	check("the ready screen offers the start button", (await page.locator('.fr-ready [data-action="first-run-start"]').count()) === 1);
+	await shot(page, "04-ready.png");
+
+	// the tour: Enter (or the button) raises the cinematic welcome, then every
+	// coach mark the data supports. A run without a callable model has no demo
+	// question, and one without a duplicate family has no duplicates/versions.
 	await page.keyboard.press("Enter");
+	// The stage fades out before the tour mounts; click only if Enter did not start it.
+	const viaEnter = await page.waitForSelector('.fr-root[data-screen="tour"]', { timeout: 5_000 }).then(() => true, () => false);
+	if (!viaEnter) await page.locator('[data-action="first-run-start"]').click();
+	check("Enter on the ready screen starts the tour", viaEnter);
+	await page.waitForSelector('.fr-root[data-screen="tour"]', { timeout: 15_000 });
+	await page.waitForSelector(".fr-cinema", { timeout: 15_000 });
+	// The title card is on screen for about three seconds; capture it once its reveal has played.
+	await page.waitForTimeout(1200);
+	await page.screenshot({ path: join(EVIDENCE, "05-tour-cinema.png") });
+	check("the tour opens on the cinematic welcome", await stepArrives(page, "welcome"));
+	check("a coach mark offers both next and skip", (await page.locator('.fr-coach[data-step="welcome"] [data-action="tour-next"]').count()) === 1 && (await page.locator('.fr-coach[data-step="welcome"] [data-action="tour-skip"]').count()) === 1);
+	await shot(page, "05-tour-welcome.png");
+	await advance(page, "welcome");
 
-	// permissions: the gate follows the real Full Disk Access probe.
-	await page.waitForSelector(".onb .permission-list");
-	check("permissions step", (await heading()).includes("허용"));
-	await page.waitForTimeout(500);
-	const status = await page.evaluate(() => window.autorag.onboarding.permissions());
-	if (process.platform === "darwin") {
-		check("next gate matches the FDA probe", (await primary.isEnabled()) === status.fullDiskAccess, JSON.stringify(status));
-		const granted = await page.locator(".onb .permission-list .state.ok").count();
-		check("FDA row shows the probed state", (granted > 0) === status.fullDiskAccess);
-		if (!status.fullDiskAccess) {
-			await shot("02-permissions-blocked");
-			throw new Error("grant Full Disk Access to Electron to drive the rest of the lane");
+	const walked = ["welcome"];
+	for (const id of DEMO_STEPS) {
+		if (!(await stepArrives(page, id))) {
+			info(`tour step ${id} was skipped (no demo question)`);
+			break;
 		}
+		walked.push(id);
+		await checkStep(page, id);
+		await shot(page, `06-tour-${id}.png`);
+		await advance(page, id);
 	}
-	await shot("02-permissions");
-	await primary.click();
-
-	// account: signing in is real (system browser); the lane takes the no-account
-	// BYOK path, which must not need a server. The real sign-in is run-qa-account.mjs.
-	await page.waitForSelector(".onb .auth-card");
-	check("account step", (await heading()).includes("계정"));
-	check("signing in is gated until an account exists", await primary.isDisabled());
-	await shot("03-account");
-	// Where the files live is said in the machine's own words: "이 Mac" on a Mac, "이 PC" on Windows.
-	const accountLead = await page.locator(".onb .screen-copy p").first().innerText();
-	check("the account step names this machine, not another OS's", isWindows ? accountLead.includes("이 PC") && !accountLead.includes("Mac") : accountLead.includes("이 Mac"), accountLead);
-	await page.locator(".onb .auth-card .action-row button.secondary").click();
-
-	// model: BYOK connects its model before any folder is scanned, because the smart scan runs on it.
-	await page.waitForSelector(".onb .model-card", { timeout: 6000 });
-	check("skipping the account (BYOK) advances to the model step, before the folders", true);
-	await shot("03b-model-empty");
-	check("the model step is gated until a model is chosen", await primary.isDisabled());
-	check("the model picker is disabled while nothing is connected", await page.locator("[data-model-trigger]").isDisabled());
-	await page.locator("[data-connect-service]").click();
-	await page.locator(".settings-menu-item", { hasText: ko.settingsCore.ai.menu.addCustom }).click();
-	await page.waitForSelector(".settings-modal");
-	await shot("03c-model-server-form");
-	const serverFields = page.locator(".settings-modal input");
-	await serverFields.nth(0).fill("QA stub");
-	await serverFields.nth(1).fill(stubUrl);
-	await serverFields.nth(2).fill("sk-qa-stub");
-	await page.locator(".settings-modal .settings-btn-primary").click();
-	await page.waitForSelector(".settings-modal", { state: "detached", timeout: 15_000 });
-	check("the only model the server offers is chosen by itself", (await page.locator("[data-model-trigger]").innerText()).includes("qa-stub-model"));
-	// The model is called for real before the step can be left: this one refuses, so the step stays closed and says why.
-	await page.waitForSelector("[data-model-retry]", { timeout: 15_000 });
-	check("a model that refuses the call keeps the step closed", await primary.isDisabled());
-	check("the refusal is shown to the user", (await page.locator(".model-status").innerText()).includes("qa stub refuses this model"), await page.locator(".model-status").innerText());
-	await shot("03c2-model-refused");
-	stubRefuses = false;
-	await page.locator("[data-model-retry]").click();
-	await page.waitForFunction(() => !document.querySelector(".onb .footer button.primary")?.disabled, null, { timeout: 15_000 });
-	check("checking again after the model works opens the step", await primary.isEnabled());
-	check("the retry button goes away once it answers", (await page.locator("[data-model-retry]").count()) === 0);
-	check("the connection used the entered key", stubHits.includes("Bearer sk-qa-stub"), JSON.stringify(stubHits));
-	await shot("03d-model-ready");
-	// What onboarding connected is what Settings knows: same Pi credentials, same config.
-	const known = await page.evaluate(async () => {
-		const providers = await window.autorag.settings.providersList();
-		const config = (await window.autorag.settings.configGet()).config;
-		return { providers: providers.filter((provider) => provider.authConfigured).map((provider) => provider.id), model: config.model ?? null };
-	});
-	check("Settings lists the provider connected here", known.providers.some((id) => known.model?.provider === id), JSON.stringify(known));
-	check("the shared config already holds the chosen model", known.model?.id === "qa-stub-model", JSON.stringify(known.model));
-	await primary.click();
-	// folders: swap the real candidates for fixtures picked through the dialog.
-	await page.waitForSelector(".onb .folder-grid", { timeout: 6000 });
-	check("the model step advances to folders", true);
-	await app.evaluate(({ dialog }, paths) => {
-		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths });
-	}, [DESK, DOCS]);
-	while ((await page.locator(".onb .folder-card.selected").count()) > 0) await page.locator(".onb .folder-card.selected").first().click();
-	check("folders gate closes with nothing selected", await primary.isDisabled());
-	await page.locator(".onb .folder-card.add").click();
-	await page.waitForFunction(() => document.querySelectorAll(".onb .folder-card.selected").length === 2, null, { timeout: 5000 });
-	await page.waitForFunction(() => !document.querySelector(".onb .folder-summary")?.textContent?.includes("세는 중"), null, { timeout: 15_000 });
-	const summary = await page.locator(".onb .folder-summary").innerText();
-	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
-	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
-	await shot("04-folders");
-	const etaText = await page.locator(".onb .eta-row").first().innerText();
-	check("the local ETA names this machine, not another OS's", isWindows ? etaText.includes("이 PC") && !etaText.includes("Mac") : etaText.includes("이 Mac"), etaText);
-	await primary.click();
-
-	// smart scan: the AI looks through the folders just chosen, on the model connected before them.
-	await page.waitForSelector(".onb .si-minimal-scan", { timeout: 6000 });
-	check("folders advance to the smart scan", true);
-	await page.waitForFunction(() => document.querySelector(".onb .si-scan-note") !== null || document.querySelector(".onb .si-scan-error") !== null, null, { timeout: 60_000 });
-	check("the scan ran on the connected model instead of failing for want of one", (await page.locator(".onb .si-scan-error").count()) === 0, await page.locator(".onb .si-scan-error").innerText().catch(() => ""));
-	check("the scan step can be left", await primary.isEnabled());
-	await shot("04b-smart-scan");
-	await primary.click();
-
-	// smart-indexing scope: the chosen folders as blue pills, nothing proposed by the stub model.
-	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });
-	check("the scope screen follows the scan", true);
-	check("it lists exactly the two chosen folders", (await page.locator(".onb .si-panel.blue .si-pill").count()) === 2);
-	check("the red panel says what is always left out when nothing was proposed", (await page.locator(".onb .si-panel.red .si-panel-foot").innerText()).includes("node_modules"));
-	check("the scope screen can be left", await primary.isEnabled());
-	await shot("04c-smart-scope");
-	await primary.click();
-
-	// embedding: the prototype's three cards; the cloud one is disabled while signed out.
-	await page.waitForSelector(".onb .em-card");
-	check("the three embedding modes are offered", (await page.locator(".onb .em-card").count()) === 3);
-	check("cloud embedding is offered as unavailable", (await page.locator('.onb .em-card[data-value="cloud"].disabled').count()) === 1);
-	check("keyword-only is the preselected default", (await page.locator(".onb .em-card").nth(0).getAttribute("aria-checked")) === "true");
-	await shot("05-embedding");
-	await page.locator(".onb .em-card").nth(EMBED_CARD).click();
-	check(`the ${EMBED} card is selected`, (await page.locator(".onb .em-card").nth(EMBED_CARD).getAttribute("aria-checked")) === "true");
-	// Record the checking line from before the step opens: a machine with no
-	// connectors installed (a fresh QA VM) finishes every probe in milliseconds,
-	// so polling for the line afterwards races its removal.
-	await page.evaluate(() => {
-		window.__sources = { sawChecking: false, overlap: false, shrank: false, rows: 0 };
-		new MutationObserver(() => {
-			const checking = document.querySelector(".onb [data-sources-checking]") !== null;
-			if (checking) window.__sources.sawChecking = true;
-			if (checking && document.querySelector(".onb .connect-more") !== null) window.__sources.overlap = true;
-			const rows = document.querySelectorAll(".onb .source-row").length;
-			if (rows < window.__sources.rows) window.__sources.shrank = true;
-			window.__sources.rows = rows;
-		}).observe(document.body, { childList: true, subtree: true });
-	});
-	await primary.click();
-
-	// sources: rows stream in as each probe finishes; a spinner line holds the
-	// "connect later" row back until every probe is done.
-	const sourcesShownAt = Date.now();
-	await page.waitForSelector(".onb [data-sources-done]", { timeout: 60_000 });
-	const allDoneMs = Date.now() - sourcesShownAt;
-	const sourcesSeen = await page.evaluate(() => window.__sources);
-	check("a checking line shows while probes run", sourcesSeen.sawChecking);
-	check("connect-later row is hidden while probing", !sourcesSeen.overlap);
-	console.log(`INFO sources: all probes done after ${allDoneMs}ms`);
-	const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
-	check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
-	check("rows only ever grow while probing", !sourcesSeen.shrank, `${ids.length} rows`);
-	const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
-	check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
-	check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);
-	const chips = await page.locator(".onb .more-chips .brand-chip").allInnerTexts();
-	check(
-		"connect-later chips exclude the detected sources",
-		!ids.includes("kakao") || !chips.some((label) => label.includes("KakaoTalk")),
-		chips.join(", "),
-	);
-	await shot("06-sources");
-	// Optional source-specific regression lane: enable exactly the requested
-	// detected connector. The default lane keeps datasources off.
-	const requestedSource = process.env.QA_ONBOARDING_SOURCE?.trim() ?? "";
-	if (requestedSource.length > 0) {
-		if (!ids.includes(requestedSource)) throw new Error(`requested datasource is not detected: ${requestedSource}`);
-		const sourceRow = page.locator(`.onb .source-row[data-source-id="${requestedSource}"]`);
-		await sourceRow.locator(".switch").click();
-		await page.waitForFunction(
-			(sourceId) => document.querySelector(`.onb .source-row[data-source-id="${sourceId}"] .switch.on`) !== null,
-			requestedSource,
-			{ timeout: 3000 },
-		);
-		check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
-		check(`${requestedSource} switch is enabled`, await sourceRow.locator(".switch").isEnabled());
+	if (await stepArrives(page, "duplicates")) {
+		walked.push("duplicates");
+		await shot(page, "06-tour-duplicates.png");
+		await advance(page, "duplicates");
+		if (await stepArrives(page, "versions")) {
+			walked.push("versions");
+			await checkStep(page, "versions");
+			await shot(page, "06-tour-versions.png");
+			await advance(page, "versions");
+		}
+	} else {
+		info("tour steps duplicates/versions were skipped (no duplicate family)");
 	}
-	await primary.click();
+	info(`tour walked: ${walked.join(" → ")}`);
+	check("the tour walked at least the welcome step", walked[0] === "welcome");
 
-	// plan: with no account, a paid plan stays gated behind sign-in (no checkout,
-	// no charge); BYOK needs no account and keeps the lane offline.
-	await page.waitForSelector(".onb .plan-card");
-	await page.waitForTimeout(400);
-	// The plan screen's content is centred in the stage, top and bottom.
-	const gaps = await page.evaluate(() => {
-		const stage = document.querySelector(".onb .stage").getBoundingClientRect();
-		const content = document.querySelector(".onb .screen .eyebrow").getBoundingClientRect();
-		const last = document.querySelector(".onb .screen .promo").getBoundingClientRect();
-		return { top: content.top - stage.top, bottom: stage.bottom - last.bottom };
-	});
-	check("plan content is centred between the title bar and the footer", Math.abs(gaps.top - gaps.bottom) <= 2, JSON.stringify(gaps));
-	await shot("07-plan");
-	await page.locator(".onb .plan-card").nth(2).click();
-	check("a paid plan without an account cannot continue", await primary.isDisabled());
-	check("the plan step says to sign in first", (await page.locator(".onb .screen .promo .auth-note").count()) === 1);
-	await shot("07b-plan-needs-account");
-	// BYOK again: its model was connected right after the account, so the plan leads straight to the index.
-	await page.locator(".onb .plan-card").last().click();
-	await primary.click();
+	// plans: the end of the first run. Signing in is real; the lane takes the
+	// free path so it never needs an account.
+	await page.waitForSelector('.fr-root[data-screen="plans"]', { timeout: 30_000 });
+	check("the plans sheet is shown", (await page.locator(".fr-plans").count()) === 1);
+	check("every plan is offered", (await page.locator(".fr-plans [data-plan]").count()) === 4, String(await page.locator(".fr-plans [data-plan]").count()));
+	check("both sign-in providers are offered", (await page.locator(".fr-plans [data-signin]").count()) === 2, String(await page.locator(".fr-plans [data-signin]").count()));
+	await shot(page, "07-plans.png");
+	await page.locator('.fr-plans [data-action="plans-later"]').click();
 
-	// roles: without a Dazzi plan the reranker and Jev are chosen here, from what was connected.
-	await page.waitForSelector("[data-role-trigger]", { timeout: 10_000 });
-	check("a BYOK user is asked about the reranker and Jev before indexing", (await page.locator("[data-role-trigger]").count()) === 2);
-	check("a connected service that serves neither says so instead of offering an empty menu", (await page.locator("[data-role-unavailable]").count()) === 2);
-	check("the role step can be left without choosing", await primary.isEnabled());
-	await shot("07d-roles");
-	await primary.click();
+	// the overlay leaves (the Finder is already usable behind it) and the first
+	// run is marked done.
+	await page.waitForSelector(".fr-root", { state: "detached", timeout: 30_000 });
+	check("the first-run overlay is gone after the tour", (await page.locator(".fr-root").count()) === 0);
+	check("the Finder is usable behind the finished first run", await page.locator(".sidebar__item").first().isVisible());
 
-	// indexing: real first index. The Finder is already open and usable beside this window, so the
-	// screen offers no way out of onboarding: no open button, no background start, no button in the gate.
-	await page.waitForSelector(".onb.immersive .ix-bar", { timeout: 10_000 });
-	check("the indexing screen has no open button", (await page.locator(".onb .ix-open-btn").count()) === 0);
-	check("the indexing screen has no background-start button", (await page.locator(".onb .ix-bg-start").count()) === 0);
-	check("the indexing gate holds no button", (await page.locator(".onb .ix-gate button").count()) === 0);
-	check(
-		"the gate holds a notice instead of a button",
-		(await page.locator(".onb .ix-gate .ix-notice").count()) === 1,
-		await page.locator(".onb .ix-gate").innerText(),
-	);
-	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
-	check(
-		EMBED === "none"
-			? "indexing phases of a keyword-only run have no embedding phase (parsed, finalizing)"
-			: "indexing phases show only local phases (parsed, minsync, finalizing)",
-		phaseLabels.length === (EMBED === "none" ? 2 : 3) && !phaseLabels.some((label) => label.includes("데이터 소스")),
-		phaseLabels.join(" | "),
-	);
-	await shot("08-indexing");
-	await page.waitForFunction(
-		() => document.querySelector(".onb .ix.done") !== null || document.querySelector(".onb .ix.paused") !== null,
-		null,
-		{ timeout: 600_000 },
-	);
-	const failed = await page.locator(".onb .ix.paused").count();
-	check("first index succeeds", failed === 0, failed ? await page.locator(".onb .ix.paused").innerText() : "");
-	check("the done screen shows the ok notice in the gate", (await page.locator(".onb .ix.done .ix-gate .ix-notice.ok").count()) === 1, await page.locator(".onb .ix-gate").innerText().catch(() => ""));
-	check("the done screen still offers neither open nor background-start button", (await page.locator(".onb .ix-open-btn, .onb .ix-bg-start").count()) === 0);
-	check("the done screen's gate holds no button", (await page.locator(".onb .ix-gate button").count()) === 0);
-	const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
-	check(
-		"the connected model survived the first index, with its base URL and no key in the config",
-		raw.model?.id === "qa-stub-model" && raw.model?.baseUrl === stubUrl && !JSON.stringify(raw).includes("sk-qa-stub"),
-		JSON.stringify(raw.model),
-	);
-	if (requestedSource.length > 0) {
-		const configured = Object.entries(raw.datasources ?? {}).filter(
-			([alias, entry]) => alias === requestedSource || entry?.type === requestedSource || alias.startsWith(`${requestedSource}-`),
-		);
-		check(`${requestedSource} datasource config written`, configured.length > 0, JSON.stringify(configured));
-	}
-	check("config searchPaths = selected folders", JSON.stringify(raw.searchPaths) === JSON.stringify([DESK, DOCS]), JSON.stringify(raw.searchPaths));
-	if (EMBED === "none") {
-		check("keyword-only: semantic search switched off in the config", raw.appIndexing?.semanticSearch === false, JSON.stringify(raw.appIndexing));
-		check("keyword-only: no embedder written", raw.minSync?.embedder === undefined, JSON.stringify(raw.minSync));
-		check("keyword-only: MinSync never ran (no .minsync index in the workspace)", !existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "minsync")));
+	// the keyword-only first run: parsed mirror + SPLADE, no dense embedder.
+	if (existsSync(CONFIG)) {
+		const raw = JSON.parse(readFileSync(CONFIG, "utf8"));
+		check("keyword-only: semantic search is off in the shared config", raw.appIndexing?.semanticSearch === false, JSON.stringify(raw.appIndexing));
+		check("keyword-only: no dense embedder was written", raw.minSync?.embedder === undefined, JSON.stringify(raw.minSync));
+		check("the default folders were written as search paths", Array.isArray(raw.searchPaths) && raw.searchPaths.length > 0, JSON.stringify(raw.searchPaths));
+		check("the first index lives under AUTORAG_HOME", String(raw.workspacePath ?? "").startsWith(AUTORAG_HOME), String(raw.workspacePath));
 		check("keyword-only: the parsed mirror exists", existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "stage")) && existsSync(join(AUTORAG_HOME, "workspace", ".autorag", "parsed", "files")));
 	} else {
-		check("config local embedder set", raw.minSync?.embedder?.id === "native:Qwen/Qwen3-Embedding-0.6B", JSON.stringify(raw.minSync?.embedder));
-		check("semantic search stays on", raw.appIndexing?.semanticSearch === undefined, JSON.stringify(raw.appIndexing));
+		check("the first run wrote the shared config", false, `${CONFIG} is missing`);
 	}
-	check("first index lives in the AutoRAG home, not the app cwd", raw.workspacePath === join(AUTORAG_HOME, "workspace") && !existsSync(join(ROOT, ".autorag")), String(raw.workspacePath));
-	const final = await page.evaluate(() => window.autorag.onboarding.indexStatus());
-	check(
-		"index read exactly the selected folders' pre-scanned files",
-		final.state === "success" && final.progress === 100 && final.totalFiles === 3 && final.processedFiles === 3,
-		JSON.stringify(final),
-	);
-	check("recent folder resolves through the realpath", final.recentFolder === "회의" || final.recentFolder === "reports", String(final.recentFolder));
-	// Nothing is clicked from here on: a first index that succeeded ends onboarding by itself.
-	const stateDeadline = Date.now() + 30_000;
-	let completed = false;
-	while (Date.now() < stateDeadline) {
-		try {
-			completed = JSON.parse(readFileSync(join(userDataDir, "onboarding", "state.json"), "utf8")).completed === true;
-		} catch {
-			completed = false;
-		}
-		if (completed) break;
-		await page.waitForTimeout(250);
-	}
-	check("onboarding completed by itself once the index succeeded, with no click", completed);
-	await shot("09-indexing-done");
-	// Both windows are still there: onboarding on its done screen at its own size, the Finder untouched.
-	const doneSize = await windowSize();
-	const finderDoneSize = await finderWindowSize();
-	check("the onboarding window stays open on the done screen", doneSize !== null && doneSize.visible === true, JSON.stringify(doneSize));
-	check("the onboarding window keeps the onboarding size", fits(doneSize, [1120, 720]), JSON.stringify(doneSize));
-	check(
-		"the finished index left the Finder window untouched",
-		finderSize !== null && fits(finderDoneSize, [1440, 900]) && finderDoneSize.content.join("x") === finderSize.content.join("x"),
-		JSON.stringify(finderDoneSize),
-	);
-	await finder.screenshot({ path: join(EVIDENCE, "10-finder-beside-onboarding.png") });
-	await page.locator(".onb").screenshot({ path: join(EVIDENCE, "10-onboarding-beside-finder.png") });
-	// Leaving the done screen is the user's own act: close the window (the OS close button, not `page.close()`).
-	check("the onboarding window closes the way a user closes it", (await closeOnboardingWindow()) === true);
-	await page.waitForEvent("close", { timeout: 10_000 }).catch(() => undefined);
-	check("the onboarding page detaches when its window closes", page.isClosed());
-	const finderAfter = await finderWindowSize();
-	check("the Finder stays open after the onboarding window closes", finderAfter !== null && finderAfter.visible === true, JSON.stringify(finderAfter));
-	check("the Finder keeps its size after the onboarding window closes", fits(finderAfter, [1440, 900]), JSON.stringify(finderAfter));
-	check("the Finder still answers after the onboarding window closes", await finder.locator(".side-search input").isEditable());
-	await finder.screenshot({ path: join(EVIDENCE, "11-finder-after.png") });
-	if (requestedSource.length > 0) {
-		const completedAt = Date.parse(final.finishedAt ?? final.startedAt ?? new Date().toISOString()) - 2_000;
-		const deadline = Date.now() + 120_000;
-		let matching = [];
-		while (Date.now() < deadline) {
-			const { activity, snapshot } = await finder.evaluate(async () => ({
-				activity: await window.autorag.indexActivity.get(),
-				snapshot: await window.autorag.settings.sourcesList(),
-			}));
-			matching = snapshot.sources.filter(
-				(row) => row.id === requestedSource || row.type === requestedSource || row.id.startsWith(`${requestedSource}-`),
-			);
-			const done =
-				activity.state !== "running" &&
-				matching.length > 0 &&
-				matching.every(
-					(row) =>
-						row.status === "ready" &&
-						(row.index.state === "indexed" || row.index.state === "empty") &&
-						(row.index.indexedAt === null || Date.parse(row.index.indexedAt) >= completedAt),
-				);
-			if (done) break;
-			await finder.waitForTimeout(1_000);
-		}
-		await finder.waitForFunction(() => document.querySelector('.sidebar__activity[data-tone="run"]') === null, null, { timeout: 5_000 });
-		check(
-			`${requestedSource} datasource finishes indexing in the background`,
-			matching.length > 0 && matching.every((row) => row.index.state === "indexed" && (row.index.chunkCount ?? 0) > 0),
-			JSON.stringify(matching.map((row) => ({ id: row.id, status: row.status, index: row.index }))),
-		);
-		await finder.locator(".sidebar__item--settings").click();
-		await finder.waitForSelector(".settings-sidebar", { timeout: 10_000 });
-		await finder.locator(".settings-sidebar .settings-nav-item", { hasText: "인덱싱" }).click();
-		await finder.waitForSelector(".settings-sync-row", { timeout: 10_000 });
-		await finder.screenshot({ path: join(EVIDENCE, "12-settings-indexing.png") });
-	}
+
+	// a relaunch on the same profile must go straight to the Finder.
+	await page.screenshot({ path: join(EVIDENCE, "08-finder-after-first-run.png") });
+	await app.close();
+	app = undefined;
+	app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
+	const relaunched = await finderWindow(app, 30_000);
+	await relaunched.waitForSelector(".sidebar__item", { timeout: 30_000 }).catch(() => undefined);
+	await relaunched.waitForTimeout(1500);
+	check("a relaunch on the same profile shows no first-run overlay", (await relaunched.locator(".fr-root").count()) === 0);
+	await relaunched.screenshot({ path: join(EVIDENCE, "09-relaunch-no-overlay.png") });
+
 	check("no renderer errors", errors.length === 0, errors.slice(0, 3).join(" | "));
 } catch (error) {
 	failures.push(String(error));
 	console.error(error);
 } finally {
-	// The first index leaves background helpers pointing into WORK (e.g.
-	// fsearch-cli watch); kill them by their command line before deleting it.
+	// The first index leaves background helpers pointing into WORK (fsearch-cli
+	// watch); kill them by their command line before deleting it.
 	const killHelpers = () => {
-		if (process.platform !== "win32") {
-			spawnSync("pkill", ["-9", "-f", WORK]);
-			return;
-		}
-		// Same by command line on Windows: any process still pointing into WORK would block its removal (EPERM).
-		const script = `Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne ${process.pid} -and $_.CommandLine -and $_.CommandLine.Contains($env:QA_WORK) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`;
-		spawnSync("powershell", ["-NoProfile", "-Command", script], { env: { ...process.env, QA_WORK: WORK } });
+		if (process.platform !== "win32") spawnSync("pkill", ["-9", "-f", WORK]);
 	};
 	killHelpers();
-	// After the first index the app can keep helper processes alive on Windows, and `close()` then never
-	// returns; give it a moment, then kill the whole process tree so the lane always ends.
-	const pid = app.process().pid;
-	const closed = await Promise.race([app.close().then(() => true, () => true), new Promise((resolve) => setTimeout(() => resolve(false), 30_000))]);
-	if (!closed && pid !== undefined) {
-		console.log("INFO app did not close within 30s; killing its process tree");
-		if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)]);
-		else spawnSync("pkill", ["-9", "-P", String(pid)]);
+	if (app !== undefined) {
+		const pid = app.process().pid;
+		const closed = await Promise.race([app.close().then(() => true, () => true), new Promise((resolve) => setTimeout(() => resolve(false), 30_000))]);
+		if (!closed && pid !== undefined) {
+			info("the app did not close within 30s; killing its process tree");
+			if (process.platform === "win32") spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)]);
+			else spawnSync("pkill", ["-9", "-P", String(pid)]);
+		}
 	}
 	killHelpers();
-	stub.closeAllConnections();
-	stub.close();
+	// Remove only the fixture files this lane created; never the folders or a
+	// developer's own files.
+	for (const path of createdFixtures) {
+		try {
+			rmSync(path, { force: true });
+		} catch {
+			// Best effort.
+		}
+	}
 	rmRetry(WORK);
 }
 console.log(failures.length === 0 ? "onboarding QA passed" : `onboarding QA FAILED: ${failures.join("; ")}`);

@@ -349,47 +349,46 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 ---
 
-## 3a. First-run onboarding
+## 3a. First run
 
-- The reference is `docs/design-reference/onboarding/onboarding-prototype.html`.
-  `src/renderer/styles/onboarding.css` ports its stylesheet rule for rule, with
-  every selector scoped under `.onb` (the prototype's `.app-window`) and its
-  keyframes renamed `onb-*`. Palette values the app already defines map onto
-  app tokens (`--bg-window`, `--border`, `--text-*`, `--accent`), so appearance
-  follows the app; the rest stay as `--onb-*` literals from the prototype.
-- The React screens in `src/renderer/src/onboarding/` emit the prototype's DOM
-  and class names, so the port needs no restyling. The prototype's drawn
-  traffic lights are omitted: the real window's native ones sit over the 42px
-  drag bar.
-- On a first run the app opens two windows: the Finder, usable at once and never
-  resized, and this onboarding window at the prototype's 1120×720 canvas (min
-  960×680). The screens have no button that opens Dazzi. A finished first index
-  completes onboarding by itself and leaves the done screen up until the user
-  closes the window.
-- Prototype simulations are replaced by real state: the indexing screen shows
-  real progress (no 30-minute minimum), folder cards show "세는 중…" until their
-  pre-scan finishes, and a stopped index is the same screen held still (see
-  below), never a dead end.
-- **A first index that stops (issue #283)** is not a separate failure screen but
-  the indexing screen paused: the scene stops, one amber light replaces the blue,
-  and the screen carries only an icon, a one-line title, one reason line, one
-  button (Enter presses it) and at most two quiet links. There is no link that
-  skips the index: the Finder is already open, and closing this window on a
-  stopped run ends onboarding. The raw error and its code never appear (they stay in
-  the app log); a stopped run shows no estimate, no phase strip and no locked
-  gate. The reason decides the button: a refused embedder opens the embedding
-  choice, an offline embedder or model download retries by itself (8 s, up to 6
-  times, counted down on the reason line), an unplugged folder is watched every
-  3 s and can be left out, a full disk resumes the download, anything else
-  retries once and then offers the embedding choice. The design reference is
-  `docs/prototypes/onboarding-failure/`; the reasons and their screens are
-  `src/renderer/src/onboarding/pause.ts`.
-- The design reference now includes an experimental **Smart Indexing** step between account and folder selection. It is intentionally synthetic: it shows a bounded discovery pass, broad include roots, nested exclude paths (including `~/Documents/Codex`), hidden-folder exclusion, editable recommendations, and the hand-off to the existing folder scope screen. It does not read the host filesystem, call an LLM, write `searchPaths`/`excludePaths`, or start indexing.
-- The prototype controls can jump directly to each current-main-aligned step, switch light/dark appearance, and reset the synthetic state. The recommendation evidence and file counts are illustrative only; production model/provider, privacy consent, sampling limits, and path policy remain open design decisions.
-- The reference is a standalone HTML demo; its hardcoded copy is not application runtime UI. Production implementation MUST use the existing i18n and onboarding bridge contracts rather than copying the demo state.
-- Changes to these screens are checked against the prototype with
-  `scripts/manual-qa/run-qa-onboarding.mjs`, which also writes per-step
-  screenshots to `.omo/evidence/onboarding/`.
+- **Principle: the less onboarding, the better the product.** The first run asks
+  nothing the app can decide itself. The defaults are the product: the OS
+  default folders, smart-indexing exclusions taken as proposed, keyword-only
+  indexing (parsed mirror + MinSync's bundled SPLADE encoder; dense embedding is
+  opt-in in Settings), and sign-in at the very end.
+- There is **one window**. The Finder window opens with the pending flag and
+  carries the first-run layer, `src/renderer/src/first-run/FirstRun.tsx`
+  (pure logic in `first-run/tour.ts`, styles in `styles/first-run.css`, copy
+  under `firstRun.*`). The main-process side is `src/main/first-run-service.ts`.
+- Screens (`.fr-root[data-screen]`): `permission` (macOS, only while Full Disk
+  Access is missing; it polls the probe every 2 s and moves on by itself) →
+  `setup` (one progress bar, the current stage, files and minutes left; the run
+  keeps the machine awake and needs nothing from the user) → `ready` (the Dazzi
+  logo, "모두 준비되었어요!", one "시작하기" button; Enter presses it) → `tour` →
+  `plans`.
+- While the layer covers the window the Finder behind it is mounted, `inert`,
+  and held under the stage by `html[data-first-run="cover"]`. "시작하기"
+  splits the window (the current folder on the left, AI Search on the right,
+  sidebar and inspector shown) and `html[data-first-run="rise"]` springs the
+  Finder up from below. Motion is spring `linear()` curves on transform and
+  opacity only; `prefers-reduced-motion` turns it off.
+- The tour opens with a letterboxed, dimmed title card ("Welcome to Dazzi, the
+  AI Finder" / "the AI File Explorer" on Windows), then coach marks: a
+  spotlight on the real control plus a bubble; everything but the bubble lets
+  clicks through. With a verified demo question (`SetupStatus.demo`, generated
+  from one indexed document and proven answerable by keyword retrieval) the
+  question types itself into the composer, Enter asks it, and the tour points at
+  the answer, a citation chip, the evidence panel and the Evidence Folder
+  button. With a version family the left pane reveals its newest copy and the
+  tour points at the stacked row and the inspector's Versions section. Steps
+  the data does not support are skipped, never faked.
+- `plans` ends the first run: Free, Air, Pro, Max with Google and GitHub
+  sign-in; "나중에 할게요" or Free finish it, a paid plan opens the hosted
+  checkout after sign-in. Finishing calls `onboarding.complete()`, so the next
+  launch opens the Finder straight away.
+- `make onboarding` walks this on a disposable profile; the end-to-end check is
+  `scripts/manual-qa/run-qa-onboarding.mjs` (screenshots in
+  `.omo/evidence/onboarding/`).
 
 ---
 

@@ -1,30 +1,6 @@
-// @vitest-environment happy-dom
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { platformKey } from "../src/renderer/src/lib/platform-copy";
-import { FoldersStep } from "../src/renderer/src/onboarding/steps/Folders";
 import { resources, SUPPORTED_LANGUAGES, type LocaleKey } from "../src/shared/i18n";
-import { BASE_DRAFT, onboardingCtx } from "./support/onboarding-ctx";
-
-Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
-
-let host: HTMLDivElement;
-let root: Root;
-
-beforeEach(() => {
-	host = document.createElement("div");
-	document.body.append(host);
-	root = createRoot(host);
-});
-
-afterEach(() => {
-	act(() => root.unmount());
-	host.remove();
-});
-
-/** The text on screen. */
-const shown = (): string => host.innerHTML.replaceAll(/<[^>]*>/gu, " ");
 
 /** The dictionary value at a dotted key. */
 function lookup(language: (typeof SUPPORTED_LANGUAGES)[number], key: string): string {
@@ -44,8 +20,6 @@ describe("copy that names the machine", () => {
 	const PC_KEYS: readonly LocaleKey[] = [
 		"settingsCore.embedding.apiKeyHintPc",
 		"settingsCore.ai.server.bodyLocalPc",
-		"onboarding.account.leadPc",
-		"onboarding.folders.localEtaPc",
 	];
 
 	it("has a PC sentence in every language that never calls the machine a Mac", () => {
@@ -59,18 +33,9 @@ describe("copy that names the machine", () => {
 	});
 
 	it("keeps the Mac sentences naming the Mac", () => {
-		for (const key of ["settingsCore.embedding.apiKeyHint", "settingsCore.ai.server.bodyLocal", "onboarding.account.lead", "onboarding.folders.localEta"]) {
+		for (const key of ["settingsCore.embedding.apiKeyHint", "settingsCore.ai.server.bodyLocal"]) {
 			expect(lookup("en", key), key).toMatch(/Mac/u);
 		}
 	});
 
-	it("the folders step estimates the local run in PC words on Windows, Mac words elsewhere", () => {
-		const candidates = [{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents" as const, defaultSelected: true, ocrOff: false }];
-		const scans = new Map([["/docs", { path: "/docs", files: 1000, bytes: 1, onlineOnly: 0, done: true, error: null }]]);
-		act(() => root.render(<FoldersStep ctx={onboardingCtx({ platform: "win32", candidates, scans, draft: BASE_DRAFT })} />));
-		expect(shown()).toContain("onboarding.folders.localEtaPc");
-		act(() => root.render(<FoldersStep ctx={onboardingCtx({ platform: "darwin", candidates, scans, draft: BASE_DRAFT })} />));
-		expect(shown()).toContain("onboarding.folders.localEta ");
-		expect(shown()).not.toContain("onboarding.folders.localEtaPc");
-	});
 });

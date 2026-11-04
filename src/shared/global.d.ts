@@ -16,7 +16,6 @@ import type { ModelDownloadBridge } from "./model-download-contract";
 import type { OnboardingBridge } from "./onboarding-contract";
 import type { OsRequestBridge } from "./os-request-contract";
 import type { SearchBridge } from "./search-contract";
-import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
 import type { RemoteAccessBridge } from "./remote-contract";
@@ -45,7 +44,6 @@ declare global {
 			readonly osRequests: OsRequestBridge;
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;
-			readonly smartIndexing: SmartIndexingBridge;
 			readonly settings: SettingsBridge;
 			readonly services: ServicesBridge;
 			readonly remote: RemoteAccessBridge;

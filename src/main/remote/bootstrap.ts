@@ -14,7 +14,6 @@ import { ONBOARDING_CHANNELS } from "../../shared/onboarding-contract";
 import { OS_REQUEST_CHANNELS } from "../../shared/os-request-contract";
 import { SEARCH_CHANNELS } from "../../shared/search-contract";
 import { SETTINGS_CHANNELS } from "../../shared/settings-contract";
-import { SMART_INDEXING_CHANNELS } from "../../shared/smart-indexing-contract";
 import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
 import {
 	REMOTE_PREVIEW_FOLDER_CODE,
@@ -50,9 +49,8 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"search.onEvent": SEARCH_CHANNELS.event,
 	"settings.onChanged": SETTINGS_CHANNELS.changed,
 	"settings.onProviderLoginEvent": SETTINGS_CHANNELS.providerLoginEvent,
-	"smartIndexing.onEvent": SMART_INDEXING_CHANNELS.event,
 	"osRequests.onAvailable": OS_REQUEST_CHANNELS.available,
-	"onboarding.onScanProgress": ONBOARDING_CHANNELS.scanProgress,
+	"onboarding.onProgress": ONBOARDING_CHANNELS.progress,
 	"fs.onLocationsChanged": FS_WORKER_PUSH.locationsChanged,
 	"fs.onIndexRefreshed": FS_WORKER_PUSH.indexRefreshed,
 	"live.onMessage": FS_WORKER_PUSH.live,
@@ -80,7 +78,6 @@ const TARGETS = [
 	"modelDownload",
 	"onboarding",
 	"osRequests",
-	"smartIndexing",
 	"analytics",
 ] as const;
 

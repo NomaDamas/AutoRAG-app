@@ -748,328 +748,104 @@
       "osMenuIntegrationError": "无法设置右键菜单"
     }
   },
-  "onboarding": {
-    "footerBack": "返回",
-    "step": {
-      "welcome": "介绍",
-      "permissions": "权限",
-      "account": "账户",
-      "folders": "文件夹",
-      "smartScan": "智能浏览",
-      "smartScope": "智能索引",
-      "embedding": "嵌入",
-      "sources": "数据源",
-      "plan": "套餐",
-      "model": "AI 模型",
-      "roles": "检索辅助模型",
-      "indexing": "索引"
+  "firstRun": {
+    "permission": {
+      "eyebrow": "开始之前",
+      "title": "请允许完全磁盘访问权限",
+      "lead": "Dazzi 需要读取文稿、下载和桌面中的文件才能帮你查找。文件不会离开这台 Mac,也不会被修改。",
+      "stepOpen": "在系统设置中打开 Dazzi",
+      "stepRelaunch": "打开后请重新启动 Dazzi",
+      "open": "打开系统设置",
+      "relaunch": "重新启动",
+      "waiting": "正在等待授权"
     },
-    "stepLabel": {
-      "welcome": "继续",
-      "permissions": "继续",
-      "account": "继续",
-      "folders": "选择文件夹并继续",
-      "smartScan": "查看推荐范围",
-      "smartScope": "确定范围并继续",
-      "embedding": "继续",
-      "sources": "继续",
-      "model": "继续",
-      "roles": "继续",
-      "indexing": "继续"
+    "setup": {
+      "title": "正在准备 Dazzi",
+      "lead": "只要电脑保持开机,就会自动完成。期间可以照常做别的事。",
+      "stage": {
+        "idle": "正在开始",
+        "scanning": "正在查看文件夹",
+        "planning": "正在挑选需要的文件",
+        "indexing": "正在读取文件",
+        "preparing": "正在收尾",
+        "ready": "已就绪",
+        "failed": "已停止"
+      },
+      "files": "{{processed}} / {{total}} 个文件",
+      "remaining": "大约还需 {{minutes}} 分钟",
+      "failedTitle": "准备已暂停",
+      "failedLead": "重试后会从停下的地方继续。",
+      "retry": "重试"
     },
-    "welcome": {
-      "eyebrow": "Pro 7 天免费试用",
-      "title": "直接向\n文件提问",
-      "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
-      "note": "默认在本地处理。部分功能在使用时，内容可能会发送到 Dazzi 服务器或模型提供方。详情请参阅隐私政策。",
-      "usageStats": "发送匿名使用统计以帮助改进 Dazzi。统计在设计上不包含文件、搜索词或文档内容，可随时在设置中关闭。",
-      "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。报告在设计上不包含文件路径、文件名和文档内容，可随时在设置中更改。",
-      "usageStatsPolicy": "隐私政策",
-      "chat": {
-        "user": "上一季度的成本为什么下降了？",
-        "replyLead": "营销成本比上季度下降了",
-        "replyTail": "。"
+    "ready": {
+      "title": "一切就绪!",
+      "lead": "{{count}} 个文件已经可以搜索了。",
+      "leadNone": "现在就用 Dazzi 找找文件吧。",
+      "start": "开始使用"
+    },
+    "cinema": {
+      "title": "欢迎来到 {{name}}",
+      "subtitleMac": "你的 AI 访达",
+      "subtitleWindows": "你的 AI 文件资源管理器"
+    },
+    "tour": {
+      "next": "下一步",
+      "skip": "跳过",
+      "finish": "完成",
+      "progress": "{{index}} / {{count}}",
+      "welcome": {
+        "title": "左边是文件夹,右边是 AI 搜索",
+        "body": "还是熟悉的文件夹界面,Dazzi 在旁边读取文件内容来回答你。"
+      },
+      "question": {
+        "title": "这是从你的文件里生成的问题",
+        "body": "我们已经确认刚读取的文档能回答它。"
+      },
+      "ask": {
+        "title": "按 Enter 提问",
+        "body": "也可以点击发送按钮。"
+      },
+      "answer": {
+        "title": "答案来了",
+        "body": "答案只以你的文件为依据。",
+        "waitingTitle": "正在寻找答案",
+        "waitingBody": "正在阅读文件里的内容。",
+        "failedTitle": "这次没有找到答案",
+        "failedBody": "可以换个说法再问一次。"
+      },
+      "cite": {
+        "title": "点击数字查看依据",
+        "body": "可以马上看到答案里每句话出自哪个文件。"
       },
       "evidence": {
-        "revenue": "营收报告",
-        "revenueQuote": "“同比增长 18%…”",
-        "budget": "预算摘要",
-        "budgetQuote": "“第三季度运营成本…”"
-      }
-    },
-    "feature": {
-      "ai": {
-        "title": "AI 搜索",
-        "sub": "答案与依据一并呈现"
+        "title": "依据都汇集在这里",
+        "body": "原文中对应的段落原样呈现。点击标题即可前往文件所在位置。"
       },
-      "citation": {
-        "title": "引用依据",
-        "sub": "查看答案的来源"
+      "evidenceFolder": {
+        "title": "把依据文件放进一个文件夹",
+        "body": "点击这个按钮,会打开只包含答案所用文件的临时文件夹。"
+      },
+      "duplicates": {
+        "title": "相似的文档会归在一起",
+        "body": "副本和旧版本合并为一行,最新版显示在最上面。"
       },
       "versions": {
-        "title": "版本归组",
-        "sub": "整理重复文档"
-      },
-      "quicklook": {
-        "title": "快速查看",
-        "sub": "打开前预览"
-      },
-      "sources": {
-        "title": "数据源",
-        "sub": "连同已连接的位置一起搜索"
-      },
-      "hybrid": {
-        "title": "混合搜索",
-        "sub": "关键词与语义并用，按重排排序"
+        "title": "在这里确认最新版",
+        "body": "相同和几乎相同的文档并排显示。点击即可跳转到该文件。"
       }
     },
-    "hybrid": {
-      "keyword": "关键词",
-      "semantic": "语义",
-      "rerank": "重排"
-    },
-    "versions": {
-      "latest": "最新版",
-      "near": "相似版",
-      "exact": "相同版"
-    },
-    "account": {
-      "eyebrow": "账户",
-      "title": "用账户\n开始使用",
-      "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
-      "note": "在浏览器中登录后会自动返回此应用。不会在应用中输入密码。",
-      "signedIn": "登录完成",
-      "signedInNote": "正在进入下一步",
-      "otherAccount": "使用其他账户登录",
-      "cardTitle": "Dazzi 账户",
-      "cardSub": "管理套餐和用量",
-      "busy": "正在浏览器中登录…",
-      "busyNote": "认证完成后会自动返回。",
-      "signIn": "在浏览器中登录",
-      "cancel": "取消",
-      "skip": "不使用账户，改用自己的 API 密钥 (BYOK)",
-      "offline": "无法连接服务器，显示的是上次确认的信息。",
-      "authNote": "登录方式（邮箱验证码、第三方登录）在浏览器的 Dazzi 登录页面选择。",
-      "getStarted": "开始使用",
-      "continueGoogle": "使用 Google 继续",
-      "continueApple": "使用 Apple 继续",
-      "continueGithub": "使用 GitHub 继续",
-      "or": "或",
-      "emailLabel": "邮箱",
-      "emailPlaceholder": "mingzi@example.cn",
-      "continueEmail": "使用邮箱继续",
-      "codeLabel": "验证码",
-      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
-      "sendingCode": "正在发送验证码…",
-      "verifyCode": "验证并继续",
-      "verifyingCode": "正在验证…",
-      "resendCode": "重新发送验证码",
-      "resendIn": "{{seconds}} 秒后重发",
-      "useDifferentEmail": "使用其他邮箱",
-      "guest": "以访客身份继续",
-      "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
-      "agreeTerms": "服务条款",
-      "agreePrivacy": "隐私政策",
-      "agreeUse": "可接受使用政策",
-      "planLabel": "{{plan}} 套餐",
-      "leadPc": "套餐和用量与账户关联。文件和搜索索引保存在这台电脑上。"
-    },
-    "permissions": {
-      "eyebrow": "权限",
-      "title": "请确认允许的权限",
-      "leadMac": "macOS 要求应用在读取受保护文件前获得你的许可。\n允许之后，要搜索的文件夹仍在下一步由你自己选择。",
-      "leadWindows": "请先确认需要的权限。\n所有项目都可以跳过，之后也可在设置中更改。",
-      "titleWindows": "请确认允许的权限",
-      "note": "Dazzi 不会修改你的文件。实际要索引的文件夹由你在下一步自行选择。",
-      "required": "必需",
-      "optional": "可选",
-      "setting": "设置",
-      "granted": "已允许",
-      "restartNeeded": "需要重启",
-      "restartNow": "立即重启",
-      "openSettings": "打开系统设置",
-      "footnote": "开启后才能继续。",
-      "fda": {
-        "name": "完全磁盘访问权限",
-        "desc": "读取文稿、下载、邮件、外接磁盘等受保护区域所需的权限。\n允许一次后，就不会再逐个文件夹请求权限。"
-      },
-      "notifications": {
-        "name": "通知",
-        "desc": "提前请求通知权限。要接收哪些通知可在设置中选择。",
-        "allow": "允许通知",
-        "openWindows": "打开 Windows 设置"
-      },
-      "login": {
-        "name": "登录时启动",
-        "desc": "开机后应用会自动启动。可随时在设置中关闭。"
-      },
-      "network": {
-        "name": "网络",
-        "desc": "仅在向在线 AI 提问或在线分析文档时需要。",
-        "allow": "允许网络"
-      }
-    },
-    "smartScan": {
-      "title": "正在浏览文件夹…",
-      "done": "浏览完成",
-      "idle": "要浏览文件夹吗？",
-      "failedTitle": "未能浏览文件夹",
-      "lead": "AI 正在统计推荐文件夹中的文件数量",
-      "looking": "正在查看：{{path}}",
-      "cancel": "取消并手动选择",
-      "note": "找到 {{count}} 个建议排除的子文件夹。请在下一屏查看。",
-      "noteNone": "没有需要排除的文件夹。所选文件夹以文档为主。",
-      "failed": "未能完成分析。可以在下一屏手动选择范围。",
-      "retry": "重试",
-      "skipped": "不使用 AI 浏览也可以手动选择范围。",
-      "start": "用 AI 浏览"
-    },
-    "folders": {
-      "eyebrow": "索引范围",
-      "title": "选择 AI 可读取的文件夹",
-      "lead": "只有此处选择的文件夹会纳入 AI 搜索。范围可稍后扩大或缩小。",
-      "suggested": "推荐位置",
-      "selectAll": "全选",
-      "add": "添加其他文件夹",
-      "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
-      "scanning": "统计中…",
-      "scanError": "无法读取",
-      "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-      "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
-      "cloudEta": "远程 约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
-      "localEtaPc": "本地 (此电脑) 约 {{minutes}} 分钟"
-    },
-    "smartScope": {
-      "policy": {
-        "title": "智能索引范围",
-        "tag": "AI 已分类",
-        "lead": "左侧蓝色的上层文件夹全部纳入，右侧红色的子文件夹和 .* 隐藏文件夹将从索引中排除。",
-        "eta": "约 {{minutes}} 分钟",
-        "etaSaved": "缩短 {{percent}}%",
-        "rescan": "重新浏览",
-        "auto": ".* 隐藏文件夹（.git、.obsidian、.cache）和 node_modules 默认排除"
-      },
-      "include": {
-        "title": "要纳入的上层文件夹",
-        "meta": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-        "remove": "取消纳入",
-        "addable": "可添加：",
-        "allIn": "推荐的上层文件夹已全部纳入"
-      },
-      "exclude": {
-        "title": "要排除的子文件夹",
-        "meta": "{{count}} 个路径 · −{{size}}",
-        "add": "添加排除文件夹",
-        "restore": "取消排除",
-        "restored": "已取消排除：",
-        "refused": {
-          "isRoot": "不能排除所选文件夹本身，请选择其中的子文件夹。",
-          "outside": "只能排除所选文件夹内的子文件夹。",
-          "covered": "该文件夹已被排除。"
-        },
-        "noDocs": "无文档"
-      },
-      "criteria": {
-        "show": "查看 AI 的判断标准",
-        "hide": "收起判断标准",
-        "looked": "AI 看了什么：所选文件夹中的文件和文件夹名称、各类型的文件数量，以及文件最近何时修改。不会打开任何文件。",
-        "keep": "保留什么：你自己写的、收到的或收集的文档（报告、笔记、合同、论文、课程资料等），以及以项目、人名或日期命名的文件夹。",
-        "leave": "排除什么：程序顺带生成的日志、应用下载或导出的文件（如聊天软件）、缓存、临时和崩溃文件、构建或自动生成的产物、安装包和应用备份，以及一次性堆积了大量相似名称文件的文件夹。",
-        "code": "代码仓库即使是你自己写的也会被排除：以源文件为主、带有 package.json 等清单文件的文件夹。",
-        "doubt": "拿不准时会保留。误排除你自己的文档会让它从搜索中消失，而多索引一些杂物只会多花时间。",
-        "you": "由你决定。把鼠标移到条目上可查看理由，用 x 撤销，或自行添加。AI 每次的判断可能略有不同。"
-      }
-    },
-    "embedding": {
-      "title": "如何使用嵌入？",
-      "groupLabel": "嵌入方式",
-      "card": {
-        "none": {
-          "name": "按关键词查找",
-          "line": "只查找包含所输入词语的文档。"
-        },
-        "cloud": {
-          "name": "在 Dazzi 服务器上分析",
-          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
-        },
-        "local": {
-          "nameMac": "在我的 Mac 上分析",
-          "namePc": "在我的 PC 上分析",
-          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
-          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
-        }
-      },
-      "meter": {
-        "performance": "所需性能",
-        "accuracy": "准确度",
-        "low": "低",
-        "high": "高",
-        "meh": "略逊",
-        "good": "好"
-      },
-      "meterAria": "{{label}}: {{value}}",
-      "prepTime": "准备时间",
-      "about": "约",
-      "minutes": "{{minutes}} 分钟",
-      "cached": "已就绪",
-      "downloadUnknown": "检查中",
-      "cloudConsentRequired": "(必填)",
-      "cloudConsent": "我同意将文档正文发送到服务器。",
-      "cloudConsentCheck": "我同意",
-      "pausedNotice": {
-        "config": "所选嵌入方式不可用，已暂停",
-        "disk": "存储空间不足，无法下载模型",
-        "default": "嵌入无法继续"
-      }
-    },
-    "sources": {
-      "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
-      "checking": "正在检查可添加的其他来源…",
-      "empty": "未找到已连接的来源。您可以稍后在设置中连接。",
-      "connectMore": "需要准备的数据源可稍后在设置中连接。",
-      "name": {
-        "kakao": "KakaoTalk",
-        "slack": "Slack",
-        "discord": "Discord",
-        "telegram": "Telegram",
-        "whatsapp": "WhatsApp",
-        "mailcrawl": "邮件 (mailcrawl)",
-        "github": "GitHub",
-        "notion": "Notion",
-        "obsidian": "Obsidian"
-      },
-      "detail": {
-        "kakao": "检测到 KakaoTalk 应用数据",
-        "slack": "已连接 {{workspaces}} 个工作区",
-        "discord": "检测到 Discord 应用消息 {{messages}} 条",
-        "telegram": "检测到 Telegram 应用数据",
-        "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
-        "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
-        "github": "已登录 · Issues 与 Pull Requests",
-        "notion": "发现 Notion 应用数据",
-        "obsidian": "发现 {{vaults}} 个 Vault"
-      }
-    },
-    "plan": {
-      "eyebrow": "套餐",
-      "title": "你打算如何使用？",
-      "titleReady": "套餐已就绪",
-      "lead": "请选择套餐。可随时在设置中更改。",
-      "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
-      "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
-      "badgeTrial": "试用进行中",
-      "badgeSubscribed": "已订阅",
-      "perMonth": "/ 月",
-      "continue": "使用此套餐继续",
-      "checkoutPro": "开始 Pro 7 天免费试用",
-      "checkoutAir": "打开 Air 结算页面",
-      "noteHeld": "此账户正在使用",
-      "noteTrialing": "试用中 · 至 {{date}}",
-      "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
-      "signInFirst": "付费套餐需要先登录。",
-      "signInAction": "登录",
+    "plans": {
+      "eyebrow": "最后一步",
+      "title": "选择你的方案",
+      "lead": "登录后即可直接使用 AI 搜索。免费开始,随时可以更改。",
+      "perMonth": "/月",
+      "google": "使用 Google 继续",
+      "github": "使用 GitHub 继续",
+      "later": "以后再说",
+      "signingIn": "请在浏览器中完成登录",
+      "signedIn": "已以 {{email}} 登录",
+      "continue": "开始使用",
+      "checkout": "打开付款页面",
       "plan": {
         "free": {
           "name": "Free",
@@ -1095,194 +871,8 @@
           "price": "$200",
           "note": "每月 $200 · 随时取消",
           "tag": "适合重度使用"
-        },
-        "byok": {
-          "name": "BYOK",
-          "price": "仅 API 费用",
-          "tag": "用自己的密钥直接连接"
-        }
-      },
-      "checkoutMax": "打开 Max 结算页面",
-      "promo": {
-        "prompt": "有优惠码？",
-        "label": "优惠码",
-        "invalid": "仅限字母、数字、- 和 _。"
-      }
-    },
-    "model": {
-      "eyebrow": "AI 模型",
-      "title": "连接要使用的模型",
-      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。它必须能响应一次真实调用，才能继续。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
-      "connectedTitle": "已连接的服务",
-      "none": "尚未连接任何服务。",
-      "connect": "连接服务",
-      "modelRow": "模型",
-      "pick": "选择模型",
-      "needService": "请先连接服务",
-      "unready": "请选择模型以继续。",
-      "ready": "✓ 已就绪 · {{model}} 在 {{seconds}} 秒内响应。",
-      "checking": "正在确认 {{model}} 是否响应…",
-      "failed": "{{model}} 没有响应：{{error}}",
-      "readyResumed": "✓ 已就绪 · 将由 {{model}} 回答。",
-      "retry": "重新检查"
-    },
-    "indexing": {
-      "tip": "小技巧",
-      "prevTip": "上一条技巧",
-      "nextTip": "下一条技巧",
-      "tipDot": "技巧 {{index}}",
-      "done": "索引完成",
-      "doneDetail": "{{files}} 个文件 · {{sources}} 个数据源",
-      "waiting": "等待开始",
-      "waitingNote": "正在准备首次索引。",
-      "running": "{{phase}}…",
-      "detailParsing": "正在读取文档",
-      "detailEmbedding": "正在构建向量索引",
-      "detailFinalizing": "正在优化搜索索引",
-      "phaseLabel": {
-        "parsed": "正在读取文档",
-        "minsync": "正在嵌入",
-        "finalizing": "正在整理"
-      },
-      "phase": {
-        "parsed": "读取文档",
-        "minsync": "嵌入",
-        "finalizing": "整理"
-      },
-      "title": "Dazzi 正在读取你的文件",
-      "titleDone": "一切就绪",
-      "metaDone": "正在确认总用时",
-      "metaTotal": "总计 {{minutes}} 分钟",
-      "metaFiles": "{{count}} 个文件",
-      "metaEstimating": "正在计算剩余时间",
-      "metaUnderMinute": "剩余不到 1 分钟",
-      "metaRemaining": "剩余约 {{minutes}} 分钟",
-      "metaProgress": "{{processed}} / {{total}} 个文件",
-      "gateOkTitle": "现在可以退出了",
-      "gateOkDetail": "已读取全部 {{files}} 个文件。新更改的文件会在后台继续读取。",
-      "gateTitleMac": "请勿退出 Dazzi 或关闭 Mac",
-      "gateTitlePc": "请勿退出 Dazzi 或关闭电脑",
-      "gateDetailMac": "首次索引耗时较长。退出会中断进度。请连接电源适配器并保持屏幕开启。",
-      "gateDetailWindows": "首次索引耗时较长。退出会中断进度。请保持连接电源。",
-      "skipped": "已跳过 {{count}} 个文件",
-      "gateOkDetailPartial": "其余文件均可搜索。新更改的文件会在后台继续读取。",
-      "pause": {
-        "config": {
-          "title": "无法使用嵌入",
-          "line": "请检查嵌入设置"
-        },
-        "offline": {
-          "title": "连接已断开",
-          "line": "连接恢复后会自动继续"
-        },
-        "model": {
-          "title": "无法下载模型",
-          "line": "连接恢复后会继续下载"
-        },
-        "disk": {
-          "title": "存储空间不足",
-          "line": "腾出空间后即可继续下载"
-        },
-        "unknown": {
-          "title": "嵌入已停止",
-          "line": "可以重试，或更改嵌入方式"
-        },
-        "folder": {
-          "title": "无法读取“{{folder}}”文件夹",
-          "titleMany": "无法读取 {{count}} 个文件夹",
-          "line": "连接驱动器后会自动继续"
-        },
-        "exit": {
-          "retry": "重试",
-          "retryNow": "立即重试",
-          "recheck": "重新检查",
-          "resume": "继续下载",
-          "resumeDisk": "已腾出空间，继续下载",
-          "changeEmbedding": "更改嵌入方式",
-          "exclude": "跳过“{{folder}}”继续",
-          "excludeMany": "跳过无法读取的文件夹继续"
-        },
-        "line": {
-          "retrying": "正在重试",
-          "countdown": "{{seconds}} 秒后自动重试",
-          "exhausted": "已停止自动重试 · 请手动重试",
-          "again": "又因同样的原因停止了"
         }
       }
-    },
-    "tips": {
-      "1": {
-        "title": "一次 {{shortcut}} 即可提问",
-        "body": "从任何界面都能跳转到 AI Search 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
-      },
-      "2": {
-        "title": "点击答案中的编号即可预览依据",
-        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接预览依据文件的内容。",
-        "bubble": "营销成本比上季度下降了 18%。"
-      },
-      "3": {
-        "title": "用 Space 不打开也能浏览",
-        "body": "选中文件后按 Space 即可用快速查看预览。无需切换应用即可查看内容。"
-      },
-      "4": {
-        "title": "把文件拖入提问",
-        "body": "将 Finder 中的条目或其他应用的文件、文件夹拖入 AI Search，即以该范围为基准提问。",
-        "pill": "概括这个文件"
-      },
-      "5": {
-        "title": "相似文件归为一组",
-        "body": "像 proposal-final 和 proposal-v3 这样的相似文件会归组，并标记为最新版、相似版、相同版。不必再纠结选哪个版本。",
-        "latest": "最新版",
-        "near": "相似版",
-        "exact": "相同版"
-      },
-      "6": {
-        "title": "用 {{shortcut}} 搜索文件",
-        "body": "直接跳转到搜索框。同时查看关键词和语义，并按重排排列顺序。"
-      },
-      "7": {
-        "title": "用 {{shortcut}} · 2 · 3 切换视图",
-        "body": "用键盘在图标、列表和分栏视图之间切换。最后选择的视图在下次启动时仍会保留。"
-      },
-      "8": {
-        "title": "Slack 和 GitHub 也能用同样的问题",
-        "body": "已连接的数据源会与文件一同搜索。可随时在设置中添加或关闭数据源。"
-      },
-      "9": {
-        "title": "随时用 {{shortcut}} 重新配置",
-        "body": "文件夹范围、AI 模型和数据源可在设置中更改。只有嵌入位置一旦更改就会从头重新索引。"
-      }
-    },
-    "overlay": {
-      "later": "稍后",
-      "pay": {
-        "title": "{{plan}} 结算",
-        "lead": "付款在浏览器的结算页面完成。不会在此应用中输入银行卡信息。",
-        "waiting": "完成付款后，此窗口会自动更新。",
-        "reopen": "重新打开结算页面",
-        "check": "确认付款",
-        "checking": "确认中…"
-      }
-    },
-    "toast": {
-      "signedIn": "已登录。",
-      "notificationsOn": "已获得通知权限。",
-      "notificationsOff": "请在系统设置中允许通知。",
-      "loginFailed": "无法添加到登录项。",
-      "networkOk": "已确认网络连接。",
-      "networkFail": "无法连接到网络。",
-      "fdaPending": "重新打开应用后权限将生效。",
-      "planActive": "{{plan}} 套餐已生效。",
-      "signInFailed": "无法登录。",
-      "notIndexed": "索引完成后才能打开 Dazzi。"
-    },
-    "roles": {
-      "eyebrow": "检索辅助模型",
-      "title": "选择重排序与判断模型",
-      "lead": "使用 Dazzi 套餐时会默认提供。使用自己的密钥时，请从已连接的服务中选择，或保持现状。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
-      "unavailable": "已连接的服务中没有提供该模型的。在设置中连接 OpenRouter 即可使用。"
     }
   },
   "finderComponents": {
@@ -1525,19 +1115,14 @@
       "invalidConversionRequest": "转换请求无效。"
     },
     "dialogs": {
-      "notificationBody": "通知已开启。",
       "openWithTitle": "打开方式",
       "openButton": "打开",
-      "chooseFolderTitle": "选择文件夹",
-      "addButton": "添加",
       "quitButton": "退出",
       "continueButton": "继续",
       "indexingInProgress": "正在建立索引。",
       "indexingQuitDetail": "退出将停止进度。"
     },
     "onboarding": {
-      "apiKeyRequired": "需要 API 密钥。",
-      "baseUrlRequired": "需要服务器地址(base URL)。",
       "indexingFailed": "建立索引失败。",
       "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}"
     },

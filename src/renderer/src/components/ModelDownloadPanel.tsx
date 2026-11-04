@@ -1,9 +1,18 @@
 import type { ReactElement } from "react";
 import type { ModelDownloadStatus } from "../../../shared/model-download-contract";
-import type { Translate } from "../onboarding/flow";
-import { formatSize } from "../onboarding/flow";
 import { downloadPercent } from "../state/model-download";
 import { ProgressBar } from "./primitives/ProgressBar";
+
+/** A loose `t`: the panel's keys are fixed, and a loose signature keeps callers free of i18next's key typing. */
+export type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+/** "1.2 GB" / "812 MB": decimal units, as model hosts publish download sizes. */
+export function formatDownloadSize(bytes: number): string {
+	if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
+	if (bytes >= 1_000_000) return `${Math.round(bytes / 1_000_000)} MB`;
+	// Anything above zero shows as at least 1 KB, so a partial download is never reported as empty.
+	return `${bytes <= 0 ? 0 : Math.max(1, Math.round(bytes / 1000))} KB`;
+}
 
 interface ModelDownloadPanelProps {
 	readonly status: ModelDownloadStatus;
@@ -13,13 +22,13 @@ interface ModelDownloadPanelProps {
 }
 
 /**
- * The on-device embedding model's download, as one block for every place that needs it (the onboarding embedding
- * step and indexing screen, Settings). It reads the shared status and offers exactly the action that fits:
+ * The on-device embedding model's download, as one block for every place that needs it (Settings → embedding).
+ * It reads the shared status and offers exactly the action that fits:
  * download or resume when nothing runs, cancel while it runs, retry after a failure, nothing once it is here.
  */
 export function ModelDownloadPanel({ status, t, onStart, onCancel }: ModelDownloadPanelProps): ReactElement {
 	const percent = downloadPercent(status);
-	const size = formatSize(status.bytesTotal);
+	const size = formatDownloadSize(status.bytesTotal);
 	if (status.state === "ready") {
 		return (
 			<div className="model-dl" data-state="ready" role="status">
@@ -39,7 +48,7 @@ export function ModelDownloadPanel({ status, t, onStart, onCancel }: ModelDownlo
 				<>
 					<ProgressBar percent={percent} tone="run" label={t("modelDownload.progressAria")} />
 					<span className="model-dl-meta">
-						{t("modelDownload.amount", { done: formatSize(status.bytesDone), total: size })}
+						{t("modelDownload.amount", { done: formatDownloadSize(status.bytesDone), total: size })}
 						{status.file === null ? "" : ` · ${t("modelDownload.file", { file: status.file })}`}
 					</span>
 					<span className="model-dl-meta">{t("modelDownload.keepOpen")}</span>
@@ -49,7 +58,7 @@ export function ModelDownloadPanel({ status, t, onStart, onCancel }: ModelDownlo
 					{status.error}
 				</span>
 			) : (
-				<span className="model-dl-meta">{partial ? t("modelDownload.partial", { done: formatSize(status.bytesDone) }) : t("modelDownload.needed", { size })}</span>
+				<span className="model-dl-meta">{partial ? t("modelDownload.partial", { done: formatDownloadSize(status.bytesDone) }) : t("modelDownload.needed", { size })}</span>
 			)}
 			<div className="model-dl-actions">
 				{status.state === "downloading" ? (

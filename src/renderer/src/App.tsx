@@ -55,6 +55,8 @@ import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
+import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
+import { folderPaneId, splitWithAiSearch } from "./first-run/tour";
 import { cn } from "./lib/cn";
 
 const autorag = window.autorag;
@@ -220,6 +222,10 @@ export function App(): ReactElement {
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
+	/** The first-run layer is up (the main process passed the pending flag; the layer's `load` is authoritative). */
+	const [firstRun, setFirstRun] = useState(() => autorag.onboarding.pending);
+	/** The layer covers the whole window, so the Finder behind it takes no input. */
+	const [firstRunCovered, setFirstRunCovered] = useState(firstRun);
 	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
 	const grantTagColors = useCallback(() => {
 		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
@@ -363,6 +369,44 @@ export function App(): ReactElement {
 		if (handle === undefined) return;
 		deliverToDock(handle, pending);
 	}, [aiDelivery, activeAiTabId]);
+
+	const firstRunHost = useMemo<FirstRunHost>(
+		() => ({
+			arrange: () => {
+				setSidebarVisible(true);
+				setInspectorVisible(true);
+				setWorkspace((current) => splitWithAiSearch(current));
+			},
+			typeDraft: (text) => {
+				const ws = workspaceRef.current;
+				for (const pane of ws.panes) {
+					if (pane.tabs.find((tab) => tab.id === pane.activeId)?.path !== AI_SEARCH_PATH) continue;
+					aiHandlesRef.current.get(pane.activeId)?.prefill(text);
+					if (ws.focusedPaneId !== pane.id) setWorkspace((current) => focusPane(current, pane.id));
+					return;
+				}
+			},
+			showFamily: (family) => {
+				const paneId = folderPaneId(workspaceRef.current);
+				const head = family.entriesByPath[family.head];
+				if (paneId === null || head === undefined) return;
+				store.get(paneId)?.revealEntry(head);
+				setWorkspace((current) => focusPane(current, paneId));
+			},
+			versionFamilies: async () => (await source.versionFamilies()).families,
+			folderPath: () => {
+				const paneId = folderPaneId(workspaceRef.current);
+				const pane = workspaceRef.current.panes.find((candidate) => candidate.id === paneId);
+				return pane?.tabs.find((tab) => tab.id === pane.activeId)?.path ?? null;
+			},
+			setCovered: setFirstRunCovered,
+		}),
+		[source, store],
+	);
+	const endFirstRun = useCallback(() => {
+		setFirstRun(false);
+		setFirstRunCovered(false);
+	}, []);
 
 	/** The window-level callbacks every pane shares: one stable object, so panes re-render only for their own state. */
 	const shell = useMemo<PaneShell>(
@@ -685,10 +729,12 @@ export function App(): ReactElement {
 		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
+		<>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
 				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
+				inert={firstRunCovered}
 			>
 				<div className="min-w-0 min-h-0 overflow-hidden" inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
@@ -946,6 +992,8 @@ export function App(): ReactElement {
 				<MagicActionDialog />
 			</div>
 		</div>
+		{firstRun ? <FirstRun host={firstRunHost} onDone={endFirstRun} /> : null}
+		</>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
 		</ContextMenuSettingsContext>

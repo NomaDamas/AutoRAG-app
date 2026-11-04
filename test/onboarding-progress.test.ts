@@ -1,81 +1,57 @@
 import { describe, expect, it } from "vitest";
 import { computeIndexingProgress } from "../src/main/onboarding-progress";
 
+const base = { state: "running", minsyncFiles: 0, phaseElapsedMs: 0 } as const;
+
 describe("computeIndexingProgress", () => {
 	it("is idle at 0 and done at 100", () => {
-		expect(computeIndexingProgress({ state: "idle", phase: null, processedFiles: 0, totalFiles: 0, phaseElapsedMs: 0 })).toEqual({
+		expect(computeIndexingProgress({ ...base, state: "idle", phase: null, processedFiles: 0, totalFiles: 0 })).toEqual({
 			progress: 0,
 			remainingMinutes: null,
 		});
-		expect(computeIndexingProgress({ state: "success", phase: "finalizing", processedFiles: 10, totalFiles: 10, phaseElapsedMs: 0 })).toEqual({
+		expect(computeIndexingProgress({ ...base, state: "success", phase: "finalizing", processedFiles: 10, totalFiles: 10 })).toEqual({
 			progress: 100,
 			remainingMinutes: null,
 		});
 	});
 
-	it("measures the read phase from processed/total, filling half the bar", () => {
-		const half = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 85, totalFiles: 170, phaseElapsedMs: 0 });
-		expect(half.progress).toBe(25);
+	it("measures the read phase from processed/total and fills 60% of the bar", () => {
+		const half = computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 225, totalFiles: 450 });
+		expect(half.progress).toBe(30);
 		expect(half.remainingMinutes).toBe(1);
-		const done = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 170, totalFiles: 170, phaseElapsedMs: 0 });
-		expect(done.progress).toBe(50);
+		const done = computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 450, totalFiles: 450 });
+		expect(done.progress).toBe(60);
 		expect(done.remainingMinutes).toBe(0);
 	});
 
-	it("has no estimate when the pre-scan found nothing", () => {
-		expect(computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 0, totalFiles: 0, phaseElapsedMs: 0 })).toEqual({
-			progress: 0,
-			remainingMinutes: null,
-		});
+	it("shows the floor estimate before the pre-scan reports a total", () => {
+		expect(computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 0, totalFiles: 0 })).toEqual({ progress: 0, remainingMinutes: 8 });
+		expect(computeIndexingProgress({ ...base, phase: null, processedFiles: 0, totalFiles: 0 })).toEqual({ progress: 0, remainingMinutes: 8 });
 	});
 
-	it("estimates later local phases from elapsed time against the local rate", () => {
-		// 85 files ≈ 60s of local work; half elapsed = half of the phase's share.
-		const minsync = computeIndexingProgress({ state: "running", phase: "minsync", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 30_000 });
-		expect(minsync.progress).toBe(72.5);
-		expect(minsync.remainingMinutes).toBe(1);
-		const finalizing = computeIndexingProgress({ state: "running", phase: "finalizing", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 60_000 });
-		expect(finalizing.progress).toBe(99);
+	it("measures the SPLADE tail from MinSync's committed files over what the read produced", () => {
+		const half = computeIndexingProgress({ ...base, phase: "minsync", processedFiles: 100, totalFiles: 100, minsyncFiles: 50, phaseElapsedMs: 5_000 });
+		expect(half.progress).toBe(77.5);
+		expect(half.remainingMinutes).toBe(1);
 	});
 
-	it("measures the minsync phase from embedded/total when MinSync's resume log reports committed files", () => {
-		const half = computeIndexingProgress({
-			state: "running",
-			phase: "minsync",
-			processedFiles: 100,
-			embeddedFiles: 50,
-			totalFiles: 100,
-			phaseElapsedMs: 5_000,
-		});
-		expect(half.progress).toBe(72.5);
+	it("falls back to elapsed time against the keyword-only rate before MinSync commits anything", () => {
+		// 450 files ≈ 60s of keyword work; half elapsed = half of the SPLADE share.
+		const half = computeIndexingProgress({ ...base, phase: "minsync", processedFiles: 450, totalFiles: 450, minsyncFiles: 0, phaseElapsedMs: 30_000 });
+		expect(half.progress).toBe(77.5);
+		expect(half.remainingMinutes).toBe(1);
+	});
+
+	it("completes in the last few percent during finalizing, estimated from elapsed time", () => {
+		expect(computeIndexingProgress({ ...base, phase: "finalizing", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 30_000 }).progress).toBe(97);
+		expect(computeIndexingProgress({ ...base, phase: "finalizing", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 600_000 }).progress).toBe(99);
 	});
 
 	it("never reaches 100 before success and drops the estimate on failure", () => {
-		const stuck = computeIndexingProgress({ state: "running", phase: "minsync", processedFiles: 85, totalFiles: 85, phaseElapsedMs: 600_000 });
+		const stuck = computeIndexingProgress({ ...base, phase: "minsync", processedFiles: 450, totalFiles: 450, minsyncFiles: 0, phaseElapsedMs: 600_000 });
 		expect(stuck.progress).toBe(95);
-		const failed = computeIndexingProgress({ state: "failed", phase: "parsed", processedFiles: 10, totalFiles: 100, phaseElapsedMs: 0 });
+		const failed = computeIndexingProgress({ ...base, state: "failed", phase: "parsed", processedFiles: 45, totalFiles: 450 });
+		expect(failed.progress).toBe(6);
 		expect(failed.remainingMinutes).toBeNull();
-		expect(failed.progress).toBe(5);
-	});
-});
-
-describe("computeIndexingProgress without embedding", () => {
-	it("gives the read phase 90% of the bar, since no embedding phase follows it", () => {
-		const half = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 225, totalFiles: 450, phaseElapsedMs: 0, embedding: false });
-		expect(half.progress).toBe(45);
-		expect(half.remainingMinutes).toBe(1);
-		const done = computeIndexingProgress({ state: "running", phase: "parsed", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 0, embedding: false });
-		expect(done.progress).toBe(90);
-	});
-
-	it("finishes in the last tenth and uses the keyword-only rate for the estimate", () => {
-		const finalizing = computeIndexingProgress({ state: "running", phase: "finalizing", processedFiles: 450, totalFiles: 450, phaseElapsedMs: 60_000, embedding: false });
-		expect(finalizing.progress).toBe(99);
-		expect(finalizing.remainingMinutes).toBe(0);
-	});
-
-	it("keeps the embedding layout when the flag is absent or true", () => {
-		const input = { state: "running", phase: "parsed", processedFiles: 85, totalFiles: 170, phaseElapsedMs: 0 } as const;
-		expect(computeIndexingProgress(input)).toEqual(computeIndexingProgress({ ...input, embedding: true }));
 	});
 });

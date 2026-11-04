@@ -14,8 +14,7 @@ describe("mainWindowChrome", () => {
 		}
 	});
 
-	it("is as tall as the page's own top bar: the onboarding band, then the Finder toolbar", () => {
-		expect(windowControlsOverlay("light", "onboarding").height).toBe(42);
+	it("is as tall as the page's own top bar: the Finder toolbar", () => {
 		expect(windowControlsOverlay("light", "finder").height).toBe(52);
 	});
 

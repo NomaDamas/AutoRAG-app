@@ -77,8 +77,9 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   are left out of indexing; the app finds them itself and passes them as
   `excludePaths`. OCR (`parserOptions.ocr.enabled`, which makes the librarian parse image files) and Jikji's media index are pinned off in every
   config the app hands to the librarian.
-- **Keyword-only search** — the onboarding embedding step offers 사용 안 함 /
-  로컬 / 원격, and Settings → AI 모델 → 문서 이해 offers the same choice. 사용 안 함
+- **Keyword-only search** — the first run writes `appIndexing.semanticSearch: false`
+  (its first index embeds nothing), and Settings → AI 모델 → 문서 이해 offers 사용
+  안 함 / 로컬 / 원격 afterwards. 사용 안 함
   writes `appIndexing.semanticSearch: false` (absent or `true` keeps semantic
   search; the shared config file otherwise stays as the user left it, `minSync.embedder`
   included, so choosing a model again needs no re-entry). `semantic-policy.ts`
@@ -355,11 +356,9 @@ purpose (restarting it re-scans every watched folder). QA lane:
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
 so a stuck or failed index is seen without the user filing an issue. It is
-asked once, on the first onboarding step: a checkbox that is **ticked by
-default** sits next to the usage-statistics one, and Settings → 일반 → 개인정보 →
-"오류 보고서 보내기" has the same choice as a switch. `errorReporting` is stored
-off until the user continues from the welcome step, which saves both checkboxes
-as they stand; closing the window there saves nothing.
+**off by default** and the first run never asks: Settings → 일반 → 개인정보 →
+"오류 보고서 보내기" is the only place it is turned on. `errorReporting` is stored
+false unless an earlier build or the user set it true.
 Until it is on, every event is dropped before it is queued, and
 `readErrorReportingEnabled` reads the setting as off unless it is exactly `true`.
 There is no per-report prompt.
@@ -396,16 +395,12 @@ Tracing, replay, logs and user feedback are not enabled.
 ## Usage statistics (PostHog)
 
 Separate from error reports: Settings → 일반 → 개인정보 has a second switch,
-`usageAnalytics`, stored **off** until the user continues from the welcome step.
+`usageAnalytics`, **off by default** and never asked during the first run.
 It answers "which features are used", never "what is in them".
 
-How it is chosen: the first onboarding step (welcome) carries a small checkbox
-with a link to the Privacy Policy, **ticked by default**, and Settings → 일반 →
-개인정보 has the same choice as a switch. Continuing from the welcome step saves
-the checkbox's value to `usageAnalytics`; closing the window there saves
-nothing, so nothing is sent before the user has continued. Because the box is
-pre-ticked, continuing is not by itself an affirmative opt-in under the EU's
-GDPR/ePrivacy rules (see `docs/compliance/eu-status.md`). The Privacy Policy
+How it is chosen: only the Settings → 일반 → 개인정보 switch turns it on; the
+first run asks nothing, so nothing is sent before the user opts in there (see
+`docs/compliance/eu-status.md`). The Privacy Policy
 (served from the landing-page repo) must name the desktop app's usage statistics
 before EU users are served.
 
@@ -447,186 +442,117 @@ app at a local capture server and asserts the rules above over HTTP.
 
 ## First-run onboarding
 
-A fresh install opens onboarding instead of the Finder: welcome, permissions,
-account, folders, smart scan, smart-indexing scope, embedding, data sources,
-plan, and the first index. A BYOK user also gets the model step: right after the
-account (before any folder is scanned, because the smart scan runs on that model),
-or after the plan for a signed-in user who only picks BYOK there, and a role step
-(reranker and Jev) right before the first index. The screens port
-`docs/design-reference/onboarding/onboarding-prototype.html`; the draft is saved
-after every change, so a relaunch (for example after granting Full Disk Access)
-resumes at the same step.
+The first run asks nothing it can decide itself — the less onboarding, the better
+the product. A fresh install opens the **Finder window** (there is one window
+now; the old separate onboarding window is gone) with the `ONBOARDING_PENDING_FLAG`
+preload argument while `firstRun.pending()` is true. The renderer's first-run
+layer (`src/renderer/src/first-run/`, root `.fr-root`) mounts over the Finder and
+drives one flow against the contract in `src/shared/onboarding-contract.ts`:
 
-- **Permissions** probe Full Disk Access for real (macOS) and re-check every two
-  seconds. "시스템 설정 열기" opens the Privacy & Security › Full Disk Access pane
-  directly, with no explanation modal in between, and the row switches at once
-  to "다시 시작 필요" + "지금 다시 시작" because a grant only reaches a running app
-  after a relaunch (the probe clears it once the grant is real). Notifications post a real system notification; if macOS reports the
-  app is not allowed, the step says so and opens the system notification
-  settings (the unsigned dev binary is never allowed, so this only works in a
-  signed build). Launch at login is the same setting as Settings › General and
-  registers the OS login item in packaged builds only (registering the dev
-  binary would add bare "Electron" to Login Items); the switch is read back from
-  the OS and flips off with a message if the OS refused.
-- **Folders** shows the suggested locations (Desktop, Documents, Downloads, iCloud
-  Drive start selected; Pictures and connected cloud drives do not) as cards with
-  a checkbox, each pre-scanned with the indexer's own rules (supported
-  extensions, size cap, skipped dependency/code folders) for a real file count,
-  size and ETA, plus "add another folder". This is where the person chooses what
-  the AI looks through and what is indexed; the steps after it work on exactly
-  these folders.
-- **Smart scan** (after the folders) starts a helper agent (see "Helper agents")
-  on the selected folders. It runs once on entering the step, and again only when
-  a folder was selected that the last analysis did not cover (the draft keeps the
-  folders it analysed, `smartScopeRoots`); unselecting a folder just hides its
-  proposals. The scan screen shows the prototype's drawn folder and roaming magnifying glass
-  and the folder being looked at. The model judges, in words and without
-  thresholds, whether a folder holds what a person wrote or collected for
-  their own use or what a program generated as a by-product (logs, app and chat
-  exports, caches, build or generated output, installers, machine-named series).
-  Code repositories (mostly source files plus a manifest such as `package.json`,
-  `src`/`test` folders, a cloned project) are always left out, even the person's
-  own; the prompt describes how to recognise one from names. It sees names only:
-  `folder_survey` reports file counts by type, every type and not only the ones
-  the index reads (subfolders included, with the pre-scan's own rules), when the
-  files last changed and a spread of file names, for the folder and each
-  subfolder, and `list_folder` lists the names in one folder. A survey names up to
-  500 subfolders, the largest 40 in detail and the rest one line each (name,
-  counts, main type), so a large folder stays readable. No file is opened and no excerpt leaves the
-  machine. The agent has no pi file tools, so it can only look inside the chosen
-  folders. A folder can only be proposed after it was surveyed, every path is
-  checked against the disk and the chosen folders. A proposal is kept even when
-  the index would read no file from it (the screen then says "no documents"). When in doubt the model keeps the folder: a wrongly
-  excluded document vanishes from search, a wrongly included folder only costs
-  time. Because the model decides, runs can differ a little; each proposal carries
-  the reason the model gave. It spends the AutoRAG model; the user
-  can cancel and carry on by hand, and a failure (no model signed in yet, a provider
-  error) shows its reason with a retry while the step can still be left.
-- **Smart-indexing scope** is the prototype's scope screen: a policy bar (the
-  estimate, struck through to the old one with the percent saved, and "scan
-  again"), a blue panel of the included folders and a red one of the sub-folders
-  left out. A pill's x removes a folder or puts a left-out one back, a ghost pill brings
-  back a folder the AI had looked through and the person unselected, and the
-  dashed button adds a sub-folder of the selected ones to leave out (measured
-  once added). Choosing which folders to look through is the step before the scan. The proposals and the user's choices live in the draft (`smartScope`),
-  so a relaunch restores them. Starting the index writes the folders still left
-  out into the shared config's `excludePaths` after the user's own entries and
-  subtracts their file count from the first index's total and ETA.
-- **Local embedding spec guard** — the built-in local model
-  (`native:Qwen/Qwen3-Embedding-0.6B`) only runs on a capable machine:
-  Apple silicon with a Pro, Max or Ultra chip and at least 32 GB of unified
-  memory, or Windows/Linux with a CUDA GPU (NVIDIA, read with `nvidia-smi`) of
-  at least 8 GB VRAM. `src/shared/local-embedding-spec.ts` holds the rule
-  (`evaluateLocalEmbeddingSpec`) and the translated message
-  (`localSpecMessage`, keys `localSpec.*`); `src/main/hardware-probe.ts` reads
-  the hardware once per launch. Below the spec the onboarding local card is
-  disabled and says why, a saved draft that chose local falls back to keyword-only,
-  `startIndexing` refuses `embed: "local"`, and Settings → AI 모델 → 문서 이해
-  marks the native profile unavailable (`EmbeddingProfile.unavailable`); the main
-  process refuses to plan or apply it. Keyword-only, Dazzi cloud embedding and a
-  user-run local embedding server (`local-server`) are never gated. Raising or
-  lowering the minimum is a change to that one file. Unpackaged builds honor
-  `AUTORAG_QA_HARDWARE` (a JSON `HardwareProfile`) so QA can see the blocked state
-  on a capable machine; a packaged app ignores it.
-- **Embedding** offers local (`native:Qwen/Qwen3-Embedding-0.6B`) by default and enables
-  Dazzi cloud embedding (`openai:qwen/qwen3-embedding-0.6b` on the Dazzi
-  endpoint) once the user is signed in to Dazzi and gives explicit consent.
-  Choosing cloud embedding places the plan step immediately after embedding and
-  restricts plan selection to Pro and Max; when the signed-in account already
-  holds an active paid subscription (Air, Pro or Max for local; Pro or Max for
-  cloud), the plan step is skipped automatically.
-- **Data sources** list only usable connectors, and every one starts off. The
-  probes run in parallel and each row appears the moment its own probe finishes
-  (fast ones first); a "checking" line stays under the list until all of them are
-  done, and only then does the "connect later" row appear, minus whatever was
-  found. There is no description to write: onboarding stores none, and the
-  agent-facing description is meant to be generated from the indexed content.
-  Local files are covered by the folders step, so
-  Spotlight and Apple Mail are not offered. Each row appears only when the
-  connector's own health probe says its data is reachable: KakaoTalk
-  (`lazykatok doctor --macos-probe` plus `lazykatok source chats --source macos`
-  when `auth.json` has not been cached yet: app, container, verifiable login,
-  readable database files), Slack (`slacrawl`, at least one workspace), Discord
-  (`discrawl` ready database plus a dry-run `wiretap` that finds messages),
-  Telegram (`telecrawl doctor`), WhatsApp (`wacrawl doctor`, read-only, with
-  messages), mail (`mailcrawl` installed and a `himalaya` account whose login
-  succeeds), GitHub, and Obsidian. Mail writes one `mailcrawl-<account>` archive
-  per verified account under `~/.mailcrawl/<account>`; accounts that cannot log
-  in are skipped. GitHub requires authentication and at least one discovered
-  repository; empty or failed repo discovery does not offer a source that would
-  fail its first sync.
-- **Model** (BYOK) is Settings → AI 모델's connect flow in onboarding clothes
-  (`components/settings/ProviderConnect.tsx`, `ModelPicker.tsx`): any provider Pi
-  can sign in to (OAuth, API key) or a local/custom OpenAI-compatible server. The
-  credential lands in Pi's `auth.json` and the chosen answer model in the shared
-  `config.json` (`model.*`, through `modelConfigUpdates`) the moment it is picked,
-  so the smart scan can run on it and Settings shows exactly the same provider and
-  model afterwards. The draft only remembers the choice; the config is the authority
-  (`onboarding/model-choice.ts`). The step cannot be left until the saved model has
-  answered a real call (`main/model-health.ts`, `onboarding:checkModel`: the same
-  resolution and credentials the smart scan and AI Search use, one 16-token reply,
-  30 s limit); a refusal shows the provider's own message and a retry button, and
-  `draft.model.verified` is only ever set by that answer.
-- **Roles** (BYOK, right before indexing) picks the reranker and Jev, which a Dazzi
-  plan would provide, from the connected services that serve them
-  (`shared/ai-roles.ts`); each can be left alone or turned off, and a role no
-  connected service offers says so. They are written through the same config
-  helpers Settings uses (`jevConfigUpdates`, `rerankConfigUpdates`).
-- **Indexing** writes `searchPaths`, the embedder (only when none is set), the
-  enabled datasources (`kakao` is indexed by the librarian's read-only sidecar over
-  lazykatok's archive with the shared embedder, so `lazykatok index` and its
-  fastembed pipeline never run) into the shared config (the BYOK model is already
-  there from the model step), then runs
-  the local refresh (`parsed`, `minsync`) and syncs enabled datasources in the
-  background once local indexing and onboarding complete. A config still pointing its
-  `workspacePath` at the app's cwd seed is moved to `<AutoRAG home>/workspace`.
-  The Finder is open from the first launch, in its own window beside onboarding
-  (`openWindows` in `src/main/index.ts`; the onboarding window carries the
-  `ONBOARDING_PENDING_FLAG` launch argument, so the renderer shows only the flow).
-  The indexing screen has no button to open Dazzi: a successful first index
-  completes onboarding by itself (the renderer calls `onboarding.complete()`), and
-  the window stays on its done screen until it is closed. Closing it on a run that
-  failed completes onboarding too (`completesOnClose`, `src/main/onboarding-window.ts`);
-  closing it before the index ran or while it runs keeps onboarding for the next
-  launch. Closing the last window during a running first index asks before quitting
-  (`closeDecision`). Main pushes index and activity events to both windows.
-  The status the screen shows has one writer for its final state: the poll tick
-  (every second, reading `refresh-progress.json`, the parsed mirror and MinSync's
-  `progress.jsonl`) reads first and applies its snapshot only if its run is still
-  the live one and still `running`, so a tick that straddles the end of the refresh
-  can no longer turn a `failed` or `success` back into `running`.
+1. **Permission** (macOS only, while `permissions().fullDiskAccess === false`):
+   the card asks for Full Disk Access and re-probes every two seconds, moving on
+   by itself once it is granted; "시스템 설정 열기" opens Privacy & Security ›
+   Full Disk Access directly, and because a grant can reach a running app only
+   after a relaunch the card also offers "다시 시작" (`x-apple.systempreferences:`
+   URL, `probeFullDiskAccess`).
+2. **Setup**: one call to `start()` and one 0–100 progress bar while the main
+   process (`src/main/first-run-service.ts`) does everything:
+   - `scanning` (0→8) pre-scans the default folders — Desktop, Documents,
+     Downloads, and iCloud Drive on macOS — keeping only the ones that exist,
+     through the same folder-scan coordinator the indexer uses, which gives the
+     total file count;
+   - `planning` (8→15) runs the smart-indexing helper agent over those roots
+     (see "Helper agents") and **takes every proposal** it makes; a model that is
+     not configured, errors, or times out simply yields no exclusions and the run
+     carries on silently. `excludedFolders` is the count taken;
+   - `indexing` (15→90) writes the folders into the shared AutoRAG config in
+     **keyword-only** mode and runs the first index. `applyIndexingConfig` sets
+     `searchPaths`, merges the left-out paths into `excludePaths`, sets
+     `appIndexing.semanticSearch: false`, and moves a `workspacePath` still
+     pointing at the app's cwd seed to `<AutoRAG home>/workspace`. No dense
+     embedder block is written at all: the first index is the parsed mirror plus
+     MinSync's bundled SPLADE sparse encoder, so nothing is embedded and no model
+     is downloaded. Dense embedding stays opt-in in Settings → AI 모델 → 문서 이해.
+     The bar is measured by the same poll the old indexing screen used (every
+     second: `refresh-progress.json`, the parsed mirror, MinSync's `progress.jsonl`)
+     and mapped through `computeIndexingProgress` (parsed 0–60, SPLADE 60–95,
+     finalizing 95–99, `NONE_FILES_PER_MINUTE` for the ETA with the
+     `NONE_MIN_MINUTES` floor until the pre-scan reports a total). A power-save
+     blocker is held for the run;
+   - `preparing` (90→99) starts a duplicate (dupey) scan in the background and
+     picks the tour's one question: it reads the parsed mirror, takes up to eight
+     substantial, non-code documents (recent first, one per folder), reads a
+     ~2,000-character excerpt of each, and asks the configured answer model
+     (`resolveConfiguredSessionModel` + `completeSimple`) for one natural,
+     interface-language question per document. Each question is then verified
+     with **model-free keyword retrieval** (`new AutoRAGLite(effectiveConfig)`
+     `.retrieve`, `topK: 5`); a question counts only when its own document comes
+     back, and the best rank then the lowest latency wins. The whole stage is
+     bounded (~90 s) and any failure leaves `demo = null` — the tour then skips
+     its question steps;
+   - `ready` (100) with the demo question (or null). The demo question and the
+     excerpts are sent only to the model provider the user configured (their own
+     BYOK provider, or the Dazzi API for a managed model) and only when a model
+     is configured at all; the excerpts never leave the machine otherwise
+     (see `docs/compliance/data-flows.md`).
+   A failure stops the bar and shows `[data-action="setup-retry"]`, which calls
+   `start()` again (a failed run restarts; a run in flight or finished is returned
+   as is).
+3. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
+   `[data-action="tour-next"]` / `tour-skip`) walk the split view — a cinematic
+   title, the demo question typed into AI Search and asked, the answer, the first
+   citation chip, the inspector evidence, the evidence folder, a duplicate family
+   in the left pane, and its Versions section. Steps with no data (no demo
+   question, no duplicate family) are skipped.
+4. **Plans**: only at the very end of the tour does the sheet `.fr-plans` offer
+   Free / Air / Pro / Max cards, Google / GitHub sign-in, and "나중에"
+   (`[data-action="plans-later"]`). Completing it calls `onboarding.complete()`,
+   persists `{ completed: true }` in `<userData>/onboarding/state.json`, and the
+   overlay disappears. No account, plan, model, source, or embedding question is
+   ever asked before the first index.
 
-Account and plan are real. The account step signs in against the hosted AutoRAG
-service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and
-no card number is typed into the app. Clicking Google or GitHub opens
+A relaunch (for example after granting Full Disk Access) stays on the overlay:
+`load()` is authoritative. The Finder keeps its own size; only the preload
+argument changes with the first run. Closing the last window while a first index
+is still in flight asks before quitting (`closeDecision`,
+`src/main/onboarding-window.ts`).
+
+The **local embedding spec guard** still exists for the opt-in path: the built-in
+local model (`native:Qwen/Qwen3-Embedding-0.6B`) only runs on a capable machine
+(Apple silicon Pro/Max/Ultra with ≥ 32 GB unified memory, or a CUDA GPU with
+≥ 8 GB VRAM). `src/shared/local-embedding-spec.ts` holds the rule
+(`evaluateLocalEmbeddingSpec`) and the translated message (`localSpecMessage`,
+keys `localSpec.*`); `src/main/hardware-probe.ts` reads the hardware once per
+launch. It is enforced when the user later selects that profile in Settings:
+`EmbeddingProfile.unavailable` marks it and the main process refuses to plan or
+apply it. Keyword-only, Dazzi cloud embedding and a user-run embedding server
+(`local-server`) are never gated. Unpackaged builds honor `AUTORAG_QA_HARDWARE`
+(a JSON `HardwareProfile`); a packaged app ignores it.
+
+Account and plan are real, and reachable from the tour's last sheet (and from
+Settings). Signing in goes against the hosted AutoRAG service (`AUTORAG_BASE_URL`,
+default `https://api.dazziapp.com`); no password and no card number is typed into
+the app. Clicking Google or GitHub opens
 `/api/desktop/oauth?client=app&…&provider=google|github` (OAuth 2.0 authorization
 code + PKCE over a loopback redirect, RFC 8252), which 302-redirects straight to
 Google or GitHub without stopping on `/login` and returns straight to the
-loopback callback once authenticated. Email sign-in runs natively inside the
-onboarding screen (`POST /api/desktop/email/send` + `POST /api/desktop/email/verify`,
-6-digit verification code) without opening a browser. Settings › 계정 keeps the
-generic `/desktop/authorize` flow. The returned API key lives only in Pi's `auth.json` as the `dazzi`
-from, so the app and the librarian cannot disagree about being signed in; the
-renderer sees an `AccountStatus` (email, plan, subscription state, weekly
-credits), never the
-key. The plan step is five plain cards (Free, Air, Pro, Max, BYOK: name, price,
-who it is for), in the order and with the audiences the service describes; the
-Pro card carries a "7-day free trial" pill, and a Free card keeps the one
-training disclosure. The screen is centred in the stage top and bottom, and the
-line under the cards (sign-in prompt, promo link or field) is always present, so
-choosing another plan never moves anything. The footer is a three-column grid
-(back, progress, primary) so the progress dashes sit on the window's centre line
-on every step. Air, Pro and Max open the service's hosted checkout in the
-browser (the server withholds the trial from a mailbox that already had one),
-carrying the promo code if the user asked for the field ("Have a promo code?":
-`discount_code`, a token of letters, digits, `-` and `_`; the server refuses an
-unknown one and the app shows its reason). The plan step continues
-once the server reports that plan; cancel, refund, and the
-payment method live in the hosted billing portal (Settings › 구독 및 사용량).
-Skipping the account is the BYOK path.
+loopback callback once authenticated. Settings › 계정 keeps the generic
+`/desktop/authorize` flow and the native email sign-in
+(`POST /api/desktop/email/send` + `POST /api/desktop/email/verify`). The
+returned API key lives only in Pi's `auth.json` as
+the `dazzi` provider, so the app and the librarian cannot disagree about being
+signed in; the renderer sees an `AccountStatus` (email, plan, subscription state,
+weekly credits), never the key. The first run's plan sheet is four cards (Free,
+Air, Pro, Max: name, monthly price, who it is for; Pro carries the "7-day free
+trial" pill) above Google and GitHub sign-in. Free or "나중에 할게요" finishes the
+first run; a paid card asks for sign-in first, then opens the service's hosted
+checkout in the browser (the server withholds the trial from a mailbox that
+already had one). Promo codes, BYOK and the rest of billing live in Settings ›
+구독 및 사용량; cancel, refund, and the payment method live in the hosted
+billing portal.
 
-**What signing in changes.** A successful sign-in (onboarding, Settings, or the
-AutoRAG entry in Settings › AI) points the agent at the account's models, per
+**What signing in changes.** A successful sign-in (the tour's sheet, Settings, or
+the AutoRAG entry in Settings › AI) points the agent at the account's models, per
 role, in the shared `config.json` (the config carries an explicit
 `baseUrl`, never the key or an env var name):
 
@@ -642,59 +568,49 @@ a list that cannot be fetched leaves that role alone. Settings › 계정 › "�
 모델로 설정" applies the plan to the answer and decomposition roles
 unconditionally. The corpus-text rule is unchanged: embeddings stay on this Mac.
 
-Onboarding state lives in `<userData>/onboarding/state.json`. Set
-`AUTORAG_SKIP_ONBOARDING=1` to open the Finder directly; the manual-QA launcher
-does this for every lane except `run-qa-onboarding.mjs`.
+First-run state lives in `<userData>/onboarding/state.json` and holds only
+`{ completed, indexing? }`. Set `AUTORAG_SKIP_ONBOARDING=1` to open the Finder
+directly; the manual-QA launcher does this for every lane except
+`run-qa-onboarding.mjs`.
 
 `make onboarding` walks the flow on a disposable profile: every run starts from
 scratch in a temp sandbox holding its own `userData` (via `--user-data-dir`),
 AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
-support directory are never read or written. The cached native MinSync
-embedding model is copied in so the first index runs offline. When the app exits
-the wrapper kills the run's processes and removes the sandbox; a SIGKILL of
-the wrapper is covered by a detached watchdog, and the next `make onboarding`
-sweeps any sandbox whose owner and watchdog both died. The QA lane covers the
-same flow end to end in CI settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`).
-For a detected datasource regression, set `QA_ONBOARDING_SOURCE=github`,
-`mail`, `spotlight`, or `slack` before that command; it enables only that row
-and asserts its written connector config and access tag. The run uses temporary
-AutoRAG state but the selected external crawler uses its real store, as noted
-below.
+support directory are never read or written. When the app exits the wrapper kills
+the run's processes and removes the sandbox; a SIGKILL of the wrapper is covered
+by a detached watchdog, and the next `make onboarding` sweeps any sandbox whose
+owner and watchdog both died. The QA lane covers the same flow end to end in CI
+settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`). The first run indexes
+keyword-only, so the lane needs no embedding model. The first-run overlay drives
+the Finder window itself (no second window); on macOS `HOME` in the launch env
+does not move `app.getPath("documents"/"desktop"/"downloads")`, so the QA
+fixtures live in the real home (disposable in the VM). Scope of that isolation:
+the sandbox holds AutoRAG's own state (userData, config, home, workspace, index).
+External datasource crawlers are CLIs with their own stores in the real home, and
+the librarian passes `HOME` through to them, so a source enabled later in
+Settings syncs the real store — `slacrawl` reads and writes `~/.slacrawl` (Slack's
+local mirror), the other messenger crawlers import into their own stores the same
+way, and Obsidian reads the real vaults.
 
-Scope of that isolation: the sandbox holds AutoRAG's own state (userData,
-config, home, workspace, index). External datasource crawlers are CLIs with
-their own stores in the real home, and the librarian passes `HOME` through to
-them, so enabling a source in onboarding syncs the real store — `slacrawl` reads
-and writes `~/.slacrawl` (Slack's local mirror), the other messenger crawlers
-import into their own stores the same way, and Obsidian reads the real vaults.
-Detection and the first sync are real by
-design; they never touch other apps' data beyond their own store.
-
-**A first index that stops.** `IndexingStatus` carries `failure` (`reason`, the
-unreadable `folders`, the deciding diagnostic `code`) when the run failed, and
-`skipped` when it finished. `classifyIndexFailure` (`src/main/index-failure.ts`)
-reads only what the app itself emits: `search-root-unavailable` (with `folders`),
-`embedder-preflight-failed` and `embedding-model-download-failed` (each with a
-`reason` token the app sets, never parsed from a message), `embedding-model-missing`,
-plus the two checks the app already trusts, `isEmbeddingTimeout` and Node's own
-`ENOSPC`. Anything else is `unknown`; the raw text stays in the log, never on a
-screen. Files a run left out are counted from `files-left-out` and `parse-killed`
-(their `count`) and from each `minsync-file-skipped` (one file). The renderer's
-`onboarding/pause.ts` maps each reason to its screen: the button, the links, the
-automatic retry (offline embedder or model download: every 8 s, up to 6 times;
-unreadable folder: every 3 s while the screen is open). Fixing the embedding from a
-pause sets `draft.resumeAt = "indexing"`, so leaving that step returns straight to
-the index. Closing the onboarding window after a failed first run starts a keyword-only refresh
-(`parsed`, `jikji`; no embedder) so the app is not empty.
-
-After onboarding, `index-problem-service.ts` keeps the last run's failure and skipped
-count in `<userData>/index-problem.json` and pushes it as `window.autorag.indexProblem`;
-the sidebar block, the banner above the file list and the Settings indexing card read
-it. A clean run from onboarding, Settings (manual refresh) or the surfaces' own retry
-clears it; a clean OS-scheduled refresh clears the failure but not the skipped count,
-which that job does not report; the user can dismiss it. `run-qa-onboarding-failure.mjs`
-makes each failure for real (a fake embedder that answers 402 or is not there, a
-folder that disappears, an unwritable workspace) and walks every way out.
+**A first index that stops.** The run's own status carries the error text when
+`stage` is `failed`; the renderer shows it with a retry button, and retrying
+restarts the run. The durable half is unchanged: `index-problem-service.ts` keeps
+the last run's failure and skipped count in `<userData>/index-problem.json` and
+pushes it as `window.autorag.indexProblem`; the sidebar block, the banner above
+the file list and the Settings indexing card read it. `classifyIndexFailure`
+(`src/main/index-failure.ts`) reads only what the app itself emits —
+`search-root-unavailable` (with `folders`), `embedder-preflight-failed` and
+`embedding-model-download-failed` (each with a `reason` token the app sets, never
+parsed from a message), `embedding-model-missing`, plus the two checks the app
+already trusts, `isEmbeddingTimeout` and Node's own `ENOSPC`; anything else is
+`unknown` and the raw text stays in the log, never on a screen. Files a run left
+out are counted from `files-left-out` and `parse-killed` (their `count`) and from
+each `minsync-file-skipped` (one file). A clean run from the first run, Settings
+(manual refresh) or the surfaces' own retry clears the problem; a clean
+OS-scheduled refresh clears the failure but not the skipped count, which that job
+does not report; the user can dismiss it. `run-qa-onboarding-failure.mjs` makes
+the first run's one stop for real (an unwritable workspace) and walks the retry
+back to ready.
 
 ## Live filesystem sync
 
@@ -765,7 +681,7 @@ A profile session never reads or writes AutoRAG's retrieval memory.
 App profiles live in `src/main/agents/profiles/`, and every profile shares `src/main/agents/profile-progress.ts` (`withIntentTools`,
 `intentPromptLine`, `subscribeProfileProgress`), which mirrors AutoRAG's own `i` intent-tracing parameter: every working tool declares a
 required `i` string first in its schema so the model writes a short plain phrase in the interface language before calling the tool, and the
-session streams that phrase to the UI where it is rendered with the `.shimmer` text effect. The first profile is smart indexing (thinking
+session streams that phrase as an intent-progress event (the first run consumes only the terminal smart-indexing event). The first profile is smart indexing (thinking
 `low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
 second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
 app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,

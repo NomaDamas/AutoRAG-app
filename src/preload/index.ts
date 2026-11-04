@@ -22,7 +22,6 @@ import { createModelDownloadBridge } from "./model-download-bridge";
 import { createOnboardingBridge } from "./onboarding-bridge";
 import { createOsRequestBridge } from "./os-request-bridge";
 import { createSearchBridge } from "./search-bridge";
-import { createSmartIndexingBridge } from "./smart-indexing-bridge";
 import { createSettingsBridge } from "./settings-bridge";
 import { createServicesBridge } from "./services-bridge";
 import { installAppearancePreload } from "./appearance";
@@ -63,7 +62,6 @@ contextBridge.exposeInMainWorld("autorag", {
 	osRequests: createOsRequestBridge(ipcRenderer),
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
-	smartIndexing: createSmartIndexingBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
 	services: createServicesBridge(ipcRenderer),
 	remote: createRemoteBridge(ipcRenderer),

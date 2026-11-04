@@ -19,11 +19,13 @@ run:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-debug.mjs
 
-# Walk the first-run onboarding on a disposable profile: every run starts from
-# scratch in a temp sandbox (userData, AutoRAG config/home/workspace), the real
-# `~/.autorag` and the app's support dir stay untouched, and the sandbox is
-# removed when the app exits — Ctrl+C, SIGKILL of this make, or the next run's
-# sweep if both the wrapper and its watchdog died.
+# Experience a brand-new user's first run on a disposable profile: one window,
+# no questions beyond Full Disk Access, one progress bar through scan →
+# keyword-only index → tour. Every run starts from scratch in a temp sandbox
+# (userData, AutoRAG config/home/workspace), the real `~/.autorag` and the app's
+# support dir stay untouched, and the sandbox is removed when the app exits —
+# Ctrl+C, SIGKILL of this make, or the next run's sweep if both the wrapper and
+# its watchdog died.
 onboarding:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs
