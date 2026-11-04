@@ -187,7 +187,7 @@ try {
 	await page.waitForFunction(
 		() => {
 			const replies = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn__reply');
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return replies.length >= 1 && sendBtn !== null;
 		},
 		null,
@@ -195,7 +195,7 @@ try {
 	);
 	await shot("02-live-shortcut-turn1-done");
 
-	const reply1 = await panel.locator(".customizer-turn__reply").first().innerText();
+	const reply1 = (await panel.locator(".customizer-turn").first().locator(".customizer-turn__reply").allInnerTexts()).join("\n\n");
 	console.log(`live model reply 1:\n${reply1}`);
 	console.log(`live progress phrases: ${JSON.stringify(seenProgress)}`);
 
@@ -235,7 +235,7 @@ try {
 		() => {
 			const turns = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn');
 			const lastReply = turns[1]?.querySelector(".customizer-turn__reply");
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return lastReply !== null && lastReply !== undefined && sendBtn !== null;
 		},
 		null,
@@ -261,7 +261,7 @@ try {
 		() => {
 			const turns = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn');
 			const lastReply = turns[2]?.querySelector(".customizer-turn__reply");
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return lastReply !== null && lastReply !== undefined && sendBtn !== null;
 		},
 		null,

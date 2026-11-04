@@ -277,7 +277,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 				type: "turn-done",
 				runId,
 				sessionId: request.sessionId,
-				reply: "음악과 동영상 폴더를 사이드바에서 숨겼습니다.",
+				messages: ["음악과 동영상 폴더를 사이드바에서 숨겼습니다."],
 				changes: [{ kind: "sidebar", summary: "음악, 동영상 숨김", fields: ["sidebar.hiddenItems"] }],
 				settings: nextSettings,
 			});
@@ -288,6 +288,89 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		// Underlying sidebar page switches reflect the live agent change
 		expect(host.querySelector<HTMLButtonElement>('[data-sidebar-switch="place:music"]')?.getAttribute("aria-checked")).toBe("false");
 		expect(host.querySelector<HTMLButtonElement>('[data-sidebar-switch="place:movies"]')?.getAttribute("aria-checked")).toBe("false");
+	});
+
+	it("keeps each intermediate assistant message visible and unfolds the shimmer below it while the agent keeps thinking", async () => {
+		await act(async () => {
+			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
+		});
+		await settle();
+
+		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
+		await act(async () => {
+			panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
+		});
+		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] as [string, { sessionId: string; message: string }];
+		const assistantRow = (): HTMLElement | null => panel?.querySelector<HTMLElement>(".customizer-turn__assistant-row") ?? null;
+
+		// 1. Starts with shimmer only
+		expect(assistantRow()?.querySelector(".customizer-turn__progress .shimmer")).not.toBeNull();
+
+		// 2. Streams first assistant message (shimmer hides while words stream)
+		await act(async () => {
+			bridge.emitCustomizerEvent({
+				type: "draft",
+				runId,
+				sessionId: request.sessionId,
+				text: "현재 사이드바 설정을 먼저 살펴볼게요.",
+			});
+		});
+		expect(assistantRow()?.querySelector(".customizer-turn__reply")?.textContent).toBe("현재 사이드바 설정을 먼저 살펴볼게요.");
+		expect(assistantRow()?.querySelector(".customizer-turn__progress")).toBeNull();
+
+		// 3. Agent enters tool call and keeps thinking: the message stays AND a new shimmer unfolds BELOW it
+		await act(async () => {
+			bridge.emitCustomizerEvent({
+				type: "assistant-message",
+				runId,
+				sessionId: request.sessionId,
+				text: "현재 사이드바 설정을 먼저 살펴볼게요.",
+			});
+			bridge.emitCustomizerEvent({
+				type: "progress",
+				runId,
+				sessionId: request.sessionId,
+				text: "사이드바 항목을 정리하는 중",
+			});
+		});
+		const childrenDuringThink = [...(assistantRow()?.children ?? [])];
+		expect(childrenDuringThink.map((el) => el.className)).toEqual([
+			"customizer-turn__reply",
+			"customizer-turn__progress",
+		]);
+		expect(childrenDuringThink[0]?.textContent).toBe("현재 사이드바 설정을 먼저 살펴볼게요.");
+		expect(childrenDuringThink[1]?.querySelector(".shimmer")?.textContent).toBe("사이드바 항목을 정리하는 중");
+
+		// 4. Final answer streams below the first bubble and both remain when the turn finishes
+		await act(async () => {
+			bridge.emitCustomizerEvent({
+				type: "draft",
+				runId,
+				sessionId: request.sessionId,
+				text: "정리를 마쳤습니다.",
+			});
+		});
+		expect([...(assistantRow()?.querySelectorAll(".customizer-turn__reply") ?? [])].map((el) => el.textContent)).toEqual([
+			"현재 사이드바 설정을 먼저 살펴볼게요.",
+			"정리를 마쳤습니다.",
+		]);
+		expect(assistantRow()?.querySelector(".customizer-turn__progress")).toBeNull();
+
+		await act(async () => {
+			bridge.emitCustomizerEvent({
+				type: "turn-done",
+				runId,
+				sessionId: request.sessionId,
+				messages: ["현재 사이드바 설정을 먼저 살펴볼게요.", "정리를 마쳤습니다."],
+				changes: [{ kind: "sidebar", summary: "사이드바 정리됨", fields: ["sidebar.hiddenItems"] }],
+				settings: currentSettings,
+			});
+		});
+		expect([...(assistantRow()?.querySelectorAll(".customizer-turn__reply") ?? [])].map((el) => el.textContent)).toEqual([
+			"현재 사이드바 설정을 먼저 살펴볼게요.",
+			"정리를 마쳤습니다.",
+		]);
+		expect(assistantRow()?.querySelector(".customizer-turn__progress")).toBeNull();
 	});
 
 	it("adds and removes a custom folder in Favorites", async () => {

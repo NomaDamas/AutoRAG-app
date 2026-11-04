@@ -70,14 +70,21 @@ export type AppCustomizerEvent =
 			readonly type: "draft";
 			readonly runId: string;
 			readonly sessionId: string;
-			/** Streamed assistant text draft for the current turn. */
+			/** Streamed assistant text draft for the active step. */
+			readonly text: string;
+	  }
+	| {
+			readonly type: "assistant-message";
+			readonly runId: string;
+			readonly sessionId: string;
+			/** Completed assistant message from an intermediate step before tool execution continues. */
 			readonly text: string;
 	  }
 	| {
 			readonly type: "turn-done";
 			readonly runId: string;
 			readonly sessionId: string;
-			readonly reply: string;
+			readonly messages: readonly string[];
 			readonly changes: readonly AppCustomizerChange[];
 			readonly settings: AppSettings;
 	  }

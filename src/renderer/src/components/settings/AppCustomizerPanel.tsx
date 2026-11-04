@@ -16,7 +16,7 @@ function getCustomizerBridge(): AppCustomizerBridge | undefined {
 interface ChatTurn {
 	readonly id: string;
 	readonly userText: string;
-	readonly reply: string | null;
+	readonly messages: readonly string[];
 	readonly draft: string;
 	readonly progress: string;
 	readonly changes: readonly AppCustomizerChange[];
@@ -193,12 +193,23 @@ export function AppCustomizerPanel({
 						case "progress":
 							return { ...turn, progress: event.text };
 						case "draft":
-							return { ...turn, draft: event.text };
+							return {
+								...turn,
+								draft: event.text,
+								...(event.text.length > 0 ? { progress: "" } : {}),
+							};
+						case "assistant-message":
+							return {
+								...turn,
+								messages: [...turn.messages, event.text],
+								draft: "",
+								progress: "",
+							};
 						case "turn-done":
 							return {
 								...turn,
 								status: "done",
-								reply: event.reply,
+								messages: event.messages,
 								draft: "",
 								progress: "",
 								changes: event.changes,
@@ -237,7 +248,17 @@ export function AppCustomizerPanel({
 		if (runId === null) return;
 		setActiveRunId(null);
 		setTurns((prev) =>
-			prev.map((turn) => (turn.id === runId && turn.status === "running" ? { ...turn, status: "cancelled", progress: "", draft: "" } : turn)),
+			prev.map((turn) =>
+				turn.id === runId && turn.status === "running"
+					? {
+							...turn,
+							status: "cancelled",
+							messages: turn.draft.trim().length > 0 ? [...turn.messages, turn.draft.trim()] : turn.messages,
+							progress: "",
+							draft: "",
+						}
+					: turn,
+			),
 		);
 		void getCustomizerBridge()?.cancel(runId);
 	}, []);
@@ -254,7 +275,7 @@ export function AppCustomizerPanel({
 				{
 					id: runId,
 					userText: trimmed,
-					reply: null,
+					messages: [],
 					draft: "",
 					progress: "",
 					changes: [],
@@ -347,13 +368,17 @@ export function AppCustomizerPanel({
 											))}
 										</div>
 									) : null}
-									{turn.status === "running" && turn.draft === "" ? (
+									{turn.messages.map((message, idx) => (
+										<CustomizerReplyBody key={idx} text={message} />
+									))}
+									{turn.status === "running" && turn.draft.length > 0 ? (
+										<CustomizerReplyBody text={turn.draft} />
+									) : null}
+									{turn.status === "running" && turn.draft.length === 0 ? (
 										<div className="customizer-turn__progress" role="status">
 											<span className="shimmer">{turn.progress.length > 0 ? turn.progress : t(copy.thinking)}</span>
 										</div>
 									) : null}
-									{turn.draft.length > 0 && turn.reply === null ? <CustomizerReplyBody text={turn.draft} /> : null}
-									{turn.reply !== null && turn.reply.length > 0 ? <CustomizerReplyBody text={turn.reply} /> : null}
 									{turn.error !== null ? (
 										<div className="customizer-turn__error" role="alert">
 											<p className="customizer-turn__error-text">{turn.error}</p>

@@ -93,7 +93,12 @@ const server = createServer((req, res) => {
 					type: "function",
 					function: { name: step.tool, arguments: JSON.stringify(step.args) },
 				};
-				res.write(frame({ role: "assistant", tool_calls: [call] }, null));
+				if (step.text) {
+					res.write(frame({ role: "assistant", content: step.text }, null));
+					res.write(frame({ tool_calls: [call] }, null));
+				} else {
+					res.write(frame({ role: "assistant", tool_calls: [call] }, null));
+				}
 				res.write(frame({}, "tool_calls"));
 			} else {
 				res.write(frame({ role: "assistant", content: step.text }, null));
@@ -276,7 +281,12 @@ try {
 
 	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Search & Automations, pinning Projects, hiding pictures) -> reply
 	queue.push(
-		{ tool: "get_app_settings", args: { i: "현재 사이드바 설정을 확인하는 중" }, delayMs: 250 },
+		{
+			text: "먼저 현재 사이드바 구성을 살펴볼게요.",
+			tool: "get_app_settings",
+			args: { i: "현재 사이드바 설정을 확인하는 중" },
+			delayMs: 200,
+		},
 		{
 			tool: "update_sidebar",
 			args: {
@@ -285,10 +295,11 @@ try {
 				addCustomFavorites: [{ path: PROJECTS_DIR, label: "Projects" }],
 				favoritesOrder: ["custom:" + PROJECTS_DIR, "place:downloads", "place:documents"],
 			},
-			delayMs: 350,
+			delayMs: 900,
 		},
 		{
 			text: "그림 폴더를 추가로 숨기고 Projects 폴더를 즐겨찾기 상단에 고정했습니다. AI 검색과 자동화는 필수 기능이라 항상 표시됩니다.",
+			delayMs: 250,
 		},
 	);
 
@@ -297,12 +308,31 @@ try {
 	await page.keyboard.type("그림 폴더도 숨기고 Projects 폴더를 맨 위에 추가해줘. AI 검색도 숨겨봐.");
 	await page.keyboard.press("Enter");
 
-	// Capture live shimmer progress
-	await panel.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
+	// Wait until the intermediate assistant message has committed AND the shimmer is spinning below it
+	await panel.locator(".customizer-turn__reply", { hasText: "먼저 현재 사이드바 구성을 살펴볼게요." }).waitFor({ timeout: 10_000 });
+	await panel.locator(".customizer-turn__progress .shimmer", { hasText: "현재 사이드바 설정을 확인하는 중" }).waitFor({ timeout: 10_000 });
+	const midTurnStack = await panel.evaluate((el) => {
+		const reply = el.querySelector(".customizer-turn__reply")?.getBoundingClientRect();
+		const progress = el.querySelector(".customizer-turn__progress")?.getBoundingClientRect();
+		return reply && progress ? { replyBottom: Math.round(reply.bottom), progressTop: Math.round(progress.top) } : null;
+	});
+	check(
+		"Intermediate assistant message stays visible with the live shimmer rendered below it while thinking continues",
+		midTurnStack !== null && midTurnStack.replyBottom <= midTurnStack.progressTop,
+		JSON.stringify(midTurnStack),
+	);
 	await shot("04-customizer-panel-shimmer-progress");
 
-	// Wait for turn reply
+	// Wait for final turn reply and confirm both assistant bubbles remain in order
 	await panel.locator(".customizer-turn__reply", { hasText: "Projects 폴더를 즐겨찾기 상단에 고정했습니다" }).waitFor({ timeout: 15_000 });
+	const turn1Bubbles = await panel.locator(".customizer-turn").first().locator(".customizer-turn__reply").allInnerTexts();
+	check(
+		"Turn 1 keeps both the intermediate assistant message and the final reply in order",
+		turn1Bubbles.length === 2 &&
+			turn1Bubbles[0].includes("먼저 현재 사이드바 구성을 살펴볼게요.") &&
+			turn1Bubbles[1].includes("Projects 폴더를 즐겨찾기 상단에 고정했습니다"),
+		JSON.stringify(turn1Bubbles),
+	);
 	await shot("05-customizer-panel-turn1-done");
 	// While the agent's change lands, the switch beside the panel reflects it without closing anything
 	check(

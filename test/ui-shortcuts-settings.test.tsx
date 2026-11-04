@@ -329,7 +329,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 				type: "turn-done",
 				runId,
 				sessionId: request.sessionId,
-				reply: "이름 변경 단축키를 F2로 설정했습니다.",
+				messages: ["이름 변경 단축키를 F2로 설정했습니다."],
 				changes: [{ kind: "shortcuts", summary: "단축키 변경 (이름 변경)", fields: ["shortcuts.overrides.rename"] }],
 				settings: updatedSettings,
 			});

@@ -274,7 +274,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				type: "turn-done",
 				runId,
 				sessionId: req.sessionId,
-				reply: "PDF 3줄 요약 매직 액션을 추가했습니다.",
+				messages: ["PDF 3줄 요약 매직 액션을 추가했습니다."],
 				changes: [{ kind: "contextMenu", summary: "매직 액션 저장: PDF 3줄 요약", fields: ["contextMenu.magicActions"] }],
 				settings: nextSettings,
 			});

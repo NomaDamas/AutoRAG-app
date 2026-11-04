@@ -262,7 +262,7 @@ try {
 		() => {
 			const panel = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
 			const settled = panel?.querySelector(".customizer-turn__reply, .customizer-turn__error");
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return settled !== null && settled !== undefined && sendBtn !== null;
 		},
 		null,
@@ -272,7 +272,7 @@ try {
 
 	const custError = await panel.locator(".customizer-turn__error").count();
 	check("Real LLM finished the context-menu turn without an error", custError === 0, custError === 0 ? "" : await panel.locator(".customizer-turn__error").first().innerText());
-	const custReply = custError === 0 ? await panel.locator(".customizer-turn__reply").first().innerText() : "";
+	const custReply = custError === 0 ? (await panel.locator(".customizer-turn").first().locator(".customizer-turn__reply").allInnerTexts()).join("\n\n") : "";
 	console.log(`live customizer reply:\n${custReply}`);
 	console.log(`live customizer progress: ${JSON.stringify(seenCustomizerProgress)}`);
 
