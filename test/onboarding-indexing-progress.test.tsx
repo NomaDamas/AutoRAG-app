@@ -69,6 +69,12 @@ afterEach(() => {
 const text = (): string => host.textContent ?? "";
 
 describe("the first-run indexing screen", () => {
+	function barFill(): HTMLElement {
+		const fill = host.querySelector<HTMLElement>(".ix-bar > span");
+		if (fill === null) throw new Error("the bar has no fill");
+		return fill;
+	}
+
 	function renderScreen(next: IndexingStatus): void {
 		const ctx: OnboardingCtx = onboardingCtx({ draft: { ...BASE_DRAFT, stepId: "indexing" }, indexStatus: next, t: t as unknown as Translate });
 		act(() => root.render(<IndexingScreen ctx={ctx} />));
@@ -86,6 +92,8 @@ describe("the first-run indexing screen", () => {
 		expect(text()).not.toContain("95%");
 		expect(text()).not.toContain("1분 미만");
 		expect(host.querySelector(".ix-bar")?.classList.contains("waiting")).toBe(false);
+		// The read stage's 40% plus 44% of the embedding stage's 50%.
+		expect(Number.parseFloat(barFill().style.width)).toBeCloseTo(61.88, 1);
 	});
 
 	it("steps discover, parse, embed, finalize on the strip", () => {
@@ -103,6 +111,8 @@ describe("the first-run indexing screen", () => {
 		renderScreen(status(computeIndexProgress(realCase({ phase: "jikji" })).snapshot));
 		expect(host.querySelector(".ix-bar")?.classList.contains("waiting")).toBe(true);
 		expect(host.querySelector(".ix-bar")?.hasAttribute("aria-valuenow")).toBe(false);
+		// The stylesheet fills the working bar; an inline width would only be beaten by `!important`.
+		expect(barFill().style.width).toBe("");
 		expect(host.querySelector(".ix-meta b")?.textContent).toBe("마무리");
 		expect(text()).not.toMatch(/9\d%/);
 	});

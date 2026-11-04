@@ -231,6 +231,8 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const view = detail === null ? null : describeIndexProgress(detail, now, t);
 	const stages = detail === null ? indexingStages(embed).map((id, index) => ({ id, state: running && index === 0 ? ("running" as const) : ("pending" as const) })) : detail.stages;
 	const waiting = running && (detail === null || detail.indeterminate);
+	// While the model downloads the bar shows that download's percent, so it never draws as the working bar.
+	const working = waiting && !downloading;
 	const totalFiles = status?.totalFiles ?? 0;
 	const sources = status?.sources ?? [];
 	// Files the run finished without are not "read"; the screen says how many they were instead of counting them.
@@ -341,13 +343,14 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 			</div>
 			<h1 className="ix-title">{success ? t("onboarding.indexing.titleDone") : t("onboarding.indexing.title")}</h1>
 			<div
-				className={cn("ix-bar", waiting && !downloading && "waiting")}
+				className={cn("ix-bar", working && "waiting")}
 				role="progressbar"
 				aria-valuemin={0}
 				aria-valuemax={100}
-				aria-valuenow={waiting && !downloading ? undefined : Math.floor(progress)}
+				aria-valuenow={working ? undefined : Math.floor(progress)}
 			>
-				<span style={{ width: `${progress}%` }} />
+				{/* The working bar is sized by its stylesheet rule: an inline width would need `!important` to lose. */}
+				<span style={working ? undefined : { width: `${progress}%` }} />
 			</div>
 			<div className="ix-meta">{meta}</div>
 			{running && !downloading && view !== null ? (

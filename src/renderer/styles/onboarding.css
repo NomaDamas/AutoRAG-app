@@ -3158,7 +3158,7 @@ html[data-appearance="dark"] .onb .si-loupe-svg {
 
 /* A stage that cannot be measured (discovery, the final tidy-up): the bar says "working", not a percent. */
 .onb .ix-bar.waiting>span {
-	width: 100% !important;
+	width: 100%;
 	opacity: .35;
 }
 
