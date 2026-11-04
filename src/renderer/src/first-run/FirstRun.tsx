@@ -17,6 +17,7 @@ import dazziLogo from "../assets/dazzi-logo.png";
 import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
+import { MineGame } from "./MineGame";
 import { initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
 /** What the layer needs from the Finder window it sits on. */
@@ -42,6 +43,8 @@ const AI_HOST = "[data-ai-tab]:not(.hidden)";
 const DESK_MOTION_MS = 1100;
 const CINEMA_IN_MS = 650;
 const CINEMA_OUT_MS = 3700;
+/** The title and the floating logo fade out this long before the board and the moved progress bar come in. */
+const INTRO_FADE_MS = 340;
 
 type DeskMode = "cover" | "rise" | null;
 
@@ -60,6 +63,8 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 	const [status, setStatus] = useState<SetupStatus | null>(null);
 	const [platform] = useState(hostPlatform);
 	const [leaving, setLeaving] = useState(false);
+	/** The person tapped the logo: the setup screen is a game board until they start the app. */
+	const [playing, setPlaying] = useState(false);
 	const hostRef = useRef(host);
 	hostRef.current = host;
 
@@ -103,9 +108,15 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 			.then(setStatus)
 			.catch((error: unknown) => console.error("[first-run] start failed", error));
 	}, [screen]);
+	// A finished run goes to the ready screen, unless a game is on: then the same "ready" call is offered under the board.
 	useEffect(() => {
-		if (screen === "setup" && status?.stage === "ready") setScreen("ready");
-	}, [screen, status?.stage]);
+		if (screen === "setup" && status?.stage === "ready" && !playing) setScreen("ready");
+	}, [screen, status?.stage, playing]);
+	// A failed run shows its retry panel; once it recovers the screen starts over from the logo.
+	useEffect(() => {
+		if (status?.stage === "failed") setPlaying(false);
+	}, [status?.stage]);
+	const startGame = useCallback(() => setPlaying(true), []);
 
 	const begin = useCallback(() => {
 		if (leaving) return;
@@ -133,7 +144,7 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 			{covering ? (
 				<div className={cn("fr-stage", leaving && "fr-stage--leaving")}>
 					<div className="fr-drag" />
-					{screen === "setup" ? <SetupScreen status={status} /> : null}
+					{screen === "setup" ? <SetupScreen status={status} playing={playing} onPlay={startGame} onStart={begin} /> : null}
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
 			) : null}
@@ -149,10 +160,52 @@ function Logo({ className }: { readonly className?: string }): ReactElement {
 
 /* ------------------------------------------------------------------ setup */
 
-function SetupScreen({ status }: { readonly status: SetupStatus | null }): ReactElement {
+function SetupScreen({
+	status,
+	playing,
+	onPlay,
+	onStart,
+}: {
+	readonly status: SetupStatus | null;
+	readonly playing: boolean;
+	readonly onPlay: () => void;
+	readonly onStart: () => void;
+}): ReactElement {
 	const { t } = useTranslation();
 	const stage = status?.stage ?? "idle";
 	const progress = Math.max(0, Math.min(100, Math.round(status?.progress ?? 0)));
+	const [fading, setFading] = useState(false);
+	const dockRef = useRef<HTMLDivElement>(null);
+	/** Where the progress bar was when the logo was tapped, so it can glide down to its place under the board. */
+	const dockFrom = useRef<number | null>(null);
+	const done = playing && stage === "ready";
+	useEnterToStart(onStart, done);
+
+	// A failed run drops the game; once it recovers the screen starts over from the floating logo.
+	useEffect(() => {
+		if (stage === "failed") setFading(false);
+	}, [stage]);
+
+	useEffect(() => {
+		if (!fading) return;
+		const timer = window.setTimeout(() => {
+			dockFrom.current = dockRef.current?.getBoundingClientRect().top ?? null;
+			onPlay();
+		}, INTRO_FADE_MS);
+		return () => window.clearTimeout(timer);
+	}, [fading, onPlay]);
+
+	useLayoutEffect(() => {
+		const dock = dockRef.current;
+		const from = dockFrom.current;
+		dockFrom.current = null;
+		if (!playing || dock === null || from === null) return;
+		const dy = from - dock.getBoundingClientRect().top;
+		if (dy === 0 || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+		const easing = getComputedStyle(document.documentElement).getPropertyValue("--fr-spring-rise").trim() || "ease-out";
+		dock.animate([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 900, easing });
+	}, [playing]);
+
 	if (stage === "failed") {
 		return (
 			<section className="fr-panel fr-setup" data-state="failed">
@@ -170,35 +223,61 @@ function SetupScreen({ status }: { readonly status: SetupStatus | null }): React
 	const total = status?.totalFiles ?? 0;
 	const processed = Math.min(status?.processedFiles ?? 0, total);
 	const remaining = status?.remainingMinutes ?? null;
+	const readyCount = status?.processedFiles ?? status?.totalFiles ?? 0;
 	return (
-		<section className="fr-panel fr-setup">
-			<Logo className="fr-logo--breathe" />
-			<h1 className="fr-title">{t("firstRun.setup.title")}</h1>
-			<p className="fr-lead">{t("firstRun.setup.lead")}</p>
-			<div className="fr-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={t("firstRun.setup.title")}>
-				<div className="fr-progress-fill" style={{ transform: `scaleX(${progress / 100})` }} />
+		<section className="fr-panel fr-setup" data-mode={playing ? "game" : "intro"}>
+			{playing ? null : (
+				<div className={cn("fr-intro", fading && "fr-intro--fading")}>
+					<button type="button" className="fr-logo-btn" data-action="game-start" aria-label={t("firstRun.game.invite")} disabled={fading} onClick={() => setFading(true)}>
+						<span className="fr-logo-ring" />
+						<Logo className="fr-logo--breathe" />
+						<span className="fr-invite">{t("firstRun.game.invite")}</span>
+					</button>
+					<h1 className="fr-title">{t("firstRun.setup.title")}</h1>
+					<p className="fr-lead">{t("firstRun.setup.lead")}</p>
+				</div>
+			)}
+			{playing ? <MineGame /> : null}
+			<div className="fr-dock" ref={dockRef}>
+				{done ? (
+					<div className="fr-dock-ready" data-role="dock-ready">
+						<Logo className="fr-logo--xs" />
+						<div className="fr-dock-copy">
+							<h1 className="fr-title fr-title--dock">{t("firstRun.ready.title")}</h1>
+							<p className="fr-dock-lead">{readyCount > 0 ? t("firstRun.ready.lead", { count: readyCount.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
+						</div>
+						<button type="button" className="fr-btn fr-btn--primary" data-action="first-run-start" onClick={onStart}>
+							{t("firstRun.ready.start")}
+							<kbd className="fr-kbd">↵</kbd>
+						</button>
+					</div>
+				) : (
+					<>
+						<div className="fr-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={t("firstRun.setup.title")}>
+							<div className="fr-progress-fill" style={{ transform: `scaleX(${progress / 100})` }} />
+						</div>
+						<div className="fr-progress-meta">
+							<span className="fr-stage-label" key={stage}>{t(`firstRun.setup.stage.${stage}`)}</span>
+							<span>
+								{stage === "indexing" && total > 0 ? t("firstRun.setup.files", { processed: processed.toLocaleString(), total: total.toLocaleString() }) : null}
+								{stage === "indexing" && total > 0 && remaining !== null ? " · " : null}
+								{remaining !== null ? t("firstRun.setup.remaining", { minutes: Math.max(1, remaining) }) : null}
+							</span>
+						</div>
+						<p className="fr-recent" title={status?.recentFile ?? undefined}>{stage === "indexing" ? (status?.recentFile ?? "") : ""}</p>
+					</>
+				)}
 			</div>
-			<div className="fr-progress-meta">
-				<span className="fr-stage-label" key={stage}>{t(`firstRun.setup.stage.${stage}`)}</span>
-				<span>
-					{stage === "indexing" && total > 0 ? t("firstRun.setup.files", { processed: processed.toLocaleString(), total: total.toLocaleString() }) : null}
-					{stage === "indexing" && total > 0 && remaining !== null ? " · " : null}
-					{remaining !== null ? t("firstRun.setup.remaining", { minutes: Math.max(1, remaining) }) : null}
-				</span>
-			</div>
-			<p className="fr-recent" title={status?.recentFile ?? undefined}>{stage === "indexing" ? (status?.recentFile ?? "") : ""}</p>
 		</section>
 	);
 }
 
-/* ------------------------------------------------------------------ ready */
-
-function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null; readonly onStart: () => void }): ReactElement {
-	const { t } = useTranslation();
+/** Enter starts the app: captured, so it never reaches the Finder's own shortcuts behind the layer. */
+function useEnterToStart(onStart: () => void, active: boolean): void {
 	const startRef = useRef(onStart);
 	startRef.current = onStart;
-	// Capture phase, so Enter starts the app instead of reaching the Finder's own shortcuts behind the layer.
 	useEffect(() => {
+		if (!active) return;
 		const onKey = (event: KeyboardEvent): void => {
 			if (event.key !== "Enter" || event.isComposing) return;
 			event.preventDefault();
@@ -207,7 +286,14 @@ function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null;
 		};
 		window.addEventListener("keydown", onKey, true);
 		return () => window.removeEventListener("keydown", onKey, true);
-	}, []);
+	}, [active]);
+}
+
+/* ------------------------------------------------------------------ ready */
+
+function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null; readonly onStart: () => void }): ReactElement {
+	const { t } = useTranslation();
+	useEnterToStart(onStart, true);
 	const count = status?.processedFiles ?? status?.totalFiles ?? 0;
 	return (
 		<section className="fr-panel fr-ready">

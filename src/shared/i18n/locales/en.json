@@ -766,6 +766,18 @@
       "failedLead": "Try again and it picks up where it stopped.",
       "retry": "Try again"
     },
+    "game": {
+      "invite": "Tap me",
+      "hint": "Right-click or Shift+click to flag",
+      "remaining": "Logos left",
+      "time": "Time",
+      "best": "Best {{time}}",
+      "board": "Find the logos",
+      "won": "You found every logo!",
+      "record": "New record!",
+      "lost": "Oops, a logo was hiding there",
+      "again": "Play again"
+    },
     "ready": {
       "title": "You're all set!",
       "lead": "{{count}} files are ready to be found.",

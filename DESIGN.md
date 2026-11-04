@@ -364,7 +364,16 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   stage, files and minutes left; macOS prompts per folder as each default folder
   is read, refused folders are left out, and the run keeps the machine awake) →
   `ready` (the Dazzi logo, "모두 준비되었어요!", one "시작하기" button; Enter
-  presses it) → `tour` → `plans`. Full Disk Access is never asked here; it is
+  presses it) → `tour` → `plans`. While `setup` runs, the floating logo is a
+  button: tapping it fades the title and description out, the progress bar glides
+  below, and a 16×16 Minesweeper with 40 hidden Dazzi logos in place of mines
+  fades in (`first-run/MineGame.tsx`, rules in `first-run/minesweeper.ts`). Left
+  click opens, right click / Shift+click flags, middle click or a click on an
+  open number chords; the first click always opens a patch; the clock runs from
+  the first open cell and a finished board restarts on the next click (best time
+  of the session is shown). If setup finishes mid-game the board stays and the
+  progress bar is replaced by a docked "모두 준비되었어요! / 시작하기" card (Enter
+  presses it). Full Disk Access is never asked here; it is
   asked by `FullDiskAccessDialog` (one state-dependent button) only when Finder
   tag colours, KakaoTalk, or Apple Mail under `~/Library/Mail` is used.
 - While the layer covers the window the Finder behind it is mounted, `inert`,

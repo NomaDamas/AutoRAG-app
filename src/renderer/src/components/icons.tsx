@@ -29,6 +29,7 @@ import {
 	ExternalLink,
 	Eye,
 	Film,
+	Flag,
 	FoldVertical,
 	History,
 	Image as ImageGlyph,
@@ -221,3 +222,6 @@ export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 		</svg>
 	);
 }
+
+/** The first-run game: a flag on a cell the player believes hides a logo. */
+export const FlagIcon = glyph(Flag, 14, 2.2);
