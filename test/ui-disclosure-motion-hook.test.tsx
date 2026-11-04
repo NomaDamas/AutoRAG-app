@@ -102,6 +102,36 @@ describe("useDisclosureMotion", () => {
 		expect(last()).toBeNull();
 	});
 
+	it("keeps a closing block at its end until React takes the rows off (seungwonme/AutoRAG-app#25)", () => {
+		// The CSS reads an unset openness as 1 (open). Clearing it from the last frame, before React has
+		// removed the closing rows, paints them fully open for one frame. It may only go in React's commit.
+		const fakeFrame = globalThis.requestAnimationFrame;
+		let inFrame = 0;
+		vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) =>
+			fakeFrame((time) => {
+				inFrame += 1;
+				try {
+					callback(time);
+				} finally {
+					inFrame -= 1;
+				}
+			}),
+		);
+		show(list.expanded);
+		show(list.collapsed);
+		const style = target().style;
+		const removeProperty = style.removeProperty.bind(style);
+		const clearedInFrame: boolean[] = [];
+		vi.spyOn(style, "removeProperty").mockImplementation((name: string) => {
+			if (name === OPENNESS_PROPERTY) clearedInFrame.push(inFrame > 0);
+			return removeProperty(name);
+		});
+		run(400);
+		expect(last()).toBeNull();
+		expect(clearedInFrame).toEqual([false]);
+		expect(style.getPropertyValue(OPENNESS_PROPERTY)).toBe("");
+	});
+
 	it("runs for the --dur-disclosure token, not a number of its own", () => {
 		const style = getComputedStyle(document.documentElement);
 		vi.spyOn(globalThis, "getComputedStyle").mockImplementation(

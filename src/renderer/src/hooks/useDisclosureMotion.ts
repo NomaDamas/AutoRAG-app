@@ -113,8 +113,10 @@ export function useDisclosureMotion(input: {
 			settled = true;
 			if (frame !== null) cancelAnimationFrame(frame);
 			window.clearTimeout(backstop);
+			// The end value stays on until React drops the motion; the cleanup below clears it in that
+			// same commit. Cleared here, a frame painted before that commit would draw a closing block
+			// at the CSS fallback openness of 1, fully open (seungwonme/AutoRAG-app#25).
 			paint(motion.to);
-			element.style.removeProperty(OPENNESS_PROPERTY);
 			end();
 		};
 		const tick = (): void => {
