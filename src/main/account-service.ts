@@ -24,7 +24,15 @@ import { i18n, t } from "../shared/i18n/core";
 import { isJsonObject } from "../shared/settings-contract";
 import { managedRoleUpdates, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles } from "../shared/ai-roles";
 import type { ProviderCredentialService } from "./provider-credentials";
-import { clearDazziPlanCredential, readDazziPlanCredential, storeDazziPlanCredential } from "./dazzi-plan-credential";
+import {
+	clearDazziGuestCredential,
+	clearDazziPlanCredential,
+	isGuestDazziToken,
+	readDazziGuestCredential,
+	readDazziPlanCredential,
+	storeDazziGuestCredential,
+	storeDazziPlanCredential,
+} from "./dazzi-plan-credential";
 
 /**
  * The main-process half of the AutoRAG account: browser sign-in (OAuth 2.0
@@ -57,6 +65,8 @@ export interface AccountServiceDeps {
 	readonly signInTimeoutMs?: number;
 	/** Runs after the server confirmed the account (sign-in and every refresh); must not throw to callers. */
 	readonly onSignedIn?: () => Promise<void>;
+	/** The anonymous device id sent to `/api/desktop/guest` and on sign-in to carry the trial over. */
+	readonly deviceId?: () => Promise<string>;
 }
 
 export interface AccountService {
@@ -69,6 +79,10 @@ export interface AccountService {
 	signOut(): Promise<AccountStatus>;
 	checkout(plan: PaidPlanId, promoCode?: string): Promise<void>;
 	useManagedModel(): Promise<ManagedModelResult>;
+	/** Provisions (or validates) an anonymous guest credential before sign-in; true when access is available. */
+	ensureGuestAccess(): Promise<boolean>;
+	/** Whether the current config runs on a guest credential whose device cap is exhausted or already claimed. */
+	guestQuotaStatus(): Promise<"inactive" | "ok" | "exhausted" | "claimed">;
 	/** Aborts a sign-in in flight so its loopback listener closes (app quit). */
 	dispose(): Promise<void>;
 }
@@ -157,6 +171,12 @@ function base64Url(bytes: Buffer): string {
 	return bytes.toString("base64url");
 }
 
+/** The `credits` block shared by `/v1/account`, `/v1/guest` and `/api/desktop/guest`. */
+function parseCreditBalance(body: unknown): { readonly used: number; readonly limit: number } {
+	const credits = isJsonObject(body) && isJsonObject(body.credits) ? body.credits : {};
+	return { used: readNumber(credits.used_cents, 0), limit: readNumber(credits.limit_cents, 0) };
+}
+
 /** The page the browser lands on after sign-in, in the interface language the app is showing. */
 function callbackPage(): string {
 	return `<!doctype html><html lang="${i18n.language}"><meta charset="utf-8"><title>Dazzi</title>
@@ -205,6 +225,10 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	/** A key the server rejected; an environment key cannot be removed, so it is remembered instead. */
 	let revokedKey: string | null = null;
 	let flow: { readonly promise: Promise<AccountStatus>; readonly abort: AbortController } | null = null;
+	/** Single-flight guard so concurrent onboarding and search callers share one guest-provisioning run. */
+	let guestAccess: Promise<boolean> | null = null;
+	/** Why the last guest-provisioning attempt failed, for `guestQuotaStatus` to report. */
+	let guestProvisionOutcome: "none" | "exhausted" | "claimed" = "none";
 
 	function baseUrl(): string {
 		const configured = deps.env.AUTORAG_BASE_URL?.trim();
@@ -296,10 +320,8 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		return { status: response.status, body: await response.json().catch(() => null) };
 	}
 
-	/** An authenticated call that throws the server's own message on any failure. */
-	async function callSignedIn(path: string, init: { readonly method?: string; readonly body?: unknown }): Promise<unknown> {
-		const key = await currentKey();
-		if (key === null) throw new Error(t("main.account.signInFirst"));
+	/** An authenticated call with an explicit bearer key that throws the server's own message on any failure. */
+	async function callBearer(path: string, key: string, init: { readonly method?: string; readonly body?: unknown } = {}): Promise<unknown> {
 		let response: ApiResponse;
 		try {
 			response = await call(path, { ...init, key });
@@ -308,6 +330,24 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		}
 		if (response.status < 200 || response.status >= 300) throw new Error(errorMessageOf(response));
 		return response.body;
+	}
+
+	/** An authenticated call signed with the signed-in user's key. */
+	async function callSignedIn(path: string, init: { readonly method?: string; readonly body?: unknown }): Promise<unknown> {
+		const key = await currentKey();
+		if (key === null) throw new Error(t("main.account.signInFirst"));
+		return callBearer(path, key, init);
+	}
+
+	/** The anonymous device id, or null when unavailable; a failure never blocks sign-in. */
+	async function resolveDeviceId(): Promise<string | null> {
+		if (deps.deviceId === undefined) return null;
+		try {
+			const id = await deps.deviceId();
+			return typeof id === "string" && id.length > 0 ? id : null;
+		} catch {
+			return null;
+		}
 	}
 
 	async function openHostedUrl(path: string, body?: unknown): Promise<void> {
@@ -350,9 +390,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		// Best effort and off the critical path: the model picker lists the plan's
 		// models from this catalog, but a slow server must not hold the status back.
 		if (status.state === "signedIn" && status.account !== null && !offline && lastError === null) {
-			void deps.onSignedIn?.().catch((error: unknown) => {
-				console.warn("[account] onSignedIn hook failed:", error);
-			});
+			notifySignedIn();
 		}
 		return status;
 	}
@@ -438,7 +476,11 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			} else if (result.kind === "error") {
 				lastError = result.message;
 			} else if (result.kind === "code") {
-				const response = await call("/api/desktop/token", { method: "POST", body: { code: result.code, code_verifier: verifier, redirect_uri: redirectUri } });
+				const deviceId = await resolveDeviceId();
+				const response = await call("/api/desktop/token", {
+					method: "POST",
+					body: { code: result.code, code_verifier: verifier, redirect_uri: redirectUri, ...(deviceId === null ? {} : { device_id: deviceId }) },
+				});
 				const token = isJsonObject(response.body) ? response.body.access_token : undefined;
 				if (response.status !== 200 || typeof token !== "string" || token.length === 0) {
 					lastError = errorMessageOf(response);
@@ -475,7 +517,11 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		const email = rawEmail.trim();
 		const otp = rawCode.trim();
 		try {
-			const response = await call("/api/desktop/email/verify", { method: "POST", body: { email, otp, client: "app" } });
+			const deviceId = await resolveDeviceId();
+			const response = await call("/api/desktop/email/verify", {
+				method: "POST",
+				body: { email, otp, client: "app", ...(deviceId === null ? {} : { device_id: deviceId }) },
+			});
 			const token = isJsonObject(response.body) ? response.body.access_token : undefined;
 			if (response.status !== 200 || typeof token !== "string" || token.length === 0) {
 				lastError = errorMessageOf(response);
@@ -490,16 +536,16 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	}
 
 	/** Model ids the server lists for a non-chat operation (`jev`, `rerank`); empty when unavailable. */
-	async function operationModelIds(operation: "jev" | "rerank"): Promise<readonly { readonly id: string }[]> {
+	async function operationModelIds(operation: "jev" | "rerank", key: string): Promise<readonly { readonly id: string }[]> {
 		try {
-			return parseCatalog(await callSignedIn(`/v1/models?operation=${operation}`, {}));
+			return parseCatalog(await callBearer(`/v1/models?operation=${operation}`, key));
 		} catch {
 			return [];
 		}
 	}
 
 	/**
-	 * Points the shared config at the signed-in account's models. The server
+	 * Points the shared config at the account's models. The server
 	 * decides the catalog and its order, so the first entry is the recommended
 	 * chat model; question decomposition runs on the cheapest one.
 	 *
@@ -509,16 +555,21 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	 * (sign-in) mode: it replaces the decomposition model only when it is absent,
 	 * already AutoRAG, or the librarian's untouched default; the explicit button
 	 * also replaces a deliberately chosen OpenRouter one.
+	 *
+	 * `key` is the bearer the model catalog is fetched with: the signed-in user's
+	 * key by default, or an anonymous guest token during onboarding. Guests never
+	 * use the cloud embedder, so the embedder key is synced only for real keys.
 	 */
-	async function applyManagedModel(options: { readonly onlyUntouchedDecomposition?: boolean } = {}): Promise<ManagedModelResult> {
-		const activeKey = await currentKey();
-		if (activeKey !== null) await syncCloudEmbedderKey(activeKey);
-		const catalog = parseCatalog(await callSignedIn("/v1/models", {}));
+	async function applyManagedModel(options: { readonly onlyUntouchedDecomposition?: boolean; readonly key?: string } = {}): Promise<ManagedModelResult> {
+		const activeKey = options.key ?? (await currentKey());
+		if (activeKey === null) throw new Error(t("main.account.signInFirst"));
+		if (!isGuestDazziToken(activeKey)) await syncCloudEmbedderKey(activeKey);
+		const catalog = parseCatalog(await callBearer("/v1/models", activeKey));
 		const main = catalog[0];
 		const cheapest = catalog.reduce<CatalogModel | undefined>((best, model) => (best === undefined || model.price < best.price ? model : best), undefined);
 		if (main === undefined || cheapest === undefined) throw new Error(t("main.account.noModels"));
 		// A list the server cannot give leaves that role alone and never fails the chat model.
-		const [jevIds, rerankIds] = await Promise.all([operationModelIds("jev"), operationModelIds("rerank")]);
+		const [jevIds, rerankIds] = await Promise.all([operationModelIds("jev", activeKey), operationModelIds("rerank", activeKey)]);
 		const reference = (model: CatalogModel): Record<string, unknown> => ({
 			provider: AUTORAG_PROVIDER_ID,
 			id: model.id,
@@ -552,17 +603,123 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 	}
 
 	/**
-	 * Right after a successful sign-in: adopt the account's models unless the
-	 * user already chose another provider's model. Never fails the sign-in.
-	 * Only untouched defaults are replaced here; the explicit button replaces any.
+	 * Right after a successful sign-in or guest provisioning: adopt the account's
+	 * models unless the user already chose another provider's model. Never fails
+	 * the caller. Only untouched defaults are replaced here; the explicit button
+	 * replaces any. `key` is the guest token when provisioning anonymously.
 	 */
-	async function adoptManagedModelIfUnset(): Promise<void> {
+	async function adoptManagedModelIfUnset(key?: string): Promise<void> {
 		try {
+			const activeKey = key ?? (await currentKey());
+			if (activeKey === null) return;
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
-			if (shouldAdoptManagedModel(raw)) await applyManagedModel({ onlyUntouchedDecomposition: true });
+			if (shouldAdoptManagedModel(raw)) await applyManagedModel({ onlyUntouchedDecomposition: true, key: activeKey });
 		} catch (error) {
 			console.warn("[account] could not set the account's models as the default:", error);
 		}
+	}
+
+	/** Fire-and-forget the catalog sync hook; a failure never reaches callers. */
+	function notifySignedIn(): void {
+		void deps.onSignedIn?.().catch((error: unknown) => {
+			console.warn("[account] onSignedIn hook failed:", error);
+		});
+	}
+
+	/**
+	 * Provision (or validate) an anonymous guest credential so a fresh,
+	 * unauthenticated launch can answer through the plan's models before anyone
+	 * signs in. Returns true when usage is available.
+	 *
+	 * A user who already configured their own provider keeps it: with a BYOK or
+	 * other-provider model in the shared config this does nothing and makes no
+	 * network call. An existing guest token is validated from the server first;
+	 * only a `401` drops it and re-provisions, and an unreachable server leaves it
+	 * in place.
+	 */
+	async function provisionGuestAccess(): Promise<boolean> {
+		if ((await currentKey()) !== null) return true;
+		const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
+		if (!shouldAdoptManagedModel(raw)) return false;
+		guestProvisionOutcome = "none";
+		const existingGuest = await readDazziGuestCredential(agentDir);
+		if (existingGuest !== null) {
+			let response: ApiResponse;
+			try {
+				response = await call("/v1/guest", { key: existingGuest });
+			} catch (error) {
+				if (error instanceof OfflineError) return false;
+				throw error;
+			}
+			if (response.status === 200) {
+				const credits = parseCreditBalance(response.body);
+				await adoptManagedModelIfUnset(existingGuest);
+				notifySignedIn();
+				guestProvisionOutcome = credits.used >= credits.limit ? "exhausted" : "none";
+				return credits.used < credits.limit;
+			}
+			if (response.status !== 401) return false;
+			await clearDazziGuestCredential(agentDir, existingGuest);
+		}
+		const id = await resolveDeviceId();
+		if (id === null) return false;
+		let response: ApiResponse;
+		try {
+			response = await call("/api/desktop/guest", { method: "POST", body: { device_id: id, client: "app" } });
+		} catch (error) {
+			if (error instanceof OfflineError) return false;
+			throw error;
+		}
+		if (response.status !== 200) {
+			if (response.status === 403) guestProvisionOutcome = "claimed";
+			return false;
+		}
+		const token = isJsonObject(response.body) ? response.body.access_token : undefined;
+		if (typeof token !== "string" || !isGuestDazziToken(token)) return false;
+		const credits = parseCreditBalance(response.body);
+		if (await storeDazziGuestCredential(agentDir, token)) {
+			await adoptManagedModelIfUnset(token);
+			notifySignedIn();
+		}
+		guestProvisionOutcome = credits.used >= credits.limit ? "exhausted" : "none";
+		return credits.used < credits.limit;
+	}
+
+	/** Single-flight wrapper: concurrent callers share one provisioning run. */
+	function ensureGuestAccess(): Promise<boolean> {
+		if (guestAccess !== null) return guestAccess;
+		const run = provisionGuestAccess().finally(() => {
+			guestAccess = null;
+		});
+		guestAccess = run;
+		return run;
+	}
+
+	/**
+	 * Whether the current config runs on a guest credential that is used up or
+	 * already claimed on an account; for the search preflight to refuse a run the
+	 * server would reject. Signed-in users are `inactive` (their own `quotaBlock`
+	 * applies); an unreachable server is `ok`, so the server keeps the last word.
+	 */
+	async function guestQuotaStatus(): Promise<"inactive" | "ok" | "exhausted" | "claimed"> {
+		if ((await currentKey()) !== null) return "inactive";
+		const guestKey = await readDazziGuestCredential(agentDir);
+		if (guestKey !== null) {
+			let response: ApiResponse;
+			try {
+				response = await call("/v1/guest", { key: guestKey });
+			} catch (error) {
+				if (error instanceof OfflineError) return "ok";
+				throw error;
+			}
+			if (response.status === 200) {
+				const credits = parseCreditBalance(response.body);
+				return credits.used >= credits.limit ? "exhausted" : "ok";
+			}
+			if (response.status === 401) await clearDazziGuestCredential(agentDir, guestKey);
+		}
+		if (await ensureGuestAccess()) return "ok";
+		return guestProvisionOutcome === "none" ? "ok" : guestProvisionOutcome;
 	}
 
 	return {
@@ -604,5 +761,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			await openHostedUrl("/v1/account/checkout", { plan, ...(promo.code === null ? {} : { discount_code: promo.code }) });
 		},
 		useManagedModel: () => applyManagedModel(),
+		ensureGuestAccess,
+		guestQuotaStatus,
 	};
 }

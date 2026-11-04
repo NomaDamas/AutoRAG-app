@@ -65,6 +65,8 @@ import { refreshAutoragIndex, resolveEffectiveConfig } from "./index-refresh";
 import { terminateMinSyncChildren } from "./minsync-watchdog";
 import { createFolderScanCoordinator, supportedExtensionsFromRegistry } from "./onboarding-scan";
 import { createAccountService } from "./account-service";
+import { resolveAnonymousDeviceId } from "./device-id";
+import { readDazziGuestCredential } from "./dazzi-plan-credential";
 import { quotaBlock } from "./quota-guard";
 import { createFirstRunService, type FirstRunService } from "./first-run-service";
 import { closeDecision } from "./onboarding-window";
@@ -81,7 +83,7 @@ import { createFsWorkerHost, registerFsWorkerIpc, type FsWorkerHost } from "./fs
 import { createRemoteHost, type RemoteHost } from "./remote/host";
 import { REMOTE_CHANNELS, type RemoteAccessStatus } from "../shared/remote-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
-import { ACCOUNT_CHANNELS } from "../shared/account-contract";
+import { ACCOUNT_CHANNELS, AUTORAG_PROVIDER_ID } from "../shared/account-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
 import { SERVICES_CHANNELS } from "../shared/services-contract";
@@ -540,21 +542,29 @@ app.whenReady().then(async () => {
 		indexReadiness: () => indexReadiness(),
 		// A run on the Dazzi plan's model with the week's credits used up is not sent: the server would refuse every request of it.
 		preflight: async () => {
+			const configPath = autoragConfigPath();
+			const model = existsSync(configPath) ? readRawConfigObject(configPath).model : undefined;
+			const provider = isJsonObject(model) && typeof model.provider === "string" ? model.provider : undefined;
 			const block = await quotaBlock({
-				modelProvider: async () => {
-					const configPath = autoragConfigPath();
-					const model = existsSync(configPath) ? readRawConfigObject(configPath).model : undefined;
-					return isJsonObject(model) && typeof model.provider === "string" ? model.provider : undefined;
-				},
+				modelProvider: async () => provider,
 				account: accountService,
 				now: () => new Date(),
 			});
-			return block === null
-				? null
-				: {
-						message: t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) }),
-						action: "open-plan",
-					};
+			if (block !== null) {
+				return {
+					message: t("main.search.quotaExhausted", { date: block.resetsAt.toLocaleString(currentLanguage, { dateStyle: "medium", timeStyle: "short" }) }),
+					action: "open-plan",
+				};
+			}
+			// The signed-out trial runs on a guest credential with its own device cap; when it is
+			// used up or already claimed, hold the run and offer to sign in/upgrade, as above.
+			const guestRelevant = provider === AUTORAG_PROVIDER_ID || (provider === undefined && (await readDazziGuestCredential(getAgentDir())) !== null);
+			if (!guestRelevant) return null;
+			const guestState = await accountService.guestQuotaStatus();
+			if (guestState === "exhausted" || guestState === "claimed") {
+				return { message: t(guestState === "claimed" ? "main.search.guestAlreadyClaimed" : "main.search.guestQuotaExhausted"), action: "open-plan" };
+			}
+			return null;
 		},
 	});
 	registerSearchIpcHandlers(searchService);
@@ -970,18 +980,31 @@ app.whenReady().then(async () => {
 	});
 	registerMagicActionIpcHandlers(magicActionService);
 	app.once("will-quit", () => magicActionService.dispose());
+	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
+	let deviceIdPromise: Promise<string> | null = null;
+	const getDeviceId = (): Promise<string> => {
+		deviceIdPromise ??= resolveAnonymousDeviceId({ platform: process.platform, home, env: process.env, packaged: app.isPackaged });
+		return deviceIdPromise;
+	};
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,
 		cachePath: join(app.getPath("userData"), "account.json"),
 		configPath: autoragConfigPath(),
+		deviceId: getDeviceId,
 		openExternal: (url) => shell.openExternal(url),
 		send: sendToMainWindow,
 		// The picker lists the plan's models from the runtime's persisted catalog.
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
-	void accountService.refresh().catch(() => undefined);
+	// A fresh, unauthenticated launch provisions anonymous guest access so the plan's models work before sign-in.
+	void accountService
+		.refresh()
+		.then((status) => {
+			if (status.state === "signedOut") void accountService.ensureGuestAccess().catch(() => undefined);
+		})
+		.catch(() => undefined);
 	app.once("will-quit", () => void accountService.dispose());
 
 	const firstRun: FirstRunService = createFirstRunService({
@@ -1022,6 +1045,8 @@ app.whenReady().then(async () => {
 		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
 		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
 		probeFullDiskAccess: () => probeFullDiskAccess(home),
+		// A fresh unauthenticated launch provisions the guest credential + plan models before indexing and the tour.
+		ensureModelAccess: () => accountService.ensureGuestAccess(),
 		stubIndex: !app.isPackaged && process.env.AUTORAG_ONBOARDING_SKIP_INDEX === "1",
 		onComplete: () => {
 			analytics.track("onboarding_completed", {});

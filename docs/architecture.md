@@ -450,7 +450,12 @@ layer (`src/renderer/src/first-run/`, root `.fr-root`) mounts over the Finder an
 drives one flow against the contract in `src/shared/onboarding-contract.ts`:
 
 1. **Setup**: one call to `start()` and one 0–100 progress bar while the main
-   process (`src/main/first-run-service.ts`) does everything:
+   process (`src/main/first-run-service.ts`) does everything. Before it scans (and
+   before the smart-indexing helper and the tour question need one), `run()` awaits
+   `ensureModelAccess` — the account service's `ensureGuestAccess()` — so a fresh,
+   unauthenticated launch provisions the anonymous `dzg_` guest credential and
+   adopts the plan's `dazzi` models into `config.json` (an unset model only; a
+   user's own provider is left alone). The stages then run:
    - `scanning` (0→8) pre-scans the default folders one at a time — Desktop,
      Documents, Downloads, and iCloud Drive on macOS — keeping only the ones
      that exist, through the same folder-scan coordinator the indexer uses,
@@ -552,6 +557,25 @@ checkout in the browser (the server withholds the trial from a mailbox that
 already had one). Promo codes, BYOK and the rest of billing live in Settings ›
 구독 및 사용량; cancel, refund, and the payment method live in the hosted
 billing portal.
+
+**Anonymous access before sign-in.** A fresh, signed-out launch still asks
+questions: the account service provisions an anonymous guest credential so the
+plan's models work before anyone signs in. The app computes a per-device
+`device_id` (`src/main/device-id.ts`): the SHA-256 of the OS's install identity
+(macOS `IOPlatformUUID`, Windows `MachineGuid`, Linux machine-id; a random seed
+under `<home>/.autorag/device-seed` where none exists) under the `dazzi-device-v1:`
+namespace — never a raw hardware id. `POST /api/desktop/guest` returns a short
+guest key (`dzg_…`), which is stored in the same `auth.json` `dazzi` slot the
+librarian reads, but is recognised as a guest by `isGuestDazziToken` and never as
+a signed-in user: `AccountStatus.state` stays `signedOut`, and the app's own
+account routes (`/v1/account`, checkout, portal) reject it. Signing in later
+sends the same `device_id` on `POST /api/desktop/token` (or
+`/api/desktop/email/verify`), and the server carries the guest's used cents onto
+the account's current plan period and immediately invalidates the guest key;
+`completeWithToken` overwrites the slot with the real `dz_` key. The signed-out
+usage cap is per device, non-resetting until claimed, and the search preflight
+refuses a run on an exhausted or already-claimed guest (`guestQuotaStatus`)
+before it is sent.
 
 **What signing in changes.** A successful sign-in (the tour's sheet, Settings, or
 the AutoRAG entry in Settings › AI) points the agent at the account's models, per
@@ -794,6 +818,10 @@ and kept for the chat's life:
   the run go, since the server has the last word. The refusal names the reset time and carries an `open-plan` action (`SearchErrorAction` on the `error` event): the panel's notice (`RunErrorNotice`) shows a button that opens Settings on Subscription & Usage (`requestSettingsCategory("plan")`). That time is the server's `credits.resets_at`
   (`AccountSnapshot.creditsResetsAt`): the server's week starts when the account's period did, so it is not a fixed weekday; Monday
   00:00 UTC (`nextWeeklyReset`) is only the fallback for a server that sends none. The Plan page uses the same `creditsResetAt`.
+  A signed-out run on the plan's models uses the anonymous guest credential instead, which has its own per-device cap; the same
+  `preflight` goes on to `accountService.guestQuotaStatus()` and, when the guest trial is used up or already claimed on an account,
+  refuses with `main.search.guestQuotaExhausted` / `main.search.guestAlreadyClaimed` and the same `open-plan` action (offline or
+  unconfigured is left to the server).
 - **An index that is not ready.** A question Jev routes to the `local` branch (or any run with no Jev route that goes on to search
   the index) reads only what the index holds. The librarian does not announce the branch in its stream, so
   `src/main/local-track.ts` reads it from the progress tracker the agent keeps for its terminal widget (the private

@@ -179,6 +179,8 @@ export interface FirstRunServiceDeps {
 	readonly stopPowerSaveBlocker: (id: number) => void;
 	readonly probeFullDiskAccess: () => Promise<boolean>;
 	readonly onComplete: () => void;
+	/** Provisions anonymous model access (the guest credential + adopted models) before indexing and the tour. */
+	readonly ensureModelAccess?: () => Promise<unknown>;
 	readonly now?: () => number;
 	/** Dev-only (`make onboarding-skip-index`): play through the setup bar in ~1.8 s without scanning or indexing. */
 	readonly stubIndex?: boolean;
@@ -826,6 +828,9 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			if (deps.stubIndex === true) {
 				await runStubbed();
 			} else {
+				// Before the first index and the tour: a fresh unauthenticated launch provisions the
+				// guest credential and the plan's models, so smart indexing and buildDemo() have a model.
+				await deps.ensureModelAccess?.().catch(() => undefined);
 				const folders = await scanStage();
 				const exclusions = await planningStage(folders);
 				const result = await indexingStage(folders, exclusions);

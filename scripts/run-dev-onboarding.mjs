@@ -182,9 +182,11 @@ async function main() {
 	const configPath = join(sandbox, "config.json");
 	const userDataDir = join(sandbox, "user-data");
 	const minsyncCache = join(sandbox, "minsync-models");
+	const piAgentDir = join(sandbox, "pi-agent");
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
 	mkdirSync(minsyncCache, { recursive: true });
+	mkdirSync(piAgentDir, { recursive: true });
 	const realMinsyncCache =
 		process.env.FASTEMBED_CACHE_DIR?.trim() ||
 		(process.platform === "win32"
@@ -213,6 +215,10 @@ async function main() {
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
 		FASTEMBED_CACHE_DIR: minsyncCache,
+		// Pi's agent home (auth.json) lives in the sandbox, so the flow never reads or writes the
+		// developer's real ~/.pi/agent; the device seed keeps every run a clean unauthenticated machine.
+		PI_CODING_AGENT_DIR: piAgentDir,
+		AUTORAG_DEV_DEVICE_SEED: sandbox,
 		...(skipIndex ? { AUTORAG_ONBOARDING_SKIP_INDEX: "1" } : {}),
 	};
 

@@ -1048,7 +1048,9 @@
       "no": "No"
     },
     "search": {
-      "quotaExhausted": "Your Dazzi credits are used up, so nothing was sent. They come back on {{date}}. Upgrade your plan, or choose another model provider in Settings, to keep asking."
+      "quotaExhausted": "Your Dazzi credits are used up, so nothing was sent. They come back on {{date}}. Upgrade your plan, or choose another model provider in Settings, to keep asking.",
+      "guestQuotaExhausted": "You've used up this device's free Dazzi trial, so nothing was sent. Create an account to keep going.",
+      "guestAlreadyClaimed": "This device's free Dazzi trial is already tied to an account, so nothing was sent. Sign in to keep going."
     },
     "action": {
       "unsupportedResize": "This format cannot be resized.",

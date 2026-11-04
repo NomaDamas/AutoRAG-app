@@ -1048,7 +1048,9 @@
       "no": "否"
     },
     "search": {
-      "quotaExhausted": "Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。"
+      "quotaExhausted": "Dazzi 额度已用完，因此没有发送请求。额度将在 {{date}} 恢复。升级套餐，或在设置中选择其他模型提供方，即可继续使用。",
+      "guestQuotaExhausted": "本设备的 Dazzi 免费试用额度已用完，因此没有发送请求。创建账户即可继续使用。",
+      "guestAlreadyClaimed": "本设备的免费试用已绑定到某个账户，无法再使用。登录后即可继续使用。"
     },
     "action": {
       "unsupportedResize": "此格式不支持调整大小。",
