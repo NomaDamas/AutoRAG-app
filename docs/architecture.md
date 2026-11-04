@@ -514,12 +514,13 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    inspecting the evidence (`evidence`), clicking a duplicate family row
    (`duplicates`), and checking its Versions section (`versions`). Steps with no
    data (no demo question, no duplicate family) are skipped.
-3. **Plans**: only at the very end of the tour does the sheet `.fr-plans` offer
-   Free / Air / Pro / Max cards, Google / GitHub sign-in, and "나중에"
-   (`[data-action="plans-later"]`). Completing it calls `onboarding.complete()`,
-   persists `{ completed: true }` in `<userData>/onboarding/state.json`, and the
-   overlay disappears. No account, plan, model, source, or embedding question is
-   ever asked before the first index.
+3. **Sign-in**: only at the very end of the tour does the sheet
+   `.fr-signin-sheet` offer Google / GitHub sign-in, the in-app email code, and
+   "나중에 할게요" (`[data-action="signin-later"]`); a finished sign-in shows
+   "시작하기" (`[data-action="signin-continue"]`). No plan is offered. Completing
+   it calls `onboarding.complete()`, persists `{ completed: true }` in
+   `<userData>/onboarding/state.json`, and the overlay disappears. No account,
+   plan, model, source, or embedding question is ever asked before the first index.
 
 A relaunch before completion stays on the overlay: `load()` is authoritative.
 The Finder keeps its own size; only the preload
@@ -539,27 +540,26 @@ apply it. Keyword-only, Dazzi cloud embedding and a user-run embedding server
 (`local-server`) are never gated. Unpackaged builds honor `AUTORAG_QA_HARDWARE`
 (a JSON `HardwareProfile`); a packaged app ignores it.
 
-Account and plan are real, and reachable from the tour's last sheet (and from
+Account and plan are real; sign-in is reachable from the tour's last sheet (and from
 Settings). Signing in goes against the hosted AutoRAG service (`AUTORAG_BASE_URL`,
 default `https://api.dazziapp.com`); no password and no card number is typed into
 the app. Clicking Google or GitHub opens
 `/api/desktop/oauth?client=app&…&provider=google|github` (OAuth 2.0 authorization
 code + PKCE over a loopback redirect, RFC 8252), which 302-redirects straight to
 Google or GitHub without stopping on `/login` and returns straight to the
-loopback callback once authenticated. Settings › 계정 keeps the generic
-`/desktop/authorize` flow and the native email sign-in
-(`POST /api/desktop/email/send` + `POST /api/desktop/email/verify`). The
+loopback callback once authenticated. The tour's sheet and Settings › 계정 also
+offer the native email sign-in (`POST /api/desktop/email/send` +
+`POST /api/desktop/email/verify`); Settings › 계정 keeps the generic
+`/desktop/authorize` flow. The
 returned API key lives only in Pi's `auth.json` as
 the `dazzi` provider, so the app and the librarian cannot disagree about being
 signed in; the renderer sees an `AccountStatus` (email, plan, subscription state,
-weekly credits), never the key. The first run's plan sheet is four cards (Free,
-Air, Pro, Max: name, monthly price, who it is for; Pro carries the "7-day free
-trial" pill) above Google and GitHub sign-in. Free or "나중에 할게요" finishes the
-first run; a paid card asks for sign-in first, then opens the service's hosted
-checkout in the browser (the server withholds the trial from a mailbox that
-already had one). Promo codes, BYOK and the rest of billing live in Settings ›
-구독 및 사용량; cancel, refund, and the payment method live in the hosted
-billing portal.
+weekly credits), never the key. The first run never asks for a plan: its last
+sheet is sign-in only, and "나중에 할게요" finishes the first run signed out on the
+anonymous guest allowance below. Choosing Air, Pro, or Max, the hosted checkout
+(the server withholds the trial from a mailbox that already had one), promo
+codes, BYOK and the rest of billing live in Settings › 구독 및 사용량; cancel,
+refund, and the payment method live in the hosted billing portal.
 
 **Anonymous access before sign-in.** A fresh, signed-out launch still asks
 questions: the account service provisions an anonymous guest credential so the

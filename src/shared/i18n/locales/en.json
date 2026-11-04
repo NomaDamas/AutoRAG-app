@@ -835,45 +835,36 @@
         "body": "Identical and near-identical documents side by side. Click one to jump to it."
       }
     },
-    "plans": {
-      "eyebrow": "One last thing",
-      "title": "Choose your plan",
-      "lead": "Sign in and AI Search works right away. Start free and change any time.",
-      "perMonth": "/mo",
+    "signin": {
+      "title": "Get started with {{app}}",
+      "lead": "Your plan and usage are tied to your account. Your files and search index are stored on this Mac.",
+      "leadPc": "Your plan and usage are tied to your account. Your files and search index are stored on this PC.",
+      "busy": "Signing in in your browser…",
+      "busyNote": "You'll return here automatically once authentication finishes.",
+      "cancel": "Cancel",
+      "or": "or",
+      "emailLabel": "Email",
+      "emailPlaceholder": "name@example.com",
+      "continueEmail": "Continue with email",
+      "codeLabel": "Sign-in code",
+      "codeSentNote": "We sent a 6-digit code to {{email}}.",
+      "sendingCode": "Sending code…",
+      "verifyCode": "Verify code",
+      "verifyingCode": "Checking…",
+      "resendCode": "Send a new code",
+      "resendIn": "Resend in {{seconds}}s",
+      "useDifferentEmail": "Use a different email",
+      "signedIn": "You're signed in",
+      "otherAccount": "Sign in with another account",
+      "offline": "Can't reach the server, so this is the last information we confirmed.",
+      "agreeLead": "By continuing, you agree to Dazzi's:",
+      "agreeTerms": "Terms of Service",
+      "agreePrivacy": "Privacy Policy",
+      "agreeUse": "Acceptable Use",
       "google": "Continue with Google",
       "github": "Continue with GitHub",
       "later": "Maybe later",
-      "signingIn": "Finish signing in in your browser",
-      "signedIn": "Signed in as {{email}}",
-      "continue": "Get started",
-      "checkout": "Open checkout",
-      "plan": {
-        "free": {
-          "name": "Free",
-          "price": "Free",
-          "tag": "To try Dazzi out",
-          "training": "Inputs and outputs may be used to improve the service"
-        },
-        "air": {
-          "name": "Air",
-          "price": "$4",
-          "note": "$4/mo · cancel anytime",
-          "tag": "For people who already use another AI subscription"
-        },
-        "pro": {
-          "name": "Pro",
-          "price": "$20",
-          "note": "7 days free with a card, then $20/mo",
-          "tag": "For people who want Dazzi to just work, with no other AI subscription",
-          "trial": "7-day free trial"
-        },
-        "max": {
-          "name": "Max",
-          "price": "$200",
-          "note": "$200/mo · cancel anytime",
-          "tag": "For heavy, all-day use"
-        }
-      }
+      "continue": "Get started"
     }
   },
   "finderComponents": {

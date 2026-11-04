@@ -1,11 +1,11 @@
 // Drives the zero-question first run end to end in the built app: the folder
 // pre-scan, the keyword-only config write, the real first index (parsed mirror +
 // MinSync's bundled SPLADE encoder, no dense model), the generated tour, and the
-// plans sheet that ends the first run.
+// sign-in sheet that ends the first run.
 //
 // There is now ONE window: the Finder window itself opens with the pending flag
 // and hosts the first-run overlay (`.fr-root`), so this lane drives that window
-// through `data-screen` = setup → ready → tour → plans. No permission screen is
+// through `data-screen` = setup → ready → tour → signin. No permission screen is
 // shown: the run starts on its own and the tour is the only interaction.
 //
 // The first run scans the OS's own default folders (Desktop, Documents,
@@ -229,14 +229,14 @@ try {
 	info(`tour walked: ${walked.join(" → ")}`);
 	check("the tour walked splitBottom → mergePane", walked[0] === "splitBottom" && walked[1] === "mergePane");
 
-	// plans: the end of the first run. Signing in is real; the lane takes the
-	// free path so it never needs an account.
-	await page.waitForSelector('.fr-root[data-screen="plans"]', { timeout: 30_000 });
-	check("the plans sheet is shown", (await page.locator(".fr-plans").count()) === 1);
-	check("every plan is offered", (await page.locator(".fr-plans [data-plan]").count()) === 4, String(await page.locator(".fr-plans [data-plan]").count()));
-	check("both sign-in providers are offered", (await page.locator(".fr-plans [data-signin]").count()) === 2, String(await page.locator(".fr-plans [data-signin]").count()));
-	await shot(page, "07-plans.png");
-	await page.locator('.fr-plans [data-action="plans-later"]').click();
+	// signin: the end of the first run. Signing in is real; the lane takes
+	// "나중에 할게요" so it never needs an account. No plan is offered here.
+	await page.waitForSelector('.fr-root[data-screen="signin"]', { timeout: 30_000 });
+	check("the sign-in sheet is shown", (await page.locator(".fr-signin-sheet").count()) === 1);
+	check("no plan picker is shown", (await page.locator(".fr-signin-sheet [data-plan]").count()) === 0);
+	check("Google, GitHub, and email sign-in are offered", (await page.locator(".fr-signin-sheet [data-signin]").count()) === 3, String(await page.locator(".fr-signin-sheet [data-signin]").count()));
+	await shot(page, "07-signin.png");
+	await page.locator('.fr-signin-sheet [data-action="signin-later"]').click();
 
 	// the overlay leaves (the Finder is already usable behind it) and the first
 	// run is marked done.

@@ -9,7 +9,7 @@ import type { VersionFamilyData } from "../state/version-family";
 import { AI_SEARCH_PATH, openAiSearchTab } from "../state/tabs";
 import { allTabs, focusPane, moveTab, updatePaneTabs, type Workspace } from "../state/workspace";
 
-export type FirstRunScreen = "setup" | "ready" | "tour" | "plans";
+export type FirstRunScreen = "setup" | "ready" | "tour" | "signin";
 
 /** The setup run first; it may already have finished before a relaunch. */
 export function initialScreen(status: SetupStatus): FirstRunScreen {

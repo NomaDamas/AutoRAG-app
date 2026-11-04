@@ -21,7 +21,7 @@ run:
 
 # Experience a brand-new user's first run on a disposable profile: one window,
 # zero questions up front, one progress bar through scan → keyword-only index →
-# tour → plans. Every run starts from scratch in a temp sandbox
+# tour → sign-in. Every run starts from scratch in a temp sandbox
 # (userData, AutoRAG config/home/workspace), the real `~/.autorag` and the app's
 # support dir stay untouched, and the sandbox is removed when the app exits —
 # Ctrl+C, SIGKILL of this make, or the next run's sweep if both the wrapper and
@@ -33,7 +33,7 @@ onboarding:
 # Same disposable first-run sandbox as `make onboarding`, seeded with a 4-file
 # mini-fixture home (duplicate pair + cited docs) and stubbed setup (~2 s) so
 # all 7 tour steps (splitBottom → mergePane → ask → cite → evidence → duplicates → versions)
-# and plans run immediately without indexing the real home folders.
+# and the sign-in sheet run immediately without indexing the real home folders.
 onboarding-skip-index:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs --skip-index

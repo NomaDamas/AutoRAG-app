@@ -2,14 +2,14 @@
  * The first-run layer over the Finder window (DESIGN.md §3a). It asks for
  * nothing: one progress bar while the main process sets everything up (macOS
  * prompts per folder as each default folder is read), then "모두 준비되었어요!"
- * and a guided tour over the real Finder, and the plans sheet last.
+ * and a guided tour over the real Finder, and the sign-in sheet last.
  *
  * The Finder is mounted (and usable) behind the layer the whole time; the
  * layer drives it only through {@link FirstRunHost}.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
-import { isPaidPlanId, type AccountPlanId, type AccountStatus } from "../../../shared/account-contract";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactElement } from "react";
+import { accountLegalUrl, type AccountLegalRoute, type AccountStatus } from "../../../shared/account-contract";
 import { APP_NAME } from "../../../shared/app-info";
 import type { SetupStatus } from "../../../shared/onboarding-contract";
 import { useTranslation } from "../../../shared/i18n";
@@ -164,8 +164,8 @@ export function FirstRun({
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
 			) : null}
-			{screen === "tour" ? <Tour host={host} paneState={paneState} demo={status?.demo ?? null} platform={platform} onEnd={() => setScreen("plans")} /> : null}
-			{screen === "plans" ? <PlansSheet onFinish={finish} /> : null}
+			{screen === "tour" ? <Tour host={host} paneState={paneState} demo={status?.demo ?? null} platform={platform} onEnd={() => setScreen("signin")} /> : null}
+			{screen === "signin" ? <SignInSheet platform={platform} onFinish={finish} /> : null}
 		</div>
 	);
 }
@@ -841,113 +841,234 @@ function Coach({
 	);
 }
 
-/* ------------------------------------------------------------------ plans */
+/* ----------------------------------------------------------------- sign-in */
 
-const PLANS: readonly AccountPlanId[] = ["free", "air", "pro", "max"];
+const OTP_LENGTH = 6;
+const RESEND_COOLDOWN_SECONDS = 60;
 
-function PlansSheet({ onFinish }: { readonly onFinish: () => void }): ReactElement {
+function openLegal(baseUrl: string | undefined, route: AccountLegalRoute): void {
+	const open = window.autorag?.fs?.openUrl;
+	if (typeof open === "function") void open(accountLegalUrl(baseUrl, route));
+}
+
+/** The end of the first run: Google, GitHub, or an in-app email code, or "나중에 할게요". No plan choice here; plans live in Settings. */
+function SignInSheet({ platform, onFinish }: { readonly platform: string; readonly onFinish: () => void }): ReactElement {
 	const { t } = useTranslation();
 	const [account, setAccount] = useState<AccountStatus | null>(null);
-	const [plan, setPlan] = useState<AccountPlanId>("free");
+	const [email, setEmail] = useState("");
+	const [sentTo, setSentTo] = useState<string | null>(null);
+	const [code, setCode] = useState("");
 	const [busy, setBusy] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [resendIn, setResendIn] = useState(0);
+	const account$ = window.autorag.account;
 	useEffect(() => {
 		let live = true;
-		void window.autorag.account
+		void account$
 			.status()
 			.then((next) => {
 				if (live) setAccount(next);
 			})
 			.catch(() => undefined);
-		const off = window.autorag.account.onChanged((next) => {
+		const off = account$.onChanged((next) => {
 			if (live) setAccount(next);
 		});
 		return () => {
 			live = false;
 			off();
 		};
-	}, []);
+	}, [account$]);
+	useEffect(() => {
+		if (resendIn <= 0) return;
+		const timer = window.setTimeout(() => setResendIn((seconds) => seconds - 1), 1000);
+		return () => window.clearTimeout(timer);
+	}, [resendIn]);
+
 	const signedIn = account?.state === "signedIn";
 	const signingIn = account?.state === "signingIn";
 	const signIn = (provider: "google" | "github"): void => {
-		void window.autorag.account
+		setError(null);
+		void account$
 			.signIn({ provider })
 			.then(setAccount)
-			.catch((error: unknown) => console.error("[first-run] sign-in failed", error));
+			.catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)));
 	};
-	const proceed = (): void => {
-		if (!isPaidPlanId(plan)) {
-			onFinish();
-			return;
-		}
+	const requestCode = async (address: string): Promise<void> => {
+		const trimmed = address.trim();
+		if (trimmed.length === 0 || busy) return;
+		setError(null);
 		setBusy(true);
-		void window.autorag.account
-			.checkout(plan)
-			.then(onFinish)
-			.catch((error: unknown) => console.error("[first-run] checkout failed", error))
+		try {
+			const result = await account$.sendEmailOtp(trimmed);
+			if (!result.ok) {
+				setError(result.error);
+				return;
+			}
+			setSentTo(result.email);
+			setCode("");
+			setResendIn(RESEND_COOLDOWN_SECONDS);
+		} catch (reason) {
+			setError(reason instanceof Error ? reason.message : String(reason));
+		} finally {
+			setBusy(false);
+		}
+	};
+	const submitEmail = (event: FormEvent<HTMLFormElement>): void => {
+		event.preventDefault();
+		void requestCode(email);
+	};
+	const submitCode = (event: FormEvent<HTMLFormElement>): void => {
+		event.preventDefault();
+		if (sentTo === null || code.length !== OTP_LENGTH || busy) return;
+		setError(null);
+		setBusy(true);
+		void account$
+			.verifyEmailOtp(sentTo, code)
+			.then((next) => {
+				setAccount(next);
+				if (next.state !== "signedIn" && next.error !== null) setError(next.error);
+			})
+			.catch((reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason)))
 			.finally(() => setBusy(false));
 	};
+	const resetEmail = (): void => {
+		setSentTo(null);
+		setCode("");
+		setError(null);
+		setResendIn(0);
+	};
+	const visibleError = error ?? account?.error ?? null;
+	const lead = platform === "darwin" ? t("firstRun.signin.lead") : t("firstRun.signin.leadPc");
+
 	return (
 		<div className="fr-sheet-scrim">
-			<section className="fr-plans" role="dialog" aria-label={t("firstRun.plans.title")}>
-				<div className="fr-plans-head">
-					<Logo className="fr-logo--xs" />
-					<div>
-						<p className="fr-eyebrow">{t("firstRun.plans.eyebrow")}</p>
-						<h2 className="fr-title fr-title--sheet">{t("firstRun.plans.title")}</h2>
-					</div>
-				</div>
-				<p className="fr-lead fr-lead--sheet">{t("firstRun.plans.lead")}</p>
-				<div className="fr-plan-grid">
-					{PLANS.map((id) => (
-						<button
-							type="button"
-							key={id}
-							data-plan={id}
-							aria-pressed={plan === id}
-							className={cn("fr-plan", plan === id && "fr-plan--on", id === "pro" && "fr-plan--featured")}
-							onClick={() => setPlan(id)}
-						>
-							<span className="fr-plan-name">{t(`firstRun.plans.plan.${id}.name`)}</span>
-							<span className="fr-plan-price">
-								{t(`firstRun.plans.plan.${id}.price`)}
-								{id === "free" ? null : <small>{t("firstRun.plans.perMonth")}</small>}
+			<section className="fr-signin-sheet" role="dialog" aria-label={t("firstRun.signin.title", { app: APP_NAME })} data-state={signedIn ? "done" : signingIn ? "busy" : sentTo !== null ? "code" : "pick"}>
+				{signedIn ? (
+					<div className="fr-signin-done">
+						<div className="fr-signin-mark">
+							<Logo className="fr-logo--sm" />
+							<span className="fr-signin-check" aria-hidden="true">
+								<svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+									<path d="M20 6 9 17l-5-5" />
+								</svg>
 							</span>
-							<span className="fr-plan-tag">{t(`firstRun.plans.plan.${id}.tag`)}</span>
-							{id === "pro" ? <span className="fr-plan-badge">{t("firstRun.plans.plan.pro.trial")}</span> : null}
+						</div>
+						<h2 className="fr-title fr-title--sheet">{t("firstRun.signin.signedIn")}</h2>
+						{account?.account?.email ? <p className="fr-signin-email">{account.account.email}</p> : null}
+						{account?.offline === true ? <p className="fr-signin-note">{t("firstRun.signin.offline")}</p> : null}
+						<button type="button" className="fr-btn fr-btn--primary fr-btn--wide" data-action="signin-continue" autoFocus onClick={onFinish}>
+							{t("firstRun.signin.continue")}
 						</button>
-					))}
-				</div>
-				<div className="fr-signin">
-					{signedIn ? (
-						<p className="fr-signed">{t("firstRun.plans.signedIn", { email: account?.account?.email ?? "" })}</p>
-					) : (
-						<>
-							<button type="button" className="fr-btn fr-btn--secondary fr-btn--brand" data-signin="google" disabled={signingIn} onClick={() => signIn("google")}>
-								<GoogleMark />
-								{t("firstRun.plans.google")}
+						<button type="button" className="fr-link" onClick={() => void account$.signOut().then(setAccount)}>
+							{t("firstRun.signin.otherAccount")}
+						</button>
+					</div>
+				) : (
+					<>
+						<div className="fr-signin-head">
+							<Logo className="fr-logo--sm" />
+							<h2 className="fr-title fr-title--sheet">{t("firstRun.signin.title", { app: APP_NAME })}</h2>
+							<p className="fr-signin-lead">{lead}</p>
+						</div>
+						{signingIn ? (
+							<div className="fr-signin-busy">
+								<p className="fr-waiting">
+									<span className="fr-dot" />
+									<span>
+										<strong>{t("firstRun.signin.busy")}</strong>
+										<small>{t("firstRun.signin.busyNote")}</small>
+									</span>
+								</p>
+								<button type="button" className="fr-btn fr-btn--secondary fr-btn--wide" onClick={() => void account$.cancelSignIn().then(setAccount)}>
+									{t("firstRun.signin.cancel")}
+								</button>
+							</div>
+						) : sentTo !== null ? (
+							<form className="fr-signin-form" onSubmit={submitCode}>
+								<p className="fr-signin-note">{t("firstRun.signin.codeSentNote", { email: sentTo })}</p>
+								<label className="fr-field">
+									<span>{t("firstRun.signin.codeLabel")}</span>
+									<input
+										type="text"
+										inputMode="numeric"
+										pattern="[0-9]{6}"
+										maxLength={OTP_LENGTH}
+										className="fr-input fr-input--code"
+										value={code}
+										placeholder="000000"
+										autoComplete="one-time-code"
+										autoFocus
+										onChange={(event) => setCode(event.target.value.replace(/\D/gu, "").slice(0, OTP_LENGTH))}
+									/>
+								</label>
+								<button type="submit" className="fr-btn fr-btn--primary fr-btn--wide" disabled={busy || code.length !== OTP_LENGTH}>
+									{busy ? t("firstRun.signin.verifyingCode") : t("firstRun.signin.verifyCode")}
+								</button>
+								<p className="fr-signin-links">
+									<button type="button" className="fr-link" disabled={busy || resendIn > 0} onClick={() => void requestCode(sentTo)}>
+										{resendIn > 0 ? t("firstRun.signin.resendIn", { seconds: resendIn }) : t("firstRun.signin.resendCode")}
+									</button>
+									<span aria-hidden="true">·</span>
+									<button type="button" className="fr-link" disabled={busy} onClick={resetEmail}>
+										{t("firstRun.signin.useDifferentEmail")}
+									</button>
+								</p>
+							</form>
+						) : (
+							<div className="fr-signin-form">
+								<button type="button" className="fr-btn fr-btn--secondary fr-btn--brand" data-signin="google" disabled={busy} onClick={() => signIn("google")}>
+									<GoogleMark />
+									{t("firstRun.signin.google")}
+								</button>
+								<button type="button" className="fr-btn fr-btn--secondary fr-btn--brand" data-signin="github" disabled={busy} onClick={() => signIn("github")}>
+									<GithubMark />
+									{t("firstRun.signin.github")}
+								</button>
+								<div className="fr-divider">{t("firstRun.signin.or")}</div>
+								<form className="fr-signin-form" onSubmit={submitEmail}>
+									<label className="fr-field">
+										<span>{t("firstRun.signin.emailLabel")}</span>
+										<input
+											type="email"
+											className="fr-input"
+											value={email}
+											placeholder={t("firstRun.signin.emailPlaceholder")}
+											autoComplete="email"
+											onChange={(event) => setEmail(event.target.value)}
+										/>
+									</label>
+									<button type="submit" className="fr-btn fr-btn--primary fr-btn--wide" data-signin="email" disabled={busy || email.trim().length === 0}>
+										{busy ? t("firstRun.signin.sendingCode") : t("firstRun.signin.continueEmail")}
+									</button>
+								</form>
+								<p className="fr-signin-legal">
+									{t("firstRun.signin.agreeLead")}{" "}
+									<button type="button" className="fr-link fr-link--inline" onClick={() => openLegal(account?.baseUrl, "terms")}>
+										{t("firstRun.signin.agreeTerms")}
+									</button>
+									{" · "}
+									<button type="button" className="fr-link fr-link--inline" onClick={() => openLegal(account?.baseUrl, "privacy")}>
+										{t("firstRun.signin.agreePrivacy")}
+									</button>
+									{" · "}
+									<button type="button" className="fr-link fr-link--inline" onClick={() => openLegal(account?.baseUrl, "acceptableUse")}>
+										{t("firstRun.signin.agreeUse")}
+									</button>
+								</p>
+							</div>
+						)}
+						{visibleError !== null ? (
+							<p className="fr-signin-error" role="alert">
+								{visibleError}
+							</p>
+						) : null}
+						{signingIn ? null : (
+							<button type="button" className="fr-link fr-signin-later" data-action="signin-later" onClick={onFinish}>
+								{t("firstRun.signin.later")}
 							</button>
-							<button type="button" className="fr-btn fr-btn--secondary fr-btn--brand" data-signin="github" disabled={signingIn} onClick={() => signIn("github")}>
-								<GithubMark />
-								{t("firstRun.plans.github")}
-							</button>
-						</>
-					)}
-				</div>
-				{signingIn ? <p className="fr-waiting"><span className="fr-dot" />{t("firstRun.plans.signingIn")}</p> : null}
-				<div className="fr-actions fr-actions--sheet">
-					<button type="button" className="fr-link" data-action="plans-later" onClick={onFinish}>
-						{t("firstRun.plans.later")}
-					</button>
-					<button
-						type="button"
-						className="fr-btn fr-btn--primary"
-						data-action="plans-continue"
-						disabled={busy || (isPaidPlanId(plan) && !signedIn)}
-						onClick={proceed}
-					>
-						{isPaidPlanId(plan) ? t("firstRun.plans.checkout") : t("firstRun.plans.continue")}
-					</button>
-				</div>
+						)}
+					</>
+				)}
 			</section>
 		</div>
 	);

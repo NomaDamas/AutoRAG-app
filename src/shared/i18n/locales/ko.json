@@ -835,45 +835,36 @@
         "body": "같은 문서와 거의 같은 문서를 나란히 보여 줘요. 누르면 바로 그 파일로 가요."
       }
     },
-    "plans": {
-      "eyebrow": "마지막으로",
-      "title": "플랜을 골라 주세요",
-      "lead": "로그인하면 바로 AI 검색을 쓸 수 있어요. 무료로 시작하고 언제든 바꿀 수 있어요.",
-      "perMonth": "/월",
+    "signin": {
+      "title": "{{app}} 시작하기",
+      "lead": "플랜과 사용량은 계정에 연결됩니다. 파일과 검색 인덱스는 이 Mac에 저장됩니다.",
+      "leadPc": "플랜과 사용량은 계정에 연결됩니다. 파일과 검색 인덱스는 이 PC에 저장됩니다.",
+      "busy": "브라우저에서 로그인 중…",
+      "busyNote": "인증이 끝나면 자동으로 돌아옵니다.",
+      "cancel": "취소",
+      "or": "또는",
+      "emailLabel": "이메일",
+      "emailPlaceholder": "name@example.com",
+      "continueEmail": "이메일로 계속",
+      "codeLabel": "인증 코드",
+      "codeSentNote": "{{email}}로 6자리 인증 코드를 보냈습니다.",
+      "sendingCode": "인증 코드 전송 중…",
+      "verifyCode": "코드로 계속",
+      "verifyingCode": "확인 중…",
+      "resendCode": "코드 다시 보내기",
+      "resendIn": "{{seconds}}초 후 재전송",
+      "useDifferentEmail": "다른 이메일 사용",
+      "signedIn": "로그인을 완료했어요",
+      "otherAccount": "다른 계정으로 로그인",
+      "offline": "서버에 연결할 수 없어 마지막으로 확인한 정보를 보여줍니다.",
+      "agreeLead": "계속하면 Dazzi의 다음 정책에 동의합니다:",
+      "agreeTerms": "이용약관",
+      "agreePrivacy": "개인정보처리방침",
+      "agreeUse": "수용 가능한 사용 정책",
       "google": "Google로 계속",
       "github": "GitHub로 계속",
       "later": "나중에 할게요",
-      "signingIn": "브라우저에서 로그인을 마쳐 주세요",
-      "signedIn": "{{email}} 계정으로 로그인했어요",
-      "continue": "시작하기",
-      "checkout": "결제 페이지 열기",
-      "plan": {
-        "free": {
-          "name": "Free",
-          "price": "무료",
-          "tag": "Dazzi를 써 보려는 분께",
-          "training": "서비스 개선을 위해 입력·출력을 사용할 수 있습니다"
-        },
-        "air": {
-          "name": "Air",
-          "price": "$4",
-          "note": "월 $4 · 언제든 해지",
-          "tag": "이미 다른 AI 구독을 쓰는 분께"
-        },
-        "pro": {
-          "name": "Pro",
-          "price": "$20",
-          "note": "카드 등록 시 7일 무료, 이후 월 $20",
-          "tag": "다른 AI 구독 없이 Dazzi만으로 바로 쓰고 싶은 분께",
-          "trial": "7일 무료 체험"
-        },
-        "max": {
-          "name": "Max",
-          "price": "$200",
-          "note": "월 $200 · 언제든 해지",
-          "tag": "많이 쓰는 분을 위한 플랜"
-        }
-      }
+      "continue": "시작하기"
     }
   },
   "finderComponents": {

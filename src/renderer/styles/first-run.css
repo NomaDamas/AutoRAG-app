@@ -1261,7 +1261,7 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	animation: spin 800ms linear infinite;
 }
 
-/* -------------------------------------------------------------------- plans */
+/* ------------------------------------------------------------------ sign-in */
 
 .fr-sheet-scrim {
 	position: absolute;
@@ -1269,17 +1269,23 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	display: grid;
 	place-items: center;
 	background: var(--fr-scrim);
+	-webkit-backdrop-filter: blur(6px);
+	backdrop-filter: blur(6px);
 	animation: fr-dim-in 400ms ease both;
 	pointer-events: auto;
 }
 
-.fr-plans {
-	width: min(720px, calc(100vw - 64px));
-	padding: 26px 28px 22px;
+.fr-signin-sheet {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: min(380px, calc(100vw - 64px));
+	padding: 30px 30px 18px;
 	border: 1px solid var(--fr-card-border);
-	border-radius: 20px;
+	border-radius: 22px;
 	background: var(--bg-window);
 	box-shadow: var(--fr-shadow);
+	text-align: center;
 	animation: fr-sheet-up 700ms var(--fr-spring) both;
 }
 
@@ -1290,115 +1296,223 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	}
 }
 
-.fr-plans-head {
+.fr-signin-head {
 	display: flex;
+	flex-direction: column;
 	align-items: center;
-	gap: 14px;
 }
 
-.fr-plans-head .fr-eyebrow {
-	margin-bottom: 2px;
+.fr-signin-head .fr-logo--sm,
+.fr-signin-mark .fr-logo--sm {
+	width: 64px;
+	height: 64px;
+	margin-bottom: 14px;
 }
 
 .fr-title--sheet {
 	font-size: 22px;
 }
 
-.fr-lead--sheet {
-	max-width: none;
-	margin-top: 10px;
-	font-size: 14px;
+.fr-signin-lead {
+	margin: 8px 0 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--fr-muted);
+	text-wrap: pretty;
 }
 
-.fr-plan-grid {
-	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
-	gap: 10px;
-	margin-top: 18px;
-}
-
-.fr-plan {
-	position: relative;
+.fr-signin-form {
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start;
-	gap: 4px;
-	min-height: 132px;
-	padding: 14px;
-	border: 1.5px solid var(--border);
-	border-radius: 14px;
-	background: var(--bg-subtle);
-	font: inherit;
+	gap: 8px;
+	width: 100%;
+	margin-top: 20px;
+}
+
+.fr-signin-form .fr-signin-form {
+	margin-top: 0;
+}
+
+.fr-signin-sheet .fr-btn--brand {
+	flex: none;
+	width: 100%;
+}
+
+.fr-btn--wide {
+	width: 100%;
+	height: 40px;
+}
+
+.fr-divider {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 6px 0;
+	font-size: 12px;
+	color: var(--fr-muted);
+}
+
+.fr-divider::before,
+.fr-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--border);
+}
+
+.fr-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
 	text-align: left;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fr-muted);
+}
+
+.fr-input {
+	height: 40px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--bg-input);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 400;
 	color: var(--fr-ink);
-	cursor: pointer;
-	transition: border-color 150ms ease, background 150ms ease, transform 300ms var(--fr-spring), box-shadow 150ms ease;
+	outline: none;
+	transition: border-color 150ms ease, box-shadow 150ms ease;
+	-webkit-app-region: no-drag;
 }
 
-.fr-plan:hover {
-	transform: translateY(-2px);
-	box-shadow: var(--shadow-raised);
-}
-
-.fr-plan--on {
+.fr-input:focus {
 	border-color: var(--accent);
-	background: var(--accent-drop-hover);
 	box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
-.fr-plan-name {
-	font-size: 13px;
-	font-weight: 700;
+.fr-input--code {
+	font-size: 20px;
+	font-weight: 600;
+	letter-spacing: 0.4em;
+	text-align: center;
 }
 
-.fr-plan-price {
-	font-size: 22px;
-	font-weight: 700;
-	letter-spacing: -0.02em;
-}
-
-.fr-plan-price small {
-	margin-left: 2px;
-	font-size: 12px;
-	font-weight: 500;
-	color: var(--fr-muted);
-}
-
-.fr-plan-tag {
-	font-size: 12px;
-	line-height: 1.45;
-	color: var(--fr-muted);
-}
-
-.fr-plan-badge {
-	position: absolute;
-	top: -9px;
-	right: 10px;
-	padding: 2px 8px;
-	border-radius: 999px;
-	background: linear-gradient(90deg, #ffb703, #fb8500);
-	color: #fff;
-	font-size: 10.5px;
-	font-weight: 700;
-}
-
-.fr-signin {
-	display: flex;
-	gap: 10px;
-	margin-top: 18px;
-}
-
-.fr-signed {
+.fr-signin-note {
 	margin: 0;
 	font-size: 13px;
-	font-weight: 600;
+	line-height: 1.5;
+	color: var(--fr-muted);
+}
+
+.fr-signin-links {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 6px;
+	margin: 4px 0 0;
+	color: var(--fr-muted);
+}
+
+.fr-signin-legal {
+	margin: 8px 0 0;
+	font-size: 11.5px;
+	line-height: 1.6;
+	color: var(--fr-muted);
+}
+
+.fr-link--inline {
+	padding: 0;
+	font-size: inherit;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.fr-link:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.fr-signin-error {
+	margin: 12px 0 0;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--danger-text);
+}
+
+.fr-signin-busy {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	margin-top: 8px;
+}
+
+.fr-signin-busy .fr-waiting {
+	align-items: flex-start;
+	text-align: left;
+}
+
+.fr-signin-busy .fr-waiting .fr-dot {
+	flex: none;
+	margin-top: 6px;
+}
+
+.fr-signin-busy strong,
+.fr-signin-busy small {
+	display: block;
+}
+
+.fr-signin-busy strong {
 	color: var(--fr-ink);
 }
 
-.fr-actions--sheet {
-	justify-content: space-between;
+.fr-signin-later {
+	margin-top: 14px;
+}
+
+.fr-signin-done {
+	display: flex;
+	flex-direction: column;
 	align-items: center;
+	gap: 6px;
+	width: 100%;
+}
+
+.fr-signin-done .fr-btn--wide {
 	margin-top: 18px;
+}
+
+.fr-signin-mark {
+	position: relative;
+}
+
+.fr-signin-check {
+	position: absolute;
+	right: -4px;
+	bottom: 10px;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border: 2px solid var(--bg-window);
+	border-radius: 50%;
+	background: #34c759;
+	color: #fff;
+	animation: fr-check-pop 600ms var(--fr-spring) 120ms both;
+}
+
+@keyframes fr-check-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.4);
+	}
+}
+
+.fr-signin-email {
+	margin: 0;
+	font-size: 13px;
+	color: var(--fr-muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1413,7 +1527,8 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	.fr-cinema-bars::before,
 	.fr-cinema-bars::after,
 	.fr-coach-card,
-	.fr-plans,
+	.fr-signin-sheet,
+	.fr-signin-check,
 	.fr-progress-fill::after,
 	.fr-coach-hint-dot,
 	.fr-cursor-ring,

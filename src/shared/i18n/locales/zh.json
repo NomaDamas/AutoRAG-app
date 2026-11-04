@@ -835,45 +835,36 @@
         "body": "相同和几乎相同的文档并排显示。点击即可跳转到该文件。"
       }
     },
-    "plans": {
-      "eyebrow": "最后一步",
-      "title": "选择你的方案",
-      "lead": "登录后即可直接使用 AI 搜索。免费开始,随时可以更改。",
-      "perMonth": "/月",
+    "signin": {
+      "title": "开始使用 {{app}}",
+      "lead": "套餐和用量与账户关联。文件和搜索索引保存在这台 Mac 上。",
+      "leadPc": "套餐和用量与账户关联。文件和搜索索引保存在这台电脑上。",
+      "busy": "正在浏览器中登录…",
+      "busyNote": "认证完成后会自动返回。",
+      "cancel": "取消",
+      "or": "或",
+      "emailLabel": "邮箱",
+      "emailPlaceholder": "mingzi@example.cn",
+      "continueEmail": "使用邮箱继续",
+      "codeLabel": "验证码",
+      "codeSentNote": "已向 {{email}} 发送 6 位验证码。",
+      "sendingCode": "正在发送验证码…",
+      "verifyCode": "验证并继续",
+      "verifyingCode": "正在验证…",
+      "resendCode": "重新发送验证码",
+      "resendIn": "{{seconds}} 秒后重发",
+      "useDifferentEmail": "使用其他邮箱",
+      "signedIn": "登录完成",
+      "otherAccount": "使用其他账户登录",
+      "offline": "无法连接服务器，显示的是上次确认的信息。",
+      "agreeLead": "继续即表示您同意 Dazzi 的以下条款:",
+      "agreeTerms": "服务条款",
+      "agreePrivacy": "隐私政策",
+      "agreeUse": "可接受使用政策",
       "google": "使用 Google 继续",
       "github": "使用 GitHub 继续",
       "later": "以后再说",
-      "signingIn": "请在浏览器中完成登录",
-      "signedIn": "已以 {{email}} 登录",
-      "continue": "开始使用",
-      "checkout": "打开付款页面",
-      "plan": {
-        "free": {
-          "name": "Free",
-          "price": "免费",
-          "tag": "想先试试 Dazzi 的用户",
-          "training": "输入与输出可能用于改进服务"
-        },
-        "air": {
-          "name": "Air",
-          "price": "$4",
-          "note": "每月 $4 · 随时取消",
-          "tag": "已经在使用其他 AI 订阅的用户"
-        },
-        "pro": {
-          "name": "Pro",
-          "price": "$20",
-          "note": "绑定银行卡可免费 7 天，之后每月 $20",
-          "tag": "不想再订阅其他 AI、希望 Dazzi 开箱即用的用户",
-          "trial": "7 天免费试用"
-        },
-        "max": {
-          "name": "Max",
-          "price": "$200",
-          "note": "每月 $200 · 随时取消",
-          "tag": "适合重度使用"
-        }
-      }
+      "continue": "开始使用"
     }
   },
   "finderComponents": {

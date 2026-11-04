@@ -835,45 +835,36 @@
         "body": "同じ書類とほぼ同じ書類を並べて表示します。押すとそのファイルへ移動します。"
       }
     },
-    "plans": {
-      "eyebrow": "最後に",
-      "title": "プランを選んでください",
-      "lead": "ログインするとすぐにAI検索が使えます。無料ではじめて、いつでも変更できます。",
-      "perMonth": "/月",
+    "signin": {
+      "title": "{{app}}をはじめる",
+      "lead": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのMacに保存されます。",
+      "leadPc": "プランと使用量はアカウントに紐づきます。ファイルと検索インデックスはこのPCに保存されます。",
+      "busy": "ブラウザでログイン中…",
+      "busyNote": "認証が完了すると自動的に戻ります。",
+      "cancel": "キャンセル",
+      "or": "または",
+      "emailLabel": "メール",
+      "emailPlaceholder": "namae@example.jp",
+      "continueEmail": "メールで続行",
+      "codeLabel": "認証コード",
+      "codeSentNote": "{{email}} に6桁の認証コードを送信しました。",
+      "sendingCode": "認証コードを送信中…",
+      "verifyCode": "コードで続行",
+      "verifyingCode": "確認中…",
+      "resendCode": "コードを再送",
+      "resendIn": "{{seconds}}秒後に再送",
+      "useDifferentEmail": "別のメールを使う",
+      "signedIn": "ログインが完了しました",
+      "otherAccount": "別のアカウントでログイン",
+      "offline": "サーバーに接続できないため、最後に確認した情報を表示しています。",
+      "agreeLead": "続行すると、Dazziの以下に同意したものとみなされます:",
+      "agreeTerms": "利用規約",
+      "agreePrivacy": "プライバシーポリシー",
+      "agreeUse": "受け入れ可能な利用ポリシー",
       "google": "Googleで続ける",
       "github": "GitHubで続ける",
       "later": "あとで",
-      "signingIn": "ブラウザでログインを完了してください",
-      "signedIn": "{{email}}でログインしました",
-      "continue": "はじめる",
-      "checkout": "決済ページを開く",
-      "plan": {
-        "free": {
-          "name": "Free",
-          "price": "無料",
-          "tag": "Dazziを試したい方向け",
-          "training": "サービス向上のため入出力を利用する場合があります"
-        },
-        "air": {
-          "name": "Air",
-          "price": "$4",
-          "note": "月額$4 · いつでも解約可",
-          "tag": "すでに他のAIサブスクリプションを使っている方向け"
-        },
-        "pro": {
-          "name": "Pro",
-          "price": "$20",
-          "note": "カード登録で7日間無料、その後月額$20",
-          "tag": "他のAIサブスクリプションなしでDazziをそのまま使いたい方向け",
-          "trial": "7日間無料トライアル"
-        },
-        "max": {
-          "name": "Max",
-          "price": "$200",
-          "note": "月額$200 · いつでも解約可",
-          "tag": "たくさん使う方向け"
-        }
-      }
+      "continue": "はじめる"
     }
   },
   "finderComponents": {

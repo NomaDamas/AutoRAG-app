@@ -364,7 +364,7 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   stage, files and minutes left; macOS prompts per folder as each default folder
   is read, refused folders are left out, and the run keeps the machine awake) →
   `ready` (the Dazzi logo, "모두 준비되었어요!", one "시작하기" button; Enter
-  presses it) → `tour` → `plans`. While `setup` runs, the floating logo is a
+  presses it) → `tour` → `signin`. While `setup` runs, the floating logo is a
   button: tapping it fades the title and description out, the progress bar glides
   below, and a 16×16 Minesweeper with 40 hidden Dazzi logos in place of mines
   fades in (`first-run/MineGame.tsx`, rules in `first-run/minesweeper.ts`). Left
@@ -398,10 +398,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   With a version family the folder tab opens without pre-selecting the row;
   clicking the stacked row unfolds the stack and reveals the inspector's
   Versions section. Steps the data does not support are skipped, never faked.
-- `plans` ends the first run: Free, Air, Pro, Max with Google and GitHub
-  sign-in; "나중에 할게요" or Free finish it, a paid plan opens the hosted
-  checkout after sign-in. Finishing calls `onboarding.complete()`, so the next
-  launch opens the Finder straight away.
+- `signin` ends the first run: one compact sheet with the Dazzi logo, Google
+  and GitHub sign-in, the in-app email code (send, then a 6-digit code), the
+  legal links, and "나중에 할게요". No plan is chosen here (plans live in
+  Settings › 구독 및 사용량); signing in shows "로그인을 완료했어요" with one
+  "시작하기" button. Either way finishing calls `onboarding.complete()`, so the
+  next launch opens the Finder straight away.
 - `make onboarding` walks this on a disposable profile; the end-to-end check is
   `scripts/manual-qa/run-qa-onboarding.mjs` (screenshots in
   `.omo/evidence/onboarding/`).
