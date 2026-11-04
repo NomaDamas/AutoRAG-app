@@ -4,16 +4,15 @@
  * the split the tour arranges. The React layer (`FirstRun.tsx`) only renders it.
  */
 
-import type { PermissionStatus, SetupStatus } from "../../../shared/onboarding-contract";
+import type { SetupStatus } from "../../../shared/onboarding-contract";
 import type { VersionFamilyData } from "../state/version-family";
 import { AI_SEARCH_PATH, openAiSearchTab } from "../state/tabs";
 import { allTabs, focusPane, moveTab, updatePaneTabs, type Workspace } from "../state/workspace";
 
-export type FirstRunScreen = "permission" | "setup" | "ready" | "tour" | "plans";
+export type FirstRunScreen = "setup" | "ready" | "tour" | "plans";
 
-/** Full Disk Access first (macOS only), then the setup run, which may already have finished before a relaunch. */
-export function initialScreen(permissions: PermissionStatus, status: SetupStatus): FirstRunScreen {
-	if (permissions.fullDiskAccess === false) return "permission";
+/** The setup run first; it may already have finished before a relaunch. */
+export function initialScreen(status: SetupStatus): FirstRunScreen {
 	return status.stage === "ready" ? "ready" : "setup";
 }
 

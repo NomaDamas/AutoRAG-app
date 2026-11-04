@@ -62,11 +62,6 @@ try {
 	});
 
 	await page.waitForSelector(".fr-root[data-screen]", { timeout: 30_000 });
-	if ((await screenOf(page)) === "permission") {
-		await page.screenshot({ path: join(EVIDENCE, "00-permission.png") });
-		throw new Error("grant Full Disk Access to the Electron binary in this VM and rerun the onboarding-failure lane");
-	}
-
 	// setup starts on its own. This fixture fails the run within milliseconds, so the setup
 	// screen may already show the stop; a retry on screen must mean the run really failed.
 	// The DOM is read before the status: `failed` holds until the retry, so the order is safe.

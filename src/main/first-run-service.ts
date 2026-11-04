@@ -156,6 +156,8 @@ export interface FirstRunServiceDeps {
 	readonly scanFolders: (paths: readonly string[]) => Promise<void>;
 	/** Sum of the given folders' finished pre-scans, for the indexing denominator. */
 	readonly folderTotals: (paths: readonly string[]) => number;
+	/** True when a folder's pre-scan failed (for example a refused macOS folder prompt), so it is left out of the index. */
+	readonly scanFailed?: (path: string) => boolean;
 	/** Starts a duplicate (dupey) scan in the background; errors are ignored (dupey may be missing). */
 	readonly refreshDuplicates: () => Promise<void>;
 	/** The answer model in the shared config with its credentials; rejects when none is configured. */
@@ -171,7 +173,6 @@ export interface FirstRunServiceDeps {
 	readonly language: () => AppSettings["language"];
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
-	readonly relaunch: () => void;
 	readonly startPowerSaveBlocker: () => number;
 	readonly stopPowerSaveBlocker: (id: number) => void;
 	readonly probeFullDiskAccess: () => Promise<boolean>;
@@ -185,7 +186,6 @@ export interface FirstRunService {
 	load(): Promise<OnboardingSnapshot>;
 	permissions(): Promise<PermissionStatus>;
 	openFullDiskAccess(): Promise<void>;
-	relaunch(): Promise<void>;
 	start(): Promise<SetupStatus>;
 	status(): Promise<SetupStatus>;
 	/** Sync: is a first-run index still in flight (quit-confirmation gate). */
@@ -638,12 +638,17 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	async function scanStage(): Promise<readonly string[]> {
 		setStage("scanning", 4);
 		emitStatus();
-		const folders = defaultFolders();
-		if (folders.length > 0) await deps.scanFolders(folders);
-		totalFiles = deps.folderTotals(folders);
+		// One folder at a time, so macOS per-folder consent dialogs arrive one after another instead of piling up;
+		// any folder the user refuses fails its pre-scan and is left out rather than failing the whole index.
+		const readable: string[] = [];
+		for (const folder of defaultFolders()) {
+			await deps.scanFolders([folder]);
+			if (deps.scanFailed?.(folder) !== true) readable.push(folder);
+		}
+		totalFiles = deps.folderTotals(readable);
 		setProgress(8);
 		emitStatus();
-		return folders;
+		return readable;
 	}
 
 	async function planningStage(roots: readonly string[]): Promise<readonly SmartExclusion[]> {
@@ -802,7 +807,6 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			fullDiskAccess: deps.platform === "darwin" ? await deps.probeFullDiskAccess() : null,
 		}),
 		openFullDiskAccess: () => deps.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
-		relaunch: async () => deps.relaunch(),
 		start: async () => {
 			if (runPromise !== null) return snapshot();
 			if (stage === "ready") return snapshot();

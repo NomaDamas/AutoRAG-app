@@ -33,7 +33,6 @@
     "tags": "标签",
     "tagColorsDenied": "显示标签颜色",
     "tagColorsDeniedHint": "macOS 把 Finder 的标签颜色放在“完全磁盘访问权限”之后。允许后重新启动应用即可显示。",
-    "tagColorsGrantToast": "请允许“完全磁盘访问权限”，然后重新启动 Dazzi。",
     "home": "个人主页",
     "applications": "应用程序",
     "desktop": "桌面",
@@ -749,16 +748,6 @@
     }
   },
   "firstRun": {
-    "permission": {
-      "eyebrow": "开始之前",
-      "title": "请允许完全磁盘访问权限",
-      "lead": "Dazzi 需要读取文稿、下载和桌面中的文件才能帮你查找。文件不会离开这台 Mac,也不会被修改。",
-      "stepOpen": "在系统设置中打开 Dazzi",
-      "stepRelaunch": "打开后请重新启动 Dazzi",
-      "open": "打开系统设置",
-      "relaunch": "重新启动",
-      "waiting": "正在等待授权"
-    },
     "setup": {
       "title": "正在准备 Dazzi",
       "lead": "只要电脑保持开机,就会自动完成。期间可以照常做别的事。",
@@ -2704,5 +2693,15 @@
     "emptyOutput": "已完成，无文本输出。",
     "targetsCount": "共 {{count}} 项",
     "sidebarOpen": "查看魔法动作结果"
+  },
+  "fullDiskAccess": {
+    "title": "请允许完全磁盘访问权限",
+    "titleGranted": "已允许完全磁盘访问权限",
+    "leadTagColors": "访达标签颜色保存在受 macOS 保护的位置。请在系统设置中打开 Dazzi,出现提示时选择“退出并重新打开”。",
+    "leadSource": "此数据源需要读取其他应用的数据。请在系统设置中开启 Dazzi 的完全磁盘访问权限,出现提示时选择“退出并重新打开”。",
+    "granted": "已确认获得权限,可以继续了。",
+    "open": "打开系统设置",
+    "confirm": "确认并继续",
+    "rowName": "完全磁盘访问权限"
   }
 }

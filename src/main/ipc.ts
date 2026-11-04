@@ -395,7 +395,6 @@ export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
-	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
 	ipcMain.handle(ONBOARDING_CHANNELS.start, () => service.start());
 	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());

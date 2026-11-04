@@ -3,9 +3,9 @@
  * Finder window's first-run layer (`src/renderer/src/first-run/`).
  *
  * The first run asks nothing it can decide itself. The Finder window opens with
- * the pending flag; on macOS the layer first asks for Full Disk Access, then it
- * calls `start` and shows one progress bar while the main process does the rest
- * on its own:
+ * the pending flag; the layer calls `start` at once and shows one progress bar
+ * while the main process does the rest on its own (macOS asks for per-folder
+ * access as each default folder is read; refused folders are left out):
  *
  *  1. `scanning`  — pre-scans the default folders (Desktop, Documents, Downloads,
  *     iCloud Drive), which gives the index its file total;
@@ -27,7 +27,7 @@ export const ONBOARDING_CHANNELS = {
 	load: "onboarding:load",
 	permissions: "onboarding:permissions",
 	openFullDiskAccess: "onboarding:openFullDiskAccess",
-	relaunch: "onboarding:relaunch",
+	// Full Disk Access is deferred to the features that really need it (Finder tag colours, KakaoTalk/WhatsApp/Mail).
 	/** Starts the setup run, or returns the one in flight / finished. */
 	start: "onboarding:start",
 	status: "onboarding:status",
@@ -109,8 +109,7 @@ export interface OnboardingBridge {
 	permissions(): Promise<PermissionStatus>;
 	/** Opens System Settings › Privacy & Security › Full Disk Access. */
 	openFullDiskAccess(): Promise<void>;
-	/** Quit and reopen the app (Full Disk Access applies to a running app only after a relaunch). */
-	relaunch(): Promise<void>;
+	// System Settings offers Quit & Reopen itself once Full Disk Access is toggled for a running app.
 	/** Starts the setup run (a failed one starts again); resolves with its status right away. */
 	start(): Promise<SetupStatus>;
 	status(): Promise<SetupStatus>;

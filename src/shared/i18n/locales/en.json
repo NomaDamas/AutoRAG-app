@@ -33,7 +33,6 @@
     "tags": "Tags",
     "tagColorsDenied": "Show tag colors",
     "tagColorsDeniedHint": "macOS keeps Finder's tag colors behind Full Disk Access. Allow it, then relaunch the app to see them.",
-    "tagColorsGrantToast": "Allow Full Disk Access, then relaunch Dazzi.",
     "home": "Home",
     "applications": "Applications",
     "desktop": "Desktop",
@@ -749,16 +748,6 @@
     }
   },
   "firstRun": {
-    "permission": {
-      "eyebrow": "Before we start",
-      "title": "Allow Full Disk Access",
-      "lead": "Dazzi needs to read the files in Documents, Downloads and Desktop to find things for you. Your files never leave this Mac and are never changed.",
-      "stepOpen": "Turn Dazzi on in System Settings",
-      "stepRelaunch": "Then restart Dazzi",
-      "open": "Open System Settings",
-      "relaunch": "Restart",
-      "waiting": "Waiting for access"
-    },
     "setup": {
       "title": "Getting Dazzi ready",
       "lead": "Just keep your computer on and it finishes by itself. Feel free to do other things meanwhile.",
@@ -2704,5 +2693,15 @@
     "emptyOutput": " Finished with no text output.",
     "targetsCount": "{{count}} item(s)",
     "sidebarOpen": "Open Magic Action result"
+  },
+  "fullDiskAccess": {
+    "title": "Allow Full Disk Access",
+    "titleGranted": "Full Disk Access allowed",
+    "leadTagColors": "Finder's tag colors live in a location macOS protects. Turn Dazzi on in System Settings and choose Quit & Reopen when prompted.",
+    "leadSource": "This source reads another app's data. Turn on Full Disk Access for Dazzi in System Settings and choose Quit & Reopen when prompted.",
+    "granted": "Access is allowed. You're ready to continue.",
+    "open": "Open System Settings",
+    "confirm": "Confirm and continue",
+    "rowName": "Full Disk Access"
   }
 }

@@ -70,7 +70,6 @@ async function makeDeps(userDataDir: string, overrides: Partial<FirstRunServiceD
 		language: () => "ko",
 		send: () => undefined,
 		openExternal: async () => undefined,
-		relaunch: () => undefined,
 		startPowerSaveBlocker: () => 1,
 		stopPowerSaveBlocker: () => undefined,
 		probeFullDiskAccess: async () => false,
@@ -179,6 +178,27 @@ describe("createFirstRunService run", () => {
 		await waitForStage(service, "ready");
 		expect(attempt).toBe(2);
 		expect(outcomes).toEqual([false, true]);
+	});
+
+	it("leaves out a default folder whose pre-scan failed and still finishes the index", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const base = await makeDeps(directory);
+		await mkdir(join(base.home, "Documents"), { recursive: true });
+		const scanned: string[] = [];
+		const service = createFirstRunService({
+			...base,
+			scanFolders: async (paths) => {
+				scanned.push(...paths);
+			},
+			scanFailed: (path) => path.endsWith("Documents"),
+		});
+		await service.start();
+		const final = await waitForStage(service, "ready");
+		expect(final.stage).toBe("ready");
+		// Scanned one at a time, and only the readable folder reaches searchPaths.
+		expect(scanned).toEqual([join(base.home, "Desktop"), join(base.home, "Documents")]);
+		const written = JSON.parse(await readFile(base.configPath, "utf8")) as { searchPaths: string[] };
+		expect(written.searchPaths).toEqual([join(base.home, "Desktop")]);
 	});
 });
 

@@ -449,18 +449,20 @@ preload argument while `firstRun.pending()` is true. The renderer's first-run
 layer (`src/renderer/src/first-run/`, root `.fr-root`) mounts over the Finder and
 drives one flow against the contract in `src/shared/onboarding-contract.ts`:
 
-1. **Permission** (macOS only, while `permissions().fullDiskAccess === false`):
-   the card asks for Full Disk Access and re-probes every two seconds, moving on
-   by itself once it is granted; "시스템 설정 열기" opens Privacy & Security ›
-   Full Disk Access directly, and because a grant can reach a running app only
-   after a relaunch the card also offers "다시 시작" (`x-apple.systempreferences:`
-   URL, `probeFullDiskAccess`).
-2. **Setup**: one call to `start()` and one 0–100 progress bar while the main
+1. **Setup**: one call to `start()` and one 0–100 progress bar while the main
    process (`src/main/first-run-service.ts`) does everything:
-   - `scanning` (0→8) pre-scans the default folders — Desktop, Documents,
-     Downloads, and iCloud Drive on macOS — keeping only the ones that exist,
-     through the same folder-scan coordinator the indexer uses, which gives the
-     total file count;
+   - `scanning` (0→8) pre-scans the default folders one at a time — Desktop,
+     Documents, Downloads, and iCloud Drive on macOS — keeping only the ones
+     that exist, through the same folder-scan coordinator the indexer uses,
+     which gives the total file count. On macOS each folder triggers its own
+     per-folder TCC consent dialog as it is read; a refused folder fails its
+     pre-scan and is left out of `searchPaths` rather than failing the run.
+     Full Disk Access is not asked on the first run — only features that read
+     locations beyond per-folder consent (Finder tag colours in
+     `~/Library/Daemon Containers`, `lazykatok` for KakaoTalk, `mailcrawl` over
+     `~/Library/Mail`) open `FullDiskAccessDialog` (one button: opens Privacy &
+     Security › Full Disk Access while ungranted, flips to confirm-and-continue
+     once `probeFullDiskAccess` passes; System Settings offers Quit & Reopen);
    - `planning` (8→15) runs the smart-indexing helper agent over those roots
      (see "Helper agents") and **takes every proposal** it makes; a model that is
      not configured, errors, or times out simply yields no exclusions and the run
@@ -498,21 +500,21 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    A failure stops the bar and shows `[data-action="setup-retry"]`, which calls
    `start()` again (a failed run restarts; a run in flight or finished is returned
    as is).
-3. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
+2. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
    `[data-action="tour-next"]` / `tour-skip`) walk the split view — a cinematic
    title, the demo question typed into AI Search and asked, the answer, the first
    citation chip, the inspector evidence, the evidence folder, a duplicate family
    in the left pane, and its Versions section. Steps with no data (no demo
    question, no duplicate family) are skipped.
-4. **Plans**: only at the very end of the tour does the sheet `.fr-plans` offer
+3. **Plans**: only at the very end of the tour does the sheet `.fr-plans` offer
    Free / Air / Pro / Max cards, Google / GitHub sign-in, and "나중에"
    (`[data-action="plans-later"]`). Completing it calls `onboarding.complete()`,
    persists `{ completed: true }` in `<userData>/onboarding/state.json`, and the
    overlay disappears. No account, plan, model, source, or embedding question is
    ever asked before the first index.
 
-A relaunch (for example after granting Full Disk Access) stays on the overlay:
-`load()` is authoritative. The Finder keeps its own size; only the preload
+A relaunch before completion stays on the overlay: `load()` is authoritative.
+The Finder keeps its own size; only the preload
 argument changes with the first run. Closing the last window while a first index
 is still in flight asks before quitting (`closeDecision`,
 `src/main/onboarding-window.ts`).

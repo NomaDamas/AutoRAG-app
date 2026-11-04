@@ -1,8 +1,8 @@
 /**
  * The first-run layer over the Finder window (DESIGN.md §3a). It asks for
- * nothing it can decide itself: Full Disk Access on macOS, then one progress
- * bar while the main process sets everything up, then "모두 준비되었어요!" and
- * a guided tour over the real Finder, and the plans sheet last.
+ * nothing: one progress bar while the main process sets everything up (macOS
+ * prompts per folder as each default folder is read), then "모두 준비되었어요!"
+ * and a guided tour over the real Finder, and the plans sheet last.
  *
  * The Finder is mounted (and usable) behind the layer the whole time; the
  * layer drives it only through {@link FirstRunHost}.
@@ -11,10 +11,11 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { isPaidPlanId, type AccountPlanId, type AccountStatus } from "../../../shared/account-contract";
 import { APP_NAME } from "../../../shared/app-info";
-import type { PermissionStatus, SetupStatus } from "../../../shared/onboarding-contract";
+import type { SetupStatus } from "../../../shared/onboarding-contract";
 import { useTranslation } from "../../../shared/i18n";
 import dazziLogo from "../assets/dazzi-logo.png";
 import { cn } from "../lib/cn";
+import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
 import { initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
@@ -57,7 +58,7 @@ function isTextTarget(target: EventTarget | null): boolean {
 export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readonly onDone: () => void }): ReactElement | null {
 	const [screen, setScreen] = useState<FirstRunScreen | null>(null);
 	const [status, setStatus] = useState<SetupStatus | null>(null);
-	const [platform, setPlatform] = useState("darwin");
+	const [platform] = useState(hostPlatform);
 	const [leaving, setLeaving] = useState(false);
 	const hostRef = useRef(host);
 	hostRef.current = host;
@@ -72,11 +73,10 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 					onDone();
 					return;
 				}
-				const [permissions, current] = await Promise.all([onboarding().permissions(), onboarding().status()]);
+				const current = await onboarding().status();
 				if (!live) return;
-				setPlatform(permissions.platform);
 				setStatus(current);
-				setScreen(initialScreen(permissions, current));
+				setScreen(initialScreen(current));
 			})
 			.catch((error: unknown) => console.error("[first-run] load failed", error));
 		const off = onboarding().onProgress((next) => {
@@ -88,7 +88,7 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 		};
 	}, [onDone]);
 
-	const covering = screen === "permission" || screen === "setup" || screen === "ready";
+	const covering = screen === "setup" || screen === "ready";
 	useEffect(() => {
 		hostRef.current.setCovered(covering);
 		if (covering) setDeskMode("cover");
@@ -133,7 +133,6 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 			{covering ? (
 				<div className={cn("fr-stage", leaving && "fr-stage--leaving")}>
 					<div className="fr-drag" />
-					{screen === "permission" ? <PermissionScreen onGranted={() => setScreen("setup")} /> : null}
 					{screen === "setup" ? <SetupScreen status={status} /> : null}
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
@@ -146,45 +145,6 @@ export function FirstRun({ host, onDone }: { readonly host: FirstRunHost; readon
 
 function Logo({ className }: { readonly className?: string }): ReactElement {
 	return <img className={cn("fr-logo", className)} src={dazziLogo} alt="" draggable={false} />;
-}
-
-/* ------------------------------------------------------------- permission */
-
-function PermissionScreen({ onGranted }: { readonly onGranted: () => void }): ReactElement {
-	const { t } = useTranslation();
-	// The probe re-reads a protected file; System Settings can grant it while the app runs.
-	useEffect(() => {
-		const timer = window.setInterval(() => {
-			void onboarding()
-				.permissions()
-				.then((next: PermissionStatus) => {
-					if (next.fullDiskAccess !== false) onGranted();
-				})
-				.catch(() => undefined);
-		}, 2000);
-		return () => window.clearInterval(timer);
-	}, [onGranted]);
-	return (
-		<section className="fr-panel fr-permission">
-			<Logo className="fr-logo--sm" />
-			<p className="fr-eyebrow">{t("firstRun.permission.eyebrow")}</p>
-			<h1 className="fr-title">{t("firstRun.permission.title")}</h1>
-			<p className="fr-lead">{t("firstRun.permission.lead")}</p>
-			<ol className="fr-steps">
-				<li><span className="fr-step-n">1</span>{t("firstRun.permission.stepOpen")}</li>
-				<li><span className="fr-step-n">2</span>{t("firstRun.permission.stepRelaunch")}</li>
-			</ol>
-			<div className="fr-actions">
-				<button type="button" className="fr-btn fr-btn--secondary" data-action="relaunch" onClick={() => void onboarding().relaunch()}>
-					{t("firstRun.permission.relaunch")}
-				</button>
-				<button type="button" className="fr-btn fr-btn--primary" data-action="open-fda" onClick={() => void onboarding().openFullDiskAccess()}>
-					{t("firstRun.permission.open")}
-				</button>
-			</div>
-			<p className="fr-waiting"><span className="fr-dot" />{t("firstRun.permission.waiting")}</p>
-		</section>
-	);
 }
 
 /* ------------------------------------------------------------------ setup */

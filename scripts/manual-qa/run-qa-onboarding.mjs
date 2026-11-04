@@ -1,13 +1,12 @@
-// Drives the zero-question first run end to end in the built app: the real Full
-// Disk Access gate, the folder pre-scan, the keyword-only config write, the real
-// first index (parsed mirror + MinSync's bundled SPLADE encoder, no dense model),
-// the generated tour, and the plans sheet that ends the first run.
+// Drives the zero-question first run end to end in the built app: the folder
+// pre-scan, the keyword-only config write, the real first index (parsed mirror +
+// MinSync's bundled SPLADE encoder, no dense model), the generated tour, and the
+// plans sheet that ends the first run.
 //
 // There is now ONE window: the Finder window itself opens with the pending flag
 // and hosts the first-run overlay (`.fr-root`), so this lane drives that window
-// through `data-screen` = permission → setup → ready → tour → plans. Nothing is
-// asked beyond Full Disk Access: the run starts on its own and the tour is the
-// only interaction.
+// through `data-screen` = setup → ready → tour → plans. No permission screen is
+// shown: the run starts on its own and the tour is the only interaction.
 //
 // The first run scans the OS's own default folders (Desktop, Documents,
 // Downloads, iCloud Drive), and Electron resolves those from the OS — on macOS
@@ -116,18 +115,7 @@ try {
 	await page.waitForSelector(".fr-root[data-screen]", { timeout: 30_000 });
 	info(`the first run opened on the ${await screen(page)} screen`);
 
-	// permission: macOS only, shown while Full Disk Access is not granted.
-	if ((await screen(page)) === "permission") {
-		await shot(page, "01-permission.png");
-		const status = await page.evaluate(() => window.autorag.onboarding.permissions());
-		check("the permission screen is macOS-only", status.platform === "darwin", JSON.stringify(status));
-		check("the permission screen means Full Disk Access is not granted", status.fullDiskAccess === false, JSON.stringify(status));
-		check("the permission card offers every way on", (await page.locator('[data-action="open-fda"], [data-action="relaunch"]').count()) === 2);
-		throw new Error("grant Full Disk Access to the Electron binary in this VM (System Settings › Privacy & Security › Full Disk Access, then relaunch) and rerun the onboarding lane");
-	}
-	// Past the permission screen the gate is either not macOS or already granted.
-	const gate = await page.evaluate(() => window.autorag.onboarding.permissions());
-	check("the permission gate matches the platform", process.platform === "darwin" ? gate.fullDiskAccess === true : gate.fullDiskAccess === null, JSON.stringify(gate));
+	check("no permission screen blocks the first run", (await screen(page)) !== "permission" && (await page.locator('[data-action="open-fda"]').count()) === 0);
 
 	// setup: one progress bar while main pre-scans, plans exclusions, writes the
 	// keyword-only config, runs the first index and prepares the tour.

@@ -33,7 +33,6 @@
     "tags": "태그",
     "tagColorsDenied": "태그 색상 보기",
     "tagColorsDeniedHint": "Finder의 태그 색상은 macOS가 전체 디스크 접근 권한 뒤에 두고 있어요. 허용한 뒤 앱을 다시 시작하면 색상이 보입니다.",
-    "tagColorsGrantToast": "전체 디스크 접근 권한을 허용하고 Dazzi를 다시 시작하세요.",
     "home": "홈",
     "applications": "응용 프로그램",
     "desktop": "데스크탑",
@@ -749,16 +748,6 @@
     }
   },
   "firstRun": {
-    "permission": {
-      "eyebrow": "시작하기 전에",
-      "title": "전체 디스크 접근을 허용해 주세요",
-      "lead": "Dazzi가 문서, 다운로드, 데스크탑의 파일을 읽어야 찾아 드릴 수 있어요. 파일은 이 Mac 밖으로 나가지 않고, 고치지도 않아요.",
-      "stepOpen": "시스템 설정에서 Dazzi를 켜 주세요",
-      "stepRelaunch": "켠 다음 Dazzi를 다시 시작해 주세요",
-      "open": "시스템 설정 열기",
-      "relaunch": "다시 시작",
-      "waiting": "허용을 기다리는 중"
-    },
     "setup": {
       "title": "Dazzi를 준비하고 있어요",
       "lead": "컴퓨터를 켜 두기만 하면 알아서 끝나요. 그동안 다른 일을 하셔도 괜찮아요.",
@@ -2704,5 +2693,15 @@
     "emptyOutput": "출력된 텍스트가 없습니다.",
     "targetsCount": "대상 {{count}}개",
     "sidebarOpen": "매직 액션 실행 결과 열기"
+  },
+  "fullDiskAccess": {
+    "title": "전체 디스크 접근을 허용해 주세요",
+    "titleGranted": "전체 디스크 접근이 허용되었어요",
+    "leadTagColors": "Finder 태그 색상은 macOS가 보호하는 영역에 있어요. 시스템 설정에서 Dazzi를 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
+    "leadSource": "이 소스는 다른 앱의 데이터를 읽어요. 시스템 설정에서 Dazzi의 전체 디스크 접근을 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
+    "granted": "허용이 확인되었어요. 이제 계속할 수 있어요.",
+    "open": "시스템 설정 열기",
+    "confirm": "확인하고 계속",
+    "rowName": "전체 디스크 접근"
   }
 }

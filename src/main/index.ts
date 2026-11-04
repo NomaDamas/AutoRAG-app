@@ -1003,6 +1003,7 @@ app.whenReady().then(async () => {
 		// The first run indexes its folders and, on the same run, scans them for duplicates so the tour can show a family.
 		scanFolders: (paths) => scanCoordinator.start(paths),
 		folderTotals: (paths) => scanCoordinator.totalFiles(paths),
+		scanFailed: (path) => scanCoordinator.cached(path)?.error !== null && scanCoordinator.cached(path)?.error !== undefined,
 		refreshDuplicates: async () => {
 			await workerHost.client.call("refreshVersionFamilies");
 		},
@@ -1018,10 +1019,6 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		send: sendToMainWindow,
 		openExternal: (url) => shell.openExternal(url),
-		relaunch: () => {
-			app.relaunch();
-			app.exit(0);
-		},
 		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
 		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
 		probeFullDiskAccess: () => probeFullDiskAccess(home),

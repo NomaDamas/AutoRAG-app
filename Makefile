@@ -20,8 +20,8 @@ run:
 	bun scripts/run-dev-debug.mjs
 
 # Experience a brand-new user's first run on a disposable profile: one window,
-# no questions beyond Full Disk Access, one progress bar through scan →
-# keyword-only index → tour. Every run starts from scratch in a temp sandbox
+# zero questions up front, one progress bar through scan → keyword-only index →
+# tour → plans. Every run starts from scratch in a temp sandbox
 # (userData, AutoRAG config/home/workspace), the real `~/.autorag` and the app's
 # support dir stay untouched, and the sandbox is removed when the app exits —
 # Ctrl+C, SIGKILL of this make, or the next run's sweep if both the wrapper and

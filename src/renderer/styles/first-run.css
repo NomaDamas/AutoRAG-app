@@ -78,7 +78,6 @@ html[data-first-run="rise"] .desk {
 }
 
 .fr-root[data-screen="loading"],
-.fr-root[data-screen="permission"],
 .fr-root[data-screen="setup"],
 .fr-root[data-screen="ready"] {
 	pointer-events: auto;
@@ -187,42 +186,6 @@ html[data-first-run="rise"] .desk {
 	line-height: 1.6;
 	color: var(--fr-muted);
 	text-wrap: pretty;
-}
-
-/* --------------------------------------------------------------- permission */
-
-.fr-steps {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	margin: 26px 0 0;
-	padding: 16px 20px;
-	list-style: none;
-	text-align: left;
-	border: 1px solid var(--fr-card-border);
-	border-radius: 14px;
-	background: var(--fr-card);
-	box-shadow: var(--shadow-raised);
-	font-size: 14px;
-}
-
-.fr-steps li {
-	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.fr-step-n {
-	display: inline-grid;
-	place-items: center;
-	flex: none;
-	width: 22px;
-	height: 22px;
-	border-radius: 50%;
-	background: var(--accent-soft);
-	color: var(--accent-text);
-	font-size: 12px;
-	font-weight: 700;
 }
 
 .fr-actions {

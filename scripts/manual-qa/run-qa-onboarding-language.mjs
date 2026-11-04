@@ -4,11 +4,10 @@
 // language on `<html lang>`, the settings, and the screens' own text, with no
 // Korean left in the English/Japanese/Chinese screens and no raw key in Korean.
 //
-// The overlay is now one window with four screens reached without asking
-// anything: permission (macOS, while Full Disk Access is not granted) → setup
-// (the progress bar) → ready → tour. The lane checks the first screen it lands
-// on and stops the app before the first index finishes; the language is fixed at
-// launch, so one screen is enough.
+// The overlay is now one window with three screens reached without asking
+// anything: setup (the progress bar) → ready → tour. The lane checks the first
+// screen it lands on and stops the app before the first index finishes; the
+// language is fixed at launch, so one screen is enough.
 //
 // How the OS language is set depends on the OS:
 //  - macOS: the `-AppleLanguages` argument, which Electron reads like the real
@@ -67,9 +66,7 @@ for (const { os, lang: injected } of CASES) {
 		await page.waitForSelector(".fr-root[data-screen]", { timeout: 30_000 });
 		const screen = await screenOf(page);
 		const label = `${os}/${screen}`;
-		// The permission card carries prose only; setup and ready carry the h1.fr-title.
-		if (screen === "permission") check(`${label}: the permission card shows its copy`, (await page.locator(".fr-permission").innerText()).trim().length > 0);
-		else await page.waitForSelector(".fr-root h1.fr-title", { timeout: 60_000 });
+		await page.waitForSelector(".fr-root h1.fr-title", { timeout: 60_000 });
 		const htmlLang = await page.evaluate(() => document.documentElement.lang);
 		check(`${label}: <html lang> is ${lang}`, htmlLang === lang, htmlLang);
 		const stored = await page.evaluate(() => window.autorag.settings.get().then((settings) => settings.language));

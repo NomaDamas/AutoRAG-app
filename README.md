@@ -150,7 +150,7 @@ make run     # launch the dev app on free ports, debuggers enabled
 |---|---|
 | `make setup` | Verifies bun, Node 24+ and dupey, then installs dependencies |
 | `make run` | Starts the dev app; prints the renderer URL, main-process inspector, and renderer debug endpoint |
-| `make onboarding` | Experiences a brand-new user's first run (Full Disk Access → setup → tour → plans) in a disposable sandbox profile |
+| `make onboarding` | Experiences a brand-new user's first run (setup → tour → plans) in a disposable sandbox profile |
 | `bun run test` | Vitest unit tests |
 | `bun run typecheck` | TypeScript checks |
 | `bun run build` | Production build into `out/` |

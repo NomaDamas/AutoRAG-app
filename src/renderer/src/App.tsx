@@ -20,6 +20,7 @@ import { InspectorColumn } from "./components/InspectorColumn";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
+import { FullDiskAccessDialog } from "./components/primitives/FullDiskAccessDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
 import { MagicActionDialog } from "./components/MagicActionDialog";
@@ -226,12 +227,9 @@ export function App(): ReactElement {
 	const [firstRun, setFirstRun] = useState(() => autorag.onboarding.pending);
 	/** The layer covers the whole window, so the Finder behind it takes no input. */
 	const [firstRunCovered, setFirstRunCovered] = useState(firstRun);
+	const [tagColorsFdaOpen, setTagColorsFdaOpen] = useState(false);
 	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
-	const grantTagColors = useCallback(() => {
-		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
-		void autorag.onboarding.openFullDiskAccess().catch(reportTagError);
-		setToast(t("places.tagColorsGrantToast"));
-	}, [reportTagError, t]);
+	const grantTagColors = useCallback(() => setTagColorsFdaOpen(true), []);
 	const tagCatalog = useTagCatalogLoader(source, reportTagError);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
@@ -992,6 +990,16 @@ export function App(): ReactElement {
 				<MagicActionDialog />
 			</div>
 		</div>
+		{tagColorsFdaOpen ? (
+			<FullDiskAccessDialog
+				reason="tagColors"
+				onClose={() => setTagColorsFdaOpen(false)}
+				onConfirmed={() => {
+					setTagColorsFdaOpen(false);
+					tagCatalog.reload();
+				}}
+			/>
+		) : null}
 		{firstRun ? <FirstRun host={firstRunHost} onDone={endFirstRun} /> : null}
 		</>
 		</AutomationsContext>
