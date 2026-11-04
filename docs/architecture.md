@@ -595,6 +595,13 @@ resumes at the same step.
   `progress.jsonl`) reads first and applies its snapshot only if its run is still
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
+  The librarian writes `success` (or `failed`) for its own pass before `refresh()`
+  returns, and the batch-halving retry of a timed-out MinSync step (`index-refresh`
+  re-runs `syncMinSync()` after that write) never rewrites the file. A tick that
+  reads such a view therefore keeps the last measured snapshot, the phase and the
+  bar of the last running view, without its remaining time (`holdIndexProgress`),
+  instead of recomputing from a file that no longer describes the work; the bar
+  never moves backwards on the way to `finish()`.
   The numbers on the screen, in the sidebar activity entry and in Settings >
   Indexing are one `IndexProgressSnapshot` (`src/shared/index-progress-contract.ts`),
   computed by `computeIndexProgress` (`src/shared/index-progress.ts`) from what the

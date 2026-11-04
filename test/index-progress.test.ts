@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	computeIndexProgress,
 	EMPTY_RATE_HISTORY,
+	holdIndexProgress,
 	MIN_RATE_SPAN_MS,
 	RATE_WINDOW_MS,
 	STALL_AFTER_MS,
@@ -303,5 +304,27 @@ describe("activity and the stall warning", () => {
 		const { snapshot } = computeIndexProgress(embedInput({ now: T0, journal: journal({ committed: 300, modifiedAt: T0 - 15 * MIN }) }));
 		expect(snapshot.pulse.lastCompletedAt).toBe(new Date(T0 - 15 * MIN).toISOString());
 		expect(snapshot.pulse.stalled).toBe(true);
+	});
+});
+
+describe("holding the last snapshot", () => {
+	it("keeps where the run stands and drops the remaining time nobody is measuring any more", () => {
+		const estimated = observe(
+			[
+				[T0, 100],
+				[T0 + 2 * MIN, 300],
+			],
+			{ minsync: { total: 1_000 } },
+		).snapshot;
+		expect(estimated.etaState).toBe("estimated");
+		const held = holdIndexProgress(estimated);
+		expect(held).toMatchObject({ stage: "embed", fraction: estimated.fraction, indeterminate: estimated.indeterminate, etaState: "calculating", etaMinutes: null });
+		expect(held?.stages).toEqual(estimated.stages);
+	});
+
+	it("passes through what has nothing to project, and nothing at all", () => {
+		const finalizing = computeIndexProgress(embedInput({ phase: "jikji" })).snapshot;
+		expect(holdIndexProgress(finalizing)).toBe(finalizing);
+		expect(holdIndexProgress(null)).toBeNull();
 	});
 });

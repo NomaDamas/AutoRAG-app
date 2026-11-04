@@ -260,6 +260,15 @@ function nextHistory(history: RateHistory, stage: IndexStageId, handled: number,
 	};
 }
 
+/**
+ * The last snapshot carried over while nothing newer can be measured. Where the run stands is kept; the remaining time
+ * is not, because no rate is being observed any more.
+ */
+export function holdIndexProgress(snapshot: IndexProgressSnapshot | null): IndexProgressSnapshot | null {
+	if (snapshot === null || snapshot.etaState === "none") return snapshot;
+	return { ...snapshot, etaState: "calculating", etaMinutes: null };
+}
+
 /** The whole-run snapshot for one poll, and the history to hand back at the next. */
 export function computeIndexProgress(input: IndexProgressInput, history: RateHistory = EMPTY_RATE_HISTORY): IndexProgressResult {
 	const embedding = input.embedding !== false;

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, rm, truncate, writeFile } from "node:fs/promi
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ONBOARDING_CHANNELS, type DetectedSource, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
+import { ONBOARDING_CHANNELS, type DetectedSource, type IndexingStatus, type OnboardingDraft, type SourceDetection } from "../src/shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshResult } from "../src/shared/settings-contract";
 import { DEFAULT_SIDEBAR_SETTINGS } from "../src/shared/sidebar-contract";
 import { DEFAULT_CONTEXT_MENU_SETTINGS } from "../src/shared/context-menu-contract";
@@ -685,6 +685,114 @@ describe("createOnboardingService persistence", () => {
 			vi.useRealTimers();
 			service.dispose();
 		}
+	});
+
+	describe("when the librarian's file already reads success or failed but the refresh is still running", () => {
+		/** The state a run is in between the librarian's own end write and `refresh()` returning (a halved-batch MinSync retry, the last moments). */
+		async function runUntilMinsyncIsAtThree(): Promise<{
+			readonly service: ReturnType<typeof createOnboardingService>;
+			readonly gate: PromiseWithResolvers<ConfigRefreshResult>;
+			readonly sent: IndexingStatus[];
+			readonly write: (state: "running" | "success" | "failed", phase: string) => Promise<void>;
+			readonly tick: () => Promise<IndexingStatus>;
+		}> {
+			const directory = await workDir();
+			const gate = Promise.withResolvers<ConfigRefreshResult>();
+			const sent: IndexingStatus[] = [];
+			const service = createOnboardingService({
+				...makeDeps(directory),
+				refresh: () => gate.promise,
+				folderTotals: () => 10,
+				send: (channel, payload) => {
+					if (channel === ONBOARDING_CHANNELS.indexProgress) sent.push(payload as IndexingStatus);
+				},
+			});
+			await mkdir(join(directory, ".autorag"), { recursive: true });
+			const startedAt = new Date().toISOString();
+			let revision = 0;
+			const write = async (state: "running" | "success" | "failed", phase: string): Promise<void> => {
+				// The poll skips a file whose mtime and size did not change; make sure each write is a change.
+				await new Promise((resolve) => setTimeout(resolve, 15));
+				revision += 1;
+				await writeFile(
+					join(directory, ".autorag", "refresh-progress.json"),
+					JSON.stringify({
+						version: 1,
+						runId: "r1",
+						pid: process.pid,
+						state,
+						phase,
+						startedAt,
+						updatedAt: new Date(Date.parse(startedAt) + revision * 1_000).toISOString(),
+						sourceFiles: { total: 10 },
+						parsedCounts: { scanned: 10, written: 10, deleted: 0, skipped: 0 },
+						minsync: { total: 10, synced: 3 },
+					}),
+					"utf8",
+				);
+			};
+			const tick = async (): Promise<IndexingStatus> => {
+				vi.advanceTimersByTime(1_000);
+				await flush();
+				return service.indexStatus();
+			};
+			await write("running", "minsync");
+			vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+			await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free" });
+			const running = await tick();
+			expect(running).toMatchObject({ state: "running", phase: "minsync", detail: { stage: "embed" } });
+			expect(running.progress).toBeCloseTo(40 + 50 * 0.3, 5);
+			return { service, gate, sent, write, tick };
+		}
+
+		it("keeps the stage and the bar through the batch-halving retry instead of dropping to 0% and discovery", async () => {
+			const { service, gate, write, tick } = await runUntilMinsyncIsAtThree();
+			try {
+				// The first MinSync pass timed out on some files: the librarian wrote success, then `index-refresh` halves the batch and
+				// calls `syncMinSync()` again, which never rewrites the file.
+				await write("success", "finalizing");
+				for (const label of ["first poll", "second poll"]) {
+					const held = await tick();
+					expect(held, label).toMatchObject({ state: "running", phase: "minsync", processedFiles: 10, totalFiles: 10 });
+					expect(held.detail?.stage, label).toBe("embed");
+					expect(held.progress, label).toBeCloseTo(55, 5);
+					// No rate is observed any more, so no remaining time is promised.
+					expect(held.remainingMinutes, label).toBeNull();
+					expect(held.detail?.etaState, label).toBe("calculating");
+				}
+				// A failed write (the refresh is about to reject) holds the same way until `finish()` records the failure.
+				await write("failed", "minsync");
+				const failedView = await tick();
+				expect(failedView).toMatchObject({ state: "running", phase: "minsync", detail: { stage: "embed" } });
+				expect(failedView.progress).toBeCloseTo(55, 5);
+
+				gate.resolve({ ok: true, methods: [], scanned: 10, written: 10, deleted: 0, skipped: 0, diagnostics: [], error: null });
+				for (let tries = 0; tries < 50 && service.isIndexing(); tries += 1) await flush();
+				expect(await service.indexStatus()).toMatchObject({ state: "success", progress: 100, detail: null });
+			} finally {
+				vi.useRealTimers();
+				service.dispose();
+			}
+		});
+
+		it("never publishes a lower bar on the way to the end of a run", async () => {
+			const { service, gate, sent, write } = await runUntilMinsyncIsAtThree();
+			try {
+				// The normal end: the librarian writes success, and the result arrives before the next poll. The settle step polls once
+				// more on its own; that poll reads the success file.
+				await write("success", "finalizing");
+				gate.resolve({ ok: true, methods: [], scanned: 10, written: 10, deleted: 0, skipped: 0, diagnostics: [], error: null });
+				for (let tries = 0; tries < 50 && service.isIndexing(); tries += 1) await flush();
+				const bars = sent.map((status) => status.progress);
+				expect(bars.at(-1)).toBe(100);
+				expect(bars.some((bar) => bar >= 55)).toBe(true);
+				const firstMeasured = bars.findIndex((bar) => bar >= 55);
+				expect(bars.slice(firstMeasured).every((bar, index, rest) => index === 0 || bar >= (rest[index - 1] ?? 0))).toBe(true);
+			} finally {
+				vi.useRealTimers();
+				service.dispose();
+			}
+		});
 	});
 
 	it("ignores the progress file an earlier run left behind", async () => {

@@ -31,6 +31,7 @@ import {
 import type { AppSettings, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { tByName, t } from "../shared/i18n/core";
+import { holdIndexProgress } from "../shared/index-progress";
 import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
 import { parseRefreshProgress, type ProgressView } from "./index-activity";
@@ -464,7 +465,8 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const startedAtMs = status.startedAt === null ? 0 : Date.parse(status.startedAt);
 			if (view !== null && !(Date.parse(view.startedAt) < startedAtMs - 5_000)) {
 				refreshView = view;
-				phase = toIndexingPhase(view.phase) ?? phase;
+				// A view that reads success or failed does not name a phase of the work still going on (see `held` below).
+				if (view.state === "running") phase = toIndexingPhase(view.phase) ?? phase;
 				inspectStage = view.counts !== null;
 			}
 		}
@@ -478,7 +480,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		}
 
 		const expectedFiles = Math.max(0, deps.folderTotals(selectedFolders) - excludedFiles);
-		const detail = tracker.poll(workspacePath, refreshView, { embedding: !keywordOnly, parseFile: parsedSnapshot.recentFile });
+		// The librarian marks its own pass `success` (or `failed`) before this refresh returns: the batch-halving retry of a
+		// timed-out MinSync step re-runs after that write and never touches the file again, and the last moments before the
+		// result arrives look the same. The file then says nothing newer than what the last running view measured, so the
+		// screen keeps that instead of falling back to 0% and "discover"; `finish()` writes the end state.
+		const held = refreshView !== null && refreshView.state !== "running";
+		const detail = held ? holdIndexProgress(status.detail) : tracker.poll(workspacePath, refreshView, { embedding: !keywordOnly, parseFile: parsedSnapshot.recentFile });
 		const parse = detail?.stages.find((stage) => stage.id === "parse");
 		// One unit for both numbers: the librarian's own file count. The pre-scan count is only what the folders were expected to hold.
 		const totalFiles = parse?.counts?.total ?? expectedFiles;
