@@ -324,6 +324,8 @@
     "steerSend": "検索を修正",
     "voiceStart": "音声で入力",
     "voiceStop": "録音を終了して文字起こし",
+    "voiceCancel": "録音をキャンセル",
+    "voiceSend": "録音を終了して送信",
     "voiceTranscribing": "文字起こし中…",
     "voiceNoSpeech": "音声が聞き取れませんでした。もう一度お話しください。",
     "voiceUnavailable": "このデバイスではマイクを使用できません。",

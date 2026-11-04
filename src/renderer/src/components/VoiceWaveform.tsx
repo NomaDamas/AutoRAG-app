@@ -1,10 +1,30 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
+import { cn } from "../lib/cn";
 
-const BAR_COUNT = 13;
-const MIN_BAR_PX = 3;
-const MAX_BAR_PX = 16;
+const BAR_WIDTH_PX = 2;
+const BAR_GAP_PX = 3;
+const DEFAULT_SLOTS = 72;
+const MIN_SLOTS = 24;
+const MAX_SLOTS = 180;
+const DOT_PX = 2;
+const MIN_SPEECH_PX = 4;
+const MAX_SPEECH_PX = 22;
 const SAMPLE_INTERVAL_MS = 45;
-const INITIAL_BARS: readonly number[] = Array.from({ length: BAR_COUNT }, () => 0);
+
+/** Number of 2px waveform slots that fit across `widthPx`. */
+export function waveformSlotCount(widthPx: number): number {
+	if (!Number.isFinite(widthPx) || widthPx <= 0) return DEFAULT_SLOTS;
+	const count = Math.floor((widthPx + BAR_GAP_PX) / (BAR_WIDTH_PX + BAR_GAP_PX));
+	return Math.max(MIN_SLOTS, Math.min(MAX_SLOTS, count));
+}
+
+/** Resizes the level buffer while keeping the newest samples on the right. */
+export function resizeWaveformBars(bars: readonly number[], count: number): readonly number[] {
+	if (count <= 0) return [];
+	if (bars.length === count) return bars;
+	if (bars.length > count) return bars.slice(bars.length - count);
+	return [...Array.from({ length: count - bars.length }, () => 0), ...bars];
+}
 
 /**
  * Turns a short window of floating-point PCM samples (-1..1) into a 0..1 bar
@@ -33,16 +53,31 @@ export function pushWaveformBar(previous: readonly number[], next: number): read
 }
 
 /**
- * Live scrolling bar waveform fed directly by the active microphone stream.
- * Renders minimum-height dots before the stream opens or during silence, and
- * closes its own `AudioContext` as soon as listening ends.
+ * Full-width neutral voice track: a fine baseline of muted 2px dots on silence
+ * that rises into monochrome vertical bars as microphone audio streams in.
+ * Closes its own `AudioContext` as soon as listening stops.
  */
 export function VoiceWaveform({ stream }: { readonly stream: MediaStream | null }): ReactElement {
-	const [bars, setBars] = useState<readonly number[]>(INITIAL_BARS);
+	const trackRef = useRef<HTMLDivElement | null>(null);
+	const [bars, setBars] = useState<readonly number[]>(() => Array.from({ length: DEFAULT_SLOTS }, () => 0));
+
+	useEffect(() => {
+		const el = trackRef.current;
+		if (el === null) return;
+		const syncWidth = (): void => {
+			const count = waveformSlotCount(el.clientWidth);
+			setBars((prev) => resizeWaveformBars(prev, count));
+		};
+		syncWidth();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(syncWidth);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
 
 	useEffect(() => {
 		if (stream === null || typeof AudioContext === "undefined") {
-			setBars(INITIAL_BARS);
+			setBars((prev) => Array.from({ length: prev.length }, () => 0));
 			return;
 		}
 		const ctx = new AudioContext();
@@ -78,18 +113,22 @@ export function VoiceWaveform({ stream }: { readonly stream: MediaStream | null 
 	}, [stream]);
 
 	return (
-		<span className="voice-waveform flex h-16 items-center gap-[2px]" aria-hidden="true">
+		<div ref={trackRef} className="voice-waveform flex h-24 w-full min-w-0 items-center justify-between gap-[3px] overflow-hidden" aria-hidden="true">
 			{bars.map((level, index) => {
-				const height = Math.round(MIN_BAR_PX + level * (MAX_BAR_PX - MIN_BAR_PX));
+				const speaking = level > 0.01;
+				const height = speaking ? Math.round(MIN_SPEECH_PX + level * (MAX_SPEECH_PX - MIN_SPEECH_PX)) : DOT_PX;
 				return (
 					<span
 						key={index}
 						data-waveform-bar=""
-						className="w-[2px] flex-none rounded-full bg-current transition-[height] duration-75 ease-out"
+						className={cn(
+							"w-[2px] flex-none rounded-full transition-[height,background-color,opacity] duration-75 ease-out",
+							speaking ? "bg-ink opacity-90" : "bg-ink-faint opacity-55",
+						)}
 						style={{ height: `${height}px` }}
 					/>
 				);
 			})}
-		</span>
+		</div>
 	);
 }

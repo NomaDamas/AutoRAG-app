@@ -2,7 +2,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VoiceWaveform, pushWaveformBar, waveformLevel } from "../src/renderer/src/components/VoiceWaveform";
+import {
+	VoiceWaveform,
+	pushWaveformBar,
+	resizeWaveformBars,
+	waveformLevel,
+	waveformSlotCount,
+} from "../src/renderer/src/components/VoiceWaveform";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
@@ -22,9 +28,16 @@ describe("waveformLevel", () => {
 	});
 });
 
-describe("pushWaveformBar", () => {
+describe("pushWaveformBar & resizeWaveformBars", () => {
 	it("shifts bars left and appends the latest level at fixed length", () => {
 		expect(pushWaveformBar([0.1, 0.2, 0.3], 0.8)).toEqual([0.2, 0.3, 0.8]);
+	});
+
+	it("computes slot count from container width and preserves recent history on resize", () => {
+		expect(waveformSlotCount(0)).toBeGreaterThanOrEqual(40);
+		expect(waveformSlotCount(500)).toBeGreaterThan(waveformSlotCount(250));
+		expect(resizeWaveformBars([0.4, 0.9], 4)).toEqual([0, 0, 0.4, 0.9]);
+		expect(resizeWaveformBars([0.1, 0.2, 0.4, 0.9], 2)).toEqual([0.4, 0.9]);
 	});
 });
 
@@ -82,14 +95,15 @@ describe("VoiceWaveform", () => {
 		vi.unstubAllGlobals();
 	});
 
-	it("grows the live waveform bars from microphone audio and closes the AudioContext on unmount", () => {
+	it("renders a full-width dotted baseline on silence, grows neutral bars on speech without red styling, and closes AudioContext", () => {
 		const stream = {} as MediaStream;
 		sampleAmplitude = 0;
 		act(() => root.render(<VoiceWaveform stream={stream} />));
 
-		const barsBefore = [...host.querySelectorAll<HTMLElement>("[data-waveform-bar]")].map((el) => Number.parseFloat(el.style.height));
-		expect(barsBefore.length).toBeGreaterThanOrEqual(9);
-		const quietMax = Math.max(...barsBefore);
+		const initialBars = [...host.querySelectorAll<HTMLElement>("[data-waveform-bar]")];
+		expect(initialBars.length).toBeGreaterThanOrEqual(40);
+		expect(initialBars.every((el) => Number.parseFloat(el.style.height) === 2)).toBe(true);
+		expect(host.innerHTML).not.toContain("danger");
 
 		sampleAmplitude = 0.35;
 		act(() => {
@@ -99,8 +113,9 @@ describe("VoiceWaveform", () => {
 			}
 		});
 
-		const barsAfter = [...host.querySelectorAll<HTMLElement>("[data-waveform-bar]")].map((el) => Number.parseFloat(el.style.height));
-		expect(Math.max(...barsAfter)).toBeGreaterThan(quietMax);
+		const heightsAfter = [...host.querySelectorAll<HTMLElement>("[data-waveform-bar]")].map((el) => Number.parseFloat(el.style.height));
+		expect(Math.max(...heightsAfter)).toBeGreaterThan(10);
+		expect(Math.min(...heightsAfter)).toBe(2);
 
 		act(() => root.unmount());
 		expect(closedContexts).toBe(1);

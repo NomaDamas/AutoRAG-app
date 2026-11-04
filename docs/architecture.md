@@ -1235,10 +1235,12 @@ reads and sends it.
     microphone is now allowed it closes and the recording the person asked for starts; if not it says the
     microphone is still off. "Not now" and Esc close it without recording.
 - **Recording.** `useVoiceInput` (`MediaRecorder`, `audio/webm;codecs=opus` first) holds the microphone
-  only while recording and releases it on stop, cancel, error and unmount. While listening, the
-  microphone button turns into `VoiceWaveform` (`AudioContext` + `AnalyserNode`), drawing a live
-  scrolling bar waveform from the stream with no timer count, and closes its `AudioContext` as soon as
-  listening ends. Other errors are shown as a line under the field, not as the run's error card.
+  only while recording and releases it on stop, cancel, error and unmount. While listening or
+  transcribing, the composer collapses from any multi-line draft height into a single-row neutral pill
+  (`voice-bar`): left cancel (`×`), full-width `VoiceWaveform` (dotted baseline on silence, monochrome
+  bars fed by `AudioContext` + `AnalyserNode`), stop-to-draft (`■`) and stop-and-send (`↑`), followed by
+  a centered `받아쓰는 중…` / `Transcribing…` indicator before expanding back to the full draft height.
+  Other errors are shown as a line under the field, not as the run's error card.
 - **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`,
   `openMicrophoneSettings()`. All are native-only in a remote browser session.
 

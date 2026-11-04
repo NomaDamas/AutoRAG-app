@@ -11,8 +11,8 @@ export interface VoiceInputOptions {
 	readonly voice: VoiceBridge;
 	/** The Interface language: the language the speech is recognized in. */
 	readonly language: AppSettings["language"];
-	/** Called with the sentence that was heard (never empty). */
-	readonly onTranscript: (text: string) => void;
+	/** Called with the sentence that was heard (never empty); `submit` is true when stopped via the send button. */
+	readonly onTranscript: (text: string, submit?: boolean) => void;
 	/** Called with a message to show; the hook is back at `idle` when it fires. */
 	readonly onError: (message: string) => void;
 }
@@ -32,6 +32,8 @@ export interface VoiceInput {
 	readonly permission: VoicePermission;
 	/** Starts recording; while recording, ends it and sends the clip; while transcribing, does nothing. */
 	toggle(): void;
+	/** Ends a recording, transcribes it, and asks the caller to submit immediately. */
+	stopAndSend(): void;
 	/** Ends a recording without sending it. */
 	cancel(): void;
 	/** The dialog's main button: opens the OS microphone settings and waits for the person to come back. */
@@ -55,6 +57,8 @@ interface Recording {
 	readonly mimeType: string;
 	/** True once the person cancelled: the clip is dropped instead of sent. */
 	cancelled: boolean;
+	/** True when stopped with the direct-send button rather than stop-to-draft. */
+	submit: boolean;
 }
 
 /**
@@ -68,6 +72,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 	const phaseRef = useRef<VoicePhase>("idle");
 	const recordingRef = useRef<Recording | null>(null);
 	const timerRef = useRef<number | undefined>(undefined);
+	const startingRef = useRef(false);
 	/** Newest options without re-creating the handlers: the recorder's callbacks outlive a render. */
 	const optionsRef = useRef(options);
 	optionsRef.current = options;
@@ -109,7 +114,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 				return;
 			}
 			move("idle");
-			onTranscript(text);
+			onTranscript(text, recording.submit);
 		} catch (error) {
 			if (mountedRef.current) fail(t("aiSearch.voiceFailed", { message: conversionErrorMessage(error) }));
 		}
@@ -130,20 +135,23 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 	}
 
 	async function start(): Promise<void> {
-		move("listening");
+		startingRef.current = true;
 		const { voice } = optionsRef.current;
 		let readiness: VoiceReadiness;
 		try {
 			readiness = await voice.prepare();
 		} catch {
+			startingRef.current = false;
 			fail(t("aiSearch.voiceUnavailable"));
 			return;
 		}
 		if (readiness === "signed-out") {
+			startingRef.current = false;
 			fail(t("main.account.signInFirst"));
 			return;
 		}
 		if (readiness === "microphone-denied") {
+			startingRef.current = false;
 			move("idle");
 			showPermission("needed");
 			return;
@@ -152,25 +160,28 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		try {
 			liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 		} catch (error) {
+			startingRef.current = false;
 			move("idle");
 			// The OS refused the stream although its switch looked on (a policy, or a choice made since): the same way out.
 			if (error instanceof Error && (error.name === "NotAllowedError" || error.name === "SecurityError")) showPermission("needed");
 			else optionsRef.current.onError(t("aiSearch.voiceUnavailable"));
 			return;
 		}
+		startingRef.current = false;
 		if (!mountedRef.current) {
 			for (const track of liveStream.getTracks()) track.stop();
 			return;
 		}
 		const mimeType = recorderMimeType();
 		const recorder = new MediaRecorder(liveStream, mimeType === undefined ? undefined : { mimeType });
-		const recording: Recording = { recorder, stream: liveStream, chunks: [], mimeType: recorder.mimeType || mimeType || "audio/webm", cancelled: false };
+		const recording: Recording = { recorder, stream: liveStream, chunks: [], mimeType: recorder.mimeType || mimeType || "audio/webm", cancelled: false, submit: false };
 		recorder.ondataavailable = (event) => {
 			if (event.data.size > 0) recording.chunks.push(event.data);
 		};
 		recorder.onstop = () => finish(recording);
 		recordingRef.current = recording;
 		setStream(liveStream);
+		move("listening");
 		recorder.start();
 		// Stop a few seconds before the service's 60 s limit so a long dictation is sent instead of refused.
 		timerRef.current = window.setTimeout(() => {
@@ -179,10 +190,9 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 	}
 
 	function toggle(): void {
-		if (phaseRef.current === "transcribing") return;
+		if (phaseRef.current === "transcribing" || startingRef.current) return;
 		const recording = recordingRef.current;
 		if (phaseRef.current === "listening") {
-			// Between the button press and the stream opening there is no recorder yet: a second press ends nothing.
 			if (recording !== null && recording.recorder.state === "recording") recording.recorder.stop();
 			return;
 		}
@@ -190,6 +200,13 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		void start();
 	}
 
+
+	function stopAndSend(): void {
+		const recording = recordingRef.current;
+		if (phaseRef.current !== "listening" || recording === null || recording.recorder.state !== "recording") return;
+		recording.submit = true;
+		recording.recorder.stop();
+	}
 	function cancel(): void {
 		const recording = recordingRef.current;
 		if (recording === null) return;
@@ -238,5 +255,5 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		void optionsRef.current.voice.openMicrophoneSettings().catch(() => showPermission("still-denied"));
 	}
 
-	return { phase, stream, permission, toggle, cancel, openSettings, dismissPermission: () => showPermission(null) };
+	return { phase, stream, permission, toggle, stopAndSend, cancel, openSettings, dismissPermission: () => showPermission(null) };
 }

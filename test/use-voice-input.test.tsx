@@ -47,6 +47,7 @@ let host: HTMLDivElement;
 let root: Root;
 let input: VoiceInput;
 let transcripts: string[];
+let submitFlags: boolean[];
 let errors: string[];
 let bridge: VoiceBridge;
 let stream: FakeStream;
@@ -54,7 +55,15 @@ let getUserMedia: Mock<() => Promise<FakeStream>>;
 let transcribed: VoiceClip[];
 
 function Harness({ language = "ko" as const }: { readonly language?: "ko" | "en" }): ReactElement {
-	input = useVoiceInput({ voice: bridge, language, onTranscript: (text) => transcripts.push(text), onError: (message) => errors.push(message) });
+	input = useVoiceInput({
+		voice: bridge,
+		language,
+		onTranscript: (text, submit) => {
+			transcripts.push(text);
+			submitFlags.push(submit === true);
+		},
+		onError: (message) => errors.push(message),
+	});
 	return <span>{input.phase}</span>;
 }
 
@@ -70,6 +79,7 @@ beforeEach(() => {
 	vi.useFakeTimers();
 	setAppLanguage("en");
 	transcripts = [];
+	submitFlags = [];
 	errors = [];
 	transcribed = [];
 	stream = new FakeStream();
@@ -298,5 +308,20 @@ describe("useVoiceInput", () => {
 		expect(stream.stopped).toBe(2);
 		expect(bridge.transcribe).not.toHaveBeenCalled();
 		root = createRoot(host);
+	});
+
+	it("distinguishes stopping into the draft from stopping to send immediately", async () => {
+		await mount();
+		await act(async () => input.toggle());
+		await flush();
+		await act(async () => input.toggle());
+		await flush();
+
+		await act(async () => input.toggle());
+		await flush();
+		await act(async () => input.stopAndSend());
+		await flush();
+
+		expect(submitFlags).toEqual([false, true]);
 	});
 });

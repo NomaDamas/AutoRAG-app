@@ -324,6 +324,8 @@
     "steerSend": "검색 바로잡기",
     "voiceStart": "음성으로 입력",
     "voiceStop": "녹음 끝내고 받아쓰기",
+    "voiceCancel": "녹음 취소",
+    "voiceSend": "녹음 끝내고 바로 보내기",
     "voiceTranscribing": "받아쓰는 중…",
     "voiceNoSpeech": "말소리를 듣지 못했어요. 다시 말해 주세요.",
     "voiceUnavailable": "이 기기에서는 마이크를 쓸 수 없어요.",
