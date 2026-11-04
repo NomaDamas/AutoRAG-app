@@ -35,6 +35,7 @@ import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../stat
 import { appendTranscript } from "../../../shared/voice-contract";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
+import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
@@ -1107,12 +1108,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<div className="composer-toolbar flex items-center justify-between gap-8">
 							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
 							<div className="composer-actions flex items-center gap-7">
-								{voice.phase === "listening" ? (
-									<span className="voice-timer flex items-center gap-5 text-badge text-danger-text select-none" role="status" aria-live="polite">
-										<span className="size-6 flex-none rounded-full bg-danger-text animate-[pulseDot_1.4s_ease-in-out_infinite]" aria-hidden="true" />
-										{t("aiSearch.voiceListening", { seconds: voice.seconds })}
-									</span>
-								) : voice.phase === "transcribing" ? (
+								{voice.phase === "transcribing" ? (
 									<span className="voice-timer text-badge text-ink-muted select-none" role="status" aria-live="polite">
 										{t("aiSearch.voiceTranscribing")}
 									</span>
@@ -1120,8 +1116,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								<button
 									type="button"
 									className={cn(
-										"voice-button flex size-32 flex-none items-center justify-center rounded-full border-0 cursor-pointer transition-colors duration-(--dur-color) ease-out disabled:cursor-default disabled:opacity-50",
-										voice.phase === "listening" ? "bg-danger-text text-on-accent" : "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",
+										"voice-button flex h-32 flex-none items-center justify-center rounded-full cursor-pointer transition-colors duration-(--dur-color) ease-out disabled:cursor-default disabled:opacity-50",
+										voice.phase === "listening"
+											? "border border-danger-border bg-danger-bg-soft px-10 text-danger-text hover:bg-danger-bg"
+											: "size-32 border-0 bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",
 									)}
 									title={voice.phase === "listening" ? t("aiSearch.voiceStop") : t("aiSearch.voiceStart")}
 									aria-label={voice.phase === "listening" ? t("aiSearch.voiceStop") : t("aiSearch.voiceStart")}
@@ -1132,7 +1130,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										voice.toggle();
 									}}
 								>
-									<MicIcon />
+									{voice.phase === "listening" ? <VoiceWaveform stream={voice.stream} /> : <MicIcon />}
 								</button>
 								{searching && query.trim().length > 0 ? (
 									<button

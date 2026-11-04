@@ -27,8 +27,8 @@ export type VoicePermission = "needed" | "waiting" | "still-denied" | null;
 
 export interface VoiceInput {
 	readonly phase: VoicePhase;
-	/** Whole seconds recorded so far while `listening`. */
-	readonly seconds: number;
+	/** Live microphone stream while `listening` (null before `getUserMedia` resolves and after stopping). */
+	readonly stream: MediaStream | null;
 	readonly permission: VoicePermission;
 	/** Starts recording; while recording, ends it and sends the clip; while transcribing, does nothing. */
 	toggle(): void;
@@ -64,7 +64,7 @@ interface Recording {
  */
 export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 	const [phase, setPhase] = useState<VoicePhase>("idle");
-	const [seconds, setSeconds] = useState(0);
+	const [stream, setStream] = useState<MediaStream | null>(null);
 	const phaseRef = useRef<VoicePhase>("idle");
 	const recordingRef = useRef<Recording | null>(null);
 	const timerRef = useRef<number | undefined>(undefined);
@@ -88,7 +88,7 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 	}
 
 	function clearTimer(): void {
-		window.clearInterval(timerRef.current);
+		window.clearTimeout(timerRef.current);
 		timerRef.current = undefined;
 	}
 
@@ -119,18 +119,18 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		clearTimer();
 		recordingRef.current = null;
 		for (const track of recording.stream.getTracks()) track.stop();
-		if (recording.cancelled || !mountedRef.current) {
-			if (mountedRef.current) move("idle");
+		if (!mountedRef.current) return;
+		setStream(null);
+		if (recording.cancelled) {
+			move("idle");
 			return;
 		}
-		setSeconds(0);
 		move("transcribing");
 		void send(recording);
 	}
 
 	async function start(): Promise<void> {
 		move("listening");
-		setSeconds(0);
 		const { voice } = optionsRef.current;
 		let readiness: VoiceReadiness;
 		try {
@@ -148,9 +148,9 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 			showPermission("needed");
 			return;
 		}
-		let stream: MediaStream;
+		let liveStream: MediaStream;
 		try {
-			stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+			liveStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 		} catch (error) {
 			move("idle");
 			// The OS refused the stream although its switch looked on (a policy, or a choice made since): the same way out.
@@ -159,25 +159,23 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 			return;
 		}
 		if (!mountedRef.current) {
-			for (const track of stream.getTracks()) track.stop();
+			for (const track of liveStream.getTracks()) track.stop();
 			return;
 		}
 		const mimeType = recorderMimeType();
-		const recorder = new MediaRecorder(stream, mimeType === undefined ? undefined : { mimeType });
-		const recording: Recording = { recorder, stream, chunks: [], mimeType: recorder.mimeType || mimeType || "audio/webm", cancelled: false };
+		const recorder = new MediaRecorder(liveStream, mimeType === undefined ? undefined : { mimeType });
+		const recording: Recording = { recorder, stream: liveStream, chunks: [], mimeType: recorder.mimeType || mimeType || "audio/webm", cancelled: false };
 		recorder.ondataavailable = (event) => {
 			if (event.data.size > 0) recording.chunks.push(event.data);
 		};
 		recorder.onstop = () => finish(recording);
 		recordingRef.current = recording;
+		setStream(liveStream);
 		recorder.start();
-		const startedAt = Date.now();
-		timerRef.current = window.setInterval(() => {
-			const elapsed = Math.floor((Date.now() - startedAt) / 1000);
-			setSeconds(elapsed);
-			// Stop a few seconds before the service's 60 s limit so a long dictation is sent instead of refused.
-			if (elapsed >= VOICE_MAX_SECONDS && recorder.state === "recording") recorder.stop();
-		}, 250);
+		// Stop a few seconds before the service's 60 s limit so a long dictation is sent instead of refused.
+		timerRef.current = window.setTimeout(() => {
+			if (recorder.state === "recording") recorder.stop();
+		}, VOICE_MAX_SECONDS * 1000);
 	}
 
 	function toggle(): void {
@@ -240,5 +238,5 @@ export function useVoiceInput(options: VoiceInputOptions): VoiceInput {
 		void optionsRef.current.voice.openMicrophoneSettings().catch(() => showPermission("still-denied"));
 	}
 
-	return { phase, seconds, permission, toggle, cancel, openSettings, dismissPermission: () => showPermission(null) };
+	return { phase, stream, permission, toggle, cancel, openSettings, dismissPermission: () => showPermission(null) };
 }

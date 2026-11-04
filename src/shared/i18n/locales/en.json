@@ -324,7 +324,6 @@
     "steerSend": "Correct the search",
     "voiceStart": "Dictate with your voice",
     "voiceStop": "Stop recording and transcribe",
-    "voiceListening": "Listening… {{seconds}}s",
     "voiceTranscribing": "Transcribing…",
     "voiceNoSpeech": "No speech was heard. Please try again.",
     "voiceUnavailable": "No microphone is available on this device.",

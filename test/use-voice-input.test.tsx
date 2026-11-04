@@ -126,12 +126,15 @@ describe("useVoiceInput", () => {
 		expect(input.phase).toBe("idle");
 	});
 
-	it("counts the seconds while listening", async () => {
+	it("exposes the live microphone stream only while listening so the waveform can read it", async () => {
 		await mount();
+		expect(input.stream).toBeNull();
 		await act(async () => input.toggle());
 		await flush();
-		await act(async () => vi.advanceTimersByTime(3000));
-		expect(input.seconds).toBe(3);
+		expect(input.stream).toBe(stream);
+		await act(async () => input.toggle());
+		await flush();
+		expect(input.stream).toBeNull();
 	});
 
 	it("stops by itself a few seconds before the service's limit and still transcribes", async () => {
