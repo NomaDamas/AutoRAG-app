@@ -2234,6 +2234,7 @@
         "rename": "이름 변경",
         "copyPath": "경로 복사",
         "newFolder": "새 폴더",
+        "pinToSidebar": "사이드바에 고정 / 제거",
         "extract": "압축 해제",
         "compress": "압축 (ZIP)",
         "compress7z": "7z로 압축",

@@ -352,11 +352,10 @@ export function buildContextMenu(input: ContextMenuInput): FinderMenuEntry[] {
 		if (input.canCreateFolder && !hiddenItems.has("builtin:newFolder")) {
 			rowActions.push(item("newFolder", t("contextMenu.newFolder")));
 		}
-		if (isFolder && !multi && input.sidebarPin === "pin") {
-			rowActions.push(item("pinToSidebar", t("contextMenu.pinToSidebar")));
-		}
-		if (isFolder && !multi && input.sidebarPin === "unpin") {
-			rowActions.push(item("unpinFromSidebar", t("contextMenu.unpinFromSidebar")));
+		// One hide id covers both labels: 사이드바에 고정 and 사이드바에서 제거 are the same row of the menu.
+		if (isFolder && !multi && !hiddenItems.has("builtin:pinToSidebar")) {
+			if (input.sidebarPin === "pin") rowActions.push(item("pinToSidebar", t("contextMenu.pinToSidebar")));
+			if (input.sidebarPin === "unpin") rowActions.push(item("unpinFromSidebar", t("contextMenu.unpinFromSidebar")));
 		}
 		if (input.capabilities.archive) {
 			if (!multi && archiveFormatOf(input.target.name) !== null && !hiddenItems.has("builtin:extract")) {

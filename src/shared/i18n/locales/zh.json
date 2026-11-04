@@ -2234,6 +2234,7 @@
         "rename": "重命名",
         "copyPath": "复制路径",
         "newFolder": "新建文件夹",
+        "pinToSidebar": "固定到边栏 / 从边栏中移除",
         "extract": "解压缩",
         "compress": "压缩 (ZIP)",
         "compress7z": "压缩为 7z",

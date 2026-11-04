@@ -2234,6 +2234,7 @@
         "rename": "名称変更",
         "copyPath": "パスをコピー",
         "newFolder": "新規フォルダ",
+        "pinToSidebar": "サイドバーに固定 / 削除",
         "extract": "展開",
         "compress": "圧縮 (ZIP)",
         "compress7z": "7zで圧縮",

@@ -7,6 +7,7 @@ import {
 	menuPlacement,
 } from "../src/renderer/src/state/context-menu";
 import type { ContextMenuInput, FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu, FinderMenuSubmenuItem } from "../src/renderer/src/state/context-menu";
+import { normalizeContextMenuSettings } from "../src/shared/context-menu-contract";
 import { NEW_FILE_FORMATS } from "../src/shared/new-file-contract";
 import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
 
@@ -597,6 +598,33 @@ describe("buildContextMenu sidebar pin", () => {
 	it("keeps 사이드바에 고정 when the user hides 새 폴더", () => {
 		const hidden = { hiddenItems: ["builtin:newFolder" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
 		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: hidden })).toContain("pinToSidebar");
+	});
+
+	it("hides 사이드바에 고정 with its own id, leaving 새 폴더 and the rest of the section", () => {
+		const hidden = { hiddenItems: ["builtin:pinToSidebar" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		const menu = actions({ ...folder, sidebarPin: "pin", contextMenu: hidden });
+		expect(menu).not.toContain("pinToSidebar");
+		expect(menu).toContain("newFolder");
+		expect(menu).toContain("compress");
+	});
+
+	it("hides 사이드바에서 제거 with the same id as 사이드바에 고정", () => {
+		const hidden = { hiddenItems: ["builtin:pinToSidebar" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		expect(actions({ ...folder, sidebarPin: "unpin", contextMenu: hidden })).not.toContain("unpinFromSidebar");
+		const shown = { hiddenItems: ["builtin:newFolder" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		expect(actions({ ...folder, sidebarPin: "unpin", contextMenu: shown })).toContain("unpinFromSidebar");
+	});
+
+	it("still offers the pin once the user shows it again", () => {
+		const settings = normalizeContextMenuSettings({ hiddenItems: ["사이드바에 고정"] });
+		expect(settings.hiddenItems).toEqual(["builtin:pinToSidebar"]);
+		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: settings })).not.toContain("pinToSidebar");
+		const shown = normalizeContextMenuSettings({ ...settings, hiddenItems: [] });
+		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: shown })).toContain("pinToSidebar");
+	});
+
+	it("keeps 사이드바에서 제거 on a pinned sidebar row's own menu, which has no other item", () => {
+		expect(buildSidebarPinMenu().map((entry) => (entry.kind === "item" ? entry.action : entry.kind))).toEqual(["unpinFromSidebar"]);
 	});
 
 	it("labels the pinned row's own menu with its one action", () => {
