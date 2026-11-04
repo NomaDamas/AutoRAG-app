@@ -1022,6 +1022,7 @@ app.whenReady().then(async () => {
 		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
 		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
 		probeFullDiskAccess: () => probeFullDiskAccess(home),
+		stubIndex: !app.isPackaged && process.env.AUTORAG_ONBOARDING_SKIP_INDEX === "1",
 		onComplete: () => {
 			analytics.track("onboarding_completed", {});
 		},

@@ -200,6 +200,38 @@ describe("createFirstRunService run", () => {
 		const written = JSON.parse(await readFile(base.configPath, "utf8")) as { searchPaths: string[] };
 		expect(written.searchPaths).toEqual([join(base.home, "Desktop")]);
 	});
+
+	it("stubIndex walks every stage to ready and writes the keyword-only config without scanning or indexing", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const base = await makeDeps(directory);
+		const seen: SetupStatus[] = [];
+		let touched = false;
+		const service = createFirstRunService({
+			...base,
+			stubIndex: true,
+			stubStepDelayMs: 5,
+			send: (_channel, payload) => seen.push(payload as SetupStatus),
+			scanFolders: async () => {
+				touched = true;
+			},
+			refresh: async () => {
+				touched = true;
+				return OK;
+			},
+			refreshDuplicates: async () => {
+				touched = true;
+			},
+		});
+		await service.start();
+		const final = await waitForStage(service, "ready");
+		expect(touched).toBe(false);
+		expect(final.stage).toBe("ready");
+		expect(final.progress).toBe(100);
+		expect([...new Set(seen.map((entry) => entry.stage))]).toEqual(["scanning", "planning", "indexing", "preparing", "ready"]);
+		const written = JSON.parse(await readFile(base.configPath, "utf8")) as { appIndexing?: { semanticSearch?: boolean }; searchPaths?: string[] };
+		expect(written.appIndexing?.semanticSearch).toBe(false);
+		expect(written.searchPaths).toEqual([join(base.home, "Desktop")]);
+	});
 });
 
 describe("createFirstRunService complete", () => {

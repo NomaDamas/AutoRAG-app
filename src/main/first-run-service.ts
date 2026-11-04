@@ -63,6 +63,8 @@ const MAX_DOC_BYTES = 400_000;
 const MAX_DEMO_DOCS = 8;
 const EXCERPT_CHARS = 2_000;
 const MIN_EXCERPT_CHARS = 200;
+const STUB_STEP_DELAY_MS = 350;
+const STUB_FILE_TOTAL = 48;
 
 /** Extensions the tour's question should never be built from: source or configuration, not the person's own writing. */
 const SKIP_EXTENSIONS: Readonly<Record<string, true>> = {
@@ -178,6 +180,9 @@ export interface FirstRunServiceDeps {
 	readonly probeFullDiskAccess: () => Promise<boolean>;
 	readonly onComplete: () => void;
 	readonly now?: () => number;
+	/** Dev-only (`make onboarding-skip-index`): play through the setup bar in ~1.8 s without scanning or indexing. */
+	readonly stubIndex?: boolean;
+	readonly stubStepDelayMs?: number;
 }
 
 export interface FirstRunService {
@@ -763,6 +768,48 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		emitStatus();
 	}
 
+	async function runStubbed(): Promise<void> {
+		const pause = (): Promise<void> => {
+			const { promise, resolve } = Promise.withResolvers<void>();
+			setTimeout(resolve, deps.stubStepDelayMs ?? STUB_STEP_DELAY_MS);
+			return promise;
+		};
+		const folders = defaultFolders();
+		setStage("scanning", 8);
+		totalFiles = STUB_FILE_TOTAL;
+		emitStatus();
+		await pause();
+		setStage("planning", 18);
+		emitStatus();
+		await pause();
+		const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
+		const next = applyIndexingConfig({
+			raw,
+			folders,
+			excludePaths: [],
+			semanticSearch: false,
+			workspacePath: typeof raw.workspacePath !== "string" || raw.workspacePath === deps.cwd ? join(deps.env.AUTORAG_HOME?.trim() || join(deps.home, ".autorag"), "workspace") : null,
+		});
+		writeConfigObject(deps.configPath, next);
+		setStage("indexing", 52);
+		processedFiles = Math.round(STUB_FILE_TOTAL / 2);
+		remainingMinutes = 1;
+		emitStatus();
+		await pause();
+		setProgress(86);
+		processedFiles = STUB_FILE_TOTAL;
+		emitStatus();
+		await pause();
+		const finished = new Date(now()).toISOString();
+		stateFile = { ...stateFile, indexing: { startedAt: startedAt ?? finished, finishedAt: finished } };
+		void persist().catch(warnPersistFailed);
+		deps.recordIndex({ ok: true, error: null, diagnostics: [] });
+		setStage("preparing", 96);
+		remainingMinutes = null;
+		emitStatus();
+		await pause();
+	}
+
 	async function run(): Promise<void> {
 		startedAt = new Date(now()).toISOString();
 		finishedAt = null;
@@ -776,11 +823,15 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		remainingMinutes = null;
 		powerBlockerId = deps.startPowerSaveBlocker();
 		try {
-			const folders = await scanStage();
-			const exclusions = await planningStage(folders);
-			const result = await indexingStage(folders, exclusions);
-			if (!result.ok) return;
-			await preparingStage();
+			if (deps.stubIndex === true) {
+				await runStubbed();
+			} else {
+				const folders = await scanStage();
+				const exclusions = await planningStage(folders);
+				const result = await indexingStage(folders, exclusions);
+				if (!result.ok) return;
+				await preparingStage();
+			}
 			setStage("ready", 100);
 			progress = 100;
 			remainingMinutes = null;

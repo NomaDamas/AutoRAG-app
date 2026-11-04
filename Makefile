@@ -1,6 +1,6 @@
 # Dazzi developer entry points.
 
-.PHONY: setup run onboarding
+.PHONY: setup run onboarding onboarding-skip-index
 
 # Prepare a fresh clone for development: verify the toolchain (bun, Node 24+,
 # dupey), install dependencies (which clones and builds .upstream/autorag and
@@ -29,3 +29,10 @@ run:
 onboarding:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs
+
+# Same disposable first-run sandbox as `make onboarding`, with the setup stages
+# stubbed (~2 s) so you land straight on "모두 준비되었어요!" → tour → plans
+# without waiting for the real home-folder index.
+onboarding-skip-index:
+	bun scripts/setup.mjs --ensure
+	bun scripts/run-dev-onboarding.mjs --skip-index

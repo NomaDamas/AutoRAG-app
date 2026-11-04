@@ -174,9 +174,9 @@ function copyDirInto(source, destination) {
 }
 
 async function main() {
+	const skipIndex = process.argv.slice(2).includes("--skip-index");
 	sweepStaleSandboxes();
 	reapOrphanSandboxProcesses();
-
 	const sandbox = mkdtempSync(join(tmpdir(), PREFIX));
 	const autoragHome = join(sandbox, "autorag-home");
 	const configPath = join(sandbox, "config.json");
@@ -190,7 +190,7 @@ async function main() {
 		(process.platform === "win32"
 			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "minsync", "models")
 			: join(homedir(), ".cache", "minsync", "models"));
-	if (existsSync(realMinsyncCache)) {
+	if (!skipIndex && existsSync(realMinsyncCache)) {
 		const sparseEntry = join(realMinsyncCache, sparseModel.repoDir);
 		if (existsSync(sparseEntry)) {
 			try {
@@ -213,6 +213,7 @@ async function main() {
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
 		FASTEMBED_CACHE_DIR: minsyncCache,
+		...(skipIndex ? { AUTORAG_ONBOARDING_SKIP_INDEX: "1" } : {}),
 	};
 
 	// Same dev entry point as `make run`: predev hooks sync the librarian and
@@ -224,7 +225,7 @@ async function main() {
 		env,
 		stdio: ["ignore", "inherit", "inherit"],
 	});
-	console.log(`[onboarding] sandbox ${sandbox}`);
+	console.log(`[onboarding] sandbox ${sandbox}${skipIndex ? " (skip-index stub)" : ""}`);
 	console.log("[onboarding] the real ~/.autorag and the app's support dir are untouched");
 	console.log("[onboarding] press Ctrl+C or quit the app; everything is removed afterwards");
 
