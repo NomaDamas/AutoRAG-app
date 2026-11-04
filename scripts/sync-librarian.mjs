@@ -16,7 +16,7 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources. On top:
 // Windows cloud-attribute reads quote paths with typographic apostrophes (AutoRAG#2086), dupey skips cloud and
 // network roots (#2085), and the CLI honors the config file's webSearch section (#2083).
-const librarianRef = "b4f2538738ba629660554e3ccd300d448957ae6d";
+const librarianRef = "2e4e027578264acddf3bec84c22895d83ac715e8";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
