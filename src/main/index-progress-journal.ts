@@ -5,6 +5,12 @@ import { isJsonObject } from "../shared/settings-contract";
 /**
  * Reading MinSync's crash-resume log, `.autorag/minsync/.minsync/progress.jsonl`.
  *
+ * This is MinSync's private interrupted-run format (the librarian's docs say AutoRAG does not read it), read only to
+ * draw the progress display, and little of it has been observed: the header and the `committed` lines were measured
+ * with MinSync 0.6.1 and no other version, the `failed` and `deleted` lines were not seen in a real run, and the
+ * supported floor, 0.6.0, was not measured. Anything unrecognized is skipped, and the display falls back to the counts
+ * MinSync writes into `refresh-progress.json`.
+ *
  * Measured with MinSync 0.6.1: line 1 is a run header
  * (`{"format":3,"source_id":...,"stage":"vector","run_token":...,"full":true,"created_at":...}`), and every
  * following line is one file whose work is durable:
