@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { IndexProgressSnapshot } from "../../../shared/index-progress-contract";
 import { useNow } from "../hooks/useNow";
 import { describeIndexProgress, progressTranslate } from "../state/index-progress";
+import { StalledWarning } from "./StalledWarning";
 
 /**
  * The stage-by-stage account of a running index: which stage, how many files of how many, how much of the
@@ -27,11 +28,7 @@ export function IndexProgressDetail({ detail }: { readonly detail: IndexProgress
 					{line}
 				</p>
 			))}
-			{view.warning === null ? null : (
-				<p role="alert" className="settings-list-meta settings-activity-warning" data-testid="index-progress-stalled">
-					{view.warning}
-				</p>
-			)}
+			<StalledWarning view={view} className="settings-list-meta settings-activity-warning" testId="index-progress-stalled" />
 		</div>
 	);
 }

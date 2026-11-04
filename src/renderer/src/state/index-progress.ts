@@ -21,6 +21,9 @@ export interface IndexStageView {
 	readonly state: IndexStageState;
 }
 
+/** The heartbeat is still arriving (a large file may be taking long), or it stopped too. */
+export type StalledKind = "alive" | "silent";
+
 export interface IndexProgressView {
 	readonly stages: readonly IndexStageView[];
 	readonly stageName: string | null;
@@ -36,8 +39,10 @@ export interface IndexProgressView {
 	readonly etaLine: string | null;
 	/** "Last file finished 3 min ago · report.pdf · Last activity signal just now". */
 	readonly activityLine: string | null;
-	/** The "may be stalled" warning, if the snapshot carries one. */
+	/** The "may be stalled" warning, if the snapshot carries one. Its minute count grows every minute. */
 	readonly warning: string | null;
+	/** Which warning it is; changes only when the situation does, not as the minutes grow. `null` without a warning. */
+	readonly warningKind: StalledKind | null;
 	/** Everything above in one line, for tooltips. */
 	readonly summary: string;
 }
@@ -120,13 +125,13 @@ function activityLine(detail: IndexProgressSnapshot, now: number, t: ProgressTra
 	return parts.length === 0 ? null : parts.join(" · ");
 }
 
-function warning(detail: IndexProgressSnapshot, now: number, t: ProgressTranslate): string | null {
+function warning(detail: IndexProgressSnapshot, now: number, t: ProgressTranslate): { readonly text: string; readonly kind: StalledKind } | null {
 	const { pulse } = detail;
 	if (!pulse.stalled) return null;
 	const since = pulse.lastCompletedAt === null ? now : Date.parse(pulse.lastCompletedAt);
 	const minutes = Math.max(10, Math.floor((now - since) / 60_000));
-	const alive = pulse.heartbeatAt !== null && now - Date.parse(pulse.heartbeatAt) < HEARTBEAT_FRESH_MS;
-	return t(alive ? "indexProgress.warn.stalledAlive" : "indexProgress.warn.stalledSilent", { minutes });
+	const kind = pulse.heartbeatAt !== null && now - Date.parse(pulse.heartbeatAt) < HEARTBEAT_FRESH_MS ? "alive" : "silent";
+	return { text: t(kind === "alive" ? "indexProgress.warn.stalledAlive" : "indexProgress.warn.stalledSilent", { minutes }), kind };
 }
 
 export function describeIndexProgress(detail: IndexProgressSnapshot, now: number, t: ProgressTranslate): IndexProgressView {
@@ -143,6 +148,7 @@ export function describeIndexProgress(detail: IndexProgressSnapshot, now: number
 		}
 	}
 	const counts = running === undefined || name === null ? null : countLine(running, name, t);
+	const stalled = warning(detail, now, t);
 	const view = {
 		stages,
 		stageName: name,
@@ -152,7 +158,8 @@ export function describeIndexProgress(detail: IndexProgressSnapshot, now: number
 		bytesLine: running === undefined ? null : bytesLine(running, t),
 		etaLine,
 		activityLine: activityLine(detail, now, t),
-		warning: warning(detail, now, t),
+		warning: stalled?.text ?? null,
+		warningKind: stalled?.kind ?? null,
 	};
 	const summary = [view.countLine, view.extraLine, view.bytesLine, view.etaLine].filter((part): part is string => part !== null).join(" · ");
 	return { ...view, summary };

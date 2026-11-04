@@ -422,7 +422,10 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   movement (bytes when the staged sizes are known, files otherwise), named for the
   stage it is about, and reads "계산 중" until a minute of movement has been seen.
   Ten minutes without a finished file, with files left, shows a stalled warning
-  that says whether MinSync's heartbeat is still arriving.
+  that says whether MinSync's heartbeat is still arriving. Its minute count
+  grows on screen every minute, but screen readers hear the warning once (a
+  hidden alert holds the words from when it appeared or changed kind, and the
+  visible line is `aria-hidden`), not again every minute (`StalledWarning`).
 - **A first index that stops (issue #283)** is not a separate failure screen but
   the indexing screen paused: the scene stops, one amber light replaces the blue,
   and the screen carries only an icon, a one-line title, one reason line, one

@@ -1,14 +1,15 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { StalledWarning } from "../src/renderer/src/components/StalledWarning";
 import { IndexActivityCard } from "../src/renderer/src/components/settings/IndexActivityCard";
 import { describeIndexActivity } from "../src/renderer/src/state/index-activity";
 import { collectSidebarActivities } from "../src/renderer/src/state/sidebar-activity-queue";
 import { NO_INDEX_PROBLEM } from "../src/shared/index-problem-contract";
 import { setAppLanguage, t } from "../src/shared/i18n";
 import { IDLE_INDEX_ACTIVITY, type IndexActivitySnapshot } from "../src/shared/index-activity-contract";
-import { computeIndexProgress, type IndexProgressInput } from "../src/shared/index-progress";
+import { computeIndexProgress, EMPTY_RATE_HISTORY, STALL_AFTER_MS, type IndexProgressInput } from "../src/shared/index-progress";
 import type { IndexProgressSnapshot } from "../src/shared/index-progress-contract";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -138,5 +139,55 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 		});
 		expect(entry?.percent).toBeNull();
 		expect(describeIndexActivity(snapshot, t)?.percent).toBeNull();
+	});
+});
+
+describe("the stalled warning", () => {
+	const alerts = (): string[] => [...host.querySelectorAll('[role="alert"]')].map((alert) => alert.textContent ?? "");
+	const line = (): string => host.querySelector('[data-testid="stalled"]')?.textContent ?? "";
+	function show(warning: string | null, warningKind: "alive" | "silent" | null): void {
+		act(() => root.render(<StalledWarning view={{ warning, warningKind }} testId="stalled" />));
+	}
+
+	it("announces the warning once and does not read the growing minute count out again", () => {
+		show("11분째 끝난 파일이 없어요.", "alive");
+		expect(alerts()).toEqual(["11분째 끝난 파일이 없어요."]);
+		expect(host.querySelector('[data-testid="stalled"]')?.getAttribute("aria-hidden")).toBe("true");
+		// A minute later the visible line says 12; the live region keeps its words, so nothing is announced.
+		show("12분째 끝난 파일이 없어요.", "alive");
+		show("13분째 끝난 파일이 없어요.", "alive");
+		expect(line()).toBe("13분째 끝난 파일이 없어요.");
+		expect(alerts()).toEqual(["11분째 끝난 파일이 없어요."]);
+	});
+
+	it("reaches Settings > Indexing as the same single alert", async () => {
+		const quiet = { committed: 500, deleted: 0, failed: 0, bytesDone: null, lastFile: null, modifiedAt: null };
+		const start = computeIndexProgress(realCase({ now: T0, heartbeatAt: T0, journal: quiet }), EMPTY_RATE_HISTORY);
+		const later = T0 + STALL_AFTER_MS + 60_000;
+		const stalled = computeIndexProgress(realCase({ now: later, heartbeatAt: later - 5_000, journal: quiet }), start.history).snapshot;
+		vi.useFakeTimers({ now: later });
+		try {
+			await act(async () => {
+				root.render(<IndexActivityCard snapshot={activity(stalled)} />);
+				await Promise.resolve();
+			});
+		} finally {
+			vi.useRealTimers();
+		}
+		expect(host.querySelector('[data-testid="index-progress-stalled"]')?.getAttribute("aria-hidden")).toBe("true");
+		expect(alerts()).toHaveLength(1);
+		expect(alerts()[0]).toContain("11분째 끝난 파일이 없어요");
+	});
+
+	it("announces again when the situation changes, and not at all once the warning is gone", () => {
+		show("11분째 끝난 파일이 없어요. 작업 신호는 계속 들어오고 있어요.", "alive");
+		show("14분째 끝난 파일이 없고 작업 신호도 끊겼어요.", "silent");
+		expect(alerts()).toEqual(["14분째 끝난 파일이 없고 작업 신호도 끊겼어요."]);
+		show(null, null);
+		expect(alerts()).toEqual([]);
+		expect(line()).toBe("");
+		// A warning that comes back later is a new one.
+		show("10분째 끝난 파일이 없어요.", "alive");
+		expect(alerts()).toEqual(["10분째 끝난 파일이 없어요."]);
 	});
 });

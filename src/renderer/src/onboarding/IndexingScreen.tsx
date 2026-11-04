@@ -1,6 +1,7 @@
 /** Step 9 — the immersive first-index screen, driven by the real IndexingStatus. */
 
 import { useEffect, useRef, type CSSProperties, type ReactElement } from "react";
+import { StalledWarning } from "../components/StalledWarning";
 import { useNow } from "../hooks/useNow";
 import { cn } from "../lib/cn";
 import { describeIndexProgress } from "../state/index-progress";
@@ -366,11 +367,7 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 						.map((line) => (
 							<span key={line}>{line}</span>
 						))}
-					{view.warning === null ? null : (
-						<span className="warn" role="alert" data-testid="ix-stalled">
-							{view.warning}
-						</span>
-					)}
+					<StalledWarning view={view} as="span" className="warn" testId="ix-stalled" />
 				</div>
 			) : null}
 			<div className="ix-phases">
