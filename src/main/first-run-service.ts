@@ -24,6 +24,7 @@ import type { RunOutcome } from "./index-problem-service";
 import type { FolderScanOptions } from "./onboarding-scan";
 import { createSmartIndexingService, type SmartIndexingService } from "./smart-indexing-service";
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
+import { skipIndexDemo } from "./skip-index-fixture";
 
 /**
  * The main-process half of the zero-question first run. The Finder window opens
@@ -777,6 +778,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			return promise;
 		};
 		const folders = defaultFolders();
+		const duplicateScan = deps.refreshDuplicates().catch(() => undefined);
 		setStage("scanning", 8);
 		totalFiles = STUB_FILE_TOTAL;
 		emitStatus();
@@ -809,7 +811,8 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		setStage("preparing", 96);
 		remainingMinutes = null;
 		emitStatus();
-		await pause();
+		await Promise.all([pause(), withTimeout(duplicateScan, PREPARING_TIMEOUT_MS, undefined)]);
+		demo = skipIndexDemo(deps.home, deps.language());
 	}
 
 	async function run(): Promise<void> {

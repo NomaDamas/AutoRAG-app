@@ -146,6 +146,7 @@ import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
 import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
+import { createSkipIndexPreviewAgent, seedSkipIndexFixtureHome } from "./skip-index-fixture";
 
 const execFileAsync = promisify(execFile);
 
@@ -415,11 +416,16 @@ app.whenReady().then(async () => {
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
+	const skipOnboardingIndex = !app.isPackaged && process.env.AUTORAG_ONBOARDING_SKIP_INDEX === "1";
+	const rawFixtureHome = !app.isPackaged ? (process.env.AUTORAG_ONBOARDING_FIXTURE_HOME?.trim() ?? "") : "";
+	const fixtureHome = rawFixtureHome !== "" && isAbsolute(rawFixtureHome) ? rawFixtureHome : null;
+	if (skipOnboardingIndex && fixtureHome !== null) seedSkipIndexFixtureHome(fixtureHome);
 	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
 	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.
 	// A profile without a resolvable known folder (a throwaway USERPROFILE) makes
 	// app.getPath throw; that must fall back to `<home>\<Folder>`, never abort startup.
 	const knownFolder = (name: Parameters<typeof app.getPath>[0], fallback: string): string => {
+		if (fixtureHome !== null) return fallback;
 		try {
 			return app.getPath(name);
 		} catch (error) {
@@ -427,7 +433,7 @@ app.whenReady().then(async () => {
 			return fallback;
 		}
 	};
-	const home = app.getPath("home");
+	const home = fixtureHome ?? app.getPath("home");
 	const knownFolders: KnownFolders | undefined =
 		process.platform === "win32"
 			? {
@@ -455,6 +461,7 @@ app.whenReady().then(async () => {
 		config: {
 			userDataDir: app.getPath("userData"),
 			...(qaRoot !== "" && isAbsolute(qaRoot) ? { qaRoot } : {}),
+			...(fixtureHome === null ? {} : { homeDir: fixtureHome }),
 			...(knownFolders === undefined ? {} : { knownFolders }),
 		},
 		shell,
@@ -530,7 +537,10 @@ app.whenReady().then(async () => {
 	// Each chat's model conversation is a pi session file; the index remembers which file is whose.
 	const chatSessionsDirectory = join(app.getPath("userData"), "chat-sessions");
 	const searchService = createSearchService({
-		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
+		agentFactory:
+			skipOnboardingIndex && fixtureHome !== null
+				? () => createSkipIndexPreviewAgent({ fixtureHome, language: () => currentLanguage })
+				: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		send: sendToMainWindow,
@@ -1018,7 +1028,7 @@ app.whenReady().then(async () => {
 			documents: knownFolder("documents", join(home, "Documents")),
 			downloads: knownFolder("downloads", join(home, "Downloads")),
 		},
-		iCloudDrivePath: process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
+		iCloudDrivePath: fixtureHome === null && process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
 		refresh: (methods) => runLocalIndex("onboarding-index", methods, busyResult(methods)),

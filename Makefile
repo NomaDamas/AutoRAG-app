@@ -30,9 +30,10 @@ onboarding:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs
 
-# Same disposable first-run sandbox as `make onboarding`, with the setup stages
-# stubbed (~2 s) so you land straight on "모두 준비되었어요!" → tour → plans
-# without waiting for the real home-folder index.
+# Same disposable first-run sandbox as `make onboarding`, seeded with a 4-file
+# mini-fixture home (duplicate pair + cited docs) and stubbed setup (~2 s) so
+# all 9 tour steps (question → answer → cite → evidence → duplicates → versions)
+# and plans run immediately without indexing the real home folders.
 onboarding-skip-index:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs --skip-index

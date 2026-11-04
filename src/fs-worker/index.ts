@@ -32,10 +32,12 @@ function readConfig(): FsWorkerConfig {
 		throw new Error("fs-worker config has no userDataDir");
 	}
 	const qaRoot = "qaRoot" in parsed && typeof parsed.qaRoot === "string" ? parsed.qaRoot : undefined;
+	const homeDir = "homeDir" in parsed && typeof parsed.homeDir === "string" ? parsed.homeDir : undefined;
 	const knownFolders = "knownFolders" in parsed && isKnownFolders(parsed.knownFolders) ? parsed.knownFolders : undefined;
 	return {
 		userDataDir: parsed.userDataDir,
 		...(qaRoot === undefined ? {} : { qaRoot }),
+		...(homeDir === undefined ? {} : { homeDir }),
 		...(knownFolders === undefined ? {} : { knownFolders }),
 	};
 }

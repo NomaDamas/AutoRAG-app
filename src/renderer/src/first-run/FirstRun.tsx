@@ -401,7 +401,7 @@ function Tour({
 	useEffect(() => {
 		const off = window.autorag.search.onEvent?.((event) => {
 			const current = stepRef.current;
-			if (current !== "ask" && current !== "answer") return;
+			if (current !== "question" && current !== "ask" && current !== "answer") return;
 			if (event.type === "done" || event.type === "error" || event.type === "cancelled") {
 				// The citation chips render with the final answer; look once it has painted.
 				window.setTimeout(() => {
@@ -411,7 +411,7 @@ function Tour({
 			} else {
 				setAnswer((state) => (state === "idle" ? "running" : state));
 			}
-			if (current === "ask") setStep("answer");
+			if (current === "question" || current === "ask") setStep("answer");
 		});
 		return () => off?.();
 	}, []);
@@ -436,15 +436,35 @@ function Tour({
 		if (step === "duplicates" && family !== null && family !== undefined) hostRef.current.showFamily(family);
 	}, [step, question, family]);
 
-	const advance = useCallback(() => {
-		const current = stepRef.current;
-		if (current === null) return;
-		if (current === "cite") clickReal(`${AI_HOST} .cite`);
-		if (current === "evidenceFolder") clickReal('.inspector-column [data-action="evidence-folder"]');
-		const next = nextStep(steps, current, { cited });
-		if (next === null) onEnd();
-		else setStep(next);
-	}, [steps, cited, onEnd]);
+	const moveNext = useCallback(
+		(alreadyClickedReal: boolean) => {
+			const current = stepRef.current;
+			if (current === null) return;
+			if (!alreadyClickedReal && current === "cite") clickReal(`${AI_HOST} .cite`);
+			if (!alreadyClickedReal && current === "evidenceFolder") clickReal('.inspector-column [data-action="evidence-folder"]');
+			const next = nextStep(steps, current, { cited });
+			if (next === null) onEnd();
+			else setStep(next);
+		},
+		[steps, cited, onEnd],
+	);
+	const advance = useCallback(() => moveNext(false), [moveNext]);
+
+	// Clicking the spotlighted citation chip or Evidence Folder button itself advances the tour naturally;
+	// ignore synthetic clicks fired by `clickReal` (`!event.isTrusted`) so "다음" never double-advances.
+	useEffect(() => {
+		if (step !== "cite" && step !== "evidenceFolder") return;
+		const expectedStep = step;
+		const targetSelector = step === "cite" ? `${AI_HOST} .cite` : '.inspector-column [data-action="evidence-folder"]';
+		const onClick = (event: MouseEvent): void => {
+			if (!event.isTrusted || !(event.target instanceof Element) || event.target.closest(targetSelector) === null) return;
+			window.setTimeout(() => {
+				if (stepRef.current === expectedStep) moveNext(true);
+			}, 0);
+		};
+		document.addEventListener("click", onClick);
+		return () => document.removeEventListener("click", onClick);
+	}, [step, moveNext]);
 
 	const nextBlocked =
 		step === "ask" ||

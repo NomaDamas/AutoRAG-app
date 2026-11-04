@@ -95,7 +95,7 @@ const checkStep = async (page, id) => {
 };
 /** Move past a coach step: Enter in the composer at `ask`, the bubble's next button otherwise (the evidence-folder step's own button when the bubble has none). */
 const advance = async (page, id) => {
-	if (id === "ask") return page.locator(`${AI_PANEL} textarea`).first().press("Enter");
+	if (id === "ask") return page.locator('[data-ai-tab]:not(.hidden) textarea').first().press("Enter");
 	const next = page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`);
 	if ((await next.count()) > 0) return next.click();
 	return page.locator(`.fr-coach[data-step="${id}"] [data-action="evidence-folder"]`).first().click();

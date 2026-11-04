@@ -605,8 +605,9 @@ AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
 support directory are never read or written. When the app exits the wrapper kills
 the run's processes and removes the sandbox; a SIGKILL of the wrapper is covered
 by a detached watchdog, and the next `make onboarding` sweeps any sandbox whose
-owner and watchdog both died (`make onboarding-skip-index` uses the same sandbox
-with indexing stubbed in ~2 s to preview the post-setup flow). The QA lane covers the same flow end to end in CI
+owner and watchdog both died (`make onboarding-skip-index` seeds a four-file
+mini-fixture home with a duplicate pair and a deterministic preview answer so
+all nine tour steps run in ~2 s without indexing the real home). The QA lane covers the same flow end to end in CI
 settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`). The first run indexes
 keyword-only, so the lane needs no embedding model. The first-run overlay drives
 the Finder window itself (no second window); on macOS `HOME` in the launch env

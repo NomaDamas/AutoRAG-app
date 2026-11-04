@@ -172,7 +172,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	});
 	const places =
 		deps.places ??
-		createPlaces(process.platform === "win32" && config.knownFolders !== undefined ? { knownFolders: config.knownFolders } : {});
+		createPlaces({
+			...(config.homeDir === undefined ? {} : { homeDir: config.homeDir }),
+			...(process.platform === "win32" && config.knownFolders !== undefined ? { knownFolders: config.knownFolders } : {}),
+		});
 	// Filename search rides the platform index (fsearch / Everything); the
 	// disk walk stays as the fallback when no index answers.
 	const fileNameSearch =
@@ -185,6 +188,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		fileNameSearch,
 		recents: createRecentsStore({ directory: join(config.userDataDir, "recents") }),
 		trashStore: createTrashStore({ directory: join(config.userDataDir, "trash") }),
+		...(config.homeDir === undefined ? {} : { homeDir: config.homeDir }),
 		...(config.qaRoot === undefined ? {} : { qaRoot: config.qaRoot }),
 	});
 	let scanIntervalMinutes = DEFAULT_SCAN_INTERVAL_MINUTES;
