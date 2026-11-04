@@ -22,10 +22,10 @@ export function SettingsPageHead({ title, description }: { readonly title: strin
 	);
 }
 
-export function Section({ title, description, children }: { readonly title: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
+export function Section({ title, description, children }: { readonly title?: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
 	return (
 		<section className="settings-section">
-			<div className="linear-section-title">{title}</div>
+			{title !== undefined ? <div className="linear-section-title">{title}</div> : null}
 			{description !== undefined ? <p className="linear-section-desc">{description}</p> : null}
 			{children}
 		</section>

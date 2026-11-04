@@ -36,7 +36,7 @@ export const REMOTE_BOOTSTRAP_PATH = "/remote/bootstrap.js";
  * to its own origin over HTTP/HTTPS and WebSocket (the Electron CSP allows only
  * `autorag-preview:`/`blob:` beyond self, and `img-src`/`media-src`/`font-src`
  * must also accept the same origin's preview and thumbnail endpoints whether
- * served over plain HTTP or an HTTPS proxy such as `tailscale serve`). The
+ * served over plain HTTP or behind an HTTPS proxy). The
  * phone shell's previewer frames a PDF or text file from the preview endpoint,
  * so `frame-src` gains the page's own origin too.
  *

@@ -62,6 +62,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	approvalMode: "auto",
 	remoteAccess: false,
 	remotePort: 47833,
+	remoteTunnelHostname: "",
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,

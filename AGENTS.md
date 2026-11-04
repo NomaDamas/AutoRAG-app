@@ -389,7 +389,7 @@ switch branches in place.
 - `src/main/agents/` — the factory for helper agents (plain pi sessions that
   share the AutoRAG agent's model and sign-in) and their profiles; see
   `docs/architecture.md` "Helper agents". AI Search itself stays on the librarian.
-- `src/main/remote/` — opt-in remote browser access (Settings → 일반 → 원격 접속):
+- `src/main/remote/` — opt-in remote browser access (Settings → 원격 접속):
   an authenticated HTTP + SSE server that serves the same renderer bundle, a
   dispatcher that reuses the existing `ipcMain` handlers and the per-session fs
   worker client, and the `window.autorag` bootstrap injected into the page. See

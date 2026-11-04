@@ -845,9 +845,11 @@ app.whenReady().then(async () => {
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
-			void applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+			// A failed start (port taken) is shown in Settings through the status's `serverError`, not thrown at nobody.
+			applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
 				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
 			});
+			void remoteHost?.setTunnelHostname(settings.remoteTunnelHostname);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -926,37 +928,48 @@ app.whenReady().then(async () => {
 		actions: ACTIONS_CHANNELS,
 		analytics: ANALYTICS_CHANNELS,
 	} as const;
+	const ensureRemoteHost = (): RemoteHost => {
+		remoteHost ??= createRemoteHost({
+			rendererRoot: join(import.meta.dirname, "../renderer"),
+			stateDir: join(app.getPath("userData"), "settings"),
+			host: "0.0.0.0",
+			port: async () => (await settingsService.get()).remotePort,
+			icons: iconProvider,
+			workerHost,
+			targets: remoteTargets,
+			window: () => mainWindow,
+			settings: () => settingsService.get(),
+			onStatusChanged: (next) => sendToAllWindows(REMOTE_CHANNELS.changed, next),
+		});
+		return remoteHost;
+	};
 	async function applyRemoteAccess(enabled: boolean): Promise<void> {
 		if (enabled) {
-			remoteHost ??= createRemoteHost({
-				rendererRoot: join(import.meta.dirname, "../renderer"),
-				host: "0.0.0.0",
-				port: (await settingsService.get()).remotePort,
-				icons: iconProvider,
-				workerHost,
-				targets: remoteTargets,
-				window: () => mainWindow,
-				settings: () => settingsService.get(),
-			});
-			await remoteHost.start();
+			await ensureRemoteHost().start();
 			return;
 		}
 		await remoteHost?.stop();
 	}
-	const remoteStatus = async (): Promise<RemoteAccessStatus> => {
-		const status = remoteHost?.status() ?? { serving: false, origin: null, sessions: 0 };
-		const port = status.origin === null ? (await settingsService.get()).remotePort : Number(new URL(status.origin).port);
-		return { serving: status.serving, origin: status.origin, port, sessions: status.sessions };
-	};
+	const remoteStatus = (): Promise<RemoteAccessStatus> => ensureRemoteHost().status();
 	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
+	// The Settings switch reports the outcome as status (`serving` / `serverError`) instead of rejecting the call.
 	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
-		await applyRemoteAccess(true);
+		await applyRemoteAccess(true).catch(() => undefined);
 		return remoteStatus();
 	});
 	ipcMain.handle(REMOTE_CHANNELS.stop, async () => {
 		await applyRemoteAccess(false);
 		return remoteStatus();
 	});
+	ipcMain.handle(REMOTE_CHANNELS.startPairing, () => ensureRemoteHost().startPairing());
+	ipcMain.handle(REMOTE_CHANNELS.devices, () => ensureRemoteHost().devices());
+	ipcMain.handle(REMOTE_CHANNELS.renameDevice, (_event, id: string, label: string) => ensureRemoteHost().renameDevice(id, label));
+	ipcMain.handle(REMOTE_CHANNELS.revokeDevice, (_event, id: string) => ensureRemoteHost().revokeDevice(id));
+	ipcMain.handle(REMOTE_CHANNELS.revokeAllDevices, () => ensureRemoteHost().revokeAllDevices());
+	ipcMain.handle(REMOTE_CHANNELS.refreshNetwork, () => ensureRemoteHost().refreshNetwork());
+	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.loginTunnel, () => ensureRemoteHost().loginTunnel());
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});

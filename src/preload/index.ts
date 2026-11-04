@@ -4,11 +4,11 @@ import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { createAutomationBridge } from "./automation-bridge";
 import { createConversionBridge } from "./conversion-bridge";
-import { contextBridge, ipcRenderer, webUtils, type IpcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils, type IpcRenderer, type IpcRendererEvent } from "electron";
 import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
-import { REMOTE_CHANNELS, type RemoteAccessBridge } from "../shared/remote-contract";
+import { REMOTE_CHANNELS, type RemoteAccessBridge, type RemoteAccessStatus } from "../shared/remote-contract";
 import { QUICK_SEARCH_CHANNELS, type QuickSearchSettingsBridge } from "../shared/quick-search-contract";
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
@@ -76,11 +76,27 @@ contextBridge.exposeInMainWorld("autorag", {
 	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });
 
-/** Remote access: the Settings toggle's live status, start and stop. */
+/** Remote access: live status, pairing codes, paired devices, and Quick Tunnel. */
 function createRemoteBridge(ipcRenderer: IpcRenderer): RemoteAccessBridge {
 	return {
 		status: () => ipcRenderer.invoke(REMOTE_CHANNELS.status),
 		start: () => ipcRenderer.invoke(REMOTE_CHANNELS.start),
 		stop: () => ipcRenderer.invoke(REMOTE_CHANNELS.stop),
+		startPairing: () => ipcRenderer.invoke(REMOTE_CHANNELS.startPairing),
+		devices: () => ipcRenderer.invoke(REMOTE_CHANNELS.devices),
+		renameDevice: (id, label) => ipcRenderer.invoke(REMOTE_CHANNELS.renameDevice, id, label),
+		revokeDevice: (id) => ipcRenderer.invoke(REMOTE_CHANNELS.revokeDevice, id),
+		revokeAllDevices: () => ipcRenderer.invoke(REMOTE_CHANNELS.revokeAllDevices),
+		refreshNetwork: () => ipcRenderer.invoke(REMOTE_CHANNELS.refreshNetwork),
+		startTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.startTunnel),
+		stopTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.stopTunnel),
+		loginTunnel: () => ipcRenderer.invoke(REMOTE_CHANNELS.loginTunnel),
+		onChange: (listener) => {
+			const handler = (_event: IpcRendererEvent, status: RemoteAccessStatus): void => listener(status);
+			ipcRenderer.on(REMOTE_CHANNELS.changed, handler);
+			return () => {
+				ipcRenderer.removeListener(REMOTE_CHANNELS.changed, handler);
+			};
+		},
 	};
 }
