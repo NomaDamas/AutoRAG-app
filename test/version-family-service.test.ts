@@ -436,17 +436,32 @@ describe("version-family service — a failed scan stays local", () => {
 			readonly service: ReturnType<typeof createVersionFamilyService>;
 		}
 
-		/** iCloud Drive: the whole-root scan times out, so does Desktop on its own; Documents reads fine. */
-		function cloud(options: { desktopFails?: () => boolean; seed?: StoredVersionFamilies | null; folders?: string[] } = {}): CloudRun {
+		/**
+		 * iCloud Drive: the whole-root scan times out (or fails as `wholeRoot` says), so does Desktop on its own;
+		 * Documents reads fine. A whole-root scan that succeeds finds the stack that spans the two folders.
+		 */
+		function cloud(
+			options: {
+				desktopFails?: () => boolean;
+				wholeRoot?: () => Error | null;
+				seed?: StoredVersionFamilies | null;
+				folders?: string[];
+			} = {},
+		): CloudRun {
 			const calls: [string, readonly string[] | undefined][] = [];
 			const desktopFails = options.desktopFails ?? (() => true);
+			const wholeRoot = options.wholeRoot ?? (() => timeout());
 			const h = harness(
 				{
 					locations: async () => [place("iCloud Drive", "/icloud", "cloud")],
 					listFolders: async () => options.folders ?? ["Documents", "Desktop"],
 					scanDuplicates: async (dir, scanOptions) => {
 						calls.push([dir, scanOptions?.excludeDirs]);
-						if (dir === "/icloud" && scanOptions === undefined) throw timeout();
+						if (dir === "/icloud" && scanOptions === undefined) {
+						const failure = wholeRoot();
+						if (failure !== null) throw failure;
+						return scanOf([family("/icloud/Documents/a.txt", "/icloud/Desktop/x.txt")]);
+					}
 						if (dir === "/icloud/Desktop" && desktopFails()) throw timeout();
 						if (dir === "/icloud/Documents") return scanOf([family("/icloud/Documents/a.txt", "/icloud/Documents/b.txt")]);
 						if (dir === "/icloud/Desktop") return scanOf([family("/icloud/Desktop/x.txt", "/icloud/Desktop/y.txt")]);
@@ -489,11 +504,16 @@ describe("version-family service — a failed scan stays local", () => {
 			]);
 			expect((await run.service.result()).scanFailures.map((failure) => failure.path)).toEqual(["/icloud/Desktop"]);
 
-			// "Check again": Desktop is read once more, and now succeeds.
+			// "Check again": the whole root is tried once more (and times out again), then Desktop is read once more, and now succeeds.
 			desktopFails = false;
 			run.calls.length = 0;
 			const retried = await run.service.refresh();
-			expect(run.calls.map(([dir]) => dir)).toEqual(["/icloud", "/icloud/Documents", "/icloud/Desktop"]);
+			expect(run.calls.map(([dir, excluded]) => [dir, excluded?.length])).toEqual([
+				["/icloud", undefined],
+				["/icloud", 2],
+				["/icloud/Documents", undefined],
+				["/icloud/Desktop", undefined],
+			]);
 			expect(retried.scanFailures).toEqual([]);
 			expect(retried.families.map((entry) => entry.head).sort()).toEqual([
 				"/icloud/Desktop/x.txt",
@@ -503,9 +523,136 @@ describe("version-family service — a failed scan stays local", () => {
 
 		it("starts from the folder scans after a restart instead of asking the drive for the whole root again", async () => {
 			const run = cloud({ seed: stored([], { locations: ["/icloud"], splitLocations: ["/icloud"] }) });
-			await run.service.refresh();
+			await run.service.start();
 			expect(run.calls.map(([dir]) => dir)).toEqual(["/icloud", "/icloud/Documents", "/icloud/Desktop"]);
 			expect(run.calls[0]?.[1]).toEqual(["Documents", "Desktop"]);
+		});
+
+		it("does not split a drive whose whole-root scan failed for any reason but the time limit", async () => {
+			let failing = true;
+			const run = cloud({ wholeRoot: () => (failing ? new Error("dupey failed with exit code 1: Operation not permitted") : null) });
+
+			const failed = await run.service.refresh();
+
+			expect(run.calls).toEqual([["/icloud", undefined]]);
+			expect(failed.scanFailures).toEqual([
+				{
+					name: "iCloud Drive",
+					path: "/icloud",
+					excludeDirs: [],
+					reason: "error",
+					message: "dupey failed with exit code 1: Operation not permitted",
+				},
+			]);
+			expect(run.h.persisted()?.splitLocations).toBeUndefined();
+
+			// The next scan reads the whole drive again, finds it readable, and never splits it.
+			failing = false;
+			run.calls.length = 0;
+			const recovered = await run.service.refresh();
+			expect(run.calls).toEqual([["/icloud", undefined]]);
+			expect(recovered.scanFailures).toEqual([]);
+			expect(recovered.families.map((entry) => entry.head)).toEqual(["/icloud/Documents/a.txt"]);
+			expect(run.h.persisted()?.splitLocations).toBeUndefined();
+		});
+
+		it("reads a split drive whole again when asked to check again, and is whole from then on", async () => {
+			// Given a drive that was split by a time-out, with one folder that timed out on its own
+			let wholeTimesOut = true;
+			const run = cloud({ wholeRoot: () => (wholeTimesOut ? timeout() : null) });
+			await run.service.start();
+			expect(run.h.persisted()?.splitLocations).toEqual(["/icloud"]);
+			expect(run.h.persisted()?.timedOutScopes?.map((scope) => scope.path)).toEqual(["/icloud/Desktop"]);
+
+			// When the person checks again and the whole drive now reads in time
+			wholeTimesOut = false;
+			run.calls.length = 0;
+			const result = await run.service.refresh();
+
+			// Then it is one scan, the stack across two folders is back, and nothing is remembered as split or timed out
+			expect(run.calls).toEqual([["/icloud", undefined]]);
+			expect(result.families.map((entry) => entry.head)).toEqual(["/icloud/Documents/a.txt"]);
+			expect(result.scanFailures).toEqual([]);
+			expect(run.h.persisted()?.splitLocations).toBeUndefined();
+			expect(run.h.persisted()?.timedOutScopes).toBeUndefined();
+
+			// And the scheduled scans read the whole drive too
+			run.calls.length = 0;
+			run.h.timers[0]?.fire();
+			await settle();
+			expect(run.calls).toEqual([["/icloud", undefined]]);
+		});
+
+		it("keeps a split drive split, and does not remember the whole-root time-out, when reading it whole fails again", async () => {
+			const run = cloud({ seed: stored([], { locations: ["/icloud"], splitLocations: ["/icloud"] }) });
+
+			await run.service.refresh();
+
+			expect(run.h.persisted()?.splitLocations).toEqual(["/icloud"]);
+			expect(run.h.persisted()?.timedOutScopes?.map((scope) => scope.path)).toEqual(["/icloud/Desktop"]);
+		});
+
+		it("goes on with the folder scans when the whole drive fails to read for another reason on check again", async () => {
+			const run = cloud({
+				seed: stored([], { locations: ["/icloud"], splitLocations: ["/icloud"] }),
+				wholeRoot: () => new Error("dupey failed with exit code 1"),
+			});
+
+			const result = await run.service.refresh();
+
+			expect(run.calls.map(([dir]) => dir)).toEqual(["/icloud", "/icloud", "/icloud/Documents", "/icloud/Desktop"]);
+			expect(result.scanFailures.map((failure) => failure.path)).toEqual(["/icloud/Desktop"]);
+			expect(run.h.persisted()?.splitLocations).toEqual(["/icloud"]);
+		});
+
+		it("remembers a whole-drive time-out when there are no folders to split into, and leaves the drive alone on the schedule", async () => {
+			const run = cloud({ folders: [] });
+			await run.service.start();
+			expect(run.h.persisted()?.timedOutScopes?.map((scope) => scope.path)).toEqual(["/icloud"]);
+			expect(run.h.persisted()?.splitLocations).toBeUndefined();
+			run.calls.length = 0;
+
+			run.h.timers[0]?.fire();
+			await settle();
+
+			expect(run.calls).toEqual([]);
+			expect((await run.service.result()).scanFailures.map((failure) => failure.reason)).toEqual(["timeout"]);
+		});
+
+		it("forgets a folder's time-out once the folder is gone from the drive", async () => {
+			const gone = { name: "Gone", path: "/icloud/Gone", excludeDirs: [], message: "dupey timed out.", at: "2026-09-28T00:00:00.000Z" };
+			const run = cloud({
+				seed: stored([], { locations: ["/icloud"], splitLocations: ["/icloud"], timedOutScopes: [gone] }),
+				desktopFails: () => false,
+			});
+
+			await run.service.start();
+
+			expect(run.h.persisted()?.timedOutScopes).toBeUndefined();
+		});
+
+		it("recognizes the root files' time-out whatever order the folders are listed in", async () => {
+			let order = ["Documents", "Desktop"];
+			const calls: string[] = [];
+			const h = harness({
+				locations: async () => [place("iCloud Drive", "/icloud", "cloud")],
+				listFolders: async () => order,
+				scanDuplicates: async (dir, scanOptions) => {
+					calls.push(scanOptions?.excludeDirs === undefined ? dir : `${dir}+root`);
+					if (dir === "/icloud") throw timeout();
+					return scanOf([]);
+				},
+			});
+			const service = createVersionFamilyService(h.deps);
+			await service.start();
+			calls.length = 0;
+			order = ["Desktop", "Documents"];
+
+			h.timers[0]?.fire();
+			await settle();
+
+			// The root files' scan timed out before; listing the folders in another order does not make it a new scan.
+			expect(calls).toEqual(["/icloud/Desktop", "/icloud/Documents"]);
 		});
 
 		it("splits along the real top-level folders of the drive, never the files", async () => {

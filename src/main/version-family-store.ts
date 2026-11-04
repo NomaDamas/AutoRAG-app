@@ -45,8 +45,9 @@ export interface StoredVersionFamilies {
 	readonly families: readonly FsVersionFamily[];
 	readonly stamps?: Readonly<Record<string, FileStamp>>;
 	/**
-	 * Cloud drives whose whole-root scan failed. They are scanned folder by folder from then on, so a restart does not
-	 * start another whole-root scan that is bound to fail the same way (and ask the drive to download files for it).
+	 * Cloud drives whose whole-root scan hit the time limit. They are scanned folder by folder from then on, so a restart
+	 * does not start another whole-root scan that is bound to time out the same way (and ask the drive to download files
+	 * for it). Checking again reads the drive whole once more and removes it from here if that finishes.
 	 */
 	readonly splitLocations?: readonly string[];
 	/**

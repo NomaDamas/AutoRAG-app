@@ -12,8 +12,11 @@
  * own; a location whose scan failed keeps the families the last good scan found
  * there and is reported in `scanFailures` (shown only while that folder is in
  * view), and every other location's result is written as usual. A cloud drive
- * (iCloud Drive and the like) whose whole-root scan fails is scanned folder by
- * folder from then on, so one slow or huge folder no longer costs the rest.
+ * (iCloud Drive and the like) whose whole-root scan hits the time limit is scanned
+ * folder by folder from then on, so one slow or huge folder no longer costs the
+ * rest; "Check again" reads the whole drive once more and ends the split if that
+ * finishes. A folder that timed out stays out of the scheduled scans, also after a
+ * restart, until the person checks again.
  *
  * A modification that lands after dupey read a file but before its post-scan
  * probe keeps the old relation until the next scan unless a live event for it
@@ -22,7 +25,7 @@
  */
 
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { DupeyScanResult } from "@autorag/librarian";
 import type {
 	FsEntry,
@@ -488,8 +491,9 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		snapshot = next;
 	}
 
+	/** A scope's identity. The order the folders were listed in is not part of it, or a listing in another order forgets a time-out. */
 	function unitKey(unit: VersionScanScope): string {
-		return [unit.path, ...unit.excludeDirs].join("\u0000");
+		return [unit.path, ...[...unit.excludeDirs].sort()].join("\u0000");
 	}
 
 	/** dupey families to the app's: entries built, members that vanished dropped, every path stamped. */
@@ -576,21 +580,46 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	}
 
 	/**
-	 * A whole location is one dupey call. A cloud drive whose call fails is scanned folder by folder instead: each of its
-	 * top-level folders is its own call, and the files in its root are one more that skips those folders. A folder that
-	 * is too slow or too large then fails alone, and the others still report. The price is that a family whose files sit
-	 * in two different top-level folders is no longer found: dupey only groups files it scanned in one call.
+	 * Forgets the time-outs of the scopes splitting `root` creates (the root itself with folders left out, and its
+	 * top-level folders), except the keys in `keep`. A scope deeper down belongs to a location of its own.
+	 */
+	function forgetSplitScopes(root: string, keep: ReadonlySet<string> = new Set()): void {
+		for (const [key, record] of timedOut) {
+			const path = record.failure.path;
+			if (!keep.has(key) && (path === root || dirname(path) === root)) timedOut.delete(key);
+		}
+	}
+
+	/**
+	 * A whole location is one dupey call. A cloud drive whose call hits the time limit is scanned folder by folder
+	 * instead: each of its top-level folders is its own call, and the files in its root are one more that skips those
+	 * folders. A folder that is too slow or too large then fails alone, and the others still report. The price is that a
+	 * family whose files sit in two different top-level folders is no longer found: dupey only groups files it scanned in
+	 * one call.
+	 *
+	 * Only a time-out splits a drive. It says the drive is too big to read at once; any other failure (a glitch, a missing
+	 * permission) is reported as it is, and the next scan tries the whole drive again. Once split, the drive is read whole
+	 * again only when the person asks to check again: if that scan finishes, the drive is whole again and its folders'
+	 * time-outs are forgotten; if it fails, the folder scans go on as before.
 	 */
 	async function scanLocation(location: FsLocation, retryTimedOut: boolean): Promise<LocationScan> {
 		const cloud = location.section === "cloud";
 		const whole: UnitScan = { name: location.name, scope: { path: location.path, excludeDirs: [] } };
 		let wholeFailure: FsVersionFamilyScanFailure | null = null;
-		if (!(cloud && splitLocations.has(location.path))) {
+		const wasSplit = cloud && splitLocations.has(location.path);
+		if (!wasSplit || retryTimedOut) {
 			const result = await scanUnit(whole, retryTimedOut);
-			if (result.ok) return { families: result.families, stamps: result.stamps, read: 1, failures: [] };
-			if (!cloud) return { families: [], stamps: {}, read: 0, failures: [result.failure] };
+			if (result.ok) {
+				if (wasSplit) {
+					splitLocations.delete(location.path);
+					forgetSplitScopes(location.path);
+				}
+				return { families: result.families, stamps: result.stamps, read: 1, failures: [] };
+			}
+			if (!wasSplit && !(cloud && result.failure.reason === "timeout")) {
+				return { families: [], stamps: {}, read: 0, failures: [result.failure] };
+			}
 			wholeFailure = result.failure;
-			timedOut.delete(unitKey(whole.scope));
 		}
 		let folders: readonly string[];
 		try {
@@ -600,7 +629,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			const failure = wholeFailure ?? { ...whole.scope, name: whole.name, reason: "error" as const, message };
 			return { families: [], stamps: {}, read: 0, failures: [failure] };
 		}
-		// Nothing to split into: the whole-root call that just failed is all there is.
+		// Nothing to split into: the whole-root call that just failed is all there is, and its time-out stays remembered.
 		if (folders.length === 0 && wholeFailure !== null) {
 			return { families: [], stamps: {}, read: 0, failures: [wholeFailure] };
 		}
@@ -609,6 +638,8 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			{ name: location.name, scope: { path: location.path, excludeDirs: folders } },
 			...folders.map((folder) => ({ name: folder, scope: { path: join(location.path, folder), excludeDirs: [] } })),
 		];
+		// The folder scans replace the whole-root scan, and a folder that is gone or renamed leaves nothing to skip.
+		forgetSplitScopes(location.path, new Set(units.map((unit) => unitKey(unit.scope))));
 		const families: FsVersionFamily[] = [];
 		const stamps: Record<string, FileStamp> = {};
 		const failures: FsVersionFamilyScanFailure[] = [];
