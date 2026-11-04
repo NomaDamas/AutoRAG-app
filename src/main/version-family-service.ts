@@ -42,7 +42,10 @@ import { type StoredVersionFamilies, VERSION_FAMILY_STORE_VERSION, type VersionF
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
 
-/** dupey kills itself with this message when a scan outlasts the librarian's time limit (`timeoutMs`, 120 s by default). */
+/**
+ * The message of a scan that outlasted its time limit (`DUPEY_TIMEOUT_MS`, 120 s): the dupey runner (`dupey-runner.ts`)
+ * ends the process and fails the call with it. A scan the app stopped fails with another message, so it is no time-out.
+ */
 export function isDupeyTimeout(message: string): boolean {
 	return /dupey timed out/i.test(message);
 }

@@ -23,6 +23,8 @@ export interface LibrarianServices {
 	readonly fileNameSearch: FileNameSearchBackend;
 	readonly contentSearch: ContentSearch;
 	scanDuplicates(dir: string, options?: DupeyScanOptions): Promise<DupeyScanResult>;
+	/** Ends the dupey processes a scan has running; resolves once they are gone, or after the wait it allows. */
+	stopDuplicateScans(): Promise<void>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -39,7 +41,7 @@ export interface LibrarianHost {
 export interface ServeLibrarianOptions {
 	readonly services: (host: LibrarianHost) => LibrarianServices;
 	/**
-	 * Runs on `shutdown`, after the file-name index stopped. The real thread raises the process `exit` event here, which is
+	 * Runs on `shutdown`, after the file-name index and the dupey processes stopped. The real thread raises the process `exit` event here, which is
 	 * how the librarian ends the MinSync children an index refresh started; a test leaves it out.
 	 */
 	readonly onShutdown?: () => void;
@@ -85,7 +87,15 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 			return services.indexStatus.setIndexExcluded(stringArg(args, 0, "path"), args[1]);
 		},
 		[LIBRARIAN_OP.shutdown]: async () => {
-			await services.fileNameSearch.stop();
+			// dupey first, and without waiting for the file-name index: its stop can take most of the time the worker's
+			// quit allows (it queues behind an index run), the signals must be sent before the thread is terminated, and
+			// the SIGKILL that follows a SIGTERM dupey ignores is a timer of this thread.
+			const dupeyStopped = services.stopDuplicateScans();
+			try {
+				await services.fileNameSearch.stop();
+			} finally {
+				await dupeyStopped;
+			}
 			options.onShutdown?.();
 		},
 		[LIBRARIAN_OP.setLanguage]: async (args) => {
