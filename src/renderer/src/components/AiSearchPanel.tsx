@@ -40,8 +40,11 @@ import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
+import dazziLogo from "../assets/dazzi-logo.png";
 import {
 	collectSessionEvidence,
+	evidenceDetail,
+	evidenceHeading,
 	evidenceKind,
 	resolveActiveEvidence,
 	unresolvedCitationNumbers,
@@ -74,8 +77,8 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
  * land here directly.
  */
 export interface AiDockHandle {
-	/** Seed the composer with `text` and send it at once. */
-	sendQuery(text: string): void;
+	/** Seed the composer with `text` and send it at once, with `atts` added to the drafts of that run. */
+	sendQuery(text: string, atts?: readonly ChatAttachment[]): void;
 	/** Leave `text` in the composer unsent and focus it: the person finishes the sentence and sends it. */
 	prefill(text: string): void;
 	/** Append draft attachments and focus the composer. */
@@ -89,6 +92,10 @@ export interface AiDockHandle {
 	summarize(atts: readonly ChatAttachment[]): void;
 	/** Focus the composer (pending until the panel is the visible tab). */
 	focusComposer(): void;
+	/** Open or close the 대화 기록 list (the phone shell puts the button in its own nav bar). */
+	toggleHistory(): void;
+	/** Start a new conversation, like the panel's 새 대화 button. */
+	newChat(): void;
 }
 
 export interface AiSearchPanelProps {
@@ -110,6 +117,18 @@ export interface AiSearchPanelProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source, by its alias (a button of the AI fix). */
 	readonly onOpenSource: (alias: string) => void;
+	/**
+	 * A citation chip or a source card was tapped. The desktop shows evidence in the
+	 * inspector beside the chat, so it leaves this out; the phone shell has no room
+	 * for that and opens its evidence sheet here.
+	 */
+	readonly onCitation?: ((number: number) => void) | undefined;
+	/**
+	 * Phone layout (remote session on a phone): the empty chat shows example
+	 * questions, each answer lists its sources as tappable cards, and the desktop
+	 * keyboard hints go. The desktop window never sets it.
+	 */
+	readonly phone?: boolean | undefined;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -124,7 +143,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -426,6 +445,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const nextEvidence = resolveActiveEvidence(allTurnPhases, nextSource);
 		if (active) onPublish(nextEvidence, sessionEvidence);
 		onSelectEvidence(number);
+		onCitation?.(number);
 	}
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
@@ -773,11 +793,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	useImperativeHandle(ref, () => ({
-		sendQuery(text: string): void {
+		sendQuery(text: string, atts: readonly ChatAttachment[] = []): void {
 			const trimmed = text.trim();
 			if (trimmed.length === 0 || searchIdRef.current !== null) return;
 			setQuery(trimmed);
-			void runSearch(trimmed, attachmentsRef.current);
+			void runSearch(trimmed, mergeAttachments(attachmentsRef.current, atts));
 		},
 		prefill,
 		attach(atts: readonly ChatAttachment[]): void {
@@ -792,6 +812,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		focusComposer(): void {
 			ensureFocus();
 		},
+		toggleHistory,
+		newChat,
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
@@ -964,10 +986,26 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
 				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
 					{showEmpty ? (
-						<div className="ai-empty my-28 text-center">
-							<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
-							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
-						</div>
+						phone ? (
+							<div className="ai-empty ai-empty-phone">
+								<img className="ai-empty-logo" src={dazziLogo} alt="" />
+								<strong>{t("aiSearch.emptyPromptTitle")}</strong>
+								<p>{t("aiSearch.emptyPromptDesc")}</p>
+								<div className="ai-suggest" role="list" aria-label={t("mobile.ai.suggestions")}>
+									{(["mobile.ai.suggest1", "mobile.ai.suggest2", "mobile.ai.suggest3"] as const).map((key) => (
+										<button key={key} type="button" role="listitem" onClick={() => prefill(t(key))}>
+											<SparklesIcon />
+											<span>{t(key)}</span>
+										</button>
+									))}
+								</div>
+							</div>
+						) : (
+							<div className="ai-empty my-28 text-center">
+								<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
+								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
+							</div>
+						)
 					) : null}
 
 					{pastTurns.map((turn, index) => (
@@ -984,6 +1022,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							onOpenSource={onOpenSource}
 							onNewChat={newChat}
 							onRephrase={prefill}
+							phone={phone}
 						/>
 					))}
 
@@ -1082,6 +1121,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									</div>
 								</div>
 							) : null}
+							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
 						</div>
 					)}
 
@@ -1135,7 +1175,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							))}
 						</div>
 					) : null}
-					{searching ? (
+					{searching && !phone ? (
 						<div className="steer-hint flex items-center gap-10 px-4 pb-6 text-tile text-ink-muted select-none" aria-hidden="true">
 							<span className="size-6 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
 							<span className="min-w-0 flex-1 truncate">{t("aiSearch.steerHintLead")}</span>
@@ -1215,7 +1255,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									value={query}
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
-									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
 								{voiceNotice === null ? null : (
@@ -1392,6 +1432,7 @@ function PastTurnView({
 	onOpenSource,
 	onNewChat,
 	onRephrase,
+	phone,
 }: {
 	readonly turn: PastTurn;
 	readonly turnIndex: number;
@@ -1405,6 +1446,8 @@ function PastTurnView({
 	readonly onNewChat: () => void;
 	/** Puts a question back in the composer. */
 	readonly onRephrase: (question: string) => void;
+	/** Phone layout: the answer ends with its sources as tappable cards. */
+	readonly phone: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
@@ -1475,9 +1518,36 @@ function PastTurnView({
 						{prose(turn.deepText, turn.deep, "deep")}
 					</div>
 				)}
+				{phone ? <SourceCards evidence={(turn.deep ?? turn.quick)?.evidence ?? []} onSelect={(number) => onCitation(turnIndex, turn.deep === null ? "quick" : "deep", number)} /> : null}
 			</div>
 			{turn.stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped")}</div> : null}
 		</>
+	);
+}
+
+/**
+ * The phone layout's sources row under an answer: one card per cited source,
+ * scrolled sideways, each opening that source's evidence. The desktop does not
+ * render it; its inspector lists the sources beside the chat.
+ */
+function SourceCards({ evidence, onSelect }: { readonly evidence: readonly CitationEvidence[]; readonly onSelect: (number: number) => void }): ReactElement | null {
+	const { t } = useTranslation();
+	if (evidence.length === 0) return null;
+	return (
+		<div className="ai-sources" role="list" aria-label={t("mobile.ai.sources", { count: evidence.length })}>
+			{evidence.map((item) => {
+				const detail = evidenceDetail(item.confidence);
+				return (
+					<button key={item.number} type="button" role="listitem" className="ai-source" onClick={() => onSelect(item.number)}>
+						<span className="ai-source-n">{item.number}</span>
+						<span className="ai-source-main">
+							<b>{evidenceHeading(item.title, item.source)}</b>
+							{detail === null ? null : <small>{detail}</small>}
+						</span>
+					</button>
+				);
+			})}
+		</div>
 	);
 }
 

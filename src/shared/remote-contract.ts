@@ -28,29 +28,130 @@ export const REMOTE_ROUTES = {
 	download: "/remote/download",
 	preview: "/remote/preview",
 	thumb: "/remote/thumb",
+	pair: "/remote/pair",
+	auth: "/remote/auth",
+	health: "/remote/health",
 } as const;
 
 export const REMOTE_TOKEN_HEADER = "x-remote-token";
+export const REMOTE_CSRF_HEADER = "x-dazzi-remote";
 
-/** Main <-> renderer channels for the remote-access setting's live status. */
+/** Main <-> renderer channels for the remote-access setting's live status, pairing, devices, and tunnel. */
 export const REMOTE_CHANNELS = {
 	status: "remote:status",
 	start: "remote:start",
 	stop: "remote:stop",
+	startPairing: "remote:startPairing",
+	devices: "remote:devices",
+	renameDevice: "remote:renameDevice",
+	revokeDevice: "remote:revokeDevice",
+	revokeAllDevices: "remote:revokeAllDevices",
+	refreshNetwork: "remote:refreshNetwork",
+	startTunnel: "remote:startTunnel",
+	stopTunnel: "remote:stopTunnel",
+	loginTunnel: "remote:loginTunnel",
+	changed: "remote:changed",
 } as const;
 
-/** What Settings shows about remote access, and the address a browser opens. */
+/** One-time 6-digit pairing code minted on the host (10-minute TTL, 5-attempt burn). */
+export interface RemotePairingCode {
+	readonly code: string;
+	readonly expiresAt: string;
+}
+
+/** A durably enrolled browser/device holding a hashed `dazzi_device` credential. */
+export interface RemotePairedDevice {
+	readonly id: string;
+	readonly label: string;
+	readonly createdAt: string;
+	readonly lastSeenAt: string | null;
+	readonly current?: boolean;
+}
+
+/** Why an outbound tunnel could not start; the Settings UI translates each one. */
+export type RemoteTunnelErrorCode = "missing_binary" | "server_stopped" | "timeout" | "exited" | "disconnected" | "login_required" | "setup_failed";
+
+/**
+ * Outbound Cloudflare tunnel for HTTPS access from outside the local network.
+ * `quick`: an account-less `https://<random>.trycloudflare.com` address that changes on every start.
+ * `custom`: a named tunnel on the user's own Cloudflare domain (`remoteTunnelHostname`), stable across restarts.
+ */
+export interface RemoteTunnelStatus {
+	readonly available: boolean;
+	readonly mode: "quick" | "custom";
+	/** The configured custom hostname (`remote.example.com`), or null for Quick Tunnel. */
+	readonly hostname: string | null;
+	/** `cloudflared tunnel login` has written `~/.cloudflared/cert.pem` (required for `custom`). */
+	readonly loggedIn: boolean;
+	readonly state: "off" | "starting" | "online" | "error";
+	readonly url: string | null;
+	readonly error: string | null;
+	readonly errorCode: RemoteTunnelErrorCode | null;
+}
+
+/**
+ * A bare DNS hostname the user owns on Cloudflare (`remote.example.com`): at least two labels, letters/digits/hyphens,
+ * no scheme, port, path, or wildcard. Returns the lower-cased name, or null when it is not one.
+ */
+export function normalizeTunnelHostname(value: string): string | null {
+	const name = value.trim().toLowerCase().replace(/\.$/, "");
+	if (name.length === 0 || name.length > 253) return null;
+	const labels = name.split(".");
+	if (labels.length < 2) return null;
+	const label = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/;
+	return labels.every((part) => label.test(part)) && !/^\d+$/.test(labels.at(-1) ?? "") ? name : null;
+}
+
+/** How the current browser request authenticated to the remote server. */
+export type RemoteAccessVia = "token" | "device";
+
+/** Why an unauthenticated browser request reached the AccessGate instead of Finder. */
+export type RemoteAccessRefusal = "pairing_required";
+
+/**
+ * Why the remote server is not serving although remote access is on: the listen error the system gave. A taken port
+ * is not one: the server falls back to a nearby free port, then to one the OS picks.
+ */
+export interface RemoteServerError {
+	readonly port: number;
+	readonly message: string;
+}
+
+/** What Settings shows about remote access, how devices connect, and the addresses a browser opens. */
 export interface RemoteAccessStatus {
 	readonly serving: boolean;
+	/** Complete token-bearing localhost URL (`http://localhost:<port>/?token=...`) on the host; `location.origin` in a remote browser. */
 	readonly origin: string | null;
+	/** Clean base origin (`http://localhost:<port>`) without the secret token. */
+	readonly baseOrigin?: string | null;
 	readonly port: number;
 	readonly sessions: number;
+	/** Active non-loopback LAN origins (`http://192.168.x.y:<port>`). */
+	readonly lanOrigins?: readonly string[];
+	readonly tunnel?: RemoteTunnelStatus;
+	readonly pairing?: RemotePairingCode | null;
+	readonly devices?: readonly RemotePairedDevice[];
+	/** Present in a remote browser session to describe how it authenticated. */
+	readonly via?: RemoteAccessVia;
+	/** Set while remote access is on but the server could not start; cleared by the next successful start or by stop. */
+	readonly serverError?: RemoteServerError | null;
 }
 
 export interface RemoteAccessBridge {
 	status(): Promise<RemoteAccessStatus>;
 	start(): Promise<RemoteAccessStatus>;
 	stop(): Promise<RemoteAccessStatus>;
+	startPairing(): Promise<RemotePairingCode>;
+	devices(): Promise<readonly RemotePairedDevice[]>;
+	renameDevice(id: string, label: string): Promise<RemotePairedDevice | null>;
+	revokeDevice(id: string): Promise<boolean>;
+	revokeAllDevices(): Promise<number>;
+	refreshNetwork(): Promise<RemoteAccessStatus>;
+	startTunnel(): Promise<RemoteAccessStatus>;
+	stopTunnel(): Promise<RemoteAccessStatus>;
+	/** Runs `cloudflared tunnel login` (opens the Cloudflare authorization page in the browser). */
+	loginTunnel(): Promise<RemoteAccessStatus>;
+	onChange(listener: (status: RemoteAccessStatus) => void): () => void;
 }
 
 /** One bridge method invocation. `target` is the bridge name (`fs`, `settings`, …). */
@@ -68,7 +169,10 @@ export interface RemotePush {
 
 /** The remote session's configuration, injected into the bootstrap script. */
 export interface RemoteBootstrapConfig {
-	readonly token: string;
+	/** Optional: omitted for cookie-authenticated sessions where HttpOnly cookies carry authority. */
+	readonly token?: string;
+	readonly via?: RemoteAccessVia;
+	readonly deviceId?: string | null;
 	readonly platform: string;
 	readonly appearance: AppSettings["appearance"];
 	readonly language: AppSettings["language"];
