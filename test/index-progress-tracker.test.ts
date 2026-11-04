@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createIndexProgressTracker, readStagedSizes, type TrackedRefresh } from "../src/main/index-progress-tracker";
 import { MINSYNC_JOURNAL_PARTS } from "../src/main/index-progress-journal";
 import type { IndexProgressSnapshot, IndexStageProgress } from "../src/shared/index-progress-contract";
@@ -77,11 +77,9 @@ describe("the progress tracker", () => {
 		const first = tracker.poll(root, refresh());
 		expect(embedOf(first).counts).toEqual({ done: 2, skipped: 0, failed: 0, total: 4 });
 		expect(first?.pulse.lastFile).toBe("b");
-		// Sizes load in the background; the next poll has them.
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		const second = tracker.poll(root, refresh());
-		expect(embedOf(second).bytes).toEqual({ done: 4_000, total: 10_000 });
-		expect(embedOf(second).fraction).toBe(0.5);
+		// Sizes load in the background; a later poll has them.
+		await vi.waitFor(() => expect(embedOf(tracker.poll(root, refresh())).bytes).toEqual({ done: 4_000, total: 10_000 }));
+		expect(embedOf(tracker.poll(root, refresh())).fraction).toBe(0.5);
 	});
 
 	it("shows no byte total when the staged documents are not the files this sync was told to index", async () => {
@@ -90,10 +88,9 @@ describe("the progress tracker", () => {
 		stage("c.md", 1_000);
 		writeJournal(journalLine("files/a.md"), T0);
 		const tracker = createIndexProgressTracker({ now: () => T0 });
-		tracker.poll(root, refresh({ minsync: { total: 1 } }));
-		await new Promise((resolve) => setTimeout(resolve, 50));
 		// An incremental sync of 1 changed file out of 3 staged: 3 KB would overstate its work.
-		expect(embedOf(tracker.poll(root, refresh({ minsync: { total: 1 } }))).bytes).toEqual({ done: 1_000, total: null });
+		// Once the sizes are in, the committed file's size shows and the total stays unknown.
+		await vi.waitFor(() => expect(embedOf(tracker.poll(root, refresh({ minsync: { total: 1 } }))).bytes).toEqual({ done: 1_000, total: null }));
 	});
 
 	it("projects the end from the journal as it grows over the minutes between polls", () => {
