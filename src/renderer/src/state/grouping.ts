@@ -359,8 +359,8 @@ export function groupedWindow(layout: GroupedLayout, input: GroupedWindowInput):
 
 /**
  * Content-space top of the flattened row `rowIndex` in list geometry (row
- * height 24, header block 40). The controller scrolls the list to this top
- * minus the keyboard lead.
+ * height 24, header block 40). `hooks/list-reveal.ts` scrolls the list from it
+ * (`scrollTopToReveal`); an index past the last row gives the layout's height.
  */
 export function groupedRowTop(sections: readonly GroupSection<unknown>[], rowIndex: number): number {
 	if (rowIndex < 0) return 0;
