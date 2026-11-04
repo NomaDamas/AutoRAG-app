@@ -33,8 +33,8 @@ second datasource or model configuration. The sidebar is searchable and grouped:
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, error reports, and document languages.
 - **기본 → 사이드바** — sidebar item and section visibility, ordering, custom pinned
-  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** (`AppCustomizerModal`)
-  dialog, all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
+  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** in the window's right sidebar
+  (`AppCustomizerPanel` in the Inspector's column, one conversation per section), all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
   **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
@@ -43,7 +43,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
   key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
   conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
-  profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
+  profile (`AppCustomizerPanel` in the right sidebar, with `surface="shortcuts"`), persisted in
   `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
   be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
