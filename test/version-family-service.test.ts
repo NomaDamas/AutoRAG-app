@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { DupeyScanResult } from "@autorag/librarian";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND } from "../src/main/dupey";
 import {
@@ -864,6 +864,90 @@ describe("version-family service — a failed scan stays local", () => {
 			await createVersionFamilyService(h.deps).refresh();
 
 			expect(h.persisted()?.timedOutScopes).toBeUndefined();
+		});
+	});
+
+	describe("check again while a scheduled scan runs", () => {
+		/** Desktop timed out before; the scheduled scan is held inside Documents until `release` is called. */
+		function scheduledScanInFlight() {
+			const gate = Promise.withResolvers<void>();
+			const calls: string[] = [];
+			let desktopTimesOut = true;
+			let hold = false;
+			const h = harness(
+				{
+					locations: async () => [place("Desktop", "/home/Desktop"), place("Documents", "/home/Documents")],
+					scanDuplicates: async (dir) => {
+						calls.push(dir);
+						if (dir === "/home/Documents" && hold) await gate.promise;
+						if (dir === "/home/Desktop" && desktopTimesOut) throw timeout();
+						return scanOf([family(`${dir}/a.txt`, `${dir}/b.txt`)]);
+					},
+				},
+			);
+			const service = createVersionFamilyService(h.deps);
+			return {
+				h,
+				service,
+				calls,
+				/** The first scan, which times Desktop out; then the schedule fires and hangs in Documents. */
+				async startScheduledScan() {
+					await service.start();
+					calls.length = 0;
+					hold = true;
+					desktopTimesOut = false;
+					h.timers[0]?.fire();
+					await vi.waitFor(() => expect(calls).toEqual(["/home/Documents"]));
+				},
+				release: () => gate.resolve(),
+			};
+		}
+
+		it("tries the timed-out folders once the scheduled scan has ended, instead of joining a scan that skips them", async () => {
+			const run = scheduledScanInFlight();
+			await run.startScheduledScan();
+
+			const checking = run.service.refresh();
+			run.release();
+			const result = await checking;
+
+			// The scheduled scan skipped Desktop; "Check again" scanned it, so its failure is gone.
+			expect(run.calls).toEqual(["/home/Documents", "/home/Desktop", "/home/Documents"]);
+			expect(result.scanFailures).toEqual([]);
+		});
+
+		it("runs one more scan for however many ask meanwhile", async () => {
+			const run = scheduledScanInFlight();
+			await run.startScheduledScan();
+
+			const first = run.service.refresh();
+			const second = run.service.refresh();
+			run.release();
+			await Promise.all([first, second]);
+
+			expect(run.calls.filter((dir) => dir === "/home/Desktop")).toEqual(["/home/Desktop"]);
+			expect(run.calls).toEqual(["/home/Documents", "/home/Desktop", "/home/Documents"]);
+		});
+
+		it("joins a scan that already retries the timed-out folders", async () => {
+			const run = scheduledScanInFlight();
+			await run.service.refresh();
+			run.calls.length = 0;
+
+			await Promise.all([run.service.refresh(), run.service.refresh()]);
+
+			expect(run.calls).toEqual(["/home/Desktop", "/home/Documents"]);
+		});
+
+		it("lets a scheduled scan join the scan in flight, as before", async () => {
+			const run = scheduledScanInFlight();
+			await run.startScheduledScan();
+
+			run.h.timers[0]?.fire();
+			run.release();
+			await settle();
+
+			expect(run.calls).toEqual(["/home/Documents"]);
 		});
 	});
 

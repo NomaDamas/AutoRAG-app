@@ -174,8 +174,9 @@ export interface VersionFamilyService {
 	result(): Promise<FsVersionFamiliesResult>;
 	/**
 	 * Runs a scan, persists the snapshot, and reports the outcome. This is the person asking ("Check again"), so folders
-	 * that timed out earlier are tried again; the scheduled scans leave them alone until then. A scan already running is
-	 * joined, not started twice.
+	 * that timed out earlier are tried again; the scheduled scans leave them alone until then. A scan already running
+	 * is joined, not started twice, unless it is a scheduled one: that scan skips the folders that timed out, so this
+	 * one runs right after it.
 	 */
 	refresh(): Promise<FsVersionFamiliesResult>;
 	/** Startup scan plus the repeating interval. */
@@ -222,6 +223,10 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	 */
 	const timedOut = new Map<string, TimedOutScope>();
 	let scanning: Promise<FsVersionFamiliesResult> | null = null;
+	/** The running scan retries the folders that timed out, so a "Check again" can join it. */
+	let scanningRetries = false;
+	/** The "Check again" waiting for a scheduled scan to end. */
+	let queuedRetry: Promise<FsVersionFamiliesResult> | null = null;
 	let timer: unknown = null;
 	let mutationSeq = 0;
 	const touchedAt = new Map<string, number>();
@@ -557,7 +562,6 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			return { ok: true, ...built };
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			console.error(`dupey scan failed for ${scope.path}: ${message}`);
 			const failure: FsVersionFamilyScanFailure = {
 				name: unit.name,
 				path: scope.path,
@@ -565,6 +569,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				reason: isDupeyTimeout(message) ? "timeout" : "error",
 				message,
 			};
+			console.error(`dupey scan failed for ${scope.path}: ${message}`);
 			if (failure.reason === "timeout") timedOut.set(key, { failure, at: now().toISOString() });
 			else timedOut.delete(key);
 			return { ok: false, failure };
@@ -796,12 +801,30 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		return result();
 	}
 
-	/** One scan at a time: a cloud drive scanned folder by folder can outlast the interval. */
+	/**
+	 * One scan at a time: a cloud drive scanned folder by folder can outlast the interval. A scan that asks for the
+	 * timed-out folders to be tried again does not join one that skips them: it runs once that one has ended, and
+	 * however many ask meanwhile share that one run.
+	 */
 	function scan(retryTimedOut: boolean): Promise<FsVersionFamiliesResult> {
-		scanning ??= runScan(retryTimedOut).finally(() => {
-			scanning = null;
-		});
-		return scanning;
+		if (scanning === null) {
+			scanningRetries = retryTimedOut;
+			scanning = runScan(retryTimedOut).finally(() => {
+				scanning = null;
+			});
+			return scanning;
+		}
+		if (!retryTimedOut || scanningRetries) return scanning;
+		queuedRetry ??= scanning
+			.then(
+				() => undefined,
+				() => undefined,
+			)
+			.then(() => scan(true))
+			.finally(() => {
+				queuedRetry = null;
+			});
+		return queuedRetry;
 	}
 
 	async function refresh(): Promise<FsVersionFamiliesResult> {
