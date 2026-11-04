@@ -44,9 +44,21 @@ describe("tallyMinsyncJournal", () => {
 			["files/b.md", 5_000],
 			["files/c.md", 70],
 		]);
-		const text = [HEADER, committed("files/a.md"), '{"item":"files/b.md","version":"v","outcome":"failed","error":"x"}', committed("files/c.md"), committed("files/not-staged.md")].join("\n");
+		const text = [HEADER, committed("files/a.md"), '{"item":"files/b.md","version":"v","outcome":"failed","error":"x"}', committed("files/c.md")].join("\n");
 		const tally = tallyMinsyncJournal(text, { sizeOf: (item) => sizes.get(item), modifiedAt: 42 });
-		expect(tally).toMatchObject({ committed: 3, failed: 1, bytesDone: 1_070, modifiedAt: 42 });
+		expect(tally).toMatchObject({ committed: 2, failed: 1, bytesDone: 1_070, modifiedAt: 42 });
+	});
+
+	it("leaves the bytes unknown when a committed file has no size, rather than counting it as 0", () => {
+		const sizes = new Map([["files/a.md", 1_000]]);
+		const text = [HEADER, committed("files/a.md"), committed("files/not-staged.md")].join("\n");
+		const tally = tallyMinsyncJournal(text, { sizeOf: (item) => sizes.get(item) });
+		expect(tally).toMatchObject({ committed: 2, bytesDone: null });
+		// A file that was not committed does not need a size: only the work counted as done is measured.
+		const failedOnly = [HEADER, committed("files/a.md"), '{"item":"files/not-staged.md","version":"v","outcome":"failed","error":"x"}'].join("\n");
+		expect(tallyMinsyncJournal(failedOnly, { sizeOf: (item) => sizes.get(item) })).toMatchObject({ committed: 1, failed: 1, bytesDone: 1_000 });
+		// No file committed yet: nothing to add up, and the sizes are known, so zero is true.
+		expect(tallyMinsyncJournal(`${HEADER}\n`, { sizeOf: (item) => sizes.get(item) }).bytesDone).toBe(0);
 	});
 
 	it("is empty for an empty or header-only log", () => {

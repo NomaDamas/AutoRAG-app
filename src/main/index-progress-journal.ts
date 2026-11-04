@@ -36,7 +36,9 @@ export function journalItemName(item: string): string {
 /**
  * Tally the log. A torn last line (the process was killed mid-append) and any line that is not a record are
  * ignored: this is only a display, so a bad line must never hide the rest.
- * `sizeOf` maps an item to the size of its parsed document; without it the tally carries no bytes.
+ * `sizeOf` maps an item to the size of its parsed document; without it the tally carries no bytes. A committed file whose
+ * size it cannot give (not staged when the sizes were read) leaves the figure unknown: adding it as 0 would show "0 B of X"
+ * for work that was done.
  */
 export function tallyMinsyncJournal(
 	text: string,
@@ -70,10 +72,13 @@ export function tallyMinsyncJournal(
 	let deleted = 0;
 	let failed = 0;
 	let bytes = 0;
+	let sized = options.sizeOf !== undefined;
 	for (const [item, outcome] of latest) {
 		if (outcome === "committed") {
 			committed += 1;
-			bytes += options.sizeOf?.(item) ?? 0;
+			const size = options.sizeOf?.(item);
+			if (size === undefined) sized = false;
+			else bytes += size;
 		} else if (outcome === "deleted") deleted += 1;
 		else failed += 1;
 	}
@@ -82,7 +87,7 @@ export function tallyMinsyncJournal(
 		committed,
 		deleted,
 		failed,
-		bytesDone: options.sizeOf === undefined ? null : bytes,
+		bytesDone: sized ? bytes : null,
 		lastFile: last === null ? null : journalItemName(last),
 		modifiedAt: options.modifiedAt ?? null,
 	};

@@ -93,6 +93,20 @@ describe("the progress tracker", () => {
 		await vi.waitFor(() => expect(embedOf(tracker.poll(root, refresh({ minsync: { total: 1 } }))).bytes).toEqual({ done: 1_000, total: null }));
 	});
 
+	it("shows no byte figure, not 0 B of the total, once the journal commits a file whose size is unknown", async () => {
+		stage("a.md", 1_000);
+		stage("b.md", 3_000);
+		writeJournal(journalLine("files/a.md"), T0);
+		const tracker = createIndexProgressTracker({ now: () => T0 });
+		const twoFiles = refresh({ minsync: { total: 2 } });
+		await vi.waitFor(() => expect(embedOf(tracker.poll(root, twoFiles)).bytes).toEqual({ done: 1_000, total: 4_000 }));
+		// The next commit is a file that was not staged when the sizes were read: its bytes cannot be added, so none are claimed.
+		writeJournal(journalLine("files/a.md") + journalLine("files/late.md"), T0 + 1_000);
+		const snapshot = tracker.poll(root, twoFiles);
+		expect(embedOf(snapshot).counts).toMatchObject({ done: 2, total: 2 });
+		expect(embedOf(snapshot).bytes).toBeNull();
+	});
+
 	it("projects the end from the journal as it grows over the minutes between polls", () => {
 		let now = T0;
 		const tracker = createIndexProgressTracker({ now: () => now });
