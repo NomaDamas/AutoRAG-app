@@ -366,6 +366,11 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 				settings: currentSettings,
 			});
 		});
+		expect([...(assistantRow()?.children ?? [])].map((el) => el.className)).toEqual([
+			"customizer-turn__reply",
+			"customizer-turn__changes",
+			"customizer-turn__reply",
+		]);
 		expect([...(assistantRow()?.querySelectorAll(".customizer-turn__reply") ?? [])].map((el) => el.textContent)).toEqual([
 			"현재 사이드바 설정을 먼저 살펴볼게요.",
 			"정리를 마쳤습니다.",

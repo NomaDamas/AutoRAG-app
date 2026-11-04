@@ -358,6 +358,11 @@ export function AppCustomizerPanel({
 									<div className="customizer-turn__user-bubble">{turn.userText}</div>
 								</div>
 								<div className="customizer-turn__assistant-row">
+									{(turn.changes.length > 0 && turn.messages.length > 0 ? turn.messages.slice(0, -1) : turn.messages).map(
+										(message, idx) => (
+											<CustomizerReplyBody key={idx} text={message} />
+										),
+									)}
 									{turn.changes.length > 0 ? (
 										<div className="customizer-turn__changes">
 											{turn.changes.map((change, idx) => (
@@ -368,9 +373,9 @@ export function AppCustomizerPanel({
 											))}
 										</div>
 									) : null}
-									{turn.messages.map((message, idx) => (
-										<CustomizerReplyBody key={idx} text={message} />
-									))}
+									{turn.changes.length > 0 && turn.messages.length > 0 ? (
+										<CustomizerReplyBody text={turn.messages[turn.messages.length - 1]!} />
+									) : null}
 									{turn.status === "running" && turn.draft.length > 0 ? (
 										<CustomizerReplyBody text={turn.draft} />
 									) : null}
