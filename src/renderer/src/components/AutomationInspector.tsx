@@ -34,7 +34,7 @@ export function AutomationInspector({ rule, onEdit, onDelete }: AutomationInspec
 	const { t } = useTranslation();
 	return (
 		<aside
-			className="inspector w-full min-w-0 h-full flex flex-col bg-subtle border-l border-border overflow-hidden"
+			className="inspector w-full min-w-0 flex-1 min-h-0 flex flex-col bg-subtle overflow-hidden"
 			aria-label={t("finderComponents.inspectorAside")}
 		>
 			{rule === null ? (

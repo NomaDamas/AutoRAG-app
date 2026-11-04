@@ -380,7 +380,7 @@ try {
 	await shot("06-customizer-panel-turn2-dark-en");
 
 	// Hide the right sidebar from the toolbar, check the hero comes back, reopen it, and the conversation is still there
-	await page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first().click();
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
 	await shot("07-settings-sidebar-dark-en");
 	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
@@ -394,10 +394,9 @@ try {
 	);
 	await shot("07b-customizer-panel-reopened");
 	// A second round trip through the same toggle keeps the conversation
-	const toggle = page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first();
-	await toggle.click();
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
-	await toggle.click();
+	await page.locator("button[aria-label=\"정보 보기\"], button[aria-label=\"Show inspector\"], button[aria-label=\"情報パネルを表示\"], button[aria-label=\"显示检查器\"]").first().click();
 	await panel.waitFor();
 	check("A second hide/show through the toolbar toggle keeps the conversation", (await panel.locator(".customizer-turn").count()) === 2);
 

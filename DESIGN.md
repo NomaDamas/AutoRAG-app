@@ -38,7 +38,7 @@ The application is not an isolated AI chatbot; it is a **living macOS Finder bro
 - **Permanent Multi-Pane Architecture:** 
   - Left navigation (Sidebar) lists the live OS places in groups (`Favorites`, `Cloud`, `Locations`), plus `Connections` when a connected app has a folder to show, with **AI Search** above Recents; see §1.5.
   - Center area hosts the tab strip. A tab shows a folder, Settings, or the AI Search chat — AI Search is a tab, not a bottom dock.
-  - Right panel (Info / Evidence) is **permanently present**, preventing jarring layout shifts during file inspection.
+  - Right panel (Info / Evidence) is a **right sidebar** that mirrors the left one: a full-height column from the window top, so the toolbar spans only the center column and its view, Sort, Group, and Share controls end at the inspector's edge. Its head (as tall as the toolbar, a drag region) carries the hide button flush left; while it is hidden the toolbar's last button shows it again, the way the show-sidebar button sits at the toolbar's start. The choice and the width persist (`autorag.shell.inspector`, `autorag.shell.inspectorWidth`), and the column keeps its width while the window grid slides it shut. Layout: `components/InspectorColumn.tsx`; live check: `scripts/manual-qa/right-sidebar.e2e.ts`.
 
 
 ### 1.2 Sort and grouping controls
@@ -220,12 +220,43 @@ The app's own icon comes from the native thumbnail lane, which renders a bundle 
 | `⌘D` | Finder | Duplicate the selected rows next to themselves (undoable with ⌘Z) |
 | Mouse back / forward buttons | Window | Same as the toolbar's Back and Forward (the tab's history, also on Settings and AI Search tabs); a press at either end of the history does nothing |
 | `Space` | File List | Quick Look preview of the selected file or folder (`src/preview/DESIGN.md`) |
-| `⌥ Space` | Global | Global AutoRAG Spotlight summon |
+| `⌥Space` / `Alt+Space` | System-wide | Summon or dismiss the quick-search launcher over any app (§2a); the chord is set in Settings → General → Quick Search |
 | `Enter` | Search Bar | Commit search with Filenames |
 | `⌥ Enter` | Search Bar | Commit search with Content |
 | `Escape` | Window | Dismiss dropdowns, clear active search focus |
 
 ---
+
+## 2a. Quick-search launcher
+
+A Raycast/Spotlight-style window the system-wide shortcut (default `⌥Space` on macOS, `Alt+Space` on Windows) summons
+over whatever app is in front: one text field, one result list, a footer of key hints. Everything works from the
+keyboard and everything works with the mouse.
+
+- **Results.** Empty query: the Finder's Recents. Typed: *File Names* (the file-name index, ranked prefix → word start →
+  substring, shorter and newer first), then *Contents* (the local MinSync hybrid index, one row per file with the
+  matched passage, terms marked; files already listed by name are not repeated), then the *Ask Dazzi* row. At most 8 rows
+  per section. Keyword-only mode and an index that is not ready say so under the list.
+- **Placement.** Centred on the display under the pointer, a fifth of the way down its work area; 720 × 468; above
+  full-screen apps and on every Space / virtual desktop. Clicking anywhere else hides it.
+
+| Key | Action |
+|---|---|
+| `↑` / `↓`, `⇧↑` / `⇧↓` | Move the selection / extend it (copies and drags carry the whole range) |
+| `⌘↑` / `⌘↓` | First / last row |
+| `↩` | Open the file (Ask row: ask the question) and hand the foreground to it |
+| `Space`, `⌘Y` | Quick Look the focused row; it follows `↑`/`↓` and closes on `Space` again. `Space` previews only while it cannot be part of the query (empty field, after moving through the rows, or with the preview open); `⌘Y` previews any time |
+| `⌘↩` | Show in Finder / Explorer |
+| `⇧⌘↩` | Show the file selected in the Dazzi Finder |
+| `⌥↩` | Ask Dazzi the typed question in a new AI Search tab |
+| `⌥⌘↩` | Attach the selected files to AI Search, to ask about them |
+| `⌘C` | Copy the selected files (they paste as files in other apps); copies the text instead while text in the field is selected |
+| `⇧⌘C` | Copy the selected paths as text |
+| `⌘K` | Action panel for the row (arrows + `↩`, or click) |
+| `Esc` | Close the panel → close the preview → clear the query → hide and give the foreground back to the previous app |
+
+Mouse: click selects, `⇧`-click extends, double-click opens, a row drags out as the real file(s), the footer hints and
+the panel entries are buttons. On Windows the chords use `Ctrl` for `⌘` and `Alt` for `⌥`.
 
 ## 3. Inspector file actions
 

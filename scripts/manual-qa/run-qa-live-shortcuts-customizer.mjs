@@ -279,7 +279,7 @@ try {
 	);
 
 	// Hide the right sidebar and verify direct key-press recording in the live session too!
-	await page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first().click();
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
 	await page.locator('[data-shortcut-record="newTab"]').click();
 	await page.keyboard.press(chord("Shift", "P"));

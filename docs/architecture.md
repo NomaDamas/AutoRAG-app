@@ -1034,6 +1034,40 @@ the run's first model prompt. The query string, which the librarian uses for
 baseline retrieval and records in its retrieval memory, stays the user's own
 words.
 
+## Quick-search launcher
+
+A system-wide shortcut (`globalShortcut`, Settings → General → Quick Search, stored as `AppSettings.quickSearch`)
+summons a small window over any app. Pieces:
+
+- `src/main/quick-search-shortcut.ts` keeps the registration in step with the settings: moves to a new chord, reports
+  one another app holds (`status().error === "taken"`, shown in Settings), and releases the chord while Settings
+  records a new one (`quick-search:recording`) so the keys reach the recorder.
+- `src/main/quick-search-window.ts` creates the window hidden at startup (`quick-search.html`, preload
+  `quick-search.mjs`): a `panel` window on macOS, an always-on-top window without a taskbar button on Windows. Hiding
+  with `restore` gives the foreground back (macOS hides the app unless a Dazzi window was in front); actions that open
+  something (`handoff`) leave it to what they opened. On Windows/Linux it is destroyed with the last app window so
+  closing the Finder still quits.
+- The page (`src/renderer/src/launcher/QuickSearch.tsx`, model in `state/launcher.ts`) talks to the fs worker over its
+  own port, like the Finder: `search` (file names), `contentSearch` (below), `enrichEntries`, `open`, `reveal`,
+  `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
+  (`AbortSignal` through the worker and the librarian thread).
+- Handoffs to the Finder reuse the os-request queue: *Show in Dazzi* is a `reveal`, *Ask about these files* an `ask`
+  (drafts on the nearest AI Search tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
+  `dazzi --ask` (a new AI Search tab sends it).
+- `contentSearch` (`src/main/content-search.ts`, in the librarian thread) is model-free: `AutoRAGLite.searchSelected`
+  over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
+  Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
+  was not searched.
+- Preview: the launcher owns a second Quick Look panel (`attachQuickLook(launcher, { level: "screen-saver",
+  closeWithOwner: true })`; `src/preview/node/window.ts` keeps one session per owner window and routes each IPC call to
+  the session whose owner or panel sent it). The page drives it through the same `PreviewBridge` the Finder uses and
+  makes it follow the focused row. Focus moving between the launcher and its panel is not a dismissal: a blur hides the
+  launcher only when, a moment later, neither window has focus; the panel closes with the launcher.
+
+QA: `scripts/manual-qa/run-qa-quick-search.mjs` (lane `quick-search`) builds a real index, presses the real OS chord
+over TextEdit, drives the launcher from the keyboard and the mouse, previews rows in the real Quick Look panel, and
+reads the copies back from the OS clipboard.
+
 ## Right-click menu in Finder and Explorer
 
 Settings → General → **Add to the file right-click menu** (off by default)
@@ -1072,6 +1106,7 @@ folder to Finder:
 ```sh
 dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
 dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
+dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Search tab asks at once, the paths attached
 dazzi                          # bring Dazzi to the front
 ```
 
@@ -1080,6 +1115,15 @@ does not exist is reported like `open` does (`dazzi: nope: No such file or
 directory`), the ones that exist still open, and the exit status is 1. At most 200
 paths per call (the request limit in `src/shared/os-request-contract.ts`); more is
 an error rather than a silent cut.
+
+`--ask QUESTION` (or `--ask=QUESTION`) sends the action `ask` with the question
+in `--autorag-query=`: the renderer opens a new AI Search tab and sends the
+question with the existing paths as its attachments in one run
+(`deliverToDock` → `sendQuery(text, attachments)`), so a tab that is still
+answering never swallows it. The question needs no path; a missing attachment is
+reported and dropped while the question is still asked; an empty question exits 2.
+Questions are capped at 16,000 characters (`OS_REQUEST_MAX_QUERY_LENGTH`).
+`--ask` is macOS-only for now: `dazzi.cmd` rejects it as an unknown option.
 
 The launcher is a script that ships inside the app (`build/cli/dazzi` →
 `Dazzi.app/Contents/Resources/bin/dazzi`; `dazzi.cmd` in `resources\bin` on

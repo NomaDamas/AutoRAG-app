@@ -160,4 +160,29 @@ describe("remote bootstrap", () => {
 		expect(opened).toEqual([]);
 		expect(closedCount).toBe(2);
 	});
+
+	it("omits ?token= on cookie-paired sessions and exposes pairing and device management methods", () => {
+		const script = buildRemoteBootstrapScript({
+			via: "device",
+			deviceId: "dev-123",
+			platform: "darwin",
+			appearance: "light",
+			language: "en",
+			version: "0.1.0",
+		});
+		const window = runBootstrap(script);
+		const remote = window.__autoragRemote as { routes: { preview: string }; url: (route: string, params?: Record<string, unknown>) => string };
+		const resolved = remote.url(remote.routes.preview, { path: "/tmp/a.png" });
+		expect(resolved).toContain("/remote/preview");
+		expect(resolved).not.toContain("token=");
+
+		const autorag = window.autorag as Record<string, Record<string, unknown>>;
+		const bridge = autorag.remote;
+		expect(typeof bridge?.startPairing).toBe("function");
+		expect(typeof bridge?.devices).toBe("function");
+		expect(typeof bridge?.renameDevice).toBe("function");
+		expect(typeof bridge?.revokeDevice).toBe("function");
+		expect(typeof bridge?.revokeAllDevices).toBe("function");
+		expect(typeof bridge?.onChange).toBe("function");
+	});
 });

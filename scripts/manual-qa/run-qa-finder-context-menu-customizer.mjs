@@ -334,7 +334,7 @@ try {
 		(await page.locator(".settings-content", { hasText: "PDF 핵심 3줄 요약" }).count()) === 1 && (await panel.isVisible()),
 	);
 
-	await page.locator("button[aria-label=\"정보 창 토글\"], button[aria-label=\"Toggle inspector\"], button[aria-label=\"情報パネルの切り替え\"], button[aria-label=\"切换检查器\"]").first().click();
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
 	await panel.waitFor({ state: "hidden" });
 	await shot("06-settings-context-menu-populated");
 
