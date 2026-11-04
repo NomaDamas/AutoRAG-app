@@ -794,30 +794,33 @@
       "skip": "跳过",
       "finish": "完成",
       "clickHint": "直接点击试试",
+      "dragHint": "直接拖动标签页试试",
+      "sendHint": "直接发送试试",
+      "typingHint": "正在输入问题…",
       "progress": "{{index}} / {{count}}",
-      "welcome": {
-        "title": "左边是文件夹,右边是 AI 搜索",
-        "body": "还是熟悉的文件夹界面,Dazzi 在旁边读取文件内容来回答你。"
+      "splitBottom": {
+        "title": "拖动标签页试试上下分屏",
+        "body": "按住右侧的标签页,拖到左侧文件夹界面的底部松开,就能变成上下分屏。",
+        "dropLabel": "拖到这里变成上下分屏"
       },
-      "question": {
-        "title": "这是从你的文件里生成的问题",
-        "body": "我们已经确认刚读取的文档能回答它。"
+      "mergePane": {
+        "title": "再合并回单个画面试试",
+        "body": "把标签页拖到另一个画面的中央或标签栏上松开,随时都能合二为一。",
+        "dropLabel": "拖到这里合并为一个画面"
       },
       "ask": {
-        "title": "点击发送按钮提问",
-        "body": "也可以直接按 Enter 键发送。"
-      },
-      "answer": {
-        "title": "答案来了",
-        "body": "答案只以你的文件为依据。",
-        "waitingTitle": "正在寻找答案",
-        "waitingBody": "正在阅读文件里的内容。",
-        "failedTitle": "这次没有找到答案",
-        "failedBody": "可以换个说法再问一次。"
+        "title": "亲自发送这个问题试试",
+        "body": "这是从你刚读取的文件里挑选的问题。点击发送按钮,或改成你想问的内容试试。"
       },
       "cite": {
-        "title": "点击依据编号试试",
-        "body": "点击编号后,右侧会打开这句话出自的原文件。"
+        "title": "答案来了 — 点击依据编号试试",
+        "body": "答案只以你的文件为依据。点击蓝色编号即可打开对应的原文件。",
+        "waitingTitle": "正在寻找答案",
+        "waitingBody": "正在阅读文件里的内容。",
+        "noCiteTitle": "答案来了",
+        "noCiteBody": "答案只以你的文件为依据。",
+        "failedTitle": "这次没有找到答案",
+        "failedBody": "可以换个说法再问一次。"
       },
       "evidence": {
         "title": "依据都汇集在这里",

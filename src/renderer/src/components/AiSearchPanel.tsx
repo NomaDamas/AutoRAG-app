@@ -71,8 +71,8 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
 export interface AiDockHandle {
 	/** Seed the composer with `text` and send it at once. */
 	sendQuery(text: string): void;
-	/** Leave `text` in the composer unsent and focus it: the person finishes the sentence and sends it. */
-	prefill(text: string): void;
+	/** Leave `text` in the composer unsent (`focus: false` types without stealing focus mid-animation). */
+	prefill(text: string, options?: { readonly focus?: boolean }): void;
 	/** Append draft attachments and focus the composer. */
 	attach(atts: readonly ChatAttachment[]): void;
 	/**
@@ -690,9 +690,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	/** Leaves `text` in the composer unsent and focuses it: the person finishes or edits it and sends it themselves. */
-	function prefill(text: string): void {
+	function prefill(text: string, options?: { readonly focus?: boolean }): void {
 		setQuery(text);
-		ensureFocus();
+		if (options?.focus !== false) ensureFocus();
 	}
 
 	useImperativeHandle(ref, () => ({

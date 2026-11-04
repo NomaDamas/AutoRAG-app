@@ -32,7 +32,7 @@ onboarding:
 
 # Same disposable first-run sandbox as `make onboarding`, seeded with a 4-file
 # mini-fixture home (duplicate pair + cited docs) and stubbed setup (~2 s) so
-# all 8 tour steps (question → ask → answer → cite → evidence → duplicates → versions)
+# all 7 tour steps (splitBottom → mergePane → ask → cite → evidence → duplicates → versions)
 # and plans run immediately without indexing the real home folders.
 onboarding-skip-index:
 	bun scripts/setup.mjs --ensure

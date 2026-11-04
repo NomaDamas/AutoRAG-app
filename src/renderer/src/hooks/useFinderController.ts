@@ -103,6 +103,7 @@ import {
 	navigateTab,
 	openAiSearchTab,
 	openEvidenceFolderTab,
+	openOrSelectFolderTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
@@ -1036,7 +1037,11 @@ export function useFinderController(
 	});
 
 	const showEntryFolder = useLatestCallback((entry: FinderEntry) => {
-		setTabsState((state) => navigateTab(state, locationOf(entry)));
+		const dir = locationOf(entry);
+		setTabsState((state) => {
+			const switched = isVirtualTabPath(activeTab(state).path) ? openOrSelectFolderTab(state, dir) : navigateTab(state, dir);
+			return patchActiveTab(switched, (current) => ({ ...current, selection: EMPTY_SELECTION }));
+		});
 		setQueryValue("");
 		scrollTarget.current = entry.path;
 	});

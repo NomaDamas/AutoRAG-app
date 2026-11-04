@@ -55,8 +55,8 @@ import { loadListColumns, saveListColumns, type ListColumnsState } from "./state
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
-import { allTabs, canCloseWorkspaceTab, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
-import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
+import { allTabs, canCloseWorkspaceTab, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
+import { FirstRun, type FirstRunHost, type TourPaneState } from "./first-run/FirstRun";
 import { folderPaneId, splitWithAiSearch } from "./first-run/tour";
 import { cn } from "./lib/cn";
 
@@ -375,14 +375,15 @@ export function App(): ReactElement {
 				setInspectorVisible(true);
 				setWorkspace((current) => splitWithAiSearch(current));
 			},
-			typeDraft: (text) => {
+			focusAi: () => {
+				setWorkspace((current) => focusAiSearchInWorkspace(current));
+			},
+			typeDraft: (text, focus = true) => {
 				const ws = workspaceRef.current;
-				for (const pane of ws.panes) {
-					if (pane.tabs.find((tab) => tab.id === pane.activeId)?.path !== AI_SEARCH_PATH) continue;
-					aiHandlesRef.current.get(pane.activeId)?.prefill(text);
-					if (ws.focusedPaneId !== pane.id) setWorkspace((current) => focusPane(current, pane.id));
-					return;
-				}
+				const aiTab = allTabs(ws).find((tab) => tab.path === AI_SEARCH_PATH);
+				if (aiTab === undefined) return;
+				aiHandlesRef.current.get(aiTab.id)?.prefill(text, { focus });
+				if (focus) setWorkspace((current) => focusAiSearchInWorkspace(current));
 			},
 			showFamily: (family) => {
 				const paneId = folderPaneId(workspaceRef.current);
@@ -1002,7 +1003,19 @@ export function App(): ReactElement {
 				}}
 			/>
 		) : null}
-		{firstRun ? <FirstRun host={firstRunHost} onDone={endFirstRun} /> : null}
+		{firstRun ? (
+			<FirstRun
+				host={firstRunHost}
+				paneState={
+					{
+						count: workspace.panes.length,
+						splitDirection: workspace.layout.kind === "split" ? workspace.layout.direction : null,
+						dragging: draggingTabId !== null,
+					} satisfies TourPaneState
+				}
+				onDone={endFirstRun}
+			/>
+		) : null}
 		</>
 		</AutomationsContext>
 		</ShortcutSettingsContext>

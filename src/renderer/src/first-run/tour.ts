@@ -16,26 +16,30 @@ export function initialScreen(status: SetupStatus): FirstRunScreen {
 	return status.stage === "ready" ? "ready" : "setup";
 }
 
-export type TourStepId = "welcome" | "question" | "ask" | "answer" | "cite" | "evidence" | "duplicates" | "versions";
+export type TourStepId = "splitBottom" | "mergePane" | "ask" | "cite" | "evidence" | "duplicates" | "versions";
 
 /** Steps that only make sense once the demo question produced a cited answer. */
-const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { cite: true, evidence: true };
+const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { evidence: true };
 
-/** Steps where the user acts on the spotlighted control directly rather than pressing a Next button. */
-const ACTION_REQUIRED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { ask: true, cite: true, duplicates: true };
-
-export function stepRequiresUserAction(step: TourStepId): boolean {
-	return ACTION_REQUIRED_STEPS[step] === true;
-}
+/** Steps where the user acts on the real Finder controls rather than pressing a Next button. */
+export const ACTION_REQUIRED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = {
+	splitBottom: true,
+	mergePane: true,
+	ask: true,
+	cite: true,
+	duplicates: true,
+};
 
 /**
- * The tour the data supports: the AI steps need the verified demo question,
- * the duplicate steps a version family.
+ * The tour the data supports: everyone experiences splitting and merging panes
+ * first; the AI steps need the verified demo question, the duplicate steps a
+ * version family.
  */
 export function tourSteps(input: { readonly demo: boolean; readonly family: boolean }): readonly TourStepId[] {
 	return [
-		"welcome",
-		...(input.demo ? (["question", "ask", "answer", "cite", "evidence"] as const) : []),
+		"splitBottom",
+		"mergePane",
+		...(input.demo ? (["ask", "cite", "evidence"] as const) : []),
 		...(input.family ? (["duplicates", "versions"] as const) : []),
 	];
 }
@@ -77,10 +81,10 @@ export function splitWithAiSearch(ws: Workspace): Workspace {
 	return moveTab(opened, aiTab.id, { kind: "split", paneId, edge: "right" });
 }
 
-/** The pane the tour treats as "the folder side": the first one not showing AI Search. */
+/** The pane the tour treats as "the folder side": the first one not showing AI Search, or the single merged pane. */
 export function folderPaneId(ws: Workspace): number | null {
 	const pane = ws.panes.find((candidate) => candidate.tabs.find((tab) => tab.id === candidate.activeId)?.path !== AI_SEARCH_PATH);
-	return pane?.id ?? null;
+	return (pane ?? ws.panes[0])?.id ?? null;
 }
 
 export interface Rect {
@@ -101,9 +105,28 @@ const MARGIN = 14;
  * with room (a wide anchor puts it below or above), centred on the window when
  * there is no anchor or the anchor fills the window. Always inside the window.
  */
-export function placeBubble(anchor: Rect | null, viewport: { readonly width: number; readonly height: number }, size: { readonly width: number; readonly height: number }): { readonly left: number; readonly top: number; readonly side: BubbleSide } {
+export function placeBubble(
+	anchor: Rect | null,
+	viewport: { readonly width: number; readonly height: number },
+	size: { readonly width: number; readonly height: number },
+	prefer?: "bottom-right" | "below",
+): { readonly left: number; readonly top: number; readonly side: BubbleSide } {
 	const clampX = (x: number): number => Math.min(Math.max(x, MARGIN), Math.max(MARGIN, viewport.width - size.width - MARGIN));
 	const clampY = (y: number): number => Math.min(Math.max(y, MARGIN), Math.max(MARGIN, viewport.height - size.height - MARGIN));
+	if (prefer === "bottom-right" && anchor !== null) {
+		return {
+			left: clampX(anchor.left + anchor.width - size.width - 18),
+			top: clampY(anchor.top + anchor.height - size.height - 18),
+			side: "center",
+		};
+	}
+	if (prefer === "below" && anchor !== null && viewport.height - (anchor.top + anchor.height) - GAP - MARGIN >= size.height) {
+		return {
+			left: clampX(anchor.left + anchor.width / 2 - size.width / 2),
+			top: anchor.top + anchor.height + GAP,
+			side: "below",
+		};
+	}
 	const fills = anchor !== null && anchor.width >= viewport.width * 0.8 && anchor.height >= viewport.height * 0.6;
 	if (anchor === null || fills) {
 		return { left: clampX((viewport.width - size.width) / 2), top: clampY(viewport.height * 0.62 - size.height / 2), side: "center" };

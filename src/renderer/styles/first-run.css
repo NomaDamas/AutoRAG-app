@@ -985,6 +985,15 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	inset: 0;
 }
 
+/* While the user actively drags a tab, step out of the way so WorkspaceView's live drop zones shine unobstructed. */
+.fr-tour[data-dragging="true"] .fr-coach,
+.fr-tour[data-dragging="true"] .fr-drop-zone,
+.fr-tour[data-dragging="true"] .fr-drag-trail,
+.fr-tour[data-dragging="true"] .fr-cursor {
+	opacity: 0.14;
+	pointer-events: none;
+}
+
 /* The spotlight: a hole in a dim veil, drawn by one huge shadow. Clicks pass through. */
 .fr-spot {
 	position: absolute;
@@ -1082,8 +1091,8 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 .fr-cursor {
 	position: absolute;
 	z-index: 2;
-	width: 0;
-	height: 0;
+	width: 26px;
+	height: 26px;
 	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring);
 	pointer-events: none;
 }
@@ -1139,6 +1148,109 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	}
 }
 
+.fr-drop-zone {
+	position: absolute;
+	z-index: 1;
+	display: grid;
+	place-items: center;
+	border: 2px dashed var(--accent);
+	border-radius: 12px;
+	background: rgba(10, 100, 216, 0.08);
+	box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+	pointer-events: none;
+	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring), width 260ms var(--fr-spring), height 260ms var(--fr-spring), opacity 180ms ease;
+	animation: fr-zone-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes fr-zone-pulse {
+	0%,
+	100% {
+		background: rgba(10, 100, 216, 0.06);
+	}
+	50% {
+		background: rgba(10, 100, 216, 0.14);
+	}
+}
+
+.fr-drop-zone-label {
+	padding: 5px 12px;
+	border-radius: 999px;
+	background: var(--fr-card);
+	border: 1px solid var(--fr-card-border);
+	box-shadow: var(--shadow-raised);
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--accent-text);
+}
+
+.fr-drag-trail {
+	position: absolute;
+	inset: 0;
+	z-index: 1;
+	pointer-events: none;
+	transition: opacity 180ms ease;
+}
+
+.fr-drag-trail line {
+	stroke: var(--accent);
+	stroke-width: 2;
+	stroke-dasharray: 5 5;
+	stroke-opacity: 0.55;
+}
+
+.fr-drag-trail circle {
+	fill: var(--accent);
+	fill-opacity: 0.75;
+}
+
+.fr-cursor--drag {
+	animation: fr-cursor-glide 2.3s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.fr-cursor--drag .fr-cursor-glyph {
+	animation: none;
+}
+
+.fr-drag-pill {
+	position: absolute;
+	left: 14px;
+	top: -12px;
+	padding: 3px 9px;
+	border-radius: 7px;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font-size: 11px;
+	font-weight: 700;
+	white-space: nowrap;
+	box-shadow: 0 6px 16px rgba(10, 100, 216, 0.32);
+}
+
+@keyframes fr-cursor-glide {
+	0% {
+		opacity: 0;
+		transform: translate3d(0, -8px, 0) scale(1.06);
+	}
+	12% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0) scale(0.92);
+	}
+	20% {
+		opacity: 1;
+		transform: translate3d(0, 0, 0) scale(0.92);
+	}
+	70% {
+		opacity: 1;
+		transform: translate3d(var(--dx, 0px), var(--dy, 0px), 0) scale(0.94);
+	}
+	82% {
+		opacity: 1;
+		transform: translate3d(var(--dx, 0px), var(--dy, 0px), 0) scale(1.04);
+	}
+	100% {
+		opacity: 0;
+		transform: translate3d(var(--dx, 0px), var(--dy, 0px), 0) scale(1.04);
+	}
+}
 .fr-coach-spinner {
 	flex: none;
 	width: 13px;
@@ -1305,7 +1417,9 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	.fr-progress-fill::after,
 	.fr-coach-hint-dot,
 	.fr-cursor-ring,
-	.fr-cursor-glyph {
+	.fr-cursor-glyph,
+	.fr-cursor--drag,
+	.fr-drop-zone {
 		animation: none;
 	}
 

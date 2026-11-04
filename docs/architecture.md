@@ -506,12 +506,14 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    `start()` again (a failed run restarts; a run in flight or finished is returned
    as is).
 2. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
-   `[data-action="tour-next"]` / `tour-skip`, plus the animated target cursor
-   `.fr-cursor` on action-required steps where `tour-next` is omitted) walk the
-   split view — a cinematic title, the demo question typed into AI Search and
-   sent, the answer, clicking the first citation chip, the inspector evidence,
-   clicking a duplicate family row in the left pane, and its Versions section.
-   Steps with no data (no demo question, no duplicate family) are skipped.
+   `[data-action="tour-next"]` / `tour-skip`, plus `.fr-cursor` / `.fr-cursor--drag`
+   on action-required steps where `tour-next` is omitted) walk the live window —
+   a cinematic title, dragging the `AI 검색` tab down to split top and bottom
+   (`splitBottom`), dragging it back to merge into one pane (`mergePane`),
+   sending the typed demo question (`ask`), clicking the citation chip (`cite`),
+   inspecting the evidence (`evidence`), clicking a duplicate family row
+   (`duplicates`), and checking its Versions section (`versions`). Steps with no
+   data (no demo question, no duplicate family) are skipped.
 3. **Plans**: only at the very end of the tour does the sheet `.fr-plans` offer
    Free / Air / Pro / Max cards, Google / GitHub sign-in, and "나중에"
    (`[data-action="plans-later"]`). Completing it calls `onboarding.complete()`,
@@ -608,7 +610,7 @@ the run's processes and removes the sandbox; a SIGKILL of the wrapper is covered
 by a detached watchdog, and the next `make onboarding` sweeps any sandbox whose
 owner and watchdog both died (`make onboarding-skip-index` seeds a four-file
 mini-fixture home with a duplicate pair and a deterministic preview answer so
-all nine tour steps run in ~2 s without indexing the real home). The QA lane covers the same flow end to end in CI
+all seven tour steps run in ~2 s without indexing the real home). The QA lane covers the same flow end to end in CI
 settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`). The first run indexes
 keyword-only, so the lane needs no embedding model. The first-run overlay drives
 the Finder window itself (no second window); on macOS `HOME` in the launch env
