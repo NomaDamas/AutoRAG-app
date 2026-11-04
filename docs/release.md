@@ -238,37 +238,36 @@ then signs every `.exe` it packs: `Dazzi.exe`, the bundled tools under `resource
 `elevate.exe`, the uninstaller, and the installer.
 
 1. **Eligibility.** Public Trust is open to *organizations* in South Korea; *individual*
-   developers only in the US and Canada. A Korean 개인사업자 such as 노마다마스 applies through
-   **Organization → Public** with its 사업자등록증명 (in date, issued within 12 months). Microsoft
-   does not document sole proprietorships either way, and its pages disagree on a three-year
-   history requirement (a Microsoft moderator answered "no minimum org age" in 2026-08; the MSIX
-   guidance still says three years). 노마다마스 opened on 2026-10-06, so ask Azure Support before
-   the first attempt: validation allows three document uploads, and a failed request cannot be
-   retried with the same entity without support. The certificate's CN is the validated legal
-   name exactly as registered (`노마다마스`); it cannot be customized.
+   developers only in the US and Canada. A Korean 개인사업자 (`NomaDamas`) applies through
+   **Organization → Public** with its 사업자등록증명 (in date, issued within 12 months; an English
+   사업자등록증명 from Hometax carries the English name `NomaDamas`). Microsoft does not document
+   sole proprietorships either way, and its pages disagree on a three-year history requirement
+   (a Microsoft moderator answered "no minimum org age" in 2026-08; the MSIX guidance still says
+   three years). Validation allows three document uploads, and a failed request cannot be retried
+   with the same entity without support. The certificate's CN is the validated legal name
+   (`NomaDamas`); it cannot be customized.
 2. **What validation asks for.** A paid (pay-as-you-go) subscription, not free or trial; the
-   *Artifact Signing Identity Verifier* role on the account; a website of the business
-   (`https://nomadamas.org`); primary and secondary mailboxes on that domain that accept external
-   links (the domain's mail runs through Cloudflare Email Routing, so both must forward to a
-   monitored inbox); the business identifier (사업자등록번호) and address exactly as on the
-   certificate; and the representative's Microsoft Verified ID (government ID + face check).
+   *Artifact Signing Identity Verifier* role on the account; the business's website
+   (`https://dazziapp.com`) and primary/secondary mailboxes on that domain that accept external
+   links; the 10-digit 사업자등록번호 without hyphens (`Registered Business Number`, Street address
+   ≤ 30 chars); and the representative's Microsoft Verified ID (government ID + face check).
    Processing takes 1–20 business days.
-3. **Resources.** Register the `Microsoft.CodeSigning` provider, create an Artifact Signing
-   account in *Korea Central* (endpoint `https://krc.codesigning.azure.net`), and after
-   validation completes, a **Public Trust** certificate profile. Create an app registration
-   with a client secret and give it the *Artifact Signing Certificate Profile Signer* role on
-   the account.
-4. **Store the values.** `AZURE_CODESIGN_PUBLISHER` is the certificate's CN as shown in the
-   profile's subject preview:
+3. **Resources.** The `Microsoft.CodeSigning` provider, the Artifact Signing account
+   `nomadamas-signing` in *Korea Central* (`https://krc.codesigning.azure.net`, Basic SKU,
+   $9.99/month), and the Entra app registration `dazzi-github-actions` with the *Artifact Signing
+   Certificate Profile Signer* role are provisioned. Once validation completes, create a
+   **Public Trust** certificate profile on `nomadamas-signing`.
+4. **Store the values.** Set all seven together once the certificate profile exists
+   (`AZURE_CODESIGN_PUBLISHER` is the certificate's CN from the profile's subject preview):
 
 ```sh
 gh secret set AZURE_TENANT_ID     --repo NomaDamas/AutoRAG-app
 gh secret set AZURE_CLIENT_ID     --repo NomaDamas/AutoRAG-app
 gh secret set AZURE_CLIENT_SECRET --repo NomaDamas/AutoRAG-app
 gh variable set AZURE_CODESIGN_ENDPOINT  --repo NomaDamas/AutoRAG-app --body https://krc.codesigning.azure.net
-gh variable set AZURE_CODESIGN_ACCOUNT   --repo NomaDamas/AutoRAG-app --body <account name>
+gh variable set AZURE_CODESIGN_ACCOUNT   --repo NomaDamas/AutoRAG-app --body nomadamas-signing
 gh variable set AZURE_CODESIGN_PROFILE   --repo NomaDamas/AutoRAG-app --body <certificate profile name>
-gh variable set AZURE_CODESIGN_PUBLISHER --repo NomaDamas/AutoRAG-app --body 노마다마스
+gh variable set AZURE_CODESIGN_PUBLISHER --repo NomaDamas/AutoRAG-app --body NomaDamas
 ```
 
 All seven or none: `scripts/release/windows-signing.mjs` fails the pack when only some are set,
