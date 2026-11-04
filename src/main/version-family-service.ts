@@ -198,7 +198,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	let lastFailures: readonly FsVersionFamilyScanFailure[] = [];
 	/** Cloud drives scanned folder by folder; seeded from the snapshot before the first scan. */
 	const splitLocations = new Set<string>();
-	let splitLoaded = false;
+	let memoryLoaded = false;
 	/** Scans that hit dupey's time limit, by scope. A scheduled scan reuses them instead of asking the drive for the same files again. */
 	const timedOut = new Map<string, FsVersionFamilyScanFailure>();
 	let scanning: Promise<FsVersionFamiliesResult> | null = null;
@@ -422,11 +422,17 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		});
 	}
 
-	/** Seeds `splitLocations` from the snapshot, once: a restart must not retry the whole-root scan that already failed. */
-	async function loadSplitLocations(): Promise<void> {
-		if (splitLoaded) return;
-		splitLoaded = true;
+	/** Seeds what scans remember from the snapshot, once: a restart must not retry the whole-root scan that already failed. */
+	async function loadScanMemory(): Promise<void> {
+		if (memoryLoaded) return;
+		memoryLoaded = true;
 		for (const path of (await load())?.splitLocations ?? []) splitLocations.add(path);
+	}
+
+	/** What the snapshot carries beyond the families so the next process need not learn it again, for the locations scanned. */
+	function scanMemory(locations: readonly string[]): Pick<StoredVersionFamilies, "splitLocations"> {
+		const split = [...splitLocations].filter((path) => locations.includes(path));
+		return split.length === 0 ? {} : { splitLocations: split };
 	}
 
 	function unitKey(unit: VersionScanScope): string {
@@ -574,7 +580,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		readonly failures: readonly FsVersionFamilyScanFailure[];
 		readonly stamps: Record<string, FileStamp>;
 	}> {
-		await loadSplitLocations();
+		await loadScanMemory();
 		const families: FsVersionFamily[] = [];
 		const locations: string[] = [];
 		const failures: FsVersionFamilyScanFailure[] = [];
@@ -671,14 +677,13 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				),
 			);
 			for (const path of fencedPaths) stampsOfMerged[path] = DIRTY_STAMP;
-			const split = [...splitLocations].filter((path) => locations.includes(path));
 			const stored: StoredVersionFamilies = {
 				version: VERSION_FAMILY_STORE_VERSION,
 				scannedAt: now().toISOString(),
 				locations,
 				families: pruneVersionFamilies(merged, honored),
 				stamps: stampsOfMerged,
-				...(split.length === 0 ? {} : { splitLocations: split }),
+				...scanMemory(locations),
 			};
 			const verified = await verifyStored(stored);
 			const persisted: StoredVersionFamilies = {
