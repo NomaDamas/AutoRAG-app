@@ -12,7 +12,11 @@ import {
 	pruneVersionFamilies,
 	type VersionFamilyServiceDeps,
 } from "../src/main/version-family-service";
-import { createFileVersionFamilyStore, type StoredVersionFamilies } from "../src/main/version-family-store";
+import {
+	createFileVersionFamilyStore,
+	type StoredVersionFamilies,
+	VERSION_FAMILY_STORE_VERSION,
+} from "../src/main/version-family-store";
 import { DIRTY_STAMP, type FileStamp } from "../src/main/version-family-verify";
 import { RECENTS_PATH, type FsEntry, type FsLocation, type FsVersionFamily } from "../src/shared/fs-contract";
 
@@ -397,9 +401,9 @@ describe("version-family service — a failed scan stays local", () => {
 		expect(result.scanFailures.map((failure) => failure.path)).toEqual(["/home/Desktop"]);
 	});
 
-	it("leaves the snapshot and its scannedAt alone when no location could be read", async () => {
+	it("leaves the snapshot's families and its scannedAt alone when no location could be read", async () => {
 		const h = harness(
-			{ scanDuplicates: async () => { throw timeout(); } },
+			{ scanDuplicates: async () => { throw new Error("dupey failed with exit code 1"); } },
 			stored([stack("/home/Desktop/old.txt", "/home/Desktop/old2.txt")]),
 		);
 		const result = await createVersionFamilyService(h.deps).refresh();
@@ -575,6 +579,145 @@ describe("version-family service — a failed scan stays local", () => {
 		expect((await service.result()).scanFailures).toHaveLength(1);
 		await service.refresh();
 		expect(h.scans).toEqual(["/home/Desktop", "/home/Desktop"]);
+	});
+
+	describe("a folder that timed out is remembered across a restart", () => {
+		const desktopTimedOut = (): Partial<VersionFamilyServiceDeps> => ({
+			locations: async () => [place("Desktop", "/home/Desktop"), place("Documents", "/home/Documents")],
+			scanDuplicates: async (dir) => {
+				if (dir === "/home/Desktop") throw timeout();
+				return scanOf([family("/home/Documents/a.txt", "/home/Documents/b.txt")]);
+			},
+		});
+		const desktopRecord = {
+			name: "Desktop",
+			path: "/home/Desktop",
+			excludeDirs: [],
+			message: "dupey timed out.",
+			at: "2026-09-29T10:00:00.000Z",
+		};
+
+		it("writes the folder, its message and the time it timed out into the snapshot", async () => {
+			const h = harness(desktopTimedOut());
+
+			await createVersionFamilyService(h.deps).refresh();
+
+			expect(h.persisted()?.timedOutScopes).toEqual([desktopRecord]);
+		});
+
+		it("does not scan the folder again after a restart, but still reports it", async () => {
+			const first = harness(desktopTimedOut());
+			await createVersionFamilyService(first.deps).refresh();
+			const scanned: string[] = [];
+
+			// A new process: a new service reading the snapshot the first one wrote.
+			const restarted = harness(
+				{
+					...desktopTimedOut(),
+					scanDuplicates: async (dir) => {
+						scanned.push(dir);
+						return scanOf([]);
+					},
+				},
+				first.persisted(),
+			);
+			const result = await createVersionFamilyService(restarted.deps).start();
+
+			expect(scanned).toEqual(["/home/Documents"]);
+			expect(result.scanFailures).toEqual([
+				{ name: "Desktop", path: "/home/Desktop", excludeDirs: [], reason: "timeout", message: "dupey timed out." },
+			]);
+		});
+
+		it("scans the folder after a restart once the person asks, and forgets it when it reads", async () => {
+			const first = harness(desktopTimedOut());
+			await createVersionFamilyService(first.deps).refresh();
+			const scanned: string[] = [];
+			const restarted = harness(
+				{
+					...desktopTimedOut(),
+					scanDuplicates: async (dir) => {
+						scanned.push(dir);
+						return scanOf([family(`${dir}/x.txt`, `${dir}/y.txt`)]);
+					},
+				},
+				first.persisted(),
+			);
+
+			const result = await createVersionFamilyService(restarted.deps).refresh();
+
+			expect(scanned).toEqual(["/home/Desktop", "/home/Documents"]);
+			expect(result.scanFailures).toEqual([]);
+			expect(restarted.persisted()?.timedOutScopes).toBeUndefined();
+		});
+
+		it("writes the memory when no location could be read, with the snapshot's families and scannedAt as they were", async () => {
+			const h = harness(
+				{ scanDuplicates: async () => { throw timeout(); } },
+				stored([stack("/home/Desktop/old.txt", "/home/Desktop/old2.txt")]),
+			);
+
+			await createVersionFamilyService(h.deps).refresh();
+
+			expect(h.writes).toBe(1);
+			expect(h.persisted()?.scannedAt).toBe("2026-09-28T00:00:00.000Z");
+			expect(h.persisted()?.families.map((entry) => entry.head)).toEqual(["/home/Desktop/old.txt"]);
+			expect(h.persisted()?.timedOutScopes).toEqual([desktopRecord]);
+		});
+
+		it("keeps the memory of a first scan that read nothing, as a snapshot that was never scanned", async () => {
+			const h = harness({ scanDuplicates: async () => { throw timeout(); } });
+			await createVersionFamilyService(h.deps).refresh();
+			expect(h.persisted()).toMatchObject({ version: 2, scannedAt: null, families: [], timedOutScopes: [desktopRecord] });
+			const scanned: string[] = [];
+
+			const restarted = harness(
+				{ scanDuplicates: async (dir) => { scanned.push(dir); return scanOf([]); } },
+				h.persisted(),
+			);
+			const result = await createVersionFamilyService(restarted.deps).start();
+
+			expect(scanned).toEqual([]);
+			expect(result.scannedAt).toBeNull();
+			expect(result.scanFailures.map((failure) => failure.reason)).toEqual(["timeout"]);
+		});
+
+		it("does not rewrite the snapshot when a scheduled scan learned nothing new", async () => {
+			const h = harness({ scanDuplicates: async () => { throw timeout(); } });
+			const service = createVersionFamilyService(h.deps);
+			await service.start();
+			expect(h.writes).toBe(1);
+
+			h.timers[0]?.fire();
+			await settle();
+
+			expect(h.writes).toBe(1);
+		});
+
+		it("does not remember a scan that failed for another reason", async () => {
+			const h = harness({
+				...desktopTimedOut(),
+				scanDuplicates: async (dir) => {
+					if (dir === "/home/Desktop") throw new Error("dupey failed with exit code 1");
+					return scanOf([]);
+				},
+			});
+
+			await createVersionFamilyService(h.deps).refresh();
+
+			expect(h.persisted()?.timedOutScopes).toBeUndefined();
+		});
+
+		it("forgets a folder that is no longer under a scanned location", async () => {
+			const h = harness(
+				{ ...desktopTimedOut(), locations: async () => [place("Documents", "/home/Documents")] },
+				stored([], { timedOutScopes: [desktopRecord] }),
+			);
+
+			await createVersionFamilyService(h.deps).refresh();
+
+			expect(h.persisted()?.timedOutScopes).toBeUndefined();
+		});
 	});
 
 	it("runs one scan at a time", async () => {
@@ -956,5 +1099,64 @@ describe("file version-family store", () => {
 		const dir = await mkdtemp(join(tmpdir(), "vf-store-"));
 		await writeFile(join(dir, "version-families.json"), "{ not json", "utf8");
 		expect(await createFileVersionFamilyStore(dir).read()).toBeNull();
+	});
+
+	describe("the timed-out folders a snapshot remembers", () => {
+		const timedOutScope = {
+			name: "Desktop",
+			path: "/icloud/Desktop",
+			excludeDirs: ["Archive"],
+			message: "dupey timed out.",
+			at: "2026-09-29T10:00:00.000Z",
+		};
+		const base = {
+			version: 2 as const,
+			scannedAt: "2026-09-29T10:00:00.000Z",
+			locations: ["/icloud"],
+			families: [],
+		};
+
+		it("round-trips them, and a snapshot that was never scanned", async () => {
+			const dir = await mkdtemp(join(tmpdir(), "vf-store-"));
+			const store = createFileVersionFamilyStore(dir);
+			const snapshot = { ...base, scannedAt: null, splitLocations: ["/icloud"], timedOutScopes: [timedOutScope] };
+
+			await store.write(snapshot);
+
+			expect(await store.read()).toEqual(snapshot);
+		});
+
+		it("still reads a snapshot written before they existed, at the same format version", async () => {
+			const dir = await mkdtemp(join(tmpdir(), "vf-store-"));
+			await writeFile(join(dir, "version-families.json"), JSON.stringify({ ...base, splitLocations: ["/icloud"] }), "utf8");
+
+			const read = await createFileVersionFamilyStore(dir).read();
+
+			expect(read).toEqual({ ...base, splitLocations: ["/icloud"] });
+			expect(read?.timedOutScopes).toBeUndefined();
+			expect(VERSION_FAMILY_STORE_VERSION).toBe(2);
+		});
+
+		it("drops an entry that is not a well-formed folder and keeps the rest of the snapshot", async () => {
+			const dir = await mkdtemp(join(tmpdir(), "vf-store-"));
+			const broken = [{ name: "x" }, "Desktop", null, { ...timedOutScope, excludeDirs: [1] }, { ...timedOutScope, at: 5 }];
+			await writeFile(
+				join(dir, "version-families.json"),
+				JSON.stringify({ ...base, timedOutScopes: [...broken, timedOutScope] }),
+				"utf8",
+			);
+
+			const read = await createFileVersionFamilyStore(dir).read();
+
+			expect(read?.timedOutScopes).toEqual([timedOutScope]);
+			expect(read?.locations).toEqual(["/icloud"]);
+		});
+
+		it("treats a field that is not a list as no memory at all", async () => {
+			const dir = await mkdtemp(join(tmpdir(), "vf-store-"));
+			await writeFile(join(dir, "version-families.json"), JSON.stringify({ ...base, timedOutScopes: "Desktop" }), "utf8");
+
+			expect(await createFileVersionFamilyStore(dir).read()).toEqual(base);
+		});
 	});
 });

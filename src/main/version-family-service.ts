@@ -38,7 +38,12 @@ import type { FsDirChange } from "../shared/live-contract";
 import { type DupeyScanOptions, scanScopeCovers, type VersionScanScope } from "../shared/version-scan-scope";
 import { createDupeyProbe, DUPEY_INSTALL_COMMAND, type DupeyProbe } from "./dupey";
 import { DIRTY_STAMP, lstatProbe, remapRenames, sameContent, verifyFamilies, type FileStamp, type Probe } from "./version-family-verify";
-import { type StoredVersionFamilies, VERSION_FAMILY_STORE_VERSION, type VersionFamilyStore } from "./version-family-store";
+import {
+	type StoredTimedOutScope,
+	type StoredVersionFamilies,
+	VERSION_FAMILY_STORE_VERSION,
+	type VersionFamilyStore,
+} from "./version-family-store";
 
 export const DEFAULT_SCAN_INTERVAL_MINUTES = 60;
 
@@ -186,6 +191,12 @@ export interface VersionFamilyService {
 	applyDirChanges(dirs: readonly FsDirChange[]): Promise<boolean>;
 }
 
+/** A scope whose scan hit the time limit: the failure it is reported as, and when it happened. */
+interface TimedOutScope {
+	readonly failure: FsVersionFamilyScanFailure;
+	readonly at: string;
+}
+
 export function createVersionFamilyService(deps: VersionFamilyServiceDeps): VersionFamilyService {
 	const { scanDuplicates } = deps;
 	const listFolders = deps.listFolders ?? defaultListFolders;
@@ -202,8 +213,11 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	/** Cloud drives scanned folder by folder; seeded from the snapshot before the first scan. */
 	const splitLocations = new Set<string>();
 	let memoryLoaded = false;
-	/** Scans that hit dupey's time limit, by scope. A scheduled scan reuses them instead of asking the drive for the same files again. */
-	const timedOut = new Map<string, FsVersionFamilyScanFailure>();
+	/**
+	 * Scans that hit dupey's time limit, by scope. A scheduled scan reuses them instead of asking the drive for the same
+	 * files again; the snapshot keeps them, so that holds after a restart too. Only "Check again" scans them once more.
+	 */
+	const timedOut = new Map<string, TimedOutScope>();
 	let scanning: Promise<FsVersionFamiliesResult> | null = null;
 	let timer: unknown = null;
 	let mutationSeq = 0;
@@ -429,13 +443,49 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 	async function loadScanMemory(): Promise<void> {
 		if (memoryLoaded) return;
 		memoryLoaded = true;
-		for (const path of (await load())?.splitLocations ?? []) splitLocations.add(path);
+		const stored = await load();
+		for (const path of stored?.splitLocations ?? []) splitLocations.add(path);
+		for (const scope of stored?.timedOutScopes ?? []) {
+			const { name, path, excludeDirs, message, at } = scope;
+			timedOut.set(unitKey({ path, excludeDirs }), { failure: { name, path, excludeDirs, reason: "timeout", message }, at });
+		}
 	}
 
 	/** What the snapshot carries beyond the families so the next process need not learn it again, for the locations scanned. */
-	function scanMemory(locations: readonly string[]): Pick<StoredVersionFamilies, "splitLocations"> {
+	function scanMemory(locations: readonly string[]): Pick<StoredVersionFamilies, "splitLocations" | "timedOutScopes"> {
 		const split = [...splitLocations].filter((path) => locations.includes(path));
-		return split.length === 0 ? {} : { splitLocations: split };
+		const scopes: StoredTimedOutScope[] = [];
+		for (const { failure, at } of timedOut.values()) {
+			if (!locations.some((root) => scanScopeCovers({ path: root, excludeDirs: [] }, failure.path))) continue;
+			scopes.push({ name: failure.name, path: failure.path, excludeDirs: failure.excludeDirs, message: failure.message, at });
+		}
+		return {
+			...(split.length === 0 ? {} : { splitLocations: split }),
+			...(scopes.length === 0 ? {} : { timedOutScopes: scopes }),
+		};
+	}
+
+	/**
+	 * Writes what the scans learned when they read nothing, so the snapshot's families and its `scannedAt` stay as they
+	 * were. Without it a restart scans again every folder that timed out: 120 s each, and a cloud drive's files downloaded
+	 * for nothing. Writes only when that memory changed.
+	 */
+	async function persistScanMemory(locations: readonly string[]): Promise<void> {
+		const stored = await load();
+		const memory = scanMemory(locations);
+		const same =
+			JSON.stringify(stored?.splitLocations ?? []) === JSON.stringify(memory.splitLocations ?? []) &&
+			JSON.stringify(stored?.timedOutScopes ?? []) === JSON.stringify(memory.timedOutScopes ?? []);
+		if (same) return;
+		const { splitLocations: _split, timedOutScopes: _timedOut, ...base } = stored ?? {
+			version: VERSION_FAMILY_STORE_VERSION,
+			scannedAt: null,
+			locations,
+			families: [],
+		};
+		const next: StoredVersionFamilies = { ...base, ...memory };
+		await deps.store.write(next);
+		snapshot = next;
 	}
 
 	function unitKey(unit: VersionScanScope): string {
@@ -492,7 +542,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		const { scope } = unit;
 		const key = unitKey(scope);
 		const known = timedOut.get(key);
-		if (known !== undefined && !retryTimedOut) return { ok: false, failure: known };
+		if (known !== undefined && !retryTimedOut) return { ok: false, failure: known.failure };
 		try {
 			const scan =
 				scope.excludeDirs.length === 0
@@ -511,7 +561,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				reason: isDupeyTimeout(message) ? "timeout" : "error",
 				message,
 			};
-			if (failure.reason === "timeout") timedOut.set(key, failure);
+			if (failure.reason === "timeout") timedOut.set(key, { failure, at: now().toISOString() });
 			else timedOut.delete(key);
 			return { ok: false, failure };
 		}
@@ -652,6 +702,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			return serialize(async () => {
 				lastError = null;
 				lastFailures = failures;
+				await persistScanMemory(locations);
 				const previous = published;
 				const currentBase =
 					previous ?? (await verifyStored(await load())).result;
