@@ -14,7 +14,8 @@ export interface SidebarRowMenu {
 /**
  * The right-click menu of a pinned sidebar row (사이드바에서 제거). It is the
  * app's own menu, not a native one, so it is dismissed here: a click outside
- * closes it through `ContextMenu`, and Escape closes it through this hook.
+ * closes it through `ContextMenu`, and Escape closes it through this hook, which
+ * keeps the keystroke from reaching the window keymap's own Esc handling.
  */
 export function useSidebarRowMenu(onUnpin: (sidebarId: string) => void): SidebarRowMenu {
 	const [state, setState] = useState<{ readonly cursor: { readonly x: number; readonly y: number }; readonly id: string } | null>(null);
@@ -24,7 +25,9 @@ export function useSidebarRowMenu(onUnpin: (sidebarId: string) => void): Sidebar
 		if (state === null) return;
 		const onKeyDown = (event: KeyboardEvent): void => {
 			if (event.key !== "Escape") return;
+			// Esc is spent on the menu: the window keymap's dismiss (close Quick Look or a rename, clear the search) must not also run.
 			event.preventDefault();
+			event.stopPropagation();
 			setState(null);
 		};
 		window.addEventListener("keydown", onKeyDown, true);

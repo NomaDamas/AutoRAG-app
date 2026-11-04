@@ -362,6 +362,40 @@ describe("sidebar row menu", () => {
 		expect(host.textContent).toContain("Remove from Sidebar");
 	});
 
+	it("spends Escape on itself: the window keymap's own Esc handling (dismiss) does not also run", () => {
+		const dismiss = vi.fn();
+		// useFinderKeyboard listens on window in the bubble phase; the key press starts on an element.
+		window.addEventListener("keydown", dismiss);
+		try {
+			act(() => root.render(<Menu onUnpin={vi.fn()} />));
+			open();
+			const escape = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+			act(() => void host.dispatchEvent(escape));
+			expect(host.querySelector(".menu__item")).toBeNull();
+			expect(escape.defaultPrevented).toBe(true);
+			expect(dismiss).not.toHaveBeenCalled();
+			// With the menu gone Escape is the keymap's again.
+			act(() => void host.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+			expect(dismiss).toHaveBeenCalledTimes(1);
+		} finally {
+			window.removeEventListener("keydown", dismiss);
+		}
+	});
+
+	it("leaves other keys to the keymap while the menu is open", () => {
+		const keymap = vi.fn();
+		window.addEventListener("keydown", keymap);
+		try {
+			act(() => root.render(<Menu onUnpin={vi.fn()} />));
+			open();
+			act(() => void host.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, cancelable: true })));
+			expect(keymap).toHaveBeenCalledTimes(1);
+			expect(host.querySelector(".menu__item")).not.toBeNull();
+		} finally {
+			window.removeEventListener("keydown", keymap);
+		}
+	});
+
 	it("closes on Escape without unpinning", () => {
 		const onUnpin = vi.fn();
 		act(() => root.render(<Menu onUnpin={onUnpin} />));
