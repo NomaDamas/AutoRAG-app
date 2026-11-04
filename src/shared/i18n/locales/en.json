@@ -322,6 +322,25 @@
     "dropPrompt": "Drag here to ask AI",
     "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
     "steerSend": "Correct the search",
+    "voiceStart": "Dictate with your voice",
+    "voiceStop": "Stop recording and transcribe",
+    "voiceCancel": "Cancel recording",
+    "voiceSend": "Stop and send",
+    "voiceTranscribing": "Transcribing…",
+    "voiceNoSpeech": "No speech was heard. Please try again.",
+    "voiceUnavailable": "No microphone is available on this device.",
+    "voiceFailed": "Could not transcribe your voice: {{message}}",
+    "micPermission": {
+      "title": "Allow microphone access",
+      "body": "To ask with your voice, Dazzi needs the microphone. It records only after you press the microphone button.",
+      "stepsMac": "Turn on Dazzi in System Settings › Privacy & Security › Microphone.",
+      "stepsWindows": "In Settings › Privacy & security › Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”.",
+      "openMac": "Open System Settings",
+      "openWindows": "Open Windows Settings",
+      "notNow": "Not now",
+      "waiting": "Turn it on there and come back to Dazzi: recording starts right away.",
+      "stillDenied": "The microphone is still off. Turn it on in Settings, then come back."
+    },
     "steerHintLead": "You can type while it searches",
     "steerHintEnter": "correct",
     "steerHintAltEnter": "next question",
@@ -1521,7 +1540,8 @@
       "unknownAction": "Unknown file action.",
       "invalidAnchor": "The share anchor is invalid.",
       "invalidServiceRequest": "The service request is invalid.",
-      "invalidConversionRequest": "The conversion request is invalid."
+      "invalidConversionRequest": "The conversion request is invalid.",
+      "invalidVoiceRequest": "The voice request is invalid."
     },
     "dialogs": {
       "notificationBody": "Notifications are on.",
@@ -1634,6 +1654,9 @@
       "checkMenu": "Check for Updates…",
       "readyNotification": "Dazzi {{version}} is ready. It installs when you quit the app.",
       "availableNotification": "Dazzi {{version}} is available to download."
+    },
+    "voice": {
+      "unreadableTranscript": "The Dazzi service returned a transcript this app cannot read."
     },
     "account": {
       "httpStatus": "The Dazzi service answered HTTP {{status}}.",

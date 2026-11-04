@@ -322,6 +322,25 @@
     "dropPrompt": "ここにドラッグしてAIに質問",
     "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
     "steerSend": "検索を修正",
+    "voiceStart": "音声で入力",
+    "voiceStop": "録音を終了して文字起こし",
+    "voiceCancel": "録音をキャンセル",
+    "voiceSend": "録音を終了して送信",
+    "voiceTranscribing": "文字起こし中…",
+    "voiceNoSpeech": "音声が聞き取れませんでした。もう一度お話しください。",
+    "voiceUnavailable": "このデバイスではマイクを使用できません。",
+    "voiceFailed": "音声を文字起こしできませんでした: {{message}}",
+    "micPermission": {
+      "title": "マイクへのアクセスを許可してください",
+      "body": "音声で質問するには、Dazziがマイクを使える必要があります。録音はマイクボタンを押したときだけ行います。",
+      "stepsMac": "システム設定 › プライバシーとセキュリティ › マイク で Dazzi をオンにしてください。",
+      "stepsWindows": "設定 › プライバシーとセキュリティ › マイク で「マイクへのアクセス」と「デスクトップ アプリがマイクにアクセスできるようにする」をオンにしてください。",
+      "openMac": "システム設定を開く",
+      "openWindows": "Windowsの設定を開く",
+      "notNow": "後で",
+      "waiting": "設定でオンにして Dazzi に戻ると、すぐに録音を始めます。",
+      "stillDenied": "マイクはまだオフです。設定でオンにしてから戻ってください。"
+    },
     "steerHintLead": "検索中も入力できます",
     "steerHintEnter": "修正",
     "steerHintAltEnter": "次の質問",
@@ -1521,7 +1540,8 @@
       "unknownAction": "不明なファイル操作です。",
       "invalidAnchor": "共有位置が正しくありません。",
       "invalidServiceRequest": "サービスリクエストが正しくありません。",
-      "invalidConversionRequest": "変換リクエストが正しくありません。"
+      "invalidConversionRequest": "変換リクエストが正しくありません。",
+      "invalidVoiceRequest": "音声入力のリクエストが正しくありません。"
     },
     "dialogs": {
       "notificationBody": "通知がオンになりました。",
@@ -1634,6 +1654,9 @@
       "checkMenu": "アップデートを確認…",
       "readyNotification": "Dazzi {{version}} の準備ができました。アプリを終了するとインストールされます。",
       "availableNotification": "Dazzi {{version}} をダウンロードできます。"
+    },
+    "voice": {
+      "unreadableTranscript": "Dazziサービスから、このアプリで読み取れない文字起こしが返されました。"
     },
     "account": {
       "httpStatus": "Dazziサービスが HTTP {{status}} で応答しました。",

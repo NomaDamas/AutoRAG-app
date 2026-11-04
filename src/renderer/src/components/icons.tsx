@@ -36,6 +36,7 @@ import {
 	LayoutGrid,
 	Link2,
 	List,
+	Mic,
 	PackageOpen,
 	PanelLeft,
 	PanelRight,
@@ -152,6 +153,8 @@ export const SendIcon = glyph(Send, 16, 2.4);
 export const SparklesIcon = glyph(Sparkles, 14, 2);
 
 export const ArrowUpIcon = glyph(ArrowUp, 16, 2.6);
+
+export const MicIcon = glyph(Mic, 16, 2);
 
 export const PencilIcon = glyph(Pencil, 13, 2);
 
