@@ -123,7 +123,9 @@
       "reset": "열 초기화"
     },
     "versionBanner": {
-      "retry": "다시 확인"
+      "retry": "다시 확인",
+      "scanTimeout": "\"{{name}}\"의 버전 묶기를 확인하지 못했습니다. 검사가 너무 오래 걸렸습니다. 다른 폴더의 버전 묶기는 그대로입니다.",
+      "scanFailed": "\"{{name}}\"의 버전 묶기를 확인하지 못했습니다. {{detail}}"
     },
     "pathBar": {
       "edit": "경로로 이동",

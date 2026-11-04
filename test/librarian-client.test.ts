@@ -21,13 +21,22 @@ interface Calls {
 	ensure: number;
 	stop: number;
 	scanned: string[];
+	/** The `excludeDirs` each scan came with, in the order of `scanned`; undefined when it came with none. */
+	scanExcludes: (readonly string[] | undefined)[];
 	shutdowns: number;
+	/** Times the thread was told to end its dupey processes. */
+	dupeyStops: number;
 	excluded: [string, boolean][];
 	locationsSeen: (readonly FsLocation[])[];
 }
 
 /** Services that record what the thread was asked, and can be told to fail. */
-function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLocation[]>; indexRefreshed(error: string | null): void }, fail: { search?: Error } = {}): LibrarianServices {
+function stubServices(
+	calls: Calls,
+	host: { locations(): Promise<readonly FsLocation[]>; indexRefreshed(error: string | null): void },
+	fail: { search?: Error } = {},
+	hooks: { onStop?: () => Promise<void> } = {},
+): LibrarianServices {
 	return {
 		contentSearch: {
 			search: async (query, limit, signal) => {
@@ -53,11 +62,16 @@ function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLoca
 			},
 			stop: async () => {
 				calls.stop += 1;
+				await hooks.onStop?.();
 			},
 		},
-		scanDuplicates: async (dir) => {
+		scanDuplicates: async (dir, options) => {
 			calls.scanned.push(dir);
+			calls.scanExcludes.push(options?.excludeDirs);
 			return { ...SCAN, dir };
+		},
+		stopDuplicateScans: async () => {
+			calls.dupeyStops += 1;
 		},
 		indexStatus: {
 			indexStatus: async (paths) => paths.map((path) => ({ ...STATUS, path })),
@@ -83,8 +97,8 @@ interface Harness {
 
 const closers: (() => void)[] = [];
 
-function harness(options: { fail?: { search?: Error }; hang?: boolean; shutdownMs?: number } = {}): Harness {
-	const calls: Calls = { search: [], content: [], aborted: 0, ensure: 0, stop: 0, scanned: [], shutdowns: 0, excluded: [], locationsSeen: [] };
+function harness(options: { fail?: { search?: Error }; hang?: boolean; shutdownMs?: number; onStop?: () => Promise<void> } = {}): Harness {
+	const calls: Calls = { search: [], content: [], aborted: 0, ensure: 0, stop: 0, scanned: [], scanExcludes: [], shutdowns: 0, dupeyStops: 0, excluded: [], locationsSeen: [] };
 	const refreshed: (string | null)[] = [];
 	const reports: ErrorReport[] = [];
 	let spawned = 0;
@@ -95,7 +109,7 @@ function harness(options: { fail?: { search?: Error }; hang?: boolean; shutdownM
 			spawned += 1;
 			const { port1, port2 } = new MessageChannel();
 			if (options.hang !== true) serveLibrarian(adaptNodePort(port2), {
-					services: (host) => stubServices(calls, host, options.fail),
+					services: (host) => stubServices(calls, host, options.fail, options.onStop === undefined ? {} : { onStop: options.onStop }),
 					onShutdown: () => {
 						calls.shutdowns += 1;
 					},
@@ -195,6 +209,17 @@ describe("createLibrarianClient", () => {
 			{ ...STATUS, path: "/d/b.txt" },
 		]);
 		expect(h.calls.scanned).toEqual(["/photos"]);
+		expect(h.calls.scanExcludes).toEqual([undefined]);
+	});
+
+	it("hands the folders a duplicate scan skips to the thread", async () => {
+		const h = harness();
+
+		await h.client.scanDuplicates("/cloud", { excludeDirs: ["Documents", "Desktop"] });
+		await expect(h.client.scanDuplicates("/cloud", { excludeDirs: [] })).resolves.toMatchObject({ dir: "/cloud" });
+
+		expect(h.calls.scanned).toEqual(["/cloud", "/cloud"]);
+		expect(h.calls.scanExcludes).toEqual([["Documents", "Desktop"], []]);
 	});
 
 	it("passes an exclusion toggle through and delivers the refresh outcome the thread pushes", async () => {
@@ -275,6 +300,66 @@ describe("createLibrarianClient", () => {
 		expect(h.terminated()).toBe(1);
 		await expect(h.client.scanDuplicates("/d")).rejects.toThrow();
 		expect(h.spawned()).toBe(1);
+	});
+
+	it("ends the dupey processes on dispose, before the file-name index has finished stopping", async () => {
+		// Given a file-name index whose stop is slow, as it is behind an index run still in flight
+		const slow = Promise.withResolvers<void>();
+		const h = harness({ onStop: () => slow.promise });
+		await h.client.scanDuplicates("/d");
+
+		// When the app disposes the client
+		const disposing = h.client.dispose();
+
+		// Then dupey is told to end while the index stop is still pending, and the thread is ended after both
+		await expect.poll(() => h.calls.dupeyStops).toBe(1);
+		expect(h.calls.stop).toBe(1);
+		expect(h.terminated()).toBe(0);
+		slow.resolve();
+		await disposing;
+		expect(h.calls.shutdowns).toBe(1);
+		expect(h.terminated()).toBe(1);
+	});
+
+	it("still waits for the dupey processes to leave when the file-name index fails to stop", async () => {
+		const gone = Promise.withResolvers<void>();
+		let released = false;
+		const calls: Calls = { search: [], content: [], aborted: 0, ensure: 0, stop: 0, scanned: [], scanExcludes: [], shutdowns: 0, dupeyStops: 0, excluded: [], locationsSeen: [] };
+		const { port1, port2 } = new MessageChannel();
+		closers.push(() => {
+			port1.close();
+			port2.close();
+		});
+		serveLibrarian(adaptNodePort(port2), {
+			services: (host) => ({
+				...stubServices(calls, host),
+				fileNameSearch: { ...stubServices(calls, host).fileNameSearch, stop: async () => { throw new Error("index stop failed"); } },
+				stopDuplicateScans: async () => {
+					await gone.promise;
+					released = true;
+				},
+			}),
+			onShutdown: () => {
+				calls.shutdowns += 1;
+			},
+		});
+		const client = createLibrarianClient({
+			spawn: (): LibrarianThread => ({ port: adaptNodePort(port1), onExit: () => {}, terminate: async () => port1.close() }),
+			locations: async () => [LOCATION],
+			onIndexRefreshed: () => {},
+			onReport: () => {},
+		});
+		await client.scanDuplicates("/d");
+
+		const disposing = client.dispose();
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		expect(released).toBe(false);
+		gone.resolve();
+		await disposing;
+
+		expect(released).toBe(true);
+		// The failed index stop skipped the exit event, as before; dupey was still waited for.
+		expect(calls.shutdowns).toBe(0);
 	});
 
 	it("ends a thread that does not answer the shutdown within the bound", async () => {

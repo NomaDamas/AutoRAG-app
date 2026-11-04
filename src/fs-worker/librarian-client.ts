@@ -15,6 +15,7 @@ import { createWorkerClient, serveWorkerPort, type WorkerClient } from "../share
 import { t } from "../shared/i18n/core";
 import type { AppLanguage } from "../shared/i18n/core";
 import type { FsLocation } from "../shared/fs-contract";
+import type { DupeyScanOptions } from "../shared/version-scan-scope";
 import type { IndexStatus } from "../shared/index-contract";
 import type { ErrorReport } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
@@ -41,7 +42,7 @@ export interface LibrarianClientDeps {
 export interface LibrarianClient {
 	readonly fileNameSearch: FileNameSearchBackend;
 	readonly contentSearch: ContentSearch;
-	scanDuplicates(dir: string): Promise<DupeyScanResult>;
+	scanDuplicates(dir: string, options?: DupeyScanOptions): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
@@ -134,7 +135,8 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 		contentSearch: {
 			search: (query, limit, signal) => call(LIBRARIAN_OP.contentSearch, limit === undefined ? [query] : [query, limit], signal),
 		},
-		scanDuplicates: (dir) => call(LIBRARIAN_OP.scanDuplicates, [dir]),
+		scanDuplicates: (dir, options) =>
+			call(LIBRARIAN_OP.scanDuplicates, options?.excludeDirs === undefined ? [dir] : [dir, options.excludeDirs]),
 		indexStatus: {
 			indexStatus: (paths) => call(LIBRARIAN_OP.indexStatus, [paths]),
 			setIndexExcluded: (path, excluded) => call(LIBRARIAN_OP.setIndexExcluded, [path, excluded]),

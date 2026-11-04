@@ -213,7 +213,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		deps.versionFamilies?.(familyDeps) ??
 		createVersionFamilyService({
 			...familyDeps,
-			scanDuplicates: (dir) => librarian.scanDuplicates(dir),
+			scanDuplicates: (dir, options) => librarian.scanDuplicates(dir, options),
 			locations: () => fsService.locations(),
 			store: createFileVersionFamilyStore(join(config.userDataDir, "dupey-cache")),
 			buildEntry: buildFsEntry,

@@ -5,8 +5,11 @@ import {
 	buildVersionFamilies,
 	defaultIndexIncluded,
 	EMPTY_VERSION_FAMILIES,
+	EMPTY_VERSION_FAMILIES_RESULT,
 	stackSelectionKeys,
 	type VersionFamilyData,
+	type VersionFamiliesResult,
+	versionFamilyErrorFor,
 } from "../src/renderer/src/state/version-family";
 
 function entry(path: string, name = path.split("/").pop() ?? ""): FinderEntry {
@@ -192,5 +195,52 @@ describe("stackSelectionKeys", () => {
 		expect(applyVersionStacks(rows, { ...options, selectedKeys: stackSelectionKeys(selection, built) })).toEqual(
 			applyVersionStacks(rows, { ...options, selectedKeys: selection }),
 		);
+	});
+});
+
+describe("versionFamilyErrorFor", () => {
+	const timedOut = {
+		name: "Desktop",
+		path: "/icloud/Desktop",
+		excludeDirs: [],
+		reason: "timeout" as const,
+		message: "dupey timed out.",
+	};
+	const result = (patch: Partial<VersionFamiliesResult>): VersionFamiliesResult => ({
+		...EMPTY_VERSION_FAMILIES_RESULT,
+		...patch,
+	});
+
+	it("shows a folder's scan failure only while that folder or one inside it is open", () => {
+		const failed = result({ scanFailures: [timedOut] });
+		expect(versionFamilyErrorFor(failed, "/icloud/Desktop")).toEqual({
+			code: "scan-failed",
+			message: "dupey timed out.",
+			installCommand: null,
+			scan: { name: "Desktop", reason: "timeout" },
+		});
+		expect(versionFamilyErrorFor(failed, "/icloud/Desktop/Projects")).not.toBeNull();
+		// The rest of the drive, other locations, and the virtual views stay clean.
+		expect(versionFamilyErrorFor(failed, "/icloud/Documents")).toBeNull();
+		expect(versionFamilyErrorFor(failed, "/icloud")).toBeNull();
+		expect(versionFamilyErrorFor(failed, "/Users/me/Documents")).toBeNull();
+		expect(versionFamilyErrorFor(failed, "Recents")).toBeNull();
+		expect(versionFamilyErrorFor(failed, "")).toBeNull();
+	});
+
+	it("does not show a failed root scan in the folders that scan skipped", () => {
+		const loose = { ...timedOut, name: "iCloud Drive", path: "/icloud", excludeDirs: ["Documents"] };
+		const failed = result({ scanFailures: [loose] });
+		expect(versionFamilyErrorFor(failed, "/icloud")).not.toBeNull();
+		expect(versionFamilyErrorFor(failed, "/icloud/Documents")).toBeNull();
+	});
+
+	it("shows a feature-wide error everywhere", () => {
+		const missing = { code: "dupey-missing" as const, message: "no dupey", installCommand: "cargo install dupey" };
+		expect(versionFamilyErrorFor(result({ error: missing, scanFailures: [timedOut] }), "/anywhere")).toBe(missing);
+	});
+
+	it("is null when nothing failed", () => {
+		expect(versionFamilyErrorFor(EMPTY_VERSION_FAMILIES_RESULT, "/icloud/Desktop")).toBeNull();
 	});
 });

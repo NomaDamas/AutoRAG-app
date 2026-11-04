@@ -123,7 +123,9 @@
       "reset": "重置列"
     },
     "versionBanner": {
-      "retry": "重新检查"
+      "retry": "重新检查",
+      "scanTimeout": "无法检查“{{name}}”的版本归组：扫描耗时过长。其他文件夹的版本归组不受影响。",
+      "scanFailed": "无法检查“{{name}}”的版本归组：{{detail}}"
     },
     "pathBar": {
       "edit": "前往路径",

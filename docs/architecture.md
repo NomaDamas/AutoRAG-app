@@ -327,10 +327,29 @@ extra main-bundle entry like the archive workers). `src/fs-worker/librarian-clie
 starts it on the first call that needs the librarian (a file-name search, the dupey
 scan, the index badges) and the worker asks for it once at launch, after the first
 folder renders; the contract is `librarian-contract.ts`. Quitting sends the thread a
-`shutdown` first, which stops the file-name index daemon (the Everything process on
-Windows, which otherwise keeps the profile folder locked) and raises the process
-`exit` event the librarian ends its MinSync children on, then terminates the thread.
-The client waits 1.8 s for that: main kills the worker 2 s after the quit.
+`shutdown` first, which ends the dupey processes a scan has running, stops the
+file-name index daemon (the Everything process on Windows, which otherwise keeps the
+profile folder locked) and raises the process `exit` event the librarian ends its
+MinSync children on, then terminates the thread. dupey goes first and the daemon's
+stop does not delay it, because that stop can take most of the time there is. The
+client waits 1.8 s for all of that: main kills the worker 2 s after the quit.
+
+dupey runs under the app's own runner (`src/main/dupey-runner.ts`), not under the
+librarian's: the thread hands `scanWithDupey` a `run` backed by `createDupeyRunner`
+(`src/fs-worker/librarian-dupey.ts`). The librarian's own spawn tracks no child, sends
+SIGTERM once at its 120 s limit and nothing ends it when the thread is terminated, so
+a scan of a cloud drive, which waits on files the drive has to download, left `dupey`
+processes at PPID 1 for tens of minutes after a quit. The runner keeps every child it
+starts. A call that outlasts 120 s fails with `dupey timed out.` and its process gets
+SIGTERM, then SIGKILL 5 s later if it is still there. `shutdown` sends SIGTERM to every
+child before it awaits anything (the thread is terminated right after), SIGKILL after
+500 ms, and fails the calls with `dupey was stopped.`, which is not a time-out and is
+never remembered as one; a process `exit` handler is the last backstop (synchronous
+SIGKILL). It also decodes dupey's output as a stream (a Korean path split across two
+chunks no longer breaks the JSON) and passes excluded folders as `--exclude-dir=<name>`
+(a folder named `-archive` was read as an option and failed the scan). What it cannot
+do is end a dupey when the whole worker process is killed or crashes: nothing in that
+process runs then, and the child outlives it until it finishes.
 
 If the worker dies, main forks a new one at once (repeated crashes within 10 s
 back off, up to 5 s), the window stays, and every open tab relists and
@@ -745,6 +764,46 @@ edited file joins version stacks at the next regular scan. A stack member whose
 content changed after the scan is shown as a normal row (detached) until the
 next scan. An external rename of a stack member re-points the stack within a 2 s
 window. Search results are not live.
+
+A dupey scan that fails is the failing folder's problem, not the feature's.
+`version-family-service.ts` scans each `scanned` location with one dupey call. A
+location whose call fails keeps the families of the last good scan, is listed in
+`scanFailures` of the layer data, and the other locations are written as usual;
+the renderer shows the failure (`versionFamilyErrorFor`) only while that folder, or
+one below it, is open. Only the missing CLI is a feature-wide `error`.
+
+A call that hits the 120 s limit (`reason: "timeout"`) is remembered with its time in
+the snapshot (`timedOutScopes`): the scheduled scans skip that folder, still report
+it, and keep skipping it after a restart, until the person chooses "Check again", which
+scans it once more and forgets it if it reads. "Check again" while a scheduled scan is
+running waits for that scan and runs after it; however many ask meanwhile share that
+one run. Any other failure (`reason: "error"`) is not remembered and is tried again by
+the next scan. A scan the app stopped on quit is neither: `stop()` makes the scan in
+flight give up without writing anything.
+
+A cloud drive (sidebar section `cloud`, e.g. iCloud Drive) whose whole-root call hits
+the time limit is scanned folder by folder from then on (`splitLocations` in the
+snapshot): each top-level folder is a call of its own, and the files in the root are
+one more call that skips those folders (`dupey scan --exclude-dir=<name>`). Only a
+time-out splits a drive; a whole-root call that fails for another reason is reported
+and the whole drive is tried again by the next scan. The way back is "Check again":
+it reads a split drive whole once more, and if that finishes the split and the folders'
+time-outs are forgotten and the scheduled scans read the whole drive again; if it
+fails, the folder scans go on. That attempt can take a full 120 s and asks the drive for
+files it has not downloaded yet, so the scheduled scans never make it. The split trades
+away stacks whose files sit in two different top-level folders of such a drive: the
+folder scans no longer find them, until a whole-drive scan finishes. The app cannot make
+dupey skip a file that is not downloaded yet; it has no such option. A split drive is
+still read folder by folder on every scheduled scan (the folders that did not time
+out), which reads files the drive may have to download: the scan interval in Settings
+is what limits that.
+
+The snapshot's format version stays 2. `splitLocations` and `timedOutScopes` are
+optional fields, an older snapshot loads without them, and a build that does not know
+them ignores them; a version bump would make every existing snapshot read as missing and
+force the very rescans these fields avoid. A snapshot written when no scan has read
+anything yet has `scannedAt: null`; entries that are not a well-formed folder are
+dropped on read without losing the rest.
 
 ## Helper agents
 
