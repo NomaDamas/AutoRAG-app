@@ -990,7 +990,7 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	position: absolute;
 	border-radius: 12px;
 	box-shadow: 0 0 0 200vmax var(--fr-scrim), 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 24px 4px rgba(10, 100, 216, 0.35);
-	transition: left 520ms var(--fr-spring), top 520ms var(--fr-spring), width 520ms var(--fr-spring), height 520ms var(--fr-spring), opacity 300ms ease;
+	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring), width 260ms var(--fr-spring), height 260ms var(--fr-spring), opacity 240ms ease;
 	pointer-events: none;
 }
 
@@ -1056,9 +1056,87 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	margin-top: 14px;
 }
 
+.fr-coach-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--accent-text);
+}
+
+.fr-coach-hint-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+	animation: fr-pulse 1.3s ease-in-out infinite;
+}
+
 .fr-coach-hint .fr-kbd {
 	background: var(--bg-input);
 	color: var(--fr-muted);
+}
+
+/* Animated click-guide cursor: tracks the real target element and taps gently. */
+.fr-cursor {
+	position: absolute;
+	z-index: 2;
+	width: 0;
+	height: 0;
+	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring);
+	pointer-events: none;
+}
+
+.fr-cursor-ring {
+	position: absolute;
+	left: -17px;
+	top: -17px;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	border: 2px solid var(--accent);
+	background: rgba(10, 100, 216, 0.16);
+	animation: fr-cursor-ripple 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.fr-cursor-glyph {
+	position: absolute;
+	left: -5px;
+	top: -3px;
+	filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.34));
+	transform-origin: 5px 3px;
+	animation: fr-cursor-tap 1.5s ease-in-out infinite;
+}
+
+@keyframes fr-cursor-tap {
+	0%,
+	100% {
+		transform: translate(8px, 10px) scale(1);
+	}
+	42% {
+		transform: translate(0, 0) scale(0.9);
+	}
+	58% {
+		transform: translate(1px, 1px) scale(0.95);
+	}
+}
+
+@keyframes fr-cursor-ripple {
+	0%,
+	34% {
+		opacity: 0;
+		transform: scale(0.45);
+	}
+	46% {
+		opacity: 0.95;
+		transform: scale(0.85);
+	}
+	88%,
+	100% {
+		opacity: 0;
+		transform: scale(1.65);
+	}
 }
 
 .fr-coach-spinner {
@@ -1224,12 +1302,16 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	.fr-cinema-bars::after,
 	.fr-coach-card,
 	.fr-plans,
-	.fr-progress-fill::after {
+	.fr-progress-fill::after,
+	.fr-coach-hint-dot,
+	.fr-cursor-ring,
+	.fr-cursor-glyph {
 		animation: none;
 	}
 
 	.fr-spot,
 	.fr-coach,
+	.fr-cursor,
 	.fr-progress-fill {
 		transition: none;
 	}

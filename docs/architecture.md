@@ -506,11 +506,12 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    `start()` again (a failed run restarts; a run in flight or finished is returned
    as is).
 2. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
-   `[data-action="tour-next"]` / `tour-skip`) walk the split view — a cinematic
-   title, the demo question typed into AI Search and asked, the answer, the first
-   citation chip, the inspector evidence, the evidence folder, a duplicate family
-   in the left pane, and its Versions section. Steps with no data (no demo
-   question, no duplicate family) are skipped.
+   `[data-action="tour-next"]` / `tour-skip`, plus the animated target cursor
+   `.fr-cursor` on action-required steps where `tour-next` is omitted) walk the
+   split view — a cinematic title, the demo question typed into AI Search and
+   sent, the answer, clicking the first citation chip, the inspector evidence,
+   clicking a duplicate family row in the left pane, and its Versions section.
+   Steps with no data (no demo question, no duplicate family) are skipped.
 3. **Plans**: only at the very end of the tour does the sheet `.fr-plans` offer
    Free / Air / Pro / Max cards, Google / GitHub sign-in, and "나중에"
    (`[data-action="plans-later"]`). Completing it calls `onboarding.complete()`,

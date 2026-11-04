@@ -388,7 +388,9 @@ export function App(): ReactElement {
 				const paneId = folderPaneId(workspaceRef.current);
 				const head = family.entriesByPath[family.head];
 				if (paneId === null || head === undefined) return;
-				store.get(paneId)?.revealEntry(head);
+				// Open the folder and scroll the stacked head row into view without selecting it yet:
+				// the user's own click on the spotlighted row unfolds the stack and opens Versions.
+				store.get(paneId)?.showEntryFolder(head);
 				setWorkspace((current) => focusPane(current, paneId));
 			},
 			versionFamilies: async () => (await source.versionFamilies()).families,

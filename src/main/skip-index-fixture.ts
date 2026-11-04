@@ -134,8 +134,7 @@ function pause(ms: number): Promise<void> {
 /**
  * Deterministic `SearchAgent` for `make onboarding-skip-index`: streams a live
  * cited answer grounded in the real mini-fixture files on disk, so every step of
- * the tour (`answer` → `cite` → `evidence` → `evidenceFolder`) works offline and
- * in under a second.
+ * the tour (`answer` → `cite` → `evidence`) works offline and in under a second.
  */
 export function createSkipIndexPreviewAgent(options: {
 	readonly fixtureHome: string;

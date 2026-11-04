@@ -90,19 +90,29 @@ const stepArrives = (page, id, timeout = 12_000) =>
 /** Per-step assertions on the surface the coach points at. */
 const checkStep = async (page, id) => {
 	if (id === "cite") check("the cite step points at a citation chip", (await page.locator(".cite").count()) > 0);
-	if (id === "evidenceFolder") check("the evidence-folder step offers its button", (await page.locator('[data-action="evidence-folder"]').count()) === 1);
+	if (id === "ask" || id === "cite" || id === "duplicates") {
+		check(`the ${id} step guides with an animated cursor and hides Next`, (await page.locator(`.fr-cursor[data-target-step="${id}"]`).count()) === 1 && (await page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`).count()) === 0);
+	}
 	if (id === "versions") check("the versions step shows the inspector Versions section", (await page.locator('[data-section="versions"]').count()) === 1);
 };
-/** Move past a coach step: Enter in the composer at `ask`, the bubble's next button otherwise (the evidence-folder step's own button when the bubble has none). */
+/** Move past a coach step: interactive steps click at the exact point `.fr-cursor` aims at, informational steps click Next. */
 const advance = async (page, id) => {
-	if (id === "ask") return page.locator('[data-ai-tab]:not(.hidden) textarea').first().press("Enter");
-	const next = page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`);
-	if ((await next.count()) > 0) return next.click();
-	return page.locator(`.fr-coach[data-step="${id}"] [data-action="evidence-folder"]`).first().click();
+	if (id === "ask" || id === "cite" || id === "duplicates") {
+		const target = await page.evaluate((step) => {
+			const cursor = document.querySelector(`.fr-cursor[data-target-step="${step}"]`);
+			if (!(cursor instanceof HTMLElement)) return null;
+			return { x: Number.parseFloat(cursor.style.left), y: Number.parseFloat(cursor.style.top) };
+		}, id);
+		if (target === null || !Number.isFinite(target.x) || !Number.isFinite(target.y)) {
+			throw new Error(`cursor for ${id} has no target coordinates`);
+		}
+		await page.mouse.click(target.x, target.y);
+		return;
+	}
+	return page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`).click();
 };
 
-const DEMO_STEPS = ["question", "ask", "answer", "cite", "evidence", "evidenceFolder"];
-
+const DEMO_STEPS = ["question", "ask", "answer", "cite", "evidence"];
 let app;
 try {
 	app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });
@@ -171,6 +181,7 @@ try {
 	}
 	if (await stepArrives(page, "duplicates")) {
 		walked.push("duplicates");
+		await checkStep(page, "duplicates");
 		await shot(page, "06-tour-duplicates.png");
 		await advance(page, "duplicates");
 		if (await stepArrives(page, "versions")) {

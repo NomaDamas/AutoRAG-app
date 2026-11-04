@@ -385,13 +385,16 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 - The tour opens with a letterboxed, dimmed title card ("Welcome to Dazzi, the
   AI Finder" / "the AI File Explorer" on Windows), then coach marks: a
   spotlight on the real control plus a bubble; everything but the bubble lets
-  clicks through. With a verified demo question (`SetupStatus.demo`, generated
-  from one indexed document and proven answerable by keyword retrieval) the
-  question types itself into the composer, Enter asks it, and the tour points at
-  the answer, a citation chip, the evidence panel and the Evidence Folder
-  button. With a version family the left pane reveals its newest copy and the
-  tour points at the stacked row and the inspector's Versions section. Steps
-  the data does not support are skipped, never faked.
+  clicks through. Interactive steps (`ask`, `cite`, `duplicates`) hide the Next
+  button and place a tapping cursor `.fr-cursor` directly over the live target
+  control so the person acts on the real UI to move on. With a verified demo
+  question (`SetupStatus.demo`, generated from one indexed document and proven
+  answerable by keyword retrieval) the question types itself into the composer,
+  clicking send (or pressing Enter) asks it, and the tour points at the answer,
+  requires clicking a citation chip, and highlights the evidence panel. With a
+  version family the left pane opens its folder without pre-selecting the row;
+  clicking the stacked row unfolds the stack and reveals the inspector's
+  Versions section. Steps the data does not support are skipped, never faked.
 - `plans` ends the first run: Free, Air, Pro, Max with Google and GitHub
   sign-in; "나중에 할게요" or Free finish it, a paid plan opens the hosted
   checkout after sign-in. Finishing calls `onboarding.complete()`, so the next

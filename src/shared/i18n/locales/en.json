@@ -793,6 +793,7 @@
       "next": "Next",
       "skip": "Skip",
       "finish": "Done",
+      "clickHint": "Click it to try",
       "progress": "{{index}} / {{count}}",
       "welcome": {
         "title": "Folders on the left, AI Search on the right",
@@ -803,8 +804,8 @@
         "body": "We checked that your documents answer it before asking."
       },
       "ask": {
-        "title": "Press Enter to ask",
-        "body": "Or click the send button."
+        "title": "Click send to ask",
+        "body": "You can also press Enter right away."
       },
       "answer": {
         "title": "Here's your answer",
@@ -815,20 +816,16 @@
         "failedBody": "You can rephrase the question and ask again."
       },
       "cite": {
-        "title": "Click a number to see the source",
-        "body": "See which file each sentence of the answer came from."
+        "title": "Click the citation number",
+        "body": "Clicking a number opens the exact source file on the right."
       },
       "evidence": {
         "title": "Sources gather here",
         "body": "The exact passage from the original. Click its title to go to the file."
       },
-      "evidenceFolder": {
-        "title": "All sources in one folder",
-        "body": "This button opens a temporary folder holding only the files the answer used."
-      },
       "duplicates": {
-        "title": "Similar documents stack together",
-        "body": "Copies and older versions fold into one row, with the newest on top."
+        "title": "Click the stacked document",
+        "body": "Copies and older versions fold into one row. Click it to expand all versions."
       },
       "versions": {
         "title": "Check the latest version here",

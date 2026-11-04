@@ -16,10 +16,17 @@ export function initialScreen(status: SetupStatus): FirstRunScreen {
 	return status.stage === "ready" ? "ready" : "setup";
 }
 
-export type TourStepId = "welcome" | "question" | "ask" | "answer" | "cite" | "evidence" | "evidenceFolder" | "duplicates" | "versions";
+export type TourStepId = "welcome" | "question" | "ask" | "answer" | "cite" | "evidence" | "duplicates" | "versions";
 
 /** Steps that only make sense once the demo question produced a cited answer. */
-const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { cite: true, evidence: true, evidenceFolder: true };
+const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { cite: true, evidence: true };
+
+/** Steps where the user acts on the spotlighted control directly rather than pressing a Next button. */
+const ACTION_REQUIRED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { ask: true, cite: true, duplicates: true };
+
+export function stepRequiresUserAction(step: TourStepId): boolean {
+	return ACTION_REQUIRED_STEPS[step] === true;
+}
 
 /**
  * The tour the data supports: the AI steps need the verified demo question,
@@ -28,7 +35,7 @@ const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { cite: true, e
 export function tourSteps(input: { readonly demo: boolean; readonly family: boolean }): readonly TourStepId[] {
 	return [
 		"welcome",
-		...(input.demo ? (["question", "ask", "answer", "cite", "evidence", "evidenceFolder"] as const) : []),
+		...(input.demo ? (["question", "ask", "answer", "cite", "evidence"] as const) : []),
 		...(input.family ? (["duplicates", "versions"] as const) : []),
 	];
 }

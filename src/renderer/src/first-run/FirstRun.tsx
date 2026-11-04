@@ -18,7 +18,7 @@ import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
-import { initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
+import { initialScreen, nextStep, pickTourFamily, placeBubble, stepRequiresUserAction, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
 /** What the layer needs from the Finder window it sits on. */
 export interface FirstRunHost {
@@ -332,8 +332,6 @@ function anchorFor(step: TourStepId, family: VersionFamilyData | null): string |
 			return `${AI_HOST} .cite`;
 		case "evidence":
 			return ".inspector-column";
-		case "evidenceFolder":
-			return '.inspector-column [data-action="evidence-folder"]';
 		case "duplicates":
 			return family === null ? null : `.workspace-pane [data-path="${CSS.escape(family.head)}"]`;
 		case "versions":
@@ -341,10 +339,18 @@ function anchorFor(step: TourStepId, family: VersionFamilyData | null): string |
 	}
 }
 
-/** Click a real control of the Finder, as the person would (the bubble's button just does it for them). */
-function clickReal(selector: string): void {
-	const element = document.querySelector<HTMLElement>(selector);
-	element?.click();
+/** Exact clickable target the animated cursor points at during interactive steps. */
+function clickTargetFor(step: TourStepId, family: VersionFamilyData | null): string | null {
+	switch (step) {
+		case "ask":
+			return `${AI_HOST} form.composer button.send[type="submit"]`;
+		case "cite":
+			return `${AI_HOST} .cite`;
+		case "duplicates":
+			return family === null ? null : `.workspace-pane [data-path="${CSS.escape(family.head)}"]`;
+		default:
+			return null;
+	}
 }
 
 function Tour({
@@ -436,42 +442,36 @@ function Tour({
 		if (step === "duplicates" && family !== null && family !== undefined) hostRef.current.showFamily(family);
 	}, [step, question, family]);
 
-	const moveNext = useCallback(
-		(alreadyClickedReal: boolean) => {
-			const current = stepRef.current;
-			if (current === null) return;
-			if (!alreadyClickedReal && current === "cite") clickReal(`${AI_HOST} .cite`);
-			if (!alreadyClickedReal && current === "evidenceFolder") clickReal('.inspector-column [data-action="evidence-folder"]');
-			const next = nextStep(steps, current, { cited });
-			if (next === null) onEnd();
-			else setStep(next);
-		},
-		[steps, cited, onEnd],
-	);
-	const advance = useCallback(() => moveNext(false), [moveNext]);
+	const advance = useCallback(() => {
+		const current = stepRef.current;
+		if (current === null) return;
+		const next = nextStep(steps, current, { cited });
+		if (next === null) onEnd();
+		else setStep(next);
+	}, [steps, cited, onEnd]);
 
-	// Clicking the spotlighted citation chip or Evidence Folder button itself advances the tour naturally;
-	// ignore synthetic clicks fired by `clickReal` (`!event.isTrusted`) so "다음" never double-advances.
+	// Interactive steps (`cite`, `duplicates`) advance only when the user actually clicks the spotlighted control.
 	useEffect(() => {
-		if (step !== "cite" && step !== "evidenceFolder") return;
+		if (step !== "cite" && step !== "duplicates") return;
 		const expectedStep = step;
-		const targetSelector = step === "cite" ? `${AI_HOST} .cite` : '.inspector-column [data-action="evidence-folder"]';
+		const targetSelector = clickTargetFor(step, family ?? null);
+		if (targetSelector === null) return;
 		const onClick = (event: MouseEvent): void => {
 			if (!event.isTrusted || !(event.target instanceof Element) || event.target.closest(targetSelector) === null) return;
 			window.setTimeout(() => {
-				if (stepRef.current === expectedStep) moveNext(true);
+				if (stepRef.current === expectedStep) advance();
 			}, 0);
 		};
 		document.addEventListener("click", onClick);
 		return () => document.removeEventListener("click", onClick);
-	}, [step, moveNext]);
+	}, [step, family, advance]);
 
+	const requiresUserAction = step !== null && stepRequiresUserAction(step);
 	const nextBlocked =
-		step === "ask" ||
+		requiresUserAction ||
 		(step === "question" && typed < question.length) ||
 		(step === "answer" && (answer === "idle" || answer === "running")) ||
 		(step === "welcome" && family === undefined);
-
 	// Enter moves on, unless it belongs to a text field (the composer's Enter asks the question).
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
@@ -510,12 +510,13 @@ function Tour({
 				<Coach
 					step={step}
 					selector={anchorFor(step, family ?? null)}
+					clickSelector={clickTargetFor(step, family ?? null)}
 					index={index}
 					count={steps.length}
 					title={title}
 					body={body}
 					waiting={waiting}
-					showNext={step !== "ask"}
+					showNext={!requiresUserAction}
 					nextDisabled={nextBlocked}
 					nextLabel={last ? t("firstRun.tour.finish") : t("firstRun.tour.next")}
 					onNext={advance}
@@ -535,6 +536,7 @@ function sameRect(a: Rect | null, b: Rect | null): boolean {
 function Coach({
 	step,
 	selector,
+	clickSelector,
 	index,
 	count,
 	title,
@@ -548,6 +550,7 @@ function Coach({
 }: {
 	readonly step: TourStepId;
 	readonly selector: string | null;
+	readonly clickSelector: string | null;
 	readonly index: number;
 	readonly count: number;
 	readonly title: string;
@@ -561,24 +564,31 @@ function Coach({
 }): ReactElement {
 	const { t } = useTranslation();
 	const [rect, setRect] = useState<Rect | null>(null);
+	const [clickRect, setClickRect] = useState<Rect | null>(null);
 	const [size, setSize] = useState({ width: 320, height: 160 });
 	const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 	const bubbleRef = useRef<HTMLDivElement>(null);
 
-	// The anchor moves with the Finder (a pane opening, an answer streaming), so it is followed every frame.
+	// Both the spotlight anchor and the clickable target follow the live Finder layout every frame,
+	// so whatever folder structure or line wrap the user's files produce, the cursor lands on it.
 	useEffect(() => {
 		let frame = 0;
-		const tick = (): void => {
-			const element = selector === null ? null : document.querySelector(selector);
+		const measure = (query: string | null): Rect | null => {
+			const element = query === null ? null : document.querySelector(query);
 			const box = element?.getBoundingClientRect();
-			const next = box === undefined || box.width === 0 || box.height === 0 ? null : { left: box.left, top: box.top, width: box.width, height: box.height };
-			setRect((previous) => (sameRect(previous, next) ? previous : next));
+			return box === undefined || box.width === 0 || box.height === 0 ? null : { left: box.left, top: box.top, width: box.width, height: box.height };
+		};
+		const tick = (): void => {
+			const nextRect = measure(selector);
+			const nextClick = measure(clickSelector);
+			setRect((previous) => (sameRect(previous, nextRect) ? previous : nextRect));
+			setClickRect((previous) => (sameRect(previous, nextClick) ? previous : nextClick));
 			setViewport((previous) => (previous.width === window.innerWidth && previous.height === window.innerHeight ? previous : { width: window.innerWidth, height: window.innerHeight }));
 			frame = window.requestAnimationFrame(tick);
 		};
 		tick();
 		return () => window.cancelAnimationFrame(frame);
-	}, [selector]);
+	}, [selector, clickSelector]);
 
 	useLayoutEffect(() => {
 		const element = bubbleRef.current;
@@ -594,9 +604,31 @@ function Coach({
 		rect === null
 			? { left: viewport.width / 2, top: viewport.height / 2, width: 0, height: 0, opacity: 0.55 }
 			: { left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
+	// For wide rows (stacked duplicate row), aim at the file title/badge zone on the left rather than blank columns on the right.
+	const cursorPos =
+		clickRect === null
+			? null
+			: {
+					left: clickRect.width > 180 ? clickRect.left + Math.min(116, clickRect.width * 0.34) : clickRect.left + clickRect.width * 0.52,
+					top: clickRect.top + clickRect.height * 0.58,
+				};
 	return (
 		<div className="fr-tour">
 			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
+			{cursorPos === null ? null : (
+				<div className="fr-cursor" data-target-step={step} style={{ left: cursorPos.left, top: cursorPos.top }} aria-hidden="true">
+					<span className="fr-cursor-ring" />
+					<svg className="fr-cursor-glyph" width={26} height={26} viewBox="0 0 26 26" fill="none">
+						<path
+							d="M5.2 2.8L20.6 14.3L13.4 15.6L16.7 22.7L13.5 24.2L10.2 17.1L5.2 21.6V2.8Z"
+							fill="#FFFFFF"
+							stroke="#18191D"
+							strokeWidth="1.7"
+							strokeLinejoin="round"
+						/>
+					</svg>
+				</div>
+			)}
 			<div ref={bubbleRef} className="fr-coach" data-step={step} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={title}>
 				<div className="fr-coach-card" key={step}>
 					<p className="fr-coach-count">{t("firstRun.tour.progress", { index: index + 1, count })}</p>
@@ -614,7 +646,11 @@ function Coach({
 								{nextLabel}
 							</button>
 						) : (
-							<span className="fr-coach-hint"><kbd className="fr-kbd">↵</kbd></span>
+							<span className="fr-coach-hint">
+								<span className="fr-coach-hint-dot" aria-hidden="true" />
+								{t("firstRun.tour.clickHint")}
+								{step === "ask" ? <kbd className="fr-kbd">↵</kbd> : null}
+							</span>
 						)}
 					</div>
 				</div>

@@ -237,6 +237,8 @@ export interface FinderController {
 	familyEntriesFor(path: string): { readonly head: FinderEntry; readonly members: readonly { readonly entry: FinderEntry; readonly relation: VersionRelation }[] } | null;
 	/** Navigate the current tab to the entry's folder and reveal the row (version-member click). */
 	revealEntry(entry: FinderEntry): void;
+	/** Navigate the current tab to `entry`'s folder and scroll `entry` into view without selecting it, so a guided click lands on the real row. */
+	showEntryFolder(entry: FinderEntry): void;
 	/** Create an "untitled folder" in the current directory and select it. */
 	newFolder(): void;
 	/** Create a new file of `format` in the current directory and select it. */
@@ -1030,6 +1032,12 @@ export function useFinderController(
 		);
 		setQueryValue("");
 		setFlashPath(entry.path);
+		scrollTarget.current = entry.path;
+	});
+
+	const showEntryFolder = useLatestCallback((entry: FinderEntry) => {
+		setTabsState((state) => navigateTab(state, locationOf(entry)));
+		setQueryValue("");
 		scrollTarget.current = entry.path;
 	});
 
@@ -2429,6 +2437,7 @@ export function useFinderController(
 		quickLookPath,
 		moveSelectionBy,
 		revealEvidence,
+		showEntryFolder,
 		focusFinder,
 		marqueeSelect,
 		clickRow,
