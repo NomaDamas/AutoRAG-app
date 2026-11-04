@@ -1,5 +1,5 @@
 import type { TFunction } from "i18next";
-import type { IndexProgressSnapshot, IndexStageId, IndexStageProgress, IndexStageState } from "../../../shared/index-progress-contract";
+import { isFileCountStage, type IndexProgressSnapshot, type IndexStageId, type IndexStageProgress, type IndexStageState } from "../../../shared/index-progress-contract";
 import { formatByteSize } from "../../../shared/size-reduction";
 
 /**
@@ -112,9 +112,9 @@ function activityLine(detail: IndexProgressSnapshot, now: number, t: ProgressTra
 	const { pulse } = detail;
 	const parts: string[] = [];
 	if (pulse.lastCompletedAt !== null) parts.push(t("indexProgress.activity.lastDone", { ago: formatAgo(pulse.lastCompletedAt, now, t) }));
-	else if (detail.stage === "parse" || detail.stage === "embed") parts.push(t("indexProgress.activity.none"));
+	else if (isFileCountStage(detail.stage)) parts.push(t("indexProgress.activity.none"));
 	if (pulse.lastFile !== null) parts.push(pulse.lastFile);
-	if (pulse.heartbeatAt !== null && (detail.stage === "parse" || detail.stage === "embed")) {
+	if (pulse.heartbeatAt !== null && isFileCountStage(detail.stage)) {
 		parts.push(t("indexProgress.activity.heartbeat", { ago: formatAgo(pulse.heartbeatAt, now, t) }));
 	}
 	return parts.length === 0 ? null : parts.join(" · ");
@@ -135,7 +135,7 @@ export function describeIndexProgress(detail: IndexProgressSnapshot, now: number
 	const name = running === undefined ? null : stageLabel(running.id, t);
 	let etaLine: string | null = null;
 	// Discovery and the final tidy-up have no files to count, so there is no pace to project from.
-	if (name !== null && (detail.stage === "parse" || detail.stage === "embed")) {
+	if (name !== null && isFileCountStage(detail.stage)) {
 		if (detail.etaState === "estimated" && detail.etaMinutes !== null) {
 			etaLine = t("indexProgress.eta.remaining", { stage: name, duration: formatDuration(detail.etaMinutes, t) });
 		} else if (detail.etaState === "calculating") {

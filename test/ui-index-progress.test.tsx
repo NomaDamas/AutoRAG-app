@@ -96,6 +96,33 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 		expect(entry?.title).toContain("용량 4.0 GB / 17 GB (23%)");
 	});
 
+	it("calls MinSync's step the same thing in Settings and the sidebar when nothing is embedded", async () => {
+		const snapshot = activity(computeIndexProgress(realCase({ embedding: false })).snapshot);
+		await act(async () => {
+			root.render(<IndexActivityCard snapshot={snapshot} />);
+			await Promise.resolve();
+		});
+		const detail = host.querySelector('[data-testid="index-progress-detail"]')?.textContent ?? "";
+		const counts = `키워드 색인 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`;
+		expect(detail).toContain("탐색파싱키워드 색인마무리");
+		expect(detail).toContain(counts);
+		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("키워드 색인");
+		const [entry] = collectSidebarActivities({
+			indexActivity: snapshot,
+			indexProblem: NO_INDEX_PROBLEM,
+			errorFix: { sessions: [], activeId: null },
+			backgroundTasks: [],
+			modelDownload: { state: "absent", bytesDone: 0, bytesTotal: 0, file: null, error: null },
+			t,
+			onOpenIndexing: () => undefined,
+			onOpenErrorFix: () => undefined,
+		});
+		expect(entry?.title).toContain(counts);
+		// A measured stage, so a number, not the indeterminate bar the final tidy-up gets.
+		expect(entry?.percent).toBe(61);
+		expect(`${detail}${entry?.title ?? ""}`).not.toContain("임베딩");
+	});
+
 	it("shows an indeterminate bar in both while the final stage runs", () => {
 		const snapshot = activity(computeIndexProgress(realCase({ phase: "jikji" })).snapshot);
 		expect(snapshot.fraction).toBeNull();

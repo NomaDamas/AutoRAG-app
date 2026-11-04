@@ -1,8 +1,8 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { deriveIndexActivity, DONE_LINGER_MS, FAILED_LINGER_MS, parseRefreshProgress, type ProgressView } from "../src/main/index-activity";
+import { createIndexActivityService, deriveIndexActivity, DONE_LINGER_MS, FAILED_LINGER_MS, parseRefreshProgress, type ProgressView } from "../src/main/index-activity";
 import { createActivityJournal, journalSingleRun, LOCAL_ITEM, readActivity, sourceItem, type ActivityRecord } from "../src/main/index-activity-journal";
 import { runScheduledRefresh, schedulePaths } from "../src/main/refresh-schedule";
 
@@ -104,6 +104,23 @@ describe("deriveIndexActivity", () => {
 		// 25 of 100 files synced: the read stage's 40% plus a quarter of the embedding stage's 50%.
 		expect(view.fraction).toBeCloseTo(0.525);
 		expect(view.progress?.stages.find((stage) => stage.id === "embed")?.counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 100 });
+	});
+
+	it("measures MinSync's step as the keyword index, file by file, when semantic search is off", () => {
+		const input = {
+			progress: progress({ pid: 100, phase: "minsync", parsedCounts: { scanned: 100, written: 80, deleted: 0, skipped: 20 }, minsync: { synced: 25, total: 100 } }),
+			journal: null,
+			now: T0,
+			alive,
+			ownPids: [100],
+		};
+		const keyword = deriveIndexActivity({ ...input, embedding: false });
+		expect(keyword.progress?.stage).toBe("keyword");
+		expect(keyword.progress?.stages.map((stage) => stage.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
+		expect(keyword.progress?.stages.find((stage) => stage.id === "keyword")?.counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 100 });
+		// The same place on the bar as the embedding run with the same counts, not an unmeasurable "finalize".
+		expect(keyword.fraction).toBeCloseTo(0.525);
+		expect(keyword.fraction).toBe(deriveIndexActivity(input).fraction);
 	});
 
 	it("advances past a finished item even when the next one is a silent datasource sync", () => {
@@ -226,5 +243,66 @@ describe("scheduled run journal", () => {
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("createIndexActivityService", () => {
+	let workspace: string;
+	beforeEach(() => {
+		workspace = mkdtempSync(join(tmpdir(), "index-activity-service-"));
+		mkdirSync(join(workspace, ".autorag"), { recursive: true });
+		writeFileSync(
+			join(workspace, ".autorag", "refresh-progress.json"),
+			progressText({ pid: process.pid, phase: "minsync", sourceFiles: { total: 100 }, parsedCounts: { scanned: 100, written: 100, deleted: 0, skipped: 0 }, minsync: { synced: 25, total: 100 } }),
+		);
+	});
+	afterEach(() => {
+		rmSync(workspace, { recursive: true, force: true });
+	});
+
+	function serviceWith(semanticSearch?: () => boolean) {
+		return createIndexActivityService({
+			configPath: () => join(workspace, "config.json"),
+			resolveWorkspacePath: async () => workspace,
+			journalPath: () => join(workspace, "activity.json"),
+			ownPids: () => [],
+			now: () => T0,
+			...(semanticSearch === undefined ? {} : { semanticSearch }),
+		});
+	}
+
+	it("names MinSync's step by the semantic-search switch, as the first-run screen does", async () => {
+		writeFileSync(join(workspace, "config.json"), "{}");
+		const embedding = await serviceWith(() => true).snapshot();
+		expect(embedding.progress?.stage).toBe("embed");
+		const keywordOnly = await serviceWith(() => false).snapshot();
+		expect(keywordOnly.progress?.stage).toBe("keyword");
+		expect(keywordOnly.progress?.stages.find((stage) => stage.id === "keyword")?.counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 100 });
+		// No switch given: embedding, as before.
+		expect((await serviceWith().snapshot()).progress?.stage).toBe("embed");
+	});
+
+	it("reads the switch again when the config file changes, and survives one that cannot be read", async () => {
+		let semantic = true;
+		writeFileSync(join(workspace, "config.json"), "{}");
+		const service = serviceWith(() => semantic);
+		expect((await service.snapshot()).progress?.stage).toBe("embed");
+		semantic = false;
+		// Unchanged config: the switch is not asked again.
+		expect((await service.snapshot()).progress?.stage).toBe("embed");
+		writeFileSync(join(workspace, "config.json"), '{"appIndexing":{"semanticSearch":false}}');
+		expect((await service.snapshot()).progress?.stage).toBe("keyword");
+		writeFileSync(join(workspace, "config.json"), "{ not json, and longer than before");
+		const unreadable = createIndexActivityService({
+			configPath: () => join(workspace, "config.json"),
+			resolveWorkspacePath: async () => workspace,
+			journalPath: () => join(workspace, "activity.json"),
+			ownPids: () => [],
+			now: () => T0,
+			semanticSearch: () => {
+				throw new Error("config unreadable");
+			},
+		});
+		expect((await unreadable.snapshot()).progress?.stage).toBe("embed");
 	});
 });

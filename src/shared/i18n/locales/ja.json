@@ -644,6 +644,7 @@
       "discover": "探索",
       "parse": "解析",
       "embed": "埋め込み",
+      "keyword": "キーワードインデックス",
       "finalize": "仕上げ"
     },
     "line": {

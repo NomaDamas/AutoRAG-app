@@ -104,6 +104,8 @@ export interface DeriveInput {
 	 * Without it the snapshot is measured from the progress file alone.
 	 */
 	readonly detail?: IndexProgressSnapshot | null;
+	/** False when semantic search is off (keyword-only): MinSync builds a keyword index, not embeddings. Default true. */
+	readonly embedding?: boolean;
 	readonly now: number;
 	readonly alive: (pid: number) => boolean;
 	/** Pids of this app's own processes (main, fs worker); a refresh from any other pid is external. */
@@ -116,11 +118,12 @@ function time(iso: string | null): number {
 }
 
 /** Measured from the progress file alone, for a caller that keeps no history between polls. */
-function measureFromFile(progress: ProgressView, now: number): IndexProgressSnapshot {
+function measureFromFile(progress: ProgressView, embedding: boolean, now: number): IndexProgressSnapshot {
 	return computeIndexProgress(
 		{
 			state: "running",
 			phase: progress.phase,
+			embedding,
 			sourceTotal: progress.sourceTotal,
 			parsed: progress.counts,
 			minsync: progress.minsync,
@@ -182,7 +185,7 @@ export function deriveIndexActivity(input: DeriveInput): IndexActivitySnapshot {
 			if (localIndex < 0) items.unshift(local);
 			else items[localIndex] = local;
 		}
-		const detail = progressRunning ? (input.detail ?? measureFromFile(progress, now)) : null;
+		const detail = progressRunning ? (input.detail ?? measureFromFile(progress, input.embedding !== false, now)) : null;
 		return {
 			state: "running",
 			origin: originOf(journalLive ? journal : null, progress, ownPids),
@@ -249,6 +252,8 @@ export interface IndexActivityDeps {
 	readonly resolveWorkspacePath: () => Promise<string>;
 	readonly journalPath: () => string;
 	readonly ownPids: () => readonly (number | null)[];
+	/** Whether semantic search is on; false is keyword-only. Re-read when the config file changes. Default true. */
+	readonly semanticSearch?: () => boolean;
 	readonly pollMs?: number;
 	readonly now?: () => number;
 	/** Reads the progress files into stage counts; the app passes none and gets its own. */
@@ -269,28 +274,39 @@ export function createIndexActivityService(deps: IndexActivityDeps): IndexActivi
 	const now = deps.now ?? Date.now;
 	const tracker = deps.tracker ?? createIndexProgressTracker({ now });
 	let current: IndexActivitySnapshot = IDLE_INDEX_ACTIVITY;
-	let workspace: { readonly signature: string; readonly path: string | null } = { signature: "", path: null };
+	let workspace: { readonly signature: string; readonly path: string | null; readonly semantic: boolean } = { signature: "", path: null, semantic: true };
 
-	async function workspacePath(): Promise<string | null> {
+	function semanticSearch(): boolean {
+		try {
+			return deps.semanticSearch?.() ?? true;
+		} catch {
+			// An unreadable config says nothing about the switch; the default stays on.
+			return true;
+		}
+	}
+
+	/** The workspace and the semantic-search switch, both from the config file and both re-read only when it changes. */
+	async function workspaceConfig(): Promise<{ readonly path: string | null; readonly semantic: boolean }> {
 		const info = await stat(deps.configPath()).catch(() => null);
 		const signature = info === null ? "missing" : `${info.mtimeMs}:${info.size}`;
 		if (signature !== workspace.signature) {
-			workspace = { signature, path: await deps.resolveWorkspacePath().catch(() => null) };
+			workspace = { signature, path: await deps.resolveWorkspacePath().catch(() => null), semantic: semanticSearch() };
 		}
-		return workspace.path;
+		return workspace;
 	}
 
 	async function poll(): Promise<IndexActivitySnapshot> {
-		const root = await workspacePath();
+		const { path: root, semantic } = await workspaceConfig();
 		const text = root === null ? null : readLibrarianFile(join(root, ".autorag", "refresh-progress.json"));
 		const progress = text === null ? null : parseRefreshProgress(text);
 		// Only a refresh whose process is alive has a run to follow; a dead one's file is the past.
 		const live = progress !== null && progress.state === "running" && processAlive(progress.pid);
-		const detail = root === null ? null : tracker.poll(root, live ? progress : null);
+		const detail = root === null ? null : tracker.poll(root, live ? progress : null, { embedding: semantic });
 		current = deriveIndexActivity({
 			progress,
 			journal: readActivity(deps.journalPath()),
 			detail,
+			embedding: semantic,
 			now: now(),
 			alive: processAlive,
 			ownPids: [process.pid, ...deps.ownPids()].filter((pid): pid is number => pid !== null),

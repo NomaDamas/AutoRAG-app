@@ -10,9 +10,24 @@
  * from the rate those counts actually moved at.
  */
 
-/** The four stages of a run, in order: find files, read them, build the search index, tidy up. */
+/** The four stages of a run that embeds, in order: find files, read them, embed them into the search index, tidy up. */
 export const INDEX_STAGES = ["discover", "parse", "embed", "finalize"] as const;
-export type IndexStageId = (typeof INDEX_STAGES)[number];
+/**
+ * The stages of a keyword-only run (semantic search off). MinSync still goes through every file, building a sparse
+ * keyword index, so its stage counts files like the embedding one does; it only has a name of its own.
+ */
+export const KEYWORD_INDEX_STAGES = ["discover", "parse", "keyword", "finalize"] as const;
+export type IndexStageId = (typeof INDEX_STAGES)[number] | (typeof KEYWORD_INDEX_STAGES)[number];
+
+/** The stages of a run, in order; `embedding` is false for keyword-only. */
+export function indexStagesFor(embedding: boolean): readonly IndexStageId[] {
+	return embedding ? INDEX_STAGES : KEYWORD_INDEX_STAGES;
+}
+
+/** The stages that go through the files one by one: reading them, and MinSync's. Discovery and the tidy-up have nothing to count. */
+export function isFileCountStage(id: IndexStageId | null): boolean {
+	return id === "parse" || id === "embed" || id === "keyword";
+}
 
 export type IndexStageState = "pending" | "running" | "done";
 

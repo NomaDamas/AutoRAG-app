@@ -17,7 +17,8 @@
 
 import type { IndexActivityCounts, IndexActivityPhase } from "./index-activity-contract";
 import {
-	INDEX_STAGES,
+	indexStagesFor,
+	isFileCountStage,
 	type IndexEtaState,
 	type IndexProgressSnapshot,
 	type IndexStageBytes,
@@ -36,9 +37,13 @@ export const SAMPLE_EVERY_MS = 5_000;
 /** No file finished for this long, with files left: "may be stalled". */
 export const STALL_AFTER_MS = 10 * 60_000;
 
-/** Where each stage sits on the whole-run bar. A layout choice, not a duration. */
-const STAGE_SHARE_WITH_EMBED: Readonly<Record<IndexStageId, number>> = { discover: 0, parse: 0.4, embed: 0.5, finalize: 0.1 };
-const STAGE_SHARE_WITHOUT_EMBED: Readonly<Record<IndexStageId, number>> = { discover: 0, parse: 0.9, embed: 0, finalize: 0.1 };
+/** Where each stage sits on the whole-run bar. A layout choice, not a duration; a run has either the embedding or the keyword stage. */
+const STAGE_SHARE: Readonly<Record<IndexStageId, number>> = { discover: 0, parse: 0.4, embed: 0.5, keyword: 0.5, finalize: 0.1 };
+
+/** The stage MinSync's work shows up as: embedding the files, or building the keyword index when nothing is embedded. */
+function isMinsyncStage(id: IndexStageId): boolean {
+	return id === "embed" || id === "keyword";
+}
 
 /** What MinSync's `progress.jsonl` says so far (see `index-progress-journal.ts`). */
 export interface MinsyncJournalTally {
@@ -60,16 +65,16 @@ export interface IndexProgressInput {
 	readonly state: "running" | "success" | "failed";
 	/** The librarian's phase from `refresh-progress.json`; `null` before the first one is written. */
 	readonly phase: IndexActivityPhase | null;
-	/** False for keyword-only indexing, which has no embedding stage. Default true. */
+	/** False for keyword-only indexing (semantic search off): MinSync builds a keyword index instead of embedding. Default true. */
 	readonly embedding?: boolean;
 	/** `sourceFiles.total`: how many files the read stage will go through, once the librarian has listed them. */
 	readonly sourceTotal: number | null;
 	readonly parsed: IndexActivityCounts | null;
 	readonly minsync: { readonly synced?: number; readonly total?: number; readonly filesSkipped?: number } | null;
 	readonly journal: MinsyncJournalTally | null;
-	/** Bytes of every file the embedding stage will go through, when known. */
+	/** Bytes of every file MinSync's stage (embedding, or the keyword index) will go through, when known. */
 	readonly embedBytesTotal?: number | null;
-	/** Name of the file the read stage handled last (from the parsed mirror); the embedding stage reads the journal's instead. */
+	/** Name of the file the read stage handled last (from the parsed mirror); MinSync's stage reads the journal's instead. */
 	readonly parseFile?: string | null;
 	/** `updatedAt` of `refresh-progress.json` (ms): MinSync rewrites it every few seconds while it works. */
 	readonly heartbeatAt: number | null;
@@ -122,7 +127,7 @@ export function activeStage(input: Pick<IndexProgressInput, "phase" | "sourceTot
 		case "parsed":
 			return input.sourceTotal === null && input.parsed === null ? "discover" : "parse";
 		case "minsync":
-			return input.embedding === false ? "finalize" : "embed";
+			return input.embedding === false ? "keyword" : "embed";
 		default:
 			return "finalize";
 	}
@@ -151,7 +156,7 @@ function parseCounts(input: IndexProgressInput, finished: boolean): IndexStageCo
 }
 
 /**
- * Counts of the embedding stage. MinSync's denominator (`minsync.total`) is the number of files this sync has to
+ * Counts of MinSync's stage, whether it embeds or builds the keyword index. MinSync's denominator (`minsync.total`) is the number of files this sync has to
  * index, so the numerator is only ever MinSync's own count of files it finished: never the read stage's count.
  */
 function embedCounts(input: IndexProgressInput, finished: boolean): IndexStageCounts | null {
@@ -169,7 +174,7 @@ function embedCounts(input: IndexProgressInput, finished: boolean): IndexStageCo
 
 function bytesOf(stage: IndexStageId, input: IndexProgressInput): IndexStageBytes | null {
 	// The read stage has no byte figure: the parsed mirror lists every file of earlier runs too, so it cannot say what this run has read.
-	if (stage === "embed") {
+	if (isMinsyncStage(stage)) {
 		const done = input.journal?.bytesDone;
 		if (done === undefined || done === null) return null;
 		const total = input.embedBytesTotal ?? null;
@@ -187,7 +192,7 @@ function stageProgress(id: IndexStageId, state: IndexStageState, input: IndexPro
 		counts = found === null ? null : { done: found, skipped: 0, failed: 0, total: found };
 	} else if (id === "parse") {
 		counts = parseCounts(input, finished);
-	} else if (id === "embed") {
+	} else if (isMinsyncStage(id)) {
 		counts = embedCounts(input, finished);
 	}
 	const bytes = bytesOf(id, input);
@@ -198,16 +203,7 @@ function stageProgress(id: IndexStageId, state: IndexStageState, input: IndexPro
 }
 
 function lastFileOf(stage: IndexStageId, input: IndexProgressInput): string | null {
-	return stage === "embed" ? (input.journal?.lastFile ?? null) : stage === "parse" ? (input.parseFile ?? null) : null;
-}
-
-function sharesFor(embedding: boolean): Readonly<Record<IndexStageId, number>> {
-	return embedding ? STAGE_SHARE_WITH_EMBED : STAGE_SHARE_WITHOUT_EMBED;
-}
-
-/** Stages that apply to this run, in order. */
-function stagesFor(embedding: boolean): readonly IndexStageId[] {
-	return embedding ? INDEX_STAGES : INDEX_STAGES.filter((id) => id !== "embed");
+	return isMinsyncStage(stage) ? (input.journal?.lastFile ?? null) : stage === "parse" ? (input.parseFile ?? null) : null;
 }
 
 /** Projects the end of the running stage from the rate of the samples in the window; `null` when they say too little. */
@@ -272,8 +268,7 @@ export function holdIndexProgress(snapshot: IndexProgressSnapshot | null): Index
 /** The whole-run snapshot for one poll, and the history to hand back at the next. */
 export function computeIndexProgress(input: IndexProgressInput, history: RateHistory = EMPTY_RATE_HISTORY): IndexProgressResult {
 	const embedding = input.embedding !== false;
-	const order = stagesFor(embedding);
-	const shares = sharesFor(embedding);
+	const order = indexStagesFor(embedding);
 	const heartbeat = iso(input.heartbeatAt);
 
 	if (input.state === "success") {
@@ -286,7 +281,7 @@ export function computeIndexProgress(input: IndexProgressInput, history: RateHis
 				indeterminate: false,
 				etaState: "none",
 				etaMinutes: null,
-				pulse: { lastCompletedAt: iso(history.lastCompletedAt), heartbeatAt: heartbeat, lastFile: lastFileOf(embedding ? "embed" : "parse", input), stalled: false },
+				pulse: { lastCompletedAt: iso(history.lastCompletedAt), heartbeatAt: heartbeat, lastFile: lastFileOf(embedding ? "embed" : "keyword", input), stalled: false },
 			},
 			history: EMPTY_RATE_HISTORY,
 		};
@@ -301,19 +296,19 @@ export function computeIndexProgress(input: IndexProgressInput, history: RateHis
 
 	let position = 0;
 	for (const stage of stages) {
-		if (stage.state === "done") position += shares[stage.id];
-		else if (stage.state === "running" && measured !== null) position += shares[stage.id] * measured;
+		if (stage.state === "done") position += STAGE_SHARE[stage.id];
+		else if (stage.state === "running" && measured !== null) position += STAGE_SHARE[stage.id] * measured;
 	}
 	// A stage that has counted everything but not yet closed (MinSync is still writing its index) has nothing left to measure either.
 	const waitingToClose = counts !== null && counts.total !== null && counts.total > 0 && handledOf(counts) >= counts.total && active !== "finalize";
 	const indeterminate = measured === null || waitingToClose;
 
-	// The read and embedding stages are the ones with files to count; discovery and the final tidy-up have none.
-	const countable = active === "parse" || active === "embed";
+	// The read stage and MinSync's are the ones with files to count; discovery and the final tidy-up have none.
+	const countable = isFileCountStage(active);
 	const handled = handledOf(counts);
 	const total = counts?.total ?? null;
 	const bytes = running?.bytes?.done ?? null;
-	const journalAt = active === "embed" ? (input.journal?.modifiedAt ?? null) : null;
+	const journalAt = isMinsyncStage(active) ? (input.journal?.modifiedAt ?? null) : null;
 	const nextRate = input.state === "running" && countable && counts !== null ? nextHistory(history, active, handled, bytes, journalAt, input.now) : { ...EMPTY_RATE_HISTORY, stage: active, since: history.stage === active ? history.since : input.now };
 
 	let etaState: IndexEtaState = "none";

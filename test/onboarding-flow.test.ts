@@ -486,8 +486,8 @@ describe("detected sources list", () => {
 });
 
 describe("indexing stages", () => {
-	it("drops the embedding stage on the keyword-only path", () => {
-		expect(indexingStages("none")).toEqual(["discover", "parse", "finalize"]);
+	it("names MinSync's step the keyword index on the keyword-only path instead of embedding", () => {
+		expect(indexingStages("none")).toEqual(["discover", "parse", "keyword", "finalize"]);
 		expect(indexingStages("local")).toEqual(["discover", "parse", "embed", "finalize"]);
 		expect(indexingStages("cloud")).toEqual(["discover", "parse", "embed", "finalize"]);
 	});

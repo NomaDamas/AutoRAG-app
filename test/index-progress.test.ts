@@ -167,10 +167,46 @@ describe("stages", () => {
 		expect(done.indeterminate).toBe(false);
 	});
 
-	it("has no embedding stage for keyword-only indexing and gives the read stage 90% of the bar", () => {
-		const { snapshot } = computeIndexProgress(embedInput({ embedding: false, phase: "parsed", minsync: null, sourceTotal: 100, parsed: { scanned: 50, written: 50, deleted: 0, skipped: 0 } }));
-		expect(snapshot.stages.map((s) => s.id)).toEqual(["discover", "parse", "finalize"]);
-		expect(snapshot.fraction).toBeCloseTo(0.45);
+	it("goes through the same four stages for keyword-only indexing, with MinSync's step named the keyword index", () => {
+		const reading = computeIndexProgress(embedInput({ embedding: false, phase: "parsed", minsync: null, sourceTotal: 100, parsed: { scanned: 50, written: 50, deleted: 0, skipped: 0 } })).snapshot;
+		expect(reading.stages.map((s) => s.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
+		// The read stage keeps its 40% of the bar; the half-read share is 20%.
+		expect(reading.fraction).toBeCloseTo(0.2);
+		const indexing = computeIndexProgress(embedInput({ embedding: false, minsync: { total: 100 }, journal: journal({ committed: 30, bytesDone: 3_000 }), embedBytesTotal: 10_000 })).snapshot;
+		expect(indexing.stage).toBe("keyword");
+		expect(indexing.stages.map((s) => s.state)).toEqual(["done", "done", "running", "pending"]);
+		expect(stage(indexing, "keyword").counts).toEqual({ done: 30, skipped: 0, failed: 0, total: 100 });
+		expect(stage(indexing, "keyword").bytes).toEqual({ done: 3_000, total: 10_000 });
+		expect(indexing.indeterminate).toBe(false);
+		expect(indexing.etaState).toBe("calculating");
+		expect(indexing.pulse.lastFile).toBeNull();
+	});
+
+	it("puts a keyword-only run at the same place on the bar as an embedding run with the same file counts", () => {
+		const base = { minsync: { synced: 30, total: 100 }, sourceTotal: 100, parsed: { scanned: 100, written: 100, deleted: 0, skipped: 0 } };
+		const keyword = computeIndexProgress(embedInput({ ...base, embedding: false })).snapshot;
+		const embed = computeIndexProgress(embedInput({ ...base, embedding: true })).snapshot;
+		expect(keyword.fraction).toBeCloseTo(0.55);
+		expect(keyword.fraction).toBeCloseTo(embed.fraction);
+		expect(stage(keyword, "keyword").counts).toEqual(stage(embed, "embed").counts);
+		// A keyword-only run has no stage called embedding, and an embedding run none called keyword.
+		expect(keyword.stages.some((s) => s.id === "embed")).toBe(false);
+		expect(embed.stages.some((s) => s.id === "keyword")).toBe(false);
+	});
+
+	it("keeps the final tidy-up a stage of its own after the keyword index", () => {
+		const finalize = computeIndexProgress(embedInput({ embedding: false, phase: "jikji", minsync: { synced: 100, total: 100 } })).snapshot;
+		expect(finalize.stage).toBe("finalize");
+		expect(finalize.stages.map((s) => s.state)).toEqual(["done", "done", "done", "running"]);
+		expect(finalize.fraction).toBeCloseTo(0.9);
+		expect(finalize.indeterminate).toBe(true);
+		const done = computeIndexProgress(embedInput({ embedding: false, state: "success", minsync: { synced: 100, total: 100 } })).snapshot;
+		expect(done.stages.map((s) => [s.id, s.state])).toEqual([
+			["discover", "done"],
+			["parse", "done"],
+			["keyword", "done"],
+			["finalize", "done"],
+		]);
 	});
 
 	it("never reaches 1 while the run is still running", () => {

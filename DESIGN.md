@@ -405,14 +405,20 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   remaining time and the "may be stalled" warning come from `IndexProgressSnapshot`
   (`src/shared/index-progress.ts`), the one computation that the indexing screen,
   the sidebar activity entry and Settings > Indexing share. Four stages (탐색,
-  파싱, 임베딩, 마무리; no 임베딩 for keyword-only) each count one unit, files,
-  with skipped and failed files apart from the finished ones, so a count can
-  never pass its total. The bar sits on fixed stage shares (parse 40%, embed 50%,
-  finalize 10%; 90/10 without embedding) filled only by measured completion; a
-  stage that cannot be measured (discovery, the final tidy-up, an embedding stage
-  whose files are all counted but not yet closed) draws as a working bar with the
-  stage name instead of a percent, so a number never sits at 95% while work
-  remains. The remaining time is the rate of the last 10 minutes of observed
+  파싱, 임베딩, 마무리) each count one unit, files, with skipped and failed files
+  apart from the finished ones, so a count can never pass its total. A
+  keyword-only run (semantic search off) still runs MinSync, as a sparse keyword
+  index, so it has the same four stages and only the third is named 키워드 색인
+  (`keyword` instead of `embed`) on all three screens; it counts files and takes
+  the same share of the bar. The bar sits on fixed stage shares (parse 40%,
+  embedding or keyword index 50%, finalize 10%) filled only by measured
+  completion; a stage that cannot be measured (discovery, the final tidy-up, a
+  MinSync stage whose files are all counted but not yet closed) draws as a working
+  bar with the stage name instead of a percent, so a number never sits at 95%
+  while work remains. When the librarian's progress file already reads `success`
+  or `failed` but the app's refresh is still running (the batch-halving retry of a
+  timed-out MinSync step), the first-run screen keeps the last measured stage and
+  bar instead of falling back to 0% and 탐색. The remaining time is the rate of the last 10 minutes of observed
   movement (bytes when the staged sizes are known, files otherwise), named for the
   stage it is about, and reads "계산 중" until a minute of movement has been seen.
   Ten minutes without a finished file, with files left, shows a stalled warning

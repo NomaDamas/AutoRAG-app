@@ -110,6 +110,18 @@ describe("the progress tracker", () => {
 		expect(snapshot).toMatchObject({ etaState: "estimated", etaMinutes: 18 });
 	});
 
+	it("reads the journal into the keyword stage when nothing is embedded", () => {
+		writeJournal(journalLine("files/a.md") + journalLine("files/b.md"), T0);
+		const tracker = createIndexProgressTracker({ now: () => T0 });
+		const snapshot = tracker.poll(root, refresh(), { embedding: false });
+		expect(snapshot?.stage).toBe("keyword");
+		expect(snapshot?.stages.map((stage) => stage.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
+		expect(snapshot?.stages.find((stage) => stage.id === "keyword")?.counts).toEqual({ done: 2, skipped: 0, failed: 0, total: 4 });
+		expect(snapshot?.pulse.lastFile).toBe("b");
+		// Without the switch the same files are the embedding stage's.
+		expect(createIndexProgressTracker({ now: () => T0 }).poll(root, refresh())?.stage).toBe("embed");
+	});
+
 	it("starts over for a new run and forgets a run that is not live", () => {
 		const tracker = createIndexProgressTracker({ now: () => T0 });
 		writeJournal(journalLine("files/a.md"), T0);

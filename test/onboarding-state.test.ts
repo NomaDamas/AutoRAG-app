@@ -687,6 +687,50 @@ describe("createOnboardingService persistence", () => {
 		}
 	});
 
+	it("measures a keyword-only run's MinSync step by files, as the keyword index, the way the other screens do", async () => {
+		const directory = await workDir();
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const service = createOnboardingService({ ...makeDeps(directory), refresh: () => gate.promise, folderTotals: () => 10 });
+		await mkdir(join(directory, ".autorag", "minsync", ".minsync"), { recursive: true });
+		await writeFile(
+			join(directory, ".autorag", "refresh-progress.json"),
+			JSON.stringify({
+				version: 1,
+				runId: "r1",
+				pid: process.pid,
+				state: "running",
+				phase: "minsync",
+				startedAt: new Date().toISOString(),
+				updatedAt: new Date().toISOString(),
+				sourceFiles: { total: 10 },
+				parsedCounts: { scanned: 10, written: 10, deleted: 0, skipped: 0 },
+				minsync: { total: 10 },
+			}),
+			"utf8",
+		);
+		const record = (item: string) => `{"item":"files/${item}.md","version":"sha256:aa","outcome":"committed"}\n`;
+		await writeFile(join(directory, ".autorag", "minsync", ".minsync", "progress.jsonl"), `{"format":3,"stage":"vector","run_token":"t"}\n${record("a")}${record("b")}${record("c")}`, "utf8");
+
+		vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+		try {
+			await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "none", sources: [], plan: "free" });
+			vi.advanceTimersByTime(1_000);
+			await flush();
+			const running = await service.indexStatus();
+			expect(running).toMatchObject({ state: "running", phase: "minsync" });
+			expect(running.detail?.stage).toBe("keyword");
+			expect(running.detail?.stages.map((stage) => stage.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
+			expect(running.detail?.stages.find((stage) => stage.id === "keyword")?.counts).toEqual({ done: 3, skipped: 0, failed: 0, total: 10 });
+			// The same place on the bar as an embedding run with these counts: not a bar that sits at the read stage's 90%.
+			expect(running.progress).toBeCloseTo(40 + 50 * 0.3, 5);
+			expect(running.detail?.indeterminate).toBe(false);
+		} finally {
+			vi.useRealTimers();
+			gate.resolve({ ok: true, methods: [], scanned: 10, written: 10, deleted: 0, skipped: 0, diagnostics: [], error: null });
+			service.dispose();
+		}
+	});
+
 	describe("when the librarian's file already reads success or failed but the refresh is still running", () => {
 		/** The state a run is in between the librarian's own end write and `refresh()` returning (a halved-batch MinSync retry, the last moments). */
 		async function runUntilMinsyncIsAtThree(): Promise<{

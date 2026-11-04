@@ -224,8 +224,9 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const downloading = running && download.state === "downloading";
 	const progress = success ? 100 : downloading ? downloadPercent(download) : (status?.progress ?? 0);
 	const phase = status?.phase ?? null;
-	// The keyword-only path never embeds, so its strip has no embedding stage.
+	// The keyword-only path never embeds: MinSync builds a keyword index there, and every line below names it that.
 	const embed = resolveEmbed(ctx.draft.embed, canSelectCloudEmbedding(ctx.account));
+	const keywordOnly = embed === "none";
 	// Every number below comes from the same snapshot Settings and the sidebar read: measured counts only.
 	const detail = status?.detail ?? null;
 	const view = detail === null ? null : describeIndexProgress(detail, now, t);
@@ -239,12 +240,17 @@ export function IndexingScreen({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 	const skipped = success ? (status?.skipped ?? 0) : 0;
 	const readFiles = Math.max(0, totalFiles - skipped);
 
-	const phaseLabel = phase === null ? t("onboarding.indexing.phaseLabel.parsed") : t(`onboarding.indexing.phaseLabel.${phase}`);
+	const phaseLabel =
+		phase === null
+			? t("onboarding.indexing.phaseLabel.parsed")
+			: phase === "minsync" && keywordOnly
+				? t("indexActivity.phases.minsync")
+				: t(`onboarding.indexing.phaseLabel.${phase}`);
 	let statusDetail: string;
 	if (phase === "finalizing") {
 		statusDetail = t("onboarding.indexing.detailFinalizing");
 	} else if (phase === "minsync") {
-		statusDetail = t("onboarding.indexing.detailEmbedding");
+		statusDetail = keywordOnly ? t("indexProgress.stage.keyword") : t("onboarding.indexing.detailEmbedding");
 	} else if (status?.recentFolder != null && status.recentFile != null) {
 		statusDetail = `${status.recentFolder} · ${status.recentFile}`;
 	} else {

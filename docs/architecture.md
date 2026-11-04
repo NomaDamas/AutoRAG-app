@@ -613,7 +613,15 @@ resumes at the same step.
   tally and the size of every staged document (read once per run from
   `.autorag/minsync/files`) come from `src/main/index-progress-tracker.ts`, which the
   onboarding service and the activity service each own one of, and which keeps the
-  rolling-rate samples between polls. Nothing in it is filled from elapsed time;
+  rolling-rate samples between polls. Keyword-only mode (`appIndexing.semanticSearch:
+  false`) still runs MinSync as a sparse-only index (`onboarding-service.ts`
+  `startIndexing`, `index-refresh.ts`), so its MinSync step is a counted stage like
+  the embedding one, named `keyword` (키워드 색인) instead of `embed`; both trackers
+  are told which it is, the onboarding service from the chosen embed mode and the
+  activity service from the config file through its `semanticSearch` dependency
+  (re-read when the file changes), so the first-run screen, the sidebar and
+  Settings > Indexing print the same name and file counts. Nothing in it is filled
+  from elapsed time;
   the old `computeIndexingProgress` (`onboarding-progress.ts`), which did that,
   is gone.
 

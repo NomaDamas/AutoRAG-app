@@ -644,6 +644,7 @@
       "discover": "탐색",
       "parse": "파싱",
       "embed": "임베딩",
+      "keyword": "키워드 색인",
       "finalize": "마무리"
     },
     "line": {

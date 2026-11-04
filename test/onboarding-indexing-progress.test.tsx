@@ -75,8 +75,8 @@ describe("the first-run indexing screen", () => {
 		return fill;
 	}
 
-	function renderScreen(next: IndexingStatus): void {
-		const ctx: OnboardingCtx = onboardingCtx({ draft: { ...BASE_DRAFT, stepId: "indexing" }, indexStatus: next, t: t as unknown as Translate });
+	function renderScreen(next: IndexingStatus, embed: "local" | "none" = "local"): void {
+		const ctx: OnboardingCtx = onboardingCtx({ draft: { ...BASE_DRAFT, stepId: "indexing", embed }, indexStatus: next, t: t as unknown as Translate });
 		act(() => root.render(<IndexingScreen ctx={ctx} />));
 	}
 
@@ -105,6 +105,26 @@ describe("the first-run indexing screen", () => {
 			["임베딩", false, true],
 			["마무리", false, false],
 		]);
+	});
+
+	it("names MinSync's step the keyword index, with file counts, when nothing is embedded", () => {
+		renderScreen({ ...status(computeIndexProgress(realCase({ embedding: false })).snapshot), phase: "minsync" }, "none");
+		const phases = [...host.querySelectorAll(".ix-phase")].map((el) => [el.textContent, el.classList.contains("done"), el.classList.contains("active")]);
+		expect(phases).toEqual([
+			["탐색", true, false],
+			["파싱", true, false],
+			["키워드 색인", false, true],
+			["마무리", false, false],
+		]);
+		const detail = host.querySelector('[data-testid="ix-detail"]')?.textContent ?? "";
+		expect(detail).toContain(`키워드 색인 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`);
+		expect(host.querySelector(".ix-meta")?.textContent).toContain("61%");
+		expect(host.querySelector(".ix-meta")?.textContent).toContain("키워드 색인 남은 시간 계산 중");
+		// The status pill says the same thing: nothing is embedded in this run.
+		const pill = host.querySelector(".ix-status")?.textContent ?? "";
+		expect(pill).toContain("검색 색인 만드는 중");
+		expect(text()).not.toContain("임베딩");
+		expect(host.querySelector(".ix-bar")?.classList.contains("waiting")).toBe(false);
 	});
 
 	it("draws a stage it cannot measure as working rather than as a percent", () => {

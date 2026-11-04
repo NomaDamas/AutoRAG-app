@@ -644,6 +644,7 @@
       "discover": "发现",
       "parse": "解析",
       "embed": "嵌入",
+      "keyword": "关键词索引",
       "finalize": "收尾"
     },
     "line": {
