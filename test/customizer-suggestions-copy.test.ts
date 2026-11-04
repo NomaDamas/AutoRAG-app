@@ -18,7 +18,7 @@ describe("customization assistant suggestions", () => {
 			for (const surface of SURFACES) {
 				const assistant: Record<string, string> = locale.settingsCore[surface].assistant;
 				const suggestions = Object.entries(assistant).filter(([key]) => key.startsWith("prompt"));
-				expect(suggestions.length, `${surface} suggestions`).toBe(4);
+				expect(suggestions.length, `${surface} suggestions`).toBeGreaterThan(0);
 				for (const [key, text] of suggestions) expect(text, `${surface}.${key}`).not.toMatch(DEVELOPER_TERMS);
 				// The input box carries no example of its own: the suggestions above it are the examples.
 				expect(assistant.placeholder, `${surface}.placeholder`).toBeUndefined();

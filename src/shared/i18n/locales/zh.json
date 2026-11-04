@@ -2147,7 +2147,6 @@
         "emptyDesc": "告诉助手要显示的文件夹、分区顺序或外观模式，更改会实时生效。",
         "promptHideMedia": "把工作中用不到的音乐、影片和图片文件夹从侧边栏隐藏",
         "promptReorder": "把下载和文稿移到个人收藏的最上方",
-        "promptDarkMode": "把界面切换成深色模式",
         "promptReset": "把侧边栏恢复成最初的样子",
         "thinking": "正在检查设置",
         "send": "发送",
@@ -2261,8 +2260,8 @@
         "emptyDesc": "可以自己做右键菜单，帮你总结、对比或整理文件，也可以把用不到的菜单项隐藏起来。",
         "promptSummarizeDoc": "做一个魔法动作：右键 PDF 或 Word 文档时，用三句话总结要点",
         "promptCompareFiles": "做一个魔法动作：选中两个文件右键时，列出它们之间的不同之处",
-        "promptTrimMenu": "把右键菜单里不常用的项目隐藏，只留下常用的",
-        "promptReset": "把右键菜单恢复成最初的样子"
+        "promptPaperToDiscord": "做一个魔法动作：总结 PDF 论文，把摘要发到我的 Discord #论文摘要 频道，并做成摘要幻灯片放进“论文摘要”文件夹",
+        "promptMaskToPdf": "做一个魔法动作：把 hwp、docx 文件里的假名化信息全部打码，再转换成 PDF 保存"
       }
     },
     "shortcuts": {

@@ -352,7 +352,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(panel?.querySelector("h2")).toBeNull();
 		expect(panel?.textContent).not.toContain("원하는 사이드바 구성이나 화면 설정을");
 		expect(panel?.getAttribute("aria-label")).toBe("AI 앱 커스텀 어시스턴트");
-		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(4);
+		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(3);
 		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 검색과 자동화는 필수 기능");
 		// New chat appears only once there is a conversation to discard
 		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();

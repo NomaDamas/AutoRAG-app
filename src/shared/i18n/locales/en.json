@@ -2147,7 +2147,6 @@
         "emptyDesc": "Tell the assistant which folders to show, how to order them, or switch themes — changes apply live.",
         "promptHideMedia": "Hide the Music, Movies, and Pictures folders I don't use for work",
         "promptReorder": "Move Downloads and Documents to the top of Favorites",
-        "promptDarkMode": "Switch the app to dark mode",
         "promptReset": "Put the sidebar back the way it was",
         "thinking": "Inspecting settings",
         "send": "Send",
@@ -2261,8 +2260,8 @@
         "emptyDesc": "Build your own right-click actions that summarize, compare, or tidy up files, or hide the menu items you don't use.",
         "promptSummarizeDoc": "Make a Magic Action that sums up a PDF or Word document in three lines when I right-click it",
         "promptCompareFiles": "Make a Magic Action that lists what changed between two files I select and right-click",
-        "promptTrimMenu": "Hide the right-click items I rarely use and keep only the ones I need",
-        "promptReset": "Put the right-click menu back the way it was"
+        "promptPaperToDiscord": "Make a Magic Action that summarizes a PDF paper, posts the summary to my Discord #paper-summaries channel, and saves summary slides in a \"Paper Summaries\" folder",
+        "promptMaskToPdf": "Make a Magic Action that masks all pseudonymized personal details in an hwp or docx file, then converts it to PDF and saves it"
       }
     },
     "shortcuts": {

@@ -28,7 +28,7 @@ interface SurfaceCopy {
 	readonly title: LocaleKey;
 	readonly emptyTitle: LocaleKey;
 	readonly emptyDesc: LocaleKey;
-	readonly suggestions: readonly [LocaleKey, LocaleKey, LocaleKey, LocaleKey];
+	readonly suggestions: readonly LocaleKey[];
 	readonly thinking: LocaleKey;
 	readonly openAiSettings: LocaleKey;
 	readonly unavailable: LocaleKey;
@@ -43,7 +43,6 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		suggestions: [
 			"settingsCore.sidebar.assistant.promptHideMedia",
 			"settingsCore.sidebar.assistant.promptReorder",
-			"settingsCore.sidebar.assistant.promptDarkMode",
 			"settingsCore.sidebar.assistant.promptReset",
 		],
 		thinking: "settingsCore.sidebar.assistant.thinking",
@@ -57,8 +56,8 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		suggestions: [
 			"settingsCore.contextMenu.assistant.promptSummarizeDoc",
 			"settingsCore.contextMenu.assistant.promptCompareFiles",
-			"settingsCore.contextMenu.assistant.promptTrimMenu",
-			"settingsCore.contextMenu.assistant.promptReset",
+			"settingsCore.contextMenu.assistant.promptPaperToDiscord",
+			"settingsCore.contextMenu.assistant.promptMaskToPdf",
 		],
 		thinking: "settingsCore.sidebar.assistant.thinking",
 		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
