@@ -711,19 +711,25 @@ export function App(): ReactElement {
 			try {
 				switch (effect) {
 					case "askAiForRule": {
-						const { downloads } = await autorag.demo.preparePhoto();
+						const { downloads, gray } = await autorag.demo.preparePhoto();
 						// The background service must be up before the rule exists, so the first dropped photo is seen.
 						void autorag.demo.ensureDaemon();
-						openAiDraft(translate("tutorials.automations.askText", { folder: downloads }));
+						openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray }));
 						return {};
 					}
 					case "showAutomations":
 						finder?.showAutomations();
 						return {};
 					case "arrangePhotoPanes": {
-						const { folder, photo, downloads } = await autorag.demo.preparePhoto();
+						const { folder, photo, downloads, gray } = await autorag.demo.preparePhoto();
 						setWorkspace((current) => splitTwoFolders(current, downloads, folder));
-						return { photo, downloads };
+						return { photo, folder, downloads, gray };
+					}
+					case "showGrayFolder": {
+						// The copy is in a sub-folder of Downloads that no pane shows: bring the left pane there so the person sees it.
+						const { gray, folder } = facts;
+						if (gray !== undefined && folder !== undefined) setWorkspace((current) => splitTwoFolders(current, gray, folder));
+						return {};
 					}
 					case "createMagicAction": {
 						const { sample } = await autorag.demo.prepareMagicAction();

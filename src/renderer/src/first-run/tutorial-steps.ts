@@ -13,17 +13,20 @@ import { AI_HOST } from "./tour";
 export type TutorialId = "automations" | "contextMenu" | "remoteAccess";
 
 /** What an offer step's button does in the app before the tutorial goes on. */
-export type TutorialEffect = "askAiForRule" | "showAutomations" | "arrangePhotoPanes" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
+export type TutorialEffect = "askAiForRule" | "showAutomations" | "arrangePhotoPanes" | "showGrayFolder" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
 
 /** What the effects learned about the practice material; later steps point at it. */
 export interface TutorialFacts {
 	/** The sample file the Magic Action tutorial asks the person to right-click. */
 	readonly sample?: string;
-	/** The practice photo (under its placeholder name) and the Downloads folder it is to be dragged into. */
+	/** The practice photo, the Downloads folder it is to be dragged into, and the folder the rule saves black-and-white copies to. */
 	readonly photo?: string;
+	/** The practice-photo folder that holds `photo`. */
+	readonly folder?: string;
 	readonly downloads?: string;
-	/** The path the photo ended up under once the rule renamed it. */
-	readonly renamed?: string;
+	readonly gray?: string;
+	/** The black-and-white copy the rule made. */
+	readonly result?: string;
 }
 
 type Selector = string | ((facts: TutorialFacts) => string);
@@ -47,8 +50,8 @@ export interface TutorialStep {
 	readonly until?: Selector;
 	/** Waits for the AI Search answer to finish (the rule is made by then); ends the tutorial if it fails. */
 	readonly untilEvent?: "aiDone";
-	/** Waits for the practice photo to show up under a new name in Downloads; moves on with what it learned. */
-	readonly watch?: "photoRenamed";
+	/** Waits for a black-and-white copy of the practice photo to show up in the rule's output folder; moves on with what it learned. */
+	readonly watch?: "grayCopy";
 	/** An effect run once as the step comes up, with no button: the tutorial itself takes the person somewhere. */
 	readonly enter?: TutorialEffect;
 	/** For steps the person acts in: how the guide cursor and hint read. */
@@ -71,7 +74,7 @@ const RULE_ROW = "[data-rule-id]";
 const DEMO_MAGIC_ITEM = `.menu [data-magic-action-id="${DEMO_MAGIC_ACTION_ID}"]`;
 
 const photoRow = (facts: TutorialFacts): string => (facts.photo === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.photo)}"]`);
-const renamedRow = (facts: TutorialFacts): string => (facts.renamed === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.renamed)}"]`);
+const resultRow = (facts: TutorialFacts): string => (facts.result === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.result)}"]`);
 const SEND_BUTTON = `${AI_HOST} form.composer button.send[type="submit"]`;
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
@@ -81,8 +84,8 @@ export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = 
 		{ key: "asking", anchors: [`${AI_HOST} [role="alertdialog"]`, `${AI_HOST} .ai-body`], untilEvent: "aiDone" },
 		{ key: "rule", anchors: [RULE_ROW], enter: "showAutomations", waitFor: RULE_ROW },
 		{ key: "panes", anchors: [RULE_ROW], offer: "arrangePhotoPanes" },
-		{ key: "drag", anchors: [photoRow], waitFor: photoRow, watch: "photoRenamed", hint: "drag" },
-		{ key: "result", anchors: [renamedRow], waitFor: renamedRow },
+		{ key: "drag", anchors: [photoRow], waitFor: photoRow, watch: "grayCopy", hint: "drag" },
+		{ key: "result", anchors: [resultRow], enter: "showGrayFolder", waitFor: resultRow },
 	],
 	contextMenu: [
 		{ key: "intro", anchors: ['.menu[role="menu"]'], offer: "createMagicAction" },
@@ -159,27 +162,21 @@ export function markTutorialSeen(id: TutorialId): void {
 	}
 }
 
-const PICTURE = /\.(jpe?g|png|heic|webp|gif)$/iu;
+const PICTURE = /\.(jpe?g|png|heic|webp|gif|tiff?|bmp|avif)$/iu;
 
 function basenameOf(path: string): string {
 	return path.replaceAll("\\", "/").split("/").pop() ?? path;
 }
 
 /**
- * The photo's new path: a picture that appeared directly in Downloads since `baseline` (what the folder showed when the
- * step began) under any name but the placeholder it was dragged in with. Null while it still has the placeholder name
- * or has not arrived.
+ * The black-and-white copy: a picture among `listed` (the direct contents of the rule's output folder) that was not there
+ * when the step began. Null while nothing new is there. The folder may not exist yet; that is the same as empty.
+ * Paths are taken as the listing spells them (a symlinked folder lists under its real path), never compared to the
+ * folder's own path.
  */
-export function renamedPhoto(paths: readonly string[], facts: TutorialFacts, baseline: ReadonlySet<string>): string | null {
-	const { downloads, photo } = facts;
-	if (downloads === undefined || photo === undefined) return null;
-	const prefix = downloads.endsWith("/") || downloads.endsWith("\\") ? downloads : `${downloads}/`;
-	const placeholder = basenameOf(photo);
-	for (const path of paths) {
-		if (baseline.has(path) || !path.startsWith(prefix)) continue;
-		const rest = path.slice(prefix.length);
-		if (/[\\/]/u.test(rest) || !PICTURE.test(rest) || rest === placeholder) continue;
-		return path;
+export function grayCopy(listed: readonly string[], baseline: ReadonlySet<string>): string | null {
+	for (const path of listed) {
+		if (!baseline.has(path) && PICTURE.test(basenameOf(path))) return path;
 	}
 	return null;
 }

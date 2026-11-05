@@ -19,7 +19,7 @@ import {
 	anchorSelectors,
 	markTutorialSeen,
 	nextStep,
-	renamedPhoto,
+	grayCopy,
 	selectorOf,
 	stepsAfter,
 	tutorialSeen,
@@ -186,7 +186,7 @@ function TutorialCoach({
 	readonly onNext: () => void;
 	readonly onTapped: () => void;
 	readonly onAccept: (effect: TutorialEffect) => Promise<void>;
-	/** The step saw what it was waiting for and learned something (the renamed photo's path). */
+	/** The step saw what it was waiting for and learned something (the black-and-white copy's path). */
 	readonly onLearned: (facts: TutorialFacts) => void;
 	/** The step brings the person somewhere itself, once, as it comes up. */
 	readonly onEnter: (effect: TutorialEffect) => Promise<void>;
@@ -218,27 +218,27 @@ function TutorialCoach({
 		return () => off?.();
 	}, [step]);
 
-	// The photo's rename: watch Downloads itself (not the DOM, which may show another folder) for a new picture that is not the placeholder.
+	// The black-and-white copy: watch the rule's output folder itself (not the DOM, which may show another folder) for a new picture.
 	useEffect(() => {
-		if (step.watch !== "photoRenamed" || facts.downloads === undefined) return;
+		if (step.watch !== "grayCopy" || facts.gray === undefined) return;
 		let live = true;
 		let baseline: ReadonlySet<string> | null = null;
 		const poll = async (): Promise<void> => {
+			let paths: readonly string[] = [];
 			try {
-				const listing = await window.autorag.fs.listDir(facts.downloads as string);
-				if (!live) return;
-				const paths = listing.entries.map((entry) => entry.path);
-				if (baseline === null) {
-					baseline = new Set(paths);
-					return;
-				}
-				const found = renamedPhoto(paths, facts, baseline);
-				if (found !== null) {
-					live = false;
-					latest.current.onLearned({ renamed: found });
-				}
+				paths = (await window.autorag.fs.listDir(facts.gray as string)).entries.map((entry) => entry.path);
 			} catch {
-				// A listing that fails once is tried again on the next tick.
+				// The folder does not exist until the rule makes it: that is an empty folder, not a failure.
+			}
+			if (!live) return;
+			if (baseline === null) {
+				baseline = new Set(paths);
+				return;
+			}
+			const found = grayCopy(paths, baseline);
+			if (found !== null) {
+				live = false;
+				latest.current.onLearned({ result: found });
 			}
 		};
 		void poll();

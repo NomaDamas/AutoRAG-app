@@ -891,10 +891,10 @@
     "waitingHint": "One moment…",
     "rightClickHint": "Right-click the file",
     "automations": {
-      "askText": "When a new photo lands in {{folder}}, handle it. Build it as a \"hand it to Dazzi\" command rule (it passes the new file paths to the autorag search command), and only target photos with camera or screenshot names like IMG_, DSC_ or Screenshot, so a renamed photo never matches the rule again. What to do: open the photo and rename the file to describe what's in it, like dog-playing-on-the-beach.jpg. Don't move it out of the folder.",
+      "askText": "When a new photo lands in {{folder}}, save a black-and-white copy of it in {{gray}}. Leave the original alone. Make it a command rule that uses file conversion (the grayscale preset of filee-cli). Turn on appendFiles so the new file paths arrive as command arguments, and exclude everything inside the black-and-white folder so the copies never trigger the rule again.",
       "intro": {
         "title": "Automations are made by talking",
-        "body": "There's no settings form. Tell the AI what you want and it builds the rule. Let's ask for: \"when a photo lands in Downloads, rename it to describe what's in it.\"",
+        "body": "There's no settings form. Tell the AI what you want and it builds the rule. Let's ask for: \"when a photo lands in Downloads, make a black-and-white copy in a Black and White folder.\"",
         "action": "Ask the AI"
       },
       "send": {
@@ -903,7 +903,7 @@
       },
       "asking": {
         "title": "The AI is making the rule",
-        "body": "It's setting up a rule that watches the folder, and the AI that renames photos. If it asks for approval, allow it."
+        "body": "It's setting up a rule that watches the folder and saves black-and-white copies. If it asks for approval, allow it."
       },
       "rule": {
         "title": "The rule is ready",
@@ -917,11 +917,11 @@
       },
       "drag": {
         "title": "Drag the photo into Downloads",
-        "body": "Drag IMG_0001.jpg from the right into the Downloads folder on the left. Its name means nothing. Hold Option (Alt) while dragging to copy instead of move."
+        "body": "Drag IMG_0001.jpg from the right into the Downloads folder on the left. Hold Option (Alt) while dragging to copy instead of move. The rule notices as soon as it lands."
       },
       "result": {
-        "title": "It got a new name!",
-        "body": "The AI looked at the photo and renamed it. From now on every photo that lands in Downloads gets this treatment. This rule is just for practice, so feel free to delete it."
+        "title": "A black-and-white photo appeared!",
+        "body": "A black-and-white copy is now in the Black and White folder inside Downloads. From now on every photo that lands in Downloads gets one. This rule is just for practice, so feel free to delete it."
       }
     },
     "contextMenu": {
@@ -1401,7 +1401,8 @@
       "sampleBody": "Weekly report (example)\n\nDone this week: QA on the new feature, 3 customer interviews\nNext week: release prep, doc cleanup\nBlockers: none\n",
       "glanceLabel": "Peek at contents",
       "glanceDesc": "Shows the size and first lines of the selected text files. (A Dazzi practice example)",
-      "photos": "Practice Photos"
+      "photos": "Practice Photos",
+      "gray": "Black and White"
     }
   },
   "quickLook": {

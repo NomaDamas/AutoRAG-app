@@ -1,5 +1,5 @@
 /**
- * The practice material the tutorials hand a person: a sample photo with a meaningless placeholder name, and one
+ * The practice material the tutorials hand a person: a sample photo, and one
  * example Magic Action that peeks into the text files it is run on. The automation example is not made here: the
  * person asks the AI for it in AI Search (that is the point of the lesson), and the tutorial only watches for the rule
  * to appear, then for the sample photo to be renamed once it is dropped in Downloads.
@@ -24,6 +24,8 @@ export interface DemoPhotoReady {
 	readonly photo: string;
 	/** The folder the AI-made rule is told to watch. */
 	readonly downloads: string;
+	/** Where the rule is asked to save the black-and-white copies: a sub-folder of `downloads` (the rule must not watch it). */
+	readonly gray: string;
 }
 
 export interface DemoMagicActionReady {

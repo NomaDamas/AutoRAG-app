@@ -53,7 +53,7 @@ function rootOf(home: string): string {
 	return join(home, t("main.demo.folder"));
 }
 
-/** `IMG_0001.jpg`: the kind of name a camera or a screenshot tool gives, which says nothing about the picture. */
+/** `IMG_0001.jpg`: the kind of name a camera gives. */
 const PLACEHOLDER_PHOTO = "IMG_0001.jpg";
 
 export function createDemoService(deps: DemoServiceDeps): DemoBridge {
@@ -68,7 +68,7 @@ export function createDemoService(deps: DemoServiceDeps): DemoBridge {
 			const photo = join(folder, PLACEHOLDER_PHOTO);
 			// A fresh copy each time, so the lesson can be run again; a photo already moved away is simply put back.
 			if (!existsSync(photo)) await copyFile(deps.photoSource ?? referencePhotoPath, photo);
-			return { folder, photo, downloads: deps.downloads };
+			return { folder, photo, downloads: deps.downloads, gray: join(deps.downloads, t("main.demo.gray")) };
 		},
 
 		ensureDaemon: async (): Promise<boolean> => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { splitTwoFolders } from "../src/renderer/src/first-run/tour";
-import { renamedPhoto } from "../src/renderer/src/first-run/tutorial-steps";
+import { grayCopy } from "../src/renderer/src/first-run/tutorial-steps";
 import { allTabs, createWorkspace, paneOf, type Workspace } from "../src/renderer/src/state/workspace";
 
 const paths = (ws: Workspace): string[][] => ws.panes.map((pane) => pane.tabs.map((tab) => tab.path));
@@ -24,21 +24,23 @@ describe("splitTwoFolders", () => {
 	});
 });
 
-describe("renamedPhoto", () => {
-	const facts = { downloads: "/home/Downloads", photo: "/home/Practice/IMG_0001.jpg" };
-	const before = new Set(["/home/Downloads/old.png", "/home/Downloads/notes.txt"]);
+describe("grayCopy", () => {
+	const before = new Set(["/home/Downloads/흑백/older.jpg"]);
 
-	it("waits while the photo still has the placeholder name or has not arrived", () => {
-		expect(renamedPhoto(["/home/Downloads/old.png"], facts, before)).toBeNull();
-		expect(renamedPhoto(["/home/Downloads/old.png", "/home/Downloads/IMG_0001.jpg"], facts, before)).toBeNull();
+	it("waits while the output folder is empty, missing, or only holds what was there before", () => {
+		expect(grayCopy([], before)).toBeNull();
+		expect(grayCopy(["/home/Downloads/흑백/older.jpg"], before)).toBeNull();
 	});
 
-	it("returns the new picture directly in Downloads, ignoring what was already there, other file kinds, and sub-folders", () => {
-		const paths = ["/home/Downloads/old.png", "/home/Downloads/IMG_0001.jpg", "/home/Downloads/budget.xlsx", "/home/Downloads/sub/cat.jpg", "/home/Downloads/astronaut-and-flag-on-the-moon.jpg"];
-		expect(renamedPhoto(paths, facts, before)).toBe("/home/Downloads/astronaut-and-flag-on-the-moon.jpg");
+	it("returns the new picture", () => {
+		expect(grayCopy(["/home/Downloads/흑백/older.jpg", "/home/Downloads/흑백/IMG_0001_gray.jpg"], before)).toBe("/home/Downloads/흑백/IMG_0001_gray.jpg");
 	});
 
-	it("does not mistake a pane showing another folder for Downloads", () => {
-		expect(renamedPhoto(["/home/Practice/astronaut.jpg"], facts, before)).toBeNull();
+	it("ignores other kinds of file", () => {
+		expect(grayCopy(["/home/Downloads/흑백/notes.txt", "/home/Downloads/흑백/.DS_Store"], before)).toBeNull();
+	});
+
+	it("takes paths as the listing spells them, so a symlinked folder still works", () => {
+		expect(grayCopy(["/private/var/T/Downloads/흑백/a_gray.jpg"], new Set())).toBe("/private/var/T/Downloads/흑백/a_gray.jpg");
 	});
 });
