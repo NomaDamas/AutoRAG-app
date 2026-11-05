@@ -660,6 +660,50 @@
       "finalizing": "Finishing up"
     }
   },
+  "indexProgress": {
+    "stage": {
+      "discover": "Discovering",
+      "parse": "Parsing",
+      "embed": "Embedding",
+      "keyword": "Keyword indexing",
+      "finalize": "Finishing"
+    },
+    "line": {
+      "discover": "Looking for files",
+      "finalize": "Finishing the search index",
+      "counts": "{{stage}} {{done}} / {{total}} files ({{percent}}%)",
+      "countsOpen": "{{stage}} {{done}} files (total still being counted)"
+    },
+    "skipped": "{{count}} skipped",
+    "failed": "{{count}} failed",
+    "bytes": "Size {{done}} / {{total}} ({{percent}}%)",
+    "bytesDone": "Size {{done}} processed",
+    "eta": {
+      "calculating": "{{stage}}: calculating time left",
+      "remaining": "{{stage}}: about {{duration}} left"
+    },
+    "duration": {
+      "minutes": "{{count}} min",
+      "hours": "{{hours}} h",
+      "hoursMinutes": "{{hours}} h {{minutes}} min",
+      "days": "{{count}} days"
+    },
+    "ago": {
+      "now": "just now",
+      "seconds": "{{count}}s ago",
+      "minutes": "{{count}} min ago",
+      "hours": "{{count}} h ago"
+    },
+    "activity": {
+      "lastDone": "Last file finished {{ago}}",
+      "none": "No file has finished yet",
+      "heartbeat": "Last activity signal {{ago}}"
+    },
+    "warn": {
+      "stalledAlive": "No file has finished for {{minutes}} minutes. Work signals are still coming in, so it may be a large file.",
+      "stalledSilent": "No file has finished for {{minutes}} minutes and the work signals stopped. It may be stalled."
+    }
+  },
   "indexProblem": {
     "retrying": "Retrying now",
     "fixEmbedding": "Change embedding method",
@@ -1166,20 +1210,12 @@
         "minsync": "Embedding",
         "finalizing": "Tidying up"
       },
-      "phase": {
-        "parsed": "Reading documents",
-        "minsync": "Embedding",
-        "finalizing": "Tidying up"
-      },
       "title": "Dazzi is reading your files",
       "titleDone": "Everything's ready",
       "metaDone": "Checking total time",
       "metaTotal": "{{minutes}} min total",
       "metaFiles": "{{count}} files",
       "metaEstimating": "Calculating time remaining",
-      "metaUnderMinute": "Less than a minute left",
-      "metaRemaining": "~{{minutes}} min left",
-      "metaProgress": "{{processed}} / {{total}} files",
       "gateOkTitle": "You can quit now",
       "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
       "gateTitleMac": "Don't quit Dazzi or turn off your Mac",

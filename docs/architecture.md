@@ -595,6 +595,49 @@ resumes at the same step.
   `progress.jsonl`) reads first and applies its snapshot only if its run is still
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
+  The librarian writes `success` (or `failed`) for its own pass before `refresh()`
+  returns, and the batch-halving retry of a timed-out MinSync step (`index-refresh`
+  re-runs `syncMinSync()` after that write) never rewrites the file. A tick that
+  reads such a view therefore keeps the last measured snapshot, the phase and the
+  bar of the last running view, without its remaining time (`holdIndexProgress`),
+  instead of recomputing from a file that no longer describes the work; the bar
+  never moves backwards on the way to `finish()`.
+  The numbers on the screen, in the sidebar activity entry and in Settings >
+  Indexing are one `IndexProgressSnapshot` (`src/shared/index-progress-contract.ts`),
+  computed by `computeIndexProgress` (`src/shared/index-progress.ts`) from what the
+  processes wrote down: the librarian's `refresh-progress.json` (`sourceFiles.total`,
+  `parsedCounts`, `minsync.synced/total`, `updatedAt`, which MinSync's 5 s heartbeat
+  rewrites) and MinSync's `progress.jsonl` (header, then one
+  `{"item":"files/<path>.md","version":...,"outcome":"committed|failed|deleted"}` line
+  per file, no sizes, no timestamps).
+  That journal is MinSync's private interrupted-run format: the librarian's own
+  docs say AutoRAG does not read MinSync's private snapshot/journal formats, and the
+  app reads this one only to draw the display. What is known of it is narrow. The
+  header and the `committed` lines were measured on MinSync 0.6.1 only. The `failed`
+  and `deleted` lines were not seen in a real run (their test follows MinSync's
+  source, `journal.rs`). The supported floor, 0.6.0 (`MINSYNC_MIN_VERSION`), was not
+  measured at all. So the tally skips any line it does not recognize, and the
+  journal can only raise a count above MinSync's own `minsync.synced/total` in
+  `refresh-progress.json`: a format it cannot read adds nothing, and the screens fall
+  back to MinSync's count. The file-by-file tally and the size of every staged
+  document (read once per run from `.autorag/minsync/files`) come from
+  `src/main/index-progress-tracker.ts`. A committed file with no staged size makes
+  the byte figure unknown (`bytesDone: null`: the screens show file counts only)
+  instead of adding 0 to it.
+  The tracker is owned once by the onboarding service and once by the activity
+  service, and keeps the rolling-rate samples between polls. Keyword-only mode
+  (`appIndexing.semanticSearch: false`) still runs MinSync as a sparse-only index
+  (`onboarding-service.ts` `startIndexing`, `index-refresh.ts`), so its MinSync step
+  is a counted stage like the embedding one, named `keyword` (키워드 색인) instead
+  of `embed`. Both trackers are told which it is: the onboarding service from the
+  chosen embed mode, the activity service from the config file through its
+  `semanticSearch` dependency (re-read when the file changes). The first-run screen,
+  the sidebar and Settings > Indexing therefore print the same name and file counts.
+  The bar sits on fixed stage shares (parse 10%, MinSync's embedding or keyword stage 80%,
+  finalize 10%); MinSync's stage is filled by `bytes.done / bytes.total` when the staged
+  sizes are known and by file counts otherwise, so a few large files cannot show as nearly done.
+  Nothing in it is filled from elapsed time; the old `computeIndexingProgress`
+  (`onboarding-progress.ts`), which did that, is gone.
 
 Account and plan are real. The account step signs in against the hosted AutoRAG
 service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and

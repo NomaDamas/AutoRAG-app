@@ -44,6 +44,7 @@ import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
 import { autoragHome } from "./autorag-home";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -873,6 +874,11 @@ app.whenReady().then(async () => {
 		configPath: autoragConfigPath,
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
 		journalPath: () => schedulePath.activity,
+		// Keyword-only runs MinSync too, as a keyword index; the progress screens name that stage by this switch.
+		semanticSearch: () => {
+			const configPath = autoragConfigPath();
+			return !existsSync(configPath) || readAppIndexing(readRawConfigObject(configPath)).semanticSearch;
+		},
 		// The fs worker runs the checkbox-toggle refresh, so its pid marks that run as this app's own.
 		ownPids: () => [workerHost.status().pid],
 	});
