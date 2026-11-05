@@ -410,10 +410,13 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   keyword-only run (semantic search off) still runs MinSync, as a sparse keyword
   index, so it has the same four stages and only the third is named 키워드 색인
   (`keyword` instead of `embed`) on all three screens; it counts files and takes
-  the same share of the bar. The bar sits on fixed stage shares (parse 40%,
-  embedding or keyword index 50%, finalize 10%) filled only by measured
-  completion; a stage that cannot be measured (discovery, the final tidy-up, a
-  MinSync stage whose files are all counted but not yet closed) draws as a working
+  the same share of the bar. The bar sits on fixed stage shares (parse 10%,
+  embedding or keyword index 80%, finalize 10%): reading is quick and MinSync's
+  work is nearly all of a run. It is filled only by measured completion, and
+  MinSync's stage is filled by bytes once the staged sizes are known (a few large
+  files cannot show as nearly done), by files before. A stage that cannot be
+  measured (discovery, the final tidy-up, a MinSync stage whose files are all
+  counted but not yet closed) draws as a working
   bar with the stage name instead of a percent, so a number never sits at 95%
   while work remains. When the librarian's progress file already reads `success`
   or `failed` but the app's refresh is still running (the batch-halving retry of a

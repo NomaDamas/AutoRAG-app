@@ -633,6 +633,9 @@ resumes at the same step.
   chosen embed mode, the activity service from the config file through its
   `semanticSearch` dependency (re-read when the file changes). The first-run screen,
   the sidebar and Settings > Indexing therefore print the same name and file counts.
+  The bar sits on fixed stage shares (parse 10%, MinSync's embedding or keyword stage 80%,
+  finalize 10%); MinSync's stage is filled by `bytes.done / bytes.total` when the staged
+  sizes are known and by file counts otherwise, so a few large files cannot show as nearly done.
   Nothing in it is filled from elapsed time; the old `computeIndexingProgress`
   (`onboarding-progress.ts`), which did that, is gone.
 

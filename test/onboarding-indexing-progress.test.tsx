@@ -87,13 +87,13 @@ describe("the first-run indexing screen", () => {
 		expect(detail).toContain("용량 4.0 GB / 17 GB (23%)");
 		expect(detail).toContain("마지막 완료");
 		expect(detail).toContain("report.pdf");
-		expect(host.querySelector(".ix-meta")?.textContent).toContain("61%");
+		expect(host.querySelector(".ix-meta")?.textContent).toContain("28%");
 		expect(host.querySelector(".ix-meta")?.textContent).toContain("임베딩 남은 시간 계산 중");
 		expect(text()).not.toContain("95%");
 		expect(text()).not.toContain("1분 미만");
 		expect(host.querySelector(".ix-bar")?.classList.contains("waiting")).toBe(false);
-		// The read stage's 40% plus 44% of the embedding stage's 50%.
-		expect(Number.parseFloat(barFill().style.width)).toBeCloseTo(61.88, 1);
+		// The read stage's 10% plus 23% (the bytes) of the embedding stage's 80%.
+		expect(Number.parseFloat(barFill().style.width)).toBeCloseTo(28.4, 1);
 	});
 
 	it("steps discover, parse, embed, finalize on the strip", () => {
@@ -118,7 +118,7 @@ describe("the first-run indexing screen", () => {
 		]);
 		const detail = host.querySelector('[data-testid="ix-detail"]')?.textContent ?? "";
 		expect(detail).toContain(`키워드 색인 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`);
-		expect(host.querySelector(".ix-meta")?.textContent).toContain("61%");
+		expect(host.querySelector(".ix-meta")?.textContent).toContain("28%");
 		expect(host.querySelector(".ix-meta")?.textContent).toContain("키워드 색인 남은 시간 계산 중");
 		// The status pill says the same thing: nothing is embedded in this run.
 		const pill = host.querySelector(".ix-status")?.textContent ?? "";

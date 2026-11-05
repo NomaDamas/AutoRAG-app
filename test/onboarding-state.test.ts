@@ -674,7 +674,7 @@ describe("createOnboardingService persistence", () => {
 			expect(running.detail?.pulse.lastFile).toBe("c");
 			// One unit for both numbers: the librarian's count, not the pre-scan's 20,484.
 			expect(running).toMatchObject({ totalFiles: 10, processedFiles: 10 });
-			expect(running.progress).toBeCloseTo(40 + 50 * 0.3, 5);
+			expect(running.progress).toBeCloseTo(10 + 80 * 0.3, 5);
 			// Too little movement has been observed to project an end; it says so, and never shows 0 minutes.
 			expect(running.remainingMinutes).toBeNull();
 			expect(running.detail?.etaState).toBe("calculating");
@@ -721,8 +721,8 @@ describe("createOnboardingService persistence", () => {
 			expect(running.detail?.stage).toBe("keyword");
 			expect(running.detail?.stages.map((stage) => stage.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
 			expect(running.detail?.stages.find((stage) => stage.id === "keyword")?.counts).toEqual({ done: 3, skipped: 0, failed: 0, total: 10 });
-			// The same place on the bar as an embedding run with these counts: not a bar that sits at the read stage's 90%.
-			expect(running.progress).toBeCloseTo(40 + 50 * 0.3, 5);
+			// The same place on the bar as an embedding run with these counts: not a bar that sits at the read stage's 10%.
+			expect(running.progress).toBeCloseTo(10 + 80 * 0.3, 5);
 			expect(running.detail?.indeterminate).toBe(false);
 		} finally {
 			vi.useRealTimers();
@@ -785,7 +785,7 @@ describe("createOnboardingService persistence", () => {
 			await service.startIndexing({ folders: ["/Users/me/Documents"], embed: "local", sources: [], plan: "free" });
 			const running = await tick();
 			expect(running).toMatchObject({ state: "running", phase: "minsync", detail: { stage: "embed" } });
-			expect(running.progress).toBeCloseTo(40 + 50 * 0.3, 5);
+			expect(running.progress).toBeCloseTo(10 + 80 * 0.3, 5);
 			return { service, gate, sent, write, tick };
 		}
 
@@ -799,7 +799,7 @@ describe("createOnboardingService persistence", () => {
 					const held = await tick();
 					expect(held, label).toMatchObject({ state: "running", phase: "minsync", processedFiles: 10, totalFiles: 10 });
 					expect(held.detail?.stage, label).toBe("embed");
-					expect(held.progress, label).toBeCloseTo(55, 5);
+					expect(held.progress, label).toBeCloseTo(34, 5);
 					// No rate is observed any more, so no remaining time is promised.
 					expect(held.remainingMinutes, label).toBeNull();
 					expect(held.detail?.etaState, label).toBe("calculating");
@@ -808,7 +808,7 @@ describe("createOnboardingService persistence", () => {
 				await write("failed", "minsync");
 				const failedView = await tick();
 				expect(failedView).toMatchObject({ state: "running", phase: "minsync", detail: { stage: "embed" } });
-				expect(failedView.progress).toBeCloseTo(55, 5);
+				expect(failedView.progress).toBeCloseTo(34, 5);
 
 				gate.resolve({ ok: true, methods: [], scanned: 10, written: 10, deleted: 0, skipped: 0, diagnostics: [], error: null });
 				for (let tries = 0; tries < 50 && service.isIndexing(); tries += 1) await flush();
@@ -829,8 +829,8 @@ describe("createOnboardingService persistence", () => {
 				for (let tries = 0; tries < 50 && service.isIndexing(); tries += 1) await flush();
 				const bars = sent.map((status) => status.progress);
 				expect(bars.at(-1)).toBe(100);
-				expect(bars.some((bar) => bar >= 55)).toBe(true);
-				const firstMeasured = bars.findIndex((bar) => bar >= 55);
+				expect(bars.some((bar) => bar >= 34)).toBe(true);
+				const firstMeasured = bars.findIndex((bar) => bar >= 34);
 				expect(bars.slice(firstMeasured).every((bar, index, rest) => index === 0 || bar >= (rest[index - 1] ?? 0))).toBe(true);
 			} finally {
 				vi.useRealTimers();

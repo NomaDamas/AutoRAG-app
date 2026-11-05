@@ -84,8 +84,8 @@ describe("deriveIndexActivity", () => {
 		});
 		expect(view.origin).toBe("scheduled");
 		expect(view.items[0]).toMatchObject({ key: "local", phase: "minsync", counts: { scanned: 10, written: 4, deleted: 1, skipped: 2 } });
-		// The read stage is done (40% of the bar) and a quarter of the 50% embedding share: 0.525 of the local item, over three items.
-		expect(view.fraction).toBeCloseTo(0.525 / 3);
+		// The read stage is done (10% of the bar) and a quarter of the 80% embedding share: 0.3 of the local item, over three items.
+		expect(view.fraction).toBeCloseTo(0.3 / 3);
 	});
 
 	it("advances the local minsync fraction from librarian 2.13.2 streamed minsync progress when present", () => {
@@ -101,8 +101,8 @@ describe("deriveIndexActivity", () => {
 			alive,
 			ownPids: [100],
 		});
-		// 25 of 100 files synced: the read stage's 40% plus a quarter of the embedding stage's 50%.
-		expect(view.fraction).toBeCloseTo(0.525);
+		// 25 of 100 files synced: the read stage's 10% plus a quarter of the embedding stage's 80%.
+		expect(view.fraction).toBeCloseTo(0.3);
 		expect(view.progress?.stages.find((stage) => stage.id === "embed")?.counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 100 });
 	});
 
@@ -119,7 +119,7 @@ describe("deriveIndexActivity", () => {
 		expect(keyword.progress?.stages.map((stage) => stage.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
 		expect(keyword.progress?.stages.find((stage) => stage.id === "keyword")?.counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 100 });
 		// The same place on the bar as the embedding run with the same counts, not an unmeasurable "finalize".
-		expect(keyword.fraction).toBeCloseTo(0.525);
+		expect(keyword.fraction).toBeCloseTo(0.3);
 		expect(keyword.fraction).toBe(deriveIndexActivity(input).fraction);
 	});
 

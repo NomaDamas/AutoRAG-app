@@ -62,22 +62,37 @@ describe("the 0.1.7 case: 12,950 of 29,595 files done while the screen said 95%"
 		embedBytesTotal: 18_500_000_000,
 	});
 
-	it("reports the journal's 44% of the files and 23% of the bytes", () => {
+	it("reports the journal's 44% of the files and 23% of the bytes, and fills the stage by the bytes", () => {
 		const { snapshot } = computeIndexProgress(input);
 		const embed = stage(snapshot, "embed");
 		expect(embed.counts).toEqual({ done: 12_950, skipped: 0, failed: 0, total: 29_595 });
-		expect(embed.fraction).toBeCloseTo(0.4376, 3);
-		expect(Math.round((embed.fraction ?? 0) * 100)).toBe(44);
+		expect(((embed.counts?.done ?? 0) / (embed.counts?.total ?? 1))).toBeCloseTo(0.4376, 3);
 		expect(embed.bytes).toEqual({ done: 4_255_000_000, total: 18_500_000_000 });
-		expect((embed.bytes?.done ?? 0) / (embed.bytes?.total ?? 1)).toBeCloseTo(0.23, 2);
+		expect(embed.fraction).toBeCloseTo(4_255_000_000 / 18_500_000_000, 6);
+		expect(Math.round((embed.fraction ?? 0) * 100)).toBe(23);
 	});
 
-	it("does not sit at 95% with no time left: the bar is the read stage plus the measured part of embedding", () => {
+	it("does not sit at 95% with no time left: the bar is the read stage plus the measured bytes of embedding", () => {
 		const { snapshot } = computeIndexProgress(input);
 		expect(snapshot.stage).toBe("embed");
-		expect(snapshot.fraction).toBeCloseTo(0.4 + 0.5 * 0.4376, 3);
+		expect(snapshot.fraction).toBeCloseTo(0.1 + 0.8 * 0.23, 3);
 		expect(snapshot.fraction).toBeLessThan(0.95);
 		expect(snapshot.etaMinutes).not.toBe(0);
+	});
+
+	it("fills MinSync's stage by files while no sizes are known", () => {
+		const { snapshot } = computeIndexProgress(embedInput({ journal: journal({ committed: 12_950 }) }));
+		expect(stage(snapshot, "embed").bytes).toBeNull();
+		expect(stage(snapshot, "embed").fraction).toBeCloseTo(0.4376, 3);
+		expect(snapshot.fraction).toBeCloseTo(0.1 + 0.8 * 0.4376, 3);
+	});
+
+	it("lets one huge file keep the bar honest: 99 of 100 files done is 10% of the bytes, not 99%", () => {
+		const { snapshot } = computeIndexProgress(
+			embedInput({ minsync: { total: 100 }, journal: journal({ committed: 99, bytesDone: 99_000_000 }), embedBytesTotal: 999_000_000 }),
+		);
+		expect(stage(snapshot, "embed").fraction).toBeCloseTo(99 / 999, 6);
+		expect(snapshot.fraction).toBeLessThan(0.2);
 	});
 
 	it("keeps the read stage's own file universe, so a bigger processed count than total cannot happen", () => {
@@ -170,8 +185,8 @@ describe("stages", () => {
 	it("goes through the same four stages for keyword-only indexing, with MinSync's step named the keyword index", () => {
 		const reading = computeIndexProgress(embedInput({ embedding: false, phase: "parsed", minsync: null, sourceTotal: 100, parsed: { scanned: 50, written: 50, deleted: 0, skipped: 0 } })).snapshot;
 		expect(reading.stages.map((s) => s.id)).toEqual(["discover", "parse", "keyword", "finalize"]);
-		// The read stage keeps its 40% of the bar; the half-read share is 20%.
-		expect(reading.fraction).toBeCloseTo(0.2);
+		// The read stage has a tenth of the bar; the half-read share is 5%.
+		expect(reading.fraction).toBeCloseTo(0.05);
 		const indexing = computeIndexProgress(embedInput({ embedding: false, minsync: { total: 100 }, journal: journal({ committed: 30, bytesDone: 3_000 }), embedBytesTotal: 10_000 })).snapshot;
 		expect(indexing.stage).toBe("keyword");
 		expect(indexing.stages.map((s) => s.state)).toEqual(["done", "done", "running", "pending"]);
@@ -186,7 +201,7 @@ describe("stages", () => {
 		const base = { minsync: { synced: 30, total: 100 }, sourceTotal: 100, parsed: { scanned: 100, written: 100, deleted: 0, skipped: 0 } };
 		const keyword = computeIndexProgress(embedInput({ ...base, embedding: false })).snapshot;
 		const embed = computeIndexProgress(embedInput({ ...base, embedding: true })).snapshot;
-		expect(keyword.fraction).toBeCloseTo(0.55);
+		expect(keyword.fraction).toBeCloseTo(0.1 + 0.8 * 0.3);
 		expect(keyword.fraction).toBeCloseTo(embed.fraction);
 		expect(stage(keyword, "keyword").counts).toEqual(stage(embed, "embed").counts);
 		// A keyword-only run has no stage called embedding, and an embedding run none called keyword.

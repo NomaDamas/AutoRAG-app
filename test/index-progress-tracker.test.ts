@@ -79,7 +79,8 @@ describe("the progress tracker", () => {
 		expect(first?.pulse.lastFile).toBe("b");
 		// Sizes load in the background; a later poll has them.
 		await vi.waitFor(() => expect(embedOf(tracker.poll(root, refresh())).bytes).toEqual({ done: 4_000, total: 10_000 }));
-		expect(embedOf(tracker.poll(root, refresh())).fraction).toBe(0.5);
+		// Two of four files are done but a larger share of the bytes is not: the stage is filled by the bytes (4,000 of 10,000).
+		expect(embedOf(tracker.poll(root, refresh())).fraction).toBe(0.4);
 	});
 
 	it("shows no byte total when the staged documents are not the files this sync was told to index", async () => {

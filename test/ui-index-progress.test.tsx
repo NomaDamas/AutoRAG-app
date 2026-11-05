@@ -92,7 +92,7 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 			onOpenErrorFix: () => undefined,
 		});
 		expect(entry?.percent).toBe(view?.percent);
-		expect(entry?.percent).toBe(61);
+		expect(entry?.percent).toBe(28);
 		expect(entry?.title).toContain(`임베딩 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`);
 		expect(entry?.title).toContain("용량 4.0 GB / 17 GB (23%)");
 	});
@@ -120,7 +120,7 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 		});
 		expect(entry?.title).toContain(counts);
 		// A measured stage, so a number, not the indeterminate bar the final tidy-up gets.
-		expect(entry?.percent).toBe(61);
+		expect(entry?.percent).toBe(28);
 		expect(`${detail}${entry?.title ?? ""}`).not.toContain("임베딩");
 	});
 

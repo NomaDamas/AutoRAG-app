@@ -6,9 +6,11 @@
  *  - Only measured completion moves a number. Elapsed time never fills a bar.
  *  - A stage counts one unit (files) from start to end, so `done` can never
  *    pass `total`; skipped and failed files are counted apart from `done`.
+ *  - MinSync's stage, which is nearly all of the run, fills the bar by bytes when the sizes are known
+ *    (a few large files then cannot show as "almost done"), and by files otherwise.
  *  - The estimate is the rate of the last {@link RATE_WINDOW_MS} of observed
  *    movement; with too little movement it says so instead of guessing.
- *  - While work remains the bar never reaches 95%: the last tenth belongs to the
+ *  - While work remains the bar stays at or below 90%: the last tenth belongs to the
  *    final stage, which cannot be measured and is drawn as indeterminate.
  *
  * It is a pure function of what the processes wrote down plus a small history
@@ -37,8 +39,8 @@ export const SAMPLE_EVERY_MS = 5_000;
 /** No file finished for this long, with files left: "may be stalled". */
 export const STALL_AFTER_MS = 10 * 60_000;
 
-/** Where each stage sits on the whole-run bar. A layout choice, not a duration; a run has either the embedding or the keyword stage. */
-const STAGE_SHARE: Readonly<Record<IndexStageId, number>> = { discover: 0, parse: 0.4, embed: 0.5, keyword: 0.5, finalize: 0.1 };
+/** Where each stage sits on the whole-run bar: reading is quick, MinSync's work is nearly all of the run. A layout choice, not a duration; a run has either the embedding or the keyword stage. */
+const STAGE_SHARE: Readonly<Record<IndexStageId, number>> = { discover: 0, parse: 0.1, embed: 0.8, keyword: 0.8, finalize: 0.1 };
 
 /** The stage MinSync's work shows up as: embedding the files, or building the keyword index when nothing is embedded. */
 function isMinsyncStage(id: IndexStageId): boolean {
@@ -183,6 +185,11 @@ function bytesOf(stage: IndexStageId, input: IndexProgressInput): IndexStageByte
 	return null;
 }
 
+function fractionOfBytes(bytes: IndexStageBytes | null): number | null {
+	if (bytes === null || bytes.total === null || bytes.total <= 0) return null;
+	return clamp(bytes.done / bytes.total, 0, 1);
+}
+
 function stageProgress(id: IndexStageId, state: IndexStageState, input: IndexProgressInput): IndexStageProgress {
 	if (state === "pending") return { id, state, counts: null, bytes: null, fraction: 0 };
 	const finished = state === "done";
@@ -196,8 +203,9 @@ function stageProgress(id: IndexStageId, state: IndexStageState, input: IndexPro
 		counts = embedCounts(input, finished);
 	}
 	const bytes = bytesOf(id, input);
-	const measured = fractionOf(counts);
 	// The final stage has nothing to count: it is either finished or being worked on.
+	// MinSync's stage is filled by bytes when it knows them: a file count would show a few large files as nearly done.
+	const measured = isMinsyncStage(id) ? (fractionOfBytes(bytes) ?? fractionOf(counts)) : fractionOf(counts);
 	const fraction = finished ? 1 : id === "finalize" || id === "discover" ? null : measured;
 	return { id, state, counts, bytes, fraction };
 }

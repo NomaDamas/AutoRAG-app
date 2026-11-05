@@ -27,7 +27,7 @@ export type StalledKind = "alive" | "silent";
 export interface IndexProgressView {
 	readonly stages: readonly IndexStageView[];
 	readonly stageName: string | null;
-	/** Measured completion of the running stage, 0..100; `null` when it cannot be measured. */
+	/** Measured completion of the running stage, 0..100 (bytes once its sizes are known, files before); `null` when it cannot be measured. */
 	readonly stagePercent: number | null;
 	/** "Embedding 12,950 / 29,595 files (44%)": the running stage in its own unit. */
 	readonly countLine: string | null;
@@ -88,7 +88,8 @@ function countLine(running: IndexStageProgress, name: string, t: ProgressTransla
 		stage: name,
 		done,
 		total: counts.total.toLocaleString(),
-		percent: percentOf(running.fraction) ?? 0,
+		// The files' own share: the stage's bar fraction is told in bytes once sizes are known, and has its own line.
+		percent: percentOf(counts.total <= 0 ? 1 : (counts.done + counts.skipped + counts.failed) / counts.total) ?? 0,
 	});
 }
 
