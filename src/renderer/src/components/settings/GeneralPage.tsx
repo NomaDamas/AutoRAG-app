@@ -110,11 +110,11 @@ export function GeneralPage({
 					<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
 				</Row>
 			</Section>
-			{canManageRemote ? <Section title={t("settingsCore.general.remoteTitle")} description={t("settingsCore.general.remoteSecurityHint")}>
-				<Row name={t("settingsCore.general.remoteAccess")} hint={t("settingsCore.general.remoteAccessHint")}>
+			{canManageRemote ? <Section anchor="remote" title={t("settingsCore.general.remoteTitle")} description={t("settingsCore.general.remoteSecurityHint")}>
+				<Row anchor="remote-access" name={t("settingsCore.general.remoteAccess")} hint={t("settingsCore.general.remoteAccessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.general.remoteAccess")} />
 				</Row>
-				<Row name={t("settingsCore.general.remoteAddress")} stack>
+				<Row anchor="remote-address" name={t("settingsCore.general.remoteAddress")} stack>
 					<input
 						type="text"
 						className="settings-source-desc__input min-w-0"

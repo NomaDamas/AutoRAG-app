@@ -408,6 +408,27 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   `scripts/manual-qa/run-qa-onboarding.mjs` (screenshots in
   `.omo/evidence/onboarding/`).
 
+## 3b. Contextual tutorials
+
+- Anything the first run does not need to teach waits until the person reaches
+  it. `src/renderer/src/first-run/Tutorials.tsx` (steps and the once-per-profile
+  flags `autorag.tutorial.<id>.seen` in `first-run/tutorial-steps.ts`, copy
+  under `tutorials.*`) watches the Finder and starts one tutorial on the first:
+  - visit to **자동화** (`automations`): what a rule is, the background line,
+    then a click on the empty state's add button and the AI Search draft it
+    opens (or, with rules already there, double-click to edit);
+  - right-click on a file or folder (`contextMenu`): an offer over the open
+    menu; "알아보기" opens Settings › 우클릭 메뉴, the person clicks "AI로
+    커스텀하기", and the last step frames the customizer's input;
+  - opening Settings (`remoteAccess`, desktop only): an offer over the 원격 접속
+    section; "알아보기" moves to 일반 and walks the switch, the address with its
+    token, and the HTTP warning.
+- Same coach marks as the tour (`.fr-spot`, `.fr-coach`, `.fr-cursor`); clicks
+  pass through, Escape or 건너뛰기 ends one, and a step whose target stays gone
+  for 4 s ends it. One runs at a time, never during the first run, and never when
+  `AUTORAG_SKIP_ONBOARDING=1` (`OnboardingSnapshot.tutorials`), so QA lanes are
+  unaffected.
+
 ---
 
 ## 4. Verification & Testing Guardrails

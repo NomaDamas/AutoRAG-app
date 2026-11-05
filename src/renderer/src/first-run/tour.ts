@@ -9,6 +9,9 @@ import type { VersionFamilyData } from "../state/version-family";
 import { AI_SEARCH_PATH, openAiSearchTab } from "../state/tabs";
 import { allTabs, focusPane, moveTab, updatePaneTabs, type Workspace } from "../state/workspace";
 
+/** The visible AI Search panel (one AI host per tab; hidden ones carry `.hidden`). */
+export const AI_HOST = "[data-ai-tab]:not(.hidden)";
+
 export type FirstRunScreen = "setup" | "ready" | "tour" | "signin";
 
 /** The setup run first; it may already have finished before a relaunch. */

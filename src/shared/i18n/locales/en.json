@@ -867,6 +867,64 @@
       "continue": "Get started"
     }
   },
+  "tutorials": {
+    "later": "Not now",
+    "learn": "Show me",
+    "automations": {
+      "intro": {
+        "title": "Automations: Dazzi handles new files for you",
+        "body": "Pick a folder to watch and what to do, and Dazzi acts whenever a file is added or changed there. Move new receipt PDFs into a Receipts folder, or summarize every new meeting note."
+      },
+      "background": {
+        "title": "Runs even when the app is closed",
+        "body": "Rules run in the background. Turn that on or off here."
+      },
+      "rules": {
+        "title": "Edit rules in plain words",
+        "body": "Double-click a rule to edit it in AI Search. Right-click an empty spot to add a new one."
+      },
+      "create": {
+        "title": "Make a rule by describing it",
+        "body": "No settings forms. This button opens a draft in AI Search; describe what you want and Dazzi writes the rule."
+      },
+      "draft": {
+        "title": "Describe it and send",
+        "body": "For example: \"When a new PDF lands in Downloads, move it to Documents.\" Dazzi creates the rule and adds it to your automations."
+      }
+    },
+    "contextMenu": {
+      "offer": {
+        "title": "Make the right-click menu yours",
+        "body": "Keep only the items you use and reorder them. Magic Actions let AI or a script do a job on the selected files in one right-click."
+      },
+      "customize": {
+        "title": "Customize with AI",
+        "body": "Just say it. For example: \"Add an action that summarizes a PDF in three lines when I right-click it.\""
+      },
+      "ask": {
+        "title": "Type what you want",
+        "body": "A Magic Action you create shows up when you right-click a matching file. Hiding or reordering items works the same way."
+      }
+    },
+    "remoteAccess": {
+      "offer": {
+        "title": "Want to try Remote Access?",
+        "body": "Open this computer's Dazzi from a browser on your phone or another computer."
+      },
+      "toggle": {
+        "title": "Turn it on and it's live",
+        "body": "With Remote Access on, Dazzi runs a small web server on this computer. Browse files and use AI Search right in the browser."
+      },
+      "address": {
+        "title": "Open this address in a browser",
+        "body": "The address carries a secret access token. Open it on a device on the same network. Anyone with the address can get in, so share it carefully."
+      },
+      "security": {
+        "title": "Trusted networks only",
+        "body": "The connection is unencrypted HTTP. Keep it on only on a network you trust, like home or work, or through an encrypted tunnel."
+      }
+    }
+  },
   "finderComponents": {
     "searchRange": "Search scope",
     "sidebar": "Places",

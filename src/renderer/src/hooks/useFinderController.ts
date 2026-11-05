@@ -219,7 +219,8 @@ export interface FinderController {
 	readonly activeNavPath: string | null;
 	/** Sidebar groups built from the live OS locations. */
 	readonly navGroups: readonly NavGroup[];
-	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
+	/** The open right-click menu; `onEntry` is false for the empty-space menu. */
+	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number }; readonly onEntry: boolean } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
 	readonly viewMode: ViewMode;
@@ -2363,7 +2364,7 @@ export function useFinderController(
 		versionFamilyError,
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,
-		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
+		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor, onEntry: contextMenu.entry !== null },
 		contextMenuEntries,
 		viewMode,
 		layout,

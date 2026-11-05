@@ -860,7 +860,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 
 	return {
 		pending: () => pending,
-		load: async () => ({ pending }),
+		load: async () => ({ pending, tutorials: deps.env.AUTORAG_SKIP_ONBOARDING !== "1" }),
 		permissions: async () => ({
 			platform: deps.platform,
 			fullDiskAccess: deps.platform === "darwin" ? await deps.probeFullDiskAccess() : null,

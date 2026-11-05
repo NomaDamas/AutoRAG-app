@@ -58,6 +58,8 @@ import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./
 import { allTabs, canCloseWorkspaceTab, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { FirstRun, type FirstRunHost, type TourPaneState } from "./first-run/FirstRun";
 import { folderPaneId, splitWithAiSearch } from "./first-run/tour";
+import { Tutorials } from "./first-run/Tutorials";
+import type { TutorialEffect } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
 
 const autorag = window.autorag;
@@ -227,6 +229,14 @@ export function App(): ReactElement {
 	const [firstRun, setFirstRun] = useState(() => autorag.onboarding.pending);
 	/** The layer covers the whole window, so the Finder behind it takes no input. */
 	const [firstRunCovered, setFirstRunCovered] = useState(firstRun);
+	/** The contextual tutorials run unless the main process opted this profile out (QA lanes skip onboarding). */
+	const [tutorialsAllowed, setTutorialsAllowed] = useState(false);
+	useEffect(() => {
+		void autorag.onboarding
+			.load()
+			.then((snapshot) => setTutorialsAllowed(snapshot.tutorials))
+			.catch(() => setTutorialsAllowed(false));
+	}, []);
 	const [tagColorsFdaOpen, setTagColorsFdaOpen] = useState(false);
 	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
 	const grantTagColors = useCallback(() => setTagColorsFdaOpen(true), []);
@@ -652,6 +662,24 @@ export function App(): ReactElement {
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
+	const fileMenuOpen = finder?.contextMenu?.onEntry === true;
+	const settingsTabActive = path === SETTINGS_PATH;
+	const tutorialTriggers = useMemo(
+		() => ({ automations: automationsTabActive, fileMenu: fileMenuOpen, settings: settingsTabActive }),
+		[automationsTabActive, fileMenuOpen, settingsTabActive],
+	);
+	const runTutorialEffect = useCallback(
+		(effect: TutorialEffect) => {
+			if (effect === "openContextMenuSettings") {
+				finder?.closeContextMenu();
+				requestSettingsCategory("contextMenu");
+				finder?.openSettings();
+				return;
+			}
+			requestSettingsCategory("general");
+		},
+		[finder],
+	);
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -1016,6 +1044,7 @@ export function App(): ReactElement {
 				onDone={endFirstRun}
 			/>
 		) : null}
+		<Tutorials enabled={tutorialsAllowed && !firstRun} triggers={tutorialTriggers} onEffect={runTutorialEffect} />
 		</>
 		</AutomationsContext>
 		</ShortcutSettingsContext>

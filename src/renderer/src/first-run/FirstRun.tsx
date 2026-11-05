@@ -18,7 +18,8 @@ import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
-import { ACTION_REQUIRED_STEPS, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
+import { CursorGlyph } from "./cursor";
+import { ACTION_REQUIRED_STEPS, AI_HOST, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
 export interface TourPaneState {
 	readonly count: number;
@@ -44,9 +45,6 @@ export interface FirstRunHost {
 }
 
 const onboarding = (): typeof window.autorag.onboarding => window.autorag.onboarding;
-
-/** The visible AI Search panel (one AI host per tab; hidden ones carry `.hidden`). */
-const AI_HOST = "[data-ai-tab]:not(.hidden)";
 
 const DESK_MOTION_MS = 1100;
 const CINEMA_IN_MS = 650;
@@ -785,30 +783,14 @@ function Coach({
 						aria-hidden="true"
 					>
 						<span className="fr-drag-pill">{t("places.aiSearch")}</span>
-						<svg className="fr-cursor-glyph" width={26} height={26} viewBox="0 0 26 26" fill="none">
-							<path
-								d="M5.2 2.8L20.6 14.3L13.4 15.6L16.7 22.7L13.5 24.2L10.2 17.1L5.2 21.6V2.8Z"
-								fill="#FFFFFF"
-								stroke="#18191D"
-								strokeWidth="1.7"
-								strokeLinejoin="round"
-							/>
-						</svg>
+						<CursorGlyph />
 					</div>
 				</>
 			)}
 			{cursorPos === null ? null : (
 				<div className="fr-cursor" data-target-step={step} style={{ left: cursorPos.left, top: cursorPos.top }} aria-hidden="true">
 					<span className="fr-cursor-ring" />
-					<svg className="fr-cursor-glyph" width={26} height={26} viewBox="0 0 26 26" fill="none">
-						<path
-							d="M5.2 2.8L20.6 14.3L13.4 15.6L16.7 22.7L13.5 24.2L10.2 17.1L5.2 21.6V2.8Z"
-							fill="#FFFFFF"
-							stroke="#18191D"
-							strokeWidth="1.7"
-							strokeLinejoin="round"
-						/>
-					</svg>
+					<CursorGlyph />
 				</div>
 			)}
 			<div ref={bubbleRef} className="fr-coach" data-step={step} data-side={place.side} style={{ left: place.left, top: place.top }} role="dialog" aria-label={title}>

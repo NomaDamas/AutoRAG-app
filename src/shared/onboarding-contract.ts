@@ -49,6 +49,8 @@ export const NONE_MIN_MINUTES = 8;
 export interface OnboardingSnapshot {
 	/** True while the first run still has to happen. */
 	readonly pending: boolean;
+	/** False when `AUTORAG_SKIP_ONBOARDING=1` (QA lanes): the contextual tutorials stay off too. */
+	readonly tutorials: boolean;
 }
 
 export interface PermissionStatus {
