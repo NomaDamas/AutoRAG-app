@@ -1,38 +1,29 @@
 /**
- * The practice material the tutorials hand a person: a folder with sample files, one example automation that
- * sorts what lands in its inbox, and one example Magic Action that summarises the files it is run on. They are
- * real rules and real actions (the person can open, edit, and delete them like their own); the tutorials only
- * create them so that "what is this for" is answered by watching one run.
+ * The practice material the tutorials hand a person: a sample photo with a meaningless placeholder name, and one
+ * example Magic Action that peeks into the text files it is run on. The automation example is not made here: the
+ * person asks the AI for it in AI Search (that is the point of the lesson), and the tutorial only watches for the rule
+ * to appear, then for the sample photo to be renamed once it is dropped in Downloads.
  */
 
 export const DEMO_CHANNELS = {
-	/** Create the practice folder and the example automation (and start its daemon); resolves when it is ready to be triggered. */
-	prepareAutomation: "demo:prepareAutomation",
-	/** Drop a sample file in the automation's inbox so the rule has something to do. */
-	triggerAutomation: "demo:triggerAutomation",
+	/** Put the sample photo (under a placeholder name) in the practice folder and report where everything is. */
+	preparePhoto: "demo:preparePhoto",
+	/** Make sure the background service that runs automations is up; resolves with whether it is. */
+	ensureDaemon: "demo:ensureDaemon",
 	/** Add the example Magic Action (and make sure its sample file exists). */
 	prepareMagicAction: "demo:prepareMagicAction",
 } as const;
 
-/** The rule the automation tutorial creates. */
-export const DEMO_AUTOMATION_ID = "dazzi-demo-sort";
 /** The Magic Action the right-click tutorial creates. */
 export const DEMO_MAGIC_ACTION_ID = "dazzi-demo-glance";
 
-export interface DemoAutomationReady {
-	/** `~/Dazzi 체험` (localised), where everything below lives. */
-	readonly root: string;
-	/** Files dropped here are sorted by the rule. */
-	readonly inbox: string;
-	/** The rule is in the rules file and its daemon is installed; false when the daemon could not be started. */
-	readonly daemon: boolean;
-}
-
-export interface DemoTrigger {
-	/** The sample file that was dropped in the inbox. */
-	readonly dropped: string;
-	/** Where the rule is expected to move it (a folder under the practice root). */
-	readonly destination: string;
+export interface DemoPhotoReady {
+	/** `~/Dazzi 체험/연습 사진` (localized): the folder the person drags the photo out of. */
+	readonly folder: string;
+	/** The sample photo, with a placeholder name like `IMG_0001.jpg`. */
+	readonly photo: string;
+	/** The folder the AI-made rule is told to watch. */
+	readonly downloads: string;
 }
 
 export interface DemoMagicActionReady {
@@ -42,7 +33,7 @@ export interface DemoMagicActionReady {
 }
 
 export interface DemoBridge {
-	prepareAutomation(): Promise<DemoAutomationReady>;
-	triggerAutomation(): Promise<DemoTrigger>;
+	preparePhoto(): Promise<DemoPhotoReady>;
+	ensureDaemon(): Promise<boolean>;
 	prepareMagicAction(): Promise<DemoMagicActionReady>;
 }

@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
@@ -29,8 +29,6 @@ export interface AutomationService {
 	snapshot(): Promise<AutomationsSnapshot>;
 	/** Delete rule `id` from the rules file; `removal` carries the entry back for `restore`. */
 	remove(id: string): Promise<{ readonly snapshot: AutomationsSnapshot; readonly removal: AutomationRemoval }>;
-	/** Insert rule `entry` (replacing one with the same id), keeping every other entry as written. */
-	upsert(entry: Readonly<Record<string, unknown>> & { readonly id: string }): Promise<AutomationsSnapshot>;
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
@@ -290,7 +288,6 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 
 	/** Replace the whole file at once: the daemon must never reload a half-written rules file. */
 	const saveEntries = async (entries: readonly Record<string, unknown>[]): Promise<void> => {
-		await mkdir(deps.home(), { recursive: true });
 		const path = rulesPath();
 		const temporary = `${path}.${process.pid}.tmp`;
 		const mode = (await stat(path).catch(() => null))?.mode;
@@ -305,13 +302,6 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 
 	return {
 		snapshot,
-		upsert: (entry) =>
-			serialized(async () => {
-				const entries = await loadEntries({ required: false });
-				const index = entries.findIndex((existing) => existing.id === entry.id);
-				await saveEntries(index === -1 ? [...entries, entry] : entries.map((existing, at) => (at === index ? entry : existing)));
-				return freshSnapshot();
-			}),
 		remove: (id) =>
 			serialized(async () => {
 				const entries = await loadEntries({ required: true });

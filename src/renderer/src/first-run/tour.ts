@@ -6,7 +6,7 @@
 
 import type { SetupStatus } from "../../../shared/onboarding-contract";
 import type { VersionFamilyData } from "../state/version-family";
-import { AI_SEARCH_PATH, openAiSearchTab } from "../state/tabs";
+import { AI_SEARCH_PATH, openAiSearchTab, openOrSelectFolderTab, openTabAt } from "../state/tabs";
 import { allTabs, focusPane, moveTab, updatePaneTabs, type Workspace } from "../state/workspace";
 
 /** The visible AI Search panel (one AI host per tab; hidden ones carry `.hidden`). */
@@ -82,6 +82,25 @@ export function splitWithAiSearch(ws: Workspace): Workspace {
 	const aiTab = allTabs(opened).findLast((tab) => tab.path === AI_SEARCH_PATH);
 	if (aiTab === undefined) return ws;
 	return moveTab(opened, aiTab.id, { kind: "split", paneId, edge: "right" });
+}
+
+/**
+ * Two folders side by side: `left` in the focused pane and `right` in a new pane beside it, so a file can be dragged
+ * from one to the other. A single pane is split; with two or more panes, the first two take the folders. The right
+ * pane is focused, since it is the one the person works in first.
+ */
+export function splitTwoFolders(ws: Workspace, left: string, right: string): Workspace {
+	const [first, second] = ws.panes;
+	if (first !== undefined && second !== undefined) {
+		const withLeft = updatePaneTabs(ws, first.id, (state) => openOrSelectFolderTab(state, left));
+		return focusPane(updatePaneTabs(withLeft, second.id, (state) => openOrSelectFolderTab(state, right)), second.id);
+	}
+	const leftPaneId = ws.focusedPaneId;
+	const withLeft = updatePaneTabs(ws, leftPaneId, (state) => openOrSelectFolderTab(state, left));
+	const opened = updatePaneTabs(withLeft, leftPaneId, (state) => openTabAt(state, right));
+	const tab = allTabs(opened).findLast((candidate) => candidate.path === right);
+	if (tab === undefined) return withLeft;
+	return moveTab(opened, tab.id, { kind: "split", paneId: leftPaneId, edge: "right" });
 }
 
 /** The pane the tour treats as "the folder side": the first one not showing AI Search, or the single merged pane. */

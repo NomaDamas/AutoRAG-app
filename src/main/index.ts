@@ -852,13 +852,9 @@ app.whenReady().then(async () => {
 	registerDemoIpcHandlers(
 		createDemoService({
 			home: homedir(),
-			autoragHome: autoragHome(process.env, homedir()),
+			downloads: knownFolder("downloads", join(homedir(), "Downloads")),
 			platform: process.platform,
 			automations,
-			run: (args) => {
-				const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
-				return runLibrarianCli(librarian.command, [...librarian.args, ...args], process.env);
-			},
 			settings: settingsService,
 		}),
 	);

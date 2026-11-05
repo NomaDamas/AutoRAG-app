@@ -7,19 +7,23 @@
  * the React layer (`Tutorials.tsx`) renders them.
  */
 
-import { DEMO_AUTOMATION_ID, DEMO_MAGIC_ACTION_ID } from "../../../shared/demo-contract";
+import { DEMO_MAGIC_ACTION_ID } from "../../../shared/demo-contract";
+import { AI_HOST } from "./tour";
 
 export type TutorialId = "automations" | "contextMenu" | "remoteAccess";
 
 /** What an offer step's button does in the app before the tutorial goes on. */
-export type TutorialEffect = "createAutomation" | "dropFile" | "openResult" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
+export type TutorialEffect = "askAiForRule" | "showAutomations" | "arrangePhotoPanes" | "createMagicAction" | "openContextMenuSettings" | "showRemoteSettings";
 
 /** What the effects learned about the practice material; later steps point at it. */
 export interface TutorialFacts {
 	/** The sample file the Magic Action tutorial asks the person to right-click. */
 	readonly sample?: string;
-	/** The folder the example automation moves the dropped file into. */
-	readonly destination?: string;
+	/** The practice photo (under its placeholder name) and the Downloads folder it is to be dragged into. */
+	readonly photo?: string;
+	readonly downloads?: string;
+	/** The path the photo ended up under once the rule renamed it. */
+	readonly renamed?: string;
 }
 
 type Selector = string | ((facts: TutorialFacts) => string);
@@ -41,9 +45,18 @@ export interface TutorialStep {
 	readonly offer?: TutorialEffect;
 	/** Waits for something to happen on its own (a run finishing, a menu opening): moves on when this matches. */
 	readonly until?: Selector;
-	/** For `until` steps the person causes: how the guide cursor and hint read. */
-	readonly hint?: "click" | "rightClick";
+	/** Waits for the AI Search answer to finish (the rule is made by then); ends the tutorial if it fails. */
+	readonly untilEvent?: "aiDone";
+	/** Waits for the practice photo to show up under a new name in Downloads; moves on with what it learned. */
+	readonly watch?: "photoRenamed";
+	/** An effect run once as the step comes up, with no button: the tutorial itself takes the person somewhere. */
+	readonly enter?: TutorialEffect;
+	/** For steps the person acts in: how the guide cursor and hint read. */
+	readonly hint?: "click" | "rightClick" | "drag";
 }
+
+/** A value as a quoted CSS attribute selector operand (paths hold quotes and backslashes on some systems). */
+const attr = (value: string): string => value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 
 const resolve = (selector: Selector, facts: TutorialFacts): string => (typeof selector === "string" ? selector : selector(facts));
 
@@ -51,20 +64,25 @@ const resolve = (selector: Selector, facts: TutorialFacts): string => (typeof se
 export const anchorSelectors = (step: TutorialStep, facts: TutorialFacts): readonly string[] => step.anchors.map((anchor) => resolve(anchor, facts));
 export const selectorOf = (selector: Selector | undefined, facts: TutorialFacts): string | undefined => (selector === undefined ? undefined : resolve(selector, facts));
 
-const byPath = (path: string | undefined): string => (path === undefined ? "[data-path]:not([data-path])" : `[data-path="${CSS.escape(path)}"]`);
+const byPath = (path: string | undefined): string => (path === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(path)}"]`);
 
 const AUTOMATIONS_VIEW = "[data-automations-view]";
-const DEMO_ROW = `[data-rule-id="${DEMO_AUTOMATION_ID}"]`;
-const DEMO_RAN = `${DEMO_ROW} [data-run-tone="ok"], ${DEMO_ROW} [data-run-tone="fail"]`;
+const RULE_ROW = "[data-rule-id]";
 const DEMO_MAGIC_ITEM = `.menu [data-magic-action-id="${DEMO_MAGIC_ACTION_ID}"]`;
+
+const photoRow = (facts: TutorialFacts): string => (facts.photo === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.photo)}"]`);
+const renamedRow = (facts: TutorialFacts): string => (facts.renamed === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.renamed)}"]`);
+const SEND_BUTTON = `${AI_HOST} form.composer button.send[type="submit"]`;
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
 	automations: [
-		{ key: "intro", anchors: [AUTOMATIONS_VIEW], offer: "createAutomation" },
-		{ key: "rule", anchors: [DEMO_ROW], waitFor: DEMO_ROW },
-		{ key: "drop", anchors: [DEMO_ROW], offer: "dropFile" },
-		{ key: "running", anchors: [DEMO_ROW], until: DEMO_RAN },
-		{ key: "result", anchors: [DEMO_ROW], offer: "openResult" },
+		{ key: "intro", anchors: [AUTOMATIONS_VIEW], offer: "askAiForRule" },
+		{ key: "send", anchors: [`${AI_HOST} form.composer`], waitFor: SEND_BUTTON, tap: SEND_BUTTON },
+		{ key: "asking", anchors: [`${AI_HOST} [role="alertdialog"]`, `${AI_HOST} .ai-body`], untilEvent: "aiDone" },
+		{ key: "rule", anchors: [RULE_ROW], enter: "showAutomations", waitFor: RULE_ROW },
+		{ key: "panes", anchors: [RULE_ROW], offer: "arrangePhotoPanes" },
+		{ key: "drag", anchors: [photoRow], waitFor: photoRow, watch: "photoRenamed", hint: "drag" },
+		{ key: "result", anchors: [renamedRow], waitFor: renamedRow },
 	],
 	contextMenu: [
 		{ key: "intro", anchors: ['.menu[role="menu"]'], offer: "createMagicAction" },
@@ -75,8 +93,8 @@ export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = 
 	],
 	remoteAccess: [
 		{ key: "offer", anchors: ['[data-settings-nav="remote"]'], offer: "showRemoteSettings" },
-		{ key: "toggle", anchors: ['[data-settings-row="remote-access"]'], requires: '[data-settings-row="remote-access"]' },
-		{ key: "security", anchors: ['[data-settings-section="remote-access"]'], requires: '[data-settings-section="remote-access"]' },
+		{ key: "toggle", anchors: ['[data-settings-row="remote-access"]'], waitFor: '[data-settings-row="remote-access"]' },
+		{ key: "security", anchors: ['[data-settings-section="remote-access"]'], waitFor: '[data-settings-section="remote-access"]' },
 		{ key: "connect", anchors: ['[data-settings-section="remote-connect"]'], requires: '[data-settings-section="remote-connect"]' },
 	],
 };
@@ -103,6 +121,19 @@ export function nextStep(
 	return null;
 }
 
+/** How many steps would still come after `from`, as the live Finder stands (a page not yet open counts through `waitFor`, never `requires`). */
+export function stepsAfter(
+	steps: readonly TutorialStep[],
+	from: number,
+	tapped: boolean,
+	present: (selector: string) => boolean,
+	facts: TutorialFacts = {},
+): number {
+	let count = 0;
+	for (let index = nextStep(steps, from, tapped, present, facts); index !== null; index = nextStep(steps, index, steps[index]?.tap !== undefined, present, facts)) count += 1;
+	return count;
+}
+
 /** The steps the live Finder would show, in order, for the "n / m" count (a click-required step counts as clicked). */
 export function stepsInPlay(steps: readonly TutorialStep[], present: (selector: string) => boolean, facts: TutorialFacts = {}): readonly number[] {
 	const shown: number[] = [];
@@ -114,7 +145,7 @@ const seenKey = (id: TutorialId): string => `autorag.tutorial.${id}.seen`;
 
 export function tutorialSeen(id: TutorialId): boolean {
 	try {
-		return window.localStorage.getItem(seenKey(id)) === "1";
+		return globalThis.localStorage.getItem(seenKey(id)) === "1";
 	} catch {
 		return false;
 	}
@@ -122,8 +153,33 @@ export function tutorialSeen(id: TutorialId): boolean {
 
 export function markTutorialSeen(id: TutorialId): void {
 	try {
-		window.localStorage.setItem(seenKey(id), "1");
+		globalThis.localStorage.setItem(seenKey(id), "1");
 	} catch {
 		// Storage unavailable: the tutorial may show again next session, which is harmless.
 	}
+}
+
+const PICTURE = /\.(jpe?g|png|heic|webp|gif)$/iu;
+
+function basenameOf(path: string): string {
+	return path.replaceAll("\\", "/").split("/").pop() ?? path;
+}
+
+/**
+ * The photo's new path: a picture that appeared directly in Downloads since `baseline` (what the folder showed when the
+ * step began) under any name but the placeholder it was dragged in with. Null while it still has the placeholder name
+ * or has not arrived.
+ */
+export function renamedPhoto(paths: readonly string[], facts: TutorialFacts, baseline: ReadonlySet<string>): string | null {
+	const { downloads, photo } = facts;
+	if (downloads === undefined || photo === undefined) return null;
+	const prefix = downloads.endsWith("/") || downloads.endsWith("\\") ? downloads : `${downloads}/`;
+	const placeholder = basenameOf(photo);
+	for (const path of paths) {
+		if (baseline.has(path) || !path.startsWith(prefix)) continue;
+		const rest = path.slice(prefix.length);
+		if (/[\\/]/u.test(rest) || !PICTURE.test(rest) || rest === placeholder) continue;
+		return path;
+	}
+	return null;
 }

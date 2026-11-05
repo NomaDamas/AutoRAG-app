@@ -59,7 +59,7 @@ import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { FirstRun, type FirstRunHost, type TourPaneState } from "./first-run/FirstRun";
-import { folderPaneId, splitWithAiSearch } from "./first-run/tour";
+import { folderPaneId, splitTwoFolders, splitWithAiSearch } from "./first-run/tour";
 import { Tutorials } from "./first-run/Tutorials";
 import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
@@ -681,43 +681,6 @@ export function App(): ReactElement {
 		() => ({ automations: automationsTabActive, fileMenu: fileMenuOpen, settings: settingsTabActive }),
 		[automationsTabActive, fileMenuOpen, settingsTabActive],
 	);
-	const runTutorialEffect = useCallback(
-		async (effect: TutorialEffect, facts: TutorialFacts): Promise<TutorialFacts | null> => {
-			try {
-				switch (effect) {
-					case "createAutomation":
-						await autorag.demo.prepareAutomation();
-						return {};
-					case "dropFile": {
-						const { destination } = await autorag.demo.triggerAutomation();
-						return { destination };
-					}
-					case "openResult":
-						if (facts.destination !== undefined) finder?.openFolder(facts.destination);
-						return {};
-					case "createMagicAction": {
-						const { sample } = await autorag.demo.prepareMagicAction();
-						finder?.closeContextMenu();
-						finder?.openFolder(dirname(sample));
-						return { sample };
-					}
-					case "openContextMenuSettings":
-						dismissMagicActionDialog();
-						finder?.closeContextMenu();
-						requestSettingsCategory("contextMenu");
-						finder?.openSettings();
-						return {};
-					case "showRemoteSettings":
-						requestSettingsCategory("remote");
-						return {};
-				}
-			} catch (error) {
-				setToast(error instanceof Error ? error.message : String(error));
-				return null;
-			}
-		},
-		[finder],
-	);
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -742,6 +705,48 @@ export function App(): ReactElement {
 			deliverToAi({ draft });
 		},
 		[deliverToAi, finder],
+	);
+	const runTutorialEffect = useCallback(
+		async (effect: TutorialEffect, facts: TutorialFacts): Promise<TutorialFacts | null> => {
+			try {
+				switch (effect) {
+					case "askAiForRule": {
+						const { downloads } = await autorag.demo.preparePhoto();
+						// The background service must be up before the rule exists, so the first dropped photo is seen.
+						void autorag.demo.ensureDaemon();
+						openAiDraft(translate("tutorials.automations.askText", { folder: downloads }));
+						return {};
+					}
+					case "showAutomations":
+						finder?.showAutomations();
+						return {};
+					case "arrangePhotoPanes": {
+						const { folder, photo, downloads } = await autorag.demo.preparePhoto();
+						setWorkspace((current) => splitTwoFolders(current, downloads, folder));
+						return { photo, downloads };
+					}
+					case "createMagicAction": {
+						const { sample } = await autorag.demo.prepareMagicAction();
+						finder?.closeContextMenu();
+						finder?.openFolder(dirname(sample));
+						return { sample };
+					}
+					case "openContextMenuSettings":
+						dismissMagicActionDialog();
+						finder?.closeContextMenu();
+						requestSettingsCategory("contextMenu");
+						finder?.openSettings();
+						return {};
+					case "showRemoteSettings":
+						requestSettingsCategory("remote");
+						return {};
+				}
+			} catch (error) {
+				setToast(error instanceof Error ? error.message : String(error));
+				return null;
+			}
+		},
+		[finder, openAiDraft],
 	);
 	const automations = useAutomationsShell({
 		store: automationsStore,

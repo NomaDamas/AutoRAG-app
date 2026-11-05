@@ -450,10 +450,10 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 	});
 }
 
-/** The tutorials' practice material: the sample folder, the example automation and the example Magic Action. */
+/** The tutorials' practice material: the sample photo, the automation daemon and the example Magic Action. */
 export function registerDemoIpcHandlers(service: DemoBridge): void {
-	ipcMain.handle(DEMO_CHANNELS.prepareAutomation, () => service.prepareAutomation());
-	ipcMain.handle(DEMO_CHANNELS.triggerAutomation, () => service.triggerAutomation());
+	ipcMain.handle(DEMO_CHANNELS.preparePhoto, () => service.preparePhoto());
+	ipcMain.handle(DEMO_CHANNELS.ensureDaemon, () => service.ensureDaemon());
 	ipcMain.handle(DEMO_CHANNELS.prepareMagicAction, () => service.prepareMagicAction());
 }
 

@@ -615,10 +615,6 @@
     "agent": {
       "reads": "Reads only",
       "writes": "Can change files"
-    },
-    "demo": {
-      "short": "Sort by kind",
-      "what": "Moves each new file into a folder for its kind (a Dazzi practice example)"
     }
   },
   "osMenu": {
@@ -895,29 +891,37 @@
     "waitingHint": "One moment…",
     "rightClickHint": "Right-click the file",
     "automations": {
+      "askText": "When a new photo lands in {{folder}}, handle it. Build it as a \"hand it to Dazzi\" command rule (it passes the new file paths to the autorag search command), and only target photos with camera or screenshot names like IMG_, DSC_ or Screenshot, so a renamed photo never matches the rule again. What to do: open the photo and rename the file to describe what's in it, like dog-playing-on-the-beach.jpg. Don't move it out of the folder.",
       "intro": {
-        "title": "Automations: files get handled for you",
-        "body": "Let's make an example right now: new files that land in an Inbox folder get sorted by type. It takes about five seconds.",
-        "action": "Create the example"
+        "title": "Automations are made by talking",
+        "body": "There's no settings form. Tell the AI what you want and it builds the rule. Let's ask for: \"when a photo lands in Downloads, rename it to describe what's in it.\"",
+        "action": "Ask the AI"
+      },
+      "send": {
+        "title": "Press send",
+        "body": "We wrote the request for you. Edit it if you like, or send it as it is."
+      },
+      "asking": {
+        "title": "The AI is making the rule",
+        "body": "It's setting up a rule that watches the folder, and the AI that renames photos. If it asks for approval, allow it."
       },
       "rule": {
-        "title": "A rule just appeared",
-        "body": "\"New file → put in a folder\" is the example. One line shows the folder it watches, when it runs, and what it does. The dot on the right is its run status.",
+        "title": "The rule is ready",
+        "body": "A new rule appeared in your automations. One line shows the folder it watches, when it runs, and what it does. It keeps watching in the background even when the app is closed.",
         "action": "Next"
       },
-      "drop": {
-        "title": "Now let's drop a file in",
-        "body": "We'll put a sample meeting note in the Inbox folder. Dazzi is watching it in the background.",
-        "action": "Drop a file"
+      "panes": {
+        "title": "Now let's see it work",
+        "body": "We'll split the window: Downloads on the left, a practice photos folder on the right. Move the photo to the left and watch.",
+        "action": "Split the window"
       },
-      "running": {
-        "title": "Working on it",
-        "body": "It keeps watching even when the app is closed. The dot on this row turns green when it's done."
+      "drag": {
+        "title": "Drag the photo into Downloads",
+        "body": "Drag IMG_0001.jpg from the right into the Downloads folder on the left. Its name means nothing. Hold Option (Alt) while dragging to copy instead of move."
       },
       "result": {
-        "title": "Done! It sorted the note into Documents",
-        "body": "The meeting note moved to Sorted › Documents. To make a new rule, just describe it in AI Search. This example is for practice, so feel free to delete it.",
-        "action": "Open the folder"
+        "title": "It got a new name!",
+        "body": "The AI looked at the photo and renamed it. From now on every photo that lands in Downloads gets this treatment. This rule is just for practice, so feel free to delete it."
       }
     },
     "contextMenu": {
@@ -962,7 +966,8 @@
         "title": "Devices pair with a code",
         "body": "Once it's on, connection options appear below. Open the address on the new device and enter the pairing code shown here to register it. Registered devices can be renamed or removed in the list underneath."
       }
-    }
+    },
+    "dragHint": "Drag the photo over"
   },
   "finderComponents": {
     "searchRange": "Search scope",
@@ -1391,20 +1396,12 @@
     },
     "demo": {
       "folder": "Dazzi Practice",
-      "inbox": "Inbox",
-      "sorted": "Sorted",
       "samples": "Samples",
-      "kinds": {
-        "documents": "Documents",
-        "images": "Images",
-        "other": "Other"
-      },
-      "dropName": "Meeting notes (example).txt",
-      "dropBody": "Weekly meeting notes (example)\n\n- Lock next week's presentation\n- Share design drafts by Friday\n- Revisit the budget\n",
       "sampleName": "Weekly report (example).txt",
       "sampleBody": "Weekly report (example)\n\nDone this week: QA on the new feature, 3 customer interviews\nNext week: release prep, doc cleanup\nBlockers: none\n",
       "glanceLabel": "Peek at contents",
-      "glanceDesc": "Shows the size and first lines of the selected text files. (A Dazzi practice example)"
+      "glanceDesc": "Shows the size and first lines of the selected text files. (A Dazzi practice example)",
+      "photos": "Practice Photos"
     }
   },
   "quickLook": {

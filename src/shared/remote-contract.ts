@@ -195,7 +195,7 @@ export const REMOTE_NATIVE_ONLY_METHODS: Readonly<Record<string, readonly string
 
 	onboarding: ["openFullDiskAccess"],
 	// Practice files and the example daemon are written on the host computer, not in a browser session.
-	demo: ["prepareAutomation", "triggerAutomation", "prepareMagicAction"],
+	demo: ["preparePhoto", "ensureDaemon", "prepareMagicAction"],
 	appUpdate: ["install", "download", "check"],
 	account: ["signIn", "cancelSignIn", "sendEmailOtp", "verifyEmailOtp", "checkout", "useManagedModel", "signOut", "refresh"],
 };

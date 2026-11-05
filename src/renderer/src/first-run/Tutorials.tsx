@@ -19,8 +19,9 @@ import {
 	anchorSelectors,
 	markTutorialSeen,
 	nextStep,
+	renamedPhoto,
 	selectorOf,
-	stepsInPlay,
+	stepsAfter,
 	tutorialSeen,
 	TUTORIALS,
 	type TutorialEffect,
@@ -33,6 +34,8 @@ import {
 const ANCHOR_GONE_MS = 4000;
 /** A step waiting for something to appear or finish gives up after this long. */
 const WAIT_MS = 45_000;
+/** The AI writing a rule, or the person dragging a photo, takes longer than a spinner should be trusted for. */
+const LONG_WAIT_MS = 180_000;
 
 export interface TutorialTriggers {
 	/** The focused pane shows the 자동화 view. */
@@ -46,8 +49,8 @@ export interface TutorialTriggers {
 interface Running {
 	readonly id: TutorialId;
 	readonly index: number;
-	/** The steps the Finder supported when it started: the "n / m" count stays steady as the view changes under it. */
-	readonly plan: readonly number[];
+	/** Steps already shown before this one: the "n" of "n / m". The "m" is this plus what the live Finder still has to show. */
+	readonly shown: number;
 	/** What the effects learned (the sample file's path, where the sorted file goes). */
 	readonly facts: TutorialFacts;
 }
@@ -102,11 +105,10 @@ export function Tutorials({
 		if (!enabled || runningRef.current !== null) return;
 		const start = (id: TutorialId): boolean => {
 			if (tutorialSeen(id)) return false;
-			const plan = stepsInPlay(TUTORIALS[id], present);
-			const first = plan[0];
-			if (first === undefined) return false;
+			const first = nextStep(TUTORIALS[id], -1, false, present);
+			if (first === null) return false;
 			markTutorialSeen(id);
-			setRunning({ id, index: first, plan, facts: {} });
+			setRunning({ id, index: first, shown: 0, facts: {} });
 			return true;
 		};
 		if (triggers.fileMenu && !before.fileMenu && start("contextMenu")) return;
@@ -123,7 +125,7 @@ export function Tutorials({
 			if (current === null) return null;
 			const facts = learned === undefined ? current.facts : { ...current.facts, ...learned };
 			const index = nextStep(TUTORIALS[current.id], current.index, tapped, present, facts);
-			return index === null ? null : { ...current, index, facts };
+			return index === null ? null : { ...current, index, shown: current.shown + 1, facts };
 		});
 	}, []);
 	const end = useCallback(() => setRunning(null), []);
@@ -131,7 +133,7 @@ export function Tutorials({
 	if (running === null) return null;
 	const step = TUTORIALS[running.id][running.index];
 	if (step === undefined) return null;
-	const position = Math.max(0, running.plan.indexOf(running.index));
+	const remaining = stepsAfter(TUTORIALS[running.id], running.index, step.tap !== undefined, present, running.facts);
 	return (
 		<div className="fr-root" data-screen="tutorial" data-tutorial={running.id}>
 			<TutorialCoach
@@ -139,8 +141,8 @@ export function Tutorials({
 				id={running.id}
 				step={step}
 				facts={running.facts}
-				index={position}
-				count={running.plan.length}
+				index={running.shown}
+				count={running.shown + 1 + remaining}
 				last={nextStep(TUTORIALS[running.id], running.index, false, () => true, running.facts) === null}
 				onNext={() => advance(false)}
 				onTapped={() => advance(true)}
@@ -148,6 +150,12 @@ export function Tutorials({
 					const learned = await onEffect(effect, running.facts);
 					if (learned === null) end();
 					else advance(false, learned);
+				}}
+				onLearned={(learned) => advance(false, learned)}
+				onEnter={async (effect) => {
+					const learned = await onEffect(effect, running.facts);
+					if (learned === null) end();
+					else setRunning((current) => (current === null ? null : { ...current, facts: { ...current.facts, ...learned } }));
 				}}
 				onEnd={end}
 			/>
@@ -165,6 +173,8 @@ function TutorialCoach({
 	onNext,
 	onTapped,
 	onAccept,
+	onLearned,
+	onEnter,
 	onEnd,
 }: {
 	readonly id: TutorialId;
@@ -176,6 +186,10 @@ function TutorialCoach({
 	readonly onNext: () => void;
 	readonly onTapped: () => void;
 	readonly onAccept: (effect: TutorialEffect) => Promise<void>;
+	/** The step saw what it was waiting for and learned something (the renamed photo's path). */
+	readonly onLearned: (facts: TutorialFacts) => void;
+	/** The step brings the person somewhere itself, once, as it comes up. */
+	readonly onEnter: (effect: TutorialEffect) => Promise<void>;
 	readonly onEnd: () => void;
 }): ReactElement | null {
 	const { t } = useTranslation();
@@ -186,8 +200,54 @@ function TutorialCoach({
 	const [size, setSize] = useState({ width: 320, height: 160 });
 	const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 	const bubbleRef = useRef<HTMLDivElement>(null);
-	const latest = useRef({ onEnd, onTapped, onNext });
-	latest.current = { onEnd, onTapped, onNext };
+	const latest = useRef({ onEnd, onTapped, onNext, onLearned, onEnter });
+	latest.current = { onEnd, onTapped, onNext, onLearned, onEnter };
+
+	// A step with an `enter` effect takes the person there itself (back to the list the new rule shows in).
+	useEffect(() => {
+		if (step.enter !== undefined) void latest.current.onEnter(step.enter);
+	}, [step]);
+
+	// The AI answer: the step waits for the real search stream to finish; a failure or cancel ends the lesson.
+	useEffect(() => {
+		if (step.untilEvent !== "aiDone") return;
+		const off = window.autorag.search.onEvent?.((event) => {
+			if (event.type === "done") window.setTimeout(() => latest.current.onNext(), 600);
+			else if (event.type === "error" || event.type === "cancelled") latest.current.onEnd();
+		});
+		return () => off?.();
+	}, [step]);
+
+	// The photo's rename: watch Downloads itself (not the DOM, which may show another folder) for a new picture that is not the placeholder.
+	useEffect(() => {
+		if (step.watch !== "photoRenamed" || facts.downloads === undefined) return;
+		let live = true;
+		let baseline: ReadonlySet<string> | null = null;
+		const poll = async (): Promise<void> => {
+			try {
+				const listing = await window.autorag.fs.listDir(facts.downloads as string);
+				if (!live) return;
+				const paths = listing.entries.map((entry) => entry.path);
+				if (baseline === null) {
+					baseline = new Set(paths);
+					return;
+				}
+				const found = renamedPhoto(paths, facts, baseline);
+				if (found !== null) {
+					live = false;
+					latest.current.onLearned({ renamed: found });
+				}
+			} catch {
+				// A listing that fails once is tried again on the next tick.
+			}
+		};
+		void poll();
+		const timer = window.setInterval(() => void poll(), 1000);
+		return () => {
+			live = false;
+			window.clearInterval(timer);
+		};
+	}, [step, facts]);
 
 	// Follow the live Finder layout every frame: the spotlight, the guide cursor, a wait for something to appear, and a wait for something to finish.
 	useEffect(() => {
@@ -219,8 +279,8 @@ function TutorialCoach({
 				latest.current.onNext();
 				return;
 			}
-			const waiting = !isReady || until !== undefined;
-			if (waiting && now - started > WAIT_MS) {
+			const waiting = !isReady || until !== undefined || step.untilEvent !== undefined || step.watch !== undefined;
+			if (waiting && now - started > (step.watch !== undefined || step.untilEvent !== undefined ? LONG_WAIT_MS : WAIT_MS)) {
 				latest.current.onEnd();
 				return;
 			}
@@ -276,9 +336,9 @@ function TutorialCoach({
 			: { left: rect.left - pad, top: rect.top - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 };
 	const copy = `tutorials.${id}.${step.key}`;
 	const offer = step.offer;
-	const waiting = step.until !== undefined;
+	const waiting = step.until !== undefined || step.untilEvent !== undefined || step.watch !== undefined;
 	const hintKey: LocaleKey | null =
-		step.hint === "rightClick" ? "tutorials.rightClickHint" : step.tap !== undefined ? "firstRun.tour.clickHint" : waiting ? "tutorials.waitingHint" : null;
+		step.hint === "rightClick" ? "tutorials.rightClickHint" : step.hint === "drag" ? "tutorials.dragHint" : step.tap !== undefined ? "firstRun.tour.clickHint" : waiting ? "tutorials.waitingHint" : null;
 	const accept = (): void => {
 		if (offer === undefined || busy) return;
 		setBusy(true);
