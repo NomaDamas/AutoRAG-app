@@ -6,6 +6,7 @@
  */
 
 import type { AutomationEventType, AutomationRule, AutomationRun } from "../../../shared/automation-contract";
+import { DEMO_AUTOMATION_ID } from "../../../shared/demo-contract";
 import { i18n, t } from "../../../shared/i18n/core";
 
 const MINUTE_MS = 60_000;
@@ -142,6 +143,7 @@ function leafName(path: string): string {
 
 function commandName(rule: AutomationRule): string {
 	const [program = "", second] = rule.run;
+
 	const name = leafName(program).replace(/\.exe$/i, "");
 	if (RUNTIMES.has(name.toLowerCase()) && second !== undefined && !second.startsWith("-")) return leafName(second);
 	return name;
@@ -152,6 +154,8 @@ function isAutorag(rule: AutomationRule, subcommand: string): boolean {
 }
 
 export function actionShort(rule: AutomationRule): string {
+	// The tutorial's example rule is named for what it does, not for the helper script that does it.
+	if (rule.id === DEMO_AUTOMATION_ID) return t("automations.demo.short");
 	if (rule.agent !== undefined) return t("automations.action.agent");
 	if (isAutorag(rule, "refresh")) return t("automations.action.refresh");
 	if (isAutorag(rule, "search")) return t("automations.action.search");
@@ -190,6 +194,7 @@ function shortInstruction(text: string): string {
 export function whatText(rule: AutomationRule, { full = false }: { readonly full?: boolean } = {}): string {
 	if (rule.agent !== undefined) return `“${full ? rule.agent.task : shortInstruction(rule.agent.task)}”`;
 	if (isAutorag(rule, "refresh")) return t("automations.what.refresh");
+	if (rule.id === DEMO_AUTOMATION_ID) return t("automations.demo.what");
 	const instruction = rule.run[2];
 	if (isAutorag(rule, "search") && instruction !== undefined) return `“${full ? instruction : shortInstruction(instruction)}”`;
 	return t("automations.what.program", { name: commandName(rule) });

@@ -445,20 +445,36 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   it. `src/renderer/src/first-run/Tutorials.tsx` (steps and the once-per-profile
   flags `autorag.tutorial.<id>.seen` in `first-run/tutorial-steps.ts`, copy
   under `tutorials.*`) watches the Finder and starts one tutorial on the first:
-  - visit to **자동화** (`automations`): what a rule is, the background line,
-    then a click on the empty state's add button and the AI Search draft it
-    opens (or, with rules already there, double-click to edit);
-  - right-click on a file or folder (`contextMenu`): an offer over the open
-    menu; "알아보기" opens Settings › 우클릭 메뉴, the person clicks "AI로
-    커스텀하기", and the last step frames the customizer's input;
-  - opening Settings (`remoteAccess`, desktop only): an offer over the 원격 접속
-    section; "알아보기" moves to 일반 and walks the switch, the address with its
-    token, and the HTTP warning.
+  - visit to **자동화** (`automations`);
+  - right-click on a file or folder (`contextMenu`);
+  - opening Settings (`remoteAccess`, desktop only).
+- **Explaining is not enough, so the person makes a real example and watches it
+  work.** An offer step ("예시 만들기") runs an effect on the main process
+  through `window.autorag.demo` (`shared/demo-contract.ts`,
+  `main/demo-service.ts`); later steps wait for the real UI to show the result:
+  - `automations`: creates `~/Dazzi 체험/받은 파일` (localized), the rule
+    `dazzi-demo-sort` (watches that inbox for new files, moves each into
+    `자동 정리/<문서|이미지|기타>` with a small `node` script kept under
+    `<AUTORAG_HOME>/demo/`), and installs the background daemon. The next steps
+    frame the new row, drop a sample meeting note in the inbox, wait for the
+    row's status dot to turn green (the daemon ran the rule; without a daemon
+    the app runs the rule once through `autorag automate run`), then open the
+    result folder.
+  - `contextMenu`: adds the Magic Action `dazzi-demo-glance` ("내용 한눈에
+    보기", a script that prints a text file's size and first lines) and a sample
+    file, opens the sample folder, and waits for the person to right-click the
+    sample and click the new menu item; the result dialog is explained, and the
+    last step offers Settings › 우클릭 메뉴 for making their own.
+  - `remoteAccess` creates nothing: it never turns the switch on for the person.
+- Everything the demo makes is real and idempotent (a second run reuses it).
+  It is left in place when the tutorial ends; the copy says it is practice and
+  may be deleted. Nothing the person made is touched.
 - Same coach marks as the tour (`.fr-spot`, `.fr-coach`, `.fr-cursor`); clicks
   pass through, Escape or 건너뛰기 ends one, and a step whose target stays gone
-  for 4 s ends it. One runs at a time, never during the first run, and never when
-  `AUTORAG_SKIP_ONBOARDING=1` (`OnboardingSnapshot.tutorials`), so QA lanes are
-  unaffected.
+  for 4 s (or a wait that lasts 45 s) ends it. One runs at a time, never during
+  the first run, and never when `AUTORAG_SKIP_ONBOARDING=1`
+  (`OnboardingSnapshot.tutorials`), so QA lanes are unaffected. `demo.*` is
+  native-only: a remote browser session cannot write files on the host.
 
 ---
 

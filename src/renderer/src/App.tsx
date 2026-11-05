@@ -44,6 +44,7 @@ import { ShortcutSettingsContext } from "./hooks/useShortcutSettings";
 import type { ShortcutSettings } from "../../shared/shortcuts-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
+import { dismissMagicActionDialog } from "./hooks/useMagicAction";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
 import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "./state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
@@ -701,6 +702,7 @@ export function App(): ReactElement {
 						return { sample };
 					}
 					case "openContextMenuSettings":
+						dismissMagicActionDialog();
 						finder?.closeContextMenu();
 						requestSettingsCategory("contextMenu");
 						finder?.openSettings();

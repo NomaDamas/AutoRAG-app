@@ -615,6 +615,10 @@
     "agent": {
       "reads": "Reads only",
       "writes": "Can change files"
+    },
+    "demo": {
+      "short": "Sort by kind",
+      "what": "Moves each new file into a folder for its kind (a Dazzi practice example)"
     }
   },
   "osMenu": {
@@ -888,47 +892,63 @@
   },
   "tutorials": {
     "later": "Not now",
-    "learn": "Show me",
+    "waitingHint": "One moment…",
+    "rightClickHint": "Right-click the file",
     "automations": {
       "intro": {
-        "title": "Automations: Dazzi handles new files for you",
-        "body": "Pick a folder to watch and what to do, and Dazzi acts whenever a file is added or changed there. Move new receipt PDFs into a Receipts folder, or summarize every new meeting note."
+        "title": "Automations: files get handled for you",
+        "body": "Let's make an example right now: new files that land in an Inbox folder get sorted by type. It takes about five seconds.",
+        "action": "Create the example"
       },
-      "background": {
-        "title": "Runs even when the app is closed",
-        "body": "Rules run in the background. Turn that on or off here."
+      "rule": {
+        "title": "A rule just appeared",
+        "body": "\"New file → put in a folder\" is the example. One line shows the folder it watches, when it runs, and what it does. The dot on the right is its run status.",
+        "action": "Next"
       },
-      "rules": {
-        "title": "Edit rules in plain words",
-        "body": "Double-click a rule to edit it in AI Search. Right-click an empty spot to add a new one."
+      "drop": {
+        "title": "Now let's drop a file in",
+        "body": "We'll put a sample meeting note in the Inbox folder. Dazzi is watching it in the background.",
+        "action": "Drop a file"
       },
-      "create": {
-        "title": "Make a rule by describing it",
-        "body": "No settings forms. This button opens a draft in AI Search; describe what you want and Dazzi writes the rule."
+      "running": {
+        "title": "Working on it",
+        "body": "It keeps watching even when the app is closed. The dot on this row turns green when it's done."
       },
-      "draft": {
-        "title": "Describe it and send",
-        "body": "For example: \"When a new PDF lands in Downloads, move it to Documents.\" Dazzi creates the rule and adds it to your automations."
+      "result": {
+        "title": "Done! It sorted the note into Documents",
+        "body": "The meeting note moved to Sorted › Documents. To make a new rule, just describe it in AI Search. This example is for practice, so feel free to delete it.",
+        "action": "Open the folder"
       }
     },
     "contextMenu": {
-      "offer": {
-        "title": "Make the right-click menu yours",
-        "body": "Keep only the items you use and reorder them. Magic Actions let AI or a script do a job on the selected files in one right-click."
+      "intro": {
+        "title": "Add your own button to the right-click menu",
+        "body": "Let's make a Magic Action called \"Peek at contents\". Right-click a text file and it shows the size and first lines right away.",
+        "action": "Create the example"
       },
-      "customize": {
-        "title": "Customize with AI",
-        "body": "Just say it. For example: \"Add an action that summarizes a PDF in three lines when I right-click it.\""
+      "sample": {
+        "title": "Right-click the practice file",
+        "body": "We opened the Samples folder. Right-click the file and the button you just made shows up in the menu."
       },
-      "ask": {
-        "title": "Type what you want",
-        "body": "A Magic Action you create shows up when you right-click a matching file. Hiding or reordering items works the same way."
+      "pick": {
+        "title": "There it is",
+        "body": "A Magic Action you make only appears when you right-click a matching file. Click it to run it."
+      },
+      "result": {
+        "title": "The result is right there",
+        "body": "The script read the size and first lines of the selected file. An AI action that summarizes works the same way."
+      },
+      "more": {
+        "title": "Make more of your own",
+        "body": "In Settings › Right-click menu you can create actions by describing them, hide items, and reorder them. This example is for practice, so feel free to delete it.",
+        "action": "Open Settings"
       }
     },
     "remoteAccess": {
       "offer": {
         "title": "Want to try Remote Access?",
-        "body": "Open this computer's Dazzi from a browser on your phone or another computer."
+        "body": "Open this computer's Dazzi from a browser on your phone or another computer. Nothing is opened until you switch it on yourself.",
+        "action": "Show me"
       },
       "toggle": {
         "title": "Turn it on and it's live",
