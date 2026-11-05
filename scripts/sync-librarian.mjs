@@ -16,8 +16,9 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources. On top:
 // Windows cloud-attribute reads quote paths with typographic apostrophes (AutoRAG#2086) and run PowerShell from env so
 // stderr is UTF-8 instead of CP949 mojibake (#2087), dupey skips cloud and network roots (#2085), and the CLI honors
-// the config file's webSearch section (#2083).
-const librarianRef = "651fa2ffd0ffa888a9670f7fb677fc47e40b4cbe";
+// the config file's webSearch section (#2083). The loop guard of file automations states the loop invariant instead of
+// banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
+const librarianRef = "87bdfc5c4b8c040a5584075f50a660fc40f0f3de";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
