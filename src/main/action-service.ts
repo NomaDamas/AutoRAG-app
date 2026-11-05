@@ -10,16 +10,14 @@
  * renderer can never offer a button that would fail.
  *
  * Both archive directions are streamed: compression reads and deflates one
- * member at a time (fflate's async deflate would spin up a worker thread per
- * entry, which costs more than it saves here), and extraction inflates chunk
- * by chunk without ever holding the whole archive or its contents.
+ * member at a time (`zip-writer.ts`, `sevenzip-writer.ts`), and extraction
+ * inflates chunk by chunk without ever holding the whole archive or its contents.
  */
 
 import { spawn } from "node:child_process";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { finished } from "node:stream/promises";
-import { unzlibSync, Zip, ZipDeflate, ZipPassThrough, zlibSync } from "fflate";
+import { unzlibSync, zlibSync } from "fflate";
 import { PDFDocument, PDFName, PDFNumber, PDFRawStream } from "pdf-lib";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
@@ -51,6 +49,7 @@ import {
 } from "../shared/actions-contract";
 import type { PdfReducer } from "./pdf-reducer";
 import { writeSevenZip } from "./sevenzip-writer";
+import { writeZip } from "./zip-writer";
 import { errorMessage, pathExists } from "./fs-entry";
 
 /** Result of one external command. */
@@ -156,8 +155,6 @@ function parseOpenWithListing(stdout: string): { readonly defaultPath: string | 
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const COMMAND_MAX_BUFFER = 1 << 24;
-/** Deflate level: fflate's default balance, matching zlib's tuned setting. */
-const ZIP_LEVEL = 6;
 /** Re-encode quality for lossy formats (sips `formatOptions`, ffmpeg `-quality`). */
 const LOSSY_QUALITY = 80;
 const JPEG_QUALITY = "70";
@@ -457,37 +454,6 @@ async function addArchiveMembers(members: ArchiveMember[], root: string, isDirec
 		}
 	};
 	await walk(root, `${name}/`);
-}
-
-/**
- * Write `members` as a zip at `target`. Each file is read and deflated before
- * the next one starts, so peak input memory tracks the largest member rather
- * than the whole tree.
- */
-async function writeZip(target: string, members: readonly ArchiveMember[]): Promise<void> {
-	const output = rawFs.createWriteStream(target);
-	const archive = new Zip((error, chunk, final) => {
-		if (error !== null) {
-			output.destroy(error);
-			return;
-		}
-		output.write(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength));
-		if (final) output.end();
-	});
-	const drained = finished(output);
-	for (const member of members) {
-		if (member.directory) {
-			const directory = new ZipPassThrough(member.entry);
-			archive.add(directory);
-			directory.push(new Uint8Array(0), true);
-			continue;
-		}
-		const file = new ZipDeflate(member.entry, { level: ZIP_LEVEL });
-		archive.add(file);
-		file.push(new Uint8Array(await rawFs.promises.readFile(member.source)), true);
-	}
-	archive.end();
-	await drained;
 }
 
 /** Encoder names from `ffmpeg -encoders`: six flag characters, then the name. */
