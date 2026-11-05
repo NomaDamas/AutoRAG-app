@@ -208,15 +208,28 @@ function TutorialCoach({
 		if (step.enter !== undefined) void latest.current.onEnter(step.enter);
 	}, [step]);
 
-	// The AI answer: the step waits for the real search stream to finish; a failure or cancel ends the lesson.
+	// The AI answer: read from the chat the tutorial opened. The search stream is shared by every chat, so another
+	// chat finishing (or failing) must not move this step; a chat is done once it has a question and is no longer running.
 	useEffect(() => {
-		if (step.untilEvent !== "aiDone") return;
-		const off = window.autorag.search.onEvent?.((event) => {
-			if (event.type === "done") window.setTimeout(() => latest.current.onNext(), 600);
-			else if (event.type === "error" || event.type === "cancelled") latest.current.onEnd();
-		});
-		return () => off?.();
-	}, [step]);
+		if (step.untilEvent !== "aiDone" || facts.aiTab === undefined) return;
+		const host = `[data-ai-tab="${facts.aiTab}"]`;
+		let quietSince: number | null = null;
+		const timer = window.setInterval(() => {
+			const asked = document.querySelector(`${host} .user-msg`) !== null;
+			const running = document.querySelector(`${host} button[aria-label="${t("aiSearch.stop")}"]`) !== null;
+			if (!asked || running) {
+				quietSince = null;
+				return;
+			}
+			quietSince ??= Date.now();
+			// Half a second of quiet: the answer is in, and the rule list behind the tab has had time to show the new rule.
+			if (Date.now() - quietSince >= 600) {
+				window.clearInterval(timer);
+				latest.current.onNext();
+			}
+		}, 250);
+		return () => window.clearInterval(timer);
+	}, [step, facts.aiTab, t]);
 
 	// The black-and-white copy: watch the rule's output folder itself (not the DOM, which may show another folder) for a new picture.
 	useEffect(() => {

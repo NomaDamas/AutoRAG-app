@@ -348,9 +348,12 @@ export function App(): ReactElement {
 	 */
 	const aiHandlesRef = useRef(new Map<number, AiDockHandle>());
 	const aiPendingRef = useRef<AiDelivery | null>(null);
+	/** The AI Search tab the waiting delivery is for; null means whichever one is focused when it lands. */
+	const aiTargetRef = useRef<number | null>(null);
 	const [aiDelivery, setAiDelivery] = useState(0);
-	const deliverToAi = useCallback((request: AiDeliveryRequest) => {
+	const deliverToAi = useCallback((request: AiDeliveryRequest, tabId?: number) => {
 		aiPendingRef.current = mergeDelivery(aiPendingRef.current, request);
+		if (tabId !== undefined) aiTargetRef.current = tabId;
 		setAiDelivery((tick) => tick + 1);
 	}, []);
 
@@ -374,11 +377,14 @@ export function App(): ReactElement {
 	useEffect(() => {
 		const pending = aiPendingRef.current;
 		if (pending === null) return;
-		aiPendingRef.current = null;
-		const handle = activeAiTabId === null ? undefined : aiHandlesRef.current.get(activeAiTabId);
+		const target = aiTargetRef.current ?? activeAiTabId;
+		const handle = target === null ? undefined : aiHandlesRef.current.get(target);
+		// The tab was just opened and its chat is not mounted yet: keep the request for the render that mounts it.
 		if (handle === undefined) return;
+		aiPendingRef.current = null;
+		aiTargetRef.current = null;
 		deliverToDock(handle, pending);
-	}, [aiDelivery, activeAiTabId]);
+	}, [aiDelivery, activeAiTabId, aiPanelIds]);
 
 	const firstRunHost = useMemo<FirstRunHost>(
 		() => ({
@@ -700,9 +706,12 @@ export function App(): ReactElement {
 	);
 	/** Edit and add leave the list for a new AI Search tab whose composer holds a draft: nothing is sent for the person. */
 	const openAiDraft = useCallback(
-		(draft: string) => {
+		(draft: string): number => {
+			// A new tab takes the next id of the window's counter: the draft goes there, not to another AI Search that is open.
+			const opened = workspaceRef.current.nextTabId;
 			finder?.openAiSearch();
-			deliverToAi({ draft });
+			deliverToAi({ draft }, opened);
+			return opened;
 		},
 		[deliverToAi, finder],
 	);
@@ -714,8 +723,7 @@ export function App(): ReactElement {
 						const { downloads, gray } = await autorag.demo.preparePhoto();
 						// The background service must be up before the rule exists, so the first dropped photo is seen.
 						void autorag.demo.ensureDaemon();
-						openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray }));
-						return {};
+						return { aiTab: openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray })) };
 					}
 					case "showAutomations":
 						finder?.showAutomations();

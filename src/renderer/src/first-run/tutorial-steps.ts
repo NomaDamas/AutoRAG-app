@@ -19,6 +19,8 @@ export type TutorialEffect = "askAiForRule" | "showAutomations" | "arrangePhotoP
 export interface TutorialFacts {
 	/** The sample file the Magic Action tutorial asks the person to right-click. */
 	readonly sample?: string;
+	/** The AI Search tab the tutorial opened: its chat, not another one that may be on screen. */
+	readonly aiTab?: number;
 	/** The practice photo, the Downloads folder it is to be dragged into, and the folder the rule saves black-and-white copies to. */
 	readonly photo?: string;
 	/** The practice-photo folder that holds `photo`. */
@@ -48,7 +50,7 @@ export interface TutorialStep {
 	readonly offer?: TutorialEffect;
 	/** Waits for something to happen on its own (a run finishing, a menu opening): moves on when this matches. */
 	readonly until?: Selector;
-	/** Waits for the AI Search answer to finish (the rule is made by then); ends the tutorial if it fails. */
+	/** Waits for the tutorial's own AI Search chat to finish answering (the rule is made by then). */
 	readonly untilEvent?: "aiDone";
 	/** Waits for a black-and-white copy of the practice photo to show up in the rule's output folder; moves on with what it learned. */
 	readonly watch?: "grayCopy";
@@ -75,13 +77,16 @@ const DEMO_MAGIC_ITEM = `.menu [data-magic-action-id="${DEMO_MAGIC_ACTION_ID}"]`
 
 const photoRow = (facts: TutorialFacts): string => (facts.photo === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.photo)}"]`);
 const resultRow = (facts: TutorialFacts): string => (facts.result === undefined ? "[data-path]:not([data-path])" : `[data-path="${attr(facts.result)}"]`);
-const SEND_BUTTON = `${AI_HOST} form.composer button.send[type="submit"]`;
+/** The chat the tutorial opened; any visible chat until it is known. */
+const aiHost = (facts: TutorialFacts): string => (facts.aiTab === undefined ? AI_HOST : `[data-ai-tab="${facts.aiTab}"]`);
+const aiComposer = (facts: TutorialFacts): string => `${aiHost(facts)} form.composer`;
+const sendButton = (facts: TutorialFacts): string => `${aiComposer(facts)} button.send[type="submit"]`;
 
 export const TUTORIALS: Readonly<Record<TutorialId, readonly TutorialStep[]>> = {
 	automations: [
 		{ key: "intro", anchors: [AUTOMATIONS_VIEW], offer: "askAiForRule" },
-		{ key: "send", anchors: [`${AI_HOST} form.composer`], waitFor: SEND_BUTTON, tap: SEND_BUTTON },
-		{ key: "asking", anchors: [`${AI_HOST} [role="alertdialog"]`, `${AI_HOST} .ai-body`], untilEvent: "aiDone" },
+		{ key: "send", anchors: [aiComposer], waitFor: sendButton, tap: sendButton },
+		{ key: "asking", anchors: [(facts) => `${aiHost(facts)} [role="alertdialog"]`, (facts) => `${aiHost(facts)} .ai-body`], untilEvent: "aiDone" },
 		{ key: "rule", anchors: [RULE_ROW], enter: "showAutomations", waitFor: RULE_ROW },
 		{ key: "panes", anchors: [RULE_ROW], offer: "arrangePhotoPanes" },
 		{ key: "drag", anchors: [photoRow], waitFor: photoRow, watch: "grayCopy", hint: "drag" },
