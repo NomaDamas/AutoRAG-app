@@ -76,6 +76,7 @@ export interface MagicActionProfileInput {
 	readonly cwd: string;
 	readonly agentDir: string;
 	readonly env: NodeJS.ProcessEnv;
+	readonly platform?: NodeJS.Platform;
 	/** Share AutoRAG Agent's installed Skills (`<agentDir>/skills` & user skills). Defaults to `true`. */
 	readonly useSkills?: boolean;
 	/** Share AutoRAG Agent's connected MCP servers (`<agentDir>/mcp.json`). Defaults to `true`. */
@@ -88,8 +89,18 @@ export interface OpenedMagicActionSession {
 	dispose(): Promise<void>;
 }
 
-function inside(child: string, root: string): boolean {
-	return child === root || child.startsWith(`${root}${sep}`);
+function normalizeFencePath(value: string, platform: NodeJS.Platform): string {
+	if (platform === "win32") {
+		return value.replace(/\//g, "\\").toLowerCase();
+	}
+	return value;
+}
+
+function inside(child: string, root: string, platform: NodeJS.Platform = process.platform): boolean {
+	const normChild = normalizeFencePath(child, platform);
+	const normRoot = normalizeFencePath(root, platform);
+	const boundary = platform === "win32" ? "\\" : sep;
+	return normChild === normRoot || normChild.startsWith(`${normRoot}${boundary}`);
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -109,6 +120,7 @@ export function buildMagicActionUserMessage(paths: readonly string[], prompt: st
 }
 
 function createMagicActionTools(input: MagicActionProfileInput): readonly ToolDefinition[] {
+	const platform = input.platform ?? process.platform;
 	const isCancelled = input.cancelled ?? (() => false);
 	const allowSkills = input.useSkills !== false;
 	const agentDirResolved = resolve(input.agentDir);
@@ -126,10 +138,10 @@ function createMagicActionTools(input: MagicActionProfileInput): readonly ToolDe
 			throw new Error("Refused: credential and private key files are off limits.");
 		}
 		const agentReal = await agentDirReal;
-		if (inside(real, agentReal) || inside(resolved, agentDirResolved)) {
+		if (inside(real, agentReal, platform) || inside(resolved, agentDirResolved, platform)) {
 			if (accessMode === "read" && allowSkills) {
 				const sReal = await skillsDirReal;
-				if (inside(real, sReal) || inside(resolved, skillsDirResolved)) {
+				if (inside(real, sReal, platform) || inside(resolved, skillsDirResolved, platform)) {
 					return;
 				}
 			}
@@ -218,16 +230,20 @@ function createMagicActionTools(input: MagicActionProfileInput): readonly ToolDe
 				throw new Error("Refused: Dazzi's internal sign-in and credential files are off limits.");
 			}
 			const agentReal = await agentDirReal;
-			let scrubbed = command;
+			const boundary = platform === "win32" ? "\\" : sep;
+			let scrubbed = normalizeFencePath(command, platform);
 			if (allowSkills && !command.includes("..")) {
-				const sReal = await skillsDirReal;
+				const sReal = normalizeFencePath(await skillsDirReal, platform);
+				const sResolved = normalizeFencePath(skillsDirResolved, platform);
 				scrubbed = scrubbed
-					.split(`${sReal}${sep}`)
+					.split(`${sReal}${boundary}`)
 					.join("")
-					.split(`${skillsDirResolved}${sep}`)
+					.split(`${sResolved}${boundary}`)
 					.join("");
 			}
-			if (scrubbed.includes(agentReal) || scrubbed.includes(agentDirResolved)) {
+			const normAgentReal = normalizeFencePath(agentReal, platform);
+			const normAgentResolved = normalizeFencePath(agentDirResolved, platform);
+			if (scrubbed.includes(normAgentReal) || scrubbed.includes(normAgentResolved)) {
 				throw new Error("Refused: Dazzi's internal sign-in and credential files are off limits.");
 			}
 		}),
@@ -247,7 +263,7 @@ function systemPrompt(input: MagicActionProfileInput): string {
 			: [
 					"- You are running in ORGANIZE / ACTION mode (`read`, `ls`, `find`, `grep`, `edit`, `write`, `bash`).",
 					"- You may create new files, convert or transform files, edit files, rename/move/organize, or run local CLI tools to fulfill the task.",
-					"- Never permanently delete user files (`rm`, `rmdir`, `unlink`, `shred`); if a task explicitly asks to remove a file, move it to the OS Trash (`/usr/bin/trash` on macOS, `gio trash` on Linux).",
+					"- Never permanently delete user files (`rm`, `rmdir`, `unlink`, `shred`, `Remove-Item`); if a task explicitly asks to remove a file, move it to the OS Trash / Recycle Bin (`/usr/bin/trash` on macOS, `gio trash` on Linux, or Recycle Bin via Shell.Application on Windows).",
 					"- Never overwrite unrelated existing files unless the instruction explicitly asks for it; report every created or modified path clearly in your final reply.",
 				];
 	const mcpRule =
@@ -350,7 +366,7 @@ function discoverAsideBuiltinSkillDirs(
 		return typeof cfg.command === "string" && /\baside(?:\.exe)?$/iu.test(cfg.command.trim());
 	});
 	if (!hasAside) return [];
-	const home = env.HOME?.trim() || homedir();
+	const home = env.HOME?.trim() || env.USERPROFILE?.trim() || homedir();
 	const profilesRoot = join(home, ".aside", "u");
 	if (!existsSync(profilesRoot)) return [];
 	const out: string[] = [];

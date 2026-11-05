@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "../src/main/os-request-channel";
 import { createOsRequestService, diskKindOf } from "../src/main/os-request-service";
-import { normalizeOsLaunchRequest, parseOsRequestArgv, type OsLaunchRequest } from "../src/shared/os-request-contract";
+import { normalizeOsLaunchRequest, OS_REQUEST_MAX_QUERY_LENGTH, parseOsRequestArgv, type OsLaunchRequest } from "../src/shared/os-request-contract";
 
 const cleanups: (() => Promise<unknown>)[] = [];
 afterEach(async () => {
@@ -38,6 +38,15 @@ describe("parseOsRequestArgv", () => {
 			parseOsRequestArgv(["--autorag-request=reveal", "--autorag-path=D:\\", '--autorag-path=D:\\"', "--autorag-path=\\\\srv\\share\\f.txt"]),
 		).toEqual({ action: "reveal", paths: ["D:\\", "\\\\srv\\share\\f.txt"] });
 	});
+
+	it("reads the question an ask request carries, which needs no path", () => {
+		expect(parseOsRequestArgv(["/App", "--autorag-request=ask", "--autorag-query=회의록 요약해줘"])).toEqual({ action: "ask", paths: [], query: "회의록 요약해줘" });
+		expect(parseOsRequestArgv(["--autorag-request=ask", "--autorag-query=what changed?", "--autorag-path=/a/b.md"])).toEqual({
+			action: "ask",
+			paths: ["/a/b.md"],
+			query: "what changed?",
+		});
+	});
 });
 
 describe("normalizeOsLaunchRequest", () => {
@@ -51,6 +60,16 @@ describe("normalizeOsLaunchRequest", () => {
 
 	it("drops relative paths and duplicates", () => {
 		expect(normalizeOsLaunchRequest({ action: "ask", paths: ["/a", "rel", "/a", "/b"] })).toEqual({ action: "ask", paths: ["/a", "/b"] });
+	});
+
+	it("keeps a question only on ask, trimmed, and never an empty, oversized or NUL one", () => {
+		expect(normalizeOsLaunchRequest({ action: "ask", paths: [], query: "  두 줄\n질문  " })).toEqual({ action: "ask", paths: [], query: "두 줄\n질문" });
+		expect(normalizeOsLaunchRequest({ action: "ask", paths: [], query: "   " })).toBeNull();
+		expect(normalizeOsLaunchRequest({ action: "ask", paths: [], query: "a\0b" })).toBeNull();
+		expect(normalizeOsLaunchRequest({ action: "ask", paths: [], query: 7 })).toBeNull();
+		expect(normalizeOsLaunchRequest({ action: "ask", paths: [], query: "x".repeat(OS_REQUEST_MAX_QUERY_LENGTH + 1) })).toBeNull();
+		expect(normalizeOsLaunchRequest({ action: "open", paths: ["/a"], query: "q" })).toBeNull();
+		expect(normalizeOsLaunchRequest({ action: "reveal", paths: [], query: "q" })).toBeNull();
 	});
 });
 
@@ -71,6 +90,7 @@ describe("createOsRequestService", () => {
 					{ kind: "file", id: join(dir, "note.txt"), name: "note.txt" },
 					{ kind: "folder", id: join(dir, "folder"), name: "folder" },
 				],
+				query: null,
 			},
 		]);
 		expect(service.take()).toEqual([]);
@@ -88,6 +108,18 @@ describe("createOsRequestService", () => {
 		const service = createOsRequestService({ kindOf: async (path) => (path === "/a" ? null : "file"), onQueued: () => undefined });
 		await service.push({ action: "reveal", paths: ["/a", "/b", "/c"] });
 		expect(service.take()).toEqual([{ action: "reveal", path: "/b" }]);
+	});
+
+	it("asks the question with whatever attachments still exist, even when none do", async () => {
+		let queued = 0;
+		const service = createOsRequestService({ kindOf: async (path) => (path === "/a.pdf" ? "file" : null), onQueued: () => (queued += 1) });
+		await service.push({ action: "ask", paths: ["/a.pdf", "/gone.pdf"], query: "요약해줘" });
+		await service.push({ action: "ask", paths: ["/gone.pdf"], query: "그냥 질문" });
+		expect(queued).toBe(2);
+		expect(service.take()).toEqual([
+			{ action: "ask", attachments: [{ kind: "file", id: "/a.pdf", name: "a.pdf" }], query: "요약해줘" },
+			{ action: "ask", attachments: [], query: "그냥 질문" },
+		]);
 	});
 });
 
@@ -135,6 +167,14 @@ describe("os request channel", () => {
 		const received: OsLaunchRequest[] = [];
 		const endpoint = await listening(received);
 		const request: OsLaunchRequest = { action: "ask", paths: ["/a/한글 파일.pdf"] };
+		expect(await sendOsRequest(endpoint, request)).toBe(true);
+		expect(received).toEqual([request]);
+	});
+
+	it("carries a question through the socket unchanged", async () => {
+		const received: OsLaunchRequest[] = [];
+		const endpoint = await listening(received);
+		const request: OsLaunchRequest = { action: "ask", paths: [], query: "줄바꿈\n과 \"따옴표\" 포함" };
 		expect(await sendOsRequest(endpoint, request)).toBe(true);
 		expect(received).toEqual([request]);
 	});

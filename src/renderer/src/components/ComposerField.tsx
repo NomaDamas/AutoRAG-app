@@ -60,7 +60,8 @@ export interface ComposerFieldProps {
 	readonly onChange: (value: string) => void;
 	/** Alt+Enter: queue the draft as the next question. */
 	readonly onAltEnter: () => void;
-	readonly placeholder: string;
+	/** Hint in the empty field; absent for an idle composer, whose label already says what it is for. */
+	readonly placeholder?: string | undefined;
 	readonly ariaLabel: string;
 	readonly fieldRef?: Ref<HTMLTextAreaElement>;
 }

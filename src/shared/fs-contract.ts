@@ -1,3 +1,4 @@
+import type { ContentSearchResult } from "./content-search-contract";
 import type { IndexStatus } from "./index-contract";
 import type { NewFileFormatId } from "./new-file-contract";
 
@@ -526,6 +527,8 @@ export interface FsIndexBridge {
 	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
 	/** Fires when the refresh a toggle started has settled; `error` is null on success. */
 	onIndexRefreshed?(listener: (error: string | null) => void): () => void;
+	/** Files whose text matches `query` in the local document index, best first (no model runs). */
+	contentSearch(query: string, limit?: number): Promise<ContentSearchResult>;
 }
 
 export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge, FsIndexBridge, FsDragBridge {}

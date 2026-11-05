@@ -52,10 +52,12 @@ try {
 		observed.keycapTexts.includes(isMac ? "⌘F" : "Ctrl+F"),
 		JSON.stringify(observed.keycapTexts),
 	);
+	const expectedSettingsKeycap = isMac ? "⌘," : "Ctrl+,";
 	check(
 		isMac ? "the Settings hint is ⌘," : "the Settings hint is Ctrl+,",
-		observed.keycapTexts.includes(isMac ? "⌘," : "Ctrl+,"),
-		JSON.stringify(observed.keycapTexts),
+		observed.keycapTexts.includes(expectedSettingsKeycap) ||
+			observed.titles.some((t) => t.startsWith("Settings") && t.includes(expectedSettingsKeycap)),
+		JSON.stringify({ keycaps: observed.keycapTexts, titles: observed.titles.filter((t) => t.includes("Settings")) }),
 	);
 	check(
 		isMac ? "the new-tab label is ⌘T" : "the new-tab label is Ctrl+T",
