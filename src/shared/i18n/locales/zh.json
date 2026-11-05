@@ -212,6 +212,8 @@
     "putBackCount": "将 {{count}} 个项目放回原处",
     "emptyTrash": "清倒废纸篓",
     "newFolder": "新建文件夹",
+    "pinToSidebar": "固定到边栏",
+    "unpinFromSidebar": "从边栏中移除",
     "new": "新建",
     "trashShort": "废纸篓"
   },
@@ -2252,6 +2254,7 @@
         "rename": "重命名",
         "copyPath": "复制路径",
         "newFolder": "新建文件夹",
+        "pinToSidebar": "固定到边栏 / 从边栏中移除",
         "extract": "解压缩",
         "compress": "压缩 (ZIP)",
         "compress7z": "压缩为 7z",
