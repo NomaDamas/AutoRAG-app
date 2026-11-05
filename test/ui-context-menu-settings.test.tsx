@@ -232,6 +232,33 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(0);
 	});
 
+	it("lists 사이드바에 고정 / 제거 in the actions section and shows or hides it on its own", async () => {
+		await act(async () => {
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
+		});
+		await settle();
+
+		const row = host.querySelector<HTMLElement>('[data-cmenu-row="builtin:pinToSidebar"]');
+		expect(row?.textContent).toContain("사이드바에 고정 / 제거");
+		const rows = [...host.querySelectorAll<HTMLElement>("[data-cmenu-row]")].map((entry) => entry.dataset.cmenuRow);
+		expect(rows.indexOf("builtin:pinToSidebar")).toBe(rows.indexOf("builtin:newFolder") + 1);
+
+		const pinSwitch = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-sidebar-switch="builtin:pinToSidebar"]');
+		expect(pinSwitch()?.getAttribute("aria-checked")).toBe("true");
+		await act(async () => {
+			pinSwitch()?.click();
+		});
+		await settle();
+		expect(currentSettings.contextMenu.hiddenItems).toEqual(["builtin:pinToSidebar"]);
+		expect(pinSwitch()?.getAttribute("aria-checked")).toBe("false");
+
+		await act(async () => {
+			pinSwitch()?.click();
+		});
+		await settle();
+		expect(currentSettings.contextMenu.hiddenItems).toEqual([]);
+	});
+
 	it("docks the AI Customizer panel in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);

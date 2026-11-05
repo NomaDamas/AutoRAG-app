@@ -224,6 +224,46 @@ describe("app-customizer pi agent profile & toolkit", () => {
 		expect(saved3.contextMenu.magicActions.map((a) => a.id)).toEqual(["sha256-hash"]);
 	});
 
+	it("hides and shows 사이드바에 고정 / 제거 as one built-in item by id or by any of its names, and lists it for the agent", async () => {
+		const settings = createStubSettings();
+		const kit = createAppCustomizerToolkit({
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+			homeDir: root,
+		});
+		const getSettings = kit.tools.find((t) => t.name === "get_app_settings")!;
+		const updateMenu = kit.tools.find((t) => t.name === "update_context_menu")!;
+		const run = (id: string, params: Record<string, unknown>) =>
+			updateMenu.execute(id, params, undefined, undefined, undefined as never);
+		const listed = async (): Promise<{ id: string; visible: boolean }[]> => {
+			const res = await getSettings.execute("pin-get", {}, undefined, undefined, undefined as never);
+			const snapshot = JSON.parse(res.content.map((b) => (b.type === "text" ? b.text : "")).join("")) as {
+				contextMenu: { builtinItems: { id: string; visible: boolean }[] };
+			};
+			return snapshot.contextMenu.builtinItems;
+		};
+
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
+
+		// One id for both labels: the pin label and the unpin label in each language resolve to it.
+		for (const [index, name] of ["사이드바에 고정", "사이드바에서 제거", "Pin to Sidebar", "Remove from Sidebar", "サイドバーに固定", "固定到边栏"].entries()) {
+			await run(`pin-show-${index}`, { showItems: ["builtin:pinToSidebar"] });
+			await run(`pin-hide-${index}`, { hideItems: [name] });
+			expect((await settings.get()).contextMenu.hiddenItems, name).toEqual(["builtin:pinToSidebar"]);
+		}
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(false);
+
+		await run("pin-show", { showItems: ["사이드바에 고정"] });
+		expect((await settings.get()).contextMenu.hiddenItems).toEqual([]);
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
+
+		const profile = appCustomizerProfile({ language: "ko", toolkit: kit });
+		expect(profile.systemPrompt).toContain("`builtin:pinToSidebar`");
+		const hideTool = kit.tools.find((t) => t.name === "update_context_menu");
+		expect(JSON.stringify(hideTool?.parameters)).toContain("builtin:pinToSidebar");
+	});
+
 	it("preserves every mutation without lost updates when multiple customization tools run in parallel", async () => {
 		const settings = createStubSettings();
 		const kit = createAppCustomizerToolkit({

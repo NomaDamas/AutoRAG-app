@@ -1,0 +1,52 @@
+--- a/libarchive/archive_entry.c
++++ b/libarchive/archive_entry.c
+@@ -622,11 +622,49 @@
+ archive_entry_pathname_utf8(struct archive_entry *entry)
+ {
+ 	const char *p;
++	const char *raw;
++	const unsigned char *in;
++	char *text;
++	char *out;
++	size_t length;
+ 	if (archive_mstring_get_utf8(
+ 	    entry->archive, &entry->ae_pathname, &p) == 0)
+ 		return (p);
+ 	if (errno == ENOMEM)
+ 		__archive_errx(1, "No memory");
++	/*
++	 * The name is not UTF-8 — the CP949 a Korean Windows tool wrote into a
++	 * ustar, cpio, or ISO 9660 stream, none of which can carry a charset.
++	 * A caller handed NULL drops the entry (the Quick Look listing and the
++	 * extractor both skip an empty name), so the bytes are passed on the
++	 * only way a C string can carry them: one byte per character, each one
++	 * above ASCII written as the UTF-8 encoding of the same Latin-1 code
++	 * point, 0x80..0xFF as a two-byte sequence. src/main/archive-names.mjs
++	 * turns that back into the bytes.
++	 */
++	raw = archive_entry_pathname(entry);
++	if (raw == NULL)
++		return (NULL);
++	length = strlen(raw);
++	text = (char *)malloc(length * 2 + 1);
++	if (text == NULL)
++		return (NULL);
++	out = text;
++	for (in = (const unsigned char *)raw; *in != '\0'; in++) {
++		if (*in < 0x80)
++			*out++ = (char)*in;
++		else {
++			*out++ = (char)(0xc0 | (*in >> 6));
++			*out++ = (char)(0x80 | (*in & 0x3f));
++		}
++	}
++	*out = '\0';
++	/* The entry owns the text; the caller gets a pointer it may keep. */
++	archive_entry_set_pathname_utf8(entry, text);
++	free(text);
++	if (archive_mstring_get_utf8(
++	    entry->archive, &entry->ae_pathname, &p) == 0)
++		return (p);
+ 	return (NULL);
+ }
+ 

@@ -521,6 +521,20 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    it calls `onboarding.complete()`, persists `{ completed: true }` in
    `<userData>/onboarding/state.json`, and the overlay disappears. No account,
    plan, model, source, or embedding question is ever asked before the first index.
+- **Local embedding spec guard** — the built-in local model
+  (`native:Qwen/Qwen3-Embedding-0.6B`) only runs on a capable machine:
+  Apple silicon with a Pro, Max or Ultra chip and at least 32 GB of unified
+  memory, or Windows/Linux with a CUDA GPU (NVIDIA, read with `nvidia-smi`) of
+  at least 8 GB VRAM. `src/shared/local-embedding-spec.ts` holds the rule
+  (`evaluateLocalEmbeddingSpec`) and the translated message
+  (`localSpecMessage`, keys `localSpec.*`); `src/main/hardware-probe.ts` reads
+  the hardware once per launch. Below the spec Settings → AI 모델 → 문서 이해
+  marks the native profile unavailable (`EmbeddingProfile.unavailable`); the main
+  process refuses to plan or apply it. Keyword-only, Dazzi cloud embedding and a
+  user-run local embedding server (`local-server`) are never gated. Raising or
+  lowering the minimum is a change to that one file. Unpackaged builds honor
+  `AUTORAG_QA_HARDWARE` (a JSON `HardwareProfile`) so QA can see the blocked state
+  on a capable machine; a packaged app ignores it.
 
 A relaunch before completion stays on the overlay: `load()` is authoritative.
 The Finder keeps its own size; only the preload
