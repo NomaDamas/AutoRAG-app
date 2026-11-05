@@ -398,11 +398,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   switched off and drawn dashed — a click switches a chip, "폴더 N개 읽기" starts
   the run over the switched-on ones (Enter presses it; with none on it is
   disabled), and a lock line under it; a profile with no folder to offer skips
-  it) → `setup` (one progress bar, the current
-  stage, files and minutes left; macOS prompts per folder as each default folder
-  is read, refused folders are left out, and the run keeps the machine awake) →
-  `ready` (the Dazzi logo, "모두 준비되었어요!", one "시작하기" button; Enter
-  presses it) → `tour` → `signin`. While `setup` runs, the floating logo is a
+  it) → `setup` (Figma 162:1244: "파일을 읽고 있어요", one 540 × 12 progress
+  bar, the current stage with files read on the left and minutes left on the
+  right; macOS prompts per folder as each chosen folder is read, refused folders
+  are left out, and the run keeps the machine awake) → `ready` (Figma 162:1308:
+  the Dazzi logo with a green check badge, "파일을 다 읽었어요", one "시작하기"
+  button at the same height as the folder screen's; Enter presses it) → `tour` → `signin`. While `setup` runs, the floating logo is a
   button: tapping it fades the title and description out, the progress bar glides
   below, and a 16×16 Minesweeper with 40 hidden Dazzi logos in place of mines
   fades in (`first-run/MineGame.tsx`, rules in `first-run/minesweeper.ts`). Left
@@ -410,7 +411,7 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   open number chords; the first click always opens a patch; the clock runs from
   the first open cell and a finished board restarts on the next click (best time
   of the session is shown). If setup finishes mid-game the board stays and the
-  progress bar is replaced by a docked "모두 준비되었어요! / 시작하기" card (Enter
+  progress bar is replaced by a docked "파일을 다 읽었어요 / 시작하기" card (Enter
   presses it). Full Disk Access is never asked here; it is
   asked by `FullDiskAccessDialog` (one state-dependent button) only when Finder
   tag colours, KakaoTalk, or Apple Mail under `~/Library/Mail` is used.

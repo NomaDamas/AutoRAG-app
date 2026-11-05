@@ -782,8 +782,8 @@
       "privacyPc": "파일은 내 PC 밖으로 나가지 않아요"
     },
     "setup": {
-      "title": "Dazzi를 준비하고 있어요",
-      "lead": "컴퓨터를 켜 두기만 하면 알아서 끝나요. 그동안 다른 일을 하셔도 괜찮아요.",
+      "title": "파일을 읽고 있어요",
+      "lead": "{{app}}를 켜 두기만 하면 알아서 끝나요.",
       "stage": {
         "idle": "시작하는 중",
         "scanning": "폴더를 살펴보는 중",
@@ -793,7 +793,7 @@
         "ready": "준비 완료",
         "failed": "멈춤"
       },
-      "files": "파일 {{processed}} / {{total}}개",
+      "files": "{{processed}} / {{total}}개",
       "remaining": "약 {{minutes}}분 남음",
       "failedTitle": "준비를 잠시 멈췄어요",
       "failedLead": "다시 시도하면 멈춘 곳부터 이어서 해요.",
@@ -812,8 +812,8 @@
       "again": "다시 하기"
     },
     "ready": {
-      "title": "모두 준비되었어요!",
-      "lead": "파일 {{count}}개를 찾을 준비가 끝났어요.",
+      "title": "파일을 다 읽었어요",
+      "lead": "이제 파일 {{count}}개 안에서 무엇이든 찾아 드릴게요.",
       "leadNone": "이제 Dazzi로 파일을 찾아볼까요?",
       "start": "시작하기"
     },

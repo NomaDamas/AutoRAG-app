@@ -782,8 +782,8 @@
       "privacyPc": "Your files never leave your PC"
     },
     "setup": {
-      "title": "Getting Dazzi ready",
-      "lead": "Just keep your computer on and it finishes by itself. Feel free to do other things meanwhile.",
+      "title": "Going through your files",
+      "lead": "Just keep {{app}} open and it finishes on its own.",
       "stage": {
         "idle": "Starting",
         "scanning": "Looking through your folders",
@@ -812,8 +812,8 @@
       "again": "Play again"
     },
     "ready": {
-      "title": "You're all set!",
-      "lead": "{{count}} files are ready to be found.",
+      "title": "Done reading your files",
+      "lead": "Now you can find anything in your {{count}} files.",
       "leadNone": "Ready to find your files with Dazzi?",
       "start": "Get started"
     },
