@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { unzipSync } from "fflate";
@@ -75,6 +75,28 @@ describe("writeZip", () => {
 		const raw = Object.values(EXPECTED).reduce((sum, body) => sum + body.length, 0);
 		expect((await readFile(archive)).length).toBeLessThan(raw);
 		if (hasBin("unzip")) unzipTest(archive);
+	});
+
+	it("streams files past the in-memory limit, compressible and not, across many chunks", async () => {
+		const files = { "big/": null, "big/text.txt": TEXT, "big/noise.bin": randomBytes(300 * 1024), "big/small.txt": Buffer.from("small") };
+		const archive = join(root, "streamed.zip");
+		// 16 KiB threshold and chunks: every file past it is read in pieces, never whole.
+		await writeZip(archive, await members(files), { streamFileBytes: 16 * 1024, chunkBytes: 16 * 1024 });
+		expect(await readBack(archive)).toEqual(Object.fromEntries(Object.entries(files).map(([name, body]) => [name, body ?? Buffer.alloc(0)])));
+		// The noise is stored, not deflated into something larger.
+		expect((await readFile(archive)).length).toBeLessThan(TEXT.length + 300 * 1024);
+		if (hasBin("unzip")) unzipTest(archive);
+	});
+
+	it.skipIf(!hasBin("unzip"))("writes a single file larger than 2 GiB", { timeout: 300_000 }, async () => {
+		const source = join(root, "huge.bin");
+		// Sparse: 2 GiB + 1 of zeros costs no disk, and is past what one read can return.
+		await writeFile(source, "");
+		await truncate(source, 2 * 1024 ** 3 + 1);
+		const archive = join(root, "huge.zip");
+		await writeZip(archive, [{ source, entry: "huge.bin", directory: false }]);
+		unzipTest(archive);
+		expect(execFileSync("zipinfo", ["-l", archive]).toString()).toMatch(/\b2147483649\b/);
 	});
 
 	it("writes Zip64 sizes and offsets that every reader resolves", async () => {

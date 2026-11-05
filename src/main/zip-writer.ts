@@ -11,17 +11,21 @@
  * end record and locator once the count, the directory size, or its offset
  * overflow. Small archives stay classic zips, byte-compatible with every reader.
  *
- * Each file is read, CRC'd, and deflated (zlib, off the main thread) before it
- * is written, so its local header already carries the final sizes: no data
- * descriptors, and peak memory tracks the largest file. A file deflate cannot
- * shrink is stored. A failed write removes the partial archive.
+ * A file up to `STREAM_FILE_BYTES` is read, CRC'd, and deflated (zlib, off the
+ * main thread) before it is written, so its local header already carries the
+ * final sizes. A larger file is streamed in chunks (`archive-stream.ts`) behind a
+ * header with a Zip64 field, and the header is patched in place once its CRC and
+ * sizes are known: no data descriptors either way, and memory stays bounded
+ * whatever the file's size. A file deflate cannot shrink is stored. A failed
+ * write removes the partial archive.
  */
 
 import { promisify } from "node:util";
 import { crc32, deflateRaw } from "node:zlib";
+import { CHUNK_BYTES, DEFLATE_LEVEL, streamFile } from "./archive-stream";
 import { rawFs } from "./raw-fs";
 
-const { open, readFile, rm } = rawFs.promises;
+const { open, rm } = rawFs.promises;
 const deflate = promisify(deflateRaw);
 
 /** One file or directory to write, with its archive-relative "/"-separated path. */
@@ -39,10 +43,14 @@ export interface ZipOptions {
 	 * writing gigabytes.
 	 */
 	readonly zip64Threshold?: number;
+	/** Files larger than this are streamed in chunks instead of read whole. */
+	readonly streamFileBytes?: number;
+	/** Read size while streaming. */
+	readonly chunkBytes?: number;
 }
 
-/** zlib's tuned default balance of size and time. */
-const DEFLATE_LEVEL = 6;
+/** 64 MiB: a whole read and its deflated copy stay small, and nearly every file takes the fast path. */
+const STREAM_FILE_BYTES = 64 * 1024 ** 2;
 const MAX_32 = 0xffffffff;
 const MAX_16 = 0xffff;
 const LOCAL_HEADER = 0x04034b50;
@@ -90,9 +98,34 @@ function zip64Extra(values: readonly number[]): Buffer {
 	return extra;
 }
 
+/**
+ * A local file header with its name and extra field. `forceZip64` gives it a
+ * Zip64 field whatever the sizes, so a streamed entry's header, written before
+ * its sizes are known, keeps its length when it is patched.
+ */
+function localHeader(record: CentralRecord, stamp: { readonly time: number; readonly date: number }, threshold: number, forceZip64: boolean): Buffer {
+	// The local Zip64 field, when present, must hold both sizes.
+	const local64 = forceZip64 || record.size >= threshold || record.compressedSize >= threshold;
+	const extra = local64 ? zip64Extra([record.size, record.compressedSize]) : Buffer.alloc(0);
+	const header = Buffer.alloc(30);
+	header.writeUInt32LE(LOCAL_HEADER, 0);
+	header.writeUInt16LE(local64 ? VERSION_ZIP64 : VERSION_DEFLATE, 4);
+	header.writeUInt16LE(FLAG_UTF8, 6);
+	header.writeUInt16LE(record.method, 8);
+	header.writeUInt16LE(stamp.time, 10);
+	header.writeUInt16LE(stamp.date, 12);
+	header.writeUInt32LE(record.crc, 14);
+	header.writeUInt32LE(local64 ? MAX_32 : record.compressedSize, 18);
+	header.writeUInt32LE(local64 ? MAX_32 : record.size, 22);
+	header.writeUInt16LE(record.name.length, 26);
+	header.writeUInt16LE(extra.length, 28);
+	return Buffer.concat([header, record.name, extra]);
+}
+
 /** Write `members` as a zip at `target`, in member order. */
 export async function writeZip(target: string, members: readonly ZipMember[], options: ZipOptions = {}): Promise<void> {
 	const threshold = options.zip64Threshold ?? MAX_32;
+	const streamFileBytes = options.streamFileBytes ?? STREAM_FILE_BYTES;
 	const stamp = dosDateTime(new Date());
 	const handle = await open(target, "w");
 	let offset = 0;
@@ -104,43 +137,56 @@ export async function writeZip(target: string, members: readonly ZipMember[], op
 		const records: CentralRecord[] = [];
 		for (const member of members) {
 			const name = Buffer.from(member.entry, "utf8");
-			const content = member.directory ? Buffer.alloc(0) : await readFile(member.source);
-			let method = METHOD_STORE;
-			let body: Uint8Array = content;
-			if (content.length > 0) {
-				const packed = await deflate(content, { level: DEFLATE_LEVEL });
-				if (packed.length < content.length) {
-					method = METHOD_DEFLATE;
-					body = packed;
-				}
+			if (member.directory) {
+				const record: CentralRecord = { name, method: METHOD_STORE, crc: 0, compressedSize: 0, size: 0, offset, directory: true };
+				await write(localHeader(record, stamp, threshold, false));
+				records.push(record);
+				continue;
 			}
-			const record: CentralRecord = {
-				name,
-				method,
-				crc: content.length > 0 ? crc32(content) : 0,
-				compressedSize: body.length,
-				size: content.length,
-				offset,
-				directory: member.directory,
-			};
-			// The local Zip64 field, when present, must hold both sizes.
-			const local64 = record.size >= threshold || record.compressedSize >= threshold;
-			const extra = local64 ? zip64Extra([record.size, record.compressedSize]) : Buffer.alloc(0);
-			const header = Buffer.alloc(30);
-			header.writeUInt32LE(LOCAL_HEADER, 0);
-			header.writeUInt16LE(local64 ? VERSION_ZIP64 : VERSION_DEFLATE, 4);
-			header.writeUInt16LE(FLAG_UTF8, 6);
-			header.writeUInt16LE(method, 8);
-			header.writeUInt16LE(stamp.time, 10);
-			header.writeUInt16LE(stamp.date, 12);
-			header.writeUInt32LE(record.crc, 14);
-			header.writeUInt32LE(local64 ? MAX_32 : record.compressedSize, 18);
-			header.writeUInt32LE(local64 ? MAX_32 : record.size, 22);
-			header.writeUInt16LE(name.length, 26);
-			header.writeUInt16LE(extra.length, 28);
-			await write(Buffer.concat([header, name, extra]));
-			if (body.length > 0) await write(body);
-			records.push(record);
+			const source = await open(member.source, "r");
+			try {
+				const { size } = await source.stat();
+				if (size > streamFileBytes) {
+					const placeholder: CentralRecord = { name, method: METHOD_STORE, crc: 0, compressedSize: 0, size: 0, offset, directory: false };
+					await write(localHeader(placeholder, stamp, threshold, true));
+					const streamed = await streamFile(source, size, write, options.chunkBytes ?? CHUNK_BYTES);
+					const record: CentralRecord = {
+						...placeholder,
+						method: streamed.method === "deflate" ? METHOD_DEFLATE : METHOD_STORE,
+						crc: streamed.crc,
+						compressedSize: streamed.packedSize,
+						size: streamed.size,
+					};
+					const patched = localHeader(record, stamp, threshold, true);
+					await handle.write(patched, 0, patched.length, record.offset);
+					records.push(record);
+					continue;
+				}
+				const content = await source.readFile();
+				let method = METHOD_STORE;
+				let body: Uint8Array = content;
+				if (content.length > 0) {
+					const packed = await deflate(content, { level: DEFLATE_LEVEL });
+					if (packed.length < content.length) {
+						method = METHOD_DEFLATE;
+						body = packed;
+					}
+				}
+				const record: CentralRecord = {
+					name,
+					method,
+					crc: content.length > 0 ? crc32(content) : 0,
+					compressedSize: body.length,
+					size: content.length,
+					offset,
+					directory: false,
+				};
+				await write(localHeader(record, stamp, threshold, false));
+				if (body.length > 0) await write(body);
+				records.push(record);
+			} finally {
+				await source.close();
+			}
 		}
 
 		const directoryOffset = offset;
