@@ -10,8 +10,9 @@
  * - LZMA, compressed in a worker thread (the encoder is synchronous WebAssembly).
  * - Copy, when a sample shows the data is already compressed (jpg, mp4, zip…) or
  *   LZMA would not shrink it. Skipping the encoder saves most of the time.
- * - Deflate (`node:zlib`) for single files over `LZMA_MAX_FILE_BYTES`, which would
- *   not fit the wasm encoder's 32-bit memory.
+ * - Deflate or Copy for a single file over `LZMA_MAX_FILE_BYTES`, which would not
+ *   fit the wasm encoder's 32-bit memory. It is streamed in chunks
+ *   (`archive-stream.ts`), so a file of any size passes with bounded memory.
  *
  * Layout (7-Zip's `7zFormat.txt`): a 32-byte signature header, the packed
  * streams, then one plain header. The signature header is written last, once
@@ -24,14 +25,12 @@
  */
 
 import { Worker } from "node:worker_threads";
-import { promisify } from "node:util";
-import { crc32, deflateRaw } from "node:zlib";
+import { crc32 } from "node:zlib";
 import { t } from "../shared/i18n/core";
+import { CHUNK_BYTES, streamFile } from "./archive-stream";
 import { rawFs } from "./raw-fs";
 
-const { lstat, open, readFile, rm } = rawFs.promises;
-
-const deflate = promisify(deflateRaw);
+const { lstat, open, rm } = rawFs.promises;
 
 /** One file or directory to write, with its archive-relative "/"-separated path. */
 export interface SevenZipMember {
@@ -45,8 +44,10 @@ export interface SevenZipMember {
 export interface SevenZipOptions {
 	/** Bytes of file content gathered into one solid block before it is compressed. */
 	readonly solidBlockBytes?: number;
-	/** A single file larger than this is deflated on its own instead of LZMA-compressed. */
+	/** A single file larger than this is streamed into its own Deflate or Copy folder instead of LZMA-compressed. */
 	readonly lzmaMaxFileBytes?: number;
+	/** Read size while streaming such a file. */
+	readonly chunkBytes?: number;
 }
 
 /**
@@ -67,7 +68,6 @@ const INCOMPRESSIBLE_RATIO = 0.97;
 /** LZMA-Alone prefix: 5 property bytes + 8-byte uncompressed size; 7z stores only the properties. */
 const LZMA_PROPS_BYTES = 5;
 const LZMA_ALONE_HEADER_BYTES = 13;
-const DEFLATE_LEVEL = 6;
 
 const SIGNATURE = Buffer.from([0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c, 0x00, 0x04]);
 const SIGNATURE_HEADER_SIZE = 32;
@@ -214,42 +214,34 @@ export async function writeSevenZip(target: string, members: readonly SevenZipMe
 		let pendingBytes = 0;
 		let packedBytes = 0;
 
-		/** Pack `files` as one folder and append it to the output. */
-		const writeFolder = async (files: readonly Buffer[], method: "lzma" | "deflate"): Promise<void> => {
+		/** Pack `files` as one LZMA (or Copy) folder and append it to the output. */
+		const writeFolder = async (files: readonly Buffer[]): Promise<void> => {
 			const data = files.length === 1 ? (files[0] as Buffer) : Buffer.concat(files);
 			let coder = COPY_CODER;
 			let body: Uint8Array = data;
-			if (method === "deflate") {
-				const packed = await deflate(data, { level: DEFLATE_LEVEL });
-				if (packed.length < data.length) {
-					coder = DEFLATE_CODER;
-					body = packed;
-				}
-			} else {
-				// Judge a head/middle/tail sample at the fast level first: already
-				// compressed data (jpg, mp4, zip) would take seconds and shrink nothing.
-				let compressible = true;
-				if (data.length >= PROBE_SLICE_BYTES) {
-					const middle = Math.max(0, (data.length - PROBE_SLICE_BYTES) >> 1);
-					const sample =
-						data.length <= 3 * PROBE_SLICE_BYTES
-							? data
-							: Buffer.concat([
-									data.subarray(0, PROBE_SLICE_BYTES),
-									data.subarray(middle, middle + PROBE_SLICE_BYTES),
-									data.subarray(data.length - PROBE_SLICE_BYTES),
-								]);
-					const worker = (encoder.worker ??= new LzmaWorker());
-					const probe = await worker.compress(sample, PROBE_LEVEL);
-					compressible = probe.length - LZMA_ALONE_HEADER_BYTES < sample.length * INCOMPRESSIBLE_RATIO;
-				}
-				if (compressible) {
-					const worker = (encoder.worker ??= new LzmaWorker());
-					const packed = await worker.compress(data, LZMA_LEVEL);
-					if (packed.length - LZMA_ALONE_HEADER_BYTES < data.length) {
-						coder = Buffer.concat([LZMA_CODER_PREFIX, packed.subarray(0, LZMA_PROPS_BYTES)]);
-						body = packed.subarray(LZMA_ALONE_HEADER_BYTES);
-					}
+			// Judge a head/middle/tail sample at the fast level first: already
+			// compressed data (jpg, mp4, zip) would take seconds and shrink nothing.
+			let compressible = true;
+			if (data.length >= PROBE_SLICE_BYTES) {
+				const middle = Math.max(0, (data.length - PROBE_SLICE_BYTES) >> 1);
+				const sample =
+					data.length <= 3 * PROBE_SLICE_BYTES
+						? data
+						: Buffer.concat([
+								data.subarray(0, PROBE_SLICE_BYTES),
+								data.subarray(middle, middle + PROBE_SLICE_BYTES),
+								data.subarray(data.length - PROBE_SLICE_BYTES),
+							]);
+				const worker = (encoder.worker ??= new LzmaWorker());
+				const probe = await worker.compress(sample, PROBE_LEVEL);
+				compressible = probe.length - LZMA_ALONE_HEADER_BYTES < sample.length * INCOMPRESSIBLE_RATIO;
+			}
+			if (compressible) {
+				const worker = (encoder.worker ??= new LzmaWorker());
+				const packed = await worker.compress(data, LZMA_LEVEL);
+				if (packed.length - LZMA_ALONE_HEADER_BYTES < data.length) {
+					coder = Buffer.concat([LZMA_CODER_PREFIX, packed.subarray(0, LZMA_PROPS_BYTES)]);
+					body = packed.subarray(LZMA_ALONE_HEADER_BYTES);
 				}
 			}
 			await handle.write(body);
@@ -262,7 +254,7 @@ export async function writeSevenZip(target: string, members: readonly SevenZipMe
 			const files = pending;
 			pending = [];
 			pendingBytes = 0;
-			await writeFolder(files, "lzma");
+			await writeFolder(files);
 		};
 
 		for (const [index, member] of members.entries()) {
@@ -271,15 +263,42 @@ export async function writeSevenZip(target: string, members: readonly SevenZipMe
 			// Windows attribute bits, plus 7-Zip's Unix extension: type and permissions in the high 16 bits.
 			const unixMode = member.directory ? 0o040000 | (stats.mode & 0o777) | 0o700 : 0o100000 | (stats.mode & 0o777);
 			attributes.writeUInt32LE(((unixMode << 16) | UNIX_EXTENSION | (member.directory ? WIN_DIRECTORY : WIN_ARCHIVE)) >>> 0, 4 * index);
-			const content = member.directory ? Buffer.alloc(0) : await readFile(member.source);
-			emptyStream.push(content.length === 0);
-			if (content.length === 0) continue;
-			if (content.length > maxLzmaFile) {
-				// Folders are read back in order, so the pending block goes out first.
-				await flush();
-				await writeFolder([content], "deflate");
+			if (member.directory) {
+				emptyStream.push(true);
 				continue;
 			}
+			const source = await open(member.source, "r");
+			let content: Buffer;
+			try {
+				const { size } = await source.stat();
+				if (size > maxLzmaFile) {
+					// Folders are read back in order, so the pending block goes out first.
+					await flush();
+					const streamed = await streamFile(
+						source,
+						size,
+						async (data) => {
+							await handle.write(data);
+						},
+						options.chunkBytes ?? CHUNK_BYTES,
+					);
+					emptyStream.push(streamed.size === 0);
+					if (streamed.size === 0) continue;
+					packedBytes += streamed.packedSize;
+					folders.push({
+						coder: streamed.method === "deflate" ? DEFLATE_CODER : COPY_CODER,
+						packedSize: streamed.packedSize,
+						sizes: [streamed.size],
+						crcs: [streamed.crc],
+					});
+					continue;
+				}
+				content = await source.readFile();
+			} finally {
+				await source.close();
+			}
+			emptyStream.push(content.length === 0);
+			if (content.length === 0) continue;
 			if (pendingBytes > 0 && pendingBytes + content.length > blockBytes) await flush();
 			pending.push(content);
 			pendingBytes += content.length;
