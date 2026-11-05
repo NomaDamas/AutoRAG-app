@@ -23,11 +23,13 @@
  * of it ships for Node; this one needs no external binary.
  */
 
-import { lstat, open, readFile, rm } from "node:fs/promises";
 import { Worker } from "node:worker_threads";
 import { promisify } from "node:util";
 import { crc32, deflateRaw } from "node:zlib";
 import { t } from "../shared/i18n/core";
+import { rawFs } from "./raw-fs";
+
+const { lstat, open, readFile, rm } = rawFs.promises;
 
 const deflate = promisify(deflateRaw);
 

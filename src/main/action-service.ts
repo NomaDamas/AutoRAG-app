@@ -16,7 +16,6 @@
  */
 
 import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { finished } from "node:stream/promises";
@@ -39,6 +38,7 @@ import { t } from "../shared/i18n/core";
 import { ArchiveError } from "./archive-guard.mjs";
 import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
 import { extractGzipInto, extractIntoFolder, flattenWrapper } from "./archive-extract";
+import { rawFs } from "./raw-fs";
 import {
 	type ActionAnchor,
 	type ActionCapabilities,
@@ -442,7 +442,7 @@ async function addArchiveMembers(members: ArchiveMember[], root: string, isDirec
 	}
 	members.push({ source: root, entry: `${name}/`, directory: true });
 	const walk = async (dir: string, prefix: string): Promise<void> => {
-		const dirents = await readdir(dir, { withFileTypes: true });
+		const dirents = await rawFs.promises.readdir(dir, { withFileTypes: true });
 		dirents.sort((a, b) => a.name.localeCompare(b.name));
 		for (const dirent of dirents) {
 			if (dirent.isSymbolicLink()) continue;
@@ -465,7 +465,7 @@ async function addArchiveMembers(members: ArchiveMember[], root: string, isDirec
  * than the whole tree.
  */
 async function writeZip(target: string, members: readonly ArchiveMember[]): Promise<void> {
-	const output = createWriteStream(target);
+	const output = rawFs.createWriteStream(target);
 	const archive = new Zip((error, chunk, final) => {
 		if (error !== null) {
 			output.destroy(error);
@@ -484,7 +484,7 @@ async function writeZip(target: string, members: readonly ArchiveMember[]): Prom
 		}
 		const file = new ZipDeflate(member.entry, { level: ZIP_LEVEL });
 		archive.add(file);
-		file.push(new Uint8Array(await readFile(member.source)), true);
+		file.push(new Uint8Array(await rawFs.promises.readFile(member.source)), true);
 	}
 	archive.end();
 	await drained;
@@ -1370,7 +1370,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					const target = await uniqueChild(dirname(first), `${stem}.${format}`);
 					const members: ArchiveMember[] = [];
 					for (const path of paths) {
-						const stat = await lstat(path);
+						const stat = await rawFs.promises.lstat(path);
 						await addArchiveMembers(members, path, stat.isDirectory());
 					}
 					await (format === "7z" ? writeSevenZip(target, members) : writeZip(target, members));
