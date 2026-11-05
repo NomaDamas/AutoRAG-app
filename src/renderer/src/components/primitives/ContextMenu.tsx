@@ -68,7 +68,13 @@ function TagSwatchRow({ row, onSelect }: { readonly row: FinderMenuTagRow; reado
 }
 
 /** What a menu choice carries beyond its action: a new-file format, a service, or a Finder tag name. */
-export type MenuSelect = (action: FinderMenuAction, format: NewFileFormatId | null, serviceId: string | null, tagName: string | null) => void;
+export type MenuSelect = (
+	action: FinderMenuAction,
+	format: NewFileFormatId | null,
+	serviceId: string | null,
+	tagName: string | null,
+	magicActionId?: string | null,
+) => void;
 
 /** Shared row styling for a menu item and a submenu parent. */
 const ITEM_CLASS =
@@ -173,9 +179,10 @@ export function ContextMenu({
 				}
 				return (
 					<button
-						key={entry.action}
+						key={entry.magicActionId !== undefined ? `magic-${entry.magicActionId}` : entry.action}
 						type="button"
 						role="menuitem"
+						data-magic-action-id={entry.magicActionId}
 						className={cn(
 							`menu__item${entry.tone === "danger" ? " menu__item--danger" : ""}${
 								entry.tone === "warning" ? " menu__item--warning" : ""
@@ -185,7 +192,7 @@ export function ContextMenu({
 							entry.tone === "warning" && "text-error-orange-text",
 						)}
 						disabled={entry.disabled}
-						onClick={() => onSelect(entry.action, null, null, null)}
+						onClick={() => onSelect(entry.action, null, null, null, entry.magicActionId ?? null)}
 					>
 						<span className="menu__label flex-1">{entry.label}</span>
 						{/* A visual hint only: the item's accessible name stays "Rename", not "Rename⌘R". */}

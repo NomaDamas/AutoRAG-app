@@ -1,73 +1,45 @@
 /**
- * The mark of an AI service: the provider's own logo (nominative use — the
- * icon names the service the connection talks to). Marks come from
- * `simple-icons` (CC0), matched on the provider id; a provider it does not
- * ship falls back to a neutral lucide glyph for its kind (a server on this
- * computer, a custom gateway, or a hosted service).
+ * Icon for an AI provider: its brand logo (nominative use: the mark names the service the row connects to),
+ * or the first-letter `AppIcon` when the provider has none. The tile is the same `settings-app-icon` box in
+ * both cases, so a row does not change size when a provider gains or loses a logo. The logos are
+ * monochrome and drawn in `currentColor`, so they follow the theme; the Dazzi plan keeps its own colored
+ * mark. See `providerLogos.ts` for the mapping and THIRD_PARTY_NOTICES.md for the logo sources.
  */
 
 import type { ReactElement } from "react";
-import { Bot, Globe, Server } from "lucide-react";
-import {
-	siAnthropic,
-	siDeepseek,
-	siGithubcopilot,
-	siGooglegemini,
-	siHuggingface,
-	siMinimax,
-	siMistralai,
-	siMoonshotai,
-	siNvidia,
-	siOllama,
-	siOpenrouter,
-	siPerplexity,
-	siQwen,
-	siVercel,
-	siX,
-	type SimpleIcon,
-} from "simple-icons";
+import { AUTORAG_PROVIDER_ID } from "../../../../shared/account-contract";
 import type { ProviderSummary } from "../../../../shared/settings-contract";
-import { brandFill } from "./SourceIcon";
+import dazziLogo from "../../assets/dazzi-logo.png";
+import { providerLogoFor } from "./providerLogos";
+import { AppIcon } from "./SettingsKit";
 
-/** Provider-id prefixes and the logo each names; the first match wins. */
-const BRAND_BY_PREFIX: readonly (readonly [string, SimpleIcon])[] = [
-	["anthropic", siAnthropic],
-	["github-copilot", siGithubcopilot],
-	["google", siGooglegemini],
-	["gemini", siGooglegemini],
-	["xai", siX],
-	["huggingface", siHuggingface],
-	["mistral", siMistralai],
-	["deepseek", siDeepseek],
-	["openrouter", siOpenrouter],
-	["vercel", siVercel],
-	["nvidia", siNvidia],
-	["perplexity", siPerplexity],
-	["minimax", siMinimax],
-	["moonshot", siMoonshotai],
-	["kimi", siMoonshotai],
-	["qwen", siQwen],
-	["ollama", siOllama],
-];
+export type ProviderIdentity = Pick<ProviderSummary, "id" | "kind" | "name">;
 
-function brandFor(provider: ProviderSummary): SimpleIcon | undefined {
-	const id = provider.id.toLowerCase();
-	const hit = BRAND_BY_PREFIX.find(([prefix]) => id.startsWith(prefix));
-	if (hit !== undefined) return hit[1];
-	// A server on this computer is most often Ollama, on its default port.
-	if (provider.kind === "local" && /ollama|:11434\b/iu.test(`${provider.name} ${provider.baseUrl ?? ""}`)) return siOllama;
-	return undefined;
+/** The plan's row in the connect menu has a label but no `ProviderSummary` (it is filtered out of the lists). */
+export const DAZZI_PLAN_PROVIDER: ProviderIdentity = { id: AUTORAG_PROVIDER_ID, kind: "runtime", name: "Dazzi" };
+
+/** The logo to draw inside a tile `size` px wide, or `null` when the provider has none. Hidden from assistive tech: the name is always beside it. */
+export function providerMark(provider: ProviderIdentity, size: number): ReactElement | null {
+	if (provider.kind === "runtime" && provider.id === AUTORAG_PROVIDER_ID) {
+		return <img className="settings-app-icon-logo" src={dazziLogo} width={size} height={size} alt="" draggable={false} />;
+	}
+	const paths = providerLogoFor(provider);
+	if (paths === null) return null;
+	return (
+		<svg className="settings-app-icon-logo" viewBox="0 0 24 24" width={size} height={size} fill="currentColor" fillRule="evenodd" aria-hidden="true" focusable="false">
+			{paths.map((path) => (
+				<path key={path.d} d={path.d} {...(path.fillOpacity === undefined ? {} : { fillOpacity: path.fillOpacity })} />
+			))}
+		</svg>
+	);
 }
 
-export function ProviderIcon({ provider, size = 20 }: { readonly provider: ProviderSummary; readonly size?: number }): ReactElement {
-	const brand = brandFor(provider);
-	if (brand !== undefined) {
-		return (
-			<svg viewBox="0 0 24 24" width={size} height={size} role="img" aria-label={provider.name} focusable="false">
-				<path d={brand.path} fill={brandFill(brand.hex)} />
-			</svg>
-		);
-	}
-	const Glyph = provider.kind === "local" ? Server : provider.kind === "custom" ? Globe : Bot;
-	return <Glyph size={size} aria-label={provider.name} role="img" focusable="false" />;
+export function ProviderIcon({ provider, small = false }: { readonly provider: ProviderIdentity; readonly small?: boolean }): ReactElement {
+	const mark = providerMark(provider, small ? 12 : 18);
+	if (mark === null) return <AppIcon small={small} label={provider.name} />;
+	return (
+		<span className={`settings-app-icon${small ? " is-sm" : ""}`} aria-hidden="true">
+			{mark}
+		</span>
+	);
 }

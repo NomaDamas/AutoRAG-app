@@ -3,9 +3,12 @@ import { cn } from "../../lib/cn";
 
 const FILL_BY_TONE = {
 	run: "bg-accent",
+	queued: "bg-ink-faint opacity-50",
 	ok: "bg-(--ok-dot)",
 	error: "bg-(--error-orange-dot)",
 } as const;
+
+export type ProgressBarTone = keyof typeof FILL_BY_TONE;
 
 /**
  * A 4px determinate bar, or a shimmering full-width one when `percent` is
@@ -18,9 +21,10 @@ export function ProgressBar({
 	label,
 }: {
 	readonly percent: number | null;
-	readonly tone: keyof typeof FILL_BY_TONE;
+	readonly tone: ProgressBarTone;
 	readonly label: string;
 }): ReactElement {
+	const effectivePercent = tone === "queued" ? 18 : percent;
 	return (
 		<div
 			className="progress h-4 w-full overflow-hidden rounded-full bg-hover-strong"
@@ -28,14 +32,14 @@ export function ProgressBar({
 			aria-label={label}
 			aria-valuemin={0}
 			aria-valuemax={100}
-			aria-valuenow={percent ?? undefined}
+			aria-valuenow={tone === "queued" ? 0 : (percent ?? undefined)}
 		>
-			{percent === null ? (
+			{effectivePercent === null ? (
 				<div className="progress__fill h-full w-full bg-[linear-gradient(90deg,transparent,var(--accent),transparent)] bg-[length:200%_100%] animate-shimmer" />
 			) : (
 				<div
 					className={cn("progress__fill h-full rounded-full transition-[width] duration-(--dur-step) ease-[ease]", FILL_BY_TONE[tone])}
-					style={{ width: `${percent}%` }}
+					style={{ width: `${effectivePercent}%` }}
 				/>
 			)}
 		</div>

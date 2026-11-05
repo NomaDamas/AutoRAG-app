@@ -6,6 +6,7 @@ import type { AppCustomizerBridge } from "./app-customizer-contract";
 import type { AutoRagBridge } from "./bridge";
 import type { ConversionBridge } from "./conversion-contract";
 import type { ErrorFixBridge } from "./error-fix-contract";
+import type { MagicActionBridge } from "./magic-actions-contract";
 import type { FsBridge } from "./fs-contract";
 import type { IndexActivityBridge } from "./index-activity-contract";
 import type { InteractionBridge } from "./interaction-contract";
@@ -19,6 +20,8 @@ import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
 import type { RemoteAccessBridge } from "./remote-contract";
+import type { VoiceBridge } from "./voice-contract";
+import type { QuickSearchSettingsBridge } from "./quick-search-contract";
 import type { AppUpdateBridge } from "./update-contract";
 import type { AutomationBridge } from "./automation-contract";
 
@@ -34,12 +37,14 @@ declare global {
 			readonly automations: AutomationBridge;
 			readonly conversion: ConversionBridge;
 			readonly errorFix: ErrorFixBridge;
+			readonly magicAction: MagicActionBridge;
 			readonly indexActivity: IndexActivityBridge;
 			readonly interaction: InteractionBridge;
 			readonly indexProblem: IndexProblemBridge;
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;
 			readonly onboarding: OnboardingBridge;
+			readonly voice: VoiceBridge;
 			readonly osRequests: OsRequestBridge;
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;
@@ -47,8 +52,11 @@ declare global {
 			readonly settings: SettingsBridge;
 			readonly services: ServicesBridge;
 			readonly remote: RemoteAccessBridge;
+			/** The launcher's global shortcut, for Settings; absent in a remote browser session. */
+			readonly quickSearch?: QuickSearchSettingsBridge;
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */
 			readonly pathForFile: (file: File) => string;
 		};
+		readonly autoragIsRemote?: boolean;
 	}
 }

@@ -13,12 +13,12 @@ import { isPaidPlanId, planCovers } from "../../../shared/account-contract";
 import type {
 	EmbedMode,
 	FolderScan,
-	IndexingPhase,
 	OnboardingStepId,
 	PlanId,
 	SourceFacts,
 	SourceId,
 } from "../../../shared/onboarding-contract";
+import { indexStagesFor, type IndexStageId } from "../../../shared/index-progress-contract";
 import type { LocalSpecVerdict } from "../../../shared/local-embedding-spec";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
 import { datasourceSupported } from "../../../shared/messenger-platform";
@@ -381,17 +381,11 @@ export function bySourceOrder(a: { readonly id: SourceId }, b: { readonly id: So
 }
 
 /**
- * The indexing phase strip for a run. The embedding phase only exists when
- * something is embedded, so the keyword-only path goes straight from reading
- * documents to finalizing.
+ * The stage strip for a run: discover, parse, embed, finalize. When nothing is embedded (keyword-only) MinSync still
+ * runs, so its stage stays in third place under the name of the keyword index.
  */
-export function indexingPhases(embed: EmbedMode): readonly IndexingPhase[] {
-	return embed === "none" ? ["parsed", "finalizing"] : ["parsed", "minsync", "finalizing"];
-}
-
-/** Phase → position in that run's strip. */
-export function phaseIndex(embed: EmbedMode, phase: IndexingPhase): number {
-	return Math.max(0, indexingPhases(embed).indexOf(phase));
+export function indexingStages(embed: EmbedMode): readonly IndexStageId[] {
+	return indexStagesFor(embed !== "none");
 }
 
 export type TipArt =

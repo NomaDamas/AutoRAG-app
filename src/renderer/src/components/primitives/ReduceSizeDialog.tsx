@@ -16,12 +16,14 @@ export function ReduceSizeDialog({
 	onChangeReplaceOriginal,
 	onStart,
 	onCancel,
+	onMinimize,
 }: {
 	readonly state: ReduceSizeDialogState;
 	readonly onChangeLevel: (level: ReductionLevel) => void;
 	readonly onChangeReplaceOriginal: (replaceOriginal: boolean) => void;
 	readonly onStart: () => void;
 	readonly onCancel: () => void;
+	readonly onMinimize?: (() => void) | undefined;
 }): ReactElement {
 	const { t } = useTranslation();
 	const sizeText = state.size !== null && state.size > 0 ? formatByteSize(state.size) : null;
@@ -32,7 +34,10 @@ export function ReduceSizeDialog({
 			className="fixed inset-0 z-80 flex items-center justify-center bg-black/30"
 			role="presentation"
 			onMouseDown={(event) => {
-				if (event.target === event.currentTarget && !state.working) onCancel();
+				if (event.target === event.currentTarget) {
+					if (!state.working) onCancel();
+					else onMinimize?.();
+				}
 			}}
 		>
 			<div
@@ -151,7 +156,19 @@ export function ReduceSizeDialog({
 					<button type="button" className="linear-btn" onClick={onCancel}>
 						{t("common.cancel")}
 					</button>
-					{state.working ? null : (
+					{state.working ? (
+						onMinimize === undefined ? null : (
+							<button
+								type="button"
+								data-action="minimize-reduce"
+								autoFocus
+								className="inline-flex h-[30px] items-center justify-center rounded-6 border border-accent bg-accent px-12 text-[12.5px] font-medium text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+								onClick={onMinimize}
+							>
+								{t("sidebarActivity.minimize")}
+							</button>
+						)
+					) : (
 						<button
 							type="button"
 							data-action="confirm-reduce"

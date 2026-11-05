@@ -1,18 +1,19 @@
 import { Eject, PanelLeft } from "lucide-react";
 import type { DragEvent, ReactElement, RefObject } from "react";
 import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import type { FsLocationIcon } from "../../../shared/fs-contract";
 import { TAGS_GROUP_LABEL, type NavGroup, type NavItem } from "../data/places";
 import { TagDotMark } from "./primitives/TagDot";
 import { cn } from "../lib/cn";
 import { formatShortcut, hostPlatform } from "../lib/shortcuts";
+import { useFavoritesDrop, type FavoritesDropTarget } from "../hooks/useFavoritesDrop";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { GearIcon, EyeIcon, UsageIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
-import { SidebarIndexActivity } from "./SidebarIndexActivity";
-import { SidebarErrorFixActivity } from "./SidebarErrorFixActivity";
+import { SidebarActivityQueue } from "./SidebarActivityQueue";
 import { SidebarSearch, type SearchMode } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button): 28px rows, 12px labels. */
@@ -28,6 +29,29 @@ const HEAD_BUTTON_CLASS = cn(
 /** The 20px eject affordance on a mounted volume's row, flush right inside it. */
 const EJECT_BUTTON_CLASS =
 	"sidebar__eject absolute right-4 top-1/2 -translate-y-1/2 flex items-center justify-center size-20 p-0 border-0 rounded-6 bg-transparent text-ink-muted cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover-icon hover:text-ink";
+
+/** A sidebar group heading in the interface language (shared with the phone shell's 둘러보기). */
+export function placeGroupLabel(t: TFunction, label: string): string {
+	switch (label) {
+		case "Favorites": return t("places.favorites", label);
+		case "Cloud": return t("places.cloud", label);
+		case "Connections": return t("places.connections", label);
+		case "Locations": return t("places.locations", label);
+		case TAGS_GROUP_LABEL: return t("places.tags", label);
+		default: return label;
+	}
+}
+
+/** A sidebar row's label in the interface language; user folders, volumes and tags keep their own names. */
+export function placeItemLabel(t: TFunction, item: NavItem): string {
+	if (item.view === "aiSearch") return t("places.aiSearch", item.label);
+	if (item.view === "automations") return t("places.automations", item.label);
+	// Windows calls these folders Videos and Recycle Bin; the other keys read the same everywhere.
+	if (item.kind === "movies" && hostPlatform() === "win32") return t("places.moviesWindows", item.label);
+	if (item.kind === "trash" && hostPlatform() === "win32") return t("places.trashWindows", item.label);
+	if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
+	return item.label;
+}
 
 /**
  * Sidebar (v7 `.sidebar` / `.side-head` / `.side-scroll` / `.side-footer`): the
@@ -50,6 +74,7 @@ export function Sidebar({
 	onOpenUsage,
 	onHideSidebar,
 	onOpenIndexing,
+	onOpenAiSettings,
 	sourceStatus,
 	searchQuery,
 	searchRef,
@@ -60,6 +85,7 @@ export function Sidebar({
 	aiSearchDrop,
 	tagColorsDenied = false,
 	onGrantTagColors,
+	favorites,
 }: {
 	readonly groups: readonly NavGroup[];
 	/** Path of the row that owns the current folder. */
@@ -74,6 +100,8 @@ export function Sidebar({
 	readonly onHideSidebar: () => void;
 	/** The indexing block opens Settings on its Indexing page. */
 	readonly onOpenIndexing: () => void;
+	/** Model download entries open Settings on its AI page. */
+	readonly onOpenAiSettings?: (() => void) | undefined;
 	readonly sourceStatus?: Readonly<Partial<Record<FsLocationIcon, "syncing" | "error">>>;
 	readonly searchQuery: string;
 	readonly searchRef: RefObject<HTMLInputElement | null>;
@@ -91,28 +119,14 @@ export function Sidebar({
 	/** macOS refused the app Finder's tag registry: the Tags group offers the Full Disk Access grant. */
 	readonly tagColorsDenied?: boolean;
 	readonly onGrantTagColors?: (() => void) | undefined;
+	/** Pin (drop a folder between rows), reorder (drag a row), and unpin (right-click) in Favorites; absent turns them off. */
+	readonly favorites?: FavoritesDropTarget | undefined;
 }): ReactElement {
 	const settingsShortcut = useFormattedShortcut("openSettings");
 	const { t } = useTranslation();
-	const localizedGroupLabel = (label: string): string => {
-		switch (label) {
-			case "Favorites": return t("places.favorites", label);
-			case "Cloud": return t("places.cloud", label);
-			case "Connections": return t("places.connections", label);
-			case "Locations": return t("places.locations", label);
-			case TAGS_GROUP_LABEL: return t("places.tags", label);
-			default: return label;
-		}
-	};
-	const localizedItemLabel = (item: NavItem): string => {
-		if (item.view === "aiSearch") return t("places.aiSearch", item.label);
-		if (item.view === "automations") return t("places.automations", item.label);
-		// Windows calls these folders Videos and Recycle Bin; the other keys read the same everywhere.
-		if (item.kind === "movies" && hostPlatform() === "win32") return t("places.moviesWindows", item.label);
-		if (item.kind === "trash" && hostPlatform() === "win32") return t("places.trashWindows", item.label);
-		if (item.kind !== undefined) return t(`places.${item.kind}`, item.label);
-		return item.label;
-	};
+	const favoritesDrop = useFavoritesDrop(favorites);
+	const localizedGroupLabel = (label: string): string => placeGroupLabel(t, label);
+	const localizedItemLabel = (item: NavItem): string => placeItemLabel(t, item);
 	return (
 		<aside
 			className="sidebar flex w-full h-full flex-none flex-col min-h-0 bg-sidebar border-r border-border backdrop-blur-[18px]"
@@ -141,7 +155,11 @@ export function Sidebar({
 			/>
 			<div className="side-scroll flex flex-1 flex-col gap-10 min-h-0 px-10 pt-6 pb-12 overflow-auto">
 				{groups.map((group) => (
-					<div key={group.label} className="side-group flex flex-col gap-1">
+					<div
+						key={group.label}
+						className="side-group flex flex-col gap-1"
+						{...(group.label === "Favorites" ? favoritesDrop.groupProps : {})}
+					>
 						<div className="side-label px-8 pt-4 pb-4 text-ink-muted text-badge font-semibold tracking-label">
 							{localizedGroupLabel(group.label)}
 						</div>
@@ -152,8 +170,19 @@ export function Sidebar({
 							const drop = item.view === "aiSearch" ? aiSearchDrop : null;
 							// The path tooltip disambiguates same-named locations; an app row has no path to show.
 							const pathTitle = item.kind === undefined ? undefined : item.path;
+							const dropLine = favoritesDrop.lineEdge(item);
 							return (
-								<div key={item.path} className="relative">
+								<div key={item.path} className="relative" {...favoritesDrop.rowProps(item)}>
+									{dropLine === null ? null : (
+										<span
+											aria-hidden="true"
+											data-drop-line={dropLine}
+											className={cn(
+												"sidebar__drop-line pointer-events-none absolute inset-x-8 z-10 h-2 rounded-full bg-accent shadow-[0_0_0_2px_var(--accent-soft)]",
+												dropLine === "top" ? "-top-1" : "-bottom-1",
+											)}
+										/>
+									)}
 									<button
 										type="button"
 										className={cn(
@@ -225,8 +254,7 @@ export function Sidebar({
 				))}
 			</div>
 			<div className="side-footer flex flex-none flex-col px-12 py-10 border-t border-border">
-				<SidebarErrorFixActivity />
-				<SidebarIndexActivity onOpen={onOpenIndexing} />
+				<SidebarActivityQueue onOpenIndexing={onOpenIndexing} onOpenAiSettings={onOpenAiSettings} />
 				<div className="flex items-center gap-4">
 					<button
 						type="button"

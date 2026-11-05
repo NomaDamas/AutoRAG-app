@@ -5,6 +5,7 @@ import { APP_CUSTOMIZER_CHANNELS } from "../../shared/app-customizer-contract";
 import { APP_UPDATE_CHANNELS } from "../../shared/update-contract";
 import { AUTOMATION_CHANNELS } from "../../shared/automation-contract";
 import { ERROR_FIX_CHANNELS } from "../../shared/error-fix-contract";
+import { MAGIC_ACTION_CHANNELS } from "../../shared/magic-actions-contract";
 import { INDEX_ACTIVITY_CHANNELS } from "../../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../../shared/index-problem-contract";
 import { INTERACTION_CHANNELS } from "../../shared/interaction-contract";
@@ -16,6 +17,8 @@ import { SETTINGS_CHANNELS } from "../../shared/settings-contract";
 import { SMART_INDEXING_CHANNELS } from "../../shared/smart-indexing-contract";
 import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
 import {
+	REMOTE_CHANNELS,
+	REMOTE_CSRF_HEADER,
 	REMOTE_PREVIEW_FOLDER_CODE,
 	REMOTE_PREVIEW_MIMES,
 	REMOTE_PREVIEW_UNSUPPORTED_CODE,
@@ -39,6 +42,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"appUpdate.onChange": APP_UPDATE_CHANNELS.changed,
 	"automations.onChange": AUTOMATION_CHANNELS.changed,
 	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
+	"magicAction.onEvent": MAGIC_ACTION_CHANNELS.event,
 	"indexActivity.onChange": INDEX_ACTIVITY_CHANNELS.changed,
 	"indexProblem.onChange": INDEX_PROBLEM_CHANNELS.changed,
 	"interaction.onMode": INTERACTION_CHANNELS.modeChanged,
@@ -54,6 +58,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"fs.onLocationsChanged": FS_WORKER_PUSH.locationsChanged,
 	"fs.onIndexRefreshed": FS_WORKER_PUSH.indexRefreshed,
 	"live.onMessage": FS_WORKER_PUSH.live,
+	"remote.onChange": REMOTE_CHANNELS.changed,
 };
 
 /** The bridge names the renderer reads; a call on one posts to the dispatcher. */
@@ -69,6 +74,7 @@ const TARGETS = [
 	"conversion",
 	"errorFix",
 	"appCustomizer",
+	"magicAction",
 	"account",
 	"automations",
 	"appUpdate",
@@ -79,6 +85,7 @@ const TARGETS = [
 	"osRequests",
 	"smartIndexing",
 	"analytics",
+	"voice",
 ] as const;
 
 export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): string {
@@ -105,7 +112,7 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 	const url = (route, params) => {
 		const target = new URL(route, base);
 		for (const [key, value] of Object.entries(params ?? {})) if (value !== undefined && value !== null) target.searchParams.set(key, String(value));
-		target.searchParams.set("token", config.token);
+		if (config.token) target.searchParams.set("token", config.token);
 		target.searchParams.set("session", session);
 		return target.toString();
 	};
@@ -123,7 +130,7 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		}
 		if (value.startsWith("autorag-preview://")) {
 			const parsed = new URL(value);
-			return url(routes.preview, { path: parsed.searchParams.get("path") });
+			return url(routes.preview, { path: parsed.searchParams.get("path"), v: parsed.searchParams.get("v") });
 		}
 		return value;
 	};
@@ -168,12 +175,17 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 			listeners.get(channel)?.delete(listener);
 		};
 	};
+	const csrfHeader = ${JSON.stringify(REMOTE_CSRF_HEADER)};
 	const call = async (target, method, args) => {
 		const response = await fetch(url(routes.call), {
 			method: "POST",
-			headers: { "content-type": "application/json", "x-remote-session": session },
+			headers: { "content-type": "application/json", "x-remote-session": session, [csrfHeader]: "1" },
 			body: JSON.stringify({ target, method, args: [...args] }),
 		});
+		if (response.status === 401 || response.status === 403) {
+			if (typeof location.reload === "function") location.reload();
+			throw new Error("remote call refused: " + response.status);
+		}
 		if (!response.ok) throw new Error("remote call refused: " + response.status);
 		const result = await response.json();
 		if (result.ok !== true) {
@@ -222,7 +234,7 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 		uploadFiles: async (folder, files) => {
 			const results = [];
 			for (const file of files) {
-				const response = await fetch(url(routes.upload, { folder, name: file.name }), { method: "POST", body: file, headers: { "x-remote-session": session } });
+				const response = await fetch(url(routes.upload, { folder, name: file.name }), { method: "POST", body: file, headers: { "x-remote-session": session, [csrfHeader]: "1" } });
 				results.push({ name: file.name, ok: response.ok });
 			}
 			return results;
@@ -296,13 +308,47 @@ export function buildRemoteBootstrapScript(config: RemoteBootstrapConfig): strin
 	// A browser session is the client of remote access, so its own status is true
 	// and its own address is this page; starting or stopping the host server stays
 	// with the desktop that owns it.
-	const remoteStatus = async () => ({
-		serving: true,
-		origin: location.origin,
-		port: Number(location.port || 0),
-		sessions: 1,
-	});
-	autorag.remote = { status: remoteStatus, start: remoteStatus, stop: remoteStatus };
+	const currentDeviceId = config.deviceId ?? null;
+	const mapDevices = (list) => Array.isArray(list) ? list.map((d) => currentDeviceId && d && d.id === currentDeviceId ? Object.assign({}, d, { current: true }) : d) : [];
+	const remoteStatus = async () => {
+		let hostStatus = null;
+		try {
+			hostStatus = await call("remote", "status", []);
+		} catch {
+			hostStatus = null;
+		}
+		return {
+			serving: true,
+			origin: location.origin,
+			baseOrigin: hostStatus?.baseOrigin ?? location.origin,
+			port: Number(location.port || hostStatus?.port || 0),
+			sessions: hostStatus?.sessions ?? 1,
+			lanOrigins: hostStatus?.lanOrigins ?? [],
+			tunnel: hostStatus?.tunnel,
+			pairing: hostStatus?.pairing ?? null,
+			devices: mapDevices(hostStatus?.devices ?? []),
+			...(config.via ? { via: config.via } : {}),
+		};
+	};
+	autorag.remote = {
+		status: remoteStatus,
+		start: remoteStatus,
+		stop: remoteStatus,
+		startPairing: () => call("remote", "startPairing", []),
+		devices: async () => mapDevices(await call("remote", "devices", [])),
+		renameDevice: (id, label) => call("remote", "renameDevice", [id, label]),
+		revokeDevice: (id) => call("remote", "revokeDevice", [id]),
+		revokeAllDevices: () => call("remote", "revokeAllDevices", []),
+		refreshNetwork: async () => {
+			await call("remote", "refreshNetwork", []).catch(() => null);
+			return remoteStatus();
+		},
+		// Tunnel control belongs to the desktop that runs cloudflared; a browser sees its status only.
+		startTunnel: remoteStatus,
+		stopTunnel: remoteStatus,
+		loginTunnel: remoteStatus,
+		onChange: (listener) => subscribe("remote.onChange", () => { void remoteStatus().then(listener, () => {}); }),
+	};
 	for (const target of targets) autorag[target] = bridgeFor(target);
 	autorag.fs = Object.assign(bridgeFor("fs"), localClipboard);
 	// Value-shaped members the renderer reads without calling (the desktop preload's).

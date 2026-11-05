@@ -10,9 +10,8 @@ import {
 	embedCards,
 	etaMinutes,
 	formatSize,
-	indexingPhases,
+	indexingStages,
 	isPlanSelectable,
-	phaseIndex,
 	planHeld,
 	errorReportsConsentOnLeaving,
 	primaryLabelKey,
@@ -476,19 +475,11 @@ describe("detected sources list", () => {
 	});
 });
 
-describe("indexing phases", () => {
-	it("drops the embedding phase on the keyword-only path", () => {
-		expect(indexingPhases("none")).toEqual(["parsed", "finalizing"]);
-		expect(indexingPhases("local")).toEqual(["parsed", "minsync", "finalizing"]);
-		expect(indexingPhases("cloud")).toEqual(["parsed", "minsync", "finalizing"]);
-	});
-
-	it("maps a phase to its position in that run's strip", () => {
-		expect(phaseIndex("local", "parsed")).toBe(0);
-		expect(phaseIndex("local", "minsync")).toBe(1);
-		expect(phaseIndex("local", "finalizing")).toBe(2);
-		expect(phaseIndex("none", "parsed")).toBe(0);
-		expect(phaseIndex("none", "finalizing")).toBe(1);
+describe("indexing stages", () => {
+	it("names MinSync's step the keyword index on the keyword-only path instead of embedding", () => {
+		expect(indexingStages("none")).toEqual(["discover", "parse", "keyword", "finalize"]);
+		expect(indexingStages("local")).toEqual(["discover", "parse", "embed", "finalize"]);
+		expect(indexingStages("cloud")).toEqual(["discover", "parse", "embed", "finalize"]);
 	});
 });
 

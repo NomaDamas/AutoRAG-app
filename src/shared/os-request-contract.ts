@@ -13,22 +13,25 @@ import type { ChatAttachment } from "./search-contract";
  */
 
 /**
- * `ask` attaches the paths to AI Search; `reveal` shows the first one in its folder; `open` is the
+ * `ask` attaches the paths to AI Search, and with a `query` sends that question at once (the
+ * `dazzi --ask` command, the Raycast extension); `reveal` shows the first path in its folder; `open` is the
  * `dazzi <path>...` command: every folder opens in a tab, every file is shown selected in its folder.
  */
 export type OsRequestAction = "ask" | "reveal" | "open";
 
 export const OS_REQUEST_ACTIONS: readonly OsRequestAction[] = ["ask", "reveal", "open"];
 
-/** The request as a menu entry states it: raw, untrusted paths. */
+/** The request as a menu entry or the command line states it: raw, untrusted paths and question. */
 export interface OsLaunchRequest {
 	readonly action: OsRequestAction;
 	readonly paths: readonly string[];
+	/** `ask` only: the question to send. An `ask` with a question needs no path. */
+	readonly query?: string;
 }
 
 /** The request after the main process checked the paths against the disk. */
 export type OsRendererRequest =
-	| { readonly action: "ask"; readonly attachments: readonly ChatAttachment[] }
+	| { readonly action: "ask"; readonly attachments: readonly ChatAttachment[]; readonly query: string | null }
 	| { readonly action: "reveal"; readonly path: string }
 	| { readonly action: "open"; readonly targets: readonly OsOpenTarget[] };
 
@@ -42,9 +45,13 @@ export interface OsOpenTarget {
 export const OS_REQUEST_FLAG = "--autorag-request=";
 /** argv flag carrying one selected path; repeated once per item. */
 export const OS_REQUEST_PATH_FLAG = "--autorag-path=";
+/** argv flag carrying the question of an `ask` request. */
+export const OS_REQUEST_QUERY_FLAG = "--autorag-query=";
 
 /** More than this many items in one request are ignored: a menu never sends that many on purpose. */
 export const OS_REQUEST_MAX_PATHS = 200;
+/** A longer question is refused rather than cut: nobody types this much into a launcher. */
+export const OS_REQUEST_MAX_QUERY_LENGTH = 16_000;
 
 export const OS_REQUEST_CHANNELS = {
 	/** invoke: drain the queued requests. */
@@ -66,16 +73,19 @@ export function isOsRequestAction(value: unknown): value is OsRequestAction {
 
 /**
  * The request a launch's argv carries, or null for an ordinary launch (no
- * action flag, an unknown action, or no usable path). Only absolute paths are
+ * action flag, an unknown action, or nothing usable). Only absolute paths are
  * kept, in order and without duplicates.
  */
 export function parseOsRequestArgv(argv: readonly string[]): OsLaunchRequest | null {
 	let action: OsRequestAction | null = null;
+	let query: string | undefined;
 	const paths: string[] = [];
 	for (const arg of argv) {
 		if (arg.startsWith(OS_REQUEST_FLAG)) {
 			const value = arg.slice(OS_REQUEST_FLAG.length);
 			if (isOsRequestAction(value)) action = value;
+		} else if (arg.startsWith(OS_REQUEST_QUERY_FLAG)) {
+			query = arg.slice(OS_REQUEST_QUERY_FLAG.length);
 		} else if (arg.startsWith(OS_REQUEST_PATH_FLAG)) {
 			// Windows hands `"D:\"` to the argv parser as an escaped quote, leaving a stray `"` on a
 			// drive-root path; no Windows path contains one, so it is safe to drop.
@@ -83,17 +93,25 @@ export function parseOsRequestArgv(argv: readonly string[]): OsLaunchRequest | n
 			paths.push(raw.endsWith('"') ? raw.slice(0, -1) : raw);
 		}
 	}
-	return action === null ? null : normalizeOsLaunchRequest({ action, paths });
+	if (action === null) return null;
+	return normalizeOsLaunchRequest(query === undefined ? { action, paths } : { action, paths, query });
 }
 
 /**
  * Validate and clean an untrusted request (argv, or JSON off the socket).
- * Returns null unless an action and at least one absolute path survive.
+ * Returns null unless an action and at least one absolute path survive, or,
+ * for `ask`, a non-empty question. A question on any other action is invalid.
  */
 export function normalizeOsLaunchRequest(value: unknown): OsLaunchRequest | null {
 	if (typeof value !== "object" || value === null) return null;
-	const { action, paths } = value as { action?: unknown; paths?: unknown };
+	const { action, paths, query } = value as { action?: unknown; paths?: unknown; query?: unknown };
 	if (!isOsRequestAction(action) || !Array.isArray(paths) || paths.length > OS_REQUEST_MAX_PATHS) return null;
+	let question: string | undefined;
+	if (query !== undefined) {
+		if (action !== "ask" || typeof query !== "string" || query.includes("\0") || query.length > OS_REQUEST_MAX_QUERY_LENGTH) return null;
+		question = query.trim();
+		if (question.length === 0) return null;
+	}
 	const kept: string[] = [];
 	for (const entry of paths) {
 		if (typeof entry !== "string" || entry.length === 0 || entry.includes("\0")) return null;
@@ -101,5 +119,6 @@ export function normalizeOsLaunchRequest(value: unknown): OsLaunchRequest | null
 		if (!absolute) continue;
 		if (!kept.includes(entry)) kept.push(entry);
 	}
+	if (question !== undefined) return { action: "ask", paths: kept, query: question };
 	return kept.length === 0 ? null : { action, paths: kept };
 }

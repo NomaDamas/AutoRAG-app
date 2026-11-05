@@ -19,7 +19,10 @@ import type {
 import { DEFAULT_SETTINGS } from "../shared/settings-contract";
 import { isApprovalMode } from "../shared/interaction-contract";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
+import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
 import { normalizeShortcutSettings } from "../shared/shortcuts-contract";
+import { normalizeTunnelHostname } from "../shared/remote-contract";
+import { normalizeQuickSearchSettings } from "../shared/quick-search-contract";
 import type { AutoRagConfigService } from "./autorag-config-service";
 import type { DataSourceStatusService } from "./datasource-status";
 import type { ModelStatusService } from "./model-status";
@@ -78,7 +81,9 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 				appearance: persisted.appearance === "dark" ? "dark" : "light",
 				approvalMode: isApprovalMode(persisted.approvalMode) ? persisted.approvalMode : defaults.approvalMode,
 				sidebar: persisted.sidebar === undefined ? defaults.sidebar : normalizeSidebarSettings(persisted.sidebar),
+				contextMenu: persisted.contextMenu === undefined ? defaults.contextMenu : normalizeContextMenuSettings(persisted.contextMenu),
 				shortcuts: persisted.shortcuts === undefined ? defaults.shortcuts : normalizeShortcutSettings(persisted.shortcuts),
+				quickSearch: persisted.quickSearch === undefined ? defaults.quickSearch : normalizeQuickSearchSettings(persisted.quickSearch),
 			},
 			permissions: state.permissions ?? {},
 		};
@@ -90,17 +95,21 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge {
 	const path = join(deps.directory, "settings-state.json");
 	let statePromise = loadState(path, deps.systemLanguage === undefined ? DEFAULT_SETTINGS : { ...DEFAULT_SETTINGS, language: deps.systemLanguage });
-	const persist = async (): Promise<void> => {
-		const state = await statePromise;
+	let writeQueue: Promise<unknown> = Promise.resolve();
+	const persist = async (state: SettingsState): Promise<void> => {
 		await mkdir(dirname(path), { recursive: true });
 		await writeFile(path, `${JSON.stringify(state, null, 2)}\n`, "utf8");
 	};
-	const mutate = async (update: (state: SettingsState) => void): Promise<SettingsState> => {
-		const state = await statePromise;
-		update(state);
-		statePromise = Promise.resolve(state);
-		await persist();
-		return state;
+	const mutate = <T>(work: (state: SettingsState) => Promise<T> | T): Promise<T> => {
+		const next = writeQueue.then(async () => {
+			const state = await statePromise;
+			const result = await work(state);
+			statePromise = Promise.resolve(state);
+			await persist(state);
+			return result;
+		});
+		writeQueue = next.catch(() => undefined);
+		return next;
 	};
 	const resolvedPermission = (state: SettingsState, pathName: string): ResolvedPermission => {
 		const candidates = Object.entries(state.permissions)
@@ -141,17 +150,27 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 	return {
 		get: async () => (await statePromise).settings,
 		set: async (patch) => {
-			if (deps.applyOsMenu !== undefined) {
-				// Before the write: a failed install rejects the toggle rather than saving "on" with no menu entries.
-				const previous = (await statePromise).settings;
-				await deps.applyOsMenu({ ...previous, ...patch }, previous);
-			}
-			const state = await mutate((current) => {
+			const state = await mutate(async (current) => {
+				if (deps.applyOsMenu !== undefined) {
+					// Before the write: a failed install rejects the toggle rather than saving "on" with no menu entries.
+					await deps.applyOsMenu({ ...current.settings, ...patch }, current.settings);
+				}
 				const appearance = patch.appearance === "dark" || patch.appearance === "light" ? patch.appearance : current.settings.appearance;
 				const approvalMode = isApprovalMode(patch.approvalMode) ? patch.approvalMode : current.settings.approvalMode;
 				const sidebar = patch.sidebar === undefined ? current.settings.sidebar : normalizeSidebarSettings(patch.sidebar);
+				const contextMenu = patch.contextMenu === undefined ? current.settings.contextMenu : normalizeContextMenuSettings(patch.contextMenu);
 				const shortcuts = patch.shortcuts === undefined ? current.settings.shortcuts : normalizeShortcutSettings(patch.shortcuts);
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, shortcuts };
+				let remoteTunnelHostname = current.settings.remoteTunnelHostname;
+				if (patch.remoteTunnelHostname !== undefined) {
+					const trimmed = patch.remoteTunnelHostname.trim();
+					const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
+					// A rejected change leaves the stored hostname as it was; the renderer shows the reason.
+					if (normalized === null) throw new Error(`Not a domain name: ${trimmed}`);
+					remoteTunnelHostname = normalized;
+				}
+				const quickSearch = patch.quickSearch === undefined ? current.settings.quickSearch : normalizeQuickSearchSettings(patch.quickSearch);
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname };
+				return current;
 			});
 			deps.onSettingsChanged?.(state.settings);
 			return state.settings;

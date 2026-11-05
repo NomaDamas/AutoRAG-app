@@ -909,14 +909,20 @@ export function resolveEventKeyName(key: string, code?: string): string | "Escap
  * Korean Hangul IME (`⌘ㅍ` on `KeyP`) and macOS Option dead-keys (`⌥⌘V` → `√`
  * on `KeyV`) resolve to their physical canonical key.
  */
-export function chordFromKeyEvent(event: RecordableKeyEvent): RecordedKeyEventResult {
-	const mod = (event.metaKey ?? event.meta ?? false) || (event.ctrlKey ?? event.ctrl ?? false);
+export function chordFromKeyEvent(event: RecordableKeyEvent, platform = "darwin"): RecordedKeyEventResult {
+	const isMac = platform === "darwin";
+	const metaHeld = event.metaKey ?? event.meta ?? false;
+	const ctrlHeld = event.ctrlKey ?? event.ctrl ?? false;
+	const mod = isMac ? metaHeld || ctrlHeld : ctrlHeld;
 	const alt = event.altKey ?? event.alt ?? false;
 	const shift = event.shiftKey ?? event.shift ?? false;
 
 	const keyName = resolveEventKeyName(event.key, event.code);
 	if (keyName === "Modifier") {
 		return { kind: "modifier-only", mod, alt, shift };
+	}
+	if (!isMac && metaHeld) {
+		return { kind: "invalid", reason: "unknown-key", rawChord: event.key };
 	}
 	if (keyName === "Escape" && !mod && !alt && !shift) {
 		return { kind: "cancel" };

@@ -433,7 +433,7 @@ function ConnectList({
 							{group.items.map((provider) => (
 								<button key={provider.id} type="button" className="onb-menu-item" onClick={() => onConnect(provider, group.auth)}>
 									<span className="onb-menu-icon" aria-hidden="true">
-										<ProviderIcon provider={provider} size={16} />
+										<ProviderIcon small provider={provider} />
 									</span>
 									<span>{provider.name}</span>
 								</button>
@@ -554,7 +554,7 @@ function RoleList({
 							<div key={bucket.provider.id} className="onb-menu-group">
 								<p className="onb-menu-group-title is-provider">
 									<span className="onb-menu-icon" aria-hidden="true">
-										<ProviderIcon provider={bucket.provider} size={14} />
+										<ProviderIcon small provider={bucket.provider} />
 									</span>
 									<span>{bucket.provider.name}</span>
 								</p>
@@ -595,7 +595,7 @@ function RoleList({
 								}}
 							>
 								<span className="onb-menu-icon" aria-hidden="true">
-									<ProviderIcon provider={bucket.provider} size={16} />
+									<ProviderIcon small provider={bucket.provider} />
 								</span>
 								<span>{bucket.provider.name}</span>
 								{hasSelectedModel ? <span className="onb-provider-active-dot" aria-hidden="true" /> : null}

@@ -8,7 +8,7 @@
  * shared `config.json`) through structured tool calling.
  *
  * Conversation sessions stay in memory keyed by `sessionId` so follow-up
- * turns in the Settings customization modal remember earlier turns until reset.
+ * turns in the customization panel in Settings' right sidebar remember earlier turns until reset.
  */
 
 import type { AppSettings } from "./settings-contract";
@@ -21,7 +21,7 @@ export const APP_CUSTOMIZER_CHANNELS = {
 	event: "appCustomizer:event",
 } as const;
 
-export type AppCustomizerSurface = "sidebar" | "shortcuts";
+export type AppCustomizerSurface = "sidebar" | "contextMenu" | "shortcuts";
 
 export interface AppCustomizerRequest {
 	readonly sessionId: string;
@@ -34,7 +34,10 @@ export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRe
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Record<string, unknown>;
 	const validSurface =
-		candidate.surface === undefined || candidate.surface === "sidebar" || candidate.surface === "shortcuts";
+		candidate.surface === undefined ||
+		candidate.surface === "sidebar" ||
+		candidate.surface === "contextMenu" ||
+		candidate.surface === "shortcuts";
 	return (
 		validSurface &&
 		typeof candidate.sessionId === "string" &&
@@ -46,7 +49,7 @@ export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRe
 
 /** One setting mutation performed by a tool call during a turn. */
 export interface AppCustomizerChange {
-	readonly kind: "sidebar" | "shortcuts" | "general";
+	readonly kind: "sidebar" | "contextMenu" | "shortcuts" | "general";
 	/** Short human-readable description of the change. */
 	readonly summary: string;
 	/** Settings keys modified (e.g. `["sidebar.hiddenItems"]`, `["appearance"]`). */
@@ -67,14 +70,21 @@ export type AppCustomizerEvent =
 			readonly type: "draft";
 			readonly runId: string;
 			readonly sessionId: string;
-			/** Streamed assistant text draft for the current turn. */
+			/** Streamed assistant text draft for the active step. */
+			readonly text: string;
+	  }
+	| {
+			readonly type: "assistant-message";
+			readonly runId: string;
+			readonly sessionId: string;
+			/** Completed assistant message from an intermediate step before tool execution continues. */
 			readonly text: string;
 	  }
 	| {
 			readonly type: "turn-done";
 			readonly runId: string;
 			readonly sessionId: string;
-			readonly reply: string;
+			readonly messages: readonly string[];
 			readonly changes: readonly AppCustomizerChange[];
 			readonly settings: AppSettings;
 	  }

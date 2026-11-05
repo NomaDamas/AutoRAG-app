@@ -10,17 +10,14 @@
  * renderer can never offer a button that would fail.
  *
  * Both archive directions are streamed: compression reads and deflates one
- * member at a time (fflate's async deflate would spin up a worker thread per
- * entry, which costs more than it saves here), and extraction inflates chunk
- * by chunk without ever holding the whole archive or its contents.
+ * member at a time (`zip-writer.ts`, `sevenzip-writer.ts`), and extraction
+ * inflates chunk by chunk without ever holding the whole archive or its contents.
  */
 
 import { spawn } from "node:child_process";
-import { createWriteStream } from "node:fs";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
-import { finished } from "node:stream/promises";
-import { unzlibSync, Zip, ZipDeflate, ZipPassThrough, zlibSync } from "fflate";
+import { unzlibSync, zlibSync } from "fflate";
 import { PDFDocument, PDFName, PDFNumber, PDFRawStream } from "pdf-lib";
 import type { BrowserWindow } from "electron";
 import { archiveFormatOf } from "../shared/archive-formats";
@@ -39,6 +36,7 @@ import { t } from "../shared/i18n/core";
 import { ArchiveError } from "./archive-guard.mjs";
 import { DEFAULT_ARCHIVE_LIMITS, type ArchiveLimits } from "./archive-common";
 import { extractGzipInto, extractIntoFolder, flattenWrapper } from "./archive-extract";
+import { rawFs } from "./raw-fs";
 import {
 	type ActionAnchor,
 	type ActionCapabilities,
@@ -51,6 +49,7 @@ import {
 } from "../shared/actions-contract";
 import type { PdfReducer } from "./pdf-reducer";
 import { writeSevenZip } from "./sevenzip-writer";
+import { writeZip } from "./zip-writer";
 import { errorMessage, pathExists } from "./fs-entry";
 
 /** Result of one external command. */
@@ -156,8 +155,6 @@ function parseOpenWithListing(stdout: string): { readonly defaultPath: string | 
 
 const COMMAND_TIMEOUT_MS = 10 * 60 * 1000;
 const COMMAND_MAX_BUFFER = 1 << 24;
-/** Deflate level: fflate's default balance, matching zlib's tuned setting. */
-const ZIP_LEVEL = 6;
 /** Re-encode quality for lossy formats (sips `formatOptions`, ffmpeg `-quality`). */
 const LOSSY_QUALITY = 80;
 const JPEG_QUALITY = "70";
@@ -425,21 +422,24 @@ interface ArchiveMember {
 }
 
 /**
- * Every regular file and directory below `root`, archived under the root's own
- * name (macOS "Compress" keeps the folder wrapper). Symlinks are skipped: the
- * archiver must not escape the tree or chase a cycle.
+ * Append every regular file and directory below `root` to `members`, archived
+ * under the root's own name (macOS "Compress" keeps the folder wrapper).
+ * Symlinks are skipped: the archiver must not escape the tree or chase a cycle.
+ * Appending in place keeps a tree of any size off the call stack: spreading
+ * ~125k entries into one `push(...)` call throws "Maximum call stack size exceeded".
  */
-async function archiveMembers(root: string, isDirectory: boolean): Promise<ArchiveMember[]> {
+async function addArchiveMembers(members: ArchiveMember[], root: string, isDirectory: boolean): Promise<void> {
 	// Entry names are written NFC: Windows, Linux and Finder-created files use the
 	// composed form, while a name copied from an NFD source (older macOS volumes,
 	// other archives) lists on Windows as separate jamo and cannot be matched.
 	const name = basename(root).normalize("NFC");
 	if (!isDirectory) {
-		return [{ source: root, entry: name, directory: false }];
+		members.push({ source: root, entry: name, directory: false });
+		return;
 	}
-	const members: ArchiveMember[] = [{ source: root, entry: `${name}/`, directory: true }];
+	members.push({ source: root, entry: `${name}/`, directory: true });
 	const walk = async (dir: string, prefix: string): Promise<void> => {
-		const dirents = await readdir(dir, { withFileTypes: true });
+		const dirents = await rawFs.promises.readdir(dir, { withFileTypes: true });
 		dirents.sort((a, b) => a.name.localeCompare(b.name));
 		for (const dirent of dirents) {
 			if (dirent.isSymbolicLink()) continue;
@@ -454,38 +454,6 @@ async function archiveMembers(root: string, isDirectory: boolean): Promise<Archi
 		}
 	};
 	await walk(root, `${name}/`);
-	return members;
-}
-
-/**
- * Write `members` as a zip at `target`. Each file is read and deflated before
- * the next one starts, so peak input memory tracks the largest member rather
- * than the whole tree.
- */
-async function writeZip(target: string, members: readonly ArchiveMember[]): Promise<void> {
-	const output = createWriteStream(target);
-	const archive = new Zip((error, chunk, final) => {
-		if (error !== null) {
-			output.destroy(error);
-			return;
-		}
-		output.write(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength));
-		if (final) output.end();
-	});
-	const drained = finished(output);
-	for (const member of members) {
-		if (member.directory) {
-			const directory = new ZipPassThrough(member.entry);
-			archive.add(directory);
-			directory.push(new Uint8Array(0), true);
-			continue;
-		}
-		const file = new ZipDeflate(member.entry, { level: ZIP_LEVEL });
-		archive.add(file);
-		file.push(new Uint8Array(await readFile(member.source)), true);
-	}
-	archive.end();
-	await drained;
 }
 
 /** Encoder names from `ffmpeg -encoders`: six flag characters, then the name. */
@@ -1368,8 +1336,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					const target = await uniqueChild(dirname(first), `${stem}.${format}`);
 					const members: ArchiveMember[] = [];
 					for (const path of paths) {
-						const stat = await lstat(path);
-						members.push(...(await archiveMembers(path, stat.isDirectory())));
+						const stat = await rawFs.promises.lstat(path);
+						await addArchiveMembers(members, path, stat.isDirectory());
 					}
 					await (format === "7z" ? writeSevenZip(target, members) : writeZip(target, members));
 					return { output: target, note: t("main.action.compressed", { name: basename(target) }) };

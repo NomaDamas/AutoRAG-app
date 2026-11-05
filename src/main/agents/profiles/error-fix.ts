@@ -143,7 +143,9 @@ const SETTINGS_PAGE_GUIDE: readonly string[] = [
 	"account: the Dazzi account and sign-in",
 	"general: appearance and startup behaviour",
 	"sidebar: which items, folders and sections are shown or hidden in the Finder sidebar",
+	"contextMenu: which built-in items and custom right-click Magic Actions are shown in the file context menu",
 	"shortcuts: customizing or resetting Dazzi's built-in keyboard shortcuts",
+	"remote: opening this Dazzi from a browser on another device (remote access switch, pairing codes, Same Wi-Fi / Cloudflare tunnel addresses, paired devices)",
 ];
 
 interface Answer {

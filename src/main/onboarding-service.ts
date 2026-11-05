@@ -32,9 +32,11 @@ import {
 import type { AppSettings, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { tByName, t } from "../shared/i18n/core";
+import { holdIndexProgress } from "../shared/index-progress";
 import { localSpecMessage, type LocalSpecVerdict } from "../shared/local-embedding-spec";
 import { applyIndexingConfig, buildDatasourceEntries } from "./onboarding-config";
-import { computeIndexingProgress } from "./onboarding-progress";
+import { parseRefreshProgress, type ProgressView } from "./index-activity";
+import { createIndexProgressTracker, type IndexProgressTracker } from "./index-progress-tracker";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
 import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
@@ -76,6 +78,8 @@ export interface OnboardingServiceDeps {
 	readonly agentDir?: string;
 	/** The process cwd the app seeds a fresh config's `workspacePath` with. */
 	readonly cwd: string;
+	/** Turns the progress files into stage counts and a rolling-rate estimate; tests inject one with a fixed clock. */
+	readonly tracker?: IndexProgressTracker;
 	readonly platform: NodeJS.Platform;
 	readonly home: string;
 	readonly knownFolders: {
@@ -322,6 +326,7 @@ const IDLE_STATUS: IndexingStatus = {
 	error: null,
 	failure: null,
 	skipped: 0,
+	detail: null,
 };
 
 /** Map a librarian refresh phase to a local onboarding contract phase (`jikji`/search phases fold into finalizing). */
@@ -331,13 +336,18 @@ function toIndexingPhase(value: unknown): IndexingPhase | null {
 	return null;
 }
 
-interface ParsedMirrorSnapshot {
-	readonly processedFiles: number;
+/** The newest file the parsed mirror lists. */
+interface RecentParsedFile {
 	readonly recentFile: string | null;
 	readonly recentSourcePath: string | null;
 }
 
-/** Count what the parsed mirror actually handled, and find the newest entry. */
+interface ParsedMirrorSnapshot extends RecentParsedFile {
+	/** Entries plus skipped files the mirror lists. Across runs, so only a finished run that reported no count of its own falls back to it. */
+	readonly listedFiles: number;
+}
+
+/** Find the newest entry of the parsed mirror. While a run is live, how many files the read stage handled comes from the librarian's counts, not from here. */
 function snapshotParsedStage(workspaceRoot: string): ParsedMirrorSnapshot {
 	try {
 		const index = loadMirrorIndex(workspaceRoot);
@@ -353,17 +363,12 @@ function snapshotParsedStage(workspaceRoot: string): ParsedMirrorSnapshot {
 				recentFile = basename(entry.sourcePath);
 			}
 		}
-		return { processedFiles: entries.length + skippedCount, recentFile, recentSourcePath };
+		return { listedFiles: entries.length + skippedCount, recentFile, recentSourcePath };
 	} catch {
-		return { processedFiles: 0, recentFile: null, recentSourcePath: null };
+		return { listedFiles: 0, recentFile: null, recentSourcePath: null };
 	}
 }
-/** Count the committed file entries in MinSync's crash-resume log (`progress.jsonl`). */
-function countMinSyncProgress(text: string | null): number {
-	if (text === null) return 0;
-	const lines = text.split("\n").filter((line) => line.trim().length > 0);
-	return Math.max(0, lines.length - 1);
-}
+
 export function createOnboardingService(deps: OnboardingServiceDeps): OnboardingService {
 	const agentDir = deps.agentDir ?? getAgentDir();
 	const now = deps.now ?? Date.now;
@@ -382,7 +387,6 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let powerBlockerId: number | null = null;
 	let workspacePath: string | null = null;
 	let phase: IndexingPhase | null = null;
-	let phaseStartedAt = 0;
 	/** Bumped by every `startIndexing`; a poll tick belongs to the run it began in and is dropped once that run is over. */
 	let runId = 0;
 	let selectedFolders: readonly string[] = [];
@@ -391,10 +395,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 	let sourceNames: readonly string[] = [];
 	let pendingDatasourceAliases: readonly string[] = [];
 	let localIndexDone = false;
-	let parsedSnapshot: ParsedMirrorSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
-	let embeddedFiles = 0;
+	let parsedSnapshot: RecentParsedFile = { recentFile: null, recentSourcePath: null };
+	/** The librarian's last readable `refresh-progress.json` of this run. */
+	let refreshView: ProgressView | null = null;
 	let progressSignature = "";
-	let minsyncSignature = "";
+	/** Reads the progress files into the stage counts and the rolling-rate estimate the other screens show too. */
+	const tracker: IndexProgressTracker = deps.tracker ?? createIndexProgressTracker({ now });
 	/** True while a keyword-only index runs: no embedding phase exists, so the bar has none. */
 	let keywordOnly = false;
 	const maybeStartBackgroundDatasources = (): void => {
@@ -452,70 +458,52 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		const root = join(workspacePath, ".autorag");
 		// Synchronous reads: an async read keeps the file open across event-loop turns, which fails the librarian's rename on Windows.
 		const progressRead = readIfChanged(join(root, "refresh-progress.json"), progressSignature);
-		const minsyncRead = readIfChanged(join(root, "minsync", ".minsync", "progress.jsonl"), minsyncSignature);
 		if (ownRun !== runId || status.state !== "running") return;
 		let inspectStage = false;
 		if (progressRead.text !== null) {
 			progressSignature = progressRead.signature;
-			let parsed: unknown;
-			try {
-				parsed = JSON.parse(progressRead.text);
-			} catch {
-				parsed = null;
-			}
-			if (isJsonObject(parsed)) {
-				const nextPhase = toIndexingPhase(parsed.phase);
-				if (nextPhase !== null && nextPhase !== phase) {
-					phase = nextPhase;
-					phaseStartedAt = now();
-				}
-				if (isJsonObject(parsed.parsedCounts) && typeof parsed.parsedCounts.scanned === "number") {
-					parsedSnapshot = {
-						...parsedSnapshot,
-						processedFiles: Math.max(parsedSnapshot.processedFiles, parsed.parsedCounts.scanned),
-					};
-					inspectStage = true;
-				}
-				if (isJsonObject(parsed.minsync) && typeof parsed.minsync.synced === "number") {
-					embeddedFiles = Math.max(embeddedFiles, parsed.minsync.synced);
-				}
+			const view = parseRefreshProgress(progressRead.text);
+			// The file a previous run left behind is not this run's: the librarian rewrites it within moments of starting.
+			const startedAtMs = status.startedAt === null ? 0 : Date.parse(status.startedAt);
+			if (view !== null && !(Date.parse(view.startedAt) < startedAtMs - 5_000)) {
+				refreshView = view;
+				// A view that reads success or failed does not name a phase of the work still going on (see `held` below).
+				if (view.state === "running") phase = toIndexingPhase(view.phase) ?? phase;
+				inspectStage = view.counts !== null;
 			}
 		}
 
 		if (inspectStage && existsSync(join(root, "parsed", "stage"))) {
 			const stageSnapshot = snapshotParsedStage(workspacePath);
 			parsedSnapshot = {
-				processedFiles: Math.max(parsedSnapshot.processedFiles, stageSnapshot.processedFiles),
 				recentFile: stageSnapshot.recentFile ?? parsedSnapshot.recentFile,
 				recentSourcePath: stageSnapshot.recentSourcePath ?? parsedSnapshot.recentSourcePath,
 			};
 		}
 
-		if (minsyncRead.text !== null) {
-			minsyncSignature = minsyncRead.signature;
-			embeddedFiles = Math.max(embeddedFiles, countMinSyncProgress(minsyncRead.text));
-		}
-		const totalFiles = Math.max(0, deps.folderTotals(selectedFolders) - excludedFiles);
-		const { progress, remainingMinutes } = computeIndexingProgress({
-			state: "running",
-			phase,
-			processedFiles: parsedSnapshot.processedFiles,
-			embeddedFiles,
-			totalFiles,
-			phaseElapsedMs: phase === null ? 0 : now() - phaseStartedAt,
-			embedding: !keywordOnly,
-		});
+		const expectedFiles = Math.max(0, deps.folderTotals(selectedFolders) - excludedFiles);
+		// The librarian marks its own pass `success` (or `failed`) before this refresh returns: the batch-halving retry of a
+		// timed-out MinSync step re-runs after that write and never touches the file again, and the last moments before the
+		// result arrives look the same. The file then says nothing newer than what the last running view measured, so the
+		// screen keeps that instead of falling back to 0% and "discover"; `finish()` writes the end state.
+		const held = refreshView !== null && refreshView.state !== "running";
+		const detail = held ? holdIndexProgress(status.detail) : tracker.poll(workspacePath, refreshView, { embedding: !keywordOnly, parseFile: parsedSnapshot.recentFile });
+		const parse = detail?.stages.find((stage) => stage.id === "parse");
+		// One unit for both numbers: the librarian's own file count. The pre-scan count is only what the folders were expected to hold.
+		const totalFiles = parse?.counts?.total ?? expectedFiles;
+		const processedFiles = parse?.counts === null || parse === undefined ? 0 : parse.counts.done + parse.counts.skipped + parse.counts.failed;
 		status = {
 			...status,
 			state: "running",
 			phase,
-			progress,
-			remainingMinutes,
-			processedFiles: parsedSnapshot.processedFiles,
+			progress: detail === null ? 0 : detail.fraction * 100,
+			remainingMinutes: detail?.etaMinutes ?? null,
+			processedFiles,
 			totalFiles,
 			recentFile: parsedSnapshot.recentFile,
 			recentFolder: parsedSnapshot.recentSourcePath === null ? null : folderNameFor(parsedSnapshot.recentSourcePath),
 			sources: sourceNames,
+			detail,
 		};
 		emitStatus();
 	}
@@ -536,11 +524,12 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 		if (indexing !== undefined) stateFile = { ...stateFile, indexing: { ...indexing, finishedAt } };
 		void persist().catch(warnPersistFailed);
 		status = ok
-			? { ...status, state: "success", progress: 100, remainingMinutes: null, finishedAt, error: null, failure: null, skipped: skippedFileCount(diagnostics) }
+			? { ...status, state: "success", progress: 100, remainingMinutes: null, detail: null, finishedAt, error: null, failure: null, skipped: skippedFileCount(diagnostics) }
 			: {
 					...status,
 					state: "failed",
 					remainingMinutes: null,
+					detail: null,
 					finishedAt,
 					error: error ?? t("main.onboarding.indexingFailed"),
 					failure: classifyIndexFailure({ diagnostics, error }),
@@ -742,9 +731,9 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			localIndexDone = false;
 			phase = null;
 			progressSignature = "";
-			minsyncSignature = "";
-			parsedSnapshot = { processedFiles: 0, recentFile: null, recentSourcePath: null };
-			embeddedFiles = 0;
+			parsedSnapshot = { recentFile: null, recentSourcePath: null };
+			refreshView = null;
+			tracker.reset();
 			const startedAt = new Date(now()).toISOString();
 			stateFile = { ...stateFile, indexing: { startedAt, finishedAt: null } };
 			void persist().catch(warnPersistFailed);
@@ -761,19 +750,22 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			// A keyword-only run can end before the first poll: read the mirror once more so the final status counts what it read.
 			const settle = async (result: ConfigRefreshResult): Promise<void> => {
 				await tick().catch(() => undefined);
+				let listedFiles = 0;
 				if (workspacePath !== null && existsSync(join(workspacePath, ".autorag", "parsed", "stage"))) {
 					const stageSnapshot = snapshotParsedStage(workspacePath);
-					const processedFiles = Math.max(status.processedFiles, stageSnapshot.processedFiles, result.scanned);
 					const recentSourcePath = stageSnapshot.recentSourcePath;
+					listedFiles = stageSnapshot.listedFiles;
 					status = {
 						...status,
-						processedFiles,
 						recentFile: stageSnapshot.recentFile ?? status.recentFile,
 						recentFolder: recentSourcePath === null ? status.recentFolder : folderNameFor(recentSourcePath),
 					};
-				} else if (result.scanned > status.processedFiles) {
-					status = { ...status, processedFiles: result.scanned };
 				}
+				// A finished run has gone through every file the librarian listed: that count, not the pre-scan, is the total.
+				// A run so quick that nothing was polled reported no count in the progress file; the mirror then says what it read.
+				const handled = result.scanned > 0 ? result.scanned : result.ok ? listedFiles : 0;
+				if (result.ok && handled > 0) status = { ...status, processedFiles: handled, totalFiles: handled };
+				else if (result.scanned > status.processedFiles) status = { ...status, processedFiles: result.scanned };
 				finish(result.ok, result.error, result.diagnostics);
 			};
 			// The first index embeds on this computer when the config now names the local model: its weights have to be

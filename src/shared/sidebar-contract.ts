@@ -180,6 +180,11 @@ export function customSidebarItemId(path: string): string {
 	return `custom:${path}`;
 }
 
+/** The folder path of a custom pin's item ID (`custom:/path` -> `/path`); null for any other ID. */
+export function customPathOfSidebarItemId(id: string): string | null {
+	return id.startsWith("custom:") ? id.slice("custom:".length) : null;
+}
+
 /** Canonical sidebar item ID for a cloud drive (`cloud:/path`). */
 export function cloudSidebarItemId(path: string): string {
 	return `cloud:${path}`;

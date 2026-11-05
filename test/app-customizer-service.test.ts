@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxText, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appCustomizerProfile, createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
 import { createAppCustomizerService } from "../src/main/app-customizer-service";
@@ -83,9 +83,12 @@ describe("app-customizer pi agent profile & toolkit", () => {
 		expect(profile.id).toBe("app-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual([
+			"delete_magic_action",
 			"get_app_settings",
+			"update_context_menu",
 			"update_general_settings",
 			"update_sidebar",
+			"upsert_magic_action",
 		]);
 		expect(profile.systemPrompt).toContain("AI Search");
 		expect(profile.systemPrompt).toContain("Automations");
@@ -136,6 +139,182 @@ describe("app-customizer pi agent profile & toolkit", () => {
 		expect(saved2.sidebar.hiddenItems).toContain("place:music");
 		expect(saved2.sidebar.customFavorites).toEqual([{ path: workFolder, label: "Projects" }]);
 	});
+
+	it("customizes context menu visibility/order, creates & deletes Magic Actions (script and agent), and enforces locked Tags invariant", async () => {
+		const settings = createStubSettings();
+		const kit = createAppCustomizerToolkit({
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+			homeDir: root,
+		});
+		const updateMenu = kit.tools.find((t) => t.name === "update_context_menu")!;
+		const upsertMagic = kit.tools.find((t) => t.name === "upsert_magic_action")!;
+		const deleteMagic = kit.tools.find((t) => t.name === "delete_magic_action")!;
+
+		// Attempt to hide Tags (`태그` / `builtin:tags` and section `tags`) alongside `7z로 압축` and `경로 복사`
+		const res1 = await updateMenu.execute(
+			"cm-1",
+			{
+				hideItems: ["태그", "7z로 압축", "copyPath"],
+				hideSections: ["tags", "services"],
+				sectionOrder: ["magic", "open", "clipboard"],
+			},
+			undefined,
+			undefined,
+			undefined as never,
+		);
+		const text1 = res1.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
+		expect(text1).toMatch(/Tags|builtin:tags/i);
+
+		const saved1 = await settings.get();
+		expect(saved1.contextMenu.hiddenItems).toEqual(["builtin:compress7z", "builtin:copyPath"]);
+		expect(saved1.contextMenu.hiddenSections).toEqual(["services"]);
+		expect(saved1.contextMenu.sectionOrder.slice(0, 3)).toEqual(["magic", "open", "clipboard"]);
+
+		// Add an agent Magic Action for PDFs and a script Magic Action for multiple files
+		await upsertMagic.execute(
+			"cm-2",
+			{
+				label: "PDF 3줄 요약",
+				selection: "single",
+				targetKind: "file",
+				extensions: [".pdf", "md"],
+				executionKind: "agent",
+				agentMode: "read",
+				prompt: "선택한 문서를 핵심 3줄로 요약해줘.",
+			},
+			undefined,
+			undefined,
+			undefined as never,
+		);
+		await upsertMagic.execute(
+			"cm-3",
+			{
+				id: "sha256-hash",
+				label: "SHA-256 해시 계산",
+				selection: "any",
+				targetKind: "file",
+				executionKind: "script",
+				command: "shasum -a 256 \"$@\"",
+			},
+			undefined,
+			undefined,
+			undefined as never,
+		);
+
+		const saved2 = await settings.get();
+		expect(saved2.contextMenu.magicActions).toHaveLength(2);
+		expect(saved2.contextMenu.magicActions[0]).toMatchObject({
+			label: "PDF 3줄 요약",
+			selection: "single",
+			targetKind: "file",
+			extensions: ["pdf", "md"],
+			execution: { kind: "agent", mode: "read", prompt: "선택한 문서를 핵심 3줄로 요약해줘." },
+		});
+		expect(saved2.contextMenu.magicActions[1]).toMatchObject({
+			id: "sha256-hash",
+			label: "SHA-256 해시 계산",
+			execution: { kind: "script", command: "shasum -a 256 \"$@\"" },
+		});
+
+		// Delete one Magic Action by id or label
+		await deleteMagic.execute("cm-4", { idOrLabel: "PDF 3줄 요약" }, undefined, undefined, undefined as never);
+		const saved3 = await settings.get();
+		expect(saved3.contextMenu.magicActions.map((a) => a.id)).toEqual(["sha256-hash"]);
+	});
+
+	it("hides and shows 사이드바에 고정 / 제거 as one built-in item by id or by any of its names, and lists it for the agent", async () => {
+		const settings = createStubSettings();
+		const kit = createAppCustomizerToolkit({
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+			homeDir: root,
+		});
+		const getSettings = kit.tools.find((t) => t.name === "get_app_settings")!;
+		const updateMenu = kit.tools.find((t) => t.name === "update_context_menu")!;
+		const run = (id: string, params: Record<string, unknown>) =>
+			updateMenu.execute(id, params, undefined, undefined, undefined as never);
+		const listed = async (): Promise<{ id: string; visible: boolean }[]> => {
+			const res = await getSettings.execute("pin-get", {}, undefined, undefined, undefined as never);
+			const snapshot = JSON.parse(res.content.map((b) => (b.type === "text" ? b.text : "")).join("")) as {
+				contextMenu: { builtinItems: { id: string; visible: boolean }[] };
+			};
+			return snapshot.contextMenu.builtinItems;
+		};
+
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
+
+		// One id for both labels: the pin label and the unpin label in each language resolve to it.
+		for (const [index, name] of ["사이드바에 고정", "사이드바에서 제거", "Pin to Sidebar", "Remove from Sidebar", "サイドバーに固定", "固定到边栏"].entries()) {
+			await run(`pin-show-${index}`, { showItems: ["builtin:pinToSidebar"] });
+			await run(`pin-hide-${index}`, { hideItems: [name] });
+			expect((await settings.get()).contextMenu.hiddenItems, name).toEqual(["builtin:pinToSidebar"]);
+		}
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(false);
+
+		await run("pin-show", { showItems: ["사이드바에 고정"] });
+		expect((await settings.get()).contextMenu.hiddenItems).toEqual([]);
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
+
+		const profile = appCustomizerProfile({ language: "ko", toolkit: kit });
+		expect(profile.systemPrompt).toContain("`builtin:pinToSidebar`");
+		const hideTool = kit.tools.find((t) => t.name === "update_context_menu");
+		expect(JSON.stringify(hideTool?.parameters)).toContain("builtin:pinToSidebar");
+	});
+
+	it("preserves every mutation without lost updates when multiple customization tools run in parallel", async () => {
+		const settings = createStubSettings();
+		const kit = createAppCustomizerToolkit({
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+			homeDir: root,
+		});
+		const updateMenu = kit.tools.find((t) => t.name === "update_context_menu")!;
+		const upsertMagic = kit.tools.find((t) => t.name === "upsert_magic_action")!;
+
+		await Promise.all([
+			updateMenu.execute(
+				"p-1",
+				{ hideItems: ["builtin:compress7z", "builtin:copyPath"], sectionOrder: ["magic", "open"] },
+				undefined,
+				undefined,
+				undefined as never,
+			),
+			upsertMagic.execute(
+				"p-2",
+				{
+					id: "action-one",
+					label: "액션 1",
+					executionKind: "agent",
+					agentMode: "read",
+					prompt: "요약",
+				},
+				undefined,
+				undefined,
+				undefined as never,
+			),
+			upsertMagic.execute(
+				"p-3",
+				{
+					id: "action-two",
+					label: "액션 2",
+					executionKind: "script",
+					command: "wc -l \"$@\"",
+				},
+				undefined,
+				undefined,
+				undefined as never,
+			),
+		]);
+
+		const final = await settings.get();
+		expect(final.contextMenu.hiddenItems).toEqual(["builtin:compress7z", "builtin:copyPath"]);
+		expect(final.contextMenu.sectionOrder[0]).toBe("magic");
+		expect(final.contextMenu.magicActions.map((a) => a.id)).toEqual(["action-one", "action-two"]);
+	});
 });
 
 describe("app-customizer multi-turn service", () => {
@@ -177,7 +356,7 @@ describe("app-customizer multi-turn service", () => {
 			type: "turn-done",
 			runId: "run-1",
 			sessionId: "sess-1",
-			reply: "사이드바에서 음악과 동영상 폴더를 숨기고 다운로드와 문서를 위로 올렸습니다.",
+			messages: ["사이드바에서 음악과 동영상 폴더를 숨기고 다운로드와 문서를 위로 올렸습니다."],
 		});
 		if (done1?.type === "turn-done") {
 			expect(done1.settings.sidebar.hiddenItems).toEqual(["place:music", "place:movies"]);
@@ -211,5 +390,59 @@ describe("app-customizer multi-turn service", () => {
 		]);
 		await svc.send("run-3", { sessionId: "sess-1", message: "안녕" });
 		expect(sawAfterReset).toBe(false);
+	});
+
+	it("keeps intermediate assistant messages when tool calls follow and emits them before the next step's shimmer progress", async () => {
+		const registration = register();
+		const settings = createStubSettings();
+		const svc = createAppCustomizerService({
+			send: (event) => events.push(event),
+			resolveModel: async () => ({ model: registration.getModel() }),
+			agentDir,
+			env: {},
+			cwd: root,
+			homeDir: root,
+			language: () => "ko",
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+		});
+
+		registration.setResponses([
+			fauxAssistantMessage([
+				fauxText("현재 사이드바 구성을 먼저 확인해 볼게요."),
+				fauxToolCall("get_app_settings", { i: "현재 사이드바 설정 확인 중" }),
+			]),
+			fauxAssistantMessage([
+				fauxText("음악 폴더를 숨기겠습니다."),
+				fauxToolCall("update_sidebar", { i: "음악 폴더 숨기는 중", hideItems: ["music"] }),
+			]),
+			fauxAssistantMessage("음악 폴더를 사이드바에서 숨겼습니다."),
+		]);
+
+		await svc.send("run-mid", { sessionId: "sess-mid", message: "음악 폴더 숨겨줘" });
+
+		// Never wipes a spoken assistant message with an empty draft
+		expect(events.filter((e) => e.type === "draft" && e.text === "")).toEqual([]);
+
+		const summary = events
+			.filter((e) => e.type === "assistant-message" || e.type === "progress")
+			.map((e) => `${e.type}:${e.text}`);
+		expect(summary).toEqual([
+			"assistant-message:현재 사이드바 구성을 먼저 확인해 볼게요.",
+			"progress:현재 사이드바 설정 확인 중",
+			"assistant-message:음악 폴더를 숨기겠습니다.",
+			"progress:음악 폴더 숨기는 중",
+		]);
+
+		const done = events.at(-1);
+		expect(done).toMatchObject({
+			type: "turn-done",
+			messages: [
+				"현재 사이드바 구성을 먼저 확인해 볼게요.",
+				"음악 폴더를 숨기겠습니다.",
+				"음악 폴더를 사이드바에서 숨겼습니다.",
+			],
+		});
 	});
 });

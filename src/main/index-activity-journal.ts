@@ -40,6 +40,8 @@ export interface ActivityRecord {
 export interface ActivityJournal {
 	/** Start a run with every planned item queued. */
 	begin(items: readonly ActivityItemSeed[]): void;
+	/** Append items to a live run without discarding items already running or finished in this wave. */
+	enqueue(items: readonly ActivityItemSeed[]): void;
 	start(key: string): void;
 	finish(key: string, ok: boolean, error: string | null): void;
 	/** Close the run; unfinished items are failed so a thrown run never reads as "running". */
@@ -84,6 +86,34 @@ export function createActivityJournal(path: string, options: ActivityJournalOpti
 				finishedAt: null,
 				items: items.map((item) => ({ ...item, state: "queued", error: null })),
 			}),
+		enqueue: (items) => {
+			if (items.length === 0) return;
+			if (record === null || record.finishedAt !== null) {
+				write({
+					version: 1,
+					pid,
+					owner: options.owner,
+					startedAt: new Date(now()).toISOString(),
+					finishedAt: null,
+					items: items.map((item) => ({ ...item, state: "queued", error: null })),
+				});
+				return;
+			}
+			const nextItems: ActivityItemRecord[] = [...record.items];
+			for (const seed of items) {
+				const idx = nextItems.findIndex((existing) => existing.key === seed.key);
+				if (idx < 0) {
+					nextItems.push({ ...seed, state: "queued", error: null });
+				} else {
+					const current = nextItems[idx];
+					if (current !== undefined && (current.state === "done" || current.state === "failed")) {
+						nextItems.splice(idx, 1);
+						nextItems.push({ ...seed, state: "queued", error: null });
+					}
+				}
+			}
+			write({ ...record, items: nextItems });
+		},
 		start: (key) => update(key, { state: "running", error: null }),
 		finish: (key, ok, error) => update(key, { state: ok ? "done" : "failed", error: ok ? null : error }),
 		end: () => {

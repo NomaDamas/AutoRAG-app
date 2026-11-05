@@ -45,3 +45,10 @@ export function useIndexActivity(): IndexActivitySnapshot {
 		() => IDLE_INDEX_ACTIVITY,
 	);
 }
+
+export function resetIndexActivityForTests(): void {
+	unsubscribe?.();
+	unsubscribe = null;
+	current = IDLE_INDEX_ACTIVITY;
+	for (const listener of listeners) listener();
+}

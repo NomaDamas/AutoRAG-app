@@ -18,7 +18,11 @@ import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { useTagCatalog } from "./useTagCatalog";
+import { useSidebarPins, type SidebarPins } from "./useSidebarPins";
 import { useSidebarSettings } from "./useSidebarSettings";
+import { useContextMenuSettings } from "./useContextMenuSettings";
+import { useShortcutSettings } from "./useShortcutSettings";
+import { onMagicActionDone, startMagicActionRun } from "./useMagicAction";
 import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
 import { validateName } from "../state/collision";
@@ -42,6 +46,7 @@ import { fileExtension, type FileActionTarget } from "../state/file-actions";
 import { conversionErrorMessage, type ConvertRenameState } from "../state/convert-rename";
 import type { ReductionLevel } from "../../../shared/size-reduction";
 import { createReduceSizeDialogState, type ReduceSizeDialogState } from "../state/reduce-size-dialog";
+import { cancelBackgroundTask, enqueueBackgroundTask, updateBackgroundTaskProgress } from "./useBackgroundTasks";
 import { batchToast, emptyStateText, emptyTrashToast, historyToast, indexToast } from "../state/format";
 import { evidenceSourceUrl, findEvidenceSource } from "../state/evidence";
 import type { FocusZone } from "../state/keymap";
@@ -214,6 +219,8 @@ export interface FinderController {
 	readonly activeNavPath: string | null;
 	/** Sidebar groups built from the live OS locations. */
 	readonly navGroups: readonly NavGroup[];
+	/** Pin, unpin, and reorder of the sidebar's Favorites (they write `AppSettings.sidebar`). */
+	readonly sidebarPins: SidebarPins;
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
@@ -255,6 +262,7 @@ export interface FinderController {
 	setReduceDialogReplaceOriginal(replaceOriginal: boolean): void;
 	confirmReduceSize(): void;
 	cancelReduceSize(): void;
+	minimizeReduceSize(): void;
 	/** The rows a drag of `entry` carries: the whole selection when it is selected, else just `entry`. */
 	dragEntries(entry: FinderEntry): readonly FinderEntry[];
 	/** Copy the current selection to the in-app file clipboard (⌘C). */
@@ -285,6 +293,8 @@ export interface FinderController {
 	confirmConvertRename(keepOriginal: boolean): void;
 	/** Drop the pending question, or stop the conversion that is running. */
 	cancelConvertRename(): void;
+	/** Hide the active conversion modal while keeping the conversion running in the background queue. */
+	minimizeConvertRename(): void;
 	/** Open a temporary Evidence Folder in a new tab with the session's local evidence files. */
 	openEvidenceFolder(paths: readonly string[]): void;
 	/** Whether the close-Evidence-Folder confirm modal is showing. */
@@ -360,7 +370,13 @@ export interface FinderController {
 	/** The empty-space menu for `dir` (New / Paste); defaults to the folder in view. */
 	openBackgroundContextMenu(event: ReactMouseEvent<HTMLDivElement>, dir?: string): void;
 	closeContextMenu(): void;
-	runMenuAction(action: FinderMenuAction, format?: NewFileFormatId | null, serviceId?: string | null, tagName?: string | null): void;
+	runMenuAction(
+		action: FinderMenuAction,
+		format?: NewFileFormatId | null,
+		serviceId?: string | null,
+		tagName?: string | null,
+		magicActionId?: string | null,
+	): void;
 	toggleIndex(entry: FinderEntry): void;
 	toggleStack(entry: FinderEntry): void;
 	/** Folder disclosure triangle: nest or hide the folder's contents in place. */
@@ -473,6 +489,8 @@ export function useFinderController(
 	const [revision, setRevision] = useState(0);
 	const [actionCapabilities, setActionCapabilities] = useState<ActionCapabilities>(NO_CAPABILITIES);
 	const [reduceDialog, setReduceDialog] = useState<ReduceSizeDialogState | null>(null);
+	const backgroundReduceRef = useRef(new Map<string, ReduceSizeDialogState>());
+	const backgroundConvertRef = useRef(new Map<string, ConvertRenameState>());
 	const [layerStore, setLayerStore] = useState<LayerStore>(EMPTY_LAYER_STORE);
 	const [stackPinned, setStackPinned] = useState<ReadonlySet<string>>(new Set());
 	const [viewMode, setViewModeValue] = useState<ViewMode>(readStoredViewMode);
@@ -535,6 +553,11 @@ export function useFinderController(
 	useEffect(() => {
 		if (source.actions.onProgress === undefined) return;
 		return source.actions.onProgress((event) => {
+			updateBackgroundTaskProgress(event.id, event.percent);
+			const tracked = backgroundReduceRef.current.get(event.id);
+			if (tracked !== undefined) {
+				backgroundReduceRef.current.set(event.id, { ...tracked, percent: event.percent });
+			}
 			setReduceDialog((current) =>
 				current !== null && current.id === event.id ? { ...current, percent: event.percent } : current,
 			);
@@ -542,6 +565,7 @@ export function useFinderController(
 	}, [source]);
 
 	const showToast = useLatestCallback((message: string) => toastRef.current?.(message));
+	const sidebarPins = useSidebarPins(locations, showToast);
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
@@ -737,6 +761,7 @@ export function useFinderController(
 			document.removeEventListener("visibilitychange", onVisibilityChange);
 		};
 	}, [store, path, source]);
+	useEffect(() => onMagicActionDone(() => refresh()), [refresh]);
 
 	// Only selected stack heads/members change the rows; a plain-row click must
 	// not re-run sort → stack → group → tree. The joined key is value-stable
@@ -1379,15 +1404,32 @@ export function useFinderController(
 	const confirmReduceSize = useLatestCallback(() => {
 		const pending = reduceDialog;
 		if (pending === null || pending.working) return;
-		setReduceDialog({ ...pending, working: true, percent: null });
-		source.actions
-			.run([pending.path], {
-				kind: "reduceSize",
-				id: pending.id,
-				level: pending.level,
-				replaceOriginal: pending.replaceOriginal,
-			})
-			.then((outcome) => {
+		const working: ReduceSizeDialogState = { ...pending, working: true, percent: null };
+		backgroundReduceRef.current.set(pending.id, working);
+		setReduceDialog(working);
+		void enqueueBackgroundTask({
+			id: pending.id,
+			kind: "reduce-size",
+			headline: pending.name,
+			queuedHeadline: pending.name,
+			doneHeadline: pending.name,
+			failedHeadline: pending.name,
+			detail: `${t("finder.reduce.title")} · ${t(`finder.reduce.levels.${pending.level}`)}`,
+			ariaLabel: t("sidebarActivity.reduceOpen"),
+			onSelect: () => {
+				const live = backgroundReduceRef.current.get(pending.id);
+				if (live !== undefined) setReduceDialog(live);
+			},
+			onCancel: () => {
+				void source.actions.cancel?.(pending.id).catch(reportError);
+			},
+			run: async () => {
+				const outcome = await source.actions.run([pending.path], {
+					kind: "reduceSize",
+					id: pending.id,
+					level: pending.level,
+					replaceOriginal: pending.replaceOriginal,
+				});
 				showToast(outcome.note);
 				if (outcome.output !== null) {
 					recordActionOutput("reduceSize", outcome.output);
@@ -1398,19 +1440,28 @@ export function useFinderController(
 						setFlashPath(outcome.output);
 					}
 				}
+			},
+		})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message === "Task cancelled") return;
+				reportError(error);
 			})
-			.catch(reportError)
 			.finally(() => {
+				backgroundReduceRef.current.delete(pending.id);
 				setReduceDialog((current) => (current?.id === pending.id ? null : current));
 			});
+	});
+
+	const minimizeReduceSize = useLatestCallback(() => {
+		setReduceDialog((current) => (current !== null && current.working ? null : current));
 	});
 
 	const cancelReduceSize = useLatestCallback(() => {
 		const pending = reduceDialog;
 		if (pending === null) return;
 		if (pending.working) {
-			void source.actions.cancel?.(pending.id).catch(reportError);
-			return;
+			backgroundReduceRef.current.delete(pending.id);
+			cancelBackgroundTask(pending.id);
 		}
 		setReduceDialog(null);
 	});
@@ -1663,8 +1714,15 @@ export function useFinderController(
 				.catch(reportError);
 		});
 
+	const contextMenuSettings = useContextMenuSettings();
 	const runMenuAction = useLatestCallback(
-		(action: FinderMenuAction, format: NewFileFormatId | null = null, serviceId: string | null = null, tagName: string | null = null) => {
+		(
+			action: FinderMenuAction,
+			format: NewFileFormatId | null = null,
+			serviceId: string | null = null,
+			tagName: string | null = null,
+			magicActionId: string | null = null,
+		) => {
 			const menu = contextMenu;
 			if (menu === null) {
 				return;
@@ -1749,6 +1807,14 @@ export function useFinderController(
 				case "copyPath":
 					source.copyPaths(targets).catch(reportError);
 					return;
+				case "pinToSidebar":
+					sidebarPins.pin([entry.path], null);
+					return;
+				case "unpinFromSidebar": {
+					const pinned = sidebarPins.stateOf(entry.path);
+					if (pinned?.custom === true) sidebarPins.unpin(pinned.id);
+					return;
+				}
 				case "openWith":
 					// The menu's item is the Inspector's "기타…": the OS application
 					// chooser, then one launch for the whole selection.
@@ -1801,6 +1867,12 @@ export function useFinderController(
 				case "toggleTag":
 					if (tagName !== null) toggleTag(targets, tagName);
 					return;
+				case "magicAction": {
+					if (magicActionId === null) return;
+					const found = contextMenuSettings.magicActions.find((item) => item.id === magicActionId);
+					if (found !== undefined) startMagicActionRun(found, targets);
+					return;
+				}
 			}
 		});
 
@@ -1858,10 +1930,27 @@ export function useFinderController(
 	const confirmConvertRename = useLatestCallback((keepOriginal: boolean) => {
 		const pending = convertRename;
 		if (pending === null || pending.working) return;
-		setConvertRename({ ...pending, working: true });
-		source.conversion
-			.run({ id: pending.id, path: pending.path, newName: pending.newName })
-			.then(async (outcome) => {
+		const working: ConvertRenameState = { ...pending, working: true };
+		backgroundConvertRef.current.set(pending.id, working);
+		setConvertRename(working);
+		void enqueueBackgroundTask({
+			id: pending.id,
+			kind: "convert-rename",
+			headline: pending.newName,
+			queuedHeadline: pending.newName,
+			doneHeadline: pending.newName,
+			failedHeadline: pending.newName,
+			detail: `${t("finder.convert.title")} · ${pending.from.toUpperCase()} → ${pending.to.toUpperCase()}`,
+			ariaLabel: t("sidebarActivity.convertOpen"),
+			onSelect: () => {
+				const live = backgroundConvertRef.current.get(pending.id);
+				if (live !== undefined) setConvertRename(live);
+			},
+			onCancel: () => {
+				void source.conversion.cancel(pending.id).catch(reportError);
+			},
+			run: async () => {
+				const outcome = await source.conversion.run({ id: pending.id, path: pending.path, newName: pending.newName });
 				if (keepOriginal) {
 					showToast(outcome.note);
 					return;
@@ -1869,21 +1958,29 @@ export function useFinderController(
 				const trashed = await source.trash([pending.path]);
 				dropRemoved(trashed.ok);
 				showToast(trashed.failed.length === 0 ? t("finder.convert.replaced", { name: basename(outcome.output) }) : batchToast("trash", trashed));
+			},
+		})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message === "Task cancelled") return;
+				showToast(conversionErrorMessage(error));
 			})
-			.catch((error: unknown) => showToast(conversionErrorMessage(error)))
 			.finally(() => {
-				setConvertRename(null);
+				backgroundConvertRef.current.delete(pending.id);
+				setConvertRename((current) => (current?.id === pending.id ? null : current));
 				refresh();
 			});
+	});
+
+	const minimizeConvertRename = useLatestCallback(() => {
+		setConvertRename((current) => (current !== null && current.working ? null : current));
 	});
 
 	const cancelConvertRename = useLatestCallback(() => {
 		const pending = convertRename;
 		if (pending === null) return;
 		if (pending.working) {
-			// The running conversion rejects as cancelled; its handler closes the dialog.
-			void source.conversion.cancel(pending.id).catch(reportError);
-			return;
+			backgroundConvertRef.current.delete(pending.id);
+			cancelBackgroundTask(pending.id);
 		}
 		setConvertRename(null);
 	});
@@ -2133,29 +2230,48 @@ export function useFinderController(
 		[pane, queries, t, trashLocationPath],
 	);
 
+	const shortcutSettings = useShortcutSettings();
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
 		const menu = contextMenu;
 		if (menu === null) {
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices });
+			return buildBackgroundContextMenu({
+				clipboardCount,
+				inTrash: inTrashLocation,
+				services: menuServices,
+				shortcuts: shortcutSettings,
+			});
 		}
 		const entry = menu.entry;
+		const targetPaths = menuTargets(entry);
+		const byPath = new Map(viewEntries.map((row) => [row.path, row]));
+		const targetDescriptors = targetPaths.map((targetPath) => {
+			const row = byPath.get(targetPath);
+			return row !== undefined ? { name: row.name, kind: row.kind } : { name: basename(targetPath), kind: entry.kind };
+		});
+		// One folder only: the sidebar pins a folder, never a file or a selection of rows.
+		const pinned = targetPaths.length === 1 && entry.kind === "folder" ? sidebarPins.stateOf(entry.path) : undefined;
+		const sidebarPin = pinned === undefined ? undefined : pinned === null || !pinned.shown ? "pin" : pinned.custom ? "unpin" : undefined;
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
-			selectionCount: menuTargets(entry).length,
+			targets: targetDescriptors,
+			selectionCount: targetPaths.length,
 			indexIncluded: sidecar.indexStatus(entry.path)?.excluded !== true,
 			clipboardCount,
 			inRecents: path === RECENTS_PATH || isTagPath(path),
 			inTrash: inTrashLocation,
 			capabilities: actionCapabilities,
 			canCreateFolder: canCreateIn(menuCreateDir(menu)),
+			...(sidebarPin === undefined ? {} : { sidebarPin }),
 			services: menuServices,
-			tags: { catalog: tagCatalog.catalog, shared: sharedTags(menuTargets(entry).map((target) => tagsOf(target))) },
+			tags: { catalog: tagCatalog.catalog, shared: sharedTags(targetPaths.map((target) => tagsOf(target))) },
+			contextMenu: contextMenuSettings,
+			shortcuts: shortcutSettings,
 		});
 		// `t` changes identity with the language, so the menu re-labels on a switch.
-	}, [contextMenu, menuTargets, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf]);
+	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings, shortcutSettings, sidebarPins]);
 
 	const sidebarSettings = useSidebarSettings();
 	const sidebarGroups = useMemo(
@@ -2250,6 +2366,7 @@ export function useFinderController(
 		versionFamilyError,
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,
+		sidebarPins,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		viewMode,
@@ -2274,6 +2391,7 @@ export function useFinderController(
 		setReduceDialogReplaceOriginal,
 		confirmReduceSize,
 		cancelReduceSize,
+		minimizeReduceSize,
 		dragEntries,
 		copySelection,
 		cutSelection,
@@ -2289,6 +2407,7 @@ export function useFinderController(
 		convertRename,
 		confirmConvertRename,
 		cancelConvertRename,
+		minimizeConvertRename,
 		openEvidenceFolder,
 		closeEvidenceFolderConfirm: closingEvidenceTabId !== null,
 		confirmCloseEvidenceFolder,

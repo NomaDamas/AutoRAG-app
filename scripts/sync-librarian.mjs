@@ -13,8 +13,11 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // This SHA is the librarian on MinSync 0.6.0: SPLADE sparse retrieval (KURE-Sparse-nano) replaces BM25, Kiwi and
 // `minsync init --language` are gone, and `minSync.embedder.id: "none"` builds a sparse-only index (AutoRAG#2080,
 // #2081). Main since v2.13.3 also carries the required decision model, opt-in reranking, parallel name search,
-// SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources.
-const librarianRef = "642cd9ba71bfa272109e18865f713c94b2e8c1a7";
+// SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources. On top:
+// Windows cloud-attribute reads quote paths with typographic apostrophes (AutoRAG#2086) and run PowerShell from env so
+// stderr is UTF-8 instead of CP949 mojibake (#2087), dupey skips cloud and network roots (#2085), and the CLI honors
+// the config file's webSearch section (#2083).
+const librarianRef = "651fa2ffd0ffa888a9670f7fb677fc47e40b4cbe";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

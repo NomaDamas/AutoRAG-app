@@ -421,23 +421,24 @@ export function createEmbeddingSettingsService(deps: EmbeddingSettingsDeps): Emb
 			// The rebuilds embed through whatever the new config selects: the local server has to be up (or gone) first.
 			await ensureEmbeddingForConfig(readRawConfigObject(configPath()));
 
-			const rebuilds: DataSourceSyncResult[] = [];
-			for (const id of toRebuild) {
-				try {
-					rebuilds.push(await deps.dataSources.sync(id));
-				} catch (error) {
-					rebuilds.push({
-						id,
-						ok: false,
-						state: "failed",
-						chunkCount: null,
-						indexedAt: null,
-						durationMs: 0,
-						diagnostics: [],
-						error: error instanceof Error ? error.message : String(error),
-					});
-				}
-			}
+			const rebuilds = await Promise.all(
+				toRebuild.map(async (id): Promise<DataSourceSyncResult> => {
+					try {
+						return await deps.dataSources.sync(id);
+					} catch (error) {
+						return {
+							id,
+							ok: false,
+							state: "failed",
+							chunkCount: null,
+							indexedAt: null,
+							durationMs: 0,
+							diagnostics: [],
+							error: error instanceof Error ? error.message : String(error),
+						};
+					}
+				}),
+			);
 
 			return { ...result, ok: true, applied: true, written, rebuilds };
 		},

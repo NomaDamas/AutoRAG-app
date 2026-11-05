@@ -12,6 +12,7 @@ import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
+import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
@@ -27,6 +28,8 @@ import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
+import { VOICE_CHANNELS, isVoiceClip } from "../shared/voice-contract";
+import type { VoiceService } from "./voice-service";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
@@ -41,6 +44,7 @@ import type { ServicesService } from "./services-service";
 import type { SmartIndexingService } from "./smart-indexing-service";
 import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
+import type { MagicActionService } from "./magic-action-service";
 
 /**
  * The row drag-out: the renderer has already cancelled its own drag
@@ -96,6 +100,16 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (typeof id !== "string" || id.length === 0) throw new Error(t("main.ipc.unknownAction"));
 		return service.cancel(id);
 	});
+}
+
+/** Dictation: transcribe one recorded clip, the readiness check (sign-in, microphone permission) before recording, and the OS microphone settings. */
+export function registerVoiceIpcHandlers(service: VoiceService): void {
+	ipcMain.handle(VOICE_CHANNELS.transcribe, (_event, clip: unknown) => {
+		if (!isVoiceClip(clip)) throw new Error(t("main.ipc.invalidVoiceRequest"));
+		return service.transcribe(clip);
+	});
+	ipcMain.handle(VOICE_CHANNELS.prepare, () => service.prepare());
+	ipcMain.handle(VOICE_CHANNELS.openMicrophoneSettings, () => service.openMicrophoneSettings());
 }
 
 /** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */
@@ -165,6 +179,18 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	);
 	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.reset, (_event, sessionId: unknown) =>
 		typeof sessionId === "string" ? service.reset(sessionId) : undefined,
+	);
+}
+
+export function registerMagicActionIpcHandlers(service: MagicActionService): void {
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.start, (_event, runId: unknown, request: unknown) => {
+		if (typeof runId !== "string" || !isMagicActionRunRequest(request)) {
+			throw new TypeError("magicAction:start expects a run id and { actionId, paths }");
+		}
+		return service.start(runId, request);
+	});
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.cancel, (_event, runId: unknown) =>
+		typeof runId === "string" ? service.cancel(runId) : undefined,
 	);
 }
 

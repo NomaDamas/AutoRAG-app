@@ -16,15 +16,18 @@ import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
+import { InspectorColumn } from "./components/InspectorColumn";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
+import { MagicActionDialog } from "./components/MagicActionDialog";
 import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
+import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
@@ -33,7 +36,10 @@ import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
+import { useSidebarRowMenu } from "./hooks/useSidebarRowMenu";
 import type { SidebarSettings } from "../../shared/sidebar-contract";
+import { ContextMenuSettingsContext } from "./hooks/useContextMenuSettings";
+import type { ContextMenuSettings } from "../../shared/context-menu-contract";
 import { ShortcutSettingsContext } from "./hooks/useShortcutSettings";
 import type { ShortcutSettings } from "../../shared/shortcuts-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
@@ -178,6 +184,7 @@ export function App(): ReactElement {
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
 	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
+	const [contextMenuSettings, setContextMenuSettings] = useState<ContextMenuSettings>(DEFAULT_SETTINGS.contextMenu);
 	const [shortcutSettings, setShortcutSettings] = useState<ShortcutSettings>(DEFAULT_SETTINGS.shortcuts);
 	const [preview, setPreview] = useState<QuickLookTarget | null>(null);
 	const previewRef = useRef<QuickLookTarget | null>(null);
@@ -477,6 +484,11 @@ export function App(): ReactElement {
 					if (target.kind === "folder") finder.openFolder(target.path);
 					else finder.revealEvidence(target.path);
 				}
+			} else if (request.query !== null) {
+				// `dazzi --ask`, Raycast, and the quick-search launcher's "Ask Dazzi": a new AI Search tab asks at once, like
+				// the sidebar's content search, so a tab that is still answering never swallows the question.
+				finder.openAiSearch();
+				deliverToAi({ attach: request.attachments, query: request.query });
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();
@@ -564,6 +576,7 @@ export function App(): ReactElement {
 			setShowHiddenFiles(settings.showHiddenFiles);
 			setLanguage(settings.language);
 			setSidebarSettings(settings.sidebar);
+			setContextMenuSettings(settings.contextMenu);
 			setShortcutSettings(settings.shortcuts);
 			void setAppLanguage(settings.language);
 		};
@@ -601,6 +614,12 @@ export function App(): ReactElement {
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
+	/** On a customizable Settings section the right sidebar is that section's AI assistant instead of the Inspector. */
+	const { host: settingsAssistant, dock: settingsAssistantDock } = useSettingsAssistantHost({
+		rightSidebarVisible: inspectorVisible,
+		setRightSidebarVisible: setInspectorVisible,
+		settingsFocused: path === SETTINGS_PATH,
+	});
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -668,18 +687,20 @@ export function App(): ReactElement {
 			deliverToAi({ attach: dropped });
 		},
 	};
-	/** Outer grid: sidebar + the region that holds the full-width toolbar. */
-	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr)`;
-	/** Inner grid under the toolbar: workspace + inspector. */
-	const finderColumns = `minmax(0,1fr)${inspectorVisible ? ` ${inspectorWidth}px` : ""}`;
+	/** A pinned Favorites row's right-click menu (사이드바에서 제거). */
+	const sidebarRowMenu = useSidebarRowMenu((id) => finder?.sidebarPins.unpin(id));
+	/** Window grid: left sidebar, the content column (toolbar over the workspace), right sidebar (the inspector). */
+	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr) ${inspectorVisible ? inspectorWidth : 0}px`;
 	const canCloseTabs = canCloseWorkspaceTab(workspace);
 	const split = workspace.panes.length > 1;
 
 	return (
 		<TagCatalogContext value={tagCatalog}>
 		<SidebarSettingsContext value={sidebarSettings}>
+		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
+		<SettingsAssistantContext value={settingsAssistant}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
@@ -702,6 +723,10 @@ export function App(): ReactElement {
 							requestSettingsCategory("indexing");
 							finder?.openSettings();
 						}}
+						onOpenAiSettings={() => {
+							requestSettingsCategory("ai");
+							finder?.openSettings();
+						}}
 						sourceStatus={sourceStatus}
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}
@@ -712,6 +737,17 @@ export function App(): ReactElement {
 						aiSearchDrop={aiSearchDrop}
 						tagColorsDenied={tagCatalog.catalog.colorsDenied}
 						onGrantTagColors={grantTagColors}
+						favorites={
+							finder === undefined
+								? undefined
+								: {
+										shownIds: finder.sidebarPins.shownIds,
+										onPin: finder.sidebarPins.pin,
+										onMove: finder.sidebarPins.move,
+										onRowMenu: sidebarRowMenu.open,
+										pathForFile: autorag.pathForFile,
+									}
+						}
 					/></div></div>
 				<div className="flex min-w-0 min-h-0 flex-col">
 					<Toolbar
@@ -726,8 +762,8 @@ export function App(): ReactElement {
 						grouping={finder?.grouping ?? "none"}
 						onApplySort={(key, direction) => finder?.applySort(key, direction)}
 						onSetGrouping={(key) => finder?.setGrouping(key)}
-						inspectorVisible={inspectorVisible}
-						onToggleInspector={() => setInspectorVisible((visible) => !visible)}
+						inspectorHidden={!inspectorVisible}
+						onShowInspector={() => setInspectorVisible(true)}
 						shareAvailable={shareControl.shown}
 						canShare={shareControl.enabled}
 						onShare={(anchor) => {
@@ -740,7 +776,7 @@ export function App(): ReactElement {
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 					/>
-					<div className="grid min-h-0 flex-1" style={{ gridTemplateColumns: finderColumns, gridTemplateRows: "minmax(0, 1fr)" }}>
+					<div className="flex min-h-0 flex-1">
 						<WorkspaceView
 							workspace={workspace}
 							draggingTabId={draggingTabId}
@@ -804,9 +840,14 @@ export function App(): ReactElement {
 								})
 							}
 						/>
-						{inspectorVisible && automationsTabActive ? (
+					</div>
+				</div>
+				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)}>
+						{settingsAssistantDock !== null ? (
+							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
-						) : inspectorVisible ? (
+						) : (
 							<Inspector
 								entry={inspectorEntry}
 								entries={finder?.selectedEntries ?? []}
@@ -835,9 +876,8 @@ export function App(): ReactElement {
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
 								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
 							/>
-						) : null}
-					</div>
-				</div>
+						)}
+				</InspectorColumn>
 				{toast === null && automations.undoToast === null ? null : (
 					<Toast message={automations.undoToast?.message ?? toast ?? ""} action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }} />
 				)}
@@ -869,6 +909,7 @@ export function App(): ReactElement {
 					state={finder.convertRename}
 					onConvert={(keepOriginal) => finder?.confirmConvertRename(keepOriginal)}
 					onCancel={() => finder?.cancelConvertRename()}
+					onMinimize={() => finder?.minimizeConvertRename()}
 				/>
 			)}
 			{finder?.reduceDialog == null ? null : (
@@ -878,6 +919,7 @@ export function App(): ReactElement {
 					onChangeReplaceOriginal={(replaceOriginal) => finder.setReduceDialogReplaceOriginal(replaceOriginal)}
 					onStart={() => finder.confirmReduceSize()}
 					onCancel={() => finder.cancelReduceSize()}
+					onMinimize={() => finder.minimizeReduceSize()}
 				/>
 			)}
 			{finder?.emptyTrashConfirm === true ? (
@@ -916,6 +958,9 @@ export function App(): ReactElement {
 			{automations.menu === null ? null : (
 				<ContextMenu cursor={automations.menu.cursor} entries={automations.menu.entries} onSelect={automations.menuSelect} onClose={automations.closeMenu} />
 			)}
+			{sidebarRowMenu.menu === null ? null : (
+				<ContextMenu cursor={sidebarRowMenu.menu.cursor} entries={sidebarRowMenu.menu.entries} onSelect={sidebarRowMenu.select} onClose={sidebarRowMenu.close} />
+			)}
 			{automations.preview === null ? null : (
 				<AutomationQuickLook rule={automations.preview} onClose={automations.closePreview} onEdit={automations.edit} />
 			)}
@@ -930,10 +975,13 @@ export function App(): ReactElement {
 						finder?.openSettings();
 					}}
 				/>
+				<MagicActionDialog />
 			</div>
 		</div>
+		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
+		</ContextMenuSettingsContext>
 		</SidebarSettingsContext>
 		</TagCatalogContext>
 	);

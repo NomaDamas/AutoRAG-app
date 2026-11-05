@@ -18,7 +18,8 @@ import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { platformKey } from "../../lib/platform-copy";
 import type { ProviderLoginEvent, ProviderLoginPrompt, ProviderSummary } from "../../../../shared/settings-contract";
-import { AppIcon, ModalActions, ModalShell } from "./SettingsKit";
+import { DAZZI_PLAN_PROVIDER, ProviderIcon } from "./ProviderIcon";
+import { ModalActions, ModalShell } from "./SettingsKit";
 import { defaultEnvName, errorText } from "./configSupport";
 
 const settings = window.autorag.settings;
@@ -227,7 +228,7 @@ export function ConnectMenu({
 				<>
 					<p className="settings-menu-group">{t("settingsCore.ai.menu.dazziPlan")}</p>
 					<button type="button" className="settings-menu-item" onClick={onSignInToAutorag}>
-						<AppIcon small label="Dazzi" />
+						<ProviderIcon small provider={DAZZI_PLAN_PROVIDER} />
 						<span>{t("settingsCore.ai.menu.signInDazzi")}</span>
 					</button>
 				</>
@@ -237,7 +238,7 @@ export function ConnectMenu({
 					<p className="settings-menu-group">{t("settingsCore.ai.subscriptionAccount")}</p>
 					{subscriptions.map((provider) => (
 						<button key={provider.id} type="button" className="settings-menu-item" onClick={() => onConnect(provider, "oauth")}>
-							<AppIcon small label={provider.name} />
+							<ProviderIcon small provider={provider} />
 							<span>{provider.name}</span>
 						</button>
 					))}
@@ -248,7 +249,7 @@ export function ConnectMenu({
 					<p className="settings-menu-group">{t("settingsCore.ai.menu.apiKeys")}</p>
 					{apiKeys.map((provider) => (
 						<button key={provider.id} type="button" className="settings-menu-item" onClick={() => onConnect(provider, "api_key")}>
-							<AppIcon small label={provider.name} />
+							<ProviderIcon small provider={provider} />
 							<span>{provider.name}</span>
 						</button>
 					))}
@@ -257,7 +258,7 @@ export function ConnectMenu({
 			<p className="settings-menu-group">{t("settingsCore.ai.menu.localMachine")}</p>
 			{servers.map((provider) => (
 				<button key={provider.id} type="button" className="settings-menu-item" onClick={() => onPickServerExisting(provider)}>
-					<AppIcon small label={provider.name} />
+					<ProviderIcon small provider={provider} />
 					<span>{provider.name}</span>
 				</button>
 			))}
