@@ -3163,7 +3163,34 @@
       "addFolderPlaceholder": "e.g. ~/Documents",
       "addItemPlaceholder": "e.g. node_modules",
       "confirmAdd": "Add",
-      "addChip": "+ Add"
+      "addChip": "+ Add",
+      "openMap": "View index map",
+      "openMapHint": "See, as a map, how much of every file and folder in the search scope is indexed."
+    },
+    "indexMap": {
+      "title": "Index map",
+      "desc": "Blue land is indexed, red land is not indexed yet or needs a refresh, and grey land is excluded from search.",
+      "coverageLabel": "Share indexed",
+      "coverage": "{{indexed}} of {{total}} indexed",
+      "canvasLabel": "Map of the files and folders in the search scope, drawn as territories",
+      "loading": "Surveying the search scope…",
+      "error": "Couldn't load the map: {{message}}",
+      "unavailable": "The index map isn't available in this window.",
+      "empty": "There are no files in the search scope. Add a folder to search.",
+      "parcel": "{{files}} files · {{state}}",
+      "folderCounts": "{{indexed}} of {{total}} indexed",
+      "fit": "Fit to view",
+      "reload": "Reload",
+      "legendLabel": "Legend",
+      "truncated": "The search scope is too large, so only the first {{total}} files were surveyed.",
+      "folded": "{{total}} files are too many to draw one by one, so files in the same state are grouped together.",
+      "state": {
+        "indexed": "Indexed",
+        "stale": "Needs refresh",
+        "unindexed": "Not indexed",
+        "excluded": "Excluded",
+        "unindexable": "Unreadable"
+      }
     },
     "web": {
       "title": "Web search",

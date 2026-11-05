@@ -3163,7 +3163,34 @@
       "addFolderPlaceholder": "例如：~/Documents",
       "addItemPlaceholder": "例如：node_modules",
       "confirmAdd": "添加",
-      "addChip": "+ 添加"
+      "addChip": "+ 添加",
+      "openMap": "查看索引地图",
+      "openMapHint": "以地图形式查看搜索范围内所有文件和文件夹的索引情况。"
+    },
+    "indexMap": {
+      "title": "索引地图",
+      "desc": "蓝色土地已建立索引，红色土地尚未索引或需要重新索引，灰色土地已从搜索中排除。",
+      "coverageLabel": "已索引比例",
+      "coverage": "{{total}} 个中已索引 {{indexed}} 个",
+      "canvasLabel": "将搜索范围内的文件和文件夹绘制为领土的地图",
+      "loading": "正在勘察搜索范围…",
+      "error": "无法加载地图：{{message}}",
+      "unavailable": "此窗口无法查看索引地图。",
+      "empty": "搜索范围内没有文件。请添加要搜索的文件夹。",
+      "parcel": "{{files}} 个{{state}}文件",
+      "folderCounts": "{{total}} 个中已索引 {{indexed}} 个",
+      "fit": "显示全部",
+      "reload": "重新加载",
+      "legendLabel": "图例",
+      "truncated": "搜索范围过大，仅勘察了前 {{total}} 个文件。",
+      "folded": "{{total}} 个文件太多，无法逐一绘制，因此将相同状态的文件合并显示。",
+      "state": {
+        "indexed": "已索引",
+        "stale": "需要更新",
+        "unindexed": "未索引",
+        "excluded": "已排除",
+        "unindexable": "无法读取"
+      }
     },
     "web": {
       "title": "网页搜索",

@@ -1282,6 +1282,179 @@
 	cursor: progress;
 }
 
+/* ------------------------------------------------------ Index map modal -- */
+
+.settings-view .settings-modal.index-map-modal {
+	display: flex;
+	flex-direction: column;
+	width: min(1080px, calc(100% - 48px));
+	height: min(760px, calc(100vh - 48px));
+	max-height: none;
+	overflow: hidden;
+	padding: 20px 20px 16px;
+}
+
+.settings-view .index-map-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: var(--space-16);
+	padding-right: 36px;
+	margin-bottom: var(--space-12);
+}
+
+.settings-view .index-map-head p {
+	max-width: 640px;
+}
+
+.settings-view .index-map-coverage {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	flex-shrink: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .index-map-coverage strong {
+	color: var(--text-primary);
+	font-size: 22px;
+	font-weight: var(--weight-semibold);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.1;
+}
+
+.settings-view .index-map-stage {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid rgba(120, 150, 210, 0.22);
+	border-radius: var(--radius-12);
+	background: #04070f;
+}
+
+.settings-view .index-map-canvas {
+	display: block;
+	width: 100%;
+	height: 100%;
+	cursor: grab;
+	touch-action: none;
+}
+
+.settings-view .index-map-canvas:active {
+	cursor: grabbing;
+}
+
+.settings-view .index-map-overlay {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	padding: var(--space-20);
+	color: rgba(226, 234, 250, 0.82);
+	font-size: 13px;
+	text-align: center;
+	pointer-events: none;
+}
+
+.settings-view .index-map-tooltip {
+	position: absolute;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	column-gap: 7px;
+	align-items: center;
+	max-width: 320px;
+	padding: 7px 10px;
+	border: 1px solid rgba(200, 215, 245, 0.18);
+	border-radius: var(--radius-8);
+	background: rgba(8, 14, 30, 0.86);
+	backdrop-filter: blur(8px);
+	color: #eef3ff;
+	font-size: 12px;
+	transform: translate(-50%, calc(-100% - 14px));
+	pointer-events: none;
+}
+
+.settings-view .index-map-tooltip-dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+}
+
+.settings-view .index-map-tooltip-name {
+	overflow: hidden;
+	font-weight: var(--weight-semibold);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .index-map-tooltip-meta {
+	grid-column: 2;
+	overflow: hidden;
+	color: rgba(214, 226, 250, 0.7);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .index-map-tools {
+	position: absolute;
+	right: 10px;
+	bottom: 10px;
+	display: flex;
+	gap: 6px;
+}
+
+.settings-view .index-map-tool {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border: 1px solid rgba(200, 215, 245, 0.2);
+	border-radius: var(--radius-6);
+	background: rgba(8, 14, 30, 0.7);
+	color: rgba(226, 234, 250, 0.9);
+	cursor: pointer;
+}
+
+.settings-view .index-map-tool:hover {
+	background: rgba(30, 44, 78, 0.85);
+}
+
+.settings-view .index-map-legend {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-6) var(--space-16);
+	margin: var(--space-12) 0 0;
+	padding: 0;
+	list-style: none;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .index-map-legend li {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.settings-view .index-map-legend strong {
+	color: var(--text-primary);
+	font-weight: var(--weight-semibold);
+	font-variant-numeric: tabular-nums;
+}
+
+.settings-view .index-map-legend-swatch {
+	width: 10px;
+	height: 10px;
+	border-radius: 3px;
+}
+
+.settings-view .settings-modal .index-map-note {
+	margin-top: var(--space-6);
+	font-size: var(--font-size-meta);
+}
+
 .settings-view .settings-code {
 	display: block;
 	margin-top: var(--space-8);

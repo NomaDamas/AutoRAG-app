@@ -8,12 +8,13 @@
  * reuse `LanguageSettings`.
  */
 
-import { useState, type ReactElement } from "react";
+import { useCallback, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { Folder, Plus } from "lucide-react";
+import { Folder, Map as MapIcon, Plus } from "lucide-react";
 import { DEFAULT_CODE_FOLDER_NAMES, type AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
+import { IndexMapModal } from "./index-map/IndexMapModal";
 import { Chips, Note, PromptModal, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { asRecord, boolOf, getAt, listOf, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
@@ -102,6 +103,8 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 	const { t } = useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
 	const [addTarget, setAddTarget] = useState<"searchPaths" | "excludePaths" | null>(null);
+	const [mapOpen, setMapOpen] = useState(false);
+	const closeMap = useCallback(() => setMapOpen(false), []);
 	const searchPaths = listOf(getAt(snapshot.config, ["searchPaths"]));
 	const excludePaths = listOf(getAt(snapshot.config, ["excludePaths"]));
 	const fsearch = getAt(snapshot.config, ["fsearch"]);
@@ -134,6 +137,11 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 					</div>
 				</Row>
 				{searchPaths.length === 0 ? <Note>{t("settingsSources.scope.emptyFolderNote")}</Note> : null}
+				<Row name={t("settingsSources.scope.openMap")} hint={t("settingsSources.scope.openMapHint")}>
+					<button type="button" className="linear-btn settings-btn-quiet" onClick={() => setMapOpen(true)}>
+						<MapIcon size={13} aria-hidden="true" focusable="false" />{t("settingsSources.scope.openMap")}
+					</button>
+				</Row>
 			</Section>
 			<Section title={t("settingsSources.scope.excludeTitle")} description={t("settingsSources.scope.excludeDesc")}>
 				<Note>{t("settingsSources.scope.excludeNote", { folders: codeFolderNames.join(", ") })}</Note>
@@ -170,6 +178,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 					}}
 				/>
 			) : null}
+			{mapOpen ? <IndexMapModal onClose={closeMap} /> : null}
 		</>
 	);
 }

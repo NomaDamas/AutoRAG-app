@@ -3163,7 +3163,34 @@
       "addFolderPlaceholder": "예: ~/Documents",
       "addItemPlaceholder": "예: node_modules",
       "confirmAdd": "추가",
-      "addChip": "+ 추가"
+      "addChip": "+ 추가",
+      "openMap": "인덱싱 지도 보기",
+      "openMapHint": "검색 범위 안의 모든 파일과 폴더가 얼마나 인덱싱됐는지 지도로 봅니다."
+    },
+    "indexMap": {
+      "title": "인덱싱 지도",
+      "desc": "파란 땅은 인덱싱된 곳, 빨간 땅은 아직 인덱싱되지 않았거나 다시 인덱싱해야 하는 곳, 회색 땅은 검색에서 제외된 곳입니다.",
+      "coverageLabel": "인덱싱된 비율",
+      "coverage": "{{total}}개 중 {{indexed}}개 인덱싱됨",
+      "canvasLabel": "검색 범위의 파일과 폴더를 영토로 그린 지도",
+      "loading": "검색 범위를 살펴보는 중…",
+      "error": "지도를 불러오지 못했습니다: {{message}}",
+      "unavailable": "이 창에서는 인덱싱 지도를 볼 수 없습니다.",
+      "empty": "검색 범위에 파일이 없습니다. 검색할 폴더를 추가해 보세요.",
+      "parcel": "{{state}} 파일 {{files}}개",
+      "folderCounts": "{{total}}개 중 {{indexed}}개 인덱싱됨",
+      "fit": "전체 보기",
+      "reload": "다시 불러오기",
+      "legendLabel": "범례",
+      "truncated": "검색 범위가 너무 커서 처음 {{total}}개 파일까지만 살펴봤습니다.",
+      "folded": "파일 {{total}}개를 모두 그리기엔 많아서, 같은 상태의 파일은 한 덩어리로 묶었습니다.",
+      "state": {
+        "indexed": "인덱싱됨",
+        "stale": "갱신 필요",
+        "unindexed": "인덱싱 안 됨",
+        "excluded": "제외됨",
+        "unindexable": "읽을 수 없음"
+      }
     },
     "web": {
       "title": "웹 검색",

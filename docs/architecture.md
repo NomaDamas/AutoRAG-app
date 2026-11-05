@@ -351,6 +351,36 @@ purpose (restarting it re-scans every watched folder). QA lane:
 `scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
 `taskkill /F` on main alone).
 
+### Index map
+
+Settings → 검색 범위 → **인덱싱 지도 보기** opens a modal that draws the search
+roots as a territory map (`src/renderer/src/components/settings/index-map/`).
+`src/main/index-map.ts` runs on the librarian thread (`indexMap` in
+`librarian-contract.ts`). It walks the roots the way a refresh walks them: no
+symlinks, the librarian's skip-folder names, its depth limit. An excluded or
+skipped folder is sealed, which means it is not entered and its direct entries
+count as excluded. Each file gets the same classification as the index badge
+(`index-status.ts`, which shares the context loader): **indexed** means the
+parsed mirror holds the file and MinSync has staged it; **stale** means the
+mirror's mtime/size no longer match, the file was never staged, or it is
+excluded but still in the index; then **unindexed**, **excluded**, and
+**unindexable** (no parser reads it). The scan stops at
+`INDEX_MAP_MAX_ENTRIES` and reports `truncated`. `buildIndexMap` keeps the node
+count under `INDEX_MAP_NODE_BUDGET`. It picks the most detailed level of a fixed
+ladder that fits: first it caps the files shown per folder, then the depth.
+Files it does not show become one `parcel` node per state with their count.
+
+The renderer lays the graph out with `d3-force`. `territory.ts` rasterizes the
+land: each node claims a smooth falloff around itself, and the claims of one
+state add up. A cell goes to the state with the strongest sum; weak cells are
+sea. Borders are drawn where the owner changes, and terraces follow the summed
+claim. Blue is indexed, red is unindexed or stale, and grey (translucent) is
+excluded or unindexable. Overlapping folder labels yield to roots and heavier
+folders until you zoom in. The canvas pans, zooms, and fits. Hovering names the
+file and its state. A refresh that finishes while the modal is open
+(`onIndexRefreshed`) reloads the map. QA lane:
+`scripts/manual-qa/run-qa-finder-index-map.mjs`.
+
 ## Error reports (Sentry)
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,

@@ -60,6 +60,7 @@ export type FsWorkerOp =
 	| "setLanguage"
 	| "indexStatus"
 	| "setIndexExcluded"
+	| "indexMap"
 	| "setWatchSet"
 	| "layers"
 	/** The app that opens a path (Quick Look's "Open with"); main asks so it never spawns a child itself. */

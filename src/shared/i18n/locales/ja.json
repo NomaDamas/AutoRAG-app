@@ -3163,7 +3163,34 @@
       "addFolderPlaceholder": "例: ~/Documents",
       "addItemPlaceholder": "例: node_modules",
       "confirmAdd": "追加",
-      "addChip": "+ 追加"
+      "addChip": "+ 追加",
+      "openMap": "インデックスマップを表示",
+      "openMapHint": "検索範囲内のすべてのファイルとフォルダがどれだけインデックス化されているかを地図で確認します。"
+    },
+    "indexMap": {
+      "title": "インデックスマップ",
+      "desc": "青い土地はインデックス済み、赤い土地は未インデックスまたは再インデックスが必要な場所、灰色の土地は検索から除外された場所です。",
+      "coverageLabel": "インデックス済みの割合",
+      "coverage": "{{total}} 件中 {{indexed}} 件がインデックス済み",
+      "canvasLabel": "検索範囲のファイルとフォルダを領土として描いた地図",
+      "loading": "検索範囲を調べています…",
+      "error": "地図を読み込めませんでした: {{message}}",
+      "unavailable": "このウィンドウではインデックスマップを表示できません。",
+      "empty": "検索範囲にファイルがありません。検索するフォルダを追加してください。",
+      "parcel": "{{state}}のファイル {{files}} 件",
+      "folderCounts": "{{total}} 件中 {{indexed}} 件がインデックス済み",
+      "fit": "全体を表示",
+      "reload": "再読み込み",
+      "legendLabel": "凡例",
+      "truncated": "検索範囲が大きすぎるため、最初の {{total}} 件のファイルまでを調べました。",
+      "folded": "{{total}} 件のファイルは一つずつ描くには多いため、同じ状態のファイルをまとめて表示しています。",
+      "state": {
+        "indexed": "インデックス済み",
+        "stale": "更新が必要",
+        "unindexed": "未インデックス",
+        "excluded": "除外",
+        "unindexable": "読み取り不可"
+      }
     },
     "web": {
       "title": "ウェブ検索",

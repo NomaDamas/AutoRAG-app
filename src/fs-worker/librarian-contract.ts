@@ -19,6 +19,7 @@ export const LIBRARIAN_OP = {
 	scanDuplicates: "scanDuplicates",
 	indexStatus: "indexStatus",
 	setIndexExcluded: "setIndexExcluded",
+	indexMap: "indexMap",
 	setLanguage: "setLanguage",
 	/**
 	 * Stop the file-name index and let the librarian clean up the child processes it started. The librarian does that
