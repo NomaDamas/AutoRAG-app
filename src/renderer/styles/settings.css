@@ -1063,6 +1063,12 @@
 	border-radius: var(--radius-4);
 	font-size: 9.5px;
 }
+
+/* A provider logo keeps the 2/3 share of the tile it has at the other sizes. */
+.settings-view .settings-menu-group.is-provider .settings-app-icon.is-sm .settings-app-icon-logo {
+	width: 10px;
+	height: 10px;
+}
 .settings-view .settings-menu-item {
 	display: flex;
 	align-items: center;
@@ -2092,94 +2098,43 @@
 	color: var(--text-faint);
 }
 
-/* ------------------------------------------------ AI App Customizer Modal -- */
+/* ------------------------------------------- AI App Customizer side panel -- */
 
-.customizer-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: 60;
-	display: grid;
-	place-items: center;
-	background: var(--scrim-modal);
-	backdrop-filter: blur(4px);
-}
-
-.customizer-modal {
+/*
+ * On the customizable pages (사이드바, 우클릭 메뉴, 단축키) the window's right
+ * sidebar — the Inspector's column, with its width, resize grip, and toolbar
+ * toggle — holds the assistant instead, so the page stays interactive and
+ * shows every change the agent makes. `.customizer-dock` is the right sidebar's
+ * content; `.customizer-dock__node` is the node Settings renders into and the
+ * window moves into it (`SettingsAssistantDock.tsx`).
+ */
+.customizer-dock,
+.customizer-dock__node {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
-	width: min(560px, calc(100vw - 48px));
-	height: min(600px, calc(100vh - 64px));
-	border: 1px solid var(--border);
-	border-radius: var(--radius-12);
+	min-width: 0;
+	min-height: 0;
+}
+
+.customizer-panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
 	background: var(--bg-window);
-	box-shadow: var(--shadow-window);
-	overflow: hidden;
 }
 
-.customizer-modal__head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-12);
-	padding: var(--space-14) var(--space-16);
-	border-bottom: 1px solid var(--border-divider);
-	background: var(--bg-chrome);
+.customizer-panel[hidden] {
+	display: none;
 }
 
-.customizer-modal__brand {
-	display: flex;
-	align-items: center;
-	gap: var(--space-10);
-	min-width: 0;
-}
-
-.customizer-modal__icon {
+/* Starts a new conversation; sits beside send once there is one to discard. */
+.customizer-composer__new-chat {
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 32px;
-	height: 32px;
-	background: transparent;
-}
-
-.customizer-modal__logo {
-	display: block;
-	width: 30px;
-	height: 30px;
-	object-fit: contain;
-	background: transparent;
-}
-
-.customizer-modal__titles {
-	min-width: 0;
-}
-
-.customizer-modal__title {
-	margin: 0;
-	font-size: var(--font-size-body);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
-}
-
-.customizer-modal__subtitle {
-	margin: var(--space-2) 0 0;
-	font-size: var(--font-size-badge);
-	color: var(--text-muted);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.customizer-modal__head-actions {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-4);
-	flex: none;
-}
-
-.customizer-modal__icon-btn {
-	display: grid;
-	place-items: center;
 	width: 28px;
 	height: 28px;
 	padding: 0;
@@ -2191,21 +2146,21 @@
 	transition: background var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out);
 }
 
-.customizer-modal__icon-btn:hover {
+.customizer-composer__new-chat:hover {
 	background: var(--bg-hover-strong);
 	color: var(--text-primary);
 }
 
-.customizer-modal__body {
+.customizer-panel__body {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--space-20);
+	padding: var(--space-16);
 }
 
-.customizer-modal__empty {
+.customizer-panel__empty {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -2214,7 +2169,7 @@
 	text-align: center;
 }
 
-.customizer-modal__empty-orb {
+.customizer-panel__empty-orb {
 	display: grid;
 	place-items: center;
 	width: 56px;
@@ -2223,7 +2178,7 @@
 	background: transparent;
 }
 
-.customizer-modal__empty-logo {
+.customizer-panel__empty-logo {
 	display: block;
 	width: 52px;
 	height: 52px;
@@ -2231,14 +2186,14 @@
 	background: transparent;
 }
 
-.customizer-modal__empty-title {
+.customizer-panel__empty-title {
 	margin: 0 0 var(--space-6);
 	font-size: 15px;
 	font-weight: var(--weight-semibold);
 	color: var(--text-primary);
 }
 
-.customizer-modal__empty-desc {
+.customizer-panel__empty-desc {
 	margin: 0 0 var(--space-18);
 	max-width: 380px;
 	font-size: var(--font-size-meta);
@@ -2246,7 +2201,7 @@
 	color: var(--text-muted);
 }
 
-.customizer-modal__suggestions {
+.customizer-panel__suggestions {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
@@ -2277,16 +2232,7 @@
 	color: var(--text-primary);
 }
 
-.customizer-suggestion-chip__logo {
-	display: block;
-	flex: none;
-	width: 15px;
-	height: 15px;
-	object-fit: contain;
-	background: transparent;
-}
-
-.customizer-modal__turns {
+.customizer-panel__turns {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-18);
@@ -2400,7 +2346,7 @@
 	line-height: 1.45;
 }
 
-.customizer-modal__foot {
+.customizer-panel__foot {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
@@ -2471,15 +2417,6 @@
 
 .customizer-composer__send.is-stop {
 	background: var(--text-primary);
-}
-
-.customizer-modal__footnote {
-	display: flex;
-	align-items: center;
-	gap: var(--space-5);
-	padding: 0 var(--space-2);
-	font-size: var(--font-size-badge);
-	color: var(--text-muted);
 }
 
 /* ------------------------------------------------ Shortcuts Customization -- */

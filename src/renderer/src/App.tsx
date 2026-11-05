@@ -27,6 +27,7 @@ import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
+import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
@@ -35,6 +36,7 @@ import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
+import { useSidebarRowMenu } from "./hooks/useSidebarRowMenu";
 import type { SidebarSettings } from "../../shared/sidebar-contract";
 import { ContextMenuSettingsContext } from "./hooks/useContextMenuSettings";
 import type { ContextMenuSettings } from "../../shared/context-menu-contract";
@@ -612,6 +614,12 @@ export function App(): ReactElement {
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
+	/** On a customizable Settings section the right sidebar is that section's AI assistant instead of the Inspector. */
+	const { host: settingsAssistant, dock: settingsAssistantDock } = useSettingsAssistantHost({
+		rightSidebarVisible: inspectorVisible,
+		setRightSidebarVisible: setInspectorVisible,
+		settingsFocused: path === SETTINGS_PATH,
+	});
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -679,6 +687,8 @@ export function App(): ReactElement {
 			deliverToAi({ attach: dropped });
 		},
 	};
+	/** A pinned Favorites row's right-click menu (사이드바에서 제거). */
+	const sidebarRowMenu = useSidebarRowMenu((id) => finder?.sidebarPins.unpin(id));
 	/** Window grid: left sidebar, the content column (toolbar over the workspace), right sidebar (the inspector). */
 	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr) ${inspectorVisible ? inspectorWidth : 0}px`;
 	const canCloseTabs = canCloseWorkspaceTab(workspace);
@@ -690,6 +700,7 @@ export function App(): ReactElement {
 		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
+		<SettingsAssistantContext value={settingsAssistant}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
@@ -726,6 +737,17 @@ export function App(): ReactElement {
 						aiSearchDrop={aiSearchDrop}
 						tagColorsDenied={tagCatalog.catalog.colorsDenied}
 						onGrantTagColors={grantTagColors}
+						favorites={
+							finder === undefined
+								? undefined
+								: {
+										shownIds: finder.sidebarPins.shownIds,
+										onPin: finder.sidebarPins.pin,
+										onMove: finder.sidebarPins.move,
+										onRowMenu: sidebarRowMenu.open,
+										pathForFile: autorag.pathForFile,
+									}
+						}
 					/></div></div>
 				<div className="flex min-w-0 min-h-0 flex-col">
 					<Toolbar
@@ -821,7 +843,9 @@ export function App(): ReactElement {
 					</div>
 				</div>
 				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)}>
-						{automationsTabActive ? (
+						{settingsAssistantDock !== null ? (
+							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : (
 							<Inspector
@@ -934,6 +958,9 @@ export function App(): ReactElement {
 			{automations.menu === null ? null : (
 				<ContextMenu cursor={automations.menu.cursor} entries={automations.menu.entries} onSelect={automations.menuSelect} onClose={automations.closeMenu} />
 			)}
+			{sidebarRowMenu.menu === null ? null : (
+				<ContextMenu cursor={sidebarRowMenu.menu.cursor} entries={sidebarRowMenu.menu.entries} onSelect={sidebarRowMenu.select} onClose={sidebarRowMenu.close} />
+			)}
 			{automations.preview === null ? null : (
 				<AutomationQuickLook rule={automations.preview} onClose={automations.closePreview} onEdit={automations.edit} />
 			)}
@@ -951,6 +978,7 @@ export function App(): ReactElement {
 				<MagicActionDialog />
 			</div>
 		</div>
+		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
 		</ContextMenuSettingsContext>

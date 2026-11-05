@@ -212,6 +212,8 @@
     "putBackCount": "Put Back {{count}} items",
     "emptyTrash": "Empty Trash",
     "newFolder": "New Folder",
+    "pinToSidebar": "Pin to Sidebar",
+    "unpinFromSidebar": "Remove from Sidebar",
     "new": "New",
     "trashShort": "Trash"
   },
@@ -322,6 +324,25 @@
     "dropPrompt": "Drag here to ask AI",
     "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
     "steerSend": "Correct the search",
+    "voiceStart": "Dictate with your voice",
+    "voiceStop": "Stop recording and transcribe",
+    "voiceCancel": "Cancel recording",
+    "voiceSend": "Stop and send",
+    "voiceTranscribing": "Transcribing…",
+    "voiceNoSpeech": "No speech was heard. Please try again.",
+    "voiceUnavailable": "No microphone is available on this device.",
+    "voiceFailed": "Could not transcribe your voice: {{message}}",
+    "micPermission": {
+      "title": "Allow microphone access",
+      "body": "To ask with your voice, Dazzi needs the microphone. It records only after you press the microphone button.",
+      "stepsMac": "Turn on Dazzi in System Settings › Privacy & Security › Microphone.",
+      "stepsWindows": "In Settings › Privacy & security › Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”.",
+      "openMac": "Open System Settings",
+      "openWindows": "Open Windows Settings",
+      "notNow": "Not now",
+      "waiting": "Turn it on there and come back to Dazzi: recording starts right away.",
+      "stillDenied": "The microphone is still off. Turn it on in Settings, then come back."
+    },
     "steerHintLead": "You can type while it searches",
     "steerHintEnter": "correct",
     "steerHintAltEnter": "next question",
@@ -1557,7 +1578,8 @@
       "unknownAction": "Unknown file action.",
       "invalidAnchor": "The share anchor is invalid.",
       "invalidServiceRequest": "The service request is invalid.",
-      "invalidConversionRequest": "The conversion request is invalid."
+      "invalidConversionRequest": "The conversion request is invalid.",
+      "invalidVoiceRequest": "The voice request is invalid."
     },
     "dialogs": {
       "notificationBody": "Notifications are on.",
@@ -1670,6 +1692,9 @@
       "checkMenu": "Check for Updates…",
       "readyNotification": "Dazzi {{version}} is ready. It installs when you quit the app.",
       "availableNotification": "Dazzi {{version}} is available to download."
+    },
+    "voice": {
+      "unreadableTranscript": "The Dazzi service returned a transcript this app cannot read."
     },
     "account": {
       "httpStatus": "The Dazzi service answered HTTP {{status}}.",
@@ -2189,23 +2214,20 @@
       "emptyConnections": "No connected app attachment folders.",
       "emptyLocations": "No mounted volumes found.",
       "emptyTags": "No pinned Finder tags.",
-      "modal": {
+      "assistant": {
         "title": "AI App Customizer",
-        "subtitle": "Describe how you want your sidebar or app preferences configured.",
         "newChat": "New Chat",
         "emptyTitle": "How would you like to customize Dazzi?",
         "emptyDesc": "Tell the assistant which folders to show, how to order them, or switch themes — changes apply live.",
-        "promptMinimal": "Hide Music, Movies, Pictures, and Applications from the sidebar",
+        "promptHideMedia": "Hide the Music, Movies, and Pictures folders I don't use for work",
         "promptReorder": "Move Downloads and Documents to the top of Favorites",
-        "promptCleanSections": "Hide the Cloud and Tags sections for a cleaner sidebar",
-        "promptReset": "Reset the sidebar layout back to default",
+        "promptReset": "Put the sidebar back the way it was",
         "thinking": "Inspecting settings",
-        "placeholder": "e.g. Hide Music and Movies and put Downloads at the top…",
         "send": "Send",
         "stop": "Stop",
-        "lockedNotice": "AI Search and Automations are essential features and always remain visible.",
         "openAiSettings": "Open AI Model Settings",
-        "unavailable": "App customizer service is unavailable."
+        "unavailable": "App customizer service is unavailable.",
+        "inputLabel": "Message the assistant"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects or C:\\Work"
     },
@@ -2268,6 +2290,7 @@
         "rename": "Rename",
         "copyPath": "Copy Path",
         "newFolder": "New Folder",
+        "pinToSidebar": "Pin to / Remove from Sidebar",
         "extract": "Extract Archive",
         "compress": "Compress (ZIP)",
         "compress7z": "Compress as 7z",
@@ -2307,17 +2330,14 @@
         "commandPlaceholderWindows": "e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args or python ~\\scripts\\process.py @args",
         "commandHintWindows": "Runs in Windows PowerShell with selected paths passed in $args and env vars $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, and $env:DAZZI_FILE_COUNT."
       },
-      "modal": {
+      "assistant": {
         "title": "AI Context Menu & Magic Action Assistant",
-        "subtitle": "Describe the right-click buttons, scripts, or AI file actions you want.",
         "emptyTitle": "What should appear when you right-click?",
-        "emptyDesc": "Create AI agent actions or scripts scoped to specific extensions or multi-file selections, or clean up built-in items.",
-        "promptSummarizePdf": "Add a Magic Action for single PDF or Markdown files that summarizes them in 3 bullet points",
-        "promptBatchScript": "Create a Magic Action for multiple selected files that computes their SHA-256 hashes",
-        "promptCleanMenu": "Hide Compress as 7z, Copy Path, and Cut from the right-click menu",
-        "promptReset": "Reset the right-click context menu back to default",
-        "placeholder": "e.g. Add a right-click action for multiple images that lists their dimensions and sizes…",
-        "lockedNotice": "Tags always remains visible, and built-in keyboard shortcuts stay unchanged."
+        "emptyDesc": "Build your own right-click actions that summarize, compare, or tidy up files, or hide the menu items you don't use.",
+        "promptSummarizeDoc": "Make a Magic Action that sums up a PDF or Word document in three lines when I right-click it",
+        "promptCompareFiles": "Make a Magic Action that lists what changed between two files I select and right-click",
+        "promptPaperToDiscord": "Make a Magic Action that summarizes a PDF paper, posts the summary to my Discord #paper-summaries channel, and saves summary slides in a \"Paper Summaries\" folder",
+        "promptMaskToPdf": "Make a Magic Action that masks all pseudonymized personal details in an hwp or docx file, then converts it to PDF and saves it"
       }
     },
     "shortcuts": {
@@ -2385,18 +2405,15 @@
         "aiNewChat": "New AI Chat",
         "aiToggleHistory": "Toggle Chat History"
       },
-      "modal": {
+      "assistant": {
         "title": "AI Shortcut Customizer",
-        "subtitle": "Describe the shortcut changes or swaps you want in plain words.",
         "emptyTitle": "Which shortcuts would you like to change?",
         "emptyDesc": "Rebind or swap any of Dazzi's 26 default-bound shortcuts — changes take effect right away.",
-        "promptMacFinder": "Switch to Mac Finder default shortcuts",
-        "promptWindowsExplorer": "Switch to Windows File Explorer shortcuts",
-        "promptSwap": "Swap the Duplicate and Rename shortcuts",
-        "promptReset": "Reset all keyboard shortcuts back to default",
+        "promptMacFinder": "Let me use the same shortcuts as the Mac Finder",
+        "promptWindowsExplorer": "Switch to the shortcuts I know from Windows File Explorer",
+        "promptRenameF2": "Make F2 rename a file",
+        "promptReset": "Put all shortcuts back the way they were",
         "thinking": "Checking shortcuts",
-        "placeholder": "e.g. Set Rename to F2 and Focus Search to Cmd+P…",
-        "lockedNotice": "Only existing default-bound shortcuts can be edited; Esc and plain arrow keys stay reserved.",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "Shortcut customizer service is unavailable."
       }

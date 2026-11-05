@@ -2,6 +2,7 @@ import {
 	forwardRef,
 	useEffect,
 	useImperativeHandle,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -32,6 +33,10 @@ import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { appendTranscript } from "../../../shared/voice-contract";
+import { useVoiceInput } from "../state/useVoiceInput";
+import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
+import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
@@ -48,7 +53,7 @@ import {
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -199,6 +204,69 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const composeBoxRef = useRef<HTMLDivElement | null>(null);
+	const lastIdleHeightRef = useRef<number | null>(null);
+	const prevVoiceActiveRef = useRef(false);
+	/** What went wrong with dictation (not signed in, microphone refused, nothing heard): a line by the composer, never the run's error card. */
+	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+	const voice = useVoiceInput({
+		voice: autorag.voice,
+		language,
+		onTranscript: (text, submitImmediately) => {
+			const merged = appendTranscript(query, text);
+			setVoiceNotice(null);
+			if (submitImmediately === true) {
+				sendDraft(merged, false);
+				return;
+			}
+			setQuery(merged);
+		},
+		onError: setVoiceNotice,
+	});
+	const voiceActive = voice.phase === "listening" || voice.phase === "transcribing";
+
+	useEffect(() => {
+		if (voiceActive) return;
+		const box = composeBoxRef.current;
+		if (box === null) return;
+		const recordHeight = (): void => {
+			const h = box.getBoundingClientRect().height;
+			if (h > 0) lastIdleHeightRef.current = h;
+		};
+		recordHeight();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(recordHeight);
+		observer.observe(box);
+		return () => observer.disconnect();
+	}, [voiceActive]);
+
+	useLayoutEffect(() => {
+		if (prevVoiceActiveRef.current === voiceActive) return;
+		prevVoiceActiveRef.current = voiceActive;
+		const box = composeBoxRef.current;
+		const fromHeight = voiceActive ? lastIdleHeightRef.current : 48;
+		if (box !== null && fromHeight !== null) {
+			const toHeight = box.getBoundingClientRect().height;
+			const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+			if (!reduced && toHeight > 0 && Math.abs(fromHeight - toHeight) > 2 && typeof box.animate === "function") {
+				box.animate(
+					[
+						{ height: `${fromHeight}px`, overflow: "hidden" },
+						{ height: `${toHeight}px`, overflow: "hidden" },
+					],
+					{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+				);
+			}
+		}
+		if (!voiceActive) {
+			const field = inputRef.current;
+			if (field !== null) {
+				field.focus();
+				const end = field.value.length;
+				field.setSelectionRange(end, end);
+			}
+		}
+	}, [voiceActive]);
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -407,6 +475,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				return;
 			}
 			if (historyOpen) return;
+			if (event.key === "Escape" && voice.phase === "listening") {
+				event.preventDefault();
+				voice.cancel();
+				return;
+			}
 			if (event.key === "Escape" && searchIdRef.current !== null) {
 				// The dock owns Escape while it is open: it dismisses the request (cancel
 				// or deny), not the run.
@@ -527,8 +600,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	 * the next question. Steers carry text only; drafted attachments stay in
 	 * the tray for the next question.
 	 */
-	function send(altKey: boolean): void {
-		const text = query.trim();
+	function sendDraft(rawDraft: string, altKey: boolean): void {
+		const text = rawDraft.trim();
 		const runId = searchIdRef.current;
 		const action = composerAction({ searching: runId !== null, altKey });
 		if (action === "ask") {
@@ -552,6 +625,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setSteers((current) => current.filter((steer) => steer.id !== id));
 			setQueued((current) => [...current, text]);
 		});
+	}
+
+	function send(altKey: boolean): void {
+		sendDraft(query, altKey);
 	}
 
 	function clearHistoryDebounce(): void {
@@ -1108,58 +1185,135 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					) : null}
 					<div
-						className="compose-box flex flex-col gap-6 rounded-14 border border-border bg-input px-14 pt-12 pb-8 transition-colors duration-(--dur-color) ease-out focus-within:border-accent"
+						ref={composeBoxRef}
+						className={cn(
+							"compose-box border border-border bg-input transition-[border-color,border-radius] duration-(--dur-color) ease-out",
+							voiceActive
+								? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
+								: "flex flex-col gap-6 rounded-14 px-14 pt-12 pb-8 focus-within:border-accent",
+						)}
 						onMouseDown={(event) => {
+							if (voiceActive) return;
 							// A click on the box's own padding or toolbar gap lands in the field, like any chat composer.
 							if (!(event.target instanceof HTMLElement) || event.target.closest("button, textarea") !== null) return;
 							event.preventDefault();
 							inputRef.current?.focus();
 						}}
 					>
-						<ComposerField
-							fieldRef={inputRef}
-							value={query}
-							onChange={setQuery}
-							onAltEnter={() => send(true)}
-							placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
-							ariaLabel={t("aiSearch.askDazzi")}
-						/>
-						<div className="composer-toolbar flex items-center justify-between gap-8">
-							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-							<div className="composer-actions flex items-center gap-7">
-								{searching && query.trim().length > 0 ? (
-									<button
-										type="submit"
-										className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-										title={t("aiSearch.steerSend")}
-										aria-label={t("aiSearch.steerSend")}
-									>
-										<ArrowUpIcon />
-									</button>
-								) : null}
-								{searching ? (
+						{voice.phase === "listening" ? (
+							<>
+								<button
+									type="button"
+									className="voice-cancel flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border border-border bg-transparent p-0 text-ink-body transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
+									title={t("aiSearch.voiceCancel")}
+									aria-label={t("aiSearch.voiceCancel")}
+									onClick={voice.cancel}
+								>
+									<TabCloseIcon size={13} />
+								</button>
+								<div className="flex min-w-0 flex-1 items-center px-4">
+									<VoiceWaveform stream={voice.stream} />
+								</div>
+								<div className="flex flex-none items-center gap-7">
 									<button
 										type="button"
-										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-										title={t("aiSearch.stop")}
-										aria-label={t("aiSearch.stop")}
-										onClick={() => void stop()}
+										className="voice-button voice-stop flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border border-border bg-transparent p-0 text-ink transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong"
+										title={t("aiSearch.voiceStop")}
+										aria-label={t("aiSearch.voiceStop")}
+										aria-pressed="true"
+										onClick={voice.toggle}
 									>
-										<Square size={10} strokeWidth={3} fill="currentColor" />
+										<Square size={10} strokeWidth={0} fill="currentColor" className="rounded-[2px]" />
 									</button>
-								) : (
 									<button
-										type="submit"
-										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-										title={t("aiSearch.askDazzi")}
-										aria-label={t("aiSearch.askDazzi")}
-										disabled={query.trim().length === 0 && attachments.length === 0}
+										type="button"
+										className="voice-send flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-ink p-0 text-window transition-opacity duration-(--dur-color) ease-out hover:opacity-85"
+										title={t("aiSearch.voiceSend")}
+										aria-label={t("aiSearch.voiceSend")}
+										onClick={voice.stopAndSend}
 									>
 										<ArrowUpIcon />
 									</button>
-								)}
+								</div>
+							</>
+						) : voice.phase === "transcribing" ? (
+							<div
+								className="voice-transcribing flex w-full items-center justify-center gap-8 text-body text-ink-muted select-none"
+								role="status"
+								aria-live="polite"
+							>
+								<span
+									className="size-12 flex-none rounded-full border-[1.75px] border-border border-t-ink-body animate-spin"
+									aria-hidden="true"
+								/>
+								<span>{t("aiSearch.voiceTranscribing")}</span>
 							</div>
-						</div>
+						) : (
+							<>
+								<ComposerField
+									fieldRef={inputRef}
+									value={query}
+									onChange={setQuery}
+									onAltEnter={() => send(true)}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
+									ariaLabel={t("aiSearch.askDazzi")}
+								/>
+								{voiceNotice === null ? null : (
+									<p className="voice-notice m-0 select-text text-meta leading-normal text-ink-muted" role="alert">
+										{voiceNotice}
+									</p>
+								)}
+								<div className="composer-toolbar flex items-center justify-between gap-8">
+									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+									<div className="composer-actions flex items-center gap-7">
+										<button
+											type="button"
+											className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-ink-muted transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
+											title={t("aiSearch.voiceStart")}
+											aria-label={t("aiSearch.voiceStart")}
+											aria-pressed="false"
+											onClick={() => {
+												setVoiceNotice(null);
+												voice.toggle();
+											}}
+										>
+											<MicIcon />
+										</button>
+										{searching && query.trim().length > 0 ? (
+											<button
+												type="submit"
+												className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.steerSend")}
+												aria-label={t("aiSearch.steerSend")}
+											>
+												<ArrowUpIcon />
+											</button>
+										) : null}
+										{searching ? (
+											<button
+												type="button"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+												title={t("aiSearch.stop")}
+												aria-label={t("aiSearch.stop")}
+												onClick={() => void stop()}
+											>
+												<Square size={10} strokeWidth={3} fill="currentColor" />
+											</button>
+										) : (
+											<button
+												type="submit"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+												title={t("aiSearch.askDazzi")}
+												aria-label={t("aiSearch.askDazzi")}
+												disabled={query.trim().length === 0 && attachments.length === 0}
+											>
+												<ArrowUpIcon />
+											</button>
+										)}
+									</div>
+								</div>
+							</>
+						)}
 					</div>
 					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
@@ -1176,6 +1330,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
+			{voice.permission === null ? null : (
+				<MicrophonePermissionDialog state={voice.permission} platform={autorag.platform} onOpenSettings={voice.openSettings} onClose={voice.dismissPermission} />
+			)}
 		</section>
 	);
 });

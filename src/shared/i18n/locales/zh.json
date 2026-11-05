@@ -212,6 +212,8 @@
     "putBackCount": "将 {{count}} 个项目放回原处",
     "emptyTrash": "清倒废纸篓",
     "newFolder": "新建文件夹",
+    "pinToSidebar": "固定到边栏",
+    "unpinFromSidebar": "从边栏中移除",
     "new": "新建",
     "trashShort": "废纸篓"
   },
@@ -322,6 +324,25 @@
     "dropPrompt": "拖动到此处以提问 AI",
     "steerPlaceholder": "搜索方向不对？随时纠正（例如：只看上周的消息）",
     "steerSend": "纠正搜索",
+    "voiceStart": "语音输入",
+    "voiceStop": "结束录音并转写",
+    "voiceCancel": "取消录音",
+    "voiceSend": "结束录音并发送",
+    "voiceTranscribing": "正在转写…",
+    "voiceNoSpeech": "没有听到语音，请再说一次。",
+    "voiceUnavailable": "此设备没有可用的麦克风。",
+    "voiceFailed": "无法转写语音：{{message}}",
+    "micPermission": {
+      "title": "请允许使用麦克风",
+      "body": "要用语音提问，Dazzi 需要使用麦克风。只有在你按下麦克风按钮后才会录音。",
+      "stepsMac": "请在“系统设置 › 隐私与安全性 › 麦克风”中打开 Dazzi。",
+      "stepsWindows": "请在“设置 › 隐私和安全性 › 麦克风”中打开“麦克风访问权限”和“允许桌面应用访问你的麦克风”。",
+      "openMac": "打开系统设置",
+      "openWindows": "打开 Windows 设置",
+      "notNow": "以后再说",
+      "waiting": "在设置中打开后回到 Dazzi，就会立即开始录音。",
+      "stillDenied": "麦克风仍处于关闭状态。请在设置中打开后再回来。"
+    },
     "steerHintLead": "搜索时也可以输入",
     "steerHintEnter": "纠正",
     "steerHintAltEnter": "下一个问题",
@@ -1557,7 +1578,8 @@
       "unknownAction": "未知的文件操作。",
       "invalidAnchor": "共享位置无效。",
       "invalidServiceRequest": "服务请求无效。",
-      "invalidConversionRequest": "转换请求无效。"
+      "invalidConversionRequest": "转换请求无效。",
+      "invalidVoiceRequest": "语音输入请求无效。"
     },
     "dialogs": {
       "notificationBody": "通知已开启。",
@@ -1670,6 +1692,9 @@
       "checkMenu": "检查更新…",
       "readyNotification": "Dazzi {{version}} 已就绪。退出应用时将自动安装。",
       "availableNotification": "Dazzi {{version}} 可供下载。"
+    },
+    "voice": {
+      "unreadableTranscript": "Dazzi 服务返回了此应用无法读取的转写内容。"
     },
     "account": {
       "httpStatus": "Dazzi 服务返回了 HTTP {{status}}。",
@@ -2189,23 +2214,20 @@
       "emptyConnections": "没有已连接应用的附件文件夹。",
       "emptyLocations": "未找到已挂载的磁盘。",
       "emptyTags": "没有固定的 Finder 标签。",
-      "modal": {
+      "assistant": {
         "title": "AI 应用定制助手",
-        "subtitle": "自由描述您想要的侧边栏布局或界面设置。",
         "newChat": "新对话",
         "emptyTitle": "您希望如何定制 Dazzi？",
         "emptyDesc": "告诉助手要显示的文件夹、分区顺序或外观模式，更改会实时生效。",
-        "promptMinimal": "在侧边栏中隐藏音乐、影片、图片和应用程序文件夹",
+        "promptHideMedia": "把工作中用不到的音乐、影片和图片文件夹从侧边栏隐藏",
         "promptReorder": "把下载和文稿移到个人收藏的最上方",
-        "promptCleanSections": "隐藏云盘和标签分区，让侧边栏更清爽",
-        "promptReset": "将侧边栏布局恢复为默认状态",
+        "promptReset": "把侧边栏恢复成最初的样子",
         "thinking": "正在检查设置",
-        "placeholder": "例如：隐藏音乐和影片，并把下载放到最上面…",
         "send": "发送",
         "stop": "停止",
-        "lockedNotice": "AI 搜索与自动化是核心功能，始终保留在侧边栏中。",
         "openAiSettings": "打开 AI 模型设置",
-        "unavailable": "应用定制服务不可用。"
+        "unavailable": "应用定制服务不可用。",
+        "inputLabel": "告诉助手你的需求"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects 或 C:\\Work"
     },
@@ -2268,6 +2290,7 @@
         "rename": "重命名",
         "copyPath": "复制路径",
         "newFolder": "新建文件夹",
+        "pinToSidebar": "固定到边栏 / 从边栏中移除",
         "extract": "解压缩",
         "compress": "压缩 (ZIP)",
         "compress7z": "压缩为 7z",
@@ -2307,17 +2330,14 @@
         "commandPlaceholderWindows": "例如：Get-FileHash -Algorithm SHA256 -LiteralPath $args 或 python ~\\scripts\\process.py @args",
         "commandHintWindows": "在 Windows PowerShell 中运行，所选文件路径会通过 $args 数组以及环境变量 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT 传入。"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 右键菜单与魔法动作助手",
-        "subtitle": "自由描述您想要的右键按钮、自动化脚本或 AI 文件动作。",
         "emptyTitle": "想在右键菜单里加入什么功能？",
-        "emptyDesc": "可创建针对特定扩展名或多文件批量执行的 AI 动作与脚本，或精简内置菜单项。",
-        "promptSummarizePdf": "添加一个针对单个 PDF 或 Markdown 文件的右键魔法动作，用三句话总结核心内容",
-        "promptBatchScript": "创建一个选中多个文件右键时计算 SHA-256 哈希值的脚本动作",
-        "promptCleanMenu": "在右键菜单中隐藏压缩为 7z、复制路径和剪切",
-        "promptReset": "将右键菜单恢复为默认状态",
-        "placeholder": "例如：选中多张图片右键时生成分辨率与文件大小对比表…",
-        "lockedNotice": "标签为必选功能始终保持显示，内置快捷键保持不变。"
+        "emptyDesc": "可以自己做右键菜单，帮你总结、对比或整理文件，也可以把用不到的菜单项隐藏起来。",
+        "promptSummarizeDoc": "做一个魔法动作：右键 PDF 或 Word 文档时，用三句话总结要点",
+        "promptCompareFiles": "做一个魔法动作：选中两个文件右键时，列出它们之间的不同之处",
+        "promptPaperToDiscord": "做一个魔法动作：总结 PDF 论文，把摘要发到我的 Discord #论文摘要 频道，并做成摘要幻灯片放进“论文摘要”文件夹",
+        "promptMaskToPdf": "做一个魔法动作：把 hwp、docx 文件里的假名化信息全部打码，再转换成 PDF 保存"
       }
     },
     "shortcuts": {
@@ -2385,18 +2405,15 @@
         "aiNewChat": "新建 AI 对话",
         "aiToggleHistory": "切换对话历史"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 快捷键定制助手",
-        "subtitle": "直接用自然语言描述您想更改或互换的快捷键。",
         "emptyTitle": "您想更改哪些快捷键？",
         "emptyDesc": "可在 Dazzi 内置的 26 项默认快捷键范围内自由修改或互换，更改立即生效。",
-        "promptMacFinder": "切换为 Mac Finder 默认快捷键预设",
-        "promptWindowsExplorer": "切换为 Windows 文件资源管理器快捷键预设",
-        "promptSwap": "把创建副本和重命名的快捷键互换",
-        "promptReset": "将所有快捷键恢复为默认设置",
+        "promptMacFinder": "让我用和 Mac 访达一样的快捷键",
+        "promptWindowsExplorer": "换成我在 Windows 文件资源管理器里习惯的快捷键",
+        "promptRenameF2": "把重命名改成按 F2 键",
+        "promptReset": "把所有快捷键恢复成最初的样子",
         "thinking": "正在检查快捷键配置",
-        "placeholder": "例如：把重命名改为 F2，聚焦搜索框改为 Cmd+P…",
-        "lockedNotice": "仅限修改内置默认快捷键列表中的项目，Esc 与单独方向键保持系统固定。",
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "快捷键定制服务不可用。"
       }

@@ -252,6 +252,40 @@ describe("archive round-trip", () => {
 		expect(second.output).toBe(join(root, "Archive 2.7z"));
 	});
 
+	// V8 throws "Maximum call stack size exceeded" once a call receives about 125k spread arguments;
+	// a checkout with node_modules easily lists more entries than that.
+	it("compresses a folder with more entries than a call can take as arguments", { timeout: 180_000 }, async () => {
+		const { service } = makeService();
+		const source = join(root, "big");
+		const dirs = 130;
+		const perDir = 1000;
+		await Promise.all(
+			Array.from({ length: dirs }, async (_, d) => {
+				const dir = join(source, `d${d}`);
+				await mkdir(dir, { recursive: true });
+				for (let f = 0; f < perDir; f += 1) await writeFile(join(dir, `f${f}`), "x");
+			}),
+		);
+		const packed = await service.run([source], { kind: "compress", format: "7z" }, null);
+		// The shared afterEach hook has a short timeout; 130k files take longer than that to remove.
+		await rm(source, { recursive: true, force: true });
+		const archive = await readFile(packed.output ?? "");
+		const reader = new ArchiveReader(
+			await libarchiveWasm({ wasmBinary: await readFile(new URL("../src/main/vendor/libarchive.wasm", import.meta.url)) }),
+			new Int8Array(archive.buffer, archive.byteOffset, archive.byteLength),
+		);
+		let entries = 0;
+		let last = "";
+		for (const entry of reader.entries()) {
+			entries += 1;
+			last = entry.getPathname();
+		}
+		reader.free();
+		// The root, its directories, and every file.
+		expect(entries).toBe(1 + dirs + dirs * perDir);
+		expect(last).toBe("big/d99/f999");
+	});
+
 	it("names a single-file archive after the full file name", async () => {
 		const { service } = makeService();
 		const file = join(root, "note.txt");

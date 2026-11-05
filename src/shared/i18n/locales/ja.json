@@ -212,6 +212,8 @@
     "putBackCount": "{{count}}個の項目を元に戻す",
     "emptyTrash": "ゴミ箱を空にする",
     "newFolder": "新規フォルダー",
+    "pinToSidebar": "サイドバーに固定",
+    "unpinFromSidebar": "サイドバーから削除",
     "new": "新規作成",
     "trashShort": "ゴミ箱"
   },
@@ -322,6 +324,25 @@
     "dropPrompt": "ここにドラッグしてAIに質問",
     "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
     "steerSend": "検索を修正",
+    "voiceStart": "音声で入力",
+    "voiceStop": "録音を終了して文字起こし",
+    "voiceCancel": "録音をキャンセル",
+    "voiceSend": "録音を終了して送信",
+    "voiceTranscribing": "文字起こし中…",
+    "voiceNoSpeech": "音声が聞き取れませんでした。もう一度お話しください。",
+    "voiceUnavailable": "このデバイスではマイクを使用できません。",
+    "voiceFailed": "音声を文字起こしできませんでした: {{message}}",
+    "micPermission": {
+      "title": "マイクへのアクセスを許可してください",
+      "body": "音声で質問するには、Dazziがマイクを使える必要があります。録音はマイクボタンを押したときだけ行います。",
+      "stepsMac": "システム設定 › プライバシーとセキュリティ › マイク で Dazzi をオンにしてください。",
+      "stepsWindows": "設定 › プライバシーとセキュリティ › マイク で「マイクへのアクセス」と「デスクトップ アプリがマイクにアクセスできるようにする」をオンにしてください。",
+      "openMac": "システム設定を開く",
+      "openWindows": "Windowsの設定を開く",
+      "notNow": "後で",
+      "waiting": "設定でオンにして Dazzi に戻ると、すぐに録音を始めます。",
+      "stillDenied": "マイクはまだオフです。設定でオンにしてから戻ってください。"
+    },
     "steerHintLead": "検索中も入力できます",
     "steerHintEnter": "修正",
     "steerHintAltEnter": "次の質問",
@@ -1557,7 +1578,8 @@
       "unknownAction": "不明なファイル操作です。",
       "invalidAnchor": "共有位置が正しくありません。",
       "invalidServiceRequest": "サービスリクエストが正しくありません。",
-      "invalidConversionRequest": "変換リクエストが正しくありません。"
+      "invalidConversionRequest": "変換リクエストが正しくありません。",
+      "invalidVoiceRequest": "音声入力のリクエストが正しくありません。"
     },
     "dialogs": {
       "notificationBody": "通知がオンになりました。",
@@ -1670,6 +1692,9 @@
       "checkMenu": "アップデートを確認…",
       "readyNotification": "Dazzi {{version}} の準備ができました。アプリを終了するとインストールされます。",
       "availableNotification": "Dazzi {{version}} をダウンロードできます。"
+    },
+    "voice": {
+      "unreadableTranscript": "Dazziサービスから、このアプリで読み取れない文字起こしが返されました。"
     },
     "account": {
       "httpStatus": "Dazziサービスが HTTP {{status}} で応答しました。",
@@ -2189,23 +2214,20 @@
       "emptyConnections": "接続済みアプリの添付フォルダはありません。",
       "emptyLocations": "マウントされたディスクはありません。",
       "emptyTags": "ピン留めされた Finder タグはありません。",
-      "modal": {
+      "assistant": {
         "title": "AI アプリカスタムアシスタント",
-        "subtitle": "希望するサイドバーの構成や画面設定を自由に入力してください。",
         "newChat": "新しい会話",
         "emptyTitle": "どのようにカスタマイズしますか？",
         "emptyDesc": "表示するフォルダ、セクションの順序、画面モードを伝えると即座に反映されます。",
-        "promptMinimal": "ミュージック、ムービー、ピクチャ、アプリケーションをサイドバーから隠して",
+        "promptHideMedia": "仕事で使わないミュージック、ムービー、ピクチャのフォルダをサイドバーから隠して",
         "promptReorder": "ダウンロードと書類をお気に入りの一番上に移動して",
-        "promptCleanSections": "クラウドとタグのセクションを隠してすっきり整理して",
-        "promptReset": "サイドバーの構成を初期状態に戻して",
+        "promptReset": "サイドバーを最初の状態に戻して",
         "thinking": "設定を確認中",
-        "placeholder": "例：ミュージックとムービーを隠してダウンロードを一番上にして…",
         "send": "送信",
         "stop": "停止",
-        "lockedNotice": "AI 検索と自動化は必須機能のため常にサイドバーに表示されます。",
         "openAiSettings": "AI モデル設定を開く",
-        "unavailable": "アプリカスタムサービスを利用できません。"
+        "unavailable": "アプリカスタムサービスを利用できません。",
+        "inputLabel": "アシスタントに依頼"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects または C:\\Work"
     },
@@ -2268,6 +2290,7 @@
         "rename": "名称変更",
         "copyPath": "パスをコピー",
         "newFolder": "新規フォルダ",
+        "pinToSidebar": "サイドバーに固定 / 削除",
         "extract": "展開",
         "compress": "圧縮 (ZIP)",
         "compress7z": "7zで圧縮",
@@ -2307,17 +2330,14 @@
         "commandPlaceholderWindows": "例：Get-FileHash -Algorithm SHA256 -LiteralPath $args または python ~\\scripts\\process.py @args",
         "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 右クリックメニュー＆マジックアクションアシスタント",
-        "subtitle": "追加したい右クリックボタン、スクリプト、AIファイル操作を自由に入力してください。",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
-        "emptyDesc": "特定の拡張子や複数ファイルで動くAIアクションやスクリプトを作成したり、不要なメニューを整理できます。",
-        "promptSummarizePdf": "単一のPDFやMarkdownファイルを右クリックしたときに3行で要約するマジックアクションを追加して",
-        "promptBatchScript": "複数ファイルを選択して右クリックしたときにSHA-256ハッシュを計算するスクリプトアクションを作って",
-        "promptCleanMenu": "右クリックメニューから7zで圧縮、パスをコピー、カットを隠して整理して",
-        "promptReset": "右クリックメニューの構成を初期状態に戻して",
-        "placeholder": "例：複数の画像を右クリックしたら解像度とサイズを表にまとめるマジックアクションを作って…",
-        "lockedNotice": "タグ項目は必須機能のため常に維持され、標準ショートカットもそのまま保持されます。"
+        "emptyDesc": "ファイルを右クリックしたときに要約・比較・整理をしてくれる自分だけのメニューを作ったり、使わない項目を隠したりできます。",
+        "promptSummarizeDoc": "PDFやWord文書を右クリックすると要点を3行でまとめるマジックアクションを作って",
+        "promptCompareFiles": "2つのファイルを選んで右クリックすると違いをまとめるマジックアクションを作って",
+        "promptPaperToDiscord": "PDFの論文を要約して自分のDiscordの #論文要約 チャンネルに送り、要約スライドを作って「論文要約」フォルダに入れるマジックアクションを作って",
+        "promptMaskToPdf": "hwp・docxファイルの仮名加工情報をすべてマスキングしてからPDFに変換して保存するマジックアクションを作って"
       }
     },
     "shortcuts": {
@@ -2385,18 +2405,15 @@
         "aiNewChat": "新しいチャット",
         "aiToggleHistory": "チャット履歴を切替"
       },
-      "modal": {
+      "assistant": {
         "title": "AI ショートカットカスタムアシスタント",
-        "subtitle": "変更したいショートカットや入れ替えを自由に入力してください。",
         "emptyTitle": "どのショートカットを変更しますか？",
         "emptyDesc": "Dazzi に用意された26個の標準ショートカットの範囲内で自由に変更・入れ替えができます。",
-        "promptMacFinder": "Mac Finder の標準ショートカット構成にして",
-        "promptWindowsExplorer": "Windows エクスプローラーのショートカット構成に変えて",
-        "promptSwap": "複製と名前を変更のショートカットを入れ替えて",
-        "promptReset": "すべてのショートカットを初期状態に戻して",
+        "promptMacFinder": "Mac の Finder と同じショートカットで使えるようにして",
+        "promptWindowsExplorer": "Windows のエクスプローラーで使っていたショートカットにして",
+        "promptRenameF2": "名前の変更を F2 キーでできるようにして",
+        "promptReset": "すべてのショートカットを最初の状態に戻して",
         "thinking": "ショートカットを確認中",
-        "placeholder": "例：名前を変更を F2 に、検索欄フォーカスを Cmd+P にして…",
-        "lockedNotice": "標準で用意されたショートカット一覧内でのみ変更でき、Esc と単独の矢印キーは固定されます。",
         "openAiSettings": "AI モデル設定を開く",
         "unavailable": "ショートカットカスタムサービスを利用できません。"
       }
