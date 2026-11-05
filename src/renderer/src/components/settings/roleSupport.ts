@@ -5,7 +5,7 @@
  */
 
 import type { TFunction } from "i18next";
-import { jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { asRecord, getAt, stringOf } from "./configSupport";
 import type { RolePickerSelection } from "./ModelPicker";
@@ -51,7 +51,9 @@ export function rerankOptionsFor(connected: readonly ProviderSummary[]): RoleOpt
 export function jevLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
 	const raw = getAt(config, ["jev"]);
 	if (raw === undefined || raw === false) return t("settingsCore.ai.auto");
-	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.auto");
+	const record = asRecord(raw);
+	if (stringOf(record?.backend) === JEV_SLLM_BACKEND) return t("settingsCore.ai.jevSllm");
+	return stringOf(record?.model) || t("settingsCore.ai.auto");
 }
 
 export function rerankLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
@@ -94,6 +96,7 @@ export function roleSelectionFor(
 		if (raw === false) return null;
 		const record = asRecord(raw);
 		const backend = stringOf(record?.backend);
+		if (backend === JEV_SLLM_BACKEND) return { kind: "special", value: JEV_SLLM_BACKEND };
 		const modelId = stringOf(record?.model);
 		if (backend.length === 0 || modelId.length === 0) return null;
 		const matched = connected.find((provider) => jevBackendFor(provider.id) === backend);

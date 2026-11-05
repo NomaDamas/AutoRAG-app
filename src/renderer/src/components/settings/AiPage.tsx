@@ -25,8 +25,8 @@ import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
 import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
-import { jevBackendFor } from "../../../../shared/ai-roles";
-import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import { JEV_SLLM_BACKEND, jevBackendFor } from "../../../../shared/ai-roles";
+import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
 const settings = window.autorag.settings;
@@ -53,6 +53,8 @@ const DECOMPOSITION_SPECIALS = [
 
 /** Rerank can be disabled; Jev is required by the shared AutoRAG config. */
 const RERANK_OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
+/** The decision model is Jev or the small chat model; it cannot be switched off. */
+const JEV_SLLM_SPECIALS = [{ value: JEV_SLLM_BACKEND, labelKey: "settingsCore.ai.jevSllm" }] as const;
 
 interface MenuState {
 	readonly kind: "connect" | "provider" | "picker" | "thinking";
@@ -187,6 +189,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	function specialsFor(role: string): readonly { readonly value: string; readonly label: string }[] {
 		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "jev") return JEV_SLLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		if (role === "rerank") return RERANK_OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		return [];
 	}
@@ -268,6 +271,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 								closeMenu();
 								if (menu.arg === "decomposition" && special === "same") void run([{ path: ["queryDecomposition"], value: false }]);
 								else if (menu.arg === "decomposition" && special === "default") void run([{ path: ["queryDecomposition"], remove: true }]);
+								else if (menu.arg === "jev" && special === JEV_SLLM_BACKEND) void run(jevSllmConfigUpdates());
 								else if (menu.arg === "rerank" && special === "off") void run([{ path: ["rerank"], value: false }]);
 							}}
 						/>

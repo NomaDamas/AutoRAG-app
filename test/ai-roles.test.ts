@@ -46,6 +46,10 @@ describe("managed Jev and rerank defaults", () => {
 		expect(shouldAdoptManagedRoles({ jev: { backend: "openrouter", model: "typesafe/jev-1.13" }, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } })).toEqual({ jev: false, rerank: false });
 	});
 
+	it("keeps a deliberate small-chat-model decision model when signing in to AutoRAG", () => {
+		expect(shouldAdoptManagedRoles({ jev: { backend: "sllm" } }).jev).toBe(false);
+	});
+
 	it("respects an explicit off and a malformed value as the user's choice", () => {
 		expect(shouldAdoptManagedRoles({ jev: false, rerank: false })).toEqual({ jev: false, rerank: false });
 		expect(shouldAdoptManagedRoles({ jev: "x", rerank: 3 })).toEqual({ jev: false, rerank: false });

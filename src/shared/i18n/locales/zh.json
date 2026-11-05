@@ -2628,6 +2628,7 @@
       "decompositionHint": "将长问题拆分为多个搜索词。适合快速且便宜的模型。",
       "jevModel": "判断模型 (Jev)",
       "jevHint": "判断是直接回答还是搜索你的资料。",
+      "jevSllm": "小型聊天模型（不使用 Jev）",
       "rerankModel": "搜索结果重排",
       "rerankHint": "将相关性高的结果移到前面。回答可能会稍慢。",
       "subDocUnderstanding": "文档理解",
