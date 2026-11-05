@@ -5,8 +5,9 @@
 //
 // There is now ONE window: the Finder window itself opens with the pending flag
 // and hosts the first-run overlay (`.fr-root`), so this lane drives that window
-// through `data-screen` = setup → ready → tour → signin. No permission screen is
-// shown: the run starts on its own and the tour is the only interaction.
+// through `data-screen` = folders → setup → ready → tour → signin. No permission
+// screen is shown: the folder screen offers the default folders switched on, the
+// lane takes them as they are, and the run goes on by itself until the tour.
 //
 // The first run scans the OS's own default folders (Desktop, Documents,
 // Downloads, iCloud Drive), and Electron resolves those from the OS — on macOS
@@ -154,6 +155,14 @@ try {
 	info(`the first run opened on the ${await screen(page)} screen`);
 
 	check("no permission screen blocks the first run", (await screen(page)) !== "permission" && (await page.locator('[data-action="open-fda"]').count()) === 0);
+
+	// folders: the folders the run will read, switched on, before anything is read.
+	await page.waitForSelector('.fr-root[data-screen="folders"]', { timeout: 60_000 });
+	await page.waitForSelector(".fr-folders .fr-chip", { timeout: 30_000 });
+	const chipsOn = await page.locator('.fr-folders .fr-chip[aria-pressed="true"]').count();
+	check("the folder screen offers at least one folder switched on", chipsOn > 0, String(chipsOn));
+	await shot(page, "01-folders.png");
+	await page.locator('[data-action="folders-start"]').click();
 
 	// setup: one progress bar while main pre-scans, plans exclusions, writes the
 	// keyword-only config, runs the first index and prepares the tour.

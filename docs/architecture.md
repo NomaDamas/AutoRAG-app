@@ -399,7 +399,7 @@ Separate from error reports: Settings → 일반 → 개인정보 has a second s
 It answers "which features are used", never "what is in them".
 
 How it is chosen: only the Settings → 일반 → 개인정보 switch turns it on; the
-first run asks nothing, so nothing is sent before the user opts in there (see
+first run never asks about it (only which folders to read), so nothing is sent before the user opts in there (see
 `docs/compliance/eu-status.md`). The Privacy Policy
 (served from the landing-page repo) must name the desktop app's usage statistics
 before EU users are served.
@@ -442,23 +442,28 @@ app at a local capture server and asserts the rules above over HTTP.
 
 ## First-run onboarding
 
-The first run asks nothing it can decide itself — the less onboarding, the better
-the product. A fresh install opens the **Finder window** (there is one window
+The first run asks one thing before it reads anything — which folders, with the
+OS's own folders already switched on — and nothing else; the less onboarding, the
+better the product. A fresh install opens the **Finder window** (there is one window
 now; the old separate onboarding window is gone) with the `ONBOARDING_PENDING_FLAG`
 preload argument while `firstRun.pending()` is true. The renderer's first-run
 layer (`src/renderer/src/first-run/`, root `.fr-root`) mounts over the Finder and
 drives one flow against the contract in `src/shared/onboarding-contract.ts`:
 
-1. **Setup**: one call to `start()` and one 0–100 progress bar while the main
+1. **Folders**: `folders()` returns the folders the run offers (`FirstRunFolder`:
+   path, kind, and whether it starts switched on): the OS's own folders that exist,
+   switched on, then other cloud drives `detectCloudFolders` finds, switched off.
+   The screen's button calls `start(paths)`; the service keeps only paths it
+   offered, and a later `start()` without paths (the retry) reads the same ones.
+2. **Setup**: one call to `start()` and one 0–100 progress bar while the main
    process (`src/main/first-run-service.ts`) does everything. Before it scans (and
    before the smart-indexing helper and the tour question need one), `run()` awaits
    `ensureModelAccess` — the account service's `ensureGuestAccess()` — so a fresh,
    unauthenticated launch provisions the anonymous `dzg_` guest credential and
    adopts the plan's `dazzi` models into `config.json` (an unset model only; a
    user's own provider is left alone). The stages then run:
-   - `scanning` (0→8) pre-scans the default folders one at a time — Desktop,
-     Documents, Downloads, and iCloud Drive on macOS — keeping only the ones
-     that exist, through the same folder-scan coordinator the indexer uses,
+   - `scanning` (0→8) pre-scans the chosen folders one at a time (by default
+     Desktop, Documents, Downloads, and iCloud Drive on macOS), through the same folder-scan coordinator the indexer uses,
      which gives the total file count. On macOS each folder triggers its own
      per-folder TCC consent dialog as it is read; a refused folder fails its
      pre-scan and is left out of `searchPaths` rather than failing the run.
@@ -505,7 +510,7 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    A failure stops the bar and shows `[data-action="setup-retry"]`, which calls
    `start()` again (a failed run restarts; a run in flight or finished is returned
    as is).
-2. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
+3. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
    `[data-action="tour-next"]` / `tour-skip`, plus `.fr-cursor` / `.fr-cursor--drag`
    on action-required steps where `tour-next` is omitted) walk the live window —
    a cinematic title, dragging the `AI 검색` tab down to split top and bottom
@@ -514,7 +519,7 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    inspecting the evidence (`evidence`), clicking a duplicate family row
    (`duplicates`), and checking its Versions section (`versions`). Steps with no
    data (no demo question, no duplicate family) are skipped.
-3. **Sign-in**: only at the very end of the tour does the sheet
+4. **Sign-in**: only at the very end of the tour does the sheet
    `.fr-signin-sheet` offer Google / GitHub sign-in, the in-app email code, and
    "나중에 할게요" (`[data-action="signin-later"]`); a finished sign-in shows
    "시작하기" (`[data-action="signin-continue"]`). No plan is offered. Completing

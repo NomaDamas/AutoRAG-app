@@ -1084,6 +1084,8 @@ app.whenReady().then(async () => {
 			downloads: knownFolder("downloads", join(home, "Downloads")),
 		},
 		iCloudDrivePath: fixtureHome === null && process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
+		// A fixture home offers only its own folders, like iCloud Drive above.
+		...(fixtureHome === null ? {} : { cloudFolders: () => [] }),
 		configPath: autoragConfigPath(),
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
 		refresh: (methods) => runLocalIndex("onboarding-index", methods, busyResult(methods)),

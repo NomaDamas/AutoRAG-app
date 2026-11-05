@@ -383,15 +383,22 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 ## 3a. First run
 
 - **Principle: the less onboarding, the better the product.** The first run asks
-  nothing the app can decide itself. The defaults are the product: the OS
-  default folders, smart-indexing exclusions taken as proposed, keyword-only
+  one question only: which folders to read, already answered (the OS default
+  folders switched on). The defaults are the product: those folders, smart-indexing exclusions taken as proposed, keyword-only
   indexing (parsed mirror + MinSync's bundled SPLADE encoder; dense embedding is
   opt-in in Settings), and sign-in at the very end.
 - There is **one window**. The Finder window opens with the pending flag and
   carries the first-run layer, `src/renderer/src/first-run/FirstRun.tsx`
   (pure logic in `first-run/tour.ts`, styles in `styles/first-run.css`, copy
   under `firstRun.*`). The main-process side is `src/main/first-run-service.ts`.
-- Screens (`.fr-root[data-screen]`): `setup` (one progress bar, the current
+- Screens (`.fr-root[data-screen]`): `folders` (Figma 156:1125: the logo,
+  "Dazzi가 이 폴더들을 읽을게요", one chip per folder — Desktop, Documents,
+  Downloads and iCloud Drive switched on, other cloud drives found on the computer
+  (`~/Library/CloudStorage` Google Drive / Dropbox / OneDrive, `~/Dropbox`)
+  switched off and drawn dashed — a click switches a chip, "폴더 N개 읽기" starts
+  the run over the switched-on ones (Enter presses it; with none on it is
+  disabled), and a lock line under it; a profile with no folder to offer skips
+  it) → `setup` (one progress bar, the current
   stage, files and minutes left; macOS prompts per folder as each default folder
   is read, refused folders are left out, and the run keeps the machine awake) →
   `ready` (the Dazzi logo, "모두 준비되었어요!", one "시작하기" button; Enter

@@ -62,7 +62,10 @@ try {
 	});
 
 	await page.waitForSelector(".fr-root[data-screen]", { timeout: 30_000 });
-	// setup starts on its own. This fixture fails the run within milliseconds, so the setup
+	// The folder screen comes first (a profile with no folder to offer skips it); the lane takes the default folders.
+	await page.waitForSelector('[data-action="folders-start"]:not([disabled]), .fr-root[data-screen="setup"]', { timeout: 60_000 });
+	if ((await page.locator('[data-action="folders-start"]').count()) > 0) await page.locator('[data-action="folders-start"]').click();
+	// setup starts once the folders are taken. This fixture fails the run within milliseconds, so the setup
 	// screen may already show the stop; a retry on screen must mean the run really failed.
 	// The DOM is read before the status: `failed` holds until the retry, so the order is safe.
 	await page.waitForSelector('.fr-root[data-screen="setup"]', { timeout: 60_000 });

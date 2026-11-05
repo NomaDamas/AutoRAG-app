@@ -22,22 +22,27 @@ import {
 	ChevronRight,
 	ChevronUp,
 	ChevronsUp,
+	Cloud,
 	Columns3,
 	Copy,
 	Database,
 	Download,
 	ExternalLink,
+	File,
 	Eye,
 	Film,
 	Flag,
 	FoldVertical,
+	HardDrive,
 	History,
 	Image as ImageGlyph,
 	Layers,
 	LayoutGrid,
 	Link2,
 	List,
+	Lock,
 	Mic,
+	Monitor,
 	PackageOpen,
 	PanelLeft,
 	PanelRight,
@@ -228,3 +233,12 @@ export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 
 /** The first-run game: a flag on a cell the player believes hides a logo. */
 export const FlagIcon = glyph(Flag, 14, 2.2);
+
+/** First-run folder chips (Figma 156:1125): Desktop, Documents, Downloads, iCloud Drive, other cloud drives. */
+export const DesktopFolderIcon = glyph(Monitor, 15, 2);
+export const DocumentsFolderIcon = glyph(File, 15, 2);
+export const DownloadsFolderIcon = glyph(Download, 15, 2);
+export const CloudFolderIcon = glyph(Cloud, 15, 2);
+export const DriveFolderIcon = glyph(HardDrive, 15, 2);
+/** The first-run privacy note. */
+export const LockIcon = glyph(Lock, 13, 2.4);

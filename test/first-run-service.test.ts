@@ -6,6 +6,7 @@ import type { SetupStatus } from "../src/shared/onboarding-contract";
 import type { ConfigRefreshResult } from "../src/shared/settings-contract";
 import {
 	createFirstRunService,
+	detectCloudFolders,
 	pickVerifiedDemo,
 	parseDemoQuestions,
 	readOnboardingPending,
@@ -98,6 +99,73 @@ describe("readOnboardingPending", () => {
 
 		await writeState(directory, { completed: false, draft: null });
 		expect(readOnboardingPending(directory, { AUTORAG_SKIP_ONBOARDING: "1" })).toBe(true);
+	});
+});
+
+describe("first-run folders", () => {
+	it("offers the OS's own folders switched on and other cloud drives switched off", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const deps = await makeDeps(directory);
+		await mkdir(join(deps.home, "Documents"), { recursive: true });
+		const icloud = join(deps.home, "Library", "Mobile Documents", "com~apple~CloudDocs");
+		await mkdir(icloud, { recursive: true });
+		await mkdir(join(deps.home, "Library", "CloudStorage", "GoogleDrive-me@example.com"), { recursive: true });
+		await mkdir(join(deps.home, "Library", "CloudStorage", "Dropbox"), { recursive: true });
+		const service = createFirstRunService({ ...deps, iCloudDrivePath: icloud });
+		expect(await service.folders()).toEqual([
+			{ path: join(deps.home, "Desktop"), kind: "desktop", selected: true },
+			{ path: join(deps.home, "Documents"), kind: "documents", selected: true },
+			{ path: icloud, kind: "iCloudDrive", selected: true },
+			{ path: join(deps.home, "Library", "CloudStorage", "GoogleDrive-me@example.com"), kind: "googleDrive", selected: false },
+			{ path: join(deps.home, "Library", "CloudStorage", "Dropbox"), kind: "dropbox", selected: false },
+		]);
+	});
+
+	it("finds a classic ~/Dropbox on Windows and nothing under CloudStorage there", async () => {
+		const home = await workDir("autorag-firstrun-home-");
+		await mkdir(join(home, "Dropbox"), { recursive: true });
+		await mkdir(join(home, "Library", "CloudStorage", "GoogleDrive-me"), { recursive: true });
+		expect(detectCloudFolders(home, "win32")).toEqual([{ path: join(home, "Dropbox"), kind: "dropbox" }]);
+	});
+
+	it("reads only the chosen folders, ignores paths it never offered, and keeps the choice for a retry", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const scanned: string[] = [];
+		let fail = true;
+		const deps = await makeDeps(directory, {
+			scanFolders: async (paths) => {
+				scanned.push(...paths);
+			},
+			refresh: async () => (fail ? { ...OK, ok: false, error: "boom" } : OK),
+		});
+		await mkdir(join(deps.home, "Documents"), { recursive: true });
+		const service = createFirstRunService(deps);
+		await service.start([join(deps.home, "Documents"), "/etc"]);
+		await waitForStage(service, "failed");
+		expect(scanned).toEqual([join(deps.home, "Documents")]);
+		fail = false;
+		scanned.length = 0;
+		await service.start();
+		await waitForStage(service, "ready");
+		expect(scanned).toEqual([join(deps.home, "Documents")]);
+		const config = JSON.parse(await readFile(deps.configPath, "utf8")) as Record<string, unknown>;
+		expect(config.searchPaths).toEqual([join(deps.home, "Documents")]);
+	});
+
+	it("reads the folders switched on by default when start is given none", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const scanned: string[] = [];
+		const deps = await makeDeps(directory, {
+			scanFolders: async (paths) => {
+				scanned.push(...paths);
+			},
+			cloudFolders: () => [{ path: join(directory, "cloud"), kind: "dropbox" }],
+		});
+		await mkdir(join(directory, "cloud"), { recursive: true });
+		const service = createFirstRunService(deps);
+		await service.start();
+		await waitForStage(service, "ready");
+		expect(scanned).toEqual([join(deps.home, "Desktop")]);
 	});
 });
 

@@ -767,6 +767,20 @@
     }
   },
   "firstRun": {
+    "folders": {
+      "title": "{{app}}가 이 폴더들을 읽을게요",
+      "lead": "여기 있는 파일은 바로 검색할 수 있어요. 빼고 싶은 폴더는 눌러서 꺼 주세요.",
+      "groupLabel": "읽을 폴더",
+      "kind": {
+        "desktop": "바탕화면",
+        "documents": "문서",
+        "downloads": "다운로드"
+      },
+      "start": "폴더 {{count}}개 읽기",
+      "startNone": "폴더를 골라 주세요",
+      "privacyMac": "파일은 내 Mac 밖으로 나가지 않아요",
+      "privacyPc": "파일은 내 PC 밖으로 나가지 않아요"
+    },
     "setup": {
       "title": "Dazzi를 준비하고 있어요",
       "lead": "컴퓨터를 켜 두기만 하면 알아서 끝나요. 그동안 다른 일을 하셔도 괜찮아요.",

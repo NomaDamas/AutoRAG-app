@@ -767,6 +767,20 @@
     }
   },
   "firstRun": {
+    "folders": {
+      "title": "{{app}} will read these folders",
+      "lead": "Their files will be searchable right away. Click a folder to leave it out.",
+      "groupLabel": "Folders to read",
+      "kind": {
+        "desktop": "Desktop",
+        "documents": "Documents",
+        "downloads": "Downloads"
+      },
+      "start": "Read {{count}} selected",
+      "startNone": "Choose a folder",
+      "privacyMac": "Your files never leave your Mac",
+      "privacyPc": "Your files never leave your PC"
+    },
     "setup": {
       "title": "Getting Dazzi ready",
       "lead": "Just keep your computer on and it finishes by itself. Feel free to do other things meanwhile.",

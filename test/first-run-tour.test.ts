@@ -1,9 +1,33 @@
 import { describe, expect, it } from "vitest";
-import { splitTwoFolders } from "../src/renderer/src/first-run/tour";
+import type { SetupStatus } from "../src/shared/onboarding-contract";
+import { initialScreen, splitTwoFolders } from "../src/renderer/src/first-run/tour";
 import { grayCopy } from "../src/renderer/src/first-run/tutorial-steps";
 import { allTabs, createWorkspace, paneOf, type Workspace } from "../src/renderer/src/state/workspace";
 
 const paths = (ws: Workspace): string[][] => ws.panes.map((pane) => pane.tabs.map((tab) => tab.path));
+
+describe("initialScreen", () => {
+	const status = (stage: SetupStatus["stage"]): SetupStatus => ({
+		stage,
+		progress: 0,
+		remainingMinutes: null,
+		totalFiles: 0,
+		processedFiles: 0,
+		recentFile: null,
+		excludedFolders: 0,
+		demo: null,
+		error: null,
+		startedAt: null,
+		finishedAt: null,
+	});
+
+	it("asks for the folders before any run, and shows the run once one is under way", () => {
+		expect(initialScreen(status("idle"))).toBe("folders");
+		expect(initialScreen(status("scanning"))).toBe("setup");
+		expect(initialScreen(status("failed"))).toBe("setup");
+		expect(initialScreen(status("ready"))).toBe("ready");
+	});
+});
 
 describe("splitTwoFolders", () => {
 	it("puts the left folder in the existing pane and the right one in a new pane beside it, focused", () => {

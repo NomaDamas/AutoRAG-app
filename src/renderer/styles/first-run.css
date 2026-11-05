@@ -23,6 +23,7 @@
 	--fr-scrim: rgba(12, 14, 20, 0.42);
 	--fr-card: rgba(255, 255, 255, 0.86);
 	--fr-card-border: rgba(20, 20, 40, 0.08);
+	--fr-chip-border: rgba(20, 20, 40, 0.1);
 	--fr-shadow: 0 24px 60px rgba(20, 22, 40, 0.18), 0 2px 8px rgba(20, 22, 40, 0.08);
 }
 
@@ -34,6 +35,7 @@ html[data-appearance="dark"] {
 	--fr-scrim: rgba(0, 0, 0, 0.55);
 	--fr-card: rgba(40, 41, 46, 0.9);
 	--fr-card-border: rgba(255, 255, 255, 0.08);
+	--fr-chip-border: rgba(255, 255, 255, 0.12);
 	--fr-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -78,6 +80,7 @@ html[data-first-run="rise"] .desk {
 }
 
 .fr-root[data-screen="loading"],
+.fr-root[data-screen="folders"],
 .fr-root[data-screen="setup"],
 .fr-root[data-screen="ready"] {
 	pointer-events: auto;
@@ -778,6 +781,98 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 
 .fr-ready .fr-lead {
 	animation: fr-fade-up 600ms var(--fr-spring) 260ms both;
+}
+
+/* ---------------------------------------------------------------- folders */
+
+/* Figma 156:1125: the folders the first run will read, before it reads anything. */
+.fr-logo--folders {
+	width: 110px;
+	height: 110px;
+	margin-bottom: 30px;
+}
+
+.fr-title--folders {
+	font-size: 32px;
+	line-height: 36px;
+	letter-spacing: -0.6px;
+}
+
+.fr-folders .fr-lead {
+	max-width: 520px;
+}
+
+.fr-chips {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	width: min(440px, 100%);
+	margin-top: 29px;
+}
+
+.fr-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 13px;
+	border: 1px solid var(--fr-chip-border);
+	border-radius: 50px;
+	background: var(--fr-card);
+	font: inherit;
+	font-size: 13px;
+	line-height: 18px;
+	color: var(--fr-ink);
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 260ms var(--fr-spring);
+	-webkit-app-region: no-drag;
+}
+
+.fr-chip:active {
+	transform: scale(0.97);
+}
+
+.fr-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.fr-chip[data-state="off"] {
+	border-style: dashed;
+	border-color: var(--text-faint);
+	background: transparent;
+	color: var(--fr-muted);
+}
+
+.fr-chip-icon {
+	flex: none;
+}
+
+.fr-chip[data-state="off"] .fr-chip-icon {
+	color: var(--text-faint);
+}
+
+/* Qualified by the panel so it outranks `.fr-btn--hero` further down. */
+.fr-folders .fr-btn--folders {
+	margin-top: 72px;
+	padding: 0 29px;
+	border-radius: 16px;
+	font-weight: 500;
+	animation: none;
+}
+
+.fr-privacy {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin: 26px 0 0;
+	font-size: 13px;
+	line-height: 18.75px;
+	color: var(--fr-muted);
+}
+
+.fr-privacy-icon {
+	flex: none;
 }
 
 /* ------------------------------------------------------------------ buttons */
