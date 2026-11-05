@@ -235,6 +235,36 @@ small {
 	}
 }
 
+/* Folder disclosure in the list (seungwonme/AutoRAG-app#19) — while a folder opens or closes, `useDisclosureMotion` drives
+ * `--slide-q` on the rows container (0 closed .. 1 open) and `FileList` marks the rows that take part:
+ * `block` (the folder's rows, opening), `ghost` (the same rows, closing) and `below` (every row and header after
+ * them). The whole tail moves as one by `--slide-hc * (q - 1)`: the rows below start where they were and slide
+ * to where they end up. A block row is also cut off at the folder row's bottom edge, which is what makes it come
+ * out from behind that row: `--slide-d` is the row's resting distance below that edge, so the cut is
+ * `--slide-hc * (1 - q) - --slide-d`.
+ *
+ * Only transform and clip-path change, and nothing is disabled while they do, so a click or a key never waits
+ * for the motion; only the rows of a closing folder (`ghost`) stop taking the pointer, because they are already
+ * gone as far as the user is concerned. Reduced motion never enters this block (the hook starts no motion
+ * either), so the list just changes. */
+@media (prefers-reduced-motion: no-preference) {
+	[data-slide="block"],
+	[data-slide="ghost"],
+	[data-slide="below"] {
+		transform: translateY(calc(var(--slide-hc, 0px) * (var(--slide-q, 1) - 1)));
+	}
+
+	[data-slide="block"],
+	[data-slide="ghost"] {
+		clip-path: inset(max(0px, calc(var(--slide-hc, 0px) * (1 - var(--slide-q, 1)) - var(--slide-d, 0px))) 0 0 0);
+	}
+
+	/* The rows of a folder that is closing are already gone as far as the keyboard and the pointer go. */
+	[data-slide="ghost"] {
+		pointer-events: none;
+	}
+}
+
 /* §7 Scrollbars — deliberately unstyled: any ::-webkit-scrollbar rule forces
  * Chromium's classic scrollbars, which consume layout width and shift the
  * Inspector's preview whenever content starts or stops scrolling. Leaving

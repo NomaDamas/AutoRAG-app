@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsView } from "../src/renderer/src/components/SettingsView";
+import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
@@ -132,7 +132,7 @@ afterEach(async () => {
 describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Actions)", () => {
 	it("renders Tags locked on, toggles built-in items & presets, reorders sections, and adds/edits/removes custom Magic Actions", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
@@ -259,22 +259,18 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		expect(currentSettings.contextMenu.hiddenItems).toEqual([]);
 	});
 
-	it("opens the AI Customizer modal in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
+	it("docks the AI Customizer panel in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="open-context-menu-customizer"]')?.click();
-		});
-		await settle();
+		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		expect(panel).not.toBeNull();
+		expect(panel?.getAttribute("data-surface")).toBe("contextMenu");
+		expect(panel?.textContent).toContain("매직 액션");
 
-		const modal = document.querySelector('[data-testid="app-customizer-modal"]');
-		expect(modal).not.toBeNull();
-		expect(modal?.textContent).toContain("매직 액션");
-
-		const suggestion = modal?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
+		const suggestion = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		await act(async () => {
 			suggestion?.click();
 		});
@@ -305,7 +301,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				type: "turn-done",
 				runId,
 				sessionId: req.sessionId,
-				reply: "PDF 3줄 요약 매직 액션을 추가했습니다.",
+				messages: ["PDF 3줄 요약 매직 액션을 추가했습니다."],
 				changes: [{ kind: "contextMenu", summary: "매직 액션 저장: PDF 3줄 요약", fields: ["contextMenu.magicActions"] }],
 				settings: nextSettings,
 			});
@@ -324,7 +320,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				shortcuts: { overrides: { quickLook: "Alt+P", rename: "F2" } },
 			};
 			await act(async () => {
-				root.render(<SettingsView initialCategory="contextMenu" />);
+				root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 			});
 			await settle();
 

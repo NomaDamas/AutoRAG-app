@@ -8,17 +8,21 @@
  * page the writers it needs, so a write from one page reconciles the others.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
+import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, ReadingPage, ScopePage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
+import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
+import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
@@ -127,6 +131,11 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
+/** Settings pages whose AI customization assistant fills the window's right sidebar. */
+function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
+	return page === "sidebar" || page === "contextMenu" || page === "shortcuts" ? page : null;
+}
+
 /**
  * What every settings page reads and writes: the app settings, the config
  * snapshot, and the datasource scan. One owner per settings surface, so a write
@@ -223,7 +232,19 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 }
 
 /** One settings page's body for `category`; `onNavigate` follows a page's own link to another page. */
-export function SettingsPageContent({ data, category, onNavigate }: { readonly data: SettingsData; readonly category: SettingsCategory; readonly onNavigate: (category: SettingsCategory) => void }): ReactElement {
+export function SettingsPageContent({
+	data,
+	category,
+	onNavigate,
+	customizerOpen = true,
+	onOpenCustomizer = () => undefined,
+}: {
+	readonly data: SettingsData;
+	readonly category: SettingsCategory;
+	readonly onNavigate: (category: SettingsCategory) => void;
+	readonly customizerOpen?: boolean;
+	readonly onOpenCustomizer?: () => void;
+}): ReactElement {
 	const { t } = useTranslation();
 	const { appSettings, snapshot, sources, sourcesReady, saveSnapshot, setSources, setError, changeAppSettings } = data;
 	if (data.loading || appSettings === null || snapshot === null) return <p className="linear-section-desc">{t("common.loading")}</p>;
@@ -238,11 +259,11 @@ export function SettingsPageContent({ data, category, onNavigate }: { readonly d
 		case "general":
 			return <GeneralPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "sidebar":
-			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} onOpenAiSettings={() => onNavigate("ai")} />;
+			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
 		case "contextMenu":
-			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} onOpenAiSettings={() => onNavigate("ai")} />;
+			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
 		case "shortcuts":
-			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} onOpenAiSettings={() => onNavigate("ai")} />;
+			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "ai":
@@ -276,7 +297,25 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	const [category, setCategory] = useState<SettingsCategory>(() => normalizeCategory(initialCategory));
 	const [query, setQuery] = useState("");
 	const data = useSettingsData(onSettingsChanged);
-	const { snapshot, entries, error } = data;
+	const { snapshot, entries, error, changeAppSettings } = data;
+	/** Bumped when the user opens the assistant from a page's hero: the composer takes focus then, never on a plain visit. */
+	const [customizerFocus, setCustomizerFocus] = useState(0);
+	/** Assistants stay mounted once shown, so a conversation and a running turn survive switching sections. */
+	const [mountedSurfaces, setMountedSurfaces] = useState<readonly AppCustomizerSurface[]>([]);
+	/** The right sidebar hosts this node while a customizable section is open; the assistants render into it. */
+	const [dockNode] = useState(() => {
+		const node = document.createElement("div");
+		node.className = "customizer-dock__node";
+		return node;
+	});
+	const assistant = useContext(SettingsAssistantContext);
+	const publishDock = assistant?.publish;
+	const showAssistant = assistant?.show;
+	const openCustomizer = useCallback((): void => {
+		showAssistant?.();
+		setCustomizerFocus((count) => count + 1);
+	}, [showAssistant]);
+	const openAiSettings = useCallback((): void => setCategory("ai"), []);
 
 	// The sidebar's indexing block asks for a page from outside; honour a request made before this view mounted.
 	useEffect(() => {
@@ -296,6 +335,17 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 	useEffect(() => {
 		if (sourceAlias !== null && snapshot !== null && entries.every((entry) => entry.alias !== sourceAlias)) setCategory("apps");
 	}, [sourceAlias, snapshot, entries]);
+	const activeSurface = sourceAlias === null && assistant !== null ? customizerSurfaceOf(normalizeCategory(category)) : null;
+	/** Without a right sidebar to host it (no window shell) there is no assistant, so the page hero never offers it. */
+	const customizerShown = assistant === null || assistant.shown;
+	useEffect(() => {
+		if (activeSurface !== null) setMountedSurfaces((current) => (current.includes(activeSurface) ? current : [...current, activeSurface]));
+	}, [activeSurface]);
+	const dock = useMemo<SettingsAssistantDock | null>(() => (activeSurface === null ? null : { surface: activeSurface, node: dockNode }), [activeSurface, dockNode]);
+	useEffect(() => {
+		publishDock?.(dock);
+		return () => publishDock?.(null);
+	}, [publishDock, dock]);
 
 	const filteredPages = useMemo(() => {
 		const needle = query.trim().toLowerCase();
@@ -321,7 +371,15 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
-	const content = <SettingsPageContent data={data} category={category} onNavigate={setCategory} />;
+	const content = (
+		<SettingsPageContent
+			data={data}
+			category={category}
+			onNavigate={setCategory}
+			customizerOpen={customizerShown}
+			onOpenCustomizer={openCustomizer}
+		/>
+	);
 
 	const sourceButtons = filteredSources.map((entry) => {
 		const active = sourceAlias === entry.alias;
@@ -376,6 +434,19 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 					{content}
 				</div>
 			</main>
+			{createPortal(
+				mountedSurfaces.map((surface) => (
+					<AppCustomizerPanel
+						key={surface}
+						surface={surface}
+						hidden={surface !== activeSurface}
+						focusRequest={surface === activeSurface ? customizerFocus : 0}
+						onSettingsUpdated={changeAppSettings}
+						onOpenAiSettings={openAiSettings}
+					/>
+				)),
+				dockNode,
+			)}
 		</div>
 	);
 }

@@ -33,8 +33,8 @@ second datasource or model configuration. The sidebar is searchable and grouped:
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, error reports, and document languages.
 - **기본 → 사이드바** — sidebar item and section visibility, ordering, custom pinned
-  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** (`AppCustomizerModal`)
-  dialog, all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
+  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** in the window's right sidebar
+  (`AppCustomizerPanel` in the Inspector's column, one conversation per section), all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
   **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
@@ -43,7 +43,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
   key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
   conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
-  profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
+  profile (`AppCustomizerPanel` in the right sidebar, with `surface="shortcuts"`), persisted in
   `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
   be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
@@ -1240,6 +1240,57 @@ Cancel stops the Filee process.
 Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90 s 1080p MP4 → WebM
 encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
 `test/conversion-live.test.ts` does the same against the real binaries without the UI.
+
+## Voice input in AI Search
+
+A microphone button in the AI Search composer dictates a question: it records, sends the clip to the
+hosted service, and appends the text to the draft. Nothing is sent as a question; the person
+reads and sends it.
+
+- **Where the audio goes.** `src/main/voice-service.ts` posts the clip as multipart to the Dazzi
+  server's `POST /v1/audio/transcriptions` (model `google/stt-v2-standard`, Google Cloud
+  Speech-to-Text V2, `latest_long`) with the account key from Pi's `auth.json`. The server holds the
+  Google service account, meters the call against the weekly credits (`transcription` operation,
+  $0.016 per audio minute), and answers `{ text, duration }`. The key and the Google credentials never
+  reach the renderer. The audio leaves the computer, so unlike indexing there is no on-device path.
+- **Limits.** The service takes 10 MB and 60 seconds per request. A recording ends itself at 55 s
+  (`VOICE_MAX_SECONDS`) and is sent; a clip over 10 MB is refused in `isVoiceClip` before the request.
+  Speech the service cannot make out is not an error: the text is empty and the composer says nothing
+  was heard.
+- **Language.** The recognition language follows the Interface language (`voiceLanguageCode`:
+  `ko-KR`, `en-US`, `ja-JP`, `cmn-Hans-CN`).
+- **Before recording.** `prepare()` answers `ready`, `signed-out` (the service would refuse the clip, so
+  nothing is recorded and the system's microphone prompt is not raised) or `microphone-denied`
+  (`systemMicrophoneAccess`).
+- **Microphone permission.**
+  - macOS: the first press raises the system's own Allow / Don't Allow prompt
+    (`askForMediaAccess`; `NSMicrophoneUsageDescription`, and the `com.apple.security.device.audio-input`
+    entitlement for the hardened runtime). macOS shows that prompt once per app.
+  - Windows: Electron's `getMediaAccessStatus` follows the three switches in Settings › Privacy &
+    security › Microphone ("Microphone access", "Let apps access your microphone", "Let desktop apps
+    access your microphone"): any of them off is `denied`. Measured on Windows 11 by turning each off in
+    the Settings app. Run from a non-interactive session (SSH, a service) it always says `granted`, so
+    test it on the desktop. Windows has no prompt of an app's own.
+  - Linux: Electron offers neither call; the browser layer's own permission decides.
+  - When the microphone is refused (`microphone-denied`, or `getUserMedia` failing with
+    `NotAllowedError`) the composer opens `MicrophonePermissionDialog` instead of recording. Its main
+    button opens the system's microphone settings (`x-apple.systempreferences:…Privacy_Microphone`,
+    `ms-settings:privacy-microphone`). When the window regains focus the dialog checks again: if the
+    microphone is now allowed it closes and the recording the person asked for starts; if not it says the
+    microphone is still off. "Not now" and Esc close it without recording.
+- **Recording.** `useVoiceInput` (`MediaRecorder`, `audio/webm;codecs=opus` first) holds the microphone
+  only while recording and releases it on stop, cancel, error and unmount. While listening or
+  transcribing, the composer collapses from any multi-line draft height into a single-row neutral pill
+  (`voice-bar`): left cancel (`×`), full-width `VoiceWaveform` (dotted baseline on silence, monochrome
+  bars fed by `AudioContext` + `AnalyserNode`), stop-to-draft (`■`) and stop-and-send (`↑`), followed by
+  a centered `받아쓰는 중…` / `Transcribing…` indicator before expanding back to the full draft height.
+  Other errors are shown as a line under the field, not as the run's error card.
+- **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`,
+  `openMicrophoneSettings()`. All are native-only in a remote browser session.
+
+To test it without speaking, launch Chromium with `--no-sandbox --use-fake-device-for-media-stream
+--use-file-for-fake-audio-capture=<48 kHz stereo wav>%noloop`: with the audio sandbox on, the fake
+device delivers silence.
 
 ## Manual QA
 

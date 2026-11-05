@@ -324,6 +324,25 @@
     "dropPrompt": "여기로 끌어서 AI에게 물어보기",
     "steerPlaceholder": "검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)",
     "steerSend": "검색 바로잡기",
+    "voiceStart": "음성으로 입력",
+    "voiceStop": "녹음 끝내고 받아쓰기",
+    "voiceCancel": "녹음 취소",
+    "voiceSend": "녹음 끝내고 바로 보내기",
+    "voiceTranscribing": "받아쓰는 중…",
+    "voiceNoSpeech": "말소리를 듣지 못했어요. 다시 말해 주세요.",
+    "voiceUnavailable": "이 기기에서는 마이크를 쓸 수 없어요.",
+    "voiceFailed": "음성을 받아쓰지 못했어요: {{message}}",
+    "micPermission": {
+      "title": "마이크 권한이 필요해요",
+      "body": "음성으로 질문하려면 Dazzi가 마이크를 쓸 수 있어야 해요. 녹음은 마이크 버튼을 눌렀을 때만 해요.",
+      "stepsMac": "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Dazzi를 켜 주세요.",
+      "stepsWindows": "설정 › 개인 정보 및 보안 › 마이크에서 ‘마이크 액세스’와 ‘데스크톱 앱이 마이크에 액세스하도록 허용’을 켜 주세요.",
+      "openMac": "시스템 설정 열기",
+      "openWindows": "Windows 설정 열기",
+      "notNow": "나중에",
+      "waiting": "설정에서 켜고 Dazzi로 돌아오면 바로 녹음을 시작해요.",
+      "stillDenied": "아직 마이크가 꺼져 있어요. 설정에서 켠 뒤 다시 돌아와 주세요."
+    },
     "steerHintLead": "검색 중에도 입력할 수 있어요",
     "steerHintEnter": "바로잡기",
     "steerHintAltEnter": "다음 질문",
@@ -1523,7 +1542,8 @@
       "unknownAction": "알 수 없는 파일 작업입니다",
       "invalidAnchor": "공유 위치가 올바르지 않습니다",
       "invalidServiceRequest": "서비스 요청이 올바르지 않습니다",
-      "invalidConversionRequest": "변환 요청이 올바르지 않습니다."
+      "invalidConversionRequest": "변환 요청이 올바르지 않습니다.",
+      "invalidVoiceRequest": "음성 입력 요청이 올바르지 않습니다."
     },
     "dialogs": {
       "notificationBody": "알림이 켜졌습니다.",
@@ -1636,6 +1656,9 @@
       "checkMenu": "업데이트 확인…",
       "readyNotification": "Dazzi {{version}}이(가) 준비되었습니다. 앱을 종료하면 설치됩니다.",
       "availableNotification": "Dazzi {{version}}을(를) 내려받을 수 있습니다."
+    },
+    "voice": {
+      "unreadableTranscript": "받아쓴 내용을 읽을 수 없어요. 잠시 후 다시 시도해 주세요."
     },
     "account": {
       "httpStatus": "Dazzi 서비스가 HTTP {{status}}로 응답했습니다.",
@@ -2155,23 +2178,20 @@
       "emptyConnections": "연결된 앱 첨부 폴더가 없습니다.",
       "emptyLocations": "마운트된 디스크가 없습니다.",
       "emptyTags": "고정된 Finder 태그가 없습니다.",
-      "modal": {
+      "assistant": {
         "title": "AI 앱 커스텀 어시스턴트",
-        "subtitle": "원하는 사이드바 구성이나 화면 설정을 자유롭게 말씀해 주세요.",
         "newChat": "새 대화",
         "emptyTitle": "어떤 구성을 원하시나요?",
         "emptyDesc": "표시할 폴더, 섹션 순서, 화면 모드를 말하면 즉시 반영됩니다.",
-        "promptMinimal": "음악, 동영상, 그림, 응용 프로그램 폴더를 사이드바에서 숨겨줘",
+        "promptHideMedia": "업무에 안 쓰는 음악, 동영상, 사진 폴더는 사이드바에서 숨겨줘",
         "promptReorder": "다운로드와 문서를 즐겨찾기 맨 위로 올려줘",
-        "promptCleanSections": "클라우드와 태그 섹션은 숨기고 깔끔하게 정리해줘",
-        "promptReset": "사이드바 구성을 기본 상태로 되돌려줘",
+        "promptReset": "사이드바를 처음 상태로 되돌려줘",
         "thinking": "설정을 살펴보는 중",
-        "placeholder": "예: 음악이랑 동영상은 숨기고 다운로드를 맨 위로 올려줘…",
         "send": "보내기",
         "stop": "중단",
-        "lockedNotice": "AI 검색과 자동화는 필수 기능으로 항상 사이드바에 유지됩니다.",
         "openAiSettings": "AI 모델 설정 열기",
-        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다."
+        "unavailable": "앱 커스텀 서비스를 사용할 수 없습니다.",
+        "inputLabel": "어시스턴트에게 요청"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects 또는 C:\\Work"
     },
@@ -2274,17 +2294,14 @@
         "commandPlaceholderWindows": "예: Get-FileHash -Algorithm SHA256 -LiteralPath $args 또는 python ~\\scripts\\process.py @args",
         "commandHintWindows": "Windows PowerShell에서 실행되며 선택한 경로들이 $args 배열과 환경 변수 $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, $env:DAZZI_FILE_COUNT로 전달됩니다."
       },
-      "modal": {
+      "assistant": {
         "title": "AI 우클릭 메뉴 & 매직 액션 어시스턴트",
-        "subtitle": "원하는 우클릭 버튼, 자동화 스크립트, AI 파일 액션을 말로 설명해 주세요.",
         "emptyTitle": "우클릭 메뉴에 어떤 기능을 넣어볼까요?",
-        "emptyDesc": "특정 확장자나 여러 파일에 작동하는 AI 에이전트 액션·스크립트를 만들거나 불필요한 메뉴를 정리할 수 있습니다.",
-        "promptSummarizePdf": "PDF나 마크다운 파일 하나를 우클릭했을 때 핵심 3줄 요약을 보여주는 매직 액션 추가해줘",
-        "promptBatchScript": "여러 파일을 선택해 우클릭했을 때 SHA-256 해시값을 계산해주는 스크립트 액션 만들어줘",
-        "promptCleanMenu": "우클릭 메뉴에서 7z로 압축, 경로 복사, 잘라내기를 숨겨서 깔끔하게 만들어줘",
-        "promptReset": "우클릭 메뉴 구성을 기본 상태로 되돌려줘",
-        "placeholder": "예: 이미지 여러 개 우클릭하면 해상도랑 용량 표로 정리해주는 매직 액션 만들어줘…",
-        "lockedNotice": "태그 항목은 필수 기능으로 항상 유지되며, 기본 단축키는 그대로 보존됩니다."
+        "emptyDesc": "파일을 우클릭했을 때 요약·비교·정리를 해 주는 나만의 메뉴를 만들거나, 잘 안 쓰는 메뉴를 숨길 수 있습니다.",
+        "promptSummarizeDoc": "PDF나 워드 문서를 우클릭하면 핵심 내용을 세 줄로 요약해 주는 매직 액션을 만들어줘",
+        "promptCompareFiles": "파일 두 개를 선택해 우클릭하면 서로 달라진 내용을 정리해 주는 매직 액션을 만들어줘",
+        "promptPaperToDiscord": "PDF 논문을 요약해서 내 디스코드 #논문-요약 채널에 보내고, 요약 슬라이드를 만들어 '논문 요약' 폴더에 넣어주는 매직 액션을 만들어줘",
+        "promptMaskToPdf": "hwp, docx 파일의 가명 정보를 모두 마스킹한 뒤 PDF로 변환해서 저장하는 매직 액션을 만들어줘"
       }
     },
     "shortcuts": {
@@ -2352,18 +2369,15 @@
         "aiNewChat": "새 대화 시작",
         "aiToggleHistory": "대화 기록 토글"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 단축키 커스텀 어시스턴트",
-        "subtitle": "원하는 단축키 변경이나 맞바꾸기를 말로 요청해 보세요.",
         "emptyTitle": "어떤 단축키를 바꿔 볼까요?",
         "emptyDesc": "기본 제공되는 26개 단축키 안에서 원하는 키 조합으로 바꾸거나 맞바꿀 수 있습니다.",
-        "promptMacFinder": "Mac Finder 기본 단축키 구성으로 맞춰줘",
-        "promptWindowsExplorer": "Windows 파일 탐색기 단축키 구성으로 바꿔줘",
-        "promptSwap": "복제랑 이름 변경 단축키를 서로 맞바꿔줘",
-        "promptReset": "모든 단축키를 기본값으로 되돌려줘",
+        "promptMacFinder": "Mac Finder에서 쓰던 단축키 그대로 쓰게 해줘",
+        "promptWindowsExplorer": "Windows 파일 탐색기에서 쓰던 단축키로 바꿔줘",
+        "promptRenameF2": "이름 바꾸기를 F2 키로 바꿔줘",
+        "promptReset": "모든 단축키를 처음 상태로 되돌려줘",
         "thinking": "단축키 구성을 살펴보는 중",
-        "placeholder": "예: 이름 변경은 F2로 바꾸고 검색창 포커스는 커맨드 P로 해줘…",
-        "lockedNotice": "기본 제공 단축키 목록 안에서만 변경 가능하며, Esc 및 기본 방향키는 시스템에 고정됩니다.",
         "openAiSettings": "AI 모델 설정 열기",
         "unavailable": "단축키 커스텀 서비스를 사용할 수 없습니다."
       }
