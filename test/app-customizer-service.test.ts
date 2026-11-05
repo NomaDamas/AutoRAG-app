@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxText, fauxToolCall, registerFauxProvider, type FauxProviderRegistration } from "@earendil-works/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { appCustomizerProfile, createAppCustomizerToolkit } from "../src/main/agents/profiles/app-customizer";
 import { createAppCustomizerService } from "../src/main/app-customizer-service";
@@ -224,6 +224,46 @@ describe("app-customizer pi agent profile & toolkit", () => {
 		expect(saved3.contextMenu.magicActions.map((a) => a.id)).toEqual(["sha256-hash"]);
 	});
 
+	it("hides and shows 사이드바에 고정 / 제거 as one built-in item by id or by any of its names, and lists it for the agent", async () => {
+		const settings = createStubSettings();
+		const kit = createAppCustomizerToolkit({
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+			homeDir: root,
+		});
+		const getSettings = kit.tools.find((t) => t.name === "get_app_settings")!;
+		const updateMenu = kit.tools.find((t) => t.name === "update_context_menu")!;
+		const run = (id: string, params: Record<string, unknown>) =>
+			updateMenu.execute(id, params, undefined, undefined, undefined as never);
+		const listed = async (): Promise<{ id: string; visible: boolean }[]> => {
+			const res = await getSettings.execute("pin-get", {}, undefined, undefined, undefined as never);
+			const snapshot = JSON.parse(res.content.map((b) => (b.type === "text" ? b.text : "")).join("")) as {
+				contextMenu: { builtinItems: { id: string; visible: boolean }[] };
+			};
+			return snapshot.contextMenu.builtinItems;
+		};
+
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
+
+		// One id for both labels: the pin label and the unpin label in each language resolve to it.
+		for (const [index, name] of ["사이드바에 고정", "사이드바에서 제거", "Pin to Sidebar", "Remove from Sidebar", "サイドバーに固定", "固定到边栏"].entries()) {
+			await run(`pin-show-${index}`, { showItems: ["builtin:pinToSidebar"] });
+			await run(`pin-hide-${index}`, { hideItems: [name] });
+			expect((await settings.get()).contextMenu.hiddenItems, name).toEqual(["builtin:pinToSidebar"]);
+		}
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(false);
+
+		await run("pin-show", { showItems: ["사이드바에 고정"] });
+		expect((await settings.get()).contextMenu.hiddenItems).toEqual([]);
+		expect((await listed()).find((item) => item.id === "builtin:pinToSidebar")?.visible).toBe(true);
+
+		const profile = appCustomizerProfile({ language: "ko", toolkit: kit });
+		expect(profile.systemPrompt).toContain("`builtin:pinToSidebar`");
+		const hideTool = kit.tools.find((t) => t.name === "update_context_menu");
+		expect(JSON.stringify(hideTool?.parameters)).toContain("builtin:pinToSidebar");
+	});
+
 	it("preserves every mutation without lost updates when multiple customization tools run in parallel", async () => {
 		const settings = createStubSettings();
 		const kit = createAppCustomizerToolkit({
@@ -316,7 +356,7 @@ describe("app-customizer multi-turn service", () => {
 			type: "turn-done",
 			runId: "run-1",
 			sessionId: "sess-1",
-			reply: "사이드바에서 음악과 동영상 폴더를 숨기고 다운로드와 문서를 위로 올렸습니다.",
+			messages: ["사이드바에서 음악과 동영상 폴더를 숨기고 다운로드와 문서를 위로 올렸습니다."],
 		});
 		if (done1?.type === "turn-done") {
 			expect(done1.settings.sidebar.hiddenItems).toEqual(["place:music", "place:movies"]);
@@ -350,5 +390,59 @@ describe("app-customizer multi-turn service", () => {
 		]);
 		await svc.send("run-3", { sessionId: "sess-1", message: "안녕" });
 		expect(sawAfterReset).toBe(false);
+	});
+
+	it("keeps intermediate assistant messages when tool calls follow and emits them before the next step's shimmer progress", async () => {
+		const registration = register();
+		const settings = createStubSettings();
+		const svc = createAppCustomizerService({
+			send: (event) => events.push(event),
+			resolveModel: async () => ({ model: registration.getModel() }),
+			agentDir,
+			env: {},
+			cwd: root,
+			homeDir: root,
+			language: () => "ko",
+			settings,
+			listLocations: async () => LOCATIONS,
+			listTags: async () => TAGS,
+		});
+
+		registration.setResponses([
+			fauxAssistantMessage([
+				fauxText("현재 사이드바 구성을 먼저 확인해 볼게요."),
+				fauxToolCall("get_app_settings", { i: "현재 사이드바 설정 확인 중" }),
+			]),
+			fauxAssistantMessage([
+				fauxText("음악 폴더를 숨기겠습니다."),
+				fauxToolCall("update_sidebar", { i: "음악 폴더 숨기는 중", hideItems: ["music"] }),
+			]),
+			fauxAssistantMessage("음악 폴더를 사이드바에서 숨겼습니다."),
+		]);
+
+		await svc.send("run-mid", { sessionId: "sess-mid", message: "음악 폴더 숨겨줘" });
+
+		// Never wipes a spoken assistant message with an empty draft
+		expect(events.filter((e) => e.type === "draft" && e.text === "")).toEqual([]);
+
+		const summary = events
+			.filter((e) => e.type === "assistant-message" || e.type === "progress")
+			.map((e) => `${e.type}:${e.text}`);
+		expect(summary).toEqual([
+			"assistant-message:현재 사이드바 구성을 먼저 확인해 볼게요.",
+			"progress:현재 사이드바 설정 확인 중",
+			"assistant-message:음악 폴더를 숨기겠습니다.",
+			"progress:음악 폴더 숨기는 중",
+		]);
+
+		const done = events.at(-1);
+		expect(done).toMatchObject({
+			type: "turn-done",
+			messages: [
+				"현재 사이드바 구성을 먼저 확인해 볼게요.",
+				"음악 폴더를 숨기겠습니다.",
+				"음악 폴더를 사이드바에서 숨겼습니다.",
+			],
+		});
 	});
 });

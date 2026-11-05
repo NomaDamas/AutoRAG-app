@@ -240,14 +240,13 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "우클릭 메뉴" }).click();
 	await page.locator("h1.linear-title", { hasText: "우클릭 메뉴" }).waitFor();
-	await page.locator('[data-action="open-context-menu-customizer"]').click();
 
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("01-live-cmenu-modal-open");
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="contextMenu"]');
+	await panel.waitFor();
+	await shot("01-live-cmenu-panel-open");
 
 	// Ask real 2026+ LLM to customize the context menu & create two Magic Actions (one organize agent, one multi-file script)
-	const input = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
 	await page.keyboard.type(
 		[
@@ -261,21 +260,24 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const replies = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn__reply');
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
-			return replies.length >= 1 && sendBtn !== null;
+			const panel = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+			const settled = panel?.querySelector(".customizer-turn__reply, .customizer-turn__error");
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
+			return settled !== null && settled !== undefined && sendBtn !== null;
 		},
 		null,
-		{ timeout: 150_000 },
+		{ timeout: 240_000 },
 	);
 	await shot("02-live-cmenu-turn1-done");
 
-	const custReply = await modal.locator(".customizer-turn__reply").first().innerText();
+	const custError = await panel.locator(".customizer-turn__error").count();
+	check("Real LLM finished the context-menu turn without an error", custError === 0, custError === 0 ? "" : await panel.locator(".customizer-turn__error").first().innerText());
+	const custReply = custError === 0 ? (await panel.locator(".customizer-turn").first().locator(".customizer-turn__reply").allInnerTexts()).join("\n\n") : "";
 	console.log(`live customizer reply:\n${custReply}`);
 	console.log(`live customizer progress: ${JSON.stringify(seenCustomizerProgress)}`);
 
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
 	await shot("03-live-settings-after-ai");
 
 	const settingsPath = join(USER_DATA, "settings", "settings-state.json");

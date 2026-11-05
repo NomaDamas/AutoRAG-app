@@ -28,6 +28,8 @@ import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
+import { VOICE_CHANNELS, isVoiceClip } from "../shared/voice-contract";
+import type { VoiceService } from "./voice-service";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
@@ -98,6 +100,16 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (typeof id !== "string" || id.length === 0) throw new Error(t("main.ipc.unknownAction"));
 		return service.cancel(id);
 	});
+}
+
+/** Dictation: transcribe one recorded clip, the readiness check (sign-in, microphone permission) before recording, and the OS microphone settings. */
+export function registerVoiceIpcHandlers(service: VoiceService): void {
+	ipcMain.handle(VOICE_CHANNELS.transcribe, (_event, clip: unknown) => {
+		if (!isVoiceClip(clip)) throw new Error(t("main.ipc.invalidVoiceRequest"));
+		return service.transcribe(clip);
+	});
+	ipcMain.handle(VOICE_CHANNELS.prepare, () => service.prepare());
+	ipcMain.handle(VOICE_CHANNELS.openMicrophoneSettings, () => service.openMicrophoneSettings());
 }
 
 /** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */

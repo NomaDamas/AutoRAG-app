@@ -5,7 +5,7 @@ import type { ModelDownloadStatus } from "../../../shared/model-download-contrac
 import { formatByteSize } from "../../../shared/size-reduction";
 import type { BackgroundTaskItem } from "../hooks/useBackgroundTasks";
 import { describeSidebarErrorFixEntries, type ErrorFixStore } from "./error-fix";
-import { describeIndexActivity, itemName, itemPhaseText } from "./index-activity";
+import { describeIndexActivity, itemName, itemPhaseText, localProgressText } from "./index-activity";
 import { describeIndexProblem } from "./index-problem";
 import { describeSidebarMagicActionEntries, initialMagicActionStore, type MagicActionStore } from "./magic-action";
 import { downloadPercent } from "./model-download";
@@ -74,7 +74,7 @@ function indexEntries(
 			if (item.state === "done") continue;
 			const name = itemName(item, t);
 			if (item.state === "running") {
-				const phase = itemPhaseText(item, t);
+				const phase = (item.kind === "local" ? localProgressText(snapshot, t) : null) ?? itemPhaseText(item, t);
 				multi.push({
 					id: `index:${item.key}`,
 					tone: "run",

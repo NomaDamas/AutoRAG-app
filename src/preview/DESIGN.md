@@ -509,6 +509,14 @@ The detail calls (details, SHA-256, folder size, audio tags, data rows, archive 
 path the window is showing, and the hash, folder walk, and archive listing stop when the preview
 moves on.
 
+A streamed viewer names the file's version in its URL (`previewStreamUrl(path,
+file)` adds `v=<modifiedAt>:<size>` from the `PreviewDocument`; the protocol
+ignores it). The panel is one long-lived page, and Chromium keeps decoded
+pictures by URL for the life of the page whatever `cache-control` says, so a
+picture rewritten under the same path came back as the old decode while the
+Finder's thumbnail and the Inspector already showed the new one.
+`run-qa-quick-look-replaced-file.mjs` covers it.
+
 Electron honours only one `registerSchemesAsPrivileged` call, so the preview
 and thumbnail schemes register together in `src/main/index.ts`.
 

@@ -11,6 +11,7 @@ import {
 	FolderOpen,
 	Lock,
 	Pencil,
+	Pin,
 	RotateCcw,
 	Share2,
 	Sparkles,
@@ -40,9 +41,10 @@ import {
 	type MagicActionSelectionRule,
 	type MagicActionTargetKind,
 } from "../../../../shared/context-menu-contract";
-import { deleteKeyLabel, enterKeyLabel, formatShortcut } from "../../lib/shortcuts";
+import type { ShortcutId } from "../../../../shared/shortcuts-contract";
+import { hostPlatform } from "../../lib/shortcuts";
+import { formatContextMenuKeycap } from "../../state/context-menu";
 import { Switch } from "../primitives/Switch";
-import { AppCustomizerModal } from "./AppCustomizerModal";
 import { ModalActions, ModalShell, Note, Section, SettingsPageHead } from "./SettingsKit";
 
 type ContextMenuBridgeWindow = Window & {
@@ -81,6 +83,7 @@ interface BuiltinRowSpec {
 		| "settingsCore.contextMenu.items.rename"
 		| "settingsCore.contextMenu.items.copyPath"
 		| "settingsCore.contextMenu.items.newFolder"
+		| "settingsCore.contextMenu.items.pinToSidebar"
 		| "settingsCore.contextMenu.items.extract"
 		| "settingsCore.contextMenu.items.compress"
 		| "settingsCore.contextMenu.items.compress7z"
@@ -89,14 +92,14 @@ interface BuiltinRowSpec {
 		| "settingsCore.contextMenu.items.tags"
 		| "settingsCore.contextMenu.items.trash";
 	readonly icon: LucideIcon;
-	readonly keycap?: () => string;
+	readonly shortcutId?: ShortcutId;
 	readonly locked?: boolean;
 }
 
 const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, readonly BuiltinRowSpec[]>> = {
 	open: [
-		{ id: "builtin:quickLook", labelKey: "settingsCore.contextMenu.items.quickLook", icon: Eye, keycap: () => "space" },
-		{ id: "builtin:open", labelKey: "settingsCore.contextMenu.items.open", icon: FolderOpen, keycap: enterKeyLabel },
+		{ id: "builtin:quickLook", labelKey: "settingsCore.contextMenu.items.quickLook", icon: Eye, shortcutId: "quickLook" },
+		{ id: "builtin:open", labelKey: "settingsCore.contextMenu.items.open", icon: FolderOpen, shortcutId: "openItem" },
 		{ id: "builtin:openWith", labelKey: "settingsCore.contextMenu.items.openWith", icon: FolderOpen },
 		{ id: "builtin:showInEnclosingFolder", labelKey: "settingsCore.contextMenu.items.showInEnclosingFolder", icon: FolderOpen },
 	],
@@ -104,15 +107,16 @@ const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, rea
 		{ id: "builtin:toggleIndex", labelKey: "settingsCore.contextMenu.items.toggleIndex", icon: Sparkles },
 	],
 	clipboard: [
-		{ id: "builtin:copy", labelKey: "settingsCore.contextMenu.items.copy", icon: Copy, keycap: () => formatShortcut({ key: "C" }) },
-		{ id: "builtin:paste", labelKey: "settingsCore.contextMenu.items.paste", icon: Clipboard, keycap: () => formatShortcut({ key: "V" }) },
-		{ id: "builtin:cut", labelKey: "settingsCore.contextMenu.items.cut", icon: Clipboard, keycap: () => formatShortcut({ key: "X" }) },
-		{ id: "builtin:duplicate", labelKey: "settingsCore.contextMenu.items.duplicate", icon: Copy, keycap: () => formatShortcut({ key: "D" }) },
-		{ id: "builtin:rename", labelKey: "settingsCore.contextMenu.items.rename", icon: Pencil, keycap: () => formatShortcut({ key: "R" }) },
+		{ id: "builtin:copy", labelKey: "settingsCore.contextMenu.items.copy", icon: Copy, shortcutId: "copy" },
+		{ id: "builtin:paste", labelKey: "settingsCore.contextMenu.items.paste", icon: Clipboard, shortcutId: "paste" },
+		{ id: "builtin:cut", labelKey: "settingsCore.contextMenu.items.cut", icon: Clipboard, shortcutId: "cut" },
+		{ id: "builtin:duplicate", labelKey: "settingsCore.contextMenu.items.duplicate", icon: Copy, shortcutId: "duplicate" },
+		{ id: "builtin:rename", labelKey: "settingsCore.contextMenu.items.rename", icon: Pencil, shortcutId: "rename" },
 		{ id: "builtin:copyPath", labelKey: "settingsCore.contextMenu.items.copyPath", icon: Copy },
 	],
 	actions: [
 		{ id: "builtin:newFolder", labelKey: "settingsCore.contextMenu.items.newFolder", icon: FilePlus2 },
+		{ id: "builtin:pinToSidebar", labelKey: "settingsCore.contextMenu.items.pinToSidebar", icon: Pin },
 		{ id: "builtin:extract", labelKey: "settingsCore.contextMenu.items.extract", icon: Archive },
 		{ id: "builtin:compress", labelKey: "settingsCore.contextMenu.items.compress", icon: Archive },
 		{ id: "builtin:compress7z", labelKey: "settingsCore.contextMenu.items.compress7z", icon: Archive },
@@ -125,7 +129,7 @@ const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, rea
 		{ id: "builtin:tags", labelKey: "settingsCore.contextMenu.items.tags", icon: Tag, locked: true },
 	],
 	trash: [
-		{ id: "builtin:trash", labelKey: "settingsCore.contextMenu.items.trash", icon: Trash2, keycap: deleteKeyLabel },
+		{ id: "builtin:trash", labelKey: "settingsCore.contextMenu.items.trash", icon: Trash2, shortcutId: "trash" },
 	],
 };
 
@@ -139,6 +143,7 @@ function MagicActionEditorModal({
 	readonly onSave: (action: MagicAction) => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const isWindows = hostPlatform() === "win32";
 	const [label, setLabel] = useState(initial?.label ?? "");
 	const [description, setDescription] = useState(initial?.description ?? "");
 	const [executionKind, setExecutionKind] = useState<"agent" | "script">(initial?.execution.kind ?? "agent");
@@ -275,11 +280,21 @@ function MagicActionEditorModal({
 								data-testid="magic-editor-command"
 								className="font-mono"
 								value={command}
-								placeholder={t("settingsCore.contextMenu.editor.commandPlaceholder")}
+								placeholder={t(
+									isWindows
+										? "settingsCore.contextMenu.editor.commandPlaceholderWindows"
+										: "settingsCore.contextMenu.editor.commandPlaceholder",
+								)}
 								onChange={(e) => setCommand(e.target.value)}
 							/>
 						</label>
-						<Note>{t("settingsCore.contextMenu.editor.commandHint")}</Note>
+						<Note>
+							{t(
+								isWindows
+									? "settingsCore.contextMenu.editor.commandHintWindows"
+									: "settingsCore.contextMenu.editor.commandHint",
+							)}
+						</Note>
 					</>
 				)}
 
@@ -348,15 +363,18 @@ export function ContextMenuPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	onOpenAiSettings,
+	customizerOpen,
+	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	readonly onOpenAiSettings?: () => void;
+	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
+	readonly customizerOpen: boolean;
+	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
-	const [customizerOpen, setCustomizerOpen] = useState(false);
+	const platform = hostPlatform();
 	const [editorState, setEditorState] = useState<{ readonly open: boolean; readonly initial: MagicAction | null }>({
 		open: false,
 		initial: null,
@@ -601,26 +619,28 @@ export function ContextMenuPage({
 				description={t("settingsCore.contextMenu.description")}
 			/>
 
-			<div className="sidebar-ai-hero">
-				<div className="sidebar-ai-hero__body">
-					<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-					</span>
-					<div className="sidebar-ai-hero__copy">
-						<div className="sidebar-ai-hero__title">{t("settingsCore.contextMenu.aiHeroTitle")}</div>
-						<p className="sidebar-ai-hero__desc">{t("settingsCore.contextMenu.aiHeroDesc")}</p>
+			{customizerOpen ? null : (
+				<div className="sidebar-ai-hero">
+					<div className="sidebar-ai-hero__body">
+						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+						</span>
+						<div className="sidebar-ai-hero__copy">
+							<div className="sidebar-ai-hero__title">{t("settingsCore.contextMenu.aiHeroTitle")}</div>
+							<p className="sidebar-ai-hero__desc">{t("settingsCore.contextMenu.aiHeroDesc")}</p>
+						</div>
 					</div>
+					<button
+						type="button"
+						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
+						data-action="open-context-menu-customizer"
+						onClick={onOpenCustomizer}
+					>
+						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
+						<span>{t("settingsCore.contextMenu.aiHeroButton")}</span>
+					</button>
 				</div>
-				<button
-					type="button"
-					className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-					data-action="open-context-menu-customizer"
-					onClick={() => setCustomizerOpen(true)}
-				>
-					<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-					<span>{t("settingsCore.contextMenu.aiHeroButton")}</span>
-				</button>
-			</div>
+			)}
 
 			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.contextMenu.presetsTitle")}>
 				<span className="sidebar-presets-bar__label">{t("settingsCore.contextMenu.presetsTitle")}</span>
@@ -767,7 +787,10 @@ export function ContextMenuPage({
 												const locked = spec.locked === true;
 												const visible = locked ? true : !hiddenItems.has(spec.id);
 												const itemLabel = t(spec.labelKey);
-												const keycap = spec.keycap?.();
+												const keycap =
+													spec.shortcutId === undefined
+														? undefined
+														: formatContextMenuKeycap(spec.shortcutId, appSettings.shortcuts, platform);
 												return (
 													<div
 														key={spec.id}
@@ -817,15 +840,6 @@ export function ContextMenuPage({
 					initial={editorState.initial}
 					onCancel={() => setEditorState({ open: false, initial: null })}
 					onSave={saveMagicAction}
-				/>
-			) : null}
-
-			{customizerOpen ? (
-				<AppCustomizerModal
-					surface="contextMenu"
-					onClose={() => setCustomizerOpen(false)}
-					onSettingsUpdated={(next) => onAppSettingsChanged(next)}
-					onOpenAiSettings={onOpenAiSettings}
 				/>
 			) : null}
 		</>

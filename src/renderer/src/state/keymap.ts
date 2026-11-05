@@ -142,12 +142,13 @@ export function resolveKeyAction(
 	event: KeyEventLike,
 	context: KeyContext,
 	shortcuts: ShortcutSettings = DEFAULT_SHORTCUT_SETTINGS,
+	platform = "darwin",
 ): KeyAction | null {
 	if (event.key === "Escape") {
 		return { type: "dismiss" };
 	}
 
-	const recorded = chordFromKeyEvent(event);
+	const recorded = chordFromKeyEvent(event, platform);
 	if (recorded.kind === "valid") {
 		const effective = resolveEffectiveShortcuts(shortcuts);
 		const eventParts = decomposeShortcutChord(recorded.chord);
@@ -186,8 +187,9 @@ export function resolveKeyAction(
 		return null;
 	}
 
-	const mod = event.meta || event.ctrl === true;
-	if (!mod && !event.alt && !event.shift) {
+	const isMac = platform === "darwin";
+	const mod = isMac ? event.meta || event.ctrl === true : event.ctrl === true;
+	if (!event.meta && !mod && !event.alt && !event.shift) {
 		if (event.key === "ArrowDown" || event.key === "ArrowUp") {
 			const delta = event.key === "ArrowDown" ? 1 : -1;
 			return context.zone === "evidence" ? { type: "moveEvidence", delta } : { type: "moveSelection", delta };

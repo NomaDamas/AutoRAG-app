@@ -17,7 +17,7 @@
 
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { type FinderDragEntry, writeFinderDrag } from "../state/attachments";
-import { type DragPoint, type RowDragPhase, rowDragPhase } from "../state/row-drag";
+import { type DragPoint, type RowDragPhase, rowDragCursor, rowDragPhase } from "../state/row-drag";
 
 /** How often a held, still drag repeats `dragover`, as the browser's own drag does. */
 const DRAGOVER_REPEAT_MS = 100;
@@ -32,6 +32,23 @@ export interface RowDragSource {
 }
 
 let dragging = false;
+
+/**
+ * A DataTransfer built by script ignores writes to `dropEffect` (the browser
+ * honors it only on a real drag), yet every in-app target writes the verb it
+ * applies there. Shadow the property on this one instance so the verb a target
+ * wrote on `dragover` can be read back for the cursor.
+ */
+function trackDropEffect(data: DataTransfer): void {
+	let effect = "none";
+	Object.defineProperty(data, "dropEffect", {
+		configurable: true,
+		get: () => effect,
+		set: (value: string) => {
+			if (value === "none" || value === "copy" || value === "link" || value === "move") effect = value;
+		},
+	});
+}
 
 /** The in-window drag image: the first row's name, with a count for a multi-row drag. */
 function createGhost(entries: readonly FinderDragEntry[]): HTMLElement {
@@ -96,10 +113,11 @@ export function pressRow(event: ReactPointerEvent<HTMLElement>, source: RowDragS
 			if (next !== null) fire("dragenter", next, target);
 			target = next;
 		}
+		data.dropEffect = "none";
 		accepted = target !== null && fire("dragover", target).defaultPrevented;
-		// A script-built DataTransfer ignores `dropEffect` writes, so the cursor
-		// shows the verb every in-app file target applies: move, ⌥ copies.
-		root.dataset.rowDrag = accepted ? (altKey ? "copy" : "move") : "none";
+		// The cursor shows the verb the target wrote as `dropEffect` (pinning to Favorites is a
+		// copy); a file target that wrote none moves the rows, and ⌥ copies.
+		root.dataset.rowDrag = rowDragCursor(accepted, data.dropEffect, altKey);
 		if (ghost !== null) ghost.style.transform = `translate(${point.x + GHOST_OFFSET_PX}px, ${point.y + GHOST_OFFSET_PX}px)`;
 	};
 
@@ -144,6 +162,7 @@ export function pressRow(event: ReactPointerEvent<HTMLElement>, source: RowDragS
 			const entries = source.entries();
 			paths = entries.map((entry) => entry.path);
 			data = new DataTransfer();
+			trackDropEffect(data);
 			writeFinderDrag(data, entries);
 			window.addEventListener("click", swallowClick, true);
 			if (next === "inside") {

@@ -59,6 +59,7 @@ export default defineConfig({
 				input: {
 					index: resolve(import.meta.dirname, "src/preload/index.ts"),
 					"quick-look": resolve(import.meta.dirname, "src/preload/quick-look.ts"),
+					"quick-search": resolve(import.meta.dirname, "src/preload/quick-search.ts"),
 				},
 			},
 		},
@@ -86,6 +87,7 @@ export default defineConfig({
 				input: {
 					index: resolve(import.meta.dirname, "src/renderer/index.html"),
 					"quick-look": resolve(import.meta.dirname, "src/renderer/quick-look.html"),
+					"quick-search": resolve(import.meta.dirname, "src/renderer/quick-search.html"),
 				},
 			},
 		},

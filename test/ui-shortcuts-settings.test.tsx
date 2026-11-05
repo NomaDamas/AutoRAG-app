@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsView } from "../src/renderer/src/components/SettingsView";
+import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
@@ -119,10 +119,10 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
-describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and AI Shortcut Customizer modal)", () => {
+describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and AI Shortcut Customizer in the right sidebar)", () => {
 	it("records a shortcut by pressing keys directly, cancels on Escape, and swaps on conflict", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -197,7 +197,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 
 	it("supports pointer-only UI editing with modifier toggles and key selector, plus per-row and full reset", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -242,7 +242,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 
 	it("renders the three quick presets (Mac Finder, Windows File Explorer, Default) and switches cleanly between them", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
@@ -277,22 +277,40 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(currentSettings.shortcuts.overrides).toEqual({});
 		expect(host.querySelector('[data-action="shortcuts-preset-default"]')?.classList.contains("is-active")).toBe(true);
 	});
-	it("opens the AI Shortcut Customizer modal with surface='shortcuts' and applies agent updates live", async () => {
+
+	it("clears any pending conflict banner when switching to a Quick Preset", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory={"shortcuts" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
-		const openModalBtn = host.querySelector<HTMLButtonElement>('[data-action="open-shortcut-customizer"]');
-		expect(openModalBtn).not.toBeNull();
+		// Trigger a conflict banner on focusSearch by pressing ⌘V (bound to paste)
 		await act(async () => {
-			openModalBtn?.click();
+			host.querySelector<HTMLButtonElement>('[data-shortcut-record="focusSearch"]')?.click();
 		});
+		await act(async () => {
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "v", code: "KeyV", metaKey: true, bubbles: true, cancelable: true }));
+		});
+		await settle();
+		expect(host.querySelector('[data-action="swap-shortcut-conflict"]')).not.toBeNull();
 
-		const modal = document.body.querySelector('[data-testid="app-customizer-modal"]');
-		expect(modal).not.toBeNull();
+		// Clicking Windows File Explorer preset clears the stale conflict banner immediately
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-windows-explorer"]')?.click();
+		});
+		await settle();
+		expect(host.querySelector('[data-action="swap-shortcut-conflict"]')).toBeNull();
+	});
+	it("docks the AI Shortcut Customizer panel with surface='shortcuts' and applies agent updates live", async () => {
+		await act(async () => {
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
+		});
+		await settle();
 
-		const suggestionChip = modal?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
+		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		expect(panel?.getAttribute("data-surface")).toBe("shortcuts");
+
+		const suggestionChip = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		expect(suggestionChip).not.toBeNull();
 		await act(async () => {
 			suggestionChip?.click();
@@ -311,7 +329,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 				type: "turn-done",
 				runId,
 				sessionId: request.sessionId,
-				reply: "이름 변경 단축키를 F2로 설정했습니다.",
+				messages: ["이름 변경 단축키를 F2로 설정했습니다."],
 				changes: [{ kind: "shortcuts", summary: "단축키 변경 (이름 변경)", fields: ["shortcuts.overrides.rename"] }],
 				settings: updatedSettings,
 			});
