@@ -1,34 +1,18 @@
 /**
- * The index map's canvas: a force layout of the scope's tree (parent links
- * plus a web between siblings) that settles into continents, painted as
- * territories (`territory.ts`) under a night sky, with the tree's links and
- * nodes drawn over the land like constellations.
+ * The index map's canvas: the scope as a planet (`globe.ts`), drawn as a lit
+ * orthographic globe in an election-night studio. On open the count rolls in:
+ * every indexed region starts red and turns blue in turn, and `onProgress`
+ * reports how far the count is so the scoreboard ticks along with the globe.
+ * Drag turns the globe, the wheel zooms, hovering names the region under the
+ * pointer; left alone it sways slowly around the scope.
  *
- * Imperative on purpose: the layout ticks and the canvas repaints every frame
- * while the land settles, which React state would only slow down. The modal
- * owns one scene per map and disposes it on close.
+ * Imperative on purpose: the globe is shaded per pixel every frame, which
+ * React state would only slow down. The modal owns one scene per map and
+ * disposes it on close.
  */
 
-import { forceCollide, forceLink, forceManyBody, forceSimulation, forceX, forceY, type Simulation, type SimulationLinkDatum, type SimulationNodeDatum } from "d3-force";
 import type { IndexMap, IndexMapNode } from "../../../../../shared/index-map-contract";
-import { paintTerritory, TERRITORY_COLORS, type TerritoryClaim } from "./territory";
-
-interface Body extends SimulationNodeDatum {
-	readonly node: IndexMapNode;
-	/** Drawn radius in world units. */
-	readonly radius: number;
-	/** How far its territory reaches, in world units. */
-	readonly reach: number;
-	x: number;
-	y: number;
-}
-
-interface Tie extends SimulationLinkDatum<Body> {
-	readonly source: Body;
-	readonly target: Body;
-	/** Parent → child, or a sibling strand of the web. */
-	readonly tree: boolean;
-}
+import { cellAt, dot, GLOBE_COLORS, hash, layoutGlobe, OCEAN, paintGlobe, stateAt, type GlobeSite, type Rgb, type Vec3 } from "./globe";
 
 export interface SceneHover {
 	readonly node: IndexMapNode;
@@ -38,128 +22,114 @@ export interface SceneHover {
 }
 
 export interface IndexMapScene {
-	/** Frame the whole map again. */
+	/** Turn back to the scope and frame the whole globe. */
 	fit(): void;
 	dispose(): void;
 }
 
-/** Territory grid cell, in CSS pixels: coarse enough to repaint every frame, smoothed when scaled up. */
-const CELL = 3;
-const MIN_ZOOM = 0.08;
-const MAX_ZOOM = 8;
-
-function bodyRadius(node: IndexMapNode): number {
-	switch (node.kind) {
-		case "root":
-			return 11 + Math.min(16, Math.sqrt(node.weight) * 0.6);
-		case "folder":
-			return 5 + Math.min(18, Math.sqrt(node.weight) * 0.9);
-		case "parcel":
-			return Math.min(80, 4 + Math.sqrt(node.weight) * 4.2);
-		case "file":
-			return 4;
-	}
+export interface IndexMapSceneOptions {
+	readonly reducedMotion: boolean;
+	/** Play the opening count; false shows the final map at once (a reload while the map is open). */
+	readonly reveal: boolean;
+	readonly onHover: (hover: SceneHover | null) => void;
+	/** How far the opening count is, 0..1; called each frame while it runs and once with 1. */
+	readonly onProgress?: (progress: number) => void;
 }
 
-/** Deterministic 0..1 noise so the starfield and first positions are the same on every open. */
-function hash(seed: number): number {
-	const value = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
-	return value - Math.floor(value);
-}
+/** Shaded pixels per frame; above it the globe is shaded at a lower resolution and scaled up. */
+const PIXEL_BUDGET = 360_000;
+const COUNT_MS = 3200;
+const MIN_ZOOM = 0.7;
+const MAX_ZOOM = 3;
+const MAX_PITCH = 1.25;
+/** Light from the upper left, a little in front. */
+const LIGHT: Vec3 = (() => {
+	const [x, y, z] = [-0.5, 0.55, 0.68];
+	const length = Math.hypot(x, y, z);
+	return [x / length, y / length, z / length];
+})();
+/** Half-vector for the ocean's specular glint (viewer on +z). */
+const HALF: Vec3 = (() => {
+	const [x, y, z] = [LIGHT[0], LIGHT[1], LIGHT[2] + 1];
+	const length = Math.hypot(x, y, z);
+	return [x / length, y / length, z / length];
+})();
 
-function rgba([r, g, b]: readonly [number, number, number], alpha: number): string {
+function rgba([r, g, b]: Rgb, alpha: number): string {
 	return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-export function createIndexMapScene(
-	canvas: HTMLCanvasElement,
-	map: IndexMap,
-	options: { readonly reducedMotion: boolean; readonly onHover: (hover: SceneHover | null) => void },
-): IndexMapScene {
-	const context = canvas.getContext("2d");
-	const bodies: Body[] = [];
-	const ties: Tie[] = [];
-	const children = new Map<number, Body[]>();
-	for (const node of map.nodes) {
-		const parent = node.parent === null ? undefined : bodies[node.parent];
-		const radius = bodyRadius(node);
-		// Children start on a golden-angle spiral around their parent, so the first frames unfold instead of exploding.
-		const siblings = parent === undefined ? [] : (children.get(parent.node.id) ?? []);
-		const angle = (siblings.length + 1) * 2.399963 + hash(node.id) * 0.4;
-		const distance = parent === undefined ? 0 : parent.radius + radius + 10 + Math.sqrt(siblings.length) * 9;
-		const rootOffset = node.parent === null ? map.nodes.filter((other) => other.parent === null && other.id < node.id).length : 0;
-		const body: Body = {
-			node,
-			radius,
-			reach: node.kind === "file" ? radius * 3.2 : node.kind === "parcel" ? radius * 1.7 : radius * 2.6,
-			x: parent === undefined ? Math.cos(rootOffset * 2.4) * rootOffset * 220 : parent.x + Math.cos(angle) * distance,
-			y: parent === undefined ? Math.sin(rootOffset * 2.4) * rootOffset * 220 : parent.y + Math.sin(angle) * distance,
-		};
-		bodies.push(body);
-		if (parent !== undefined) {
-			siblings.push(body);
-			children.set(parent.node.id, siblings);
-			ties.push({ source: parent, target: body, tree: true });
-		}
-	}
-	// The web: each child is tied to the next one of the same parent, closing a ring, so a folder's files knit into one piece of land.
-	for (const group of children.values()) {
-		if (group.length < 3) continue;
-		for (let index = 0; index < group.length; index += 1) {
-			const source = group[index];
-			const target = group[(index + 1) % group.length];
-			if (source !== undefined && target !== undefined) ties.push({ source, target, tree: false });
-		}
-	}
+/** Slow start and finish, so the red map is seen before blue sweeps it and the last calls land one by one. */
+function easeInOut(t: number): number {
+	return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+}
 
-	const simulation: Simulation<Body, Tie> = forceSimulation(bodies)
-		.force(
-			"link",
-			forceLink<Body, Tie>(ties)
-				.distance((tie) => (tie.tree ? tie.source.radius + tie.target.radius + 6 : tie.source.radius + tie.target.radius + 4))
-				.strength((tie) => (tie.tree ? 0.85 : 0.22)),
-		)
-		.force("charge", forceManyBody<Body>().strength((body) => -10 - body.radius * 1.6).distanceMax(360))
-		.force("collide", forceCollide<Body>((body) => body.radius + 1.5).strength(0.9))
-		.force("x", forceX<Body>(0).strength(0.035))
-		.force("y", forceY<Body>(0).strength(0.035))
-		.alphaDecay(0.018)
-		.stop();
+function latLonOf([x, y, z]: Vec3): { lat: number; lon: number } {
+	return { lat: Math.asin(Math.max(-1, Math.min(1, y))), lon: Math.atan2(x, z) };
+}
+
+export function createIndexMapScene(canvas: HTMLCanvasElement, map: IndexMap, options: IndexMapSceneOptions): IndexMapScene {
+	const context = canvas.getContext("2d");
+	const sites = layoutGlobe(map);
+	const texture = paintGlobe(sites);
+	const leaves = sites.filter((site) => site.leaf && site.reach > 0);
+	/** Folders and roots get a pin; deeper ones only once zoomed in. */
+	const pins = sites.filter((site) => site.node.kind === "root" || site.node.kind === "folder").sort((a, b) => a.node.depth - b.node.depth || b.node.weight - a.node.weight);
+	const home = latLonOf(sites.find((site) => site.node.parent === null)?.at ?? [0, 0, 1]);
+	const homeView = { yaw: home.lon, pitch: Math.max(-MAX_PITCH, Math.min(MAX_PITCH, home.lat)) };
 
 	let width = 0;
 	let height = 0;
 	let dpr = 1;
-	const camera = { x: 0, y: 0, k: 1 };
-	/** The camera follows the growing land until the person pans or zooms. */
-	let following = true;
-	let hovered: Body | null = null;
+	const view = { yaw: homeView.yaw, pitch: homeView.pitch, k: 1 };
+	/** Left alone, the globe sways around the scope; a drag hands it to the person until `fit`. */
+	let swaying = !options.reducedMotion;
+	let swayStart = performance.now();
+	let spin = { yaw: 0, pitch: 0 };
+	let hovered: GlobeSite | null = null;
 	let frame = 0;
 	let disposed = false;
-	const land = document.createElement("canvas");
-	const landContext = land.getContext("2d");
-	const stars = Array.from({ length: 220 }, (_, index) => ({ x: hash(index * 3 + 1), y: hash(index * 3 + 2), size: 0.3 + hash(index * 3 + 3) * 1.1, twinkle: hash(index * 7) }));
+	const countStart = performance.now();
+	let progress = options.reveal && !options.reducedMotion ? 0 : 1;
+	const buffer = document.createElement("canvas");
+	const bufferContext = buffer.getContext("2d");
+	let image: ImageData | null = null;
+	const studioLights = Array.from({ length: 90 }, (_, index) => ({ x: hash(index * 3 + 1), y: hash(index * 3 + 2), size: 0.4 + hash(index * 3 + 3) * 1.1 }));
 
-	function bounds(): { x0: number; y0: number; x1: number; y1: number } {
-		let x0 = Number.POSITIVE_INFINITY;
-		let y0 = Number.POSITIVE_INFINITY;
-		let x1 = Number.NEGATIVE_INFINITY;
-		let y1 = Number.NEGATIVE_INFINITY;
-		for (const body of bodies) {
-			x0 = Math.min(x0, body.x - body.reach);
-			y0 = Math.min(y0, body.y - body.reach);
-			x1 = Math.max(x1, body.x + body.reach);
-			y1 = Math.max(y1, body.y + body.reach);
-		}
-		return bodies.length === 0 ? { x0: -1, y0: -1, x1: 1, y1: 1 } : { x0, y0, x1, y1 };
+	/** World → view rotation, rows; its transpose takes a view vector back to the world. */
+	function rotation(): number[] {
+		const cy = Math.cos(view.yaw);
+		const sy = Math.sin(view.yaw);
+		const cp = Math.cos(view.pitch);
+		const sp = Math.sin(view.pitch);
+		// Yaw about +y, then pitch about +x.
+		return [cy, 0, -sy, -sp * sy, cp, -sp * cy, cp * sy, sp, cp * cy];
 	}
 
-	function fitTarget(): { x: number; y: number; k: number } {
-		const box = bounds();
-		const k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min((width * 0.86) / (box.x1 - box.x0), (height * 0.82) / (box.y1 - box.y0))));
-		return { x: (box.x0 + box.x1) / 2, y: (box.y0 + box.y1) / 2, k: Math.min(k, 2.4) };
+	function radius(): number {
+		return Math.min(width, height) * 0.4 * view.k;
 	}
 
-	const toScreen = (x: number, y: number): [number, number] => [(x - camera.x) * camera.k + width / 2, (y - camera.y) * camera.k + height / 2];
+	function toView(m: number[], [x, y, z]: Vec3): Vec3 {
+		return [m[0]! * x + m[1]! * y + m[2]! * z, m[3]! * x + m[4]! * y + m[5]! * z, m[6]! * x + m[7]! * y + m[8]! * z];
+	}
+
+	function toScreen(m: number[], at: Vec3): { x: number; y: number; z: number } {
+		const [vx, vy, vz] = toView(m, at);
+		const r = radius();
+		return { x: width / 2 + vx * r, y: height / 2 - vy * r, z: vz };
+	}
+
+	/** The world point under a screen point, or null off the globe. */
+	function fromScreen(m: number[], sx: number, sy: number): Vec3 | null {
+		const r = radius();
+		const u = (sx - width / 2) / r;
+		const v = -(sy - height / 2) / r;
+		const rest = 1 - u * u - v * v;
+		if (rest < 0) return null;
+		const w = Math.sqrt(rest);
+		return [m[0]! * u + m[3]! * v + m[6]! * w, m[1]! * u + m[4]! * v + m[7]! * w, m[2]! * u + m[5]! * v + m[8]! * w];
+	}
 
 	function resize(): void {
 		const rect = canvas.getBoundingClientRect();
@@ -171,159 +141,232 @@ export function createIndexMapScene(
 		schedule();
 	}
 
-	function drawSky(ctx: CanvasRenderingContext2D, time: number): void {
-		const sky = ctx.createRadialGradient(width * 0.5, height * 0.42, 0, width * 0.5, height * 0.5, Math.max(width, height) * 0.75);
-		sky.addColorStop(0, "#0f1b33");
-		sky.addColorStop(0.55, "#091225");
-		sky.addColorStop(1, "#04070f");
-		ctx.fillStyle = sky;
+	function drawStudio(ctx: CanvasRenderingContext2D): void {
+		const floor = ctx.createRadialGradient(width * 0.5, height * 0.5, 0, width * 0.5, height * 0.5, Math.max(width, height) * 0.72);
+		floor.addColorStop(0, "#101b38");
+		floor.addColorStop(0.6, "#070d1f");
+		floor.addColorStop(1, "#03060e");
+		ctx.fillStyle = floor;
 		ctx.fillRect(0, 0, width, height);
-		for (const star of stars) {
-			// The sky drifts a little with the camera, slower than the land.
-			const x = (((star.x * width - camera.x * camera.k * 0.04) % width) + width) % width;
-			const y = (((star.y * height - camera.y * camera.k * 0.04) % height) + height) % height;
-			const glow = options.reducedMotion ? 0.55 : 0.35 + 0.35 * Math.sin(time / 900 + star.twinkle * 40);
-			ctx.fillStyle = `rgba(210, 225, 255, ${glow * (0.4 + star.size * 0.4)})`;
+		// Broadcast grid: faint lines behind the globe.
+		ctx.strokeStyle = "rgba(90, 120, 190, 0.07)";
+		ctx.lineWidth = 1;
+		ctx.beginPath();
+		for (let x = (width / 2) % 48; x < width; x += 48) {
+			ctx.moveTo(x, 0);
+			ctx.lineTo(x, height);
+		}
+		for (let y = (height / 2) % 48; y < height; y += 48) {
+			ctx.moveTo(0, y);
+			ctx.lineTo(width, y);
+		}
+		ctx.stroke();
+		for (const light of studioLights) {
+			ctx.fillStyle = `rgba(200, 215, 255, ${0.12 + light.size * 0.12})`;
 			ctx.beginPath();
-			ctx.arc(x, y, star.size, 0, Math.PI * 2);
+			ctx.arc(light.x * width, light.y * height, light.size, 0, Math.PI * 2);
 			ctx.fill();
 		}
 	}
 
-	function drawLand(ctx: CanvasRenderingContext2D): void {
-		if (landContext === null) return;
-		const gridWidth = Math.ceil(width / CELL);
-		const gridHeight = Math.ceil(height / CELL);
-		const claims: TerritoryClaim[] = [];
-		for (const body of bodies) {
-			const [x, y] = toScreen(body.x, body.y);
-			const reach = (body.reach * camera.k) / CELL;
-			if (x / CELL + reach < 0 || y / CELL + reach < 0 || x / CELL - reach > gridWidth || y / CELL - reach > gridHeight) continue;
-			// A root or folder claims for the state most of its files are in; a file or parcel for its own.
-			claims.push({ x: x / CELL, y: y / CELL, radius: Math.max(1.2, reach), state: body.node.state });
+	function drawAtmosphere(ctx: CanvasRenderingContext2D): void {
+		const r = radius();
+		const glow = ctx.createRadialGradient(width / 2, height / 2, r * 0.96, width / 2, height / 2, r * 1.18);
+		glow.addColorStop(0, "rgba(70, 120, 200, 0.42)");
+		glow.addColorStop(0.35, "rgba(40, 80, 160, 0.16)");
+		glow.addColorStop(1, "rgba(20, 40, 90, 0)");
+		ctx.fillStyle = glow;
+		ctx.beginPath();
+		ctx.arc(width / 2, height / 2, r * 1.18, 0, Math.PI * 2);
+		ctx.fill();
+	}
+
+	/** Shades every globe pixel: land lit by the sun and raised by its density, sea with a glint, a graticule, a blue rim. */
+	function drawGlobe(ctx: CanvasRenderingContext2D, m: number[]): void {
+		if (bufferContext === null) return;
+		const r = radius();
+		const left = Math.max(0, Math.floor(width / 2 - r));
+		const top = Math.max(0, Math.floor(height / 2 - r));
+		const right = Math.min(width, Math.ceil(width / 2 + r));
+		const bottom = Math.min(height, Math.ceil(height / 2 + r));
+		if (right <= left || bottom <= top) return;
+		const scale = Math.min(dpr, Math.sqrt(PIXEL_BUDGET / ((right - left) * (bottom - top))));
+		const bw = Math.max(1, Math.round((right - left) * scale));
+		const bh = Math.max(1, Math.round((bottom - top) * scale));
+		if (image === null || image.width !== bw || image.height !== bh) {
+			buffer.width = bw;
+			buffer.height = bh;
+			image = bufferContext.createImageData(bw, bh);
 		}
-		const grid = paintTerritory(gridWidth, gridHeight, claims);
-		land.width = gridWidth;
-		land.height = gridHeight;
-		landContext.putImageData(new ImageData(grid.pixels, gridWidth, gridHeight), 0, 0);
+		const data = image.data;
+		data.fill(0);
+		const { width: tw, height: th, edge, elevation, flipAt } = texture;
+		const flash = 0.05;
+		// Graticule line width as a share of a 15° band: about one screen pixel at any zoom.
+		const line = Math.min(0.03, 1.2 / Math.max(1, r * (Math.PI / 12)));
+		for (let py = 0; py < bh; py += 1) {
+			const v = -((top + (py + 0.5) / scale) - height / 2) / r;
+			for (let px = 0; px < bw; px += 1) {
+				const u = ((left + (px + 0.5) / scale) - width / 2) / r;
+				const rest = 1 - u * u - v * v;
+				if (rest <= 0) continue;
+				const w = Math.sqrt(rest);
+				const wx = m[0]! * u + m[3]! * v + m[6]! * w;
+				const wy = m[1]! * u + m[4]! * v + m[7]! * w;
+				const wz = m[2]! * u + m[5]! * v + m[8]! * w;
+				const lat = Math.asin(wy < -1 ? -1 : wy > 1 ? 1 : wy);
+				const lon = Math.atan2(wx, wz);
+				const column = Math.min(tw - 1, Math.floor(((lon + Math.PI) / (2 * Math.PI)) * tw));
+				const row = Math.min(th - 1, Math.floor(((Math.PI / 2 - lat) / Math.PI) * th));
+				const cell = row * tw + column;
+				const diffuse = Math.max(0, u * LIGHT[0] + v * LIGHT[1] + w * LIGHT[2]);
+				const state = stateAt(texture, cell, progress);
+				let red: number;
+				let green: number;
+				let blue: number;
+				if (state === null || state === "excluded" || state === "unindexable") {
+					const [sr, sg, sb] = state === null ? OCEAN : GLOBE_COLORS[state];
+					const light = 0.45 + diffuse * 0.75;
+					const glint = Math.max(0, u * HALF[0] + v * HALF[1] + w * HALF[2]) ** 60 * 0.6;
+					// The graticule: faint lines every 15° over open water.
+					const latLine = Math.abs(((lat * 12) / Math.PI) % 1);
+					const lonLine = Math.abs(((lon * 12) / Math.PI) % 1);
+					const grid = latLine < line || latLine > 1 - line || lonLine < line * 1.6 || lonLine > 1 - line * 1.6 ? 0.12 : 0;
+					const shoreline = state !== null && (edge[cell] ?? 0) === 1 ? 0.18 : 0;
+					red = sr * light + 255 * (glint + grid * 0.5 + shoreline * 0.4);
+					green = sg * light + 255 * (glint + grid * 0.7 + shoreline * 0.5);
+					blue = sb * light + 255 * (glint + grid + shoreline * 0.7);
+				} else {
+					const [lr, lg, lb] = GLOBE_COLORS[state];
+					const lift = Math.min(0.22, (elevation[cell] ?? 0) * 0.045);
+					const light = 0.42 + diffuse * 0.72;
+					// A white line where one state meets another or the coast; a white flash where the count just turned the ground blue.
+					const since = progress - (flipAt[cell] ?? 2);
+					const white = ((edge[cell] ?? 0) === 1 ? 0.5 : 0) + (state === "indexed" && since >= 0 && since < flash ? (1 - since / flash) * 0.7 : 0) + lift;
+					red = (lr + (255 - lr) * white) * light;
+					green = (lg + (255 - lg) * white) * light;
+					blue = (lb + (255 - lb) * white) * light;
+				}
+				// Rim light: the atmosphere brightens the limb.
+				const rim = (1 - w) ** 3 * 0.55;
+				const offset = (py * bw + px) * 4;
+				data[offset] = red + 90 * rim;
+				data[offset + 1] = green + 150 * rim;
+				data[offset + 2] = blue + 255 * rim;
+				// Anti-aliased edge of the disk.
+				data[offset + 3] = Math.min(255, rest * r * 0.5 * scale * 255);
+			}
+		}
+		bufferContext.putImageData(image, 0, 0);
 		ctx.imageSmoothingEnabled = true;
 		ctx.imageSmoothingQuality = "high";
-		// Shallow water: the land, blurred and faint, glows into the sea around the coast.
-		ctx.save();
-		ctx.filter = "blur(14px)";
-		ctx.globalAlpha = 0.55;
-		ctx.drawImage(land, 0, 0, gridWidth * CELL, gridHeight * CELL);
-		ctx.restore();
-		ctx.drawImage(land, 0, 0, gridWidth * CELL, gridHeight * CELL);
+		ctx.drawImage(buffer, left, top, bw / scale, bh / scale);
 	}
 
-	function drawWeb(ctx: CanvasRenderingContext2D): void {
-		const ancestors = new Set<number>();
-		for (let id: number | null = hovered?.node.id ?? null; id !== null; id = map.nodes[id]?.parent ?? null) ancestors.add(id);
-		ctx.lineCap = "round";
-		for (const tie of ties) {
-			const [x0, y0] = toScreen(tie.source.x, tie.source.y);
-			const [x1, y1] = toScreen(tie.target.x, tie.target.y);
-			const lit = tie.tree && ancestors.has(tie.source.node.id) && ancestors.has(tie.target.node.id);
-			ctx.strokeStyle = lit ? "rgba(255, 244, 214, 0.9)" : tie.tree ? "rgba(214, 228, 255, 0.2)" : "rgba(214, 228, 255, 0.07)";
-			ctx.lineWidth = lit ? 1.6 : tie.tree ? Math.min(1.2, 0.5 + camera.k * 0.3) : 0.6;
+	function drawPins(ctx: CanvasRenderingContext2D, m: number[]): void {
+		const r = radius();
+		const maxDepth = view.k < 1.4 ? 1 : view.k < 2.4 ? 2 : 3;
+		const placed: { left: number; top: number; right: number; bottom: number }[] = [];
+		ctx.textBaseline = "middle";
+		for (const site of pins) {
+			const { node } = site;
+			if (node.depth > maxDepth) continue;
+			const point = toScreen(m, site.at);
+			if (point.z < 0.18) continue;
+			const fade = Math.min(1, (point.z - 0.18) * 4);
+			const root = node.kind === "root";
+			const indexable = node.counts.indexed + node.counts.stale + node.counts.unindexed;
+			// The callout ticks with the count, like the scoreboard: indexed files cross over from red as it runs.
+			const share = indexable === 0 ? null : Math.round((Math.round(node.counts.indexed * progress) * 100) / indexable);
+			const leading: Rgb = share === null ? GLOBE_COLORS.excluded : share >= 50 ? GLOBE_COLORS.indexed : GLOBE_COLORS.unindexed;
+			const label = root ? (node.name.split(/[\\/]/u).filter(Boolean).at(-1) ?? node.name) : node.name;
+			const text = share === null ? label : `${label}  ${share}%`;
+			ctx.font = root ? "700 12px system-ui, -apple-system, sans-serif" : "600 10.5px system-ui, -apple-system, sans-serif";
+			const textWidth = ctx.measureText(text).width;
+			const boxHeight = root ? 22 : 18;
+			const boxWidth = textWidth + 18;
+			const lift = root ? 30 : 20;
+			const box = { left: point.x - boxWidth / 2, top: point.y - lift - boxHeight, right: point.x + boxWidth / 2, bottom: point.y - lift };
+			const crowded = placed.some((other) => box.left < other.right + 4 && box.right > other.left - 4 && box.top < other.bottom + 2 && box.bottom > other.top - 2);
+			// The pin always shows; its callout only where it has room.
+			ctx.globalAlpha = fade;
+			ctx.fillStyle = "#ffffff";
 			ctx.beginPath();
-			ctx.moveTo(x0, y0);
-			ctx.lineTo(x1, y1);
+			ctx.arc(point.x, point.y, root ? 3.4 : 2.4, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.strokeStyle = rgba(leading, 0.95);
+			ctx.lineWidth = 1.6;
 			ctx.stroke();
-		}
-	}
-
-	function drawStars(ctx: CanvasRenderingContext2D): void {
-		for (const body of bodies) {
-			const [x, y] = toScreen(body.x, body.y);
-			if (x < -40 || y < -40 || x > width + 40 || y > height + 40) continue;
-			const color = TERRITORY_COLORS[body.node.state];
-			const hub = body.node.kind === "root" || body.node.kind === "folder";
-			if (hub) {
-				const size = Math.max(2.2, body.radius * camera.k * 0.42);
-				const halo = ctx.createRadialGradient(x, y, 0, x, y, size * 3.4);
-				halo.addColorStop(0, "rgba(255, 255, 255, 0.85)");
-				halo.addColorStop(0.25, rgba(color, 0.55));
-				halo.addColorStop(1, rgba(color, 0));
-				ctx.fillStyle = halo;
+			if (!crowded && r > 60) {
+				placed.push(box);
+				ctx.strokeStyle = "rgba(255, 255, 255, 0.55)";
+				ctx.lineWidth = 1;
 				ctx.beginPath();
-				ctx.arc(x, y, size * 3.4, 0, Math.PI * 2);
-				ctx.fill();
-				ctx.fillStyle = "#ffffff";
+				ctx.moveTo(point.x, point.y - 4);
+				ctx.lineTo(point.x, box.bottom);
+				ctx.stroke();
+				ctx.fillStyle = "rgba(6, 12, 28, 0.86)";
 				ctx.beginPath();
-				ctx.arc(x, y, size * 0.55, 0, Math.PI * 2);
+				ctx.roundRect(box.left, box.top, boxWidth, boxHeight, 4);
 				ctx.fill();
-			} else {
-				const size = body.node.kind === "parcel" ? Math.max(1.6, Math.min(5, body.radius * camera.k * 0.12)) : Math.max(0.9, Math.min(2.6, camera.k * 1.3));
-				ctx.fillStyle = rgba([Math.min(255, color[0] + 110), Math.min(255, color[1] + 110), Math.min(255, color[2] + 110)], 0.9);
-				ctx.beginPath();
-				ctx.arc(x, y, size, 0, Math.PI * 2);
-				ctx.fill();
+				// A bar on the left in the color of who is ahead, like a called race.
+				ctx.fillStyle = rgba(leading, 1);
+				ctx.fillRect(box.left, box.top, 4, boxHeight);
+				ctx.fillStyle = "rgba(246, 248, 255, 0.98)";
+				ctx.textAlign = "left";
+				ctx.fillText(text, box.left + 11, box.top + boxHeight / 2 + 0.5);
 			}
-			if (body === hovered) {
+			if (site === hovered) {
 				ctx.strokeStyle = "rgba(255, 244, 214, 0.95)";
 				ctx.lineWidth = 1.5;
 				ctx.beginPath();
-				ctx.arc(x, y, Math.max(7, body.radius * camera.k * 0.6), 0, Math.PI * 2);
+				ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+				ctx.stroke();
+			}
+			ctx.globalAlpha = 1;
+		}
+		if (hovered !== null && hovered.leaf) {
+			const point = toScreen(m, hovered.at);
+			if (point.z > 0) {
+				ctx.strokeStyle = "rgba(255, 244, 214, 0.95)";
+				ctx.lineWidth = 1.5;
+				ctx.beginPath();
+				ctx.arc(point.x, point.y, Math.max(5, Math.sin(hovered.reach) * r * point.z * 0.7), 0, Math.PI * 2);
 				ctx.stroke();
 			}
 		}
 	}
 
-	function drawLabels(ctx: CanvasRenderingContext2D): void {
-		ctx.textAlign = "center";
-		ctx.textBaseline = "top";
-		// Roots first, then the heavier folders: a label that would overlap one already drawn waits for more zoom.
-		const named = bodies
-			.filter(({ node }) => node.kind === "root" || (node.kind === "folder" && camera.k >= 0.55 + node.depth * 0.45))
-			.sort((a, b) => Number(b.node.kind === "root") - Number(a.node.kind === "root") || b.node.weight - a.node.weight);
-		const placed: { left: number; top: number; right: number; bottom: number }[] = [];
-		for (const body of named) {
-			const { node } = body;
-			const [x, y] = toScreen(body.x, body.y);
-			if (x < -80 || y < -20 || x > width + 80 || y > height + 20) continue;
-			const root = node.kind === "root";
-			ctx.font = root ? "600 13px system-ui, -apple-system, sans-serif" : "500 11px system-ui, -apple-system, sans-serif";
-			const label = root ? node.name.split(/[\\/]/u).filter(Boolean).at(-1) ?? node.name : node.name;
-			const top = y + Math.max(6, body.radius * camera.k * 0.5) + 6;
-			const half = ctx.measureText(label).width / 2 + 3;
-			const box = { left: x - half, top: top - 1, right: x + half, bottom: top + (root ? 16 : 14) };
-			if (placed.some((other) => box.left < other.right && box.right > other.left && box.top < other.bottom && box.bottom > other.top)) continue;
-			placed.push(box);
-			ctx.lineWidth = 3;
-			ctx.strokeStyle = "rgba(4, 8, 18, 0.85)";
-			ctx.strokeText(label, x, top);
-			ctx.fillStyle = root ? "rgba(255, 250, 235, 0.98)" : "rgba(226, 234, 250, 0.86)";
-			ctx.fillText(label, x, top);
-		}
-	}
-
-	function draw(time: number): void {
+	function draw(): void {
 		if (context === null) return;
+		const m = rotation();
 		context.setTransform(dpr, 0, 0, dpr, 0, 0);
-		drawSky(context, time);
-		drawLand(context);
-		drawWeb(context);
-		drawStars(context);
-		drawLabels(context);
+		drawStudio(context);
+		drawAtmosphere(context);
+		drawGlobe(context, m);
+		drawPins(context, m);
 	}
 
+	let last = performance.now();
 	function step(time: number): void {
 		frame = 0;
 		if (disposed) return;
-		const settling = simulation.alpha() > simulation.alphaMin();
-		if (settling) simulation.tick(options.reducedMotion ? 0 : 1);
-		if (following) {
-			const target = fitTarget();
-			const ease = options.reducedMotion ? 1 : 0.12;
-			camera.x += (target.x - camera.x) * ease;
-			camera.y += (target.y - camera.y) * ease;
-			camera.k += (target.k - camera.k) * ease;
+		const dt = Math.min(0.05, (time - last) / 1000);
+		last = time;
+		if (progress < 1) {
+			progress = Math.min(1, easeInOut(Math.max(0, time - countStart) / COUNT_MS));
+			options.onProgress?.(progress);
 		}
-		draw(time);
-		const easing = following && Math.abs(fitTarget().k - camera.k) > 0.002;
-		if ((settling || easing) && !options.reducedMotion) schedule();
+		if (swaying && drag === null) view.yaw = homeView.yaw + Math.sin(((time - swayStart) / 1000) * 0.22) * 0.38;
+		if (drag === null && (Math.abs(spin.yaw) > 1e-4 || Math.abs(spin.pitch) > 1e-4)) {
+			// Inertia after a flick.
+			view.yaw += spin.yaw * dt * 60;
+			view.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, view.pitch + spin.pitch * dt * 60));
+			spin = { yaw: spin.yaw * 0.92, pitch: spin.pitch * 0.92 };
+		}
+		draw();
+		const moving = progress < 1 || swaying || Math.abs(spin.yaw) > 1e-4 || Math.abs(spin.pitch) > 1e-4;
+		if (moving) schedule();
 	}
 
 	function schedule(): void {
@@ -335,49 +378,76 @@ export function createIndexMapScene(
 		return [event.clientX - rect.left, event.clientY - rect.top];
 	}
 
-	let drag: { x: number; y: number; cameraX: number; cameraY: number } | null = null;
+	/** The pin within a few pixels of the pointer, else the leaf whose claim is strongest under it. */
+	function siteAt(sx: number, sy: number): GlobeSite | null {
+		const m = rotation();
+		const maxDepth = view.k < 1.4 ? 1 : view.k < 2.4 ? 2 : 3;
+		for (const site of pins) {
+			if (site.node.depth > maxDepth) continue;
+			const point = toScreen(m, site.at);
+			if (point.z > 0.18 && Math.hypot(point.x - sx, point.y - sy) < 8) return site;
+		}
+		const at = fromScreen(m, sx, sy);
+		if (at === null) return null;
+		let best: GlobeSite | null = null;
+		let bestClaim = 0;
+		for (const site of leaves) {
+			const chord = 2 - 2 * dot(site.at, at);
+			const claim = 1 - chord / (2 - 2 * Math.cos(site.reach));
+			if (claim > bestClaim) {
+				bestClaim = claim;
+				best = site;
+			}
+		}
+		// Open ocean names nothing; a cell of the scope's sea or land names who holds it.
+		return best !== null && (texture.owner[cellAt(texture, at)] ?? -1) >= 0 ? best : null;
+	}
+
+	let drag: { x: number; y: number; yaw: number; pitch: number; moved: boolean } | null = null;
 	const onWheel = (event: WheelEvent): void => {
 		event.preventDefault();
-		following = false;
-		const [sx, sy] = pointAt(event);
-		const wx = (sx - width / 2) / camera.k + camera.x;
-		const wy = (sy - height / 2) / camera.k + camera.y;
-		camera.k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, camera.k * Math.exp(-event.deltaY * 0.0015)));
-		// Zoom about the pointer: the world point under it stays under it.
-		camera.x = wx - (sx - width / 2) / camera.k;
-		camera.y = wy - (sy - height / 2) / camera.k;
+		view.k = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.k * Math.exp(-event.deltaY * 0.0015)));
 		schedule();
 	};
 	const onPointerDown = (event: PointerEvent): void => {
 		const [sx, sy] = pointAt(event);
-		drag = { x: sx, y: sy, cameraX: camera.x, cameraY: camera.y };
+		drag = { x: sx, y: sy, yaw: view.yaw, pitch: view.pitch, moved: false };
+		spin = { yaw: 0, pitch: 0 };
 		canvas.setPointerCapture?.(event.pointerId);
 	};
+	let lastMove = { x: 0, y: 0 };
 	const onPointerMove = (event: PointerEvent): void => {
 		const [sx, sy] = pointAt(event);
 		if (drag !== null) {
-			following = false;
-			camera.x = drag.cameraX - (sx - drag.x) / camera.k;
-			camera.y = drag.cameraY - (sy - drag.y) / camera.k;
+			if (Math.hypot(sx - drag.x, sy - drag.y) > 3) drag.moved = true;
+			if (!drag.moved) return;
+			swaying = false;
+			const r = Math.max(1, radius());
+			view.yaw = drag.yaw - (sx - drag.x) / r;
+			view.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, drag.pitch + (sy - drag.y) / r));
+			spin = { yaw: -(sx - lastMove.x) / r, pitch: (sy - lastMove.y) / r };
+			lastMove = { x: sx, y: sy };
+			options.onHover(null);
 			schedule();
 			return;
 		}
-		const wx = (sx - width / 2) / camera.k + camera.x;
-		const wy = (sy - height / 2) / camera.k + camera.y;
-		const found = simulation.find(wx, wy, Math.max(10, 18 / camera.k)) ?? null;
+		lastMove = { x: sx, y: sy };
+		const found = siteAt(sx, sy);
 		if (found !== hovered) {
 			hovered = found;
 			schedule();
 		}
 		if (found === null) options.onHover(null);
 		else {
-			const [hx, hy] = toScreen(found.x, found.y);
-			options.onHover({ node: found.node, x: hx, y: hy });
+			const point = toScreen(rotation(), found.at);
+			// A pin anchors the tooltip; a region follows the pointer, since its center may be far off.
+			options.onHover({ node: found.node, x: found.leaf ? sx : point.x, y: found.leaf ? sy : point.y });
 		}
 	};
 	const onPointerUp = (event: PointerEvent): void => {
 		drag = null;
 		canvas.releasePointerCapture?.(event.pointerId);
+		schedule();
 	};
 	const onPointerLeave = (): void => {
 		if (drag !== null) return;
@@ -393,23 +463,23 @@ export function createIndexMapScene(
 	canvas.addEventListener("pointerleave", onPointerLeave);
 	const observer = typeof ResizeObserver === "function" ? new ResizeObserver(resize) : null;
 	observer?.observe(canvas);
-
-	if (options.reducedMotion) {
-		// No motion: settle the layout before the first frame and show only the result.
-		simulation.tick(Math.ceil(Math.log(simulation.alphaMin()) / Math.log(1 - simulation.alphaDecay())));
-	}
+	if (progress >= 1) options.onProgress?.(1);
 	resize();
 
 	return {
 		fit() {
-			following = true;
+			view.yaw = homeView.yaw;
+			view.pitch = homeView.pitch;
+			view.k = 1;
+			spin = { yaw: 0, pitch: 0 };
+			swaying = !options.reducedMotion;
+			swayStart = performance.now();
 			schedule();
 		},
 		dispose() {
 			disposed = true;
 			if (frame !== 0) cancelAnimationFrame(frame);
 			observer?.disconnect();
-			simulation.stop();
 			canvas.removeEventListener("wheel", onWheel);
 			canvas.removeEventListener("pointerdown", onPointerDown);
 			canvas.removeEventListener("pointermove", onPointerMove);

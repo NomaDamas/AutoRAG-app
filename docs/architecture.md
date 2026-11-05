@@ -354,7 +354,7 @@ purpose (restarting it re-scans every watched folder). QA lane:
 ### Index map
 
 Settings → 검색 범위 → **인덱싱 지도 보기** opens a modal that draws the search
-roots as a territory map (`src/renderer/src/components/settings/index-map/`).
+roots as a globe (`src/renderer/src/components/settings/index-map/`).
 `src/main/index-map.ts` runs on the librarian thread (`indexMap` in
 `librarian-contract.ts`). It walks the roots the way a refresh walks them: no
 symlinks, the librarian's skip-folder names, its depth limit. An excluded or
@@ -370,15 +370,22 @@ count under `INDEX_MAP_NODE_BUDGET`. It picks the most detailed level of a fixed
 ladder that fits: first it caps the files shown per folder, then the depth.
 Files it does not show become one `parcel` node per state with their count.
 
-The renderer lays the graph out with `d3-force`. `territory.ts` rasterizes the
-land: each node claims a smooth falloff around itself, and the claims of one
-state add up. A cell goes to the state with the strongest sum; weak cells are
-sea. Borders are drawn where the owner changes, and terraces follow the summed
-claim. Blue is indexed, red is unindexed or stale, and grey (translucent) is
-excluded or unindexable. Overlapping folder labels yield to roots and heavier
-folders until you zoom in. The canvas pans, zooms, and fits. Hovering names the
-file and its state. A refresh that finishes while the modal is open
-(`onIndexRefreshed`) reloads the map. QA lane:
+`globe.ts` lays the tree out on a sphere. Each root is a continent whose region
+covers a share of the sphere in proportion to its file count. Each node's
+children sit inside its region on a sunflower spiral, heaviest at the center,
+each with ground in proportion to its own count. Only leaves claim ground. The
+claims are rasterized into an equirectangular texture: indexed, stale, and
+unindexed are land (blue for indexed, red for the other two), and excluded and
+unindexable are shallow sea; everything else is deep ocean. `scene.ts` shades
+the texture per pixel as a lit orthographic globe. On open it plays a count:
+every indexed cell starts red and turns blue at its `flipAt` (from each root's
+center outward), and `onProgress` drives the modal's scoreboard (blue vs. red
+tally, race bar with a majority line). A reload after a refresh shows the final
+state at once, and reduced motion skips both the count and the sway. Folders
+get pins with callouts that show their indexed share; deeper pins appear as you
+zoom. Drag turns the globe (with inertia), the wheel zooms, and fit turns back
+to the scope. Hovering names the region and its state. A refresh that finishes
+while the modal is open (`onIndexRefreshed`) reloads the map. QA lane:
 `scripts/manual-qa/run-qa-finder-index-map.mjs`.
 
 ## Error reports (Sentry)

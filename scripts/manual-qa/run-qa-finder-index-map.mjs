@@ -5,9 +5,11 @@
  * private folder they excluded, a `node_modules` the refresh never walks, and
  * files no parser reads), Settings' own refresh indexes it, and then one file
  * changes and two arrive. The map must count each state the way the index
- * holds it, paint blue, red and grey land on the canvas, name what is under
- * the pointer, and redraw after a refresh that an exclusion toggle started
- * while the map is open. Korean is checked as the second language.
+ * holds it, play the opening count (the scoreboard ticks from red to blue and
+ * settles on the index's own numbers), paint blue and red land on the globe,
+ * turn the globe under a real drag, name what is under the pointer, and
+ * redraw after a refresh that an exclusion toggle started while the map is
+ * open. Korean is checked as the second language.
  *
  *   bun run build
  *   bun run qa script scripts/manual-qa/run-qa-finder-index-map.mjs
@@ -125,6 +127,21 @@ const shot = async (name) => {
 	await page.waitForTimeout(400);
 	await page.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 };
+/** A cheap fingerprint of the canvas, to tell whether the globe moved. */
+const canvasPrint = () =>
+	page.evaluate(() => {
+		const canvas = document.querySelector(".index-map-canvas");
+		const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
+		let sum = 0;
+		for (let offset = 0; offset < data.length; offset += 52) sum = (sum * 31 + data[offset]) % 1_000_000_007;
+		return sum;
+	});
+const scoreboard = () =>
+	page.evaluate(() => {
+		const board = document.querySelector(".index-map-scoreboard");
+		const read = (party) => Number(board?.querySelector(`.index-map-party[data-party="${party}"] strong`)?.textContent?.replace(/[^\d]/gu, "") ?? "-1");
+		return { counting: board?.getAttribute("data-counting") ?? null, blue: read("blue"), red: read("red") };
+	});
 const openMap = async (scopeLabel, buttonLabel) => {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
@@ -139,7 +156,7 @@ const legend = () =>
 	page.evaluate(() =>
 		Object.fromEntries([...document.querySelectorAll(".index-map-legend li")].map((item) => [item.getAttribute("data-state"), Number(item.querySelector("strong")?.textContent?.replace(/[^\d]/gu, "") ?? "0")])),
 	);
-/** Share of canvas pixels whose color is the blue, red or grey territory (land drawn over the dark sky). */
+/** Share of canvas pixels that are blue (indexed) or red (needs indexing) land; sea and the studio are darker and less saturated. */
 const landColors = () =>
 	page.evaluate(() => {
 		const canvas = document.querySelector(".index-map-canvas");
@@ -152,12 +169,11 @@ const landColors = () =>
 			const r = data[offset];
 			const g = data[offset + 1];
 			const b = data[offset + 2];
-			if (b > 120 && b > r + 50 && b > g + 20) blue += 1;
+			if (b > 175 && b > g + 70 && r < 140) blue += 1;
 			else if (r > 120 && r > g + 60 && r > b + 50) red += 1;
-			else if (r > 60 && Math.abs(r - g) < 18 && Math.abs(g - b) < 26 && r < 200) grey += 1;
 		}
 		const total = data.length / 16;
-		return { blue: blue / total, red: red / total, grey: grey / total };
+		return { blue: blue / total, red: red / total };
 	});
 /** Moves the real pointer over the canvas in a grid until a tooltip names something. */
 const hoverSomething = async () => {
@@ -184,7 +200,12 @@ put("notes/note-6.txt", "Note 6: a new figure, 42.\n");
 put("notes/note-7.txt", "Note 7: another new figure, 49.\n");
 
 await openMap("Search Scope", "View index map");
-await page.waitForTimeout(4500);
+const early = await scoreboard();
+log(`scoreboard while counting: ${JSON.stringify(early)}`);
+check("the opening count is live and blue has not taken everything yet", early.counting === "true" && early.blue < INDEXABLE - 1, JSON.stringify(early));
+await page.waitForTimeout(300);
+await shot("00-counting");
+await page.waitForTimeout(4200);
 const counts = await legend();
 log(`legend: ${JSON.stringify(counts)}`);
 check("indexed counts the files the index holds unchanged", counts.indexed === INDEXABLE - 1, JSON.stringify(counts));
@@ -192,6 +213,9 @@ check("the changed file needs a refresh", counts.stale === 1, JSON.stringify(cou
 check("the two new files are not indexed yet", counts.unindexed === 2, JSON.stringify(counts));
 check("the excluded folder and node_modules are left out", counts.excluded >= 3, JSON.stringify(counts));
 check("files no parser reads are counted apart", counts.unindexable === 2, JSON.stringify(counts));
+const final = await scoreboard();
+log(`scoreboard after the count: ${JSON.stringify(final)}`);
+check("the count settles on the index's own numbers", final.counting === "false" && final.blue === counts.indexed && final.red === counts.stale + counts.unindexed, JSON.stringify(final));
 const coverage = await page.locator(".index-map-coverage strong").innerText();
 check("coverage is indexed over indexable", coverage === `${Math.round(((INDEXABLE - 1) * 100) / (INDEXABLE + 2))}%`, coverage);
 const colors = await landColors();
@@ -202,12 +226,25 @@ check("there is more blue land than red", colors.blue > colors.red, JSON.stringi
 await shot("01-index-map-en");
 
 const tooltip = await hoverSomething();
-check("hovering a star names what is under it", tooltip !== null && tooltip.length > 0, String(tooltip));
+check("hovering the globe names what is under it", tooltip !== null && tooltip.length > 0, String(tooltip));
 log(`tooltip: ${tooltip}`);
 await shot("02-hover");
 
-// Zoom with the wheel, then frame the map again with the fit button.
+// Turn the globe with a real drag: it moves, then holds still where it was left.
 const box = await page.locator(".index-map-canvas").boundingBox();
+const beforeDrag = await canvasPrint();
+await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+await page.mouse.down();
+for (let n = 1; n <= 12; n += 1) await page.mouse.move(box.x + box.width / 2 + n * 18, box.y + box.height / 2 + n * 4);
+await page.mouse.up();
+await page.waitForTimeout(2000);
+const held = await canvasPrint();
+await page.waitForTimeout(600);
+check("dragging turns the globe", held !== beforeDrag);
+check("after a drag the globe stays where it was left", held === (await canvasPrint()));
+await shot("02b-turned");
+
+// Zoom with the wheel, then frame the map again with the fit button.
 await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
 for (let n = 0; n < 6; n += 1) await page.mouse.wheel(0, -240);
 await page.waitForTimeout(400);
