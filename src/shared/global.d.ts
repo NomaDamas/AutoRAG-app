@@ -19,8 +19,11 @@ import type { SearchBridge } from "./search-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
 import type { RemoteAccessBridge } from "./remote-contract";
+import type { VoiceBridge } from "./voice-contract";
+import type { QuickSearchSettingsBridge } from "./quick-search-contract";
 import type { AppUpdateBridge } from "./update-contract";
 import type { AutomationBridge } from "./automation-contract";
+import type { DemoBridge } from "./demo-contract";
 
 declare global {
 	interface Window {
@@ -32,6 +35,7 @@ declare global {
 			readonly appUpdate: AppUpdateBridge;
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;
+			readonly demo: DemoBridge;
 			readonly conversion: ConversionBridge;
 			readonly errorFix: ErrorFixBridge;
 			readonly magicAction: MagicActionBridge;
@@ -41,14 +45,18 @@ declare global {
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;
 			readonly onboarding: OnboardingBridge;
+			readonly voice: VoiceBridge;
 			readonly osRequests: OsRequestBridge;
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;
 			readonly settings: SettingsBridge;
 			readonly services: ServicesBridge;
 			readonly remote: RemoteAccessBridge;
+			/** The launcher's global shortcut, for Settings; absent in a remote browser session. */
+			readonly quickSearch?: QuickSearchSettingsBridge;
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */
 			readonly pathForFile: (file: File) => string;
 		};
+		readonly autoragIsRemote?: boolean;
 	}
 }

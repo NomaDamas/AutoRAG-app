@@ -12,6 +12,7 @@ import {
 	clipboard,
 	ClipboardItem,
 	dialog,
+	globalShortcut,
 	ipcMain,
 	nativeTheme,
 	Notification,
@@ -20,6 +21,7 @@ import {
 	safeStorage,
 	ShareMenu,
 	shell,
+	systemPreferences,
 	type OpenDialogOptions,
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
@@ -32,7 +34,7 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
 import { AutoRAGLite, createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
@@ -41,6 +43,8 @@ import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
 import { autoragHome } from "./autorag-home";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { createDemoService } from "./demo-service";
+import { DEMO_CHANNELS } from "../shared/demo-contract";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -117,6 +121,7 @@ import {
 	registerAppUpdateIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
+	registerDemoIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
 	registerErrorFixIpcHandlers,
@@ -128,17 +133,22 @@ import {
 	registerSearchIpcHandlers,
 	registerServicesIpcHandlers,
 	registerSettingsIpcHandlers,
+	registerVoiceIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createVoiceService, systemMicrophoneAccess } from "./voice-service";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
 import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
+import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
+import { createQuickSearchShortcut, type QuickSearchShortcut } from "./quick-search-shortcut";
+import { createQuickSearchWindow, type QuickSearchWindow } from "./quick-search-window";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
@@ -273,7 +283,13 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 	});
 
 	loadRendererPage(window, "index.html");
-	attachQuickLook(window, {
+	attachQuickLook(window, quickLookOptions(appearance));
+	return window;
+}
+
+/** The Quick Look panel's options; the Finder and the quick-search launcher each own one panel. */
+function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
+	return {
 		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
 		appearance,
 		language: currentLanguage,
@@ -281,8 +297,7 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 		// Spawning osascript blocks the caller for the fork; the worker pays it.
 		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
 		quickLookChord: () => currentQuickLookChord,
-	});
-	return window;
+	};
 }
 
 let fsWorker: FsWorkerHost | null = null;
@@ -290,6 +305,8 @@ let fsWorker: FsWorkerHost | null = null;
 let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let currentQuickLookChord = "Space";
+/** The system-wide quick-search shortcut; null until startup built the launcher it summons. */
+let quickSearchShortcut: QuickSearchShortcut | null = null;
 /** The one app window: the Finder, which also hosts the first-run overlay while onboarding is unfinished. */
 let mainWindow: BrowserWindow | null = null;
 let currentAppearance: AppAppearance = "light";
@@ -777,10 +794,15 @@ app.whenReady().then(async () => {
 			}
 			setErrorReportingEnabled(settings.errorReporting);
 			currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
+			quickSearchShortcut?.apply(settings.quickSearch);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
-			void applyRemoteAccess(settings.remoteAccess);
+			// A failed start (port taken) is shown in Settings through the status's `serverError`, not thrown at nobody.
+			applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+			});
+			void remoteHost?.setTunnelHostname(settings.remoteTunnelHostname);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -827,6 +849,19 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerAutomationIpcHandlers(automations);
+	registerDemoIpcHandlers(
+		createDemoService({
+			home: homedir(),
+			autoragHome: autoragHome(process.env, homedir()),
+			platform: process.platform,
+			automations,
+			run: (args) => {
+				const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
+				return runLibrarianCli(librarian.command, [...librarian.args, ...args], process.env);
+			},
+			settings: settingsService,
+		}),
+	);
 	const stopAutomations = automations.start((snapshot) => {
 		sendToMainWindow(AUTOMATION_CHANNELS.changed, snapshot);
 	});
@@ -848,6 +883,7 @@ app.whenReady().then(async () => {
 		appCustomizer: APP_CUSTOMIZER_CHANNELS,
 		magicAction: MAGIC_ACTION_CHANNELS,
 		automations: AUTOMATION_CHANNELS,
+		demo: DEMO_CHANNELS,
 		indexActivity: INDEX_ACTIVITY_CHANNELS,
 		indexProblem: INDEX_PROBLEM_CHANNELS,
 		appUpdate: APP_UPDATE_CHANNELS,
@@ -858,37 +894,48 @@ app.whenReady().then(async () => {
 		actions: ACTIONS_CHANNELS,
 		analytics: ANALYTICS_CHANNELS,
 	} as const;
+	const ensureRemoteHost = (): RemoteHost => {
+		remoteHost ??= createRemoteHost({
+			rendererRoot: join(import.meta.dirname, "../renderer"),
+			stateDir: join(app.getPath("userData"), "settings"),
+			host: "0.0.0.0",
+			port: async () => (await settingsService.get()).remotePort,
+			icons: iconProvider,
+			workerHost,
+			targets: remoteTargets,
+			window: () => mainWindow,
+			settings: () => settingsService.get(),
+			onStatusChanged: (next) => sendToAllWindows(REMOTE_CHANNELS.changed, next),
+		});
+		return remoteHost;
+	};
 	async function applyRemoteAccess(enabled: boolean): Promise<void> {
 		if (enabled) {
-			remoteHost ??= createRemoteHost({
-				rendererRoot: join(import.meta.dirname, "../renderer"),
-				host: "0.0.0.0",
-				port: (await settingsService.get()).remotePort,
-				icons: iconProvider,
-				workerHost,
-				targets: remoteTargets,
-				window: () => mainWindow,
-				settings: () => settingsService.get(),
-			});
-			await remoteHost.start();
+			await ensureRemoteHost().start();
 			return;
 		}
 		await remoteHost?.stop();
 	}
-	const remoteStatus = async (): Promise<RemoteAccessStatus> => {
-		const status = remoteHost?.status() ?? { serving: false, origin: null, sessions: 0 };
-		const port = status.origin === null ? (await settingsService.get()).remotePort : Number(new URL(status.origin).port);
-		return { serving: status.serving, origin: status.origin, port, sessions: status.sessions };
-	};
+	const remoteStatus = (): Promise<RemoteAccessStatus> => ensureRemoteHost().status();
 	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
+	// The Settings switch reports the outcome as status (`serving` / `serverError`) instead of rejecting the call.
 	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
-		await applyRemoteAccess(true);
+		await applyRemoteAccess(true).catch(() => undefined);
 		return remoteStatus();
 	});
 	ipcMain.handle(REMOTE_CHANNELS.stop, async () => {
 		await applyRemoteAccess(false);
 		return remoteStatus();
 	});
+	ipcMain.handle(REMOTE_CHANNELS.startPairing, () => ensureRemoteHost().startPairing());
+	ipcMain.handle(REMOTE_CHANNELS.devices, () => ensureRemoteHost().devices());
+	ipcMain.handle(REMOTE_CHANNELS.renameDevice, (_event, id: string, label: string) => ensureRemoteHost().renameDevice(id, label));
+	ipcMain.handle(REMOTE_CHANNELS.revokeDevice, (_event, id: string) => ensureRemoteHost().revokeDevice(id));
+	ipcMain.handle(REMOTE_CHANNELS.revokeAllDevices, () => ensureRemoteHost().revokeAllDevices());
+	ipcMain.handle(REMOTE_CHANNELS.refreshNetwork, () => ensureRemoteHost().refreshNetwork());
+	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.loginTunnel, () => ensureRemoteHost().loginTunnel());
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});
@@ -1008,6 +1055,18 @@ app.whenReady().then(async () => {
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
+	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone permission.
+	registerVoiceIpcHandlers(
+		createVoiceService({
+			env: process.env,
+			readKey: () => readDazziPlanCredential(getAgentDir()),
+			microphone: systemMicrophoneAccess({
+				platform: process.platform,
+				preferences: systemPreferences,
+				openExternal: (url) => shell.openExternal(url),
+			}),
+		}),
+	);
 	// A fresh, unauthenticated launch provisions anonymous guest access so the plan's models work before sign-in.
 	void accountService
 		.refresh()
@@ -1115,6 +1174,40 @@ app.whenReady().then(async () => {
 		sendToMainWindow(OS_REQUEST_CHANNELS.available, null);
 	};
 	if (launchRequest !== null) void osRequests.push(launchRequest);
+	// The quick-search launcher: a system-wide shortcut summons it over any app (Settings → General).
+	const launcher: QuickSearchWindow = createQuickSearchWindow({
+		preload: join(import.meta.dirname, "../preload/quick-search.mjs"),
+		appearance: currentAppearance,
+		language: currentLanguage,
+		loadPage: (window) => loadRendererPage(window, "quick-search.html"),
+		revealInApp: (path) => osRequests.push({ action: "reveal", paths: [path] }),
+		// Same checks as `dazzi --ask`: a blank, oversized, or NUL-carrying question queues nothing.
+		ask: (query) => {
+			const request = normalizeOsLaunchRequest({ action: "ask", paths: [], query });
+			if (request !== null) void osRequests.push(request);
+		},
+		attach: (paths) => osRequests.push({ action: "ask", paths }),
+		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
+		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
+		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
+		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
+	});
+	quickSearchShortcut = createQuickSearchShortcut({
+		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
+		unregister: (accelerator) => globalShortcut.unregister(accelerator),
+		onPress: () => launcher.toggle(),
+	});
+	quickSearchShortcut.apply(settings.quickSearch);
+	// Windows and Linux quit when the last app window closes; the hidden launcher must not keep the app alive.
+	app.on("browser-window-created", (_event, created) => {
+		created.once("closed", () => {
+			if (process.platform !== "darwin" && appWindows().length === 0) launcher.destroy();
+		});
+	});
+	app.once("will-quit", () => {
+		quickSearchShortcut?.dispose();
+		launcher.destroy();
+	});
 	if (settings.osMenuIntegration) {
 		// Refresh on every start: the executable path or interface language may have changed.
 		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));

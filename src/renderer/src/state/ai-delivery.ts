@@ -28,7 +28,8 @@ export interface AiDeliveryRequest {
 /** The slice of the panel's imperative handle a delivery drives. */
 export interface AiDeliveryTarget {
 	prefill(text: string): void;
-	sendQuery(text: string): void;
+	/** Send `text` now, with `atts` folded into the drafts of the same run. */
+	sendQuery(text: string, atts?: readonly ChatAttachment[]): void;
 	attach(atts: readonly ChatAttachment[]): void;
 	summarize(atts: readonly ChatAttachment[]): void;
 	focusComposer(): void;
@@ -43,14 +44,21 @@ export function mergeDelivery(pending: AiDelivery | null, request: AiDeliveryReq
 	};
 }
 
-/** Hand a folded delivery to the tab's panel. A summary run owns the turn; a query beats a draft. */
+/**
+ * Hand a folded delivery to the tab's panel. A summary run owns the turn; a query beats a draft. A query
+ * takes its attachments in the same call: `attach` only reaches the panel's state on the next render, so
+ * attach-then-send would ask without them.
+ */
 export function deliverToDock(dock: AiDeliveryTarget, delivery: AiDelivery): void {
 	if (delivery.summarize.length > 0) {
 		dock.summarize(delivery.summarize);
 		return;
 	}
+	if (delivery.query !== null) {
+		dock.sendQuery(delivery.query, delivery.attach);
+		return;
+	}
 	if (delivery.attach.length > 0) dock.attach(delivery.attach);
-	if (delivery.query !== null) dock.sendQuery(delivery.query);
-	else if (delivery.draft !== null) dock.prefill(delivery.draft);
+	if (delivery.draft !== null) dock.prefill(delivery.draft);
 	else dock.focusComposer();
 }

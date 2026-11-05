@@ -325,13 +325,12 @@ try {
 	check("Pressing customized F2 in Finder opens inline rename on the selected file", renameInputCount >= 1, `inputs=${renameInputCount}`);
 	await page.keyboard.press("Escape");
 
-	// Return to Settings -> 단축키 and open AI Shortcut Customizer modal
+	// Return to Settings -> 단축키, where the AI Shortcut Customizer fills the window's right sidebar
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "단축키" }).click();
-	await page.locator('[data-action="open-shortcut-customizer"]').click();
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("06-shortcut-customizer-modal-empty");
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="shortcuts"]');
+	await panel.waitFor();
+	await shot("06-shortcut-customizer-panel-empty");
 
 	queue.push(
 		{ tool: "get_shortcuts", args: { i: "현재 단축키 목록을 확인하는 중" }, delayMs: 250 },
@@ -351,16 +350,18 @@ try {
 		},
 	);
 
-	const modalInput = modal.locator('textarea[data-testid="app-customizer-input"]');
-	await modalInput.click();
+	const panelInput = panel.locator('textarea[data-testid="app-customizer-input"]');
+	await panelInput.click();
 	await page.keyboard.type("새 폴더를 커맨드 N으로 바꾸고 터미널 열기도 커맨드 J로 추가해줘");
 	await page.keyboard.press("Enter");
 
-	await modal.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
+	await panel.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
 	await shot("07-shortcut-customizer-shimmer");
 
-	await modal.locator(".customizer-turn__reply", { hasText: "새 폴더 단축키를" }).waitFor({ timeout: 15_000 });
+	await panel.locator(".customizer-turn__reply", { hasText: "새 폴더 단축키를" }).waitFor({ timeout: 15_000 });
 	await shot("08-shortcut-customizer-turn-done");
+	const newFolderKeycap = await page.locator('[data-shortcut-record="newFolder"]').evaluate((el) => (el.textContent ?? "").replace(/\s+/g, ""));
+	check("The newFolder keycap beside the assistant updates live from ⌘⇧N to ⌘N", newFolderKeycap === "⌘N", newFolderKeycap);
 
 	check(
 		"Pi shortcut-customizer profile offered strictly get_shortcuts and update_shortcuts tools",
@@ -376,8 +377,8 @@ try {
 		JSON.stringify(persistedAfterAgent.settings.shortcuts),
 	);
 
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
 
 	// 4. Verify English Dark, Japanese Light, and Simplified Chinese Light localizations
 	await page.evaluate(() => window.autorag.settings.set({ language: "en", appearance: "dark" }));

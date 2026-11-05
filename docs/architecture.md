@@ -33,8 +33,8 @@ second datasource or model configuration. The sidebar is searchable and grouped:
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, error reports, and document languages.
 - **기본 → 사이드바** — sidebar item and section visibility, ordering, custom pinned
-  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** (`AppCustomizerModal`)
-  dialog, all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
+  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** in the window's right sidebar
+  (`AppCustomizerPanel` in the Inspector's column, one conversation per section), all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
   **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
@@ -43,7 +43,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
   key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
   conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
-  profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
+  profile (`AppCustomizerPanel` in the right sidebar, with `surface="shortcuts"`), persisted in
   `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
   be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
@@ -985,6 +985,40 @@ the run's first model prompt. The query string, which the librarian uses for
 baseline retrieval and records in its retrieval memory, stays the user's own
 words.
 
+## Quick-search launcher
+
+A system-wide shortcut (`globalShortcut`, Settings → General → Quick Search, stored as `AppSettings.quickSearch`)
+summons a small window over any app. Pieces:
+
+- `src/main/quick-search-shortcut.ts` keeps the registration in step with the settings: moves to a new chord, reports
+  one another app holds (`status().error === "taken"`, shown in Settings), and releases the chord while Settings
+  records a new one (`quick-search:recording`) so the keys reach the recorder.
+- `src/main/quick-search-window.ts` creates the window hidden at startup (`quick-search.html`, preload
+  `quick-search.mjs`): a `panel` window on macOS, an always-on-top window without a taskbar button on Windows. Hiding
+  with `restore` gives the foreground back (macOS hides the app unless a Dazzi window was in front); actions that open
+  something (`handoff`) leave it to what they opened. On Windows/Linux it is destroyed with the last app window so
+  closing the Finder still quits.
+- The page (`src/renderer/src/launcher/QuickSearch.tsx`, model in `state/launcher.ts`) talks to the fs worker over its
+  own port, like the Finder: `search` (file names), `contentSearch` (below), `enrichEntries`, `open`, `reveal`,
+  `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
+  (`AbortSignal` through the worker and the librarian thread).
+- Handoffs to the Finder reuse the os-request queue: *Show in Dazzi* is a `reveal`, *Ask about these files* an `ask`
+  (drafts on the nearest AI Search tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
+  `dazzi --ask` (a new AI Search tab sends it).
+- `contentSearch` (`src/main/content-search.ts`, in the librarian thread) is model-free: `AutoRAGLite.searchSelected`
+  over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
+  Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
+  was not searched.
+- Preview: the launcher owns a second Quick Look panel (`attachQuickLook(launcher, { level: "screen-saver",
+  closeWithOwner: true })`; `src/preview/node/window.ts` keeps one session per owner window and routes each IPC call to
+  the session whose owner or panel sent it). The page drives it through the same `PreviewBridge` the Finder uses and
+  makes it follow the focused row. Focus moving between the launcher and its panel is not a dismissal: a blur hides the
+  launcher only when, a moment later, neither window has focus; the panel closes with the launcher.
+
+QA: `scripts/manual-qa/run-qa-quick-search.mjs` (lane `quick-search`) builds a real index, presses the real OS chord
+over TextEdit, drives the launcher from the keyboard and the mouse, previews rows in the real Quick Look panel, and
+reads the copies back from the OS clipboard.
+
 ## Right-click menu in Finder and Explorer
 
 Settings → General → **Add to the file right-click menu** (off by default)
@@ -1023,6 +1057,7 @@ folder to Finder:
 ```sh
 dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
 dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
+dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Search tab asks at once, the paths attached
 dazzi                          # bring Dazzi to the front
 ```
 
@@ -1031,6 +1066,15 @@ does not exist is reported like `open` does (`dazzi: nope: No such file or
 directory`), the ones that exist still open, and the exit status is 1. At most 200
 paths per call (the request limit in `src/shared/os-request-contract.ts`); more is
 an error rather than a silent cut.
+
+`--ask QUESTION` (or `--ask=QUESTION`) sends the action `ask` with the question
+in `--autorag-query=`: the renderer opens a new AI Search tab and sends the
+question with the existing paths as its attachments in one run
+(`deliverToDock` → `sendQuery(text, attachments)`), so a tab that is still
+answering never swallows it. The question needs no path; a missing attachment is
+reported and dropped while the question is still asked; an empty question exits 2.
+Questions are capped at 16,000 characters (`OS_REQUEST_MAX_QUERY_LENGTH`).
+`--ask` is macOS-only for now: `dazzi.cmd` rejects it as an unknown option.
 
 The launcher is a script that ships inside the app (`build/cli/dazzi` →
 `Dazzi.app/Contents/Resources/bin/dazzi`; `dazzi.cmd` in `resources\bin` on
@@ -1147,6 +1191,57 @@ Cancel stops the Filee process.
 Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90 s 1080p MP4 → WebM
 encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
 `test/conversion-live.test.ts` does the same against the real binaries without the UI.
+
+## Voice input in AI Search
+
+A microphone button in the AI Search composer dictates a question: it records, sends the clip to the
+hosted service, and appends the text to the draft. Nothing is sent as a question; the person
+reads and sends it.
+
+- **Where the audio goes.** `src/main/voice-service.ts` posts the clip as multipart to the Dazzi
+  server's `POST /v1/audio/transcriptions` (model `google/stt-v2-standard`, Google Cloud
+  Speech-to-Text V2, `latest_long`) with the account key from Pi's `auth.json`. The server holds the
+  Google service account, meters the call against the weekly credits (`transcription` operation,
+  $0.016 per audio minute), and answers `{ text, duration }`. The key and the Google credentials never
+  reach the renderer. The audio leaves the computer, so unlike indexing there is no on-device path.
+- **Limits.** The service takes 10 MB and 60 seconds per request. A recording ends itself at 55 s
+  (`VOICE_MAX_SECONDS`) and is sent; a clip over 10 MB is refused in `isVoiceClip` before the request.
+  Speech the service cannot make out is not an error: the text is empty and the composer says nothing
+  was heard.
+- **Language.** The recognition language follows the Interface language (`voiceLanguageCode`:
+  `ko-KR`, `en-US`, `ja-JP`, `cmn-Hans-CN`).
+- **Before recording.** `prepare()` answers `ready`, `signed-out` (the service would refuse the clip, so
+  nothing is recorded and the system's microphone prompt is not raised) or `microphone-denied`
+  (`systemMicrophoneAccess`).
+- **Microphone permission.**
+  - macOS: the first press raises the system's own Allow / Don't Allow prompt
+    (`askForMediaAccess`; `NSMicrophoneUsageDescription`, and the `com.apple.security.device.audio-input`
+    entitlement for the hardened runtime). macOS shows that prompt once per app.
+  - Windows: Electron's `getMediaAccessStatus` follows the three switches in Settings › Privacy &
+    security › Microphone ("Microphone access", "Let apps access your microphone", "Let desktop apps
+    access your microphone"): any of them off is `denied`. Measured on Windows 11 by turning each off in
+    the Settings app. Run from a non-interactive session (SSH, a service) it always says `granted`, so
+    test it on the desktop. Windows has no prompt of an app's own.
+  - Linux: Electron offers neither call; the browser layer's own permission decides.
+  - When the microphone is refused (`microphone-denied`, or `getUserMedia` failing with
+    `NotAllowedError`) the composer opens `MicrophonePermissionDialog` instead of recording. Its main
+    button opens the system's microphone settings (`x-apple.systempreferences:…Privacy_Microphone`,
+    `ms-settings:privacy-microphone`). When the window regains focus the dialog checks again: if the
+    microphone is now allowed it closes and the recording the person asked for starts; if not it says the
+    microphone is still off. "Not now" and Esc close it without recording.
+- **Recording.** `useVoiceInput` (`MediaRecorder`, `audio/webm;codecs=opus` first) holds the microphone
+  only while recording and releases it on stop, cancel, error and unmount. While listening or
+  transcribing, the composer collapses from any multi-line draft height into a single-row neutral pill
+  (`voice-bar`): left cancel (`×`), full-width `VoiceWaveform` (dotted baseline on silence, monochrome
+  bars fed by `AudioContext` + `AnalyserNode`), stop-to-draft (`■`) and stop-and-send (`↑`), followed by
+  a centered `받아쓰는 중…` / `Transcribing…` indicator before expanding back to the full draft height.
+  Other errors are shown as a line under the field, not as the run's error card.
+- **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`,
+  `openMicrophoneSettings()`. All are native-only in a remote browser session.
+
+To test it without speaking, launch Chromium with `--no-sandbox --use-fake-device-for-media-stream
+--use-file-for-fake-audio-capture=<48 kHz stereo wav>%noloop`: with the audio sandbox on, the fake
+device delivers silence.
 
 ## Manual QA
 

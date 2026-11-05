@@ -28,6 +28,7 @@ import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
+import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
@@ -59,7 +60,7 @@ import { allTabs, canCloseWorkspaceTab, createWorkspace, focusAiSearchInWorkspac
 import { FirstRun, type FirstRunHost, type TourPaneState } from "./first-run/FirstRun";
 import { folderPaneId, splitWithAiSearch } from "./first-run/tour";
 import { Tutorials } from "./first-run/Tutorials";
-import type { TutorialEffect } from "./first-run/tutorial-steps";
+import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
 
 const autorag = window.autorag;
@@ -537,6 +538,11 @@ export function App(): ReactElement {
 					if (target.kind === "folder") finder.openFolder(target.path);
 					else finder.revealEvidence(target.path);
 				}
+			} else if (request.query !== null) {
+				// `dazzi --ask`, Raycast, and the quick-search launcher's "Ask Dazzi": a new AI Search tab asks at once, like
+				// the sidebar's content search, so a tab that is still answering never swallows the question.
+				finder.openAiSearch();
+				deliverToAi({ attach: request.attachments, query: request.query });
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();
@@ -662,6 +668,12 @@ export function App(): ReactElement {
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
+	/** On a customizable Settings section the right sidebar is that section's AI assistant instead of the Inspector. */
+	const { host: settingsAssistant, dock: settingsAssistantDock } = useSettingsAssistantHost({
+		rightSidebarVisible: inspectorVisible,
+		setRightSidebarVisible: setInspectorVisible,
+		settingsFocused: path === SETTINGS_PATH,
+	});
 	const fileMenuOpen = finder?.contextMenu?.onEntry === true;
 	const settingsTabActive = path === SETTINGS_PATH;
 	const tutorialTriggers = useMemo(
@@ -669,14 +681,38 @@ export function App(): ReactElement {
 		[automationsTabActive, fileMenuOpen, settingsTabActive],
 	);
 	const runTutorialEffect = useCallback(
-		(effect: TutorialEffect) => {
-			if (effect === "openContextMenuSettings") {
-				finder?.closeContextMenu();
-				requestSettingsCategory("contextMenu");
-				finder?.openSettings();
-				return;
+		async (effect: TutorialEffect, facts: TutorialFacts): Promise<TutorialFacts | null> => {
+			try {
+				switch (effect) {
+					case "createAutomation":
+						await autorag.demo.prepareAutomation();
+						return {};
+					case "dropFile": {
+						const { destination } = await autorag.demo.triggerAutomation();
+						return { destination };
+					}
+					case "openResult":
+						if (facts.destination !== undefined) finder?.openFolder(facts.destination);
+						return {};
+					case "createMagicAction": {
+						const { sample } = await autorag.demo.prepareMagicAction();
+						finder?.closeContextMenu();
+						finder?.openFolder(dirname(sample));
+						return { sample };
+					}
+					case "openContextMenuSettings":
+						finder?.closeContextMenu();
+						requestSettingsCategory("contextMenu");
+						finder?.openSettings();
+						return {};
+					case "showRemoteSettings":
+						requestSettingsCategory("remote");
+						return {};
+				}
+			} catch (error) {
+				setToast(error instanceof Error ? error.message : String(error));
+				return null;
 			}
-			requestSettingsCategory("general");
 		},
 		[finder],
 	);
@@ -758,7 +794,7 @@ export function App(): ReactElement {
 		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
-		<>
+		<SettingsAssistantContext value={settingsAssistant}>
 		<div className="desk flex h-full bg-window">
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
@@ -891,7 +927,9 @@ export function App(): ReactElement {
 					</div>
 				</div>
 				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)}>
-						{automationsTabActive ? (
+						{settingsAssistantDock !== null ? (
+							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : (
 							<Inspector
@@ -1045,7 +1083,7 @@ export function App(): ReactElement {
 			/>
 		) : null}
 		<Tutorials enabled={tutorialsAllowed && !firstRun} triggers={tutorialTriggers} onEffect={runTutorialEffect} />
-		</>
+		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
 		</ContextMenuSettingsContext>

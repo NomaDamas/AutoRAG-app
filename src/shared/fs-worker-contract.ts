@@ -23,6 +23,8 @@ export type FsWorkerOp =
 	| "previewIcon"
 	| "exists"
 	| "search"
+	/** Model-free search of the local document index; the quick-search launcher lists its files. */
+	| "contentSearch"
 	| "locations"
 	| "ejectLocation"
 	| "tags"

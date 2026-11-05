@@ -11,7 +11,7 @@ export interface OsRequestServiceDeps {
 }
 
 export interface OsRequestService {
-	/** Check the paths and queue the request; a request with no surviving path queues nothing. */
+	/** Check the paths and queue the request; a request with no surviving path (and no question) queues nothing. */
 	push(request: OsLaunchRequest): Promise<void>;
 	/** Everything queued so far, oldest first; the queue is empty afterwards. */
 	take(): readonly OsRendererRequest[];
@@ -40,15 +40,19 @@ export function createOsRequestService(deps: OsRequestServiceDeps): OsRequestSer
 				const kind = await deps.kindOf(path);
 				if (kind !== null) found.push({ path, kind });
 			}
-			const first = found[0];
-			if (first === undefined) return;
 			if (request.action === "reveal") {
+				const first = found[0];
+				if (first === undefined) return;
 				queue.push({ action: "reveal", path: first.path });
 			} else if (request.action === "open") {
+				if (found.length === 0) return;
 				queue.push({ action: "open", targets: found });
 			} else {
+				// A question is asked even when every attachment is gone; bare attachments need one that exists.
+				const query = request.query ?? null;
+				if (found.length === 0 && query === null) return;
 				const attachments: ChatAttachment[] = found.map(({ path, kind }) => ({ kind, id: path, name: basename(path) }));
-				queue.push({ action: "ask", attachments });
+				queue.push({ action: "ask", attachments, query });
 			}
 			deps.onQueued();
 		},

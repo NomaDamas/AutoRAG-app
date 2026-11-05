@@ -23,10 +23,10 @@ export function SettingsPageHead({ title, description }: { readonly title: strin
 }
 
 /** `anchor` names the section for coach marks (`data-settings-section`). */
-export function Section({ title, description, anchor, children }: { readonly title: string; readonly description?: string; readonly anchor?: string; readonly children: ReactNode }): ReactElement {
+export function Section({ title, description, anchor, children }: { readonly title?: string; readonly description?: string; readonly anchor?: string; readonly children: ReactNode }): ReactElement {
 	return (
 		<section className="settings-section" data-settings-section={anchor}>
-			<div className="linear-section-title">{title}</div>
+			{title !== undefined ? <div className="linear-section-title">{title}</div> : null}
 			{description !== undefined ? <p className="linear-section-desc">{description}</p> : null}
 			{children}
 		</section>

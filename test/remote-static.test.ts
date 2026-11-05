@@ -23,6 +23,18 @@ describe("rewriteIndexHtml", () => {
 		expect(out.indexOf(REMOTE_BOOTSTRAP_PATH)).toBeLessThan(out.indexOf("/assets/index.js"));
 		expect(out).toContain("connect-src 'self' blob: http: https:");
 	});
+
+	it("gives a phone a device-width viewport and lets the page frame its own previews", () => {
+		// Given the Electron CSP, which frames only blob: documents.
+		const html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'self'; frame-src blob:; connect-src 'self'" /></head><body></body></html>`;
+
+		// When the remote server rewrites it.
+		const out = rewriteIndexHtml(html);
+
+		// Then a phone lays the page out at its own width, and a PDF from the preview endpoint can be framed.
+		expect(out).toMatch(/<meta name="viewport" content="width=device-width[^"]*"/u);
+		expect(out).toContain("frame-src 'self' blob:");
+	});
 });
 
 describe("readRemoteStatic", () => {

@@ -96,6 +96,7 @@ const config = {
 			NSFileProviderDomainUsageDescription: "Dazzi reads your cloud drive folders on this Mac so you can browse and search your files.",
 			NSRemovableVolumesUsageDescription: "Dazzi reads connected disks so you can browse and search your files.",
 			NSNetworkVolumesUsageDescription: "Dazzi reads connected network volumes so you can browse and search your files.",
+			NSMicrophoneUsageDescription: "Dazzi listens only while you press the microphone button, to turn your voice into a question.",
 		},
 		// Without a Developer ID the bundle is ad-hoc signed ("-"): Apple Silicon refuses to run unsigned code.
 		...(hasMacSigning ? {} : { identity: "-" }),

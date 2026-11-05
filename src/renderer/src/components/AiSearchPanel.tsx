@@ -2,6 +2,7 @@ import {
 	forwardRef,
 	useEffect,
 	useImperativeHandle,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -32,11 +33,18 @@ import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { appendTranscript } from "../../../shared/voice-contract";
+import { useVoiceInput } from "../state/useVoiceInput";
+import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
+import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
 import { PipeTable } from "./PipeTable";
+import dazziLogo from "../assets/dazzi-logo.png";
 import {
 	collectSessionEvidence,
+	evidenceDetail,
+	evidenceHeading,
 	evidenceKind,
 	resolveActiveEvidence,
 	unresolvedCitationNumbers,
@@ -45,7 +53,7 @@ import {
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -69,9 +77,9 @@ const CENTERED = "mx-auto w-full max-w-[820px]";
  * land here directly.
  */
 export interface AiDockHandle {
-	/** Seed the composer with `text` and send it at once. */
-	sendQuery(text: string): void;
-	/** Leave `text` in the composer unsent (`focus: false` types without stealing focus mid-animation). */
+	/** Seed the composer with `text` and send it at once, with `atts` added to the drafts of that run. */
+	sendQuery(text: string, atts?: readonly ChatAttachment[]): void;
+	/** Leave `text` in the composer unsent (`focus: false` types without stealing focus mid-animation); by default the composer is focused so the person finishes the sentence. */
 	prefill(text: string, options?: { readonly focus?: boolean }): void;
 	/** Append draft attachments and focus the composer. */
 	attach(atts: readonly ChatAttachment[]): void;
@@ -84,6 +92,10 @@ export interface AiDockHandle {
 	summarize(atts: readonly ChatAttachment[]): void;
 	/** Focus the composer (pending until the panel is the visible tab). */
 	focusComposer(): void;
+	/** Open or close the 대화 기록 list (the phone shell puts the button in its own nav bar). */
+	toggleHistory(): void;
+	/** Start a new conversation, like the panel's 새 대화 button. */
+	newChat(): void;
 }
 
 export interface AiSearchPanelProps {
@@ -105,6 +117,18 @@ export interface AiSearchPanelProps {
 	readonly onOpenSettings: (page: ErrorFixSettingsPage) => void;
 	/** Goes to the Settings page of one configured data source, by its alias (a button of the AI fix). */
 	readonly onOpenSource: (alias: string) => void;
+	/**
+	 * A citation chip or a source card was tapped. The desktop shows evidence in the
+	 * inspector beside the chat, so it leaves this out; the phone shell has no room
+	 * for that and opens its evidence sheet here.
+	 */
+	readonly onCitation?: ((number: number) => void) | undefined;
+	/**
+	 * Phone layout (remote session on a phone): the empty chat shows example
+	 * questions, each answer lists its sources as tappable cards, and the desktop
+	 * keyboard hints go. The desktop window never sets it.
+	 */
+	readonly phone?: boolean | undefined;
 }
 
 /** The parent folder of a local attachment, derived from its absolute path. */
@@ -119,7 +143,7 @@ function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource },
+	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -180,6 +204,69 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const composeBoxRef = useRef<HTMLDivElement | null>(null);
+	const lastIdleHeightRef = useRef<number | null>(null);
+	const prevVoiceActiveRef = useRef(false);
+	/** What went wrong with dictation (not signed in, microphone refused, nothing heard): a line by the composer, never the run's error card. */
+	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+	const voice = useVoiceInput({
+		voice: autorag.voice,
+		language,
+		onTranscript: (text, submitImmediately) => {
+			const merged = appendTranscript(query, text);
+			setVoiceNotice(null);
+			if (submitImmediately === true) {
+				sendDraft(merged, false);
+				return;
+			}
+			setQuery(merged);
+		},
+		onError: setVoiceNotice,
+	});
+	const voiceActive = voice.phase === "listening" || voice.phase === "transcribing";
+
+	useEffect(() => {
+		if (voiceActive) return;
+		const box = composeBoxRef.current;
+		if (box === null) return;
+		const recordHeight = (): void => {
+			const h = box.getBoundingClientRect().height;
+			if (h > 0) lastIdleHeightRef.current = h;
+		};
+		recordHeight();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(recordHeight);
+		observer.observe(box);
+		return () => observer.disconnect();
+	}, [voiceActive]);
+
+	useLayoutEffect(() => {
+		if (prevVoiceActiveRef.current === voiceActive) return;
+		prevVoiceActiveRef.current = voiceActive;
+		const box = composeBoxRef.current;
+		const fromHeight = voiceActive ? lastIdleHeightRef.current : 48;
+		if (box !== null && fromHeight !== null) {
+			const toHeight = box.getBoundingClientRect().height;
+			const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+			if (!reduced && toHeight > 0 && Math.abs(fromHeight - toHeight) > 2 && typeof box.animate === "function") {
+				box.animate(
+					[
+						{ height: `${fromHeight}px`, overflow: "hidden" },
+						{ height: `${toHeight}px`, overflow: "hidden" },
+					],
+					{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+				);
+			}
+		}
+		if (!voiceActive) {
+			const field = inputRef.current;
+			if (field !== null) {
+				field.focus();
+				const end = field.value.length;
+				field.setSelectionRange(end, end);
+			}
+		}
+	}, [voiceActive]);
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -358,6 +445,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const nextEvidence = resolveActiveEvidence(allTurnPhases, nextSource);
 		if (active) onPublish(nextEvidence, sessionEvidence);
 		onSelectEvidence(number);
+		onCitation?.(number);
 	}
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
@@ -387,6 +475,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				return;
 			}
 			if (historyOpen) return;
+			if (event.key === "Escape" && voice.phase === "listening") {
+				event.preventDefault();
+				voice.cancel();
+				return;
+			}
 			if (event.key === "Escape" && searchIdRef.current !== null) {
 				// The dock owns Escape while it is open: it dismisses the request (cancel
 				// or deny), not the run.
@@ -507,8 +600,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	 * the next question. Steers carry text only; drafted attachments stay in
 	 * the tray for the next question.
 	 */
-	function send(altKey: boolean): void {
-		const text = query.trim();
+	function sendDraft(rawDraft: string, altKey: boolean): void {
+		const text = rawDraft.trim();
 		const runId = searchIdRef.current;
 		const action = composerAction({ searching: runId !== null, altKey });
 		if (action === "ask") {
@@ -532,6 +625,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setSteers((current) => current.filter((steer) => steer.id !== id));
 			setQueued((current) => [...current, text]);
 		});
+	}
+
+	function send(altKey: boolean): void {
+		sendDraft(query, altKey);
 	}
 
 	function clearHistoryDebounce(): void {
@@ -696,11 +793,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	}
 
 	useImperativeHandle(ref, () => ({
-		sendQuery(text: string): void {
+		sendQuery(text: string, atts: readonly ChatAttachment[] = []): void {
 			const trimmed = text.trim();
 			if (trimmed.length === 0 || searchIdRef.current !== null) return;
 			setQuery(trimmed);
-			void runSearch(trimmed, attachmentsRef.current);
+			void runSearch(trimmed, mergeAttachments(attachmentsRef.current, atts));
 		},
 		prefill,
 		attach(atts: readonly ChatAttachment[]): void {
@@ -715,6 +812,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		focusComposer(): void {
 			ensureFocus();
 		},
+		toggleHistory,
+		newChat,
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
@@ -887,10 +986,26 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			<div ref={bodyRef} className="ai-body min-h-0 flex-1 overflow-auto px-20 py-16">
 				<div className={cn(CENTERED, "flex flex-col space-y-16")}>
 					{showEmpty ? (
-						<div className="ai-empty my-28 text-center">
-							<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
-							<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
-						</div>
+						phone ? (
+							<div className="ai-empty ai-empty-phone">
+								<img className="ai-empty-logo" src={dazziLogo} alt="" />
+								<strong>{t("aiSearch.emptyPromptTitle")}</strong>
+								<p>{t("aiSearch.emptyPromptDesc")}</p>
+								<div className="ai-suggest" role="list" aria-label={t("mobile.ai.suggestions")}>
+									{(["mobile.ai.suggest1", "mobile.ai.suggest2", "mobile.ai.suggest3"] as const).map((key) => (
+										<button key={key} type="button" role="listitem" onClick={() => prefill(t(key))}>
+											<SparklesIcon />
+											<span>{t(key)}</span>
+										</button>
+									))}
+								</div>
+							</div>
+						) : (
+							<div className="ai-empty my-28 text-center">
+								<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
+								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
+							</div>
+						)
 					) : null}
 
 					{pastTurns.map((turn, index) => (
@@ -907,6 +1022,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							onOpenSource={onOpenSource}
 							onNewChat={newChat}
 							onRephrase={prefill}
+							phone={phone}
 						/>
 					))}
 
@@ -1005,6 +1121,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									</div>
 								</div>
 							) : null}
+							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
 						</div>
 					)}
 
@@ -1058,7 +1175,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							))}
 						</div>
 					) : null}
-					{searching ? (
+					{searching && !phone ? (
 						<div className="steer-hint flex items-center gap-10 px-4 pb-6 text-tile text-ink-muted select-none" aria-hidden="true">
 							<span className="size-6 flex-none rounded-full bg-info-dot animate-[pulseDot_1.4s_ease-in-out_infinite]" />
 							<span className="min-w-0 flex-1 truncate">{t("aiSearch.steerHintLead")}</span>
@@ -1068,58 +1185,135 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					) : null}
 					<div
-						className="compose-box flex flex-col gap-6 rounded-14 border border-border bg-input px-14 pt-12 pb-8 transition-colors duration-(--dur-color) ease-out focus-within:border-accent"
+						ref={composeBoxRef}
+						className={cn(
+							"compose-box border border-border bg-input transition-[border-color,border-radius] duration-(--dur-color) ease-out",
+							voiceActive
+								? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
+								: "flex flex-col gap-6 rounded-14 px-14 pt-12 pb-8 focus-within:border-accent",
+						)}
 						onMouseDown={(event) => {
+							if (voiceActive) return;
 							// A click on the box's own padding or toolbar gap lands in the field, like any chat composer.
 							if (!(event.target instanceof HTMLElement) || event.target.closest("button, textarea") !== null) return;
 							event.preventDefault();
 							inputRef.current?.focus();
 						}}
 					>
-						<ComposerField
-							fieldRef={inputRef}
-							value={query}
-							onChange={setQuery}
-							onAltEnter={() => send(true)}
-							placeholder={searching ? t("aiSearch.steerPlaceholder") : t("finderComponents.composerPlaceholder")}
-							ariaLabel={t("aiSearch.askDazzi")}
-						/>
-						<div className="composer-toolbar flex items-center justify-between gap-8">
-							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-							<div className="composer-actions flex items-center gap-7">
-								{searching && query.trim().length > 0 ? (
-									<button
-										type="submit"
-										className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-										title={t("aiSearch.steerSend")}
-										aria-label={t("aiSearch.steerSend")}
-									>
-										<ArrowUpIcon />
-									</button>
-								) : null}
-								{searching ? (
+						{voice.phase === "listening" ? (
+							<>
+								<button
+									type="button"
+									className="voice-cancel flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border border-border bg-transparent p-0 text-ink-body transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
+									title={t("aiSearch.voiceCancel")}
+									aria-label={t("aiSearch.voiceCancel")}
+									onClick={voice.cancel}
+								>
+									<TabCloseIcon size={13} />
+								</button>
+								<div className="flex min-w-0 flex-1 items-center px-4">
+									<VoiceWaveform stream={voice.stream} />
+								</div>
+								<div className="flex flex-none items-center gap-7">
 									<button
 										type="button"
-										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-										title={t("aiSearch.stop")}
-										aria-label={t("aiSearch.stop")}
-										onClick={() => void stop()}
+										className="voice-button voice-stop flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border border-border bg-transparent p-0 text-ink transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong"
+										title={t("aiSearch.voiceStop")}
+										aria-label={t("aiSearch.voiceStop")}
+										aria-pressed="true"
+										onClick={voice.toggle}
 									>
-										<Square size={10} strokeWidth={3} fill="currentColor" />
+										<Square size={10} strokeWidth={0} fill="currentColor" className="rounded-[2px]" />
 									</button>
-								) : (
 									<button
-										type="submit"
-										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-										title={t("aiSearch.askDazzi")}
-										aria-label={t("aiSearch.askDazzi")}
-										disabled={query.trim().length === 0 && attachments.length === 0}
+										type="button"
+										className="voice-send flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-ink p-0 text-window transition-opacity duration-(--dur-color) ease-out hover:opacity-85"
+										title={t("aiSearch.voiceSend")}
+										aria-label={t("aiSearch.voiceSend")}
+										onClick={voice.stopAndSend}
 									>
 										<ArrowUpIcon />
 									</button>
-								)}
+								</div>
+							</>
+						) : voice.phase === "transcribing" ? (
+							<div
+								className="voice-transcribing flex w-full items-center justify-center gap-8 text-body text-ink-muted select-none"
+								role="status"
+								aria-live="polite"
+							>
+								<span
+									className="size-12 flex-none rounded-full border-[1.75px] border-border border-t-ink-body animate-spin"
+									aria-hidden="true"
+								/>
+								<span>{t("aiSearch.voiceTranscribing")}</span>
 							</div>
-						</div>
+						) : (
+							<>
+								<ComposerField
+									fieldRef={inputRef}
+									value={query}
+									onChange={setQuery}
+									onAltEnter={() => send(true)}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
+									ariaLabel={t("aiSearch.askDazzi")}
+								/>
+								{voiceNotice === null ? null : (
+									<p className="voice-notice m-0 select-text text-meta leading-normal text-ink-muted" role="alert">
+										{voiceNotice}
+									</p>
+								)}
+								<div className="composer-toolbar flex items-center justify-between gap-8">
+									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+									<div className="composer-actions flex items-center gap-7">
+										<button
+											type="button"
+											className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-ink-muted transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
+											title={t("aiSearch.voiceStart")}
+											aria-label={t("aiSearch.voiceStart")}
+											aria-pressed="false"
+											onClick={() => {
+												setVoiceNotice(null);
+												voice.toggle();
+											}}
+										>
+											<MicIcon />
+										</button>
+										{searching && query.trim().length > 0 ? (
+											<button
+												type="submit"
+												className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.steerSend")}
+												aria-label={t("aiSearch.steerSend")}
+											>
+												<ArrowUpIcon />
+											</button>
+										) : null}
+										{searching ? (
+											<button
+												type="button"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+												title={t("aiSearch.stop")}
+												aria-label={t("aiSearch.stop")}
+												onClick={() => void stop()}
+											>
+												<Square size={10} strokeWidth={3} fill="currentColor" />
+											</button>
+										) : (
+											<button
+												type="submit"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+												title={t("aiSearch.askDazzi")}
+												aria-label={t("aiSearch.askDazzi")}
+												disabled={query.trim().length === 0 && attachments.length === 0}
+											>
+												<ArrowUpIcon />
+											</button>
+										)}
+									</div>
+								</div>
+							</>
+						)}
 					</div>
 					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
@@ -1136,6 +1330,9 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
+			{voice.permission === null ? null : (
+				<MicrophonePermissionDialog state={voice.permission} platform={autorag.platform} onOpenSettings={voice.openSettings} onClose={voice.dismissPermission} />
+			)}
 		</section>
 	);
 });
@@ -1235,6 +1432,7 @@ function PastTurnView({
 	onOpenSource,
 	onNewChat,
 	onRephrase,
+	phone,
 }: {
 	readonly turn: PastTurn;
 	readonly turnIndex: number;
@@ -1248,6 +1446,8 @@ function PastTurnView({
 	readonly onNewChat: () => void;
 	/** Puts a question back in the composer. */
 	readonly onRephrase: (question: string) => void;
+	/** Phone layout: the answer ends with its sources as tappable cards. */
+	readonly phone: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
 	const before = turn.steers.filter((steer) => steer.timing === "before-quick");
@@ -1318,9 +1518,36 @@ function PastTurnView({
 						{prose(turn.deepText, turn.deep, "deep")}
 					</div>
 				)}
+				{phone ? <SourceCards evidence={(turn.deep ?? turn.quick)?.evidence ?? []} onSelect={(number) => onCitation(turnIndex, turn.deep === null ? "quick" : "deep", number)} /> : null}
 			</div>
 			{turn.stopped ? <div className="text-body text-ink-muted">{t("aiSearch.stopped")}</div> : null}
 		</>
+	);
+}
+
+/**
+ * The phone layout's sources row under an answer: one card per cited source,
+ * scrolled sideways, each opening that source's evidence. The desktop does not
+ * render it; its inspector lists the sources beside the chat.
+ */
+function SourceCards({ evidence, onSelect }: { readonly evidence: readonly CitationEvidence[]; readonly onSelect: (number: number) => void }): ReactElement | null {
+	const { t } = useTranslation();
+	if (evidence.length === 0) return null;
+	return (
+		<div className="ai-sources" role="list" aria-label={t("mobile.ai.sources", { count: evidence.length })}>
+			{evidence.map((item) => {
+				const detail = evidenceDetail(item.confidence);
+				return (
+					<button key={item.number} type="button" role="listitem" className="ai-source" onClick={() => onSelect(item.number)}>
+						<span className="ai-source-n">{item.number}</span>
+						<span className="ai-source-main">
+							<b>{evidenceHeading(item.title, item.source)}</b>
+							{detail === null ? null : <small>{detail}</small>}
+						</span>
+					</button>
+				);
+			})}
+		</div>
 	);
 }
 

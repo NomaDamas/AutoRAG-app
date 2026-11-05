@@ -1,11 +1,24 @@
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from "electron";
-import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
-import { remotePreviewMime, type RemoteCall, type RemotePush } from "../../shared/remote-contract";
+import dazziMarkPath from "../../renderer/src/assets/dazzi-mark.png?asset";
+import type { AppSettings } from "../../shared/settings-contract";
+import {
+	remotePreviewMime,
+	type RemoteAccessStatus,
+	type RemoteCall,
+	type RemotePairedDevice,
+	type RemotePairingCode,
+	type RemotePush,
+	type RemoteServerError,
+} from "../../shared/remote-contract";
 import { APP_VERSION } from "../../shared/app-info";
 import { buildRemoteBootstrapScript } from "./bootstrap";
+import { DeviceStore } from "./devices";
+import { discoverLanOrigins } from "./lan";
 import { createRemoteDispatcher } from "./registry";
-import { createRemoteServer, type RemoteServer } from "./server";
+import { createRemoteServer, type RemoteAuthenticatedContext, type RemoteServer } from "./server";
+import { createTunnelManager, type TunnelManager } from "./tunnel";
 import { previewResponseForPath } from "../../preview/node/protocol";
 import { iconIdentityFromUrl } from "../icon-protocol";
 import type { IconStore } from "../file-icon";
@@ -14,11 +27,18 @@ import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
 import type { WorkerClient } from "../../shared/fs-worker-protocol";
 
 /**
- * Wires the remote server to the running app. Each browser session gets its own
- * fs-worker client (independent watches and listings) and its calls go to the
- * SAME `ipcMain` handlers the desktop renderer uses, so validation lives in one
- * place. Every push the desktop windows receive is forwarded to each session.
+ * Wires the remote server, device pairing registry, LAN IPv4 discovery,
+ * and the Cloudflare tunnel (Quick Tunnel or own domain) to the running app.
  */
+
+/** The sunflower mark the AccessGate draws above "Dazzi", inlined because the gate page allows only `data:` images. */
+function gateLogoDataUrl(): string | undefined {
+	try {
+		return `data:image/png;base64,${readFileSync(dazziMarkPath).toString("base64")}`;
+	} catch {
+		return undefined;
+	}
+}
 
 /** Bridge target -> the IPC channel map whose keys are the bridge method names. */
 export type RemoteTargetChannels = Readonly<Record<string, Readonly<Record<string, string>>>>;
@@ -26,8 +46,10 @@ export type RemoteTargetChannels = Readonly<Record<string, Readonly<Record<strin
 export interface RemoteHostDeps {
 	/** The renderer bundle root the desktop window loads. */
 	readonly rendererRoot: string;
+	/** Private state directory (`<userData>/settings`) for `remote-devices.json`. */
+	readonly stateDir: string;
 	readonly host: string;
-	readonly port: number;
+	readonly port: () => Promise<number>;
 	/** The icon cache that serves `autorag-thumb://` for the desktop. */
 	readonly icons: IconStore;
 	readonly workerHost: FsWorkerHost;
@@ -36,6 +58,7 @@ export interface RemoteHostDeps {
 	/** The desktop window whose webContents stands in for a browser sender. */
 	readonly window: () => BrowserWindow | null;
 	readonly settings: () => Promise<AppSettings>;
+	readonly onStatusChanged?: (status: RemoteAccessStatus) => void;
 	readonly log?: (message: string) => void;
 }
 
@@ -44,7 +67,19 @@ export interface RemoteHost {
 	stop(): Promise<void>;
 	/** Forward one desktop push to every connected browser session. */
 	push(channel: string, payload: unknown): void;
-	status(): { readonly serving: boolean; readonly origin: string | null; readonly sessions: number };
+	status(): Promise<RemoteAccessStatus>;
+	startPairing(): RemotePairingCode;
+	devices(): readonly RemotePairedDevice[];
+	renameDevice(id: string, label: string): RemotePairedDevice | null;
+	revokeDevice(id: string): boolean;
+	revokeAllDevices(): number;
+	refreshNetwork(): Promise<RemoteAccessStatus>;
+	startTunnel(): Promise<RemoteAccessStatus>;
+	stopTunnel(): Promise<RemoteAccessStatus>;
+	/** `cloudflared tunnel login`, run from the desktop only (it opens a browser on the host). */
+	loginTunnel(): Promise<RemoteAccessStatus>;
+	/** The own-domain hostname setting changed (`""` = Quick Tunnel). */
+	setTunnelHostname(hostname: string): Promise<void>;
 }
 
 /** Calls the IPC handler the desktop renderer would reach, with a stand-in sender. */
@@ -56,33 +91,97 @@ function invokeIpc(channel: string, sender: Electron.WebContents | null, args: r
 	return Promise.resolve((handler as (event: IpcMainInvokeEvent, ...rest: unknown[]) => unknown)(event, ...args));
 }
 
+function describeStartFailure(error: unknown, port: number): RemoteServerError {
+	return { port, message: error instanceof Error ? error.message : String(error) };
+}
+
 export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	const log = deps.log ?? ((message: string) => console.error(`[remote] ${message}`));
+	const deviceStore = new DeviceStore(deps.stateDir);
+	const gateLogo = gateLogoDataUrl();
 	let token = "";
 	let origin: string | null = null;
+	let baseOrigin: string | null = null;
+	let boundPort: number | null = null;
+	/** The port setting the running server was started for (`boundPort` differs when that port was taken). */
+	let requestedPort: number | null = null;
 	let server: RemoteServer | null = null;
+	/** Why the last start did not serve; null once a start succeeds or remote access is stopped. */
+	let serverError: RemoteServerError | null = null;
+	/** The start in flight: concurrent callers (launch, the settings toggle, a port change) share it. */
+	let starting: Promise<string> | null = null;
 	const sessions = new Map<string, FsWorkerRemoteClient>();
 	let fallback: FsWorkerRemoteClient | null = null;
 
+	const emitChanged = (): void => {
+		if (deps.onStatusChanged === undefined) return;
+		void buildStatus().then(
+			(next) => deps.onStatusChanged?.(next),
+			() => undefined,
+		);
+	};
+
+	deviceStore.onChanged(emitChanged);
+
+	const tunnel: TunnelManager = createTunnelManager({
+		stateDir: deps.stateDir,
+		onChange: emitChanged,
+	});
+	void deps.settings().then(
+		(settings) => tunnel.setHostname(settings.remoteTunnelHostname),
+		() => undefined,
+	);
+
+	const buildStatus = async (): Promise<RemoteAccessStatus> => {
+		const configuredPort = await deps.port();
+		const activePort = boundPort ?? configuredPort;
+		const lanOrigins = server !== null && activePort > 0 ? discoverLanOrigins(activePort) : [];
+		return {
+			serving: server !== null,
+			origin,
+			baseOrigin,
+			port: activePort,
+			sessions: sessions.size,
+			lanOrigins,
+			tunnel: tunnel.status(),
+			pairing: deviceStore.activePairing(),
+			devices: deviceStore.list(null),
+			serverError,
+		};
+	};
+
+	// What a browser session may call on `remote.*`. Tunnel control stays with the desktop: it spawns
+	// cloudflared on the host and its login opens a browser there.
+	const remoteMethods: Readonly<Record<string, (...args: readonly unknown[]) => unknown>> = {
+		status: () => buildStatus(),
+		startPairing: () => deviceStore.startPairing(),
+		devices: () => deviceStore.list(null),
+		renameDevice: (id, label) => deviceStore.rename(String(id), label),
+		revokeDevice: (id) => deviceStore.revoke(String(id)),
+		revokeAllDevices: () => deviceStore.revokeAll().length,
+		refreshNetwork: () => buildStatus(),
+	};
+
 	const dispatcher = createRemoteDispatcher({
 		workerFor: (sessionId) => workerFor(sessionId).client,
-		targets: Object.fromEntries(
-			Object.entries(deps.targets).map(([target, methods]) => [
-				target,
-				Object.fromEntries(
-					Object.entries(methods).map(([method, channel]) => [
-						method,
-						(...args: readonly unknown[]) => invokeIpc(channel, deps.window()?.webContents ?? null, args),
-					]),
-				),
-			]),
-		),
+		targets: {
+			...Object.fromEntries(
+				Object.entries(deps.targets).map(([target, methods]) => [
+					target,
+					Object.fromEntries(
+						Object.entries(methods).map(([method, channel]) => [
+							method,
+							(...args: readonly unknown[]) => invokeIpc(channel, deps.window()?.webContents ?? null, args),
+						]),
+					),
+				]),
+			),
+			remote: remoteMethods,
+		},
 	});
 
 	const dispatch = (call: RemoteCall, sessionId: string): Promise<unknown> => dispatcher(call, sessionId);
 
-	// The worker pushes its own events over its own port; a browser can only see
-	// them through its SSE stream, so each session's client forwards them on.
 	const forwardWorkerPushes = (client: WorkerClient, sink: (payload: RemotePush) => void): void => {
 		for (const name of [FS_WORKER_PUSH.live, FS_WORKER_PUSH.locationsChanged, FS_WORKER_PUSH.indexRefreshed]) {
 			client.onPush(name, (payload) => sink({ channel: name, payload }));
@@ -101,77 +200,157 @@ export function createRemoteHost(deps: RemoteHostDeps): RemoteHost {
 	const sharedWorker = (): FsWorkerRemoteClient => {
 		if (fallback === null) {
 			fallback = deps.workerHost.remoteClient();
-			// Writes this client makes (an upload) change folders every session may
-			// be viewing, so its batches go to all of them.
 			forwardWorkerPushes(fallback.client, (push) => server?.broadcast(push));
 		}
 		return fallback;
 	};
 
+	const buildBootstrapFor = async (auth?: RemoteAuthenticatedContext): Promise<string> => {
+		const settings = await deps.settings();
+		return buildRemoteBootstrapScript({
+			...(auth === undefined || auth.includeQueryToken ? { token } : {}),
+			...(auth?.via !== undefined ? { via: auth.via } : {}),
+			...(auth?.deviceId !== undefined ? { deviceId: auth.deviceId } : {}),
+			platform: process.platform,
+			appearance: settings.appearance,
+			language: settings.language,
+			version: APP_VERSION,
+		});
+	};
+
+	const lifecycle = {
+		start(): Promise<string> {
+			// Each start re-reads the port setting: a server started for another port moves. Compare with the port that
+			// was asked for, not the one bound: a taken port falls back to a nearby one, and that must not restart the
+			// server (and change its token) on every settings change.
+			const run = async (): Promise<string> => {
+				const listenPort = await deps.port();
+				if (server !== null && (listenPort === 0 || listenPort === requestedPort)) return origin ?? "";
+				if (server !== null) await stopServer();
+				return startServer(listenPort);
+			};
+			const next = (starting ?? Promise.resolve("")).catch(() => "").then(run);
+			const current = next.finally(() => {
+				if (starting === current) starting = null;
+			});
+			starting = current;
+			return current;
+		},
+		async stop(): Promise<void> {
+			await starting?.catch(() => undefined);
+			await tunnel.stop();
+			await stopServer();
+			serverError = null;
+			emitChanged();
+		},
+	};
+
+	async function startServer(listenPort: number): Promise<string> {
+		token = randomBytes(24).toString("base64url");
+		const defaultBootstrap = await buildBootstrapFor();
+		const candidate = createRemoteServer({
+			rendererRoot: deps.rendererRoot,
+			token,
+			host: deps.host,
+			port: listenPort,
+			bootstrapScript: defaultBootstrap,
+			bootstrapScriptFor: (auth) => buildBootstrapFor(auth),
+			devices: deviceStore,
+			gatePrefs: async () => {
+				const current = await deps.settings();
+				return { language: current.language, appearance: current.appearance };
+			},
+			...(gateLogo === undefined ? {} : { gateLogoDataUrl: gateLogo }),
+			dispatch,
+			onSessionOpen: () => emitChanged(),
+			onSessionClose: (sessionId) => {
+				sessions.get(sessionId)?.close();
+				sessions.delete(sessionId);
+				emitChanged();
+			},
+			preview: (filePath, range) => previewResponseForPath(filePath, range, remotePreviewMime(filePath) ?? undefined),
+			thumbnail: (query) => {
+				const path = query.get("path");
+				const mtime = query.get("mtime");
+				if (path === null || mtime === null) return { status: 400, contentType: null, body: null };
+				const size = query.get("size");
+				const identity = iconIdentityFromUrl(
+					`autorag-thumb://local/?path=${encodeURIComponent(path)}&mtime=${encodeURIComponent(mtime)}${size === null ? "" : `&size=${encodeURIComponent(size)}`}`,
+				);
+				if (identity === null) return { status: 400, contentType: null, body: null };
+				const bytes = deps.icons.read(identity.path, identity.mtimeMs, identity.size);
+				return bytes === null ? { status: 404, contentType: null, body: null } : { status: 200, contentType: "image/png", body: bytes };
+			},
+			upload: async (folder, name, bytes) => {
+				await sharedWorker().client.call("uploadFile", [folder, name, bytes]);
+			},
+			download: async (filePath) => {
+				const bytes = await sharedWorker().client.call<Uint8Array | null>("readFile", [filePath]);
+				return bytes === null
+					? { status: 404, contentType: null, body: null }
+					: { status: 200, contentType: "application/octet-stream", body: bytes };
+			},
+			log,
+		});
+		let started: { readonly port: number; readonly origin: string };
+		try {
+			started = await candidate.start();
+		} catch (error) {
+			await candidate.stop().catch(() => undefined);
+			serverError = describeStartFailure(error, listenPort);
+			emitChanged();
+			throw error;
+		}
+		server = candidate;
+		serverError = null;
+		boundPort = started.port;
+		requestedPort = listenPort;
+		baseOrigin = started.origin;
+		origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
+		log(`serving at ${started.origin}`);
+		emitChanged();
+		return origin;
+	}
+
+	async function stopServer(): Promise<void> {
+		for (const session of sessions.values()) session.close();
+		sessions.clear();
+		fallback?.close();
+		fallback = null;
+		const current = server;
+		server = null;
+		origin = null;
+		baseOrigin = null;
+		boundPort = null;
+		requestedPort = null;
+		await current?.stop();
+	}
+
 	return {
-		async start() {
-			if (server !== null) return origin ?? "";
-			token = randomBytes(24).toString("base64url");
-			const settings = await deps.settings();
-			const appearance: AppAppearance = settings.appearance;
-			const bootstrapScript = buildRemoteBootstrapScript({
-				token,
-				platform: process.platform,
-				appearance,
-				language: settings.language,
-				version: APP_VERSION,
-			});
-			server = createRemoteServer({
-				rendererRoot: deps.rendererRoot,
-				token,
-				host: deps.host,
-				port: deps.port,
-				bootstrapScript,
-				dispatch,
-				onSessionClose: (sessionId) => {
-					sessions.get(sessionId)?.close();
-					sessions.delete(sessionId);
-				},
-				preview: (filePath, range) => previewResponseForPath(filePath, range, remotePreviewMime(filePath) ?? undefined),
-				thumbnail: (query) => {
-					const path = query.get("path");
-					const mtime = query.get("mtime");
-					if (path === null || mtime === null) return { status: 400, contentType: null, body: null };
-					const size = query.get("size");
-					const identity = iconIdentityFromUrl(
-						`autorag-thumb://local/?path=${encodeURIComponent(path)}&mtime=${encodeURIComponent(mtime)}${size === null ? "" : `&size=${encodeURIComponent(size)}`}`,
-					);
-					if (identity === null) return { status: 400, contentType: null, body: null };
-					const bytes = deps.icons.read(identity.path, identity.mtimeMs, identity.size);
-					return bytes === null ? { status: 404, contentType: null, body: null } : { status: 200, contentType: "image/png", body: bytes };
-				},
-				upload: async (folder, name, bytes) => {
-					await sharedWorker().client.call("uploadFile", [folder, name, bytes]);
-				},
-				download: async (filePath) => {
-					const bytes = await sharedWorker().client.call<Uint8Array | null>("readFile", [filePath]);
-					return bytes === null ? { status: 404, contentType: null, body: null } : { status: 200, contentType: "application/octet-stream", body: bytes };
-				},
-				log,
-			});
-			const started = await server.start();
-			origin = `${started.origin}/?token=${encodeURIComponent(token)}`;
-			log(`serving at ${started.origin}`);
-			return origin;
-		},
-		async stop() {
-			for (const session of sessions.values()) session.close();
-			sessions.clear();
-			fallback?.close();
-			fallback = null;
-			const current = server;
-			server = null;
-			origin = null;
-			await current?.stop();
-		},
+		start: lifecycle.start,
+		stop: lifecycle.stop,
 		push(channel, payload) {
 			server?.broadcast({ channel, payload } satisfies RemotePush);
 		},
-		status: () => ({ serving: server !== null, origin, sessions: sessions.size }),
+		status: () => buildStatus(),
+		startPairing: () => deviceStore.startPairing(),
+		devices: () => deviceStore.list(null),
+		renameDevice: (id, label) => deviceStore.rename(id, label),
+		revokeDevice: (id) => deviceStore.revoke(id),
+		revokeAllDevices: () => deviceStore.revokeAll().length,
+		refreshNetwork: () => buildStatus(),
+		startTunnel: async () => {
+			await tunnel.start(boundPort ?? 0);
+			return buildStatus();
+		},
+		stopTunnel: async () => {
+			await tunnel.stop();
+			return buildStatus();
+		},
+		loginTunnel: async () => {
+			await tunnel.login();
+			return buildStatus();
+		},
+		setTunnelHostname: (hostname) => tunnel.setHostname(hostname),
 	};
 }
