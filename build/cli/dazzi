@@ -1,12 +1,14 @@
 #!/bin/sh
 # DAZZI-CLI-LAUNCHER (macOS): the `dazzi` command, shipped inside the app at Contents/Resources/bin/dazzi.
 #
-#   dazzi [path...]    open folders (and show files in their folder) in Dazzi, like `open` does for Finder
-#   dazzi              bring Dazzi to the front
+#   dazzi [path...]               open folders (and show files in their folder) in Dazzi, like `open` does for Finder
+#   dazzi --ask "question" [path...]   ask AI Search the question in a new tab, the paths attached
+#   dazzi                         bring Dazzi to the front
 #
-# It only builds the request the OS file menu already sends (`--autorag-request=open` plus one
-# `--autorag-path=` per item) and starts the app's own executable with it. A running Dazzi receives the
-# request over its local socket and this process exits; with none running, the process becomes the app.
+# It only builds the request the OS file menu already sends (`--autorag-request=open` or `=ask`, one
+# `--autorag-path=` per item, `--autorag-query=` for a question) and starts the app's own executable with it.
+# A running Dazzi receives the request over its local socket and this process exits; with none running, the
+# process becomes the app.
 # DAZZI_USER_DATA_DIR aims the request at another profile (development, QA).
 
 MAX_PATHS=200
@@ -14,11 +16,14 @@ MAX_PATHS=200
 usage() {
 	cat <<'USAGE'
 Usage: dazzi [--] [path...]
+       dazzi --ask QUESTION [--] [path...]
 
 Open folders in Dazzi, or show files selected in their folder.
+With --ask, ask AI Search the question in a new tab, the paths attached.
 With no path, bring Dazzi to the front.
 
-  -h, --help   show this help
+  --ask QUESTION   ask AI Search (also --ask=QUESTION)
+  -h, --help       show this help
 USAGE
 }
 
@@ -43,11 +48,24 @@ fi
 # A launcher started from an Electron/Node tool would otherwise turn the app into plain Node.
 unset ELECTRON_RUN_AS_NODE
 
+ask=
+question=
 while [ $# -gt 0 ]; do
 	case $1 in
 		-h | --help)
 			usage
 			exit 0
+			;;
+		--ask)
+			ask=1
+			question=${2-}
+			[ $# -gt 1 ] && shift
+			shift
+			;;
+		--ask=*)
+			ask=1
+			question=${1#--ask=}
+			shift
 			;;
 		--)
 			shift
@@ -62,7 +80,18 @@ while [ $# -gt 0 ]; do
 	esac
 done
 
-if [ $# -eq 0 ]; then
+if [ -n "$ask" ]; then
+	case $question in
+		*[![:space:]]*) ;;
+		*)
+			echo "dazzi: --ask needs a question" >&2
+			usage >&2
+			exit 2
+			;;
+	esac
+fi
+
+if [ $# -eq 0 ] && [ -z "$ask" ]; then
 	exec open "$app"
 fi
 
@@ -97,19 +126,19 @@ while [ $i -lt "$count" ]; do
 done
 
 # The loop shifted every input path off and appended one flag per existing path.
-if [ "$found" -eq 0 ]; then
+if [ "$found" -eq 0 ] && [ -z "$ask" ]; then
 	exit "$status"
 fi
 
-profile=
+if [ -n "$ask" ]; then
+	set -- --autorag-request=ask "--autorag-query=$question" "$@"
+else
+	set -- --autorag-request=open "$@"
+fi
 if [ -n "${DAZZI_USER_DATA_DIR-}" ]; then
-	profile=--user-data-dir=$DAZZI_USER_DATA_DIR
+	set -- "--user-data-dir=$DAZZI_USER_DATA_DIR" "$@"
 fi
 
 # Detached: with no app running this process becomes the app and must outlive the terminal.
-if [ -n "$profile" ]; then
-	nohup "$exe" "$profile" --autorag-request=open "$@" >/dev/null 2>&1 </dev/null &
-else
-	nohup "$exe" --autorag-request=open "$@" >/dev/null 2>&1 </dev/null &
-fi
+nohup "$exe" "$@" >/dev/null 2>&1 </dev/null &
 exit "$status"

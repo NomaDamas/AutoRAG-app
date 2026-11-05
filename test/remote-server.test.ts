@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { REMOTE_ROUTES, type RemoteCall } from "../src/shared/remote-contract";
+import { REMOTE_CSRF_HEADER, REMOTE_ROUTES, type RemoteCall } from "../src/shared/remote-contract";
+import { DeviceStore } from "../src/main/remote/devices";
 import { createRemoteServer, type RemoteServer } from "../src/main/remote/server";
 
 const directories: string[] = [];
@@ -62,6 +63,22 @@ async function start(overrides: Partial<Parameters<typeof createRemoteServer>[0]
 }
 
 describe("remote server", () => {
+	it("serves on another port when the configured one is taken, instead of staying stopped", async () => {
+		// Given another program (the installed Dazzi beside a dev build) already listening on the configured port.
+		const holder = await start();
+		const taken = Number(new URL(holder.origin).port);
+		const logs: string[] = [];
+
+		// When a second server starts on that same port.
+		const { origin } = await start({ port: taken, log: (line) => logs.push(line) });
+
+		// Then it serves on a different, working port and says why.
+		const port = Number(new URL(origin).port);
+		expect(port).not.toBe(taken);
+		expect((await fetch(`${origin}/?token=secret-token`)).status).toBe(200);
+		expect(logs.some((line) => line.includes(`port ${taken} is in use`))).toBe(true);
+	});
+
 	it("refuses every request without the session token", async () => {
 		// Given a running remote server.
 		const { origin } = await start();
@@ -190,4 +207,116 @@ describe("remote server", () => {
 		expect(await response.json()).toEqual({ ok: true });
 		expect(await (await import("node:fs/promises")).readFile(join(folder, "notes.txt"), "utf8")).toBe("hello");
 	});
+
+	it("serves the AccessGate HTML at GET / for unauthenticated browsers while still refusing GET /index.html and /remote/call with 403", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "remote-devices-srv-"));
+		directories.push(dir);
+		const devices = new DeviceStore(dir);
+		const { origin } = await start({ devices });
+
+		const gate = await fetch(`${origin}/`, { headers: { accept: "text/html" } });
+		const html = await gate.text();
+		expect(gate.status).toBe(200);
+		expect(html).toContain('data-testid="remote-access-gate"');
+
+		const health = await fetch(`${origin}${REMOTE_ROUTES.health}`);
+		expect(await health.json()).toEqual({ ok: true, authenticated: false, reason: "pairing_required" });
+
+		const directCall = await fetch(`${origin}${REMOTE_ROUTES.call}`, { method: "POST", body: "{}" });
+		expect(directCall.status).toBe(403);
+	});
+
+	it("pairs a browser via 6-digit code into an HttpOnly dazzi_device cookie and immediately closes its SSE stream on revoke", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "remote-devices-pair-"));
+		directories.push(dir);
+		const devices = new DeviceStore(dir);
+		const { origin } = await start({ devices });
+
+		const pairing = devices.startPairing();
+		const pairRes = await fetch(`${origin}${REMOTE_ROUTES.pair}`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				[REMOTE_CSRF_HEADER]: "1",
+			},
+			body: JSON.stringify({ code: pairing.code, label: "iPhone · Safari" }),
+		});
+		expect(pairRes.status).toBe(204);
+		const setCookie = pairRes.headers.get("set-cookie") ?? "";
+		expect(setCookie).toContain("dazzi_device=");
+		expect(setCookie).toContain("HttpOnly");
+		const cookiePair = setCookie.split(";")[0]!;
+
+		// Cookie alone authenticates GET /, /remote/health, /remote/call, and /remote/events without ?token=
+		const rootRes = await fetch(`${origin}/`, { headers: { cookie: cookiePair } });
+		expect(rootRes.status).toBe(200);
+		expect(await rootRes.text()).toContain(REMOTE_ROUTES.bootstrap);
+
+		const healthRes = await fetch(`${origin}${REMOTE_ROUTES.health}`, { headers: { cookie: cookiePair } });
+		expect(await healthRes.json()).toMatchObject({ ok: true, authenticated: true, via: "device" });
+
+		const callRes = await fetch(`${origin}${REMOTE_ROUTES.call}`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				cookie: cookiePair,
+				origin,
+			},
+			body: JSON.stringify({ target: "fs", method: "listDir", args: ["/tmp"] }),
+		});
+		expect(await callRes.json()).toEqual({ ok: true, value: { target: "fs", method: "listDir", args: ["/tmp"] } });
+
+		// Cross-site POST with device cookie is refused by CSRF same-origin guard
+		const csrfRes = await fetch(`${origin}${REMOTE_ROUTES.call}`, {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				cookie: cookiePair,
+				origin: "https://attacker.example",
+			},
+			body: JSON.stringify({ target: "fs", method: "listDir", args: ["/tmp"] }),
+		});
+		expect(csrfRes.status).toBe(403);
+
+		// Open SSE stream with the device cookie, then revoke the device and verify stream terminates immediately
+		const sseRes = await fetch(`${origin}${REMOTE_ROUTES.events}?session=dev-1`, { headers: { cookie: cookiePair } });
+		expect(sseRes.status).toBe(200);
+		const reader = sseRes.body!.getReader();
+		await reader.read(); // initial retry frame
+
+		const enrolledId = devices.list(null)[0]!.id;
+		expect(devices.revoke(enrolledId)).toBe(true);
+
+		// Stream closes on revoke
+		const closed = await reader.read();
+		expect(closed.done).toBe(true);
+
+		// Subsequent requests with the revoked cookie are refused
+		const afterRevoke = await fetch(`${origin}${REMOTE_ROUTES.call}`, {
+			method: "POST",
+			headers: { "content-type": "application/json", cookie: cookiePair, origin },
+			body: JSON.stringify({ target: "fs", method: "listDir", args: ["/tmp"] }),
+		});
+		expect(afterRevoke.status).toBe(403);
+	});
+
+	it("authenticates POST /remote/auth with the session token and rate-limits brute-force guesses", async () => {
+		const { origin } = await start();
+
+		for (let i = 0; i < 5; i++) {
+			const bad = await fetch(`${origin}${REMOTE_ROUTES.auth}`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ token: "wrong-token" }),
+			});
+			expect(bad.status).toBe(401);
+		}
+		const throttled = await fetch(`${origin}${REMOTE_ROUTES.auth}`, {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ token: "wrong-token" }),
+		});
+		expect(throttled.status).toBe(429);
+	});
+
 });

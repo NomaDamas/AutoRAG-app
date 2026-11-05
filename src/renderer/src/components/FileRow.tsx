@@ -1,8 +1,9 @@
-import { useEffect, type ChangeEvent, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
+import { useEffect, type ChangeEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
 import { dateLabelOf, kindLabelOf, locationOf, sizeLabelOf } from "../state/entry-values";
+import type { RowSlide } from "../state/disclosure-motion";
 import type { Disclosure } from "../state/folder-tree";
 import { LIST_COLUMN_OPTIONS, type ListColumnKey, type ListColumnsState, listGridTemplate } from "../state/list-columns";
 import { basename, dirname } from "../state/paths";
@@ -106,6 +107,7 @@ export function FileRow({
 	listPath,
 	columns,
 	callbacks,
+	slide,
 }: {
 	readonly entry: FinderEntry;
 	readonly zebra: boolean;
@@ -124,6 +126,8 @@ export function FileRow({
 	readonly listPath: string;
 	readonly columns: ListColumnsState;
 	readonly callbacks: RowCallbacks;
+	/** Set while a folder opens or closes above this row (`state/disclosure-motion`); the CSS moves it. */
+	readonly slide?: RowSlide | undefined;
 }): ReactElement {
 	// The listing row stays as read; its icon, OS kind, metadata, and index
 	// state come from the sidecar, and only this row re-renders when they land.
@@ -202,7 +206,11 @@ export function FileRow({
 			aria-selected={selected}
 			aria-level={disclosure === "none" ? undefined : depth + 1}
 			aria-expanded={canOpen ? open : undefined}
-			style={{ gridTemplateColumns: listGridTemplate(columns) }}
+			style={slide?.part === "block" || slide?.part === "ghost"
+				? ({ gridTemplateColumns: listGridTemplate(columns), "--slide-d": `${slide.offset}px` } as CSSProperties)
+				: { gridTemplateColumns: listGridTemplate(columns) }}
+			data-slide={slide?.part}
+			aria-hidden={slide?.part === "ghost" ? true : undefined}
 			onPointerDown={renameDraft === null ? (event) => callbacks.onPointerDown(entry, event) : undefined}
 			onClick={(event) => callbacks.onClick(entry, event)}
 			onDoubleClick={() => callbacks.onOpen(entry)}
@@ -232,7 +240,7 @@ export function FileRow({
 					>
 						<span
 							className={cn(
-								"block border-l-[5px] border-y-[4px] border-l-current border-y-transparent transition-transform duration-(--dur-color) ease-[ease]",
+								"block border-l-[5px] border-y-[4px] border-l-current border-y-transparent transition-transform duration-(--dur-disclosure) ease-(--ease-disclosure) motion-reduce:transition-none",
 								open && "rotate-90",
 							)}
 						/>

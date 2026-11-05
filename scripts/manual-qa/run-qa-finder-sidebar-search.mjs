@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
  *   5. the scope bar's folder pill narrows the commit to the folder in view;
  *   6. 내용 opens a new AI Search tab running the real content search;
  *   7. ⌘F focuses the sidebar field;
- *   8. the toolbar's inspector / AI / Share cluster behaves.
+ *   8. the toolbar's right cluster holds Share only, and the inspector hides from its own head.
  *
  * Run `bun run build` first. Evidence lands in the ignored `.omo/` tree.
  */
@@ -131,11 +131,11 @@ try {
 	const focused = await page.evaluate(() => document.activeElement?.matches(".side-search input") ?? false);
 	check("⌘F focuses the sidebar search field", focused, String(focused));
 
-	// 8. Toolbar inspector / AI / Share cluster.
-	await page.locator('[aria-label="Toggle inspector"]').waitFor({ timeout: 5000 });
-	check("the toolbar exposes the inspector toggle", (await page.locator('[aria-label="Toggle inspector"]').count()) === 1);
+	// 8. Toolbar right cluster; the inspector's hide button lives in its own head.
+	await page.locator('.inspector-head [aria-label="Hide inspector"]').waitFor({ timeout: 5000 });
+	check("the inspector head exposes its hide button", (await page.locator('.inspector-head [aria-label="Hide inspector"]').count()) === 1);
 	const cluster = await page.locator(".toolbar .tgroup button").evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label")));
-	check("the toolbar's right cluster has no AI Search button", JSON.stringify(cluster) === JSON.stringify(isMac ? ["Toggle inspector", "Share"] : ["Toggle inspector"]), JSON.stringify(cluster));
+	check("the toolbar's right cluster has no AI Search or inspector button", JSON.stringify(cluster) === JSON.stringify(isMac ? ["Share"] : []), JSON.stringify(cluster));
 	// The Share item opens the OS share sheet, so it is shown on macOS only.
 	const share = page.locator('.toolbar [aria-label="Share"]');
 	check("the toolbar exposes Share on macOS only", (await share.count()) === (isMac ? 1 : 0), `count=${await share.count()}`);

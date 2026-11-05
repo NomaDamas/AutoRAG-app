@@ -6,10 +6,11 @@
  *      locked on, hides selected built-in items (`builtin:compress7z`, `builtin:copyPath`),
  *      reorders `magic` to the top, and manually adds a batch script Magic Action
  *      (`multiple` files, `txt|md` extensions).
- *   2. AI App Customizer modal (`[data-action="open-context-menu-customizer"]`) streams live
+ *   2. The AI App Customizer in the window's right sidebar
+ *      (`[data-testid="app-customizer-panel"][data-surface="contextMenu"]`) streams live
  *      `.shimmer` `i` progress while calling `get_app_settings`, `update_context_menu`
  *      (attempting to hide `태그` — kept locked!), and `upsert_magic_action` to add a
- *      single-PDF AI Magic Action.
+ *      single-PDF AI Magic Action, which appears in the page beside it right away.
  *   3. Navigates to Documents in Finder, right-clicks:
  *      - Single `report.pdf` → shows the AI PDF Magic Action, hides the multi-file script,
  *        hides `7z로 압축` & `경로 복사`, keeps visual shortcuts (`⌘C`) and `태그` swatches.
@@ -28,7 +29,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { isMac, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { isMac, isWindows, rmRetry, writeMinsyncStub } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-context-menu-customizer");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -194,7 +195,11 @@ const sweep = () => {
 	try {
 		rmRetry(WORK);
 	} catch {
-		rmSync(WORK, { recursive: true, force: true });
+		try {
+			rmSync(WORK, { recursive: true, force: true });
+		} catch {
+			// Best-effort on forced exit
+		}
 	}
 };
 process.on("exit", sweep);
@@ -266,18 +271,23 @@ try {
 	await shot("02a-magic-action-editor-agent-skills-mcp-default-on");
 	await editor.locator('[data-testid="magic-editor-label"]').fill("텍스트 묶음 줄 수 계산");
 	await editor.locator('[data-testid="magic-editor-kind"]').selectOption("script");
-	await editor.locator('[data-testid="magic-editor-command"]').fill('printf "BATCH_COUNT=%s FIRST=%s\\n" "$DAZZI_FILE_COUNT" "$(basename "$DAZZI_FILE")"');
+	await editor
+		.locator('[data-testid="magic-editor-command"]')
+		.fill(
+			isWindows
+				? 'Write-Output "BATCH_COUNT=$($env:DAZZI_FILE_COUNT) FIRST=$(Split-Path -Leaf $args[0])"'
+				: 'printf "BATCH_COUNT=%s FIRST=%s\\n" "$DAZZI_FILE_COUNT" "$(basename "$DAZZI_FILE")"',
+		);
 	await editor.locator('[data-testid="magic-editor-selection"]').selectOption("multiple");
 	await editor.locator('[data-testid="magic-editor-extensions"]').fill("txt, md");
 	await shot("02-magic-action-editor-script");
 	await editor.locator('[data-action="save-magic-editor"]').click();
 	await editor.waitFor({ state: "detached" });
 
-	// 2. Open AI Customizer modal from ContextMenuPage and create a single-PDF Agent Magic Action + try hiding Tags
-	await page.locator('[data-action="open-context-menu-customizer"]').click();
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("03-context-menu-ai-modal-empty");
+	// 2. Use the AI Customizer in the right sidebar beside ContextMenuPage to create a single-PDF Agent Magic Action + try hiding Tags
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="contextMenu"]');
+	await panel.waitFor();
+	await shot("03-context-menu-ai-panel-empty");
 
 	queue.push(
 		{ tool: "get_app_settings", args: { i: "우클릭 메뉴 구성을 확인하는 중" }, delayMs: 220 },
@@ -310,18 +320,22 @@ try {
 		},
 	);
 
-	const aiInput = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const aiInput = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await aiInput.click();
 	await page.keyboard.type("PDF 하나 우클릭하면 핵심 3줄 요약해주는 매직 액션 만들고, 잘라내기랑 태그도 숨겨줘.");
 	await page.keyboard.press("Enter");
 
-	await modal.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
+	await panel.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
 	await shot("04-context-menu-ai-shimmer");
-	await modal.locator(".customizer-turn__reply", { hasText: "PDF 핵심 3줄 요약" }).waitFor({ timeout: 15_000 });
+	await panel.locator(".customizer-turn__reply", { hasText: "PDF 핵심 3줄 요약" }).waitFor({ timeout: 15_000 });
 	await shot("05-context-menu-ai-done");
+	check(
+		"The new Magic Action shows up in the page beside the assistant without closing it",
+		(await page.locator(".settings-content", { hasText: "PDF 핵심 3줄 요약" }).count()) === 1 && (await panel.isVisible()),
+	);
 
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
 	await shot("06-settings-context-menu-populated");
 
 	check(
@@ -445,6 +459,8 @@ try {
 		(await page.locator('[data-context-menu-section="tags"]').innerText()).includes("Always shown"),
 	);
 } finally {
+	await app?.close().catch(() => undefined);
+	app = undefined;
 	sweep();
 }
 

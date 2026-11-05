@@ -402,11 +402,14 @@ try {
 		await page.locator(".onb .ix-gate").innerText(),
 	);
 	const phaseLabels = await page.locator(".onb .ix-phases .ix-phase").allInnerTexts();
+	const hasStage = (name) => phaseLabels.some((label) => label.includes(name));
 	check(
 		EMBED === "none"
-			? "indexing phases of a keyword-only run have no embedding phase (parsed, finalizing)"
-			: "indexing phases show only local phases (parsed, minsync, finalizing)",
-		phaseLabels.length === (EMBED === "none" ? 2 : 3) && !phaseLabels.some((label) => label.includes("데이터 소스")),
+			? "indexing stages of a keyword-only run name MinSync's step the keyword index, not embedding (discover, parse, keyword index, finalize)"
+			: "indexing stages show only local stages (discover, parse, embed, finalize)",
+		phaseLabels.length === 4 &&
+			!hasStage("데이터 소스") &&
+			(EMBED === "none" ? hasStage("키워드 색인") && !hasStage("임베딩") : hasStage("임베딩") && !hasStage("키워드 색인")),
 		phaseLabels.join(" | "),
 	);
 	await shot("08-indexing");

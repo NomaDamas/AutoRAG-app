@@ -171,14 +171,13 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "단축키" }).click();
 	await page.locator("h1.linear-title", { hasText: "단축키" }).waitFor();
-	await page.locator('[data-action="open-shortcut-customizer"]').click();
 
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("01-live-shortcut-modal-opened");
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="shortcuts"]');
+	await panel.waitFor();
+	await shot("01-live-shortcut-panel-opened");
 
 	// Turn 1: Ask the real 2026+ LLM to change rename to F2, focusSearch to Cmd+P, and attempt an unsupported new action
-	const input = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
 	await page.keyboard.type(
 		"이름 변경 단축키를 F2로 바꾸고, 검색창 포커스 단축키는 커맨드 P로 바꿔줘. 그리고 '터미널 열기'라는 새 기능도 커맨드 J 단축키로 추가할 수 있으면 추가해줘.",
@@ -187,8 +186,8 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const replies = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn__reply');
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const replies = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn__reply');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return replies.length >= 1 && sendBtn !== null;
 		},
 		null,
@@ -196,7 +195,7 @@ try {
 	);
 	await shot("02-live-shortcut-turn1-done");
 
-	const reply1 = await modal.locator(".customizer-turn__reply").first().innerText();
+	const reply1 = (await panel.locator(".customizer-turn").first().locator(".customizer-turn__reply").allInnerTexts()).join("\n\n");
 	console.log(`live model reply 1:\n${reply1}`);
 	console.log(`live progress phrases: ${JSON.stringify(seenProgress)}`);
 
@@ -234,9 +233,9 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const turns = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn');
+			const turns = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn');
 			const lastReply = turns[1]?.querySelector(".customizer-turn__reply");
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return lastReply !== null && lastReply !== undefined && sendBtn !== null;
 		},
 		null,
@@ -260,9 +259,9 @@ try {
 
 	await page.waitForFunction(
 		() => {
-			const turns = document.querySelectorAll('[data-testid="app-customizer-modal"] .customizer-turn');
+			const turns = document.querySelectorAll('[data-testid="app-customizer-panel"]:not([hidden]) .customizer-turn');
 			const lastReply = turns[2]?.querySelector(".customizer-turn__reply");
-			const sendBtn = document.querySelector('[data-action="send-customizer-message"]');
+			const sendBtn = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden]) [data-action="send-customizer-message"]');
 			return lastReply !== null && lastReply !== undefined && sendBtn !== null;
 		},
 		null,
@@ -279,9 +278,9 @@ try {
 		JSON.stringify({ overrides: persisted2.settings.shortcuts.overrides, liveKeycapAfterTurn2 }),
 	);
 
-	// Close modal and verify direct key-press recording in the live session too!
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	// Hide the right sidebar and verify direct key-press recording in the live session too!
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
 	await page.locator('[data-shortcut-record="newTab"]').click();
 	await page.keyboard.press(chord("Shift", "P"));
 	await page.waitForTimeout(300);

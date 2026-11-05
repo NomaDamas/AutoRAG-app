@@ -3,6 +3,8 @@ import { StrictMode, type ReactElement } from "react";
 import { createRoot } from "react-dom/client";
 import "../styles/app.css";
 import { App } from "./App";
+import { MobileApp } from "./mobile/MobileApp";
+import { useMobileShell } from "./mobile/device";
 import { Onboarding } from "./onboarding/Onboarding";
 import { applyInterfaceLanguage } from "./lib/interface-language";
 
@@ -13,9 +15,13 @@ const closeWindow = (): void => window.close();
  * First-run onboarding and the Finder are separate windows. The main process opens the onboarding one with a
  * launch argument (`pending`), so it shows the flow and nothing else, and every other window is the Finder.
  * Onboarding's `load()` is authoritative and closes the window at once when the stored state says it is done.
+ * A remote browser session on a phone-sized screen gets the phone shell instead of the desktop Finder; it is
+ * never onboarding (the bootstrap reports `pending: false`).
  */
 function Root(): ReactElement {
-	return window.autorag.onboarding.pending ? <Onboarding onComplete={closeWindow} /> : <App />;
+	const mobile = useMobileShell();
+	if (window.autorag.onboarding.pending) return <Onboarding onComplete={closeWindow} />;
+	return mobile ? <MobileApp /> : <App />;
 }
 
 const container = document.getElementById("root");

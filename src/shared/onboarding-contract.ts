@@ -20,6 +20,7 @@
 
 import type { LocalSpecVerdict } from "./local-embedding-spec";
 import type { IndexFailure } from "./index-failure";
+import type { IndexProgressSnapshot } from "./index-progress-contract";
 import type { SmartExclusion } from "./smart-indexing-contract";
 
 export const ONBOARDING_CHANNELS = {
@@ -261,13 +262,13 @@ export type IndexingPhase = "parsed" | "minsync" | "finalizing";
 export interface IndexingStatus {
 	readonly state: "idle" | "running" | "success" | "failed";
 	readonly phase: IndexingPhase | null;
-	/** 0–100: measured in the read phase, estimated from elapsed time in the later ones. */
+	/** 0–100: where the run stands, from measured completion only (`detail.fraction`). */
 	readonly progress: number;
-	/** Null when unknown (idle) or done. */
+	/** Whole minutes left in the running stage, from the observed rate; null while still calculating, idle or done. */
 	readonly remainingMinutes: number | null;
-	/** Files the pre-scan expects the read phase to handle. */
+	/** Files the read stage will go through: the librarian's own count once it has listed them, the pre-scan's until then. */
 	readonly totalFiles: number;
-	/** Files the read phase has handled so far. */
+	/** Files the read stage has gone through (finished, skipped or failed), so never more than `totalFiles`. */
 	readonly processedFiles: number;
 	/** Most recently read file name, and the display name of the selected folder it is under. */
 	readonly recentFile: string | null;
@@ -276,6 +277,11 @@ export interface IndexingStatus {
 	readonly failure: IndexFailure | null;
 	/** Files a finished run left out (read errors, parser timeouts, files MinSync skipped); `0` unless `state` is `success`. */
 	readonly skipped: number;
+	/**
+	 * Stage-by-stage counts, bytes, remaining time and liveness while the run is live; the same snapshot
+	 * the sidebar and Settings show for any refresh. `null` before the first progress is written and once the run ends.
+	 */
+	readonly detail: IndexProgressSnapshot | null;
 	/** Display names of the data sources being indexed. */
 	readonly sources: readonly string[];
 	readonly startedAt: string | null;
