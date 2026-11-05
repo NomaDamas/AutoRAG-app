@@ -119,6 +119,24 @@ describe("RolePicker", () => {
 		expect(document.querySelector('[data-model-id="anthropic/claude-haiku-5.5"]')).toBeNull();
 	});
 
+	it("draws each provider with its logo, in browse mode and in search groups, and keeps the letter when it has none", async () => {
+		const openai = provider("openai", "OpenAI", [model("openai", "gpt-6-luna", "GPT-6 Luna")]);
+		const radius = provider("radius", "Radius", [model("radius", "r1", "Radius One")]);
+
+		await act(async () => {
+			root.render(<RolePicker role="answer" models={catalog([openai, radius])} specials={[]} selected={null} onPick={vi.fn()} onSpecial={vi.fn()} />);
+		});
+		const browseIcon = (id: string): Element | null => host.querySelector(`[data-provider-trigger="${id}"] .settings-app-icon.is-sm`);
+		expect(browseIcon("openai")?.querySelector("svg")).not.toBeNull();
+		expect(browseIcon("radius")?.querySelector("svg")).toBeNull();
+		expect(browseIcon("radius")?.textContent).toBe("R");
+
+		await typeQuery(host.querySelector<HTMLInputElement>(".settings-menu-search input"), "o");
+		const groupIcons = [...host.querySelectorAll(".settings-menu-group.is-provider .settings-app-icon.is-sm")];
+		expect(groupIcons).toHaveLength(2);
+		expect(groupIcons.map((icon) => icon.querySelector("svg") !== null)).toEqual([true, false]);
+	});
+
 	it("opens a provider's model submenu on hover or click, switches providers cleanly, and picks a model", async () => {
 		const onPick = vi.fn();
 		const fireworks = provider("fireworks", "Fireworks", [model("fireworks", "accounts/fireworks/models/glm-5p3-flash", "GLM 5.3 Flash")]);

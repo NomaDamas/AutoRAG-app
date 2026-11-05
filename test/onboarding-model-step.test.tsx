@@ -96,6 +96,17 @@ describe("ModelStep", () => {
 		expect(host.querySelector("[data-connect-service]")).not.toBeNull();
 	});
 
+	it("draws a connected provider with its logo, or its first letter when it has none", async () => {
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a")]), provider("radius", [model("radius", "r")])]);
+		bridge.settings.configGet.mockResolvedValue(config());
+		await render(byokDraft());
+		const iconOf = (id: string): Element | null => host.querySelector(`[data-provider-row="${id}"] .source-icon`);
+		expect(iconOf("openai")?.querySelector("svg")?.getAttribute("fill")).toBe("currentColor");
+		expect(iconOf("openai")?.textContent).toBe("");
+		expect(iconOf("radius")?.querySelector("svg")).toBeNull();
+		expect(iconOf("radius")?.textContent).toBe("P");
+	});
+
 	it("saves the picked model into the shared config, where Settings reads it, and marks the choice ready", async () => {
 		const pick = model("openai", "b");
 		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), pick])]);
@@ -192,5 +203,11 @@ describe("ModelStep", () => {
 		expect(menu).toContain("Provider ollama");
 		// The Dazzi plan sign-in belongs to the account step, not to bring-your-own-key.
 		expect(menu).not.toContain("Dazzi");
+		// Menu entries carry the provider's logo; a local server keeps the letter.
+		const entryIcon = (name: string): Element | null => [...document.querySelectorAll(".settings-menu-item")].find((item) => item.textContent?.includes(name))?.querySelector(".settings-app-icon") ?? null;
+		expect(entryIcon("Provider anthropic")?.querySelector("svg")).not.toBeNull();
+		expect(entryIcon("Provider openrouter")?.querySelector("svg")).not.toBeNull();
+		expect(entryIcon("Provider ollama")?.querySelector("svg")).toBeNull();
+		expect(entryIcon("Provider ollama")?.textContent).toBe("P");
 	});
 });
