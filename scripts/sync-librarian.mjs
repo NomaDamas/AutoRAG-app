@@ -10,15 +10,16 @@ const staged = join(root, ".upstream", "librarian-package");
 const installed = join(root, "node_modules", "@autorag", "librarian");
 const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // A release tag, or a full commit SHA while the librarian has no tag that carries what the app needs.
-// This SHA is the librarian on MinSync 0.6.0: SPLADE sparse retrieval (KURE-Sparse-nano) replaces BM25, Kiwi and
+// v2.13.5 is the librarian on MinSync 0.6.0: SPLADE sparse retrieval (KURE-Sparse-nano) replaces BM25, Kiwi and
 // `minsync init --language` are gone, and `minSync.embedder.id: "none"` builds a sparse-only index (AutoRAG#2080,
-// #2081). Main since v2.13.3 also carries the required decision model, opt-in reranking, parallel name search,
-// SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources. On top:
+// #2081). It carries the required decision model (`jev.backend: "sllm"` makes the small chat LLM the decision model,
+// AutoRAG#2091: `jev.fallback` is now a boolean and the sLLM's model is `jev.sllm.model`), opt-in reranking, parallel
+// name search, SheetJS/CSV parsing, cloud placeholder handling, and the removal of the Spotlight and rclone datasources.
 // Windows cloud-attribute reads quote paths with typographic apostrophes (AutoRAG#2086) and run PowerShell from env so
 // stderr is UTF-8 instead of CP949 mojibake (#2087), dupey skips cloud and network roots (#2085), and the CLI honors
 // the config file's webSearch section (#2083). The loop guard of file automations states the loop invariant instead of
 // banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
-const librarianRef = "87bdfc5c4b8c040a5584075f50a660fc40f0f3de";
+const librarianRef = "v2.13.5";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
