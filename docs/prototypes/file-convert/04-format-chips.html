@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 4 · 형식 칩</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 4: the formats a file can become are always one glance away, on the row itself.
+		 * No menu to open, no separate queue: progress, failure and engine-needed all live in the row. */
+		.chiprow { position: relative; height: 40px; margin: 0; padding: 0 8px 0 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; background: var(--accent-soft); border-top: 1px solid var(--accent-pending-border); border-bottom: 1px solid var(--accent-pending-border); }
+		.chiprow .lead { display: flex; align-items: center; gap: 7px; color: var(--accent-text); font-size: 11.5px; font-weight: 600; padding-left: 25px; }
+		.chiprow .lead .icon { width: 13px; height: 13px; }
+		.fchips { display: flex; align-items: center; gap: 5px; }
+		.fchip {
+			display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px;
+			border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--bg-window);
+			color: var(--text-primary); font: 600 11px var(--font-sans); letter-spacing: 0.02em;
+			transition: background var(--dur-color) var(--ease-out), border-color var(--dur-color) var(--ease-out);
+		}
+		.fchip:hover { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+		.fchip .icon { width: 11px; height: 11px; color: var(--warn-text); }
+		.fchip:hover .icon { color: var(--text-on-accent); }
+		.fchip.more { color: var(--text-muted); font-weight: 500; }
+		.fchip.same { color: var(--text-muted); font-weight: 500; border-style: dashed; }
+		.frow.working { background: var(--accent-wash); }
+		.frow.failed { background: var(--danger-bg-soft); }
+		.frow.needs { background: var(--warn-bg); }
+		.frow .st-ok { color: var(--ok-text); } .frow .st-err { color: var(--danger-text); } .frow .st-warn { color: var(--warn-text); }
+		.mini { height: 20px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-5); background: var(--bg-window); color: var(--text-body); font-size: 11px; }
+		.mini:hover { background: var(--bg-hover); }
+		.mini.primary { border-color: var(--accent); background: var(--accent); color: var(--text-on-accent); }
+		.frow .meta.state-cell { grid-column: span 3; display: flex; align-items: center; gap: 8px; }
+		.frow.new-in { animation: fc-in 420ms var(--ease-pane); }
+		@keyframes fc-in { from { background: var(--accent-flash); } to { background: transparent; } }
+		.legend { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; color: var(--text-muted); font-size: 11.5px; }
+		.legend .k { display: inline-flex; align-items: center; gap: 5px; }
+		.dots { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* Row states per file id: idle | working(p) | done | failed | needs-engine. Derived files are real rows after conversion. */
+		const sel = { id: "e" };            // the selected row shows its chips
+		const state = {};                  // id -> { s, p, to }
+		const derived = [];                // converted outputs, inserted under their source
+		let engineReady = false;
+
+		const SEL_TARGETS = { e: ["jpg", "png", "webp", "pdf"], c: ["docx", "txt", "md", "png"], a: ["pdf", "docx", "hwp"], j: ["mp4", "gif", "mp3"] };
+		const NEEDS = { j: "FFmpeg" };
+
+		function chips(f) {
+			const list = SEL_TARGETS[f.id] || TARGETS[f.ext] || [];
+			const need = NEEDS[f.id];
+			return list.slice(0, 4).map((t) => `<button class="fchip" data-conv="${t}" title="${f.ext.toUpperCase()} → ${t.toUpperCase()}">${need && !engineReady ? icon("hard-drive-download") : ""}${t.toUpperCase()}</button>`).join("") +
+				`<button class="fchip more" data-more="1" title="모든 형식 · ⌥⌘C">${icon("ellipsis")}</button>`;
+		}
+
+		function rowFor(f) {
+			const st = state[f.id];
+			const selected = sel.id === f.id;
+			let cls = selected ? "sel mute" : "";
+			let name = `<div class="name"><span class="tile t-${f.tile}">${f.letter}</span><b>${f.name}</b></div>`;
+			let cells = `<span class="meta">${f.date}</span><span class="meta num">${f.size}</span><span class="meta">${f.kind}</span><span class="meta"></span>`;
+			if (st?.s === "working") {
+				cls = "working"; cells = `<span class="meta state-cell"><span class="state"><span class="bar"><i style="width:${st.p}%"></i></span><small>${st.to.toUpperCase()}로 변환 중 ${st.p}%</small></span></span><span class="meta"></span><span class="meta"></span>`;
+			} else if (st?.s === "failed") {
+				cls = "failed"; cells = `<span class="meta state-cell st-err">${icon("circle-alert", "sm")}<small>글꼴이 손상되어 읽을 수 없어요</small><button class="mini" data-retry="${f.id}">다시 시도</button></span><span class="meta"></span><span class="meta"></span>`;
+			} else if (st?.s === "needs") {
+				cls = "needs"; cells = `<span class="meta state-cell st-warn">${icon("hard-drive-download", "sm")}<small>${NEEDS[f.id]} 설치 필요 · 약 100 MB</small><button class="mini primary" data-install="${f.id}">${st.installing != null ? `받는 중 ${st.installing}%` : "설치하고 변환"}</button></span><span class="meta"></span><span class="meta"></span>`;
+			}
+			return `<div class="frow ${cls}" data-id="${f.id}">${name}${cells}</div>`;
+		}
+
+		function derivedRow(d) {
+			return `<div class="frow new-in" data-d="${d.name}"><div class="name"><span class="tile t-${d.tile}">${d.letter}</span><b>${d.name}</b><span class="tag-derived">${icon("arrow-right", "sm")}파생</span></div>
+				<span class="meta">방금</span><span class="meta num">${d.size}</span><span class="meta">${d.kind}</span><span class="meta">${d.from}에서</span></div>`;
+		}
+
+		function render() {
+			const rows = [];
+			for (const f of FILES) {
+				rows.push(rowFor(f));
+				if (sel.id === f.id && (!state[f.id] || state[f.id].s === "idle")) {
+					const lead = NEEDS[f.id] && !engineReady ? `${icon("hard-drive-download")}변환: ` : `${icon("arrow-right-left")}변환: `;
+					rows.push(`<div class="chiprow"><span class="lead">${lead}</span><div class="fchips">${chips(f)}</div></div>`);
+				}
+				for (const d of derived.filter((x) => x.of === f.id)) rows.push(derivedRow(d));
+			}
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 4", "변환 가능한 형식을 선택한 행 바로 아래 칩으로 보여줍니다. 진행·실패·설치 안내도 그 행에서 끝납니다.", "04-format-chips.html", "받은 사진이나 문서를 열었더니 형식이 안 맞을 때 — 메뉴를 열기 전에 “무엇으로 바뀌는지”가 이미 보여야 합니다") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${rows.join("")}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(FILES.find((f) => f.id === sel.id), baseChips())}
+			</div>
+			<div class="proto-bar"><span>행 선택</span>
+				${[["e", "HEIC 사진"], ["c", "PDF"], ["a", "HWPX"], ["j", "MOV (엔진 필요)"]].map(([id, l]) => `<button class="btn ${sel.id === id ? "on" : ""}" data-sel="${id}">${l}</button>`).join("")}
+				<span class="sp"></span>
+				<span class="legend"><span class="k"><i class="dots" style="background:var(--accent)"></i>진행</span><span class="k"><i class="dots" style="background:var(--danger-dot)"></i>실패</span><span class="k"><i class="dots" style="background:var(--warn-dot)"></i>엔진 필요</span></span>
+			</div></div></div>`;
+			wireChrome();
+			document.querySelectorAll("[data-sel]").forEach((b) => (b.onclick = () => { sel.id = b.dataset.sel; if (state[sel.id]?.s === "done") delete state[sel.id]; render(); }));
+			document.querySelectorAll(".frow[data-id]").forEach((r) => (r.onclick = () => { sel.id = r.dataset.id; render(); }));
+			document.querySelectorAll("[data-conv]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); start(sel.id, b.dataset.conv); }));
+			document.querySelectorAll("[data-more]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); toast("전체 형식 목록은 1번 시안의 팝오버를 재사용합니다", "info"); }));
+			document.querySelectorAll("[data-install]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); install(b.dataset.install); }));
+			document.querySelectorAll("[data-retry]").forEach((b) => (b.onclick = (e) => { e.stopPropagation(); delete state[b.dataset.retry]; render(); }));
+		}
+
+		function start(id, to) {
+			if (NEEDS[id] && !engineReady) { state[id] = { s: "needs", to }; render(); return; }
+			state[id] = { s: "working", p: 0, to };
+			const timer = setInterval(() => {
+				state[id].p = Math.min(100, state[id].p + 14);
+				if (state[id].p >= 100) {
+					clearInterval(timer);
+					const f = FILES.find((x) => x.id === id);
+					derived.push({ of: id, name: f.name.replace(/\.[^.]+$/, "") + "." + to, tile: to === "pdf" ? "pdf" : to === "jpg" || to === "png" || to === "webp" ? "png" : "md", letter: to[0].toUpperCase(), size: "1.1 MB", kind: to.toUpperCase() + " 파일", from: f.name });
+					delete state[id];
+					toast(`${f.name.replace(/\.[^.]+$/, "")}.${to} — 원본 아래에 만들었어요`, "arrow-right-left");
+				}
+				render();
+			}, 150);
+			render();
+		}
+
+		function install(id) {
+			state[id].installing = 0; render();
+			const timer = setInterval(() => {
+				state[id].installing += 20;
+				if (state[id].installing >= 100) { clearInterval(timer); engineReady = true; const to = state[id].to; delete state[id]; start(id, to); toast("FFmpeg 설치 완료", "circle-check"); return; }
+				render();
+			}, 200);
+		}
+		render();
+	</script>
+</body>
+</html>
