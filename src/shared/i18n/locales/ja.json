@@ -718,6 +718,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "圧縮を中止しますか？",
+    "compressStopMessage": "{{name}} の圧縮を中止し、作成途中の圧縮ファイルを削除します。",
+    "compressStopAction": "中止",
+    "compressKeep": "圧縮を続ける",
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
@@ -1499,6 +1503,7 @@
       "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
       "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）",
       "reduceCancelled": "{{name}} の容量削減をキャンセルしました",
+      "compressCancelled": "{{name}} の圧縮を中止しました",
       "reducedReplaced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減・元のファイルはゴミ箱へ移動）"
     },
     "indexStatus": {
@@ -3200,6 +3205,7 @@
     "reduceDone": "サイズ削減完了 · {{name}}",
     "reduceFailed": "サイズ削減に失敗 · {{name}}",
     "reduceOpen": "サイズ削減の状態を表示",
+    "compressOpen": "圧縮を中止",
     "convertRunning": "変換中 · {{name}}",
     "convertQueued": "変換を待機中 · {{name}}",
     "convertDone": "変換完了 · {{name}}",

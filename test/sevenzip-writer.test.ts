@@ -151,4 +151,30 @@ describe("writeSevenZip", () => {
 			expect(await readFile(join(out, name))).toEqual(body);
 		}
 	});
+
+	it("hears every source byte once, across blocks and streamed files", async () => {
+		const files = { "a.txt": TEXT, "b.txt": TEXT, "big.bin": randomBytes(300 * 1024), "c.txt": Buffer.from("tail") };
+		let heard = 0;
+		await writeSevenZip(join(root, "count.7z"), await members(files), {
+			solidBlockBytes: TEXT.length,
+			lzmaMaxFileBytes: 64 * 1024,
+			chunkBytes: 16 * 1024,
+			onBytes: (bytes) => {
+				heard += bytes;
+			},
+		});
+		expect(heard).toBe(Object.values(files).reduce((sum, body) => sum + body.length, 0));
+	});
+
+	it("stops on abort between blocks and leaves no partial archive", async () => {
+		const controller = new AbortController();
+		const list = await members({ "a.txt": TEXT, "b.txt": TEXT, "c.txt": TEXT });
+		const write = writeSevenZip(join(root, "stopped.7z"), list, {
+			solidBlockBytes: TEXT.length,
+			signal: controller.signal,
+			onBytes: () => controller.abort(),
+		});
+		await expect(write).rejects.toThrow();
+		expect(await readdir(root)).toEqual(["src"]);
+	});
 });
