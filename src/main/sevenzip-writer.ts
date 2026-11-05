@@ -284,31 +284,34 @@ export async function writeSevenZip(target: string, members: readonly SevenZipMe
 		}
 		await flush();
 
+		// Every list below grows with the folder or file count, so it is appended
+		// in a loop: spreading ~125k values into one `push(...)` call overflows the stack.
 		const parts: Buffer[] = [Buffer.from([ID.header])];
 		if (folders.length > 0) {
 			const streamCrcs = Buffer.alloc(4 * folders.reduce((sum, folder) => sum + folder.crcs.length, 0));
-			folders.flatMap((folder) => folder.crcs).forEach((crc, i) => streamCrcs.writeUInt32LE(crc, 4 * i));
+			let crcIndex = 0;
+			for (const folder of folders) {
+				for (const crc of folder.crcs) {
+					streamCrcs.writeUInt32LE(crc, 4 * crcIndex);
+					crcIndex += 1;
+				}
+			}
+			parts.push(Buffer.from([ID.mainStreamsInfo, ID.packInfo]), number(0), number(folders.length), Buffer.from([ID.size]));
+			for (const folder of folders) parts.push(number(folder.packedSize));
+			parts.push(Buffer.from([ID.end, ID.unpackInfo, ID.folder]), number(folders.length), Buffer.from([0x00]));
+			for (const folder of folders) parts.push(folder.coder);
+			parts.push(Buffer.from([ID.codersUnpackSize]));
+			for (const folder of folders) parts.push(number(folder.sizes.reduce((sum, size) => sum + size, 0)));
+			parts.push(Buffer.from([ID.end, ID.subStreamsInfo, ID.numUnpackStream]));
+			for (const folder of folders) parts.push(number(folder.sizes.length));
 			// Within a folder every file but the last has its size listed; the last is the remainder.
-			const innerSizes = folders.flatMap((folder) => folder.sizes.slice(0, -1));
-			parts.push(
-				Buffer.from([ID.mainStreamsInfo, ID.packInfo]),
-				number(0),
-				number(folders.length),
-				Buffer.from([ID.size]),
-				...folders.map((folder) => number(folder.packedSize)),
-				Buffer.from([ID.end, ID.unpackInfo, ID.folder]),
-				number(folders.length),
-				Buffer.from([0x00]),
-				...folders.map((folder) => folder.coder),
-				Buffer.from([ID.codersUnpackSize]),
-				...folders.map((folder) => number(folder.sizes.reduce((sum, size) => sum + size, 0))),
-				Buffer.from([ID.end, ID.subStreamsInfo, ID.numUnpackStream]),
-				...folders.map((folder) => number(folder.sizes.length)),
-				...(innerSizes.length > 0 ? [Buffer.from([ID.size]), ...innerSizes.map((size) => number(size))] : []),
-				Buffer.from([ID.crc, 0x01]),
-				streamCrcs,
-				Buffer.from([ID.end, ID.end]),
-			);
+			if (folders.some((folder) => folder.sizes.length > 1)) {
+				parts.push(Buffer.from([ID.size]));
+				for (const folder of folders) {
+					for (let i = 0; i < folder.sizes.length - 1; i += 1) parts.push(number(folder.sizes[i] as number));
+				}
+			}
+			parts.push(Buffer.from([ID.crc, 0x01]), streamCrcs, Buffer.from([ID.end, ID.end]));
 		}
 
 		parts.push(Buffer.from([ID.filesInfo]), number(members.length));
