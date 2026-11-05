@@ -234,7 +234,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 
 	it("lists 사이드바에 고정 / 제거 in the actions section and shows or hides it on its own", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
