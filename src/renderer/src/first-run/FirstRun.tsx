@@ -16,7 +16,8 @@ import { APP_NAME } from "../../../shared/app-info";
 import type { FirstRunFolder, FirstRunFolderKind, SetupStatus } from "../../../shared/onboarding-contract";
 import { useTranslation } from "../../../shared/i18n";
 import dazziLogo from "../assets/dazzi-logo.png";
-import { CheckIcon, CloudFolderIcon, DesktopFolderIcon, DocumentsFolderIcon, DownloadsFolderIcon, DriveFolderIcon, LockIcon } from "../components/icons";
+import dazziMark from "../assets/dazzi-mark.png";
+import { CheckIcon, CloudFolderIcon, DesktopFolderIcon, DocumentsFolderIcon, DownloadsFolderIcon, DriveFolderIcon } from "../components/icons";
 import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
@@ -175,7 +176,7 @@ export function FirstRun({
 			{covering ? (
 				<div className={cn("fr-stage", leaving && "fr-stage--leaving")}>
 					<div className="fr-drag" />
-					{screen === "folders" ? <FoldersScreen platform={platform} onStart={startWith} /> : null}
+					{screen === "folders" ? <FoldersScreen onStart={startWith} /> : null}
 					{screen === "setup" ? <SetupScreen status={status} playing={playing} onPlay={startGame} onStart={begin} /> : null}
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
@@ -186,8 +187,9 @@ export function FirstRun({
 	);
 }
 
-function Logo({ className }: { readonly className?: string }): ReactElement {
-	return <img className={cn("fr-logo", className)} src={dazziLogo} alt="" draggable={false} />;
+/** The app-icon tile, or (`mark`) the bare sunflower the folder, reading and ready screens draw (Figma 156:1125, 162:1244, 162:1308). */
+function Logo({ className, mark = false }: { readonly className?: string; readonly mark?: boolean }): ReactElement {
+	return <img className={cn("fr-logo", className)} src={mark ? dazziMark : dazziLogo} alt="" draggable={false} />;
 }
 
 /* ---------------------------------------------------------------- folders */
@@ -216,7 +218,7 @@ function FolderIcon({ kind }: { readonly kind: FirstRunFolderKind }): ReactEleme
 }
 
 /** Before anything is read: the folders the first run will read, each one a chip that switches it on or off. */
-function FoldersScreen({ platform, onStart }: { readonly platform: string; readonly onStart: (folders: readonly string[]) => void }): ReactElement {
+function FoldersScreen({ onStart }: { readonly onStart: (folders: readonly string[]) => void }): ReactElement {
 	const { t } = useTranslation();
 	const [folders, setFolders] = useState<readonly FirstRunFolder[] | null>(null);
 	const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
@@ -259,9 +261,9 @@ function FoldersScreen({ platform, onStart }: { readonly platform: string; reado
 
 	return (
 		<section className="fr-panel fr-folders">
-			<Logo className="fr-logo--stage" />
+			<Logo className="fr-logo--stage" mark />
 			<h1 className="fr-title fr-title--stage">{t("firstRun.folders.title", { app: APP_NAME })}</h1>
-			<p className="fr-lead">{t("firstRun.folders.lead")}</p>
+			<p className="fr-lead fr-lead--stage">{t("firstRun.folders.lead")}</p>
 			<div className="fr-chips" role="group" aria-label={t("firstRun.folders.groupLabel")}>
 				{(folders ?? []).map((folder) => {
 					const on = chosen.has(folder.path);
@@ -286,10 +288,6 @@ function FoldersScreen({ platform, onStart }: { readonly platform: string; reado
 				{count > 0 ? t("firstRun.folders.start", { count }) : t("firstRun.folders.startNone")}
 				{count > 0 ? <kbd className="fr-kbd">↵</kbd> : null}
 			</button>
-			<p className="fr-privacy">
-				<LockIcon className="fr-privacy-icon" />
-				{platform === "darwin" ? t("firstRun.folders.privacyMac") : t("firstRun.folders.privacyPc")}
-			</p>
 		</section>
 	);
 }
@@ -366,11 +364,11 @@ function SetupScreen({
 				<div className={cn("fr-intro", fading && "fr-intro--fading")}>
 					<button type="button" className="fr-logo-btn" data-action="game-start" aria-label={t("firstRun.game.invite")} disabled={fading} onClick={() => setFading(true)}>
 						<span className="fr-logo-ring" />
-						<Logo className="fr-logo--stage fr-logo--breathe" />
+						<Logo className="fr-logo--stage fr-logo--breathe" mark />
 						<span className="fr-invite">{t("firstRun.game.invite")}</span>
 					</button>
 					<h1 className="fr-title fr-title--stage">{t("firstRun.setup.title")}</h1>
-					<p className="fr-lead">{t("firstRun.setup.lead", { app: APP_NAME })}</p>
+					<p className="fr-lead fr-lead--stage">{t("firstRun.setup.lead", { app: APP_NAME })}</p>
 				</div>
 			)}
 			{playing ? <MineGame /> : null}
@@ -434,13 +432,13 @@ function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null;
 	return (
 		<section className="fr-panel fr-ready">
 			<div className="fr-done-mark">
-				<Logo className="fr-logo--stage" />
+				<Logo className="fr-logo--stage" mark />
 				<span className="fr-status-mark" aria-hidden="true">
 					<CheckIcon size={18} />
 				</span>
 			</div>
 			<h1 className="fr-title fr-title--stage">{t("firstRun.ready.title")}</h1>
-			<p className="fr-lead">{count > 0 ? t("firstRun.ready.lead", { count: count.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
+			<p className="fr-lead fr-lead--stage">{count > 0 ? t("firstRun.ready.lead", { count: count.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
 			<button type="button" className="fr-btn fr-btn--primary fr-btn--hero fr-btn--stage" data-action="first-run-start" autoFocus onClick={onStart}>
 				{t("firstRun.ready.start")}
 				<kbd className="fr-kbd">↵</kbd>

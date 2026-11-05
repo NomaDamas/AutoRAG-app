@@ -401,8 +401,9 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   (`~/Library/CloudStorage` Google Drive / Dropbox / OneDrive, `~/Dropbox`)
   switched off and drawn dashed — a click switches a chip, "폴더 N개 읽기" starts
   the run over the switched-on ones (Enter presses it; with none on it is
-  disabled), and a lock line under it; a profile with no folder to offer skips
-  it) → `setup` (Figma 162:1244: "파일을 읽고 있어요", one 540 × 12 progress
+  disabled; a profile with no folder to offer skips it). The folder, reading
+  and ready screens draw the bare sunflower (`dazzi-mark.png`), not the icon
+  tile → `setup` (Figma 162:1244: "파일을 읽고 있어요", one 540 × 12 progress
   bar, the current stage with files read on the left and minutes left on the
   right; macOS prompts per folder as each chosen folder is read, refused folders
   are left out, and the run keeps the machine awake) → `ready` (Figma 162:1308:

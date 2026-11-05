@@ -40,7 +40,6 @@ import {
 	LayoutGrid,
 	Link2,
 	List,
-	Lock,
 	Mic,
 	Monitor,
 	PackageOpen,
@@ -240,5 +239,3 @@ export const DocumentsFolderIcon = glyph(File, 15, 2);
 export const DownloadsFolderIcon = glyph(Download, 15, 2);
 export const CloudFolderIcon = glyph(Cloud, 15, 2);
 export const DriveFolderIcon = glyph(HardDrive, 15, 2);
-/** The first-run privacy note. */
-export const LockIcon = glyph(Lock, 13, 2.4);
