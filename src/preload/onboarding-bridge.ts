@@ -13,7 +13,8 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 		load: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.load),
 		permissions: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.permissions),
 		openFullDiskAccess: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.openFullDiskAccess),
-		start: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.start),
+		folders: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.folders),
+		start: (folders) => ipcRenderer.invoke(ONBOARDING_CHANNELS.start, folders),
 		status: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.status),
 		onProgress: (listener) => {
 			const handler = (_event: unknown, payload: SetupStatus): void => listener(payload);

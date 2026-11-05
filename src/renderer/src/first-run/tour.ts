@@ -12,11 +12,12 @@ import { allTabs, focusPane, moveTab, updatePaneTabs, type Workspace } from "../
 /** The visible AI Search panel (one AI host per tab; hidden ones carry `.hidden`). */
 export const AI_HOST = "[data-ai-tab]:not(.hidden)";
 
-export type FirstRunScreen = "setup" | "ready" | "tour" | "signin";
+export type FirstRunScreen = "folders" | "setup" | "ready" | "tour" | "signin";
 
-/** The setup run first; it may already have finished before a relaunch. */
+/** The folder screen before a run starts; the setup run once one is under way (it may already have finished before a relaunch). */
 export function initialScreen(status: SetupStatus): FirstRunScreen {
-	return status.stage === "ready" ? "ready" : "setup";
+	if (status.stage === "ready") return "ready";
+	return status.stage === "idle" ? "folders" : "setup";
 }
 
 export type TourStepId = "splitBottom" | "mergePane" | "ask" | "cite" | "evidence" | "duplicates" | "versions";

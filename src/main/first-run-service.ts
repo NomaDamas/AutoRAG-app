@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, realpathSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { loadMirrorIndex, type ParsedMirrorEntry } from "@autorag/librarian";
@@ -9,6 +9,8 @@ import type { ProfileModel } from "@autorag/librarian/profiles";
 import {
 	ONBOARDING_CHANNELS,
 	type FirstRunDemo,
+	type FirstRunFolder,
+	type FirstRunFolderKind,
 	type OnboardingSnapshot,
 	type PermissionStatus,
 	type SetupStage,
@@ -26,12 +28,12 @@ import { createSmartIndexingService, type SmartIndexingService } from "./smart-i
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
 
 /**
- * The main-process half of the zero-question first run. The Finder window opens
- * with the pending flag; on macOS the renderer overlay first asks for Full Disk
- * Access, then it calls `start` once and shows a single progress bar while this
- * service does the rest on its own:
+ * The main-process half of the first run. The Finder window opens with the
+ * pending flag; the renderer overlay shows the folders it is about to read
+ * (`folders`), the person switches any of them, and `start` takes the chosen
+ * ones. A single progress bar follows while this service does the rest on its own:
  *
- *  scanning  (0→8)   pre-scan the default folders, which gives the file total;
+ *  scanning  (0→8)   pre-scan the chosen folders, which gives the file total;
  *  planning  (8→15)  when a model can be called, take every smart-indexing
  *                    exclusion it proposes; otherwise continue silently;
  *  indexing (15→90)  write the folders into the shared config keyword-only
@@ -42,8 +44,8 @@ import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexin
  *                    answers from that document;
  *  ready     (100).
  *
- * No account, plan, model, source, or embedding question is asked before the
- * first index. Persisted state is only `{ completed, indexing? }`; a run that
+ * Which folders to read is the only question; no account, plan, model, source,
+ * or embedding question is asked before the first index. Persisted state is only `{ completed, indexing? }`; a run that
  * failed is restarted by `start`, a run in flight or finished is returned as is.
  */
 
@@ -146,6 +148,8 @@ export interface FirstRunServiceDeps {
 	readonly knownFolders: { readonly desktop: string; readonly documents: string; readonly downloads: string };
 	/** macOS iCloud Drive path, or null where there is none. */
 	readonly iCloudDrivePath: string | null;
+	/** Other cloud drives to offer switched off; defaults to {@link detectCloudFolders} over `home`. */
+	readonly cloudFolders?: () => readonly { readonly path: string; readonly kind: FirstRunFolderKind }[];
 	readonly configPath: string;
 	readonly resolveWorkspacePath: () => Promise<string>;
 	/** The first index (`parsed` + `minsync`), through the app's shared local-index runner. */
@@ -186,9 +190,12 @@ export interface FirstRunService {
 	/** True while the first run still has to happen (quit-confirmation gate and window flag). */
 	pending(): boolean;
 	load(): Promise<OnboardingSnapshot>;
+	/** The OS's own folders (switched on) and other cloud drives found on this computer (switched off). */
+	folders(): Promise<readonly FirstRunFolder[]>;
 	permissions(): Promise<PermissionStatus>;
 	openFullDiskAccess(): Promise<void>;
-	start(): Promise<SetupStatus>;
+	/** `folders` are paths from {@link folders}; others are ignored. Omitted: the last run's folders, else the default ones. */
+	start(folders?: readonly string[]): Promise<SetupStatus>;
 	status(): Promise<SetupStatus>;
 	/** Sync: is a first-run index still in flight (quit-confirmation gate). */
 	isIndexing(): boolean;
@@ -215,6 +222,51 @@ interface DemoDoc {
 	readonly sourcePath: string;
 	readonly realSourcePath: string;
 	readonly excerpt: string;
+}
+
+/** Cloud drives the File Provider mounts under `~/Library/CloudStorage` (macOS), by folder-name prefix. */
+const CLOUD_STORAGE_PREFIXES: readonly (readonly [string, FirstRunFolderKind])[] = [
+	["GoogleDrive-", "googleDrive"],
+	["Dropbox", "dropbox"],
+	["OneDrive-", "oneDrive"],
+];
+
+/**
+ * Cloud drives found on this computer besides iCloud Drive: macOS File Provider
+ * mounts, and a classic `~/Dropbox` on either platform. They are offered
+ * switched off, since they often hold far more than the person's own files.
+ */
+export function detectCloudFolders(home: string, platform: NodeJS.Platform): readonly { readonly path: string; readonly kind: FirstRunFolderKind }[] {
+	const found: { path: string; kind: FirstRunFolderKind }[] = [];
+	if (platform === "darwin") {
+		const root = join(home, "Library", "CloudStorage");
+		let names: string[] = [];
+		try {
+			names = readdirSync(root).sort((a, b) => a.localeCompare(b));
+		} catch {
+			names = [];
+		}
+		for (const [prefix, kind] of CLOUD_STORAGE_PREFIXES) {
+			for (const name of names) {
+				if (!name.startsWith(prefix)) continue;
+				const path = join(root, name);
+				try {
+					if (statSync(path).isDirectory()) found.push({ path, kind });
+				} catch {
+					// gone between the listing and the stat
+				}
+			}
+		}
+	}
+	const dropbox = join(home, "Dropbox");
+	if (!found.some((folder) => folder.kind === "dropbox")) {
+		try {
+			if (statSync(dropbox).isDirectory()) found.push({ path: dropbox, kind: "dropbox" });
+		} catch {
+			// no classic Dropbox folder
+		}
+	}
+	return found;
 }
 
 function onboardingStatePath(userDataDir: string): string {
@@ -465,6 +517,8 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	let powerBlockerId: number | null = null;
 	let workspacePath: string | null = null;
 	let selectedFolders: readonly string[] = [];
+	/** What the person chose on the folder screen; a retry without a choice reads these again. */
+	let chosenFolders: readonly string[] | null = null;
 	let excludedFiles = 0;
 	let phase: IndexingRunPhase | null = null;
 	let phaseStartedAt = 0;
@@ -550,13 +604,41 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		return promise.finally(() => clearTimeout(timer));
 	}
 
-	function defaultFolders(): readonly string[] {
-		const candidates =
+	/** Every folder the first run offers: the OS's own folders that exist (on), then other cloud drives (off). */
+	function offeredFolders(): readonly FirstRunFolder[] {
+		const own: { readonly path: string; readonly kind: FirstRunFolderKind }[] =
 			deps.platform === "win32"
-				? [deps.knownFolders.desktop, deps.knownFolders.documents, deps.knownFolders.downloads]
-				: [join(deps.home, "Desktop"), join(deps.home, "Documents"), join(deps.home, "Downloads")];
-		if (deps.iCloudDrivePath !== null) candidates.push(deps.iCloudDrivePath);
-		return candidates.filter((path) => existsSync(path));
+				? [
+						{ path: deps.knownFolders.desktop, kind: "desktop" },
+						{ path: deps.knownFolders.documents, kind: "documents" },
+						{ path: deps.knownFolders.downloads, kind: "downloads" },
+					]
+				: [
+						{ path: join(deps.home, "Desktop"), kind: "desktop" },
+						{ path: join(deps.home, "Documents"), kind: "documents" },
+						{ path: join(deps.home, "Downloads"), kind: "downloads" },
+					];
+		if (deps.iCloudDrivePath !== null) own.push({ path: deps.iCloudDrivePath, kind: "iCloudDrive" });
+		const offered: FirstRunFolder[] = own.filter(({ path }) => existsSync(path)).map((folder) => ({ ...folder, selected: true }));
+		for (const cloud of deps.cloudFolders?.() ?? detectCloudFolders(deps.home, deps.platform)) {
+			if (!offered.some((folder) => folder.path === cloud.path)) offered.push({ ...cloud, selected: false });
+		}
+		return offered;
+	}
+
+	function defaultFolders(): readonly string[] {
+		return offeredFolders()
+			.filter((folder) => folder.selected)
+			.map((folder) => folder.path);
+	}
+
+	/** The folders a run reads: the chosen ones that are still offered, in the offered order. */
+	function chooseFolders(requested: readonly string[] | undefined): readonly string[] {
+		if (requested === undefined) return chosenFolders ?? defaultFolders();
+		const wanted = new Set(requested);
+		return offeredFolders()
+			.map((folder) => folder.path)
+			.filter((path) => wanted.has(path));
 	}
 
 	function readIfChanged(path: string, previousSignature: string): { readonly text: string | null; readonly signature: string } {
@@ -643,7 +725,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		// One folder at a time, so macOS per-folder consent dialogs arrive one after another instead of piling up;
 		// any folder the user refuses fails its pre-scan and is left out rather than failing the whole index.
 		const readable: string[] = [];
-		for (const folder of defaultFolders()) {
+		for (const folder of chosenFolders ?? defaultFolders()) {
 			await deps.scanFolders([folder]);
 			if (deps.scanFailed?.(folder) !== true) readable.push(folder);
 		}
@@ -807,14 +889,16 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	return {
 		pending: () => pending,
 		load: async () => ({ pending, tutorials: deps.env.AUTORAG_SKIP_ONBOARDING !== "1" }),
+		folders: async () => offeredFolders(),
 		permissions: async () => ({
 			platform: deps.platform,
 			fullDiskAccess: deps.platform === "darwin" ? await deps.probeFullDiskAccess() : null,
 		}),
 		openFullDiskAccess: () => deps.openExternal("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles"),
-		start: async () => {
+		start: async (folders) => {
 			if (runPromise !== null) return snapshot();
 			if (stage === "ready") return snapshot();
+			chosenFolders = chooseFolders(folders);
 			if (stage === "failed") {
 				stage = "idle";
 				progress = 0;

@@ -2,13 +2,15 @@
  * First-run contract shared by the main process, the preload bridge, and the
  * Finder window's first-run layer (`src/renderer/src/first-run/`).
  *
- * The first run asks nothing it can decide itself. The Finder window opens with
- * the pending flag; the layer calls `start` at once and shows one progress bar
- * while the main process does the rest on its own (macOS asks for per-folder
- * access as each default folder is read; refused folders are left out):
+ * The first run asks one thing before it reads anything: the Finder window opens
+ * with the pending flag and the layer shows the folders it is about to read
+ * (`folders`: Desktop, Documents, Downloads and iCloud Drive switched on, other
+ * cloud drives found on this computer switched off). The person can switch any of
+ * them, then `start` takes the chosen ones and one progress bar follows while the
+ * main process does the rest on its own (macOS asks for per-folder access as each
+ * folder is read; refused folders are left out):
  *
- *  1. `scanning`  — pre-scans the default folders (Desktop, Documents, Downloads,
- *     iCloud Drive), which gives the index its file total;
+ *  1. `scanning`  — pre-scans the chosen folders, which gives the index its file total;
  *  2. `planning`  — when a model can be called, smart indexing proposes generated
  *     sub-folders to leave out and every proposal is taken; without a model the
  *     app's code-folder exclusions are all there is;
@@ -28,6 +30,8 @@ export const ONBOARDING_CHANNELS = {
 	permissions: "onboarding:permissions",
 	openFullDiskAccess: "onboarding:openFullDiskAccess",
 	// Full Disk Access is deferred to the features that really need it (Finder tag colours, KakaoTalk/WhatsApp/Mail).
+	/** The folders the first run offers to read, before it starts. */
+	folders: "onboarding:folders",
 	/** Starts the setup run, or returns the one in flight / finished. */
 	start: "onboarding:start",
 	status: "onboarding:status",
@@ -71,6 +75,17 @@ export interface FolderScan {
 	readonly error: string | null;
 }
 
+/** Which folder a first-run choice is; the renderer turns it into a label and an icon. */
+export type FirstRunFolderKind = "desktop" | "documents" | "downloads" | "iCloudDrive" | "googleDrive" | "dropbox" | "oneDrive";
+
+/** One folder the first run offers to read. */
+export interface FirstRunFolder {
+	readonly path: string;
+	readonly kind: FirstRunFolderKind;
+	/** Switched on before the person changes anything: the OS's own folders are, other cloud drives are not. */
+	readonly selected: boolean;
+}
+
 export type SetupStage = "idle" | "scanning" | "planning" | "indexing" | "preparing" | "ready" | "failed";
 
 /** The question the tour asks: generated from one indexed document and found by keyword retrieval. */
@@ -112,8 +127,14 @@ export interface OnboardingBridge {
 	/** Opens System Settings › Privacy & Security › Full Disk Access. */
 	openFullDiskAccess(): Promise<void>;
 	// System Settings offers Quit & Reopen itself once Full Disk Access is toggled for a running app.
-	/** Starts the setup run (a failed one starts again); resolves with its status right away. */
-	start(): Promise<SetupStatus>;
+	/** The folders the first run offers, in the order they are shown. */
+	folders(): Promise<readonly FirstRunFolder[]>;
+	/**
+	 * Starts the setup run over `folders` (paths from {@link folders}; anything else is ignored), or over the
+	 * folders the last run used, or the ones switched on by default, when omitted. A failed run starts again;
+	 * resolves with its status right away.
+	 */
+	start(folders?: readonly string[]): Promise<SetupStatus>;
 	status(): Promise<SetupStatus>;
 	onProgress(listener: (status: SetupStatus) => void): () => void;
 	/** Marks the first run done: the next launch opens the Finder straight away. */

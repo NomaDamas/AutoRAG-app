@@ -813,9 +813,23 @@
     }
   },
   "firstRun": {
+    "folders": {
+      "title": "{{app}} 将读取这些文件夹",
+      "lead": "这里的文件马上就能搜索。不想包含的文件夹，点一下即可关闭。",
+      "groupLabel": "要读取的文件夹",
+      "kind": {
+        "desktop": "桌面",
+        "documents": "文档",
+        "downloads": "下载"
+      },
+      "start": "读取 {{count}} 个文件夹",
+      "startNone": "请选择文件夹",
+      "privacyMac": "文件不会离开你的 Mac",
+      "privacyPc": "文件不会离开你的电脑"
+    },
     "setup": {
-      "title": "正在准备 Dazzi",
-      "lead": "只要电脑保持开机,就会自动完成。期间可以照常做别的事。",
+      "title": "正在浏览你的文件",
+      "lead": "只要让 {{app}} 保持打开，就会自动完成。",
       "stage": {
         "idle": "正在开始",
         "scanning": "正在查看文件夹",
@@ -844,8 +858,8 @@
       "again": "再玩一次"
     },
     "ready": {
-      "title": "一切就绪!",
-      "lead": "{{count}} 个文件已经可以搜索了。",
+      "title": "文件已全部读取",
+      "lead": "现在可以在 {{count}} 个文件中查找任何内容。",
       "leadNone": "现在就用 Dazzi 找找文件吧。",
       "start": "开始使用"
     },

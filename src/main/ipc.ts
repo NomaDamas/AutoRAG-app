@@ -403,12 +403,18 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
 }
 
-/** The zero-question first run: load, permissions, start/status/complete. The service validates its own state. */
+/** The first run: load, permissions, folders, start/status/complete. The service validates its own state. */
 export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
-	ipcMain.handle(ONBOARDING_CHANNELS.start, () => service.start());
+	ipcMain.handle(ONBOARDING_CHANNELS.folders, () => service.folders());
+	ipcMain.handle(ONBOARDING_CHANNELS.start, (_event, folders: unknown) => {
+		if (folders !== undefined && (!Array.isArray(folders) || !folders.every((path) => typeof path === "string"))) {
+			throw new TypeError("onboarding:start expects an array of folder paths");
+		}
+		return service.start(folders as readonly string[] | undefined);
+	});
 	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
 }

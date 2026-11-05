@@ -1,8 +1,10 @@
 /**
- * The first-run layer over the Finder window (DESIGN.md §3a). It asks for
- * nothing: one progress bar while the main process sets everything up (macOS
- * prompts per folder as each default folder is read), then "모두 준비되었어요!"
- * and a guided tour over the real Finder, and the sign-in sheet last.
+ * The first-run layer over the Finder window (DESIGN.md §3a). It asks one
+ * thing first: the folders it is about to read, which the person can switch on
+ * or off (Figma 156:1125). Then one progress bar while the main process sets
+ * everything up (macOS prompts per folder as each folder is read), then
+ * "파일을 다 읽었어요" and a guided tour over the real Finder, and the sign-in
+ * sheet last.
  *
  * The Finder is mounted (and usable) behind the layer the whole time; the
  * layer drives it only through {@link FirstRunHost}.
@@ -11,9 +13,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactElement } from "react";
 import { accountLegalUrl, type AccountLegalRoute, type AccountStatus } from "../../../shared/account-contract";
 import { APP_NAME } from "../../../shared/app-info";
-import type { SetupStatus } from "../../../shared/onboarding-contract";
+import type { FirstRunFolder, FirstRunFolderKind, SetupStatus } from "../../../shared/onboarding-contract";
 import { useTranslation } from "../../../shared/i18n";
 import dazziLogo from "../assets/dazzi-logo.png";
+import { CheckIcon, CloudFolderIcon, DesktopFolderIcon, DocumentsFolderIcon, DownloadsFolderIcon, DriveFolderIcon, LockIcon } from "../components/icons";
 import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
@@ -51,6 +54,8 @@ const CINEMA_IN_MS = 650;
 const CINEMA_OUT_MS = 3700;
 /** The title and the floating logo fade out this long before the board and the moved progress bar come in. */
 const INTRO_FADE_MS = 340;
+/** How often the reading screen re-reads the run's status in case a progress event was missed. */
+const SETUP_POLL_MS = 3000;
 
 type DeskMode = "cover" | "rise" | null;
 
@@ -107,20 +112,32 @@ export function FirstRun({
 		};
 	}, [onDone]);
 
-	const covering = screen === "setup" || screen === "ready";
+	const covering = screen === "folders" || screen === "setup" || screen === "ready";
 	useEffect(() => {
 		hostRef.current.setCovered(covering);
 		if (covering) setDeskMode("cover");
 	}, [covering]);
 	useEffect(() => () => setDeskMode(null), []);
 
-	// Setup starts by itself; the run survives a reload because main owns it.
-	useEffect(() => {
-		if (screen !== "setup") return;
+	// The folder screen starts the run; it survives a reload because main owns it.
+	const startWith = useCallback((folders: readonly string[]) => {
+		setScreen("setup");
 		void onboarding()
-			.start()
+			.start(folders)
 			.then(setStatus)
 			.catch((error: unknown) => console.error("[first-run] start failed", error));
+	}, []);
+	// The progress stream drives the bar; a slow poll backs it up, so a missed event never leaves the reading screen stuck once main is done.
+	useEffect(() => {
+		if (screen !== "setup") return;
+		const timer = window.setInterval(() => {
+			void onboarding()
+				.status()
+				// The bar only moves forward within a run, so an answer older than the last event is dropped.
+				.then((next) => setStatus((previous) => (previous !== null && next.stage !== "failed" && (next.progress < previous.progress || (next.progress === previous.progress && next.stage === previous.stage)) ? previous : next)))
+				.catch(() => undefined);
+		}, SETUP_POLL_MS);
+		return () => window.clearInterval(timer);
 	}, [screen]);
 	// A finished run goes to the ready screen, unless a game is on: then the same "ready" call is offered under the board.
 	useEffect(() => {
@@ -158,6 +175,7 @@ export function FirstRun({
 			{covering ? (
 				<div className={cn("fr-stage", leaving && "fr-stage--leaving")}>
 					<div className="fr-drag" />
+					{screen === "folders" ? <FoldersScreen platform={platform} onStart={startWith} /> : null}
 					{screen === "setup" ? <SetupScreen status={status} playing={playing} onPlay={startGame} onStart={begin} /> : null}
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
@@ -170,6 +188,110 @@ export function FirstRun({
 
 function Logo({ className }: { readonly className?: string }): ReactElement {
 	return <img className={cn("fr-logo", className)} src={dazziLogo} alt="" draggable={false} />;
+}
+
+/* ---------------------------------------------------------------- folders */
+
+/** Brand names stay as they are in every language; the OS's own folders are translated. */
+const CLOUD_LABELS: Readonly<Partial<Record<FirstRunFolderKind, string>>> = {
+	iCloudDrive: "iCloud Drive",
+	googleDrive: "Google Drive",
+	dropbox: "Dropbox",
+	oneDrive: "OneDrive",
+};
+
+function FolderIcon({ kind }: { readonly kind: FirstRunFolderKind }): ReactElement {
+	switch (kind) {
+		case "desktop":
+			return <DesktopFolderIcon className="fr-chip-icon" />;
+		case "documents":
+			return <DocumentsFolderIcon className="fr-chip-icon" />;
+		case "downloads":
+			return <DownloadsFolderIcon className="fr-chip-icon" />;
+		case "iCloudDrive":
+			return <CloudFolderIcon className="fr-chip-icon" />;
+		default:
+			return <DriveFolderIcon className="fr-chip-icon" />;
+	}
+}
+
+/** Before anything is read: the folders the first run will read, each one a chip that switches it on or off. */
+function FoldersScreen({ platform, onStart }: { readonly platform: string; readonly onStart: (folders: readonly string[]) => void }): ReactElement {
+	const { t } = useTranslation();
+	const [folders, setFolders] = useState<readonly FirstRunFolder[] | null>(null);
+	const [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set());
+	const startRef = useRef(onStart);
+	startRef.current = onStart;
+
+	useEffect(() => {
+		let live = true;
+		void onboarding()
+			.folders()
+			.then((offered) => {
+				if (!live) return;
+				// Nothing to choose from: read what there is rather than ask about nothing.
+				if (offered.length === 0) {
+					startRef.current([]);
+					return;
+				}
+				setFolders(offered);
+				setChosen(new Set(offered.filter((folder) => folder.selected).map((folder) => folder.path)));
+			})
+			.catch((error: unknown) => console.error("[first-run] folders failed", error));
+		return () => {
+			live = false;
+		};
+	}, []);
+
+	const count = folders?.filter((folder) => chosen.has(folder.path)).length ?? 0;
+	const start = useCallback(() => {
+		if (folders === null || count === 0) return;
+		startRef.current(folders.filter((folder) => chosen.has(folder.path)).map((folder) => folder.path));
+	}, [folders, chosen, count]);
+	useEnterToStart(start, count > 0);
+	const toggle = (path: string): void =>
+		setChosen((previous) => {
+			const next = new Set(previous);
+			if (next.has(path)) next.delete(path);
+			else next.add(path);
+			return next;
+		});
+
+	return (
+		<section className="fr-panel fr-folders">
+			<Logo className="fr-logo--stage" />
+			<h1 className="fr-title fr-title--stage">{t("firstRun.folders.title", { app: APP_NAME })}</h1>
+			<p className="fr-lead">{t("firstRun.folders.lead")}</p>
+			<div className="fr-chips" role="group" aria-label={t("firstRun.folders.groupLabel")}>
+				{(folders ?? []).map((folder) => {
+					const on = chosen.has(folder.path);
+					return (
+						<button
+							key={folder.path}
+							type="button"
+							className="fr-chip"
+							data-state={on ? "on" : "off"}
+							data-folder-kind={folder.kind}
+							aria-pressed={on}
+							title={folder.path}
+							onClick={() => toggle(folder.path)}
+						>
+							<FolderIcon kind={folder.kind} />
+							<span>{CLOUD_LABELS[folder.kind] ?? t(`firstRun.folders.kind.${folder.kind as "desktop" | "documents" | "downloads"}`)}</span>
+						</button>
+					);
+				})}
+			</div>
+			<button type="button" className="fr-btn fr-btn--primary fr-btn--hero fr-btn--stage" data-action="folders-start" disabled={count === 0} onClick={start}>
+				{count > 0 ? t("firstRun.folders.start", { count }) : t("firstRun.folders.startNone")}
+				{count > 0 ? <kbd className="fr-kbd">↵</kbd> : null}
+			</button>
+			<p className="fr-privacy">
+				<LockIcon className="fr-privacy-icon" />
+				{platform === "darwin" ? t("firstRun.folders.privacyMac") : t("firstRun.folders.privacyPc")}
+			</p>
+		</section>
+	);
 }
 
 /* ------------------------------------------------------------------ setup */
@@ -244,11 +366,11 @@ function SetupScreen({
 				<div className={cn("fr-intro", fading && "fr-intro--fading")}>
 					<button type="button" className="fr-logo-btn" data-action="game-start" aria-label={t("firstRun.game.invite")} disabled={fading} onClick={() => setFading(true)}>
 						<span className="fr-logo-ring" />
-						<Logo className="fr-logo--breathe" />
+						<Logo className="fr-logo--stage fr-logo--breathe" />
 						<span className="fr-invite">{t("firstRun.game.invite")}</span>
 					</button>
-					<h1 className="fr-title">{t("firstRun.setup.title")}</h1>
-					<p className="fr-lead">{t("firstRun.setup.lead")}</p>
+					<h1 className="fr-title fr-title--stage">{t("firstRun.setup.title")}</h1>
+					<p className="fr-lead">{t("firstRun.setup.lead", { app: APP_NAME })}</p>
 				</div>
 			)}
 			{playing ? <MineGame /> : null}
@@ -271,14 +393,14 @@ function SetupScreen({
 							<div className="fr-progress-fill" style={{ transform: `scaleX(${progress / 100})` }} />
 						</div>
 						<div className="fr-progress-meta">
-							<span className="fr-stage-label" key={stage}>{t(`firstRun.setup.stage.${stage}`)}</span>
-							<span>
-								{stage === "indexing" && total > 0 ? t("firstRun.setup.files", { processed: processed.toLocaleString(), total: total.toLocaleString() }) : null}
-								{stage === "indexing" && total > 0 && remaining !== null ? " · " : null}
-								{remaining !== null ? t("firstRun.setup.remaining", { minutes: Math.max(1, remaining) }) : null}
+							<span className="fr-progress-now">
+								<span className="fr-stage-label" key={stage}>{t(`firstRun.setup.stage.${stage}`)}</span>
+								{stage === "indexing" && total > 0 ? (
+									<span title={status?.recentFile ?? undefined}>{t("firstRun.setup.files", { processed: processed.toLocaleString(), total: total.toLocaleString() })}</span>
+								) : null}
 							</span>
+							<span>{remaining !== null ? t("firstRun.setup.remaining", { minutes: Math.max(1, remaining) }) : null}</span>
 						</div>
-						<p className="fr-recent" title={status?.recentFile ?? undefined}>{stage === "indexing" ? (status?.recentFile ?? "") : ""}</p>
 					</>
 				)}
 			</div>
@@ -311,16 +433,15 @@ function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null;
 	const count = status?.processedFiles ?? status?.totalFiles ?? 0;
 	return (
 		<section className="fr-panel fr-ready">
-			<div className="fr-hero">
-				<span className="fr-halo" />
-				<Logo className="fr-logo--pop" />
-				<span className="fr-spark fr-spark--a" />
-				<span className="fr-spark fr-spark--b" />
-				<span className="fr-spark fr-spark--c" />
+			<div className="fr-done-mark">
+				<Logo className="fr-logo--stage" />
+				<span className="fr-status-mark" aria-hidden="true">
+					<CheckIcon size={18} />
+				</span>
 			</div>
-			<h1 className="fr-title fr-title--ready">{t("firstRun.ready.title")}</h1>
+			<h1 className="fr-title fr-title--stage">{t("firstRun.ready.title")}</h1>
 			<p className="fr-lead">{count > 0 ? t("firstRun.ready.lead", { count: count.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
-			<button type="button" className="fr-btn fr-btn--primary fr-btn--hero" data-action="first-run-start" autoFocus onClick={onStart}>
+			<button type="button" className="fr-btn fr-btn--primary fr-btn--hero fr-btn--stage" data-action="first-run-start" autoFocus onClick={onStart}>
 				{t("firstRun.ready.start")}
 				<kbd className="fr-kbd">↵</kbd>
 			</button>

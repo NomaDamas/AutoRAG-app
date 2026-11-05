@@ -23,6 +23,7 @@
 	--fr-scrim: rgba(12, 14, 20, 0.42);
 	--fr-card: rgba(255, 255, 255, 0.86);
 	--fr-card-border: rgba(20, 20, 40, 0.08);
+	--fr-chip-border: rgba(20, 20, 40, 0.1);
 	--fr-shadow: 0 24px 60px rgba(20, 22, 40, 0.18), 0 2px 8px rgba(20, 22, 40, 0.08);
 }
 
@@ -34,6 +35,7 @@ html[data-appearance="dark"] {
 	--fr-scrim: rgba(0, 0, 0, 0.55);
 	--fr-card: rgba(40, 41, 46, 0.9);
 	--fr-card-border: rgba(255, 255, 255, 0.08);
+	--fr-chip-border: rgba(255, 255, 255, 0.12);
 	--fr-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -78,6 +80,7 @@ html[data-first-run="rise"] .desk {
 }
 
 .fr-root[data-screen="loading"],
+.fr-root[data-screen="folders"],
 .fr-root[data-screen="setup"],
 .fr-root[data-screen="ready"] {
 	pointer-events: auto;
@@ -227,12 +230,12 @@ html[data-first-run="rise"] .desk {
 
 .fr-progress {
 	position: relative;
-	width: min(420px, 100%);
-	height: 8px;
-	margin-top: 34px;
+	width: min(540px, 100%);
+	height: 12px;
+	margin-top: 44px;
 	overflow: hidden;
 	border-radius: 999px;
-	background: var(--bg-input);
+	background: var(--border);
 }
 
 .fr-progress-fill {
@@ -240,7 +243,7 @@ html[data-first-run="rise"] .desk {
 	inset: 0;
 	transform-origin: 0 50%;
 	border-radius: inherit;
-	background: linear-gradient(90deg, #ffb703, #fb8500 55%, var(--accent));
+	background: linear-gradient(90deg, #ffb703, var(--accent));
 	transition: transform 900ms var(--fr-spring);
 }
 
@@ -265,15 +268,24 @@ html[data-first-run="rise"] .desk {
 	display: flex;
 	justify-content: space-between;
 	gap: 12px;
-	width: min(420px, 100%);
-	margin-top: 10px;
+	width: min(540px, 100%);
+	margin-top: 11.5px;
 	font-size: 12.5px;
+	line-height: 18.75px;
 	color: var(--fr-muted);
 	font-variant-numeric: tabular-nums;
 }
 
+.fr-progress-now {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
 .fr-stage-label {
-	font-weight: 600;
+	font-size: 13px;
+	font-weight: 500;
 	color: var(--fr-ink);
 	animation: fr-fade-up 380ms var(--fr-spring) both;
 }
@@ -283,17 +295,6 @@ html[data-first-run="rise"] .desk {
 		opacity: 0;
 		transform: translateY(4px);
 	}
-}
-
-.fr-recent {
-	width: min(420px, 100%);
-	height: 16px;
-	margin: 8px 0 0;
-	overflow: hidden;
-	font-size: 12px;
-	color: var(--text-faint);
-	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 /* --------------------------------------------------------------- setup game */
@@ -345,6 +346,11 @@ html[data-first-run="rise"] .desk {
 	margin-bottom: 0;
 }
 
+/* The button's padding is a hit area only: the logo sits where the folder and ready screens draw theirs (Figma 162:1244). */
+.fr-intro .fr-logo-btn {
+	margin: -14px 0 16px;
+}
+
 .fr-logo-ring {
 	position: absolute;
 	inset: 6px;
@@ -394,6 +400,11 @@ html[data-first-run="rise"] .desk {
 	flex-direction: column;
 	align-items: center;
 	width: 100%;
+}
+
+/* The reading screen has no button; this keeps its logo and title where the folder and ready screens draw theirs (Figma 162:1244). */
+.fr-setup[data-mode="intro"] {
+	padding-bottom: 136px;
 }
 
 .fr-setup[data-mode="game"] {
@@ -685,40 +696,28 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 
 /* -------------------------------------------------------------------- ready */
 
-.fr-hero {
+/* Figma 162:1308: the logo with a green check badge on its lower right. */
+.fr-done-mark {
 	position: relative;
+	margin-bottom: 30px;
+}
+
+.fr-done-mark .fr-logo--stage {
+	margin-bottom: 0;
+}
+
+.fr-status-mark {
+	position: absolute;
+	left: 84.5px;
+	top: 78px;
 	display: grid;
 	place-items: center;
-	width: 180px;
-	height: 180px;
-	margin-bottom: 18px;
-}
-
-.fr-halo {
-	position: absolute;
-	inset: 6px;
-	border-radius: 50%;
-	background: radial-gradient(circle, var(--fr-glow) 0%, transparent 68%);
-	animation: fr-halo 2.6s ease-in-out infinite;
-}
-
-@keyframes fr-halo {
-	0%,
-	100% {
-		transform: scale(0.92);
-		opacity: 0.8;
-	}
-	50% {
-		transform: scale(1.06);
-		opacity: 1;
-	}
-}
-
-.fr-logo--pop {
-	position: relative;
-	width: 132px;
-	height: 132px;
-	animation: fr-pop 900ms var(--fr-spring) both, fr-breathe 3.6s ease-in-out 900ms infinite;
+	width: 36px;
+	height: 36px;
+	border-radius: 18px;
+	background: var(--bg-window);
+	color: var(--ok-dot);
+	animation: fr-pop 700ms var(--fr-spring) 200ms both;
 }
 
 @keyframes fr-pop {
@@ -728,56 +727,103 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	}
 }
 
-.fr-spark {
-	position: absolute;
-	width: 10px;
-	height: 10px;
-	background: #ffc23d;
-	clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
-	animation: fr-twinkle 2.4s ease-in-out infinite;
+/* ---------------------------------------------------------------- folders */
+
+/* Figma 156:1125: the folders the first run will read, before it reads anything. The logo and title sizes are shared with the reading and ready screens (162:1244, 162:1308). */
+.fr-logo--stage {
+	width: 110px;
+	height: 110px;
+	margin-bottom: 30px;
 }
 
-.fr-spark--a {
-	top: 22px;
-	right: 26px;
+.fr-title--stage {
+	font-size: 32px;
+	line-height: 36px;
+	letter-spacing: -0.6px;
 }
 
-.fr-spark--b {
-	bottom: 34px;
-	left: 18px;
-	width: 7px;
-	height: 7px;
-	animation-delay: 0.7s;
+.fr-folders .fr-lead {
+	max-width: 520px;
 }
 
-.fr-spark--c {
-	top: 52px;
-	left: 30px;
-	width: 6px;
-	height: 6px;
-	background: var(--accent);
-	animation-delay: 1.3s;
+.fr-chips {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	width: min(440px, 100%);
+	margin-top: 29px;
 }
 
-@keyframes fr-twinkle {
-	0%,
-	100% {
-		opacity: 0;
-		transform: scale(0.4) rotate(0deg);
-	}
-	50% {
-		opacity: 1;
-		transform: scale(1) rotate(45deg);
-	}
+.fr-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 13px;
+	border: 1px solid var(--fr-chip-border);
+	border-radius: 50px;
+	background: var(--fr-card);
+	font: inherit;
+	font-size: 13px;
+	line-height: 18px;
+	color: var(--fr-ink);
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 260ms var(--fr-spring);
+	-webkit-app-region: no-drag;
 }
 
-.fr-title--ready {
-	font-size: 34px;
-	animation: fr-fade-up 600ms var(--fr-spring) 180ms both;
+.fr-chip:active {
+	transform: scale(0.97);
 }
 
-.fr-ready .fr-lead {
-	animation: fr-fade-up 600ms var(--fr-spring) 260ms both;
+.fr-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.fr-chip[data-state="off"] {
+	border-style: dashed;
+	border-color: var(--text-faint);
+	background: transparent;
+	color: var(--fr-muted);
+}
+
+.fr-chip-icon {
+	flex: none;
+}
+
+.fr-chip[data-state="off"] .fr-chip-icon {
+	color: var(--text-faint);
+}
+
+/* Qualified by the panel so it outranks `.fr-btn--hero` further down. Both sit at the same height (Figma 156:1125, 162:1308). */
+.fr-panel .fr-btn--stage {
+	padding: 0 29px;
+	border-radius: 16px;
+	font-weight: 500;
+	animation: none;
+}
+
+.fr-folders .fr-btn--stage {
+	margin-top: 72px;
+}
+
+.fr-ready .fr-btn--stage {
+	margin-top: 174px;
+}
+
+.fr-privacy {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	margin: 26px 0 0;
+	font-size: 13px;
+	line-height: 18.75px;
+	color: var(--fr-muted);
+}
+
+.fr-privacy-icon {
+	flex: none;
 }
 
 /* ------------------------------------------------------------------ buttons */
@@ -1519,9 +1565,7 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	html[data-first-run="rise"] .desk,
 	.fr-panel,
 	.fr-logo--breathe,
-	.fr-logo--pop,
-	.fr-halo,
-	.fr-spark,
+	.fr-status-mark,
 	.fr-cinema-title,
 	.fr-cinema-sub,
 	.fr-cinema-bars::before,
