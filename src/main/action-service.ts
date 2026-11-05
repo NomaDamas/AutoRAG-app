@@ -425,19 +425,22 @@ interface ArchiveMember {
 }
 
 /**
- * Every regular file and directory below `root`, archived under the root's own
- * name (macOS "Compress" keeps the folder wrapper). Symlinks are skipped: the
- * archiver must not escape the tree or chase a cycle.
+ * Append every regular file and directory below `root` to `members`, archived
+ * under the root's own name (macOS "Compress" keeps the folder wrapper).
+ * Symlinks are skipped: the archiver must not escape the tree or chase a cycle.
+ * Appending in place keeps a tree of any size off the call stack: spreading
+ * ~125k entries into one `push(...)` call throws "Maximum call stack size exceeded".
  */
-async function archiveMembers(root: string, isDirectory: boolean): Promise<ArchiveMember[]> {
+async function addArchiveMembers(members: ArchiveMember[], root: string, isDirectory: boolean): Promise<void> {
 	// Entry names are written NFC: Windows, Linux and Finder-created files use the
 	// composed form, while a name copied from an NFD source (older macOS volumes,
 	// other archives) lists on Windows as separate jamo and cannot be matched.
 	const name = basename(root).normalize("NFC");
 	if (!isDirectory) {
-		return [{ source: root, entry: name, directory: false }];
+		members.push({ source: root, entry: name, directory: false });
+		return;
 	}
-	const members: ArchiveMember[] = [{ source: root, entry: `${name}/`, directory: true }];
+	members.push({ source: root, entry: `${name}/`, directory: true });
 	const walk = async (dir: string, prefix: string): Promise<void> => {
 		const dirents = await readdir(dir, { withFileTypes: true });
 		dirents.sort((a, b) => a.name.localeCompare(b.name));
@@ -454,7 +457,6 @@ async function archiveMembers(root: string, isDirectory: boolean): Promise<Archi
 		}
 	};
 	await walk(root, `${name}/`);
-	return members;
 }
 
 /**
@@ -1369,7 +1371,7 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 					const members: ArchiveMember[] = [];
 					for (const path of paths) {
 						const stat = await lstat(path);
-						members.push(...(await archiveMembers(path, stat.isDirectory())));
+						await addArchiveMembers(members, path, stat.isDirectory());
 					}
 					await (format === "7z" ? writeSevenZip(target, members) : writeZip(target, members));
 					return { output: target, note: t("main.action.compressed", { name: basename(target) }) };
