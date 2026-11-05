@@ -1,5 +1,6 @@
 import type { TFunction } from "i18next";
 import type { IndexActivityItem, IndexActivitySnapshot } from "../../../shared/index-activity-contract";
+import { describeIndexProgress, progressTranslate } from "./index-progress";
 
 /** What the sidebar block and the Settings card show for one snapshot; `null` means nothing to show. */
 export interface IndexActivityView {
@@ -22,10 +23,21 @@ export function itemPhaseText(item: IndexActivityItem, t: TFunction): string | n
 	return item.phase === null ? null : t(`indexActivity.phases.${item.phase}`);
 }
 
-function runningDetail(running: readonly IndexActivityItem[], t: TFunction): string | null {
+/**
+ * What the local refresh is doing in numbers, from the same snapshot Settings > Indexing shows: the stage with its
+ * counts, bytes and remaining time, and the stalled warning when there is one. `null` when nothing is measured yet.
+ */
+export function localProgressText(snapshot: IndexActivitySnapshot, t: TFunction, now: number = Date.now()): string | null {
+	if (snapshot.progress === null) return null;
+	const view = describeIndexProgress(snapshot.progress, now, progressTranslate(t));
+	const text = [view.summary, view.warning].filter((part): part is string => part !== null && part.length > 0).join(" · ");
+	return text.length === 0 ? null : text;
+}
+
+function runningDetail(running: readonly IndexActivityItem[], t: TFunction, progress: string | null): string | null {
 	const [first] = running;
 	if (first === undefined) return null;
-	const phase = itemPhaseText(first, t);
+	const phase = first.kind === "local" && progress !== null ? progress : itemPhaseText(first, t);
 	const name = itemName(first, t);
 	const text = phase === null ? t("indexActivity.syncing", { name }) : `${name} · ${phase}`;
 	return running.length > 1 ? t("indexActivity.andMore", { text, count: running.length - 1 }) : text;
@@ -40,6 +52,7 @@ export function describeIndexActivity(snapshot: IndexActivitySnapshot, t: TFunct
 		const detail = runningDetail(
 			snapshot.items.filter((item) => item.state === "running"),
 			t,
+			localProgressText(snapshot, t),
 		);
 		return {
 			tone: "run",

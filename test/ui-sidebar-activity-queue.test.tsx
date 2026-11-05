@@ -118,6 +118,7 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 				startedAt: "2026-11-02T00:00:00.000Z",
 				finishedAt: null,
 				fraction: 0.45,
+				progress: null,
 				error: null,
 				items: [{ key: "local", kind: "local", id: null, state: "running", phase: "minsync", counts: null, error: null }],
 			});
@@ -143,6 +144,7 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 				startedAt: "2026-11-02T00:00:00.000Z",
 				finishedAt: null,
 				fraction: 0.6 / 3,
+				progress: null,
 				error: null,
 				items: [
 					{ key: "local", kind: "local", id: null, state: "running", phase: "minsync", counts: null, error: null },
@@ -236,6 +238,7 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 				startedAt: "2026-11-02T00:01:00.000Z",
 				finishedAt: null,
 				fraction: null,
+				progress: null,
 				error: null,
 				items: [{ key: "source:slack", kind: "source", id: "slack", state: "running", phase: null, counts: null, error: null }],
 			});

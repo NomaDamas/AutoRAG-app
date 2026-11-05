@@ -30,6 +30,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import sparseModel from "../src/shared/sparse-model.json" with { type: "json" };
+import { preindexFixture, seedFixtureHome } from "./onboarding-fixture/index.mjs";
 
 // This script lives in <repo>/scripts/, so the repo root is the parent.
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -194,7 +195,7 @@ async function main() {
 		(process.platform === "win32"
 			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "minsync", "models")
 			: join(homedir(), ".cache", "minsync", "models"));
-	if (!skipIndex && existsSync(realMinsyncCache)) {
+	if (existsSync(realMinsyncCache)) {
 		const sparseEntry = join(realMinsyncCache, sparseModel.repoDir);
 		if (existsSync(sparseEntry)) {
 			try {
@@ -209,6 +210,21 @@ async function main() {
 	const marker = { owner: process.pid, watchdog: null, sandbox };
 	writeFileSync(join(sandbox, ".onboarding-sandbox.json"), `${JSON.stringify(marker, null, "\t")}\n`);
 
+	// `--skip-index`: the same first run, on a four-document home that is indexed here, before the app starts, with the
+	// librarian's real refresh. The app runs no different code: it scans, plans, indexes (nothing left to do), asks the
+	// model for the tour question, and answers in AI Search from the real index.
+	if (fixtureHome !== null) {
+		try {
+			console.log("[onboarding] indexing the four-document fixture home (real keyword-only refresh)...");
+			seedFixtureHome(fixtureHome);
+			preindexFixture({ fixtureHome, autoragHome, configPath, minsyncCache });
+		} catch (error) {
+			killPathProcesses(sandbox, "SIGKILL");
+			rmManaged(sandbox);
+			fail(String(error instanceof Error ? error.message : error));
+		}
+	}
+
 	// Everything else passes through, so the dev preflight runs the same dupey
 	// check `make run` does.
 	const env = {
@@ -221,9 +237,8 @@ async function main() {
 		// developer's real ~/.pi/agent; the device seed keeps every run a clean unauthenticated machine.
 		PI_CODING_AGENT_DIR: piAgentDir,
 		AUTORAG_DEV_DEVICE_SEED: sandbox,
-		...(skipIndex && fixtureHome !== null
-			? { AUTORAG_ONBOARDING_SKIP_INDEX: "1", AUTORAG_ONBOARDING_FIXTURE_HOME: fixtureHome }
-			: {}),
+		// The sandbox's own home, so Desktop/Documents/Downloads and the places in the sidebar are the fixture's.
+		...(fixtureHome === null ? {} : { AUTORAG_ONBOARDING_FIXTURE_HOME: fixtureHome }),
 	};
 
 	// Same dev entry point as `make run`: predev hooks sync the librarian and
@@ -235,7 +250,7 @@ async function main() {
 		env,
 		stdio: ["ignore", "inherit", "inherit"],
 	});
-	console.log(`[onboarding] sandbox ${sandbox}${skipIndex ? " (skip-index stub)" : ""}`);
+	console.log(`[onboarding] sandbox ${sandbox}${skipIndex ? " (four-document fixture home, pre-indexed)" : ""}`);
 	console.log("[onboarding] the real ~/.autorag and the app's support dir are untouched");
 	console.log("[onboarding] press Ctrl+C or quit the app; everything is removed afterwards");
 

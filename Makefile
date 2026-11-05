@@ -30,10 +30,13 @@ onboarding:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs
 
-# Same disposable first-run sandbox as `make onboarding`, seeded with a 4-file
-# mini-fixture home (duplicate pair + cited docs) and stubbed setup (~2 s) so
-# all 7 tour steps (splitBottom → mergePane → ask → cite → evidence → duplicates → versions)
-# and the sign-in sheet run immediately without indexing the real home folders.
+# Same disposable first-run sandbox as `make onboarding`, but on a four-document
+# fixture home (a duplicate pair, a checklist, meeting notes) that is indexed
+# before the app starts with the librarian's real refresh. Everything the app
+# does is real: it scans, plans, indexes (an incremental no-op), asks the model for
+# the tour question, and answers in AI Search from that index. Only the folders
+# are small, so it reaches the tour in seconds instead of minutes. Needs a model
+# (the first run provisions the guest one) like `make onboarding`.
 onboarding-skip-index:
 	bun scripts/setup.mjs --ensure
 	bun scripts/run-dev-onboarding.mjs --skip-index

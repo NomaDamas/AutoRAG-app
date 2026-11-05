@@ -11,6 +11,7 @@ import {
 	FolderOpen,
 	Lock,
 	Pencil,
+	Pin,
 	RotateCcw,
 	Share2,
 	Sparkles,
@@ -82,6 +83,7 @@ interface BuiltinRowSpec {
 		| "settingsCore.contextMenu.items.rename"
 		| "settingsCore.contextMenu.items.copyPath"
 		| "settingsCore.contextMenu.items.newFolder"
+		| "settingsCore.contextMenu.items.pinToSidebar"
 		| "settingsCore.contextMenu.items.extract"
 		| "settingsCore.contextMenu.items.compress"
 		| "settingsCore.contextMenu.items.compress7z"
@@ -114,6 +116,7 @@ const SECTION_ITEMS: Readonly<Record<Exclude<ContextMenuSectionId, "magic">, rea
 	],
 	actions: [
 		{ id: "builtin:newFolder", labelKey: "settingsCore.contextMenu.items.newFolder", icon: FilePlus2 },
+		{ id: "builtin:pinToSidebar", labelKey: "settingsCore.contextMenu.items.pinToSidebar", icon: Pin },
 		{ id: "builtin:extract", labelKey: "settingsCore.contextMenu.items.extract", icon: Archive },
 		{ id: "builtin:compress", labelKey: "settingsCore.contextMenu.items.compress", icon: Archive },
 		{ id: "builtin:compress7z", labelKey: "settingsCore.contextMenu.items.compress7z", icon: Archive },

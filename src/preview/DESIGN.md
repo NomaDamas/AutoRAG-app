@@ -85,8 +85,11 @@ still has the previous file's size when they lay out.
   encode takes. The panel shows "Preparing the video…" (after 400ms, so a copy
   already cached shows no flash) with ffmpeg's
   progress (`preview:video-playback-progress`) and leaving the file cancels the
-  job (`preview:video-playback-cancel`), which kills ffmpeg and deletes the
-  partial output. No ffmpeg, or a file ffmpeg cannot read, answers "native":
+  job (`preview:video-playback-cancel`), which ends the program it started and
+  everything that program started — the `ffmpeg` on a Windows `PATH` is usually a
+  launcher whose own child is what holds the partial output — waits for it to be
+  gone, and then deletes the partial output. No ffmpeg, or a file ffmpeg cannot
+  read, answers "native":
   the panel plays the file itself and shows the "couldn't play" card. The copy's
   sound is the element's own, so the AC-3 sidecar is off for it.
 - **Audio** — cover art (or a stand-in sleeve), title, artist, album, and time

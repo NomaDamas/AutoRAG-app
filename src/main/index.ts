@@ -45,6 +45,7 @@ import { autoragHome } from "./autorag-home";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { createDemoService } from "./demo-service";
 import { DEMO_CHANNELS } from "../shared/demo-contract";
+import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -104,8 +105,7 @@ import { resolveMcpConnectInfo } from "./mcp-connect-info";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
-import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
+import { openPlanRuntime, resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
@@ -156,7 +156,6 @@ import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
 import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
-import { createSkipIndexPreviewAgent, seedSkipIndexFixtureHome } from "./skip-index-fixture";
 
 const execFileAsync = promisify(execFile);
 
@@ -433,10 +432,8 @@ app.whenReady().then(async () => {
 	const devLabel = resolveDevLabel();
 	console.log(`[autorag] ${formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel)}`);
 	const qaRoot = process.env.AUTORAG_QA_ROOT?.trim() ?? "";
-	const skipOnboardingIndex = !app.isPackaged && process.env.AUTORAG_ONBOARDING_SKIP_INDEX === "1";
 	const rawFixtureHome = !app.isPackaged ? (process.env.AUTORAG_ONBOARDING_FIXTURE_HOME?.trim() ?? "") : "";
 	const fixtureHome = rawFixtureHome !== "" && isAbsolute(rawFixtureHome) ? rawFixtureHome : null;
-	if (skipOnboardingIndex && fixtureHome !== null) seedSkipIndexFixtureHome(fixtureHome);
 	// Windows can redirect the known folders (OneDrive backup moves Desktop/Documents),
 	// so Explorer's real paths come from Electron; on macOS they always live under $HOME.
 	// A profile without a resolvable known folder (a throwaway USERPROFILE) makes
@@ -554,10 +551,7 @@ app.whenReady().then(async () => {
 	// Each chat's model conversation is a pi session file; the index remembers which file is whose.
 	const chatSessionsDirectory = join(app.getPath("userData"), "chat-sessions");
 	const searchService = createSearchService({
-		agentFactory:
-			skipOnboardingIndex && fixtureHome !== null
-				? () => createSkipIndexPreviewAgent({ fixtureHome, language: () => currentLanguage })
-				: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
+		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		send: sendToMainWindow,
@@ -822,6 +816,11 @@ app.whenReady().then(async () => {
 		configPath: autoragConfigPath,
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
 		journalPath: () => schedulePath.activity,
+		// Keyword-only runs MinSync too, as a keyword index; the progress screens name that stage by this switch.
+		semanticSearch: () => {
+			const configPath = autoragConfigPath();
+			return !existsSync(configPath) || readAppIndexing(readRawConfigObject(configPath)).semanticSearch;
+		},
 		// The fs worker runs the checkbox-toggle refresh, so its pid marks that run as this app's own.
 		ownPids: () => [workerHost.status().pid],
 	});
@@ -1098,7 +1097,8 @@ app.whenReady().then(async () => {
 			await workerHost.client.call("refreshVersionFamilies");
 		},
 		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
-		complete: completeSimple,
+		// Through Pi's runtime, which authenticates the plan's OAuth credential; a bare `completeSimple` has no key for it.
+		complete: async (model, context, options) => (await openPlanRuntime(getAgentDir(), process.env)).completeSimple(model, context, options),
 		// The tour's question is verified with model-free keyword retrieval over the config the app actually runs with.
 		retrieve: async (query, options) => {
 			const { config } = await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() });
@@ -1114,7 +1114,6 @@ app.whenReady().then(async () => {
 		probeFullDiskAccess: () => probeFullDiskAccess(home),
 		// A fresh unauthenticated launch provisions the guest credential + plan models before indexing and the tour.
 		ensureModelAccess: () => accountService.ensureGuestAccess(),
-		stubIndex: !app.isPackaged && process.env.AUTORAG_ONBOARDING_SKIP_INDEX === "1",
 		onComplete: () => {
 			analytics.track("onboarding_completed", {});
 		},

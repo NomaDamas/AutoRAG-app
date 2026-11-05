@@ -211,6 +211,8 @@
     "putBackCount": "将 {{count}} 个项目放回原处",
     "emptyTrash": "清倒废纸篓",
     "newFolder": "新建文件夹",
+    "pinToSidebar": "固定到边栏",
+    "unpinFromSidebar": "从边栏中移除",
     "new": "新建",
     "trashShort": "废纸篓"
   },
@@ -655,6 +657,50 @@
       "everything": "正在为文件名建立索引",
       "fsearch": "正在为文件名建立索引",
       "finalizing": "即将完成"
+    }
+  },
+  "indexProgress": {
+    "stage": {
+      "discover": "发现",
+      "parse": "解析",
+      "embed": "嵌入",
+      "keyword": "关键词索引",
+      "finalize": "收尾"
+    },
+    "line": {
+      "discover": "正在查找文件",
+      "finalize": "正在完成搜索索引",
+      "counts": "{{stage}} {{done}} / {{total}} 个文件 ({{percent}}%)",
+      "countsOpen": "{{stage}} {{done}} 个文件 (总数仍在统计)"
+    },
+    "skipped": "已跳过 {{count}} 个",
+    "failed": "失败 {{count}} 个",
+    "bytes": "大小 {{done}} / {{total}} ({{percent}}%)",
+    "bytesDone": "已处理大小 {{done}}",
+    "eta": {
+      "calculating": "{{stage}} 正在计算剩余时间",
+      "remaining": "{{stage}} 约剩 {{duration}}"
+    },
+    "duration": {
+      "minutes": "{{count}} 分钟",
+      "hours": "{{hours}} 小时",
+      "hoursMinutes": "{{hours}} 小时 {{minutes}} 分钟",
+      "days": "{{count}} 天"
+    },
+    "ago": {
+      "now": "刚刚",
+      "seconds": "{{count}} 秒前",
+      "minutes": "{{count}} 分钟前",
+      "hours": "{{count}} 小时前"
+    },
+    "activity": {
+      "lastDone": "上次完成 {{ago}}",
+      "none": "还没有完成的文件",
+      "heartbeat": "活动信号 {{ago}}"
+    },
+    "warn": {
+      "stalledAlive": "已有 {{minutes}} 分钟没有文件完成。工作信号仍在传来,可能正在处理大文件。",
+      "stalledSilent": "已有 {{minutes}} 分钟没有文件完成,工作信号也中断了。可能已停滞。"
     }
   },
   "indexProblem": {
@@ -1938,6 +1984,7 @@
         "rename": "重命名",
         "copyPath": "复制路径",
         "newFolder": "新建文件夹",
+        "pinToSidebar": "固定到边栏 / 从边栏中移除",
         "extract": "解压缩",
         "compress": "压缩 (ZIP)",
         "compress7z": "压缩为 7z",

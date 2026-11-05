@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 6 · 못 열 때</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 6: Quick Look (Space) cannot show this file. Instead of a dead end, offer to make it viewable.
+		 * The conversion is a *preview* first: nothing is written to disk until the person chooses to keep it. */
+		.ql-scrim { position: absolute; inset: 0; z-index: 50; background: var(--scrim-quicklook); display: grid; place-items: center; }
+		.ql {
+			display: flex; flex-direction: column; width: 560px; height: 430px; overflow: hidden;
+			background: var(--ql-panel-solid); border-radius: var(--radius-12); box-shadow: var(--shadow-ql-phone);
+			color: var(--ql-ink); font-family: var(--ql-font);
+		}
+		.ql-bar { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 14px; border-bottom: 1px solid var(--ql-hairline); font-size: 12.5px; font-weight: 600; }
+		.ql-bar .sp { flex: 1; }
+		.ql-bar .x { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: var(--radius-full); background: var(--ql-button); color: var(--ql-ink-secondary); }
+		.ql-body { flex: 1; min-height: 0; display: grid; place-items: center; padding: 22px; position: relative; }
+		.cant { display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; max-width: 380px; }
+		.cant .big { display: grid; place-items: center; width: 74px; height: 92px; border-radius: var(--radius-5); background: var(--ql-glyph-paper); box-shadow: var(--shadow-ql-doc); color: var(--ql-ink-secondary); font-weight: 700; font-size: 13px; }
+		.cant h3 { margin: 0; font-size: 15px; font-weight: 600; }
+		.cant p { margin: 0; color: var(--ql-ink-secondary); font-size: 12.5px; line-height: 1.5; }
+		.ql-actions { display: flex; flex-direction: column; gap: 7px; width: 100%; margin-top: 6px; }
+		.qbtn { display: flex; align-items: center; justify-content: center; gap: 8px; height: 34px; border: 0; border-radius: var(--radius-8); background: var(--ql-button); color: var(--ql-ink); font-size: 13px; font-weight: 500; }
+		.qbtn:hover { background: var(--ql-button-hover); }
+		.qbtn.primary { background: var(--ql-accent); color: var(--text-on-accent); font-weight: 600; }
+		.qbtn.primary:hover { background: var(--accent-hover); }
+		.qbtn small { font-weight: 400; opacity: 0.8; font-size: 11.5px; }
+		.qbtn .icon { width: 15px; height: 15px; }
+
+		/* the converting state */
+		.work { display: flex; flex-direction: column; align-items: center; gap: 12px; width: 300px; }
+		.work .bar { width: 100%; height: 5px; background: var(--ql-sunk); }
+		.work .bar > i { background: var(--ql-accent); }
+		.work span { color: var(--ql-ink-secondary); font-size: 12px; }
+
+		/* the preview state: the real content, with a ribbon that says it is a temporary conversion */
+		.pv { position: absolute; inset: 0; display: flex; flex-direction: column; }
+		.pv-page { flex: 1; margin: 16px 16px 0; background: var(--ql-page); border-radius: var(--radius-4); box-shadow: var(--shadow-ql-page); padding: 22px 30px; overflow: hidden; color: var(--ql-page-ring); }
+		.pv-page h4 { margin: 0 0 10px; font-size: 15px; }
+		.pv-page .ln { height: 7px; border-radius: 3px; background: var(--ql-sunk); margin: 0 0 8px; }
+		.pv-page .ln.h { width: 55%; background: var(--ql-md-mark); height: 9px; margin-bottom: 14px; }
+		.ribbon { display: flex; align-items: center; gap: 10px; margin: 10px 16px 14px; padding: 9px 12px; border-radius: var(--radius-9); background: var(--ql-sunk); font-size: 12px; }
+		.ribbon .t { flex: 1; min-width: 0; color: var(--ql-ink-secondary); line-height: 1.35; }
+		.ribbon .t b { color: var(--ql-ink); font-weight: 600; }
+		.rbtn { height: 26px; padding: 0 11px; border: 0; border-radius: var(--radius-6); background: var(--ql-button); color: var(--ql-ink); font-size: 12px; font-weight: 500; }
+		.rbtn:hover { background: var(--ql-button-hover); }
+		.rbtn.primary { background: var(--ql-accent); color: var(--text-on-accent); font-weight: 600; }
+		.cases { display: flex; gap: 6px; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* Each case = a file Quick Look cannot show, and the nearest thing that is viewable. */
+		const CASES = {
+			hwp: { file: { ...FILES[0], name: "2026 업무보고.hwp", ext: "hwp", kind: "한글 문서(구버전)" }, why: "이 형식은 미리보기를 지원하지 않아요", to: "pdf", note: "HWP → PDF", engine: null, ms: 1100 },
+			heic: { file: FILES[4], why: "이 Mac에서 HEIC를 미리 볼 수 없어요", to: "jpg", note: "HEIC → JPG", engine: null, ms: 600 },
+			mov: { file: FILES[9], why: "이 영상 코덱은 미리보기를 지원하지 않아요", to: "mp4", note: "MOV → MP4", engine: "FFmpeg", ms: 1700 },
+		};
+		let key = "hwp"; let phase = "cant"; // cant → engine? → working → preview
+		let kept = false;
+
+		function body(c) {
+			const f = c.file;
+			if (phase === "cant") {
+				return `<div class="cant"><div class="big">${f.ext.toUpperCase()}</div>
+					<h3>${f.name}</h3><p>${c.why}. 보는 용도로 변환해서 확인할 수 있어요 — 확인하기 전에는 아무 파일도 만들지 않습니다.</p>
+					<div class="ql-actions">
+						<button class="qbtn primary" id="view">${icon("eye")}볼 수 있게 변환 <small>${c.note}${c.engine ? ` · ${c.engine} 필요` : ""}</small></button>
+						<button class="qbtn" id="other">${icon("app-window")}다른 앱으로 열기</button>
+					</div></div>`;
+			}
+			if (phase === "engine") {
+				return `<div class="cant"><div class="big">${icon("hard-drive-download")}</div><h3>${c.engine}가 필요해요</h3>
+					<p>영상 변환을 맡는 프로그램입니다. 한 번만 설치하면 되고, 파일은 이 Mac 밖으로 나가지 않습니다.</p>
+					<div class="ql-actions"><button class="qbtn primary" id="install">${icon("download")}설치하고 변환 <small>약 100 MB</small></button><button class="qbtn" id="back">취소</button></div></div>`;
+			}
+			if (phase === "working") {
+				return `<div class="work"><div class="big cant" style="gap:0"><div class="big">${f.ext.toUpperCase()}</div></div><span id="wl">${c.note} 변환 중…</span><div class="bar"><i id="wp" style="width:8%"></i></div></div>`;
+			}
+			const out = f.name.replace(/\.[^.]+$/, "") + "." + c.to;
+			return `<div class="pv">
+				<div class="pv-page"><h4>${c.to === "mp4" ? "▶ 영상 미리보기" : "2026년 업무보고"}</h4><div class="ln h"></div>${"<div class='ln'></div>".repeat(8)}<div class="ln" style="width:40%"></div></div>
+				<div class="ribbon"><div class="t"><b>임시 변환본</b> · 아직 저장되지 않았어요<br>${kept ? out + " 로 저장했어요" : "닫으면 사라집니다"}</div>
+					${kept ? `<button class="rbtn" disabled>저장됨</button>` : `<button class="rbtn" id="drop">버리기</button><button class="rbtn primary" id="keep">${out} 저장</button>`}</div></div>`;
+		}
+
+		function render() {
+			const c = CASES[key]; const f = c.file;
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 6", "Space로 미리보기가 안 열릴 때: 막다른 화면 대신 “볼 수 있게 변환”. 확인 전에는 파일을 만들지 않습니다.", "06-cant-open.html", "친구가 보낸 .hwp, 아이폰이 아닌 PC에서 받은 .heic를 Space로 훑어보려는데 아무것도 안 나올 때 — 지금 필요한 건 파일이 아니라 “내용을 보는 것”입니다") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${FILES.map((x) => rowHtml(x, x.id === f.id || x.id === "a" && key === "hwp" ? "sel" : "")).join("")}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(f, baseChips())}
+				<div class="ql-scrim"><div class="ql" role="dialog" aria-label="훑어보기">
+					<div class="ql-bar"><button class="x" id="close" aria-label="닫기">${icon("x", "sm")}</button><span>${f.name}</span><span class="sp"></span>${phase === "preview" ? `<span class="badge info">${c.note}</span>` : ""}</div>
+					<div class="ql-body">${body(c)}</div></div></div>
+			</div>
+			<div class="proto-bar"><span>파일</span><span class="cases">${Object.entries(CASES).map(([k, v]) => `<button class="btn ${k === key ? "on" : ""}" data-k="${k}">${v.note.split(" → ")[0]}</button>`).join("")}</span><span class="sp"></span><span>Space로 열었는데 안 열리는 경우</span></div></div></div>`;
+			wireChrome();
+			document.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => { key = b.dataset.k; phase = "cant"; kept = false; render(); }));
+			const go = () => { phase = c.engine && !engineOk ? "engine" : "working"; render(); if (phase === "working") run(c); };
+			document.getElementById("view")?.addEventListener("click", go);
+			document.getElementById("install")?.addEventListener("click", () => { engineOk = true; phase = "working"; render(); run(c); });
+			document.getElementById("back")?.addEventListener("click", () => { phase = "cant"; render(); });
+			document.getElementById("other")?.addEventListener("click", () => toast("다른 앱으로 열기 (기존 동작)", "info"));
+			document.getElementById("close")?.addEventListener("click", () => { phase = "cant"; kept = false; render(); toast("닫았습니다 — 만든 파일은 없습니다", "info"); });
+			document.getElementById("keep")?.addEventListener("click", () => { kept = true; render(); toast(`${f.name.replace(/\.[^.]+$/, "")}.${c.to} — 원본 옆에 저장했어요`, "circle-check"); });
+			document.getElementById("drop")?.addEventListener("click", () => { phase = "cant"; render(); toast("임시 변환본을 버렸어요", "info"); });
+		}
+		let engineOk = false;
+		function run(c) {
+			let p = 8; const bar = () => document.getElementById("wp");
+			const t = setInterval(() => { p += 100 / (c.ms / 120); if (bar()) bar().style.width = `${Math.min(p, 100)}%`; if (p >= 100) { clearInterval(t); phase = "preview"; render(); } }, 120);
+		}
+		render();
+	</script>
+</body>
+</html>

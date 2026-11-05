@@ -50,6 +50,12 @@ import {
 	type SidebarSectionId,
 	type SidebarSettings,
 } from "../../../../shared/sidebar-contract";
+import {
+	sortByFavoritesOrder,
+	withCustomFavorite,
+	withFavoriteMoved,
+	withoutCustomFavorite,
+} from "../../../../shared/sidebar-favorites";
 import { hostPlatform } from "../../lib/shortcuts";
 import { basename, normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
@@ -206,12 +212,7 @@ export function SidebarPage({
 			icon: Folder,
 			customPath: entry.path,
 		}));
-		const all = [...standard, ...custom];
-		const orderIndex = new Map<string, number>(sidebar.favoritesOrder.map((id, idx) => [id, idx]));
-		return all
-			.map((row, idx) => ({ row, order: orderIndex.get(row.id) ?? sidebar.favoritesOrder.length + idx }))
-			.sort((a, b) => a.order - b.order)
-			.map(({ row }) => row);
+		return sortByFavoritesOrder([...standard, ...custom], sidebar.favoritesOrder);
 	}, [locations, localizedPlaceLabel, sidebar.customFavorites, sidebar.favoritesOrder]);
 
 	const toggleItem = (id: string): void => {
@@ -222,13 +223,8 @@ export function SidebarPage({
 	};
 
 	const moveFavorite = (index: number, delta: -1 | 1): void => {
-		const targetIndex = index + delta;
-		if (targetIndex < 0 || targetIndex >= favoriteRows.length) return;
-		const ids = favoriteRows.map((row) => row.id);
-		const [moved] = ids.splice(index, 1);
-		if (moved === undefined) return;
-		ids.splice(targetIndex, 0, moved);
-		void updateSidebar({ ...sidebar, favoritesOrder: ids });
+		const next = withFavoriteMoved(sidebar, favoriteRows.map((row) => row.id), index, index + delta);
+		if (next !== sidebar) void updateSidebar(next);
 	};
 
 	const addCustomFavorite = (rawPath: string): void => {
@@ -245,24 +241,12 @@ export function SidebarPage({
 			}
 			const normalizedPath = normalizeTypedPath(rawPath, effectiveHome);
 			if (normalizedPath.length === 0) return;
-			const nextCustom = [...sidebar.customFavorites.filter((item) => item.path !== normalizedPath), { path: normalizedPath }];
-			const nextHidden = sidebar.hiddenItems.filter((id) => id !== customSidebarItemId(normalizedPath));
-			await updateSidebar({
-				...sidebar,
-				customFavorites: nextCustom,
-				hiddenItems: nextHidden,
-			});
+			await updateSidebar(withCustomFavorite(sidebar, normalizedPath));
 		})();
 	};
 
 	const removeCustomFavorite = (path: string): void => {
-		const id = customSidebarItemId(path);
-		void updateSidebar({
-			...sidebar,
-			customFavorites: sidebar.customFavorites.filter((item) => item.path !== path),
-			favoritesOrder: sidebar.favoritesOrder.filter((item) => item !== id),
-			hiddenItems: sidebar.hiddenItems.filter((item) => item !== id),
-		});
+		void updateSidebar(withoutCustomFavorite(sidebar, path));
 	};
 
 	const toggleSection = (sectionId: HideableSidebarSectionId): void => {

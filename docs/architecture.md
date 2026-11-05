@@ -526,6 +526,20 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    it calls `onboarding.complete()`, persists `{ completed: true }` in
    `<userData>/onboarding/state.json`, and the overlay disappears. No account,
    plan, model, source, or embedding question is ever asked before the first index.
+- **Local embedding spec guard** — the built-in local model
+  (`native:Qwen/Qwen3-Embedding-0.6B`) only runs on a capable machine:
+  Apple silicon with a Pro, Max or Ultra chip and at least 32 GB of unified
+  memory, or Windows/Linux with a CUDA GPU (NVIDIA, read with `nvidia-smi`) of
+  at least 8 GB VRAM. `src/shared/local-embedding-spec.ts` holds the rule
+  (`evaluateLocalEmbeddingSpec`) and the translated message
+  (`localSpecMessage`, keys `localSpec.*`); `src/main/hardware-probe.ts` reads
+  the hardware once per launch. Below the spec Settings → AI 모델 → 문서 이해
+  marks the native profile unavailable (`EmbeddingProfile.unavailable`); the main
+  process refuses to plan or apply it. Keyword-only, Dazzi cloud embedding and a
+  user-run local embedding server (`local-server`) are never gated. Raising or
+  lowering the minimum is a change to that one file. Unpackaged builds honor
+  `AUTORAG_QA_HARDWARE` (a JSON `HardwareProfile`) so QA can see the blocked state
+  on a capable machine; a packaged app ignores it.
 
 A relaunch before completion stays on the overlay: `load()` is authoritative.
 The Finder keeps its own size; only the preload
@@ -613,9 +627,12 @@ AutoRAG config, home, and workspace, so the real `~/.autorag` and the app's
 support directory are never read or written. When the app exits the wrapper kills
 the run's processes and removes the sandbox; a SIGKILL of the wrapper is covered
 by a detached watchdog, and the next `make onboarding` sweeps any sandbox whose
-owner and watchdog both died (`make onboarding-skip-index` seeds a four-file
-mini-fixture home with a duplicate pair and a deterministic preview answer so
-all seven tour steps run in ~2 s without indexing the real home). The QA lane covers the same flow end to end in CI
+owner and watchdog both died (`make onboarding-skip-index` runs the same first run on a
+four-document fixture home, `scripts/onboarding-fixture/`: a duplicate pair, a checklist,
+meeting notes. The wrapper indexes it before the app starts with the librarian's real
+keyword-only refresh, so the app does nothing different: it scans, plans, indexes
+(an incremental no-op), has the model write the tour question, and answers in AI Search
+from that index. Only the folders are small; there is no stub in the app). The QA lane covers the same flow end to end in CI
 settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`). The first run indexes
 keyword-only, so the lane needs no embedding model. The first-run overlay drives
 the Finder window itself (no second window); on macOS `HOME` in the launch env

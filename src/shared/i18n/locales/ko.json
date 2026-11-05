@@ -211,6 +211,8 @@
     "putBackCount": "{{count}}개 항목 원래 위치로 복원",
     "emptyTrash": "휴지통 비우기",
     "newFolder": "새 폴더",
+    "pinToSidebar": "사이드바에 고정",
+    "unpinFromSidebar": "사이드바에서 제거",
     "new": "새로 만들기",
     "trashShort": "휴지통"
   },
@@ -655,6 +657,50 @@
       "everything": "파일 이름 색인 중",
       "fsearch": "파일 이름 색인 중",
       "finalizing": "마무리하는 중"
+    }
+  },
+  "indexProgress": {
+    "stage": {
+      "discover": "탐색",
+      "parse": "파싱",
+      "embed": "임베딩",
+      "keyword": "키워드 색인",
+      "finalize": "마무리"
+    },
+    "line": {
+      "discover": "파일을 찾는 중",
+      "finalize": "검색 인덱스를 마무리하는 중",
+      "counts": "{{stage}} {{done}} / {{total}}개 파일 ({{percent}}%)",
+      "countsOpen": "{{stage}} {{done}}개 파일 (전체 수 확인 중)"
+    },
+    "skipped": "건너뜀 {{count}}개",
+    "failed": "실패 {{count}}개",
+    "bytes": "용량 {{done}} / {{total}} ({{percent}}%)",
+    "bytesDone": "용량 {{done}} 처리",
+    "eta": {
+      "calculating": "{{stage}} 남은 시간 계산 중",
+      "remaining": "{{stage}} 약 {{duration}} 남음"
+    },
+    "duration": {
+      "minutes": "{{count}}분",
+      "hours": "{{hours}}시간",
+      "hoursMinutes": "{{hours}}시간 {{minutes}}분",
+      "days": "{{count}}일"
+    },
+    "ago": {
+      "now": "방금",
+      "seconds": "{{count}}초 전",
+      "minutes": "{{count}}분 전",
+      "hours": "{{count}}시간 전"
+    },
+    "activity": {
+      "lastDone": "마지막 완료 {{ago}}",
+      "none": "아직 끝난 파일이 없어요",
+      "heartbeat": "활동 신호 {{ago}}"
+    },
+    "warn": {
+      "stalledAlive": "{{minutes}}분째 끝난 파일이 없어요. 작업 신호는 계속 들어오고 있어서 큰 파일을 처리 중일 수 있어요.",
+      "stalledSilent": "{{minutes}}분째 끝난 파일이 없고 작업 신호도 끊겼어요. 멈춘 것 같아요."
     }
   },
   "indexProblem": {
@@ -1938,6 +1984,7 @@
         "rename": "이름 변경",
         "copyPath": "경로 복사",
         "newFolder": "새 폴더",
+        "pinToSidebar": "사이드바에 고정 / 제거",
         "extract": "압축 해제",
         "compress": "압축 (ZIP)",
         "compress7z": "7z로 압축",

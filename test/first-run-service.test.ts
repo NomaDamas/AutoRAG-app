@@ -13,7 +13,6 @@ import {
 	type FirstRunService,
 	type FirstRunServiceDeps,
 } from "../src/main/first-run-service";
-import { SKIP_INDEX_PLAN_FINAL, seedSkipIndexFixtureHome } from "../src/main/skip-index-fixture";
 
 /** Yields to the event loop: the run waits on real timers and disk, so microtasks alone are not enough. */
 const flush = (): Promise<void> => {
@@ -268,46 +267,6 @@ describe("createFirstRunService run", () => {
 		expect(scanned).toEqual([join(base.home, "Desktop"), join(base.home, "Documents")]);
 		const written = JSON.parse(await readFile(base.configPath, "utf8")) as { searchPaths: string[] };
 		expect(written.searchPaths).toEqual([join(base.home, "Desktop")]);
-	});
-
-	it("stubIndex seeds the tour demo and refreshes duplicates over the mini-fixture home without scanning or indexing", async () => {
-		const directory = await workDir("autorag-firstrun-");
-		const base = await makeDeps(directory);
-		seedSkipIndexFixtureHome(base.home);
-		const seen: SetupStatus[] = [];
-		let indexedOrScanned = false;
-		let duplicatesRefreshed = 0;
-		const service = createFirstRunService({
-			...base,
-			stubIndex: true,
-			stubStepDelayMs: 5,
-			send: (_channel, payload) => seen.push(payload as SetupStatus),
-			scanFolders: async () => {
-				indexedOrScanned = true;
-			},
-			refresh: async () => {
-				indexedOrScanned = true;
-				return OK;
-			},
-			refreshDuplicates: async () => {
-				duplicatesRefreshed += 1;
-			},
-		});
-		await service.start();
-		const final = await waitForStage(service, "ready");
-		expect(indexedOrScanned).toBe(false);
-		expect(duplicatesRefreshed).toBe(1);
-		expect(final.stage).toBe("ready");
-		expect(final.progress).toBe(100);
-		expect(final.demo).toEqual({
-			question: "3분기 마케팅 비용이랑 신규 고객 수는 어떻게 바뀌었어?",
-			sourcePath: join(base.home, "Documents", SKIP_INDEX_PLAN_FINAL),
-			latencyMs: 14,
-		});
-		expect([...new Set(seen.map((entry) => entry.stage))]).toEqual(["scanning", "planning", "indexing", "preparing", "ready"]);
-		const written = JSON.parse(await readFile(base.configPath, "utf8")) as { appIndexing?: { semanticSearch?: boolean }; searchPaths?: string[] };
-		expect(written.appIndexing?.semanticSearch).toBe(false);
-		expect(written.searchPaths).toEqual([join(base.home, "Desktop"), join(base.home, "Documents"), join(base.home, "Downloads")]);
 	});
 });
 
