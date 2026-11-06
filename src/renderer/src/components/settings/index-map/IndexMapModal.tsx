@@ -6,7 +6,7 @@ import type { IndexMapNode } from "../../../../../shared/index-map-contract";
 import { useIndexActivity } from "../../../hooks/useIndexActivity";
 import { localIndexRunning } from "../../../state/index-activity";
 import { ModalShell } from "../SettingsKit";
-import { indexMapTargets, layoutRadial, radialState, type RadialState } from "./radial";
+import { indexMapTargets, layoutRadial, nodeKey, radialState, type RadialState } from "./radial";
 import { useLiveIndexMap } from "./useLiveIndexMap";
 
 const STATES: readonly RadialState[] = ["indexed", "partial", "unindexed", "excluded"];
@@ -16,9 +16,6 @@ const STATE_LABEL: Readonly<Record<RadialState, LocaleKey>> = {
 	unindexed: "settingsSources.indexMap.state.unindexed",
 	excluded: "settingsSources.indexMap.state.excluded",
 };
-
-/** A node's identity across re-reads: ids are renumbered when the tree changes, a path and kind name the same place. State is left out, so a file turning blue under the pointer stays hovered. */
-const keyOf = (node: IndexMapNode): string => `${node.kind}\u0000${node.path}`;
 
 export function IndexMapModal({ onClose }: { readonly onClose: () => void }): ReactElement {
 	const { t, i18n } = useTranslation();
@@ -32,7 +29,7 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 	const [focusPath, setFocusPath] = useState<string | null>(null);
 	const [activeKey, setActiveKey] = useState<string | null>(null);
 	const focus = map?.nodes.find((node) => node.path === focusPath && (node.kind === "root" || node.kind === "folder")) ?? null;
-	const active = map?.nodes.find((node) => keyOf(node) === activeKey) ?? focus;
+	const active = map?.nodes.find((node) => nodeKey(node) === activeKey) ?? focus;
 	const sectors = useMemo(() => map === null ? [] : layoutRadial(map, focus?.id ?? null), [map, focus]);
 	const counts = focus?.counts ?? map?.totals;
 	const targets = counts === undefined ? 0 : indexMapTargets(counts);
@@ -45,7 +42,7 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 		: node.kind === "root" ? node.path.split(/[\\/]/u).filter(Boolean).at(-1) ?? node.path : node.name;
 	const describe = (node: IndexMapNode): string => `${label(node)} · ${t(STATE_LABEL[radialState(node)])} · ${t("settingsSources.indexMap.folderCounts", { indexed: number.format(node.counts.indexed), total: number.format(indexMapTargets(node.counts)) })}`;
 	const enter = (node: IndexMapNode): void => {
-		setActiveKey(keyOf(node));
+		setActiveKey(nodeKey(node));
 		if ((node.kind === "folder" || node.kind === "root") && node.state !== "excluded") setFocusPath(node.path);
 	};
 	const roots = map?.nodes.filter((node) => node.parent === null) ?? [];
@@ -69,7 +66,7 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 			<div className="index-map-body">
 				<div className="index-map-stage">
 					<svg className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")}>
-						{sectors.map(({ node, path }) => <path key={node.id} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={active !== null && keyOf(active) === keyOf(node) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} onPointerEnter={() => setActiveKey(keyOf(node))} onFocus={() => setActiveKey(keyOf(node))} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
+						{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={active !== null && nodeKey(active) === nodeKey(node) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} onPointerEnter={() => setActiveKey(nodeKey(node))} onFocus={() => setActiveKey(nodeKey(node))} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
 					</svg>
 					{map !== null ? <button type="button" className="index-map-center" onClick={up} disabled={focus === null} aria-label={focus === null ? t("settingsSources.indexMap.allRoots") : t("settingsSources.indexMap.up")}>
 						{focus !== null ? <ArrowUpLeft size={14} aria-hidden="true" /> : null}<strong>{percent}</strong><small>{focus === null ? t("settingsSources.indexMap.allRoots") : label(focus)}</small>
@@ -95,7 +92,7 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 					</div>
 					<div className="index-map-folders" aria-label={t("settingsSources.indexMap.scopeLabel")}>
 						{focus !== null ? <button type="button" className="index-map-parent" data-action="index-map-parent" aria-label={t("settingsSources.indexMap.up")} onClick={up}><CornerLeftUp size={15} aria-hidden="true" /><span>..</span></button> : null}
-						{children.map((node) => <button type="button" key={keyOf(node)} data-state={radialState(node)} onPointerEnter={() => setActiveKey(keyOf(node))} onFocus={() => setActiveKey(keyOf(node))} onClick={() => enter(node)}>{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}<span>{label(node)}</span><small>{node.state === "excluded" ? "—" : `${number.format(node.counts.indexed)}/${number.format(indexMapTargets(node.counts))}`}</small></button>)}
+						{children.map((node) => <button type="button" key={nodeKey(node)} data-state={radialState(node)} onPointerEnter={() => setActiveKey(nodeKey(node))} onFocus={() => setActiveKey(nodeKey(node))} onClick={() => enter(node)}>{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}<span>{label(node)}</span><small>{node.state === "excluded" ? "—" : `${number.format(node.counts.indexed)}/${number.format(indexMapTargets(node.counts))}`}</small></button>)}
 					</div>
 				</aside>
 			</div>

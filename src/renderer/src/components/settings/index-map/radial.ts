@@ -16,6 +16,16 @@ export function radialState(node: IndexMapNode): RadialState {
 	return node.counts.indexed > 0 ? "partial" : "unindexed";
 }
 
+/**
+ * A node's identity across re-reads and among its siblings. Ids are renumbered whenever the tree changes, so a
+ * path and a kind name the same place instead. A parcel is the exception: folding gives one parcel per state under
+ * the same folder path, so its state is what tells them apart. A file or folder leaves its state out of the key, so
+ * one that turns blue while the pointer is on it stays the item being shown.
+ */
+export function nodeKey(node: IndexMapNode): string {
+	return node.kind === "parcel" ? `parcel\u0000${node.path}\u0000${node.state}` : `${node.kind}\u0000${node.path}`;
+}
+
 export interface RadialSector {
 	readonly node: IndexMapNode;
 	readonly start: number;

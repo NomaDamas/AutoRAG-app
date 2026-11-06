@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 import { INDEX_MAP_REFRESH_MS, useLiveIndexMap, type LiveIndexMap } from "../src/renderer/src/components/settings/index-map/useLiveIndexMap";
 import { emptyIndexMapCounts, type IndexMap } from "../src/shared/index-map-contract";
 
@@ -30,7 +30,7 @@ function mapOf(indexed: number): IndexMap {
 
 interface Harness {
 	live(): LiveIndexMap;
-	read: ReturnType<typeof vi.fn<() => Promise<IndexMap>>>;
+	read: Mock<() => Promise<IndexMap>>;
 	refreshed(): Promise<void>;
 	setRunning(running: boolean): Promise<void>;
 }
