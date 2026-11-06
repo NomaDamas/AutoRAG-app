@@ -29,6 +29,10 @@ const TAU = Math.PI * 2;
 export const RADIAL_CENTER = 320;
 export const RADIAL_HOLE = 87;
 const OUTER_RADIUS = 300;
+/** An excluded folder holds few or no files, so by count it would be a hairline: it keeps at least this angle (about 4°), wide enough to see, hover and click. */
+const EXCLUDED_MIN_ANGLE = (4 * Math.PI) / 180;
+/** ...but never more than this share of the ring it sits in, so a small parent is not swallowed by its excluded child. */
+const EXCLUDED_MAX_FLOOR = 0.25;
 
 function point(radius: number, angle: number): string {
 	return `${RADIAL_CENTER + Math.sin(angle) * radius},${RADIAL_CENTER - Math.cos(angle) * radius}`;
@@ -62,12 +66,36 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 	const rings = Math.max(1, Math.min(maxRings, Math.max(0, ...roots.map(depthOf))));
 	const step = (OUTER_RADIUS - RADIAL_HOLE) / rings;
 	const result: RadialSector[] = [];
+	/** Angular share of each sibling: by file count, except an excluded folder keeps its visible minimum. */
+	const shares = (siblings: readonly IndexMapNode[], span: number): number[] => {
+		const raw = siblings.map((node) => weights.get(node.id) ?? 1);
+		const floor = siblings.map((node) => (node.state === "excluded" ? Math.min(EXCLUDED_MIN_ANGLE / span, EXCLUDED_MAX_FLOOR) : 0));
+		const pinned = new Set<number>();
+		// Pin every sibling whose proportional share is under its floor; the others split what is left in proportion.
+		for (;;) {
+			let pinnedShare = 0;
+			let freeWeight = 0;
+			raw.forEach((weight, index) => {
+				if (pinned.has(index)) pinnedShare += floor[index]!;
+				else freeWeight += weight;
+			});
+			const scale = Math.max(0, 1 - pinnedShare) / (freeWeight || 1);
+			const next = raw.findIndex((weight, index) => !pinned.has(index) && floor[index]! > 0 && weight * scale < floor[index]!);
+			if (next >= 0) {
+				pinned.add(next);
+				continue;
+			}
+			const parts = raw.map((weight, index) => (pinned.has(index) ? floor[index]! : weight * scale));
+			const sum = parts.reduce((a, b) => a + b, 0) || 1;
+			return parts.map((part) => part / sum);
+		}
+	};
 	const visit = (siblings: readonly IndexMapNode[], start: number, end: number, level: number): void => {
 		if (level >= maxRings) return;
-		const total = siblings.reduce((sum, node) => sum + (weights.get(node.id) ?? 1), 0);
+		const parts = shares(siblings, end - start);
 		let cursor = start;
-		for (const node of siblings) {
-			const next = cursor + ((end - start) * (weights.get(node.id) ?? 1)) / Math.max(1, total);
+		siblings.forEach((node, index) => {
+			const next = cursor + (end - start) * (parts[index] ?? 0);
 			const gap = Math.min(0.007, (next - cursor) * 0.08);
 			const inner = RADIAL_HOLE + level * step + 1;
 			const outer = inner + step - 3;
@@ -77,7 +105,7 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 			result.push({ node, start: cursor, end: next, inner, outer, path: sectorPath(middle - half, middle + half, inner, outer) });
 			visit(children.get(node.id) ?? [], cursor, next, level + 1);
 			cursor = next;
-		}
+		});
 	};
 	visit(roots, 0, TAU, 0);
 	return result;

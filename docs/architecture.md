@@ -358,9 +358,19 @@ hierarchy (`src/renderer/src/components/settings/index-map/`). Search roots
 occupy the innermost ring; descendant folders and files appear progressively
 farther out. Folder sectors partition angles by represented file count, not
 bytes; individual files are narrow radial strokes. `radial.ts` computes SVG
-annular paths, with up to nine visible rings. Clicking a folder reveals its
-subtree; the center goes up, and the overview button restores all roots.
-The side panel shows the hovered/focused item's path, completion and child list.
+annular paths, with up to nine visible rings. The legend sits above the chart.
+Clicking a folder reveals its subtree; the center goes up, and the overview
+button restores all roots. The side panel shows the hovered/focused item's path,
+completion and child list; inside a folder its first row is `..`, which goes up
+one level like the center. The center shows only the percentage and the scope
+name.
+
+Angles follow file counts, with one exception: an excluded folder holds few or no
+counted files, so by count it would be a hairline beside a large sibling (42
+excluded folders in a 6,866-file scope were each about 0.05° wide: in the data,
+invisible on screen). `layoutRadial` gives each excluded sector at least about 4°,
+capped at a quarter of its parent's ring, and the siblings share what is left in
+proportion. Folding into parcels is silent; only a truncated scan prints a note.
 
 `src/main/index-map.ts` runs on the librarian thread (`indexMap` in
 `librarian-contract.ts`). It walks without symlinks and respects refresh's
@@ -392,7 +402,8 @@ losing the focused folder path; selection is cleared because node ids can move.
 The UI strings ship in Korean, English, Japanese and Simplified Chinese.
 Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`.
 Real app QA: `scripts/manual-qa/run-qa-finder-index-map.mjs` (English/Korean,
-four colors, eligible-only percentages, drill/up/overview and live exclusion).
+four colors, eligible-only percentages, drill/up/`..`/overview, excluded folders
+wide enough to see and hover, and live exclusion).
 
 ## Error reports (Sentry)
 

@@ -1144,10 +1144,11 @@
 
 /* ----------------------------------------------------------------- Modal -- */
 
+/* Above the window's resize grips (z-20) and split handles (z-30), which would otherwise show through the scrim and take clicks; below menus and dialogs (z-60+). */
 .settings-view .settings-modal-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 20;
+	z-index: 40;
 	display: grid;
 	place-items: center;
 	background: var(--scrim-modal);
@@ -1420,17 +1421,17 @@
 .settings-view .index-map-folders span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-view .index-map-folders small { color: var(--text-muted); font-size: inherit; font-variant-numeric: tabular-nums; }
 .settings-view .index-map-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-24); background: var(--bg-window); color: var(--text-muted); font-size: var(--font-size-body); text-align: center; }
-.settings-view .index-map-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-12); margin-top: var(--space-16); padding-top: var(--space-12); border-top: 1px solid var(--border-divider); }
-.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
+.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0 0 var(--space-12); padding: 0 0 var(--space-12); border-bottom: 1px solid var(--border-divider); list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
 .settings-view .index-map-legend li { display: flex; align-items: center; gap: var(--space-6); }
 .settings-view .index-map-legend-swatch { width: 9px; height: 9px; border-radius: var(--radius-full); background: var(--index-map-color); }
-.settings-view .index-map-footer p { margin: 0; color: var(--text-faint); font-size: var(--font-size-meta); }
+.settings-view .index-map-folders .index-map-parent { color: var(--text-muted); }
+.settings-view .index-map-folders .index-map-parent svg { color: var(--text-muted); }
 .settings-view .settings-modal .index-map-note { margin-top: var(--space-6); font-size: var(--font-size-meta); }
 @media (max-width: 760px) {
 	.settings-view .settings-modal.index-map-modal { padding: var(--space-16); width: calc(100% - 24px); }
 	.settings-view .index-map-body { grid-template-columns: minmax(0, 1fr) 180px; gap: var(--space-12); }
 	.settings-view .index-map-sidebar { padding-left: var(--space-12); }
-	.settings-view .index-map-center span, .settings-view .index-map-center small { display: none; }
+	.settings-view .index-map-center small { display: none; }
 }
 
 .settings-view .settings-code {

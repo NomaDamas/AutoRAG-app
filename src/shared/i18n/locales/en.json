@@ -3170,14 +3170,12 @@
     "indexMap": {
       "title": "Index map",
       "desc": "Folders and files unfold from the center outward. Only supported files are shown; folder colors reflect completion across their indexing targets.",
-      "coverageLabel": "Indexed",
       "coverage": "{{indexed}} of {{total}} indexed",
       "allRoots": "All search roots",
       "scopeLabel": "Current scope",
       "up": "Go to parent folder",
       "selectHint": "Hover over a segment to see its path and indexing status.",
       "excludedHint": "This path is excluded from indexing and does not affect completion.",
-      "dragHint": "Click a folder to zoom in · Click the center to go up",
       "canvasLabel": "Radial indexing map, from search roots at the center to descendant files at the edge",
       "loading": "Surveying the search scope…",
       "error": "Couldn't load the map: {{message}}",
@@ -3189,7 +3187,6 @@
       "reload": "Reload",
       "legendLabel": "Legend",
       "truncated": "The search scope is too large, so only the first {{total}} files were surveyed.",
-      "folded": "{{total}} files are too many to draw one by one, so files in the same state are grouped together.",
       "state": {
         "indexed": "Complete",
         "partial": "Partly indexed",

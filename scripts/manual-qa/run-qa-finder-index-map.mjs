@@ -336,6 +336,50 @@ check("unsupported files and their folder are left off the map", leaked.length =
 const privateFill = paths.find((p) => hasTail(p.path, "private"))?.fill;
 check("the excluded folder is drawn in the excluded colour", privateFill === colorByState.get("excluded"), `${privateFill} vs ${colorByState.get("excluded")}`);
 
+// Excluded folders must be wide enough to see and to hit with a real pointer, not a hairline beside a big sibling.
+const widths = await page.evaluate(() =>
+	Object.fromEntries(
+		[...document.querySelectorAll('.index-map-chart path[data-state="excluded"][data-kind="folder"]')].map((path) => {
+			const box = path.getBoundingClientRect();
+			return [path.getAttribute("data-path"), Math.max(box.width, box.height)];
+		}),
+	),
+);
+const thinnest = Math.min(...Object.values(widths));
+check("every excluded folder is drawn wide enough to see", Object.keys(widths).length >= 2 && thinnest >= 8, JSON.stringify(widths));
+const privatePath = await findPath({ kind: "folder", tail: ["private"] });
+if (privatePath !== null) await hoverPath(privatePath);
+await page.waitForTimeout(300);
+const privateDetails = await details();
+check("hovering an excluded folder names it and says it is excluded", privateDetails.includes("private") && /Excluded/u.test(privateDetails), privateDetails.slice(0, 160));
+
+// The text the person asked to drop stays gone: no label under the percent, no fold note, no bottom hint.
+const chrome = await page.evaluate(() => ({
+	centerText: document.querySelector(".index-map-center")?.innerText.replace(/\s+/gu, " ").trim() ?? "",
+	footer: document.querySelector(".index-map-footer") !== null,
+	note: document.querySelector(".index-map-note")?.textContent ?? null,
+	legendAbove: (() => {
+		const legend = document.querySelector(".index-map-legend")?.getBoundingClientRect();
+		const body = document.querySelector(".index-map-body")?.getBoundingClientRect();
+		return legend !== undefined && body !== undefined && legend.bottom <= body.top + 1;
+	})(),
+	modalText: document.querySelector(".index-map-modal")?.innerText ?? "",
+}));
+check("the centre shows only the percent and the scope name", !/Indexed$/u.test(chrome.centerText) && /^\d+%/u.test(chrome.centerText), chrome.centerText);
+check("no bottom hint or fold note", !chrome.footer && chrome.note === null && !/Click a folder to zoom/u.test(chrome.modalText) && !/grouped together/u.test(chrome.modalText), String(chrome.note));
+check("the legend sits above the chart", chrome.legendAbove);
+check("no '..' row while the whole scope is shown", (await page.locator('[data-action="index-map-parent"]').count()) === 0);
+// The window's resize grips must not show through the modal: a real pointer anywhere over it lands inside the dialog.
+const throughModal = await page.evaluate(() => {
+	const grips = [...document.querySelectorAll('[role="separator"]')].filter((grip) => !grip.closest(".settings-modal-backdrop"));
+	return grips.map((grip) => {
+		const box = grip.getBoundingClientRect();
+		const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
+		return { label: grip.getAttribute("aria-label"), inside: hit?.closest(".settings-modal-backdrop") !== null };
+	});
+});
+check("no resize grip shows through the modal", throughModal.length > 0 && throughModal.every((grip) => grip.inside), JSON.stringify(throughModal));
+
 // Hover a folder: the sidebar names it and counts it.
 const alpha = await findPath({ kind: "folder", tail: ["projects", "alpha"] });
 check("the alpha folder is on the chart", alpha !== null);
@@ -368,6 +412,16 @@ await page.waitForTimeout(450);
 await page.locator('[data-action="index-map-overview"]').click();
 await page.waitForTimeout(350);
 check("the overview button restores the whole scope", (await centerPercent()) === PERCENT_DRIFT, `${await centerPercent()} (want ${PERCENT_DRIFT})`);
+
+// The '..' row at the top of the list goes up one level, like the centre does.
+const notesForParent = await findPath({ kind: "folder", tail: ["notes"] });
+if (notesForParent !== null) await clickPath(notesForParent);
+await page.waitForTimeout(450);
+const parentRow = page.locator('[data-action="index-map-parent"]');
+check("a '..' row heads the list inside a folder", (await parentRow.count()) === 1 && ((await page.locator(".index-map-folders > button").first().getAttribute("data-action")) === "index-map-parent"));
+await parentRow.click();
+await page.waitForTimeout(450);
+check("the '..' row goes back up to the whole scope", (await centerPercent()) === PERCENT_DRIFT && (await parentRow.count()) === 0, `${await centerPercent()}`);
 
 await page.keyboard.press("Escape");
 check("Escape closes the map", (await page.locator(".index-map-modal").count()) === 0);

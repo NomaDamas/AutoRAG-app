@@ -61,4 +61,34 @@ describe("radial indexing map", () => {
 		expect(focused.some((sector) => sector.node.path.startsWith("/b"))).toBe(false);
 		expect(focused.every((sector) => sector.outer <= 300)).toBe(true);
 	});
+
+	it("keeps an excluded folder visible next to a huge indexed sibling", () => {
+		const many = Array.from({ length: 5000 }, (_, index) => file(`/r/big/${index}.txt`, "indexed"));
+		const off: ScanDir = { ...folder("/r/node_modules", []), sealed: emptyIndexMapCounts() };
+		const map = buildIndexMap({ roots: [folder("/r", [], [folder("/r/big", many), off])], truncated: false }, 40);
+		const sectors = layoutRadial(map, null);
+		const arc = (path: string): number => {
+			const sector = sectors.find((candidate) => candidate.node.path === path)!;
+			return ((sector.end - sector.start) * 180) / Math.PI;
+		};
+		// A single excluded folder beside 5000 files used to be 0.07° wide: present in the data, invisible on screen.
+		expect(arc("/r/node_modules")).toBeGreaterThanOrEqual(3);
+		expect(arc("/r/big")).toBeGreaterThan(300);
+		for (const sector of sectors) {
+			if (sector.node.parent === null) continue;
+			const parent = sectors.find((candidate) => candidate.node.id === sector.node.parent)!;
+			expect(sector.start).toBeGreaterThanOrEqual(parent.start - 1e-9);
+			expect(sector.end).toBeLessThanOrEqual(parent.end + 1e-9);
+		}
+	});
+
+	it("leaves an ordinary small sibling proportional", () => {
+		const map = buildIndexMap({ roots: [folder("/r", [], [folder("/r/a", Array.from({ length: 3 }, (_, i) => file(`/r/a/${i}.txt`, "indexed"))), folder("/r/b", [file("/r/b/0.txt", "unindexed")])])], truncated: false }, 40);
+		const sectors = layoutRadial(map, null);
+		const span = (path: string): number => {
+			const sector = sectors.find((candidate) => candidate.node.path === path)!;
+			return sector.end - sector.start;
+		};
+		expect(span("/r/a")).toBeCloseTo(3 * span("/r/b"));
+	});
 });
