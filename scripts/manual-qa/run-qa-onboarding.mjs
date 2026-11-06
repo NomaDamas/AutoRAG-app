@@ -158,8 +158,8 @@ try {
 
 	// folders: the folders the run will read, switched on, before anything is read.
 	await page.waitForSelector('.fr-root[data-screen="folders"]', { timeout: 60_000 });
-	await page.waitForSelector(".fr-folders .fr-chip", { timeout: 30_000 });
-	const chipsOn = await page.locator('.fr-folders .fr-chip[aria-pressed="true"]').count();
+	await page.waitForSelector(".fr-folders .fr-folder-chip", { timeout: 30_000 });
+	const chipsOn = await page.locator('.fr-folders .fr-folder-chip[aria-pressed="true"]').count();
 	check("the folder screen offers at least one folder switched on", chipsOn > 0, String(chipsOn));
 	await shot(page, "01-folders.png");
 	await page.locator('[data-action="folders-start"]').click();

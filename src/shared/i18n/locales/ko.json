@@ -845,15 +845,16 @@
     },
     "game": {
       "invite": "눌러보세요",
-      "hint": "우클릭이나 Shift+클릭으로 깃발을 꽂아요",
+      "hint": "깃발 꽂기 : 우클릭이나 Shift+클릭",
       "remaining": "남은 로고",
       "time": "걸린 시간",
-      "best": "최고 {{time}}",
+      "seconds": "{{time}} 초",
+      "close": "게임 닫기",
       "board": "로고 찾기 게임판",
       "won": "로고를 모두 찾았어요!",
       "record": "새 기록이에요!",
       "lost": "앗, 로고가 숨어 있었어요",
-      "again": "다시 하기"
+      "again": "다시하기"
     },
     "ready": {
       "title": "파일을 다 읽었어요",

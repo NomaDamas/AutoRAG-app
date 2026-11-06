@@ -149,6 +149,7 @@ export function FirstRun({
 		if (status?.stage === "failed") setPlaying(false);
 	}, [status?.stage]);
 	const startGame = useCallback(() => setPlaying(true), []);
+	const stopGame = useCallback(() => setPlaying(false), []);
 
 	const begin = useCallback(() => {
 		if (leaving) return;
@@ -177,7 +178,7 @@ export function FirstRun({
 				<div className={cn("fr-stage", leaving && "fr-stage--leaving")}>
 					<div className="fr-drag" />
 					{screen === "folders" ? <FoldersScreen onStart={startWith} /> : null}
-					{screen === "setup" ? <SetupScreen status={status} playing={playing} onPlay={startGame} onStart={begin} /> : null}
+					{screen === "setup" ? <SetupScreen status={status} playing={playing} onPlay={startGame} onStop={stopGame} onStart={begin} /> : null}
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
 			) : null}
@@ -205,15 +206,15 @@ const CLOUD_LABELS: Readonly<Partial<Record<FirstRunFolderKind, string>>> = {
 function FolderIcon({ kind }: { readonly kind: FirstRunFolderKind }): ReactElement {
 	switch (kind) {
 		case "desktop":
-			return <DesktopFolderIcon className="fr-chip-icon" />;
+			return <DesktopFolderIcon className="fr-folder-chip-icon" />;
 		case "documents":
-			return <DocumentsFolderIcon className="fr-chip-icon" />;
+			return <DocumentsFolderIcon className="fr-folder-chip-icon" />;
 		case "downloads":
-			return <DownloadsFolderIcon className="fr-chip-icon" />;
+			return <DownloadsFolderIcon className="fr-folder-chip-icon" />;
 		case "iCloudDrive":
-			return <CloudFolderIcon className="fr-chip-icon" />;
+			return <CloudFolderIcon className="fr-folder-chip-icon" />;
 		default:
-			return <DriveFolderIcon className="fr-chip-icon" />;
+			return <DriveFolderIcon className="fr-folder-chip-icon" />;
 	}
 }
 
@@ -264,14 +265,14 @@ function FoldersScreen({ onStart }: { readonly onStart: (folders: readonly strin
 			<Logo className="fr-logo--stage" mark />
 			<h1 className="fr-title fr-title--stage">{t("firstRun.folders.title", { app: APP_NAME })}</h1>
 			<p className="fr-lead fr-lead--stage">{t("firstRun.folders.lead")}</p>
-			<div className="fr-chips" role="group" aria-label={t("firstRun.folders.groupLabel")}>
+			<div className="fr-folder-chips" role="group" aria-label={t("firstRun.folders.groupLabel")}>
 				{(folders ?? []).map((folder) => {
 					const on = chosen.has(folder.path);
 					return (
 						<button
 							key={folder.path}
 							type="button"
-							className="fr-chip"
+							className="fr-folder-chip"
 							data-state={on ? "on" : "off"}
 							data-folder-kind={folder.kind}
 							aria-pressed={on}
@@ -298,11 +299,14 @@ function SetupScreen({
 	status,
 	playing,
 	onPlay,
+	onStop,
 	onStart,
 }: {
 	readonly status: SetupStatus | null;
 	readonly playing: boolean;
 	readonly onPlay: () => void;
+	/** The game's ✕: back to the floating logo (and to the ready screen if the run finished meanwhile). */
+	readonly onStop: () => void;
 	readonly onStart: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -314,6 +318,10 @@ function SetupScreen({
 	const dockFrom = useRef<number | null>(null);
 	const done = playing && stage === "ready";
 	useEnterToStart(onStart, done);
+	const closeGame = useCallback(() => {
+		setFading(false);
+		onStop();
+	}, [onStop]);
 
 	// A failed run drops the game; once it recovers the screen starts over from the floating logo.
 	useEffect(() => {
@@ -371,16 +379,16 @@ function SetupScreen({
 					<p className="fr-lead fr-lead--stage">{t("firstRun.setup.lead", { app: APP_NAME })}</p>
 				</div>
 			)}
-			{playing ? <MineGame /> : null}
+			{playing ? <MineGame onClose={closeGame} /> : null}
 			<div className="fr-dock" ref={dockRef}>
 				{done ? (
 					<div className="fr-dock-ready" data-role="dock-ready">
-						<Logo className="fr-logo--xs" />
+						<Logo className="fr-logo--dock" mark />
 						<div className="fr-dock-copy">
 							<h1 className="fr-title fr-title--dock">{t("firstRun.ready.title")}</h1>
 							<p className="fr-dock-lead">{readyCount > 0 ? t("firstRun.ready.lead", { count: readyCount.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
 						</div>
-						<button type="button" className="fr-btn fr-btn--primary" data-action="first-run-start" onClick={onStart}>
+						<button type="button" className="fr-btn fr-btn--primary fr-btn--stage" data-action="first-run-start" onClick={onStart}>
 							{t("firstRun.ready.start")}
 							<kbd className="fr-kbd">↵</kbd>
 						</button>

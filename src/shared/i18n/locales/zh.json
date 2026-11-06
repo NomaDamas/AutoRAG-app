@@ -845,10 +845,11 @@
     },
     "game": {
       "invite": "点我试试",
-      "hint": "右键或 Shift+点击插旗",
+      "hint": "插旗：右键或 Shift+点击",
       "remaining": "剩余徽标",
       "time": "用时",
-      "best": "最佳 {{time}}",
+      "seconds": "{{time}} 秒",
+      "close": "关闭游戏",
       "board": "找徽标游戏",
       "won": "徽标全部找到啦!",
       "record": "新纪录!",
