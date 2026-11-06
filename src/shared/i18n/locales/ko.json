@@ -313,7 +313,8 @@
       "showInList": "목록에서 보기",
       "preview": "미리보기",
       "placeholderAny": "무엇이든 물어보세요"
-    }
+    },
+    "fileActions": "파일 동작"
   },
   "aiSearch": {
     "title": "AI 검색",

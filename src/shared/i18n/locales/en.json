@@ -313,7 +313,8 @@
       "showInList": "Show in list",
       "preview": "Preview",
       "placeholderAny": "Ask anything"
-    }
+    },
+    "fileActions": "File actions"
   },
   "aiSearch": {
     "title": "AI Search",

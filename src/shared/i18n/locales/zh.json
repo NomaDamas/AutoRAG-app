@@ -313,7 +313,8 @@
       "showInList": "在列表中显示",
       "preview": "预览",
       "placeholderAny": "随便问点什么"
-    }
+    },
+    "fileActions": "文件操作"
   },
   "aiSearch": {
     "title": "AI 搜索",

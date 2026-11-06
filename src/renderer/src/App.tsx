@@ -925,6 +925,9 @@ export function App(): ReactElement {
 											pending={chatPending}
 											running={chatRunning}
 											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending)}
+											onSummarize={() => {
+												if (chatTarget !== null) void inspectorChats.summarize(chatTabId, chatTarget);
+											}}
 											onStop={inspectorChats.stop}
 											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
 											onOpenHistory={openAiHistory}

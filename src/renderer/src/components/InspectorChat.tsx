@@ -2,8 +2,8 @@
  * The inspector's AI chat (see `state/inspector-chat.ts`): AI Search in the
  * right column, beside the file it is about.
  *
- *   InspectorChatDock  the Info view's foot: the resume link and the composer
- *                      (the action bar's "AI 요약" asks here too). The first question carries the selection as
+ *   InspectorChatDock  the Info view's foot: the resume link, "AI 요약", and the
+ *                      composer. The first question carries the selection as
  *                      an attachment card.
  *   InspectorChatView  the chat itself, in place of the Info view: questions
  *                      (each with the file it brought in), answers with their
@@ -30,6 +30,7 @@ import {
 	HistoryIcon,
 	MessagesIcon,
 	NewChatIcon,
+	SparklesIcon,
 } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
@@ -168,6 +169,8 @@ export interface InspectorChatDockProps {
 	readonly pending: ChatAttachment | null;
 	readonly running: boolean;
 	readonly onAsk: (text: string) => boolean;
+	/** "AI 요약" about the selection, asked in this chat. */
+	readonly onSummarize: () => void;
 	readonly onStop: () => void;
 	readonly onResume: () => void;
 	readonly onOpenHistory: () => void;
@@ -181,6 +184,7 @@ export function InspectorChatDock({
 	pending,
 	running,
 	onAsk,
+	onSummarize,
 	onStop,
 	onResume,
 	onOpenHistory,
@@ -210,6 +214,19 @@ export function InspectorChatDock({
 					<span className="truncate">{t("inspector.chat.expired")}</span>
 				</button>
 			) : null}
+			{target === null ? null : (
+				<div className="flex mb-6">
+					<button
+						type="button"
+						className="inline-flex h-chip items-center gap-4 rounded-full border border-border-strong bg-transparent px-10 text-tile text-ink cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default"
+						disabled={running}
+						onClick={onSummarize}
+					>
+						<SparklesIcon size={12} />
+						{t("inspector.actions.askAi")}
+					</button>
+				</div>
+			)}
 			<Composer pending={pending} removable={chat !== null} placeholder={placeholder} running={running} onSend={onAsk} onStop={onStop} onDismiss={onDismiss} />
 		</div>
 	);

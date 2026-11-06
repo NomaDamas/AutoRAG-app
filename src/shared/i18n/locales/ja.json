@@ -313,7 +313,8 @@
       "showInList": "リストで表示",
       "preview": "プレビュー",
       "placeholderAny": "何でも質問してください"
-    }
+    },
+    "fileActions": "ファイル操作"
   },
   "aiSearch": {
     "title": "AI 検索",
