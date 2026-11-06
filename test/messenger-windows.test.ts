@@ -12,7 +12,6 @@ import {
 	fillSlackDesktopPath,
 	slacrawlConfigText,
 } from "../src/main/messenger-config";
-import { detectSources } from "../src/main/onboarding-sources";
 import { datasourceSupported, kakaoSupported } from "../src/shared/messenger-platform";
 
 const directories: string[] = [];
@@ -40,30 +39,6 @@ describe("KakaoTalk is a macOS-only source", () => {
 
 		expect(Object.keys(withIndexingPoliciesApplied(config, "win32").datasources ?? {})).toEqual(["slack"]);
 		expect(Object.keys(withIndexingPoliciesApplied(config, "darwin").datasources ?? {})).toEqual(["kakao", "slack", "kakao-work"]);
-	});
-
-	it("is never probed on Windows, even when a lazykatok binary happens to be on PATH", async () => {
-		const probed: string[] = [];
-		// Detecting on win32 writes discrawl's default config under the home, so the home must be a real temp directory:
-		// a Windows-style path is only a relative path on the machine running the test, and the file lands in the checkout.
-		const root = await home();
-		const result = await detectSources({
-			platform: "win32",
-			home: root,
-			env: { LOCALAPPDATA: join(root, "AppData", "Local"), APPDATA: join(root, "AppData", "Roaming") },
-			run: async (command) => {
-				probed.push(command);
-				throw new Error("not found");
-			},
-			pathExists: async () => false,
-			readDirNames: async () => [],
-			readFileText: async () => {
-				throw new Error("none");
-			},
-		});
-
-		expect(probed).not.toContain("lazykatok");
-		expect(result.sources.some((source) => source.id === "kakao")).toBe(false);
 	});
 });
 
@@ -96,29 +71,6 @@ describe("WhatsApp and Spotlight are macOS-only sources too", () => {
 		} as unknown as CliConfig;
 
 		expect(Object.keys(withIndexingPoliciesApplied(config, "win32").datasources ?? {})).toEqual(["whatsapp"]);
-	});
-
-	it("is never probed on Windows, even when a wacrawl binary happens to be on PATH", async () => {
-		const probed: string[] = [];
-		const root = await home();
-		const result = await detectSources({
-			platform: "win32",
-			home: root,
-			env: { LOCALAPPDATA: join(root, "AppData", "Local"), APPDATA: join(root, "AppData", "Roaming") },
-			run: async (command) => {
-				probed.push(command);
-				if (command === "wacrawl") return JSON.stringify({ desktop: { available: true, message_rows: 9, chat_rows: 1 } });
-				throw new Error(`${command}: not found`);
-			},
-			pathExists: async () => false,
-			readDirNames: async () => [],
-			readFileText: async () => {
-				throw new Error("none");
-			},
-		});
-
-		expect(probed).not.toContain("wacrawl");
-		expect(result.sources.some((source) => source.id === "whatsapp")).toBe(false);
 	});
 });
 
@@ -262,60 +214,3 @@ describe("slacrawl and discrawl config on Windows", () => {
 	});
 });
 
-describe("messenger detection on Windows", () => {
-	const winDeps = (root: string, run: (command: string, args: readonly string[]) => Promise<string>) => ({
-		platform: "win32" as const,
-		home: root,
-		env: { LOCALAPPDATA: join(root, "AppData", "Local"), APPDATA: join(root, "AppData", "Roaming") } as NodeJS.ProcessEnv,
-		run,
-		pathExists: async () => false,
-		readDirNames: async () => [],
-		readFileText: async () => {
-			throw new Error("none");
-		},
-	});
-
-	it("finds Discord once its config exists, where `doctor` used to stop at a missing config", async () => {
-		const root = await home();
-		const configPath = join(root, "AppData", "Local", "discrawl", "config.toml");
-		const result = await detectSources(
-			winDeps(root, async (command, args) => {
-				if (command !== "discrawl") throw new Error(`${command}: not found`);
-				const exists = await readFile(configPath, "utf8").then(() => true, () => false);
-				if (args.includes("doctor")) return JSON.stringify(exists ? { config: "ok", database: "ok" } : { config: "open config.toml: cannot find the path" });
-				return JSON.stringify({ messages: 16, dry_run: true });
-			}),
-		);
-
-		expect(result.sources).toEqual([{ id: "discord", facts: { messages: 16 } }]);
-	});
-
-	it("finds Slack from the desktop app itself when nothing is archived yet", async () => {
-		const root = await home();
-		const result = await detectSources(
-			winDeps(root, async (command, args) => {
-				if (command === "where") return "slacrawl.exe";
-				if (command !== "slacrawl") throw new Error(`${command}: not found`);
-				if (args.includes("sql")) return JSON.stringify([{ n: 0 }]);
-				return JSON.stringify({ desktop_source: { available: true, summary: { workspace_count: 2 } } });
-			}),
-		);
-
-		expect(result.sources).toEqual([{ id: "slack", facts: { workspaces: 2 } }]);
-		expect(await readFile(join(root, ".slacrawl", "config.toml"), "utf8")).toContain("[slack.desktop]");
-	});
-
-	it("does not offer Slack when the desktop app has no signed-in workspace", async () => {
-		const root = await home();
-		const result = await detectSources(
-			winDeps(root, async (command, args) => {
-				if (command === "where") return "slacrawl.exe";
-				if (command !== "slacrawl") throw new Error(`${command}: not found`);
-				if (args.includes("sql")) return JSON.stringify([{ n: 0 }]);
-				return JSON.stringify({ desktop_source: { available: false } });
-			}),
-		);
-
-		expect(result.sources).toEqual([]);
-	});
-});

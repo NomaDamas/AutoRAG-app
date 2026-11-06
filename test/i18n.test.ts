@@ -37,25 +37,25 @@ describe("i18n configuration and locale keys", () => {
 	/** Names that read the same in every language: products, brands, plan tiers, URLs, and bare placeholders. */
 	const NAME_ONLY = /^(?:[\s\W\d]|KakaoTalk|Slack|Discord|Telegram|WhatsApp|GitHub|Notion|Obsidian|Anthropic|OpenAI|OpenRouter|Google|Ollama|Free|Air|Pro|Max|BYOK|https?:\/\/\S+|\{\{\w+\}\})*$/u;
 
-	it("translates every onboarding string in ja and zh instead of leaving English or Korean copy behind", () => {
+	it("translates every first-run string in ja and zh instead of leaving English or Korean copy behind", () => {
 		const english = leaves(resources.en.translation);
 		for (const lang of ["ja", "zh"] as const) {
 			const other = leaves(resources[lang].translation);
 			const untranslated = [...other]
-				.filter(([key, text]) => key.startsWith("onboarding.") && text === english.get(key) && !NAME_ONLY.test(text))
+				.filter(([key, text]) => key.startsWith("firstRun.") && text === english.get(key) && !NAME_ONLY.test(text))
 				.map(([key]) => key);
 			expect(untranslated, lang).toEqual([]);
 		}
 	});
 
-	it("keeps English prose words out of the Korean onboarding copy", () => {
-		const prose = [...ko].filter(([key, text]) => key.startsWith("onboarding.") && /\b(?:Settings|System Settings|Budget summary|operating cost|provider|runtime|workspace)\b/u.test(text));
+	it("keeps English prose words out of the Korean first-run copy", () => {
+		const prose = [...ko].filter(([key, text]) => key.startsWith("firstRun.") && /\b(?:Settings|System Settings|Budget summary|operating cost|provider|runtime|workspace)\b/u.test(text));
 		expect(prose.map(([key]) => key)).toEqual([]);
 	});
 
-	it("keeps English prose words out of the ja and zh onboarding copy", () => {
+	it("keeps English prose words out of the ja and zh first-run copy", () => {
 		for (const lang of ["ja", "zh"] as const) {
-			const prose = [...leaves(resources[lang].translation)].filter(([key, text]) => key.startsWith("onboarding.") && /\b(?:Settings|provider|runtime|workspace|Budget summary|operating cost)\b/iu.test(text));
+			const prose = [...leaves(resources[lang].translation)].filter(([key, text]) => key.startsWith("firstRun.") && /\b(?:Settings|provider|runtime|workspace|Budget summary|operating cost)\b/iu.test(text));
 			expect(prose.map(([key]) => key), lang).toEqual([]);
 		}
 	});

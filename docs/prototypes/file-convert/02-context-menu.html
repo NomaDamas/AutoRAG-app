@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 2 · 컨텍스트 메뉴</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 2: 변환 is a submenu of the row context menu; many files share one submenu. */
+		.menu.main { width: 232px; }
+		.menu.sub { width: 252px; }
+		.mi.soon { color: var(--text-faint); }
+		.mi .tag { margin-left: auto; font-size: 10.5px; color: var(--text-muted); }
+		.mi:hover .tag, .mi.hover .tag { color: var(--text-on-accent); }
+		.sel-count { position: absolute; right: 16px; top: 66px; z-index: 6; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* Two scenarios: one file selected, or several photos selected (the submenu then offers what they all share). */
+		let scenario = "single";
+		const single = [FILES[2]];
+		const multi = [FILES[4], FILES[5]];
+
+		function subMenu(files) {
+			const ext = files[0].ext;
+			const same = files.every((f) => f.ext === ext);
+			const targets = same ? TARGETS[ext] : ["pdf", "zip"];
+			const need = NEEDS_ENGINE[ext] || {};
+			const rows = targets.map((t) => `<button class="mi">${icon("arrow-right", "sm")}<span>${t.toUpperCase()} 형식으로 변환</span>${need[t] ? `<span class="tag">${need[t]} 필요</span>` : ""}</button>`);
+			const tasks = (SAME_FORMAT_TASKS[ext] || []).map(([label, ic]) => `<button class="mi">${icon(ic)}<span>${label}</span></button>`);
+			return `<div class="menu sub" id="sub">
+				<div class="cap">${files.length > 1 ? `${files.length}개 항목 · 모두 ${ext.toUpperCase()}` : `${ext.toUpperCase()}에서`}</div>
+				${rows.join("")}
+				${tasks.length ? `<div class="div"></div>${tasks.join("")}` : ""}
+				<div class="div"></div>
+				<button class="mi">${icon("sliders-horizontal")}<span>변환 옵션…</span><kbd>⌥⌘C</kbd></button>
+			</div>`;
+		}
+
+		function render() {
+			const files = scenario === "single" ? single : multi;
+			const selIds = new Set(files.map((f) => f.id));
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 2", "행 우클릭 메뉴의 “변환” 하위 메뉴. 여러 개를 고르면 공통으로 가능한 형식만 보입니다.", "02-context-menu.html", "파일 여러 개를 골라 놓고 우클릭하는 평소 습관 그대로 변환하고 싶을 때") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${FILES.map((f) => rowHtml(f, selIds.has(f.id) ? "sel" : "")).join("")}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(files[0], baseChips())}
+				<div class="menu main" id="main">
+					<button class="mi">${icon("external-link")}<span>열기</span><kbd>⌘O</kbd></button>
+					<button class="mi">${icon("app-window")}<span>다른 앱으로 열기</span>${icon("chevron-right", "chev")}</button>
+					<div class="div"></div>
+					<button class="mi">${icon("folder")}<span>새 폴더</span><kbd>⇧⌘N</kbd></button>
+					<button class="mi hover" id="conv">${icon("arrow-right-left")}<span>변환</span>${icon("chevron-right", "chev")}</button>
+					<button class="mi">${icon("package")}<span>압축</span></button>
+					<button class="mi">${icon("share")}<span>공유</span></button>
+					<div class="div"></div>
+					<button class="mi">${icon("pencil")}<span>이름 변경</span><kbd>⌘R</kbd></button>
+					<button class="mi">${icon("copy")}<span>복제</span><kbd>⌘D</kbd></button>
+					<button class="mi">${icon("trash")}<span>휴지통으로 이동</span><kbd>⌘⌫</kbd></button>
+				</div>
+				${subMenu(files)}
+			</div>
+			<div class="proto-bar"><span>시나리오</span>
+				<button class="btn ${scenario === "single" ? "on" : ""}" id="s1">PDF 1개</button>
+				<button class="btn ${scenario === "multi" ? "on" : ""}" id="s2">HEIC 2개</button>
+			</div></div></div>`;
+			wireChrome();
+			const win = document.getElementById("win");
+			const rowEl = win.querySelector(".frow.sel");
+			const main = document.getElementById("main");
+			main.style.left = "420px"; main.style.top = `${rowEl.getBoundingClientRect().bottom - win.getBoundingClientRect().top - 4}px`;
+			placeMenu(document.getElementById("sub"), document.getElementById("conv"), win, { side: "right", dx: 4, dy: -30 });
+			document.getElementById("s1").onclick = () => { scenario = "single"; render(); };
+			document.getElementById("s2").onclick = () => { scenario = "multi"; render(); };
+			document.querySelectorAll("#sub .mi").forEach((m) => (m.onclick = () => toast("예시 화면입니다 — 변환은 실행되지 않습니다", "info")));
+		}
+		render();
+	</script>
+</body>
+</html>

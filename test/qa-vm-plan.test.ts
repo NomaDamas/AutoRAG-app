@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { guestScriptPath, needsEmbeddingAssets, orphanVmNames, parseArgs, runVmName, vmCapacity, vmExitCode } from "../scripts/qa-vm/plan.mjs";
+import { DENSE_EMBEDDING_CACHE_DIR, embeddingCacheExcludes, guestScriptPath, needsDenseEmbeddingModel, needsEmbeddingAssets, orphanVmNames, parseArgs, runVmName, vmCapacity, vmExitCode } from "../scripts/qa-vm/plan.mjs";
 
 const PREFIX = "autorag-qa-run-";
 const vm = (Name: string, Running: boolean) => ({ Name, Running });
@@ -113,5 +113,21 @@ describe("qa-vm embedding assets", () => {
 		expect(needsEmbeddingAssets({ kind: "script" })).toBe(true);
 		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["kind", "split-panes"] })).toBe(false);
 		expect(needsEmbeddingAssets({ kind: "sweep", lanes: ["datasource-status"] })).toBe(false);
+	});
+
+	it("needs the dense model only for jobs that apply the on-device embedding profile", () => {
+		expect(needsDenseEmbeddingModel({ kind: "sweep", lanes: ["settings-redesign"] })).toBe(true);
+		expect(needsDenseEmbeddingModel({ kind: "sweep", lanes: [] })).toBe(true);
+		expect(needsDenseEmbeddingModel({ kind: "script" })).toBe(true);
+		// The first run is keyword-only: parsed mirror + SPLADE, no dense model.
+		expect(needsDenseEmbeddingModel({ kind: "sweep", lanes: ["onboarding"] })).toBe(false);
+		expect(needsDenseEmbeddingModel({ kind: "sweep", lanes: ["onboarding", "kind"] })).toBe(false);
+	});
+
+	it("leaves the dense weights out of a sparse-only job's guest cache", () => {
+		expect(embeddingCacheExcludes({ kind: "sweep", lanes: ["onboarding"] })).toEqual([`/${DENSE_EMBEDDING_CACHE_DIR}/`]);
+		expect(embeddingCacheExcludes({ kind: "sweep", lanes: ["settings-redesign"] })).toEqual([]);
+		expect(embeddingCacheExcludes({ kind: "sweep", lanes: [] })).toEqual([]);
+		expect(embeddingCacheExcludes({ kind: "script" })).toEqual([]);
 	});
 });

@@ -104,6 +104,7 @@ import {
 	navigateTab,
 	openAiSearchTab,
 	openEvidenceFolderTab,
+	openOrSelectFolderTab,
 	openTab,
 	openTabAt,
 	patchActiveTab,
@@ -221,7 +222,8 @@ export interface FinderController {
 	readonly navGroups: readonly NavGroup[];
 	/** Pin, unpin, and reorder of the sidebar's Favorites (they write `AppSettings.sidebar`). */
 	readonly sidebarPins: SidebarPins;
-	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
+	/** The open right-click menu; `onEntry` is false for the empty-space menu. */
+	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number }; readonly onEntry: boolean } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
 	readonly viewMode: ViewMode;
@@ -240,6 +242,8 @@ export interface FinderController {
 	familyEntriesFor(path: string): { readonly head: FinderEntry; readonly members: readonly { readonly entry: FinderEntry; readonly relation: VersionRelation }[] } | null;
 	/** Navigate the current tab to the entry's folder and reveal the row (version-member click). */
 	revealEntry(entry: FinderEntry): void;
+	/** Navigate the current tab to `entry`'s folder and scroll `entry` into view without selecting it, so a guided click lands on the real row. */
+	showEntryFolder(entry: FinderEntry): void;
 	/** Create an "untitled folder" in the current directory and select it. */
 	newFolder(): void;
 	/** Create a new file of `format` in the current directory and select it. */
@@ -1034,6 +1038,16 @@ export function useFinderController(
 		);
 		setQueryValue("");
 		setFlashPath(entry.path);
+		scrollTarget.current = entry.path;
+	});
+
+	const showEntryFolder = useLatestCallback((entry: FinderEntry) => {
+		const dir = locationOf(entry);
+		setTabsState((state) => {
+			const switched = isVirtualTabPath(activeTab(state).path) ? openOrSelectFolderTab(state, dir) : navigateTab(state, dir);
+			return patchActiveTab(switched, (current) => ({ ...current, selection: EMPTY_SELECTION }));
+		});
+		setQueryValue("");
 		scrollTarget.current = entry.path;
 	});
 
@@ -2367,7 +2381,7 @@ export function useFinderController(
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,
 		sidebarPins,
-		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
+		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor, onEntry: contextMenu.entry !== null },
 		contextMenuEntries,
 		viewMode,
 		layout,
@@ -2446,6 +2460,7 @@ export function useFinderController(
 		quickLookPath,
 		moveSelectionBy,
 		revealEvidence,
+		showEntryFolder,
 		focusFinder,
 		marqueeSelect,
 		clickRow,

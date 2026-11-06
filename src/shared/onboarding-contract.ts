@@ -1,70 +1,47 @@
 /**
- * First-run onboarding contract shared by the main process, the preload
- * bridge, and the renderer's onboarding flow
- * (design reference: docs/design-reference/onboarding/onboarding-prototype.html).
+ * First-run contract shared by the main process, the preload bridge, and the
+ * Finder window's first-run layer (`src/renderer/src/first-run/`).
  *
- * The renderer owns the choices (the draft) and persists them through `save`
- * after every change, so a relaunch — macOS wants one after Full Disk Access
- * is granted — resumes at the same step with the same selections. The main
- * process owns everything that touches the OS or the shared AutoRAG config:
- * permission probes, folder pre-scans, connector detection, key verification
- * (secrets never cross back to the renderer), and the first index run.
+ * The first run asks one thing before it reads anything: the Finder window opens
+ * with the pending flag and the layer shows the folders it is about to read
+ * (`folders`: Desktop, Documents, Downloads and iCloud Drive switched on, other
+ * cloud drives found on this computer switched off). The person can switch any of
+ * them, then `start` takes the chosen ones and one progress bar follows while the
+ * main process does the rest on its own (macOS asks for per-folder access as each
+ * folder is read; refused folders are left out):
  *
- * Account and plan are real: the account step signs in through the system
- * browser (account-contract.ts) and the plan step reads the entitlement the
- * hosted service reports and opens its hosted checkout. The draft keeps no
- * account or payment state; both come from `window.autorag.account`.
- * Cloud embedding is available once signed in to Dazzi (Pro plan required).
- * Local embedding runs on this machine without sending corpus text off-device.
+ *  1. `scanning`  — pre-scans the chosen folders, which gives the index its file total;
+ *  2. `planning`  — when a model can be called, smart indexing proposes generated
+ *     sub-folders to leave out and every proposal is taken; without a model the
+ *     app's code-folder exclusions are all there is;
+ *  3. `indexing`  — writes the folders into the shared AutoRAG config in
+ *     keyword-only mode (parsed mirror + MinSync's bundled SPLADE encoder; dense
+ *     embedding stays opt-in in Settings) and runs the first index;
+ *  4. `preparing` — starts a duplicate (dupey) scan, and picks one question from
+ *     the user's own documents that keyword retrieval provably answers from that
+ *     document, for the guided tour;
+ *  5. `ready`.
+ *
+ * Account and plan come at the end of the tour, never before the first index.
  */
-
-import type { LocalSpecVerdict } from "./local-embedding-spec";
-import type { IndexFailure } from "./index-failure";
-import type { IndexProgressSnapshot } from "./index-progress-contract";
-import type { SmartExclusion } from "./smart-indexing-contract";
 
 export const ONBOARDING_CHANNELS = {
 	load: "onboarding:load",
-	save: "onboarding:save",
 	permissions: "onboarding:permissions",
 	openFullDiskAccess: "onboarding:openFullDiskAccess",
-	relaunch: "onboarding:relaunch",
-	requestNotifications: "onboarding:requestNotifications",
-	openNotificationSettings: "onboarding:openNotificationSettings",
-	checkNetwork: "onboarding:checkNetwork",
-	setLaunchAtLogin: "onboarding:setLaunchAtLogin",
-	folderCandidates: "onboarding:folderCandidates",
-	pickFolders: "onboarding:pickFolders",
-	scanFolders: "onboarding:scanFolders",
-	/** main → renderer event carrying one {@link FolderScan}. */
-	scanProgress: "onboarding:scanProgress",
-	embedding: "onboarding:embedding",
-	/**
-	 * Starts a streamed probe of every connector: each usable one arrives as a
-	 * {@link DetectedSource} on `sourceDetected`, then `sourcesDone` closes the run.
-	 */
-	detectSources: "onboarding:detectSources",
-	/** main → renderer event carrying one {@link DetectedSource}, as soon as its probe finishes. */
-	sourceDetected: "onboarding:sourceDetected",
-	/** main → renderer event (no payload) once every probe has finished. */
-	sourcesDone: "onboarding:sourcesDone",
-	/** Asks the model saved as the answer model for a short reply, to prove it can be called. */
-	checkModel: "onboarding:checkModel",
-	startIndexing: "onboarding:startIndexing",
-	indexStatus: "onboarding:indexStatus",
-	/** main → renderer event carrying one {@link IndexingStatus}. */
-	indexProgress: "onboarding:indexProgress",
+	// Full Disk Access is deferred to the features that really need it (Finder tag colours, KakaoTalk/WhatsApp/Mail).
+	/** The folders the first run offers to read, before it starts. */
+	folders: "onboarding:folders",
+	/** Starts the setup run, or returns the one in flight / finished. */
+	start: "onboarding:start",
+	status: "onboarding:status",
+	/** main → renderer event carrying one {@link SetupStatus}. */
+	progress: "onboarding:progress",
 	complete: "onboarding:complete",
 } as const;
 
-/** Preload argument the main process adds when the window opens on onboarding. */
+/** Preload argument the main process adds while the first run is still pending. */
 export const ONBOARDING_PENDING_FLAG = "--autorag-onboarding=1";
-
-/** Files per minute the local embedder sustains on a first index; every local ETA uses it. */
-export const LOCAL_FILES_PER_MINUTE = 85;
-
-/** Files per minute a cloud embedder would sustain; shown only as the comparison figure. */
-export const CLOUD_FILES_PER_MINUTE = 900;
 
 /**
  * Files per minute the keyword-only path sustains (documents are read and listed, never embedded).
@@ -73,126 +50,18 @@ export const CLOUD_FILES_PER_MINUTE = 900;
 export const NONE_FILES_PER_MINUTE = 450;
 export const NONE_MIN_MINUTES = 8;
 
-export type OnboardingStepId =
-	| "welcome"
-	| "permissions"
-	| "account"
-	| "folders"
-	| "smartScan"
-	| "smartScope"
-	| "embedding"
-	| "sources"
-	| "plan"
-	| "model"
-	| "roles"
-	| "indexing";
-
-/**
- * How documents are made searchable by meaning. `none` is keyword search only:
- * nothing is embedded, MinSync never runs, and no source keeps a semantic or
- * hybrid method. `local` embeds on this device; `cloud` uses the Dazzi embedder.
- */
-export type EmbedMode = "none" | "local" | "cloud";
-
-export type PlanId = "free" | "air" | "pro" | "max" | "byok";
-
-/**
- * Connectors the sources step can detect as installed, signed in, and holding data.
- * Local files are indexed through the folders step, so Spotlight/Apple Mail are
- * deliberately not offered here.
- */
-export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "notion" | "obsidian";
-
-export interface OnboardingFolderChoice {
-	readonly path: string;
-	readonly selected: boolean;
-}
-
-export interface OnboardingSourceChoice {
-	readonly id: SourceId;
-	readonly on: boolean;
-}
-
-/**
- * The bring-your-own-key answer model. The Settings config is the authority
- * (the model step writes it there); the draft only remembers which model it was.
- */
-export interface OnboardingModelChoice {
-	/** A provider id from Settings → AI 모델 (any Pi runtime, local or custom server). */
-	readonly provider: string;
-	readonly modelId: string;
-	/** Set once the provider is connected and the model is saved in the config. */
-	readonly verified: boolean;
-}
-
-/** Everything the user picked so far. Persisted verbatim by `save`. */
-export interface OnboardingDraft {
-	readonly version: 1;
-	readonly stepId: OnboardingStepId;
-	readonly notifications: boolean;
-	/** Windows: outbound network reachability was confirmed. */
-	readonly network: boolean;
-	readonly launchAtLogin: boolean;
-	/** Candidate and user-added folders, in display order. */
-	readonly folders: readonly OnboardingFolderChoice[];
-	readonly embed?: EmbedMode;
-	readonly cloudConsent?: boolean;
-	readonly sources: readonly OnboardingSourceChoice[];
-	readonly plan: PlanId;
-	/** The plan step was passed once; it then leaves the step list (back skips it). */
-	readonly planConfirmed: boolean;
-	readonly model: OnboardingModelChoice | null;
-	/**
-	 * What the smart-indexing analysis proposed, with the user's toggles. Absent
-	 * until the analysis ran; entries whose `root` is no longer selected are ignored.
-	 */
-	readonly smartScope?: readonly SmartExclusion[];
-	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
-	readonly smartScopeRoots?: readonly string[];
-	/** Whether the AI proposes sub-folders to leave out after the folders step; absent means yes. Off goes straight to the scope screen. */
-	readonly smartSuggest?: boolean;
-	/**
-	 * Set while the user is on an earlier step only to fix what stopped the first index (the embedding choice):
-	 * leaving that step goes straight back to the index instead of on through the flow.
-	 */
-	readonly resumeAt?: "indexing";
-}
-
 export interface OnboardingSnapshot {
-	/** True while onboarding still has to run in this window. */
+	/** True while the first run still has to happen. */
 	readonly pending: boolean;
-	/** Null on a first launch: the renderer seeds a fresh draft. */
-	readonly draft: OnboardingDraft | null;
+	/** False when `AUTORAG_SKIP_ONBOARDING=1` (QA lanes): the contextual tutorials stay off too. */
+	readonly tutorials: boolean;
 }
 
 export interface PermissionStatus {
 	/** `process.platform`. */
 	readonly platform: string;
-	/** macOS Full Disk Access probe (reads a TCC-protected file); null where the platform has no such gate. */
+	/** macOS Full Disk Access probe (opens a TCC-protected file); null where the platform has no such gate. */
 	readonly fullDiskAccess: boolean | null;
-	/** The stored launch-at-login choice (applied to the OS login item in packaged builds). */
-	readonly launchAtLogin: boolean;
-	readonly notificationsSupported: boolean;
-}
-
-export interface NetworkCheck {
-	readonly ok: boolean;
-	readonly error: string | null;
-}
-
-export type FolderKind = "desktop" | "documents" | "icloud" | "downloads" | "pictures" | "cloud" | "custom";
-
-export interface FolderCandidate {
-	readonly path: string;
-	/** Display name, e.g. "Documents", "Google Drive - me@example.com". */
-	readonly name: string;
-	/** `~`-abbreviated path for display. */
-	readonly displayPath: string;
-	readonly kind: FolderKind;
-	/** Documents, Desktop, Downloads and iCloud Drive start selected; Pictures and cloud drives do not. */
-	readonly defaultSelected: boolean;
-	/** Images in this folder are skipped because OCR is off in the shared config. */
-	readonly ocrOff: boolean;
 }
 
 /** Running totals of one folder's pre-scan (supported, size-capped files outside skipped folders). */
@@ -206,128 +75,68 @@ export interface FolderScan {
 	readonly error: string | null;
 }
 
-export interface EmbeddingInfo {
-	/** Local profile the first index uses. */
-	readonly profile: string;
-	readonly modelBytes: number;
-	/** The model file is already in the AutoRAG model cache (no download needed). */
-	readonly cached: boolean;
-	/** The shared config already names an embedder; onboarding leaves it as is. */
-	readonly configured: boolean;
-	/** Choosing local embedding runs the on-device model, so its weights must be downloaded (false when the config names a server of the user's own). */
-	readonly localModel: boolean;
-	/** Whether this machine meets the minimum spec for the on-device model; local embedding is off-limits when it does not. */
-	readonly localSpec: LocalSpecVerdict;
+/** Which folder a first-run choice is; the renderer turns it into a label and an icon. */
+export type FirstRunFolderKind = "desktop" | "documents" | "downloads" | "iCloudDrive" | "googleDrive" | "dropbox" | "oneDrive";
+
+/** One folder the first run offers to read. */
+export interface FirstRunFolder {
+	readonly path: string;
+	readonly kind: FirstRunFolderKind;
+	/** Switched on before the person changes anything: the OS's own folders are, other cloud drives are not. */
+	readonly selected: boolean;
 }
 
-/** Metadata a detected connector exposes, shown as its second line. */
-export interface SourceFacts {
-	readonly repos?: readonly string[];
-	readonly vaults?: readonly string[];
-	/** himalaya accounts whose login was verified; one mailcrawl archive each. */
-	readonly accounts?: readonly string[];
-	readonly workspaces?: number;
-	readonly channels?: number;
-	readonly chats?: number;
-	readonly messages?: number;
+export type SetupStage = "idle" | "scanning" | "planning" | "indexing" | "preparing" | "ready" | "failed";
+
+/** The question the tour asks: generated from one indexed document and found by keyword retrieval. */
+export interface FirstRunDemo {
+	readonly question: string;
+	/** The document the question came from. */
+	readonly sourcePath: string;
+	/** How long the verifying retrieval took. */
+	readonly latencyMs: number;
 }
 
-export interface DetectedSource {
-	readonly id: SourceId;
-	readonly facts: SourceFacts;
-}
-
-/** Every usable connector from one probe run; `startIndexing` re-reads it for the facts. */
-export interface SourceDetection {
-	readonly sources: readonly DetectedSource[];
-}
-
-/** Listener for one connector that finished probing as usable. */
-export type DetectedSourceListener = (source: DetectedSource) => void;
-
-/** The roles the model step proves with a real call: the answer model, or the one that splits questions. */
-export type ModelCheckRole = "answer" | "decomposition";
-
-/** Whether the saved answer model answered a real call, and how long it took or why not. */
-export type ModelCheckResult = { readonly ok: true; readonly latencyMs: number } | { readonly ok: false; readonly error: string };
-
-export interface IndexingRequest {
-	readonly folders: readonly string[];
-	readonly embed?: EmbedMode;
-	readonly sources: readonly { readonly id: SourceId }[];
-	readonly plan: PlanId;
-	/** Folders the user left out of the index (smart indexing); added to the config's `excludePaths`. */
-	readonly excludePaths?: readonly string[];
-	/** Files the pre-scans counted inside `excludePaths`, so the first index's total and ETA match what it reads. */
-	readonly excludedFiles?: number;
-}
-
-export type IndexingPhase = "parsed" | "minsync" | "finalizing";
-
-export interface IndexingStatus {
-	readonly state: "idle" | "running" | "success" | "failed";
-	readonly phase: IndexingPhase | null;
-	/** 0–100: where the run stands, from measured completion only (`detail.fraction`). */
+export interface SetupStatus {
+	readonly stage: SetupStage;
+	/** 0–100 across every stage; reaches 100 only at `ready`. */
 	readonly progress: number;
-	/** Whole minutes left in the running stage, from the observed rate; null while still calculating, idle or done. */
+	/** Null when unknown, or once indexing is over. */
 	readonly remainingMinutes: number | null;
-	/** Files the read stage will go through: the librarian's own count once it has listed them, the pre-scan's until then. */
+	/** Files the first index expects to read (pre-scan totals minus left-out folders). */
 	readonly totalFiles: number;
-	/** Files the read stage has gone through (finished, skipped or failed), so never more than `totalFiles`. */
+	/** Files the first index has read so far. */
 	readonly processedFiles: number;
-	/** Most recently read file name, and the display name of the selected folder it is under. */
+	/** Most recently read file name, while indexing. */
 	readonly recentFile: string | null;
-	readonly recentFolder: string | null;
-	/** Why a failed run stopped; `null` unless `state` is `failed`. */
-	readonly failure: IndexFailure | null;
-	/** Files a finished run left out (read errors, parser timeouts, files MinSync skipped); `0` unless `state` is `success`. */
-	readonly skipped: number;
-	/**
-	 * Stage-by-stage counts, bytes, remaining time and liveness while the run is live; the same snapshot
-	 * the sidebar and Settings show for any refresh. `null` before the first progress is written and once the run ends.
-	 */
-	readonly detail: IndexProgressSnapshot | null;
-	/** Display names of the data sources being indexed. */
-	readonly sources: readonly string[];
+	/** Sub-folders smart indexing left out. */
+	readonly excludedFolders: number;
+	/** The tour's question; null until `ready`, and at `ready` when no model could be called or no question survived the check. */
+	readonly demo: FirstRunDemo | null;
+	/** Why the run stopped; null unless `stage` is `failed`. */
+	readonly error: string | null;
 	readonly startedAt: string | null;
 	readonly finishedAt: string | null;
-	readonly error: string | null;
 }
 
 export interface OnboardingBridge {
-	/** True when this window opened on onboarding (preload argument; `load` is authoritative). */
+	/** True when this window opened on the first run (preload argument; `load` is authoritative). */
 	readonly pending: boolean;
 	load(): Promise<OnboardingSnapshot>;
-	save(draft: OnboardingDraft): Promise<void>;
 	permissions(): Promise<PermissionStatus>;
 	/** Opens System Settings › Privacy & Security › Full Disk Access. */
 	openFullDiskAccess(): Promise<void>;
-	/** Quit and reopen the app (Full Disk Access applies to a running app only after a relaunch). */
-	relaunch(): Promise<void>;
-	/** Shows a real system notification; resolves whether the OS displayed it. */
-	requestNotifications(): Promise<boolean>;
-	/** Opens the OS notification settings. */
-	openNotificationSettings(): Promise<void>;
-	checkNetwork(): Promise<NetworkCheck>;
-	/** Persists `launchAtLogin` (applied to the OS in packaged builds); returns the stored value. */
-	setLaunchAtLogin(enabled: boolean): Promise<boolean>;
-	folderCandidates(): Promise<readonly FolderCandidate[]>;
-	/** Native multi-folder chooser; empty when cancelled. */
-	pickFolders(): Promise<readonly FolderCandidate[]>;
-	/** Starts (or reuses) a pre-scan for each path; totals arrive through `onScanProgress`. */
-	scanFolders(paths: readonly string[]): Promise<void>;
-	onScanProgress(listener: (scan: FolderScan) => void): () => void;
-	embedding(): Promise<EmbeddingInfo>;
-	/** Starts a probe run (restarting one in flight); results arrive through the two listeners below. */
-	detectSources(): Promise<void>;
-	onSourceDetected(listener: DetectedSourceListener): () => void;
-	onSourcesDone(listener: () => void): () => void;
-	/** Calls the saved model for `role` (the answer model by default) once; the model step stays closed until it passes. */
-	checkModel(role?: ModelCheckRole): Promise<ModelCheckResult>;
-	/** Writes the choices into the shared AutoRAG config and starts the first index (reused while running). */
-	startIndexing(request: IndexingRequest): Promise<IndexingStatus>;
-	indexStatus(): Promise<IndexingStatus>;
-	onIndexProgress(listener: (status: IndexingStatus) => void): () => void;
-	/** Marks onboarding done and resizes the window for the Finder. */
+	// System Settings offers Quit & Reopen itself once Full Disk Access is toggled for a running app.
+	/** The folders the first run offers, in the order they are shown. */
+	folders(): Promise<readonly FirstRunFolder[]>;
+	/**
+	 * Starts the setup run over `folders` (paths from {@link folders}; anything else is ignored), or over the
+	 * folders the last run used, or the ones switched on by default, when omitted. A failed run starts again;
+	 * resolves with its status right away.
+	 */
+	start(folders?: readonly string[]): Promise<SetupStatus>;
+	status(): Promise<SetupStatus>;
+	onProgress(listener: (status: SetupStatus) => void): () => void;
+	/** Marks the first run done: the next launch opens the Finder straight away. */
 	complete(): Promise<void>;
 }

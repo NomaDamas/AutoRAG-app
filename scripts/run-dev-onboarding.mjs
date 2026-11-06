@@ -1,16 +1,16 @@
-// `make onboarding` entry point: launch the dev app on a disposable profile so
-// the first-run onboarding can be walked without touching the machine's real
-// AutoRAG state.
+// `make onboarding` entry point: launch the dev app on a disposable profile and
+// experience a brand-new user's first run — one window, no questions beyond Full
+// Disk Access, one progress bar through scan → keyword-only index → tour — without
+// touching the machine's real AutoRAG state.
 //
 // Isolation per run:
-// - userData (onboarding draft, credentials, caches): tmp sandbox via
+// - userData (first-run state, credentials, caches): tmp sandbox via
 //   `--user-data-dir` (the app's own support dir is left alone);
 // - AUTORAG_CONFIG + AUTORAG_HOME + AUTORAG_WORKSPACE: tmp sandbox (the real
 //   `~/.autorag/config.json`, index, and memory are never read or written);
-// - provider API keys are blanked and PI_CODING_AGENT_DIR is a tmp sandbox, so
-//   ambient provider credentials never appear as onboarding connections;
-// - the native MinSync embedding model is COPIED into the sandbox so the
-//   first index runs offline; the real cache is never written through.
+// - MinSync's SPLADE encoder is COPIED into the sandbox so the keyword-only
+//   first index runs offline; the first run never needs the dense on-device
+//   model, and the real cache is never written through.
 //
 // Teardown, ordered from graceful to brutal:
 // - wrapper exit (any cause, including Ctrl+C): kill the run's processes
@@ -29,6 +29,8 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, 
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import sparseModel from "../src/shared/sparse-model.json" with { type: "json" };
+import { preindexFixture, seedFixtureHome } from "./onboarding-fixture/index.mjs";
 
 // This script lives in <repo>/scripts/, so the repo root is the parent.
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
@@ -165,54 +167,78 @@ function rmManaged(sandbox) {
 	console.warn(`[onboarding] could not remove ${sandbox}; the next run sweeps it again`);
 }
 
-// A deep copy (not a symlink) of the cached native embedding model, so the
-// sandbox never writes through into the real cache. macOS clones it in APFS
-// copy-on-write when source and destination share the volume.
+// A deep copy (not a symlink) of MinSync's cached SPLADE encoder, so the sandbox never writes through
+// into the real cache. macOS clones it in APFS copy-on-write when source and destination share the volume.
+// Only the sparse encoder is copied: the first run is keyword-only and never fetches the dense model.
 function copyDirInto(source, destination) {
 	cpSync(source, destination, { recursive: true, preserveTimestamps: true, force: true });
 }
 
 async function main() {
+	const skipIndex = process.argv.slice(2).includes("--skip-index");
 	sweepStaleSandboxes();
 	reapOrphanSandboxProcesses();
-
 	const sandbox = mkdtempSync(join(tmpdir(), PREFIX));
 	const autoragHome = join(sandbox, "autorag-home");
 	const configPath = join(sandbox, "config.json");
 	const userDataDir = join(sandbox, "user-data");
 	const minsyncCache = join(sandbox, "minsync-models");
 	const piAgentDir = join(sandbox, "pi-agent");
+	const fixtureHome = skipIndex ? join(sandbox, "fixture-home") : null;
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
 	mkdirSync(minsyncCache, { recursive: true });
 	mkdirSync(piAgentDir, { recursive: true });
+	if (fixtureHome !== null) mkdirSync(fixtureHome, { recursive: true });
 	const realMinsyncCache =
 		process.env.FASTEMBED_CACHE_DIR?.trim() ||
 		(process.platform === "win32"
 			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "minsync", "models")
 			: join(homedir(), ".cache", "minsync", "models"));
 	if (existsSync(realMinsyncCache)) {
-		try {
-			copyDirInto(realMinsyncCache, minsyncCache);
-		} catch (error) {
-			fail(`could not copy the real MinSync model cache into the sandbox: ${error}`);
+		const sparseEntry = join(realMinsyncCache, sparseModel.repoDir);
+		if (existsSync(sparseEntry)) {
+			try {
+				copyDirInto(sparseEntry, join(minsyncCache, sparseModel.repoDir));
+			} catch (error) {
+				fail(`could not copy MinSync's SPLADE model into the sandbox: ${error}`);
+			}
+		} else {
+			console.warn(`[onboarding] MinSync's SPLADE model is not cached at ${sparseEntry}; the first index will download it`);
 		}
 	}
 	const marker = { owner: process.pid, watchdog: null, sandbox };
 	writeFileSync(join(sandbox, ".onboarding-sandbox.json"), `${JSON.stringify(marker, null, "\t")}\n`);
 
+	// `--skip-index`: the same first run, on a four-document home that is indexed here, before the app starts, with the
+	// librarian's real refresh. The app runs no different code: it scans, plans, indexes (nothing left to do), asks the
+	// model for the tour question, and answers in AI Search from the real index.
+	if (fixtureHome !== null) {
+		try {
+			console.log("[onboarding] indexing the four-document fixture home (real keyword-only refresh)...");
+			seedFixtureHome(fixtureHome);
+			preindexFixture({ fixtureHome, autoragHome, configPath, minsyncCache });
+		} catch (error) {
+			killPathProcesses(sandbox, "SIGKILL");
+			rmManaged(sandbox);
+			fail(String(error instanceof Error ? error.message : error));
+		}
+	}
+
 	// Everything else passes through, so the dev preflight runs the same dupey
-	// check `make run` does. Provider credentials are the exception: ambient
-	// keys and the real Pi agent directory must not connect a disposable run.
-	const blankedProviderApiKeys = Object.fromEntries(Object.keys(process.env).filter((name) => name.endsWith("_API_KEY")).map((name) => [name, ""]));
+	// check `make run` does.
 	const env = {
 		...process.env,
-		...blankedProviderApiKeys,
-		PI_CODING_AGENT_DIR: piAgentDir,
 		AUTORAG_HOME: autoragHome,
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
 		FASTEMBED_CACHE_DIR: minsyncCache,
+		// Pi's agent home (auth.json) lives in the sandbox, so the flow never reads or writes the
+		// developer's real ~/.pi/agent; the device seed keeps every run a clean unauthenticated machine.
+		PI_CODING_AGENT_DIR: piAgentDir,
+		AUTORAG_DEV_DEVICE_SEED: sandbox,
+		// The sandbox's own home, so Desktop/Documents/Downloads and the places in the sidebar are the fixture's.
+		...(fixtureHome === null ? {} : { AUTORAG_ONBOARDING_FIXTURE_HOME: fixtureHome }),
 	};
 
 	// Same dev entry point as `make run`: predev hooks sync the librarian and
@@ -224,7 +250,7 @@ async function main() {
 		env,
 		stdio: ["ignore", "inherit", "inherit"],
 	});
-	console.log(`[onboarding] sandbox ${sandbox}`);
+	console.log(`[onboarding] sandbox ${sandbox}${skipIndex ? " (four-document fixture home, pre-indexed)" : ""}`);
 	console.log("[onboarding] the real ~/.autorag and the app's support dir are untouched");
 	console.log("[onboarding] press Ctrl+C or quit the app; everything is removed afterwards");
 

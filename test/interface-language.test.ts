@@ -12,7 +12,7 @@ describe("applyInterfaceLanguage", () => {
 		await applyInterfaceLanguage({ get: async () => ({ language: "ja" }) });
 
 		expect(i18n.language).toBe("ja");
-		expect(t("onboarding.step.welcome")).not.toBe("");
+		expect(t("firstRun.ready.title")).not.toBe("");
 		expect(t("common.save")).toBe("保存");
 		expect(document.documentElement.lang).toBe("ja");
 	});

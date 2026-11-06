@@ -2,8 +2,7 @@ import type { BrowserWindowConstructorOptions, TitleBarOverlayOptions } from "el
 import type { AppAppearance } from "../shared/settings-contract";
 
 /**
- * The main window draws its own top bar (the onboarding band, the Finder toolbar), so the native title strip
- * is removed on every OS:
+ * The Finder window draws its own toolbar, so the native title strip is removed on every OS:
  *  - macOS keeps `hiddenInset`: the traffic lights float over the sidebar header / toolbar.
  *  - Windows and Linux use `hidden` plus a window-controls overlay: only minimize / maximize / close remain, drawn
  *    over the top-right corner of the page, with no title text. The in-window `File Edit View Window` menu bar
@@ -11,10 +10,10 @@ import type { AppAppearance } from "../shared/settings-contract";
  */
 
 /** What the page's own top bar is: the overlay's height must match it so the buttons sit centered in the bar. */
-export type WindowPhase = "onboarding" | "finder";
+export type WindowPhase = "finder";
 
-/** `.onb` grid row (onboarding.css) and `--size-toolbar` (tokens.css). */
-const TOP_BAR_HEIGHT: Readonly<Record<WindowPhase, number>> = { onboarding: 42, finder: 52 };
+/** `--size-toolbar` (tokens.css). */
+const TOP_BAR_HEIGHT: Readonly<Record<WindowPhase, number>> = { finder: 52 };
 
 const SYMBOL_COLOR: Readonly<Record<AppAppearance, string>> = {
 	light: "#1D1D1F",

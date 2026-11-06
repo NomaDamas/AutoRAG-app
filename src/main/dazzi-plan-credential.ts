@@ -29,10 +29,27 @@ interface StoredPlanCredential {
 	readonly expires: number;
 }
 
+/**
+ * Anonymous guest tokens the hosted service hands out before sign-in. They are
+ * written to the same `dazzi` slot (so the librarian reads them for chat, Jev,
+ * rerank and decomposition without knowing the difference) but are prefixed so
+ * the app can tell a guest apart from a signed-in user's own key.
+ */
+export const GUEST_TOKEN_PREFIX = "dzg_";
+
+/** True for a guest token handed out for anonymous, pre-sign-in access. */
+export function isGuestDazziToken(token: string): boolean {
+	return token.startsWith(GUEST_TOKEN_PREFIX);
+}
+
 const NEVER_EXPIRES = Number.MAX_SAFE_INTEGER;
 
 function planCredential(token: string): StoredPlanCredential {
 	return { type: "oauth", access: token, refresh: "", expires: NEVER_EXPIRES };
+}
+
+function guestCredential(token: string): StoredPlanCredential & { readonly guest: true } {
+	return { ...planCredential(token), guest: true };
 }
 
 async function readAuthObject(authPath: string): Promise<Record<string, unknown>> {
@@ -72,8 +89,8 @@ export async function clearDazziPlanCredential(agentDir: string): Promise<void> 
 	await writeAuthObject(authPath, next);
 }
 
-/** Read the hosted plan's token from `auth.json`, or null when absent/unreadable. */
-export async function readDazziPlanCredential(agentDir: string): Promise<string | null> {
+/** The raw `access` string stored under `dazzi` in `auth.json`, or null when absent/unreadable. */
+async function readDazziAccess(agentDir: string): Promise<string | null> {
 	const authPath = join(agentDir, "auth.json");
 	if (!existsSync(authPath)) return null;
 	try {
@@ -85,4 +102,53 @@ export async function readDazziPlanCredential(agentDir: string): Promise<string 
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Read the signed-in user's token from `auth.json`, or null when absent,
+ * unreadable, or a guest token. A guest token in this slot must read as "not
+ * signed in" everywhere the app asks — the librarian still reads the same
+ * `entry.access` transparently for chat, decomposition, Jev and rerank.
+ */
+export async function readDazziPlanCredential(agentDir: string): Promise<string | null> {
+	const access = await readDazziAccess(agentDir);
+	return access === null || isGuestDazziToken(access) ? null : access;
+}
+
+/** Read the anonymous guest token from `auth.json`, or null when absent/unreadable/a real user key. */
+export async function readDazziGuestCredential(agentDir: string): Promise<string | null> {
+	const access = await readDazziAccess(agentDir);
+	return access !== null && isGuestDazziToken(access) ? access : null;
+}
+
+/**
+ * Store an anonymous guest token as the `dazzi` credential. A real signed-in
+ * key already in the slot is never overwritten; returns false in that case.
+ */
+export async function storeDazziGuestCredential(agentDir: string, token: string): Promise<boolean> {
+	const authPath = join(agentDir, "auth.json");
+	const raw = await readAuthObject(authPath);
+	const existing = raw[AUTORAG_PROVIDER_ID];
+	if (isJsonObject(existing) && typeof existing.access === "string" && existing.access.length > 0 && !isGuestDazziToken(existing.access)) {
+		return false;
+	}
+	await writeAuthObject(authPath, { ...raw, [AUTORAG_PROVIDER_ID]: guestCredential(token) });
+	return true;
+}
+
+/**
+ * Remove the guest credential from `auth.json` only when the current entry is a
+ * guest token (and matches `expectedToken` when given). A real user's `dz_` key
+ * is never removed here, so signing out and dropping a stale guest cannot clobber
+ * each other.
+ */
+export async function clearDazziGuestCredential(agentDir: string, expectedToken?: string): Promise<void> {
+	const authPath = join(agentDir, "auth.json");
+	const raw = await readAuthObject(authPath);
+	const entry = raw[AUTORAG_PROVIDER_ID];
+	if (!isJsonObject(entry) || typeof entry.access !== "string" || !isGuestDazziToken(entry.access)) return;
+	if (expectedToken !== undefined && entry.access !== expectedToken) return;
+	const next = { ...raw };
+	delete next[AUTORAG_PROVIDER_ID];
+	await writeAuthObject(authPath, next);
 }

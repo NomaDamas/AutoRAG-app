@@ -3,6 +3,7 @@ import { createAccountBridge } from "./account-bridge";
 import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { createAutomationBridge } from "./automation-bridge";
+import { createDemoBridge } from "./demo-bridge";
 import { createConversionBridge } from "./conversion-bridge";
 import { contextBridge, ipcRenderer, webUtils, type IpcRenderer, type IpcRendererEvent } from "electron";
 import { createBridge } from "../shared/bridge";
@@ -23,7 +24,6 @@ import { createModelDownloadBridge } from "./model-download-bridge";
 import { createOnboardingBridge } from "./onboarding-bridge";
 import { createOsRequestBridge } from "./os-request-bridge";
 import { createSearchBridge } from "./search-bridge";
-import { createSmartIndexingBridge } from "./smart-indexing-bridge";
 import { createSettingsBridge } from "./settings-bridge";
 import { createServicesBridge } from "./services-bridge";
 import { createVoiceBridge } from "./voice-bridge";
@@ -53,6 +53,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	appUpdate: createAppUpdateBridge(ipcRenderer),
 	account: createAccountBridge(ipcRenderer),
 	automations: createAutomationBridge(ipcRenderer),
+	demo: createDemoBridge(ipcRenderer),
 	voice: createVoiceBridge(ipcRenderer),
 	conversion: createConversionBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),
@@ -66,7 +67,6 @@ contextBridge.exposeInMainWorld("autorag", {
 	osRequests: createOsRequestBridge(ipcRenderer),
 	preview: createPreviewBridge(ipcRenderer),
 	search: createSearchBridge(ipcRenderer),
-	smartIndexing: createSmartIndexingBridge(ipcRenderer),
 	settings: createSettingsBridge(ipcRenderer),
 	services: createServicesBridge(ipcRenderer),
 	remote: createRemoteBridge(ipcRenderer),
