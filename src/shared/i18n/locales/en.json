@@ -823,9 +823,7 @@
         "downloads": "Downloads"
       },
       "start": "Read {{count}} selected",
-      "startNone": "Choose a folder",
-      "privacyMac": "Your files never leave your Mac",
-      "privacyPc": "Your files never leave your PC"
+      "startNone": "Choose a folder"
     },
     "setup": {
       "title": "Going through your files",

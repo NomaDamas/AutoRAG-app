@@ -232,7 +232,7 @@ html[data-first-run="rise"] .desk {
 	position: relative;
 	width: min(540px, 100%);
 	height: 12px;
-	margin-top: 44px;
+	margin-top: 32px;
 	overflow: hidden;
 	border-radius: 999px;
 	background: var(--border);
@@ -243,7 +243,7 @@ html[data-first-run="rise"] .desk {
 	inset: 0;
 	transform-origin: 0 50%;
 	border-radius: inherit;
-	background: linear-gradient(90deg, #ffb703, var(--accent));
+	background: linear-gradient(90deg, #ffb703, #ff962d 48.56%, #70aeff);
 	transition: transform 900ms var(--fr-spring);
 }
 
@@ -270,7 +270,7 @@ html[data-first-run="rise"] .desk {
 	gap: 12px;
 	width: min(540px, 100%);
 	margin-top: 11.5px;
-	font-size: 12.5px;
+	font-size: 13px;
 	line-height: 18.75px;
 	color: var(--fr-muted);
 	font-variant-numeric: tabular-nums;
@@ -348,7 +348,7 @@ html[data-first-run="rise"] .desk {
 
 /* The button's padding is a hit area only: the logo sits where the folder and ready screens draw theirs (Figma 162:1244). */
 .fr-intro .fr-logo-btn {
-	margin: -14px 0 16px;
+	margin: -14px 0 3px;
 }
 
 .fr-logo-ring {
@@ -404,7 +404,7 @@ html[data-first-run="rise"] .desk {
 
 /* The reading screen has no button; this keeps its logo and title where the folder and ready screens draw theirs (Figma 162:1244). */
 .fr-setup[data-mode="intro"] {
-	padding-bottom: 136px;
+	padding-bottom: 63px;
 }
 
 .fr-setup[data-mode="game"] {
@@ -699,7 +699,7 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 /* Figma 162:1308: the logo with a green check badge on its lower right. */
 .fr-done-mark {
 	position: relative;
-	margin-bottom: 30px;
+	margin-bottom: 17px;
 }
 
 .fr-done-mark .fr-logo--stage {
@@ -708,8 +708,8 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 
 .fr-status-mark {
 	position: absolute;
-	left: 84.5px;
-	top: 78px;
+	left: 79px;
+	top: 74px;
 	display: grid;
 	place-items: center;
 	width: 36px;
@@ -733,7 +733,16 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 .fr-logo--stage {
 	width: 110px;
 	height: 110px;
-	margin-bottom: 30px;
+	margin-bottom: 17px;
+	filter: none;
+}
+
+.fr-lead--stage {
+	margin-top: 12px;
+	max-width: none;
+	font-size: 16px;
+	line-height: 24px;
+	color: var(--text-body);
 }
 
 .fr-title--stage {
@@ -742,8 +751,9 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	letter-spacing: -0.6px;
 }
 
-.fr-folders .fr-lead {
-	max-width: 520px;
+/* The 16px lead runs on one line, as in Figma. */
+.fr-folders {
+	width: min(640px, calc(100vw - 64px));
 }
 
 .fr-chips {
@@ -752,7 +762,7 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 	justify-content: center;
 	gap: 8px;
 	width: min(440px, 100%);
-	margin-top: 29px;
+	margin-top: 28px;
 }
 
 .fr-chip {
@@ -805,26 +815,13 @@ html[data-appearance="dark"] .fr-cell[data-kind="found"] {
 }
 
 .fr-folders .fr-btn--stage {
-	margin-top: 72px;
+	margin-top: 36px;
 }
 
 .fr-ready .fr-btn--stage {
-	margin-top: 174px;
+	margin-top: 89px;
 }
 
-.fr-privacy {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	margin: 26px 0 0;
-	font-size: 13px;
-	line-height: 18.75px;
-	color: var(--fr-muted);
-}
-
-.fr-privacy-icon {
-	flex: none;
-}
 
 /* ------------------------------------------------------------------ buttons */
 

@@ -823,9 +823,7 @@
         "downloads": "下载"
       },
       "start": "读取 {{count}} 个文件夹",
-      "startNone": "请选择文件夹",
-      "privacyMac": "文件不会离开你的 Mac",
-      "privacyPc": "文件不会离开你的电脑"
+      "startNone": "请选择文件夹"
     },
     "setup": {
       "title": "正在浏览你的文件",

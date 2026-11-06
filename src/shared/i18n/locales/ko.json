@@ -823,9 +823,7 @@
         "downloads": "다운로드"
       },
       "start": "폴더 {{count}}개 읽기",
-      "startNone": "폴더를 골라 주세요",
-      "privacyMac": "파일은 내 Mac 밖으로 나가지 않아요",
-      "privacyPc": "파일은 내 PC 밖으로 나가지 않아요"
+      "startNone": "폴더를 골라 주세요"
     },
     "setup": {
       "title": "파일을 읽고 있어요",
