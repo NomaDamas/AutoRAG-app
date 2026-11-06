@@ -24,6 +24,12 @@ import type { SmartRun } from "./smart-scope";
 
 export type OverlayKind = "pay";
 
+/** A folder listed while browsing the scope screen. */
+export interface SubFolder {
+	readonly path: string;
+	readonly name: string;
+}
+
 export interface OnboardingCtx {
 	readonly draft: OnboardingDraft;
 	readonly platform: string;
@@ -70,12 +76,17 @@ export interface OnboardingCtx {
 	/** Starts the AI analysis of the selected folders (the scan screen starts it on entry). */
 	startSmartScan(): void;
 	cancelSmartScan(): void;
-	/** Drops the proposals and goes back to the scan screen to analyse the selected folders again. */
-	rescanSmart(): void;
 	/** Sets whether one proposed folder is left out of the index. */
 	setSmartExcluded(path: string, excluded: boolean): void;
-	/** Picks folders inside the selected ones to leave out too; each is measured once it is added. */
-	addExclusion(): void;
+	/** Leaves out a folder inside a selected one (dragged to the excluded side); it is measured once added. */
+	excludeFolder(path: string): void;
+	/** Whether continuing from the folders step asks the AI for sub-folders to leave out. */
+	readonly smartSuggest: boolean;
+	setSmartSuggest(on: boolean): void;
+	/** The folders directly inside `path`, without hidden ones; empty when it cannot be read. */
+	listSubfolders(path: string): Promise<readonly SubFolder[]>;
+	/** Measures folders not measured yet; each result arrives in `scans`. */
+	measureFolders(paths: readonly string[]): void;
 
 	setEmbedMode(mode: EmbedMode): void;
 	setCloudConsent(consent: boolean): void;
@@ -83,6 +94,8 @@ export interface OnboardingCtx {
 	setSourceOn(id: SourceId, on: boolean): void;
 
 	choosePlan(plan: PlanId): void;
+	/** Choose BYOK and go on at once to what follows the plan step (connecting the model, when it is not connected yet). */
+	connectOwnKey(): void;
 	setPromoCode(code: string): void;
 	signIn(options: AccountSignInOptions): void;
 	sendEmailOtp(email: string): Promise<EmailOtpSendResult>;

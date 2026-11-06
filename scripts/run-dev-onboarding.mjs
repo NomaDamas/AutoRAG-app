@@ -7,6 +7,8 @@
 //   `--user-data-dir` (the app's own support dir is left alone);
 // - AUTORAG_CONFIG + AUTORAG_HOME + AUTORAG_WORKSPACE: tmp sandbox (the real
 //   `~/.autorag/config.json`, index, and memory are never read or written);
+// - provider API keys are blanked and PI_CODING_AGENT_DIR is a tmp sandbox, so
+//   ambient provider credentials never appear as onboarding connections;
 // - the native MinSync embedding model is COPIED into the sandbox so the
 //   first index runs offline; the real cache is never written through.
 //
@@ -179,9 +181,11 @@ async function main() {
 	const configPath = join(sandbox, "config.json");
 	const userDataDir = join(sandbox, "user-data");
 	const minsyncCache = join(sandbox, "minsync-models");
+	const piAgentDir = join(sandbox, "pi-agent");
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
 	mkdirSync(minsyncCache, { recursive: true });
+	mkdirSync(piAgentDir, { recursive: true });
 	const realMinsyncCache =
 		process.env.FASTEMBED_CACHE_DIR?.trim() ||
 		(process.platform === "win32"
@@ -198,9 +202,13 @@ async function main() {
 	writeFileSync(join(sandbox, ".onboarding-sandbox.json"), `${JSON.stringify(marker, null, "\t")}\n`);
 
 	// Everything else passes through, so the dev preflight runs the same dupey
-	// check `make run` does.
+	// check `make run` does. Provider credentials are the exception: ambient
+	// keys and the real Pi agent directory must not connect a disposable run.
+	const blankedProviderApiKeys = Object.fromEntries(Object.keys(process.env).filter((name) => name.endsWith("_API_KEY")).map((name) => [name, ""]));
 	const env = {
 		...process.env,
+		...blankedProviderApiKeys,
+		PI_CODING_AGENT_DIR: piAgentDir,
 		AUTORAG_HOME: autoragHome,
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),

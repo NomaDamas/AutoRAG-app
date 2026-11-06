@@ -36,7 +36,7 @@ import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
-import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
+import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, resolveConfigReadOnly, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
@@ -103,7 +103,7 @@ import { resolveMcpConnectInfo } from "./mcp-connect-info";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
-import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
+import { resolveConfiguredSessionModel, resolveSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -377,6 +377,17 @@ const SOURCE_PROBE_TIMEOUT_MS = 15_000;
 
 /** Longest the onboarding model check waits for the chosen model to answer one short prompt. */
 const MODEL_CHECK_TIMEOUT_MS = 30_000;
+
+/**
+ * The question-splitting model with its credentials, resolved exactly as the
+ * answer model is: the shared config with `queryDecomposition.model` standing in
+ * for `model`. `false` (split with the answer model) checks the answer model.
+ */
+function resolveDecompositionModel(): ReturnType<typeof resolveConfiguredSessionModel> {
+	const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
+	const decomposition = config.queryDecomposition === false ? undefined : config.queryDecomposition?.model;
+	return resolveSessionModel(decomposition === undefined ? config : { ...config, model: decomposition }, process.env, process.cwd(), getAgentDir());
+}
 
 /** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
 function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
@@ -1024,6 +1035,26 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	const listCloudDrives = async (): Promise<readonly { readonly path: string; readonly name: string }[]> => {
+		if (process.platform === "darwin") {
+			const root = join(home, "Library", "CloudStorage");
+			const names = await readdir(root).catch(() => [] as string[]);
+			// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
+			return names
+				.filter((name) => !name.startsWith("."))
+				.map((name) => {
+					const dash = name.indexOf("-");
+					return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
+				});
+		}
+		if (process.platform === "win32") {
+			const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
+			return locations
+				.filter((location) => location.section === "cloud" && location.available)
+				.map((location) => ({ path: location.path, name: location.name }));
+		}
+		return [];
+	};
 	registerSmartIndexingIpcHandlers(
 		createSmartIndexingService({
 			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
@@ -1031,6 +1062,7 @@ app.whenReady().then(async () => {
 			agentDir: getAgentDir(),
 			env: process.env,
 			language: () => currentLanguage,
+			cloudRoots: async () => (await listCloudDrives()).map((drive) => drive.path),
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
@@ -1129,26 +1161,7 @@ app.whenReady().then(async () => {
 		},
 		iCloudDrivePath:
 			process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
-		cloudDrives: async () => {
-			if (process.platform === "darwin") {
-				const root = join(home, "Library", "CloudStorage");
-				const names = await readdir(root).catch(() => [] as string[]);
-				// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
-				return names
-					.filter((name) => !name.startsWith("."))
-					.map((name) => {
-						const dash = name.indexOf("-");
-						return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
-					});
-			}
-			if (process.platform === "win32") {
-				const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
-				return locations
-					.filter((location) => location.section === "cloud" && location.available)
-					.map((location) => ({ path: location.path, name: location.name }));
-			}
-			return [];
-		},
+		cloudDrives: listCloudDrives,
 		localSpec,
 		ocrEnabled: async () => {
 			try {
@@ -1213,9 +1226,9 @@ app.whenReady().then(async () => {
 				return null;
 			}
 		},
-		checkModel: () =>
+		checkModel: (role) =>
 			checkModelHealth({
-				resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+				resolveModel: () => (role === "decomposition" ? resolveDecompositionModel() : resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir())),
 				complete: completeSimple,
 				timeoutMs: MODEL_CHECK_TIMEOUT_MS,
 				now: Date.now,

@@ -149,6 +149,8 @@ export interface OnboardingDraft {
 	readonly smartScope?: readonly SmartExclusion[];
 	/** The folders the AI looked through to produce `smartScope`; a folder selected later that is not here was never analysed. */
 	readonly smartScopeRoots?: readonly string[];
+	/** Whether the AI proposes sub-folders to leave out after the folders step; absent means yes. Off goes straight to the scope screen. */
+	readonly smartSuggest?: boolean;
 	/**
 	 * Set while the user is on an earlier step only to fix what stopped the first index (the embedding choice):
 	 * leaving that step goes straight back to the index instead of on through the flow.
@@ -243,6 +245,9 @@ export interface SourceDetection {
 /** Listener for one connector that finished probing as usable. */
 export type DetectedSourceListener = (source: DetectedSource) => void;
 
+/** The roles the model step proves with a real call: the answer model, or the one that splits questions. */
+export type ModelCheckRole = "answer" | "decomposition";
+
 /** Whether the saved answer model answered a real call, and how long it took or why not. */
 export type ModelCheckResult = { readonly ok: true; readonly latencyMs: number } | { readonly ok: false; readonly error: string };
 
@@ -317,8 +322,8 @@ export interface OnboardingBridge {
 	detectSources(): Promise<void>;
 	onSourceDetected(listener: DetectedSourceListener): () => void;
 	onSourcesDone(listener: () => void): () => void;
-	/** Calls the saved answer model once; the model step stays closed until this passes. */
-	checkModel(): Promise<ModelCheckResult>;
+	/** Calls the saved model for `role` (the answer model by default) once; the model step stays closed until it passes. */
+	checkModel(role?: ModelCheckRole): Promise<ModelCheckResult>;
 	/** Writes the choices into the shared AutoRAG config and starts the first index (reused while running). */
 	startIndexing(request: IndexingRequest): Promise<IndexingStatus>;
 	indexStatus(): Promise<IndexingStatus>;

@@ -833,9 +833,9 @@
       "welcome": "继续",
       "permissions": "继续",
       "account": "继续",
-      "folders": "选择文件夹并继续",
-      "smartScan": "查看推荐范围",
-      "smartScope": "确定范围并继续",
+      "folders": "继续",
+      "smartScan": "继续",
+      "smartScope": "按此范围继续",
       "embedding": "继续",
       "sources": "继续",
       "model": "继续",
@@ -843,10 +843,7 @@
       "indexing": "继续"
     },
     "welcome": {
-      "eyebrow": "Pro 7 天免费试用",
-      "title": "直接向\n文件提问",
-      "lead": "无需打开文件夹翻找。Dazzi 会阅读文档中的内容，并附上依据作答。",
-      "note": "默认在本地处理。部分功能在使用时，内容可能会发送到 Dazzi 服务器或模型提供方。详情请参阅隐私政策。",
+      "title": "找文件，现在交给 {{app}}",
       "usageStats": "发送匿名使用统计以帮助改进 Dazzi。统计在设计上不包含文件、搜索词或文档内容，可随时在设置中关闭。",
       "errorReports": "应用崩溃或索引失败时发送错误报告，以帮助修复问题。报告在设计上不包含文件路径、文件名和文档内容，可随时在设置中更改。",
       "usageStatsPolicy": "隐私政策",
@@ -854,38 +851,24 @@
         "user": "上一季度的成本为什么下降了？",
         "replyLead": "营销成本比上季度下降了",
         "replyTail": "。"
-      },
-      "evidence": {
-        "revenue": "营收报告",
-        "revenueQuote": "“同比增长 18%…”",
-        "budget": "预算摘要",
-        "budgetQuote": "“第三季度运营成本…”"
       }
     },
     "feature": {
       "ai": {
         "title": "AI 搜索",
-        "sub": "答案与依据一并呈现"
-      },
-      "citation": {
-        "title": "引用依据",
-        "sub": "查看答案的来源"
+        "sub": "有问题尽管问，回答会附上出处。"
       },
       "versions": {
-        "title": "版本归组",
-        "sub": "整理重复文档"
-      },
-      "quicklook": {
-        "title": "快速查看",
-        "sub": "打开前预览"
+        "title": "版本整理",
+        "sub": "像 final_真的最终版.docx 这样的文件也会自动整理。"
       },
       "sources": {
-        "title": "数据源",
-        "sub": "连同已连接的位置一起搜索"
+        "title": "应用连接",
+        "sub": "分散在 Notion、Slack、GitHub 等处的资料也能一次找到。"
       },
       "hybrid": {
         "title": "混合搜索",
-        "sub": "关键词与语义并用，按重排排序"
+        "sub": "即使用词不同，只要意思相近也能找到。"
       }
     },
     "hybrid": {
@@ -975,80 +958,66 @@
       }
     },
     "smartScan": {
-      "title": "正在浏览文件夹…",
-      "done": "浏览完成",
-      "idle": "要浏览文件夹吗？",
-      "failedTitle": "未能浏览文件夹",
-      "lead": "AI 正在统计推荐文件夹中的文件数量",
-      "looking": "正在查看：{{path}}",
-      "cancel": "取消并手动选择",
-      "note": "找到 {{count}} 个建议排除的子文件夹。请在下一屏查看。",
-      "noteNone": "没有需要排除的文件夹。所选文件夹以文档为主。",
-      "failed": "未能完成分析。可以在下一屏手动选择范围。",
+      "title": "正在查找要排除的子文件夹",
+      "done": "探索完成",
+      "failedTitle": "探索失败",
+      "lead": "不打开文件内容，只查看文件夹名称和结构。",
+      "back": "返回选择文件夹",
+      "manual": "不使用推荐，手动选择",
       "retry": "重试",
-      "skipped": "不使用 AI 浏览也可以手动选择范围。",
-      "start": "用 AI 浏览"
+      "looking": "正在查看：{{path}}"
     },
     "folders": {
       "eyebrow": "索引范围",
-      "title": "选择 AI 可读取的文件夹",
-      "lead": "只有此处选择的文件夹会纳入 AI 搜索。范围可稍后扩大或缩小。",
-      "suggested": "推荐位置",
+      "title": "请选择要索引的文件夹",
+      "lead": "我们会处理所选文件夹中的文档，以便 AI 进行搜索。",
+      "suggested": "推荐文件夹",
       "selectAll": "全选",
-      "add": "添加其他文件夹",
+      "add": "直接添加文件夹",
       "stats": "{{files}} 个 · {{size}} · 约 {{minutes}} 分钟",
       "scanning": "统计中…",
       "scanError": "无法读取",
-      "summary": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-      "summaryNote": "node_modules · .git · 超过 50 MiB 的文件会自动排除。",
-      "localEta": "本地 (此 Mac) 约 {{minutes}} 分钟",
-      "cloudEta": "远程 约 {{minutes}} 分钟",
-      "warning": "范围较广。选择子文件夹或远程嵌入可以更快看到首个结果。",
-      "localEtaPc": "本地 (此电脑) 约 {{minutes}} 分钟"
+      "suggestTitle": "获取建议排除的子文件夹",
+      "suggestLine": "继续后，AI 会查看所选文件夹的子文件夹并推荐可排除的项目。结果将在下一个画面中确认。"
     },
     "smartScope": {
       "policy": {
-        "title": "智能索引范围",
-        "tag": "AI 已分类",
-        "lead": "左侧蓝色的上层文件夹全部纳入，右侧红色的子文件夹和 .* 隐藏文件夹将从索引中排除。",
-        "eta": "约 {{minutes}} 分钟",
-        "etaSaved": "缩短 {{percent}}%",
-        "rescan": "重新浏览",
-        "auto": ".* 隐藏文件夹（.git、.obsidian、.cache）和 node_modules 默认排除"
+        "title": "请确认索引范围",
+        "lead": "拖动文件夹即可纳入或排除。",
+        "eta": "约 {{minutes}} 分钟"
       },
       "include": {
-        "title": "要纳入的上层文件夹",
-        "meta": "{{folders}} 个文件夹 · {{files}} 个文件 · {{size}}",
-        "remove": "取消纳入",
-        "addable": "可添加：",
-        "allIn": "推荐的上层文件夹已全部纳入"
+        "title": "要纳入的上级文件夹",
+        "meta": "{{count}} 个文件夹",
+        "all": "全部"
       },
       "exclude": {
         "title": "要排除的子文件夹",
-        "meta": "{{count}} 个路径 · −{{size}}",
-        "add": "添加排除文件夹",
-        "restore": "取消排除",
-        "restored": "已取消排除：",
+        "group": "{{name}} ({{count}})",
+        "noDocs": "无文档",
         "refused": {
           "isRoot": "不能排除所选文件夹本身，请选择其中的子文件夹。",
           "outside": "只能排除所选文件夹内的子文件夹。",
           "covered": "该文件夹已被排除。"
         },
-        "noDocs": "无文档"
+        "empty": "没有已排除的子文件夹。\n拖动文件夹即可排除。",
+        "aiTag": "AI 推荐"
       },
       "criteria": {
-        "show": "查看 AI 的判断标准",
-        "hide": "收起判断标准",
-        "looked": "AI 看了什么：所选文件夹中的文件和文件夹名称、各类型的文件数量，以及文件最近何时修改。不会打开任何文件。",
-        "keep": "保留什么：你自己写的、收到的或收集的文档（报告、笔记、合同、论文、课程资料等），以及以项目、人名或日期命名的文件夹。",
-        "leave": "排除什么：程序顺带生成的日志、应用下载或导出的文件（如聊天软件）、缓存、临时和崩溃文件、构建或自动生成的产物、安装包和应用备份，以及一次性堆积了大量相似名称文件的文件夹。",
-        "code": "代码仓库即使是你自己写的也会被排除：以源文件为主、带有 package.json 等清单文件的文件夹。",
-        "doubt": "拿不准时会保留。误排除你自己的文档会让它从搜索中消失，而多索引一些杂物只会多花时间。",
-        "you": "由你决定。把鼠标移到条目上可查看理由，用 x 撤销，或自行添加。AI 每次的判断可能略有不同。"
-      }
+        "label": "推荐标准",
+        "includeTitle": "包含的内容",
+        "includeBody": "你撰写、下载或收集的文档(报告、笔记、合同、论文、讲义等),以及以项目、人名、日期等命名的文件夹。",
+        "excludeTitle": "排除的内容",
+        "excludeBody": "程序自动生成的日志、应用下载或导出的文件、缓存/临时/冲突文件、构建和自动生成的产物、安装包和应用备份,以及堆积大量相似名称文件的文件夹。"
+      },
+      "summary": {
+        "eta": "首次索引预计时间",
+        "total": "总计"
+      },
+      "rescan": "重新推荐"
     },
     "embedding": {
-      "title": "如何使用嵌入？",
+      "title": "要如何分析文档？",
       "groupLabel": "嵌入方式",
       "card": {
         "none": {
@@ -1056,14 +1025,14 @@
           "line": "只查找包含所输入词语的文档。"
         },
         "cloud": {
-          "name": "在 Dazzi 服务器上分析",
-          "line": "文档内容会发送到 Dazzi 服务器进行分析。"
+          "name": "在服务器上分析",
+          "line": "文档内容会发送到 AutoRAG 服务器进行分析。"
         },
         "local": {
           "nameMac": "在我的 Mac 上分析",
           "namePc": "在我的 PC 上分析",
-          "lineMac": "所有分析都在这台 Mac 内完成，文档不会离开。",
-          "linePc": "所有分析都在这台 PC 内完成，文档不会离开。"
+          "lineMac": "所有分析都在这台 Mac 上完成，\n文档不会离开设备。",
+          "linePc": "所有分析都在这台 PC 上完成，\n文档不会离开设备。"
         }
       },
       "meter": {
@@ -1075,7 +1044,7 @@
         "good": "好"
       },
       "meterAria": "{{label}}: {{value}}",
-      "prepTime": "准备时间",
+      "prepTime": "预计索引时间",
       "about": "约",
       "minutes": "{{minutes}} 分钟",
       "cached": "已就绪",
@@ -1092,7 +1061,6 @@
     "sources": {
       "title": "要把在此电脑上找到的应用也加入搜索范围吗？",
       "checking": "正在检查可添加的其他来源…",
-      "empty": "未找到已连接的来源。您可以稍后在设置中连接。",
       "connectMore": "需要准备的数据源可稍后在设置中连接。",
       "name": {
         "kakao": "KakaoTalk",
@@ -1112,24 +1080,22 @@
         "telegram": "检测到 Telegram 应用数据",
         "whatsapp": "对话 {{chats}} 个 · 消息 {{messages}} 条",
         "mailcrawl": "已确认登录邮箱账户 {{accounts}} 个",
-        "github": "已登录 · Issues 与 Pull Requests",
+        "github": "已登录 gh · Issues 和 Pull Requests",
         "notion": "发现 Notion 应用数据",
         "obsidian": "发现 {{vaults}} 个 Vault"
       }
     },
     "plan": {
-      "eyebrow": "套餐",
-      "title": "你打算如何使用？",
+      "title": "要使用哪个套餐？",
       "titleReady": "套餐已就绪",
-      "lead": "请选择套餐。可随时在设置中更改。",
       "leadCloud": "远程嵌入需要 Pro 或 Max。Pro 可先免费试用 7 天。",
       "leadCloudReady": "可以使用远程嵌入。请继续下一步。",
       "badgeTrial": "试用进行中",
       "badgeSubscribed": "已订阅",
       "perMonth": "/ 月",
-      "continue": "使用此套餐继续",
-      "checkoutPro": "开始 Pro 7 天免费试用",
-      "checkoutAir": "打开 Air 结算页面",
+      "continue": "继续",
+      "checkoutPro": "开始 7 天免费试用",
+      "checkoutAir": "继续使用 Air",
       "noteHeld": "此账户正在使用",
       "noteTrialing": "试用中 · 至 {{date}}",
       "noteCancelScheduled": "已预约取消 · 可用至 {{date}}",
@@ -1139,58 +1105,94 @@
         "free": {
           "name": "Free",
           "price": "免费",
-          "tag": "想先试试 Dazzi 的用户",
-          "training": "输入与输出可能用于改进服务"
+          "tag": "适合注册后想立即体验的用户",
+          "training": "输入与输出可能用于改进服务",
+          "features": "能理解文件内容的 AI 搜索\n像聊天一样向文件提问\n5 款轻量聊天模型\n每周自动补充的免费额度"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "每月 $4 · 随时取消",
-          "tag": "已经在使用其他 AI 订阅的用户"
+          "tag": "适合想把已有 AI 订阅接入 Dazzi 的用户",
+          "features": "包含 Free 的全部功能，另有\n直接用你订阅的 AI 模型聊天\n搜索所需的 AI 由 Dazzi 提供\n比 Free 更多的每周额度"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "绑定银行卡可免费 7 天，之后每月 $20",
-          "tag": "不想再订阅其他 AI、希望 Dazzi 开箱即用的用户",
-          "trial": "7 天免费试用"
+          "tag": "适合不订阅其他 AI、只想用 Dazzi 的用户",
+          "trial": "7 天免费试用",
+          "features": "包含 Air 的全部功能，另有\n无需连接订阅，内置高性能聊天模型\n比 Air 更快的请求速度和更多额度\n7 天免费试用"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "每月 $200 · 随时取消",
-          "tag": "适合重度使用"
+          "tag": "适合同时处理大型文件夹和多项任务的高级用户",
+          "features": "包含 Pro 的全部功能，另有\nMax 专属高级模型\n为长时间任务准备的最高每周额度"
         },
         "byok": {
           "name": "BYOK",
           "price": "仅 API 费用",
-          "tag": "用自己的密钥直接连接"
+          "tag": "用自己的 API 密钥直接连接"
         }
       },
-      "checkoutMax": "打开 Max 结算页面",
+      "checkoutMax": "继续使用 Max",
       "promo": {
         "prompt": "有优惠码？",
         "label": "优惠码",
         "invalid": "仅限字母、数字、- 和 _。"
-      }
+      },
+      "tierLabel": "套餐",
+      "byokLead": "已有 API 密钥？",
+      "byokLink": "用自己的 API 密钥直接连接",
+      "startFree": "免费开始"
     },
     "model": {
-      "eyebrow": "AI 模型",
-      "title": "连接要使用的模型",
-      "lead": "连接你已有的服务（API 密钥、订阅账号登录或本机上的服务器），然后选择模型。它必须能响应一次真实调用，才能继续。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
+      "title": "连接要使用的 AI 模型",
+      "lead": "连接你正在使用的 AI 服务，然后为每个角色指定要使用的模型。\n可以连接 API 密钥、订阅账户或这台电脑上的模型服务器，设置之后可随时更改。",
       "connectedTitle": "已连接的服务",
-      "none": "尚未连接任何服务。",
+      "rolesTitle": "按角色指定模型",
       "connect": "连接服务",
-      "modelRow": "模型",
       "pick": "选择模型",
-      "needService": "请先连接服务",
-      "unready": "请选择模型以继续。",
-      "ready": "✓ 已就绪 · {{model}} 在 {{seconds}} 秒内响应。",
-      "checking": "正在确认 {{model}} 是否响应…",
-      "failed": "{{model}} 没有响应：{{error}}",
-      "readyResumed": "✓ 已就绪 · 将由 {{model}} 回答。",
-      "retry": "重新检查"
+      "auto": "自动设置",
+      "searchServices": "搜索服务",
+      "searchModels": "搜索模型",
+      "noMatch": "没有搜索结果。",
+      "noModels": "暂无可用于此角色的模型。请选择自动设置，或连接提供该模型的服务。",
+      "addCustom": "添加 OpenAI 兼容服务",
+      "addLocal": "添加这台电脑上的服务器",
+      "disconnect": "断开 {{name}}",
+      "status": {
+        "checking": "检查中",
+        "ok": "连接成功",
+        "failed": "连接失败"
+      },
+      "role": {
+        "answer": {
+          "name": "生成回答",
+          "desc": "撰写问题的回答并总结文档。"
+        },
+        "decomposition": {
+          "name": "拆分问题",
+          "desc": "将冗长复杂的问题拆分为多个搜索词。"
+        },
+        "jev": {
+          "name": "判断是否检索 (Jev)",
+          "desc": "决定是直接回答，还是先检索你的文档。"
+        },
+        "rerank": {
+          "name": "结果重排",
+          "desc": "把与问题最相关的文档排到前面。"
+        }
+      },
+      "server": {
+        "body": "连接公司网关，或使用 OpenAI API 格式的服务器。\n输入的密钥会加密保存在这台电脑上。",
+        "namePlaceholder": "显示名称",
+        "keyPlaceholder": "仅在服务器需要密钥时填写",
+        "urlInvalid": "地址无效，请重新检查。",
+        "keyInvalid": "API 密钥无效，请重新检查。"
+      }
     },
     "indexing": {
       "tip": "小技巧",
@@ -1333,13 +1335,6 @@
       "planActive": "{{plan}} 套餐已生效。",
       "signInFailed": "无法登录。",
       "notIndexed": "索引完成后才能打开 Dazzi。"
-    },
-    "roles": {
-      "eyebrow": "检索辅助模型",
-      "title": "选择重排序与判断模型",
-      "lead": "使用 Dazzi 套餐时会默认提供。使用自己的密钥时，请从已连接的服务中选择，或保持现状。",
-      "note": "会保存到「设置 → AI 模型」，之后可随时更改。",
-      "unavailable": "已连接的服务中没有提供该模型的。在设置中连接 OpenRouter 即可使用。"
     }
   },
   "finderComponents": {
@@ -1769,6 +1764,9 @@
       "tokenInvalidError": "访问令牌不匹配。",
       "rateLimitedError": "尝试次数过多，请稍后再试。",
       "cookieBlockedError": "无法确认浏览器 Cookie，请检查浏览器是否允许 Cookie 后重试。"
+    },
+    "smartIndexing": {
+      "cloudReason": "云同步文件夹。文件可能只存在于线上，因此默认不纳入索引。如需纳入，请拖回左侧。"
     }
   },
   "quickLook": {

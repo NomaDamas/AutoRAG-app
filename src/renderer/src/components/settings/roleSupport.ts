@@ -6,7 +6,7 @@
 
 import type { TFunction } from "i18next";
 import { jevBackendFor, jevModelsFor, rerankModelsFor } from "../../../../shared/ai-roles";
-import type { AutoRagConfigSnapshot, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
+import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { asRecord, getAt, stringOf } from "./configSupport";
 import type { RolePickerSelection } from "./ModelPicker";
 
@@ -18,6 +18,25 @@ export interface RoleOption {
 /** Build a catalog entry for a static Jev/rerank model so pickers reuse one shape. */
 function staticCatalogEntry(provider: ProviderSummary, id: string, name: string): ModelCatalogEntry {
 	return { provider: provider.id, id, name, api: "", available: true, baseUrl: provider.baseUrl, apiKeyEnv: provider.apiKeyEnv ?? null };
+}
+
+/**
+ * The writes that free every role pointing at `providerId` before it is
+ * disconnected: answer and decomposition fall back to their defaults by
+ * removing the field; rerank and Jev switch off. Settings and the onboarding
+ * model step disconnect through this, so both leave the same config behind.
+ */
+export function providerRoleCleanup(config: AutoRagConfigSnapshot["config"], providerId: string): AutoRagConfigUpdate[] {
+	const model = asRecord(getAt(config, ["model"]));
+	const decomposition = asRecord(getAt(config, ["queryDecomposition", "model"]));
+	const rerank = asRecord(getAt(config, ["rerank"]));
+	const jev = asRecord(getAt(config, ["jev"]));
+	const ops: AutoRagConfigUpdate[] = [];
+	if (stringOf(model?.provider) === providerId) ops.push({ path: ["model"], remove: true });
+	if (stringOf(decomposition?.provider) === providerId) ops.push({ path: ["queryDecomposition"], remove: true });
+	if (stringOf(rerank?.provider) === providerId) ops.push({ path: ["rerank"], value: false });
+	if (stringOf(jev?.backend) === jevBackendFor(providerId)) ops.push({ path: ["jev"], value: false });
+	return ops;
 }
 
 export function jevOptionsFor(connected: readonly ProviderSummary[]): RoleOption[] {
