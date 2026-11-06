@@ -127,6 +127,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+      "more": "非表示のフォルダ",
       "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
