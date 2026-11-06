@@ -1764,6 +1764,9 @@
       "tokenInvalidError": "アクセストークンが一致しません。",
       "rateLimitedError": "試行回数が多すぎます。しばらく待ってから再試行してください。",
       "cookieBlockedError": "セッション Cookie を確認できませんでした。ブラウザーの Cookie 設定を確認してください。"
+    },
+    "smartIndexing": {
+      "cloudReason": "クラウド同期フォルダです。ファイルがオンラインにしかない場合があるため、初期状態では除外しています。含めるには左へドラッグしてください。"
     }
   },
   "quickLook": {

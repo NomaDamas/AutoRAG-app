@@ -1764,6 +1764,9 @@
       "tokenInvalidError": "Access token does not match.",
       "rateLimitedError": "Too many attempts. Please wait a moment and try again.",
       "cookieBlockedError": "Could not confirm the session cookie. Check that cookies are enabled in this browser."
+    },
+    "smartIndexing": {
+      "cloudReason": "Cloud-sync folder: its files may live online only, so it starts out of the index. Drag it back to include it."
     }
   },
   "quickLook": {

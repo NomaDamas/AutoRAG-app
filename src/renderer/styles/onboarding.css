@@ -5580,28 +5580,28 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 16px;
 }
 
-/* Panels scroll sideways: groups stand side by side on the right, and the left keeps its breadcrumb still above its pills. */
+/* Panels scroll up and down: groups stack on the right, and the left keeps its breadcrumb still above its pills. */
 .onb .si-panel-body {
 	display: flex;
 	flex: 1;
-	align-items: flex-start;
-	gap: 24px;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 16px;
 	min-height: 0;
-	overflow-x: auto;
-	overflow-y: hidden;
+	overflow-x: hidden;
+	overflow-y: auto;
 	padding: 0 20px 16px;
 }
 
 .onb .si-panel-body:has(.si-crumbs) {
-	flex-direction: column;
 	gap: 12px;
-	overflow-x: hidden;
+	overflow-y: hidden;
 }
 
 .onb .si-crumbs + .si-pills {
-	max-width: 100%;
-	overflow-x: auto;
-	overflow-y: hidden;
+	min-height: 0;
+	overflow-x: hidden;
+	overflow-y: auto;
 }
 
 .onb .si-crumbs,
@@ -5649,15 +5649,22 @@ html[data-appearance="light"] .onb .ix-cta:hover {
 	line-height: 16px;
 }
 
-/* Five pills to a column, then the next column: rows and left edges line up across columns. */
+/* One pill per row, top to bottom; the panel scrolls when they outgrow it. */
 .onb .si-screen:has(.si-head) .si-pills {
-	display: grid;
-	grid-auto-flow: column;
-	grid-template-rows: repeat(5,31px);
-	grid-auto-columns: max-content;
-	justify-items: start;
+	display: flex;
+	flex: none;
+	flex-direction: column;
+	flex-wrap: nowrap;
+	align-items: flex-start;
 	gap: 8px;
 	padding: 0;
+	overflow: visible;
+}
+
+.onb .si-screen:has(.si-head) .si-crumbs + .si-pills {
+	flex: 1 1 auto;
+	overflow-x: hidden;
+	overflow-y: auto;
 }
 
 .onb .si-screen:has(.si-head) .si-pill {

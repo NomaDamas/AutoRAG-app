@@ -6,7 +6,7 @@
  * listed on its own.
  */
 
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement, type WheelEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement } from "react";
 import { ChevronRight, CircleHelp, Folder } from "lucide-react";
 import type { FolderCandidate } from "../../../../shared/onboarding-contract";
 import type { SmartExclusion } from "../../../../shared/smart-indexing-contract";
@@ -27,11 +27,6 @@ interface Moving {
 /** The part of a left-out folder's path below the folder it lies under, with "/" between its parts. */
 function insidePath(item: SmartExclusion): string {
 	return item.path.slice(item.root.length).replace(/^[\\/]+/u, "").replace(/\\/gu, "/");
-}
-
-/** The panels only scroll sideways, so a mouse wheel moves them that way too. */
-function scrollSideways(event: WheelEvent<HTMLElement>): void {
-	if (event.deltaX === 0) event.currentTarget.scrollLeft += event.deltaY;
 }
 
 /** How the AI decides; shown while the pointer (or focus) rests on its label. */
@@ -210,7 +205,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 								</span>
 							))}
 						</nav>
-						<div className="si-pills" onWheel={scrollSideways}>
+						<div className="si-pills">
 							{shown.map((folder) =>
 								pill(
 									{ path: folder.path, from: "include", top: current === null },
@@ -229,7 +224,7 @@ export function SmartScopeStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactE
 						<div className="si-panel-title">{t("onboarding.smartScope.exclude.title")}</div>
 						<span className="si-panel-meta">{formatSize(totals.bytes)}</span>
 					</div>
-					<div className="si-panel-body" onWheel={scrollSideways}>
+					<div className="si-panel-body">
 						{unselected.length === 0 && groups.length === 0 ? <p className="si-empty">{t("onboarding.smartScope.exclude.empty")}</p> : null}
 						{unselected.length > 0 ? (
 							<div className="si-group">

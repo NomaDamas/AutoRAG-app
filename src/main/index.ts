@@ -1035,6 +1035,26 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	const listCloudDrives = async (): Promise<readonly { readonly path: string; readonly name: string }[]> => {
+		if (process.platform === "darwin") {
+			const root = join(home, "Library", "CloudStorage");
+			const names = await readdir(root).catch(() => [] as string[]);
+			// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
+			return names
+				.filter((name) => !name.startsWith("."))
+				.map((name) => {
+					const dash = name.indexOf("-");
+					return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
+				});
+		}
+		if (process.platform === "win32") {
+			const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
+			return locations
+				.filter((location) => location.section === "cloud" && location.available)
+				.map((location) => ({ path: location.path, name: location.name }));
+		}
+		return [];
+	};
 	registerSmartIndexingIpcHandlers(
 		createSmartIndexingService({
 			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
@@ -1042,6 +1062,7 @@ app.whenReady().then(async () => {
 			agentDir: getAgentDir(),
 			env: process.env,
 			language: () => currentLanguage,
+			cloudRoots: async () => (await listCloudDrives()).map((drive) => drive.path),
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
@@ -1140,26 +1161,7 @@ app.whenReady().then(async () => {
 		},
 		iCloudDrivePath:
 			process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
-		cloudDrives: async () => {
-			if (process.platform === "darwin") {
-				const root = join(home, "Library", "CloudStorage");
-				const names = await readdir(root).catch(() => [] as string[]);
-				// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
-				return names
-					.filter((name) => !name.startsWith("."))
-					.map((name) => {
-						const dash = name.indexOf("-");
-						return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
-					});
-			}
-			if (process.platform === "win32") {
-				const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
-				return locations
-					.filter((location) => location.section === "cloud" && location.available)
-					.map((location) => ({ path: location.path, name: location.name }));
-			}
-			return [];
-		},
+		cloudDrives: listCloudDrives,
 		localSpec,
 		ocrEnabled: async () => {
 			try {

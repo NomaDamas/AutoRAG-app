@@ -1764,6 +1764,9 @@
       "tokenInvalidError": "访问令牌不匹配。",
       "rateLimitedError": "尝试次数过多，请稍后再试。",
       "cookieBlockedError": "无法确认浏览器 Cookie，请检查浏览器是否允许 Cookie 后重试。"
+    },
+    "smartIndexing": {
+      "cloudReason": "云同步文件夹。文件可能只存在于线上，因此默认不纳入索引。如需纳入，请拖回左侧。"
     }
   },
   "quickLook": {
