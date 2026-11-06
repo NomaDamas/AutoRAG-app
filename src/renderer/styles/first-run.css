@@ -755,6 +755,141 @@ html[data-appearance="dark"] .fr-dock-ready {
 
 /* -------------------------------------------------------------------- ready */
 
+/*
+ * Ready → Finder reveal (design-mockups/finish-reveal/v5v7-hybrid.html). The stage hands its own
+ * backdrop to `.fr-reveal-back` (below the ready panel) and the word and bloom sit in
+ * `.fr-reveal-front` (above it); `reveal.tsx` sets every opacity, transform and filter.
+ */
+.fr-stage--reveal {
+	background: transparent;
+	transition: none;
+}
+
+.fr-stage--reveal .fr-panel {
+	position: relative;
+	z-index: 1;
+	animation: none;
+}
+
+.fr-reveal,
+.fr-reveal-back,
+.fr-reveal-front {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.fr-reveal-back {
+	z-index: 0;
+	overflow: hidden;
+}
+
+.fr-reveal-front {
+	z-index: 2;
+	overflow: hidden;
+}
+
+.fr-reveal-base,
+.fr-reveal-bgw,
+.fr-reveal-dark {
+	position: absolute;
+	inset: 0;
+}
+
+.fr-reveal-base,
+.fr-reveal-bgw,
+.fr-reveal-dark,
+.fr-reveal-glow,
+.fr-reveal-word,
+.fr-reveal-bloom {
+	will-change: opacity, transform, filter;
+}
+
+.fr-reveal-base {
+	background: #f6f7fa;
+}
+
+.fr-reveal-bgw {
+	background:
+		radial-gradient(60% 50% at 50% 38%, var(--fr-glow) 0%, transparent 70%),
+		radial-gradient(80% 60% at 80% 100%, var(--fr-glow-cool) 0%, transparent 70%),
+		linear-gradient(180deg, var(--fr-stage-a), var(--fr-stage-b));
+}
+
+.fr-reveal-dark {
+	background:
+		radial-gradient(75% 65% at 82% 108%, rgba(30, 110, 230, 0.55), rgba(30, 110, 230, 0) 70%),
+		radial-gradient(60% 55% at 12% -6%, rgba(60, 90, 200, 0.3), rgba(60, 90, 200, 0) 70%),
+		#0b0d15;
+	opacity: 0;
+}
+
+.fr-reveal-glow {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 700px;
+	height: 700px;
+	margin: -366px 0 0 -350px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(255, 232, 180, 0.9) 0%, rgba(255, 184, 70, 0.34) 24%, rgba(120, 150, 230, 0.22) 40%, rgba(30, 110, 230, 0.16) 52%, rgba(30, 110, 230, 0) 66%);
+	opacity: 0;
+}
+
+.fr-reveal-word {
+	position: absolute;
+	left: 0;
+	right: 0;
+	padding-left: 0.14em;
+	text-align: center;
+	color: #fff;
+	font-size: 19px;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-shadow: 0 0 22px rgba(255, 190, 90, 0.55);
+	opacity: 0;
+}
+
+.fr-reveal-bloom {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 1000px;
+	height: 1000px;
+	margin: -500px 0 0 -500px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(255, 250, 235, 1) 0%, rgba(255, 226, 160, 0.65) 18%, rgba(255, 190, 90, 0.22) 38%, rgba(255, 190, 90, 0) 62%);
+	opacity: 0;
+}
+
+/* The sweep lives on the sunflower (inside `.fr-done-mark`) and is masked to its shape. */
+.fr-reveal-sweep {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 110px;
+	height: 110px;
+	overflow: hidden;
+	pointer-events: none;
+	mask-size: contain;
+	mask-repeat: no-repeat;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+}
+
+.fr-reveal-sweep > span {
+	position: absolute;
+	top: -20%;
+	bottom: -20%;
+	left: 0;
+	width: 52px;
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+	transform: translateX(-90px) skewX(-18deg);
+	opacity: 0;
+}
+
 /* Figma 162:1308: the logo with a green check badge on its lower right. */
 .fr-done-mark {
 	position: relative;
