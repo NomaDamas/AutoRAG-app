@@ -410,14 +410,19 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   the Dazzi logo with a green check badge, "파일을 다 읽었어요", one "시작하기"
   button at the same height as the folder screen's; Enter presses it) → `tour` → `signin`. While `setup` runs, the floating logo is a
   button: tapping it fades the title and description out, the progress bar glides
-  below, and a 16×16 Minesweeper with 40 hidden Dazzi logos in place of mines
-  fades in (`first-run/MineGame.tsx`, rules in `first-run/minesweeper.ts`). Left
-  click opens, right click / Shift+click flags, middle click or a click on an
+  below, and a 16×16 Minesweeper with 40 hidden sunflowers (`dazzi-mark.png`) in
+  place of mines fades in (`first-run/MineGame.tsx`, rules in
+  `first-run/minesweeper.ts`; Figma 166:83). Above the board: the sunflowers left
+  and the clock ("47.6 초") as pills, the flag hint in the middle, and ✕, which
+  goes back to the floating logo (or to `ready` if the run finished meanwhile).
+  Left click opens, right click / Shift+click flags, middle click or a click on an
   open number chords; the first click always opens a patch; the clock runs from
-  the first open cell and a finished board restarts on the next click (best time
-  of the session is shown). If setup finishes mid-game the board stays and the
-  progress bar is replaced by a docked "파일을 다 읽었어요 / 시작하기" card (Enter
-  presses it). Full Disk Access is never asked here; it is
+  the first open cell. A finished board reveals every sunflower and swaps the hint
+  for an underlined "다시하기" (Figma 162:2507; a faster win says "새 기록이에요!"),
+  and the next click on the board also starts over. If setup finishes mid-game the
+  board stays and the progress bar is replaced by a card with the sunflower,
+  "파일을 다 읽었어요" and "시작하기" (Figma 162:2850; Enter presses it). The blue
+  first-run buttons are flat: no shadow or glow. Full Disk Access is never asked here; it is
   asked by `FullDiskAccessDialog` (one state-dependent button) only when Finder
   tag colours, KakaoTalk, or Apple Mail under `~/Library/Mail` is used.
 - While the layer covers the window the Finder behind it is mounted, `inert`,

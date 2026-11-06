@@ -6,13 +6,15 @@
  * is replaced by a fresh one on the next click so the player can go again faster.
  *
  * The rules live in `minesweeper.ts`; this file is the board, the clock, and the
- * session's best time (not stored: it is a waiting-room toy).
+ * session's best time (not stored: it is a waiting-room toy, shown only as
+ * "새 기록이에요!" on a faster win). Layout per Figma 166:83 (playing) and
+ * 162:2507 (game over).
  */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactElement } from "react";
 import { useTranslation } from "../../../shared/i18n";
-import dazziLogo from "../assets/dazzi-logo.png";
-import { FlagIcon } from "../components/icons";
+import dazziMark from "../assets/dazzi-mark.png";
+import { CloseIcon, FlagIcon } from "../components/icons";
 import { chord, cellKind, formatClock, newBoard, OPEN, reveal, toggleFlag, type Board, type CellKind } from "./minesweeper";
 
 /** A finished board ignores clicks this long, so the click that ended the game cannot also start the next. */
@@ -24,12 +26,12 @@ function isOver(board: Board): boolean {
 	return board.phase === "won" || board.phase === "lost";
 }
 
-export function MineGame(): ReactElement {
+/** `onClose` (the ✕ on the bar) puts the setup screen back on the floating logo. */
+export function MineGame({ onClose }: { readonly onClose: () => void }): ReactElement {
 	const { t } = useTranslation();
 	const [board, setBoard] = useState<Board>(() => newBoard());
 	const [round, setRound] = useState(0);
 	const [elapsed, setElapsed] = useState(0);
-	const [best, setBest] = useState<number | null>(null);
 	const [record, setRecord] = useState(false);
 	const boardRef = useRef(board);
 	const bestRef = useRef<number | null>(null);
@@ -50,10 +52,7 @@ export function MineGame(): ReactElement {
 			if (after.phase === "won") {
 				const previous = bestRef.current;
 				const beaten = previous === null || ms < previous;
-				if (beaten) {
-					bestRef.current = ms;
-					setBest(ms);
-				}
+				if (beaten) bestRef.current = ms;
 				setRecord(beaten && previous !== null);
 			}
 		}
@@ -132,33 +131,30 @@ export function MineGame(): ReactElement {
 	return (
 		<div className="fr-game" data-phase={board.phase}>
 			<div className="fr-game-bar">
-				<div className="fr-chip fr-chip--count" title={t("firstRun.game.remaining")}>
-					<img className="fr-chip-logo" src={dazziLogo} alt="" draggable={false} />
-					<span className="fr-chip-num" data-role="remaining">{remaining}</span>
+				<div className="fr-game-stats">
+					<div className="fr-game-pill" title={t("firstRun.game.remaining")}>
+						<img className="fr-game-pill-logo" src={dazziMark} alt="" draggable={false} />
+						<span className="fr-game-pill-num" data-role="remaining">{remaining}</span>
+					</div>
+					<div className="fr-game-pill" title={t("firstRun.game.time")}>
+						<span className="fr-game-pill-num fr-game-pill-num--time" data-role="clock">{t("firstRun.game.seconds", { time: formatClock(elapsed) })}</span>
+					</div>
 				</div>
 				<div className="fr-game-say" role="status" aria-live="polite">
-					{board.phase === "won" ? (
-						<>
-							<strong>{record ? t("firstRun.game.record") : t("firstRun.game.won")}</strong>
-							<button type="button" className="fr-btn fr-btn--primary fr-btn--sm" data-action="game-again" onClick={restart}>
-								{t("firstRun.game.again")}
-							</button>
-						</>
-					) : board.phase === "lost" ? (
-						<>
-							<strong>{t("firstRun.game.lost")}</strong>
-							<button type="button" className="fr-btn fr-btn--secondary fr-btn--sm" data-action="game-again" onClick={restart}>
-								{t("firstRun.game.again")}
-							</button>
-						</>
+					{board.phase === "won" ? <strong>{record ? t("firstRun.game.record") : t("firstRun.game.won")}</strong> : null}
+					{/* Figma 162:2507 shows only "다시하기" on a lost board; the reason is still read out. */}
+					{board.phase === "lost" ? <span className="sr-only">{t("firstRun.game.lost")}</span> : null}
+					{over ? (
+						<button type="button" className="fr-game-again" data-action="game-again" onClick={restart}>
+							{t("firstRun.game.again")}
+						</button>
 					) : (
 						<span className="fr-game-hint">{t("firstRun.game.hint")}</span>
 					)}
 				</div>
-				<div className="fr-chip fr-chip--time" title={t("firstRun.game.time")}>
-					<span className="fr-chip-num" data-role="clock">{formatClock(elapsed)}</span>
-					{best !== null ? <span className="fr-chip-best" data-role="best">{t("firstRun.game.best", { time: formatClock(best) })}</span> : null}
-				</div>
+				<button type="button" className="fr-game-close" data-action="game-close" aria-label={t("firstRun.game.close")} title={t("firstRun.game.close")} onClick={onClose}>
+					<CloseIcon size={13} />
+				</button>
 			</div>
 			<div
 				key={round}
@@ -188,7 +184,7 @@ function CellFace({ kind, near }: { readonly kind: CellKind; readonly near: numb
 		case "logo":
 		case "found":
 		case "boom":
-			return <img className="fr-cell-logo" src={dazziLogo} alt="" draggable={false} />;
+			return <img className="fr-cell-logo" src={dazziMark} alt="" draggable={false} />;
 		case "open":
 			return near > 0 ? <>{near}</> : null;
 		default:
