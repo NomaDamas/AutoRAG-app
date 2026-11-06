@@ -359,11 +359,25 @@ occupy the innermost ring; descendant folders and files appear progressively
 farther out. Folder sectors partition angles by represented file count, not
 bytes; individual files are narrow radial strokes. `radial.ts` computes SVG
 annular paths, with up to nine visible rings. The legend sits above the chart.
-Clicking a folder reveals its subtree; the center goes up, and the overview
-button restores all roots. The side panel shows the hovered/focused item's path,
+Clicking a folder reveals its subtree and the center goes up; there is no overview
+or reload button. The side panel shows the hovered/focused item's path,
 completion and child list; inside a folder its first row is `..`, which goes up
 one level like the center. The center shows only the percentage and the scope
 name.
+
+**The open map keeps itself current** (`useLiveIndexMap.ts`). While the local
+folders are being indexed, by this app, the scheduled job or `autorag watch`
+(`localIndexRunning` over `useIndexActivity`), it reads the map again every
+`INDEX_MAP_REFRESH_MS` (10 s), once when a run starts, once when it ends, and at
+once when a refresh settles (`onIndexRefreshed`). Nothing polls while idle. The
+update is silent by construction: reads never overlap (a slow scan is not asked
+again, and a push that arrives during one triggers one more read after it); a
+failed re-read keeps the last good map and shows no error (only a first read with
+nothing to keep shows one, and it is retried at the same pace); an answer equal
+to the one shown keeps the same object, so the chart does not redraw. The focused
+folder and the hovered item are kept by path and kind, not node id, because ids
+are renumbered when the tree changes. A scan walks the disk, so a 10 s interval
+on a large scope costs one walk per tick, never two at once.
 
 Angles follow file counts, with one exception: an excluded folder holds few or no
 counted files, so by count it would be a hairline beside a large sibling (42
@@ -397,13 +411,16 @@ There is no simulated opening tally or continuous render loop.
 The scan stops at `INDEX_MAP_MAX_ENTRIES` and reports `truncated`.
 `buildIndexMap` uses the existing file-cap/depth ladder to fit
 `INDEX_MAP_NODE_BUDGET`, folding files into per-state parcels while preserving
-counts. A completed index refresh (`onIndexRefreshed`) reloads the map without
-losing the focused folder path; selection is cleared because node ids can move.
+counts. The reload described above keeps the focused folder and the hovered
+item, since both are kept by path.
 The UI strings ship in Korean, English, Japanese and Simplified Chinese.
-Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`.
+Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`,
+`test/ui-index-map-live.test.tsx` (polling, silent failures, no overlap) and
+`test/index-activity-view.test.ts` (`localIndexRunning`).
 Real app QA: `scripts/manual-qa/run-qa-finder-index-map.mjs` (English/Korean,
-four colors, eligible-only percentages, drill/up/`..`/overview, excluded folders
-wide enough to see and hover, and live exclusion).
+four colors, eligible-only percentages, drill/up/`..`, excluded folders wide enough
+to see and hover, live exclusion, and a real refresh followed by the open map
+without it emptying or losing the hovered item).
 
 ## Error reports (Sentry)
 

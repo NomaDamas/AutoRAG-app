@@ -395,8 +395,8 @@ if (alpha !== null) await alpha.focus();
 await page.waitForTimeout(250);
 check("focusing a folder keeps its details", (await details()).includes("alpha"), (await details()).slice(0, 160));
 
-// Drill into the top-level notes folder: the centre follows, and both the
-// centre and the overview button bring the whole scope back.
+// Drill into the top-level notes folder: the centre follows and brings the whole scope back. The map has no
+// overview or reload button any more: it keeps itself current (checked below).
 const notes = await findPath({ kind: "folder", tail: ["notes"] });
 check("the notes folder is on the chart", notes !== null);
 const notesHit = notes === null ? false : await clickPath(notes);
@@ -406,12 +406,8 @@ await shot("03-drill");
 await page.locator(".index-map-center").click();
 await page.waitForTimeout(450);
 check("the centre moves back up to the whole scope", (await centerPercent()) === PERCENT_DRIFT, `${await centerPercent()} (want ${PERCENT_DRIFT})`);
-const notesAgain = await findPath({ kind: "folder", tail: ["notes"] });
-if (notesAgain !== null) await clickPath(notesAgain);
-await page.waitForTimeout(450);
-await page.locator('[data-action="index-map-overview"]').click();
-await page.waitForTimeout(350);
-check("the overview button restores the whole scope", (await centerPercent()) === PERCENT_DRIFT, `${await centerPercent()} (want ${PERCENT_DRIFT})`);
+check("the overview button is gone", (await page.locator('[data-action="index-map-overview"]').count()) === 0);
+check("there is no reload button either", (await page.locator(".index-map-tools, .index-map-tool").count()) === 0);
 
 // The '..' row at the top of the list goes up one level, like the centre does.
 const notesForParent = await findPath({ kind: "folder", tail: ["notes"] });
@@ -437,6 +433,40 @@ check("the global percent follows the wider set", (await centerPercent()) === Ma
 const incoming = await findPath({ kind: "folder", tail: ["incoming"] });
 check("the new-only folder is drawn unindexed", incoming !== null && (await incoming.getAttribute("data-state")) === "unindexed", incoming === null ? "absent" : String(await incoming.getAttribute("data-state")));
 await shot("04-incoming");
+
+// Live refresh: leave the map open and run a real index refresh from outside. While it runs the map re-reads on its
+// own, so it ends up showing the finished index without any button, never going empty and never losing the item the
+// pointer is on.
+const watchPath = await findPath({ kind: "folder", tail: ["incoming"] });
+if (watchPath !== null) await hoverPath(watchPath);
+await page.waitForTimeout(300);
+await page.evaluate(() => {
+	const seen = { minPaths: Infinity, empty: 0, overlay: 0, samples: 0 };
+	window.__mapWatch = seen;
+	window.__mapWatchTimer = setInterval(() => {
+		const count = document.querySelectorAll(".index-map-chart path[data-node-id]").length;
+		seen.samples += 1;
+		seen.minPaths = Math.min(seen.minPaths, count);
+		if (count === 0) seen.empty += 1;
+		if (document.querySelector(".index-map-overlay") !== null) seen.overlay += 1;
+	}, 50);
+});
+const beforeLive = await summary();
+// The refresh indexes the two inbox files and the one changed earlier: 17/22 becomes 22/22 once it ends.
+void page.evaluate(() => window.autorag.settings.configRefresh());
+const followed = await page
+	.waitForFunction((expected) => Number(document.querySelector(".index-map-summary")?.getAttribute("data-indexed") ?? "-1") === expected, beforeLive.targets, { timeout: 120_000 })
+	.then(() => true, () => false);
+const watch = await page.evaluate(() => {
+	clearInterval(window.__mapWatchTimer);
+	return window.__mapWatch;
+});
+const afterLive = await summary();
+check("the open map follows a running refresh by itself, with no button pressed", followed && afterLive.indexed === beforeLive.targets, JSON.stringify({ beforeLive, afterLive }));
+check("the chart never emptied or showed a loading overlay while updating", watch.empty === 0 && watch.overlay === 0 && watch.minPaths > 0 && watch.samples > 20, JSON.stringify(watch));
+const stillHovered = await page.evaluate(() => document.querySelector(".index-map-sector[data-active='true']")?.getAttribute("data-path") ?? null);
+check("the item under the pointer is still the one being shown after the update", stillHovered !== null && hasTail(stillHovered, "incoming"), String(stillHovered));
+await shot("04b-followed-refresh");
 
 // Excluding the archive while the map is open: its three files leave the index
 // and the target set, and its territory turns gray.

@@ -3183,8 +3183,6 @@
       "empty": "検索範囲に対応するファイルがありません。",
       "parcel": "{{state}}のファイル {{files}} 件",
       "folderCounts": "{{total}} 件中 {{indexed}} 件がインデックス済み",
-      "fit": "全体を表示",
-      "reload": "再読み込み",
       "legendLabel": "凡例",
       "truncated": "検索範囲が大きすぎるため、最初の {{total}} 件のファイルまでを調べました。",
       "state": {

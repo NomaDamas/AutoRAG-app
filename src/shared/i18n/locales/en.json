@@ -3183,8 +3183,6 @@
       "empty": "There are no supported files in the search scope.",
       "parcel": "{{files}} files · {{state}}",
       "folderCounts": "{{indexed}} of {{total}} indexed",
-      "fit": "Fit to view",
-      "reload": "Reload",
       "legendLabel": "Legend",
       "truncated": "The search scope is too large, so only the first {{total}} files were surveyed.",
       "state": {

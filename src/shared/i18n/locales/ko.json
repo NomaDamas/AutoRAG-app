@@ -3183,8 +3183,6 @@
       "empty": "검색 범위에 인덱싱 가능한 파일이 없습니다.",
       "parcel": "{{state}} 파일 {{files}}개",
       "folderCounts": "{{total}}개 중 {{indexed}}개 인덱싱됨",
-      "fit": "전체 보기",
-      "reload": "다시 불러오기",
       "legendLabel": "범례",
       "truncated": "검색 범위가 너무 커서 처음 {{total}}개 파일까지만 살펴봤습니다.",
       "state": {

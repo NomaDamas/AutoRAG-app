@@ -1305,19 +1305,6 @@
 }
 
 .settings-view .index-map-head p { max-width: 680px; }
-.settings-view .index-map-tools { display: flex; gap: var(--space-6); }
-.settings-view .index-map-tool {
-	display: grid;
-	place-items: center;
-	width: 30px;
-	height: 30px;
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-subtle);
-	color: var(--text-muted);
-	cursor: pointer;
-}
-.settings-view .index-map-tool:hover { background: var(--bg-hover); color: var(--text-primary); }
 .settings-view .index-map-body {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 250px;

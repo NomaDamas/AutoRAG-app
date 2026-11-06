@@ -3183,8 +3183,6 @@
       "empty": "搜索范围内没有支持的文件。",
       "parcel": "{{files}} 个{{state}}文件",
       "folderCounts": "{{total}} 个中已索引 {{indexed}} 个",
-      "fit": "显示全部",
-      "reload": "重新加载",
       "legendLabel": "图例",
       "truncated": "搜索范围过大，仅勘察了前 {{total}} 个文件。",
       "state": {
