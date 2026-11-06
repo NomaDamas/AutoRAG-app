@@ -96,6 +96,10 @@ export interface AiDockHandle {
 	toggleHistory(): void;
 	/** Start a new conversation, like the panel's 새 대화 button. */
 	newChat(): void;
+	/** Show stored chat `id` (the inspector's ⤢), to continue it here; ignored while a run streams. */
+	openChat(id: string): void;
+	/** Open the 대화 기록 list (it stays open if it already is). */
+	showHistory(): void;
 }
 
 export interface AiSearchPanelProps {
@@ -814,6 +818,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		},
 		toggleHistory,
 		newChat,
+		openChat(id: string): void {
+			if (searchIdRef.current !== null) return;
+			void loadHistory(id);
+		},
+		showHistory(): void {
+			if (!historyOpen) void openHistory();
+		},
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {

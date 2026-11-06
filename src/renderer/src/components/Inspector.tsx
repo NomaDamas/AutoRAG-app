@@ -2,7 +2,8 @@
  * Inspector — the right column (v7 Bloom). One full-height view at a time,
  * chosen by the focused tab (a folder tab shows Info, an AI Search tab Evidence):
  *
- *   Info     preview paper, name, kind·size·date, index/trash/copy chips, the
+ *   Info     preview paper, name, kind·size·date, the file's actions as one row of
+ *            icon buttons (index, trash, copy path, then what its type suggests), the
  *            dupey Versions family, the metadata rows, and the suggested-action
  *            bar. The bar is data-driven: `state/file-actions.ts` decides which
  *            actions the focused file's own type implies, the machine's
@@ -61,10 +62,10 @@ import type { ImageActions } from "./AnswerImage";
 import { AutomationRulesSection } from "./AutomationRulesSection";
 import { EvidenceExcerpt, InlineWithImages } from "./EvidenceBlocks";
 import {
-	CheckIcon,
 	CloseIcon,
 	CompressIcon,
 	CopyIcon,
+	DatabaseIcon,
 	ExtractIcon,
 	EyeIcon,
 	FolderGlyph,
@@ -144,6 +145,10 @@ export interface InspectorProps {
 	 * known here, and it is not offered for the Trash.
 	 */
 	readonly folderInView?: boolean;
+	/** The AI chat's foot of the Info view (resume link, 요약, composer); see InspectorChat.tsx. */
+	readonly chatDock?: ReactNode;
+	/** The AI chat itself, shown instead of the Info view while the person is in it. */
+	readonly chatView?: ReactNode;
 }
 
 const HEAD_BUTTON =
@@ -186,6 +191,8 @@ export function Inspector({
 	imageActions,
 	automations,
 	folderInView = false,
+	chatDock,
+	chatView,
 }: InspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
@@ -204,6 +211,8 @@ export function Inspector({
 					evidenceFolderCount={evidenceFolderCount}
 					onOpenEvidenceFolder={onOpenEvidenceFolder}
 				/>
+			) : chatView !== undefined && chatView !== null ? (
+				chatView
 			) : entries.length > 1 ? (
 				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} actionCapabilities={actionCapabilities} onAction={onAction} />
 			) : (
@@ -215,7 +224,6 @@ export function Inspector({
 					onToggleIndex={onToggleIndex}
 					onTrash={onTrash}
 					onCopyPath={onCopyPath}
-					onAskAi={onAskAi}
 					actionCapabilities={actionCapabilities}
 					onAction={onAction}
 					loadOpenWithApplications={loadOpenWithApplications}
@@ -223,6 +231,7 @@ export function Inspector({
 					folderInView={folderInView}
 				/>
 			)}
+			{view === "evidence" || entries.length > 1 || (chatView !== undefined && chatView !== null) ? null : chatDock}
 		</aside>
 	);
 }
@@ -235,7 +244,6 @@ function InfoHalf({
 	onToggleIndex,
 	onTrash,
 	onCopyPath,
-	onAskAi,
 	actionCapabilities,
 	onAction,
 	loadOpenWithApplications,
@@ -249,7 +257,6 @@ function InfoHalf({
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
 	readonly onCopyPath: (entry: FinderEntry) => void;
-	readonly onAskAi: (entry: FinderEntry) => void;
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
@@ -306,22 +313,17 @@ function InfoHalf({
 						{folderInView ? kindLabelOf(entry) : `${kindLabelOf(entry)} · ${sizeLabelOf(entry)} · ${dateLabelOf(entry)}`}
 					</div>
 
-					<div className="chip-row flex flex-wrap gap-6 mt-12 mb-16">
-						{entry.kind === "file" ? (
-							<Chip onClick={() => onToggleIndex(entry)}>
-								<CheckIcon size={12} />
-								{included ? t("contextMenu.includeInIndex") : t("contextMenu.excludeFromIndex")}
-							</Chip>
-						) : null}
-						{folderInView ? null : (
-							<Chip onClick={() => onTrash(entry)}>
-								<TrashIcon size={12} />{t("contextMenu.trashShort")}
-							</Chip>
-						)}
-						<Chip onClick={() => onCopyPath(entry)}>
-							<CopyIcon size={12} />{t("contextMenu.copyPath")}
-						</Chip>
-					</div>
+					<FileActionGroup
+						entry={entry}
+						included={included}
+						folderInView={folderInView}
+						onToggleIndex={onToggleIndex}
+						onTrash={onTrash}
+						onCopyPath={onCopyPath}
+						actions={suggestedActions(entry, actionCapabilities).filter((action) => action.id !== "open" && action.id !== "askAi")}
+						onAction={onAction}
+						loadOpenWithApplications={() => loadOpenWithApplications(entry)}
+					/>
 
 					{entry.kind === "folder" && automations !== undefined ? (
 						<AutomationRulesSection
@@ -369,14 +371,6 @@ function InfoHalf({
 				</div>
 			)}
 
-			{entry === null ? null : (
-				<ActionBar
-					actions={suggestedActions(entry, actionCapabilities)}
-					onAction={onAction}
-					onAskAi={() => onAskAi(entry)}
-					loadOpenWithApplications={() => loadOpenWithApplications(entry)}
-				/>
-			)}
 		</div>
 	);
 }
@@ -632,11 +626,72 @@ function MultiInfoHalf({
 	);
 }
 
+/** A suggested action's label in the interface language (the action carries a Korean default). */
+function actionLabel(t: (key: string, fallback: string) => string, id: string, fallback: string): string {
+	switch (id) {
+		case "open": return t("inspector.actions.open", fallback);
+		case "openWith": return t("inspector.actions.openWith", fallback);
+		case "compress": return t("inspector.actions.compress", fallback);
+		case "extract": return t("inspector.actions.extract", fallback);
+		case "share": return t("inspector.actions.share", fallback);
+		case "askAi": return t("inspector.actions.askAi", fallback);
+		case "imageEdit": return t("inspector.actions.imageEdit", fallback);
+		case "videoConvert": return t("inspector.actions.videoConvert", fallback);
+		case "reduceSize": return t("inspector.actions.reduceSize", fallback);
+		default: return fallback;
+	}
+}
+
 /**
- * The bottom action bar: every action the focused file's type suggests, in
- * priority order. A `menu` action (`이미지 편집`, `동영상 변환`) opens its
- * variants anchored to its button; a flat action runs at once.
+ * Running a suggested action: a `menu` action (`이미지 편집`, `동영상 변환`) and "다른 앱으로 열기" open their
+ * variants anchored to the clicked button; a flat action runs at once. Returns the menu to render.
  */
+function useActionRunner({
+	onAction,
+	onAskAi,
+	loadOpenWithApplications,
+}: {
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly onAskAi?: (() => void) | undefined;
+	readonly loadOpenWithApplications?: (() => Promise<readonly OpenWithApplication[]>) | undefined;
+}): {
+	readonly activate: (action: FileAction, anchor: ActionAnchor) => void;
+	readonly menu: ReactElement | null;
+} {
+	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
+	function run(target: FileActionTarget, anchor: ActionAnchor): void {
+		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
+		if (target.kind === "askAi") onAskAi?.();
+		else if (target.kind === "openWith") {
+			// The OS's handlers for this file's type come first; "기타…" opens the full chooser.
+			// A failed lookup still leaves "기타…" reachable.
+			(loadOpenWithApplications?.() ?? Promise.resolve([]))
+				.catch((): readonly OpenWithApplication[] => [])
+				.then((applications) => setMenu({ items: openWithItems(applications), anchor }));
+		} else onAction(target, anchor);
+	}
+	return {
+		activate: (action, anchor) => {
+			if (action.kind === "action") run(action.target, anchor);
+			else setMenu({ items: action.items, anchor });
+		},
+		menu:
+			menu === null ? null : (
+				<ActionMenu
+					items={menu.items}
+					anchor={menu.anchor}
+					onSelect={(target) => {
+						const anchor = menu.anchor;
+						setMenu(null);
+						run(target, anchor);
+					}}
+					onClose={() => setMenu(null)}
+				/>
+			),
+	};
+}
+
+/** The multi-selection's bottom action bar: every action the selection suggests, in priority order. */
 function ActionBar({
 	actions,
 	onAction,
@@ -650,78 +705,118 @@ function ActionBar({
 	readonly loadOpenWithApplications?: () => Promise<readonly OpenWithApplication[]>;
 }): ReactElement {
 	const { t } = useTranslation();
-	const [menu, setMenu] = useState<{ readonly items: readonly FileActionItem[]; readonly anchor: ActionAnchor } | null>(null);
-	function run(target: FileActionTarget, anchor: ActionAnchor): void {
-		// "AI 요약" is the App shell's concern (it owns the composer), not IPC.
-		if (target.kind === "askAi") onAskAi?.();
-		else if (target.kind === "openWith") {
-			// The OS's handlers for this file's type come first; "기타…" opens the full chooser.
-			// A failed lookup still leaves "기타…" reachable.
-			(loadOpenWithApplications?.() ?? Promise.resolve([]))
-				.catch((): readonly OpenWithApplication[] => [])
-				.then((applications) => setMenu({ items: openWithItems(applications), anchor }));
-		} else onAction(target, anchor);
-	}
-
+	const runner = useActionRunner({ onAction, onAskAi, loadOpenWithApplications });
 	return (
 		<div className="inspector-actions flex-none border-t border-border bg-chrome px-10 pt-10 pb-12">
 			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
 				{actions.map((action) => {
 					const Icon = ACTION_ICONS[action.icon];
-					const localizedLabel = (id: string, def: string): string => {
-						switch (id) {
-							case "open": return t("inspector.actions.open", def);
-							case "openWith": return t("inspector.actions.openWith", def);
-							case "compress": return t("inspector.actions.compress", def);
-							case "extract": return t("inspector.actions.extract", def);
-							case "share": return t("inspector.actions.share", def);
-							case "askAi": return t("inspector.actions.askAi", def);
-							case "imageEdit": return t("inspector.actions.imageEdit", def);
-							case "videoConvert": return t("inspector.actions.videoConvert", def);
-							case "reduceSize": return t("inspector.actions.reduceSize", def);
-							default: return def;
-						}
-					};
 					return (
 						<ActionButton
 							key={action.id}
 							actionId={action.id}
 							icon={<Icon size={18} />}
-							label={localizedLabel(action.id, action.label)}
-							onClick={(event) => {
-								const anchor = anchorOf(event.currentTarget);
-								if (action.kind === "action") run(action.target, anchor);
-								else setMenu({ items: action.items, anchor });
-							}}
+							label={actionLabel(t, action.id, action.label)}
+							onClick={(event) => runner.activate(action, anchorOf(event.currentTarget))}
 						/>
 					);
 				})}
 			</div>
-			{menu === null ? null : (
-				<ActionMenu
-					items={menu.items}
-					anchor={menu.anchor}
-					onSelect={(target) => {
-						const anchor = menu.anchor;
-						setMenu(null);
-						run(target, anchor);
-					}}
-					onClose={() => setMenu(null)}
-				/>
-			)}
+			{runner.menu}
 		</div>
 	);
 }
 
-function Chip({ children, onClick }: { readonly children: ReactNode; readonly onClick: () => void }): ReactElement {
+interface GroupButton {
+	readonly id: string;
+	readonly label: string;
+	readonly icon: ReactElement;
+	readonly pressed?: boolean;
+	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+}
+
+/**
+ * A single file's actions as one row of icon buttons: index, Trash, copy path, then what the file's type suggests
+ * (open with, compress, extract, share, image edit, video conversion, reduce size). Each name shows as a tooltip on
+ * hover and keyboard focus, and is the button's accessible name. Opening the file is a double click in the list,
+ * and "AI 요약" sits with the chat composer, so neither is here.
+ */
+function FileActionGroup({
+	entry,
+	included,
+	folderInView,
+	onToggleIndex,
+	onTrash,
+	onCopyPath,
+	actions,
+	onAction,
+	loadOpenWithApplications,
+}: {
+	readonly entry: FinderEntry;
+	readonly included: boolean;
+	readonly folderInView: boolean;
+	readonly onToggleIndex: (entry: FinderEntry) => void;
+	readonly onTrash: (entry: FinderEntry) => void;
+	readonly onCopyPath: (entry: FinderEntry) => void;
+	readonly actions: readonly FileAction[];
+	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly loadOpenWithApplications: () => Promise<readonly OpenWithApplication[]>;
+}): ReactElement {
+	const { t } = useTranslation();
+	const runner = useActionRunner({ onAction, loadOpenWithApplications });
+	const buttons: GroupButton[] = [];
+	if (entry.kind === "file") {
+		buttons.push({
+			id: "index",
+			label: included ? t("contextMenu.includeInIndex") : t("contextMenu.excludeFromIndex"),
+			icon: <DatabaseIcon size={16} />,
+			pressed: included,
+			onClick: () => onToggleIndex(entry),
+		});
+	}
+	if (!folderInView) buttons.push({ id: "trash", label: t("contextMenu.trashShort"), icon: <TrashIcon size={16} />, onClick: () => onTrash(entry) });
+	buttons.push({ id: "copyPath", label: t("contextMenu.copyPath"), icon: <CopyIcon size={16} />, onClick: () => onCopyPath(entry) });
+	for (const action of actions) {
+		const Icon = ACTION_ICONS[action.icon];
+		buttons.push({
+			id: action.id,
+			label: actionLabel(t, action.id, action.label),
+			icon: <Icon size={16} />,
+			onClick: (event) => runner.activate(action, anchorOf(event.currentTarget)),
+		});
+	}
 	return (
-		<button
-			type="button"
-			className="inline-flex items-center gap-4 h-pill px-8 rounded-full border border-border bg-window text-badge font-semibold text-ink-body whitespace-nowrap cursor-pointer transition-[border-color] duration-(--dur-color) ease-[ease] hover:border-border-strong"
-			onClick={onClick}
-		>
-			{children}
-		</button>
+		<div className="inspector-file-actions flex mt-12 mb-16">
+			<div className="inline-flex max-w-full flex-wrap items-stretch rounded-8 border border-border-strong bg-window" role="toolbar" aria-label={t("inspector.fileActions")}>
+				{buttons.map((button, index) => (
+					<span key={button.id} className="flex items-stretch">
+						{index === 0 ? null : <span className="block w-px bg-border" aria-hidden="true" />}
+						<button
+							type="button"
+							data-action={button.id}
+							aria-label={button.label}
+							aria-pressed={button.pressed}
+							className={cn(
+								"group relative flex h-28 w-32 items-center justify-center border-0 bg-transparent p-0 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover",
+								button.pressed === true ? "text-accent-text" : "text-ink-body",
+								index === 0 && "rounded-l-7",
+								index === buttons.length - 1 && "rounded-r-7",
+							)}
+							onClick={button.onClick}
+						>
+							{button.icon}
+							<span
+								className="pointer-events-none absolute left-1/2 top-full z-20 mt-4 block -translate-x-1/2 whitespace-nowrap rounded-6 bg-ink px-7 py-3 text-tile text-window opacity-0 transition-opacity duration-(--dur-color) group-hover:opacity-100 group-focus-visible:opacity-100"
+								aria-hidden="true"
+							>
+								{button.label}
+							</span>
+						</button>
+					</span>
+				))}
+			</div>
+			{runner.menu}
+		</div>
 	);
 }
 

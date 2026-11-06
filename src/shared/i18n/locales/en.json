@@ -291,7 +291,30 @@
       "evidenceFolder": "Evidence Folder",
       "evidenceFolderTooltip": "Open this session's evidence files in a temporary folder tab",
       "openPreview": "Preview at the cited passage"
-    }
+    },
+    "chat": {
+      "title": "AI chat",
+      "placeholderFile": "Ask about this file",
+      "placeholderFolder": "Ask about this folder",
+      "placeholderFollowUp": "Ask a follow-up",
+      "send": "Send",
+      "stop": "Stop",
+      "busy": "Still waiting for the previous answer",
+      "resume": "Continue chat · questions: {{count}} · {{ago}}",
+      "justNow": "just now",
+      "minutesAgo": "{{count}} min ago",
+      "expired": "Earlier chats are in AI Search history",
+      "back": "{{name}} info",
+      "newChat": "New chat",
+      "expand": "Open in an AI Search tab",
+      "removeAttachment": "Remove attachment",
+      "thinking": "Looking for the answer…",
+      "stopped": "Answer stopped",
+      "showInList": "Show in list",
+      "preview": "Preview",
+      "placeholderAny": "Ask anything"
+    },
+    "fileActions": "File actions"
   },
   "aiSearch": {
     "title": "AI Search",
