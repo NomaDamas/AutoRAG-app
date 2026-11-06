@@ -1,24 +1,37 @@
 /**
  * Manual QA — Settings → Search Scope → View index map, in the real app.
  *
- * A scope is built the way a person has one (projects, notes, an archive, a
- * private folder they excluded, a `node_modules` the refresh never walks, and
- * files no parser reads), Settings' own refresh indexes it, and then one file
- * changes and two arrive. The map must count each state the way the index
- * holds it, play the opening count (the scoreboard ticks from red to blue and
- * settles on the index's own numbers), paint blue and red land on the globe,
- * turn the globe under a real drag, name what is under the pointer, and
- * redraw after a refresh that an exclusion toggle started while the map is
- * open. Korean is checked as the second language.
+ * A scope is built the way a person has one (two projects, notes, an archive, a
+ * private folder excluded in config, a `node_modules` the refresh never walks,
+ * a folder of files no parser reads), Settings' own refresh indexes it, and
+ * then one file changes and two arrive. The map is now a DaisyDisk-style
+ * radial territory chart, so the lane checks the real thing:
+ *
+ *   - every drawn territory is an SVG `path[data-node-id]` with its `data-state`
+ *     (indexed / partial / unindexed / excluded), `data-kind` and `data-path`;
+ *   - the eligible-only percent sits at the centre (`indexed / targets`, with
+ *     excluded folders and unsupported files out of the denominator);
+ *   - paths take focus and clicks, a folder click drills into its children, and
+ *     the centre and the overview button bring the whole scope back;
+ *   - the details sidebar names the hovered or focused node (its path and its
+ *     counts);
+ *   - the legend lists the four colours with no per-state counts;
+ *   - a folder-only-in-unsupported files is left off the map entirely;
+ *   - an exclusion toggled while the map is open drops the folder's files from
+ *     the target denominator and grays its territory.
+ *
+ * Korean is checked as the second language. Only the real Settings refresh and
+ * the fs bridge are called through `evaluate`; every map interaction is a real
+ * Playwright hover, focus or click.
  *
  *   bun run build
  *   bun run qa script scripts/manual-qa/run-qa-finder-index-map.mjs
  */
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { homeEnv, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { homeEnv, rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-index-map");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -36,18 +49,16 @@ const check = (label, ok, detail) => {
 
 const WORK = mkdtempSync(join(tmpdir(), "dazzi-qa-index-map-"));
 const AUTORAG_HOME = join(WORK, "autorag-home");
-const BIN = join(AUTORAG_HOME, "bin");
 const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 const USER_DATA = join(WORK, "user-data");
 for (const dir of [DOCS, join(WORK, "workspace"), join(WORK, "pi-agent"), join(WORK, "home")]) mkdirSync(dir, { recursive: true });
-writeMinsyncStub(BIN);
-// The on-device model the runner copies into the guest (or the host's own cache); the refresh refuses to stage without it.
+// The VM runner copies the host's model cache, including the SPLADE weights for this real sparse-only index.
 const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
 if (!existsSync(MODELS)) {
-	console.log(`SKIP: no on-device embedding model at ${MODELS}; the map needs a real index`);
+	console.log(`SKIP: no on-device sparse model cache at ${MODELS}; real indexing cannot run`);
 	rmSync(WORK, { recursive: true, force: true });
-	process.exit(0);
+	process.exit(2);
 }
 mkdirSync(join(WORK, "home", ".cache", "minsync"), { recursive: true });
 if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "minsync", "models"));
@@ -64,9 +75,16 @@ for (let n = 1; n <= 3; n += 1) put(`archive/2024/report-${n}.txt`, `Report ${n}
 for (let n = 1; n <= 3; n += 1) put(`private/diary-${n}.txt`, `Private entry ${n}.\n`);
 put("node_modules/pkg/README.md", "# pkg\n");
 put("node_modules/pkg/CHANGELOG.md", "# changes\n");
+// Only files no parser reads: the folder must leave the map entirely.
 put("misc/blob-1.qaunknown", "opaque");
 put("misc/blob-2.qaunknown", "opaque");
+/** Files the index is meant to hold: supported and inside the scope (archive counts until it is excluded). */
 const INDEXABLE = 6 + 4 + 5 + 3;
+const TARGETS_DRIFT = INDEXABLE + 2; // spec-1 changed, note-6 and note-7 arrived
+const PERCENT_DRIFT = Math.round(((INDEXABLE - 1) * 100) / TARGETS_DRIFT);
+const NOTES_INDEXED = 5;
+const NOTES_TARGETS = 7;
+const PERCENT_NOTES = Math.round((NOTES_INDEXED * 100) / NOTES_TARGETS);
 
 writeFileSync(
 	CONFIG,
@@ -76,7 +94,7 @@ writeFileSync(
 			excludePaths: [join(DOCS, "private")],
 			workspacePath: join(WORK, "workspace"),
 			memoryPath: join(WORK, "memory.json"),
-			minSync: { enabled: true, autoInstall: false, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } },
+			minSync: { enabled: true, autoInstall: false, embedder: { id: "none" } },
 			jikji: false,
 			webSearch: { enabled: false },
 			queryDecomposition: false,
@@ -93,7 +111,6 @@ const APP_ENV = {
 	PI_CODING_AGENT_DIR: join(WORK, "pi-agent"),
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
 	ELECTRON_RENDERER_URL: "",
-	PATH: `${BIN}${delimiter}${process.env.PATH ?? ""}`,
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
@@ -127,64 +144,119 @@ const shot = async (name) => {
 	await page.waitForTimeout(400);
 	await page.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 };
-/** A cheap fingerprint of the canvas, to tell whether the globe moved. */
-const canvasPrint = () =>
+
+/** Every territory the chart drew, with the contract attributes the lane asserts on. */
+const chartPaths = () =>
+	page.evaluate(() =>
+		[...document.querySelectorAll(".index-map-chart path[data-node-id]")].map((path) => ({
+			node: path.getAttribute("data-node-id"),
+			state: path.getAttribute("data-state"),
+			kind: path.getAttribute("data-kind"),
+			path: path.getAttribute("data-path"),
+			fill: getComputedStyle(path).fill,
+		})),
+	);
+/** The eligible-only tally the map writes on its summary. */
+const summary = () =>
 	page.evaluate(() => {
-		const canvas = document.querySelector(".index-map-canvas");
-		const { data } = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height);
-		let sum = 0;
-		for (let offset = 0; offset < data.length; offset += 52) sum = (sum * 31 + data[offset]) % 1_000_000_007;
-		return sum;
+		const el = document.querySelector(".index-map-summary");
+		return { indexed: Number(el?.getAttribute("data-indexed") ?? "-1"), targets: Number(el?.getAttribute("data-targets") ?? "-1") };
 	});
-const scoreboard = () =>
-	page.evaluate(() => {
-		const board = document.querySelector(".index-map-scoreboard");
-		const read = (party) => Number(board?.querySelector(`.index-map-party[data-party="${party}"] strong`)?.textContent?.replace(/[^\d]/gu, "") ?? "-1");
-		return { counting: board?.getAttribute("data-counting") ?? null, blue: read("blue"), red: read("red") };
+/** The percent the centre button carries for the scope currently in view. */
+const centerPercent = async () => Number((await page.locator(".index-map-center strong").innerText()).replace(/[^\d]/gu, ""));
+/** The legend's four colour statuses (state, swatch colour, visible label). */
+const legend = () =>
+	page.evaluate(() =>
+		[...document.querySelectorAll(".index-map-legend li")].map((item) => ({
+			state: item.getAttribute("data-state"),
+			color: getComputedStyle(item.querySelector(".index-map-legend-swatch") ?? item).backgroundColor,
+			text: item.innerText.replace(/\s+/gu, " ").trim(),
+		})),
+	);
+const details = async () => (await page.locator(".index-map-details").innerText()).replace(/\s+/gu, " ").trim();
+
+const segments = (path) => (path ?? "").split(/[\\/]/u).filter(Boolean);
+const hasTail = (path, ...tail) => {
+	const parts = segments(path);
+	return parts.length >= tail.length && parts.slice(-tail.length).join("/") === tail.join("/");
+};
+/** A chart path by its kind and the tail of its path (works with host and guest separators alike). */
+const findPath = async ({ kind = null, tail = [] }) => {
+	const index = await page.evaluate(
+		({ kind, tail }) => {
+			const ends = (value) => {
+				const parts = (value ?? "").split(/[\\/]/u).filter(Boolean);
+				return parts.length >= tail.length && parts.slice(-tail.length).join("/") === tail.join("/");
+			};
+			return [...document.querySelectorAll(".index-map-chart path[data-node-id]")].findIndex(
+				(path) => (kind === null || path.getAttribute("data-kind") === kind) && (tail.length === 0 || ends(path.getAttribute("data-path"))),
+			);
+		},
+		{ kind, tail },
+	);
+	return index < 0 ? null : page.locator(".index-map-chart path[data-node-id]").nth(index);
+};
+
+/**
+ * A radial territory's bounding-box centre can sit in the annulus hole (or under
+ * a child sector), so a plain locator click/hover would miss the path. Sample
+ * the path's own fill (`isPointInFill`) until a client point hit-tests back to
+ * this very element, and use that point for real mouse input.
+ */
+const interiorOf = async (locator) => {
+	const handle = await locator.elementHandle();
+	if (handle === null) return null;
+	return handle.evaluate((el) => {
+		const ctm = el.getScreenCTM();
+		if (!ctm) return null;
+		const bbox = el.getBBox();
+		const centre = new DOMPoint(bbox.x + bbox.width / 2, bbox.y + bbox.height / 2);
+		const toClient = (point) => {
+			const screen = point.matrixTransform(ctm);
+			return { x: screen.x, y: screen.y };
+		};
+		const fallback = toClient(centre);
+		const steps = 40;
+		for (let iy = 1; iy < steps; iy += 1) {
+			for (let ix = 1; ix < steps; ix += 1) {
+				const point = new DOMPoint(bbox.x + (bbox.width * ix) / steps, bbox.y + (bbox.height * iy) / steps);
+				if (typeof el.isPointInFill !== "function" || !el.isPointInFill(point)) continue;
+				const client = toClient(point);
+				const target = document.elementFromPoint(client.x, client.y);
+				if (target === el || el.contains(target)) return { ...client, hit: true };
+			}
+		}
+		return { ...fallback, hit: false };
 	});
+};
+/** Real hover at a point that actually belongs to the territory. */
+const hoverPath = async (locator) => {
+	const at = await interiorOf(locator);
+	if (at === null) return false;
+	await page.mouse.move(at.x, at.y);
+	return at.hit;
+};
+/** Real click at a point that actually belongs to the territory. */
+const clickPath = async (locator) => {
+	const at = await interiorOf(locator);
+	if (at === null) return false;
+	await page.mouse.move(at.x, at.y);
+	await page.mouse.click(at.x, at.y);
+	return at.hit;
+};
+
 const openMap = async (scopeLabel, buttonLabel) => {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: scopeLabel }).click();
 	await page.getByRole("button", { name: buttonLabel }).click();
 	await page.locator(".index-map-modal").waitFor();
-	await page.locator(".index-map-legend").waitFor();
-	// The overlay leaves once the map has arrived.
-	await page.waitForFunction(() => document.querySelector(".index-map-overlay") === null, null, { timeout: 60_000 });
-};
-const legend = () =>
-	page.evaluate(() =>
-		Object.fromEntries([...document.querySelectorAll(".index-map-legend li")].map((item) => [item.getAttribute("data-state"), Number(item.querySelector("strong")?.textContent?.replace(/[^\d]/gu, "") ?? "0")])),
-	);
-/** Share of canvas pixels that are blue (indexed) or red (needs indexing) land; sea and the studio are darker and less saturated. */
-const landColors = () =>
-	page.evaluate(() => {
-		const canvas = document.querySelector(".index-map-canvas");
-		const context = canvas.getContext("2d");
-		const { data } = context.getImageData(0, 0, canvas.width, canvas.height);
-		let blue = 0;
-		let red = 0;
-		let grey = 0;
-		for (let offset = 0; offset < data.length; offset += 16) {
-			const r = data[offset];
-			const g = data[offset + 1];
-			const b = data[offset + 2];
-			if (b > 175 && b > g + 70 && r < 140) blue += 1;
-			else if (r > 120 && r > g + 60 && r > b + 50) red += 1;
-		}
-		const total = data.length / 16;
-		return { blue: blue / total, red: red / total };
-	});
-/** Moves the real pointer over the canvas in a grid until a tooltip names something. */
-const hoverSomething = async () => {
-	const box = await page.locator(".index-map-canvas").boundingBox();
-	for (let y = 0.2; y <= 0.8; y += 0.05) {
-		for (let x = 0.15; x <= 0.85; x += 0.035) {
-			await page.mouse.move(box.x + box.width * x, box.y + box.height * y);
-			if ((await page.locator(".index-map-tooltip").count()) > 0) return (await page.locator(".index-map-tooltip").innerText()).replace(/\s+/gu, " ");
-		}
-	}
-	return null;
+	await page.locator(".index-map-chart").waitFor();
+	await page.locator(".index-map-summary").waitFor();
+	await page.locator(".index-map-center").waitFor();
+	await page.locator(".index-map-details").waitFor();
+	await page.locator(".index-map-chart path[data-node-id]").first().waitFor();
+	await page.waitForTimeout(500);
 };
 
 // ── 1. English: index the scope with Settings' own refresh, then let it drift. ──
@@ -193,99 +265,160 @@ log("app ready (en)");
 // The full refresh: the parsed phase writes the mirror, the MinSync phase stages it; a file is in the index once staged.
 const refresh = await page.evaluate(() => window.autorag.settings.configRefresh());
 log(`refresh: ${JSON.stringify({ ok: refresh.ok, error: refresh.error, written: refresh.written, diagnostics: refresh.diagnostics?.slice(0, 4) })}`);
+check("the real MinSync refresh completed successfully", refresh.ok === true, JSON.stringify(refresh));
 const indexed = (await page.evaluate(() => window.autorag.settings.sourcesList())).local.documentCount;
-check("Settings' refresh indexed every indexable file", indexed === INDEXABLE, `local.documentCount=${indexed}`);
+check("Settings' refresh indexed every eligible file", indexed === INDEXABLE, `local.documentCount=${indexed}`);
 put("projects/alpha/spec-1.md", "# Alpha spec 1\n\nThe alpha milestone moved: it now ships in week nine, after the review.\n");
 put("notes/note-6.txt", "Note 6: a new figure, 42.\n");
 put("notes/note-7.txt", "Note 7: another new figure, 49.\n");
 
 await openMap("Search Scope", "View index map");
-const early = await scoreboard();
-log(`scoreboard while counting: ${JSON.stringify(early)}`);
-check("the opening count is live and blue has not taken everything yet", early.counting === "true" && early.blue < INDEXABLE - 1, JSON.stringify(early));
-await page.waitForTimeout(300);
-await shot("00-counting");
-await page.waitForTimeout(4200);
-const counts = await legend();
-log(`legend: ${JSON.stringify(counts)}`);
-check("indexed counts the files the index holds unchanged", counts.indexed === INDEXABLE - 1, JSON.stringify(counts));
-check("the changed file needs a refresh", counts.stale === 1, JSON.stringify(counts));
-check("the two new files are not indexed yet", counts.unindexed === 2, JSON.stringify(counts));
-check("the excluded folder and node_modules are left out", counts.excluded >= 3, JSON.stringify(counts));
-check("files no parser reads are counted apart", counts.unindexable === 2, JSON.stringify(counts));
-const final = await scoreboard();
-log(`scoreboard after the count: ${JSON.stringify(final)}`);
-check("the count settles on the index's own numbers", final.counting === "false" && final.blue === counts.indexed && final.red === counts.stale + counts.unindexed, JSON.stringify(final));
-const coverage = await page.locator(".index-map-coverage strong").innerText();
-check("coverage is indexed over indexable", coverage === `${Math.round(((INDEXABLE - 1) * 100) / (INDEXABLE + 2))}%`, coverage);
-const colors = await landColors();
-log(`land colors: ${JSON.stringify(colors)}`);
-check("blue indexed land is painted", colors.blue > 0.01, JSON.stringify(colors));
-check("red land marks what needs indexing", colors.red > 0.0008, JSON.stringify(colors));
-check("there is more blue land than red", colors.blue > colors.red, JSON.stringify(colors));
+const geometry = await page.evaluate(() => {
+	const chart = document.querySelector(".index-map-chart").getBoundingClientRect();
+	const stage = document.querySelector(".index-map-stage").getBoundingClientRect();
+	const center = document.querySelector(".index-map-center").getBoundingClientRect();
+	return {
+		centered: Math.abs(center.x + center.width / 2 - chart.x - chart.width / 2) < 1 && Math.abs(center.y + center.height / 2 - chart.y - chart.height / 2) < 1,
+		contained: chart.x >= stage.x - 1 && chart.y >= stage.y - 1 && chart.right <= stage.right + 1 && chart.bottom <= stage.bottom + 1,
+	};
+});
+check("the completion readout is centered in the chart", geometry.centered, JSON.stringify(geometry));
+check("the chart fits inside its stage", geometry.contained, JSON.stringify(geometry));
 await shot("01-index-map-en");
 
-const tooltip = await hoverSomething();
-check("hovering the globe names what is under it", tooltip !== null && tooltip.length > 0, String(tooltip));
-log(`tooltip: ${tooltip}`);
+// The tally is eligible-only: the changed file and the two new ones are in the
+// target set, the excluded and unsupported files are not.
+const drift = await summary();
+log(`summary while drifted: ${JSON.stringify(drift)}`);
+check("the summary counts eligible targets only", drift.indexed === INDEXABLE - 1 && drift.targets === TARGETS_DRIFT, JSON.stringify(drift));
+check("the centre shows indexed over targets", (await centerPercent()) === PERCENT_DRIFT, `${await centerPercent()} (want ${PERCENT_DRIFT})`);
+
+// Four colour statuses, no per-state count.
+const statuses = await legend();
+log(`legend: ${JSON.stringify(statuses)}`);
+check(
+	"the legend lists the four statuses",
+	statuses.length === 4 && statuses.every((item) => ["indexed", "partial", "unindexed", "excluded"].includes(item.state)),
+	JSON.stringify(statuses.map((item) => item.state)),
+);
+check("every status has its own colour", new Set(statuses.map((item) => item.color)).size === 4, JSON.stringify(statuses.map((item) => item.color)));
+check("the legend carries no per-state counts", statuses.every((item) => !/\d/u.test(item.text)), JSON.stringify(statuses.map((item) => item.text)));
+const colorByState = new Map(statuses.map((item) => [item.state, item.color]));
+
+// The chart itself: real paths, tagged with the contract's attributes.
+const paths = await chartPaths();
+log(`paths: ${paths.length} (${[...new Set(paths.map((p) => p.state))].join(", ")})`);
+check(
+	"every territory is a tagged path with a numeric node id",
+	paths.length > 0 && paths.every((p) => /^\d+$/u.test(p.node ?? "") && (p.state ?? "") !== ""),
+	`${paths.length} paths`,
+);
+check("folders and files are both drawn", paths.some((p) => p.kind === "folder") && paths.some((p) => p.kind === "file"), JSON.stringify([...new Set(paths.map((p) => p.kind))]));
+const painted = new Set(paths.map((p) => p.state));
+check(
+	"all four statuses appear on the chart",
+	["indexed", "partial", "unindexed", "excluded"].every((state) => painted.has(state)),
+	[...painted].join(","),
+);
+const fillByState = new Map();
+for (const path of paths) if (!fillByState.has(path.state)) fillByState.set(path.state, path.fill);
+check(
+	"the four statuses are painted in four distinct colours",
+	new Set(["indexed", "partial", "unindexed", "excluded"].map((state) => fillByState.get(state))).size === 4,
+	JSON.stringify([...fillByState]),
+);
+
+// Unsupported-only files, and their folder, never reach the chart.
+const leaked = paths.filter((p) => /qaunknown/iu.test(p.path ?? "") || hasTail(p.path, "misc"));
+check("unsupported files and their folder are left off the map", leaked.length === 0, JSON.stringify(leaked.slice(0, 4)));
+
+// The explicit exclusion is drawn, but gray and out of the count.
+const privateFill = paths.find((p) => hasTail(p.path, "private"))?.fill;
+check("the excluded folder is drawn in the excluded colour", privateFill === colorByState.get("excluded"), `${privateFill} vs ${colorByState.get("excluded")}`);
+
+// Hover a folder: the sidebar names it and counts it.
+const alpha = await findPath({ kind: "folder", tail: ["projects", "alpha"] });
+check("the alpha folder is on the chart", alpha !== null);
+const tabindex = alpha === null ? null : await alpha.getAttribute("tabindex");
+check("a folder path is focusable", tabindex !== null || (alpha !== null && (await alpha.getAttribute("role")) === "button"), String(tabindex));
+if (alpha !== null) await hoverPath(alpha);
+await page.waitForTimeout(300);
+const hovered = await details();
+check("hovering a folder names its path and counts", hovered.includes("alpha") && /5/u.test(hovered) && /6/u.test(hovered), hovered.slice(0, 160));
 await shot("02-hover");
 
-// Turn the globe with a real drag: it moves, then holds still where it was left.
-const box = await page.locator(".index-map-canvas").boundingBox();
-const beforeDrag = await canvasPrint();
-await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-await page.mouse.down();
-for (let n = 1; n <= 12; n += 1) await page.mouse.move(box.x + box.width / 2 + n * 18, box.y + box.height / 2 + n * 4);
-await page.mouse.up();
-await page.waitForTimeout(2000);
-const held = await canvasPrint();
-await page.waitForTimeout(600);
-check("dragging turns the globe", held !== beforeDrag);
-check("after a drag the globe stays where it was left", held === (await canvasPrint()));
-await shot("02b-turned");
+if (alpha !== null) await alpha.focus();
+await page.waitForTimeout(250);
+check("focusing a folder keeps its details", (await details()).includes("alpha"), (await details()).slice(0, 160));
 
-// Zoom with the wheel, then frame the map again with the fit button.
-await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-for (let n = 0; n < 6; n += 1) await page.mouse.wheel(0, -240);
-await page.waitForTimeout(400);
-await shot("03-zoomed");
-await page.getByRole("button", { name: "Fit to view" }).click();
-await page.waitForTimeout(1500);
-await shot("04-fit");
-
-// ── 2. An exclusion toggled while the map is open: the map redraws after the refresh. ──
-await page.evaluate((path) => window.autorag.fs.setIndexExcluded(path, true), join(DOCS, "archive"));
-// An excluded folder is not walked, so it counts its direct entries (`archive/` holds `2024/`); its three files
-// leave the indexable total once the toggle's refresh drops them from the index.
-const archiveGone = (state) =>
-	state.excluded === counts.excluded + 1 && state.indexed + state.stale + state.unindexed === INDEXABLE + 2 - 3;
-const settled = await page
-	.waitForFunction(
-		(expected) => {
-			const read = (name) => Number(document.querySelector(`.index-map-legend li[data-state="${name}"] strong`)?.textContent?.replace(/[^\d]/gu, "") ?? "-1");
-			return read("excluded") === expected.excluded && read("indexed") + read("stale") + read("unindexed") === expected.rest;
-		},
-		{ excluded: counts.excluded + 1, rest: INDEXABLE + 2 - 3 },
-		{ timeout: 120_000 },
-	)
-	.then(() => true, () => false);
-const after = await legend();
-log(`legend after exclusion: ${JSON.stringify(after)}`);
-check("after the refresh the archive is left out", settled && archiveGone(after), JSON.stringify(after));
-await page.waitForTimeout(3000);
-await shot("05-after-exclusion");
+// Drill into the top-level notes folder: the centre follows, and both the
+// centre and the overview button bring the whole scope back.
+const notes = await findPath({ kind: "folder", tail: ["notes"] });
+check("the notes folder is on the chart", notes !== null);
+const notesHit = notes === null ? false : await clickPath(notes);
+await page.waitForTimeout(450);
+check("clicking a folder drills the centre into it", (await centerPercent()) === PERCENT_NOTES, `${await centerPercent()} (want ${PERCENT_NOTES}); pointer ${notesHit ? "hit" : "missed"}`);
+await shot("03-drill");
+await page.locator(".index-map-center").click();
+await page.waitForTimeout(450);
+check("the centre moves back up to the whole scope", (await centerPercent()) === PERCENT_DRIFT, `${await centerPercent()} (want ${PERCENT_DRIFT})`);
+const notesAgain = await findPath({ kind: "folder", tail: ["notes"] });
+if (notesAgain !== null) await clickPath(notesAgain);
+await page.waitForTimeout(450);
+await page.locator('[data-action="index-map-overview"]').click();
+await page.waitForTimeout(350);
+check("the overview button restores the whole scope", (await centerPercent()) === PERCENT_DRIFT, `${await centerPercent()} (want ${PERCENT_DRIFT})`);
 
 await page.keyboard.press("Escape");
 check("Escape closes the map", (await page.locator(".index-map-modal").count()) === 0);
+
+// ── 2. A folder of brand-new files, and an exclusion toggled while open. ──
+put("incoming/inbox-1.txt", "Inbox one, never indexed.\n");
+put("incoming/inbox-2.txt", "Inbox two, never indexed.\n");
+await openMap("Search Scope", "View index map");
+const withIncoming = await summary();
+log(`summary with incoming: ${JSON.stringify(withIncoming)}`);
+check("a new-only folder widens the target set", withIncoming.indexed === INDEXABLE - 1 && withIncoming.targets === TARGETS_DRIFT + 2, JSON.stringify(withIncoming));
+check("the global percent follows the wider set", (await centerPercent()) === Math.round(((INDEXABLE - 1) * 100) / (TARGETS_DRIFT + 2)), `${await centerPercent()}`);
+const incoming = await findPath({ kind: "folder", tail: ["incoming"] });
+check("the new-only folder is drawn unindexed", incoming !== null && (await incoming.getAttribute("data-state")) === "unindexed", incoming === null ? "absent" : String(await incoming.getAttribute("data-state")));
+await shot("04-incoming");
+
+// Excluding the archive while the map is open: its three files leave the index
+// and the target set, and its territory turns gray.
+await page.evaluate((path) => window.autorag.fs.setIndexExcluded(path, true), join(DOCS, "archive"));
+const settled = await page
+	.waitForFunction(
+		(expected) => Number(document.querySelector(".index-map-summary")?.getAttribute("data-targets") ?? "-1") === expected,
+		withIncoming.targets - 3,
+		{ timeout: 120_000 },
+	)
+	.then(() => true, () => false);
+const after = await summary();
+log(`summary after exclusion: ${JSON.stringify(after)}`);
+check("excluding a folder drops its files from the target set", settled && after.targets === withIncoming.targets - 3, JSON.stringify({ before: withIncoming, after }));
+const archive = await findPath({ kind: "folder", tail: ["archive"] });
+check("the excluded archive turns gray", archive !== null && (await archive.getAttribute("data-state")) === "excluded", archive === null ? "absent" : String(await archive.getAttribute("data-state")));
+await shot("05-exclusion");
+
+await page.keyboard.press("Escape");
 await app.close();
 app = undefined;
+
 // ── 3. Korean: the same map in the second language. ──
 await start("ko");
 log("app ready (ko)");
 await openMap("검색 범위", "인덱싱 지도 보기");
-await page.waitForTimeout(4500);
-const ko = await page.locator(".index-map-legend").innerText();
-check("Korean legend names the states", /인덱싱됨/u.test(ko) && /인덱싱 안 됨/u.test(ko) && /제외됨/u.test(ko), ko.replace(/\s+/gu, " "));
+const ko = await legend();
+const koTexts = ko.map((item) => item.text);
+const KO_LABELS = ["전체 완료", "일부 완료", "미완료", "제외됨"];
+log(`ko legend: ${koTexts.join(" / ")}`);
+check(
+	"the Korean legend names all four statuses",
+	ko.length === 4 && [...koTexts].sort().join("|") === [...KO_LABELS].sort().join("|"),
+	koTexts.join(" / "),
+);
+check("the Korean chart draws real territories", (await page.locator(".index-map-chart path[data-node-id]").count()) > 0);
 await shot("06-index-map-ko");
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);

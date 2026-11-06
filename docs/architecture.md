@@ -353,40 +353,46 @@ purpose (restarting it re-scans every watched folder). QA lane:
 
 ### Index map
 
-Settings → 검색 범위 → **인덱싱 지도 보기** opens a modal that draws the search
-roots as a globe (`src/renderer/src/components/settings/index-map/`).
-`src/main/index-map.ts` runs on the librarian thread (`indexMap` in
-`librarian-contract.ts`). It walks the roots the way a refresh walks them: no
-symlinks, the librarian's skip-folder names, its depth limit. An excluded or
-skipped folder is sealed, which means it is not entered and its direct entries
-count as excluded. Each file gets the same classification as the index badge
-(`index-status.ts`, which shares the context loader): **indexed** means the
-parsed mirror holds the file and MinSync has staged it; **stale** means the
-mirror's mtime/size no longer match, the file was never staged, or it is
-excluded but still in the index; then **unindexed**, **excluded**, and
-**unindexable** (no parser reads it). The scan stops at
-`INDEX_MAP_MAX_ENTRIES` and reports `truncated`. `buildIndexMap` keeps the node
-count under `INDEX_MAP_NODE_BUDGET`. It picks the most detailed level of a fixed
-ladder that fits: first it caps the files shown per folder, then the depth.
-Files it does not show become one `parcel` node per state with their count.
+Settings → 검색 범위 → **인덱싱 지도 보기** opens a DaisyDisk-style radial
+hierarchy (`src/renderer/src/components/settings/index-map/`). Search roots
+occupy the innermost ring; descendant folders and files appear progressively
+farther out. Folder sectors partition angles by represented file count, not
+bytes; individual files are narrow radial strokes. `radial.ts` computes SVG
+annular paths, with up to nine visible rings. Clicking a folder reveals its
+subtree; the center goes up, and the overview button restores all roots.
+The side panel shows the hovered/focused item's path, completion and child list.
 
-`globe.ts` lays the tree out on a sphere. Each root is a continent whose region
-covers a share of the sphere in proportion to its file count. Each node's
-children sit inside its region on a sunflower spiral, heaviest at the center,
-each with ground in proportion to its own count. Only leaves claim ground. The
-claims are rasterized into an equirectangular texture: indexed, stale, and
-unindexed are land (blue for indexed, red for the other two), and excluded and
-unindexable are shallow sea; everything else is deep ocean. `scene.ts` shades
-the texture per pixel as a lit orthographic globe. On open it plays a count:
-every indexed cell starts red and turns blue at its `flipAt` (from each root's
-center outward), and `onProgress` drives the modal's scoreboard (blue vs. red
-tally, race bar with a majority line). A reload after a refresh shows the final
-state at once, and reduced motion skips both the count and the sway. Folders
-get pins with callouts that show their indexed share; deeper pins appear as you
-zoom. Drag turns the globe (with inertia), the wheel zooms, and fit turns back
-to the scope. Hovering names the region and its state. A refresh that finishes
-while the modal is open (`onIndexRefreshed`) reloads the map. QA lane:
-`scripts/manual-qa/run-qa-finder-index-map.mjs`.
+`src/main/index-map.ts` runs on the librarian thread (`indexMap` in
+`librarian-contract.ts`). It walks without symlinks and respects refresh's
+skip-directory names and depth limit. Eligibility uses the same configured
+parser registry as the index badge: unsupported files and product artifacts
+are omitted before classification, even if an old mirror entry remains.
+Unsupported-only ordinary branches are pruned. An excluded/skip-rule folder
+is sealed rather than recursively entered: only supported files directly
+inside contribute excluded counts, and even a zero-count folder stays as a gray
+marker. The marker's angular space is not a recursive file count.
+
+An eligible file is **indexed** when the mirror's mtime/size still match and
+MinSync has staged it, **stale** when it changed or was not staged, or
+**unindexed** when not held. Supported parse/skipping failures remain
+**unindexable** unfinished targets. Unlike the Finder badge's pending-removal
+state, map exclusion wins immediately over an old mirrored entry.
+Folder completion is indexed / (indexed + stale + unindexed + unindexable),
+excluding all excluded counts. All complete is blue, some complete yellow,
+none complete red, and excluded folders gray. Stale/failed files are red.
+The center displays the actual completion percentage for the current scope;
+zero targets displays a dash, and rounding cannot report 100% with work left.
+There is no simulated opening tally or continuous render loop.
+
+The scan stops at `INDEX_MAP_MAX_ENTRIES` and reports `truncated`.
+`buildIndexMap` uses the existing file-cap/depth ladder to fit
+`INDEX_MAP_NODE_BUDGET`, folding files into per-state parcels while preserving
+counts. A completed index refresh (`onIndexRefreshed`) reloads the map without
+losing the focused folder path; selection is cleared because node ids can move.
+The UI strings ship in Korean, English, Japanese and Simplified Chinese.
+Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`.
+Real app QA: `scripts/manual-qa/run-qa-finder-index-map.mjs` (English/Korean,
+four colors, eligible-only percentages, drill/up/overview and live exclusion).
 
 ## Error reports (Sentry)
 
