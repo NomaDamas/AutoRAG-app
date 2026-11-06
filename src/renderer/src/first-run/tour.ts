@@ -20,29 +20,26 @@ export function initialScreen(status: SetupStatus): FirstRunScreen {
 	return status.stage === "idle" ? "folders" : "setup";
 }
 
-export type TourStepId = "splitBottom" | "mergePane" | "ask" | "cite" | "evidence" | "duplicates" | "versions";
+export type TourStepId = "ask" | "cite" | "evidence" | "duplicates" | "versions";
 
 /** Steps that only make sense once the demo question produced a cited answer. */
 const CITED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = { evidence: true };
 
 /** Steps where the user acts on the real Finder controls rather than pressing a Next button. */
 export const ACTION_REQUIRED_STEPS: Readonly<Partial<Record<TourStepId, true>>> = {
-	splitBottom: true,
-	mergePane: true,
 	ask: true,
 	cite: true,
 	duplicates: true,
 };
 
 /**
- * The tour the data supports: everyone experiences splitting and merging panes
- * first; the AI steps need the verified demo question, the duplicate steps a
- * version family.
+ * The tour the data supports: the AI steps need the verified demo question,
+ * the duplicate steps a version family. The window is already split (folder on
+ * the left, AI Search on the right) when the tour starts, so nothing asks the
+ * person to arrange panes.
  */
 export function tourSteps(input: { readonly demo: boolean; readonly family: boolean }): readonly TourStepId[] {
 	return [
-		"splitBottom",
-		"mergePane",
 		...(input.demo ? (["ask", "cite", "evidence"] as const) : []),
 		...(input.family ? (["duplicates", "versions"] as const) : []),
 	];

@@ -25,12 +25,6 @@ import { MineGame } from "./MineGame";
 import { CursorGlyph } from "./cursor";
 import { ACTION_REQUIRED_STEPS, AI_HOST, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
-export interface TourPaneState {
-	readonly count: number;
-	readonly splitDirection: "row" | "column" | null;
-	readonly dragging: boolean;
-}
-
 /** What the layer needs from the Finder window it sits on. */
 export interface FirstRunHost {
 	/** Split the window: the current folder on the left, AI Search on the right, inspector and sidebar shown. */
@@ -72,11 +66,9 @@ function isTextTarget(target: EventTarget | null): boolean {
 
 export function FirstRun({
 	host,
-	paneState,
 	onDone,
 }: {
 	readonly host: FirstRunHost;
-	readonly paneState: TourPaneState;
 	readonly onDone: () => void;
 }): ReactElement | null {
 	const [screen, setScreen] = useState<FirstRunScreen | null>(null);
@@ -181,7 +173,7 @@ export function FirstRun({
 					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
 				</div>
 			) : null}
-			{screen === "tour" ? <Tour host={host} paneState={paneState} demo={status?.demo ?? null} platform={platform} onEnd={() => setScreen("signin")} /> : null}
+			{screen === "tour" ? <Tour host={host} demo={status?.demo ?? null} platform={platform} onEnd={() => setScreen("signin")} /> : null}
 			{screen === "signin" ? <SignInSheet platform={platform} onFinish={finish} /> : null}
 		</div>
 	);
@@ -454,9 +446,6 @@ type AnswerState = "idle" | "running" | "done" | "failed";
 /** Where each step's spotlight frames. */
 function anchorFor(step: TourStepId, family: VersionFamilyData | null, citeReady: boolean): string | null {
 	switch (step) {
-		case "splitBottom":
-		case "mergePane":
-			return ".workspace";
 		case "ask":
 			return `${AI_HOST} form.composer`;
 		case "cite":
@@ -484,66 +473,13 @@ function clickTargetFor(step: TourStepId, family: VersionFamilyData | null, read
 	}
 }
 
-interface DragGuide {
-	readonly fromX: number;
-	readonly fromY: number;
-	readonly toX: number;
-	readonly toY: number;
-	readonly zone: Rect;
-}
-
-function measureDragGuide(step: TourStepId): DragGuide | null {
-	if (step !== "splitBottom" && step !== "mergePane") return null;
-	const aiTab = document.querySelector<HTMLElement>('.workspace-pane .tab[data-ai-search="true"]');
-	const folderPane = Array.from(document.querySelectorAll<HTMLElement>(".workspace-pane")).find(
-		(pane) => pane.querySelector('.tab--active[data-ai-search="true"]') === null,
-	);
-	if (aiTab === null || folderPane === undefined) return null;
-	const tabBox = aiTab.getBoundingClientRect();
-	const paneBox = folderPane.getBoundingClientRect();
-	if (tabBox.width === 0 || paneBox.width === 0 || paneBox.height <= 30) return null;
-	const bodyTop = paneBox.top + 25;
-	const bodyHeight = paneBox.height - 25;
-	const fromX = tabBox.left + tabBox.width * 0.5;
-	const fromY = tabBox.top + tabBox.height * 0.5;
-	if (step === "splitBottom") {
-		const zone: Rect = {
-			left: paneBox.left + 10,
-			top: bodyTop + bodyHeight * 0.72,
-			width: Math.max(0, paneBox.width - 20),
-			height: Math.max(0, bodyHeight * 0.25),
-		};
-		return { fromX, fromY, toX: paneBox.left + paneBox.width * 0.5, toY: bodyTop + bodyHeight * 0.85, zone };
-	}
-	const zone: Rect = {
-		left: paneBox.left + paneBox.width * 0.2,
-		top: bodyTop + bodyHeight * 0.24,
-		width: Math.max(0, paneBox.width * 0.6),
-		height: Math.max(0, bodyHeight * 0.52),
-	};
-	return { fromX, fromY, toX: paneBox.left + paneBox.width * 0.5, toY: bodyTop + bodyHeight * 0.5, zone };
-}
-
-function sameDragGuide(a: DragGuide | null, b: DragGuide | null): boolean {
-	if (a === null || b === null) return a === b;
-	return (
-		Math.abs(a.fromX - b.fromX) < 0.5 &&
-		Math.abs(a.fromY - b.fromY) < 0.5 &&
-		Math.abs(a.toX - b.toX) < 0.5 &&
-		Math.abs(a.toY - b.toY) < 0.5 &&
-		sameRect(a.zone, b.zone)
-	);
-}
-
 function Tour({
 	host,
-	paneState,
 	demo,
 	platform,
 	onEnd,
 }: {
 	readonly host: FirstRunHost;
-	readonly paneState: TourPaneState;
 	readonly demo: SetupStatus["demo"];
 	readonly platform: string;
 	readonly onEnd: () => void;
@@ -573,7 +509,7 @@ function Tour({
 		const out = window.setTimeout(() => setCinema("out"), CINEMA_OUT_MS - 600);
 		const off = window.setTimeout(() => {
 			setCinema("off");
-			setStep("splitBottom");
+			setStep(stepsRef.current[0] ?? null);
 		}, CINEMA_OUT_MS);
 		return () => {
 			live = false;
@@ -584,6 +520,8 @@ function Tour({
 	}, []);
 
 	const steps = tourSteps({ demo: question.length > 0, family: family !== null && family !== undefined });
+	const stepsRef = useRef(steps);
+	stepsRef.current = steps;
 	const stepRef = useRef(step);
 	stepRef.current = step;
 
@@ -594,19 +532,6 @@ function Tour({
 		if (next === null) onEnd();
 		else setStep(next);
 	}, [steps, cited, onEnd]);
-
-	// Drag steps advance as soon as the user finishes the real split / merge drop.
-	useEffect(() => {
-		if (paneState.dragging) return;
-		if (step === "splitBottom" && paneState.count === 2 && paneState.splitDirection === "column") {
-			advance();
-			return;
-		}
-		if (step === "mergePane" && paneState.count === 1 && family !== undefined) {
-			hostRef.current.focusAi();
-			advance();
-		}
-	}, [step, paneState.dragging, paneState.count, paneState.splitDirection, family, advance]);
 
 	// The answer's progress, from the search stream the panel itself listens to.
 	useEffect(() => {
@@ -712,22 +637,14 @@ function Tour({
 					: noCite
 						? t("firstRun.tour.cite.noCiteBody")
 						: t(`firstRun.tour.${step}.body`);
-	const dropLabel =
-		step === "splitBottom"
-			? t("firstRun.tour.splitBottom.dropLabel")
-			: step === "mergePane"
-				? t("firstRun.tour.mergePane.dropLabel")
-				: null;
 	const hintLabel =
-		step === "splitBottom" || step === "mergePane"
-			? t("firstRun.tour.dragHint")
-			: step === "ask"
-				? askReady
-					? t("firstRun.tour.sendHint")
-					: t("firstRun.tour.typingHint")
-				: waiting
-					? null
-					: t("firstRun.tour.clickHint");
+		step === "ask"
+			? askReady
+				? t("firstRun.tour.sendHint")
+				: t("firstRun.tour.typingHint")
+			: waiting
+				? null
+				: t("firstRun.tour.clickHint");
 	const last = step !== null && nextStep(steps, step, { cited }) === null;
 	const clickReady = step === "ask" ? askReady : step === "cite" ? citeReady : step === "duplicates";
 
@@ -748,10 +665,8 @@ function Tour({
 					step={step}
 					selector={anchorFor(step, family ?? null, citeReady)}
 					clickSelector={clickTargetFor(step, family ?? null, clickReady)}
-					dropLabel={dropLabel}
 					hintLabel={hintLabel}
 					showEnterKey={askReady}
-					dragging={paneState.dragging}
 					index={index}
 					count={steps.length}
 					title={title}
@@ -778,10 +693,8 @@ function Coach({
 	step,
 	selector,
 	clickSelector,
-	dropLabel,
 	hintLabel,
 	showEnterKey,
-	dragging,
 	index,
 	count,
 	title,
@@ -796,10 +709,8 @@ function Coach({
 	readonly step: TourStepId;
 	readonly selector: string | null;
 	readonly clickSelector: string | null;
-	readonly dropLabel: string | null;
 	readonly hintLabel: string | null;
 	readonly showEnterKey: boolean;
-	readonly dragging: boolean;
 	readonly index: number;
 	readonly count: number;
 	readonly title: string;
@@ -814,7 +725,6 @@ function Coach({
 	const { t } = useTranslation();
 	const [rect, setRect] = useState<Rect | null>(null);
 	const [clickRect, setClickRect] = useState<Rect | null>(null);
-	const [dragGuide, setDragGuide] = useState<DragGuide | null>(null);
 	const [size, setSize] = useState({ width: 320, height: 160 });
 	const [viewport, setViewport] = useState({ width: window.innerWidth, height: window.innerHeight });
 	const bubbleRef = useRef<HTMLDivElement>(null);
@@ -830,16 +740,14 @@ function Coach({
 		const tick = (): void => {
 			const nextRect = measure(selector);
 			const nextClick = measure(clickSelector);
-			const nextDrag = measureDragGuide(step);
 			setRect((previous) => (sameRect(previous, nextRect) ? previous : nextRect));
 			setClickRect((previous) => (sameRect(previous, nextClick) ? previous : nextClick));
-			setDragGuide((previous) => (sameDragGuide(previous, nextDrag) ? previous : nextDrag));
 			setViewport((previous) => (previous.width === window.innerWidth && previous.height === window.innerHeight ? previous : { width: window.innerWidth, height: window.innerHeight }));
 			frame = window.requestAnimationFrame(tick);
 		};
 		tick();
 		return () => window.cancelAnimationFrame(frame);
-	}, [step, selector, clickSelector]);
+	}, [selector, clickSelector]);
 
 	useLayoutEffect(() => {
 		const element = bubbleRef.current;
@@ -849,9 +757,8 @@ function Coach({
 		setSize((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
 	});
 
-	const isDragStep = step === "splitBottom" || step === "mergePane";
-	const place = placeBubble(rect, viewport, size, isDragStep ? "bottom-right" : step === "cite" ? "below" : undefined);
-	const pad = isDragStep ? 2 : 6;
+	const place = placeBubble(rect, viewport, size, step === "cite" ? "below" : undefined);
+	const pad = 6;
 	const spot: CSSProperties =
 		rect === null
 			? { left: viewport.width / 2, top: viewport.height / 2, width: 0, height: 0, opacity: 0.55 }
@@ -864,48 +771,9 @@ function Coach({
 					left: clickRect.width > 180 ? clickRect.left + Math.min(116, clickRect.width * 0.34) : clickRect.left + clickRect.width * 0.52,
 					top: clickRect.top + clickRect.height * 0.58,
 				};
-	const dragStyle: CSSProperties | undefined =
-		dragGuide === null
-			? undefined
-			: ({
-					left: dragGuide.fromX,
-					top: dragGuide.fromY,
-					"--dx": `${Math.round(dragGuide.toX - dragGuide.fromX)}px`,
-					"--dy": `${Math.round(dragGuide.toY - dragGuide.fromY)}px`,
-				} as CSSProperties);
 	return (
-		<div className="fr-tour" data-dragging={dragging ? "true" : undefined}>
+		<div className="fr-tour">
 			<div className={cn("fr-spot", rect === null && "fr-spot--none")} style={spot} />
-			{dragGuide === null ? null : (
-				<>
-					<div
-						className="fr-drop-zone"
-						data-drop-step={step}
-						style={{ left: dragGuide.zone.left, top: dragGuide.zone.top, width: dragGuide.zone.width, height: dragGuide.zone.height }}
-						aria-hidden="true"
-					>
-						{dropLabel === null ? null : <span className="fr-drop-zone-label">{dropLabel}</span>}
-					</div>
-					<svg className="fr-drag-trail" width={viewport.width} height={viewport.height} viewBox={`0 0 ${viewport.width} ${viewport.height}`} aria-hidden="true">
-						<line x1={dragGuide.fromX} y1={dragGuide.fromY} x2={dragGuide.toX} y2={dragGuide.toY} />
-						<circle cx={dragGuide.fromX} cy={dragGuide.fromY} r={4.5} />
-						<circle cx={dragGuide.toX} cy={dragGuide.toY} r={5.5} />
-					</svg>
-					<div
-						className="fr-cursor fr-cursor--drag"
-						data-target-step={step}
-						data-from-x={Math.round(dragGuide.fromX)}
-						data-from-y={Math.round(dragGuide.fromY)}
-						data-to-x={Math.round(dragGuide.toX)}
-						data-to-y={Math.round(dragGuide.toY)}
-						style={dragStyle}
-						aria-hidden="true"
-					>
-						<span className="fr-drag-pill">{t("places.aiSearch")}</span>
-						<CursorGlyph />
-					</div>
-				</>
-			)}
 			{cursorPos === null ? null : (
 				<div className="fr-cursor" data-target-step={step} style={{ left: cursorPos.left, top: cursorPos.top }} aria-hidden="true">
 					<span className="fr-cursor-ring" />

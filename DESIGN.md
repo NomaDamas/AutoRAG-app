@@ -429,14 +429,12 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 - The tour opens with a letterboxed, dimmed title card ("Welcome to Dazzi, the
   AI Finder" / "the AI File Explorer" on Windows), then coach marks: a
   spotlight on the real control plus a bubble; everything but the bubble lets
-  clicks through. Interactive steps (`splitBottom`, `mergePane`, `ask`, `cite`,
-  `duplicates`) hide the Next button and place an animated guide cursor
-  (`.fr-cursor--drag` with `.fr-drop-zone` for tab drags, `.fr-cursor` for
-  clicks) over the live target controls so the person acts on the real UI to
-  move on: first dragging the `AI 검색` tab down to split top and bottom, then
-  dragging it into the other pane to merge back into one pane. With a verified
-  demo question (`SetupStatus.demo`, generated from one indexed document and
-  proven answerable by keyword retrieval) the question types itself into the
+  clicks through. Interactive steps (`ask`, `cite`, `duplicates`) hide the Next
+  button and place an animated guide cursor (`.fr-cursor`) over the live target
+  control so the person acts on the real UI to move on. The window is already
+  split (folder left, AI Search right) when the tour opens; the tour never asks
+  for a drag. With a verified
+  demo question (`SetupStatus.demo`, written by a model from one indexed document or, with no callable model, from a document's opening line, and either way proven answerable by keyword retrieval) the question types itself into the
   composer without stealing focus mid-typing, the person clicks send (or presses
   Enter) themselves, then clicks a citation chip to open the evidence panel.
   With a version family the folder tab opens without pre-selecting the row;

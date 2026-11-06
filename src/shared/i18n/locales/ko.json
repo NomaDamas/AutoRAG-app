@@ -871,20 +871,9 @@
       "skip": "건너뛰기",
       "finish": "완료",
       "clickHint": "직접 클릭해 보세요",
-      "dragHint": "탭을 직접 끌어 놓아 보세요",
       "sendHint": "직접 보내 보세요",
       "typingHint": "질문을 적는 중…",
       "progress": "{{index}} / {{count}}",
-      "splitBottom": {
-        "title": "탭을 끌어 위아래로 나눠 보세요",
-        "body": "오른쪽 탭을 잡고 왼쪽 폴더 화면의 아래쪽 영역으로 끌어 놓으면 화면이 위아래로 나뉘어요.",
-        "dropLabel": "여기에 놓아 위아래로 나누기"
-      },
-      "mergePane": {
-        "title": "다시 하나의 화면으로 합쳐 보세요",
-        "body": "탭을 다른 화면의 가운데나 탭 바로 끌어 놓으면 언제든 다시 하나로 합쳐져요.",
-        "dropLabel": "여기에 놓아 하나로 합치기"
-      },
       "ask": {
         "title": "직접 질문을 보내 보세요",
         "body": "방금 읽은 당신의 파일에서 뽑은 질문이에요. 보내기 버튼을 누르거나 질문을 고쳐 물어보세요."
@@ -1278,7 +1267,8 @@
     },
     "onboarding": {
       "indexingFailed": "인덱싱에 실패했습니다.",
-      "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 색인을 시작하지 못했습니다: {{error}}"
+      "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 색인을 시작하지 못했습니다: {{error}}",
+      "demoTopicQuestion": "{{topic}}에 대해 알려 주세요"
     },
     "lock": {
       "scheduledBusy": "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.",

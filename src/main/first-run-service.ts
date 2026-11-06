@@ -55,6 +55,8 @@ const SMART_INDEXING_TIMEOUT_MS = 120_000;
 /** Longest the model may take to write the tour's questions. */
 const DEMO_MODEL_TIMEOUT_MS = 45_000;
 const DEMO_MAX_TOKENS = 900;
+const MIN_TOPIC_CHARS = 4;
+const MAX_TOPIC_CHARS = 36;
 /** The whole preparing stage is bounded so the user never waits forever. */
 const PREPARING_TIMEOUT_MS = 90_000;
 /** Indexing's share of the one bar: `computeIndexingProgress` yields 0–100 and this maps it to 15–90. */
@@ -448,6 +450,28 @@ export function parseDemoQuestions(text: string): readonly { readonly doc: numbe
 	return questions;
 }
 
+/** The topic a document opens with: its first line, minus markdown marks, cut to a short phrase. Null when it has none. */
+export function documentTopic(excerpt: string): string | null {
+	for (const line of excerpt.split("\n")) {
+		const topic = line
+			.replace(/^(?:[\s#>*\-+•]|\d+[.)]\s)+/u, "")
+			.replace(/[*_`|]/gu, "")
+			.trim();
+		if (topic.length >= MIN_TOPIC_CHARS) return topic.length > MAX_TOPIC_CHARS ? topic.slice(0, MAX_TOPIC_CHARS).trim() : topic;
+	}
+	return null;
+}
+
+/** A question per document built from its own opening line, for when no model can write one. */
+function titleQuestions(docs: readonly DemoDoc[]): readonly { readonly doc: number; readonly question: string }[] {
+	const questions: { doc: number; question: string }[] = [];
+	docs.forEach((doc, index) => {
+		const topic = documentTopic(doc.excerpt);
+		if (topic !== null) questions.push({ doc: index + 1, question: t("main.onboarding.demoTopicQuestion", { topic }) });
+	});
+	return questions;
+}
+
 /** Resolve with `fallback` if `promise` has not settled within `ms`; the underlying work is left to finish on its own. */
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
 	const { promise: timeout, resolve } = Promise.withResolvers<T>();
@@ -814,17 +838,23 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		return result;
 	}
 
-	/** One model call writes a question per document; only the ones keyword retrieval proves are returned. */
+	/**
+	 * One model call writes a question per document; only the ones keyword
+	 * retrieval proves are returned. Without a callable model (offline, no
+	 * credential) or when none of its questions verify, the questions come from
+	 * the documents' own titles instead, so the tour still shows AI Search.
+	 */
 	async function buildDemo(): Promise<FirstRunDemo | null> {
 		if (workspacePath === null) return null;
 		const docs = collectDemoDocs(workspacePath);
 		if (docs.length === 0) return null;
-		let resolved: ProfileModel;
-		try {
-			resolved = await deps.resolveModel();
-		} catch {
-			return null;
-		}
+		const written = await writeModelQuestions(docs).catch(() => []);
+		const demo = written.length === 0 ? null : await pickVerifiedDemo(docs, written, deps.retrieve, now);
+		return demo ?? pickVerifiedDemo(docs, titleQuestions(docs), deps.retrieve, now);
+	}
+
+	async function writeModelQuestions(docs: readonly DemoDoc[]): Promise<ReturnType<typeof parseDemoQuestions>> {
+		const resolved: ProfileModel = await deps.resolveModel();
 		const apiKey = resolved.apiKey ?? resolved.providerApiKeys?.[resolved.model.provider];
 		const signal = AbortSignal.timeout(DEMO_MODEL_TIMEOUT_MS);
 		const reply = await deps.complete(
@@ -832,7 +862,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			{ messages: [{ role: "user", content: demoPrompt(docs, deps.language()), timestamp: now() }] },
 			{ ...(apiKey === undefined ? {} : { apiKey }), maxTokens: DEMO_MAX_TOKENS, signal },
 		);
-		return pickVerifiedDemo(docs, parseDemoQuestions(assistantText(reply)), deps.retrieve, now);
+		return parseDemoQuestions(assistantText(reply));
 	}
 
 	async function preparingStage(): Promise<void> {

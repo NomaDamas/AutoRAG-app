@@ -511,10 +511,9 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    `start()` again (a failed run restarts; a run in flight or finished is returned
    as is).
 3. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
-   `[data-action="tour-next"]` / `tour-skip`, plus `.fr-cursor` / `.fr-cursor--drag`
+   `[data-action="tour-next"]` / `tour-skip`, plus `.fr-cursor`
    on action-required steps where `tour-next` is omitted) walk the live window —
-   a cinematic title, dragging the `AI 검색` tab down to split top and bottom
-   (`splitBottom`), dragging it back to merge into one pane (`mergePane`),
+   a cinematic title over the already-split window (folder left, AI Search right; no pane-drag steps),
    sending the typed demo question (`ask`), clicking the citation chip (`cite`),
    inspecting the evidence (`evidence`), clicking a duplicate family row
    (`duplicates`), and checking its Versions section (`versions`). Steps with no

@@ -8,6 +8,7 @@ import {
 	createFirstRunService,
 	detectCloudFolders,
 	pickVerifiedDemo,
+	documentTopic,
 	parseDemoQuestions,
 	readOnboardingPending,
 	type FirstRunService,
@@ -334,5 +335,17 @@ describe("parseDemoQuestions", () => {
 			{ doc: 1, question: "What is X?" },
 		]);
 		expect(parseDemoQuestions("no json here")).toEqual([]);
+	});
+});
+
+describe("documentTopic", () => {
+	it("uses the first substantive line without markdown marks and cuts a long one", () => {
+		expect(documentTopic("# **2026 3분기 사업기획안**\n\n본문")).toBe("2026 3분기 사업기획안");
+		expect(documentTopic("---\n- \n12\n> 주간 회의록 요약\n")).toBe("주간 회의록 요약");
+		expect(documentTopic(`${"가".repeat(60)}\n`)).toHaveLength(36);
+	});
+
+	it("returns null when no line carries a phrase", () => {
+		expect(documentTopic("# \n- 1\n")).toBeNull();
 	});
 });

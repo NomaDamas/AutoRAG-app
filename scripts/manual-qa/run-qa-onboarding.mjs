@@ -93,14 +93,23 @@ const waitCursor = (page, id, timeout = 30_000) =>
 	page.waitForSelector(`.fr-cursor[data-target-step="${id}"]`, { timeout });
 
 const checkStep = async (page, id) => {
-	if (id === "splitBottom" || id === "mergePane" || id === "ask" || id === "cite" || id === "duplicates") {
+	if (id === "ask" || id === "cite" || id === "duplicates") {
 		await waitCursor(page, id);
 		check(`the ${id} step guides with an animated cursor and hides Next`, (await page.locator(`.fr-cursor[data-target-step="${id}"]`).count()) === 1 && (await page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`).count()) === 0);
 	}
 	if (id === "cite") check("the cite step points at a citation chip", (await page.locator(".cite").count()) > 0);
 	if (id === "versions") check("the versions step shows the inspector Versions section", (await page.locator('[data-section="versions"]').count()) === 1);
 };
-/** Move past a coach step: drag along `.fr-cursor--drag`, click `.fr-cursor`, or click Next on readout steps. */
+/** Move past a coach step: click `.fr-cursor`, or click Next on readout steps. */
+const advance = async (page, id) => {
+	if (id === "ask" || id === "cite" || id === "duplicates") {
+		await waitCursor(page, id);
+		check(`the ${id} step guides with an animated cursor and hides Next`, (await page.locator(`.fr-cursor[data-target-step="${id}"]`).count()) === 1 && (await page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`).count()) === 0);
+	}
+	if (id === "cite") check("the cite step points at a citation chip", (await page.locator(".cite").count()) > 0);
+	if (id === "versions") check("the versions step shows the inspector Versions section", (await page.locator('[data-section="versions"]').count()) === 1);
+};
+/** Move past a coach step: click `.fr-cursor`, or click Next on readout steps. */
 const advance = async (page, id) => {
 	if (id === "splitBottom" || id === "mergePane") {
 		await waitCursor(page, id);

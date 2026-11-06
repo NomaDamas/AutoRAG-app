@@ -871,20 +871,9 @@
       "skip": "Skip",
       "finish": "Done",
       "clickHint": "Click it to try",
-      "dragHint": "Drag the tab to try",
       "sendHint": "Send it yourself",
       "typingHint": "Writing a question…",
       "progress": "{{index}} / {{count}}",
-      "splitBottom": {
-        "title": "Drag the tab to split top and bottom",
-        "body": "Grab the tab on the right and drop it onto the lower edge of the folder pane to stack them.",
-        "dropLabel": "Drop here to split top & bottom"
-      },
-      "mergePane": {
-        "title": "Merge them back into one pane",
-        "body": "Drop the tab onto the middle of the other pane — or into its tab bar — to combine them again.",
-        "dropLabel": "Drop here to merge into one"
-      },
       "ask": {
         "title": "Send the question yourself",
         "body": "We picked a question your files can answer. Click send — or edit it and ask your own."
@@ -1278,7 +1267,8 @@
     },
     "onboarding": {
       "indexingFailed": "Indexing failed.",
-      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}"
+      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}",
+      "demoTopicQuestion": "Tell me about {{topic}}"
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",

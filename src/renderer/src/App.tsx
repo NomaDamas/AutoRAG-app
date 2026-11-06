@@ -59,7 +59,7 @@ import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
 import { allTabs, canCloseWorkspaceTab, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
-import { FirstRun, type FirstRunHost, type TourPaneState } from "./first-run/FirstRun";
+import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
 import { folderPaneId, splitTwoFolders, splitWithAiSearch } from "./first-run/tour";
 import { Tutorials } from "./first-run/Tutorials";
 import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
@@ -1110,13 +1110,6 @@ export function App(): ReactElement {
 		{firstRun ? (
 			<FirstRun
 				host={firstRunHost}
-				paneState={
-					{
-						count: workspace.panes.length,
-						splitDirection: workspace.layout.kind === "split" ? workspace.layout.direction : null,
-						dragging: draggingTabId !== null,
-					} satisfies TourPaneState
-				}
 				onDone={endFirstRun}
 			/>
 		) : null}
