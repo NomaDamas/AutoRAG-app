@@ -291,6 +291,28 @@
       "evidenceFolder": "依据文件夹",
       "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件",
       "openPreview": "在预览中查看引用段落"
+    },
+    "chat": {
+      "title": "AI 对话",
+      "placeholderFile": "询问这个文件",
+      "placeholderFolder": "询问这个文件夹",
+      "placeholderFollowUp": "继续提问",
+      "send": "发送",
+      "stop": "停止",
+      "busy": "正在等待上一个问题的回答",
+      "resume": "继续对话 · {{count}} 个问题 · {{ago}}",
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "expired": "之前的对话在 AI 搜索记录中",
+      "back": "{{name}} 的信息",
+      "newChat": "新对话",
+      "expand": "在 AI 搜索标签页中打开",
+      "removeAttachment": "移除附件",
+      "thinking": "正在查找答案…",
+      "stopped": "已停止回答",
+      "showInList": "在列表中显示",
+      "preview": "预览",
+      "placeholderAny": "随便问点什么"
     }
   },
   "aiSearch": {

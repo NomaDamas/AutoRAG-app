@@ -17,6 +17,7 @@ import { AutomationsContext } from "./components/AutomationsTab";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
+import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
@@ -45,11 +46,14 @@ import type { ShortcutSettings } from "../../shared/shortcuts-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
+import { useInspectorChats } from "./hooks/useInspectorChats";
+import { useNow } from "./hooks/useNow";
 import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "./state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { sessionEvidencePaths } from "./state/evidence";
 import { inspectorEntryFor } from "./state/inspector-target";
+import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachment } from "./state/inspector-chat";
 import { ruleTitle } from "./state/automations";
 import { watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
@@ -629,6 +633,40 @@ export function App(): ReactElement {
 		path,
 		rules: automationsView.state.rules,
 	});
+	/**
+	 * The inspector's AI chat, one per folder tab (state/inspector-chat.ts). It is an ordinary AI Search chat: the same
+	 * history keeps it, and ⤢ opens it in an AI Search tab.
+	 */
+	const inspectorChats = useInspectorChats(language);
+	const { refresh: refreshInspectorChat, prune: pruneInspectorChats } = inspectorChats;
+	const chatTabId = focusedTab !== null && focusedTab.path !== AI_SEARCH_PATH ? focusedTab.id : null;
+	const chatNow = useNow(chatTabId !== null && inspectorVisible, 30_000);
+	const chatTab = chatTabId === null ? EMPTY_INSPECTOR_CHAT_TAB : inspectorChats.tab(chatTabId, chatNow);
+	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
+	const chatRunning = inspectorChats.runningTab !== null;
+	const chatLive = chatTabId !== null && inspectorChats.runningTab === chatTabId;
+	const chatTarget: ChatAttachment | null =
+		inspectorEntry === null ? null : { kind: inspectorEntry.kind === "folder" ? "folder" : "file", id: inspectorEntry.path, name: inspectorEntry.name };
+	const chatPending = pendingAttachment(chatTab, chatTarget);
+	const chatMode = chatTab.chat === null ? "info" : chatTab.mode;
+	// A question asked in the AI Search tab showing the same chat shows here once the inspector is back on screen.
+	useEffect(() => {
+		if (chatTabId !== null && inspectorVisible) refreshInspectorChat(chatTabId);
+	}, [chatTabId, inspectorVisible, chatMode, refreshInspectorChat]);
+	useEffect(() => {
+		pruneInspectorChats(tabs.map((tab) => tab.id));
+	}, [tabs, pruneInspectorChats]);
+	const openChatInAiTab = useCallback(
+		(chatId: string) => {
+			finder?.openAiSearch();
+			deliverToAi({ chat: chatId });
+		},
+		[deliverToAi, finder],
+	);
+	const openAiHistory = useCallback(() => {
+		finder?.openAiSearch();
+		deliverToAi({ history: true });
+	}, [deliverToAi, finder]);
 	/** Inspector action bar: open, share, and edits run on the focused row; a multi-selection's Compress packs every selected row. */
 	const runInspectorAction = useCallback(
 		(target: FileActionTarget, anchor: ActionAnchor | null) => {
@@ -856,7 +894,10 @@ export function App(): ReactElement {
 								onToggleIndex={(entry) => finder?.toggleIndex(entry)}
 								onTrash={(entry) => finder?.trashEntry(entry)}
 								onCopyPath={(entry) => finder?.copyEntryPath(entry)}
-								onAskAi={askAi}
+								onAskAi={(entry) => {
+									if (chatTabId === null) askAi(entry);
+									else void inspectorChats.summarize(chatTabId, { kind: entry.kind === "folder" ? "folder" : "file", id: entry.path, name: entry.name });
+								}}
 								actionCapabilities={finder?.actionCapabilities ?? NO_CAPABILITIES}
 								onAction={runInspectorAction}
 								loadOpenWithApplications={(entry) => finder?.loadOpenWithApplications(entry) ?? Promise.resolve([])}
@@ -875,6 +916,43 @@ export function App(): ReactElement {
 								evidenceFolderCount={localEvidencePaths.length}
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
 								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
+								chatDock={
+									chatTabId === null ? undefined : (
+										<InspectorChatDock
+											tab={chatTab}
+											now={chatNow}
+											target={chatTarget}
+											pending={chatPending}
+											running={chatRunning}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending)}
+											onStop={inspectorChats.stop}
+											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
+											onOpenHistory={openAiHistory}
+											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
+										/>
+									)
+								}
+								chatView={
+									chatTabId === null || chatTab.chat === null || chatTab.mode !== "chat" ? null : (
+										<InspectorChatView
+											tab={chatTab}
+											targetName={inspectorEntry?.name ?? basename(path)}
+											pending={chatPending}
+											running={chatLive}
+											imageActions={imageActions}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending)}
+											onStop={inspectorChats.stop}
+											onBack={() => inspectorChats.setMode(chatTabId, "info")}
+											onNewChat={() => inspectorChats.reset(chatTabId)}
+											onExpand={() => {
+												if (chatTab.chat !== null) openChatInAiTab(chatTab.chat.chatId);
+											}}
+											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
+											onReveal={(target) => finder?.revealEvidence(target)}
+											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}
+										/>
+									)
+								}
 							/>
 						)}
 				</InspectorColumn>

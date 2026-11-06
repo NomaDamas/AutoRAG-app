@@ -15,9 +15,11 @@ import {
 	AppWindow,
 	Archive,
 	ArrowDownUp,
+	ArrowLeft,
 	ArrowUp,
 	ChartNoAxesColumn,
 	Check,
+	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
 	ChevronUp,
@@ -36,6 +38,8 @@ import {
 	LayoutGrid,
 	Link2,
 	List,
+	Maximize2,
+	MessagesSquare,
 	Mic,
 	PackageOpen,
 	PanelLeft,
@@ -133,6 +137,15 @@ export const VideoConvertIcon = glyph(Film, 16, 1.8);
 export const CloseIcon = glyph(X, 10, 3);
 
 export const NewChatIcon = glyph(SquarePen, 15, 2);
+
+/** Inspector chat: open the same chat in an AI Search tab, back to Info, and the resume link. */
+export const ExpandIcon = glyph(Maximize2, 14, 2);
+
+export const ArrowLeftIcon = glyph(ArrowLeft, 13, 2.2);
+
+export const MessagesIcon = glyph(MessagesSquare, 12, 2);
+
+export const ChevronDownIcon = glyph(ChevronDown, 10, 3);
 
 /**
  * Tab strip: the reference's `icon('close',11)` / `icon('plus',14)` at the

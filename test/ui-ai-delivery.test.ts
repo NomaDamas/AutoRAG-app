@@ -11,6 +11,8 @@ function target(): AiDeliveryTarget & { readonly calls: string[] } {
 		attach: vi.fn((atts: readonly ChatAttachment[]) => void calls.push(`attach:${atts.length}`)),
 		summarize: vi.fn((atts: readonly ChatAttachment[]) => void calls.push(`summarize:${atts.length}`)),
 		focusComposer: vi.fn(() => void calls.push("focus")),
+		openChat: vi.fn((id: string) => void calls.push(`chat:${id}`)),
+		showHistory: vi.fn(() => void calls.push("history")),
 	};
 }
 
@@ -69,5 +71,19 @@ describe("a draft for the AI Search composer", () => {
 		const asked = target();
 		deliverToDock(asked, mergeDelivery(null, { attach: [file("/a.pdf"), file("/b.pdf")], query: "q" }));
 		expect(asked.calls).toEqual(["send:q+2"]);
+	});
+});
+
+describe("the inspector chat handed to an AI Search tab", () => {
+	it("opens the stored chat and does nothing else, so the tab continues the same conversation", () => {
+		const dock = target();
+		deliverToDock(dock, mergeDelivery(null, { chat: "chat-1" }));
+		expect(dock.calls).toEqual(["chat:chat-1"]);
+	});
+
+	it("opens the history list for the inspector's 지난 대화 link", () => {
+		const dock = target();
+		deliverToDock(dock, mergeDelivery(null, { history: true }));
+		expect(dock.calls).toEqual(["history"]);
 	});
 });

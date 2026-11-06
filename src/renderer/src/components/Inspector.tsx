@@ -144,6 +144,10 @@ export interface InspectorProps {
 	 * known here, and it is not offered for the Trash.
 	 */
 	readonly folderInView?: boolean;
+	/** The AI chat's foot of the Info view (resume link, 요약, composer); see InspectorChat.tsx. */
+	readonly chatDock?: ReactNode;
+	/** The AI chat itself, shown instead of the Info view while the person is in it. */
+	readonly chatView?: ReactNode;
 }
 
 const HEAD_BUTTON =
@@ -186,6 +190,8 @@ export function Inspector({
 	imageActions,
 	automations,
 	folderInView = false,
+	chatDock,
+	chatView,
 }: InspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
@@ -204,6 +210,8 @@ export function Inspector({
 					evidenceFolderCount={evidenceFolderCount}
 					onOpenEvidenceFolder={onOpenEvidenceFolder}
 				/>
+			) : chatView !== undefined && chatView !== null ? (
+				chatView
 			) : entries.length > 1 ? (
 				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} actionCapabilities={actionCapabilities} onAction={onAction} />
 			) : (
@@ -223,6 +231,7 @@ export function Inspector({
 					folderInView={folderInView}
 				/>
 			)}
+			{view === "evidence" || entries.length > 1 || (chatView !== undefined && chatView !== null) ? null : chatDock}
 		</aside>
 	);
 }

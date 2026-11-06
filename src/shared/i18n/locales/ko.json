@@ -291,6 +291,28 @@
       "evidenceFolder": "근거 폴더",
       "evidenceFolderTooltip": "현재 대화의 근거 파일을 임시 폴더 탭으로 열기",
       "openPreview": "미리보기에서 근거 위치 보기"
+    },
+    "chat": {
+      "title": "AI 채팅",
+      "placeholderFile": "이 파일에 대해 묻기",
+      "placeholderFolder": "이 폴더에 대해 묻기",
+      "placeholderFollowUp": "이어서 묻기",
+      "send": "보내기",
+      "stop": "중지",
+      "busy": "앞 질문의 답을 기다리는 중이에요",
+      "resume": "대화 이어보기 · 질문 {{count}}개 · {{ago}}",
+      "justNow": "방금",
+      "minutesAgo": "{{count}}분 전",
+      "expired": "지난 대화는 AI 검색 기록에 있어요",
+      "back": "{{name}} 정보",
+      "newChat": "새 대화",
+      "expand": "AI 검색 탭에서 열기",
+      "removeAttachment": "첨부 빼기",
+      "thinking": "답을 찾는 중…",
+      "stopped": "답변을 중지했어요",
+      "showInList": "목록에서 보기",
+      "preview": "미리보기",
+      "placeholderAny": "무엇이든 물어보세요"
     }
   },
   "aiSearch": {
