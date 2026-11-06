@@ -1463,6 +1463,9 @@
       "glanceDesc": "선택한 텍스트 파일의 크기와 첫 줄들을 바로 보여 줘요. (Dazzi 체험용 예시)",
       "photos": "연습 사진",
       "gray": "흑백"
+    },
+    "smartIndexing": {
+      "cloudReason": "클라우드 동기화 폴더예요. 파일이 온라인에만 있을 수 있어 기본으로 제외했어요. 포함하려면 왼쪽으로 끌어 놓으세요."
     }
   },
   "quickLook": {
@@ -2892,15 +2895,15 @@
     }
   },
   "localSpec": {
-    "blocked": "이 컴퓨터는 최소 사양을 충족하지 못해 로컬 임베딩을 쓸 수 없어요. {{reason}}",
+    "blocked": "이 컴퓨터는 최소 사양을 충족하지 못해 로컬 임베딩을 쓸 수 없습니다. {{reason}}",
     "reason": {
-      "appleBaseChip": "{{chip}} 기본 칩은 지원하지 않습니다. Pro·Max·Ultra 칩(예: M2 Pro)과 통합 메모리 {{minMemoryGb}}GB 이상이 필요해요.",
-      "appleMemory": "통합 메모리가 {{memoryGb}}GB예요. {{minMemoryGb}}GB 이상이 필요해요.",
-      "appleSiliconRequired": "Apple 실리콘(Pro·Max·Ultra 칩, 통합 메모리 {{minMemoryGb}}GB 이상)이 필요해요.",
-      "noCudaGpu": "CUDA를 지원하는 NVIDIA GPU(VRAM {{minVramGb}}GB 이상)를 찾지 못했어요.",
-      "gpuVram": "{{gpu}}의 VRAM이 {{vramGb}}GB예요. {{minVramGb}}GB 이상이 필요해요.",
-      "unsupportedPlatform": "이 운영체제에서는 로컬 임베딩을 지원하지 않아요.",
-      "hardwareUnreadable": "이 컴퓨터의 사양을 확인하지 못했어요."
+      "appleBaseChip": "{{chip}} 기본 칩은 지원하지 않습니다. Pro·Max·Ultra 칩(예: M2 Pro)과 통합 메모리 {{minMemoryGb}}GB 이상이 필요합니다.",
+      "appleMemory": "통합 메모리가 {{memoryGb}}GB입니다. {{minMemoryGb}}GB 이상이 필요합니다.",
+      "appleSiliconRequired": "Apple 실리콘(Pro·Max·Ultra 칩, 통합 메모리 {{minMemoryGb}}GB 이상)이 필요합니다.",
+      "noCudaGpu": "CUDA를 지원하는 NVIDIA GPU(VRAM {{minVramGb}}GB 이상)를 찾지 못했습니다.",
+      "gpuVram": "{{gpu}}의 VRAM이 {{vramGb}}GB입니다. {{minVramGb}}GB 이상이 필요합니다.",
+      "unsupportedPlatform": "이 운영체제에서는 로컬 임베딩을 지원하지 않습니다.",
+      "hardwareUnreadable": "이 컴퓨터의 사양을 확인하지 못했습니다."
     }
   },
   "modelDownload": {
@@ -3190,6 +3193,17 @@
     "evidence": {
       "showInFolder": "폴더에서 보기",
       "preview": "미리보기"
+    }
+  },
+  "onboarding": {
+    "model": {
+      "server": {
+        "body": "회사 게이트웨이나 OpenAI API 형식을 쓰는 서버를 연결합니다.\n입력한 키는 이 컴퓨터에 암호화해 저장합니다.",
+        "namePlaceholder": "표시 이름",
+        "keyPlaceholder": "서버에 키가 필요할 때만 입력하세요",
+        "urlInvalid": "주소가 올바르지 않습니다. 주소를 다시 확인하세요.",
+        "keyInvalid": "API 키가 올바르지 않습니다. 키를 다시 확인하세요."
+      }
     }
   }
 }

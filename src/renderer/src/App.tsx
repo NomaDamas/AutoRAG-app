@@ -821,7 +821,7 @@ export function App(): ReactElement {
 		<SettingsAssistantContext value={settingsAssistant}>
 		<div className="desk flex h-full bg-window">
 			<div
-				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
+				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
 				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
 				inert={firstRunCovered}
 			>

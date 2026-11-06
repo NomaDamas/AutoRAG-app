@@ -534,6 +534,8 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		agentDir,
 		env: deps.env,
 		language: deps.language,
+		// The cloud drives the folder screen offers switched off: smart indexing leaves them out as wholes, never reads them.
+		cloudRoots: async () => (deps.cloudFolders?.() ?? detectCloudFolders(deps.home, deps.platform)).map((folder) => folder.path),
 		scanOptions: deps.scanOptions,
 		timeoutMs: SMART_INDEXING_TIMEOUT_MS,
 	});

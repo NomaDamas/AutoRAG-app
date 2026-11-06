@@ -1463,6 +1463,9 @@
       "glanceDesc": "Shows the size and first lines of the selected text files. (A Dazzi practice example)",
       "photos": "Practice Photos",
       "gray": "Black and White"
+    },
+    "smartIndexing": {
+      "cloudReason": "Cloud-sync folder: its files may live online only, so it starts out of the index. Drag it back to include it."
     }
   },
   "quickLook": {
@@ -3190,6 +3193,17 @@
     "evidence": {
       "showInFolder": "Show in folder",
       "preview": "Preview"
+    }
+  },
+  "onboarding": {
+    "model": {
+      "server": {
+        "body": "Connect a company gateway or any server that uses the OpenAI API format.\nKeys you enter are encrypted and stored on this computer.",
+        "namePlaceholder": "Display name",
+        "keyPlaceholder": "Only if the server requires one",
+        "urlInvalid": "This address isn't valid. Check it and try again.",
+        "keyInvalid": "This API key isn't valid. Check it and try again."
+      }
     }
   }
 }

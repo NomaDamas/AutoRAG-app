@@ -1463,6 +1463,9 @@
       "glanceDesc": "显示所选文本文件的大小和开头几行。（Dazzi 体验用示例）",
       "photos": "练习照片",
       "gray": "黑白"
+    },
+    "smartIndexing": {
+      "cloudReason": "云同步文件夹。文件可能只存在于线上，因此默认不纳入索引。如需纳入，请拖回左侧。"
     }
   },
   "quickLook": {
@@ -3190,6 +3193,17 @@
     "evidence": {
       "showInFolder": "在文件夹中显示",
       "preview": "预览"
+    }
+  },
+  "onboarding": {
+    "model": {
+      "server": {
+        "body": "连接公司网关，或使用 OpenAI API 格式的服务器。\n输入的密钥会加密保存在这台电脑上。",
+        "namePlaceholder": "显示名称",
+        "keyPlaceholder": "仅在服务器需要密钥时填写",
+        "urlInvalid": "地址无效，请重新检查。",
+        "keyInvalid": "API 密钥无效，请重新检查。"
+      }
     }
   }
 }
