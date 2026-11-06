@@ -84,7 +84,7 @@ const RULES = join(HOME, "automations.json");
 const AGENTS_DIR = join(USER_HOME, "Library", "LaunchAgents");
 const DOWNLOADS = join(QA_ROOT, "Downloads");
 const NOTES = join(QA_ROOT, "Notes");
-for (const dir of [USER_HOME, QA_ROOT, HOME, join(HOME, "bin"), join(HOME, "automations", "logs"), AGENT_DIR, DOWNLOADS, NOTES]) mkdirSync(dir, { recursive: true });
+for (const dir of [USER_HOME, QA_ROOT, join(WORK, "workspace"), HOME, join(HOME, "bin"), join(HOME, "automations", "logs"), AGENT_DIR, DOWNLOADS, NOTES]) mkdirSync(dir, { recursive: true });
 writeFileSync(join(DOWNLOADS, "report.pdf"), "%PDF-1.4\n");
 writeFileSync(join(NOTES, "todo.md"), "# todo\n");
 const minsync = join(HOME, "bin", "minsync");
@@ -194,11 +194,29 @@ async function sendChange(page, change, shot) {
 	}
 	await sleep(500);
 	const answer = (await page.locator(`${AI_PANEL} .assistant-msg .assistant-prose`).allTextContents()).map((entry) => entry.trim()).filter(Boolean).join("\n");
-	const error = (await page.locator(`${AI_PANEL} .text-danger-text`).first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
+	let error = (await page.locator(`${AI_PANEL} .text-danger-text`).first().textContent({ timeout: 500 }).catch(() => null)) ?? "";
+	if (error === "" && answer.length === 0) {
+		// The turn ended in the "Something went wrong" card: open its details so the evidence says why.
+		await page.getByText("Show details").first().click({ timeout: 1500 }).catch(() => undefined);
+		error = ((await page.locator(AI_PANEL).first().innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").trim();
+	}
 	await page.screenshot({ path: join(EVIDENCE, shot) });
 	writeFileSync(join(EVIDENCE, `${shot.replace(/\.png$/, "")}.txt`), `SENT:\n${sent}\n\nANSWER:\n${answer}\n\nERROR:\n${error}\n`);
 	return { sent, answer, error };
 }
+
+// The login service the lane registers is started by launchd with the account's real HOME, so its agent runs read `~/.pi/agent/auth.json`,
+// not the throwaway PI_CODING_AGENT_DIR above. A fresh VM has none: the lane adds it for the run and removes it after. An existing one is never touched.
+const SERVICE_AUTH = join(homedir(), ".pi", "agent", "auth.json");
+const SERVICE_AUTH_ADDED = !existsSync(SERVICE_AUTH);
+if (SERVICE_AUTH_ADDED) {
+	mkdirSync(join(homedir(), ".pi", "agent"), { recursive: true });
+	writeFileSync(SERVICE_AUTH, readFileSync(join(AGENT_DIR, "auth.json")), { mode: 0o600 });
+}
+
+// The agent rewrites the rules file and the lane has nobody to answer a file-change approval: `full` never asks.
+mkdirSync(join(WORK, "user-data", "settings"), { recursive: true });
+writeFileSync(join(WORK, "user-data", "settings", "settings-state.json"), `${JSON.stringify({ settings: { language: "en", approvalMode: "full" }, permissions: {} }, null, 2)}\n`);
 
 const app = await launchFinder({
 	userDataDir: join(WORK, "user-data"),
@@ -302,16 +320,56 @@ try {
 		await page.screenshot({ path: join(EVIDENCE, "06-after-run.png") });
 	}
 
+	// 4b. An AI rule renames a new photo in place (#475): the guard must let a rename through when the new name cannot fire the rule.
+	const photoRequest = await (async () => {
+		await page.locator(".tabs .tab").filter({ hasText: "Automations" }).first().click();
+		await page.locator("[data-rules-body]").click({ button: "right", position: { x: 40, y: 300 } });
+		await page.waitForSelector('[role="menu"]');
+		await page.locator('[role="menu"] [role="menuitem"]').click();
+		await page.waitForSelector(COMPOSER);
+		return sendChange(
+			page,
+			`When a new photo named like IMG_0001.jpg lands in the folder ${DOWNLOADS}, rename it to describe what is in it, keeping the .jpg extension. Use an AI agent rule for this. Only create the rule; do not start the background service.`,
+			"07-photo-rule-run.png",
+		);
+	})();
+	check("the photo rule turn ended without an error", photoRequest.error === "" && photoRequest.answer.length > 0, photoRequest.error || photoRequest.answer.slice(0, 200));
+	const photoRule = readRules().find((rule) => rule.id !== ruleA.id && rule.id !== added?.id);
+	check("the photo rule is an AI organizer rule on create", photoRule !== undefined && photoRule.agent?.profile === "file-organizer" && photoRule.events?.includes("create") === true, JSON.stringify(photoRule));
+	if (photoRule !== undefined) {
+		const photo = join(DOWNLOADS, "IMG_0001.jpg");
+		const droppedAt = Date.now();
+		const made = spawnSync("ffmpeg", ["-y", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=red:s=320x240", "-frames:v", "1", photo], { encoding: "utf8" });
+		check("a red photo was dropped into Downloads", made.status === 0 && existsSync(photo), made.stderr);
+		const renamed = () => readdirSync(DOWNLOADS).filter((name) => /\.jpe?g$/i.test(name) && !/^IMG_/i.test(name));
+		const done = await waitFor("the photo renamed", async () => !existsSync(photo) && renamed().length > 0, 240_000);
+		check("the agent renamed the photo in place instead of refusing", done, readdirSync(DOWNLOADS).join(", "));
+		await sleep(30_000);
+		const runLog = join(HOME, "automations", "logs", `${photoRule.id}.jsonl`);
+		// The librarian agent may test the rule right after creating it; only runs after the drop belong to the photo.
+		const runs = existsSync(runLog) ? readFileSync(runLog, "utf8").split("\n").filter((line) => line.trim().length > 0).map((line) => JSON.parse(line)).filter((record) => Date.parse(record.startedAt) >= droppedAt - 2000).length : 0;
+		console.log(`INFO photo rule runs: ${runs}; Downloads: ${readdirSync(DOWNLOADS).join(", ")}`);
+		if (existsSync(runLog)) {
+			writeFileSync(join(EVIDENCE, "photo-rule-runs.jsonl"), readFileSync(runLog, "utf8"));
+			writeFileSync(join(EVIDENCE, "photo-rule.json"), `${JSON.stringify(photoRule, null, 2)}\n`);
+		}
+		check("the rename did not loop (one run for one photo)", runs === 1, `runs=${runs}`);
+		await sleep(350);
+		await page.screenshot({ path: join(EVIDENCE, "08-photo-renamed.png") });
+	}
+
 	// 5. Turn it off again.
+	await page.locator(".tabs .tab").filter({ hasText: "Automations" }).first().click();
 	await page.locator("[data-daemon] button").click();
 	const off = await waitFor("daemon off", async () => (await text(page, "[data-daemon]")).includes("Off · rules are not running"), 60_000);
 	check("Turn off stops the service", off, await text(page, "[data-daemon]"));
 	check("the launchd agent is gone", serviceDefinition() === null, serviceDefinition()?.path);
-	check("the rules were not touched by the switch", readRules().length === 2);
+	check("the rules were not touched by the switch", readRules().length === (photoRule === undefined ? 2 : 3));
 } catch (error) {
 	check("run completed", false, String(error).slice(0, 600));
 } finally {
 	removeService();
+	if (SERVICE_AUTH_ADDED) rmSync(SERVICE_AUTH, { force: true });
 	await app.close().catch(() => undefined);
 }
 
