@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
 	buildBackgroundContextMenu,
 	buildContextMenu,
+	buildSidebarPinMenu,
 	estimateMenuHeight,
 	menuPlacement,
 } from "../src/renderer/src/state/context-menu";
 import type { ContextMenuInput, FinderMenuEntry, FinderMenuItem, FinderMenuSubmenu, FinderMenuSubmenuItem } from "../src/renderer/src/state/context-menu";
+import { normalizeContextMenuSettings } from "../src/shared/context-menu-contract";
 import { NEW_FILE_FORMATS } from "../src/shared/new-file-contract";
 import { NO_CAPABILITIES, type ActionCapabilities } from "../src/shared/actions-contract";
 
@@ -509,5 +511,125 @@ describe("buildContextMenu customization & Magic Actions", () => {
 			}),
 		);
 		expect(trashMenu.some((i) => i.action === "magicAction")).toBe(false);
+	});
+
+	it("updates file and background right-click keycaps dynamically from ShortcutSettings presets and overrides", () => {
+		const winPresetMenu = items(
+			buildContextMenu({
+				...file,
+				platform: "win32",
+				shortcuts: {
+					overrides: {
+						quickLook: "Alt+P",
+						rename: "F2",
+						trash: "Delete",
+					},
+				},
+			}),
+		);
+		expect(winPresetMenu.find((i) => i.action === "quickLook")?.keycap).toBe("Alt+P");
+		expect(winPresetMenu.find((i) => i.action === "rename")?.keycap).toBe("F2");
+		expect(winPresetMenu.find((i) => i.action === "copy")?.keycap).toBe("Ctrl+C");
+		expect(winPresetMenu.find((i) => i.action === "trash")?.keycap).toBe("Del");
+
+		const macFolderMenu = items(
+			buildContextMenu({
+				...file,
+				target: { name: "Docs", kind: "folder" },
+				platform: "darwin",
+				shortcuts: {
+					overrides: {
+						openItem: "Mod+O",
+						trash: "Mod+Backspace",
+					},
+				},
+			}),
+		);
+		expect(macFolderMenu.find((i) => i.action === "open")?.keycap).toBe("⌘O");
+		expect(macFolderMenu.find((i) => i.action === "trash")?.keycap).toBe("⌘⌫");
+
+		const bgMenu = buildBackgroundContextMenu({
+			clipboardCount: 1,
+			platform: "win32",
+			shortcuts: { overrides: { paste: "Mod+Shift+V" } },
+		}).filter((e): e is FinderMenuItem => e.kind === "item");
+		expect(bgMenu.find((i) => i.action === "paste")?.keycap).toBe("Ctrl+Shift+V");
+	});
+});
+
+describe("buildContextMenu sidebar pin", () => {
+	const folder = { ...file, target: { name: "Finance", kind: "folder" as const } };
+	const actions = (input: ContextMenuInput) => items(buildContextMenu(input)).map((i) => i.action);
+
+	it("offers 사이드바에 고정 on a folder the sidebar does not hold, after 새 폴더", () => {
+		const menu = items(buildContextMenu({ ...folder, sidebarPin: "pin" }));
+		expect(menu.find((i) => i.action === "pinToSidebar")?.label).toBe("사이드바에 고정");
+		const order = menu.map((i) => i.action);
+		expect(order.indexOf("pinToSidebar")).toBe(order.indexOf("newFolder") + 1);
+		expect(order).not.toContain("unpinFromSidebar");
+	});
+
+	it("offers 사이드바에서 제거 instead for a folder the user pinned", () => {
+		const menu = items(buildContextMenu({ ...folder, sidebarPin: "unpin" }));
+		expect(menu.find((i) => i.action === "unpinFromSidebar")?.label).toBe("사이드바에서 제거");
+		expect(menu.map((i) => i.action)).not.toContain("pinToSidebar");
+	});
+
+	it("offers neither when the sidebar already shows the folder as an OS place", () => {
+		expect(actions(folder)).not.toContain("pinToSidebar");
+		expect(actions(folder)).not.toContain("unpinFromSidebar");
+	});
+
+	it("never offers a pin for a file, even if the caller asks", () => {
+		expect(actions({ ...file, sidebarPin: "pin" })).not.toContain("pinToSidebar");
+		expect(actions({ ...file, sidebarPin: "unpin" })).not.toContain("unpinFromSidebar");
+	});
+
+	it("never offers a pin for a selection of several rows", () => {
+		expect(actions({ ...folder, selectionCount: 3, sidebarPin: "pin" })).not.toContain("pinToSidebar");
+	});
+
+	it("offers no pin inside the Trash or when the whole actions section is hidden", () => {
+		expect(actions({ ...folder, inTrash: true, sidebarPin: "pin" })).not.toContain("pinToSidebar");
+		const hidden = { hiddenItems: [], hiddenSections: ["actions" as const], sectionOrder: [], magicActions: [] };
+		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: hidden })).not.toContain("pinToSidebar");
+	});
+
+	it("keeps 사이드바에 고정 when the user hides 새 폴더", () => {
+		const hidden = { hiddenItems: ["builtin:newFolder" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: hidden })).toContain("pinToSidebar");
+	});
+
+	it("hides 사이드바에 고정 with its own id, leaving 새 폴더 and the rest of the section", () => {
+		const hidden = { hiddenItems: ["builtin:pinToSidebar" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		const menu = actions({ ...folder, sidebarPin: "pin", contextMenu: hidden });
+		expect(menu).not.toContain("pinToSidebar");
+		expect(menu).toContain("newFolder");
+		expect(menu).toContain("compress");
+	});
+
+	it("hides 사이드바에서 제거 with the same id as 사이드바에 고정", () => {
+		const hidden = { hiddenItems: ["builtin:pinToSidebar" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		expect(actions({ ...folder, sidebarPin: "unpin", contextMenu: hidden })).not.toContain("unpinFromSidebar");
+		const shown = { hiddenItems: ["builtin:newFolder" as const], hiddenSections: [], sectionOrder: [], magicActions: [] };
+		expect(actions({ ...folder, sidebarPin: "unpin", contextMenu: shown })).toContain("unpinFromSidebar");
+	});
+
+	it("still offers the pin once the user shows it again", () => {
+		const settings = normalizeContextMenuSettings({ hiddenItems: ["사이드바에 고정"] });
+		expect(settings.hiddenItems).toEqual(["builtin:pinToSidebar"]);
+		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: settings })).not.toContain("pinToSidebar");
+		const shown = normalizeContextMenuSettings({ ...settings, hiddenItems: [] });
+		expect(actions({ ...folder, sidebarPin: "pin", contextMenu: shown })).toContain("pinToSidebar");
+	});
+
+	it("keeps 사이드바에서 제거 on a pinned sidebar row's own menu, which has no other item", () => {
+		expect(buildSidebarPinMenu().map((entry) => (entry.kind === "item" ? entry.action : entry.kind))).toEqual(["unpinFromSidebar"]);
+	});
+
+	it("labels the pinned row's own menu with its one action", () => {
+		const menu = buildSidebarPinMenu();
+		expect(menu).toHaveLength(1);
+		expect(menu[0]).toMatchObject({ kind: "item", action: "unpinFromSidebar", label: "사이드바에서 제거", tone: "default" });
 	});
 });

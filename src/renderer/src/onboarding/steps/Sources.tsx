@@ -1,4 +1,4 @@
-/** Step 6 — connectors the app found usable, streamed in as each probe finishes (Figma 07 · sources). */
+/** Step 6 — connectors the app found usable, streamed in as each probe finishes (Figma 07 · sources). With none found the shell moves on by itself. */
 
 import type { ReactElement } from "react";
 import { Icon } from "../marks";
@@ -41,7 +41,6 @@ export function SourcesStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 				</div>
 			) : (
 				<div className="connect-more" data-sources-done>
-					{sources.length === 0 ? <div className="sources-empty">{t("onboarding.sources.empty")}</div> : null}
 					{more.length > 0 ? (
 						<>
 							<div className="more-chips">

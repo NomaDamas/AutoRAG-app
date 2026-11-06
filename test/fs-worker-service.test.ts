@@ -9,6 +9,8 @@ import type { FsChange, LiveMessage } from "../src/shared/live-contract";
 import type { Places } from "../src/main/places";
 import type { VersionFamilyService } from "../src/main/version-family-service";
 import type { WatchBackend } from "../src/main/watch-backend";
+import type { ContentSearch } from "../src/main/content-search";
+import { CONTENT_SEARCH_MAX_HITS, type ContentSearchResult } from "../src/shared/content-search-contract";
 
 const places: Places = {
 	list: async (): Promise<readonly FsLocation[]> => [],
@@ -61,6 +63,8 @@ afterEach(async () => {
 	await rm(root, { recursive: true, force: true });
 });
 
+let contentSearch: ContentSearch = { search: async () => ({ state: "ok", hits: [] }) };
+
 function start(watcher: WatchBackend, onPush: (name: string, payload: unknown) => void = () => {}, trashDir?: string): FsWorkerService {
 	service = createFsWorkerService({
 		config: { userDataDir: join(root, "user-data") },
@@ -73,6 +77,7 @@ function start(watcher: WatchBackend, onPush: (name: string, payload: unknown) =
 		watchBackend: watcher,
 		places: trashDir === undefined ? places : { ...places, trashDir: async () => trashDir },
 		fileNameSearch: { search: async () => null, ensureDaemon: async () => {}, stop: async () => {} },
+		contentSearch: { search: (query, limit, signal) => contentSearch.search(query, limit, signal) },
 		versionFamilies: () => noFamilies,
 	});
 	return service;
@@ -220,5 +225,38 @@ describe("fs worker service", () => {
 		await worker.dispose();
 		service = null;
 		await expect(access(folderPath)).rejects.toThrow();
+	});
+
+	it("answers a content search with rows for the files still on disk, in the index's order, capped at the hit limit", async () => {
+		const kept = join(root, "kept.md");
+		const second = join(root, "second.md");
+		await writeFile(kept, "refund");
+		await writeFile(second, "refund too");
+		const limits: (number | undefined)[] = [];
+		contentSearch = {
+			search: async (_query, limit) => {
+				limits.push(limit);
+				return {
+					state: "ok",
+					hits: [
+						{ path: second, snippet: "refund too", line: 1, score: 0.9 },
+						{ path: join(root, "gone.md"), snippet: "refund", line: null, score: 0.8 },
+						{ path: kept, snippet: "refund", line: 2, score: 0.7 },
+					],
+				};
+			},
+		};
+		const worker = start(fakeWatcher());
+		const signal = new AbortController().signal;
+
+		const result = (await worker.handlers.contentSearch(["refund", 500], signal)) as ContentSearchResult;
+		await worker.handlers.contentSearch(["refund"], signal);
+
+		expect(result.state).toBe("ok");
+		expect(result.hits.map((hit) => [hit.entry.path, hit.entry.kind, hit.line])).toEqual([
+			[second, "file", 1],
+			[kept, "file", 2],
+		]);
+		expect(limits).toEqual([CONTENT_SEARCH_MAX_HITS, CONTENT_SEARCH_MAX_HITS]);
 	});
 });

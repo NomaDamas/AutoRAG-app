@@ -58,6 +58,7 @@ export interface AppCustomizerToolkitDeps {
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
 	readonly listTags: () => Promise<readonly FsTag[]>;
 	readonly homeDir?: string;
+	readonly platform?: NodeJS.Platform;
 	readonly language?: () => ReplyLanguage;
 	readonly cancelled?: () => boolean;
 }
@@ -281,6 +282,8 @@ function summarizeContextMenuChange(
 
 export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppCustomizerToolkit {
 	const home = deps.homeDir ?? homedir();
+	const platform = deps.platform ?? process.platform;
+	const isWindows = platform === "win32";
 	const lang = (): ReplyLanguage => deps.language?.() ?? "ko";
 	const isCancelled = (): boolean => deps.cancelled?.() === true;
 	const changes: AppCustomizerChange[] = [];
@@ -358,6 +361,8 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 		});
 
 		return {
+			platform,
+			scriptShell: isWindows ? "powershell.exe" : "/bin/sh",
 			sidebar: {
 				lockedFavorites: [
 					{ id: "app:aiSearch", label: "AI Search (AI 검색)", visible: true, locked: true, note: "Always shown at top of Favorites; cannot be hidden." },
@@ -776,7 +781,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			showItems: Type.Optional(
 				Type.Array(Type.String(), {
 					description:
-						"Built-in context menu item IDs or names to show (e.g. 'builtin:quickLook', 'builtin:openWith', 'builtin:toggleIndex', 'builtin:copy', 'builtin:paste', 'builtin:cut', 'builtin:duplicate', 'builtin:rename', 'builtin:copyPath', 'builtin:newFolder', 'builtin:extract', 'builtin:compress', 'builtin:compress7z', 'builtin:share', 'builtin:services', 'builtin:trash').",
+						"Built-in context menu item IDs or names to show (e.g. 'builtin:quickLook', 'builtin:openWith', 'builtin:toggleIndex', 'builtin:copy', 'builtin:paste', 'builtin:cut', 'builtin:duplicate', 'builtin:rename', 'builtin:copyPath', 'builtin:newFolder', 'builtin:pinToSidebar', 'builtin:extract', 'builtin:compress', 'builtin:compress7z', 'builtin:share', 'builtin:services', 'builtin:trash').",
 				}),
 			),
 			hideItems: Type.Optional(
@@ -944,8 +949,9 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 	const upsertMagicAction = defineTool({
 		name: "upsert_magic_action",
 		label: "Upsert Magic Action",
-		description:
-			"Create or update a custom right-click Magic Action button on files/folders. A Magic Action can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
+		description: isWindows
+			? "Create or update a custom right-click Magic Action button on files/folders. On this Windows machine, `executionKind: 'script'` runs in `powershell.exe` receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON` (`$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT`) — write valid PowerShell (never POSIX `\"$@\"` or `shasum`). Alternatively, `executionKind: 'agent'` (`agentMode: 'read' | 'organize'`) runs an AI agent loop with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png'])."
+			: "Create or update a custom right-click Magic Action button on files/folders. A Magic Action can run ANY shell command/script (`executionKind: 'script'`) receiving selected files in `\"$@\"` and `DAZZI_FILES_JSON`, OR run an AI agent loop (`executionKind: 'agent'`, `agentMode: 'read' | 'organize'`) with a custom `prompt` on the selected files. Supports filtering by `selection` ('any' | 'single' | 'multiple'), `targetKind` ('any' | 'file' | 'folder'), and `extensions` (e.g. ['pdf', 'png']).",
 		parameters: Type.Object({
 			id: Type.Optional(Type.String({ description: "Stable slug ID (optional on create; derived from label if omitted; pass existing id to update)." })),
 			label: Type.String({ description: "Menu button label shown on right-click (e.g. 'PDF 3줄 요약', '이미지 용량 정리', 'SHA-256 해시 복사')." }),
@@ -965,7 +971,9 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 			executionKind: stringEnum(["script", "agent"], "'script' runs a shell command/code; 'agent' runs a pi AI agent loop on the target files."),
 			command: Type.Optional(
 				Type.String({
-					description: "Required when executionKind='script'. Shell command to execute. Selected file paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON (JSON string array), DAZZI_FILE (first path), DAZZI_FILE_COUNT.",
+					description: isWindows
+						? "Required when executionKind='script'. Windows PowerShell script/command to execute in powershell.exe. Selected file paths are passed in PowerShell's $args array (e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args) and in env vars $env:DAZZI_FILES_JSON (JSON string array), $env:DAZZI_FILE (first path), $env:DAZZI_FILE_COUNT. Do NOT use POSIX \"$@\" or $VAR syntax."
+						: "Required when executionKind='script'. Shell command to execute in /bin/sh. Selected file paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON (JSON string array), DAZZI_FILE (first path), DAZZI_FILE_COUNT.",
 				}),
 			),
 			agentMode: Type.Optional(
@@ -1092,8 +1100,12 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 	};
 }
 
-function systemPrompt(language: ReplyLanguage): string {
+function systemPrompt(language: ReplyLanguage, platform: NodeJS.Platform = process.platform): string {
 	const replyLang = LANGUAGE_NAME[language];
+	const scriptDetail =
+		platform === "win32"
+			? "`executionKind: 'script'` runs in Windows `powershell.exe`, receiving selected file paths in `$args` and `$env:DAZZI_FILES_JSON`, `$env:DAZZI_FILE`, `$env:DAZZI_FILE_COUNT` (write valid Windows PowerShell such as `Get-FileHash -Algorithm SHA256 -LiteralPath $args`; NEVER use POSIX `\"$@\"` or `$DAZZI_FILE`)"
+			: "`executionKind: 'script'` runs in `/bin/sh`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`";
 	return [
 		"You are Dazzi's dedicated App Customization Assistant (`app-customizer`), embedded inside Settings.",
 		`Always reply in ${replyLang}, concisely and warmly.`,
@@ -1102,8 +1114,8 @@ function systemPrompt(language: ReplyLanguage): string {
 		"- You customize Dazzi's own app settings (stored in `settings-state.json`, completely separate from the AutoRAG index config).",
 		"- **Finder Sidebar (`update_sidebar`)**: show or hide items (`place:recents`, `place:home`, `place:applications`, `place:desktop`, `place:documents`, `place:downloads`, `place:music`, `place:movies`, `place:pictures`, `place:trash`, cloud drives, mounted volumes, tags), reorder Favorites or sections, pin or remove custom folders, or reset the sidebar to default.",
 		"- **File Right-Click Context Menu (`update_context_menu`, `upsert_magic_action`, `delete_magic_action`)**:",
-		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
-		"  - Create, update, or remove custom **Magic Actions** (`upsert_magic_action` / `delete_magic_action`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (`executionKind: 'script'`, receiving selected files via `\"$@\"`, `DAZZI_FILES_JSON`, `DAZZI_FILE`, `DAZZI_FILE_COUNT`) OR run a pi AI agent loop (`executionKind: 'agent'`, `agentMode: 'read'` for analysis/summary or `'organize'` for file creation/editing/conversion/shell actions, with `useSkills` and `useMcp` both enabled `true` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn `useSkills: false` or `useMcp: false` off) with conditions (`selection: 'single' | 'multiple' | 'any'`, `targetKind: 'file' | 'folder' | 'any'`, `extensions: ['pdf', ...]`).",
+		"  - Show or hide built-in right-click items (`builtin:quickLook`, `builtin:open`, `builtin:openWith`, `builtin:showInEnclosingFolder`, `builtin:toggleIndex`, `builtin:copy`, `builtin:paste`, `builtin:cut`, `builtin:duplicate`, `builtin:rename`, `builtin:copyPath`, `builtin:newFolder`, `builtin:pinToSidebar`, `builtin:extract`, `builtin:compress`, `builtin:compress7z`, `builtin:share`, `builtin:services`, `builtin:trash`) or whole sections (`open`, `magic`, `index`, `clipboard`, `actions`, `services`, `trash`), and reorder sections.",
+		`  - Create, update, or remove custom **Magic Actions** (\`upsert_magic_action\` / \`delete_magic_action\`) that appear when right-clicking files or folders! A Magic Action can run ANY shell command/script (${scriptDetail}) OR run a pi AI agent loop (\`executionKind: 'agent'\`, \`agentMode: 'read'\` for analysis/summary or \`'organize'\` for file creation/editing/conversion/shell actions, with \`useSkills\` and \`useMcp\` both enabled \`true\` by default so the Magic Action shares AutoRAG Agent's Skills and connected MCP servers such as Aside MCP unless the user asks to turn \`useSkills: false\` or \`useMcp: false\` off) with conditions (\`selection: 'single' | 'multiple' | 'any'\`, \`targetKind: 'file' | 'folder' | 'any'\`, \`extensions: ['pdf', ...]\`).`,
 		"- **General App Preferences (`update_general_settings`)**: adjust `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `autoInstallUpdates`.",
 		"",
 		"## Non-Negotiable Invariants: Locked Core Items & Shortcuts",
@@ -1122,10 +1134,11 @@ function systemPrompt(language: ReplyLanguage): string {
 export function appCustomizerProfile(input: {
 	readonly language: ReplyLanguage;
 	readonly toolkit: AppCustomizerToolkit;
+	readonly platform?: NodeJS.Platform;
 }): AgentProfile {
 	return {
 		id: "app-customizer",
-		systemPrompt: systemPrompt(input.language),
+		systemPrompt: systemPrompt(input.language, input.platform),
 		tools: [],
 		customTools: withIntentTools(input.toolkit.tools, { language: input.language }),
 		thinking: "low",

@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { IndexActivityItem, IndexActivitySnapshot } from "../../../../shared/index-activity-contract";
 import { dismissIndexProblem, retryIndexProblem, useIndexProblem } from "../../hooks/useIndexProblem";
+import { IndexProgressDetail } from "../IndexProgressDetail";
 import { describeIndexActivity, itemName, itemPhaseText } from "../../state/index-activity";
 import { describeIndexProblem, type IndexProblemView } from "../../state/index-problem";
 import { requestSettingsCategory } from "../../state/settings-navigation";
@@ -86,6 +87,7 @@ export function IndexActivityCard({ snapshot }: { readonly snapshot: IndexActivi
 				{view.percent !== null && view.tone === "run" ? <span className="settings-list-meta">{view.percent}%</span> : null}
 			</div>
 			<ProgressBar percent={view.percent} tone={view.tone} label={view.headline} />
+			{snapshot.progress !== null && view.tone === "run" ? <IndexProgressDetail detail={snapshot.progress} /> : null}
 			{snapshot.items.length > 0 ? (
 				<ul className="settings-activity-items">
 					{snapshot.items.map((item) => (

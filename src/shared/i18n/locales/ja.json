@@ -62,7 +62,6 @@
     "group": "グループ",
     "showInspector": "情報パネルを表示",
     "hideInspector": "情報パネルを非表示",
-    "toggleInspector": "情報パネルの切り替え",
     "share": "共有",
     "putBack": "元に戻す",
     "emptyTrash": "ゴミ箱を空にする"
@@ -213,6 +212,8 @@
     "putBackCount": "{{count}}個の項目を元に戻す",
     "emptyTrash": "ゴミ箱を空にする",
     "newFolder": "新規フォルダー",
+    "pinToSidebar": "サイドバーに固定",
+    "unpinFromSidebar": "サイドバーから削除",
     "new": "新規作成",
     "trashShort": "ゴミ箱"
   },
@@ -323,6 +324,25 @@
     "dropPrompt": "ここにドラッグしてAIに質問",
     "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
     "steerSend": "検索を修正",
+    "voiceStart": "音声で入力",
+    "voiceStop": "録音を終了して文字起こし",
+    "voiceCancel": "録音をキャンセル",
+    "voiceSend": "録音を終了して送信",
+    "voiceTranscribing": "文字起こし中…",
+    "voiceNoSpeech": "音声が聞き取れませんでした。もう一度お話しください。",
+    "voiceUnavailable": "このデバイスではマイクを使用できません。",
+    "voiceFailed": "音声を文字起こしできませんでした: {{message}}",
+    "micPermission": {
+      "title": "マイクへのアクセスを許可してください",
+      "body": "音声で質問するには、Dazziがマイクを使える必要があります。録音はマイクボタンを押したときだけ行います。",
+      "stepsMac": "システム設定 › プライバシーとセキュリティ › マイク で Dazzi をオンにしてください。",
+      "stepsWindows": "設定 › プライバシーとセキュリティ › マイク で「マイクへのアクセス」と「デスクトップ アプリがマイクにアクセスできるようにする」をオンにしてください。",
+      "openMac": "システム設定を開く",
+      "openWindows": "Windowsの設定を開く",
+      "notNow": "後で",
+      "waiting": "設定でオンにして Dazzi に戻ると、すぐに録音を始めます。",
+      "stillDenied": "マイクはまだオフです。設定でオンにしてから戻ってください。"
+    },
     "steerHintLead": "検索中も入力できます",
     "steerHintEnter": "修正",
     "steerHintAltEnter": "次の質問",
@@ -640,6 +660,50 @@
       "finalizing": "仕上げ中"
     }
   },
+  "indexProgress": {
+    "stage": {
+      "discover": "探索",
+      "parse": "解析",
+      "embed": "埋め込み",
+      "keyword": "キーワードインデックス",
+      "finalize": "仕上げ"
+    },
+    "line": {
+      "discover": "ファイルを探しています",
+      "finalize": "検索インデックスを仕上げています",
+      "counts": "{{stage}} {{done}} / {{total}} 件のファイル ({{percent}}%)",
+      "countsOpen": "{{stage}} {{done}} 件のファイル (全体数を確認中)"
+    },
+    "skipped": "スキップ {{count}} 件",
+    "failed": "失敗 {{count}} 件",
+    "bytes": "容量 {{done}} / {{total}} ({{percent}}%)",
+    "bytesDone": "容量 {{done}} 処理済み",
+    "eta": {
+      "calculating": "{{stage}} 残り時間を計算中",
+      "remaining": "{{stage}} 残り約 {{duration}}"
+    },
+    "duration": {
+      "minutes": "{{count}}分",
+      "hours": "{{hours}}時間",
+      "hoursMinutes": "{{hours}}時間{{minutes}}分",
+      "days": "{{count}}日"
+    },
+    "ago": {
+      "now": "たった今",
+      "seconds": "{{count}}秒前",
+      "minutes": "{{count}}分前",
+      "hours": "{{count}}時間前"
+    },
+    "activity": {
+      "lastDone": "最後の完了 {{ago}}",
+      "none": "まだ完了したファイルはありません",
+      "heartbeat": "稼働シグナル {{ago}}"
+    },
+    "warn": {
+      "stalledAlive": "{{minutes}}分間、完了したファイルがありません。稼働シグナルは届いているため、大きなファイルを処理中かもしれません。",
+      "stalledSilent": "{{minutes}}分間、完了したファイルがなく、稼働シグナルも途絶えました。停止している可能性があります。"
+    }
+  },
   "indexProblem": {
     "retrying": "再試行しています",
     "fixEmbedding": "埋め込み方式を変更",
@@ -769,9 +833,9 @@
       "welcome": "続ける",
       "permissions": "続ける",
       "account": "続ける",
-      "folders": "フォルダを選んで続ける",
-      "smartScan": "おすすめの範囲を見る",
-      "smartScope": "範囲を確定して続ける",
+      "folders": "続ける",
+      "smartScan": "続ける",
+      "smartScope": "この範囲で続ける",
       "embedding": "続ける",
       "sources": "続ける",
       "model": "続ける",
@@ -779,10 +843,7 @@
       "indexing": "続ける"
     },
     "welcome": {
-      "eyebrow": "Pro 7日間無料トライアル",
-      "title": "ファイルに\n聞いてみましょう",
-      "lead": "フォルダを開いて探し回る必要はありません。Dazziが文書の中身を読み、根拠とともに答えます。",
-      "note": "既定ではローカル処理です。一部の機能は、使用時に内容が Dazzi のサーバーやモデルプロバイダーに送信されることがあります。詳しくはプライバシーポリシーをご確認ください。",
+      "title": "ファイル探しは、もう{{app}}にお任せ",
       "usageStats": "サービス改善のため、匿名の利用統計を送信します。ファイル・検索語・文書の内容は含まれないよう設計されており、設定からいつでもオフにできます。",
       "errorReports": "アプリがクラッシュしたりインデックス作成に失敗したときに、問題の修正に役立てるためエラーレポートを送信します。ファイルパス・ファイル名・文書の内容は含まれないよう設計されており、設定からいつでも変更できます。",
       "usageStatsPolicy": "プライバシーポリシー",
@@ -790,38 +851,24 @@
         "user": "前四半期のコストはなぜ減ったの？",
         "replyLead": "マーケティング費用は前四半期より",
         "replyTail": "減りました。"
-      },
-      "evidence": {
-        "revenue": "売上レポート",
-        "revenueQuote": "“前年比18%増…”",
-        "budget": "予算サマリー",
-        "budgetQuote": "“第3四半期の運営費…”"
       }
     },
     "feature": {
       "ai": {
         "title": "AI検索",
-        "sub": "回答と根拠を一度に"
-      },
-      "citation": {
-        "title": "根拠の引用",
-        "sub": "回答の出典を確認"
+        "sub": "気になることはまず質問してください。出典を添えて答えます。"
       },
       "versions": {
-        "title": "バージョンのまとめ",
-        "sub": "重複した文書を整理"
-      },
-      "quicklook": {
-        "title": "クイックルック",
-        "sub": "開く前にプレビュー"
+        "title": "バージョン整理",
+        "sub": "final_本当に最終.docx のようなファイルも自動で整理します。"
       },
       "sources": {
-        "title": "データソース",
-        "sub": "接続先もまとめて検索"
+        "title": "アプリ連携",
+        "sub": "Notion、Slack、GitHub などに散らばった資料もまとめて探します。"
       },
       "hybrid": {
         "title": "ハイブリッド検索",
-        "sub": "キーワードと意味を併用し、リランキングで並べ替え"
+        "sub": "言葉が同じでなくても、意味が近ければ見つけます。"
       }
     },
     "hybrid": {
@@ -911,95 +958,81 @@
       }
     },
     "smartScan": {
-      "title": "フォルダを探索中…",
-      "done": "探索が終わりました",
-      "idle": "フォルダを探索しますか？",
-      "failedTitle": "探索できませんでした",
-      "lead": "AIがおすすめのフォルダのファイル数を数えています",
-      "looking": "確認中: {{path}}",
-      "cancel": "キャンセルして自分で選ぶ",
-      "note": "除外するとよいサブフォルダが{{count}}個見つかりました。次の画面で確認してください。",
-      "noteNone": "除外するフォルダはありません。選択したフォルダは文書が中心のようです。",
-      "failed": "分析できませんでした。範囲は次の画面で自分で選べます。",
+      "title": "除外するサブフォルダを探索します",
+      "done": "探索が完了しました",
+      "failedTitle": "探索に失敗しました",
+      "lead": "ファイルの内容は開かず、フォルダの名前と構成だけを確認します。",
+      "back": "フォルダの選択に戻る",
+      "manual": "おすすめなしで自分で選ぶ",
       "retry": "もう一度試す",
-      "skipped": "AI探索なしで範囲を自分で選べます。",
-      "start": "AIで探索する"
+      "looking": "確認中: {{path}}"
     },
     "folders": {
       "eyebrow": "インデックス作成の範囲",
-      "title": "AIが読むフォルダを選んでください",
-      "lead": "ここで選んだフォルダだけがAI検索に含まれます。範囲は後から追加したり減らしたりできます。",
-      "suggested": "おすすめの場所",
+      "title": "インデックスするフォルダを選択してください",
+      "lead": "選択したフォルダ内の文書をAIが検索できるように準備します。",
+      "suggested": "おすすめフォルダ",
       "selectAll": "すべて選択",
-      "add": "別のフォルダを追加",
+      "add": "フォルダを直接追加",
       "stats": "{{files}}件 · {{size}} · 約{{minutes}}分",
       "scanning": "集計中…",
       "scanError": "読み取れません",
-      "summary": "{{folders}}フォルダ · {{files}}ファイル · {{size}}",
-      "summaryNote": "node_modules · .git · 50 MiBを超えるファイルは自動的に除外されます。",
-      "localEta": "ローカル（このMac）約{{minutes}}分",
-      "cloudEta": "リモート 約{{minutes}}分",
-      "warning": "範囲が広すぎます。サブフォルダを選ぶか、リモート埋め込みを選ぶと最初の結果をより早く確認できます。",
-      "localEtaPc": "ローカル（このPC）約{{minutes}}分"
+      "suggestTitle": "除外するサブフォルダをおすすめしてもらう",
+      "suggestLine": "続けると、選んだフォルダのサブフォルダを AI が確認し、除外する候補をおすすめします。結果は次の画面で確認します。"
     },
     "smartScope": {
       "policy": {
-        "title": "スマートインデックスの範囲",
-        "tag": "AI分類済み",
-        "lead": "左の青い上位フォルダはすべて含め、右の赤いサブフォルダと .* 隠しフォルダはインデックスから除外します。",
-        "eta": "約{{minutes}}分",
-        "etaSaved": "{{percent}}%短縮",
-        "rescan": "再探索",
-        "auto": ".* 隠しフォルダ(.git, .obsidian, .cache)とnode_modulesは常に除外"
+        "title": "インデックスの範囲を確認してください",
+        "lead": "フォルダをドラッグして含めたり除外したりできます。",
+        "eta": "約{{minutes}}分"
       },
       "include": {
         "title": "含める上位フォルダ",
-        "meta": "{{folders}}個のフォルダ · {{files}}ファイル · {{size}}",
-        "remove": "含めない",
-        "addable": "追加できます:",
-        "allIn": "おすすめの上位フォルダはすべて含まれています"
+        "meta": "{{count}} 個のフォルダ",
+        "all": "すべて"
       },
       "exclude": {
         "title": "除外するサブフォルダ",
-        "meta": "{{count}}個のパス · −{{size}}",
-        "add": "除外フォルダを追加",
-        "restore": "除外を解除",
-        "restored": "除外解除済み:",
+        "group": "{{name}} ({{count}})",
+        "noDocs": "文書なし",
         "refused": {
           "isRoot": "選択したフォルダ自体は除外できません。その中のサブフォルダを選んでください。",
           "outside": "選択したフォルダ内のサブフォルダのみ除外できます。",
           "covered": "すでに除外されているフォルダです。"
         },
-        "noDocs": "文書なし"
+        "empty": "除外したサブフォルダはありません。\nフォルダをドラッグして除外できます。",
+        "aiTag": "AI おすすめ"
       },
       "criteria": {
-        "show": "AIの判断基準を見る",
-        "hide": "判断基準を閉じる",
-        "looked": "AIが見たもの: 選択したフォルダ内のファイル名・フォルダ名、形式ごとのファイル数、ファイルがいつ変更されたか。ファイルの中身は開きません。",
-        "keep": "残すもの: 自分で書いた・受け取った・集めた文書(報告書、メモ、契約書、論文、講義資料など)と、プロジェクト・人・日付などの名前のフォルダ。",
-        "leave": "除外するもの: プログラムが副産物として作ったログ、アプリがダウンロードまたはエクスポートしたファイル(メッセンジャーなど)、キャッシュ・一時・クラッシュファイル、ビルドや自動生成の成果物、インストーラーやアプリのバックアップ、似た名前のファイルが一度に溜まったフォルダ。",
-        "code": "コードリポジトリは自分で作ったものでも除外します。ソースファイルが大半で、package.jsonなどの設定ファイルがあるフォルダが該当します。",
-        "doubt": "迷ったら残します。自分の文書を誤って除外すると検索から消えてしまいますが、不要なものを含めても時間がかかるだけだからです。",
-        "you": "決めるのはあなたです。項目にカーソルを合わせて理由を確認し、xで戻したり、自分で追加したりできます。AIの判断は毎回少し異なることがあります。"
-      }
+        "label": "おすすめの基準",
+        "includeTitle": "含める項目",
+        "includeBody": "自分で作成、ダウンロード、収集した文書(報告書、メモ、契約書、論文、講義資料など)と、プロジェクト名・人名・日付などを付けたフォルダ。",
+        "excludeTitle": "除外する項目",
+        "excludeBody": "プログラムが自動生成したログ、アプリがダウンロードまたは書き出したファイル、キャッシュ・一時・競合ファイル、ビルドと自動生成の成果物、インストーラーとアプリのバックアップ、似た名前のファイルが大量にたまったフォルダ。"
+      },
+      "summary": {
+        "eta": "最初のインデックス作成の予想時間",
+        "total": "合計"
+      },
+      "rescan": "もう一度おすすめ"
     },
     "embedding": {
-      "title": "埋め込みをどう使いますか？",
+      "title": "文書をどのように分析しますか？",
       "groupLabel": "埋め込み方法",
       "card": {
         "none": {
           "name": "キーワードで探す",
-          "line": "入力した単語を含む文書だけを探します。"
+          "line": "入力した語句を含む文書だけを探します。"
         },
         "cloud": {
-          "name": "Dazziサーバーで分析",
-          "line": "文書の内容は分析のためにDazziサーバーへ送信されます。"
+          "name": "サーバーで分析",
+          "line": "文書の内容は分析のため AutoRAG サーバーに送信されます。"
         },
         "local": {
           "nameMac": "自分のMacで分析",
           "namePc": "自分のPCで分析",
-          "lineMac": "すべての分析をこのMac内で行います。文書は外部に出ません。",
-          "linePc": "すべての分析をこのPC内で行います。文書は外部に出ません。"
+          "lineMac": "すべての分析をこの Mac 内で行います。\n文書が外部に出ることはありません。",
+          "linePc": "すべての分析をこの PC 内で行います。\n文書が外部に出ることはありません。"
         }
       },
       "meter": {
@@ -1011,7 +1044,7 @@
         "good": "良い"
       },
       "meterAria": "{{label}}: {{value}}",
-      "prepTime": "準備時間",
+      "prepTime": "インデックスの予想時間",
       "about": "約",
       "minutes": "{{minutes}}分",
       "cached": "準備完了",
@@ -1028,7 +1061,6 @@
     "sources": {
       "title": "このPCで見つかったアプリも検索範囲に含めますか？",
       "checking": "追加できるソースを確認しています…",
-      "empty": "接続済みのソースが見つかりませんでした。後で設定から接続できます。",
       "connectMore": "準備が必要なソースは後で設定から接続できます。",
       "name": {
         "kakao": "KakaoTalk",
@@ -1048,24 +1080,22 @@
         "telegram": "Telegramアプリのデータを検出",
         "whatsapp": "会話 {{chats}}件 · メッセージ {{messages}}件",
         "mailcrawl": "メールアカウント {{accounts}}件のログインを確認",
-        "github": "ログイン済み · IssuesとPull Requests",
+        "github": "gh にログイン済み · Issues と Pull Requests",
         "notion": "Notion アプリのデータを検出",
         "obsidian": "Vault {{vaults}}件を検出"
       }
     },
     "plan": {
-      "eyebrow": "プラン",
-      "title": "どのように使いますか？",
+      "title": "どの料金プランを使いますか？",
       "titleReady": "プランの準備ができました",
-      "lead": "プランを選んでください。設定でいつでも変更できます。",
       "leadCloud": "リモート埋め込みはProまたはMaxで利用できます。Proは7日間無料で始められます。",
       "leadCloudReady": "リモート埋め込みを利用できます。そのまま進んでください。",
       "badgeTrial": "トライアル中",
       "badgeSubscribed": "購読中",
       "perMonth": "/ 月",
-      "continue": "このプランで続ける",
-      "checkoutPro": "Proの7日間無料トライアルを開始",
-      "checkoutAir": "Airの決済ページを開く",
+      "continue": "続ける",
+      "checkoutPro": "7日間の無料トライアルを開始",
+      "checkoutAir": "Air で続ける",
       "noteHeld": "このアカウントで利用中",
       "noteTrialing": "トライアル中 · {{date}}まで",
       "noteCancelScheduled": "解約予定 · {{date}}まで利用可",
@@ -1075,58 +1105,94 @@
         "free": {
           "name": "Free",
           "price": "無料",
-          "tag": "Dazziを試したい方向け",
-          "training": "サービス向上のため入出力を利用する場合があります"
+          "tag": "登録してすぐに試してみたい方へ",
+          "training": "サービス向上のため入出力を利用する場合があります",
+          "features": "ファイルの中身まで理解する AI 検索\n話しかけるように質問できるファイルチャット\n軽量なチャットモデル 5 種\n毎週補充される無料クレジット"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "月額$4 · いつでも解約可",
-          "tag": "すでに他のAIサブスクリプションを使っている方向け"
+          "tag": "すでに使っている AI サブスクリプションを Dazzi につなぎたい方へ",
+          "features": "Free のすべての機能 +\n使っている AI サブスクリプションのモデルでチャット\n検索に必要な AI は Dazzi が提供\nFree より多い週間クレジット"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "カード登録で7日間無料、その後月額$20",
-          "tag": "他のAIサブスクリプションなしでDazziをそのまま使いたい方向け",
-          "trial": "7日間無料トライアル"
+          "tag": "他の AI サブスクリプションなしで Dazzi だけを使いたい方へ",
+          "trial": "7日間無料トライアル",
+          "features": "Air のすべての機能 +\nサブスクリプション接続なしで高性能チャットモデルを利用\nAir より速いリクエストと多いクレジット\n7 日間の無料トライアル"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "月額$200 · いつでも解約可",
-          "tag": "たくさん使う方向け"
+          "tag": "大容量のフォルダと複数の作業を一度に進めるパワーユーザーの方へ",
+          "features": "Pro のすべての機能 +\nMax 専用のプレミアムモデル\n長い作業に合わせた最も多い週間クレジット"
         },
         "byok": {
           "name": "BYOK",
           "price": "API費用のみ",
-          "tag": "自分のキーで直接接続"
+          "tag": "自分の API キーで直接接続"
         }
       },
-      "checkoutMax": "Maxの決済ページを開く",
+      "checkoutMax": "Max で続ける",
       "promo": {
         "prompt": "プロモーションコードをお持ちですか？",
         "label": "プロモーションコード",
         "invalid": "英数字、-、_のみ使えます。"
-      }
+      },
+      "tierLabel": "料金プラン",
+      "byokLead": "API キーをお持ちですか？",
+      "byokLink": "自分の API キーで直接接続する",
+      "startFree": "無料で始める"
     },
     "model": {
-      "eyebrow": "AIモデル",
-      "title": "使用するモデルを接続してください",
-      "lead": "APIキー、サブスクリプションのサインイン、お使いのコンピューター上のサーバーなど、すでにお持ちのサービスを接続してから、モデルを選びます。実際の呼び出しに応答するまで次へ進めません。",
-      "note": "設定 → AIモデルに保存されるので、あとからいつでも変更できます。",
+      "title": "使用するAIモデルを接続してください",
+      "lead": "使用中のAIサービスを接続し、役割ごとに使うモデルを指定してください。\nAPIキー、サブスクリプションアカウント、このコンピューターのモデルサーバーを接続でき、設定は後からいつでも変更できます。",
       "connectedTitle": "接続済みのサービス",
-      "none": "接続されたサービスはまだありません。",
+      "rolesTitle": "役割ごとのモデル指定",
       "connect": "サービスを接続",
-      "modelRow": "モデル",
       "pick": "モデルを選択",
-      "needService": "先にサービスを接続してください",
-      "unready": "続けるにはモデルを選択してください。",
-      "ready": "✓ 準備完了 · {{model}} が {{seconds}} 秒で応答しました。",
-      "checking": "{{model}} が応答するか確認しています…",
-      "failed": "{{model}} が応答しませんでした: {{error}}",
-      "readyResumed": "✓ 準備完了 · {{model}} が回答します。",
-      "retry": "もう一度確認"
+      "auto": "自動設定",
+      "searchServices": "サービスを検索",
+      "searchModels": "モデルを検索",
+      "noMatch": "検索結果がありません。",
+      "noModels": "この役割に使えるモデルがまだありません。自動設定を選ぶか、対応するサービスを接続してください。",
+      "addCustom": "OpenAI互換サービスを追加",
+      "addLocal": "このコンピューターのサーバーを追加",
+      "disconnect": "{{name}} の接続を解除",
+      "status": {
+        "checking": "確認中",
+        "ok": "接続に成功しました",
+        "failed": "接続に失敗しました"
+      },
+      "role": {
+        "answer": {
+          "name": "回答の作成",
+          "desc": "質問への回答を作成し、文書を要約します。"
+        },
+        "decomposition": {
+          "name": "質問の分割",
+          "desc": "長く複雑な質問を複数の検索語に分けます。"
+        },
+        "jev": {
+          "name": "検索の判断 (Jev)",
+          "desc": "すぐに回答するか、先に自分の文書を検索するかを決めます。"
+        },
+        "rerank": {
+          "name": "結果の並べ替え",
+          "desc": "質問との関連性が高い文書を上位に表示します。"
+        }
+      },
+      "server": {
+        "body": "社内ゲートウェイや、OpenAI API 形式のサーバーを接続します。\n入力したキーは暗号化してこのコンピューターに保存します。",
+        "namePlaceholder": "表示名",
+        "keyPlaceholder": "サーバーがキーを求める場合のみ入力してください",
+        "urlInvalid": "アドレスが正しくありません。もう一度確認してください。",
+        "keyInvalid": "API キーが正しくありません。もう一度確認してください。"
+      }
     },
     "indexing": {
       "tip": "ヒント",
@@ -1146,20 +1212,12 @@
         "minsync": "埋め込み中",
         "finalizing": "整理中"
       },
-      "phase": {
-        "parsed": "文書の読み込み",
-        "minsync": "埋め込み",
-        "finalizing": "整理"
-      },
       "title": "Dazziがファイルを読み込んでいます",
       "titleDone": "すべての準備が整いました",
       "metaDone": "合計所要時間を確認中",
       "metaTotal": "合計{{minutes}}分",
       "metaFiles": "{{count}}ファイル",
       "metaEstimating": "残り時間を計算中",
-      "metaUnderMinute": "残り1分未満",
-      "metaRemaining": "残り約{{minutes}}分",
-      "metaProgress": "{{processed}} / {{total}}ファイル",
       "gateOkTitle": "もう終了しても大丈夫です",
       "gateOkDetail": "{{files}}ファイルをすべて読み込みました。新しく変更されたファイルはバックグラウンドで続けて読み込みます。",
       "gateTitleMac": "Dazziを終了したりMacの電源を切らないでください",
@@ -1277,13 +1335,6 @@
       "planActive": "{{plan}}プランが有効になりました。",
       "signInFailed": "ログインできませんでした。",
       "notIndexed": "インデックス作成が終わらないとDazziを開けません。"
-    },
-    "roles": {
-      "eyebrow": "検索サポートモデル",
-      "title": "リランカーと判断モデルを選択",
-      "lead": "Dazzi のプランなら標準で提供されます。ご自身のキーを使う場合は、接続したサービスから選ぶか、そのままにしてください。",
-      "note": "設定 → AIモデルに保存されるので、あとからいつでも変更できます。",
-      "unavailable": "接続中のサービスにはこのモデルがありません。設定で OpenRouter を接続すると使えます。"
     }
   },
   "finderComponents": {
@@ -1313,7 +1364,6 @@
     "searchTitle": "\"{{query}}\" を検索",
     "resizeSidebar": "サイドバーのサイズを変更",
     "resizeInspector": "インスペクタのサイズを変更",
-    "composerPlaceholder": "ファイル・メール・メッセンジャー全体に質問（ファイルのドラッグ＆ドロップ可）",
     "removeAttachment": "添付を削除",
     "locationOpenFailed": "\"{{name}}\" の場所を開けませんでした。",
     "ejected": "\"{{name}}\" を取り出しました。",
@@ -1523,7 +1573,8 @@
       "unknownAction": "不明なファイル操作です。",
       "invalidAnchor": "共有位置が正しくありません。",
       "invalidServiceRequest": "サービスリクエストが正しくありません。",
-      "invalidConversionRequest": "変換リクエストが正しくありません。"
+      "invalidConversionRequest": "変換リクエストが正しくありません。",
+      "invalidVoiceRequest": "音声入力のリクエストが正しくありません。"
     },
     "dialogs": {
       "notificationBody": "通知がオンになりました。",
@@ -1637,6 +1688,9 @@
       "readyNotification": "Dazzi {{version}} の準備ができました。アプリを終了するとインストールされます。",
       "availableNotification": "Dazzi {{version}} をダウンロードできます。"
     },
+    "voice": {
+      "unreadableTranscript": "Dazziサービスから、このアプリで読み取れない文字起こしが返されました。"
+    },
     "account": {
       "httpStatus": "Dazziサービスが HTTP {{status}} で応答しました。",
       "callbackDone": "Dazziにログインしました。このタブは閉じて構いません。",
@@ -1696,6 +1750,23 @@
       "noOutput": "{{name}} への変換でファイルが作成されませんでした。",
       "done": "{{name}} — 変換しました",
       "doneFolder": "{{name}} — 変換しました（フォルダに{{count}}個のファイル）"
+    },
+    "remoteGate": {
+      "codeLabel": "ペアリングコード（6桁）",
+      "codeShortError": "6桁の数字をすべて入力してください。",
+      "codeInvalidError": "コードが正しくないか、使用済みまたは期限切れです。ホスト PC で新しいコードを発行してください。",
+      "codeSubmit": "この端末をペアリング",
+      "codeSubmitting": "ペアリング中…",
+      "tokenToggle": "アクセストークンをお持ちですか？",
+      "tokenLabel": "アクセストークン",
+      "tokenSubmit": "ロック解除",
+      "tokenSubmitting": "確認中…",
+      "tokenInvalidError": "アクセストークンが一致しません。",
+      "rateLimitedError": "試行回数が多すぎます。しばらく待ってから再試行してください。",
+      "cookieBlockedError": "セッション Cookie を確認できませんでした。ブラウザーの Cookie 設定を確認してください。"
+    },
+    "smartIndexing": {
+      "cloudReason": "クラウド同期フォルダです。ファイルがオンラインにしかない場合があるため、初期状態では除外しています。含めるには左へドラッグしてください。"
     }
   },
   "quickLook": {
@@ -2069,6 +2140,7 @@
       "sidebar": "サイドバー",
       "contextMenu": "右クリックメニュー",
       "shortcuts": "ショートカット",
+      "remote": "リモートアクセス",
       "ai": "AI モデル",
       "web": "ウェブ検索",
       "indexing": "インデックス作成",
@@ -2090,6 +2162,7 @@
         "sidebar": "サイドバー お気に入り クラウド 場所 タグ フォルダ 非表示 表示 並び順 カスタム AI",
         "contextMenu": "右クリック コンテキストメニュー マジックアクション スクリプト 自動化 エージェント 拡張子 タグ カスタム AI",
         "shortcuts": "ショートカット キーボード ホットキー キーバインド 記録 カスタム AI shortcut hotkey",
+        "remote": "リモートアクセス スマホ モバイル ブラウザー ペアリング コード QR Cloudflare トンネル ドメイン 端末 remote",
         "ai": "LLM モデル プロバイダ サービス API キー サブスクリプション 埋め込み Jev 質問分解 並べ替え",
         "web": "ウェブ検索 インターネット 検索 サービス ページ読み取り",
         "indexing": "更新 同期 増分 インデックス 更新間隔 sync",
@@ -2139,24 +2212,22 @@
       "emptyConnections": "接続済みアプリの添付フォルダはありません。",
       "emptyLocations": "マウントされたディスクはありません。",
       "emptyTags": "ピン留めされた Finder タグはありません。",
-      "modal": {
+      "assistant": {
         "title": "AI アプリカスタムアシスタント",
-        "subtitle": "希望するサイドバーの構成や画面設定を自由に入力してください。",
         "newChat": "新しい会話",
         "emptyTitle": "どのようにカスタマイズしますか？",
         "emptyDesc": "表示するフォルダ、セクションの順序、画面モードを伝えると即座に反映されます。",
-        "promptMinimal": "ミュージック、ムービー、ピクチャ、アプリケーションをサイドバーから隠して",
+        "promptHideMedia": "仕事で使わないミュージック、ムービー、ピクチャのフォルダをサイドバーから隠して",
         "promptReorder": "ダウンロードと書類をお気に入りの一番上に移動して",
-        "promptCleanSections": "クラウドとタグのセクションを隠してすっきり整理して",
-        "promptReset": "サイドバーの構成を初期状態に戻して",
+        "promptReset": "サイドバーを最初の状態に戻して",
         "thinking": "設定を確認中",
-        "placeholder": "例：ミュージックとムービーを隠してダウンロードを一番上にして…",
         "send": "送信",
         "stop": "停止",
-        "lockedNotice": "AI 検索と自動化は必須機能のため常にサイドバーに表示されます。",
         "openAiSettings": "AI モデル設定を開く",
-        "unavailable": "アプリカスタムサービスを利用できません。"
-      }
+        "unavailable": "アプリカスタムサービスを利用できません。",
+        "inputLabel": "アシスタントに依頼"
+      },
+      "addCustomPathPlaceholderWindows": "~\\Projects または C:\\Work"
     },
     "contextMenu": {
       "description": "ファイルやフォルダを右クリックしたときに表示する項目と、独自のマジックアクション（スクリプトやAIエージェントループ）を構成します。",
@@ -2217,6 +2288,7 @@
         "rename": "名称変更",
         "copyPath": "パスをコピー",
         "newFolder": "新規フォルダ",
+        "pinToSidebar": "サイドバーに固定 / 削除",
         "extract": "展開",
         "compress": "圧縮 (ZIP)",
         "compress7z": "7zで圧縮",
@@ -2252,19 +2324,18 @@
         "targetKindField": "対象の種類",
         "extensionsField": "拡張子フィルタ（任意）",
         "extensionsPlaceholder": "空欄ですべて対象 · 例: pdf, docx, md",
-        "save": "保存"
+        "save": "保存",
+        "commandPlaceholderWindows": "例：Get-FileHash -Algorithm SHA256 -LiteralPath $args または python ~\\scripts\\process.py @args",
+        "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。"
       },
-      "modal": {
+      "assistant": {
         "title": "AI 右クリックメニュー＆マジックアクションアシスタント",
-        "subtitle": "追加したい右クリックボタン、スクリプト、AIファイル操作を自由に入力してください。",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
-        "emptyDesc": "特定の拡張子や複数ファイルで動くAIアクションやスクリプトを作成したり、不要なメニューを整理できます。",
-        "promptSummarizePdf": "単一のPDFやMarkdownファイルを右クリックしたときに3行で要約するマジックアクションを追加して",
-        "promptBatchScript": "複数ファイルを選択して右クリックしたときにSHA-256ハッシュを計算するスクリプトアクションを作って",
-        "promptCleanMenu": "右クリックメニューから7zで圧縮、パスをコピー、カットを隠して整理して",
-        "promptReset": "右クリックメニューの構成を初期状態に戻して",
-        "placeholder": "例：複数の画像を右クリックしたら解像度とサイズを表にまとめるマジックアクションを作って…",
-        "lockedNotice": "タグ項目は必須機能のため常に維持され、標準ショートカットもそのまま保持されます。"
+        "emptyDesc": "ファイルを右クリックしたときに要約・比較・整理をしてくれる自分だけのメニューを作ったり、使わない項目を隠したりできます。",
+        "promptSummarizeDoc": "PDFやWord文書を右クリックすると要点を3行でまとめるマジックアクションを作って",
+        "promptCompareFiles": "2つのファイルを選んで右クリックすると違いをまとめるマジックアクションを作って",
+        "promptPaperToDiscord": "PDFの論文を要約して自分のDiscordの #論文要約 チャンネルに送り、要約スライドを作って「論文要約」フォルダに入れるマジックアクションを作って",
+        "promptMaskToPdf": "hwp・docxファイルの仮名加工情報をすべてマスキングしてからPDFに変換して保存するマジックアクションを作って"
       }
     },
     "shortcuts": {
@@ -2332,18 +2403,15 @@
         "aiNewChat": "新しいチャット",
         "aiToggleHistory": "チャット履歴を切替"
       },
-      "modal": {
+      "assistant": {
         "title": "AI ショートカットカスタムアシスタント",
-        "subtitle": "変更したいショートカットや入れ替えを自由に入力してください。",
         "emptyTitle": "どのショートカットを変更しますか？",
         "emptyDesc": "Dazzi に用意された26個の標準ショートカットの範囲内で自由に変更・入れ替えができます。",
-        "promptMacFinder": "Mac Finder の標準ショートカット構成にして",
-        "promptWindowsExplorer": "Windows エクスプローラーのショートカット構成に変えて",
-        "promptSwap": "複製と名前を変更のショートカットを入れ替えて",
-        "promptReset": "すべてのショートカットを初期状態に戻して",
+        "promptMacFinder": "Mac の Finder と同じショートカットで使えるようにして",
+        "promptWindowsExplorer": "Windows のエクスプローラーで使っていたショートカットにして",
+        "promptRenameF2": "名前の変更を F2 キーでできるようにして",
+        "promptReset": "すべてのショートカットを最初の状態に戻して",
         "thinking": "ショートカットを確認中",
-        "placeholder": "例：名前を変更を F2 に、検索欄フォーカスを Cmd+P にして…",
-        "lockedNotice": "標準で用意されたショートカット一覧内でのみ変更でき、Esc と単独の矢印キーは固定されます。",
         "openAiSettings": "AI モデル設定を開く",
         "unavailable": "ショートカットカスタムサービスを利用できません。"
       }
@@ -2361,20 +2429,6 @@
       "finderDesc": "ファイル閲覧画面の動作です。",
       "showHiddenFiles": "隠しファイルを表示",
       "showHiddenFilesHint": "ドット(.)で始まるシステムファイルを Finder に表示します。",
-      "remoteTitle": "リモートアクセス",
-      "remoteSecurityHint": "HTTP は暗号化されません。信頼できるネットワークまたは暗号化されたトンネルでのみ使用してください。",
-      "remoteAccess": "リモートアクセスを許可",
-      "remoteAccessHint": "別の端末のブラウザーからこの Dazzi を開きます。",
-      "remoteAddress": "ブラウザーのアドレス",
-      "remoteStopped": "停止中",
-      "remotePort": "ポート",
-      "remotePortHint": "既定値は 47833 です。0 を指定すると空いているポートを選びます。変更後は Dazzi を再起動してください。",
-      "remoteCopyAddress": "アドレスをコピー",
-      "remoteAddressCopied": "コピーしました",
-      "remoteCopyError": "アドレスをコピーできませんでした。選択して手動でコピーしてください。",
-      "remoteStatusError": "リモートアクセスの状態を確認できませんでした：{{error}}",
-      "remoteSettingsError": "リモートアクセスの設定を保存できませんでした：{{error}}",
-      "remoteLimitations": "ファイルを外へドラッグするとダウンロードされます。Finder で表示とアプリケーションで開く機能は使えません。ファイルのクリップボードはブラウザーのセッションごとに独立しています。アップロードは Cmd+Z で取り消せません。",
       "launchTitle": "起動と更新",
       "launchAtLogin": "ログイン時に自動起動",
       "launchAtLoginHint": "コンピュータの起動時に Dazzi をバックグラウンドで開始します。",
@@ -2404,7 +2458,93 @@
       "docLanguagesTitle": "文書の言語",
       "docLanguagesDesc": "文書を読み込み・検索する際に優先する言語です。",
       "docLanguagesHint": "複数選択できます。",
-      "osMenuError": "右クリックメニューを設定できませんでした：{{error}}"
+      "osMenuError": "右クリックメニューを設定できませんでした：{{error}}",
+      "quickSearchTitle": "クイック検索",
+      "quickSearchDesc": "どのアプリを使っていても、ショートカットでDazziの検索バーを開きます。",
+      "quickSearchEnabled": "クイック検索のショートカットを使う",
+      "quickSearchEnabledHint": "{{shortcut}}で検索バーが開きます。もう一度押すかEscで閉じます。",
+      "quickSearchShortcut": "ショートカット",
+      "quickSearchShortcutHint": "クリックしてから新しいキーの組み合わせを押してください。",
+      "quickSearchNeedsModifier": "すべてのアプリで使うショートカットのため、⌘/Ctrlまたは⌥/Altと一緒に押してください。",
+      "quickSearchTaken": "{{shortcut}}はほかのアプリかシステムが使用中です。別の組み合わせを選んでください。"
+    },
+    "remote": {
+      "description": "別の端末のブラウザーからこの Dazzi を開き、接続できる端末を管理します。",
+      "unavailable": "このウィンドウではリモートアクセスを設定できません。",
+      "securityHint": "HTTP は暗号化されません。信頼できるネットワークまたは暗号化されたトンネルでのみ使用してください。",
+      "access": "リモートアクセスを許可",
+      "address": "ブラウザーのアドレス",
+      "stopped": "停止中",
+      "port": "ポート",
+      "portHint": "既定値は 47833 です。0 を指定すると空いているポートを選びます。変更するとすぐにそのポートで再開します。",
+      "copyAddress": "アドレスをコピー",
+      "addressCopied": "コピーしました",
+      "copyError": "アドレスをコピーできませんでした。選択して手動でコピーしてください。",
+      "statusError": "リモートアクセスの状態を確認できませんでした：{{error}}",
+      "settingsError": "リモートアクセスの設定を保存できませんでした：{{error}}",
+      "pairStart": "ペアリングコードを発行",
+      "pairNewCode": "新しいコード",
+      "pairExpires": "残り {{time}}",
+      "pairExpired": "コードの有効期限が切れました。",
+      "pairQrLabel": "コード {{code}} のペアリング QR コード",
+      "pairLinkCopy": "ペアリングリンクをコピー",
+      "pairLinkCopied": "リンクをコピーしました",
+      "tunnelStart": "トンネルを開始",
+      "tunnelStarting": "接続中…",
+      "tunnelStop": "トンネルを停止",
+      "devicesTitle": "ペアリング済み端末",
+      "devicesEmpty": "ペアリング済みの端末はまだありません。",
+      "deviceCurrent": "この端末",
+      "deviceLastSeen": "最終アクセス: {{when}}",
+      "deviceJustNow": "たった今",
+      "deviceMinutesAgo": "{{count}}分前",
+      "deviceHoursAgo": "{{count}}時間前",
+      "deviceNever": "記録なし",
+      "deviceRename": "{{name}} の名前を変更",
+      "deviceNameInput": "端末名",
+      "deviceSave": "保存",
+      "deviceCancel": "キャンセル",
+      "deviceRevoke": "解除",
+      "deviceRevokeConfirm": "解除を確認",
+      "devicesRevokeAll": "すべて解除",
+      "devicesRevokeAllConfirm": "すべて解除を確認",
+      "viaToken": "アクセストークンで接続中です。",
+      "viaDevice": "ペアリング済み端末として接続中です。",
+      "accessHint": "オンにすると、接続方法とペアリング済み端末が下に表示されます。",
+      "starting": "リモートアクセスサーバーを起動しています…",
+      "connectTitle": "端末を接続",
+      "connectHint": "接続経路を選び、新しい端末でそのアドレスを開いてからペアリングコードを入力します。",
+      "routeLabel": "1. 接続経路",
+      "routeLan": "同じ Wi-Fi",
+      "routeInternet": "インターネット",
+      "routeAddress": "接続アドレス",
+      "routeLanHint": "このコンピュータと同じ Wi-Fi や社内ネットワークの端末がそのまま開けるアドレスです。",
+      "lanMissing": "このコンピュータの Wi-Fi/LAN アドレスが見つかりません。ネットワーク接続を確認してください。",
+      "pairTitle": "2. ペアリングコード",
+      "pairHint": "どの経路でも端末ごとに最初の一度だけ必要です。QR コードには上のアドレスとコードが含まれます。",
+      "pairNoAddress": "上の経路にアドレスがあると QR コードが表示されます。コードは今でも直接入力できます。",
+      "details": "詳細",
+      "addressHint": "このコンピュータで Dazzi を開くアドレスです。アクセストークンを含むため共有しないでください。",
+      "tunnelQuickTitle": "Cloudflare 一時アドレス",
+      "tunnelCustomTitle": "独自ドメイン: {{hostname}}",
+      "tunnelQuickHint": "アカウントなしで https://….trycloudflare.com 形式の一時アドレスを作成します。トンネルを開始するたびにアドレスが変わり、Cloudflare は稼働を保証しません。",
+      "tunnelCustomHint": "Cloudflare に登録した独自ドメインで接続します。再起動してもアドレスは変わりません。",
+      "tunnelMissingBinary": "このコンピュータに cloudflared がありません。cloudflared をインストールすると（例: brew install cloudflared）すぐに使えます。",
+      "tunnelErrLogin": "独自ドメインを使うには先に Cloudflare にログインしてください。",
+      "tunnelErrServer": "リモートアクセスサーバーが動作していません。",
+      "tunnelErrTimeout": "トンネルの接続が時間内に完了しませんでした。もう一度お試しください。",
+      "tunnelErrDisconnected": "トンネルの接続が切れました。もう一度開始してください。",
+      "tunnelErrExited": "cloudflared が終了しました: {{reason}}",
+      "tunnelErrSetup": "トンネルを準備できませんでした: {{reason}}",
+      "domainToggle": "独自ドメインを使う",
+      "domainHint": "Cloudflare で管理しているドメインのホスト名（例: dazzi.example.com）を入力すると、一時アドレスの代わりに固定アドレスで接続できます。すでに別の場所を指しているホスト名は変更しません。",
+      "domainLabel": "ドメイン",
+      "domainInvalid": "ドメイン名ではありません: {{value}}",
+      "domainLogin": "Cloudflare にログイン",
+      "domainLoginHint": "ブラウザーでこのドメインを所有するアカウントを承認してください。",
+      "domainLoggedIn": "Cloudflare にログイン済みです。",
+      "serverFailed": "リモートアクセスサーバーを開始できませんでした: {{reason}}",
+      "retryStart": "再試行"
     },
     "account": {
       "description": "Dazzi アカウントとログイン状態です。",
@@ -3117,5 +3257,233 @@
     "emptyOutput": "出力テキストはありません。",
     "targetsCount": "対象 {{count}} 件",
     "sidebarOpen": "マジックアクションの結果を開く"
+  },
+  "quickSearch": {
+    "title": "クイック検索",
+    "placeholder": "ファイル名や内容で検索",
+    "searching": "検索中",
+    "sections": {
+      "recent": "最近の項目",
+      "names": "ファイル名",
+      "content": "内容",
+      "ask": "Dazziに聞く"
+    },
+    "askRow": "Dazziに聞く：「{{query}}」",
+    "emptyRecents": "入力して検索します。最近開いたファイルがここに表示されます。",
+    "noResults": "一致するファイルはありません。",
+    "contentOff": "キーワードのみのモードのため、内容検索はオフです。",
+    "contentUnavailable": "文書インデックスの準備がまだのため、内容の一致はありません。",
+    "copiedFiles": "{{count}}件のファイルをコピーしました。ほかのアプリに貼り付けられます。",
+    "copiedPaths": "{{count}}件のパスをコピーしました。",
+    "actionsTitle": "操作",
+    "actions": {
+      "open": "開く",
+      "preview": "クイックルック",
+      "revealOs": "Finder/エクスプローラで表示",
+      "showInApp": "Dazziで表示",
+      "copyFile": "ファイルをコピー",
+      "copyPath": "パスをコピー",
+      "askAbout": "このファイルについてDazziに聞く",
+      "askQuery": "Dazziに聞く"
+    },
+    "hints": {
+      "preview": "プレビュー",
+      "copy": "コピー",
+      "actions": "操作"
+    }
+  },
+  "mobile": {
+    "tabs": {
+      "browse": "ブラウズ",
+      "recents": "最近の項目",
+      "ai": "AI 検索",
+      "automations": "自動化",
+      "search": "検索",
+      "aria": "アプリのタブ",
+      "settings": "設定"
+    },
+    "connectedTo": "{{name}} に接続中",
+    "back": "戻る",
+    "more": "その他",
+    "moreFor": "{{name}} のメニュー",
+    "add": "追加",
+    "settings": "設定",
+    "collapse": "{{name}} を折りたたむ",
+    "itemCount": "{{count}} 項目",
+    "itemCountSize": "{{count}} 項目 · {{size}}",
+    "emptyFolder": "空のフォルダ",
+    "emptyFolderHint": "＋ ボタンでフォルダを作るか、このデバイスのファイルをアップロードします",
+    "emptyTrash": "ゴミ箱は空です",
+    "loadFailed": "このフォルダを開けません: {{message}}",
+    "loading": "読み込み中…",
+    "sort": {
+      "title": "並べ替え",
+      "name": "名前",
+      "date": "変更日",
+      "size": "サイズ",
+      "kind": "種類"
+    },
+    "view": {
+      "options": "表示オプション",
+      "grid": "アイコン",
+      "list": "リスト",
+      "select": "選択"
+    },
+    "folderInfo": "フォルダ情報",
+    "askFolder": "このフォルダについて聞く",
+    "pathMenu": "上のフォルダへ移動",
+    "select": {
+      "all": "すべて選択",
+      "none": "選択解除",
+      "done": "完了",
+      "title": "項目を選択",
+      "count": "{{count}} 件選択",
+      "move": "移動",
+      "copy": "コピー",
+      "ask": "AI に聞く",
+      "trash": "ゴミ箱",
+      "restore": "戻す"
+    },
+    "swipe": {
+      "trash": "ゴミ箱",
+      "more": "その他"
+    },
+    "menu": {
+      "copy": "コピー",
+      "move": "移動",
+      "download": "ダウンロード",
+      "quickLook": "クイックルック",
+      "info": "情報を見る",
+      "reveal": "内包フォルダで表示",
+      "askOne": "AI 要約",
+      "askFolder": "このフォルダについて聞く",
+      "askMany": "{{count}} 項目について AI に聞く",
+      "magic": "マジックアクション",
+      "tools": "クイックアクション",
+      "toolsHint": "圧縮 · インデックス · 複製",
+      "agent": "AI エージェント",
+      "script": "スクリプト"
+    },
+    "picker": {
+      "move": "{{count}} 項目を移動",
+      "copy": "{{count}} 項目をコピー",
+      "subtitle": "場所を選択",
+      "choose": "フォルダを選んでください",
+      "moveHere": "{{folder}} へ移動",
+      "copyHere": "{{folder}} へコピー",
+      "noSubfolders": "サブフォルダなし",
+      "places": "場所"
+    },
+    "rename": {
+      "title": "名前を変更",
+      "ok": "完了"
+    },
+    "newFolder": {
+      "title": "新規フォルダ",
+      "ok": "作成",
+      "placeholder": "新規フォルダ"
+    },
+    "confirm": {
+      "emptyTrash": "ゴミ箱を空にしますか？",
+      "emptyTrashBody": "ゴミ箱の項目は完全に削除されます。取り消せません。",
+      "emptyTrashOk": "ゴミ箱を空にする"
+    },
+    "toast": {
+      "undo": "取り消す",
+      "show": "表示",
+      "downloading": "‘{{name}}’ をダウンロード中…",
+      "downloadingMany": "{{count}} 項目をダウンロード中…",
+      "created": "‘{{name}}’ を作成しました",
+      "renamed": "名前を ‘{{name}}’ に変更しました",
+      "uploaded": "‘{{name}}’ をアップロードしました",
+      "uploadFailed": "‘{{name}}’ をアップロードできませんでした",
+      "uploadedMany": "{{count}} 件のファイルをアップロードしました",
+      "magicStarted": "‘{{name}}’ を実行中",
+      "failed": "失敗: {{message}}"
+    },
+    "info": {
+      "title": "情報",
+      "quickLook": "クイックルック",
+      "download": "ダウンロード",
+      "ask": "AI 要約",
+      "askFolder": "聞く",
+      "move": "移動",
+      "indexed": "AI 検索に含める",
+      "indexedOn": "内容まで検索できます",
+      "indexedOff": "名前だけで検索できます",
+      "indexLocked": "上位フォルダの設定に従います",
+      "versions": "バージョン",
+      "versionsFoot": "dupey が見つけた同じ書類の別バージョンです。",
+      "latest": "最新",
+      "near": "類似",
+      "exact": "同一",
+      "tags": "タグ",
+      "noTags": "なし",
+      "folderRules": "このフォルダの自動化"
+    },
+    "ql": {
+      "done": "完了",
+      "position": "{{index}} / {{total}}",
+      "noPreview": "この形式はブラウザでプレビューできません。",
+      "openTab": "新しいタブで開く"
+    },
+    "search": {
+      "placeholder": "ファイル名または内容",
+      "clear": "消去",
+      "results": "{{machine}} 全体 · {{count}} 件",
+      "none": "“{{query}}” という名前のファイルはありません",
+      "noneHint": "内容で探すには AI 検索に聞いてください",
+      "askAi": "“{{query}}” について AI 検索に聞く",
+      "askAiHint": "ファイルの内容、メール、メッセンジャーまで探します",
+      "typeHint": "このコンピュータのファイル名を検索します",
+      "exit": "検索を閉じる"
+    },
+    "recents": {
+      "empty": "最近の項目はありません",
+      "buckets": {
+        "today": "今日",
+        "yesterday": "昨日",
+        "week": "今週",
+        "month": "今月",
+        "older": "それ以前"
+      }
+    },
+    "activity": {
+      "title": "進行中と待機中",
+      "count": "{{count}} 件の作業",
+      "empty": "進行中の作業はありません",
+      "open": "進行中と待機中の作業"
+    },
+    "rules": {
+      "add": "AI 検索でルールを追加",
+      "section": "ルール",
+      "foot": "ファイルが追加・変更されたときに Dazzi が行うことを決めておきます。ルールは AI 検索で言葉で作成・編集します。",
+      "daemonToggle": "バックグラウンドで実行"
+    },
+    "ai": {
+      "history": "会話履歴",
+      "newChat": "新しい会話",
+      "sources": "出典 {{count}} 件",
+      "suggestions": "こんなふうに聞いてみましょう",
+      "suggest1": "先週受け取った見積書を探して",
+      "suggest2": "ダウンロードフォルダを整理して",
+      "suggest3": "最近の議事録を要約して"
+    },
+    "settingsHub": {
+      "title": "設定",
+      "connection": "リモートアクセス · {{address}} · Dazzi {{version}}",
+      "signedOut": "サインインしていません"
+    },
+    "create": {
+      "newFolder": "新規フォルダ",
+      "newText": "新規テキスト書類",
+      "newMarkdown": "新規 Markdown 書類",
+      "upload": "このデバイスからアップロード",
+      "uploadHint": "写真 · ファイル"
+    },
+    "evidence": {
+      "showInFolder": "フォルダで表示",
+      "preview": "プレビュー"
+    }
   }
 }

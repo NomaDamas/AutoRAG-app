@@ -79,6 +79,12 @@ interface Session {
 }
 
 const DEFAULT_CUSTOM_API = "openai-completions";
+/**
+ * Pi treats a models.json provider without an `apiKey` as having no auth, so a
+ * keyless server (the key field is optional) never counts as connected. This
+ * literal (not an env reference) marks it configured; servers that need no key ignore it.
+ */
+const KEYLESS_API_KEY = "no-key";
 const DEFAULT_TIMEOUT_MS = 8000;
 /** Cheapest models tried per connection check, and the budget for all of them together. */
 const CONNECTION_PROBE_ATTEMPTS = 4;
@@ -492,7 +498,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 			name: label,
 			baseUrl: normalized.baseUrl,
 			api: DEFAULT_CUSTOM_API,
-			...(hasKey ? { apiKey: `$${resolvedEnvName}` } : {}),
+			apiKey: hasKey ? `$${resolvedEnvName}` : KEYLESS_API_KEY,
 			models: discovery.models.map((model) => ({ id: model.id, name: model.name })),
 		};
 		await writeModelsJson(modelsPath, { ...raw, providers });

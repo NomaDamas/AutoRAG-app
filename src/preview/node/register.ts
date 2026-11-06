@@ -2,7 +2,7 @@ import { protocol, type CustomScheme } from "electron";
 import { PREVIEW_SCHEME } from "../shared/contract";
 import { handlePreviewRequest } from "./protocol";
 
-export { attachQuickLook, registerQuickLookIpc } from "./window";
+export { attachQuickLook, registerQuickLookIpc, type QuickLookWindowOptions } from "./window";
 
 /**
  * `autorag-preview://` privileges. Electron honours only one

@@ -1,0 +1,82 @@
+/* ============================================================================
+ * Phone shell: what changes in the desktop components the phone frame hosts
+ * (AI 검색 and the Settings pages).
+ *
+ * Those components are styled with Tailwind utilities, and a utility outranks
+ * every rule in the `base` layer where mobile.css lives. This sheet is
+ * imported unlayered (app.css) so it wins over them; every rule is scoped to
+ * `.phone-app .phone-hosted`, which the desktop window never renders.
+ * ========================================================================== */
+
+/* AI 검색: the phone nav bar carries 대화 기록 and
+ * 새 대화, so the panel's own head goes; the chat reads like Messages — page background, accent
+ * bubbles on the right, plain answer text, sources as cards, a pill composer floating over it. */
+.phone-app .phone-hosted.is-ai { background: var(--phone-plain); }
+.phone-app .phone-hosted .ai { background: transparent; }
+.phone-app .phone-hosted .ai > .ai-head { display: none; }
+.phone-app .phone-hosted .ai .ai-body { padding: 8px 18px 16px; }
+.phone-app .phone-hosted .ai .ai-body > div { max-width: none; }
+.phone-app .phone-hosted .ai .ai-body, .phone-app .phone-hosted .ai .assistant-prose { user-select: text; -webkit-user-select: text; }
+.phone-app .phone-hosted .ai .assistant-prose { font-size: 16px; line-height: 1.58; color: var(--phone-label); }
+.phone-app .phone-hosted .ai .thinking-header, .phone-app .phone-hosted .ai .water-wave-thinking { font-size: 13.5px; }
+
+.phone-app .phone-hosted .ai .user-bubble-wrap { max-width: 84%; }
+.phone-app .phone-hosted .ai .user-msg .bubble { padding: 10px 15px; border: 0; border-radius: 21px 21px 6px 21px; background: var(--phone-accent); color: #fff; font-size: 16px; line-height: 1.42; }
+.phone-app .phone-hosted .ai .queued-question { max-width: 86%; border-radius: 18px; }
+
+/* Citation chips are a finger's tap target, and open the evidence sheet. */
+.phone-app .phone-hosted .ai .cite { height: 22px; min-width: 22px; padding: 0 6px; border-radius: 11px; font-size: 12px; font-weight: 700; vertical-align: 1px; background: var(--phone-accent-soft); color: var(--phone-accent); }
+.phone-app .phone-hosted .ai .cite.active { background: var(--phone-accent); color: #fff; }
+
+.phone-app .phone-hosted .ai .ai-sources { display: flex; gap: 8px; margin: 2px -18px 0; padding: 0 18px 2px; overflow-x: auto; scrollbar-width: none; }
+.phone-app .phone-hosted .ai .ai-sources::-webkit-scrollbar { display: none; }
+.phone-app .phone-hosted .ai .ai-source { display: flex; flex: none; align-items: center; gap: 10px; width: 220px; padding: 10px 12px; border: 0; border-radius: 16px; background: var(--phone-cell-alt, var(--phone-fill)); text-align: left; color: var(--phone-label); }
+.phone-app .phone-hosted .ai .ai-source:active { background: var(--phone-fill-2); }
+.phone-app .phone-hosted .ai .ai-source-n { display: grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: 12px; background: var(--phone-accent-soft); color: var(--phone-accent); font-size: 12.5px; font-weight: 700; }
+.phone-app .phone-hosted .ai .ai-source-main { min-width: 0; }
+.phone-app .phone-hosted .ai .ai-source-main b { display: block; overflow: hidden; font-size: 13.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.phone-app .phone-hosted .ai .ai-source-main small { display: block; font-size: 12px; color: var(--phone-label-2); }
+
+/* Empty chat: the Dazzi mark, the prompt, and example questions that fill the composer. */
+.phone-app .phone-hosted .ai .ai-empty-phone { display: flex; flex-direction: column; align-items: center; padding: 28px 4px 0; text-align: center; }
+.phone-app .phone-hosted .ai .ai-empty-logo { width: 88px; height: 88px; }
+.phone-app .phone-hosted .ai .ai-empty-phone strong { margin-top: 14px; font-size: 24px; font-weight: 750; letter-spacing: -0.02em; color: var(--phone-label); }
+.phone-app .phone-hosted .ai .ai-empty-phone p { margin: 6px 0 0; font-size: 15px; line-height: 1.5; color: var(--phone-label-2); word-break: keep-all; }
+.phone-app .phone-hosted .ai .ai-suggest { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 26px; }
+.phone-app .phone-hosted .ai .ai-suggest button { display: flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 16px; border: 0; border-radius: 18px; background: var(--phone-fill); text-align: left; font-size: 15px; color: var(--phone-label); }
+.phone-app .phone-hosted .ai .ai-suggest button svg { flex: none; color: var(--phone-accent); }
+
+/* Composer: one pill, the send button inside it; the mode menu stays on its left. */
+.phone-app .phone-hosted .ai .composer { padding: 6px 12px 4px; background: transparent; }
+.phone-app .phone-hosted .ai .composer > div { max-width: none; }
+.phone-app .phone-hosted .ai .compose-box { gap: 4px; padding: 10px 8px 6px 16px; border: 0; border-radius: 26px; background: var(--phone-glass-strong); box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge), var(--phone-glass-drop); -webkit-backdrop-filter: blur(22px) saturate(1.8); backdrop-filter: blur(22px) saturate(1.8); }
+.phone-app .phone-hosted .ai .compose-box textarea { font-size: 16px; }
+.phone-app .phone-hosted .ai .composer .send { width: 36px; height: 36px; }
+.phone-app .phone-hosted .ai .composer-attach-pill { height: 32px; border-radius: 16px; font-size: 13px; }
+.phone-app .phone-hosted .ai .composer > div > p { margin-top: 4px; font-size: 11.5px; color: var(--phone-label-3); }
+.phone-app .phone-hosted .ai .steer-hint { display: none; }
+
+/* The approval and question card that replaces the composer. */
+.phone-app .phone-hosted .ai .composer [role="alertdialog"], .phone-app .phone-hosted .ai .composer [role="dialog"] { border: 0; border-radius: 26px; padding: 16px; background: var(--phone-glass-strong); box-shadow: inset 0 0 0 0.5px var(--phone-glass-edge), var(--phone-glass-drop); }
+.phone-app .phone-hosted .ai .composer [role="alertdialog"] button, .phone-app .phone-hosted .ai .composer [role="dialog"] button { min-height: 40px; border-radius: 20px; font-size: 15px; }
+
+/* 대화 기록: a full-width sheet under the nav bar instead of the desktop popover. */
+.phone-app .phone-hosted .ai .history { left: 10px; right: 10px; top: 6px; width: auto; max-height: calc(100% - 12px); border: 0; border-radius: 24px; box-shadow: 0 18px 50px rgba(0, 0, 0, 0.22); }
+.phone-app .phone-hosted .ai .history input { height: 46px; padding: 0 16px; font-size: 16px; }
+.phone-app .phone-hosted .ai .history-item { min-height: 52px; padding: 10px 12px; font-size: 15px; }
+
+/* Settings: one column; the 설정 hub is the page list, so the desktop nav rail goes. */
+.phone-app .phone-hosted .settings-view { flex: 1; }
+.phone-app .phone-hosted .settings-sidebar { display: none; }
+.phone-app .phone-hosted .settings-content { padding: 4px 16px calc(var(--phone-sa-bottom) + 120px); }
+.phone-app .phone-hosted .settings-content-wrap { max-width: none; }
+/* A row stacks: label and hint, then its control; a phone has no room for the desktop's right column. */
+.phone-app .phone-hosted .linear-row { flex-direction: column; align-items: stretch; gap: 10px; }
+.phone-app .phone-hosted .linear-row-label { flex: none; }
+.phone-app .phone-hosted .linear-control { flex-wrap: wrap; max-width: 100%; }
+.phone-app .phone-hosted .settings-view .linear-select, .phone-app .phone-hosted .settings-view .settings-select-compact { min-width: 0; max-width: 100%; height: 36px; font-size: 15px; }
+.phone-app .phone-hosted .linear-btn { min-height: 36px; font-size: 14px; }
+.phone-app .phone-hosted .linear-row-name { font-size: 15.5px; }
+.phone-app .phone-hosted .linear-row-label small { font-size: 13px; }
+.phone-app .phone-hosted .linear-title { font-size: 28px; font-weight: 750; letter-spacing: -0.02em; }
+.phone-app .phone-hosted input, .phone-app .phone-hosted textarea, .phone-app .phone-hosted select { font-size: 16px; }

@@ -349,6 +349,10 @@
   /* Split panes: a pane growing, shrinking, or appearing; the drop preview gliding between zones. */
   --dur-pane: 220ms;
   --ease-pane: cubic-bezier(0.2, 0.8, 0.2, 1);
+  /* A folder opening or closing in the list: its rows slide out from behind it and the rows below follow;
+   * the disclosure triangle turns over the same time. useDisclosureMotion reads both values. */
+  --dur-disclosure: 220ms;
+  --ease-disclosure: var(--ease-pane);
   --dur-color: 150ms;
   --dur-color-slow: 200ms;
   --dur-knob: 200ms;

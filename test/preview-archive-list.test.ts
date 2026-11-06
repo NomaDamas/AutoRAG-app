@@ -23,6 +23,7 @@ import {
 	fixtureIso,
 	fixtureTar,
 	rpmPackage,
+	windowsTar,
 } from "./archive-fixtures";
 
 let root: string;
@@ -128,6 +129,15 @@ describe("listing an archive", () => {
 	it("lists a RAR4 and a RAR5 archive, listing only", async () => {
 		expect(panel(await listArchive(await put("old.rar", Buffer.from(RAR4_TREE, "base64")))).items).toEqual(expect.arrayContaining(["testdir/", "test.txt"]));
 		expect(panel(await listArchive(await put("new.rar", Buffer.from(RAR5_STORED, "base64"))))).toEqual({ itemCount: 1, items: ["helloworld.txt"] });
+	});
+
+	it("keeps a Korean folder whose name a Windows tool wrote in CP949", async () => {
+		// The same three children as FIXTURE_PANEL, newest first: a name the engine
+		// cannot convert arrives as its raw bytes and must still be listed, decoded.
+		const tar = windowsTar();
+		expect(panel(await listArchive(await put("windows.tar", tar)))).toEqual(FIXTURE_PANEL);
+		expect(panel(await listArchive(await put("windows.tar.zst", zstdCompressSync(tar))))).toEqual(FIXTURE_PANEL);
+		expect(panel(await listArchive(await put("windows.deb", debPackage("data.tar.gz", gzipSync(tar)))))).toEqual(FIXTURE_PANEL);
 	});
 
 	it("keeps Korean names whole", async () => {

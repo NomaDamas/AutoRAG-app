@@ -22,10 +22,10 @@ export function SettingsPageHead({ title, description }: { readonly title: strin
 	);
 }
 
-export function Section({ title, description, children }: { readonly title: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
+export function Section({ title, description, children }: { readonly title?: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
 	return (
 		<section className="settings-section">
-			<div className="linear-section-title">{title}</div>
+			{title !== undefined ? <div className="linear-section-title">{title}</div> : null}
 			{description !== undefined ? <p className="linear-section-desc">{description}</p> : null}
 			{children}
 		</section>
@@ -57,7 +57,7 @@ export function Note({ children }: { readonly children: ReactNode }): ReactEleme
 	);
 }
 
-/** Neutral app glyph: the first letter of a provider/template label. */
+/** Neutral app glyph: the first letter of a label. `ProviderIcon` falls back to it for a provider with no logo. */
 export function AppIcon({ label, small = false }: { readonly label: string; readonly small?: boolean }): ReactElement {
 	const letter = (label.trim().slice(0, 1) || "·").toUpperCase();
 	return <span className={`settings-app-icon${small ? " is-sm" : ""}`} aria-hidden="true">{letter}</span>;

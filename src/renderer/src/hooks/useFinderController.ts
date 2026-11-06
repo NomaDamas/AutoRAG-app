@@ -18,8 +18,10 @@ import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { useTagCatalog } from "./useTagCatalog";
+import { useSidebarPins, type SidebarPins } from "./useSidebarPins";
 import { useSidebarSettings } from "./useSidebarSettings";
 import { useContextMenuSettings } from "./useContextMenuSettings";
+import { useShortcutSettings } from "./useShortcutSettings";
 import { onMagicActionDone, startMagicActionRun } from "./useMagicAction";
 import { sharedTags, sidebarTags, tagKey } from "../state/tags";
 import { finderDragEntries } from "../state/attachments";
@@ -217,6 +219,8 @@ export interface FinderController {
 	readonly activeNavPath: string | null;
 	/** Sidebar groups built from the live OS locations. */
 	readonly navGroups: readonly NavGroup[];
+	/** Pin, unpin, and reorder of the sidebar's Favorites (they write `AppSettings.sidebar`). */
+	readonly sidebarPins: SidebarPins;
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
@@ -561,6 +565,7 @@ export function useFinderController(
 	}, [source]);
 
 	const showToast = useLatestCallback((message: string) => toastRef.current?.(message));
+	const sidebarPins = useSidebarPins(locations, showToast);
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
@@ -1802,6 +1807,14 @@ export function useFinderController(
 				case "copyPath":
 					source.copyPaths(targets).catch(reportError);
 					return;
+				case "pinToSidebar":
+					sidebarPins.pin([entry.path], null);
+					return;
+				case "unpinFromSidebar": {
+					const pinned = sidebarPins.stateOf(entry.path);
+					if (pinned?.custom === true) sidebarPins.unpin(pinned.id);
+					return;
+				}
 				case "openWith":
 					// The menu's item is the Inspector's "기타…": the OS application
 					// chooser, then one launch for the whole selection.
@@ -2217,13 +2230,19 @@ export function useFinderController(
 		[pane, queries, t, trashLocationPath],
 	);
 
+	const shortcutSettings = useShortcutSettings();
 	const contextMenuEntries = useMemo<readonly FinderMenuEntry[]>(() => {
 		const menu = contextMenu;
 		if (menu === null) {
 			return [];
 		}
 		if (menu.entry === null) {
-			return buildBackgroundContextMenu({ clipboardCount, inTrash: inTrashLocation, services: menuServices });
+			return buildBackgroundContextMenu({
+				clipboardCount,
+				inTrash: inTrashLocation,
+				services: menuServices,
+				shortcuts: shortcutSettings,
+			});
 		}
 		const entry = menu.entry;
 		const targetPaths = menuTargets(entry);
@@ -2232,6 +2251,9 @@ export function useFinderController(
 			const row = byPath.get(targetPath);
 			return row !== undefined ? { name: row.name, kind: row.kind } : { name: basename(targetPath), kind: entry.kind };
 		});
+		// One folder only: the sidebar pins a folder, never a file or a selection of rows.
+		const pinned = targetPaths.length === 1 && entry.kind === "folder" ? sidebarPins.stateOf(entry.path) : undefined;
+		const sidebarPin = pinned === undefined ? undefined : pinned === null || !pinned.shown ? "pin" : pinned.custom ? "unpin" : undefined;
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
 			targets: targetDescriptors,
@@ -2242,12 +2264,14 @@ export function useFinderController(
 			inTrash: inTrashLocation,
 			capabilities: actionCapabilities,
 			canCreateFolder: canCreateIn(menuCreateDir(menu)),
+			...(sidebarPin === undefined ? {} : { sidebarPin }),
 			services: menuServices,
 			tags: { catalog: tagCatalog.catalog, shared: sharedTags(targetPaths.map((target) => tagsOf(target))) },
 			contextMenu: contextMenuSettings,
+			shortcuts: shortcutSettings,
 		});
 		// `t` changes identity with the language, so the menu re-labels on a switch.
-	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings]);
+	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings, shortcutSettings, sidebarPins]);
 
 	const sidebarSettings = useSidebarSettings();
 	const sidebarGroups = useMemo(
@@ -2342,6 +2366,7 @@ export function useFinderController(
 		versionFamilyError,
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,
+		sidebarPins,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		viewMode,

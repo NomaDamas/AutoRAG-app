@@ -51,7 +51,8 @@ import {
 	type SidebarSectionId,
 	type SidebarSettings,
 } from "../../../shared/sidebar-contract";
-import { basename } from "../state/paths";
+import { sortByFavoritesOrder } from "../../../shared/sidebar-favorites";
+import { basename, normalizeTypedPath } from "../state/paths";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH } from "../state/tabs";
 
 export interface NavItem {
@@ -68,6 +69,11 @@ export interface NavItem {
 	readonly view?: "aiSearch" | "automations";
 	/** A Finder tag's virtual folder: the row draws this colour as its dot (0 = a tag with no colour). */
 	readonly tag?: { readonly name: string; readonly color: FsTagColor };
+	/**
+	 * The row's `SidebarSettings` item id (`place:<kind>` or `custom:<path>`), set on the
+	 * Favorites rows the user can reorder or unpin; absent on every other row, and on the app rows.
+	 */
+	readonly sidebarId?: string;
 }
 
 export interface NavGroup {
@@ -158,27 +164,30 @@ export function navGroups(
 						kind: location.icon,
 						available: location.available,
 						ejectable: location.ejectable,
+						sidebarId: placeSidebarItemId(location.icon),
 					},
 				}));
+			const homePath = locations.find((location) => location.section === "favorites" && location.icon === "home")?.path ?? null;
 			const existingPaths = new Set(osFavorites.map((entry) => entry.item.path));
-			const customRows: CustomizableFavorite[] = cfg.customFavorites
-				.filter((custom) => !existingPaths.has(custom.path))
-				.map((custom) => ({
-					id: customSidebarItemId(custom.path),
-					item: {
-						label: custom.label ?? (basename(custom.path) || custom.path),
-						path: custom.path,
-						icon: Folder,
-						available: true,
-						ejectable: false,
+			const customRows: CustomizableFavorite[] = cfg.customFavorites.flatMap((custom) => {
+				const resolvedPath = normalizeTypedPath(custom.path, homePath) || custom.path;
+				if (existingPaths.has(resolvedPath) || existingPaths.has(custom.path)) return [];
+				return [
+					{
+						id: customSidebarItemId(custom.path),
+						item: {
+							label: custom.label ?? (basename(resolvedPath) || resolvedPath),
+							path: resolvedPath,
+							icon: Folder,
+							available: true,
+							ejectable: false,
+							sidebarId: customSidebarItemId(custom.path),
+						},
 					},
-				}));
+				];
+			});
 			const combined = [...osFavorites, ...customRows].filter((entry) => !hiddenItems.has(entry.id));
-			const orderIndex = new Map<string, number>(cfg.favoritesOrder.map((id, idx) => [id, idx]));
-			const ordered = combined
-				.map((entry, idx) => ({ entry, order: orderIndex.get(entry.id) ?? cfg.favoritesOrder.length + idx }))
-				.sort((a, b) => a.order - b.order)
-				.map(({ entry }) => entry.item);
+			const ordered = sortByFavoritesOrder(combined, cfg.favoritesOrder).map((entry) => entry.item);
 
 			return {
 				label: "Favorites",

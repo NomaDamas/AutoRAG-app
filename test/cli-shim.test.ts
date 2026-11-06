@@ -188,6 +188,41 @@ describe.skipIf(process.platform === "win32")("the dazzi launcher script", () =>
 		await expectNothingLaunched(f);
 	});
 
+	it("asks AI Search a question with --ask, with no path needed", async () => {
+		const f = await fixture();
+		const question = '지난주 회의록에서 "결정 사항"만 정리해줘 $HOME `x`';
+		expect(run(f, ["--ask", question]).status).toBe(0);
+		const launch = await f.nextLaunch();
+		expect(launch.program).toBe("app");
+		expect(parseOsRequestArgv(launch.args)).toEqual({ action: "ask", paths: [], query: question });
+	});
+
+	it("attaches the paths that follow --ask to the question, relative ones resolved", async () => {
+		const f = await fixture();
+		await writeFile(join(f.root, "a.md"), "x");
+		await mkdir(join(f.root, "docs"));
+		expect(run(f, ["--ask=요약해줘", "a.md", "docs"]).status).toBe(0);
+		expect(parseOsRequestArgv((await f.nextLaunch()).args)).toEqual({ action: "ask", paths: [join(f.root, "a.md"), join(f.root, "docs")], query: "요약해줘" });
+	});
+
+	it("still asks when an attachment is missing, reports it, and exits non-zero", async () => {
+		const f = await fixture();
+		const result = run(f, ["--ask", "q", "nope.md"]);
+		expect(result.status).toBe(1);
+		expect(result.stderr).toContain("dazzi: nope.md: No such file or directory");
+		expect(parseOsRequestArgv((await f.nextLaunch()).args)).toEqual({ action: "ask", paths: [], query: "q" });
+	});
+
+	it("refuses --ask without a question", async () => {
+		const f = await fixture();
+		for (const args of [["--ask"], ["--ask", "   "], ["--ask="]]) {
+			const result = run(f, args);
+			expect(result.status).toBe(2);
+			expect(result.stderr).toContain("--ask needs a question");
+		}
+		await expectNothingLaunched(f);
+	});
+
 	it("has the marker the installer uses to recognise its own launcher", async () => {
 		expect(await readFile(SHIM, "utf8")).toContain("DAZZI-CLI-LAUNCHER");
 	});

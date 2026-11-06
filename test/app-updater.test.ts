@@ -1,6 +1,7 @@
 import { EventEmitter, once } from "node:events";
+import { setImmediate } from "node:timers/promises";
 import { describe, expect, it } from "vitest";
-import { createAppUpdater, manualDownloadUrl, type UpdaterLike } from "../src/main/app-updater";
+import { createAppUpdater, manualDownloadUrl, type UpdateCheckResultLike, type UpdaterLike } from "../src/main/app-updater";
 import { feedUrlFromAppUpdateYml, isDeveloperIdSigned } from "../src/main/app-update-host";
 import type { AppUpdateMode, AppUpdateSnapshot } from "../src/shared/update-contract";
 
@@ -9,11 +10,13 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
 	autoDownload = true;
 	autoInstallOnAppQuit = true;
 	next: "none" | { version: string } | Error = "none";
+	/** With `autoDownload`, the background download fails with this instead of finishing. */
+	downloadFailure: Error | null = null;
 	downloads = 0;
 	/** `autoInstallOnAppQuit` as electron-updater sees it when `downloadUpdate` runs (MacUpdater hands the zip to Squirrel only if it is on). */
 	autoInstallDuringDownload: boolean[] = [];
 	installs: [boolean | undefined, boolean | undefined][] = [];
-	async checkForUpdates(): Promise<unknown> {
+	async checkForUpdates(): Promise<UpdateCheckResultLike | null> {
 		this.emit("checking-for-update");
 		const next = this.next;
 		if (next instanceof Error) {
@@ -26,8 +29,19 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
 		}
 		const info = { version: next.version, files: [{ url: `../v${next.version}/Dazzi-${next.version}-arm64.zip` }, { url: `../v${next.version}/Dazzi-${next.version}-arm64.dmg` }] };
 		this.emit("update-available", info);
-		if (this.autoDownload) this.emit("update-downloaded", info);
-		return info;
+		if (!this.autoDownload) return { updateInfo: info, downloadPromise: null };
+		// Like electron-updater: the check resolves now and the download runs on as `downloadPromise`; a failure
+		// is emitted as "error" and also rejects that promise.
+		const failure = this.downloadFailure;
+		const downloadPromise = Promise.resolve().then(() => {
+			if (failure !== null) {
+				this.emit("error", failure);
+				throw failure;
+			}
+			this.emit("update-downloaded", info);
+			return [];
+		});
+		return { updateInfo: info, downloadPromise };
 	}
 	async downloadUpdate(): Promise<unknown> {
 		this.downloads += 1;
@@ -140,6 +154,27 @@ describe("app updater policy", () => {
 		fireFirstCheck();
 		await failed;
 		expect(service.snapshot().state).toEqual({ kind: "available", version: "1.1.0", downloadUrl: null });
+	});
+
+	it("a failed background download is shown as the error and leaves no unhandled rejection", async () => {
+		const { updater, service, fireFirstCheck } = setup("install");
+		updater.next = { version: "1.1.0" };
+		updater.downloadFailure = new Error("ENOSPC: no space left on device, write");
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown): void => void unhandled.push(reason);
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			service.start();
+			const failed = once(updater, "error");
+			fireFirstCheck();
+			await failed;
+			// Node reports unhandled rejections once the microtask queue drains, before the next check phase.
+			await setImmediate();
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+		expect(unhandled).toEqual([]);
+		expect(service.snapshot().state).toEqual({ kind: "error", message: "ENOSPC: no space left on device, write" });
 	});
 
 	it("restart-now installs silently and relaunches, and only when an update is ready", async () => {

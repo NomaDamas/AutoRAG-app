@@ -39,7 +39,6 @@ import {
 	type ShortcutSettings,
 } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
-import { AppCustomizerModal } from "./AppCustomizerModal";
 import { Section, SettingsPageHead } from "./SettingsKit";
 
 type ShortcutsBridgeWindow = Window & {
@@ -100,18 +99,20 @@ export function ShortcutsPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	onOpenAiSettings,
+	customizerOpen,
+	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	readonly onOpenAiSettings?: () => void;
+	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
+	readonly customizerOpen: boolean;
+	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
 	const isMac = platform === "darwin";
 
-	const [customizerOpen, setCustomizerOpen] = useState(false);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [recordingId, setRecordingId] = useState<ShortcutId | null>(null);
 	const [heldMods, setHeldMods] = useState<HeldModifiers>({ mod: false, alt: false, shift: false });
@@ -198,7 +199,7 @@ export function ShortcutsPage({
 			event.stopPropagation();
 			event.stopImmediatePropagation();
 
-			const decoded = chordFromKeyEvent(event);
+			const decoded = chordFromKeyEvent(event, platform);
 			if (decoded.kind === "cancel") {
 				setRecordingId(null);
 				setHeldMods({ mod: false, alt: false, shift: false });
@@ -221,7 +222,7 @@ export function ShortcutsPage({
 			event.preventDefault();
 			event.stopPropagation();
 			setHeldMods({
-				mod: event.metaKey || event.ctrlKey,
+				mod: isMac ? event.metaKey || event.ctrlKey : event.ctrlKey,
 				alt: event.altKey,
 				shift: event.shiftKey,
 			});
@@ -246,7 +247,7 @@ export function ShortcutsPage({
 			window.removeEventListener("keyup", onKeyUp, { capture: true });
 			window.removeEventListener("mousedown", onPointerDown, { capture: true });
 		};
-	}, [recordingId, applyRecordedChord]);
+	}, [recordingId, applyRecordedChord, platform, isMac]);
 
 	const startRecording = (id: ShortcutId): void => {
 		if (recordingId === id) {
@@ -291,6 +292,15 @@ export function ShortcutsPage({
 		setPendingConflict((prev) => (prev?.id === id ? null : prev));
 		setInvalidNotice((prev) => (prev?.id === id ? null : prev));
 		await updateShortcuts({ overrides: nextOverrides });
+	};
+
+	const applyPreset = (preset: "macFinder" | "windowsExplorer" | "default"): void => {
+		setRecordingId(null);
+		setHeldMods({ mod: false, alt: false, shift: false });
+		setPendingConflict(null);
+		setInvalidNotice(null);
+		setUiEditor(null);
+		void updateShortcuts(shortcutSettingsForPreset(preset));
 	};
 
 	const normalizedQuery = filterQuery.trim().toLowerCase();
@@ -339,26 +349,28 @@ export function ShortcutsPage({
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} description={t("settingsCore.shortcuts.description")} />
 
-			<div className="sidebar-ai-hero">
-				<div className="sidebar-ai-hero__body">
-					<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-					</span>
-					<div className="sidebar-ai-hero__copy">
-						<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
-						<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
+			{customizerOpen ? null : (
+				<div className="sidebar-ai-hero">
+					<div className="sidebar-ai-hero__body">
+						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+						</span>
+						<div className="sidebar-ai-hero__copy">
+							<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
+							<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
+						</div>
 					</div>
+					<button
+						type="button"
+						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
+						data-action="open-shortcut-customizer"
+						onClick={onOpenCustomizer}
+					>
+						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
+						<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
+					</button>
 				</div>
-				<button
-					type="button"
-					className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-					data-action="open-shortcut-customizer"
-					onClick={() => setCustomizerOpen(true)}
-				>
-					<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-					<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
-				</button>
-			</div>
+			)}
 
 			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.shortcuts.presetsTitle")}>
 				<span className="sidebar-presets-bar__label">{t("settingsCore.shortcuts.presetsTitle")}</span>
@@ -368,7 +380,7 @@ export function ShortcutsPage({
 						className={`sidebar-preset-pill${activePreset === "macFinder" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-mac-finder"
 						aria-pressed={activePreset === "macFinder"}
-						onClick={() => void updateShortcuts(shortcutSettingsForPreset("macFinder"))}
+						onClick={() => applyPreset("macFinder")}
 					>
 						{t("settingsCore.shortcuts.presetMacFinder")}
 					</button>
@@ -377,7 +389,7 @@ export function ShortcutsPage({
 						className={`sidebar-preset-pill${activePreset === "windowsExplorer" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-windows-explorer"
 						aria-pressed={activePreset === "windowsExplorer"}
-						onClick={() => void updateShortcuts(shortcutSettingsForPreset("windowsExplorer"))}
+						onClick={() => applyPreset("windowsExplorer")}
 					>
 						{t("settingsCore.shortcuts.presetWindowsExplorer")}
 					</button>
@@ -386,7 +398,7 @@ export function ShortcutsPage({
 						className={`sidebar-preset-pill${activePreset === "default" ? " is-active" : ""}`}
 						data-action="shortcuts-preset-default"
 						aria-pressed={activePreset === "default"}
-						onClick={() => void updateShortcuts(shortcutSettingsForPreset("default"))}
+						onClick={() => applyPreset("default")}
 					>
 						{t("settingsCore.shortcuts.presetDefault")}
 					</button>
@@ -724,15 +736,6 @@ export function ShortcutsPage({
 					</div>
 				)}
 			</Section>
-
-			{customizerOpen ? (
-				<AppCustomizerModal
-					surface="shortcuts"
-					onClose={() => setCustomizerOpen(false)}
-					onSettingsUpdated={onAppSettingsChanged}
-					onOpenAiSettings={onOpenAiSettings}
-				/>
-			) : null}
 		</>
 	);
 }

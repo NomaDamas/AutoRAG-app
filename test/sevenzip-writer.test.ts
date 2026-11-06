@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, truncate, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
@@ -85,8 +85,32 @@ describe("writeSevenZip", () => {
 	it("deflates a single file past the LZMA size cap and keeps its neighbours intact", async () => {
 		const files = { "before.txt": TEXT, "huge.txt": Buffer.from(TEXT.toString().repeat(3)), "after.txt": Buffer.from("after") };
 		const archive = join(root, "cap.7z");
-		await writeSevenZip(archive, await members(files), { lzmaMaxFileBytes: TEXT.length * 2 });
+		// Small chunks: the capped file is read and deflated in pieces, never whole.
+		await writeSevenZip(archive, await members(files), { lzmaMaxFileBytes: TEXT.length * 2, chunkBytes: 16 * 1024 });
 		expect(await readBack(archive)).toEqual(files);
+	});
+
+	it("stores an incompressible file past the LZMA size cap as Copy", async () => {
+		const noise = randomBytes(300 * 1024);
+		const files = { "text.txt": TEXT, "noise.bin": noise };
+		const archive = join(root, "cap-noise.7z");
+		await writeSevenZip(archive, await members(files), { lzmaMaxFileBytes: 16 * 1024, chunkBytes: 16 * 1024 });
+		expect(await readBack(archive)).toEqual(files);
+		expect((await stat(archive)).size).toBeLessThan(TEXT.length + noise.length);
+	});
+
+	it.skipIf(!hasBin("bsdtar"))("writes a single file larger than 2 GiB", { timeout: 300_000 }, async () => {
+		const source = join(root, "huge.bin");
+		// Sparse: 2 GiB + 1 of zeros costs no disk, and is past what one read can return.
+		await writeFile(source, "");
+		await truncate(source, 2 * 1024 ** 3 + 1);
+		const archive = join(root, "huge.7z");
+		await writeSevenZip(archive, [{ source, entry: "huge.bin", directory: false }]);
+		// bsdtar checks the CRC while it reads the whole stream.
+		const listed = execFileSync("bsdtar", ["-tvf", archive]).toString();
+		expect(listed).toMatch(/\b2147483649\b/);
+		const size = execFileSync("sh", ["-c", `bsdtar -xOf '${archive}' huge.bin | wc -c`]).toString().trim();
+		expect(Number(size)).toBe(2 * 1024 ** 3 + 1);
 	});
 
 	it("writes empty files and empty directories without a stream", async () => {
