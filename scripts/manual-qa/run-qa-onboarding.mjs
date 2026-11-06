@@ -104,38 +104,6 @@ const checkStep = async (page, id) => {
 const advance = async (page, id) => {
 	if (id === "ask" || id === "cite" || id === "duplicates") {
 		await waitCursor(page, id);
-		check(`the ${id} step guides with an animated cursor and hides Next`, (await page.locator(`.fr-cursor[data-target-step="${id}"]`).count()) === 1 && (await page.locator(`.fr-coach[data-step="${id}"] [data-action="tour-next"]`).count()) === 0);
-	}
-	if (id === "cite") check("the cite step points at a citation chip", (await page.locator(".cite").count()) > 0);
-	if (id === "versions") check("the versions step shows the inspector Versions section", (await page.locator('[data-section="versions"]').count()) === 1);
-};
-/** Move past a coach step: click `.fr-cursor`, or click Next on readout steps. */
-const advance = async (page, id) => {
-	if (id === "splitBottom" || id === "mergePane") {
-		await waitCursor(page, id);
-		const drag = await page.evaluate((step) => {
-			const cursor = document.querySelector(`.fr-cursor--drag[data-target-step="${step}"]`);
-			if (!(cursor instanceof HTMLElement)) return null;
-			return {
-				fromX: Number(cursor.dataset.fromX),
-				fromY: Number(cursor.dataset.fromY),
-				toX: Number(cursor.dataset.toX),
-				toY: Number(cursor.dataset.toY),
-			};
-		}, id);
-		if (drag === null || !Number.isFinite(drag.fromX) || !Number.isFinite(drag.toX)) {
-			throw new Error(`drag cursor for ${id} has no coordinates`);
-		}
-		await page.mouse.move(drag.fromX, drag.fromY);
-		await page.mouse.down();
-		await page.mouse.move(drag.fromX + 10, drag.fromY + 26, { steps: 5 });
-		await page.mouse.move(drag.toX, drag.toY, { steps: 14 });
-		await page.waitForTimeout(200);
-		await page.mouse.up();
-		return;
-	}
-	if (id === "ask" || id === "cite" || id === "duplicates") {
-		await waitCursor(page, id);
 		const target = await page.evaluate((step) => {
 			const cursor = document.querySelector(`.fr-cursor[data-target-step="${step}"]`);
 			if (!(cursor instanceof HTMLElement)) return null;
@@ -209,17 +177,9 @@ try {
 	// The title card is on screen for about three seconds; capture it once its reveal has played.
 	await page.waitForTimeout(1200);
 	await page.screenshot({ path: join(EVIDENCE, "05-tour-cinema.png") });
-	check("the tour opens on the split-bottom drag step", await stepArrives(page, "splitBottom"));
-	await checkStep(page, "splitBottom");
-	check("a coach mark offers skip", (await page.locator('.fr-coach[data-step="splitBottom"] [data-action="tour-skip"]').count()) === 1);
-	await shot(page, "05-tour-split-bottom.png");
-	await advance(page, "splitBottom");
-	check("dragging down split the window top and bottom, advancing to mergePane", await stepArrives(page, "mergePane"));
-	await checkStep(page, "mergePane");
-	await shot(page, "05b-tour-merge-pane.png");
-	await advance(page, "mergePane");
-
-	const walked = ["splitBottom", "mergePane"];
+	// The window is already split (folder left, AI Search right): no pane-drag step.
+	check("the window is already split into two panes", (await page.locator(".workspace-pane").count()) === 2);
+	const walked = [];
 	for (const id of DEMO_STEPS) {
 		if (!(await stepArrives(page, id))) {
 			info(`tour step ${id} was skipped (no demo question)`);
@@ -245,7 +205,7 @@ try {
 		info("tour steps duplicates/versions were skipped (no duplicate family)");
 	}
 	info(`tour walked: ${walked.join(" → ")}`);
-	check("the tour walked splitBottom → mergePane", walked[0] === "splitBottom" && walked[1] === "mergePane");
+	check("the tour never asks for a pane drag", !walked.some((id) => id === "splitBottom" || id === "mergePane"));
 
 	// signin: the end of the first run. Signing in is real; the lane takes
 	// "나중에 할게요" so it never needs an account. No plan is offered here.
