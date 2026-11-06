@@ -23,7 +23,8 @@ function staticCatalogEntry(provider: ProviderSummary, id: string, name: string)
 /**
  * The writes that free every role pointing at `providerId` before it is
  * disconnected: answer and decomposition fall back to their defaults by
- * removing the field; rerank and Jev switch off. Settings and the onboarding
+ * removing the field; rerank switches off; Jev, which is required, is removed too so
+ * the shared default returns instead of the unsupported `jev: false`. Settings and the onboarding
  * model step disconnect through this, so both leave the same config behind.
  */
 export function providerRoleCleanup(config: AutoRagConfigSnapshot["config"], providerId: string): AutoRagConfigUpdate[] {
@@ -35,7 +36,7 @@ export function providerRoleCleanup(config: AutoRagConfigSnapshot["config"], pro
 	if (stringOf(model?.provider) === providerId) ops.push({ path: ["model"], remove: true });
 	if (stringOf(decomposition?.provider) === providerId) ops.push({ path: ["queryDecomposition"], remove: true });
 	if (stringOf(rerank?.provider) === providerId) ops.push({ path: ["rerank"], value: false });
-	if (stringOf(jev?.backend) === jevBackendFor(providerId)) ops.push({ path: ["jev"], value: false });
+	if (stringOf(jev?.backend) === jevBackendFor(providerId)) ops.push({ path: ["jev"], remove: true });
 	return ops;
 }
 
@@ -49,8 +50,7 @@ export function rerankOptionsFor(connected: readonly ProviderSummary[]): RoleOpt
 
 export function jevLabel(config: AutoRagConfigSnapshot["config"], t: TFunction): string {
 	const raw = getAt(config, ["jev"]);
-	if (raw === false) return t("settingsCore.ai.off");
-	if (raw === undefined) return t("settingsCore.ai.auto");
+	if (raw === undefined || raw === false) return t("settingsCore.ai.auto");
 	return stringOf(asRecord(raw)?.model) || t("settingsCore.ai.auto");
 }
 
@@ -91,7 +91,7 @@ export function roleSelectionFor(
 	}
 	if (role === "jev") {
 		const raw = getAt(config, ["jev"]);
-		if (raw === false) return { kind: "special", value: "off" };
+		if (raw === false) return null;
 		const record = asRecord(raw);
 		const backend = stringOf(record?.backend);
 		const modelId = stringOf(record?.model);
