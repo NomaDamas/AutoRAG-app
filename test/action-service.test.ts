@@ -1028,6 +1028,46 @@ describe("reduceSize", () => {
 		expect(await readdir(root)).toEqual(["scan.pdf"]);
 	});
 
+	it("reports compress progress for the job id, rising by whole percents to the end", async () => {
+		const progress: number[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			onProgress: (event) => {
+				expect(event.id).toBe("job-zip");
+				progress.push(event.percent);
+			},
+			run: async () => ({ stdout: "", stderr: "" }),
+		});
+		const docs = join(root, "docs");
+		await mkdir(docs);
+		for (let i = 0; i < 8; i += 1) await writeFile(join(docs, `${i}.txt`), `line ${i}\n`.repeat(4000 * (i + 1)));
+		const outcome = await service.run([docs], { kind: "compress", format: "zip", id: "job-zip" }, null);
+		expect(Object.keys(unzipSync(new Uint8Array(await readFile(outcome.output ?? ""))))).toHaveLength(9);
+		// One event per file here; each later than the last, never reaching 100 before the outcome.
+		expect(progress).toHaveLength(8);
+		expect(progress).toEqual([...progress].sort((a, b) => a - b));
+		expect(new Set(progress).size).toBe(progress.length);
+		expect(progress.at(-1)).toBe(99);
+	});
+
+	it("cancels a running compress, removes the partial archive, and rejects as cancelled", async () => {
+		let service!: ActionService;
+		service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			// Stop as soon as the first file is in: the write is mid-archive.
+			onProgress: () => void service.cancel("job-stop"),
+			run: async () => ({ stdout: "", stderr: "" }),
+		});
+		const docs = join(root, "docs");
+		await mkdir(docs);
+		for (let i = 0; i < 4; i += 1) await writeFile(join(docs, `${i}.txt`), "text\n".repeat(10_000));
+		const running = service.run([docs], { kind: "compress", format: "zip", id: "job-stop" }, null);
+		await expect(running).rejects.toThrow(t("main.action.compressCancelled", { name: "docs.zip" }));
+		expect(await readdir(root)).toEqual(["docs"]);
+	});
+
 	it("falls back to object-stream compaction when Filee left a digital PDF unshrunk", async () => {
 		const doc = await PDFDocument.create();
 		const font = await doc.embedFont(StandardFonts.Helvetica);

@@ -764,6 +764,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "要停止压缩吗？",
+    "compressStopMessage": "将停止压缩 {{name}}，并删除未完成的压缩文件。",
+    "compressStopAction": "停止",
+    "compressKeep": "继续压缩",
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
@@ -1532,6 +1536,7 @@
       "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
       "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）",
       "reduceCancelled": "已取消缩小 {{name}} 的体积",
+      "compressCancelled": "已停止压缩 {{name}}",
       "reducedReplaced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}% · 原文件已移至废纸篓）"
     },
     "indexStatus": {
@@ -3238,6 +3243,7 @@
     "reduceDone": "已缩减大小 · {{name}}",
     "reduceFailed": "缩减大小失败 · {{name}}",
     "reduceOpen": "查看缩减大小状态",
+    "compressOpen": "停止压缩",
     "convertRunning": "正在转换 · {{name}}",
     "convertQueued": "等待转换 · {{name}}",
     "convertDone": "转换完成 · {{name}}",
