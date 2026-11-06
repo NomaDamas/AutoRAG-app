@@ -10,6 +10,7 @@ import {
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { type AssistantMessage, isContextOverflow } from "@earendil-works/pi-ai";
+import { JEV_SLLM_BACKEND } from "../shared/ai-roles";
 import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
@@ -819,6 +820,22 @@ async function resolveDecomposition(
 	return { model: applyDazziThinkingLevels(resolved.model), ...(apiKey === undefined ? {} : { apiKey }) };
 }
 
+type AgentJevOptions = NonNullable<AutoRAGAgentOptions["jev"]>;
+
+/**
+ * The small chat model that decides in Jev's place when `jev.backend` is `sllm`, resolved like upstream's
+ * `resolveSllmDecisionModel` (not exported from the package entry): `jev.sllm.model`, else the question-decomposition
+ * model, else its default. Any other backend returns undefined, so the agent has no Jev fallback, as before.
+ */
+async function resolveSllmDecision(config: CliConfig, env: NodeJS.ProcessEnv, cwd: string): Promise<AgentJevOptions["sllm"]> {
+	if (config.jev?.backend !== JEV_SLLM_BACKEND) return undefined;
+	const decomposition = config.queryDecomposition === false ? undefined : config.queryDecomposition?.model;
+	const reference = config.jev.sllm?.model ?? decomposition ?? DEFAULT_QUERY_DECOMPOSITION;
+	const resolved = await resolveAgentModel({ ...config, model: reference }, { env, cwd });
+	const apiKey = resolved.apiKey ?? resolved.providerApiKeys?.[resolved.model.provider];
+	return { model: applyDazziThinkingLevels(resolved.model), ...(apiKey === undefined ? {} : { apiKey }) };
+}
+
 /**
  * `sessionDir` is where pi keeps each chat's conversation file: an app-owned folder, so the files move with the
  * app's data and "clear history" can delete exactly them.
@@ -844,11 +861,14 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		const agentDir = input.env.PI_CODING_AGENT_DIR ?? getAgentDir();
 		syncCalendarMcpConfig(raw, raw, agentDir);
 		const decomposition = await resolveDecomposition(effective, input.env, input.cwd);
+		const sllm = await resolveSllmDecision(effective, input.env, input.cwd);
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
+		const baseOptions = buildAgentOptions(effective);
 		const agentOptions: AutoRAGAgentOptions = {
-			...buildAgentOptions(effective),
+			...baseOptions,
+			...(sllm !== undefined ? { jev: { ...baseOptions.jev, sllm } } : {}),
 			model: resolved.model,
 			piAgentDir: agentDir,
 			piSessionDir: options.sessionDir,

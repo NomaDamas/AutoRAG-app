@@ -677,7 +677,7 @@ role, in the shared `config.json` (the config carries an explicit
 |---|---|---|
 | answer `model` | nothing, or an AutoRAG model | any other provider's model |
 | `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
-| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
 | `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
 
 The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);

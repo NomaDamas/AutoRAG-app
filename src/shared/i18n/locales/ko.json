@@ -2628,6 +2628,7 @@
       "decompositionHint": "긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다.",
       "jevModel": "판단 모델 (Jev)",
       "jevHint": "바로 답할지, 내 자료를 검색할지 판단합니다.",
+      "jevSllm": "설정 안 함",
       "rerankModel": "검색 결과 정렬",
       "rerankHint": "관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다.",
       "subDocUnderstanding": "문서 이해",

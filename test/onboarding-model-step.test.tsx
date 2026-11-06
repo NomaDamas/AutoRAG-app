@@ -50,7 +50,7 @@ const provider = (id: string, models: readonly ModelCatalogEntry[], over: Partia
 });
 
 /** The three helper roles on "auto", so only the answer model decides whether the step opens. */
-const HELPERS_AUTO = { queryDecomposition: false, jev: false, rerank: false };
+const HELPERS_AUTO = { queryDecomposition: false, jev: { backend: "sllm" }, rerank: false };
 
 const snapshot = (): AutoRagConfigSnapshot => ({ configPath: "/x/config.json", configExists: true, error: null, config: structuredClone(store) as AutoRagConfigSnapshot["config"] });
 
@@ -176,7 +176,7 @@ describe("ModelStep", () => {
 	});
 
 	it("keeps the step closed while a helper role has no model yet", async () => {
-		store = { model: { provider: "openai", id: "a" }, jev: false, rerank: false };
+		store = { model: { provider: "openai", id: "a" }, jev: { backend: "sllm" }, rerank: false };
 		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
 		const { patch } = await render(byokDraft());
 		expect(patch).not.toHaveBeenCalledWith({ model: expect.objectContaining({ verified: true }) });
@@ -238,6 +238,27 @@ describe("ModelStep", () => {
 		expect(store.jev).toEqual({ model: "typesafe/jev-1.13", backend: "openrouter" });
 		expect(store.rerank).toEqual({ enabled: true, provider: "openrouter", model: "voyageai/rerank-3-lite" });
 		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "openrouter", modelId: "a", verified: true } });
+	});
+
+	it("labels Jev's auto choice with the no-Jev label and saves it as the small chat model, never as `jev: false`", async () => {
+		store = { model: { provider: "openai", id: "a" }, queryDecomposition: false, rerank: false };
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		const { patch } = await render(byokDraft());
+		await click(host.querySelector('[data-role-trigger="jev"]'));
+		const none = document.querySelector("[data-role-auto]");
+		expect(none?.textContent?.trim()).toBe("settingsCore.ai.jevSllm");
+		await click(none);
+		expect(store.jev).toEqual({ backend: "sllm" });
+		expect(host.querySelector('[data-role-trigger="jev"]')?.textContent?.trim()).toBe("settingsCore.ai.jevSllm");
+		expect(patch).toHaveBeenLastCalledWith({ model: { provider: "openai", modelId: "a", verified: true } });
+	});
+
+	it("does not treat a legacy `jev: false` as a finished choice", async () => {
+		store = { model: { provider: "openai", id: "a" }, queryDecomposition: false, jev: false, rerank: false };
+		bridge.settings.providersList.mockResolvedValue([provider("openai", [model("openai", "a"), model("openai", "b")])]);
+		const { patch } = await render(byokDraft());
+		expect(host.querySelector('[data-role-trigger="jev"]')?.textContent?.trim()).toBe("onboarding.model.pick");
+		expect(patch).not.toHaveBeenCalledWith({ model: expect.objectContaining({ verified: true }) });
 	});
 
 	it("checks what the config already holds, so a returning user is not asked to pick again", async () => {
