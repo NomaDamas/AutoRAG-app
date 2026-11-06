@@ -2628,7 +2628,7 @@
       "decompositionHint": "長い質問を複数の検索語に分割します。速くて安いモデルが適しています。",
       "jevModel": "判断モデル (Jev)",
       "jevHint": "そのまま回答するか、自分の資料を検索するかを判断します。",
-      "jevSllm": "小型チャットモデル (Jev なし)",
+      "jevSllm": "設定しない",
       "rerankModel": "検索結果の並べ替え",
       "rerankHint": "関連性の高い結果を上位に移動します。回答が少し遅くなることがあります。",
       "subDocUnderstanding": "文書の理解",

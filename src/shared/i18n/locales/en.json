@@ -2628,7 +2628,7 @@
       "decompositionHint": "Splits long questions into multiple search terms. A fast, cheap model works well.",
       "jevModel": "Judge Model (Jev)",
       "jevHint": "Decides whether to answer directly or search your documents.",
-      "jevSllm": "Small chat model (no Jev)",
+      "jevSllm": "None",
       "rerankModel": "Rerank Results",
       "rerankHint": "Raises more relevant results to the top. Answers may be slightly slower.",
       "subDocUnderstanding": "Document Understanding",
