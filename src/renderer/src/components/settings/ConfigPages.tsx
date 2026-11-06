@@ -1,5 +1,5 @@
 /**
- * Settings → 웹 검색 / 검색 범위 / 문서 읽기 / 중복 파일 정리.
+ * Settings → 웹 검색 / 문서 읽기 / 중복 파일 정리 (검색 범위는 `ScopePage`).
  *
  * Config-backed pages of the prototype IA. Every toggle/select writes a leaf
  * through the serialized `useConfigWriter` (webSearch/dupey/`fetch` keep the
@@ -8,15 +8,13 @@
  * reuse `LanguageSettings`.
  */
 
-import { useCallback, useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { Folder, Map as MapIcon, Plus } from "lucide-react";
-import { DEFAULT_CODE_FOLDER_NAMES, type AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
+import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
-import { IndexMapModal } from "./index-map/IndexMapModal";
-import { Chips, Note, PromptModal, Row, Section, SettingsPageHead } from "./SettingsKit";
-import { asRecord, boolOf, getAt, listOf, stringOf, useConfigWriter } from "./configSupport";
+import { Row, Section, SettingsPageHead } from "./SettingsKit";
+import { asRecord, boolOf, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
 
 /** Web-search providers offered as the default provider in the web-search page. */
@@ -93,92 +91,6 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 					/>
 				</Row>
 			</Section>
-		</>
-	);
-}
-
-/* =============================================================== Scope == */
-
-export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const { t } = useTranslation();
-	const { run, error } = useConfigWriter(onSaved);
-	const [addTarget, setAddTarget] = useState<"searchPaths" | "excludePaths" | null>(null);
-	const [mapOpen, setMapOpen] = useState(false);
-	const closeMap = useCallback(() => setMapOpen(false), []);
-	const searchPaths = listOf(getAt(snapshot.config, ["searchPaths"]));
-	const excludePaths = listOf(getAt(snapshot.config, ["excludePaths"]));
-	const fsearch = getAt(snapshot.config, ["fsearch"]);
-	const watch = boolOf(getAt(snapshot.config, ["fsearch", "watch"])) ?? true;
-	const appIndexing = asRecord(getAt(snapshot.config, ["appIndexing"])) ?? {};
-	const storedCodeFolders = listOf(appIndexing.codeFolderNames);
-	const codeFolderNames = (storedCodeFolders.length > 0 ? storedCodeFolders : DEFAULT_CODE_FOLDER_NAMES).filter((name) => !name.startsWith("."));
-
-	function writeList(path: "searchPaths" | "excludePaths", next: readonly string[]): void {
-		void run([next.length === 0 ? { path: [path], remove: true } : { path: [path], value: [...next] }]);
-	}
-
-	return (
-		<>
-			<SettingsPageHead title={t("settingsSources.scope.title")} description={t("settingsSources.scope.desc")} />
-			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.scope.foldersTitle")} description={t("settingsSources.scope.foldersDesc")}>
-				<Row name={t("settingsSources.scope.folderName")} hint={t("settingsSources.scope.folderHint")} stack>
-					<div className="settings-path-list">
-						{searchPaths.map((path, index) => (
-							<div className="settings-path-line" key={`${path}-${index}`}>
-								<Folder size={14} aria-hidden="true" focusable="false" />
-								<span title={path}>{path}</span>
-								<button type="button" className="linear-btn settings-btn-quiet" onClick={() => writeList("searchPaths", searchPaths.filter((_, i) => i !== index))}>{t("common.delete")}</button>
-							</div>
-						))}
-						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => setAddTarget("searchPaths")}>
-							<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.scope.addFolder")}
-						</button>
-					</div>
-				</Row>
-				{searchPaths.length === 0 ? <Note>{t("settingsSources.scope.emptyFolderNote")}</Note> : null}
-				<Row name={t("settingsSources.scope.openMap")} hint={t("settingsSources.scope.openMapHint")}>
-					<button type="button" className="linear-btn settings-btn-quiet" onClick={() => setMapOpen(true)}>
-						<MapIcon size={13} aria-hidden="true" focusable="false" />{t("settingsSources.scope.openMap")}
-					</button>
-				</Row>
-			</Section>
-			<Section title={t("settingsSources.scope.excludeTitle")} description={t("settingsSources.scope.excludeDesc")}>
-				<Note>{t("settingsSources.scope.excludeNote", { folders: codeFolderNames.join(", ") })}</Note>
-				<Row name={t("settingsSources.scope.excludeList")} hint={t("settingsSources.scope.excludeListHint")} stack>
-					<Chips
-						items={excludePaths}
-						onRemove={(index) => writeList("excludePaths", excludePaths.filter((_, i) => i !== index))}
-						onAdd={() => setAddTarget("excludePaths")}
-						addLabel={t("settingsSources.scope.addChip")}
-					/>
-				</Row>
-			</Section>
-			<Section title={t("settingsSources.scope.fileScopeTitle")}>
-				<Row name={t("settingsSources.scope.autoWatch")} hint={fsearch === false ? t("settingsSources.scope.autoWatchHintOff") : t("settingsSources.scope.autoWatchHintOn")}>
-					<Switch
-						checked={watch}
-						disabled={fsearch === false}
-						ariaLabel={t("settingsSources.scope.autoWatch")}
-						onChange={() => void run([{ path: ["fsearch", "watch"], value: !watch }])}
-					/>
-				</Row>
-			</Section>
-			{addTarget !== null ? (
-				<PromptModal
-					title={addTarget === "searchPaths" ? t("settingsSources.scope.addFolderTitle") : t("settingsSources.scope.addItemTitle")}
-					description={addTarget === "searchPaths" ? t("settingsSources.scope.addFolderDesc") : t("settingsSources.scope.addItemDesc")}
-					label={addTarget === "searchPaths" ? t("settingsSources.scope.folderPath") : t("settingsSources.scope.item")}
-					placeholder={addTarget === "searchPaths" ? t("settingsSources.scope.addFolderPlaceholder") : t("settingsSources.scope.addItemPlaceholder")}
-					confirmLabel={t("settingsSources.scope.confirmAdd")}
-					onCancel={() => setAddTarget(null)}
-					onSubmit={(value) => {
-						writeList(addTarget, [...(addTarget === "searchPaths" ? searchPaths : excludePaths), value]);
-						setAddTarget(null);
-					}}
-				/>
-			) : null}
-			{mapOpen ? <IndexMapModal onClose={closeMap} /> : null}
 		</>
 	);
 }

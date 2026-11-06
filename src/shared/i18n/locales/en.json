@@ -3142,7 +3142,7 @@
       "foldersTitle": "Folders to search",
       "foldersDesc": "The contents of these folders are included in AI search.",
       "folderName": "Search folders",
-      "folderHint": "Add or remove folders by entering their paths directly.",
+      "folderHint": "Pick folders to add. Everything inside them is searched.",
       "addFolder": "Add folder",
       "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
       "excludeTitle": "Items to exclude",
@@ -3164,8 +3164,11 @@
       "addItemPlaceholder": "e.g. node_modules",
       "confirmAdd": "Add",
       "addChip": "+ Add",
-      "openMap": "View index map",
-      "openMapHint": "See, as a map, how much of every file and folder in the search scope is indexed."
+      "notAdded": {
+        "duplicate": "{{path}} is already a search folder.",
+        "insideTarget": "{{path}} is already covered by a search folder above it.",
+        "notAbsolute": "{{path}} is not a full path."
+      }
     },
     "indexMap": {
       "title": "Index map",

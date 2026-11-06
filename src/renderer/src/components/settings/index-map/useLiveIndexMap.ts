@@ -17,6 +17,8 @@ export interface LiveIndexMapSource {
 	readonly onRefreshed: (listener: () => void) => () => void;
 	/** True while the index is being built, i.e. while the map can change under the person looking at it. */
 	readonly running: boolean;
+	/** Names the scope the map describes (the search folders and exclusions). A different value reads at once. */
+	readonly revision?: string;
 }
 
 /** Counts, per node, say everything a redraw depends on: an unchanged answer is not worth one. */
@@ -107,6 +109,13 @@ export function useLiveIndexMap(source: LiveIndexMapSource): LiveIndexMap {
 		if (wasRunning.current !== source.running) control.current?.read();
 		wasRunning.current = source.running;
 	}, [source.running]);
+
+	// Changing what the index covers changes the map right away, whether or not anything is indexing yet.
+	const revision = useRef(source.revision);
+	useEffect(() => {
+		if (revision.current !== source.revision) control.current?.read();
+		revision.current = source.revision;
+	}, [source.revision]);
 
 	return state;
 }

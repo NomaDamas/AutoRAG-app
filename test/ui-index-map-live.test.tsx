@@ -33,6 +33,7 @@ interface Harness {
 	read: Mock<() => Promise<IndexMap>>;
 	refreshed(): Promise<void>;
 	setRunning(running: boolean): Promise<void>;
+	setRevision(revision: string): Promise<void>;
 }
 
 /** Mounts the hook against a scripted `indexMap` read and a controllable "refresh settled" push. */
@@ -40,13 +41,15 @@ async function mount(reads: readonly (IndexMap | Error)[], running: boolean): Pr
 	let latest: LiveIndexMap | undefined;
 	let pushed: (() => void) | undefined;
 	let call = 0;
+	let active = running;
+	let revision = "a";
 	const read = vi.fn(async (): Promise<IndexMap> => {
 		const next = reads[Math.min(call, reads.length - 1)]!;
 		call += 1;
 		if (next instanceof Error) throw next;
 		return next;
 	});
-	function Probe({ active }: { readonly active: boolean }): null {
+	function Probe(props: { readonly active: boolean; readonly revision: string }): null {
 		latest = useLiveIndexMap({
 			read,
 			onRefreshed: (listener: () => void) => {
@@ -55,17 +58,25 @@ async function mount(reads: readonly (IndexMap | Error)[], running: boolean): Pr
 					pushed = undefined;
 				};
 			},
-			running: active,
+			running: props.active,
+			revision: props.revision,
 		});
 		return null;
 	}
-	const render = (active: boolean): Promise<void> => act(async () => root.render(<Probe active={active} />));
-	await render(running);
+	const render = (): Promise<void> => act(async () => root.render(<Probe active={active} revision={revision} />));
+	await render();
 	return {
 		live: () => latest!,
 		read,
 		refreshed: () => act(async () => pushed?.()),
-		setRunning: render,
+		setRunning: (next) => {
+			active = next;
+			return render();
+		},
+		setRevision: (next) => {
+			revision = next;
+			return render();
+		},
 	};
 }
 
@@ -179,6 +190,18 @@ describe("useLiveIndexMap", () => {
 		const harness = await mount([mapOf(1), mapOf(9)], false);
 		await harness.refreshed();
 		expect(harness.live().map?.totals.indexed).toBe(9);
+	});
+
+	it("re-reads at once when the scope it describes changes, and not when the same scope is rendered again", async () => {
+		const harness = await mount([mapOf(1), mapOf(2)], false);
+		expect(harness.read).toHaveBeenCalledTimes(1);
+
+		await harness.setRevision("a");
+		expect(harness.read).toHaveBeenCalledTimes(1);
+
+		await harness.setRevision("b");
+		expect(harness.read).toHaveBeenCalledTimes(2);
+		expect(harness.live().map?.totals.indexed).toBe(2);
 	});
 
 	it("reads once more after a push that arrives while a read is running", async () => {

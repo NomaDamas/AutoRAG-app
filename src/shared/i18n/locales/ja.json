@@ -3142,7 +3142,7 @@
       "foldersTitle": "検索するフォルダ",
       "foldersDesc": "これらのフォルダの内容を AI 検索に含めます。",
       "folderName": "検索フォルダ",
-      "folderHint": "設定したフォルダのパスを直接入力して追加・削除します。",
+      "folderHint": "フォルダを選んで追加します。中のすべての項目が検索対象になります。",
       "addFolder": "フォルダを追加",
       "emptyFolderNote": "検索フォルダがまだありません。追加しない場合はデフォルトの検索範囲を使います。",
       "excludeTitle": "除外する項目",
@@ -3164,8 +3164,11 @@
       "addItemPlaceholder": "例: node_modules",
       "confirmAdd": "追加",
       "addChip": "+ 追加",
-      "openMap": "インデックスマップを表示",
-      "openMapHint": "検索範囲内のすべてのファイルとフォルダがどれだけインデックス化されているかを地図で確認します。"
+      "notAdded": {
+        "duplicate": "{{path}} はすでに検索フォルダです。",
+        "insideTarget": "{{path}} は上位の検索フォルダにすでに含まれています。",
+        "notAbsolute": "{{path}} は完全なパスではありません。"
+      }
     },
     "indexMap": {
       "title": "インデックスマップ",

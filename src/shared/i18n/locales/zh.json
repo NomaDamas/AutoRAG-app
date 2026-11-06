@@ -3142,7 +3142,7 @@
       "foldersTitle": "要搜索的文件夹",
       "foldersDesc": "这些文件夹的内容将纳入 AI 搜索。",
       "folderName": "搜索文件夹",
-      "folderHint": "直接输入文件夹路径来添加或删除。",
+      "folderHint": "选择要添加的文件夹。其中的所有内容都会被搜索。",
       "addFolder": "添加文件夹",
       "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
       "excludeTitle": "要排除的项目",
@@ -3164,8 +3164,11 @@
       "addItemPlaceholder": "例如：node_modules",
       "confirmAdd": "添加",
       "addChip": "+ 添加",
-      "openMap": "查看索引地图",
-      "openMapHint": "以地图形式查看搜索范围内所有文件和文件夹的索引情况。"
+      "notAdded": {
+        "duplicate": "{{path}} 已是搜索文件夹。",
+        "insideTarget": "{{path}} 已包含在上级搜索文件夹中。",
+        "notAbsolute": "{{path}} 不是完整路径。"
+      }
     },
     "indexMap": {
       "title": "索引地图",

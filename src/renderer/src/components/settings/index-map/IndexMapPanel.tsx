@@ -1,11 +1,11 @@
 import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowUpLeft, CornerLeftUp, File, Folder } from "lucide-react";
+import { Ban, CornerLeftUp, File, Folder, RefreshCw, RotateCcw } from "lucide-react";
 import type { LocaleKey } from "../../../../../shared/i18n/core";
 import type { IndexMapNode } from "../../../../../shared/index-map-contract";
+import { availableActions } from "../../../../../shared/index-scope-edit";
 import { useIndexActivity } from "../../../hooks/useIndexActivity";
 import { localIndexRunning } from "../../../state/index-activity";
-import { ModalShell } from "../SettingsKit";
 import { indexMapTargets, layoutRadial, nodeKey, radialState, type RadialState } from "./radial";
 import { useLiveIndexMap } from "./useLiveIndexMap";
 
@@ -17,19 +17,51 @@ const STATE_LABEL: Readonly<Record<RadialState, LocaleKey>> = {
 	excluded: "settingsSources.indexMap.state.excluded",
 };
 
-export function IndexMapModal({ onClose }: { readonly onClose: () => void }): ReactElement {
+export interface IndexMapPanelProps {
+	/** The search folders in the config. When they change, the map reads again and shows the whole scope. */
+	readonly searchPaths: readonly string[];
+	/** The exclusions in the config, to tell a folder left out on its own from one left out by a folder above it. */
+	readonly excludePaths: readonly string[];
+	/** True while a change to the scope is being saved. */
+	readonly busy: boolean;
+	readonly onExclude: (path: string) => void;
+	readonly onInclude: (path: string) => void;
+	/** Brings the index up to date with the scope, so folders added or left out show their real state. */
+	readonly onRefresh: () => void;
+}
+
+/**
+ * The index map as part of the Search Scope page: a radial chart of the search folders with their completion, and,
+ * for the folder or file in view, the one change that would work (leave it out, or bring it back).
+ */
+export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onInclude, onRefresh }: IndexMapPanelProps): ReactElement {
 	const { t, i18n } = useTranslation();
 	const running = localIndexRunning(useIndexActivity());
 	const { map, error } = useLiveIndexMap({
 		read: () => (window.autorag?.fs === undefined ? Promise.reject(new Error(t("settingsSources.indexMap.unavailable"))) : window.autorag.fs.indexMap()),
 		onRefreshed: (listener) => window.autorag?.fs?.onIndexRefreshed?.(listener) ?? (() => {}),
 		running,
+		// Any change to what the index covers reads the map again at once.
+		revision: JSON.stringify([searchPaths, excludePaths]),
 	});
-	// The focused folder and the hovered item are kept by path: a re-read renumbers nodes, but a path names the same place.
+	// What is in view is kept by path: a re-read renumbers nodes, but a path names the same place. The pointer only
+	// previews; the click is what picks, so the buttons stay reachable after the pointer leaves the chart.
 	const [focusPath, setFocusPath] = useState<string | null>(null);
-	const [activeKey, setActiveKey] = useState<string | null>(null);
+	const [hoverKey, setHoverKey] = useState<string | null>(null);
+	const [pickedKey, setPickedKey] = useState<string | null>(null);
+	// A different set of search folders is a different map: show all of it, rather than the folder that was in view,
+	// which may not even be among the new roots (a folder just added would be off screen).
+	const foldersKey = JSON.stringify(searchPaths);
+	const [seenFolders, setSeenFolders] = useState(foldersKey);
+	if (seenFolders !== foldersKey) {
+		setSeenFolders(foldersKey);
+		setFocusPath(null);
+		setPickedKey(null);
+		setHoverKey(null);
+	}
 	const focus = map?.nodes.find((node) => node.path === focusPath && (node.kind === "root" || node.kind === "folder")) ?? null;
-	const active = map?.nodes.find((node) => nodeKey(node) === activeKey) ?? focus;
+	const picked = map?.nodes.find((node) => nodeKey(node) === pickedKey) ?? null;
+	const detail = map?.nodes.find((node) => nodeKey(node) === hoverKey) ?? picked ?? focus;
 	const sectors = useMemo(() => map === null ? [] : layoutRadial(map, focus?.id ?? null), [map, focus]);
 	const counts = focus?.counts ?? map?.totals;
 	const targets = counts === undefined ? 0 : indexMapTargets(counts);
@@ -42,7 +74,8 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 		: node.kind === "root" ? node.path.split(/[\\/]/u).filter(Boolean).at(-1) ?? node.path : node.name;
 	const describe = (node: IndexMapNode): string => `${label(node)} · ${t(STATE_LABEL[radialState(node)])} · ${t("settingsSources.indexMap.folderCounts", { indexed: number.format(node.counts.indexed), total: number.format(indexMapTargets(node.counts)) })}`;
 	const enter = (node: IndexMapNode): void => {
-		setActiveKey(nodeKey(node));
+		setPickedKey(nodeKey(node));
+		setHoverKey(null);
 		if ((node.kind === "folder" || node.kind === "root") && node.state !== "excluded") setFocusPath(node.path);
 	};
 	const roots = map?.nodes.filter((node) => node.parent === null) ?? [];
@@ -50,26 +83,34 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 		const parent = map?.nodes.find((node) => node.id === focus?.parent);
 		// A lone search root is the whole scope already, so going up from its folders lands on the overview.
 		setFocusPath(parent === undefined || (parent.kind === "root" && roots.length === 1) ? null : parent.path);
-		setActiveKey(null);
+		setPickedKey(null);
+		setHoverKey(null);
+	};
+	const exclude = (path: string): void => {
+		// Leaving out the folder that is in view leaves nothing to look at inside it.
+		if (focus !== null && focus.path === path) up();
+		setPickedKey(null);
+		onExclude(path);
 	};
 	const listingParent = focus?.id ?? (roots.length === 1 ? roots[0]?.id : null);
 	const children = map?.nodes.filter((node) => node.parent === listingParent) ?? [];
-	const detail = active;
+	const actions = detail === null ? null : availableActions({ path: detail.path, kind: detail.kind, state: radialState(detail), excludePaths });
 	const total = map === null ? 0 : indexMapTargets(map.totals);
+	const preview = (node: IndexMapNode) => ({ onPointerEnter: () => setHoverKey(nodeKey(node)), onFocus: () => setHoverKey(nodeKey(node)), onBlur: () => setHoverKey(null) });
 
 	return (
-		<ModalShell onClose={onClose} className="index-map-modal" label={t("settingsSources.indexMap.title")}>
-			<div className="index-map-head">
-				<div><h2>{t("settingsSources.indexMap.title")}</h2><p>{t("settingsSources.indexMap.desc")}</p></div>
+		<div className="index-map-panel">
+			<div className="index-map-top">
+				<ul className="index-map-legend" aria-label={t("settingsSources.indexMap.legendLabel")}>{STATES.map((state) => <li key={state} data-state={state}><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t(STATE_LABEL[state])}</span></li>)}</ul>
+				<button type="button" className="linear-btn settings-btn-quiet" data-action="index-map-refresh" disabled={running} onClick={onRefresh}><RefreshCw size={13} aria-hidden="true" />{running ? t("settingsSources.indexing.localUpdating") : t("settingsSources.indexing.refreshTitle")}</button>
 			</div>
-			<ul className="index-map-legend" aria-label={t("settingsSources.indexMap.legendLabel")}>{STATES.map((state) => <li key={state} data-state={state}><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t(STATE_LABEL[state])}</span></li>)}</ul>
 			<div className="index-map-body">
 				<div className="index-map-stage">
-					<svg className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")}>
-						{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={active !== null && nodeKey(active) === nodeKey(node) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} onPointerEnter={() => setActiveKey(nodeKey(node))} onFocus={() => setActiveKey(nodeKey(node))} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
+					<svg className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")} onPointerLeave={() => setHoverKey(null)}>
+						{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={detail !== null && nodeKey(detail) === nodeKey(node) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} {...preview(node)} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
 					</svg>
 					{map !== null ? <button type="button" className="index-map-center" onClick={up} disabled={focus === null} aria-label={focus === null ? t("settingsSources.indexMap.allRoots") : t("settingsSources.indexMap.up")}>
-						{focus !== null ? <ArrowUpLeft size={14} aria-hidden="true" /> : null}<strong>{percent}</strong><small>{focus === null ? t("settingsSources.indexMap.allRoots") : label(focus)}</small>
+						{focus !== null ? <CornerLeftUp size={14} aria-hidden="true" /> : null}<strong>{percent}</strong><small>{focus === null ? t("settingsSources.indexMap.allRoots") : label(focus)}</small>
 					</button> : null}
 					{map === null && error === null ? <div className="index-map-overlay">{t("settingsSources.indexMap.loading")}</div> : null}
 					{map === null && error !== null ? <div className="index-map-overlay" role="alert">{t("settingsSources.indexMap.error", { message: error })}</div> : null}
@@ -88,15 +129,17 @@ export function IndexMapModal({ onClose }: { readonly onClose: () => void }): Re
 							<p>{detail.state === "excluded" ? t("settingsSources.indexMap.excludedHint") : t("settingsSources.indexMap.folderCounts", { indexed: number.format(detail.counts.indexed), total: number.format(indexMapTargets(detail.counts)) })}</p>
 							{detail.kind === "file" && detail.state === "stale" ? <p>{t("settingsSources.indexMap.state.stale")}</p> : null}
 							{detail.kind === "file" && detail.state === "unindexable" ? <p>{t("settingsSources.indexMap.state.unindexable")}</p> : null}
+							{actions?.exclude === true ? <button type="button" className="linear-btn settings-btn-quiet index-map-action" data-action="index-map-exclude" disabled={busy} onClick={() => exclude(detail.path)}><Ban size={13} aria-hidden="true" />{t("contextMenu.excludeFromIndex")}</button> : null}
+							{actions?.include === true ? <button type="button" className="linear-btn settings-btn-quiet index-map-action" data-action="index-map-include" disabled={busy} onClick={() => onInclude(detail.path)}><RotateCcw size={13} aria-hidden="true" />{t("contextMenu.includeInIndex")}</button> : null}
 						</>}
 					</div>
-					<div className="index-map-folders" aria-label={t("settingsSources.indexMap.scopeLabel")}>
+					<div className="index-map-folders" aria-label={t("settingsSources.indexMap.scopeLabel")} onPointerLeave={() => setHoverKey(null)}>
 						{focus !== null ? <button type="button" className="index-map-parent" data-action="index-map-parent" aria-label={t("settingsSources.indexMap.up")} onClick={up}><CornerLeftUp size={15} aria-hidden="true" /><span>..</span></button> : null}
-						{children.map((node) => <button type="button" key={nodeKey(node)} data-state={radialState(node)} onPointerEnter={() => setActiveKey(nodeKey(node))} onFocus={() => setActiveKey(nodeKey(node))} onClick={() => enter(node)}>{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}<span>{label(node)}</span><small>{node.state === "excluded" ? "—" : `${number.format(node.counts.indexed)}/${number.format(indexMapTargets(node.counts))}`}</small></button>)}
+						{children.map((node) => <button type="button" key={nodeKey(node)} data-state={radialState(node)} {...preview(node)} onClick={() => enter(node)}>{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}<span>{label(node)}</span><small>{node.state === "excluded" ? "—" : `${number.format(node.counts.indexed)}/${number.format(indexMapTargets(node.counts))}`}</small></button>)}
 					</div>
 				</aside>
 			</div>
 			{map !== null && map.truncated ? <p className="index-map-note">{t("settingsSources.indexMap.truncated", { total: number.format(total) })}</p> : null}
-		</ModalShell>
+		</div>
 	);
 }

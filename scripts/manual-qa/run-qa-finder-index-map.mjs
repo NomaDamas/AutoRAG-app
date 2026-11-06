@@ -1,33 +1,38 @@
 /**
- * Manual QA — Settings → Search Scope → View index map, in the real app.
+ * Manual QA — Settings → Search Scope: the search folders, the index map and the exclusions on one page, in the real app.
  *
  * A scope is built the way a person has one (two projects, notes, an archive, a
  * private folder excluded in config, a `node_modules` the refresh never walks,
  * a folder of files no parser reads), Settings' own refresh indexes it, and
- * then one file changes and two arrive. The map is now a DaisyDisk-style
- * radial territory chart, so the lane checks the real thing:
+ * then one file changes and two arrive. The map is a DaisyDisk-style radial
+ * territory chart inside the page, so the lane checks the real thing:
  *
  *   - every drawn territory is an SVG `path[data-node-id]` with its `data-state`
  *     (indexed / partial / unindexed / excluded), `data-kind` and `data-path`;
  *   - the eligible-only percent sits at the centre (`indexed / targets`, with
  *     excluded folders and unsupported files out of the denominator);
  *   - paths take focus and clicks, a folder click drills into its children, and
- *     the centre and the overview button bring the whole scope back;
- *   - the details sidebar names the hovered or focused node (its path and its
- *     counts);
+ *     the centre brings the whole scope back;
+ *   - the details sidebar names the hovered or focused node, and keeps the clicked
+ *     one (with its action) after the pointer leaves;
  *   - the legend lists the four colours with no per-state counts;
  *   - a folder-only-in-unsupported files is left off the map entirely;
- *   - an exclusion toggled while the map is open drops the folder's files from
- *     the target denominator and grays its territory.
+ *   - the map follows a real refresh started from its own button, by itself;
+ *   - editing from the map: a folder is left out (config `excludePaths`, the map grays
+ *     it, the target set shrinks) and brought back;
+ *   - editing the folder list: a folder picked in the system dialog (stubbed here; the
+ *     dialog itself is the OS's) appears in `searchPaths` and as a new root on the map,
+ *     one inside an existing target is refused with a reason, and Delete takes it off
+ *     again.
  *
- * Korean is checked as the second language. Only the real Settings refresh and
- * the fs bridge are called through `evaluate`; every map interaction is a real
+ * Korean is checked as the second language. Only the real Settings refresh and the
+ * setup are called through `evaluate`; every map and page interaction is a real
  * Playwright hover, focus or click.
  *
  *   bun run build
  *   bun run qa script scripts/manual-qa/run-qa-finder-index-map.mjs
  */
-import { appendFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
@@ -46,6 +51,8 @@ const check = (label, ok, detail) => {
 	log(`${ok ? "PASS" : "FAIL"} ${label}${ok || detail === undefined ? "" : ` — ${detail}`}`);
 	if (!ok) failures.push(label);
 };
+
+const KO = JSON.parse(readFileSync(join(ROOT, "src/shared/i18n/locales/ko.json"), "utf8"));
 
 const WORK = mkdtempSync(join(tmpdir(), "dazzi-qa-index-map-"));
 const AUTORAG_HOME = join(WORK, "autorag-home");
@@ -78,6 +85,10 @@ put("node_modules/pkg/CHANGELOG.md", "# changes\n");
 // Only files no parser reads: the folder must leave the map entirely.
 put("misc/blob-1.qaunknown", "opaque");
 put("misc/blob-2.qaunknown", "opaque");
+// A folder outside the scope, added to and removed from the folder list below.
+const EXTRA = join(WORK, "extra");
+mkdirSync(EXTRA, { recursive: true });
+for (let n = 1; n <= 2; n += 1) writeFileSync(join(EXTRA, `ledger-${n}.txt`), `Ledger ${n}: a figure outside the scope.\n`);
 /** Files the index is meant to hold: supported and inside the scope (archive counts until it is excluded). */
 const INDEXABLE = 6 + 4 + 5 + 3;
 const TARGETS_DRIFT = INDEXABLE + 2; // spec-1 changed, note-6 and note-7 arrived
@@ -245,19 +256,43 @@ const clickPath = async (locator) => {
 	return at.hit;
 };
 
-const openMap = async (scopeLabel, buttonLabel) => {
-	await page.locator(".sidebar__item--settings").click();
-	await page.waitForSelector(".settings-panel");
-	await page.locator(".settings-nav-item", { hasText: scopeLabel }).click();
-	await page.getByRole("button", { name: buttonLabel }).click();
-	await page.locator(".index-map-modal").waitFor();
+/** The saved config, read from disk: what the CLI and the librarian would see. */
+const savedConfig = () => JSON.parse(readFileSync(CONFIG, "utf8"));
+const listed = (key) => (savedConfig()[key] ?? []).map(String);
+const hasEntry = (key, ...tail) => listed(key).some((entry) => hasTail(entry, ...tail));
+
+/**
+ * Settings → Search Scope. Leaving the page and coming back is what remounts the map, so it reads the disk afresh
+ * (files the lane just wrote); the map itself never needs a button for that.
+ */
+const openMap = async (scopeLabel, otherLabel) => {
+	if ((await page.locator(".settings-panel").count()) === 0) {
+		await page.locator(".sidebar__item--settings").click();
+		await page.waitForSelector(".settings-panel");
+	}
+	await page.locator(".settings-nav-item", { hasText: otherLabel }).first().click();
+	await page.locator(".settings-nav-item", { hasText: scopeLabel }).first().click();
+	await page.locator(".index-map-panel").waitFor();
 	await page.locator(".index-map-chart").waitFor();
 	await page.locator(".index-map-summary").waitFor();
 	await page.locator(".index-map-center").waitFor();
 	await page.locator(".index-map-details").waitFor();
 	await page.locator(".index-map-chart path[data-node-id]").first().waitFor();
+	// Real pointer input needs the chart on screen: bring the map to the top of the page.
+	await page.locator(".index-map-panel").evaluate((el) => el.scrollIntoView({ block: "start" }));
 	await page.waitForTimeout(500);
 };
+
+/** The system folder dialog is the OS's; answer it the way a person picking these folders would. */
+const answerFolderDialog = (paths) =>
+	app.evaluate(({ dialog }, picked) => {
+		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: picked });
+	}, paths);
+
+const waitForTargets = (expected) =>
+	page
+		.waitForFunction((want) => Number(document.querySelector(".index-map-summary")?.getAttribute("data-targets") ?? "-1") === want, expected, { timeout: 120_000 })
+		.then(() => true, () => false);
 
 // ── 1. English: index the scope with Settings' own refresh, then let it drift. ──
 await start("en");
@@ -272,7 +307,9 @@ put("projects/alpha/spec-1.md", "# Alpha spec 1\n\nThe alpha milestone moved: it
 put("notes/note-6.txt", "Note 6: a new figure, 42.\n");
 put("notes/note-7.txt", "Note 7: another new figure, 49.\n");
 
-await openMap("Search Scope", "View index map");
+await openMap("Search Scope", "Indexing");
+const placement = await page.evaluate(() => ({ modal: document.querySelector(".settings-modal-backdrop") !== null, inContent: document.querySelector(".settings-content .index-map-panel") !== null, folders: document.querySelectorAll(".settings-path-line").length }));
+check("the map is part of the page, not a dialog, with the folder list on it", !placement.modal && placement.inContent && placement.folders === 1, JSON.stringify(placement));
 const geometry = await page.evaluate(() => {
 	const chart = document.querySelector(".index-map-chart").getBoundingClientRect();
 	const stage = document.querySelector(".index-map-stage").getBoundingClientRect();
@@ -363,22 +400,12 @@ const chrome = await page.evaluate(() => ({
 		const body = document.querySelector(".index-map-body")?.getBoundingClientRect();
 		return legend !== undefined && body !== undefined && legend.bottom <= body.top + 1;
 	})(),
-	modalText: document.querySelector(".index-map-modal")?.innerText ?? "",
+	modalText: document.querySelector(".index-map-panel")?.innerText ?? "",
 }));
 check("the centre shows only the percent and the scope name", !/Indexed$/u.test(chrome.centerText) && /^\d+%/u.test(chrome.centerText), chrome.centerText);
 check("no bottom hint or fold note", !chrome.footer && chrome.note === null && !/Click a folder to zoom/u.test(chrome.modalText) && !/grouped together/u.test(chrome.modalText), String(chrome.note));
 check("the legend sits above the chart", chrome.legendAbove);
 check("no '..' row while the whole scope is shown", (await page.locator('[data-action="index-map-parent"]').count()) === 0);
-// The window's resize grips must not show through the modal: a real pointer anywhere over it lands inside the dialog.
-const throughModal = await page.evaluate(() => {
-	const grips = [...document.querySelectorAll('[role="separator"]')].filter((grip) => !grip.closest(".settings-modal-backdrop"));
-	return grips.map((grip) => {
-		const box = grip.getBoundingClientRect();
-		const hit = document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2);
-		return { label: grip.getAttribute("aria-label"), inside: hit?.closest(".settings-modal-backdrop") !== null };
-	});
-});
-check("no resize grip shows through the modal", throughModal.length > 0 && throughModal.every((grip) => grip.inside), JSON.stringify(throughModal));
 
 // Hover a folder: the sidebar names it and counts it.
 const alpha = await findPath({ kind: "folder", tail: ["projects", "alpha"] });
@@ -419,13 +446,11 @@ await parentRow.click();
 await page.waitForTimeout(450);
 check("the '..' row goes back up to the whole scope", (await centerPercent()) === PERCENT_DRIFT && (await parentRow.count()) === 0, `${await centerPercent()}`);
 
-await page.keyboard.press("Escape");
-check("Escape closes the map", (await page.locator(".index-map-modal").count()) === 0);
-
+// Leaving the page and coming back reads the files written meanwhile.
 // ── 2. A folder of brand-new files, and an exclusion toggled while open. ──
 put("incoming/inbox-1.txt", "Inbox one, never indexed.\n");
 put("incoming/inbox-2.txt", "Inbox two, never indexed.\n");
-await openMap("Search Scope", "View index map");
+await openMap("Search Scope", "Indexing");
 const withIncoming = await summary();
 log(`summary with incoming: ${JSON.stringify(withIncoming)}`);
 check("a new-only folder widens the target set", withIncoming.indexed === INDEXABLE - 1 && withIncoming.targets === TARGETS_DRIFT + 2, JSON.stringify(withIncoming));
@@ -452,50 +477,111 @@ await page.evaluate(() => {
 	}, 50);
 });
 const beforeLive = await summary();
-// The refresh indexes the two inbox files and the one changed earlier: 17/22 becomes 22/22 once it ends.
-void page.evaluate(() => window.autorag.settings.configRefresh());
+// The refresh indexes the two inbox files and the one changed earlier: 17/22 becomes 22/22 once it ends. It is
+// started with the map's own button, pressed from the keyboard so the real pointer stays on the folder it is over.
+const refreshButton = page.locator('[data-action="index-map-refresh"]');
+check("the map has a refresh button", (await refreshButton.count()) === 1 && (await refreshButton.isEnabled()));
+const refreshStartedAt = Date.now();
+await refreshButton.focus();
+await page.keyboard.press("Enter");
 const followed = await page
 	.waitForFunction((expected) => Number(document.querySelector(".index-map-summary")?.getAttribute("data-indexed") ?? "-1") === expected, beforeLive.targets, { timeout: 120_000 })
 	.then(() => true, () => false);
+// How fast MinSync finishes is not the lane's to decide: keep watching for a fixed window, so "never emptied" is
+// judged over the update and the settled state after it, not over however few samples a quick refresh allowed.
+await page.waitForTimeout(Math.max(0, 2000 - (Date.now() - refreshStartedAt)));
 const watch = await page.evaluate(() => {
 	clearInterval(window.__mapWatchTimer);
 	return window.__mapWatch;
 });
 const afterLive = await summary();
-check("the open map follows a running refresh by itself, with no button pressed", followed && afterLive.indexed === beforeLive.targets, JSON.stringify({ beforeLive, afterLive }));
+log(`live refresh followed in ${Date.now() - refreshStartedAt} ms, ${watch.samples} samples`);
+check("the open map follows a running refresh by itself, with no further input", followed && afterLive.indexed === beforeLive.targets, JSON.stringify({ beforeLive, afterLive }));
 check("the chart never emptied or showed a loading overlay while updating", watch.empty === 0 && watch.overlay === 0 && watch.minPaths > 0 && watch.samples > 20, JSON.stringify(watch));
 const stillHovered = await page.evaluate(() => document.querySelector(".index-map-sector[data-active='true']")?.getAttribute("data-path") ?? null);
 check("the item under the pointer is still the one being shown after the update", stillHovered !== null && hasTail(stillHovered, "incoming"), String(stillHovered));
 await shot("04b-followed-refresh");
 
-// Excluding the archive while the map is open: its three files leave the index
-// and the target set, and its territory turns gray.
-await page.evaluate((path) => window.autorag.fs.setIndexExcluded(path, true), join(DOCS, "archive"));
-const settled = await page
-	.waitForFunction(
-		(expected) => Number(document.querySelector(".index-map-summary")?.getAttribute("data-targets") ?? "-1") === expected,
-		withIncoming.targets - 3,
-		{ timeout: 120_000 },
-	)
-	.then(() => true, () => false);
+// Excluding the archive from the map: pick the territory, press the action. Its three files leave the index and
+// the target set, its territory turns gray, and the exclusion lands in the config the CLI reads.
+check("an idle refresh button is enabled again once the run ends", await page.waitForFunction(() => !document.querySelector('[data-action="index-map-refresh"]')?.disabled, null, { timeout: 120_000 }).then(() => true, () => false));
+const archivePick = await findPath({ kind: "folder", tail: ["archive"] });
+check("the archive folder is on the chart", archivePick !== null);
+if (archivePick !== null) await clickPath(archivePick);
+await page.waitForTimeout(400);
+const pickedDetails = await details();
+check("the picked folder is named with an exclude action", pickedDetails.includes("archive") && (await page.locator('[data-action="index-map-exclude"]').count()) === 1, pickedDetails.slice(0, 160));
+// Hovering elsewhere only previews; moving the pointer off the chart returns to the picked folder, action intact.
+await page.mouse.move(2, 2);
+await page.waitForTimeout(300);
+check("the action is still there after the pointer leaves the chart", (await details()).includes("archive") && (await page.locator('[data-action="index-map-exclude"]').count()) === 1, (await details()).slice(0, 120));
+await shot("05a-pick-exclude");
+await page.locator('[data-action="index-map-exclude"]').click();
+const settled = await waitForTargets(withIncoming.targets - 3);
 const after = await summary();
 log(`summary after exclusion: ${JSON.stringify(after)}`);
 check("excluding a folder drops its files from the target set", settled && after.targets === withIncoming.targets - 3, JSON.stringify({ before: withIncoming, after }));
+check("the exclusion is in the saved config", hasEntry("excludePaths", "archive"), JSON.stringify(listed("excludePaths")));
 const archive = await findPath({ kind: "folder", tail: ["archive"] });
 check("the excluded archive turns gray", archive !== null && (await archive.getAttribute("data-state")) === "excluded", archive === null ? "absent" : String(await archive.getAttribute("data-state")));
+check("the exclusion list under the map shows it", (await page.locator(".settings-chip", { hasText: "archive" }).count()) === 1);
 await shot("05-exclusion");
 
-await page.keyboard.press("Escape");
+// And back in: pick the gray territory, press include.
+if (archive !== null) await clickPath(archive);
+await page.waitForTimeout(400);
+check("the gray archive offers include, not exclude", (await page.locator('[data-action="index-map-include"]').count()) === 1 && (await page.locator('[data-action="index-map-exclude"]').count()) === 0);
+await page.locator('[data-action="index-map-include"]').click();
+const restored = await waitForTargets(withIncoming.targets);
+check("bringing it back puts its files in the target set again", restored, JSON.stringify(await summary()));
+check("the exclusion is gone from the saved config", !hasEntry("excludePaths", "archive") && hasEntry("excludePaths", "private"), JSON.stringify(listed("excludePaths")));
+const archiveBack = await findPath({ kind: "folder", tail: ["archive"] });
+check("the archive is no longer gray", archiveBack !== null && (await archiveBack.getAttribute("data-state")) !== "excluded", archiveBack === null ? "absent" : String(await archiveBack.getAttribute("data-state")));
+
+// A folder the person did not exclude themselves (the private one is, in config) cannot be undone from a folder inside it.
+// The private folder is excluded directly, so it offers include; a search root offers neither.
+const rootPath = await findPath({ kind: "root" });
+if (rootPath !== null) await clickPath(rootPath);
+await page.waitForTimeout(400);
+check("a search root offers neither exclude nor include: it is removed from the folder list", (await page.locator('[data-action="index-map-exclude"], [data-action="index-map-include"]').count()) === 0);
+
+// ── The folder list: add a folder from the system dialog, see it become a root, refuse one already covered, remove it. ──
+await answerFolderDialog([EXTRA]);
+await page.getByRole("button", { name: "Add folder" }).click();
+const added = await page
+	.waitForFunction((tail) => [...document.querySelectorAll('.index-map-chart path[data-kind="root"]')].some((path) => (path.getAttribute("data-path") ?? "").endsWith(tail)), "extra", { timeout: 30_000 })
+	.then(() => true, () => false);
+check("a picked folder is written to searchPaths", listed("searchPaths").length === 2 && hasEntry("searchPaths", "extra"), JSON.stringify(listed("searchPaths")));
+check("a picked folder appears as a new root on the map", added);
+check("the folder list shows it", (await page.locator(".settings-path-line", { hasText: "extra" }).count()) === 1);
+check("its files join the target set", await waitForTargets(withIncoming.targets + 2), JSON.stringify(await summary()));
+await shot("06a-folder-added");
+
+await answerFolderDialog([join(DOCS, "notes")]);
+await page.getByRole("button", { name: "Add folder" }).click();
+await page.locator('.settings-error[role="alert"]').waitFor();
+const refusal = await page.locator('.settings-error[role="alert"]').innerText();
+check("a folder inside a search folder is refused, with the reason", /notes/u.test(refusal) && /already covered/u.test(refusal), refusal);
+check("nothing was written for the refused folder", listed("searchPaths").length === 2 && !hasEntry("searchPaths", "notes"), JSON.stringify(listed("searchPaths")));
+await shot("06b-folder-refused");
+
+await page.locator(".settings-path-line", { hasText: "extra" }).getByRole("button", { name: "Delete" }).click();
+const removed = await page
+	.waitForFunction(() => [...document.querySelectorAll('.index-map-chart path[data-kind="root"]')].length === 1, null, { timeout: 30_000 })
+	.then(() => true, () => false);
+check("removing it takes the folder out of searchPaths and off the map", removed && listed("searchPaths").length === 1 && !hasEntry("searchPaths", "extra"), JSON.stringify(listed("searchPaths")));
+check("the target set is back to what it was", await waitForTargets(withIncoming.targets), JSON.stringify(await summary()));
+
 await app.close();
 app = undefined;
 
 // ── 3. Korean: the same map in the second language. ──
 await start("ko");
 log("app ready (ko)");
-await openMap("검색 범위", "인덱싱 지도 보기");
+await openMap(KO.settingsSources.scope.title, KO.settingsCore.nav.indexing);
 const ko = await legend();
 const koTexts = ko.map((item) => item.text);
-const KO_LABELS = ["전체 완료", "일부 완료", "미완료", "제외됨"];
+const KO_LABELS = ["indexed", "partial", "unindexed", "excluded"].map((state) => KO.settingsSources.indexMap.state[state]);
 log(`ko legend: ${koTexts.join(" / ")}`);
 check(
 	"the Korean legend names all four statuses",

@@ -3142,7 +3142,7 @@
       "foldersTitle": "검색할 폴더",
       "foldersDesc": "이 폴더의 내용을 AI 검색에 포함합니다.",
       "folderName": "검색 폴더",
-      "folderHint": "설정한 폴더 경로를 직접 입력해 추가·삭제합니다.",
+      "folderHint": "폴더를 골라 추가합니다. 안에 있는 모든 항목이 검색됩니다.",
       "addFolder": "폴더 추가",
       "emptyFolderNote": "아직 검색 폴더가 없습니다. 추가하지 않으면 기본 검색 범위를 사용합니다.",
       "excludeTitle": "제외할 항목",
@@ -3164,8 +3164,11 @@
       "addItemPlaceholder": "예: node_modules",
       "confirmAdd": "추가",
       "addChip": "+ 추가",
-      "openMap": "인덱싱 지도 보기",
-      "openMapHint": "검색 범위 안의 모든 파일과 폴더가 얼마나 인덱싱됐는지 지도로 봅니다."
+      "notAdded": {
+        "duplicate": "{{path}}은(는) 이미 검색 폴더입니다.",
+        "insideTarget": "{{path}}은(는) 상위 검색 폴더에 이미 포함되어 있습니다.",
+        "notAbsolute": "{{path}}은(는) 전체 경로가 아닙니다."
+      }
     },
     "indexMap": {
       "title": "인덱싱 지도",

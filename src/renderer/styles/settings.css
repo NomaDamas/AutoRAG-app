@@ -1283,34 +1283,26 @@
 	cursor: progress;
 }
 
-/* ------------------------------------------------------ Index map modal -- */
+/* ---------------------------------------------------- Search Scope · map -- */
 
-.settings-view .settings-modal.index-map-modal {
-	display: flex;
-	flex-direction: column;
-	width: min(1120px, calc(100% - 48px));
-	height: min(800px, calc(100vh - 48px));
-	max-height: none;
-	overflow: hidden;
-	padding: var(--space-24);
-}
+/* The map needs room the 680px reading column does not give; only this page widens. */
+.settings-view .settings-content-wrap:has(> .scope-page) { max-width: 920px; }
 
-.settings-view .index-map-head {
+.settings-view .index-map-panel { display: flex; flex-direction: column; margin-top: var(--space-12); }
+.settings-view .index-map-top {
 	display: flex;
-	align-items: flex-start;
+	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-16);
-	padding-right: var(--space-40);
-	margin-bottom: var(--space-16);
+	margin-bottom: var(--space-12);
+	padding-bottom: var(--space-12);
+	border-bottom: 1px solid var(--border-divider);
 }
-
-.settings-view .index-map-head p { max-width: 680px; }
 .settings-view .index-map-body {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 250px;
+	grid-template-columns: minmax(0, 1fr) 270px;
 	gap: var(--space-24);
-	flex: 1;
-	min-height: 0;
+	height: clamp(400px, 64vh, 580px);
 }
 .settings-view .index-map-stage {
 	position: relative;
@@ -1328,10 +1320,10 @@
 	stroke-width: 0.35;
 	outline: none;
 }
-.settings-view .index-map-modal [data-state="indexed"] { --index-map-color: var(--tag-blue); }
-.settings-view .index-map-modal [data-state="partial"] { --index-map-color: var(--tag-yellow); }
-.settings-view .index-map-modal [data-state="unindexed"] { --index-map-color: var(--tag-red); }
-.settings-view .index-map-modal [data-state="excluded"] { --index-map-color: var(--tag-gray); }
+.settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--tag-blue); }
+.settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--tag-yellow); }
+.settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--tag-red); }
+.settings-view .index-map-panel [data-state="excluded"] { --index-map-color: var(--tag-gray); }
 .settings-view .index-map-sector[data-active="true"],
 .settings-view .index-map-sector:focus-visible {
 	stroke: var(--text-primary);
@@ -1359,7 +1351,8 @@
 }
 .settings-view .index-map-center strong {
 	color: var(--text-primary);
-	font-size: clamp(22px, 3vw, 38px);
+	/* Scales with the chart: the same readout must fit the circle in a narrow page and in a wide one. */
+	font-size: clamp(16px, 7cqmin, 38px);
 	font-weight: var(--weight-semibold);
 	font-variant-numeric: tabular-nums;
 	line-height: 1.25;
@@ -1379,7 +1372,7 @@
 .settings-view .index-map-summary p,
 .settings-view .index-map-details p { margin: var(--space-6) 0; color: var(--text-muted); font-size: var(--font-size-meta); }
 .settings-view .index-map-details {
-	min-height: 154px;
+	min-height: 176px;
 	padding: var(--space-16) 0;
 	border-top: 1px solid var(--border-divider);
 	border-bottom: 1px solid var(--border-divider);
@@ -1408,16 +1401,18 @@
 .settings-view .index-map-folders span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-view .index-map-folders small { color: var(--text-muted); font-size: inherit; font-variant-numeric: tabular-nums; }
 .settings-view .index-map-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-24); background: var(--bg-window); color: var(--text-muted); font-size: var(--font-size-body); text-align: center; }
-.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0 0 var(--space-12); padding: 0 0 var(--space-12); border-bottom: 1px solid var(--border-divider); list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
+.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
 .settings-view .index-map-legend li { display: flex; align-items: center; gap: var(--space-6); }
 .settings-view .index-map-legend-swatch { width: 9px; height: 9px; border-radius: var(--radius-full); background: var(--index-map-color); }
 .settings-view .index-map-folders .index-map-parent { color: var(--text-muted); }
 .settings-view .index-map-folders .index-map-parent svg { color: var(--text-muted); }
-.settings-view .settings-modal .index-map-note { margin-top: var(--space-6); font-size: var(--font-size-meta); }
+.settings-view .index-map-action { margin-top: var(--space-8); }
+.settings-view .index-map-note { margin: var(--space-8) 0 0; color: var(--text-muted); font-size: var(--font-size-meta); }
 @media (max-width: 760px) {
-	.settings-view .settings-modal.index-map-modal { padding: var(--space-16); width: calc(100% - 24px); }
-	.settings-view .index-map-body { grid-template-columns: minmax(0, 1fr) 180px; gap: var(--space-12); }
-	.settings-view .index-map-sidebar { padding-left: var(--space-12); }
+	.settings-view .index-map-body { grid-template-columns: minmax(0, 1fr); height: auto; }
+	.settings-view .index-map-stage { height: 360px; }
+	.settings-view .index-map-sidebar { padding: var(--space-12) 0 0; border-left: 0; border-top: 1px solid var(--border-divider); }
+	.settings-view .index-map-folders { max-height: 240px; }
 	.settings-view .index-map-center small { display: none; }
 }
 
