@@ -365,7 +365,7 @@ function SetupScreen({
 	const total = status?.totalFiles ?? 0;
 	const processed = Math.min(status?.processedFiles ?? 0, total);
 	const remaining = status?.remainingMinutes ?? null;
-	const readyCount = status?.processedFiles ?? status?.totalFiles ?? 0;
+	const readyCount = useReadyCount(status);
 	return (
 		<section className="fr-panel fr-setup" data-mode={playing ? "game" : "intro"}>
 			{playing ? null : (
@@ -386,7 +386,7 @@ function SetupScreen({
 						<Logo className="fr-logo--dock" mark />
 						<div className="fr-dock-copy">
 							<h1 className="fr-title fr-title--dock">{t("firstRun.ready.title")}</h1>
-							<p className="fr-dock-lead">{readyCount > 0 ? t("firstRun.ready.lead", { count: readyCount.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
+							<p className="fr-dock-lead">{t("firstRun.ready.lead", { count: readyCount.toLocaleString() })}</p>
 						</div>
 						<button type="button" className="fr-btn fr-btn--primary fr-btn--stage" data-action="first-run-start" onClick={onStart}>
 							{t("firstRun.ready.start")}
@@ -414,6 +414,18 @@ function SetupScreen({
 	);
 }
 
+/**
+ * The file count the ready caption shows. It only grows: a status that briefly reports fewer
+ * files (a late tick, a poll answer, `processedFiles` still 0 while `totalFiles` is known) must not
+ * change the sentence under the title once it is on screen.
+ */
+function useReadyCount(status: SetupStatus | null): number {
+	const best = useRef(0);
+	const processed = status?.processedFiles ?? 0;
+	best.current = Math.max(best.current, processed > 0 ? processed : (status?.totalFiles ?? 0));
+	return best.current;
+}
+
 /** Enter starts the app: captured, so it never reaches the Finder's own shortcuts behind the layer. */
 function useEnterToStart(onStart: () => void, active: boolean): void {
 	const startRef = useRef(onStart);
@@ -436,7 +448,7 @@ function useEnterToStart(onStart: () => void, active: boolean): void {
 function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null; readonly onStart: () => void }): ReactElement {
 	const { t } = useTranslation();
 	useEnterToStart(onStart, true);
-	const count = status?.processedFiles ?? status?.totalFiles ?? 0;
+	const count = useReadyCount(status);
 	return (
 		<section className="fr-panel fr-ready">
 			<div className="fr-done-mark">
@@ -446,7 +458,7 @@ function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null;
 				</span>
 			</div>
 			<h1 className="fr-title fr-title--stage">{t("firstRun.ready.title")}</h1>
-			<p className="fr-lead fr-lead--stage">{count > 0 ? t("firstRun.ready.lead", { count: count.toLocaleString() }) : t("firstRun.ready.leadNone")}</p>
+			<p className="fr-lead fr-lead--stage">{t("firstRun.ready.lead", { count: count.toLocaleString() })}</p>
 			<button type="button" className="fr-btn fr-btn--primary fr-btn--hero fr-btn--stage" data-action="first-run-start" autoFocus onClick={onStart}>
 				{t("firstRun.ready.start")}
 				<kbd className="fr-kbd">↵</kbd>

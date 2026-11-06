@@ -228,14 +228,16 @@ html[data-first-run="rise"] .desk {
 
 /* -------------------------------------------------------------------- setup */
 
+/* Figma 162:1244 / 162:2507: a 592-wide white track with a soft halo, the width of the game board. */
 .fr-progress {
 	position: relative;
-	width: min(540px, 100%);
+	width: min(592px, 100%);
 	height: 12px;
 	margin-top: 32px;
 	overflow: hidden;
 	border-radius: 999px;
-	background: var(--border);
+	background: var(--bg-window);
+	box-shadow: 0 0 8.5px rgba(0, 0, 0, 0.25);
 }
 
 .fr-progress-fill {
@@ -268,7 +270,7 @@ html[data-first-run="rise"] .desk {
 	display: flex;
 	justify-content: space-between;
 	gap: 12px;
-	width: min(540px, 100%);
+	width: min(592px, 100%);
 	margin-top: 11.5px;
 	font-size: 13px;
 	line-height: 18.75px;
@@ -285,7 +287,7 @@ html[data-first-run="rise"] .desk {
 
 .fr-stage-label {
 	font-size: 13px;
-	font-weight: 500;
+	font-weight: 400;
 	color: var(--fr-ink);
 	animation: fr-fade-up 380ms var(--fr-spring) both;
 }
@@ -404,6 +406,7 @@ html[data-first-run="rise"] .desk {
 
 /* The reading screen has no button; this keeps its logo and title where the folder and ready screens draw theirs (Figma 162:1244). */
 .fr-setup[data-mode="intro"] {
+	width: min(640px, calc(100vw - 64px));
 	padding-bottom: 63px;
 }
 
@@ -497,10 +500,12 @@ html[data-first-run="rise"] .desk {
 	border: 0;
 	background: none;
 	font: inherit;
-	font-size: 16px;
-	color: var(--fr-ink);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.5;
+	color: var(--fr-muted);
 	text-decoration: underline;
-	text-underline-offset: 3px;
+	text-underline-position: from-font;
 	cursor: pointer;
 	-webkit-app-region: no-drag;
 }

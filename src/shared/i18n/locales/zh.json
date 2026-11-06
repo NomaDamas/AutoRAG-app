@@ -859,7 +859,6 @@
     "ready": {
       "title": "文件已全部读取",
       "lead": "现在可以在 {{count}} 个文件中查找任何内容。",
-      "leadNone": "现在就用 Dazzi 找找文件吧。",
       "start": "开始使用"
     },
     "cinema": {

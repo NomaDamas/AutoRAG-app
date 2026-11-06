@@ -859,7 +859,6 @@
     "ready": {
       "title": "파일을 다 읽었어요",
       "lead": "이제 파일 {{count}}개 안에서 무엇이든 찾아 드릴게요.",
-      "leadNone": "이제 Dazzi로 파일을 찾아볼까요?",
       "start": "시작하기"
     },
     "cinema": {
