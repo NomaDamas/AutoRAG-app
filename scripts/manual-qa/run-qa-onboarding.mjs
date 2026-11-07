@@ -164,19 +164,18 @@ try {
 	check("the ready screen offers the start button", (await page.locator('.fr-ready [data-action="first-run-start"]').count()) === 1);
 	await shot(page, "04-ready.png");
 
-	// the tour: Enter (or the button) raises the cinematic welcome, then every
-	// coach mark the data supports. A run without a callable model has no demo
-	// question, and one without a duplicate family has no duplicates/versions.
+	// the tour: Enter (or the button) plays the Ready → Finder reveal (about five
+	// seconds); at its dim the tour opens on its first coach mark with no welcome
+	// cinema, then every coach mark the data supports. A run without a duplicate
+	// family has no duplicates/versions.
 	await page.keyboard.press("Enter");
-	// The stage fades out before the tour mounts; click only if Enter did not start it.
-	const viaEnter = await page.waitForSelector('.fr-root[data-screen="tour"]', { timeout: 5_000 }).then(() => true, () => false);
+	// The reveal runs before the tour mounts; click only if Enter did not start it.
+	const viaEnter = await page.waitForSelector('.fr-root[data-screen="tour"]', { timeout: 15_000 }).then(() => true, () => false);
 	if (!viaEnter) await page.locator('[data-action="first-run-start"]').click();
 	check("Enter on the ready screen starts the tour", viaEnter);
 	await page.waitForSelector('.fr-root[data-screen="tour"]', { timeout: 15_000 });
-	await page.waitForSelector(".fr-cinema", { timeout: 15_000 });
-	// The title card is on screen for about three seconds; capture it once its reveal has played.
-	await page.waitForTimeout(1200);
-	await page.screenshot({ path: join(EVIDENCE, "05-tour-cinema.png") });
+	check("the reveal hands over to the tour without the welcome cinema", (await page.locator(".fr-cinema").count()) === 0);
+	await page.screenshot({ path: join(EVIDENCE, "05-tour-start.png") });
 	// The window is already split (folder left, AI Search right): no pane-drag step.
 	check("the window is already split into two panes", (await page.locator(".workspace-pane").count()) === 2);
 	const walked = [];
