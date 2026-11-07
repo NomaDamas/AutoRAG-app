@@ -276,11 +276,11 @@ try {
 		updatedKeycap,
 	);
 
-	// Verify live shortcut dispatch: pressing Mod+P focuses the sidebar search input!
+	// Verify live shortcut dispatch: with Settings open (the Finder's search box is hidden), Mod+P focuses Settings' own search input.
 	await page.keyboard.press(chord("p"));
 	await page.waitForTimeout(150);
-	const searchInputFocused = await page.locator(".side-search input").evaluate((el) => document.activeElement === el);
-	check("Pressing newly recorded Mod+P focuses the live sidebar search input", searchInputFocused);
+	const searchInputFocused = await page.locator(".settings-search input").evaluate((el) => document.activeElement === el);
+	check("Pressing newly recorded Mod+P focuses Settings' search input while Settings is open", searchInputFocused);
 	// Blur search input so we continue cleanly
 	await page.locator("h1.linear-title", { hasText: "단축키" }).click();
 
@@ -315,6 +315,8 @@ try {
 	);
 
 	// Navigate to Documents in Finder, select report.txt, and press real F2 to prove live rename dispatch!
+	// Settings takes over the window; its Back button returns to the Finder and its sidebar.
+	await page.locator(".settings-sidebar-back").click();
 	await page.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
 	const reportRow = page.locator('[data-path$="report.txt"]').first();
 	await reportRow.waitFor();

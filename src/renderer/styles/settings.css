@@ -30,16 +30,58 @@
 
 /* ---------------------------------------------------------------- Sidebar -- */
 
+/* Settings' own sidebar fills the window's left column (the width comes from the window's sidebar width) and wears the
+ * Finder sidebar's surface, so entering Settings swaps the column's content without changing the chrome. */
 .settings-sidebar {
 	display: flex;
 	flex: none;
 	flex-direction: column;
-	gap: var(--space-2);
-	width: 220px; /* reference: the settings nav rail is wider than the Finder sidebar. */
-	overflow-y: auto;
-	padding: var(--space-16) var(--space-10);
-	background: var(--bg-chrome);
+	min-height: 0;
+	background: var(--bg-sidebar);
+	backdrop-filter: blur(18px);
 	border-right: 1px solid var(--border);
+}
+
+/* The head replaces the toolbar row: back button and title, level with the window's traffic lights. */
+.settings-sidebar-head {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-2);
+	height: var(--size-toolbar);
+	padding: 0 var(--space-8) 0 var(--space-8);
+	-webkit-app-region: drag;
+}
+
+/* macOS draws the traffic lights over the head's left end; the back button starts after them. */
+.settings-sidebar-head__lights {
+	flex: none;
+	width: 62px;
+}
+
+.settings-sidebar-back {
+	-webkit-app-region: no-drag;
+}
+
+.settings-sidebar-title {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	padding-left: var(--space-4);
+	font-size: 15px;
+	font-weight: 650;
+	color: var(--text-primary);
+}
+
+.settings-sidebar-scroll {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-2);
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--space-4) var(--space-10) var(--space-16);
 }
 
 .settings-sidebar-group-title {
@@ -138,6 +180,34 @@
 }
 
 /* ---------------------------------------------------------------- Content -- */
+
+.settings-main {
+	position: relative;
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+
+/* No toolbar above the pages: the content begins at the window's top edge. This strip floats over the content's own
+ * top padding (it takes no row), keeps the window draggable, and holds the one button that can bring the right
+ * sidebar back (the Finder toolbar's last button does that elsewhere). */
+.settings-main-head {
+	position: absolute;
+	inset: 0 0 auto 0;
+	z-index: 1;
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	height: 36px; /* the content's top padding below. */
+	padding: 0 calc(var(--space-12) + var(--window-controls-gutter)) 0 var(--space-12);
+	-webkit-app-region: drag;
+}
+
+.settings-main-inspector {
+	-webkit-app-region: no-drag;
+}
 
 .settings-content {
 	flex: 1;

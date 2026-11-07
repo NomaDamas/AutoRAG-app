@@ -6,6 +6,7 @@ import {
 	canDropTab,
 	CLOSED_TAB_LIMIT,
 	closeWorkspaceTab,
+	closeSettingsInWorkspace,
 	createWorkspace,
 	dropZoneAt,
 	evacuateWorkspace,
@@ -248,6 +249,41 @@ describe("workspace-wide tab commands", () => {
 		expect(next.panes.flatMap((pane) => pane.tabs).filter((tab) => tab.path === SETTINGS_PATH)).toHaveLength(1);
 		const fresh = openOrSelectSettingsInWorkspace(sideBySide());
 		expect(activePath(fresh, 2)).toBe(SETTINGS_PATH);
+	});
+
+	it("leaving Settings closes its tab and returns to the tab focused before it", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, "/b");
+		ws = openOrSelectSettingsInWorkspace(ws);
+		expect(activePath(ws, 1)).toBe(SETTINGS_PATH);
+		const left = closeSettingsInWorkspace(ws);
+		expect(paths(left, 1)).toEqual(["/a", "/b"]);
+		expect(activePath(left, 1)).toBe("/b");
+		expect(left.closedTabs).toEqual([]);
+	});
+
+	it("leaving Settings in a split pane keeps the other pane and the focus where it was", () => {
+		let ws = sideBySide();
+		ws = focusPane(ws, 1);
+		ws = openOrSelectSettingsInWorkspace(ws);
+		expect(ws.focusedPaneId).toBe(1);
+		const left = closeSettingsInWorkspace(ws);
+		expect(paths(left, 1)).toEqual(["/a"]);
+		expect(activePath(left, 1)).toBe("/a");
+		expect(left.panes).toHaveLength(2);
+		expect(left.focusedPaneId).toBe(1);
+	});
+
+	it("leaving Settings does nothing when no Settings tab is open", () => {
+		const ws = createWorkspace("/a");
+		expect(closeSettingsInWorkspace(ws)).toBe(ws);
+	});
+
+	it("leaving Settings as the window's only tab shows the folder it came from instead of closing", () => {
+		let ws = createWorkspace("/a");
+		ws = updatePaneTabs(ws, 1, (state) => navigateTab(state, SETTINGS_PATH));
+		expect(paths(ws, 1)).toEqual([SETTINGS_PATH]);
+		const left = closeSettingsInWorkspace(ws);
+		expect(paths(left, 1)).toEqual(["/a"]);
 	});
 
 	it("⌘K prefers an AI Search tab already on screen, then one in the focused pane, then opens one", () => {

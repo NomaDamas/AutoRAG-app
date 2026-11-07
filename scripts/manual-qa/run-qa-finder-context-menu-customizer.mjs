@@ -357,6 +357,8 @@ try {
 	);
 
 	// 3. Navigate to Documents in Finder and right-click single `report.pdf`
+	// Settings takes over the window; its Back button returns to the Finder and its sidebar.
+	await page.locator(".settings-sidebar-back").click();
 	await page.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
 	await rowFor(page, "report.pdf").waitFor({ timeout: 15_000 });
 	await rowFor(page, "report.pdf").click({ button: "right" });

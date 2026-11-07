@@ -8,7 +8,7 @@
  * page the writers it needs, so a write from one page reconciles the others.
  */
 
-import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
@@ -33,6 +33,10 @@ import { TEMPLATE_BY_ID } from "./settings/datasourceTemplates";
 import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
 import { attachSettingsNavigation } from "../state/settings-navigation";
+import { cn } from "../lib/cn";
+import { hostPlatform } from "../lib/shortcuts";
+import { ChevronLeftIcon, PanelRightIcon } from "./icons";
+import { iconButtonClass } from "./primitives/icon-button";
 
 const autorag = { settings };
 
@@ -293,7 +297,31 @@ export function SettingsPageContent({
 	}
 }
 
-export function SettingsView({ initialCategory = "general", onSettingsChanged }: { readonly initialCategory?: SettingsCategory; readonly onSettingsChanged?: (settings: AppSettings) => void }): ReactElement {
+/**
+ * Settings takes over the window: this view is the left sidebar (a back button, the title, search and the pages) and the
+ * content beside it, with no tab strip or view/sort toolbar above. The right sidebar stays the window's.
+ */
+export function SettingsView({
+	initialCategory = "general",
+	onSettingsChanged,
+	navWidth,
+	onBack,
+	inspectorHidden,
+	onShowInspector,
+	searchRef,
+}: {
+	readonly initialCategory?: SettingsCategory;
+	readonly onSettingsChanged?: (settings: AppSettings) => void;
+	/** The width of the window's left column, which Settings' own sidebar fills. */
+	readonly navWidth: number;
+	/** The back button: leave Settings for where the person was. */
+	readonly onBack: () => void;
+	/** The window's right sidebar is hidden: the content's top-right offers to bring it back. */
+	readonly inspectorHidden: boolean;
+	readonly onShowInspector: () => void;
+	/** The window's focus-search shortcut lands here while Settings is open (the Finder's search box is hidden). */
+	readonly searchRef?: RefObject<HTMLInputElement | null>;
+}): ReactElement {
 	const { t } = useTranslation();
 	const [category, setCategory] = useState<SettingsCategory>(() => normalizeCategory(initialCategory));
 	const [query, setQuery] = useState("");
@@ -392,49 +420,70 @@ export function SettingsView({ initialCategory = "general", onSettingsChanged }:
 		);
 	});
 
+	// macOS draws the window's traffic lights over the sidebar's top-left; Windows has none.
+	const trafficLights = hostPlatform() !== "win32";
+
 	return (
 		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
-			<aside className="settings-sidebar" aria-label={t("settingsCore.view.navAria")}>
-				<label className="settings-search">
-					<span className="settings-search__icon" aria-hidden="true">
-						<Search size={14} />
-					</span>
-					<input type="search" aria-label={t("settingsCore.view.search")} placeholder={t("settingsCore.view.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
-				</label>
-				<nav aria-label={t("settingsCore.view.menuAria")} style={{ display: "contents" }}>
-					{groups.map((group) => (
-						<div key={group.groupKey}>
-							<div className="settings-sidebar-group-title">{t(group.groupKey)}</div>
-							{group.pages.map((page) => {
-								const Icon = page.icon;
-								const active = sourceAlias === null && normalizeCategory(category) === page.id;
-								return (
-									<button key={page.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
-										<span className="settings-nav-icon" aria-hidden="true">
-											<Icon size={16} />
-										</span>
-										<span>{t(page.labelKey)}</span>
-									</button>
-								);
-							})}
-							{group.groupKey === GROUP_APPS ? sourceButtons : null}
-						</div>
-					))}
-					{!groups.some((group) => group.groupKey === GROUP_APPS) && filteredSources.length > 0 ? (
-						<div>
-							<div className="settings-sidebar-group-title">{t(GROUP_APPS)}</div>
-							{sourceButtons}
-						</div>
-					) : null}
-				</nav>
-				{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">{t("settingsCore.view.empty")}</p> : null}
-			</aside>
-			<main className="settings-content" aria-label={t("settingsCore.view.contentAria", { name: sourceAlias ?? normalizeCategory(category) })}>
-				<div className="settings-content-wrap">
-					{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-					{content}
+			<aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
+				<div className="settings-sidebar-head">
+					{trafficLights ? <span className="settings-sidebar-head__lights" aria-hidden="true" /> : null}
+					<button type="button" className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "settings-sidebar-back")} title={t("toolbar.back")} aria-label={t("toolbar.back")} onClick={onBack}>
+						<ChevronLeftIcon size={18} />
+					</button>
+					<strong className="settings-sidebar-title">{t("settings.title")}</strong>
 				</div>
-			</main>
+				<div className="settings-sidebar-scroll">
+					<label className="settings-search">
+						<span className="settings-search__icon" aria-hidden="true">
+							<Search size={14} />
+						</span>
+						<input ref={searchRef} type="search" aria-label={t("settingsCore.view.search")} placeholder={t("settingsCore.view.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
+					</label>
+					<nav aria-label={t("settingsCore.view.menuAria")} style={{ display: "contents" }}>
+						{groups.map((group) => (
+							<div key={group.groupKey}>
+								<div className="settings-sidebar-group-title">{t(group.groupKey)}</div>
+								{group.pages.map((page) => {
+									const Icon = page.icon;
+									const active = sourceAlias === null && normalizeCategory(category) === page.id;
+									return (
+										<button key={page.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
+											<span className="settings-nav-icon" aria-hidden="true">
+												<Icon size={16} />
+											</span>
+											<span>{t(page.labelKey)}</span>
+										</button>
+									);
+								})}
+								{group.groupKey === GROUP_APPS ? sourceButtons : null}
+							</div>
+						))}
+						{!groups.some((group) => group.groupKey === GROUP_APPS) && filteredSources.length > 0 ? (
+							<div>
+								<div className="settings-sidebar-group-title">{t(GROUP_APPS)}</div>
+								{sourceButtons}
+							</div>
+						) : null}
+					</nav>
+					{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">{t("settingsCore.view.empty")}</p> : null}
+				</div>
+			</aside>
+			<div className="settings-main">
+				<div className="settings-main-head">
+					{inspectorHidden ? (
+						<button type="button" className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
+							<PanelRightIcon size={18} />
+						</button>
+					) : null}
+				</div>
+				<main className="settings-content" aria-label={t("settingsCore.view.contentAria", { name: sourceAlias ?? normalizeCategory(category) })}>
+					<div className="settings-content-wrap">
+						{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
+						{content}
+					</div>
+				</main>
+			</div>
 			{createPortal(
 				mountedSurfaces.map((surface) => (
 					<AppCustomizerPanel
