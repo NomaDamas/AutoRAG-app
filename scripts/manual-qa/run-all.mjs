@@ -73,6 +73,8 @@ const LANES = [
 	{ name: "ai-search-composer", script: "run-qa-finder-ai-search-composer.mjs", timeout: 300 },
 	{ name: "ai-search-follow-up", script: "run-qa-finder-ai-search-follow-up.mjs", timeout: 300 },
 	{ name: "ai-search-index-notice", script: "run-qa-finder-ai-search-index-notice.mjs", timeout: 300 },
+	{ name: "index-map", script: "run-qa-finder-index-map.mjs", timeout: 420 },
+	{ name: "index-progress-map", script: "run-qa-index-progress-map.mjs", timeout: 1000 },
 	{ name: "ai-search-context", script: "run-qa-finder-ai-search-context.mjs", timeout: 300 },
 	{ name: "automations", script: "run-qa-finder-automations.mjs", timeout: 420 },
 	{ name: "datasource-status", script: "run-qa-finder-datasource-status.mjs", timeout: 240 },

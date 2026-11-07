@@ -3141,7 +3141,7 @@
       "foldersTitle": "Folders to search",
       "foldersDesc": "The contents of these folders are included in AI search.",
       "folderName": "Search folders",
-      "folderHint": "Add or remove folders by entering their paths directly.",
+      "folderHint": "Pick folders to add. Everything inside them is searched.",
       "addFolder": "Add folder",
       "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
       "excludeTitle": "Items to exclude",
@@ -3162,7 +3162,39 @@
       "addFolderPlaceholder": "e.g. ~/Documents",
       "addItemPlaceholder": "e.g. node_modules",
       "confirmAdd": "Add",
-      "addChip": "+ Add"
+      "addChip": "+ Add",
+      "notAdded": {
+        "duplicate": "{{path}} is already a search folder.",
+        "insideTarget": "{{path}} is already covered by a search folder above it.",
+        "notAbsolute": "{{path}} is not a full path."
+      }
+    },
+    "indexMap": {
+      "title": "Index map",
+      "coverage": "{{indexed}} of {{total}} indexed",
+      "allRoots": "All search roots",
+      "scopeLabel": "Current scope",
+      "up": "Go to parent folder",
+      "selectHint": "Hover over a segment to see its path and indexing status.",
+      "excludedHint": "This path is excluded from indexing and does not affect completion.",
+      "canvasLabel": "Radial indexing map, from search roots at the center to descendant files at the edge",
+      "loading": "Surveying the search scope…",
+      "error": "Couldn't load the map: {{message}}",
+      "unavailable": "The index map isn't available in this window.",
+      "empty": "There are no supported files in the search scope.",
+      "parcel": "{{files}} files · {{state}}",
+      "folderCounts": "{{indexed}} of {{total}} indexed",
+      "legendLabel": "Legend",
+      "progress": "Indexing now",
+      "truncated": "The search scope is too large, so only the first {{total}} files were surveyed.",
+      "state": {
+        "indexed": "Complete",
+        "partial": "Partly indexed",
+        "stale": "Needs refresh",
+        "unindexed": "Not complete",
+        "excluded": "Excluded",
+        "unindexable": "Unreadable"
+      }
     },
     "web": {
       "title": "Web search",

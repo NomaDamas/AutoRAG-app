@@ -260,9 +260,14 @@ try {
 	await page.locator('.linear-row:has-text("exact duplicate") [role="switch"]').click();
 	check("duplicates toggle writes excludeExactDuplicates", Boolean(await waitFor(() => readConfig().excludeExactDuplicates === false)));
 	await nav("Search Scope");
+	// "Add folder" opens the system folder dialog, which is the OS's: answer it as a person picking this folder would.
+	const picked = join(workspace, "extra");
+	mkdirSync(picked, { recursive: true });
+	await app.evaluate(({ dialog }, paths) => {
+		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths });
+	}, [picked]);
 	await page.locator("button", { hasText: "Add folder" }).click();
-	await page.locator(".settings-modal input").fill(join(workspace, "docs"));
-	await page.locator(".settings-modal .settings-btn-primary").click();
+	check("a folder picked in the system dialog is written to searchPaths", Boolean(await waitFor(() => readConfig().searchPaths?.includes(picked))), JSON.stringify(readConfig().searchPaths));
 	await page.screenshot({ path: join(EVIDENCE, "08-scope.png") });
 
 	// Account/plan are UI-only: no fabricated account data.

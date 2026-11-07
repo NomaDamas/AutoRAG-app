@@ -13,6 +13,7 @@ import { setAppLanguage } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
 import type { FsLocation } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
 import { installErrorReporter } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import type { ContentSearch } from "../main/content-search";
@@ -25,6 +26,7 @@ export interface LibrarianServices {
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+		indexMap(): Promise<IndexMap>;
 	};
 }
 
@@ -80,6 +82,7 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 			if (typeof args[1] !== "boolean") throw new TypeError("excluded must be a boolean");
 			return services.indexStatus.setIndexExcluded(stringArg(args, 0, "path"), args[1]);
 		},
+		[LIBRARIAN_OP.indexMap]: () => services.indexStatus.indexMap(),
 		[LIBRARIAN_OP.shutdown]: async () => {
 			await services.fileNameSearch.stop();
 			options.onShutdown?.();
