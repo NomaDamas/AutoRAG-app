@@ -15,6 +15,8 @@ export interface MinSyncProcess {
 	readonly pid: number;
 	/** Total CPU time (user + system) the process has used so far. */
 	readonly cpuMs: number;
+	/** The minsync subcommand (`sync`, `stage`, `serve`, ...) when the listing shows the command line; Windows' `tasklist` does not. */
+	readonly subcommand?: string;
 }
 
 /** How long a minsync child may use no CPU before it counts as stuck. */
@@ -29,14 +31,17 @@ export function parseCpuTime(text: string): number | null {
 	return ((Number(days ?? 0) * 24 + Number(hours ?? 0)) * 60 + Number(minutes)) * 60_000 + Math.round(Number(seconds) * 1000);
 }
 
-/** minsync children of `parentPid` from `ps -A -o pid=,ppid=,time=,comm=`. */
+/** minsync children of `parentPid` from `ps -A -o pid=,ppid=,time=,command=`. */
 export function parsePsOutput(output: string, parentPid: number): MinSyncProcess[] {
 	const found: MinSyncProcess[] = [];
 	for (const line of output.split("\n")) {
 		const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.+?)\s*$/u.exec(line);
-		if (match === null || Number(match[2]) !== parentPid || basename(match[4] ?? "") !== "minsync") continue;
+		if (match === null || Number(match[2]) !== parentPid) continue;
+		// The executable sits at the start (a folder name may hold spaces); its first argument is the subcommand.
+		const command = /^(?:.*?[\\/])?minsync(?:\.exe)?(?=\s|$)(?:\s+(\S+))?/u.exec(match[4] ?? "");
+		if (command === null) continue;
 		const cpuMs = parseCpuTime(match[3] ?? "");
-		if (cpuMs !== null) found.push({ pid: Number(match[1]), cpuMs });
+		if (cpuMs !== null) found.push({ pid: Number(match[1]), cpuMs, ...(command[1] === undefined ? {} : { subcommand: command[1] }) });
 	}
 	return found;
 }
@@ -62,7 +67,7 @@ export async function sampleMinSyncProcesses(): Promise<MinSyncProcess[]> {
 			const { stdout } = await run("tasklist", ["/FO", "CSV", "/NH", "/V", "/FI", "IMAGENAME eq minsync.exe"], { windowsHide: true });
 			return parseTasklistCsv(stdout);
 		}
-		const { stdout } = await run("ps", ["-A", "-o", "pid=,ppid=,time=,comm="]);
+		const { stdout } = await run("ps", ["-A", "-o", "pid=,ppid=,time=,command="]);
 		return parsePsOutput(stdout, process.pid);
 	} catch {
 		return [];
@@ -152,10 +157,23 @@ export async function terminateMinSyncChildren(
 	return stopped;
 }
 
-/** The watchdog the refresh uses: real process listing, SIGTERM. */
+/** What the stall watchdog may judge: every minsync child except the parse step's `stage` journal, which idles between files by design. */
+export function stallWatchedProcesses(processes: readonly MinSyncProcess[]): MinSyncProcess[] {
+	return processes.filter((entry) => entry.subcommand !== "stage");
+}
+
+/**
+ * The watchdog the refresh uses: real process listing, SIGTERM.
+ *
+ * A `minsync stage` child is not watched. It is the parse step's journal: the app parses in its own
+ * threads and talks to it only between files, so it uses no CPU for as long as one file takes (or the
+ * machine swaps), which looks exactly like a hung embedder. Killing it ends the parse with
+ * "MinSync stage session ended (signal SIGTERM)" instead of retrying anything. Windows' process listing
+ * has no command line, so a stage child there is still seen as a minsync child.
+ */
 export function createMinSyncWatchdog(stallMs: number = DEFAULT_EMBEDDING_STALL_MS): StallWatchdog {
 	return createStallWatchdog({
-		sample: sampleMinSyncProcesses,
+		sample: async () => stallWatchedProcesses(await sampleMinSyncProcesses()),
 		exempt: isEmbeddingDaemonPid,
 		kill: (pid) => {
 			try {
@@ -175,7 +193,9 @@ export const EMBEDDING_STALL_RETRIES = 2;
 /**
  * Run `attempt` under `watchdog`. When it did not succeed and the watchdog
  * killed a stuck child during it, the attempt is repeated, up to `retries`
- * more times. A failure the watchdog did not cause is returned as is.
+ * more times. That holds when the kill made the attempt throw (the parse step's `minsync stage`
+ * session rejects when its child is signalled) as well as when it returned a failed result.
+ * A failure the watchdog did not cause is returned (or thrown) as is.
  */
 export async function runWithStallRetry<T>(
 	attempt: () => Promise<T>,
@@ -187,7 +207,13 @@ export async function runWithStallRetry<T>(
 	try {
 		for (let used = 0; ; used += 1) {
 			const killedBefore = watchdog.killed();
-			const value = await attempt();
+			let value: T;
+			try {
+				value = await attempt();
+			} catch (error) {
+				if (watchdog.killed() === killedBefore || used >= retries) throw error;
+				continue;
+			}
 			if (succeeded(value) || watchdog.killed() === killedBefore || used >= retries) return { value, retries: used };
 		}
 	} finally {
