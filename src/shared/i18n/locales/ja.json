@@ -3172,7 +3172,6 @@
     },
     "indexMap": {
       "title": "インデックスマップ",
-      "desc": "中央から外側へフォルダとファイルが広がります。対応するファイルだけを表示し、フォルダの色で配下の対象ファイルの完了状況を示します。",
       "coverage": "{{total}} 件中 {{indexed}} 件がインデックス済み",
       "allRoots": "検索範囲全体",
       "scopeLabel": "現在の範囲",
@@ -3187,6 +3186,7 @@
       "parcel": "{{state}}のファイル {{files}} 件",
       "folderCounts": "{{total}} 件中 {{indexed}} 件がインデックス済み",
       "legendLabel": "凡例",
+      "progress": "インデックス作成中",
       "truncated": "検索範囲が大きすぎるため、最初の {{total}} 件のファイルまでを調べました。",
       "state": {
         "indexed": "すべて完了",

@@ -351,44 +351,71 @@ purpose (restarting it re-scans every watched folder). QA lane:
 `scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
 `taskkill /F` on main alone).
 
-### Index map and search scope
+### Index map
 
-Settings → 검색 범위 is one page (`ScopePage.tsx`) with the search folders, the
-**index map** and the exclusions together, so a change shows on the map the moment
-it is made. The map (`index-map/IndexMapPanel.tsx`) is a DaisyDisk-style radial
-hierarchy. Search roots occupy the innermost ring; descendant folders and files
-appear progressively farther out. Folder sectors partition angles by represented
-file count, not bytes; individual files are narrow radial strokes. `radial.ts`
-computes SVG annular paths, with up to nine visible rings. The legend sits above the
-chart, with **지금 새로 고침** (the same `configRefresh` as the Indexing page) beside
-it. Clicking a folder reveals its subtree and the center goes up. The side panel
-shows the hovered/focused item's path, completion and child list; inside a folder its
-first row is `..`, which goes up one level like the center. The center shows only the
-percentage and the scope name.
+Settings → 인덱싱 shows the **index map** in its progress section, directly under
+the progress card (`AppsPages.tsx` `IndexingPage`), so the bar says how far the run
+is and the map says where. The map (`index-map/IndexMapPanel.tsx`) is a
+DaisyDisk-style radial hierarchy. Search roots occupy the innermost ring; descendant
+folders and files appear progressively farther out. Folder sectors partition angles
+by represented file count, not bytes; individual files are narrow radial strokes.
+`radial.ts` computes SVG annular paths, with up to nine visible rings. The legend
+sits above the chart. Clicking a folder reveals its subtree and the center goes up.
+The side panel shows the hovered/focused item's path, completion and child list;
+inside a folder its first row is `..`, which goes up one level like the center. The
+center shows only the percentage and the scope name. The map has no refresh button of
+its own: the Indexing page's row for the local folders has it.
 
-**What the person can change** (rules in `src/shared/index-scope-edit.ts`, pure and
-tested):
+**Where the run is working** (`index-map/progress.ts`). The run's progress snapshot
+counts files per stage but names no path (`lastFile` is a bare file name), so the
+places come from the map itself: on every read while the local folders are being
+indexed, `mapProgress` compares it with the read before and names the nodes whose
+files moved forward, meaning the `indexed` or `stale` count rose (a file is read into
+the mirror, where it counts as stale until MinSync stages it, then staged). Leaving
+something out, or a different set of search folders, is not progress, and a node with
+no counterpart before is credited to its folder. Only the innermost nodes are named
+(`here`); the folders above them are `inside`. `here` gets a pulsing arc along the
+outer edge of its sector (`.index-map-edge`, a separate element, so the sector keeps
+its state colour and stays the one thing to click), `inside` gets a dot on its row in
+the list, and the legend gains an "indexing now" entry **only while an arc is shown**
+(an entry explaining a mark that is not on screen would mislead). An arc lasts until
+the next read; a read that finds nothing new clears it, and nothing is shown while no
+run is on. Nothing is estimated or animated by time: a place is named only when a file
+in it really changed state. Reduced-motion turns the pulse off and keeps the arc.
 
-- *Add folder* opens the system folder dialog (`onboarding.pickFolders`, several at
-  once). A remote browser has no dialog, so it asks for a path and expands `~`.
-  `addSearchRoots` refuses a folder already listed, one inside a listed folder
-  (indexing it twice would double-count it) and a relative path, and says why; a new
-  folder that contains listed ones replaces them. One `configPatch` writes the result.
-- *Delete* on a folder removes it from `searchPaths` and, in the same write, the
-  exclusions that only meant something under it.
-- Clicking a folder or file on the map **picks** it (hovering only previews, so the
-  action stays reachable after the pointer leaves). The side panel then offers the one
-  change that would work: *Exclude from indexing* adds the path to `excludePaths`;
-  *Include in indexing* removes it, but only when that exact path is in the list. A
-  folder excluded only because a folder above it is, a search root, a folded parcel
-  and a folder the refresh never walks (`node_modules` and the like) offer nothing.
-- Every change goes through the serialized config writer, an empty list removes its
-  key, and the map reads again at once (`useLiveIndexMap` `revision`). A refresh is
-  not started by itself: the files of a folder just added show as unindexed until the
-  next refresh, which is the truth.
-- Changing the **search folders** returns the map to the whole scope (the folder in
-  view may not exist any more); changing only exclusions keeps the view, except that
-  excluding the folder in view steps out of it.
+What this does and does not show, measured on 9,000 files in three folders (542 s,
+real MinSync, keyword-only): during the read stage (about 50 s, card on "Parsing")
+the arc moved folder by folder, alpha, then alpha and beta, then beta and gamma, then
+gamma, which is the "where". Staging then marked all 9,000 files `indexed` between two
+reads, so the arc covered everything for one read. The remaining ~470 s (87% of the
+run, card on "Embedding") changed no file's state, so the map has nothing to point at
+and shows no arc; the progress card above it is the only thing that says what is
+happening. What MinSync does inside that stretch was not inspected. The resolution is
+one read (`INDEX_MAP_REFRESH_MS`, 10 s): a corpus whose stage ends inside one read
+(1,200 tiny files do) rings everything it touched in that read, which is why the lane
+uses a few thousand files.
+
+**What the person can change from the map.** Clicking a folder or file **picks** it
+(hovering only previews, so the action stays reachable after the pointer leaves). The
+side panel then offers the one change that would work (rules in
+`src/shared/index-scope-edit.ts`, pure and tested): *Exclude from indexing* adds the
+path to `excludePaths`; *Include in indexing* removes it, but only when that exact
+path is in the list. A folder excluded only because a folder above it is, a search
+root, a folded parcel and a folder the refresh never walks (`node_modules` and the
+like) offer nothing. The write goes through the serialized config writer (an empty
+list removes its key) and the map reads again at once (`useLiveIndexMap`
+`revision`). A refresh is not started by itself. Changing the **search folders**
+returns the map to the whole scope; changing only exclusions keeps the view, except
+that excluding the folder in view steps out of it.
+
+Settings → 검색 범위 (`ScopePage.tsx`) is where the folders themselves are edited, and
+has no map. *Add folder* opens the system folder dialog (`onboarding.pickFolders`,
+several at once); a remote browser has no dialog, so it asks for a path and expands
+`~`. `addSearchRoots` refuses a folder already listed, one inside a listed folder
+(indexing it twice would double-count it) and a relative path, and says why; a new
+folder that contains listed ones replaces them. *Delete* removes a folder and, in the
+same write, the exclusions that only meant something under it. The exclusion list
+below it shows every entry, those the map wrote included.
 
 **The open map keeps itself current** (`useLiveIndexMap.ts`). While the local
 folders are being indexed, by this app, the scheduled job or `autorag watch`
@@ -442,15 +469,22 @@ since all are kept by path.
 The UI strings ship in Korean, English, Japanese and Simplified Chinese.
 Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`,
 `test/index-map-identity.test.ts`, `test/index-scope-edit.test.ts` (the edit rules),
-`test/ui-index-map-live.test.tsx` (polling, silent failures, no overlap, re-read on a
-changed scope), `test/ui-index-map-panel.test.tsx` (picking, previewing, the offered
-action), `test/ui-scope-page.test.tsx` (add/remove/exclude/include against a fake
-config, the remote path) and `test/index-activity-view.test.ts` (`localIndexRunning`).
+`test/index-map-progress.test.ts` (what counts as moving), `test/ui-index-map-live.test.tsx`
+(polling, silent failures, no overlap, re-read on a changed scope, progress marks only
+while running), `test/ui-index-map-panel.test.tsx` (picking, previewing, the offered
+action, the ring, legend entry and row marks), `test/ui-indexing-page.test.tsx` (the
+map under the progress card, exclude and include written to the config),
+`test/ui-scope-page.test.tsx` (add/remove against a fake config, the remote path) and
+`test/index-activity-view.test.ts` (`localIndexRunning`).
 Real app QA: `scripts/manual-qa/run-qa-finder-index-map.mjs` (English/Korean, four
 colors, eligible-only percentages, drill/up/`..`, excluded folders wide enough to see
-and hover, a real refresh started from the map and followed without it emptying or
-losing the hovered item, exclude and include from the map, and a folder added, refused
-and removed through the page, checked against the saved config).
+and hover, a real refresh followed by the open map without it emptying or losing the
+hovered item, exclude and include from the map checked against the saved config, and
+a folder added, refused and removed on Search Scope with the map following) and
+`scripts/manual-qa/run-qa-index-progress-map.mjs` (a few hundred real files indexed by
+a real run started from the page's own button, sampled once a second: the card above
+the map, the legend entry only while an arc is on, arcs on part of the map that move
+from folder to folder, row marks, and everything gone at 100% when it ends).
 
 ## Error reports (Sentry)
 

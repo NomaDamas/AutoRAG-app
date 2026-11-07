@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { IndexMap } from "../../../../../shared/index-map-contract";
+import { mapProgress, NO_PROGRESS, type MapProgress } from "./progress";
 
 /** How often the open map reads the index again while something is indexing. */
 export const INDEX_MAP_REFRESH_MS = 10_000;
@@ -9,6 +10,8 @@ export interface LiveIndexMap {
 	readonly map: IndexMap | null;
 	/** Why the first read failed; null once any map has been read. */
 	readonly error: string | null;
+	/** Where the running index moved between the last two reads; empty while nothing is indexing, or when nothing moved. */
+	readonly progress: MapProgress;
 }
 
 export interface LiveIndexMapSource {
@@ -44,7 +47,7 @@ function sameMap(a: IndexMap, b: IndexMap): boolean {
  * during a read is read again right after it, because that read may have walked the folders before the change.
  */
 export function useLiveIndexMap(source: LiveIndexMapSource): LiveIndexMap {
-	const [state, setState] = useState<LiveIndexMap>({ map: null, error: null });
+	const [state, setState] = useState<LiveIndexMap>({ map: null, error: null, progress: NO_PROGRESS });
 	const sourceRef = useRef(source);
 	sourceRef.current = source;
 	const control = useRef<{ read: () => void } | null>(null);
@@ -75,11 +78,19 @@ export function useLiveIndexMap(source: LiveIndexMapSource): LiveIndexMap {
 			sourceRef.current.read().then(
 				(next) => {
 					haveMap.current = true;
-					if (alive) setState((current) => (current.map !== null && sameMap(current.map, next) ? current : { map: next, error: null }));
+					if (!alive) return;
+					const indexing = sourceRef.current.running;
+					setState((current) => {
+						const same = current.map !== null && sameMap(current.map, next);
+						const progress = indexing && current.map !== null ? mapProgress(current.map, next) : NO_PROGRESS;
+						// Nothing new on either count: the same state, so nothing redraws.
+						if (same && progress.here.size === 0 && current.progress.here.size === 0) return current;
+						return { map: same ? current.map : next, error: null, progress };
+					});
 				},
 				(failure: unknown) => {
 					// Keep what is on screen; a first read with nothing to keep is the only failure the person sees.
-					if (alive) setState((current) => (current.map !== null ? current : { map: null, error: failure instanceof Error ? failure.message : String(failure) }));
+					if (alive) setState((current) => (current.map !== null ? current : { map: null, error: failure instanceof Error ? failure.message : String(failure), progress: NO_PROGRESS }));
 				},
 			).finally(() => {
 				reading = false;

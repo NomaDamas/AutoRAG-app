@@ -204,6 +204,35 @@ describe("useLiveIndexMap", () => {
 		expect(harness.live().map?.totals.indexed).toBe(2);
 	});
 
+	it("says where a running index moved since the last read, and says nothing once a read finds nothing new", async () => {
+		const harness = await mount([mapOf(1), mapOf(2), mapOf(2)], true);
+		expect(harness.live().progress.here.size).toBe(0);
+
+		await tick(INDEX_MAP_REFRESH_MS);
+		expect(harness.live().progress.here.size).toBe(1);
+		const moved = harness.live().map;
+
+		await tick(INDEX_MAP_REFRESH_MS);
+		expect(harness.live().progress.here.size).toBe(0);
+		// Clearing the mark does not redraw the chart: the map is the same object.
+		expect(harness.live().map).toBe(moved);
+	});
+
+	it("marks nothing while nothing is indexing, however the counts moved", async () => {
+		const harness = await mount([mapOf(1), mapOf(5)], false);
+		await harness.refreshed();
+		expect(harness.live().map?.totals.indexed).toBe(5);
+		expect(harness.live().progress.here.size).toBe(0);
+	});
+
+	it("does not read a different scope as progress", async () => {
+		const other = { ...mapOf(9), roots: ["/other"] };
+		const harness = await mount([mapOf(1), other], true);
+		await tick(INDEX_MAP_REFRESH_MS);
+		expect(harness.live().map?.totals.indexed).toBe(9);
+		expect(harness.live().progress.here.size).toBe(0);
+	});
+
 	it("reads once more after a push that arrives while a read is running", async () => {
 		const slow = Promise.withResolvers<IndexMap>();
 		let pushed: (() => void) | undefined;

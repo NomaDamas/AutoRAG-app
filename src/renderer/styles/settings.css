@@ -1283,21 +1283,12 @@
 	cursor: progress;
 }
 
-/* ---------------------------------------------------- Search Scope · map -- */
+/* ------------------------------------------------- Indexing · progress map -- */
 
 /* The map needs room the 680px reading column does not give; only this page widens. */
-.settings-view .settings-content-wrap:has(> .scope-page) { max-width: 920px; }
+.settings-view .settings-content-wrap:has(> .indexing-page) { max-width: 920px; }
 
 .settings-view .index-map-panel { display: flex; flex-direction: column; margin-top: var(--space-12); }
-.settings-view .index-map-top {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-16);
-	margin-bottom: var(--space-12);
-	padding-bottom: var(--space-12);
-	border-bottom: 1px solid var(--border-divider);
-}
 .settings-view .index-map-body {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 270px;
@@ -1401,9 +1392,19 @@
 .settings-view .index-map-folders span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .settings-view .index-map-folders small { color: var(--text-muted); font-size: inherit; font-variant-numeric: tabular-nums; }
 .settings-view .index-map-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-24); background: var(--bg-window); color: var(--text-muted); font-size: var(--font-size-body); text-align: center; }
-.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
+.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0 0 var(--space-12); padding: 0 0 var(--space-12); border-bottom: 1px solid var(--border-divider); list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
 .settings-view .index-map-legend li { display: flex; align-items: center; gap: var(--space-6); }
 .settings-view .index-map-legend-swatch { width: 9px; height: 9px; border-radius: var(--radius-full); background: var(--index-map-color); }
+/* Where a running index just moved: a ring, never a fill, so the four state colours stay readable under it. */
+.settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); animation: index-map-ring 1.2s ease-in-out infinite; }
+.settings-view .index-map-edge { fill: none; stroke: var(--accent); stroke-width: 3; pointer-events: none; animation: index-map-ring 1.2s ease-in-out infinite; }
+.settings-view .index-map-folders button[data-progress]::after { flex-shrink: 0; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); content: ""; animation: index-map-ring 1.2s ease-in-out infinite; }
+@keyframes index-map-ring { 50% { opacity: 0.35; stroke-opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch,
+	.settings-view .index-map-edge,
+	.settings-view .index-map-folders button[data-progress]::after { animation: none; }
+}
 .settings-view .index-map-folders .index-map-parent { color: var(--text-muted); }
 .settings-view .index-map-folders .index-map-parent svg { color: var(--text-muted); }
 .settings-view .index-map-action { margin-top: var(--space-8); }

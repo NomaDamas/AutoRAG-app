@@ -3172,7 +3172,6 @@
     },
     "indexMap": {
       "title": "索引地图",
-      "desc": "文件夹和文件从中心向外展开。仅显示支持的文件，文件夹颜色表示其下索引目标文件的完成情况。",
       "coverage": "{{total}} 个中已索引 {{indexed}} 个",
       "allRoots": "全部搜索范围",
       "scopeLabel": "当前范围",
@@ -3187,6 +3186,7 @@
       "parcel": "{{files}} 个{{state}}文件",
       "folderCounts": "{{total}} 个中已索引 {{indexed}} 个",
       "legendLabel": "图例",
+      "progress": "正在索引",
       "truncated": "搜索范围过大，仅勘察了前 {{total}} 个文件。",
       "state": {
         "indexed": "全部完成",

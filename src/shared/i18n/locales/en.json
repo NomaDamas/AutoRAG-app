@@ -3172,7 +3172,6 @@
     },
     "indexMap": {
       "title": "Index map",
-      "desc": "Folders and files unfold from the center outward. Only supported files are shown; folder colors reflect completion across their indexing targets.",
       "coverage": "{{indexed}} of {{total}} indexed",
       "allRoots": "All search roots",
       "scopeLabel": "Current scope",
@@ -3187,6 +3186,7 @@
       "parcel": "{{files}} files · {{state}}",
       "folderCounts": "{{indexed}} of {{total}} indexed",
       "legendLabel": "Legend",
+      "progress": "Indexing now",
       "truncated": "The search scope is too large, so only the first {{total}} files were surveyed.",
       "state": {
         "indexed": "Complete",

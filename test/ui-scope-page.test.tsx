@@ -3,16 +3,14 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ScopePage } from "../src/renderer/src/components/settings/ScopePage";
-import { buildIndexMap, type ScanDir, type ScanFile } from "../src/main/index-map";
 import { setAppLanguage } from "../src/shared/i18n";
-import type { IndexMap, IndexMapState } from "../src/shared/index-map-contract";
-import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ConfigRefreshResult, JsonObject } from "../src/shared/settings-contract";
+import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, JsonObject } from "../src/shared/settings-contract";
 
 // The settings pages read `window.autorag.settings` while they are imported; hoisted code runs before the imports,
 // so the one bridge object they capture is the one the tests drive.
 const bridge = vi.hoisted(() => {
 	const state: { config: Record<string, unknown> } = { config: {} };
-	const settings = { configPatch: vi.fn(), configRefresh: vi.fn() };
+	const settings = { configPatch: vi.fn() };
 	Reflect.set(globalThis, "autorag", { settings });
 	return { state, settings };
 });
@@ -36,10 +34,6 @@ function apply(config: Record<string, unknown>, ops: readonly AutoRagConfigUpdat
 	return next;
 }
 
-const file = (path: string, state: IndexMapState): ScanFile => ({ path, name: path.split("/").at(-1)!, state });
-const folder = (path: string, files: ScanFile[], dirs: ScanDir[] = []): ScanDir => ({ path, name: path.split("/").at(-1)!, files, dirs, sealed: null });
-const mapOfScope = (): IndexMap => buildIndexMap({ roots: [folder("/r", [file("/r/top.md", "indexed")], [folder("/r/notes", [file("/r/notes/a.md", "indexed")])])], truncated: false });
-
 interface Setup {
 	readonly config?: Record<string, unknown>;
 	readonly remote?: boolean;
@@ -59,8 +53,6 @@ async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked 
 		settings: bridge.settings,
 		onboarding: { pickFolders },
 		fs: {
-			indexMap: async () => mapOfScope(),
-			onIndexRefreshed: () => () => {},
 			locations: async () => [{ name: "me", path: home, section: "favorites", icon: "home" }],
 		},
 	});
@@ -72,7 +64,6 @@ async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked 
 beforeEach(async () => {
 	await setAppLanguage("en");
 	bridge.settings.configPatch.mockReset();
-	bridge.settings.configRefresh.mockReset();
 	bridge.settings.configPatch.mockImplementation(async (ops: readonly AutoRagConfigUpdate[]) => {
 		bridge.state.config = apply(bridge.state.config, ops);
 		return snapshotOf(bridge.state.config);
@@ -97,14 +88,14 @@ const click = (element: Element | null): Promise<void> => act(async () => {
 const button = (name: string): HTMLButtonElement | null => [...host.querySelectorAll<HTMLButtonElement>("button")].find((candidate) => candidate.textContent?.trim() === name) ?? null;
 const folderRows = (): string[] => [...host.querySelectorAll(".settings-path-line > span")].map((row) => row.textContent ?? "");
 const alertText = (): string | null => host.querySelector('[role="alert"]')?.textContent ?? null;
-const sector = (path: string): Element | null => host.querySelector(`.index-map-chart path[data-path="${path}"]:not([data-kind="parcel"])`);
 
 describe("Settings → Search Scope", () => {
-	it("shows the search folders and the index map on one page", async () => {
-		await mount();
+	it("lists the search folders and the exclusions; the index map is on Settings → Indexing, not here", async () => {
+		await mount({ config: { searchPaths: ["/r"], excludePaths: ["/r/private"] } });
 
 		expect(folderRows()).toEqual(["/r"]);
-		expect(host.querySelectorAll(".index-map-chart path[data-node-id]").length).toBeGreaterThan(0);
+		expect([...host.querySelectorAll(".settings-chip")].map((chip) => chip.textContent)).toContain("/r/private");
+		expect(host.querySelector(".index-map-panel")).toBeNull();
 	});
 
 	it("adds the folders picked in the system dialog in one write, in the order picked", async () => {
@@ -115,27 +106,6 @@ describe("Settings → Search Scope", () => {
 		expect(bridge.settings.configPatch).toHaveBeenCalledOnce();
 		expect(bridge.settings.configPatch).toHaveBeenCalledWith([{ path: ["searchPaths"], value: ["/r", "/data/a", "/data/b"] }]);
 		expect(folderRows()).toEqual(["/r", "/data/a", "/data/b"]);
-	});
-
-	it("returns the map to the whole scope when a folder is added, so the new folder is not hidden behind the one in view", async () => {
-		await mount({ picked: ["/data/a"] });
-		await click(sector("/r/notes"));
-		expect(host.querySelector('[data-action="index-map-parent"]')).not.toBeNull();
-
-		await click(button("Add folder"));
-
-		expect(folderRows()).toEqual(["/r", "/data/a"]);
-		expect(host.querySelector('[data-action="index-map-parent"]')).toBeNull();
-	});
-
-	it("keeps the map where it is when only an exclusion changes", async () => {
-		await mount();
-		await click(sector("/r/notes"));
-		await click(host.querySelector('[data-action="index-map-exclude"]'));
-
-		expect(bridge.state.config.excludePaths).toEqual(["/r/notes"]);
-		// Leaving out the folder in view steps out of it, to the whole scope; nothing else moves the view.
-		expect(host.querySelector('[data-action="index-map-parent"]')).toBeNull();
 	});
 
 	it("folds the folders a wider pick now contains into it, so one folder never sits inside another", async () => {
@@ -182,35 +152,6 @@ describe("Settings → Search Scope", () => {
 		await click(host.querySelector(".settings-path-line button"));
 
 		expect(bridge.state.config).toEqual({});
-	});
-
-	it("leaves a folder out from the map, and brings it back from the map", async () => {
-		await mount();
-		await click(sector("/r/notes"));
-		await click(host.querySelector('[data-action="index-map-exclude"]'));
-		expect(bridge.state.config.excludePaths).toEqual(["/r/notes"]);
-
-		await click(sector("/r/notes"));
-		await click(host.querySelector('[data-action="index-map-include"]'));
-		expect(bridge.state.config).toEqual({ searchPaths: ["/r"] });
-	});
-
-	it("shows the exclusion in the list under the map as soon as the map writes it", async () => {
-		await mount();
-		await click(sector("/r/notes"));
-		await click(host.querySelector('[data-action="index-map-exclude"]'));
-
-		expect([...host.querySelectorAll(".settings-chip")].map((chip) => chip.textContent)).toContain("/r/notes");
-	});
-
-	it("starts an index refresh from the map and shows it when the refresh is refused", async () => {
-		const refused: ConfigRefreshResult = { ok: false, methods: ["parsed", "minsync"], scanned: 0, written: 0, deleted: 0, skipped: 0, diagnostics: [], error: "Another refresh is running" };
-		bridge.settings.configRefresh.mockResolvedValue(refused);
-		await mount();
-		await click(host.querySelector('[data-action="index-map-refresh"]'));
-
-		expect(bridge.settings.configRefresh).toHaveBeenCalledOnce();
-		expect(alertText()).toBe("Another refresh is running");
 	});
 
 	it("in a remote browser, where no system dialog exists, asks for the path and expands ~ to the home folder", async () => {

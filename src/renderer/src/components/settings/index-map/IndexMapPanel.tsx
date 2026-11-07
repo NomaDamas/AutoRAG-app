@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Ban, CornerLeftUp, File, Folder, RefreshCw, RotateCcw } from "lucide-react";
+import { Ban, CornerLeftUp, File, Folder, RotateCcw } from "lucide-react";
 import type { LocaleKey } from "../../../../../shared/i18n/core";
 import type { IndexMapNode } from "../../../../../shared/index-map-contract";
 import { availableActions } from "../../../../../shared/index-scope-edit";
@@ -26,18 +26,17 @@ export interface IndexMapPanelProps {
 	readonly busy: boolean;
 	readonly onExclude: (path: string) => void;
 	readonly onInclude: (path: string) => void;
-	/** Brings the index up to date with the scope, so folders added or left out show their real state. */
-	readonly onRefresh: () => void;
 }
 
 /**
- * The index map as part of the Search Scope page: a radial chart of the search folders with their completion, and,
- * for the folder or file in view, the one change that would work (leave it out, or bring it back).
+ * The index map under the progress bar on Settings → Indexing: a radial chart of the search folders with their
+ * completion, a ring on the places a running index just moved to, and, for the folder or file in view, the one change
+ * that would work (leave it out, or bring it back).
  */
-export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onInclude, onRefresh }: IndexMapPanelProps): ReactElement {
+export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onInclude }: IndexMapPanelProps): ReactElement {
 	const { t, i18n } = useTranslation();
 	const running = localIndexRunning(useIndexActivity());
-	const { map, error } = useLiveIndexMap({
+	const { map, error, progress } = useLiveIndexMap({
 		read: () => (window.autorag?.fs === undefined ? Promise.reject(new Error(t("settingsSources.indexMap.unavailable"))) : window.autorag.fs.indexMap()),
 		onRefreshed: (listener) => window.autorag?.fs?.onIndexRefreshed?.(listener) ?? (() => {}),
 		running,
@@ -99,15 +98,16 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 	const preview = (node: IndexMapNode) => ({ onPointerEnter: () => setHoverKey(nodeKey(node)), onFocus: () => setHoverKey(nodeKey(node)), onBlur: () => setHoverKey(null) });
 
 	return (
-		<div className="index-map-panel">
-			<div className="index-map-top">
-				<ul className="index-map-legend" aria-label={t("settingsSources.indexMap.legendLabel")}>{STATES.map((state) => <li key={state} data-state={state}><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t(STATE_LABEL[state])}</span></li>)}</ul>
-				<button type="button" className="linear-btn settings-btn-quiet" data-action="index-map-refresh" disabled={running} onClick={onRefresh}><RefreshCw size={13} aria-hidden="true" />{running ? t("settingsSources.indexing.localUpdating") : t("settingsSources.indexing.refreshTitle")}</button>
-			</div>
+		<section className="index-map-panel" aria-label={t("settingsSources.indexMap.title")}>
+			<ul className="index-map-legend" aria-label={t("settingsSources.indexMap.legendLabel")}>
+				{STATES.map((state) => <li key={state} data-state={state}><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t(STATE_LABEL[state])}</span></li>)}
+				{progress.here.size > 0 ? <li data-state="progress"><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t("settingsSources.indexMap.progress")}</span></li> : null}
+			</ul>
 			<div className="index-map-body">
 				<div className="index-map-stage">
 					<svg className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")} onPointerLeave={() => setHoverKey(null)}>
-						{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={detail !== null && nodeKey(detail) === nodeKey(node) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} {...preview(node)} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
+						{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={detail !== null && nodeKey(detail) === nodeKey(node) ? "true" : undefined} data-progress={progress.here.has(nodeKey(node)) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} {...preview(node)} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
+						{sectors.filter(({ node }) => progress.here.has(nodeKey(node))).map(({ node, edge }) => <path key={`edge-${nodeKey(node)}`} d={edge} className="index-map-edge" data-path={node.path} aria-hidden="true" />)}
 					</svg>
 					{map !== null ? <button type="button" className="index-map-center" onClick={up} disabled={focus === null} aria-label={focus === null ? t("settingsSources.indexMap.allRoots") : t("settingsSources.indexMap.up")}>
 						{focus !== null ? <CornerLeftUp size={14} aria-hidden="true" /> : null}<strong>{percent}</strong><small>{focus === null ? t("settingsSources.indexMap.allRoots") : label(focus)}</small>
@@ -135,11 +135,11 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 					</div>
 					<div className="index-map-folders" aria-label={t("settingsSources.indexMap.scopeLabel")} onPointerLeave={() => setHoverKey(null)}>
 						{focus !== null ? <button type="button" className="index-map-parent" data-action="index-map-parent" aria-label={t("settingsSources.indexMap.up")} onClick={up}><CornerLeftUp size={15} aria-hidden="true" /><span>..</span></button> : null}
-						{children.map((node) => <button type="button" key={nodeKey(node)} data-state={radialState(node)} {...preview(node)} onClick={() => enter(node)}>{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}<span>{label(node)}</span><small>{node.state === "excluded" ? "—" : `${number.format(node.counts.indexed)}/${number.format(indexMapTargets(node.counts))}`}</small></button>)}
+						{children.map((node) => <button type="button" key={nodeKey(node)} data-state={radialState(node)} data-progress={progress.inside.has(nodeKey(node)) ? "true" : undefined} title={progress.inside.has(nodeKey(node)) ? t("settingsSources.indexMap.progress") : undefined} {...preview(node)} onClick={() => enter(node)}>{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}<span>{label(node)}</span><small>{node.state === "excluded" ? "—" : `${number.format(node.counts.indexed)}/${number.format(indexMapTargets(node.counts))}`}</small></button>)}
 					</div>
 				</aside>
 			</div>
 			{map !== null && map.truncated ? <p className="index-map-note">{t("settingsSources.indexMap.truncated", { total: number.format(total) })}</p> : null}
-		</div>
+		</section>
 	);
 }

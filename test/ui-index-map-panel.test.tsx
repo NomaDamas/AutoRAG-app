@@ -3,6 +3,8 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { IndexMapPanel, type IndexMapPanelProps } from "../src/renderer/src/components/settings/index-map/IndexMapPanel";
+import { resetIndexActivityForTests } from "../src/renderer/src/hooks/useIndexActivity";
+import { IDLE_INDEX_ACTIVITY, type IndexActivitySnapshot } from "../src/shared/index-activity-contract";
 import { buildIndexMap, type ScanDir, type ScanFile } from "../src/main/index-map";
 import { setAppLanguage } from "../src/shared/i18n";
 import { emptyIndexMapCounts, type IndexMap, type IndexMapState } from "../src/shared/index-map-contract";
@@ -26,6 +28,7 @@ afterEach(() => {
 	host.remove();
 	errors.mockRestore();
 	Reflect.deleteProperty(window, "autorag");
+	resetIndexActivityForTests();
 });
 
 const file = (path: string, state: IndexMapState): ScanFile => ({ path, name: path.split("/").at(-1)!, state });
@@ -48,7 +51,7 @@ function scopeMap(): IndexMap {
 }
 
 function props(overrides: Partial<IndexMapPanelProps> = {}): IndexMapPanelProps {
-	return { searchPaths: ["/r"], excludePaths: [], busy: false, onExclude: () => {}, onInclude: () => {}, onRefresh: () => {}, ...overrides };
+	return { searchPaths: ["/r"], excludePaths: [], busy: false, onExclude: () => {}, onInclude: () => {}, ...overrides };
 }
 
 async function open(map: IndexMap, overrides: Partial<IndexMapPanelProps> = {}): Promise<void> {
@@ -191,11 +194,62 @@ describe("IndexMapPanel", () => {
 		expect(host.querySelector(".index-map-details h4")?.textContent).not.toBe("notes");
 	});
 
-	it("refreshes the index from the button in the legend row", async () => {
-		const onRefresh = vi.fn();
-		await open(scopeMap(), { onRefresh });
-		await click(host.querySelector<HTMLButtonElement>('[data-action="index-map-refresh"]')!);
+	describe("while the local folders are being indexed", () => {
+		const RUNNING: IndexActivitySnapshot = {
+			...IDLE_INDEX_ACTIVITY,
+			state: "running",
+			origin: "app",
+			items: [{ key: "local", kind: "local", id: null, state: "running", phase: "minsync", counts: null, error: null }],
+		};
+		const withStates = (states: Readonly<Record<string, IndexMapState>>): IndexMap => buildIndexMap({
+			roots: [folder("/r", [file("/r/top.md", "indexed")], [folder("/r/notes", [file("/r/notes/a.md", states["/r/notes/a.md"] ?? "unindexed"), file("/r/notes/b.md", "unindexed")]), folder("/r/other", [file("/r/other/c.md", "unindexed")])])],
+			truncated: false,
+		});
 
-		expect(onRefresh).toHaveBeenCalledOnce();
+		/** The index is running from the first moment; the map is read twice, as it is when a run starts. */
+		async function openRunning(first: IndexMap, second: IndexMap): Promise<void> {
+			let reads = 0;
+			Reflect.set(window, "autorag", {
+				fs: { indexMap: async () => (reads++ === 0 ? first : second), onIndexRefreshed: () => () => {} },
+				indexActivity: { get: async () => RUNNING, onChange: () => () => {} },
+			});
+			await act(async () => root.render(<IndexMapPanel {...props()} />));
+			await act(async () => {});
+		}
+
+		it("rings the place the index just moved to, flags the folders that hold it, and says what the ring means", async () => {
+			await openRunning(withStates({}), withStates({ "/r/notes/a.md": "stale" }));
+
+			const ringed = [...host.querySelectorAll('.index-map-chart path[data-progress="true"]')].map((path) => path.getAttribute("data-path"));
+			expect(ringed).toEqual(["/r/notes/a.md"]);
+			// The mark is a separate arc on the outer edge, so the sector keeps its own colour and stays the one thing to click.
+			const arcs = [...host.querySelectorAll(".index-map-chart .index-map-edge")];
+			expect(arcs.map((arc) => arc.getAttribute("data-path"))).toEqual(["/r/notes/a.md"]);
+			expect(arcs[0]?.getAttribute("aria-hidden")).toBe("true");
+			expect(arcs[0]?.getAttribute("d")).toMatch(/^M[\d.,-]+ A/u);
+			expect(host.querySelector('.index-map-chart path[data-path="/r/notes/a.md"][data-kind="file"]')?.getAttribute("data-state")).toBe("unindexed");
+			expect(host.querySelector('.index-map-legend li[data-state="progress"]')).not.toBeNull();
+			// The list names the folder it happened in; one it did not touch stays plain.
+			const rows = [...host.querySelectorAll<HTMLElement>(".index-map-folders > button")];
+			expect(rows.find((row) => row.textContent?.includes("notes"))?.hasAttribute("data-progress")).toBe(true);
+			expect(rows.find((row) => row.textContent?.includes("other"))?.hasAttribute("data-progress")).toBe(false);
+		});
+
+		it("rings nothing when the second read finds the index where it was", async () => {
+			await openRunning(withStates({}), withStates({}));
+
+			expect(host.querySelectorAll('.index-map-chart path[data-progress="true"]')).toHaveLength(0);
+			expect(host.querySelectorAll(".index-map-edge")).toHaveLength(0);
+			// A legend entry for a mark that is not on screen would explain nothing: it is there only while a ring is.
+			expect(host.querySelector('.index-map-legend li[data-state="progress"]')).toBeNull();
+		});
+	});
+
+	it("shows only the four colours, and no ring, when nothing is indexing", async () => {
+		await open(scopeMap());
+
+		expect(host.querySelectorAll(".index-map-legend li")).toHaveLength(4);
+		expect(host.querySelector('.index-map-legend li[data-state="progress"]')).toBeNull();
+		expect(host.querySelectorAll("[data-progress]")).toHaveLength(0);
 	});
 });

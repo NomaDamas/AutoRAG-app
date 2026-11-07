@@ -1,24 +1,20 @@
 /**
- * Settings → 검색 범위: what the index covers, edited where it can be seen.
- *
- * The search folders, the index map drawn from them, and the exclusions share one page, so a folder added, taken
- * away or left out shows on the map at once. Folders are picked in the system dialog (a remote browser has none, and
- * types the path); every change is one `configPatch` of the same `searchPaths`/`excludePaths` the CLI and the
- * librarian read. The rules for those changes are in `shared/index-scope-edit.ts`.
+ * Settings → 검색 범위: what the index covers. The search folders, picked in the system dialog (a remote browser has
+ * none, and types the path), and the exclusions. Every change is one `configPatch` of the same
+ * `searchPaths`/`excludePaths` the CLI and the librarian read; the rules for those changes are in
+ * `shared/index-scope-edit.ts`. How much of this is indexed, and where, is the map on Settings → 인덱싱.
  */
 
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Folder, FolderPlus } from "lucide-react";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { addSearchRoots, excludePath, includePath, removeSearchRoot, type RejectedReason, type RejectedRoot } from "../../../../shared/index-scope-edit";
-import { DEFAULT_CODE_FOLDER_NAMES, type AutoRagConfigSnapshot, type AutoRagConfigUpdate } from "../../../../shared/settings-contract";
-import { settings } from "../../settings-runtime";
+import { addSearchRoots, removeSearchRoot, type RejectedReason, type RejectedRoot } from "../../../../shared/index-scope-edit";
+import { DEFAULT_CODE_FOLDER_NAMES, type AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
-import { IndexMapPanel } from "./index-map/IndexMapPanel";
 import { Chips, Note, PromptModal, Row, Section, SettingsPageHead } from "./SettingsKit";
-import { asRecord, boolOf, errorText, getAt, listOf, useConfigWriter } from "./configSupport";
+import { asRecord, boolOf, errorText, getAt, listOf, listUpdate, useConfigWriter } from "./configSupport";
 
 type ListKey = "searchPaths" | "excludePaths";
 
@@ -30,9 +26,6 @@ const REJECTED_LABEL: Readonly<Record<RejectedReason, LocaleKey>> = {
 
 const sameList = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every((value, index) => value === b[index]);
 
-/** A list is written whole; an empty one removes the key, as the rest of Settings does. */
-const listUpdate = (key: ListKey, list: readonly string[]): AutoRagConfigUpdate => (list.length === 0 ? { path: [key], remove: true } : { path: [key], value: [...list] });
-
 /** The user's home folder, to expand `~` in a typed path; null when the bridge does not say. */
 async function homeFolder(): Promise<string | null> {
 	const locations = await window.autorag?.fs?.locations().catch(() => []);
@@ -43,7 +36,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 	const { t } = useTranslation();
 	const { run, saving, error } = useConfigWriter(onSaved);
 	const [typing, setTyping] = useState<ListKey | null>(null);
-	/** What the last action could not do (a folder refused, a refresh that did not start); the writer reports its own failures. */
+	/** What the last action could not do (a folder refused, the dialog failing); the writer reports its own failures. */
 	const [problem, setProblem] = useState<string | null>(null);
 	const searchPaths = listOf(getAt(snapshot.config, ["searchPaths"]));
 	const excludePaths = listOf(getAt(snapshot.config, ["excludePaths"]));
@@ -90,16 +83,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 		void run(ops);
 	}
 
-	async function refresh(): Promise<void> {
-		setProblem(null);
-		try {
-			const result = await settings.configRefresh();
-			if (!result.ok && result.error !== null) setProblem(result.error);
-		} catch (cause) {
-			setProblem(errorText(cause));
-		}
-	}
-
 	async function submitTyped(value: string): Promise<void> {
 		const key = typing;
 		setTyping(null);
@@ -110,7 +93,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 	const shown = problem ?? error;
 
 	return (
-		<div className="scope-page">
+		<>
 			<SettingsPageHead title={t("settingsSources.scope.title")} description={t("settingsSources.scope.desc")} />
 			{shown !== null ? <div className="settings-error" role="alert">{shown}</div> : null}
 			<Section title={t("settingsSources.scope.foldersTitle")} description={t("settingsSources.scope.foldersDesc")}>
@@ -129,16 +112,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 					</div>
 				</Row>
 				{searchPaths.length === 0 ? <Note>{t("settingsSources.scope.emptyFolderNote")}</Note> : null}
-			</Section>
-			<Section title={t("settingsSources.indexMap.title")} description={t("settingsSources.indexMap.desc")}>
-				<IndexMapPanel
-					searchPaths={searchPaths}
-					excludePaths={excludePaths}
-					busy={saving}
-					onExclude={(path) => void writeList("excludePaths", excludePath(excludePaths, path))}
-					onInclude={(path) => void writeList("excludePaths", includePath(excludePaths, path))}
-					onRefresh={() => void refresh()}
-				/>
 			</Section>
 			<Section title={t("settingsSources.scope.excludeTitle")} description={t("settingsSources.scope.excludeDesc")}>
 				<Note>{t("settingsSources.scope.excludeNote", { folders: codeFolderNames.join(", ") })}</Note>
@@ -172,6 +145,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 					onSubmit={(value) => void submitTyped(value)}
 				/>
 			) : null}
-		</div>
+		</>
 	);
 }

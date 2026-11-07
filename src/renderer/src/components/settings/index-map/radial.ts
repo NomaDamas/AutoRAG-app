@@ -33,6 +33,8 @@ export interface RadialSector {
 	readonly inner: number;
 	readonly outer: number;
 	readonly path: string;
+	/** An arc along the sector's outer edge, as drawn (a file is a fine stroke, narrower than its share): where a mark can sit without covering the fill. */
+	readonly edge: string;
 }
 
 const TAU = Math.PI * 2;
@@ -53,6 +55,14 @@ export function sectorPath(start: number, end: number, inner: number, outer: num
 	const middle = (start + end) / 2;
 	return `M${point(outer, start)} A${outer},${outer} 0 0 1 ${point(outer, middle)} A${outer},${outer} 0 0 1 ${point(outer, end)} L${point(inner, end)} A${inner},${inner} 0 0 0 ${point(inner, middle)} A${inner},${inner} 0 0 0 ${point(inner, start)} Z`;
 }
+
+/** An open arc, split in two like {@link sectorPath}. */
+function arcPath(start: number, end: number, radius: number): string {
+	return `M${point(radius, start)} A${radius},${radius} 0 0 1 ${point(radius, (start + end) / 2)} A${radius},${radius} 0 0 1 ${point(radius, end)}`;
+}
+
+/** The gap between rings is 3 wide: an edge arc sits in it, just outside the sector. */
+const EDGE_OFFSET = 2;
 
 /** Parent-first radial partition. Angles encode file counts, not bytes or completion. */
 export function layoutRadial(map: IndexMap, focusId: number | null): RadialSector[] {
@@ -112,7 +122,7 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 			// Files read as fine radial strokes rather than wide blocks, even in a small scope.
 			const middle = (cursor + next) / 2;
 			const half = node.kind === "file" ? Math.min(0.012, (next - cursor - gap) / 2) : (next - cursor - gap) / 2;
-			result.push({ node, start: cursor, end: next, inner, outer, path: sectorPath(middle - half, middle + half, inner, outer) });
+			result.push({ node, start: cursor, end: next, inner, outer, path: sectorPath(middle - half, middle + half, inner, outer), edge: arcPath(middle - half, middle + half, outer + EDGE_OFFSET) });
 			visit(children.get(node.id) ?? [], cursor, next, level + 1);
 			cursor = next;
 		});
