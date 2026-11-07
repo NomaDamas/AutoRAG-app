@@ -22,6 +22,7 @@ import { cn } from "../lib/cn";
 import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
+import { Reveal, cancelPrewarm, prewarmReveal } from "./reveal";
 import { CursorGlyph } from "./cursor";
 import { ACTION_REQUIRED_STEPS, AI_HOST, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
@@ -156,6 +157,34 @@ export function FirstRun({
 		window.setTimeout(() => setDeskMode(null), DESK_MOTION_MS + 80);
 	}, [leaving]);
 
+	// The Finder behind the ready screen is laid out for the tour as soon as the screen shows, so the reveal's first frames do not wait on it.
+	useEffect(() => {
+		if (screen !== "ready") return;
+		hostRef.current.arrange();
+		prewarmReveal();
+	}, [screen]);
+	/** Ready → Finder through the reveal (design-mockups/finish-reveal/v5v7-hybrid.html); reduced motion keeps the plain rise. */
+	const [revealing, setRevealing] = useState(false);
+	const [cinemaSkipped, setCinemaSkipped] = useState(false);
+	const beginReveal = useCallback(() => {
+		if (leaving || revealing) return;
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			cancelPrewarm();
+			begin();
+			return;
+		}
+		// The Finder stays under its "cover" mode; the reveal overrides it inline (switching the html attribute restyles the whole document).
+		setRevealing(true);
+	}, [leaving, revealing, begin]);
+	const releaseDesk = useCallback(() => setDeskMode(null), []);
+	/** At the mockup's dim: the Finder is fully in, the tour's first bubble takes over (the reveal already said hello, so no cinema). */
+	const revealToTour = useCallback(() => {
+		hostRef.current.setCovered(false);
+		setCinemaSkipped(true);
+		setRevealing(false);
+		setScreen("tour");
+	}, []);
+
 	const finish = useCallback(() => {
 		void onboarding()
 			.complete()
@@ -167,14 +196,15 @@ export function FirstRun({
 	return (
 		<div className="fr-root" data-screen={screen}>
 			{covering ? (
-				<div className={cn("fr-stage", leaving && "fr-stage--leaving")}>
+				<div className={cn("fr-stage", leaving && "fr-stage--leaving", (screen === "ready" || revealing) && !leaving && "fr-stage--reveal")}>
 					<div className="fr-drag" />
 					{screen === "folders" ? <FoldersScreen onStart={startWith} /> : null}
 					{screen === "setup" ? <SetupScreen status={status} playing={playing} onPlay={startGame} onStop={stopGame} onStart={begin} /> : null}
-					{screen === "ready" ? <ReadyScreen status={status} onStart={begin} /> : null}
+					{screen === "ready" ? <ReadyScreen status={status} onStart={beginReveal} /> : null}
+					{screen === "ready" && !leaving ? <Reveal playing={revealing} onTour={revealToTour} onEnd={revealToTour} onRelease={releaseDesk} /> : null}
 				</div>
 			) : null}
-			{screen === "tour" ? <Tour host={host} demo={status?.demo ?? null} platform={platform} onEnd={() => setScreen("signin")} /> : null}
+			{screen === "tour" ? <Tour host={host} demo={status?.demo ?? null} platform={platform} skipCinema={cinemaSkipped} onEnd={() => setScreen("signin")} /> : null}
 			{screen === "signin" ? <SignInSheet platform={platform} onFinish={finish} /> : null}
 		</div>
 	);
@@ -445,6 +475,10 @@ function ReadyScreen({ status, onStart }: { readonly status: SetupStatus | null;
 		<section className="fr-panel fr-ready">
 			<div className="fr-done-mark">
 				<Logo className="fr-logo--stage" mark />
+				{/* The reveal's light sweep, clipped to the sunflower itself. */}
+				<span className="fr-reveal-sweep" aria-hidden="true" style={{ maskImage: `url(${dazziMark})`, WebkitMaskImage: `url(${dazziMark})` }}>
+					<span />
+				</span>
 				<span className="fr-status-mark" aria-hidden="true">
 					<CheckIcon size={18} />
 				</span>
@@ -497,14 +531,18 @@ function Tour({
 	host,
 	demo,
 	platform,
+	skipCinema = false,
 	onEnd,
 }: {
 	readonly host: FirstRunHost;
 	readonly demo: SetupStatus["demo"];
 	readonly platform: string;
+	/** The reveal already introduced the app: go straight to the first step. */
+	readonly skipCinema?: boolean;
 	readonly onEnd: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
+	const skipCinemaRef = useRef(skipCinema);
 	const [cinema, setCinema] = useState<"off" | "on" | "out">("off");
 	const [family, setFamily] = useState<VersionFamilyData | null | undefined>(undefined);
 	const [step, setStep] = useState<TourStepId | null>(null);
@@ -525,6 +563,12 @@ function Tour({
 			.catch(() => {
 				if (live) setFamily(null);
 			});
+		if (skipCinemaRef.current) {
+			setStep(stepsRef.current[0] ?? null);
+			return () => {
+				live = false;
+			};
+		}
 		const on = window.setTimeout(() => setCinema("on"), CINEMA_IN_MS);
 		const out = window.setTimeout(() => setCinema("out"), CINEMA_OUT_MS - 600);
 		const off = window.setTimeout(() => {
