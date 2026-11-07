@@ -10,15 +10,16 @@
  * real call, Jev and the reranker by their provider's connection test. While a
  * check runs its menu stays shut; a failed one is marked and keeps the step
  * closed. The three helper roles also offer "auto", which hands the job to the
- * answer model (splitting) or leaves it off (Jev, reranking) and needs no check.
+ * answer model (splitting), leaves it off (reranking) or, for Jev, which is required and cannot be off, lets the
+ * small chat model decide ("None": no Jev service). It needs no check.
  * The step opens (`draft.model.verified`) once a service is connected and every
  * role has a model that answered or is on auto.
  */
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import { Check, ChevronDown, ChevronRight, ChevronUp, LoaderCircle, Plus, Search, X } from "lucide-react";
-import { jevBackendFor, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles, withoutAutorag } from "../../../../shared/ai-roles";
-import { decompositionConfigUpdates, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition, shouldAdoptManagedRoles, withoutAutorag } from "../../../../shared/ai-roles";
+import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import type { ModelCheckResult } from "../../../../shared/onboarding-contract";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
 import { ProviderIcon } from "../../components/settings/ProviderIcon";
@@ -81,6 +82,9 @@ function roleValue(role: RoleId, config: AutoRagConfigSnapshot["config"], option
 		return { kind: "model", provider, modelId, label: optionLabel(options, provider, modelId, stringOf(model?.name) || modelId) };
 	}
 	const raw = getAt(config, [role]);
+	// Jev is required, so `false` is not a choice: an old `jev: false` reads as not chosen yet.
+	if (role === "jev" && raw === false) return { kind: "unset" };
+	if (role === "jev" && stringOf(asRecord(raw)?.backend) === JEV_SLLM_BACKEND) return { kind: "auto" };
 	if (raw === false) return { kind: "auto" };
 	if (shouldAdoptManagedRoles({ [role]: raw })[role]) return { kind: "unset" };
 	const block = asRecord(raw);
@@ -97,8 +101,9 @@ function pickUpdates(role: RoleId, entry: ModelCatalogEntry): AutoRagConfigUpdat
 	return role === "jev" ? jevConfigUpdates(entry) : rerankConfigUpdates(entry);
 }
 
-/** "Auto": splitting falls to the answer model; Jev and reranking stay off. */
+/** "Auto": splitting falls to the answer model, reranking stays off, and Jev (required) is decided by the small chat model. */
 function autoUpdates(role: Exclude<RoleId, "answer">): AutoRagConfigUpdate[] {
+	if (role === "jev") return jevSllmConfigUpdates();
 	return [{ path: [role === "decomposition" ? "queryDecomposition" : role], value: false }];
 }
 
@@ -270,7 +275,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 						// Its own trigger closes an open menu again.
 						onClick={(event) => setMenu(open ? null : { kind: "role", role, anchor: event.currentTarget })}
 					>
-						<span>{value.kind === "model" ? value.label : value.kind === "auto" ? t("onboarding.model.auto") : t("onboarding.model.pick")}</span>
+						<span>{value.kind === "model" ? value.label : value.kind === "auto" ? autoLabel(t, role) : t("onboarding.model.pick")}</span>
 						<Arrow size={16} aria-hidden="true" focusable="false" />
 					</button>
 				</div>
@@ -348,6 +353,7 @@ export function ModelStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElemen
 								current={values?.[menu.role] ?? { kind: "unset" }}
 								refused={refused[menu.role]}
 								auto={menu.role !== "answer"}
+								autoText={autoLabel(t, menu.role)}
 								onPick={(entry) => {
 									const role = menu.role;
 									setMenu(null);
@@ -482,6 +488,11 @@ function groupRoleOptions(options: readonly RoleOption[], filter?: (option: Role
 	return [...grouped.values()];
 }
 
+/** What a role's "auto" choice is called: Jev cannot be off, so its choice reads as "None" (no Jev service). */
+function autoLabel(t: OnboardingCtx["t"], role: RoleId): string {
+	return role === "jev" ? t("settingsCore.ai.jevSllm") : t("onboarding.model.auto");
+}
+
 /** A role's model menu: providers open a model submenu; search returns models grouped by provider. */
 function RoleList({
 	t,
@@ -489,6 +500,7 @@ function RoleList({
 	current,
 	refused,
 	auto,
+	autoText,
 	onPick,
 	onAuto,
 }: {
@@ -497,6 +509,7 @@ function RoleList({
 	readonly current: RoleValue;
 	readonly refused: ReadonlySet<string>;
 	readonly auto: boolean;
+	readonly autoText: string;
 	readonly onPick: (entry: ModelCatalogEntry) => void;
 	readonly onAuto: () => void;
 }): ReactElement {
@@ -618,7 +631,7 @@ function RoleList({
 					}}
 					onClick={onAuto}
 				>
-					<span>{t("onboarding.model.auto")}</span>
+					<span>{autoText}</span>
 					{current.kind === "auto" ? <Check size={12} className="onb-menu-mark" aria-hidden="true" focusable="false" /> : null}
 				</button>
 			) : null}

@@ -6,6 +6,8 @@ import { applyAppIndexing } from "./app-indexing";
 import { refreshAutoragIndex } from "./index-refresh";
 import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
+import { buildIndexMap, scanIndexScope, type IndexScopeContext } from "./index-map";
 
 /**
  * The Finder index badge reads and writes the shared AutoRAG state — the same
@@ -18,6 +20,8 @@ export interface IndexStatusService {
 	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 	/** Saves the exclusion and returns at once; `onRefreshed` fires when the index caught up. */
 	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	/** Every file and folder under the search roots with what the index holds for it (Settings → 검색 범위 → 인덱싱 지도). */
+	indexMap(): Promise<IndexMap>;
 }
 
 export interface IndexStatusServiceDeps {
@@ -54,7 +58,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		);
 	}
 
-	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
+	async function loadContext(): Promise<IndexScopeContext> {
 		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
 		const config = await applyAppIndexing(resolveConfigReadOnly(input), raw);
 		const [exclusions, roots] = await Promise.all([
@@ -68,9 +72,18 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			// Missing or older MinSync binary: fall back to empty mirror state so Finder badges never throw.
 		}
 		const registry = createDefaultParserRegistry((config.parserOptions ?? {}) as DefaultParserRegistryOptions);
-		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
-		const skips = new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry]));
-		const minSyncRoot = config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath);
+		return {
+			roots,
+			exclusions,
+			entries: new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry])),
+			skips: new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry])),
+			minSyncRoot: config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath),
+			indexable: (path, name) => registry.getForVirtualPath(path) !== undefined && !PRODUCT_ARTIFACT_FILE_NAMES.has(name),
+		};
+	}
+
+	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
+		const { roots, exclusions, entries, skips, minSyncRoot, indexable } = await loadContext();
 		return Promise.all(paths.map(async (path): Promise<IndexStatus> => {
 			const real = await canonical(path);
 			if (!roots.some((root) => isUnder(real, root))) {
@@ -93,7 +106,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 						}
 					: { path, kind: "pending", excluded, toggleable, detail: t("main.indexStatus.excludedPending") };
 			}
-			if (registry.getForVirtualPath(real) === undefined || PRODUCT_ARTIFACT_FILE_NAMES.has(basename(real))) {
+			if (!indexable(real, basename(real))) {
 				return { path, kind: "unsupported", excluded, toggleable: false, detail: t("main.indexStatus.unsupported") };
 			}
 			if (staged) {
@@ -132,6 +145,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 
 	return {
 		indexStatus: (paths) => snapshot(paths),
+		indexMap: async () => buildIndexMap(await scanIndexScope(await loadContext())),
 		setIndexExcluded: async (path, excluded) => {
 			const real = await canonical(path);
 			const configPath = resolveConfigPath(input).configPath;

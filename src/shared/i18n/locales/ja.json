@@ -2629,6 +2629,7 @@
       "decompositionHint": "長い質問を複数の検索語に分割します。速くて安いモデルが適しています。",
       "jevModel": "判断モデル (Jev)",
       "jevHint": "そのまま回答するか、自分の資料を検索するかを判断します。",
+      "jevSllm": "設定しない",
       "rerankModel": "検索結果の並べ替え",
       "rerankHint": "関連性の高い結果を上位に移動します。回答が少し遅くなることがあります。",
       "subDocUnderstanding": "文書の理解",
@@ -3141,7 +3142,7 @@
       "foldersTitle": "検索するフォルダ",
       "foldersDesc": "これらのフォルダの内容を AI 検索に含めます。",
       "folderName": "検索フォルダ",
-      "folderHint": "設定したフォルダのパスを直接入力して追加・削除します。",
+      "folderHint": "フォルダを選んで追加します。中のすべての項目が検索対象になります。",
       "addFolder": "フォルダを追加",
       "emptyFolderNote": "検索フォルダがまだありません。追加しない場合はデフォルトの検索範囲を使います。",
       "excludeTitle": "除外する項目",
@@ -3162,7 +3163,39 @@
       "addFolderPlaceholder": "例: ~/Documents",
       "addItemPlaceholder": "例: node_modules",
       "confirmAdd": "追加",
-      "addChip": "+ 追加"
+      "addChip": "+ 追加",
+      "notAdded": {
+        "duplicate": "{{path}} はすでに検索フォルダです。",
+        "insideTarget": "{{path}} は上位の検索フォルダにすでに含まれています。",
+        "notAbsolute": "{{path}} は完全なパスではありません。"
+      }
+    },
+    "indexMap": {
+      "title": "インデックスマップ",
+      "coverage": "{{total}} 件中 {{indexed}} 件がインデックス済み",
+      "allRoots": "検索範囲全体",
+      "scopeLabel": "現在の範囲",
+      "up": "親フォルダに移動",
+      "selectHint": "領域にポインターを合わせると、パスと完了状況を確認できます。",
+      "excludedHint": "このパスはインデックスから除外されており、完了率には含まれません。",
+      "canvasLabel": "中央のルートから外側の子ファイルへ広がる放射状インデックスマップ",
+      "loading": "検索範囲を調べています…",
+      "error": "地図を読み込めませんでした: {{message}}",
+      "unavailable": "このウィンドウではインデックスマップを表示できません。",
+      "empty": "検索範囲に対応するファイルがありません。",
+      "parcel": "{{state}}のファイル {{files}} 件",
+      "folderCounts": "{{total}} 件中 {{indexed}} 件がインデックス済み",
+      "legendLabel": "凡例",
+      "progress": "インデックス作成中",
+      "truncated": "検索範囲が大きすぎるため、最初の {{total}} 件のファイルまでを調べました。",
+      "state": {
+        "indexed": "すべて完了",
+        "partial": "一部完了",
+        "stale": "更新が必要",
+        "unindexed": "未完了",
+        "excluded": "除外",
+        "unindexable": "読み取り不可"
+      }
     },
     "web": {
       "title": "ウェブ検索",

@@ -19,6 +19,8 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // stderr is UTF-8 instead of CP949 mojibake (#2087), dupey skips cloud and network roots (#2085), and the CLI honors
 // the config file's webSearch section (#2083). The loop guard of file automations states the loop invariant instead of
 // banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
+// The decision model is Jev or the small chat LLM: `jev.backend: "sllm"` decides with `jev.sllm.model` and never calls Jev,
+// and `jev.fallback: false` fails a session instead of moving to it (AutoRAG#2091).
 const librarianRef = "v2.13.5";
 
 function run(command, args, cwd = root) {

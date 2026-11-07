@@ -351,6 +351,141 @@ purpose (restarting it re-scans every watched folder). QA lane:
 `scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
 `taskkill /F` on main alone).
 
+### Index map
+
+Settings → 인덱싱 shows the **index map** in its progress section, directly under
+the progress card (`AppsPages.tsx` `IndexingPage`), so the bar says how far the run
+is and the map says where. The map (`index-map/IndexMapPanel.tsx`) is a
+DaisyDisk-style radial hierarchy. Search roots occupy the innermost ring; descendant
+folders and files appear progressively farther out. Folder sectors partition angles
+by represented file count, not bytes; individual files are narrow radial strokes.
+`radial.ts` computes SVG annular paths, with up to nine visible rings. The legend
+sits above the chart. Clicking a folder reveals its subtree and the center goes up.
+The side panel shows the hovered/focused item's path, completion and child list;
+inside a folder its first row is `..`, which goes up one level like the center. The
+center shows only the percentage and the scope name. The map has no refresh button of
+its own: the Indexing page's row for the local folders has it.
+
+**Where the run is working** (`index-map/progress.ts`). The run's progress snapshot
+counts files per stage but names no path (`lastFile` is a bare file name), so the
+places come from the map itself: on every read while the local folders are being
+indexed, `mapProgress` compares it with the read before and names the nodes whose
+files moved forward, meaning the `indexed` or `stale` count rose (a file is read into
+the mirror, where it counts as stale until MinSync stages it, then staged). Leaving
+something out, or a different set of search folders, is not progress, and a node with
+no counterpart before is credited to its folder. Only the innermost nodes are named
+(`here`); the folders above them are `inside`. `here` gets a pulsing arc along the
+outer edge of its sector (`.index-map-edge`, a separate element, so the sector keeps
+its state colour and stays the one thing to click), `inside` gets a dot on its row in
+the list, and the legend gains an "indexing now" entry **only while an arc is shown**
+(an entry explaining a mark that is not on screen would mislead). An arc lasts until
+the next read; a read that finds nothing new clears it, and nothing is shown while no
+run is on. Nothing is estimated or animated by time: a place is named only when a file
+in it really changed state. Reduced-motion turns the pulse off and keeps the arc.
+
+What this does and does not show, measured on 9,000 files in three folders (542 s,
+real MinSync, keyword-only): during the read stage (about 50 s, card on "Parsing")
+the arc moved folder by folder, alpha, then alpha and beta, then beta and gamma, then
+gamma, which is the "where". Staging then marked all 9,000 files `indexed` between two
+reads, so the arc covered everything for one read. The remaining ~470 s (87% of the
+run, card on "Embedding") changed no file's state, so the map has nothing to point at
+and shows no arc; the progress card above it is the only thing that says what is
+happening. What MinSync does inside that stretch was not inspected. The resolution is
+one read (`INDEX_MAP_REFRESH_MS`, 10 s): a corpus whose stage ends inside one read
+(1,200 tiny files do) rings everything it touched in that read, which is why the lane
+uses a few thousand files.
+
+**What the person can change from the map.** Clicking a folder or file **picks** it
+(hovering only previews, so the action stays reachable after the pointer leaves). The
+side panel then offers the one change that would work (rules in
+`src/shared/index-scope-edit.ts`, pure and tested): *Exclude from indexing* adds the
+path to `excludePaths`; *Include in indexing* removes it, but only when that exact
+path is in the list. A folder excluded only because a folder above it is, a search
+root, a folded parcel and a folder the refresh never walks (`node_modules` and the
+like) offer nothing. The write goes through the serialized config writer (an empty
+list removes its key) and the map reads again at once (`useLiveIndexMap`
+`revision`). A refresh is not started by itself. Changing the **search folders**
+returns the map to the whole scope; changing only exclusions keeps the view, except
+that excluding the folder in view steps out of it.
+
+Settings → 검색 범위 (`ScopePage.tsx`) is where the folders themselves are edited, and
+has no map. *Add folder* opens the system folder dialog (`onboarding.pickFolders`,
+several at once); a remote browser has no dialog, so it asks for a path and expands
+`~`. `addSearchRoots` refuses a folder already listed, one inside a listed folder
+(indexing it twice would double-count it) and a relative path, and says why; a new
+folder that contains listed ones replaces them. *Delete* removes a folder and, in the
+same write, the exclusions that only meant something under it. The exclusion list
+below it shows every entry, those the map wrote included.
+
+**The open map keeps itself current** (`useLiveIndexMap.ts`). While the local
+folders are being indexed, by this app, the scheduled job or `autorag watch`
+(`localIndexRunning` over `useIndexActivity`), it reads the map again every
+`INDEX_MAP_REFRESH_MS` (10 s), once when a run starts, once when it ends, once when
+the scope it describes changes, and at once when a refresh settles
+(`onIndexRefreshed`). Nothing polls while idle. The
+update is silent by construction: reads never overlap (a slow scan is not asked
+again, and a push that arrives during one triggers one more read after it); a
+failed re-read keeps the last good map and shows no error (only a first read with
+nothing to keep shows one, and it is retried at the same pace); an answer equal
+to the one shown keeps the same object, so the chart does not redraw. The focused
+folder, the picked item and the hovered item are kept by path and kind, not node id,
+because ids are renumbered when the tree changes. A scan walks the disk, so a 10 s
+interval on a large scope costs one walk per tick, never two at once.
+
+Angles follow file counts, with one exception: an excluded folder holds few or no
+counted files, so by count it would be a hairline beside a large sibling (42
+excluded folders in a 6,866-file scope were each about 0.05° wide: in the data,
+invisible on screen). `layoutRadial` gives each excluded sector at least about 4°,
+capped at a quarter of its parent's ring, and the siblings share what is left in
+proportion. Folding into parcels is silent; only a truncated scan prints a note.
+
+`src/main/index-map.ts` runs on the librarian thread (`indexMap` in
+`librarian-contract.ts`). It walks without symlinks and respects refresh's
+skip-directory names and depth limit. Eligibility uses the same configured
+parser registry as the index badge: unsupported files and product artifacts
+are omitted before classification, even if an old mirror entry remains.
+Unsupported-only ordinary branches are pruned. An excluded/skip-rule folder
+is sealed rather than recursively entered: only supported files directly
+inside contribute excluded counts, and even a zero-count folder stays as a gray
+marker. The marker's angular space is not a recursive file count.
+
+An eligible file is **indexed** when the mirror's mtime/size still match and
+MinSync has staged it, **stale** when it changed or was not staged, or
+**unindexed** when not held. Supported parse/skipping failures remain
+**unindexable** unfinished targets. Unlike the Finder badge's pending-removal
+state, map exclusion wins immediately over an old mirrored entry.
+Folder completion is indexed / (indexed + stale + unindexed + unindexable),
+excluding all excluded counts. All complete is blue, some complete yellow,
+none complete red, and excluded folders gray. Stale/failed files are red.
+The center displays the actual completion percentage for the current scope;
+zero targets displays a dash, and rounding cannot report 100% with work left.
+There is no simulated opening tally or continuous render loop.
+
+The scan stops at `INDEX_MAP_MAX_ENTRIES` and reports `truncated`.
+`buildIndexMap` uses the existing file-cap/depth ladder to fit
+`INDEX_MAP_NODE_BUDGET`, folding files into per-state parcels while preserving
+counts. The reload keeps the focused folder, the picked item and the hovered item,
+since all are kept by path.
+The UI strings ship in Korean, English, Japanese and Simplified Chinese.
+Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`,
+`test/index-map-identity.test.ts`, `test/index-scope-edit.test.ts` (the edit rules),
+`test/index-map-progress.test.ts` (what counts as moving), `test/ui-index-map-live.test.tsx`
+(polling, silent failures, no overlap, re-read on a changed scope, progress marks only
+while running), `test/ui-index-map-panel.test.tsx` (picking, previewing, the offered
+action, the ring, legend entry and row marks), `test/ui-indexing-page.test.tsx` (the
+map under the progress card, exclude and include written to the config),
+`test/ui-scope-page.test.tsx` (add/remove against a fake config, the remote path) and
+`test/index-activity-view.test.ts` (`localIndexRunning`).
+Real app QA: `scripts/manual-qa/run-qa-finder-index-map.mjs` (English/Korean, four
+colors, eligible-only percentages, drill/up/`..`, excluded folders wide enough to see
+and hover, a real refresh followed by the open map without it emptying or losing the
+hovered item, exclude and include from the map checked against the saved config, and
+a folder added, refused and removed on Search Scope with the map following) and
+`scripts/manual-qa/run-qa-index-progress-map.mjs` (a few hundred real files indexed by
+a real run started from the page's own button, sampled once a second: the card above
+the map, the legend entry only while an arc is on, arcs on part of the map that move
+from folder to folder, row marks, and everything gone at 100% when it ends).
+
 ## Error reports (Sentry)
 
 Dazzi sends a report to the maintainers' Sentry project when something breaks,
@@ -677,7 +812,7 @@ role, in the shared `config.json` (the config carries an explicit
 |---|---|---|
 | answer `model` | nothing, or an AutoRAG model | any other provider's model |
 | `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
-| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
 | `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
 
 The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);

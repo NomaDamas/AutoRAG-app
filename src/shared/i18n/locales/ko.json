@@ -2629,6 +2629,7 @@
       "decompositionHint": "긴 질문을 검색어 여러 개로 나눕니다. 빠르고 저렴한 모델이 잘 맞습니다.",
       "jevModel": "판단 모델 (Jev)",
       "jevHint": "바로 답할지, 내 자료를 검색할지 판단합니다.",
+      "jevSllm": "설정 안 함",
       "rerankModel": "검색 결과 정렬",
       "rerankHint": "관련 높은 결과를 위로 올립니다. 답변이 조금 느려질 수 있습니다.",
       "subDocUnderstanding": "문서 이해",
@@ -3141,7 +3142,7 @@
       "foldersTitle": "검색할 폴더",
       "foldersDesc": "이 폴더의 내용을 AI 검색에 포함합니다.",
       "folderName": "검색 폴더",
-      "folderHint": "설정한 폴더 경로를 직접 입력해 추가·삭제합니다.",
+      "folderHint": "폴더를 골라 추가합니다. 안에 있는 모든 항목이 검색됩니다.",
       "addFolder": "폴더 추가",
       "emptyFolderNote": "아직 검색 폴더가 없습니다. 추가하지 않으면 기본 검색 범위를 사용합니다.",
       "excludeTitle": "제외할 항목",
@@ -3162,7 +3163,39 @@
       "addFolderPlaceholder": "예: ~/Documents",
       "addItemPlaceholder": "예: node_modules",
       "confirmAdd": "추가",
-      "addChip": "+ 추가"
+      "addChip": "+ 추가",
+      "notAdded": {
+        "duplicate": "{{path}}은(는) 이미 검색 폴더입니다.",
+        "insideTarget": "{{path}}은(는) 상위 검색 폴더에 이미 포함되어 있습니다.",
+        "notAbsolute": "{{path}}은(는) 전체 경로가 아닙니다."
+      }
+    },
+    "indexMap": {
+      "title": "인덱싱 지도",
+      "coverage": "{{total}}개 중 {{indexed}}개 인덱싱됨",
+      "allRoots": "전체 검색 범위",
+      "scopeLabel": "현재 범위",
+      "up": "상위 폴더로 이동",
+      "selectHint": "영역에 마우스를 올리면 경로와 완료 상태를 볼 수 있습니다.",
+      "excludedHint": "인덱싱에서 제외된 경로입니다. 완료율 집계에 포함하지 않습니다.",
+      "canvasLabel": "중앙의 루트부터 바깥의 하위 파일까지 펼쳐진 방사형 인덱싱 지도",
+      "loading": "검색 범위를 살펴보는 중…",
+      "error": "지도를 불러오지 못했습니다: {{message}}",
+      "unavailable": "이 창에서는 인덱싱 지도를 볼 수 없습니다.",
+      "empty": "검색 범위에 인덱싱 가능한 파일이 없습니다.",
+      "parcel": "{{state}} 파일 {{files}}개",
+      "folderCounts": "{{total}}개 중 {{indexed}}개 인덱싱됨",
+      "legendLabel": "범례",
+      "progress": "지금 인덱싱 중",
+      "truncated": "검색 범위가 너무 커서 처음 {{total}}개 파일까지만 살펴봤습니다.",
+      "state": {
+        "indexed": "전체 완료",
+        "partial": "일부 완료",
+        "stale": "갱신 필요",
+        "unindexed": "미완료",
+        "excluded": "제외됨",
+        "unindexable": "읽을 수 없음"
+      }
     },
     "web": {
       "title": "웹 검색",
