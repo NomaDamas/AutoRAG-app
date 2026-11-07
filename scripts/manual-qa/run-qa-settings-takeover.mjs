@@ -156,6 +156,12 @@ try {
 	check("Finder shows its toolbar with the view / sort / group controls", (await shown(".toolbar")) && (await shown('[aria-label="View"]')) && (await shown('button[aria-label="Sort"]')));
 	check("Finder shows its own left sidebar", await shown("aside.sidebar"));
 	await shot("01-finder-before");
+	const TYPE = `(sel) => { const el = document.querySelector(sel); if (!el) return null; const c = getComputedStyle(el); return { fontSize: c.fontSize, lineHeight: c.lineHeight, fontWeight: c.fontWeight, height: Math.round(el.getBoundingClientRect().height), letterSpacing: c.letterSpacing, paddingLeft: c.paddingLeft, radius: c.borderTopLeftRadius }; }`;
+	const finderRow = await page.evaluate(`(${TYPE})(".sidebar .sidebar__item")`);
+	const finderLabel = await page.evaluate(`(${TYPE})(".sidebar .side-label")`);
+	const finderGap = await page.evaluate(() => { const rows = [...document.querySelectorAll(".sidebar .side-group")[0].querySelectorAll(".sidebar__item")].map((el) => el.getBoundingClientRect()); return Math.round(rows[1].top - rows[0].bottom); });
+	const emptyInspector = await page.evaluate(() => { const half = document.querySelector(".inspector-column .inspector-half"); return half === null ? null : { logo: half.querySelectorAll("img").length, text: (half.textContent ?? "").trim() }; });
+	check("right sidebar with nothing to show is the Dazzi logo alone: no caption", emptyInspector !== null && emptyInspector.logo === 1 && emptyInspector.text === "", JSON.stringify(emptyInspector));
 
 	// 2. Open Settings with the sidebar gear.
 	await page.locator(".sidebar__item--settings").click();
@@ -181,6 +187,14 @@ try {
 	check("the right sidebar is kept, flush with the window's right edge", inspector !== null && inspector.right === (await page.evaluate(() => innerWidth)), JSON.stringify(inspector));
 	check("only one Settings tab exists and it is the focused one", (await page.locator(".tabs", { hasText: "Settings" }).count()) <= 1);
 	await shot("02-settings-general");
+	const settingsRow = await page.evaluate(`(${TYPE})("aside.settings-sidebar .settings-nav-item:not(.settings-sidebar-back)")`);
+	const settingsLabel = await page.evaluate(`(${TYPE})("aside.settings-sidebar .settings-sidebar-group-title")`);
+	const settingsGap = await page.evaluate(() => { const rows = [...document.querySelectorAll("aside.settings-sidebar .settings-nav-group")[1].querySelectorAll(".settings-nav-item")].map((el) => el.getBoundingClientRect()); return Math.round(rows[1].top - rows[0].bottom); });
+	check("settings rows use the Finder sidebar's font size, line height, weight, height, padding, radius and row gap", JSON.stringify({ ...settingsRow }) === JSON.stringify({ ...finderRow }) && settingsGap === finderGap, JSON.stringify({ finderRow, settingsRow, finderGap, settingsGap }));
+	check("settings group labels use the Finder sidebar's label type", settingsLabel.fontSize === finderLabel.fontSize && settingsLabel.fontWeight === finderLabel.fontWeight && settingsLabel.letterSpacing === finderLabel.letterSpacing && settingsLabel.lineHeight === finderLabel.lineHeight, JSON.stringify({ finderLabel, settingsLabel }));
+	const headBg = await page.evaluate(() => { const col = document.querySelector(".inspector-column"); return col === null ? null : getComputedStyle(col).backgroundColor; });
+	const settingsEmpty = await page.evaluate(() => { const half = document.querySelector(".inspector-column .inspector-half"); return half === null ? null : { logo: half.querySelectorAll("img").length, text: (half.textContent ?? "").trim() }; });
+	check("on a page without an assistant the right sidebar is the logo alone too", settingsEmpty !== null && settingsEmpty.logo === 1 && settingsEmpty.text === "", JSON.stringify(settingsEmpty));
 
 	// The window's focus-search shortcut (⌘F) goes to Settings' own search box: the Finder's is hidden.
 	await page.locator(".settings-content").click({ position: { x: 5, y: 300 } });
@@ -201,6 +215,8 @@ try {
 	check("a chat turn answers in the right sidebar", true);
 	await shot("03-assistant-chat");
 
+	const colours = await page.evaluate(() => { const col = document.querySelector(".inspector-column"); const panel = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])'); const head = document.querySelector(".inspector-head"); const bg = (el) => { for (let n = el; n; n = n.parentElement) { const c = getComputedStyle(n).backgroundColor; if (c !== "rgba(0, 0, 0, 0)") return c; } return null; }; return { head: bg(head), panel: bg(panel), col: bg(col) }; });
+	check("the right sidebar's top band is the same colour as the chat below it", colours.head === colours.panel, JSON.stringify(colours));
 	// 4. Hide / show the right sidebar.
 	const hideBox = await box('.inspector-head button[aria-label="Hide inspector"]');
 	await page.locator('.inspector-head button[aria-label="Hide inspector"]').click();

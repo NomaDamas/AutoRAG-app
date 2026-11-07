@@ -874,7 +874,7 @@ export function App(): ReactElement {
 						/>
 					</div>
 				</div>
-				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)}>
+				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null ? "window" : "subtle"}>
 						{settingsAssistantDock !== null ? (
 							<SettingsAssistantSlot dock={settingsAssistantDock} />
 						) : automationsTabActive ? (

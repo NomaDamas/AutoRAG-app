@@ -462,7 +462,7 @@ export function SettingsView({
 				<div className="settings-sidebar-backrow">
 					<button type="button" className="settings-nav-item settings-sidebar-back" onClick={onBack}>
 						<span className="settings-nav-icon" aria-hidden="true">
-							<ChevronLeftIcon size={16} />
+							<ChevronLeftIcon size={14} />
 						</span>
 						<span>{t("toolbar.back")}</span>
 					</button>
@@ -470,7 +470,7 @@ export function SettingsView({
 				<div className="settings-sidebar-scroll">
 					<nav aria-label={t("settingsCore.view.menuAria")} style={{ display: "contents" }}>
 						{groups.map((group) => (
-							<div key={group.groupKey}>
+							<div key={group.groupKey} className="settings-nav-group">
 								<div className="settings-sidebar-group-title">{t(group.groupKey)}</div>
 								{group.pages.map((page) => {
 									const Icon = page.icon;
@@ -478,7 +478,7 @@ export function SettingsView({
 									return (
 										<button key={page.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
 											<span className="settings-nav-icon" aria-hidden="true">
-												<Icon size={16} />
+												<Icon size={14} strokeWidth={1.8} />
 											</span>
 											<span>{t(page.labelKey)}</span>
 										</button>
@@ -488,7 +488,7 @@ export function SettingsView({
 							</div>
 						))}
 						{!groups.some((group) => group.groupKey === GROUP_APPS) && filteredSources.length > 0 ? (
-							<div>
+							<div className="settings-nav-group">
 								<div className="settings-sidebar-group-title">{t(GROUP_APPS)}</div>
 								{sourceButtons}
 							</div>
