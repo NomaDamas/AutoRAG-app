@@ -60,6 +60,14 @@ function setDeskMode(mode: DeskMode): void {
 	else document.documentElement.dataset.firstRun = mode;
 }
 
+/**
+ * The files the first index covers: the folders' own files minus what smart indexing left out. `processedFiles` also counts
+ * every file the scan looked at and skipped (the left-out folders' included), so it overstates what can be searched.
+ */
+function indexedFileCount(status: SetupStatus | null): number {
+	return status === null ? 0 : status.totalFiles > 0 ? status.totalFiles : status.processedFiles;
+}
+
 function isTextTarget(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) return false;
 	return target.isContentEditable || target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.tagName === "SELECT";
@@ -439,12 +447,11 @@ function SetupScreen({
 /**
  * The file count the ready caption shows. It only grows: a status that briefly reports fewer
  * files (a late tick, a poll answer, `processedFiles` still 0 while `totalFiles` is known) must not
- * change the sentence under the title once it is on screen.
+ * change the sentence under the title once it is on screen. What it counts is {@link indexedFileCount}.
  */
 function useReadyCount(status: SetupStatus | null): number {
 	const best = useRef(0);
-	const processed = status?.processedFiles ?? 0;
-	best.current = Math.max(best.current, processed > 0 ? processed : (status?.totalFiles ?? 0));
+	best.current = Math.max(best.current, indexedFileCount(status));
 	return best.current;
 }
 

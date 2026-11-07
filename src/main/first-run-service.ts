@@ -62,9 +62,10 @@ const PREPARING_TIMEOUT_MS = 90_000;
 /** Indexing's share of the one bar: `computeIndexingProgress` yields 0–100 and this maps it to 15–90. */
 const INDEXING_START = 15;
 const INDEXING_SPAN = 75;
-const MIN_DOC_BYTES = 1_500;
 const MAX_DOC_BYTES = 400_000;
 const MAX_DEMO_DOCS = 8;
+/** Most parsed documents opened looking for {@link MAX_DEMO_DOCS} long enough ones. */
+const MAX_DEMO_READS = 48;
 const EXCERPT_CHARS = 2_000;
 const MIN_EXCERPT_CHARS = 200;
 
@@ -383,24 +384,24 @@ function collectDemoDocs(workspaceRoot: string): readonly DemoDoc[] {
 	const sized: ParsedMirrorEntry[] = [];
 	for (const { entry } of pool) {
 		const size = outputSize(entry.outputPath);
-		if (size === null || size < MIN_DOC_BYTES || size > MAX_DOC_BYTES) continue;
+		if (size === null || size > MAX_DOC_BYTES) continue;
 		sized.push(entry);
 	}
-	const chosen: ParsedMirrorEntry[] = [];
-	const usedFolders = new Set<string>();
+	// One document per folder first, then the rest, each group in the order above.
+	const firstPerFolder = new Set<ParsedMirrorEntry>();
+	const seenFolders = new Set<string>();
 	for (const entry of sized) {
-		if (chosen.length >= MAX_DEMO_DOCS) break;
 		const folder = dirname(entry.sourcePath);
-		if (usedFolders.has(folder)) continue;
-		usedFolders.add(folder);
-		chosen.push(entry);
+		if (seenFolders.has(folder)) continue;
+		seenFolders.add(folder);
+		firstPerFolder.add(entry);
 	}
-	for (const entry of sized) {
-		if (chosen.length >= MAX_DEMO_DOCS) break;
-		if (!chosen.includes(entry)) chosen.push(entry);
-	}
+	const ordered = [...firstPerFolder, ...sized.filter((entry) => !firstPerFolder.has(entry))];
+	// A document is long enough when its text is (characters, not bytes: a Korean note is three bytes a character),
+	// so read until enough have an excerpt rather than trusting the file size.
 	const docs: DemoDoc[] = [];
-	for (const entry of chosen) {
+	for (const entry of ordered.slice(0, MAX_DEMO_READS)) {
+		if (docs.length >= MAX_DEMO_DOCS) break;
 		const excerpt = readExcerpt(entry.outputPath);
 		if (excerpt === null) continue;
 		docs.push({ sourcePath: entry.sourcePath, realSourcePath: realpathOr(entry.sourcePath), excerpt });
