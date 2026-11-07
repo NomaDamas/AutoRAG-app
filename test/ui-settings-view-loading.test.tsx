@@ -74,9 +74,12 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
+/** Settings as the window hosts it: the width of its sidebar column, a back action, and the right sidebar shown. */
+const SHELL = { navWidth: 240, onBack: () => undefined, inspectorHidden: false, onShowInspector: () => undefined };
+
 async function renderView(initialCategory: SettingsCategory): Promise<void> {
 	await act(async () => {
-		root.render(<SettingsView initialCategory={initialCategory} />);
+		root.render(<SettingsView initialCategory={initialCategory} {...SHELL} />);
 	});
 	await settle();
 }
@@ -116,7 +119,7 @@ describe("opening Settings while the datasource scan is still running", () => {
 		bridge.sourcesList.mockReturnValue(scan.promise);
 
 		await act(async () => {
-			root.render(<SettingsView initialCategory="general" />);
+			root.render(<SettingsView initialCategory="general" {...SHELL} />);
 		});
 
 		// `get` has not answered, yet the scan is already under way: it is not queued behind it.

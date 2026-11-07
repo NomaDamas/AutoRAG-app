@@ -301,8 +301,11 @@ tokens in Pi's `auth.json`, and credential-only keys (for example
 are rejected; corpus-bearing requests stay on loopback.
 
 The Settings tab is an app-owned UI location, not a filesystem path; it never
-issues directory listings, incremental reads, or watcher requests. Returning to
-a Finder tab restores its existing folder listing and watch set.
+issues directory listings, incremental reads, or watcher requests. While it is
+focused it takes over the window (its own sidebar, no tab strip or toolbar) and
+the Finder chrome stays mounted but hidden; Back closes the tab and returns to
+the Finder tab focused before it, whose folder listing and watch set are
+restored as they were.
 
 ## Filesystem worker
 

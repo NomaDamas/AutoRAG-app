@@ -13,7 +13,13 @@ export function SettingsWithRightSidebar({ initialCategory }: { readonly initial
 	return (
 		<SettingsAssistantContext value={host}>
 			<button type="button" data-testid="toggle-right-sidebar" aria-pressed={rightSidebarVisible} onClick={() => setRightSidebarVisible((visible) => !visible)} />
-			<SettingsView {...(initialCategory === undefined ? {} : { initialCategory })} />
+			<SettingsView
+				{...(initialCategory === undefined ? {} : { initialCategory })}
+				navWidth={240}
+				onBack={() => undefined}
+				inspectorHidden={!rightSidebarVisible}
+				onShowInspector={() => setRightSidebarVisible(true)}
+			/>
 			{rightSidebarVisible && dock !== null ? <SettingsAssistantSlot dock={dock} /> : null}
 		</SettingsAssistantContext>
 	);

@@ -1,6 +1,5 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import type { AppSettings } from "../../../shared/settings-contract";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
 import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
@@ -26,7 +25,6 @@ import { IndexProblemBanner } from "./IndexProblemBanner";
 import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./list-scroll";
 import { PathBar } from "./PathBar";
 import { ScopeBar } from "./ScopeBar";
-import { SettingsView } from "./SettingsView";
 import { TabStrip } from "./TabStrip";
 
 const autorag = window.autorag;
@@ -54,7 +52,6 @@ export interface PaneShell {
 	onToast(message: string): void;
 	/** Attach to / send a query in the focused AI Search tab once it is visible. */
 	deliverToAi(request: AiDeliveryRequest): void;
-	onSettingsChanged(settings: AppSettings): void;
 	setListColumns(change: (current: ListColumnsState) => ListColumnsState): void;
 	/** A strip tab started a drag: the workspace shows where it can land. */
 	beginTabDrag(tabId: number, event: DragEvent<HTMLDivElement>): void;
@@ -366,7 +363,8 @@ export const FinderPane = memo(function FinderPane({
 					}}
 				/>
 				{finder.path === SETTINGS_PATH ? (
-					<SettingsView onSettingsChanged={shell.onSettingsChanged} />
+					// Settings takes over the whole window (App renders it) while this tab is focused.
+					<div className="min-h-0 flex-1 bg-subtle-alt" />
 				) : finder.path === AUTOMATIONS_PATH ? (
 					<AutomationsTab />
 				) : finder.path === AI_SEARCH_PATH ? (
