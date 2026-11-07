@@ -845,10 +845,11 @@
     },
     "game": {
       "invite": "Tap me",
-      "hint": "Right-click or Shift+click to flag",
+      "hint": "Flag: right-click or Shift+click",
       "remaining": "Logos left",
       "time": "Time",
-      "best": "Best {{time}}",
+      "seconds": "{{time}} s",
+      "close": "Close game",
       "board": "Find the logos",
       "won": "You found every logo!",
       "record": "New record!",
@@ -858,7 +859,6 @@
     "ready": {
       "title": "Done reading your files",
       "lead": "Now you can find anything in your {{count}} files.",
-      "leadNone": "Ready to find your files with Dazzi?",
       "start": "Get started"
     },
     "cinema": {
