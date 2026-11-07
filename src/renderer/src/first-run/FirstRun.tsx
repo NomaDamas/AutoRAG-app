@@ -564,7 +564,7 @@ function Tour({
 				if (live) setFamily(null);
 			});
 		if (skipCinemaRef.current) {
-			setStep(stepsRef.current[0] ?? null);
+			// No title card to wait through: the first step opens from the effect below once the data decides it.
 			return () => {
 				live = false;
 			};
@@ -588,6 +588,14 @@ function Tour({
 	stepsRef.current = steps;
 	const stepRef = useRef(step);
 	stepRef.current = step;
+
+	// After the reveal there is no cinema timer to wait on, so the first step opens as soon as the data supports one: `ask` from the demo question
+	// at once, otherwise the first version-family step once that lookup has answered. A tour with nothing to show ends rather than sit empty.
+	useEffect(() => {
+		if (!skipCinemaRef.current || stepRef.current !== null) return;
+		if (steps.length > 0) setStep(steps[0] ?? null);
+		else if (family !== undefined) onEnd();
+	}, [steps, family, onEnd]);
 
 	const advance = useCallback(() => {
 		const current = stepRef.current;
