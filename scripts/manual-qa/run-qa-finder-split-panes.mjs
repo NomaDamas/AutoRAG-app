@@ -351,7 +351,7 @@ try {
 	const chromeOnScreen = await page.evaluate(() => [...document.querySelectorAll("[data-workspace-pane], .tabs")].some((element) => element.getBoundingClientRect().width > 0));
 	check("Settings takes over the window: no pane or tab strip stays on screen", !chromeOnScreen);
 	await page.screenshot({ path: join(EVIDENCE, "11-settings-takeover.png") });
-	await page.locator('aside.settings-sidebar button[aria-label="Back"]').click();
+	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("[data-workspace-pane] .tabs .tab");
 	await settle(page);
 	state = await panes(page);

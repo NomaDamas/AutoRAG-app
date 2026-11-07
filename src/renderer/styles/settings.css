@@ -42,36 +42,17 @@
 	border-right: 1px solid var(--border);
 }
 
-/* The head replaces the toolbar row: back button and title, level with the window's traffic lights. */
+/* An empty head level with the Finder sidebar's: room for the window's traffic lights, and the window drags from it. */
 .settings-sidebar-head {
-	display: flex;
 	flex: none;
-	align-items: center;
-	gap: var(--space-2);
 	height: var(--size-toolbar);
-	padding: 0 var(--space-8) 0 var(--space-8);
 	-webkit-app-region: drag;
 }
 
-/* macOS draws the traffic lights over the head's left end; the back button starts after them. */
-.settings-sidebar-head__lights {
+/* The way out: one row under the search, built like a page row so it reads as one more button in the list. */
+.settings-sidebar-backrow {
 	flex: none;
-	width: 62px;
-}
-
-.settings-sidebar-back {
-	-webkit-app-region: no-drag;
-}
-
-.settings-sidebar-title {
-	min-width: 0;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	padding-left: var(--space-4);
-	font-size: 15px;
-	font-weight: 650;
-	color: var(--text-primary);
+	padding: 0 var(--space-10) var(--space-4);
 }
 
 .settings-sidebar-scroll {
@@ -197,15 +178,15 @@
 	position: absolute;
 	inset: 0 0 auto 0;
 	z-index: 1;
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
 	height: 36px; /* the content's top padding below. */
-	padding: 0 calc(var(--space-12) + var(--window-controls-gutter)) 0 var(--space-12);
 	-webkit-app-region: drag;
 }
 
+/* Where the Finder toolbar's last button sits: vertically centred in a toolbar-high row, 12px from the right edge. */
 .settings-main-inspector {
+	position: absolute;
+	top: calc((var(--size-toolbar) - var(--size-toolbar-icon)) / 2);
+	right: calc(var(--space-12) + var(--window-controls-gutter));
 	-webkit-app-region: no-drag;
 }
 
@@ -589,42 +570,6 @@
  * Everything is scoped under `.settings-view` so these generic names never
  * leak into the rest of the app.
  * ========================================================================== */
-
-/* ------------------------------------------------------- Sidebar search -- */
-
-.settings-view .settings-search {
-	position: relative;
-	margin-bottom: var(--space-6);
-}
-
-.settings-view .settings-search__icon {
-	position: absolute;
-	left: 9px;
-	top: 7px;
-	color: var(--text-muted);
-	pointer-events: none;
-}
-
-.settings-view .settings-search input {
-	width: 100%;
-	height: 28px;
-	padding: 0 10px 0 29px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-7);
-	background: var(--bg-window);
-	color: var(--text-primary);
-	font-size: 12.5px;
-	outline: none;
-}
-
-.settings-view .settings-search input::placeholder {
-	color: var(--text-faint);
-}
-
-.settings-view .settings-search input:focus {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-soft);
-}
 
 .settings-view .settings-nav-empty {
 	padding: 14px var(--space-10);

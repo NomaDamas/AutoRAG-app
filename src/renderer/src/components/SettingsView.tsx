@@ -12,7 +12,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Search, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -34,9 +34,10 @@ import { SourceIcon } from "./settings/SourceIcon";
 import { settings } from "../settings-runtime";
 import { attachSettingsNavigation } from "../state/settings-navigation";
 import { cn } from "../lib/cn";
-import { hostPlatform } from "../lib/shortcuts";
-import { ChevronLeftIcon, PanelRightIcon } from "./icons";
+import { useFormattedShortcut } from "../hooks/useShortcutSettings";
+import { ChevronLeftIcon, PanelRightIcon, SearchIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
+import { Keycap } from "./primitives/Keycap";
 
 const autorag = { settings };
 
@@ -420,26 +421,53 @@ export function SettingsView({
 		);
 	});
 
-	// macOS draws the window's traffic lights over the sidebar's top-left; Windows has none.
-	const trafficLights = hostPlatform() !== "win32";
+	const [searchFocused, setSearchFocused] = useState(false);
+	const focusSearchShortcut = useFormattedShortcut("focusSearch");
 
 	return (
 		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
 			<aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
-				<div className="settings-sidebar-head">
-					{trafficLights ? <span className="settings-sidebar-head__lights" aria-hidden="true" /> : null}
-					<button type="button" className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "settings-sidebar-back")} title={t("toolbar.back")} aria-label={t("toolbar.back")} onClick={onBack}>
-						<ChevronLeftIcon size={18} />
+				{/* Level with the Finder sidebar's head: room for the traffic lights, and the window drags from it. */}
+				<div className="settings-sidebar-head" aria-hidden="true" />
+				<div className="sidebar-search flex-none px-10 pt-2 pb-8">
+					<label className="side-search settings-search flex items-center gap-7 h-30 pl-9 pr-6 border border-transparent rounded-8 bg-hover text-ink-muted transition-[background,border-color,box-shadow,color] duration-(--dur-color) ease-[ease] hover:bg-hover-strong focus-within:bg-window focus-within:border-accent focus-within:text-accent-hover focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
+						<SearchIcon className="flex-none" />
+						<input
+							ref={searchRef}
+							className="flex-1 min-w-0 h-full border-0 outline-none bg-transparent text-ink text-meta"
+							type="text"
+							value={query}
+							placeholder={t("sidebarSearch.placeholder")}
+							aria-label={t("settingsCore.view.search")}
+							onChange={(event) => setQuery(event.target.value)}
+							onFocus={() => setSearchFocused(true)}
+							onBlur={() => setSearchFocused(false)}
+						/>
+						{query !== "" ? (
+							<button
+								type="button"
+								className="flex-none flex items-center justify-center size-16 p-0 border-0 rounded-full bg-border-strong text-on-accent text-[9px] leading-none cursor-default hover:bg-ink-muted"
+								title={t("sidebarSearch.clearSearch")}
+								aria-label={t("sidebarSearch.clearSearch")}
+								onMouseDown={(event) => event.preventDefault()}
+								onClick={() => setQuery("")}
+							>
+								✕
+							</button>
+						) : !searchFocused ? (
+							<Keycap label={focusSearchShortcut} />
+						) : null}
+					</label>
+				</div>
+				<div className="settings-sidebar-backrow">
+					<button type="button" className="settings-nav-item settings-sidebar-back" onClick={onBack}>
+						<span className="settings-nav-icon" aria-hidden="true">
+							<ChevronLeftIcon size={16} />
+						</span>
+						<span>{t("toolbar.back")}</span>
 					</button>
-					<strong className="settings-sidebar-title">{t("settings.title")}</strong>
 				</div>
 				<div className="settings-sidebar-scroll">
-					<label className="settings-search">
-						<span className="settings-search__icon" aria-hidden="true">
-							<Search size={14} />
-						</span>
-						<input ref={searchRef} type="search" aria-label={t("settingsCore.view.search")} placeholder={t("settingsCore.view.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
-					</label>
 					<nav aria-label={t("settingsCore.view.menuAria")} style={{ display: "contents" }}>
 						{groups.map((group) => (
 							<div key={group.groupKey}>
@@ -472,7 +500,7 @@ export function SettingsView({
 			<div className="settings-main">
 				<div className="settings-main-head">
 					{inspectorHidden ? (
-						<button type="button" className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
 							<PanelRightIcon size={18} />
 						</button>
 					) : null}

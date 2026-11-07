@@ -76,22 +76,47 @@ async function renderView(props: ShellProps = {}): Promise<void> {
 const nav = (): HTMLElement => host.querySelector<HTMLElement>("aside.settings-sidebar") as HTMLElement;
 
 describe("Settings as a takeover of the window", () => {
-	it("heads its own sidebar with a back button and the Settings title, above the search and the pages", async () => {
+	it("has no title or back button at the sidebar's top; the back button is one row under the search, above the pages", async () => {
 		await renderView();
 		const head = nav().firstElementChild as HTMLElement;
 		expect(head.classList.contains("settings-sidebar-head")).toBe(true);
-		expect(head.textContent).toContain("Settings");
-		expect(head.querySelector('button[aria-label="Back"]')).not.toBeNull();
-		const search = nav().querySelector("input[type=search]") as Node;
+		expect(head.textContent?.trim()).toBe("");
+		expect(head.querySelector("button")).toBeNull();
+		expect(nav().querySelector(".settings-sidebar-title")).toBeNull();
+		const search = nav().querySelector("label.side-search input") as Node;
+		const back = nav().querySelector<HTMLButtonElement>("button.settings-sidebar-back") as Node;
+		const firstPage = nav().querySelector(".settings-nav-item:not(.settings-sidebar-back)") as Node;
 		expect(search).not.toBeNull();
-		expect(head.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(back).not.toBeNull();
+		expect(search.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(back.compareDocumentPosition(firstPage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(back.textContent?.trim()).toBe("Back");
+	});
+
+	it("wears the Finder sidebar's search: same field, a clear button once typed", async () => {
+		await renderView();
+		const input = nav().querySelector<HTMLInputElement>("label.side-search input") as HTMLInputElement;
+		expect(input.placeholder).toBe("Search…");
+		expect(input.getAttribute("aria-label")).toBe("Search settings");
+		expect(nav().querySelector('button[aria-label="Clear search"]')).toBeNull();
+		const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set as (value: string) => void;
+		await act(async () => {
+			setValue.call(input, "side");
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		const clear = nav().querySelector<HTMLButtonElement>('button[aria-label="Clear search"]');
+		expect(clear).not.toBeNull();
+		await act(async () => {
+			clear?.click();
+		});
+		expect(input.value).toBe("");
 	});
 
 	it("goes back when the back button is pressed", async () => {
 		const onBack = vi.fn();
 		await renderView({ onBack });
 		await act(async () => {
-			nav().querySelector<HTMLButtonElement>('button[aria-label="Back"]')?.click();
+			nav().querySelector<HTMLButtonElement>("button.settings-sidebar-back")?.click();
 		});
 		expect(onBack).toHaveBeenCalledTimes(1);
 	});
@@ -123,6 +148,6 @@ describe("Settings as a takeover of the window", () => {
 	it("hands its search box to the window so the focus-search shortcut lands there", async () => {
 		const searchRef = createRef<HTMLInputElement>();
 		await renderView({ searchRef });
-		expect(searchRef.current).toBe(nav().querySelector("input[type=search]"));
+		expect(searchRef.current).toBe(nav().querySelector("label.side-search input"));
 	});
 });

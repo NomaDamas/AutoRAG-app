@@ -166,9 +166,13 @@ try {
 	check("the Finder sidebar is not on screen", !(await shown("aside.sidebar")));
 	const nav = await box("aside.settings-sidebar");
 	check("Settings' own sidebar fills the left column, flush at the window's left edge", nav !== null && nav.x === 0 && nav.y === 0 && sidebarBefore !== null && nav.width === sidebarBefore.width && nav.bottom === (await page.evaluate(() => innerHeight)), JSON.stringify({ nav, sidebarBefore }));
-	const back = await box('aside.settings-sidebar button[aria-label="Back"]');
-	const title = await box(".settings-sidebar-title");
-	check("a back button and the Settings title sit at the sidebar's top-left, back first", back !== null && title !== null && back.y < 60 && title.y < 60 && back.x < title.x && (await page.locator(".settings-sidebar-title").innerText()) === "Settings", JSON.stringify({ back, title }));
+	const search = await box("aside.settings-sidebar label.side-search");
+	const finderSearchClass = await page.evaluate(() => document.querySelector("aside.settings-sidebar label.side-search")?.className.replace(/\bsettings-search\b/, "").trim());
+	const back = await box("aside.settings-sidebar .settings-sidebar-back");
+	check("no title or back button at the sidebar's top-left: the head is empty", (await page.locator(".settings-sidebar-title").count()) === 0 && (await page.locator(".settings-sidebar-head button, .settings-sidebar-head :text('Settings')").count()) === 0);
+	check("the search sits right under the head, where the Finder sidebar's search does", search !== null && search.y >= 52 && search.y < 64, JSON.stringify(search));
+	check("the back button is one row directly under the search, as wide as a page row", search !== null && back !== null && back.y > search.bottom && back.y - search.bottom < 24 && (await page.locator("aside.settings-sidebar .settings-sidebar-back").innerText()).trim() === "Back", JSON.stringify({ search, back }));
+	check("the search carries the Finder sidebar's design classes", /rounded-8/.test(finderSearchClass ?? "") && /bg-hover/.test(finderSearchClass ?? "") && /h-30/.test(finderSearchClass ?? ""), finderSearchClass);
 	const content = await box("main.settings-content");
 	check("the settings content starts right at the window's top, beside the sidebar", content !== null && content.y === 0 && content.x >= (nav?.right ?? 0), JSON.stringify(content));
 	const heading = await box(".settings-content .linear-title");
@@ -198,16 +202,24 @@ try {
 	await shot("03-assistant-chat");
 
 	// 4. Hide / show the right sidebar.
+	const hideBox = await box('.inspector-head button[aria-label="Hide inspector"]');
 	await page.locator('.inspector-head button[aria-label="Hide inspector"]').click();
 	await page.waitForTimeout(400);
 	check("hiding the right sidebar leaves Settings' own show button", (await shown('.settings-main-head button[aria-label="Show inspector"]')) && !(await shown(".inspector-column")));
+	const showBox = await box('.settings-main-head button[aria-label="Show inspector"]');
+	const windowWidth = await page.evaluate(() => innerWidth);
+	check(
+		"the show button keeps the Finder toolbar's margins: centred in a toolbar-high row, 12px from the right edge, level with the hide button",
+		showBox !== null && hideBox !== null && showBox.y + showBox.height / 2 === 26 && windowWidth - showBox.right === 12 && showBox.y === hideBox.y && showBox.height === hideBox.height,
+		JSON.stringify({ showBox, hideBox, windowWidth }),
+	);
 	await shot("04-right-sidebar-hidden");
 	await page.locator('.settings-main-head button[aria-label="Show inspector"]').click();
 	await page.waitForTimeout(400);
 	check("the show button brings the right sidebar (and the assistant) back, then disappears", (await shown(".inspector-column")) && !(await shown('.settings-main-head button[aria-label="Show inspector"]')) && (await panel.isVisible()));
 
 	// 5. Back.
-	await page.locator('aside.settings-sidebar button[aria-label="Back"]').click();
+	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
 	await page.waitForTimeout(400);
 	check("Back restores the tab strip, toolbar and Finder sidebar", (await shown(".tabs")) && (await shown(".toolbar")) && (await shown("aside.sidebar")) && !(await shown(".settings-view")));
@@ -219,7 +231,7 @@ try {
 	await page.keyboard.press(chord(","));
 	await page.waitForSelector(".settings-view");
 	check("the Settings shortcut opens Settings again", !(await shown(".toolbar")) && (await shown("aside.settings-sidebar")));
-	await page.locator('aside.settings-sidebar button[aria-label="Back"]').click();
+	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
 
 	// The Finder chrome stays mounted under Settings: an AI Search tab's composer draft survives a round trip.
@@ -229,7 +241,7 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.waitForTimeout(300);
-	await page.locator('aside.settings-sidebar button[aria-label="Back"]').click();
+	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
 	check("Back returns to the AI Search tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
 	await shot("05b-ai-draft-after-settings");
@@ -244,7 +256,7 @@ try {
 	const navHidden = await box("aside.settings-sidebar");
 	check("Settings still shows its own sidebar while the Finder's is hidden", navHidden !== null && navHidden.x === 0 && navHidden.width > 100, JSON.stringify(navHidden));
 	await shot("06-settings-finder-sidebar-hidden");
-	await page.locator('aside.settings-sidebar button[aria-label="Back"]').click();
+	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector(".toolbar", { state: "visible" });
 	await page.waitForTimeout(400);
 	check("Back leaves the Finder sidebar hidden, as it was", !(await shown("aside.sidebar")) && (await shown('.toolbar button[aria-label="Show sidebar"]')));
@@ -256,10 +268,10 @@ try {
 	await page.waitForSelector(".settings-view");
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
 	await page.selectOption('select[aria-label="App Language"]', "ko");
-	await page.waitForFunction(() => document.querySelector(".settings-sidebar-title")?.textContent === "설정", null, { timeout: 10_000 });
-	check("the title and the back button follow the interface language", (await page.locator('aside.settings-sidebar button[aria-label="뒤로"]').count()) === 1);
+	await page.waitForFunction(() => document.querySelector(".settings-sidebar-back")?.textContent?.trim() === "뒤로", null, { timeout: 10_000 });
+	check("the back row follows the interface language", (await page.locator(".settings-sidebar-back").innerText()).trim() === "뒤로");
 	await shot("07-settings-ko");
-	await page.locator('aside.settings-sidebar button[aria-label="뒤로"]').click();
+	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector(".toolbar", { state: "visible" });
 	await shot("08-back-ko");
 } catch (error) {
