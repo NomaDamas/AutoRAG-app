@@ -27,12 +27,16 @@ import type { FolderScan } from "../src/shared/onboarding-contract";
 const stubTranslate: Translate = (key, options) => (options === undefined ? key : `${key}:${JSON.stringify(options)}`);
 
 describe("onboarding flow", () => {
+	it("drops the sources step once detection found none", () => {
+		expect(buildFlow("free", false, "local", true, true)).not.toContain("sources");
+		expect(buildFlow("free", false, "cloud", true, true)).toContain("plan");
+		expect(buildFlow("free", false, "local", true)).toContain("sources");
+	});
+
 	it("orders steps for a local, unconfirmed plan", () => {
 		expect(buildFlow("pro", false, "local", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -45,9 +49,7 @@ describe("onboarding flow", () => {
 	it("drops the plan once confirmed and puts the plan before sources for cloud", () => {
 		expect(buildFlow("pro", true, "local", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -56,9 +58,7 @@ describe("onboarding flow", () => {
 		]);
 		expect(buildFlow("pro", false, "cloud", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -71,9 +71,7 @@ describe("onboarding flow", () => {
 	it("treats the keyword-only mode like local embedding for ordering", () => {
 		expect(buildFlow("pro", false, "none", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
@@ -83,16 +81,13 @@ describe("onboarding flow", () => {
 		]);
 		expect(buildFlow("byok", false, "none", false)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
 			"model",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
 			"sources",
 			"plan",
-			"roles",
 			"indexing",
 		]);
 	});
@@ -101,15 +96,12 @@ describe("onboarding flow", () => {
 		const flow = buildFlow("byok", true, "local", false);
 		expect(flow).toEqual([
 			"welcome",
-			"permissions",
 			"account",
 			"model",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
 			"sources",
-			"roles",
 			"indexing",
 		]);
 		expect(flow.indexOf("model")).toBeLessThan(flow.indexOf("smartScan"));
@@ -118,16 +110,13 @@ describe("onboarding flow", () => {
 	it("keeps the model step after the plan for a signed-in user who picks BYOK there, because the scan already ran", () => {
 		expect(buildFlow("byok", false, "local", true)).toEqual([
 			"welcome",
-			"permissions",
 			"account",
-			"folders",
 			"smartScan",
 			"smartScope",
 			"embedding",
 			"sources",
 			"plan",
 			"model",
-			"roles",
 			"indexing",
 		]);
 	});
@@ -141,11 +130,12 @@ describe("onboarding flow", () => {
 		}
 	});
 
-	it("lets a BYOK user pick the reranker and Jev right before indexing, however the flow is ordered", () => {
+	it("has no separate role step: the model step picks the reranker and Jev too", () => {
 		for (const signedIn of [false, true]) {
 			for (const embed of ["none", "local", "cloud"] as const) {
 				const flow = buildFlow("byok", false, embed, signedIn);
-				expect(flow.slice(-2)).toEqual(["roles", "indexing"]);
+				expect(flow).not.toContain("roles");
+				expect(flow.at(-1)).toBe("indexing");
 			}
 		}
 	});
@@ -249,7 +239,7 @@ describe("onboarding flow", () => {
 
 	it("labels the plan primary button by what the account already holds", () => {
 		expect(primaryLabelKey("welcome", "pro", false)).toBe("onboarding.stepLabel.welcome");
-		expect(primaryLabelKey("plan", "free", false)).toBe("onboarding.plan.continue");
+		expect(primaryLabelKey("plan", "free", false)).toBe("onboarding.plan.startFree");
 		expect(primaryLabelKey("plan", "byok", false)).toBe("onboarding.plan.continue");
 		expect(primaryLabelKey("plan", "pro", true)).toBe("onboarding.plan.continue");
 		expect(primaryLabelKey("plan", "pro", false)).toBe("onboarding.plan.checkoutPro");

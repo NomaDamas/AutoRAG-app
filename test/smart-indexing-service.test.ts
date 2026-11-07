@@ -40,13 +40,14 @@ function register(): FauxProviderRegistration {
 	return registration;
 }
 
-function serviceFor(registration: FauxProviderRegistration, overrides: { timeoutMs?: number; resolveModel?: () => Promise<never> } = {}): SmartIndexingService {
+function serviceFor(registration: FauxProviderRegistration, overrides: { timeoutMs?: number; resolveModel?: () => Promise<never>; cloudRoots?: string[] } = {}): SmartIndexingService {
 	return createSmartIndexingService({
 		send: (event) => events.push(event),
 		resolveModel: overrides.resolveModel ?? (async () => ({ model: registration.getModel() })),
 		agentDir,
 		env: {},
 		language: () => "ko",
+		cloudRoots: async () => overrides.cloudRoots ?? [],
 		scanOptions: { supportedExtensions: new Set([".md"]), maxSourceBytes: 1_000_000 },
 		...(overrides.timeoutMs === undefined ? {} : { timeoutMs: overrides.timeoutMs }),
 	});
@@ -91,6 +92,32 @@ describe("smart indexing service", () => {
 				exclusions: [{ path: join(root, "Telegram Desktop"), root, reason: "채팅 앱 다운로드", files: 2, bytes: 17, excluded: true }],
 			},
 		]);
+	});
+
+	it("leaves a cloud-sync folder out as a whole without showing it to the agent, and still analyses the others", async () => {
+		const cloud = join(root, "Telegram Desktop");
+		const inside = join(cloud, "nested");
+		await mkdir(inside, { recursive: true });
+		await writeFile(join(inside, "c.md"), "123");
+		const registration = register();
+		const fed: string[][] = [];
+		registration.setResponses([
+			fauxAssistantMessage(fauxToolCall("folder_survey", { path: inside })),
+			(context) => {
+				fed.push(toolResultTexts(context.messages));
+				return fauxAssistantMessage(fauxToolCall("propose_exclusions", { exclusions: [] }));
+			},
+			fauxAssistantMessage("done"),
+		]);
+
+		await serviceFor(registration, { cloudRoots: [cloud] }).analyze("run-cloud", [join(root, "Docs"), inside]);
+
+		const result = finalEvent();
+		expect(result).toMatchObject({ type: "result", runId: "run-cloud" });
+		const exclusions = result?.type === "result" ? result.exclusions : [];
+		expect(exclusions).toEqual([expect.objectContaining({ path: inside, root: inside, excluded: true, files: 1 })]);
+		// The agent cannot look inside a cloud folder: its survey is refused.
+		expect(fed[0]?.join("\n")).not.toContain("c.md");
 	});
 
 	it("keeps a proposal even when the index would read nothing from it: what to leave out is the person's to decide, and its count is shown as it is", async () => {

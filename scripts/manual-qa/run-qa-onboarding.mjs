@@ -271,29 +271,25 @@ try {
 	check("folders gate closes with nothing selected", await primary.isDisabled());
 	await page.locator(".onb .folder-card.add").click();
 	await page.waitForFunction(() => document.querySelectorAll(".onb .folder-card.selected").length === 2, null, { timeout: 5000 });
-	await page.waitForFunction(() => !document.querySelector(".onb .folder-summary")?.textContent?.includes("세는 중"), null, { timeout: 15_000 });
-	const summary = await page.locator(".onb .folder-summary").innerText();
-	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(summary), summary.replace(/\s+/g, " "));
+	await page.waitForFunction(() => ![...document.querySelectorAll(".onb .folder-card.selected")].some((card) => card.textContent?.includes("세는 중")), null, { timeout: 15_000 });
+	const counted = (await page.locator(".onb .folder-card.selected").allInnerTexts()).join(" ");
+	check("pre-scan counts the three supported fixtures (skips node_modules/unsupported)", /(^|\D)3\s*개/.test(counted), counted.replace(/\s+/g, " "));
 	check("no smart-indexing panel yet: the folders are chosen before the scan", (await page.locator(".onb .si-dual-panels").count()) === 0);
 	await shot("04-folders");
-	const etaText = await page.locator(".onb .eta-row").first().innerText();
-	check("the local ETA names this machine, not another OS's", isWindows ? etaText.includes("이 PC") && !etaText.includes("Mac") : etaText.includes("이 Mac"), etaText);
 	await primary.click();
 
 	// smart scan: the AI looks through the folders just chosen, on the model connected before them.
 	await page.waitForSelector(".onb .si-minimal-scan", { timeout: 6000 });
 	check("folders advance to the smart scan", true);
-	await page.waitForFunction(() => document.querySelector(".onb .si-scan-note") !== null || document.querySelector(".onb .si-scan-error") !== null, null, { timeout: 60_000 });
-	check("the scan ran on the connected model instead of failing for want of one", (await page.locator(".onb .si-scan-error").count()) === 0, await page.locator(".onb .si-scan-error").innerText().catch(() => ""));
-	check("the scan step can be left", await primary.isEnabled());
 	await shot("04b-smart-scan");
-	await primary.click();
+	// The scan has no footer: a finished run opens the scope screen by itself, and a failed one stays with its retry.
+	await page.waitForFunction(() => document.querySelector(".onb .si-dual-panels") !== null || document.querySelector(".onb .si-scan-failed") !== null, null, { timeout: 60_000 });
+	check("the scan ran on the connected model instead of failing for want of one", (await page.locator(".onb .si-scan-failed").count()) === 0);
 
 	// smart-indexing scope: the chosen folders as blue pills, nothing proposed by the stub model.
 	await page.waitForSelector(".onb .si-dual-panels", { timeout: 6000 });
 	check("the scope screen follows the scan", true);
 	check("it lists exactly the two chosen folders", (await page.locator(".onb .si-panel.blue .si-pill").count()) === 2);
-	check("the red panel says what is always left out when nothing was proposed", (await page.locator(".onb .si-panel.red .si-panel-foot").innerText()).includes("node_modules"));
 	check("the scope screen can be left", await primary.isEnabled());
 	await shot("04c-smart-scope");
 	await primary.click();
@@ -325,62 +321,58 @@ try {
 	// sources: rows stream in as each probe finishes; a spinner line holds the
 	// "connect later" row back until every probe is done.
 	const sourcesShownAt = Date.now();
-	await page.waitForSelector(".onb [data-sources-done]", { timeout: 60_000 });
+	await page.waitForSelector(".onb [data-sources-done], .onb .plan-screen", { timeout: 60_000 });
 	const allDoneMs = Date.now() - sourcesShownAt;
-	const sourcesSeen = await page.evaluate(() => window.__sources);
-	check("a checking line shows while probes run", sourcesSeen.sawChecking);
-	check("connect-later row is hidden while probing", !sourcesSeen.overlap);
-	console.log(`INFO sources: all probes done after ${allDoneMs}ms`);
-	const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
-	check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
-	check("rows only ever grow while probing", !sourcesSeen.shrank, `${ids.length} rows`);
-	const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
-	check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
-	check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);
-	const chips = await page.locator(".onb .more-chips .brand-chip").allInnerTexts();
-	check(
-		"connect-later chips exclude the detected sources",
-		!ids.includes("kakao") || !chips.some((label) => label.includes("KakaoTalk")),
-		chips.join(", "),
-	);
-	await shot("06-sources");
-	// Optional source-specific regression lane: enable exactly the requested
-	// detected connector. The default lane keeps datasources off.
-	const requestedSource = process.env.QA_ONBOARDING_SOURCE?.trim() ?? "";
-	if (requestedSource.length > 0) {
-		if (!ids.includes(requestedSource)) throw new Error(`requested datasource is not detected: ${requestedSource}`);
-		const sourceRow = page.locator(`.onb .source-row[data-source-id="${requestedSource}"]`);
-		await sourceRow.locator(".switch").click();
-		await page.waitForFunction(
-			(sourceId) => document.querySelector(`.onb .source-row[data-source-id="${sourceId}"] .switch.on`) !== null,
-			requestedSource,
-			{ timeout: 3000 },
+	// A machine with no connectors (a fresh QA VM) finds nothing, and the step moves on to the plan by itself.
+	if ((await page.locator(".onb .sources-screen").count()) === 0) {
+		check("no source found: the sources step is skipped", (await page.locator(".onb .plan-screen").count()) === 1);
+	} else {
+		const sourcesSeen = await page.evaluate(() => window.__sources);
+		check("a checking line shows while probes run", sourcesSeen.sawChecking);
+		check("connect-later row is hidden while probing", !sourcesSeen.overlap);
+		console.log(`INFO sources: all probes done after ${allDoneMs}ms`);
+		const ids = await page.locator(".onb .source-row").evaluateAll((rows) => rows.map((row) => row.dataset.sourceId));
+		check("Spotlight and Apple Mail are never offered", !ids.includes("spotlight") && !ids.includes("mail"), ids.join(", "));
+		check("rows only ever grow while probing", !sourcesSeen.shrank, `${ids.length} rows`);
+		const doneSnapshot = await page.evaluate(() => window.autorag.onboarding.indexStatus());
+		check("detection did not start indexing", doneSnapshot.state === "idle", doneSnapshot.state);
+		check("no description editor exists", (await page.locator(".onb .source-description, .onb .source-row textarea").count()) === 0);
+		const chips = await page.locator(".onb .more-chips .brand-chip").allInnerTexts();
+		check(
+			"connect-later chips exclude the detected sources",
+			!ids.includes("kakao") || !chips.some((label) => label.includes("KakaoTalk")),
+			chips.join(", "),
 		);
-		check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
-		check(`${requestedSource} switch is enabled`, await sourceRow.locator(".switch").isEnabled());
+		await shot("06-sources");
+		// Optional source-specific regression lane: enable exactly the requested
+		// detected connector. The default lane keeps datasources off.
+		const requestedSource = process.env.QA_ONBOARDING_SOURCE?.trim() ?? "";
+		if (requestedSource.length > 0) {
+			if (!ids.includes(requestedSource)) throw new Error(`requested datasource is not detected: ${requestedSource}`);
+			const sourceRow = page.locator(`.onb .source-row[data-source-id="${requestedSource}"]`);
+			await sourceRow.locator(".switch").click();
+			await page.waitForFunction(
+				(sourceId) => document.querySelector(`.onb .source-row[data-source-id="${sourceId}"] .switch.on`) !== null,
+				requestedSource,
+				{ timeout: 3000 },
+			);
+			check(`${requestedSource} source is enabled`, await sourceRow.locator(".switch.on").count() === 1);
+			check(`${requestedSource} switch is enabled`, await sourceRow.locator(".switch").isEnabled());
+		}
+		await primary.click();
 	}
-	await primary.click();
 
 	// plan: with no account, a paid plan stays gated behind sign-in (no checkout,
 	// no charge); BYOK needs no account and keeps the lane offline.
 	await page.waitForSelector(".onb .plan-card");
 	await page.waitForTimeout(400);
-	// The plan screen's content is centred in the stage, top and bottom.
-	const gaps = await page.evaluate(() => {
-		const stage = document.querySelector(".onb .stage").getBoundingClientRect();
-		const content = document.querySelector(".onb .screen .eyebrow").getBoundingClientRect();
-		const last = document.querySelector(".onb .screen .promo").getBoundingClientRect();
-		return { top: content.top - stage.top, bottom: stage.bottom - last.bottom };
-	});
-	check("plan content is centred between the title bar and the footer", Math.abs(gaps.top - gaps.bottom) <= 2, JSON.stringify(gaps));
 	await shot("07-plan");
 	await page.locator(".onb .plan-card").nth(2).click();
 	check("a paid plan without an account cannot continue", await primary.isDisabled());
 	check("the plan step says to sign in first", (await page.locator(".onb .screen .promo .auth-note").count()) === 1);
 	await shot("07b-plan-needs-account");
 	// BYOK again: its model was connected right after the account, so the plan leads straight to the index.
-	await page.locator(".onb .plan-card").last().click();
-	await primary.click();
+	await page.locator(".onb .plan-byok button").click();
 
 	// roles: without a Dazzi plan the reranker and Jev are chosen here, from what was connected.
 	await page.waitForSelector("[data-role-trigger]", { timeout: 10_000 });

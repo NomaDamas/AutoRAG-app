@@ -109,6 +109,28 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 		);
 	}
 
+	// Waiting for the browser: just the spinner, what is happening, and a way out (Figma 03e).
+	if (signingIn) {
+		return (
+			<section className="screen account-screen">
+				<div className="account-wait">
+					<div className="account-wait-mark">
+						<span className="spin">
+							<Icon name="loader-circle" size={34} />
+						</span>
+					</div>
+					<div className="account-wait-copy">
+						<strong>{t("onboarding.account.busy")}</strong>
+						<small>{t("onboarding.account.busyNote")}</small>
+					</div>
+					<button type="button" className="secondary" onClick={ctx.cancelSignIn}>
+						{t("onboarding.account.cancel")}
+					</button>
+				</div>
+			</section>
+		);
+	}
+
 	return (
 		<section className="screen account-screen">
 			<div className="account-column">
@@ -118,26 +140,7 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 					</span>
 					<h1>{`${APP_NAME} ${t("onboarding.account.getStarted")}`}</h1>
 				</div>
-				{signingIn ? (
-					<div className="account-panel">
-						<div className="status-card">
-							<div className="status-mark">
-								<span className="spin">
-									<Icon name="loader-circle" size={16} />
-								</span>
-							</div>
-							<div>
-								<strong>{t("onboarding.account.busy")}</strong>
-								<small>{t("onboarding.account.busyNote")}</small>
-							</div>
-						</div>
-						<div className="action-row">
-							<button type="button" className="secondary" onClick={ctx.cancelSignIn}>
-								{t("onboarding.account.cancel")}
-							</button>
-						</div>
-					</div>
-				) : sentTo !== null ? (
+				{sentTo !== null ? (
 					<div className="account-panel">
 						<form className="account-form" onSubmit={(event) => void submitCode(event)}>
 							<p className="auth-note">{t("onboarding.account.codeSentNote", { email: sentTo })}</p>
@@ -240,11 +243,9 @@ export function AccountStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						</p>
 					</div>
 				)}
-				{signingIn ? null : (
-					<button type="button" className="account-guest" onClick={ctx.skipAccount}>
-						{t("onboarding.account.guest")}
-					</button>
-				)}
+				<button type="button" className="account-guest" onClick={ctx.skipAccount}>
+					{t("onboarding.account.guest")}
+				</button>
 			</div>
 		</section>
 	);

@@ -170,8 +170,9 @@ try {
 	check("rerank choice writes rerank block", Boolean(await waitFor(() => typeof readConfig().rerank?.model === "string" && /rerank/u.test(readConfig().rerank.model))), JSON.stringify(readConfig().rerank));
 
 	await page.locator('[data-role="jev"]').click();
-	await page.locator(".settings-menu .settings-menu-item", { hasText: "Disabled" }).click();
-	check("jev off writes jev:false", Boolean(await waitFor(() => readConfig().jev === false)));
+	const jevDisabled = await page.locator(".settings-menu .settings-menu-item", { hasText: "Disabled" }).count();
+	check("jev picker keeps the required model enabled", jevDisabled === 0 && readConfig().jev !== false, JSON.stringify({ disabledOptions: jevDisabled, jev: readConfig().jev }));
+	await page.keyboard.press("Escape");
 
 	// Real /login session: API-key login for an unconfigured provider prompts for the key.
 	await page.locator(".settings-add-row").click();

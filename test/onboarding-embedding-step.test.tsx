@@ -111,6 +111,7 @@ function harness(options: {
 		setCloudConsent,
 		setSourceOn: noop,
 		choosePlan: noop,
+		connectOwnKey: noop,
 		setPromoCode: noop,
 		signIn: noop,
 		sendEmailOtp: async () => ({ ok: true, email: "", expiresInSeconds: 600 }),
@@ -126,9 +127,12 @@ function harness(options: {
 		toggleAllFolders: noop,
 		startSmartScan: noop,
 		cancelSmartScan: noop,
-		rescanSmart: noop,
 		setSmartExcluded: noop,
-		addExclusion: noop,
+		excludeFolder: noop,
+		smartSuggest: true,
+		setSmartSuggest: noop,
+		listSubfolders: async () => [],
+		measureFolders: noop,
 		requestNotifications: noop,
 		openNotificationSettings: noop,
 		checkNetwork: noop,
@@ -285,17 +289,14 @@ describe("EmbeddingStep", () => {
 			expect(host.querySelector('.em-blocked[data-for="none"]')).toBeNull();
 		});
 
-		it("explains instead of selecting when the local card is clicked or chosen with the keyboard", () => {
+		it("does nothing when the local card is clicked or chosen with the keyboard: the note under it explains", () => {
 			const { ctx, setEmbedMode, toast } = harness({ embed: "none", localSpec: weak });
 			render(ctx);
 			click(card("local"));
 			expect(setEmbedMode).not.toHaveBeenCalled();
-			expect(toast).toHaveBeenCalledTimes(1);
-			expect(toast.mock.calls[0]?.[0]).toContain("localSpec.blocked");
-			expect(toast.mock.calls[0]?.[0]).toContain("localSpec.reason.appleBaseChip");
 			key(card("local"), "Enter");
-			expect(toast).toHaveBeenCalledTimes(2);
 			expect(setEmbedMode).not.toHaveBeenCalled();
+			expect(toast).not.toHaveBeenCalled();
 		});
 
 		it("skips the local card when the arrow keys walk the group", () => {
