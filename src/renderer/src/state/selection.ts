@@ -8,7 +8,7 @@
 
 /** File row height; the list is a fixed-height grid. */
 export const ROW_HEIGHT = 24;
-/** Pixels of context kept above the focused row when scrolling it into view. */
+/** Pixels of context kept above a row the list jumps to from outside the viewport (see `scrollTopToReveal`). */
 export const SCROLL_LEAD = 80;
 
 export interface SelectionState {
@@ -102,8 +102,56 @@ export function moveInGrid(
 	return next === undefined ? state : single(next);
 }
 
-export function scrollTopForIndex(index: number): number {
-	return Math.max(0, index * ROW_HEIGHT - SCROLL_LEAD);
+/**
+ * Why a row is being scrolled to:
+ * - `step`: the keyboard moved the focus (↑/↓, →/← onto a parent or child, the preview's own arrows).
+ * - `reveal`: the list jumps to a row the person may not see at all (Show in Enclosing Folder, a search hit or
+ *   evidence source, the folder just left with ⌥↑, a row just created).
+ */
+export type ScrollIntent = "step" | "reveal";
+
+export interface RevealInput {
+	/** Content-space top of the row, in the same space as `scrollTop`. */
+	readonly top: number;
+	readonly height: number;
+	/** Where the list is scrolled to now, and how tall its visible part is. */
+	readonly scrollTop: number;
+	readonly viewport: number;
+	/** The largest `scrollTop` the settled content allows: its height minus the viewport. */
+	readonly maxScrollTop: number;
+	readonly intent: ScrollIntent;
+}
+
+/**
+ * The `scrollTop` that brings a row into view the way Finder (and `scrollIntoView({ block: "nearest" })`) does:
+ * a row that is fully visible leaves the list where it is, and a row past an edge scrolls by exactly the part that
+ * sticks out, so its bottom (or top) lands on the viewport's bottom (or top) edge. Nothing overlays the list's top: the
+ * column header sits in a viewport of its own and the group headers scroll with the rows.
+ *
+ * One case is deliberately different. A `reveal` of a row that is entirely outside the viewport keeps `SCROLL_LEAD`
+ * of context above it instead of pinning it to the edge: the person did not move to that row one step at a time,
+ * so they have not seen its neighbours, and the row's flash would otherwise play on the very edge of the list. A
+ * `step` is always one row from the focus the person is looking at, so it never needs the context.
+ *
+ * The geometry is the settled one (`maxScrollTop`): the list never needs the row's DOM node, which a virtualized
+ * list has not mounted, and a viewport that stands past the settled end (a folder is closing under it) counts as
+ * standing at that end, because that is where the browser leaves it.
+ */
+export function scrollTopToReveal(input: RevealInput): number {
+	const { top, height, scrollTop, viewport, intent } = input;
+	if (!(viewport > 0)) return scrollTop;
+	const max = Math.max(0, input.maxScrollTop);
+	const resting = Math.min(scrollTop, max);
+	const bottom = top + height;
+	if (top >= resting && bottom <= resting + viewport) return scrollTop;
+	const outside = bottom <= resting || top >= resting + viewport;
+	const target =
+		intent === "reveal" && outside
+			? top - SCROLL_LEAD
+			: top < resting || height >= viewport
+				? top
+				: bottom - viewport;
+	return Math.min(max, Math.max(0, target));
 }
 
 export function isSelected(state: SelectionState, key: string): boolean {
