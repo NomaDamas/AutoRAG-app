@@ -4,7 +4,7 @@ import type { ReactElement } from "react";
 import type { FolderCandidate, FolderKind } from "../../../../shared/onboarding-contract";
 import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
-import { Eyebrow, Multiline } from "../parts";
+import { Multiline, Switch } from "../parts";
 import { etaMinutes, formatSize } from "../flow";
 import type { OnboardingCtx } from "../context";
 
@@ -31,18 +31,6 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 
 	const selectedPaths = new Set(draft.folders.filter((f) => f.selected).map((f) => f.path));
 	const allSelected = candidates.length > 0 && candidates.every((c) => selectedPaths.has(c.path));
-
-	let files = 0;
-	let bytes = 0;
-	for (const path of selectedPaths) {
-		const scan = scans.get(path);
-		if (scan !== undefined) {
-			files += scan.files;
-			bytes += scan.bytes;
-		}
-	}
-	const localEta = etaMinutes(files, "local");
-	const cloudEta = etaMinutes(files, "cloud");
 
 	const card = (candidate: FolderCandidate): ReactElement => {
 		const selected = selectedPaths.has(candidate.path);
@@ -81,19 +69,21 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 	};
 
 	return (
-		<section className="screen center">
+		<section className="screen center folders-screen">
 			<div className="screen-copy">
-				<Eyebrow icon="folder-search">{t("onboarding.folders.eyebrow")}</Eyebrow>
 				<h1>
 					<Multiline text={t("onboarding.folders.title")} />
 				</h1>
 				<p>{t("onboarding.folders.lead")}</p>
 			</div>
-			<div style={{ width: "100%", maxWidth: 760, marginTop: 19 }}>
+			<div className="folders-stack">
 				<div className="folder-head">
-					<strong>{t("onboarding.folders.suggested")}</strong>
-					<label>
-						<input type="checkbox" checked={allSelected} onChange={ctx.toggleAllFolders} />{" "}
+					<span>{t("onboarding.folders.suggested")}</span>
+					<label className="folder-all">
+						<input type="checkbox" checked={allSelected} onChange={ctx.toggleAllFolders} />
+						<span className="check-box">
+							<Icon name="check" size={12} />
+						</span>
 						{t("onboarding.folders.selectAll")}
 					</label>
 				</div>
@@ -104,30 +94,12 @@ export function FoldersStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactElem
 						<span>{t("onboarding.folders.add")}</span>
 					</div>
 				</div>
-				<div className="folder-summary">
-					<div className="summary-main">
-						<strong>
-							{t("onboarding.folders.summary", {
-								folders: selectedPaths.size,
-								files: files.toLocaleString(),
-								size: formatSize(bytes),
-							})}
-						</strong>
-						<small>{t("onboarding.folders.summaryNote")}</small>
+				<div className="folder-suggest">
+					<div className="folder-suggest-copy">
+						<strong>{t("onboarding.folders.suggestTitle")}</strong>
+						<small>{t("onboarding.folders.suggestLine")}</small>
 					</div>
-					<div>
-						<div className="eta-row">
-							<span>
-								{t(ctx.platform === "win32" ? "onboarding.folders.localEtaPc" : "onboarding.folders.localEta", { minutes: localEta })}
-							</span>
-							<span>
-								{t("onboarding.folders.cloudEta", { minutes: cloudEta })}
-							</span>
-						</div>
-					</div>
-				</div>
-				<div className={cn("summary-warning", localEta <= 120 && "hidden")}>
-					<Icon name="triangle-alert" size={12} /> {t("onboarding.folders.warning")}
+					<Switch on={ctx.smartSuggest} label={t("onboarding.folders.suggestTitle")} onClick={() => ctx.setSmartSuggest(!ctx.smartSuggest)} />
 				</div>
 			</div>
 		</section>

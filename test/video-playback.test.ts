@@ -1,4 +1,5 @@
 import { execFileSync, spawnSync } from "node:child_process";
+import { chmodSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { mkdtemp, readdir, rm, stat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,6 +8,7 @@ import { createVideoPlayback } from "../src/preview/node/video-playback";
 import { isVideoPlaybackProgress, needsPlaybackCopy, parsePlaybackProbe, planPlaybackEncode } from "../src/preview/shared/video-playback";
 
 const hasFfmpeg = spawnSync("ffmpeg", ["-version"]).status === 0;
+const posix = process.platform !== "win32";
 
 const AVI_XVID_MP3 = `Input #0, avi, from 'old.avi':
   Duration: 00:01:30.50, start: 0.000000, bitrate: 1200 kb/s
@@ -81,6 +83,29 @@ describe("isVideoPlaybackProgress", () => {
 
 function listing(path: string): string {
 	return spawnSync("ffmpeg", ["-hide_banner", "-i", path], { encoding: "utf8" }).stderr;
+}
+
+// The shim test below drives a real script and its own child. The conditions it awaits — "the writer is
+// writing", "the writer is gone" — are reached in another OS process, so no fake clock can observe them;
+// it polls a bounded deadline instead, as test/filee-process.test.ts does for the same reason.
+async function waitUntil(condition: () => boolean, timeoutMs = 3000): Promise<boolean> {
+	const deadline = Date.now() + timeoutMs;
+	for (;;) {
+		if (condition()) return true;
+		if (Date.now() >= deadline) return false;
+		const { promise, resolve } = Promise.withResolvers<void>();
+		setTimeout(resolve, 20);
+		await promise;
+	}
+}
+
+function alive(pid: number): boolean {
+	try {
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 describe.skipIf(!hasFfmpeg)("createVideoPlayback", () => {
@@ -200,6 +225,52 @@ describe.skipIf(!hasFfmpeg)("createVideoPlayback", () => {
 		const task = playback.prepare(long, { signal: controller.signal, onProgress: () => controller.abort() });
 		expect(await task).toEqual({ kind: "native" });
 		expect(await readdir(join(dir, "cache-abort"))).toEqual([]);
+	});
+
+	it.skipIf(!posix)("ends the ffmpeg a PATH launcher started, and keeps no partial output of the aborted job", async () => {
+		// The `ffmpeg` a Windows `PATH` answers with is usually a launcher that runs the real program as its own
+		// child, and that child is what writes and holds the partial output. The script below does the same: it
+		// writes the partial output through its child, and that child writes until it is killed.
+		const cacheDir = join(dir, "cache-shim");
+		const listingPath = join(dir, "shim-listing.txt");
+		const shimPid = join(dir, "shim.pid");
+		const writerPid = join(dir, "shim-writer.pid");
+		writeFileSync(listingPath, AVI_XVID_MP3);
+		const shim = join(dir, "shimmed-ffmpeg");
+		writeFileSync(
+			shim,
+			`#!/bin/sh
+case " $* " in
+*" -progress "*)
+	last=
+	for arg in "$@"; do last="$arg"; done
+	echo $$ > "${shimPid}"
+	( i=0; while [ "$i" -lt 500 ]; do printf x >> "$last"; i=$((i + 1)); sleep 0.02; done ) >/dev/null 2>&1 &
+	echo $! > "${writerPid}"
+	wait
+	;;
+*)
+	cat "${listingPath}" >&2
+	exit 1
+	;;
+esac
+`,
+		);
+		chmodSync(shim, 0o755);
+		const pidOf = (path: string): number => Number((existsSync(path) ? readFileSync(path, "utf8") : "").trim());
+		const preparing = (): boolean => existsSync(cacheDir) && readdirSync(cacheDir).some((name) => name.endsWith(".part")) && pidOf(shimPid) > 0 && pidOf(writerPid) > 0;
+
+		const playback = createVideoPlayback({ dir: cacheDir, command: shim });
+		const controller = new AbortController();
+		const task = playback.prepare(clip("xvid-mp3.avi"), { signal: controller.signal });
+		expect(await waitUntil(preparing, 10_000)).toBe(true);
+		const writer = pidOf(writerPid);
+
+		controller.abort();
+
+		expect(await task).toEqual({ kind: "native" });
+		expect(await waitUntil(() => !alive(writer))).toBe(true);
+		expect(readdirSync(cacheDir)).toEqual([]);
 	});
 
 	it("drops the least recently used copies once the cache is over its size limit, never the one just made", async () => {

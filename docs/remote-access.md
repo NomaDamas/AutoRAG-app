@@ -153,6 +153,7 @@ Browser actions that need native operating-system integration differ:
 - Opening a file uses a browser download rather than the host's default app.
 - **Show in Finder**, **Open With**, native share sheets, OS services, and
   native file conversion are unavailable.
+- Voice input in AI Search (the microphone button) is unavailable.
 - Quick Look uses browser previews rather than a native Quick Look window.
 - The file cut/copy clipboard belongs to each browser session. It is not the
   host's system clipboard and is lost when the page reloads or closes.

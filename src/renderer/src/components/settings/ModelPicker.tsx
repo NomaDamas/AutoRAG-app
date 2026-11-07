@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, typ
 import { useTranslation } from "react-i18next";
 import { Check, ChevronRight, Search } from "lucide-react";
 import type { ModelCatalogEntry, ProviderSummary } from "../../../../shared/settings-contract";
-import { AppIcon } from "./SettingsKit";
+import { ProviderIcon } from "./ProviderIcon";
 
 export type RolePickerSelection =
 	| { readonly kind: "model"; readonly provider: string; readonly modelId: string }
@@ -147,7 +147,7 @@ export function RolePicker({
 							<div key={bucket.provider.id} className="settings-model-search-section">
 								{index > 0 ? <div className="settings-menu-sep" /> : null}
 								<p className="settings-menu-group is-provider">
-									<AppIcon small label={bucket.provider.name} />
+									<ProviderIcon small provider={bucket.provider} />
 									<span>{bucket.provider.name}</span>
 								</p>
 								{bucket.models.map((model) => {
@@ -203,7 +203,7 @@ export function RolePicker({
 											}
 										}}
 									>
-										<AppIcon small label={bucket.provider.name} />
+										<ProviderIcon small provider={bucket.provider} />
 										<span>{bucket.provider.name}</span>
 										{hasSelectedModel ? <span className="settings-provider-active-dot" aria-hidden="true" /> : null}
 										<ChevronRight size={14} className="settings-menu-chevron" aria-hidden="true" focusable="false" />

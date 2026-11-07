@@ -39,6 +39,7 @@ const status = (patch: Partial<IndexingStatus>): IndexingStatus => ({
 	recentFolder: null,
 	failure: null,
 	skipped: 0,
+	detail: null,
 	sources: [],
 	startedAt: "2026-10-24T05:00:00.000Z",
 	finishedAt: null,

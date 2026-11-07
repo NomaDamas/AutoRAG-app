@@ -1063,6 +1063,12 @@
 	border-radius: var(--radius-4);
 	font-size: 9.5px;
 }
+
+/* A provider logo keeps the 2/3 share of the tile it has at the other sizes. */
+.settings-view .settings-menu-group.is-provider .settings-app-icon.is-sm .settings-app-icon-logo {
+	width: 10px;
+	height: 10px;
+}
 .settings-view .settings-menu-item {
 	display: flex;
 	align-items: center;
@@ -1138,10 +1144,11 @@
 
 /* ----------------------------------------------------------------- Modal -- */
 
+/* Above the window's resize grips (z-20) and split handles (z-30), which would otherwise show through the scrim and take clicks; below menus and dialogs (z-60+). */
 .settings-view .settings-modal-backdrop {
 	position: fixed;
 	inset: 0;
-	z-index: 20;
+	z-index: 40;
 	display: grid;
 	place-items: center;
 	background: var(--scrim-modal);
@@ -1274,6 +1281,140 @@
 .settings-view .settings-modal-actions .linear-btn:disabled {
 	opacity: 0.6;
 	cursor: progress;
+}
+
+/* ------------------------------------------------- Indexing · progress map -- */
+
+/* The map needs room the 680px reading column does not give; only this page widens. */
+.settings-view .settings-content-wrap:has(> .indexing-page) { max-width: 920px; }
+
+.settings-view .index-map-panel { display: flex; flex-direction: column; margin-top: var(--space-12); }
+.settings-view .index-map-body {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 270px;
+	gap: var(--space-24);
+	height: clamp(400px, 64vh, 580px);
+}
+.settings-view .index-map-stage {
+	position: relative;
+	display: grid;
+	place-items: center;
+	min-width: 0;
+	min-height: 0;
+	container-type: size;
+}
+.settings-view .index-map-chart { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+.settings-view .index-map-sector {
+	fill: var(--index-map-color);
+	cursor: pointer;
+	stroke: var(--bg-window);
+	stroke-width: 0.35;
+	outline: none;
+}
+.settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--tag-blue); }
+.settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--tag-yellow); }
+.settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--tag-red); }
+.settings-view .index-map-panel [data-state="excluded"] { --index-map-color: var(--tag-gray); }
+.settings-view .index-map-sector[data-active="true"],
+.settings-view .index-map-sector:focus-visible {
+	stroke: var(--text-primary);
+	stroke-width: 1.5;
+}
+.settings-view .index-map-center {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	width: min(24cqw, 24cqh);
+	max-width: 150px;
+	aspect-ratio: 1;
+	padding: var(--space-8);
+	border: 0;
+	border-radius: var(--radius-full);
+	background: var(--bg-window);
+	color: var(--text-muted);
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+}
+.settings-view .index-map-center strong {
+	color: var(--text-primary);
+	/* Scales with the chart: the same readout must fit the circle in a narrow page and in a wide one. */
+	font-size: clamp(16px, 7cqmin, 38px);
+	font-weight: var(--weight-semibold);
+	font-variant-numeric: tabular-nums;
+	line-height: 1.25;
+}
+.settings-view .index-map-center small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-meta); }
+.settings-view .index-map-center:hover { background: var(--bg-subtle); }
+.settings-view .index-map-sidebar {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	padding: var(--space-20) 0 var(--space-8) var(--space-20);
+	border-left: 1px solid var(--border-divider);
+}
+.settings-view .index-map-summary { padding-bottom: var(--space-20); }
+.settings-view .index-map-kicker { color: var(--text-faint); font-size: var(--font-size-meta); }
+.settings-view .index-map-summary h3 { margin: var(--space-6) 0; color: var(--text-primary); font-size: var(--font-size-body); overflow-wrap: anywhere; }
+.settings-view .index-map-summary p,
+.settings-view .index-map-details p { margin: var(--space-6) 0; color: var(--text-muted); font-size: var(--font-size-meta); }
+.settings-view .index-map-details {
+	min-height: 176px;
+	padding: var(--space-16) 0;
+	border-top: 1px solid var(--border-divider);
+	border-bottom: 1px solid var(--border-divider);
+}
+.settings-view .index-map-details h4 { margin: var(--space-8) 0; font-size: var(--font-size-body); color: var(--text-primary); overflow-wrap: anywhere; }
+.settings-view .index-map-status { display: inline-flex; align-items: center; gap: var(--space-6); color: var(--text-body); font-size: var(--font-size-meta); }
+.settings-view .index-map-status::before { width: 8px; height: 8px; border-radius: var(--radius-full); background: var(--index-map-color); content: ""; }
+.settings-view .index-map-path { overflow-wrap: anywhere; }
+.settings-view .index-map-folders { flex: 1; min-height: 0; overflow: auto; padding-top: var(--space-12); }
+.settings-view .index-map-folders button {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	width: 100%;
+	padding: var(--space-8);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	text-align: left;
+	font-size: var(--font-size-meta);
+	cursor: pointer;
+}
+.settings-view .index-map-folders button:hover { background: var(--bg-hover); }
+.settings-view .index-map-folders svg { flex-shrink: 0; color: var(--index-map-color); }
+.settings-view .index-map-folders span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.settings-view .index-map-folders small { color: var(--text-muted); font-size: inherit; font-variant-numeric: tabular-nums; }
+.settings-view .index-map-overlay { position: absolute; inset: 0; display: grid; place-items: center; padding: var(--space-24); background: var(--bg-window); color: var(--text-muted); font-size: var(--font-size-body); text-align: center; }
+.settings-view .index-map-legend { display: flex; flex-wrap: wrap; gap: var(--space-6) var(--space-16); margin: 0 0 var(--space-12); padding: 0 0 var(--space-12); border-bottom: 1px solid var(--border-divider); list-style: none; color: var(--text-muted); font-size: var(--font-size-meta); }
+.settings-view .index-map-legend li { display: flex; align-items: center; gap: var(--space-6); }
+.settings-view .index-map-legend-swatch { width: 9px; height: 9px; border-radius: var(--radius-full); background: var(--index-map-color); }
+/* Where a running index just moved: a ring, never a fill, so the four state colours stay readable under it. */
+.settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); animation: index-map-ring 1.2s ease-in-out infinite; }
+.settings-view .index-map-edge { fill: none; stroke: var(--accent); stroke-width: 3; pointer-events: none; animation: index-map-ring 1.2s ease-in-out infinite; }
+.settings-view .index-map-folders button[data-progress]::after { flex-shrink: 0; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); content: ""; animation: index-map-ring 1.2s ease-in-out infinite; }
+@keyframes index-map-ring { 50% { opacity: 0.35; stroke-opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch,
+	.settings-view .index-map-edge,
+	.settings-view .index-map-folders button[data-progress]::after { animation: none; }
+}
+.settings-view .index-map-folders .index-map-parent { color: var(--text-muted); }
+.settings-view .index-map-folders .index-map-parent svg { color: var(--text-muted); }
+.settings-view .index-map-action { margin-top: var(--space-8); }
+.settings-view .index-map-note { margin: var(--space-8) 0 0; color: var(--text-muted); font-size: var(--font-size-meta); }
+@media (max-width: 760px) {
+	.settings-view .index-map-body { grid-template-columns: minmax(0, 1fr); height: auto; }
+	.settings-view .index-map-stage { height: 360px; }
+	.settings-view .index-map-sidebar { padding: var(--space-12) 0 0; border-left: 0; border-top: 1px solid var(--border-divider); }
+	.settings-view .index-map-folders { max-height: 240px; }
+	.settings-view .index-map-center small { display: none; }
 }
 
 .settings-view .settings-code {
@@ -1606,6 +1747,41 @@
 	text-overflow: ellipsis;
 	white-space: nowrap;
 	text-align: right;
+}
+
+/* The running index in stages: which one, how many files, how long, and whether anything is still finishing (seungwonme/AutoRAG-app#5). */
+.settings-view .settings-activity-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+}
+
+.settings-view .settings-activity-detail .settings-list-meta {
+	margin: 0;
+	font-variant-numeric: tabular-nums;
+	white-space: normal;
+}
+
+.settings-view .settings-activity-stages {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--space-12);
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.settings-view .settings-activity-stages > [data-state="running"] {
+	color: var(--text-primary);
+	font-weight: 600;
+}
+
+.settings-view .settings-activity-stages > [data-state="pending"] {
+	opacity: 0.55;
+}
+
+.settings-view .settings-activity-warning {
+	color: var(--error-orange-text);
 }
 
 /* The ways out of a problem the last run left behind (issue #283). */
@@ -2057,94 +2233,43 @@
 	color: var(--text-faint);
 }
 
-/* ------------------------------------------------ AI App Customizer Modal -- */
+/* ------------------------------------------- AI App Customizer side panel -- */
 
-.customizer-modal-backdrop {
-	position: fixed;
-	inset: 0;
-	z-index: 60;
-	display: grid;
-	place-items: center;
-	background: var(--scrim-modal);
-	backdrop-filter: blur(4px);
-}
-
-.customizer-modal {
+/*
+ * On the customizable pages (사이드바, 우클릭 메뉴, 단축키) the window's right
+ * sidebar — the Inspector's column, with its width, resize grip, and toolbar
+ * toggle — holds the assistant instead, so the page stays interactive and
+ * shows every change the agent makes. `.customizer-dock` is the right sidebar's
+ * content; `.customizer-dock__node` is the node Settings renders into and the
+ * window moves into it (`SettingsAssistantDock.tsx`).
+ */
+.customizer-dock,
+.customizer-dock__node {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
-	width: min(560px, calc(100vw - 48px));
-	height: min(600px, calc(100vh - 64px));
-	border: 1px solid var(--border);
-	border-radius: var(--radius-12);
+	min-width: 0;
+	min-height: 0;
+}
+
+.customizer-panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
 	background: var(--bg-window);
-	box-shadow: var(--shadow-window);
-	overflow: hidden;
 }
 
-.customizer-modal__head {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-12);
-	padding: var(--space-14) var(--space-16);
-	border-bottom: 1px solid var(--border-divider);
-	background: var(--bg-chrome);
+.customizer-panel[hidden] {
+	display: none;
 }
 
-.customizer-modal__brand {
-	display: flex;
-	align-items: center;
-	gap: var(--space-10);
-	min-width: 0;
-}
-
-.customizer-modal__icon {
+/* Starts a new conversation; sits beside send once there is one to discard. */
+.customizer-composer__new-chat {
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 32px;
-	height: 32px;
-	background: transparent;
-}
-
-.customizer-modal__logo {
-	display: block;
-	width: 30px;
-	height: 30px;
-	object-fit: contain;
-	background: transparent;
-}
-
-.customizer-modal__titles {
-	min-width: 0;
-}
-
-.customizer-modal__title {
-	margin: 0;
-	font-size: var(--font-size-body);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
-}
-
-.customizer-modal__subtitle {
-	margin: var(--space-2) 0 0;
-	font-size: var(--font-size-badge);
-	color: var(--text-muted);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.customizer-modal__head-actions {
-	display: inline-flex;
-	align-items: center;
-	gap: var(--space-4);
-	flex: none;
-}
-
-.customizer-modal__icon-btn {
-	display: grid;
-	place-items: center;
 	width: 28px;
 	height: 28px;
 	padding: 0;
@@ -2156,21 +2281,21 @@
 	transition: background var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out);
 }
 
-.customizer-modal__icon-btn:hover {
+.customizer-composer__new-chat:hover {
 	background: var(--bg-hover-strong);
 	color: var(--text-primary);
 }
 
-.customizer-modal__body {
+.customizer-panel__body {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--space-20);
+	padding: var(--space-16);
 }
 
-.customizer-modal__empty {
+.customizer-panel__empty {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
@@ -2179,7 +2304,7 @@
 	text-align: center;
 }
 
-.customizer-modal__empty-orb {
+.customizer-panel__empty-orb {
 	display: grid;
 	place-items: center;
 	width: 56px;
@@ -2188,7 +2313,7 @@
 	background: transparent;
 }
 
-.customizer-modal__empty-logo {
+.customizer-panel__empty-logo {
 	display: block;
 	width: 52px;
 	height: 52px;
@@ -2196,14 +2321,14 @@
 	background: transparent;
 }
 
-.customizer-modal__empty-title {
+.customizer-panel__empty-title {
 	margin: 0 0 var(--space-6);
 	font-size: 15px;
 	font-weight: var(--weight-semibold);
 	color: var(--text-primary);
 }
 
-.customizer-modal__empty-desc {
+.customizer-panel__empty-desc {
 	margin: 0 0 var(--space-18);
 	max-width: 380px;
 	font-size: var(--font-size-meta);
@@ -2211,7 +2336,7 @@
 	color: var(--text-muted);
 }
 
-.customizer-modal__suggestions {
+.customizer-panel__suggestions {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
@@ -2242,16 +2367,7 @@
 	color: var(--text-primary);
 }
 
-.customizer-suggestion-chip__logo {
-	display: block;
-	flex: none;
-	width: 15px;
-	height: 15px;
-	object-fit: contain;
-	background: transparent;
-}
-
-.customizer-modal__turns {
+.customizer-panel__turns {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-18);
@@ -2365,7 +2481,7 @@
 	line-height: 1.45;
 }
 
-.customizer-modal__foot {
+.customizer-panel__foot {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
@@ -2436,15 +2552,6 @@
 
 .customizer-composer__send.is-stop {
 	background: var(--text-primary);
-}
-
-.customizer-modal__footnote {
-	display: flex;
-	align-items: center;
-	gap: var(--space-5);
-	padding: 0 var(--space-2);
-	font-size: var(--font-size-badge);
-	color: var(--text-muted);
 }
 
 /* ------------------------------------------------ Shortcuts Customization -- */

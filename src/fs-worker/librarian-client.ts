@@ -16,6 +16,7 @@ import { t } from "../shared/i18n/core";
 import type { AppLanguage } from "../shared/i18n/core";
 import type { FsLocation } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
 import type { ErrorReport } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import type { ContentSearch } from "../main/content-search";
@@ -45,6 +46,7 @@ export interface LibrarianClient {
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+		indexMap(): Promise<IndexMap>;
 	};
 	/** Remembered for every thread, and sent to the running one. */
 	setLanguage(language: AppLanguage): Promise<void>;
@@ -138,6 +140,7 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 		indexStatus: {
 			indexStatus: (paths) => call(LIBRARIAN_OP.indexStatus, [paths]),
 			setIndexExcluded: (path, excluded) => call(LIBRARIAN_OP.setIndexExcluded, [path, excluded]),
+			indexMap: () => call(LIBRARIAN_OP.indexMap),
 		},
 		async setLanguage(next) {
 			language = next;
