@@ -25,16 +25,18 @@ import { isCalendarDatasourceType } from "../../../../shared/calendar-platform";
 import { newDatasourceEntry } from "../../../../shared/datasource-defaults";
 import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
+import { excludePath, includePath } from "../../../../shared/index-scope-edit";
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SourceIcon } from "./SourceIcon";
-import { asRecord, getAt, listOf, stringOf, useConfigWriter } from "./configSupport";
+import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
 import { FullDiskAccessDialog } from "../primitives/FullDiskAccessDialog";
 import { Switch } from "../primitives/Switch";
 import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
 import { IndexActivityCard } from "./IndexActivityCard";
+import { IndexMapPanel } from "./index-map/IndexMapPanel";
 
 const settings = window.autorag.settings;
 
@@ -132,12 +134,14 @@ export function IndexingPage({
 	readonly onOpenSource: (alias: string) => void;
 }): ReactElement {
 	useTranslation();
-	const { run, error } = useConfigWriter(onSaved);
+	const { run, saving, error } = useConfigWriter(onSaved);
 	const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [refreshResult, setRefreshResult] = useState<ConfigRefreshResult | null>(null);
 	const rows = sources?.sources ?? [];
-	const localCount = listOf(getAt(snapshot.config, ["searchPaths"])).length;
+	const searchPaths = listOf(getAt(snapshot.config, ["searchPaths"]));
+	const excludePaths = listOf(getAt(snapshot.config, ["excludePaths"]));
+	const localCount = searchPaths.length;
 	const local = sources?.local ?? null;
 	const [schedule, setSchedule] = useState<RefreshScheduleStatus | null>(null);
 	const activity = useIndexActivity();
@@ -233,11 +237,18 @@ export function IndexingPage({
 
 	const problem = localError ?? error;
 	return (
-		<>
+		<div className="indexing-page">
 			<SettingsPageHead title={t("settingsSources.indexing.title")} description={t("settingsSources.indexing.desc")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			<Section title={t("settingsSources.indexing.progress")}>
 				<IndexActivityCard snapshot={activity} />
+				<IndexMapPanel
+					searchPaths={searchPaths}
+					excludePaths={excludePaths}
+					busy={saving}
+					onExclude={(path) => void run([listUpdate("excludePaths", excludePath(excludePaths, path))])}
+					onInclude={(path) => void run([listUpdate("excludePaths", includePath(excludePaths, path))])}
+				/>
 			</Section>
 			<Section title={t("settingsSources.indexing.refreshStatus")}>
 				<div className="settings-list">
@@ -349,7 +360,7 @@ export function IndexingPage({
 					</Note>
 				) : null}
 			</Section>
-		</>
+		</div>
 	);
 }
 

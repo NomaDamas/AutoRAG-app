@@ -1,4 +1,4 @@
-import { jevBackendFor } from "./ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor } from "./ai-roles";
 import type { AutoRagConfigUpdate, ModelCatalogEntry } from "./settings-contract";
 
 /**
@@ -55,6 +55,11 @@ export function decompositionConfigUpdates(entry: ModelCatalogEntry): AutoRagCon
 export function jevConfigUpdates(entry: ModelCatalogEntry): AutoRagConfigUpdate[] {
 	const backend = jevBackendFor(entry.provider);
 	return [{ path: ["jev"], value: { model: entry.id, ...(backend === undefined ? {} : { backend }) } }];
+}
+
+/** The leaf write that makes the small chat model the decision model; it replaces any Jev backend and model. */
+export function jevSllmConfigUpdates(): AutoRagConfigUpdate[] {
+	return [{ path: ["jev"], value: { backend: JEV_SLLM_BACKEND } }];
 }
 
 /** The leaf write that enables the reranker on the provider and model `entry` names. */

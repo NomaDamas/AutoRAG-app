@@ -46,7 +46,7 @@ is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 ref is a release tag or, while the librarian has no tag that carries what the
 app needs, a full commit SHA (now a commit SHA on top of v2.13.4: the librarian on MinSync 0.6.0, where SPLADE sparse retrieval
 replaces BM25 and Kiwi is gone, `minSync.embedder.id: "none"` builds a sparse-only index the app uses for keyword-only mode, and
-a `minsync` older than 0.6.0 is refused; it also brings the required decision model (`jev` can no longer be `false`; tests pass
+a `minsync` older than 0.6.0 is refused; it also brings the required decision model (`jev` can no longer be `false`; it is Jev or the small chat model, `jev.backend: "sllm"` with `jev.sllm.model`, which the app's Jev role picker offers and `createDefaultAgentFactory` resolves; tests pass
 `test/baseline-jev.ts`), opt-in reranking, and the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings
 cards still show here as unsupported. v2.13.3 holds the Dazzi context-overflow retry to half the failed request; v2.13.2 is
 MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first

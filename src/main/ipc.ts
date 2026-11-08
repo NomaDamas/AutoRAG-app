@@ -409,6 +409,7 @@ export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
 	ipcMain.handle(ONBOARDING_CHANNELS.folders, () => service.folders());
+	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
 	ipcMain.handle(ONBOARDING_CHANNELS.start, (_event, folders: unknown) => {
 		if (folders !== undefined && (!Array.isArray(folders) || !folders.every((path) => typeof path === "string"))) {
 			throw new TypeError("onboarding:start expects an array of folder paths");

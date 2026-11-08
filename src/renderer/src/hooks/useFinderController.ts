@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useLatestCallback } from "./useLatestCallback";
 import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
-import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
+import { useFinderKeyboard } from "./useFinderKeyboard";
+import { revealTarget, type ScrollRequest } from "./list-reveal";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
 import type { QuickLookTarget } from "../../../preview/shared/contract";
@@ -64,12 +65,11 @@ import {
 	applyRowClick,
 	EMPTY_SELECTION,
 	moveSelection,
+	type ScrollIntent,
 	type SelectionState,
-	SCROLL_LEAD,
 } from "../state/selection";
 import {
 	GROUP_STORAGE_KEY,
-	groupedRowTop,
 	parseGroupKey,
 	type GroupKey,
 	type GroupSection,
@@ -504,7 +504,13 @@ export function useFinderController(
 
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
-	const scrollTarget = useRef<string | null>(null);
+	/** The row the next row set should scroll into view, and why. */
+	const scrollTarget = useRef<ScrollRequest | null>(null);
+	/** Stops a list scroll that is still waiting for a folder's open/close motion to settle. */
+	const cancelReveal = useRef<(() => void) | null>(null);
+	const requestScroll = (path: string | null, intent: ScrollIntent): void => {
+		scrollTarget.current = path === null ? null : { path, intent };
+	};
 	const pathRef = useRef("");
 	const tabsRef = useRef(tabsState.tabs);
 	const searchingRef = useRef(false);
@@ -849,36 +855,30 @@ export function useFinderController(
 		};
 	}, [source, sidecar, indexStatusKey, indexRevision, reportError]);
 
-	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
+	useEffect(() => () => cancelReveal.current?.(), []);
+
+	/**
+	 * Keyboard movement and reveals keep the target row in view, as Finder does: a row that is already visible
+	 * leaves the scroll alone and one past an edge scrolls by what sticks out (`revealTarget`).
+	 */
 	useEffect(() => {
-		const target = scrollTarget.current;
-		if (target === null) {
-			return;
-		}
-		if (layout !== "list") {
-			// A pane or a revealed folder may still be loading; keep the target until its item renders.
-			const element = itemElement(listRef.current, target);
-			if (element !== null) {
-				scrollTarget.current = null;
-				element.scrollIntoView({ block: "nearest", inline: "nearest" });
-			}
+		const request = scrollTarget.current;
+		if (request === null) {
 			return;
 		}
 		// The previous folder's rows can still be on screen while a revealed folder
 		// loads; the target must only be consumed by the current folder's rows (a
 		// search list may come from many folders, so it is exempt).
-		const index = orderedKeys.indexOf(target);
-		if (index < 0 || (!searchingRef.current && listingDir !== path)) {
-			// The target's listing has not landed yet (a revealed folder still
-			// loading); keep the target so the next row set scrolls to it.
+		const rows = searchingRef.current || listingDir === path ? { sections: stackSections, orderedKeys } : null;
+		const cancel = revealTarget({ layout, list: listRef.current, request, rows });
+		if (cancel === null) {
+			// The target's item has not rendered yet (a pane or a revealed folder still loading); keep the
+			// request so the next row set scrolls to it.
 			return;
 		}
 		scrollTarget.current = null;
-		if (listRef.current !== null) {
-			// Group headers add height above a row, so the top comes from the
-			// grouped layout (identical to index * ROW_HEIGHT when ungrouped).
-			listRef.current.scrollTop = Math.max(0, groupedRowTop(stackSections, index) - SCROLL_LEAD);
-		}
+		cancelReveal.current?.();
+		cancelReveal.current = cancel;
 	}, [orderedKeys, layout, selection, path, listingDir, stackSections]);
 
 	const patchSelection = useLatestCallback((next: SelectionState) => {
@@ -928,7 +928,7 @@ export function useFinderController(
 				const current = activeTab(state);
 				return applyColumnChoice(state, chooseInColumn(current.path, current.chain, pane, entry), single(entry.path));
 			});
-			scrollTarget.current = entry.path;
+			requestScroll(entry.path, "step");
 		});
 
 	const stepColumns = useLatestCallback(
@@ -938,7 +938,7 @@ export function useFinderController(
 				const back = direction === "left" ? slideBack(path, chain) : null;
 				if (back !== null) {
 					setTabsState((state) => applyColumnChoice(state, back, single(back.focus)));
-					scrollTarget.current = back.focus;
+					requestScroll(back.focus, "step");
 				}
 				return;
 			}
@@ -1038,7 +1038,7 @@ export function useFinderController(
 		);
 		setQueryValue("");
 		setFlashPath(entry.path);
-		scrollTarget.current = entry.path;
+		requestScroll(entry.path, "reveal");
 	});
 
 	const showEntryFolder = useLatestCallback((entry: FinderEntry) => {
@@ -1048,7 +1048,7 @@ export function useFinderController(
 			return patchActiveTab(switched, (current) => ({ ...current, selection: EMPTY_SELECTION }));
 		});
 		setQueryValue("");
-		scrollTarget.current = entry.path;
+		requestScroll(entry.path, "reveal");
 	});
 
 	const openEntry = useLatestCallback(
@@ -1285,7 +1285,7 @@ export function useFinderController(
 	 */
 	const revealCreated = useLatestCallback(
 		(created: { readonly path: string; readonly name: string }) => {
-			scrollTarget.current = created.path;
+			requestScroll(created.path, "reveal");
 			patchSelection(single(created.path));
 			setRename({ path: created.path, draft: created.name });
 			refresh();
@@ -1449,7 +1449,7 @@ export function useFinderController(
 					recordActionOutput("reduceSize", outcome.output);
 					refresh();
 					if (!searchingRef.current && pathRef.current === dirname(pending.path)) {
-						scrollTarget.current = outcome.output;
+						requestScroll(outcome.output, "reveal");
 						patchSelection(single(outcome.output));
 						setFlashPath(outcome.output);
 					}
@@ -1533,7 +1533,7 @@ export function useFinderController(
 	const moveSelectionBy = useLatestCallback(
 		(delta: 1 | -1) => {
 			const next = moveSelection(orderedKeys, selection, delta);
-			scrollTarget.current = next.focus;
+			requestScroll(next.focus, "step");
 			patchSelection(next);
 		});
 
@@ -1567,7 +1567,7 @@ export function useFinderController(
 					);
 					setQueryValue("");
 					setFlashPath(entry.path);
-					scrollTarget.current = entry.path;
+					requestScroll(entry.path, "reveal");
 				})
 				.catch(reportError);
 		});
@@ -1798,7 +1798,7 @@ export function useFinderController(
 					);
 					setQueryValue("");
 					setFlashPath(entry.path);
-					scrollTarget.current = entry.path;
+					requestScroll(entry.path, "reveal");
 					return;
 				}
 				case "toggleIndex":
@@ -2016,7 +2016,7 @@ export function useFinderController(
 			patchActiveTab(navigateTab(state, parent), (current) => ({ ...current, selection: single(path) })),
 		);
 		setQueryValue("");
-		scrollTarget.current = path;
+		requestScroll(path, "reveal");
 	});
 
 	/**
@@ -2099,11 +2099,11 @@ export function useFinderController(
 	});
 
 	const focusPath = useLatestCallback((target: string) => {
-		scrollTarget.current = target;
+		requestScroll(target, "step");
 		patchSelection(single(target));
 	});
 	const moveTo = useLatestCallback((next: SelectionState) => {
-		scrollTarget.current = next.focus;
+		requestScroll(next.focus, "step");
 		patchSelection(next);
 	});
 	const focusSearch = useLatestCallback(() => {
@@ -2144,7 +2144,7 @@ export function useFinderController(
 	useEffect(() => {
 		if (!revealOnReopenRef.current) return;
 		revealOnReopenRef.current = false;
-		scrollTarget.current = selection.focus;
+		requestScroll(selection.focus, "reveal");
 	}, [shownTabId]);
 	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
 	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));

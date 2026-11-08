@@ -32,6 +32,8 @@ export const ONBOARDING_CHANNELS = {
 	// Full Disk Access is deferred to the features that really need it (Finder tag colours, KakaoTalk/WhatsApp/Mail).
 	/** The folders the first run offers to read, before it starts. */
 	folders: "onboarding:folders",
+	/** The OS folder chooser, for Settings → Scope to add a folder. */
+	pickFolders: "onboarding:pickFolders",
 	/** Starts the setup run, or returns the one in flight / finished. */
 	start: "onboarding:start",
 	status: "onboarding:status",
@@ -129,6 +131,8 @@ export interface OnboardingBridge {
 	// System Settings offers Quit & Reopen itself once Full Disk Access is toggled for a running app.
 	/** The folders the first run offers, in the order they are shown. */
 	folders(): Promise<readonly FirstRunFolder[]>;
+	/** Opens the OS folder chooser and resolves with the chosen folders (none when cancelled). */
+	pickFolders(): Promise<readonly { readonly path: string }[]>;
 	/**
 	 * Starts the setup run over `folders` (paths from {@link folders}; anything else is ignored), or over the
 	 * folders the last run used, or the ones switched on by default, when omitted. A failed run starts again;

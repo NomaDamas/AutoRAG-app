@@ -72,6 +72,7 @@ async function makeDeps(userDataDir: string, overrides: Partial<FirstRunServiceD
 		language: () => "ko",
 		send: () => undefined,
 		openExternal: async () => undefined,
+		pickFolders: async () => [],
 		startPowerSaveBlocker: () => 1,
 		stopPowerSaveBlocker: () => undefined,
 		probeFullDiskAccess: async () => false,

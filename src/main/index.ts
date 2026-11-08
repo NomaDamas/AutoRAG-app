@@ -19,6 +19,7 @@ import {
 	powerSaveBlocker,
 	protocol,
 	safeStorage,
+	screen,
 	ShareMenu,
 	shell,
 	systemPreferences,
@@ -110,6 +111,7 @@ import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
 import {
@@ -248,11 +250,10 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 }
 
 function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, pending: boolean): BrowserWindow {
+	const workArea = screen.getPrimaryDisplay().workAreaSize;
+	const windowSize = appWindowSize(workArea, "finder");
 	const window = new BrowserWindow({
-		width: 1440,
-		height: 900,
-		minWidth: 1360,
-		minHeight: 820,
+		...windowSize,
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
@@ -1109,6 +1110,16 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		send: sendToMainWindow,
 		openExternal: (url) => shell.openExternal(url),
+		pickFolders: async () => {
+			const options: OpenDialogOptions = {
+				title: t("main.dialogs.chooseFolderTitle"),
+				buttonLabel: t("main.dialogs.addButton"),
+				properties: ["openDirectory", "multiSelections", "createDirectory"],
+			};
+			const parent = mainWindow;
+			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
+			return result.canceled ? [] : result.filePaths;
+		},
 		startPowerSaveBlocker: () => powerSaveBlocker.start("prevent-app-suspension"),
 		stopPowerSaveBlocker: (id) => powerSaveBlocker.stop(id),
 		probeFullDiskAccess: () => probeFullDiskAccess(home),

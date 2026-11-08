@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, isAbsolute, join } from "node:path";
 import { loadMirrorIndex, type ParsedMirrorEntry } from "@autorag/librarian";
 import { readRawConfigObject, writeConfigObject } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
@@ -180,6 +180,8 @@ export interface FirstRunServiceDeps {
 	readonly language: () => AppSettings["language"];
 	readonly send: (channel: string, payload: unknown) => void;
 	readonly openExternal: (url: string) => Promise<void>;
+	/** The OS folder chooser: absolute paths, empty when cancelled. */
+	readonly pickFolders: () => Promise<readonly string[]>;
 	readonly startPowerSaveBlocker: () => number;
 	readonly stopPowerSaveBlocker: (id: number) => void;
 	readonly probeFullDiskAccess: () => Promise<boolean>;
@@ -195,6 +197,8 @@ export interface FirstRunService {
 	load(): Promise<OnboardingSnapshot>;
 	/** The OS's own folders (switched on) and other cloud drives found on this computer (switched off). */
 	folders(): Promise<readonly FirstRunFolder[]>;
+	/** The folders the person picked in the OS chooser that exist on disk. */
+	pickFolders(): Promise<readonly { readonly path: string }[]>;
 	permissions(): Promise<PermissionStatus>;
 	openFullDiskAccess(): Promise<void>;
 	/** `folders` are paths from {@link folders}; others are ignored. Omitted: the last run's folders, else the default ones. */
@@ -923,6 +927,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		pending: () => pending,
 		load: async () => ({ pending, tutorials: deps.env.AUTORAG_SKIP_ONBOARDING !== "1" }),
 		folders: async () => offeredFolders(),
+		pickFolders: async () => (await deps.pickFolders()).filter((path) => isAbsolute(path) && existsSync(path)).map((path) => ({ path })),
 		permissions: async () => ({
 			platform: deps.platform,
 			fullDiskAccess: deps.platform === "darwin" ? await deps.probeFullDiskAccess() : null,

@@ -14,6 +14,7 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 		permissions: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.permissions),
 		openFullDiskAccess: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.openFullDiskAccess),
 		folders: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.folders),
+		pickFolders: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.pickFolders),
 		start: (folders) => ipcRenderer.invoke(ONBOARDING_CHANNELS.start, folders),
 		status: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.status),
 		onProgress: (listener) => {

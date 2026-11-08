@@ -345,6 +345,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			if (typeof args[1] !== "boolean") throw new TypeError("excluded must be a boolean");
 			return indexStatus.setIndexExcluded(stringArg(args, 0, "path"), args[1]);
 		},
+		indexMap: () => indexStatus.indexMap(),
 		setWatchSet: (args) => watch.setWatchSet(stringsArg(args, 0, "dirs")),
 		layers: () => {
 			if (process.env.AUTORAG_FS_WATCH_DIAG === "1") console.info("[live] layers requested");

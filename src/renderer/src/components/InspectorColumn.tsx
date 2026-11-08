@@ -18,17 +18,20 @@ export function InspectorColumn({
 	visible,
 	width,
 	onHide,
+	surface = "subtle",
 	children,
 }: {
 	readonly visible: boolean;
 	readonly width: number;
 	readonly onHide: () => void;
+	/** "window" when the column hosts a chat on the window's own background, so the head above it is the same colour. */
+	readonly surface?: "subtle" | "window";
 	readonly children: ReactNode;
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
 		<div className="min-w-0 min-h-0 overflow-hidden" inert={!visible} aria-hidden={!visible}>
-			<div className="inspector-column flex h-full flex-col bg-subtle border-l border-border" style={{ width }}>
+			<div className={cn("inspector-column flex h-full flex-col border-l border-border", surface === "window" ? "bg-window" : "bg-subtle")} style={{ width }}>
 				<div className="inspector-head flex flex-none items-center gap-8 h-toolbar px-12 [-webkit-app-region:drag]">
 					<button
 						type="button"
