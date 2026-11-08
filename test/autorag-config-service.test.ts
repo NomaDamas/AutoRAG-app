@@ -460,4 +460,22 @@ describe("createAutoRagConfigService", () => {
 		expect(written.error).toBeNull();
 		expect(written.config.thinking).toEqual({ fast: "off", final: "xhigh" });
 	});
+
+	it("stores refresh.schedule and rejects an invalid one before it reaches the file", async () => {
+		const fixture = await createFixture(null, "autorag-config-schedule-");
+		await writeFile(fixture.configPath, `${JSON.stringify(baseConfig(fixture.root), null, 2)}\n`);
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await service.patch([
+			{ path: ["refresh", "schedule", "power"], value: "ac" },
+			{ path: ["refresh", "schedule", "windows"], value: ["22:00-07:00"] },
+		]);
+		const saved = JSON.parse(await readFile(fixture.configPath, "utf8"));
+		expect(saved.refresh.schedule).toEqual({ power: "ac", windows: ["22:00-07:00"] });
+
+		await expect(service.set(["refresh", "schedule", "power"], "battery")).rejects.toThrow(/power/);
+		await expect(service.set(["refresh", "schedule", "windows"], ["9am-5pm"])).rejects.toThrow(/windows/);
+		const after = JSON.parse(await readFile(fixture.configPath, "utf8"));
+		expect(after.refresh.schedule).toEqual({ power: "ac", windows: ["22:00-07:00"] });
+	});
 });

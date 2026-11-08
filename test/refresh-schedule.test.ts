@@ -182,7 +182,7 @@ describe("refresh lock", () => {
 describe("scheduled run", () => {
 	const raw = { appIndexing: { refreshIntervalMs: 60 * MIN }, datasources: { discord: { pollingIntervalMs: 15 * MIN }, slack: { pollingIntervalMs: 60 * MIN } } };
 
-	function deps(overrides: { clock: { now: number }; local?: () => Promise<ConfigRefreshResult>; source?: (id: string) => Promise<DataSourceSyncResult>; rawConfig?: Record<string, unknown> }) {
+	function deps(overrides: { clock: { now: number }; gate?: () => Promise<{ allowed: true } | { allowed: false; reason: string }>; local?: () => Promise<ConfigRefreshResult>; source?: (id: string) => Promise<DataSourceSyncResult>; rawConfig?: Record<string, unknown> }) {
 		const calls: string[] = [];
 		return {
 			calls,
@@ -192,6 +192,7 @@ describe("scheduled run", () => {
 				refreshLocal: overrides.local ?? (async () => (calls.push("local"), okLocal())),
 				syncSource: overrides.source ?? (async (id: string) => (calls.push(id), okSource(id))),
 				now: () => overrides.clock.now,
+				...(overrides.gate === undefined ? {} : { gate: overrides.gate }),
 			},
 		};
 	}
@@ -215,6 +216,39 @@ describe("scheduled run", () => {
 		const state = readScheduleState(run.value.paths.state);
 		expect(state.local?.detail).toBe("스캔 10 · 기록 2 · 삭제 0 · 건너뜀 8");
 		expect(state.sources.discord?.detail).toBe("indexed · 5개");
+	});
+
+	it("does nothing and records the reason when the schedule is closed", async () => {
+		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
+		const logs: string[] = [];
+		const run = deps({ clock, gate: async () => ({ allowed: false, reason: "battery" }) });
+		const outcome = await runScheduledRefresh({ ...run.value, log: (line) => logs.push(line) });
+		expect(outcome).toEqual({ kind: "paused", reason: "battery" });
+		expect(run.calls).toEqual([]);
+		expect(existsSync(run.value.paths.lock)).toBe(false);
+		// Nothing ran, so nothing is marked done: the same items are still due the moment the gate opens.
+		expect(readScheduleState(run.value.paths.state).local).toBeNull();
+		expect(logs.join("\n")).toContain("paused: battery");
+	});
+
+	it("runs the items that stayed due once the schedule opens", async () => {
+		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
+		let open = false;
+		const run = deps({ clock, gate: async () => (open ? { allowed: true } : { allowed: false, reason: "outside-window" }) });
+		expect(await runScheduledRefresh(run.value)).toMatchObject({ kind: "paused" });
+		open = true;
+		expect(await runScheduledRefresh(run.value)).toMatchObject({ kind: "ran", local: true, sourceIds: ["discord", "slack"] });
+	});
+
+	it("does not consult the schedule when nothing is due", async () => {
+		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
+		let asked = 0;
+		const run = deps({ clock, gate: async () => (asked++, { allowed: true }) });
+		await runScheduledRefresh(run.value);
+		asked = 0;
+		clock.now += 5 * MIN;
+		expect(await runScheduledRefresh(run.value)).toEqual({ kind: "idle" });
+		expect(asked).toBe(0);
 	});
 
 	it("keeps going after one source fails and records the failure for that source only", async () => {

@@ -211,6 +211,14 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
+  - *Conditions* (설정 > 인덱싱 > 자동 최신화 조건): "전원 연결 시에만" and one daily time
+    window are stored as `refresh.schedule` (`power: "ac"`, `windows: ["22:00-07:00"]`, local time; a
+    start later than the end wraps midnight). The job asks the librarian's `checkIndexSchedule`
+    only once something is due; a closed schedule ends the wake-up with `paused: <reason>` in
+    `job.log`, takes no lock and writes no state, so the same items run on the first wake after it
+    opens. A malformed schedule fails open. The Settings buttons are never gated. The power
+    source is read with `pmset` (macOS), `Win32_Battery` (Windows) or `/sys/class/power_supply`
+    (Linux); an unreadable source counts as plugged in.
 - **Indexing progress** — a block above 설정 in the sidebar shows what is
   indexing right now, with a progress bar: the local folders and every
   datasource, whether the run came from a Settings button, the OS job, or an

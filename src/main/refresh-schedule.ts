@@ -151,6 +151,11 @@ export interface ScheduledRunDeps {
 	readonly readRaw: () => Record<string, unknown>;
 	readonly refreshLocal: () => Promise<ConfigRefreshResult>;
 	readonly syncSource: (id: string) => Promise<DataSourceSyncResult>;
+	/**
+	 * Whether the user's power/time schedule lets a refresh run now. Asked only once something is due. A closed
+	 * schedule ends the wake-up without touching state, so the due items run on the first wake after it opens.
+	 */
+	readonly gate?: () => Promise<{ readonly allowed: true } | { readonly allowed: false; readonly reason: string }>;
 	readonly now?: () => number;
 	readonly log?: (message: string) => void;
 	readonly owner?: string;
@@ -159,6 +164,7 @@ export interface ScheduledRunDeps {
 export type ScheduledRunOutcome =
 	| { readonly kind: "ran"; readonly local: boolean; readonly sourceIds: readonly string[]; readonly failures: number }
 	| { readonly kind: "idle" }
+	| { readonly kind: "paused"; readonly reason: string }
 	| { readonly kind: "locked"; readonly heldBy: RefreshLockHolder };
 
 function localDetail(result: ConfigRefreshResult): string {
@@ -192,6 +198,11 @@ export async function runScheduledRefresh(deps: ScheduledRunDeps): Promise<Sched
 	const before = readScheduleState(deps.paths.state);
 	const due = dueItems(plan, before, now());
 	if (!due.local && due.sourceIds.length === 0) return { kind: "idle" };
+	const decision = (await deps.gate?.()) ?? { allowed: true as const };
+	if (!decision.allowed) {
+		log(`paused: ${decision.reason}`);
+		return { kind: "paused", reason: decision.reason };
+	}
 
 	const lock = acquireRefreshLock(deps.paths.lock, { owner: deps.owner ?? "scheduled-job", now });
 	if (isLockHeld(lock)) {
