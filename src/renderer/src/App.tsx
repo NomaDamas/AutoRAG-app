@@ -25,7 +25,6 @@ import { ErrorFixDialog } from "./components/ErrorFixDialog";
 import { MagicActionDialog } from "./components/MagicActionDialog";
 import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
-import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
 import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
 import { SettingsView } from "./components/SettingsView";
@@ -425,31 +424,16 @@ export function App(): ReactElement {
 		};
 	}, [draggingTabId]);
 
-	/** Sidebar 내용 / ⌥Enter "content search": a new AI Search tab runs the query. */
-	const contentSearch = useCallback(
-		(text: string) => {
-			if (finder === undefined || text.trim() === "") return;
-			finder.openAiSearch();
-			deliverToAi({ query: text });
-		},
-		[deliverToAi, finder],
-	);
-
 	/**
-	 * Sidebar search commit. Enter runs a filename search over the whole machine
-	 * (This Mac / This Computer) in the focused pane; the 내용 chip — or ⌥Enter
-	 * from either chip — hands the query to a new AI Search tab.
+	 * Sidebar search commit: one whole search in the focused pane — file names over the whole machine (This Mac / This
+	 * Computer) shown at once, the document index and every connected datasource under their own group tabs.
 	 */
 	const submitSidebarSearch = useCallback(
-		(mode: SearchMode, text: string) => {
+		(text: string) => {
 			if (finder === undefined) return;
 			const value = text.trim();
 			if (value === "") {
 				finder.setQuery("");
-				return;
-			}
-			if (mode === "content") {
-				contentSearch(value);
 				return;
 			}
 			// A Settings / AI Search tab lists nothing: the results show in its last folder.
@@ -457,7 +441,7 @@ export function App(): ReactElement {
 			finder.setSearchScope("all");
 			finder.setQuery(value);
 		},
-		[contentSearch, finder],
+		[finder],
 	);
 
 	/** Inspector "AI 요약": a new AI Search tab that attaches the entry and sends the summary run. */

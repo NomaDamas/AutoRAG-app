@@ -20,6 +20,7 @@ import type { IndexMap } from "../shared/index-map-contract";
 import type { ErrorReport } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import type { ContentSearch } from "../main/content-search";
+import type { SourceSearch } from "../main/source-search";
 import { LIBRARIAN_OP, LIBRARIAN_PUSH, LIBRARIAN_REQUEST, type LibrarianThread } from "./librarian-contract";
 
 export interface LibrarianClientDeps {
@@ -42,6 +43,7 @@ export interface LibrarianClientDeps {
 export interface LibrarianClient {
 	readonly fileNameSearch: FileNameSearchBackend;
 	readonly contentSearch: ContentSearch;
+	readonly sourceSearch: SourceSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
@@ -135,6 +137,11 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 		},
 		contentSearch: {
 			search: (query, limit, signal) => call(LIBRARIAN_OP.contentSearch, limit === undefined ? [query] : [query, limit], signal),
+		},
+		sourceSearch: {
+			datasources: () => call(LIBRARIAN_OP.searchDatasources),
+			search: (datasourceId, query, limit, signal) =>
+				call(LIBRARIAN_OP.sourceSearch, limit === undefined ? [datasourceId, query] : [datasourceId, query, limit], signal),
 		},
 		scanDuplicates: (dir) => call(LIBRARIAN_OP.scanDuplicates, [dir]),
 		indexStatus: {

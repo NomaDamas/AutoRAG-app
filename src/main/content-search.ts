@@ -82,18 +82,23 @@ export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
 	};
 }
 
+/** The raw shared AutoRAG config and a key that changes whenever it does. */
+export function sharedConfigLoader(env: NodeJS.ProcessEnv, cwd: string): ContentSearchDeps["loadConfig"] {
+	const input = { flags: {}, env, cwd };
+	return async () => {
+		const configPath = resolveConfigPath(input).configPath;
+		const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
+		return { raw, key: `${configPath}\n${JSON.stringify(raw)}` };
+	};
+}
+
 /**
  * The real search over the one shared AutoRAG config. Datasources are dropped from the runtime's config, so building it
  * constructs no datasource skill; the app's code-folder exclusions only change what a refresh writes, never a query.
  */
 export function createDefaultContentSearch(env: NodeJS.ProcessEnv, cwd: string): ContentSearch {
-	const input = { flags: {}, env, cwd };
 	return createContentSearch({
-		loadConfig: async () => {
-			const configPath = resolveConfigPath(input).configPath;
-			const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
-			return { raw, key: `${configPath}\n${JSON.stringify(raw)}` };
-		},
-		open: () => new AutoRAGLite({ ...resolveConfigReadOnly(input), datasources: {} }),
+		loadConfig: sharedConfigLoader(env, cwd),
+		open: () => new AutoRAGLite({ ...resolveConfigReadOnly({ flags: {}, env, cwd }), datasources: {} }),
 	});
 }

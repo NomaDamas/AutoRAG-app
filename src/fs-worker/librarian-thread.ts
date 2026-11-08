@@ -11,6 +11,7 @@ import { scanWithDupey } from "@autorag/librarian";
 import { createDefaultContentSearch } from "../main/content-search";
 import { createFileNameSearch } from "../main/file-name-search";
 import { createIndexStatusService } from "../main/index-status";
+import { createDefaultSourceSearch } from "../main/source-search";
 import type { LibrarianThreadData } from "./librarian-contract";
 import { serveLibrarian } from "./librarian-serve";
 import { adaptNodePort } from "./thread-port";
@@ -22,6 +23,7 @@ serveLibrarian(adaptNodePort(parentPort), {
 	services: (host) => ({
 		fileNameSearch: createFileNameSearch({ userDataDir, locations: host.locations }),
 		contentSearch: createDefaultContentSearch(process.env, process.cwd()),
+		sourceSearch: createDefaultSourceSearch(process.env, process.cwd()),
 		scanDuplicates: (dir) => scanWithDupey(dir),
 		indexStatus: createIndexStatusService({ env: process.env, cwd: process.cwd(), onRefreshed: host.indexRefreshed }),
 	}),

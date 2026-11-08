@@ -1,23 +1,15 @@
-import { useEffect, useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type RefObject } from "react";
+import { useEffect, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "../lib/cn";
-import { formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
 import { SearchIcon } from "./icons";
 import { Keycap } from "./primitives/Keycap";
 
-/** What Enter commits against: a filename search over the whole machine, or the AI content search. */
-export type SearchMode = "name" | "content";
-
-const CHIP_CLASS =
-	"flex-1 min-w-0 h-pill px-8 border border-transparent rounded-11 text-badge whitespace-nowrap cursor-default transition-[background,color,border-color] duration-(--dur-color) ease-[ease]";
-
 /**
  * The sidebar's instant search (mockup: `.side-search`). Sits at the top of the
- * Places list, above the nav groups. Enter commits a filename search over the
- * whole machine ("파일 이름"); ⌥Enter — or the 내용 chip — runs the AI content
- * search. The chips only appear while the field has focus, so the resting
- * sidebar stays uncluttered.
+ * Places list, above the nav groups. Enter commits one whole search: file names
+ * over the whole machine, the document index, and every connected datasource,
+ * each answer under its own group tab (`WholeSearchBar`). Asking the AI is the
+ * AI Search chat's job, never this field's.
  */
 export function SidebarSearch({
 	query,
@@ -35,32 +27,12 @@ export function SidebarSearch({
 	readonly showHotkeys: boolean;
 	readonly onFocus: () => void;
 	readonly onBlur: () => void;
-	/** mode + raw text; an empty text clears the committed search. */
-	readonly onSubmit: (mode: SearchMode, text: string) => void;
+	/** The raw text; an empty text clears the committed search. */
+	readonly onSubmit: (text: string) => void;
 }): ReactElement {
 	const focusSearchShortcut = useFormattedShortcut("focusSearch");
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState(query);
-	const [mode, setMode] = useState<SearchMode>("name");
-	const machine = hostPlatform() === "win32" ? t("scopeBar.thisComputer") : t("scopeBar.thisMac");
-	const chips: readonly { readonly mode: SearchMode; readonly label: string; readonly hint: string }[] = useMemo(
-		() => [
-			{
-				mode: "name",
-				label: t("sidebarSearch.fileName"),
-				hint: t("sidebarSearch.fileNameHint", { machine }),
-			},
-			{
-				mode: "content",
-				label: t("sidebarSearch.content"),
-				hint: t("sidebarSearch.contentHint", {
-					shortcut: formatShortcut({ key: "Enter", alt: true, primary: false }),
-				}),
-			},
-		],
-		[t, machine],
-	);
-
 	useEffect(() => {
 		setDraft(query);
 	}, [query]);
@@ -73,12 +45,12 @@ export function SidebarSearch({
 	const onKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
 		if (event.key === "Enter") {
 			event.preventDefault();
-			onSubmit(event.altKey ? "content" : mode, draft);
+			onSubmit(draft);
 		} else if (event.key === "Escape") {
 			event.preventDefault();
 			if (draft !== "") {
 				setDraft("");
-				onSubmit(mode, "");
+				onSubmit("");
 			} else {
 				inputRef.current?.blur();
 			}
@@ -87,7 +59,7 @@ export function SidebarSearch({
 
 	const clear = (): void => {
 		setDraft("");
-		onSubmit(mode, "");
+		onSubmit("");
 		inputRef.current?.focus();
 	};
 
@@ -122,29 +94,7 @@ export function SidebarSearch({
 					<Keycap label={focusSearchShortcut} />
 				) : null}
 			</label>
-			{focused ? (
-				<div className="search-scopes flex gap-2 mt-6 p-2 rounded-12 bg-hover" role="group" aria-label={t("finderComponents.searchRange")}>
-					{chips.map((chip) => (
-						<button
-							key={chip.mode}
-							type="button"
-							className={cn(
-								"scope-chip",
-								CHIP_CLASS,
-								mode === chip.mode
-									? "bg-window border-border text-ink"
-									: "bg-transparent text-ink-muted hover:bg-hover-strong hover:text-ink",
-							)}
-							title={chip.hint}
-							aria-pressed={mode === chip.mode}
-							onMouseDown={keepFocus}
-							onClick={() => setMode(chip.mode)}
-						>
-							{chip.label}
-						</button>
-					))}
-				</div>
-			) : null}
+			{focused ? <p className="search-hint mt-6 mb-0 px-4 text-badge text-ink-muted">{t("sidebarSearch.hint")}</p> : null}
 		</div>
 	);
 }

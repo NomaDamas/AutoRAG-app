@@ -88,7 +88,6 @@ try {
 	await page.waitForSelector(".sidebar__item", { timeout: 30000 });
 
 	const search = page.locator(".side-search input");
-	const chip = (label) => page.locator(".scope-chip", { hasText: new RegExp(`^${label}$`) });
 
 	// 1. The app warmed a watch daemon for the default database.
 	let live = false;
@@ -98,11 +97,10 @@ try {
 	}
 	check("the app starts a fsearch-cli watch daemon at launch", live && existsSync(pidFile), `live=${live} pidFile=${existsSync(pidFile)}`);
 
-	// 2. "파일 이름" answers from the index over the whole machine: the outside
+	// 2. The whole search's file names answer from the index over the whole machine: the outside
 	//    file is outside every scanned sidebar place, so only the index can
 	//    return it.
 	await search.click();
-	await chip("File Name").click();
 	await search.fill(outsideName);
 	await search.press("Enter");
 	await page.waitForSelector(".scope", { timeout: 15000 });

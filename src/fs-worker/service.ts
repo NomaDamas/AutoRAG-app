@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
 import { CONTENT_SEARCH_MAX_HITS, type ContentSearchResult } from "../shared/content-search-contract";
+import { SOURCE_SEARCH_MAX_HITS } from "../shared/source-search-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
@@ -22,6 +23,7 @@ import { isNewFileFormatId } from "../shared/new-file-contract";
 import { createChangeHub, type ChangeHub } from "../main/change-hub";
 import { createDupeyLayer } from "../main/dupey-layer";
 import type { ContentSearch } from "../main/content-search";
+import type { SourceSearch } from "../main/source-search";
 import type { IconProvider } from "../main/file-icon";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import { buildFsEntry } from "../main/fs-entry";
@@ -63,6 +65,8 @@ export interface FsWorkerServiceDeps {
 	readonly fileNameSearch?: FileNameSearchBackend;
 	/** Defaults to the local document index in the librarian thread; tests inject a stub. */
 	readonly contentSearch?: ContentSearch;
+	/** Defaults to the datasource search in the librarian thread; tests inject a stub. */
+	readonly sourceSearch?: SourceSearch;
 	/** Defaults to the AutoRAG index status in the librarian thread; tests inject a stub. */
 	readonly indexStatus?: IndexStatusService;
 	/** Defaults to the OS places; tests inject a fixture. */
@@ -182,6 +186,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	const fileNameSearch =
 		deps.fileNameSearch ?? librarian.fileNameSearch;
 	const contentSearch = deps.contentSearch ?? librarian.contentSearch;
+	const sourceSearch = deps.sourceSearch ?? librarian.sourceSearch;
 	/** Index hits as rows: a file that left the disk since it was indexed is dropped, the rest keep the index's order. */
 	async function searchContent(query: string, limit: number, signal: AbortSignal): Promise<ContentSearchResult> {
 		const outcome = await contentSearch.search(query, limit, signal);
@@ -268,6 +273,14 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
 		contentSearch: (args, signal) =>
 			searchContent(stringArg(args, 0, "query"), typeof args[1] === "number" && Number.isInteger(args[1]) && args[1] > 0 ? Math.min(args[1], CONTENT_SEARCH_MAX_HITS) : CONTENT_SEARCH_MAX_HITS, signal),
+		searchDatasources: () => sourceSearch.datasources(),
+		sourceSearch: (args, signal) =>
+			sourceSearch.search(
+				stringArg(args, 0, "datasourceId"),
+				stringArg(args, 1, "query"),
+				typeof args[2] === "number" && Number.isInteger(args[2]) && args[2] > 0 ? Math.min(args[2], SOURCE_SEARCH_MAX_HITS) : SOURCE_SEARCH_MAX_HITS,
+				signal,
+			),
 		uploadFile: (args) => {
 			const data = args[2];
 			if (!(data instanceof Uint8Array)) throw new TypeError("uploadFile expects bytes");

@@ -87,12 +87,9 @@
     "descending": "降序"
   },
   "sidebarSearch": {
-    "fileName": "文件名",
-    "content": "内容",
-    "fileNameHint": "在此{{machine}}全部范围内搜索文件名",
-    "contentHint": "使用 AI 搜索文件内容 ({{shortcut}})",
     "placeholder": "搜索…",
-    "clearSearch": "清除搜索"
+    "clearSearch": "清除搜索",
+    "hint": "按 Enter 同时搜索文件名、文档内容和已连接的应用"
   },
   "pathBar": {
     "notFound": "找不到 \"{{path}}\"。"
@@ -102,6 +99,23 @@
     "thisMac": "这台 Mac",
     "thisComputer": "这台电脑",
     "itemsFound": "个项目"
+  },
+  "wholeSearch": {
+    "groups": "搜索结果分组",
+    "files": "文件名",
+    "content": "文档内容",
+    "pending": "正在搜索…",
+    "contentOff": "仅关键词模式下没有文档内容索引。",
+    "contentUnavailable": "文档索引尚未就绪。",
+    "contentError": "无法搜索文档内容。",
+    "noContentHits": "没有与 \"{{query}}\" 匹配的文档内容。",
+    "showInFolder": "在文件夹中显示",
+    "sourcePending": "正在搜索 {{source}}…",
+    "sourceError": "无法搜索 {{source}}：{{error}}",
+    "noSourceHits": "{{source}} 中没有与 \"{{query}}\" 匹配的内容。",
+    "openPage": "打开页面",
+    "askAi": "询问 AI 搜索",
+    "askAiHint": "用此搜索词开始 AI 搜索对话"
   },
   "tabs": {
     "close": "关闭标签页 ({{shortcut}})",
@@ -1338,7 +1352,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "搜索范围",
     "sidebar": "位置",
     "pathBar": "路径",
     "inspectorAside": "检查器",
