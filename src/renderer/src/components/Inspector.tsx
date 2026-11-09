@@ -79,6 +79,7 @@ import {
 	VideoConvertIcon,
 	ReduceSizeIcon,
 } from "./icons";
+import dazziMark from "../assets/dazzi-mark.png";
 import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
 export interface InspectorFamilyMember {
@@ -321,8 +322,9 @@ function InfoHalf({
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.title")}>
 			{entry === null ? (
 				<>
-					<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
-						{t("inspector.evidencePanel.emptyTitle")}
+					{/* Nothing selected: the Dazzi mark, faded, over a composer that asks about anything. */}
+					<div className="inspector-empty flex flex-1 min-h-0 items-center justify-center">
+						<img className="size-67 object-contain opacity-50 grayscale" src={dazziMark} alt="" aria-hidden="true" draggable={false} />
 					</div>
 					{chatDock}
 				</>

@@ -197,8 +197,9 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 	const chat = tab.chat;
 	const placeholder = t(askPlaceholder(targets, "inspector.chat.placeholderAny"));
 	return (
-		<div className="inspector-chat-dock flex flex-col gap-4 px-12 pb-12">
-			<div className="mb-4 h-px bg-divider" aria-hidden="true" />
+		// With nothing selected the dock is the panel's foot on its own: no divider above it, and the chat footer's padding.
+		<div className={cn("inspector-chat-dock flex flex-col gap-4", targets.length === 0 ? "px-8 pt-8 pb-10" : "px-12 pb-12")}>
+			{targets.length === 0 ? null : <div className="mb-4 h-px bg-divider" aria-hidden="true" />}
 			{chat !== null ? (
 				<button type="button" className="mb-2 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onResume}>
 					<MessagesIcon size={12} />

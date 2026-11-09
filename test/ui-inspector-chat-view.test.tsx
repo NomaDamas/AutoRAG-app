@@ -126,4 +126,15 @@ describe("the Info view's chat dock", () => {
 		expect(host.querySelector(".inspector-chat-att")).toBeNull();
 		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
 	});
+
+	it("asks about anything with nothing selected, and offers no AI 요약", () => {
+		const empty: InspectorChatTab = { chat: null, mode: "info", expired: false, dismissed: [] };
+		act(() =>
+			root.render(
+				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} onOpenHistory={noop} />,
+			),
+		);
+		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
+		expect(host.textContent).not.toContain("AI 요약");
+	});
 });
