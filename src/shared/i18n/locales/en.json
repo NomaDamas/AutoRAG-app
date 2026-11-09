@@ -388,8 +388,7 @@
       "compacted": "Earlier conversation summarized",
       "compactedHint": "Earlier messages now reach the model only as a summary. Mention any detail it should still see.",
       "trimmed": "Only part of an oversized search result was used"
-    },
-    "placeholder": "Ask anything"
+    }
   },
   "appError": {
     "fixAction": "Fix with AI",

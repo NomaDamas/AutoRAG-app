@@ -388,8 +388,7 @@
       "compacted": "이전 대화를 요약했어요",
       "compactedHint": "이전 대화는 요약본으로 이어가요. 빠진 세부 내용이 있으면 다시 알려 주세요.",
       "trimmed": "너무 큰 검색 결과는 일부만 사용했어요"
-    },
-    "placeholder": "무엇이든 물어보세요"
+    }
   },
   "appError": {
     "fixAction": "AI로 고치기",

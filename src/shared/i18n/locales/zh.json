@@ -388,8 +388,7 @@
       "compacted": "已总结之前的对话",
       "compactedHint": "之前的对话现在只以摘要形式提供给模型。如仍需要具体细节，请再次告诉它。",
       "trimmed": "过大的搜索结果只使用了一部分"
-    },
-    "placeholder": "有什么问题都可以问"
+    }
   },
   "appError": {
     "fixAction": "用 AI 修复",

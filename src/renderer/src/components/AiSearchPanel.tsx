@@ -1264,7 +1264,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									value={query}
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
-									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("aiSearch.placeholder")}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
 								{voiceNotice === null ? null : (
