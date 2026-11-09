@@ -98,6 +98,7 @@ import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
 import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
+import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
@@ -201,13 +202,14 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
-/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has. */
+/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has, and the Jev settings the librarian now refuses. */
 function migrateEmbeddingConfig(configPath: string): void {
 	try {
-		const { raw, changed } = migrateLegacyEmbedding(readRawConfigObject(configPath));
-		if (changed) writeConfigObject(configPath, raw);
+		const embedding = migrateLegacyEmbedding(readRawConfigObject(configPath));
+		const jev = migrateLegacyJev(embedding.raw);
+		if (embedding.changed || jev.changed) writeConfigObject(configPath, jev.raw);
 	} catch (error) {
-		console.error("AutoRAG embedding config migration failed", error);
+		console.error("AutoRAG config migration failed", error);
 	}
 }
 
