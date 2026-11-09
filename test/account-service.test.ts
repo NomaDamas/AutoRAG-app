@@ -652,14 +652,22 @@ describe("Jev and rerank after sign-in", () => {
 		expect(config.rerank).toMatchObject({ provider: "dazzi" });
 	});
 
-	it("keeps a role the user turned off or pointed at another provider", async () => {
-		await writeFile(join(root, "config.json"), JSON.stringify({ jev: false, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } }), "utf8");
+	it("keeps a role the user pointed at the small chat model or another provider", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ jev: { backend: "sllm" }, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } }), "utf8");
 
 		await service.signIn();
 
 		const config = await readConfig();
-		expect(config.jev).toBe(false);
+		expect(config.jev).toEqual({ backend: "sllm" });
 		expect(config.rerank).toEqual({ provider: "openrouter", model: "voyageai/rerank-3" });
+	});
+
+	it("reads a legacy `jev: false` as the small chat model, which signing in keeps", async () => {
+		await writeFile(join(root, "config.json"), JSON.stringify({ jev: false }), "utf8");
+
+		await service.signIn();
+
+		expect((await readConfig()).jev).toEqual({ backend: "sllm" });
 	});
 
 	it("still adopts the chat model when the Jev and rerank lists cannot be read", async () => {

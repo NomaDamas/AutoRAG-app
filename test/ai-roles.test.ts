@@ -26,7 +26,7 @@ describe("jev and rerank roles", () => {
 	it("maps the AutoRAG provider to the dazzi Jev backend alongside the existing ones", () => {
 		expect(jevBackendFor("dazzi")).toBe("dazzi");
 		expect(jevBackendFor("openrouter")).toBe("openrouter");
-		expect(jevBackendFor("vercel-ai-gateway")).toBe("vercel");
+		expect(jevBackendFor("vercel-ai-gateway")).toBe("vercel-ai-gateway");
 		expect(jevBackendFor("typesafe")).toBe("typesafe");
 		expect(jevBackendFor("anthropic")).toBeUndefined();
 	});

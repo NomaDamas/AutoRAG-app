@@ -815,8 +815,17 @@ role, in the shared `config.json` (the config carries an explicit
 |---|---|---|
 | answer `model` | nothing, or an AutoRAG model | any other provider's model |
 | `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
-| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you tuned (`confidenceThreshold`, …) |
 | `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
+
+The librarian requires a decision model and refuses `jev: false`, `jev.enabled`, and the backend name `vercel`
+(now `vercel-ai-gateway`). A config an earlier Dazzi wrote can still hold them, so `migrateLegacyJev`
+(`src/main/jev-migration.ts`) rewrites them at launch, on every Settings write (`config:patch` re-reads the file
+through it, so one stale field never blocks an unrelated edit), and before sign-in adopts the plan's roles:
+switched off (`false`, `enabled: false`) becomes `{ "backend": "sllm" }`, `enabled: true` is dropped, `vercel`
+becomes `vercel-ai-gateway`, and OpenRouter's `typesafe/jev-latest` becomes the catalog id `~typesafe/jev-latest`.
+`scripts/manual-qa/run-qa-live-jev-sllm.mjs` runs this live: a legacy config, a Settings edit over it, and a real
+question answered with the sLLM deciding.
 
 The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);
 a list that cannot be fetched leaves that role alone. Settings › 계정 › "계정
