@@ -248,6 +248,8 @@
 	--color-vtag-near-text: var(--vtag-near-text);
 	--color-vtag-exact-bg: var(--vtag-exact-bg);
 	--color-vtag-exact-text: var(--vtag-exact-text);
+	--color-vtag-similar-bg: var(--vtag-similar-bg);
+	--color-vtag-similar-text: var(--vtag-similar-text);
 
 	/* --------------------------------------------------------- §7 Scrollbars */
 	/* (none — native overlay scrollbars; see base.css §7) */

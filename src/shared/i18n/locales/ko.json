@@ -224,7 +224,7 @@
     "imageInfo": "사진 정보",
     "versions": "버전",
     "latestVersion": "최신본",
-    "showMore": "전체 정보",
+    "showMore": "자세히",
     "showLess": "간략히",
     "totalSize": "총 크기",
     "labels": {
@@ -310,8 +310,8 @@
       "removeAttachment": "첨부 빼기",
       "thinking": "답을 찾는 중…",
       "stopped": "답변을 중지했어요",
-      "showInList": "목록에서 보기",
-      "preview": "미리보기",
+      "showInList": "파일 찾기",
+      "preview": "파일 열기",
       "placeholderAny": "무엇이든 물어보세요"
     },
     "fileActions": "파일 동작"

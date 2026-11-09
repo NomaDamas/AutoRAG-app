@@ -30,6 +30,7 @@ import {
 	Download,
 	ExternalLink,
 	Eye,
+	File as FileGlyph,
 	Film,
 	FoldVertical,
 	History,
@@ -146,6 +147,9 @@ export const ArrowLeftIcon = glyph(ArrowLeft, 13, 2.2);
 export const MessagesIcon = glyph(MessagesSquare, 12, 2);
 
 export const ChevronDownIcon = glyph(ChevronDown, 10, 3);
+
+/** Inspector chat source actions: find the cited file, open it. */
+export const FileIcon = glyph(FileGlyph, 12, 2);
 
 /**
  * Tab strip: the reference's `icon('close',11)` / `icon('plus',14)` at the

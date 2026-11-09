@@ -224,7 +224,7 @@
     "imageInfo": "画像情報",
     "versions": "バージョン",
     "latestVersion": "最新版",
-    "showMore": "詳細情報",
+    "showMore": "詳細",
     "showLess": "簡易表示",
     "totalSize": "合計サイズ",
     "labels": {
@@ -310,8 +310,8 @@
       "removeAttachment": "添付を外す",
       "thinking": "回答を探しています…",
       "stopped": "回答を停止しました",
-      "showInList": "リストで表示",
-      "preview": "プレビュー",
+      "showInList": "ファイルを探す",
+      "preview": "ファイルを開く",
       "placeholderAny": "何でも質問してください"
     },
     "fileActions": "ファイル操作"

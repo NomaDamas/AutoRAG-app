@@ -233,6 +233,9 @@
   --vtag-near-text: #6B3FB5;
   --vtag-exact-bg: #FFF0DF;
   --vtag-exact-text: #B45309;
+  /* The inspector's 유사본 tag (Figma 231:2588). */
+  --vtag-similar-bg: #FDEEC1;
+  --vtag-similar-text: #C47D00;
 
   /* -------------------------------------------------------------- §3 Typography */
   --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
@@ -492,6 +495,8 @@ html[data-appearance="dark"] {
     --vtag-near-text: #BF5AF2;
     --vtag-exact-bg: rgba(255,159,10,0.2);
     --vtag-exact-text: #FF9F0A;
+    --vtag-similar-bg: rgba(255,204,0,0.2);
+    --vtag-similar-text: #FFD60A;
 
     /* ------------------------------------------------------------ Scrollbars */
     /* (none — native overlay scrollbars; see base.css §7) */

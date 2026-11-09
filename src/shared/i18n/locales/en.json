@@ -310,8 +310,8 @@
       "removeAttachment": "Remove attachment",
       "thinking": "Looking for the answer…",
       "stopped": "Answer stopped",
-      "showInList": "Show in list",
-      "preview": "Preview",
+      "showInList": "Find file",
+      "preview": "Open file",
       "placeholderAny": "Ask anything"
     },
     "fileActions": "File actions"

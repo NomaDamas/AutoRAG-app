@@ -41,8 +41,8 @@ import { type FinderEntry, hasFileVersion } from "../data/entries";
 import { cn } from "../lib/cn";
 import { anchorOf } from "../lib/anchor";
 import { rulesWatching } from "../state/automations";
-import { dateLabelOf, fileKindOf, kindLabelOf, sizeLabelOf } from "../state/entry-values";
-import { buildInfoRows, hasMoreInfoRows, visibleInfoRows } from "../state/inspector-info";
+import { dateLabelOf, fileKindOf, kindLabelOf } from "../state/entry-values";
+import { buildInfoRows, hasMoreInfoRows, visibleInfoRows, type InfoRow as InfoRowData, type InfoSection } from "../state/inspector-info";
 import { stackCards, summarizeSelection } from "../state/inspector-multi";
 import { evidenceDetail, evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource } from "../state/evidence";
 import {
@@ -54,7 +54,7 @@ import {
 	type FileActionItem,
 	type FileActionTarget,
 } from "../state/file-actions";
-import { basename, dirname } from "../state/paths";
+import { dirname } from "../state/paths";
 import { VERSION_TAG_KEYS } from "../state/version-family";
 import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
@@ -229,9 +229,9 @@ export function Inspector({
 					loadOpenWithApplications={loadOpenWithApplications}
 					automations={automations}
 					folderInView={folderInView}
+					chatDock={chatDock}
 				/>
 			)}
-			{view === "evidence" || entries.length > 1 || (chatView !== undefined && chatView !== null) ? null : chatDock}
 		</aside>
 	);
 }
@@ -249,6 +249,7 @@ function InfoHalf({
 	loadOpenWithApplications,
 	automations,
 	folderInView,
+	chatDock,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -262,15 +263,14 @@ function InfoHalf({
 	readonly loadOpenWithApplications: (entry: FinderEntry) => Promise<readonly OpenWithApplication[]>;
 	readonly automations?: InspectorProps["automations"];
 	readonly folderInView: boolean;
+	readonly chatDock?: ReactNode;
 }): ReactElement {
-	const [brief, setBrief] = useState(false);
+	// 간략히 / 자세히 per section; the choice holds while the person moves between files.
+	const [brief, setBrief] = useState<Readonly<Record<InfoSection, boolean>>>({ general: false, image: false });
 	const [details, setDetails] = useState<FsFileDetails | null>(null);
 	const focusedPath = entry?.path ?? null;
 	const focusedMtime = entry?.mtimeMs ?? null;
 	const focusedSize = entry?.size ?? null;
-	useEffect(() => {
-		setBrief(false);
-	}, [focusedPath]);
 	// Rich metadata is per-file and re-read when an in-place action (such as Reduce Size)
 	// replaces the file with a new size/mtime; stale answers are dropped on cleanup.
 	useEffect(() => {
@@ -293,84 +293,104 @@ function InfoHalf({
 	const { t } = useTranslation();
 	const included = indexStatus === null || !indexStatus.excluded;
 	const infoRows = entry === null ? [] : buildInfoRows(details, entry);
-	const shownRows = visibleInfoRows(infoRows, brief);
-	const generalRows = shownRows.filter((row) => row.section === "general");
-	const imageRows = shownRows.filter((row) => row.section === "image");
-	const moreInfo = hasMoreInfoRows(infoRows);
+	const sectionOf = (section: InfoSection): readonly InfoRowData[] => infoRows.filter((row) => row.section === section);
+	const toggle = (section: InfoSection): void => setBrief((current) => ({ ...current, [section]: !current[section] }));
 
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.title")}>
-
 			{entry === null ? (
-				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
-					{t("inspector.evidencePanel.emptyTitle")}
-				</div>
+				<>
+					<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
+						{t("inspector.evidencePanel.emptyTitle")}
+					</div>
+					{chatDock}
+				</>
 			) : (
-				<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
-					<PreviewPaper entry={entry} />
-					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
-					<div className="preview-sub mt-4 text-meta text-ink-muted">
-						{folderInView ? kindLabelOf(entry) : `${kindLabelOf(entry)} · ${sizeLabelOf(entry)} · ${dateLabelOf(entry)}`}
-					</div>
-
-					<FileActionGroup
-						entry={entry}
-						included={included}
-						folderInView={folderInView}
-						onToggleIndex={onToggleIndex}
-						onTrash={onTrash}
-						onCopyPath={onCopyPath}
-						actions={suggestedActions(entry, actionCapabilities).filter((action) => action.id !== "open" && action.id !== "askAi")}
-						onAction={onAction}
-						loadOpenWithApplications={() => loadOpenWithApplications(entry)}
-					/>
-
-					{entry.kind === "folder" && automations !== undefined ? (
-						<AutomationRulesSection
-							rules={rulesWatching(automations.rules, entry.path)}
-							onEdit={automations.onEdit}
-							onDelete={automations.onDelete}
-							onMenu={automations.onMenu}
-						/>
-					) : null}
-
-					{family === null ? null : <VersionsSection family={family} entry={entry} onOpenMember={onOpenMember} />}
-
-					<div className="info-section border-t border-border pt-12 mt-12">
-						<div className="section-title flex items-center justify-between mb-6">
-							<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo")}</span>
-							{moreInfo ? (
-								<button
-									type="button"
-									className="p-0 border-0 bg-transparent text-accent-text text-badge cursor-pointer"
-									onClick={() => setBrief((current) => !current)}
-								>
-									{brief ? t("inspector.showMore") : t("inspector.showLess")}
-								</button>
-							) : null}
-						</div>
-						<dl className="m-0">
-							{generalRows.map((row) => (
-								<InfoRow key={row.label} label={row.label} value={row.value} />
-							))}
-						</dl>
-					</div>
-
-					{imageRows.length === 0 ? null : (
-						<div className="info-section border-t border-border pt-12 mt-12">
-							<div className="section-title mb-6">
-								<span className="text-meta font-semibold text-ink">{t("inspector.imageInfo")}</span>
+				// One scroll for the whole panel; the chat dock follows the content and stays pinned at the bottom.
+				<div className="inspector-body flex-1 min-h-0 overflow-auto flex flex-col">
+					<div className="flex flex-col gap-8 px-12 pt-4 pb-12">
+						<div className="preview-card flex flex-col gap-12 rounded-12 border border-divider bg-window p-14">
+							<PreviewPaper entry={entry} />
+							<div className="flex items-center gap-8">
+								<FileTile kind={fileKindOf(entry)} size={22} />
+								<div className="flex min-w-0 flex-1 flex-col gap-3">
+									<div className="preview-title text-[11.5px] font-medium text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
+									<div className="preview-sub text-[10.5px] leading-[15.75px] text-ink-muted truncate">
+										{folderInView ? kindLabelOf(entry) : `${kindLabelOf(entry)} · ${dateLabelOf(entry)}`}
+									</div>
+								</div>
 							</div>
-							<dl className="m-0">
-								{imageRows.map((row) => (
-									<InfoRow key={row.label} label={row.label} value={row.value} />
-								))}
-							</dl>
 						</div>
+
+						<FileActionGroup
+							entry={entry}
+							included={included}
+							indexToggleable={indexStatus === null ? entry.kind === "file" : indexStatus.toggleable}
+							folderInView={folderInView}
+							onToggleIndex={onToggleIndex}
+							onTrash={onTrash}
+							onCopyPath={onCopyPath}
+							actions={suggestedActions(entry, actionCapabilities).filter((action) => action.id !== "open" && action.id !== "askAi")}
+							onAction={onAction}
+							loadOpenWithApplications={() => loadOpenWithApplications(entry)}
+						/>
+
+						{entry.kind === "folder" && automations !== undefined ? (
+							<AutomationRulesSection
+								rules={rulesWatching(automations.rules, entry.path)}
+								onEdit={automations.onEdit}
+								onDelete={automations.onDelete}
+								onMenu={automations.onMenu}
+							/>
+						) : null}
+
+						{family === null ? null : <VersionsSection family={family} entry={entry} onOpenMember={onOpenMember} />}
+
+						<InfoSectionCard title={t("inspector.generalInfo")} rows={sectionOf("general")} brief={brief.general} onToggle={() => toggle("general")} />
+						<InfoSectionCard title={t("inspector.imageInfo")} rows={sectionOf("image")} brief={brief.image} onToggle={() => toggle("image")} />
+					</div>
+					{chatDock === undefined || chatDock === null ? null : (
+						<div className="inspector-dock-slot sticky bottom-0 z-10 mt-auto bg-subtle">{chatDock}</div>
 					)}
 				</div>
 			)}
+		</div>
+	);
+}
 
+/**
+ * One titled block of metadata rows (일반 정보, 사진 정보) in its card, with its own
+ * 간략히 / 자세히 link when collapsing would hide anything. A section with no rows is left out.
+ */
+function InfoSectionCard({
+	title,
+	rows,
+	brief,
+	onToggle,
+}: {
+	readonly title: string;
+	readonly rows: readonly InfoRowData[];
+	readonly brief: boolean;
+	readonly onToggle: () => void;
+}): ReactElement | null {
+	const { t } = useTranslation();
+	if (rows.length === 0) return null;
+	const shown = visibleInfoRows(rows, brief);
+	return (
+		<div className="info-section flex flex-col gap-8 border-t border-divider pt-8">
+			<div className="section-title flex h-22 items-center justify-between">
+				<span className="text-meta font-medium leading-[16px] text-ink">{title}</span>
+				{hasMoreInfoRows(rows) ? (
+					<button type="button" className="p-0 border-0 bg-transparent text-[9.5px] font-medium text-accent-text cursor-pointer hover:underline" onClick={onToggle}>
+						{brief ? t("inspector.showMore") : t("inspector.showLess")}
+					</button>
+				) : null}
+			</div>
+			<dl className="m-0 rounded-12 border border-divider bg-window px-14 py-4">
+				{shown.map((row) => (
+					<InfoRow key={row.label} label={row.label} value={row.value} />
+				))}
+			</dl>
 		</div>
 	);
 }
@@ -487,7 +507,7 @@ function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement 
 	const { state, loaded, onLoad, onError } = usePreviewState(entry);
 	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
 		return (
-			<div className="preview-paper flex-none flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised h-152 mb-14">
+			<div className="preview-paper flex-none flex items-center justify-center overflow-hidden rounded-10 border border-border bg-window h-152">
 				{entry.iconUrl === undefined ? (
 					<FileTile kind={fileKindOf(entry)} large />
 				) : (
@@ -498,7 +518,7 @@ function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement 
 	}
 	return (
 		<div
-			className="preview-paper relative flex-none w-full overflow-hidden rounded-6 border border-border bg-window shadow-raised transition-[aspect-ratio] duration-200 ease-out mb-14 max-h-[70vh]"
+			className="preview-paper relative flex-none w-full overflow-hidden rounded-10 border border-border bg-window transition-[aspect-ratio] duration-200 ease-out max-h-[70vh]"
 			style={{ aspectRatio: String(state.aspect ?? DEFAULT_PAPER_ASPECT) }}
 		>
 			{state.url === null ? null : (
@@ -744,6 +764,7 @@ interface GroupButton {
 function FileActionGroup({
 	entry,
 	included,
+	indexToggleable,
 	folderInView,
 	onToggleIndex,
 	onTrash,
@@ -754,6 +775,8 @@ function FileActionGroup({
 }: {
 	readonly entry: FinderEntry;
 	readonly included: boolean;
+	/** The index can take or drop this entry (a file, or a folder the index status says it can toggle). */
+	readonly indexToggleable: boolean;
 	readonly folderInView: boolean;
 	readonly onToggleIndex: (entry: FinderEntry) => void;
 	readonly onTrash: (entry: FinderEntry) => void;
@@ -765,7 +788,7 @@ function FileActionGroup({
 	const { t } = useTranslation();
 	const runner = useActionRunner({ onAction, loadOpenWithApplications });
 	const buttons: GroupButton[] = [];
-	if (entry.kind === "file") {
+	if (indexToggleable) {
 		buttons.push({
 			id: "index",
 			label: included ? t("contextMenu.includeInIndex") : t("contextMenu.excludeFromIndex"),
@@ -786,27 +809,25 @@ function FileActionGroup({
 		});
 	}
 	return (
-		<div className="inspector-file-actions flex mt-12 mb-16">
-			<div className="inline-flex max-w-full flex-wrap items-stretch rounded-8 border border-border-strong bg-window" role="toolbar" aria-label={t("inspector.fileActions")}>
+		<div className="inspector-file-actions flex">
+			<div className="inline-flex max-w-full flex-wrap items-center gap-4 rounded-8 border border-divider bg-window px-4 py-2" role="toolbar" aria-label={t("inspector.fileActions")}>
 				{buttons.map((button, index) => (
-					<span key={button.id} className="flex items-stretch">
-						{index === 0 ? null : <span className="block w-px bg-border" aria-hidden="true" />}
+					<span key={button.id} className="flex items-center gap-4">
+						{index === 0 ? null : <span className="block h-32 w-px bg-divider" aria-hidden="true" />}
 						<button
 							type="button"
 							data-action={button.id}
 							aria-label={button.label}
 							aria-pressed={button.pressed}
 							className={cn(
-								"group relative flex h-28 w-32 items-center justify-center border-0 bg-transparent p-0 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover",
+								"group relative flex h-32 w-28 items-center justify-center rounded-6 border-0 bg-transparent p-0 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover",
 								button.pressed === true ? "text-accent-text" : "text-ink-body",
-								index === 0 && "rounded-l-7",
-								index === buttons.length - 1 && "rounded-r-7",
 							)}
 							onClick={button.onClick}
 						>
 							{button.icon}
 							<span
-								className="pointer-events-none absolute left-1/2 top-full z-20 mt-4 block -translate-x-1/2 whitespace-nowrap rounded-6 bg-ink px-7 py-3 text-tile text-window opacity-0 transition-opacity duration-(--dur-color) group-hover:opacity-100 group-focus-visible:opacity-100"
+								className="pointer-events-none absolute left-1/2 top-full z-20 mt-6 block -translate-x-1/2 whitespace-nowrap rounded-6 bg-ink px-7 py-3 text-badge font-medium leading-[14px] text-window opacity-0 transition-opacity duration-(--dur-color) group-hover:opacity-100 group-focus-visible:opacity-100"
 								aria-hidden="true"
 							>
 								{button.label}
@@ -822,7 +843,7 @@ function FileActionGroup({
 
 function InfoRow({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
 	return (
-		<div className="flex justify-between gap-8 py-3 text-meta">
+		<div className="flex justify-between gap-8 border-b-[0.7px] border-divider py-4 text-[10.5px] leading-[15.75px] last:border-b-0">
 			<dt className="flex-none text-ink-muted">{label}</dt>
 			<dd className="m-0 min-w-0 text-ink text-right [overflow-wrap:anywhere]">{value}</dd>
 		</div>
@@ -871,25 +892,27 @@ function VersionsSection({
 		...family.members.map((member) => ({ path: member.path, name: member.name, relation: member.relation, where: member.where })),
 	];
 	return (
-		<div className="info-section border-t border-border pt-12 mt-12">
-			<div className="section-title flex items-center justify-between mb-6">
-				<span className="text-meta font-semibold text-ink">{t("inspector.versions")}</span>
-				<span className="inline-flex items-center h-[19px] px-6 rounded-full bg-input text-tile font-semibold text-ink-body">{rows.length}</span>
+		<div className="versions-section flex flex-col gap-8 border-t border-divider pt-8">
+			<div className="section-title flex h-22 items-center justify-between">
+				<span className="text-meta font-medium leading-[16px] text-ink">{t("inspector.versions")}</span>
+				<span className="inline-flex items-center rounded-8 border border-divider bg-window px-6 py-1 text-[9.5px] font-medium text-ink">{rows.length}</span>
 			</div>
-			<div className="flex flex-col">
+			<div className="flex flex-col gap-2">
 				{rows.map((row) => (
 					<button
 						type="button"
 						key={row.path}
 						className={cn(
-							"ver-row w-full min-h-26 flex items-center gap-7 px-5 py-3 rounded-5 border-0 bg-transparent text-left text-badge text-ink-body cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
-							row.path === entry.path && "bg-accent-wash",
+							"ver-row w-full min-h-39 flex items-center gap-8 px-7 py-5 rounded-8 border-0 bg-transparent text-left cursor-pointer transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
+							row.path === entry.path && "bg-input hover:bg-input",
 						)}
 						onClick={() => onOpenMember(row.path)}
 					>
 						<VersionTag relation={row.relation} />
-						<span className="ver-name flex-1 min-w-0 truncate">{row.name}</span>
-						<span className="vwhere flex-none max-w-[40%] truncate text-tile text-ink-muted">{basename(row.where)}</span>
+						<span className="flex min-w-0 flex-1 flex-col gap-1">
+							<span className="ver-name truncate text-badge font-medium leading-[14px] text-ink">{row.name}</span>
+							<span className="vwhere truncate text-[10.5px] leading-[15.75px] text-ink-muted">{row.where}</span>
+						</span>
 					</button>
 				))}
 			</div>
@@ -899,16 +922,17 @@ function VersionsSection({
 
 function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "near" | "contains" }): ReactElement {
 	const { t } = useTranslation();
+	// The inspector's own tones (Figma 231:2588): the newest copy in the accent, a similar one in amber.
 	const tone =
 		relation === "latest"
-			? "bg-vtag-latest-bg text-vtag-latest-text"
+			? "bg-accent-chip text-accent-text"
 			: relation === "near"
-				? "bg-vtag-near-bg text-vtag-near-text"
+				? "bg-vtag-similar-bg text-vtag-similar-text"
 				: relation === "exact"
 					? "bg-vtag-exact-bg text-vtag-exact-text"
 					: "bg-input text-ink-muted";
 	return (
-		<span className={cn("vtag flex-none inline-flex items-center h-16 px-6 rounded-4 text-tile font-semibold whitespace-nowrap leading-none", tone)}>
+		<span className={cn("vtag flex-none inline-flex items-center px-6 py-2 rounded-7 text-tile-xs font-bold whitespace-nowrap leading-[12px]", tone)}>
 			{t(VERSION_TAG_KEYS[relation])}
 		</span>
 	);

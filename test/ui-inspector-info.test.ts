@@ -84,23 +84,17 @@ describe("buildInfoRows without rich details", () => {
 	it("shows the entry summary and nothing more", () => {
 		const rows = buildInfoRows(null, entry());
 		expect(labels(rows)).toEqual(["종류", "크기", "위치", "경로", "수정한 날짜"]);
-		expect(rows.every((row) => row.core)).toBe(true);
-		expect(hasMoreInfoRows(rows)).toBe(false);
+		expect(labels(visibleInfoRows(rows, true))).toEqual(["종류", "크기", "위치", "경로"]);
+		expect(hasMoreInfoRows(rows)).toBe(true);
 		expect(valueOf(rows, "수정한 날짜")).toBe("Jan 2, 03:04");
 	});
 });
 
 describe("buildInfoRows with rich details", () => {
-	it("keeps the six core rows and hides the long tail until Show more", () => {
+	it("keeps the four core rows and hides the rest until 자세히", () => {
 		const rows = buildInfoRows(details(), entry());
-		expect(labels(visibleInfoRows(rows, true))).toEqual([
-			"종류",
-			"크기",
-			"위치",
-			"경로",
-			"생성한 날짜",
-			"수정한 날짜",
-		]);
+		expect(labels(visibleInfoRows(rows, true))).toEqual(["종류", "크기", "위치", "경로"]);
+		expect(labels(visibleInfoRows(rows, false))).toContain("생성한 날짜");
 		expect(hasMoreInfoRows(rows)).toBe(true);
 		expect(labels(visibleInfoRows(rows, false))).toContain("접근한 날짜");
 		expect(labels(visibleInfoRows(rows, false))).toContain("권한");
@@ -128,7 +122,7 @@ describe("buildInfoRows with rich details", () => {
 	it("appends EXIF rows under the image section and omits absent tags", () => {
 		const rows = buildInfoRows(details({ image: image() }), entry());
 		const imageSection = rows.filter((row) => row.section === "image");
-		expect(imageSection.every((row) => !row.core)).toBe(true);
+		expect(labels(imageSection.filter((row) => row.core))).toEqual(["이미지 크기", "카메라 모델", "촬영 일시"]);
 		expect(labels(imageSection)).toEqual([
 			"이미지 크기",
 			"카메라 제조사",

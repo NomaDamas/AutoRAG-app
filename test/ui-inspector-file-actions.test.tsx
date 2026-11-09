@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Inspector } from "../src/renderer/src/components/Inspector";
 import type { FinderEntry } from "../src/renderer/src/data/entries";
+import type { IndexStatus } from "../src/shared/index-contract";
 import { NO_CAPABILITIES } from "../src/shared/actions-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 
@@ -27,13 +28,20 @@ afterEach(() => {
 
 const pdf: FinderEntry = { name: "deck.pdf", path: "/work/deck.pdf", kind: "file", ext: "pdf", size: 10, mtimeMs: 1_700_000_000_000, birthtimeMs: 0 };
 
-function render(handlers: { onTrash?: (entry: FinderEntry) => void; onToggleIndex?: (entry: FinderEntry) => void } = {}, folderInView = false): void {
+const folder: FinderEntry = { name: "Reports", path: "/work/Reports", kind: "folder", ext: "", size: 0, mtimeMs: 1_700_000_000_000, birthtimeMs: 0 };
+
+function render(
+	handlers: { onTrash?: (entry: FinderEntry) => void; onToggleIndex?: (entry: FinderEntry) => void } = {},
+	folderInView = false,
+	shown: FinderEntry = pdf,
+	indexStatus: IndexStatus | null = null,
+): void {
 	act(() =>
 		root.render(
 			<Inspector
-				entry={pdf}
-				entries={[pdf]}
-				indexStatus={null}
+				entry={shown}
+				entries={[shown]}
+				indexStatus={indexStatus}
 				folderInView={folderInView}
 				onToggleIndex={handlers.onToggleIndex ?? noop}
 				onTrash={handlers.onTrash ?? noop}
@@ -91,5 +99,29 @@ describe("the inspector's file actions", () => {
 	it("offers no Trash for the folder standing in for an empty selection", () => {
 		render({}, true);
 		expect(names()).not.toContain("휴지통");
+	});
+
+	it("offers the index toggle for a folder the index can take or drop", () => {
+		render({}, false, folder, { path: folder.path, kind: "included", excluded: false, toggleable: true, detail: "" });
+		expect(names().slice(0, 3)).toEqual(["인덱싱에 포함", "휴지통", "경로 복사"]);
+	});
+
+	it("leaves the index toggle out for a folder whose status it cannot change", () => {
+		render({}, false, folder, { path: folder.path, kind: "included", excluded: false, toggleable: false, detail: "" });
+		expect(names()).not.toContain("인덱싱에 포함");
+	});
+});
+
+describe("the inspector's info sections", () => {
+	const rowLabels = (): string[] => [...host.querySelectorAll(".info-section dt")].map((cell) => cell.textContent ?? "");
+	const toggle = (): HTMLButtonElement | null => host.querySelector(".info-section .section-title button");
+
+	it("start in 자세히 and collapse to the four core rows with 간략히", () => {
+		render();
+		expect(rowLabels()).toContain("수정한 날짜");
+		expect(toggle()?.textContent).toBe("간략히");
+		act(() => toggle()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(rowLabels()).toEqual(["종류", "크기", "위치", "경로"]);
+		expect(toggle()?.textContent).toBe("자세히");
 	});
 });

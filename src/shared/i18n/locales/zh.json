@@ -224,8 +224,8 @@
     "imageInfo": "图像信息",
     "versions": "版本",
     "latestVersion": "最新版本",
-    "showMore": "更多信息",
-    "showLess": "收起",
+    "showMore": "详细",
+    "showLess": "简略",
     "totalSize": "总大小",
     "labels": {
       "kind": "种类",
@@ -310,8 +310,8 @@
       "removeAttachment": "移除附件",
       "thinking": "正在查找答案…",
       "stopped": "已停止回答",
-      "showInList": "在列表中显示",
-      "preview": "预览",
+      "showInList": "查找文件",
+      "preview": "打开文件",
       "placeholderAny": "随便问点什么"
     },
     "fileActions": "文件操作"

@@ -22,11 +22,10 @@ import type { ImageActions } from "./AnswerImage";
 import {
 	ArrowLeftIcon,
 	ArrowUpIcon,
-	ChevronDownIcon,
-	ChevronUpIcon,
 	CloseIcon,
+	DownloadIcon,
 	ExpandIcon,
-	EyeIcon,
+	FileIcon,
 	HistoryIcon,
 	MessagesIcon,
 	NewChatIcon,
@@ -47,13 +46,13 @@ function useAgo(): (at: number, now: number) => string {
 function AttachmentCard({ att, onRemove }: { readonly att: ChatAttachment; readonly onRemove?: (() => void) | undefined }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<span className="inspector-chat-att relative inline-flex max-w-full min-w-0 items-center gap-6 rounded-8 border border-border bg-input px-8 py-5" title={att.id}>
+		<span className="inspector-chat-att relative inline-flex max-w-full min-w-0 items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5" title={att.id}>
 			<FileTile kind={att.kind === "folder" ? "folder" : evidenceKind(att.name)} size={18} />
-			<span className="min-w-0 truncate text-meta font-medium text-ink">{att.name}</span>
+			<span className="min-w-0 truncate text-meta font-medium leading-[1.4] text-ink">{att.name}</span>
 			{onRemove === undefined ? null : (
 				<button
 					type="button"
-					className="absolute -top-6 -right-6 flex size-16 items-center justify-center rounded-full border border-border-strong bg-window p-0 text-ink-muted cursor-pointer hover:text-ink"
+					className="absolute -top-7 -right-7 flex size-16 items-center justify-center rounded-full border border-border-strong bg-window p-0 text-ink-muted cursor-pointer hover:text-ink"
 					aria-label={t("inspector.chat.removeAttachment")}
 					title={t("inspector.chat.removeAttachment")}
 					onClick={onRemove}
@@ -110,15 +109,15 @@ function Composer({
 	};
 	return (
 		<div className="inspector-chat-composer block">
-			<div className="block rounded-10 border border-border-strong bg-window px-8 pt-6 pb-4">
+			<div className="flex flex-col gap-10 rounded-14 border border-divider bg-window py-8 pl-11 pr-12 shadow-[0_2px_5px_rgba(20,20,41,0.07)]">
 				{pending === null ? null : (
-					<div className="flex pb-6 pr-6">
+					<div className="flex pr-6">
 						<AttachmentCard att={pending} onRemove={removable ? () => onDismiss(pending.id) : undefined} />
 					</div>
 				)}
 				<div className="flex items-center gap-4">
 					<input
-						className="min-w-0 flex-1 h-28 border-0 bg-transparent p-0 text-sm text-ink outline-none placeholder:text-ink-muted"
+						className="min-w-0 flex-1 h-24 border-0 bg-transparent p-0 text-badge leading-[16px] text-ink outline-none placeholder:text-ink-faint"
 						value={draft}
 						placeholder={placeholder}
 						aria-label={placeholder}
@@ -147,7 +146,7 @@ function Composer({
 							disabled={draft.trim().length === 0}
 							onClick={send}
 						>
-							<ArrowUpIcon size={13} />
+							<ArrowUpIcon size={12} />
 						</button>
 					)}
 				</div>
@@ -202,27 +201,30 @@ export function InspectorChatDock({
 					? t("inspector.chat.placeholderFolder")
 					: t("inspector.chat.placeholderFile");
 	return (
-		<div className="inspector-chat-dock flex-none border-t border-border bg-chrome px-10 pt-8 pb-10">
+		<div className="inspector-chat-dock flex flex-col gap-4 px-12 pb-12">
+			<div className="mb-4 h-px bg-divider" aria-hidden="true" />
 			{chat !== null ? (
-				<button type="button" className="mb-6 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onResume}>
+				<button type="button" className="mb-2 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onResume}>
 					<MessagesIcon size={12} />
 					<span className="truncate">{t("inspector.chat.resume", { count: questionCount(chat), ago: ago(chat.updatedAt, now) })}</span>
 				</button>
 			) : tab.expired ? (
-				<button type="button" className="mb-6 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onOpenHistory}>
+				<button type="button" className="mb-2 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onOpenHistory}>
 					<HistoryIcon size={12} />
 					<span className="truncate">{t("inspector.chat.expired")}</span>
 				</button>
 			) : null}
 			{target === null ? null : (
-				<div className="flex mb-6">
+				<div className="flex">
 					<button
 						type="button"
-						className="inline-flex h-chip items-center gap-4 rounded-full border border-border-strong bg-transparent px-10 text-tile text-ink cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default"
+						className="inline-flex items-center gap-6 rounded-full border border-divider bg-window py-8 pl-9 pr-10 text-[10.5px] font-medium text-ink shadow-[0_2px_5px_rgba(20,20,41,0.07)] cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default"
 						disabled={running}
 						onClick={onSummarize}
 					>
-						<SparklesIcon size={12} />
+						<span className="flex text-accent-text" aria-hidden="true">
+							<SparklesIcon size={13} />
+						</span>
 						{t("inspector.actions.askAi")}
 					</button>
 				</div>
@@ -252,36 +254,35 @@ function SourceList({
 				const heading = evidenceHeading(item.title, item.source);
 				const excerpt = item.excerpts[0] ?? item.summary;
 				return (
-					<div key={item.number} className="overflow-hidden rounded-8 border border-border bg-window">
+					<div key={item.number} className="overflow-hidden rounded-8 border border-divider bg-window shadow-[0_2px_10px_rgba(20,20,41,0.07)]">
 						<button
 							type="button"
-							className="flex w-full items-center gap-6 border-0 bg-transparent px-8 py-6 text-left text-tile text-ink cursor-pointer"
+							className="flex w-full items-center gap-6 rounded-8 border-0 bg-transparent px-10 py-8 text-left cursor-pointer hover:bg-hover"
 							aria-expanded={expanded}
 							onClick={() => setOpen(expanded ? null : item.number)}
 						>
-							<span className="flex size-14 flex-none items-center justify-center rounded-4 bg-selected-nav text-badge text-ink-muted">{item.number}</span>
-							<FileTile kind={evidenceKind(heading)} size={16} />
-							<span className="min-w-0 flex-1 truncate">{heading}</span>
-							{expanded ? <ChevronUpIcon size={10} /> : <ChevronDownIcon size={10} />}
+							<span className="flex size-16 flex-none items-center justify-center rounded-4 bg-selected-nav text-tile-xs font-medium text-ink-body">{item.number}</span>
+							<span className="min-w-0 flex-1 truncate text-meta font-medium leading-[16px] text-ink">{heading}</span>
 						</button>
 						{expanded ? (
-							<div className="block border-t border-border px-8 pt-6 pb-8">
-								{excerpt.length === 0 ? null : <p className="block m-0 mb-6 text-tile leading-body text-ink-body line-clamp-6">{excerpt}</p>}
+							<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
+								{excerpt.length === 0 ? null : <p className="block m-0 text-meta leading-[1.5] text-ink-body line-clamp-6">{excerpt}</p>}
 								{local !== null ? (
 									<div className="flex flex-wrap gap-4">
 										<button
 											type="button"
-											className="inline-flex h-24 items-center gap-4 rounded-6 border border-border-strong bg-transparent px-8 text-tile text-ink cursor-pointer hover:bg-hover"
+											className="inline-flex items-center gap-4 rounded-8 border border-border-strong bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink cursor-pointer hover:bg-hover"
 											onClick={() => onReveal(local)}
 										>
+											<FileIcon size={12} />
 											{t("inspector.chat.showInList")}
 										</button>
 										<button
 											type="button"
-											className="inline-flex h-24 items-center gap-4 rounded-6 border border-border-strong bg-transparent px-8 text-tile text-ink cursor-pointer hover:bg-hover"
+											className="inline-flex items-center gap-4 rounded-8 border border-border-strong bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink cursor-pointer hover:bg-hover"
 											onClick={() => onPreview(local, item.excerpts)}
 										>
-											<EyeIcon size={12} />
+											<DownloadIcon size={12} />
 											{t("inspector.chat.preview")}
 										</button>
 									</div>
@@ -318,10 +319,11 @@ function TurnView({
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
-				<div className="block rounded-8 bg-input px-8 py-6 text-sm leading-body text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
+				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-meta font-medium leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
+			<div className="flex min-w-0 flex-col gap-8">
 			{text.length > 0 ? (
-				<div className="inspector-chat-answer block min-w-0 text-sm leading-body text-ink-body break-words">
+				<div className="inspector-chat-answer block min-w-0 text-meta font-medium leading-[1.5] text-ink-body break-words">
 					<ProseBlocks text={text} selected={null} unresolved={unresolvedCitationNumbers(text, evidence)} onCitation={() => {}} imageActions={imageActions} />
 				</div>
 			) : live ? (
@@ -332,6 +334,7 @@ function TurnView({
 			{turn.error === null ? null : <p className="block m-0 text-tile text-danger-text">{turn.error}</p>}
 			{turn.stopped && turn.error === null ? <p className="block m-0 text-tile text-ink-muted">{t("inspector.chat.stopped")}</p> : null}
 			{live ? null : <SourceList evidence={evidence} onReveal={onReveal} onPreview={onPreview} />}
+			</div>
 		</>
 	);
 }
@@ -375,10 +378,10 @@ export function InspectorChatView({
 	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "disabled:cursor-default");
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
-			<div className="flex flex-none items-center gap-4 border-b border-border px-8 pb-6">
+			<div className="flex flex-none items-center gap-4 border-b border-border pb-6 pl-12 pr-8">
 				<button
 					type="button"
-					className="flex min-w-0 flex-1 items-center gap-4 border-0 bg-transparent px-4 py-4 text-left text-meta text-ink-muted cursor-pointer hover:text-ink"
+					className="flex min-w-0 flex-1 items-center gap-4 border-0 bg-transparent p-0 text-left text-meta font-medium leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
 					onClick={onBack}
 				>
 					<ArrowLeftIcon size={13} />
@@ -392,7 +395,7 @@ export function InspectorChatView({
 				</button>
 			</div>
 			<div
-				className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto px-12 py-10"
+				className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10"
 				ref={(node) => {
 					if (node !== null) node.scrollTop = node.scrollHeight;
 				}}
@@ -408,7 +411,7 @@ export function InspectorChatView({
 					/>
 				))}
 			</div>
-			<div className="flex-none border-t border-border bg-chrome px-10 pt-8 pb-10">
+			<div className="flex-none px-8 pt-8 pb-10">
 				<Composer
 					pending={pending}
 					removable
