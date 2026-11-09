@@ -43,6 +43,7 @@ const tab: InspectorChatTab = {
 					evidence: [{ number: 1, title: "deck.pdf", summary: "", source: "/work/deck.pdf", excerpts: ["컨셉 — **곡선으로 재해석**하는 것이 목표"] }],
 				},
 				draft: "",
+				progress: "",
 				error: null,
 				stopped: false,
 			},

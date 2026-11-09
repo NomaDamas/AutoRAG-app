@@ -220,6 +220,13 @@ export function Inspector({
 	onTrashSelection,
 }: InspectorProps): ReactElement {
 	const { t } = useTranslation();
+	// A path in the info card: straight to the system clipboard, then the window's toast.
+	const copyValue = (value: string): void => {
+		void window.autorag.fs
+			.copyPathsToClipboard([value])
+			.then(() => onToast(t("toasts.copiedPath")))
+			.catch(() => {});
+	};
 	return (
 		<aside
 			className="inspector w-full min-w-0 flex-1 min-h-0 flex flex-col bg-subtle overflow-hidden"
@@ -248,6 +255,7 @@ export function Inspector({
 					onSetSelectionIndexed={onSetSelectionIndexed}
 					onTrashSelection={onTrashSelection}
 					chatDock={chatDock}
+					onCopyValue={copyValue}
 				/>
 			) : (
 				<InfoHalf
@@ -264,6 +272,7 @@ export function Inspector({
 					automations={automations}
 					folderInView={folderInView}
 					chatDock={chatDock}
+					onCopyValue={copyValue}
 				/>
 			)}
 		</aside>
@@ -284,6 +293,7 @@ function InfoHalf({
 	automations,
 	folderInView,
 	chatDock,
+	onCopyValue,
 }: {
 	readonly entry: FinderEntry | null;
 	readonly indexStatus: IndexStatus | null;
@@ -298,6 +308,7 @@ function InfoHalf({
 	readonly automations?: InspectorProps["automations"];
 	readonly folderInView: boolean;
 	readonly chatDock?: ReactNode;
+	readonly onCopyValue: (value: string) => void;
 }): ReactElement {
 	// 간략히 / 자세히 per section; the choice holds while the person moves between files.
 	const [brief, setBrief] = useState<Readonly<Record<InfoSection, boolean>>>({ general: false, image: false });
@@ -383,8 +394,8 @@ function InfoHalf({
 
 						{family === null ? null : <VersionsSection family={family} entry={entry} onOpenMember={onOpenMember} />}
 
-						<InfoSectionCard title={t("inspector.generalInfo")} rows={sectionOf("general")} brief={brief.general} onToggle={() => toggle("general")} />
-						<InfoSectionCard title={t("inspector.imageInfo")} rows={sectionOf("image")} brief={brief.image} onToggle={() => toggle("image")} />
+						<InfoSectionCard title={t("inspector.generalInfo")} rows={sectionOf("general")} brief={brief.general} onToggle={() => toggle("general")} onCopy={onCopyValue} />
+						<InfoSectionCard title={t("inspector.imageInfo")} rows={sectionOf("image")} brief={brief.image} onToggle={() => toggle("image")} onCopy={onCopyValue} />
 					</div>
 					{chatDock === undefined || chatDock === null ? null : (
 						<div className="inspector-dock-slot sticky bottom-0 z-10 mt-auto bg-subtle">{chatDock}</div>
@@ -404,11 +415,14 @@ function InfoSectionCard({
 	rows,
 	brief,
 	onToggle,
+	onCopy,
 }: {
 	readonly title: string;
 	readonly rows: readonly InfoRowData[];
 	readonly brief: boolean;
 	readonly onToggle: () => void;
+	/** Copy a path row's value; rows marked `copyable` are clickable. */
+	readonly onCopy: (value: string) => void;
 }): ReactElement | null {
 	const { t } = useTranslation();
 	if (rows.length === 0) return null;
@@ -425,7 +439,7 @@ function InfoSectionCard({
 			</div>
 			<dl className="m-0 rounded-12 border border-divider bg-window px-14 py-4">
 				{shown.map((row) => (
-					<InfoRow key={row.label} label={row.label} value={row.value} />
+					<InfoRow key={row.label} label={row.label} value={row.value} onCopy={row.copyable === true ? () => onCopy(row.value) : undefined} />
 				))}
 			</dl>
 		</div>
@@ -641,6 +655,7 @@ function MultiInfoHalf({
 	onSetSelectionIndexed,
 	onTrashSelection,
 	chatDock,
+	onCopyValue,
 }: {
 	readonly entries: readonly FinderEntry[];
 	readonly focusPath: string | null;
@@ -650,6 +665,7 @@ function MultiInfoHalf({
 	readonly onSetSelectionIndexed: ((include: boolean) => void) | undefined;
 	readonly onTrashSelection: (() => void) | undefined;
 	readonly chatDock: ReactNode;
+	readonly onCopyValue: (value: string) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [brief, setBrief] = useState(false);
@@ -713,7 +729,7 @@ function MultiInfoHalf({
 
 					{buttons.length === 0 ? null : <ActionIconGroup buttons={buttons} menu={runner.menu} />}
 
-					<InfoSectionCard title={t("inspector.generalInfo")} rows={rows} brief={brief} onToggle={() => setBrief((current) => !current)} />
+					<InfoSectionCard title={t("inspector.generalInfo")} rows={rows} brief={brief} onToggle={() => setBrief((current) => !current)} onCopy={onCopyValue} />
 				</div>
 				{chatDock === undefined || chatDock === null ? null : (
 					<div className="inspector-dock-slot sticky bottom-0 z-10 mt-auto bg-subtle">{chatDock}</div>
@@ -888,11 +904,25 @@ function ActionIconGroup({ buttons, menu }: { readonly buttons: readonly GroupBu
 	);
 }
 
-function InfoRow({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
+function InfoRow({ label, value, onCopy }: { readonly label: string; readonly value: string; readonly onCopy?: (() => void) | undefined }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div className="flex justify-between gap-8 border-b-[0.7px] border-divider py-4 text-badge leading-[16px] last:border-b-0">
 			<dt className="flex-none text-ink-muted">{label}</dt>
-			<dd className="m-0 min-w-0 text-ink text-right [overflow-wrap:anywhere]">{value}</dd>
+			{onCopy === undefined ? (
+				<dd className="m-0 min-w-0 text-ink text-right [overflow-wrap:anywhere]">{value}</dd>
+			) : (
+				<dd className="m-0 min-w-0 text-right">
+					<button
+						type="button"
+						className="m-0 max-w-full cursor-pointer border-0 bg-transparent p-0 text-right text-badge leading-[16px] text-ink [overflow-wrap:anywhere] hover:text-accent-text"
+						title={t("inspector.clickToCopy")}
+						onClick={onCopy}
+					>
+						{value}
+					</button>
+				</dd>
+			)}
 		</div>
 	);
 }

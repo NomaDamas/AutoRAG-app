@@ -226,6 +226,7 @@
     "versions": "Versions",
     "latestVersion": "Latest",
     "showMore": "Show more",
+    "clickToCopy": "Click to copy",
     "showLess": "Show less",
     "totalSize": "Total size",
     "labels": {

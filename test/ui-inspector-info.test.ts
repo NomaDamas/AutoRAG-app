@@ -90,6 +90,13 @@ describe("buildInfoRows without rich details", () => {
 	});
 });
 
+describe("copyable rows", () => {
+	it("marks only the location and path as click-to-copy", () => {
+		const rows = buildInfoRows(details(), entry());
+		expect(rows.filter((row) => row.copyable === true).map((row) => row.label)).toEqual(["위치", "경로"]);
+	});
+});
+
 describe("buildInfoRows with rich details", () => {
 	it("keeps the four core rows and hides the rest until 자세히", () => {
 		const rows = buildInfoRows(details(), entry());

@@ -422,10 +422,13 @@ function TurnView({
 				<div className="inspector-chat-answer block min-w-0 text-meta font-medium leading-[1.5] text-ink-body break-words">
 					<ProseBlocks text={text} selected={null} unresolved={unresolvedCitationNumbers(text, evidence)} onCitation={() => {}} imageActions={imageActions} />
 				</div>
-			) : live ? (
-				<p className="block m-0 text-tile text-ink-muted" role="status">
-					{t("inspector.chat.thinking")}
-				</p>
+			) : null}
+			{live && (text.length === 0 || turn.progress !== "") ? (
+				<div className="flex min-w-0 items-center text-tile text-ink-muted" role="status">
+					<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
+						{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
+					</span>
+				</div>
 			) : null}
 			{turn.error === null ? null : <p className="block m-0 text-tile text-danger-text">{turn.error}</p>}
 			{turn.stopped && turn.error === null ? <p className="block m-0 text-tile text-ink-muted">{t("inspector.chat.stopped")}</p> : null}

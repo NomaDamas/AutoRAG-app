@@ -33,6 +33,8 @@ export interface InspectorTurn {
 	readonly answer: AnswerPhase | null;
 	/** Answer text streamed so far, before `answer` lands. */
 	readonly draft: string;
+	/** What the agent says it is doing (its note before a tool call); shown with the shimmer until an answer phase lands. */
+	readonly progress: string;
 	readonly error: string | null;
 	readonly stopped: boolean;
 }
@@ -87,6 +89,7 @@ export function turnsFromHistory(messages: readonly ChatMessage[]): readonly Ins
 			attachments: turn.question.attachments,
 			answer,
 			draft: answer?.answer ?? "",
+			progress: "",
 			error: null,
 			stopped: turn.assistant?.stopped ?? false,
 		};

@@ -105,13 +105,13 @@ export function stackCards(
  */
 export function selectionInfoRows(entries: readonly FinderEntry[], summary: SelectionSummary = summarizeSelection(entries)): readonly InfoRow[] {
 	const rows: InfoRow[] = [];
-	const push = (label: string, value: string | null, core: boolean): void => {
-		if (value !== null) rows.push({ label, value, section: "general", core });
+	const push = (label: string, value: string | null, core: boolean, copyable = false): void => {
+		if (value !== null) rows.push({ label, value, section: "general", core, ...(copyable ? { copyable } : {}) });
 	};
 	const folders = new Set(entries.map((entry) => locationOf(entry)));
 	push(t("inspector.labels.kind"), summary.kindSummary, true);
 	push(t("inspector.totalSize"), summary.sizeLabel, true);
-	push(t("inspector.labels.location"), folders.size === 1 ? ([...folders][0] ?? null) : null, true);
+	push(t("inspector.labels.location"), folders.size === 1 ? ([...folders][0] ?? null) : null, true, true);
 	push(t("inspector.labels.dateCreated"), summary.createdRange, false);
 	push(t("inspector.labels.dateModified"), summary.modifiedRange, false);
 	return rows;

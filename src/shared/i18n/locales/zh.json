@@ -226,6 +226,7 @@
     "versions": "版本",
     "latestVersion": "最新版本",
     "showMore": "详细",
+    "clickToCopy": "点按以拷贝",
     "showLess": "简略",
     "totalSize": "总大小",
     "labels": {

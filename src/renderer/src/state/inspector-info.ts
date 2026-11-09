@@ -24,6 +24,8 @@ export interface InfoRow {
 	readonly value: string;
 	readonly section: InfoSection;
 	readonly core: boolean;
+	/** The value is a filesystem path: clicking the row copies it. */
+	readonly copyable?: boolean;
 }
 
 function formatDecimal(value: number): string {
@@ -87,13 +89,13 @@ function imageRows(image: FsImageMetadata): readonly InfoRow[] {
 /** Ordered rows for the focused entry; rich when `details` has arrived, summary otherwise. */
 export function buildInfoRows(details: FsFileDetails | null, entry: FinderEntry): readonly InfoRow[] {
 	const general: InfoRow[] = [];
-	const push = (key: LocaleKey, value: string | null, core: boolean): void => {
-		if (value !== null) general.push({ label: t(key), value, section: "general", core });
+	const push = (key: LocaleKey, value: string | null, core: boolean, copyable = false): void => {
+		if (value !== null) general.push({ label: t(key), value, section: "general", core, ...(copyable ? { copyable } : {}) });
 	};
 	push("inspector.labels.kind", kindLabelOf(entry), true);
 	push("inspector.labels.size", details === null ? sizeLabelOf(entry) : formatSize(details.size), true);
-	push("inspector.labels.location", locationOf(entry), true);
-	push("inspector.labels.path", details?.path ?? entry.path, true);
+	push("inspector.labels.location", locationOf(entry), true, true);
+	push("inspector.labels.path", details?.path ?? entry.path, true, true);
 	push("inspector.labels.dateCreated", details === null ? null : formatTimestamp(details.createdAt), false);
 	push("inspector.labels.dateModified", details === null ? dateLabelOf(entry) : formatTimestamp(details.modifiedAt), false);
 	if (details !== null) {

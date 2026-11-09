@@ -69,6 +69,9 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 				changeChat(tabId, (chat) => ({ ...chat, updatedAt: Date.now() }));
 			};
 			switch (event.type) {
+				case "progress":
+					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, progress: event.text })));
+					break;
 				case "quick-draft":
 				case "deep-draft":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, draft: event.text })));
@@ -76,11 +79,11 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 				case "quick":
 					changeChat(tabId, (chat) =>
 						// Deep supersedes Quick; a Quick never replaces a Deep that already landed.
-						updateLastTurn(chat, (turn) => (turn.answer !== null ? turn : { ...turn, answer: event.phase, draft: event.phase.answer })),
+						updateLastTurn(chat, (turn) => (turn.answer !== null ? turn : { ...turn, answer: event.phase, draft: event.phase.answer, progress: "" })),
 					);
 					break;
 				case "deep":
-					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, answer: event.phase, draft: event.phase.answer })));
+					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, answer: event.phase, draft: event.phase.answer, progress: "" })));
 					break;
 				case "error":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, error: event.message })));
@@ -115,7 +118,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 			const chat: InspectorChat = {
 				chatId,
 				updatedAt: Date.now(),
-				turns: [...(current.chat?.turns ?? []), { question, attachments, answer: null, draft: "", error: null, stopped: false }],
+				turns: [...(current.chat?.turns ?? []), { question, attachments, answer: null, draft: "", progress: "", error: null, stopped: false }],
 			};
 			change(tabId, () => ({ chat, mode: "chat", expired: false, dismissed: [] }));
 			runRef.current = { tabId, searchId };

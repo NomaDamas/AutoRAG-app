@@ -226,6 +226,7 @@
     "versions": "バージョン",
     "latestVersion": "最新版",
     "showMore": "詳細",
+    "clickToCopy": "クリックしてコピー",
     "showLess": "簡易表示",
     "totalSize": "合計サイズ",
     "labels": {

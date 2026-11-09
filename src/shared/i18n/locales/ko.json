@@ -226,6 +226,7 @@
     "versions": "버전",
     "latestVersion": "최신본",
     "showMore": "자세히",
+    "clickToCopy": "클릭하여 복사",
     "showLess": "간략히",
     "totalSize": "총 크기",
     "labels": {
