@@ -67,7 +67,6 @@ const autorag = window.autorag;
 
 /** History search fires this long after the last keystroke, so typing stays smooth. */
 const HISTORY_SEARCH_DEBOUNCE_MS = 300;
-/** The conversation column; the composer below it spans the whole panel. */
 const CENTERED = "mx-auto w-full max-w-[820px]";
 
 /**
@@ -1163,11 +1162,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 			<form className="composer flex-none px-20 pt-8 pb-14" onSubmit={submit}>
 				{interactionRequest !== null ? (
-					<div className="w-full">
+					<div className={CENTERED}>
 						<InteractionDock key={interactionRequest.id} request={interactionRequest} onStop={() => void stop()} />
 					</div>
 				) : (
-				<div className="w-full">
+				<div className={CENTERED}>
 					{attachments.length > 0 ? (
 						<div className="composer-attach-tray flex flex-wrap items-center gap-6 pb-6">
 							{attachments.map((att, index) => (
