@@ -43,12 +43,21 @@ function useAgo(): (at: number, now: number) => string {
 	};
 }
 
-function AttachmentCard({ att, onRemove }: { readonly att: ChatAttachment; readonly onRemove?: (() => void) | undefined }): ReactElement {
+function AttachmentCard({
+	att,
+	onRemove,
+	small = false,
+}: {
+	readonly att: ChatAttachment;
+	readonly onRemove?: (() => void) | undefined;
+	/** The composer's card: a 10.5px name instead of the conversation's 12px. */
+	readonly small?: boolean;
+}): ReactElement {
 	const { t } = useTranslation();
 	return (
 		<span className="inspector-chat-att relative inline-flex max-w-full min-w-0 items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5" title={att.id}>
 			<FileTile kind={att.kind === "folder" ? "folder" : evidenceKind(att.name)} size={18} />
-			<span className="min-w-0 truncate text-meta font-medium leading-[1.4] text-ink">{att.name}</span>
+			<span className={cn("min-w-0 truncate text-ink", small ? "text-[10.5px] leading-[15.75px]" : "text-meta leading-[1.4]")}>{att.name}</span>
 			{onRemove === undefined ? null : (
 				<button
 					type="button"
@@ -112,7 +121,7 @@ function Composer({
 			<div className="flex flex-col gap-10 rounded-14 border border-divider bg-window py-8 pl-11 pr-12 shadow-[0_2px_5px_rgba(20,20,41,0.07)]">
 				{pending === null ? null : (
 					<div className="flex pr-6">
-						<AttachmentCard att={pending} onRemove={removable ? () => onDismiss(pending.id) : undefined} />
+						<AttachmentCard att={pending} small onRemove={removable ? () => onDismiss(pending.id) : undefined} />
 					</div>
 				)}
 				<div className="flex items-center gap-4">
@@ -234,6 +243,24 @@ export function InspectorChatDock({
 	);
 }
 
+/** An excerpt with its **marked** phrases (the cited passage) in the accent, the rest as plain text. */
+function MarkedExcerpt({ text }: { readonly text: string }): ReactElement {
+	const parts = text.split(/\*\*(.+?)\*\*/g);
+	return (
+		<>
+			{parts.map((part, index) =>
+				index % 2 === 1 ? (
+					<span key={`${index}`} className="font-medium text-accent-text">
+						{part}
+					</span>
+				) : (
+					part
+				),
+			)}
+		</>
+	);
+}
+
 function SourceList({
 	evidence,
 	onReveal,
@@ -254,7 +281,7 @@ function SourceList({
 				const heading = evidenceHeading(item.title, item.source);
 				const excerpt = item.excerpts[0] ?? item.summary;
 				return (
-					<div key={item.number} className="overflow-hidden rounded-8 border border-divider bg-window shadow-[0_2px_10px_rgba(20,20,41,0.07)]">
+					<div key={item.number} className="overflow-hidden rounded-8 border border-divider bg-window shadow-[0_0_4px_rgba(20,20,41,0.07)]">
 						<button
 							type="button"
 							className="flex w-full items-center gap-6 rounded-8 border-0 bg-transparent px-10 py-8 text-left cursor-pointer hover:bg-hover"
@@ -266,7 +293,11 @@ function SourceList({
 						</button>
 						{expanded ? (
 							<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
-								{excerpt.length === 0 ? null : <p className="block m-0 text-meta leading-[1.5] text-ink-body line-clamp-6">{excerpt}</p>}
+								{excerpt.length === 0 ? null : (
+									<p className="block m-0 text-meta leading-[1.5] text-ink-body line-clamp-6">
+										<MarkedExcerpt text={excerpt} />
+									</p>
+								)}
 								{local !== null ? (
 									<div className="flex flex-wrap gap-4">
 										<button
@@ -381,7 +412,7 @@ export function InspectorChatView({
 			<div className="flex flex-none items-center gap-4 border-b border-border pb-6 pl-12 pr-8">
 				<button
 					type="button"
-					className="flex min-w-0 flex-1 items-center gap-4 border-0 bg-transparent p-0 text-left text-meta font-medium leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
+					className="flex min-w-0 flex-1 items-center gap-8 border-0 bg-transparent p-0 text-left text-meta leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
 					onClick={onBack}
 				>
 					<ArrowLeftIcon size={13} />
@@ -415,7 +446,13 @@ export function InspectorChatView({
 				<Composer
 					pending={pending}
 					removable
-					placeholder={t("inspector.chat.placeholderFollowUp")}
+					placeholder={
+						pending === null
+							? t("inspector.chat.placeholderFollowUp")
+							: pending.kind === "folder"
+								? t("inspector.chat.placeholderFolder")
+								: t("inspector.chat.placeholderFile")
+					}
 					running={running}
 					onSend={onAsk}
 					onStop={onStop}
