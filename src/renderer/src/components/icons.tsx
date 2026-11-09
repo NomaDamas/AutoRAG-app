@@ -29,6 +29,7 @@ import {
 	Database,
 	Download,
 	Ellipsis,
+	Expand,
 	ExternalLink,
 	Eye,
 	File as FileGlyph,
@@ -142,6 +143,8 @@ export const NewChatIcon = glyph(SquarePen, 15, 2);
 
 /** Inspector chat: open the same chat in an AI Search tab, back to Info, and the resume link. */
 export const ExpandIcon = glyph(Maximize2, 14, 2);
+/** Four corner arrows: the inspector chat's "AI 검색 탭에서 열기" (Figma Icon/확장). */
+export const ExpandCornersIcon = glyph(Expand, 16, 1.75);
 
 export const ArrowLeftIcon = glyph(ArrowLeft, 13, 2.2);
 
