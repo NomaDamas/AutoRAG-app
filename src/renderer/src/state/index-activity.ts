@@ -80,3 +80,14 @@ export function describeIndexActivity(snapshot: IndexActivitySnapshot, t: TFunct
 export function activityItem(snapshot: IndexActivitySnapshot, key: string): IndexActivityItem | null {
 	return snapshot.items.find((item) => item.key === key) ?? null;
 }
+
+/**
+ * Whether the local folders are being indexed right now, by any process: the only thing that moves the index map. A run
+ * that has not listed its items yet counts (the folders are the first thing it does); a datasource sync alone does not.
+ */
+export function localIndexRunning(snapshot: IndexActivitySnapshot): boolean {
+	if (snapshot.state !== "running") return false;
+	if (snapshot.items.length === 0) return true;
+	const local = activityItem(snapshot, "local");
+	return local !== null && (local.state === "running" || local.state === "queued");
+}

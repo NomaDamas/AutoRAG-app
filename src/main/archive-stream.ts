@@ -37,6 +37,14 @@ export interface StreamedFile {
 	readonly packedSize: number;
 }
 
+/** Progress and cancellation, shared by both writers. */
+export interface ArchiveProgress {
+	/** Aborting stops the write between chunks; the writer then removes the partial archive. */
+	readonly signal?: AbortSignal;
+	/** Hears every source byte once, as it is consumed. */
+	readonly onBytes?: (bytes: number) => void;
+}
+
 /** Whether deflate would shrink the file at `handle`, judged from three slices of it. */
 async function worthDeflating(handle: FileHandle, size: number): Promise<boolean> {
 	const starts = size <= 3 * PROBE_SLICE_BYTES ? [0] : [0, Math.floor((size - PROBE_SLICE_BYTES) / 2), size - PROBE_SLICE_BYTES];
@@ -62,6 +70,7 @@ export async function streamFile(
 	size: number,
 	write: (data: Uint8Array) => Promise<void>,
 	chunkBytes: number = CHUNK_BYTES,
+	progress: ArchiveProgress = {},
 ): Promise<StreamedFile> {
 	const method = (await worthDeflating(handle, size)) ? "deflate" : "store";
 	let crc = 0;
@@ -70,8 +79,10 @@ export async function streamFile(
 	const source = handle.createReadStream({ start: 0, highWaterMark: chunkBytes, autoClose: false });
 	async function* counted(): AsyncGenerator<Buffer> {
 		for await (const chunk of source as AsyncIterable<Buffer>) {
+			progress.signal?.throwIfAborted();
 			crc = crc32(chunk, crc);
 			read += chunk.length;
+			progress.onBytes?.(chunk.length);
 			yield chunk;
 		}
 	}

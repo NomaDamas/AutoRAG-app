@@ -82,6 +82,8 @@ import {
 import dazziMarkMono from "../assets/dazzi-mark-mono.png";
 import { ActionMenu } from "./primitives/ActionMenu";
 import { FileTile } from "./primitives/FileTile";
+import dazziMark from "../assets/dazzi-mark.png";
+
 export interface InspectorFamilyMember {
 	readonly path: string;
 	readonly name: string;
@@ -176,6 +178,15 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
 	video: VideoConvertIcon,
 	reduce: ReduceSizeIcon,
 };
+
+/** What the right sidebar shows when it has nothing to say yet: the Dazzi mark, centred, with no caption. */
+function EmptyInspectorMark(): ReactElement {
+	return (
+		<div className="flex flex-1 items-center justify-center">
+			<img src={dazziMark} alt="" draggable={false} style={{ width: 52, height: 52, objectFit: "contain" }} />
+		</div>
+	);
+}
 
 export function Inspector({
 	entry,
@@ -996,9 +1007,7 @@ function EvidencePanel({
 						{folderButton}
 					</div>
 				) : null}
-				<div className="flex-1 flex items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">
-					{t("inspector.evidencePanel.emptyTitle")}
-				</div>
+				<EmptyInspectorMark />
 			</div>
 		);
 	}

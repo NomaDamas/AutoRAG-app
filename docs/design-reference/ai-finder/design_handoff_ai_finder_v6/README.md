@@ -146,7 +146,7 @@ All overlays (Quick Look, modals, toast, Requests) are positioned absolutely ins
 - **Footer** (top border, padding 10, gap 8):
   - Indexing progress: label "Indexing · Gmail" with "88%" at 12px, over a 4px bar (track `#F0F0F4`, fill `#F59E0B`).
   - **Requests** button: bell icon. When there are pending requests it shows a count badge (min 18×18, radius 9, `#D64545`, white 11/700). It gets bg `#EAEAF0` while the popover is open.
-  - **Settings** button: gear icon and a `⌘,` keycap.
+  - **Settings** button: gear icon only, with no keycap. The `⌘,` shortcut is announced in the tooltip and accessibility label, not drawn beside the gear.
   - **Keycap style:** 11px, `#6E6E80`, padding `1px 5px`, 1px border, radius 5, bg `rgba(26,26,46,0.04)`. Keycaps show only when the `showHotkeys` prop is true.
 
 ### 2. Finder column

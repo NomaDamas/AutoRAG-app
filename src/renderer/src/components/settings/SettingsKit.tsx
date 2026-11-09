@@ -174,7 +174,7 @@ export function FloatingMenu({
 	);
 }
 
-export function ModalShell({ onClose, children }: { readonly onClose: () => void; readonly children: ReactNode }): ReactElement {
+export function ModalShell({ onClose, children, className, label }: { readonly onClose: () => void; readonly children: ReactNode; readonly className?: string; readonly label?: string }): ReactElement {
 	const { t } = useTranslation();
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
@@ -185,7 +185,7 @@ export function ModalShell({ onClose, children }: { readonly onClose: () => void
 	}, [onClose]);
 	return (
 		<div className="settings-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-			<div className="settings-modal" role="dialog" aria-modal="true">
+			<div className={className === undefined ? "settings-modal" : `settings-modal ${className}`} role="dialog" aria-modal="true" aria-label={label}>
 				<button type="button" className="settings-modal-close" aria-label={t("common.close")} onClick={onClose}>
 					<X size={14} aria-hidden="true" focusable="false" />
 				</button>

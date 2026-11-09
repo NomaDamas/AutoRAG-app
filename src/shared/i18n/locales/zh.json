@@ -127,6 +127,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+      "more": "隐藏的文件夹",
       "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
@@ -791,6 +792,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "要停止压缩吗？",
+    "compressStopMessage": "将停止压缩 {{name}}，并删除未完成的压缩文件。",
+    "compressStopAction": "停止",
+    "compressKeep": "继续压缩",
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
@@ -1559,6 +1564,7 @@
       "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
       "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）",
       "reduceCancelled": "已取消缩小 {{name}} 的体积",
+      "compressCancelled": "已停止压缩 {{name}}",
       "reducedReplaced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}% · 原文件已移至废纸篓）"
     },
     "indexStatus": {
@@ -3168,7 +3174,7 @@
       "foldersTitle": "要搜索的文件夹",
       "foldersDesc": "这些文件夹的内容将纳入 AI 搜索。",
       "folderName": "搜索文件夹",
-      "folderHint": "直接输入文件夹路径来添加或删除。",
+      "folderHint": "选择要添加的文件夹。其中的所有内容都会被搜索。",
       "addFolder": "添加文件夹",
       "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
       "excludeTitle": "要排除的项目",
@@ -3189,7 +3195,39 @@
       "addFolderPlaceholder": "例如：~/Documents",
       "addItemPlaceholder": "例如：node_modules",
       "confirmAdd": "添加",
-      "addChip": "+ 添加"
+      "addChip": "+ 添加",
+      "notAdded": {
+        "duplicate": "{{path}} 已是搜索文件夹。",
+        "insideTarget": "{{path}} 已包含在上级搜索文件夹中。",
+        "notAbsolute": "{{path}} 不是完整路径。"
+      }
+    },
+    "indexMap": {
+      "title": "索引地图",
+      "coverage": "{{total}} 个中已索引 {{indexed}} 个",
+      "allRoots": "全部搜索范围",
+      "scopeLabel": "当前范围",
+      "up": "返回上级文件夹",
+      "selectHint": "将指针移到区域上可查看路径和索引状态。",
+      "excludedHint": "此路径已从索引中排除，不计入完成率。",
+      "canvasLabel": "从中心根目录向外层子文件展开的放射状索引地图",
+      "loading": "正在勘察搜索范围…",
+      "error": "无法加载地图：{{message}}",
+      "unavailable": "此窗口无法查看索引地图。",
+      "empty": "搜索范围内没有支持的文件。",
+      "parcel": "{{files}} 个{{state}}文件",
+      "folderCounts": "{{total}} 个中已索引 {{indexed}} 个",
+      "legendLabel": "图例",
+      "progress": "正在索引",
+      "truncated": "搜索范围过大，仅勘察了前 {{total}} 个文件。",
+      "state": {
+        "indexed": "全部完成",
+        "partial": "部分完成",
+        "stale": "需要更新",
+        "unindexed": "未完成",
+        "excluded": "已排除",
+        "unindexable": "无法读取"
+      }
     },
     "web": {
       "title": "网页搜索",
@@ -3265,6 +3303,7 @@
     "reduceDone": "已缩减大小 · {{name}}",
     "reduceFailed": "缩减大小失败 · {{name}}",
     "reduceOpen": "查看缩减大小状态",
+    "compressOpen": "停止压缩",
     "convertRunning": "正在转换 · {{name}}",
     "convertQueued": "等待转换 · {{name}}",
     "convertDone": "转换完成 · {{name}}",

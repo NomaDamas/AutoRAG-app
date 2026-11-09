@@ -305,6 +305,8 @@ try {
 	);
 
 	// 2. Navigate to Documents, right-click single `weekly-meeting.md`, and run the real AI Magic Action!
+	// Settings takes over the window; its Back button returns to the Finder and its sidebar.
+	await page.locator(".settings-sidebar-back").click();
 	await page.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
 	await rowFor(page, "weekly-meeting.md").waitFor({ timeout: 20_000 });
 	await rowFor(page, "weekly-meeting.md").click({ button: "right" });

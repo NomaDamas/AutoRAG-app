@@ -9,6 +9,7 @@ import { installErrorReporter, reportError, type ErrorReport } from "../src/main
 import type { FsLocation } from "../src/shared/fs-contract";
 import { t } from "../src/shared/i18n/core";
 import type { IndexStatus } from "../src/shared/index-contract";
+import { emptyIndexMapCounts } from "../src/shared/index-map-contract";
 
 const SCAN: DupeyScanResult = { dir: "/d", files: [], families: [], errors: [] };
 const STATUS: IndexStatus = { path: "/d/a.txt", kind: "included", excluded: false, toggleable: true, detail: "ok" };
@@ -66,6 +67,7 @@ function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLoca
 				host.indexRefreshed(excluded ? "refresh failed" : null);
 				return { ...STATUS, path, excluded };
 			},
+			indexMap: async () => ({ roots: [], nodes: [], totals: emptyIndexMapCounts(), truncated: false, folded: false }),
 		},
 	};
 }

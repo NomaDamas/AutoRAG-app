@@ -3,9 +3,10 @@ import { useTranslation } from "react-i18next";
 import { useLatestCallback } from "./useLatestCallback";
 import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
-import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
+import { useFinderKeyboard } from "./useFinderKeyboard";
+import { revealTarget, type ScrollRequest } from "./list-reveal";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
-import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
+import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type CompressFormat, type OpenWithApplication } from "../../../shared/actions-contract";
 import type { QuickLookTarget } from "../../../preview/shared/contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
@@ -64,12 +65,11 @@ import {
 	applyRowClick,
 	EMPTY_SELECTION,
 	moveSelection,
+	type ScrollIntent,
 	type SelectionState,
-	SCROLL_LEAD,
 } from "../state/selection";
 import {
 	GROUP_STORAGE_KEY,
-	groupedRowTop,
 	parseGroupKey,
 	type GroupKey,
 	type GroupSection,
@@ -179,6 +179,12 @@ function launchGrouping(): GroupKey {
 interface RenameState {
 	readonly path: string;
 	readonly draft: string;
+}
+
+/** A running Compress the user asked to stop, waiting for the confirm. */
+export interface CompressStopState {
+	readonly id: string;
+	readonly name: string;
 }
 
 export interface FinderController {
@@ -291,6 +297,12 @@ export interface FinderController {
 	cancelEmptyTrash(): void;
 	/** Whether the 휴지통 비우기 confirm is showing. */
 	readonly emptyTrashConfirm: boolean;
+	/** The Compress awaiting a stop answer (its sidebar row was clicked); null when none. */
+	readonly compressStop: CompressStopState | null;
+	/** Stop that Compress; the partial archive is removed. */
+	confirmCompressStop(): void;
+	/** Close the stop confirm and let the Compress run on. */
+	keepCompressing(): void;
 	/** The rename that would convert the file, waiting for the keep/replace answer or running; null when none. */
 	readonly convertRename: ConvertRenameState | null;
 	/** Convert into the new name: keep the original, or replace it (the original moves to the Trash). */
@@ -485,6 +497,8 @@ export function useFinderController(
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	/** A rename to another format's extension: asks keep-or-replace, then converts. */
 	const [convertRename, setConvertRename] = useState<ConvertRenameState | null>(null);
+	/** The running Compress whose "stop?" confirm is showing; null when none. */
+	const [compressStop, setCompressStop] = useState<CompressStopState | null>(null);
 	/** Tab id of an Evidence Folder tab awaiting close confirmation; null when none is pending. */
 	const [closingEvidenceTabId, setClosingEvidenceTabId] = useState<number | null>(null);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
@@ -504,7 +518,13 @@ export function useFinderController(
 
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
-	const scrollTarget = useRef<string | null>(null);
+	/** The row the next row set should scroll into view, and why. */
+	const scrollTarget = useRef<ScrollRequest | null>(null);
+	/** Stops a list scroll that is still waiting for a folder's open/close motion to settle. */
+	const cancelReveal = useRef<(() => void) | null>(null);
+	const requestScroll = (path: string | null, intent: ScrollIntent): void => {
+		scrollTarget.current = path === null ? null : { path, intent };
+	};
 	const pathRef = useRef("");
 	const tabsRef = useRef(tabsState.tabs);
 	const searchingRef = useRef(false);
@@ -849,36 +869,30 @@ export function useFinderController(
 		};
 	}, [source, sidecar, indexStatusKey, indexRevision, reportError]);
 
-	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
+	useEffect(() => () => cancelReveal.current?.(), []);
+
+	/**
+	 * Keyboard movement and reveals keep the target row in view, as Finder does: a row that is already visible
+	 * leaves the scroll alone and one past an edge scrolls by what sticks out (`revealTarget`).
+	 */
 	useEffect(() => {
-		const target = scrollTarget.current;
-		if (target === null) {
-			return;
-		}
-		if (layout !== "list") {
-			// A pane or a revealed folder may still be loading; keep the target until its item renders.
-			const element = itemElement(listRef.current, target);
-			if (element !== null) {
-				scrollTarget.current = null;
-				element.scrollIntoView({ block: "nearest", inline: "nearest" });
-			}
+		const request = scrollTarget.current;
+		if (request === null) {
 			return;
 		}
 		// The previous folder's rows can still be on screen while a revealed folder
 		// loads; the target must only be consumed by the current folder's rows (a
 		// search list may come from many folders, so it is exempt).
-		const index = orderedKeys.indexOf(target);
-		if (index < 0 || (!searchingRef.current && listingDir !== path)) {
-			// The target's listing has not landed yet (a revealed folder still
-			// loading); keep the target so the next row set scrolls to it.
+		const rows = searchingRef.current || listingDir === path ? { sections: stackSections, orderedKeys } : null;
+		const cancel = revealTarget({ layout, list: listRef.current, request, rows });
+		if (cancel === null) {
+			// The target's item has not rendered yet (a pane or a revealed folder still loading); keep the
+			// request so the next row set scrolls to it.
 			return;
 		}
 		scrollTarget.current = null;
-		if (listRef.current !== null) {
-			// Group headers add height above a row, so the top comes from the
-			// grouped layout (identical to index * ROW_HEIGHT when ungrouped).
-			listRef.current.scrollTop = Math.max(0, groupedRowTop(stackSections, index) - SCROLL_LEAD);
-		}
+		cancelReveal.current?.();
+		cancelReveal.current = cancel;
 	}, [orderedKeys, layout, selection, path, listingDir, stackSections]);
 
 	const patchSelection = useLatestCallback((next: SelectionState) => {
@@ -928,7 +942,7 @@ export function useFinderController(
 				const current = activeTab(state);
 				return applyColumnChoice(state, chooseInColumn(current.path, current.chain, pane, entry), single(entry.path));
 			});
-			scrollTarget.current = entry.path;
+			requestScroll(entry.path, "step");
 		});
 
 	const stepColumns = useLatestCallback(
@@ -938,7 +952,7 @@ export function useFinderController(
 				const back = direction === "left" ? slideBack(path, chain) : null;
 				if (back !== null) {
 					setTabsState((state) => applyColumnChoice(state, back, single(back.focus)));
-					scrollTarget.current = back.focus;
+					requestScroll(back.focus, "step");
 				}
 				return;
 			}
@@ -1038,7 +1052,7 @@ export function useFinderController(
 		);
 		setQueryValue("");
 		setFlashPath(entry.path);
-		scrollTarget.current = entry.path;
+		requestScroll(entry.path, "reveal");
 	});
 
 	const openEntry = useLatestCallback(
@@ -1275,7 +1289,7 @@ export function useFinderController(
 	 */
 	const revealCreated = useLatestCallback(
 		(created: { readonly path: string; readonly name: string }) => {
-			scrollTarget.current = created.path;
+			requestScroll(created.path, "reveal");
 			patchSelection(single(created.path));
 			setRename({ path: created.path, draft: created.name });
 			refresh();
@@ -1348,6 +1362,58 @@ export function useFinderController(
 		});
 
 	/**
+	 * Compress runs in the window-wide background queue: a large folder takes
+	 * minutes, so its byte progress shows in the sidebar and the window stays
+	 * usable. Clicking the row asks whether to stop it.
+	 */
+	const startCompress = useLatestCallback((paths: readonly string[], format: CompressFormat) => {
+		const [first] = paths;
+		if (first === undefined) return;
+		const id = crypto.randomUUID();
+		// The archive's own stem (main names it the same way): a file name, never translated.
+		const name = paths.length === 1 ? basename(first) : "Archive";
+		void enqueueBackgroundTask({
+			id,
+			kind: "compress",
+			headline: name,
+			queuedHeadline: name,
+			doneHeadline: name,
+			failedHeadline: name,
+			detail: t(format === "7z" ? "inspector.actions.compress7z" : "inspector.actions.compressZip"),
+			ariaLabel: t("sidebarActivity.compressOpen"),
+			onSelect: () => setCompressStop({ id, name }),
+			onCancel: () => {
+				void source.actions.cancel?.(id).catch(reportError);
+			},
+			run: async () => {
+				const outcome = await source.actions.run(paths, { kind: "compress", format, id });
+				showToast(outcome.note);
+				if (outcome.output !== null) {
+					recordActionOutput("compress", outcome.output);
+					refresh();
+				}
+			},
+		})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message === "Task cancelled") return;
+				reportError(error);
+			})
+			.finally(() => {
+				setCompressStop((current) => (current?.id === id ? null : current));
+			});
+	});
+
+	const keepCompressing = useLatestCallback(() => setCompressStop(null));
+
+	const confirmCompressStop = useLatestCallback(() => {
+		const pending = compressStop;
+		if (pending === null) return;
+		setCompressStop(null);
+		cancelBackgroundTask(pending.id);
+		showToast(t("main.action.compressCancelled", { name: pending.name }));
+	});
+
+	/**
 	 * Run one Inspector action. "AI 요약" never lands here — the App shell owns
 	 * the composer — so this covers only the filesystem and OS actions. A
 	 * successful action relists the folder so the new file appears at once.
@@ -1370,6 +1436,10 @@ export function useFinderController(
 						if (reduceDialog !== null) return;
 						const opened = createReduceSizeDialogState(entry, crypto.randomUUID());
 						if (opened !== null) setReduceDialog(opened);
+						return;
+					}
+					if (target.request.kind === "compress") {
+						startCompress([entry.path], target.request.format ?? "zip");
 						return;
 					}
 					source.actions
@@ -1405,19 +1475,10 @@ export function useFinderController(
 			return;
 		}
 		if (target.kind !== "request" || target.request.kind !== "compress") return;
-		source.actions
-			.run(
-				selectedEntries.map((entry) => entry.path),
-				target.request,
-			)
-			.then((outcome) => {
-				showToast(outcome.note);
-				if (outcome.output !== null) {
-					recordActionOutput("compress", outcome.output);
-					refresh();
-				}
-			})
-			.catch(reportError);
+		startCompress(
+			selectedEntries.map((entry) => entry.path),
+			target.request.format ?? "zip",
+		);
 	});
 
 	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
@@ -1465,7 +1526,7 @@ export function useFinderController(
 					recordActionOutput("reduceSize", outcome.output);
 					refresh();
 					if (!searchingRef.current && pathRef.current === dirname(pending.path)) {
-						scrollTarget.current = outcome.output;
+						requestScroll(outcome.output, "reveal");
 						patchSelection(single(outcome.output));
 						setFlashPath(outcome.output);
 					}
@@ -1549,7 +1610,7 @@ export function useFinderController(
 	const moveSelectionBy = useLatestCallback(
 		(delta: 1 | -1) => {
 			const next = moveSelection(orderedKeys, selection, delta);
-			scrollTarget.current = next.focus;
+			requestScroll(next.focus, "step");
 			patchSelection(next);
 		});
 
@@ -1583,7 +1644,7 @@ export function useFinderController(
 					);
 					setQueryValue("");
 					setFlashPath(entry.path);
-					scrollTarget.current = entry.path;
+					requestScroll(entry.path, "reveal");
 				})
 				.catch(reportError);
 		});
@@ -1814,7 +1875,7 @@ export function useFinderController(
 					);
 					setQueryValue("");
 					setFlashPath(entry.path);
-					scrollTarget.current = entry.path;
+					requestScroll(entry.path, "reveal");
 					return;
 				}
 				case "toggleIndex":
@@ -1855,21 +1916,13 @@ export function useFinderController(
 					return;
 				case "compress7z":
 					// Same one-archive-per-selection rule as zip; the undo record is still "compress".
-					source.actions
-						.run(targets, { kind: "compress", format: "7z" })
-						.then((outcome) => {
-							showToast(outcome.note);
-							if (outcome.output !== null) {
-								recordActionOutput("compress", outcome.output);
-								refresh();
-							}
-						})
-						.catch(reportError);
+					startCompress(targets, "7z");
 					return;
 				case "compress":
+					startCompress(targets, "zip");
+					return;
 				case "extract":
-					// One request for the whole selection: compress writes one archive,
-					// and extraction is offered for a single archive row only.
+					// Extraction is offered for a single archive row only.
 					source.actions
 						.run(targets, { kind: action })
 						.then((outcome) => {
@@ -2032,7 +2085,7 @@ export function useFinderController(
 			patchActiveTab(navigateTab(state, parent), (current) => ({ ...current, selection: single(path) })),
 		);
 		setQueryValue("");
-		scrollTarget.current = path;
+		requestScroll(path, "reveal");
 	});
 
 	/**
@@ -2097,6 +2150,10 @@ export function useFinderController(
 			setEmptyTrashConfirm(false);
 			return;
 		}
+		if (compressStop !== null) {
+			setCompressStop(null);
+			return;
+		}
 		if (contextMenu !== null) {
 			setContextMenu(null);
 			return;
@@ -2115,11 +2172,11 @@ export function useFinderController(
 	});
 
 	const focusPath = useLatestCallback((target: string) => {
-		scrollTarget.current = target;
+		requestScroll(target, "step");
 		patchSelection(single(target));
 	});
 	const moveTo = useLatestCallback((next: SelectionState) => {
-		scrollTarget.current = next.focus;
+		requestScroll(next.focus, "step");
 		patchSelection(next);
 	});
 	const focusSearch = useLatestCallback(() => {
@@ -2160,7 +2217,7 @@ export function useFinderController(
 	useEffect(() => {
 		if (!revealOnReopenRef.current) return;
 		revealOnReopenRef.current = false;
-		scrollTarget.current = selection.focus;
+		requestScroll(selection.focus, "reveal");
 	}, [shownTabId]);
 	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
 	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
@@ -2436,6 +2493,9 @@ export function useFinderController(
 		confirmEmptyTrash,
 		cancelEmptyTrash,
 		emptyTrashConfirm,
+		compressStop,
+		confirmCompressStop,
+		keepCompressing,
 		convertRename,
 		confirmConvertRename,
 		cancelConvertRename,
