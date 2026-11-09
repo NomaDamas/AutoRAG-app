@@ -100,6 +100,7 @@ export function TiffView({ file }: { readonly file: PreviewDocument }): ReactEle
 			if (current !== null) URL.revokeObjectURL(current);
 		};
 	}, [bytes, file.mime]);
+	if (file.decoding === true) return <Status>{t("quickLook.status.loading")}</Status>;
 	if (bytes === null) return <FallbackView file={file} note={t("quickLook.media.imageReadFailed")} />;
 	if (error !== null) return <FallbackView file={file} note={error} />;
 	if (url === null) return <Status>{t("quickLook.status.loading")}</Status>;

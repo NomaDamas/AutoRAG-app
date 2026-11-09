@@ -221,6 +221,14 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			if (update.seq !== seqRef.current) return;
 			setLoad((current) => (current === null || current.document === null ? current : { ...current, document: { ...current.document, thumbnail: update.url } }));
 		});
+		const offDecoded = bridge.onDecoded((update) => {
+			if (update.seq !== seqRef.current) return;
+			setLoad((current) =>
+				current === null || current.document === null
+					? current
+					: { ...current, document: { ...current.document, mime: update.mime, truncated: update.truncated, bytes: update.bytes, decoding: false } },
+			);
+		});
 		const offUnload = bridge.onUnload(() => {
 			sweep.clear();
 			seqRef.current = -1;
@@ -232,6 +240,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			offOffice();
 			offSlides();
 			offThumbnail();
+			offDecoded();
 			sweep.clear();
 			offUnload();
 		};

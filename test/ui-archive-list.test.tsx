@@ -23,6 +23,7 @@ function bridgeAnswering(answer: (path: string) => Promise<ArchivePreview>): Qui
 		onOffice: () => () => undefined,
 		onSlides: () => () => undefined,
 		onThumbnail: () => () => undefined,
+		onDecoded: () => () => undefined,
 		ready: () => undefined,
 		zoomed: () => undefined,
 		request: never,
