@@ -138,3 +138,44 @@ describe("the Info view's chat dock", () => {
 		expect(host.textContent).not.toContain("AI 요약");
 	});
 });
+
+describe("the composer's blue button", () => {
+	const typeInto = (input: HTMLInputElement, value: string): void => {
+		act(() => {
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	};
+
+	it("is the mic while nothing is typed and turns into send once text is typed, both blue", () => {
+		Reflect.set(window, "autorag", {
+			platform: "win32",
+			voice: { transcribe: async () => ({ text: "" }), prepare: async () => ({ ok: true }), openMicrophoneSettings: async () => {} },
+		});
+		try {
+			const empty: InspectorChatTab = { chat: null, mode: "info", expired: false, dismissed: [] };
+			act(() =>
+				root.render(
+					<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} onOpenHistory={noop} />,
+				),
+			);
+			const mic = host.querySelector<HTMLButtonElement>("button.inspector-chat-voice");
+			expect(mic?.getAttribute("aria-label")).toBe("음성으로 입력");
+			expect(mic?.className).toContain("bg-accent");
+			expect(host.querySelector('button[aria-label="보내기"]')).toBeNull();
+
+			const input = host.querySelector<HTMLInputElement>("input");
+			if (input === null) throw new Error("no input");
+			typeInto(input, "요약해줘");
+			const send = host.querySelector<HTMLButtonElement>('button[aria-label="보내기"]');
+			expect(send?.className).toContain("bg-accent");
+			expect(send?.disabled).toBe(false);
+			expect(host.querySelector("button.inspector-chat-voice")).toBeNull();
+
+			typeInto(input, "  ");
+			expect(host.querySelector("button.inspector-chat-voice")).not.toBeNull();
+		} finally {
+			Reflect.deleteProperty(window, "autorag");
+		}
+	});
+});

@@ -12,12 +12,16 @@
  */
 
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
+import { isAppLanguage } from "../../../shared/language-contract";
+import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contract";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
 import { cn } from "../lib/cn";
 import { evidenceHeading, evidenceKind, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
 import { questionCount, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { useVoiceInput } from "../state/useVoiceInput";
+import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks } from "./AiSearchPanel";
 import type { ImageActions } from "./AnswerImage";
 import {
@@ -29,6 +33,7 @@ import {
 	FileIcon,
 	HistoryIcon,
 	MessagesIcon,
+	MicIcon,
 	NewChatIcon,
 	SparklesIcon,
 } from "./icons";
@@ -74,6 +79,69 @@ function AttachmentCard({
 	);
 }
 
+/** The composer's blue round button. */
+const composerButton =
+	"flex size-24 flex-none items-center justify-center rounded-full border-0 bg-accent p-0 text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default";
+
+/**
+ * The empty composer's mic: dictation into the draft, as in AI Search. Clicking it again stops listening and the
+ * transcript is added to whatever is typed.
+ */
+function VoiceButton({
+	voice,
+	onTranscript,
+	onError,
+}: {
+	readonly voice: VoiceBridge;
+	readonly onTranscript: (text: string) => void;
+	readonly onError: (message: string | null) => void;
+}): ReactElement {
+	const { t, i18n } = useTranslation();
+	const dictation = useVoiceInput({
+		voice,
+		language: isAppLanguage(i18n.language) ? i18n.language : "ko",
+		onTranscript: (text) => {
+			onError(null);
+			onTranscript(text);
+		},
+		onError,
+	});
+	const label =
+		dictation.phase === "listening" ? t("aiSearch.voiceStop") : dictation.phase === "transcribing" ? t("aiSearch.voiceTranscribing") : t("aiSearch.voiceStart");
+	return (
+		<>
+			<button
+				type="button"
+				className={cn("inspector-chat-voice", composerButton)}
+				aria-label={label}
+				title={label}
+				aria-pressed={dictation.phase === "listening"}
+				disabled={dictation.phase === "transcribing"}
+				onClick={() => {
+					onError(null);
+					dictation.toggle();
+				}}
+			>
+				{dictation.phase === "listening" ? (
+					<span className="size-8 rounded-2 bg-current" aria-hidden="true" />
+				) : dictation.phase === "transcribing" ? (
+					<span className="size-10 rounded-full border-[1.5px] border-on-accent/40 border-t-on-accent animate-spin" aria-hidden="true" />
+				) : (
+					<MicIcon size={13} />
+				)}
+			</button>
+			{dictation.permission === null ? null : (
+				<MicrophonePermissionDialog
+					state={dictation.permission}
+					platform={window.autorag?.platform ?? ""}
+					onOpenSettings={dictation.openSettings}
+					onClose={dictation.dismissPermission}
+				/>
+			)}
+		</>
+	);
+}
+
 function Composer({
 	pending,
 	placeholder,
@@ -94,6 +162,8 @@ function Composer({
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
 	const [busyNotice, setBusyNotice] = useState(false);
+	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+	const voice = window.autorag?.voice;
 	const send = (): void => {
 		const text = draft.trim();
 		if (text.length === 0) return;
@@ -147,10 +217,12 @@ function Composer({
 						>
 							<span className="size-8 rounded-2 bg-current" aria-hidden="true" />
 						</button>
+					) : draft.trim().length === 0 && voice !== undefined ? (
+						<VoiceButton voice={voice} onTranscript={(text) => setDraft((current) => appendTranscript(current, text))} onError={setVoiceNotice} />
 					) : (
 						<button
 							type="button"
-							className="flex size-24 flex-none items-center justify-center rounded-full border-0 bg-accent p-0 text-on-accent cursor-pointer disabled:bg-selected-nav disabled:text-ink-muted disabled:cursor-default"
+							className={composerButton}
 							aria-label={t("inspector.chat.send")}
 							title={t("inspector.chat.send")}
 							disabled={draft.trim().length === 0}
@@ -166,6 +238,11 @@ function Composer({
 					{t("inspector.chat.busy")}
 				</p>
 			) : null}
+			{voiceNotice === null ? null : (
+				<p className="block m-0 mt-4 text-tile text-ink-muted" role="alert">
+					{voiceNotice}
+				</p>
+			)}
 		</div>
 	);
 }
