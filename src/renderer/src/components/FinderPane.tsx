@@ -406,7 +406,7 @@ export const FinderPane = memo(function FinderPane({
 							}}
 						/>
 						{whole !== null && group === "content" ? (
-							<ContentResults query={whole.query} content={whole.content} onOpen={finder.openEntry} onReveal={finder.revealEntry} />
+							<ContentResults query={whole.query} content={whole.content} onOpen={finder.openEntry} onReveal={finder.revealEntryInNewTab} />
 						) : whole !== null && selectedDatasource !== null ? (
 							<SourceResults
 								query={whole.query}

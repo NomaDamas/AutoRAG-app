@@ -95,14 +95,32 @@ try {
 		await page.screenshot({ path: join(EVIDENCE, "03-datasource.png") });
 	}
 
-	// 5. Document content: passages, or the reason the index cannot answer.
+	// 5. Document content: passages, and "Show in Folder" opens the hit's folder in a NEW tab without losing the search tab.
 	await page.locator('.search-groups [data-group="content"]').click();
 	await sleep(400);
 	const contentRows = await page.locator('[role="listbox"] [role="option"]').count();
 	const note = (await page.locator(".search-note").allInnerTexts()).join(" ").trim();
 	check("the content tab lists passages or explains why it cannot", contentRows > 0 || note !== "", `${contentRows} rows, note=${JSON.stringify(note)}`);
 	await page.screenshot({ path: join(EVIDENCE, "04-content.png") });
-
+	if (contentRows > 0) {
+		const tabsBeforeReveal = await page.locator(".tabs .tab").count();
+		const revealedPath = await page.locator('[role="listbox"] [role="option"]').first().getAttribute("data-path");
+		await page.locator(".search-reveal").first().click();
+		await page.waitForFunction((expected) => document.querySelectorAll(".tabs .tab").length === expected, tabsBeforeReveal + 1, { timeout: 10000 }).catch(() => undefined);
+		await sleep(300);
+		const tabsAfterReveal = await page.locator(".tabs .tab").count();
+		const selectedRow = await page.locator('[role="row"][aria-selected="true"]').first().getAttribute("data-path").catch(() => null);
+		check(
+			"Show in Folder opens a new folder tab with the file selected while keeping the search tab",
+			tabsAfterReveal === tabsBeforeReveal + 1 && (await page.locator(".search-groups").count()) === 0 && selectedRow === revealedPath,
+			`tabs=${tabsBeforeReveal}->${tabsAfterReveal}, selected=${selectedRow}`,
+		);
+		await page.screenshot({ path: join(EVIDENCE, "04b-revealed-in-new-tab.png") });
+		// Switch back to the search tab and verify the search is still intact.
+		await page.locator(".tabs .tab").first().click();
+		await page.waitForSelector(".search-groups", { timeout: 5000 });
+		check("switching back to the original tab restores the whole search", (await page.locator(".search-groups").count()) === 1);
+	}
 	// 6. Ask AI Search takes the same query to the chat.
 	await page.locator(".search-ask").click();
 	await page.locator(".user-msg .bubble").first().waitFor({ timeout: 10000 });

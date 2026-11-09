@@ -106,6 +106,7 @@ import {
 	openEvidenceFolderTab,
 	openTab,
 	openTabAt,
+	openTabRevealing,
 	patchActiveTab,
 	selectTab,
 	setActiveTabGrouping,
@@ -240,6 +241,8 @@ export interface FinderController {
 	familyEntriesFor(path: string): { readonly head: FinderEntry; readonly members: readonly { readonly entry: FinderEntry; readonly relation: VersionRelation }[] } | null;
 	/** Navigate the current tab to the entry's folder and reveal the row (version-member click). */
 	revealEntry(entry: FinderEntry): void;
+	/** Open a new tab on the entry's enclosing folder and reveal the row, keeping the current tab's search intact. */
+	revealEntryInNewTab(entry: FinderEntry): void;
 	/** Create an "untitled folder" in the current directory and select it. */
 	newFolder(): void;
 	/** Create a new file of `format` in the current directory and select it. */
@@ -1037,6 +1040,12 @@ export function useFinderController(
 		requestScroll(entry.path, "reveal");
 	});
 
+	const revealEntryInNewTab = useLatestCallback((entry: FinderEntry) => {
+		setTabsState((state) => openTabRevealing(state, locationOf(entry), entry.path));
+		setFlashPath(entry.path);
+		requestScroll(entry.path, "reveal");
+	});
+
 	const openEntry = useLatestCallback(
 		(entry: FinderEntry) => {
 			const location = locationOf(entry);
@@ -1545,13 +1554,7 @@ export function useFinderController(
 					if (entry === undefined) {
 						throw new Error(`Evidence source was not found in its folder: ${target}`);
 					}
-					setTabsState((state) =>
-						patchActiveTab(openTabAt(state, folder), (tab) => ({
-							...tab,
-							selection: single(entry.path),
-						})),
-					);
-					setQueryValue("");
+					setTabsState((state) => openTabRevealing(state, folder, entry.path));
 					setFlashPath(entry.path);
 					requestScroll(entry.path, "reveal");
 				})
@@ -2378,6 +2381,7 @@ export function useFinderController(
 		versionFamilyFor,
 		familyEntriesFor,
 		revealEntry,
+		revealEntryInNewTab,
 		newFolder,
 		newFile,
 		trashEntry,
