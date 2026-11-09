@@ -28,7 +28,7 @@ import {
 	ArrowLeftIcon,
 	ArrowUpIcon,
 	CloseIcon,
-	DownloadIcon,
+	ExpandCornersIcon,
 	ExpandIcon,
 	FileIcon,
 	HistoryIcon,
@@ -378,7 +378,7 @@ function SourceList({
 											className="inline-flex items-center gap-4 rounded-8 border border-border-strong bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink cursor-pointer hover:bg-hover"
 											onClick={() => onPreview(local, item.excerpts)}
 										>
-											<DownloadIcon size={12} />
+												<ExpandIcon size={12} />
 											{t("inspector.chat.preview")}
 										</button>
 									</div>
@@ -488,7 +488,7 @@ export function InspectorChatView({
 					<NewChatIcon size={14} />
 				</button>
 				<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
-					<ExpandIcon size={13} />
+					<ExpandCornersIcon size={16} />
 				</button>
 			</div>
 			<div
