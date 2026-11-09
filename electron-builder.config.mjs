@@ -25,6 +25,7 @@
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync } from "node:fs";
 import { PLATFORMS, decomposeNonAsciiNames, nonAsciiRoots, pruneNativeForPlatform, pruneToLoose, systemTar, tarExcludeArgs } from "./scripts/release/lib.mjs";
+import { windowsSigning } from "./scripts/release/windows-signing.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -41,7 +42,8 @@ const hasNotarization = Boolean(
 	(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) ||
 		(process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID),
 );
-const hasAzureSigning = Boolean(process.env.AZURE_TENANT_ID && process.env.AZURE_CLIENT_ID && process.env.AZURE_CLIENT_SECRET);
+// Windows: Azure Artifact Signing, or null when unconfigured (a half-set configuration throws).
+const azureSignOptions = platformId.startsWith("win32") ? windowsSigning(process.env) : null;
 const updateFeedUrl = process.env.AUTORAG_UPDATE_FEED_URL || null;
 
 /** @type {import("electron-builder").Configuration} */
@@ -114,15 +116,9 @@ const config = {
 	win: {
 		target: [{ target: "nsis", arch: ["x64"] }],
 		icon: "build/icon.ico",
-		...(hasAzureSigning
-			? {
-					azureSignOptions: {
-						endpoint: process.env.AZURE_CODESIGN_ENDPOINT,
-						codeSigningAccountName: process.env.AZURE_CODESIGN_ACCOUNT,
-						certificateProfileName: process.env.AZURE_CODESIGN_PROFILE,
-					},
-				}
-			: {}),
+		// Artifact Signing signs every .exe (the app, the bundled tools, the installer and its uninstaller).
+		// Its publisherName also lands in app-update.yml, so electron-updater accepts only installers signed by it.
+		...(azureSignOptions === null ? {} : { azureSignOptions }),
 	},
 	nsis: {
 		oneClick: true,

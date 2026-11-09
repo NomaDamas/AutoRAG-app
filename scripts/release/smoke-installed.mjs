@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { _electron } from "playwright";
 import { ROOT, hostPlatformId, log, run } from "./lib.mjs";
+import { readAuthenticode, windowsSignatureProblems } from "./windows-signing.mjs";
 
 const win = process.platform === "win32";
 const work = mkdtempSync(join(tmpdir(), "autorag-smoke-"));
@@ -170,6 +171,37 @@ try {
 		if (signed) {
 			const gatekeeper = spawnSync("spctl", ["--assess", "--type", "execute", "-vv", appRoot], { encoding: "utf8" });
 			expect(gatekeeper.status === 0 && /source=Notarized Developer ID/.test(gatekeeper.stderr), "Gatekeeper accepts the installed app as notarized", gatekeeper.stderr.trim());
+		}
+	}
+	// Windows: what a user sees on install ("unknown publisher" vs. the publisher's name) is the installer's
+	// signature, and every executable it unpacks must carry the same one. AZURE_CODESIGN_PUBLISHER is the
+	// certificate CN the release signs with; without it the build is unsigned and only reported as such.
+	if (win) {
+		const publisher = process.env.AZURE_CODESIGN_PUBLISHER || null;
+		const executables = [installer];
+		const walk = (directory) => {
+			for (const entry of readdirSync(directory, { withFileTypes: true })) {
+				const full = join(directory, entry.name);
+				if (entry.isDirectory()) walk(full);
+				else if (/\.exe$/i.test(entry.name)) executables.push(full);
+			}
+		};
+		walk(appRoot);
+		const signatures = readAuthenticode(executables);
+		writeFileSync(join(outDir, "authenticode.json"), `${JSON.stringify(signatures, null, 2)}\n`);
+		if (publisher === null) {
+			const unsigned = signatures.filter((file) => file.status !== "Valid").length;
+			process.stdout.write(`skip Windows signature check: AZURE_CODESIGN_PUBLISHER is unset (${unsigned} of ${signatures.length} executables unsigned; Windows shows "unknown publisher")\n`);
+		} else {
+			const problems = windowsSignatureProblems(signatures, publisher);
+			expect(problems.length === 0, `installer and all ${signatures.length} installed executables are signed by ${publisher}`, problems.slice(0, 8).join(" | "));
+			// electron-updater refuses an update installer whose signer differs from app-update.yml's publisherName;
+			// with no publisherName it accepts any installer, so a signed build must ship it.
+			const updateYml = join(resources, "app-update.yml");
+			if (existsSync(updateYml)) {
+				const text = readFileSync(updateYml, "utf8");
+				expect(text.includes(publisher) && /^publisherName:/m.test(text), "app-update.yml pins updates to the publisher (publisherName)", text.trim().replace(/\s+/g, " "));
+			}
 		}
 	}
 
