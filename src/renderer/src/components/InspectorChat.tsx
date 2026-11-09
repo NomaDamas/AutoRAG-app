@@ -58,7 +58,7 @@ function AttachmentCard({
 	return (
 		<span className="inspector-chat-att relative inline-flex max-w-full min-w-0 items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5" title={att.id}>
 			<FileTile kind={att.kind === "folder" ? "folder" : evidenceKind(att.name)} size={18} />
-			<span className={cn("min-w-0 truncate text-ink", small ? "text-[10.5px] leading-[15.75px]" : "text-meta leading-[1.4]")}>{att.name}</span>
+			<span className={cn("min-w-0 truncate text-ink", small ? "text-badge leading-[16px]" : "text-meta leading-[1.4]")}>{att.name}</span>
 			{onRemove === undefined ? null : (
 				<button
 					type="button"
@@ -127,7 +127,7 @@ function Composer({
 				)}
 				<div className="flex items-center gap-4">
 					<input
-						className="min-w-0 flex-1 h-24 border-0 bg-transparent p-0 text-badge leading-[16px] text-ink outline-none placeholder:text-ink-faint"
+						className="min-w-0 flex-1 h-24 border-0 bg-transparent p-0 text-meta leading-[16px] text-ink outline-none placeholder:text-ink-faint"
 						value={draft}
 						placeholder={placeholder}
 						aria-label={placeholder}
@@ -215,7 +215,7 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 				<div className="flex">
 					<button
 						type="button"
-						className="inline-flex items-center gap-6 rounded-full border border-divider bg-window py-8 pl-9 pr-10 text-[10.5px] font-medium text-ink shadow-[0_2px_5px_rgba(20,20,41,0.07)] cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default"
+						className="inline-flex items-center gap-6 rounded-full border border-divider bg-window py-8 pl-9 pr-10 text-meta leading-[16px] text-ink shadow-[0_2px_5px_rgba(20,20,41,0.07)] cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default"
 						disabled={running}
 						onClick={onSummarize}
 					>
@@ -338,7 +338,7 @@ function TurnView({
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
-				<div className="inspector-chat-question block rounded-[18px] bg-ink-body px-12 py-8 text-meta font-medium leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-meta leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
 			<div className="flex min-w-0 flex-col gap-8">
 			{text.length > 0 ? (

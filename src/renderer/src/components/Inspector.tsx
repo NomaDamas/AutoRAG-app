@@ -337,8 +337,8 @@ function InfoHalf({
 							<div className="flex items-center gap-8">
 								<FileTile kind={fileKindOf(entry)} size={22} />
 								<div className="flex min-w-0 flex-1 flex-col gap-3">
-									<div className="preview-title text-[11.5px] font-medium text-ink leading-[1.3] [overflow-wrap:anywhere]">{entry.name}</div>
-									<div className="preview-sub text-[10.5px] leading-[15.75px] text-ink-muted truncate">
+									<div className="preview-title text-meta font-medium text-ink leading-[16px] [overflow-wrap:anywhere]">{entry.name}</div>
+									<div className="preview-sub text-badge font-medium leading-[14px] text-ink-faint truncate">
 										{folderInView ? kindLabelOf(entry) : `${kindLabelOf(entry)} · ${dateLabelOf(entry)}`}
 									</div>
 								</div>
@@ -404,7 +404,7 @@ function InfoSectionCard({
 			<div className="section-title flex h-22 items-center justify-between">
 				<span className="text-meta font-medium leading-[16px] text-ink">{title}</span>
 				{hasMoreInfoRows(rows) ? (
-					<button type="button" className="p-0 border-0 bg-transparent text-[10.5px] leading-[15.75px] text-accent-text cursor-pointer hover:underline" onClick={onToggle}>
+					<button type="button" className="p-0 border-0 bg-transparent text-badge font-medium leading-[14px] text-accent-text cursor-pointer hover:underline" onClick={onToggle}>
 						{brief ? t("inspector.showMore") : t("inspector.showLess")}
 					</button>
 				) : null}
@@ -689,8 +689,8 @@ function MultiInfoHalf({
 						<div className="flex items-center gap-8">
 							{front === undefined ? null : <FileTile kind={fileKindOf(front)} size={22} />}
 							<div className="flex min-w-0 flex-1 flex-col gap-3">
-								<div className="preview-title text-[11.5px] font-medium text-ink leading-[1.3]">{summary.title}</div>
-								<div className="preview-sub text-[10.5px] leading-[15.75px] text-ink-muted truncate">
+								<div className="preview-title text-meta font-medium text-ink leading-[16px]">{summary.title}</div>
+								<div className="preview-sub text-badge font-medium leading-[14px] text-ink-faint truncate">
 									{newest === undefined ? summary.kindSummary : `${summary.kindSummary} · ${dateLabelOf(newest)}`}
 								</div>
 							</div>
@@ -876,7 +876,7 @@ function ActionIconGroup({ buttons, menu }: { readonly buttons: readonly GroupBu
 
 function InfoRow({ label, value }: { readonly label: string; readonly value: string }): ReactElement {
 	return (
-		<div className="flex justify-between gap-8 border-b-[0.7px] border-divider py-4 text-[10.5px] leading-[15.75px] last:border-b-0">
+		<div className="flex justify-between gap-8 border-b-[0.7px] border-divider py-4 text-badge leading-[16px] last:border-b-0">
 			<dt className="flex-none text-ink-muted">{label}</dt>
 			<dd className="m-0 min-w-0 text-ink text-right [overflow-wrap:anywhere]">{value}</dd>
 		</div>
@@ -901,7 +901,7 @@ function VersionsSection({
 		<div className="versions-section flex flex-col gap-8 border-t border-divider pt-8">
 			<div className="section-title flex h-22 items-center justify-between">
 				<span className="text-meta font-medium leading-[16px] text-ink">{t("inspector.versions")}</span>
-				<span className="inline-flex items-center rounded-8 border border-divider bg-window px-6 py-1 text-[9.5px] font-medium text-ink">{rows.length}</span>
+				<span className="inline-flex items-center rounded-8 border border-divider bg-window px-6 py-1 text-badge font-medium leading-[14px] text-ink">{rows.length}</span>
 			</div>
 			<div className="flex flex-col gap-2">
 				{rows.map((row) => (
@@ -916,8 +916,8 @@ function VersionsSection({
 					>
 						<VersionTag relation={row.relation} />
 						<span className="flex min-w-0 flex-1 flex-col gap-1">
-							<span className="ver-name truncate text-badge font-medium leading-[14px] text-ink">{row.name}</span>
-							<span className="vwhere truncate text-[10.5px] leading-[15.75px] text-ink-muted">{row.where}</span>
+							<span className="ver-name truncate text-meta font-medium leading-[16px] text-ink">{row.name}</span>
+							<span className="vwhere truncate text-badge font-medium leading-[14px] text-ink-faint">{row.where}</span>
 						</span>
 					</button>
 				))}

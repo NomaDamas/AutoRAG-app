@@ -77,7 +77,7 @@ function RuleRow({
 	return (
 		<div
 			ref={ref}
-			className="rule-row relative flex w-full items-center gap-12 rounded-8 border border-border bg-window py-8 pl-12 pr-10"
+			className="rule-row relative flex w-full items-center gap-12 rounded-10 border border-border bg-window py-8 pl-12 pr-10"
 			onContextMenu={(event) => {
 				if (onMenu === undefined) return;
 				event.preventDefault();
@@ -87,11 +87,11 @@ function RuleRow({
 			<span className="flex flex-none text-ink-body" aria-hidden="true">
 				<ZapIcon size={14} />
 			</span>
-			<span className="flex min-w-0 flex-1 flex-col">
-				<span className="truncate text-[11px] font-medium leading-[14px] text-ink">{ruleTitle(rule)}</span>
+			<span className="flex min-w-0 flex-1 flex-col gap-2">
+				<span className="truncate text-meta font-medium leading-[16px] text-ink">{ruleTitle(rule)}</span>
 				<span
 					className={cn(
-						"truncate text-[10.5px] leading-[15.75px]",
+						"truncate text-badge leading-[16px]",
 						tone === "ok" ? "text-accent-text" : tone === "fail" ? "text-error-orange-text" : "text-ink-muted",
 					)}
 				>
