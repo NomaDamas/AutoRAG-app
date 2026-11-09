@@ -904,11 +904,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 border-b border-border select-none">
+			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
 				<span className="ai-mark grid flex-none place-items-center text-accent">
 					<SparklesIcon />
 				</span>
-				<strong className="flex-none text-sm font-semibold text-ink">{t("aiSearch.title")}</strong>
+				<strong className="flex-none text-sm font-medium leading-[19.5px] text-ink">{t("aiSearch.title")}</strong>
 				<span className="flex-1" />
 				<button
 					type="button"
@@ -933,7 +933,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			{historyOpen ? (
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
-					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label={t("aiSearch.history")}>
+					<div className="history absolute right-16 top-36 z-30 flex max-h-[72%] w-358 flex-col overflow-hidden rounded-[16px] border border-divider bg-window py-12 shadow-[0_0_10px_rgba(0,0,0,0.2)]" aria-label={t("aiSearch.history")}>
 						<input
 							autoFocus
 							value={historyQuery}
@@ -957,15 +957,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							}}
 							placeholder={t("aiSearch.searchHistory")}
 							aria-label={t("aiSearch.searchHistory")}
-							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
+							className="w-full flex-none border-0 bg-transparent px-16 pt-4 pb-12 text-body font-medium leading-[19px] text-ink outline-none placeholder:text-ink-faint"
 						/>
-						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
+						<div className="history-list min-h-0 flex-1 overflow-auto">
 							{historyGroups.length === 0 ? (
-								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
+								<span className="block px-16 py-24 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">
+										<div className="history-group px-16 pt-4 pb-2 text-badge font-bold leading-[15px] text-ink-muted">
 											{t(HISTORY_BUCKET_KEYS[group.label])}
 										</div>
 										{group.items.map((item) => (
@@ -973,17 +973,17 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 												type="button"
 												key={item.id}
 												className={cn(
-													"history-item flex w-full items-start gap-8 rounded-7 border-0 p-8 text-sm text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
+													"history-item flex w-full items-start gap-8 border-0 px-16 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
 													item.id === chatId ? "current bg-accent-history-current" : "bg-transparent",
 												)}
 												onClick={() => void loadHistory(item.id)}
 											>
-												<span className={cn("hist-dot mt-5 size-5 flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
-												<span className="hist-copy min-w-0 flex-1">
-													<b className="block truncate font-bold text-ink">{item.title}</b>
-													<small className="mt-2 block truncate text-badge text-ink-muted">{item.snippet}</small>
+												
+												<span className="hist-copy flex min-w-0 flex-1 flex-col gap-1">
+													<b className="block truncate text-sm font-medium leading-[19.5px] text-ink">{item.title}</b>
+													<small className="block truncate text-caption leading-[16.5px] text-ink-muted">{item.snippet}</small>
 												</span>
-												<span className="hist-time flex-none text-tile text-ink-muted">{item.time}</span>
+												<span className="hist-time flex-none text-badge font-medium leading-[14px] text-ink-faint">{item.time}</span>
 											</button>
 										))}
 									</div>
@@ -1013,8 +1013,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</div>
 						) : (
 							<div className="ai-empty my-28 text-center">
-								<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
-								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
+								<strong className="block text-title font-medium leading-[27px] text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
+								<p className="mt-8 text-body leading-[21px] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
 							</div>
 						)
 					) : null}
@@ -1047,7 +1047,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										))}
 									</div>
 								) : null}
-								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{submittedQuery}</div>
+								<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{submittedQuery}</div>
 							</div>
 						</div>
 					)}
@@ -1076,8 +1076,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 					{submittedQuery === null ? null : (
 						<div className="message assistant-msg flex flex-col gap-14">
-							{quickReady ? (
-								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+															{quickReady ? (
+								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink">
 									<ProseBlocks
 										text={quickText}
 										selected={
@@ -1116,7 +1116,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed) })}</span>
 										</div>
 									)}
-									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+																			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink">
 										<ProseBlocks
 											text={deepText}
 											selected={
@@ -1198,10 +1198,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					<div
 						ref={composeBoxRef}
 						className={cn(
-							"compose-box border border-border bg-input transition-[border-color,border-radius] duration-(--dur-color) ease-out",
-							voiceActive
-								? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8"
-								: "flex flex-col gap-6 rounded-14 px-14 pt-12 pb-8 focus-within:border-accent",
+															"compose-box border border-divider bg-window shadow-[0_2px_5px_rgba(20,20,41,0.07)] transition-[border-color,border-radius] duration-(--dur-color) ease-out",
+							voiceActive ? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8" : "flex flex-col gap-8 rounded-[16px] px-16 py-12",
 						)}
 						onMouseDown={(event) => {
 							if (voiceActive) return;
@@ -1266,7 +1264,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									value={query}
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
-									placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("aiSearch.placeholder")}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>
 								{voiceNotice === null ? null : (
@@ -1276,20 +1274,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								)}
 								<div className="composer-toolbar flex items-center justify-between gap-8">
 									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-									<div className="composer-actions flex items-center gap-7">
-										<button
-											type="button"
-											className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent text-ink-muted transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
-											title={t("aiSearch.voiceStart")}
-											aria-label={t("aiSearch.voiceStart")}
-											aria-pressed="false"
-											onClick={() => {
-												setVoiceNotice(null);
-												voice.toggle();
-											}}
-										>
-											<MicIcon />
-										</button>
+																			<div className="composer-actions flex items-center gap-7">
 										{searching && query.trim().length > 0 ? (
 											<button
 												type="submit"
@@ -1310,13 +1295,26 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 											>
 												<Square size={10} strokeWidth={3} fill="currentColor" />
 											</button>
+																					) : query.trim().length === 0 && attachments.length === 0 ? (
+											<button
+												type="button"
+												className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.voiceStart")}
+												aria-label={t("aiSearch.voiceStart")}
+												aria-pressed="false"
+												onClick={() => {
+													setVoiceNotice(null);
+													voice.toggle();
+												}}
+											>
+												<MicIcon size={17} />
+											</button>
 										) : (
 											<button
 												type="submit"
-												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
 												title={t("aiSearch.askDazzi")}
 												aria-label={t("aiSearch.askDazzi")}
-												disabled={query.trim().length === 0 && attachments.length === 0}
 											>
 												<ArrowUpIcon />
 											</button>
@@ -1326,7 +1324,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</>
 						)}
 					</div>
-					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
 				)}
 			</form>
@@ -1349,29 +1347,27 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 });
 
 /** The 16px glyph of an attachment chip: the file-kind tile, the folder glyph, or a link badge. */
-function AttachmentGlyph({ att }: { readonly att: ChatAttachment }): ReactElement {
+function AttachmentGlyph({ att, size = 16 }: { readonly att: ChatAttachment; readonly size?: 16 | 18 }): ReactElement {
 	switch (att.kind) {
 		case "url":
 			return (
-				<span className="flex size-16 flex-none items-center justify-center rounded-4 bg-accent-soft text-accent" aria-hidden="true">
+				<span className={cn("flex flex-none items-center justify-center bg-accent-soft text-accent", size === 18 ? "size-18 rounded-5" : "size-16 rounded-4")} aria-hidden="true">
 					<LinkIcon size={11} />
 				</span>
 			);
 		case "folder":
-			return <FileTile kind="folder" size={16} />;
+			return <FileTile kind="folder" size={size} />;
 		case "file":
-			return <FileTile kind={evidenceKind(att.name)} size={16} />;
+			return <FileTile kind={evidenceKind(att.name)} size={size} />;
 	}
 }
 
 /** A referenced file badge above the user bubble (v7 `.ref-file-chip`). */
 function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
-	const folder = parentFolder(att);
 	return (
-		<span className="ref-file-chip inline-flex h-chip items-center gap-6 rounded-6 border border-border bg-input px-8 text-ink" title={att.id}>
-			<AttachmentGlyph att={att} />
-			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
-			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
+		<span className="ref-file-chip inline-flex items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5 text-ink" title={att.id}>
+			<AttachmentGlyph att={att} size={18} />
+			<span className="ref-chip-name text-meta leading-[1.4] text-ink">{att.name}</span>
 		</span>
 	);
 }
@@ -1395,8 +1391,8 @@ function SteerBubble({
 					className={cn(
 						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words whitespace-pre-wrap transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
 						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
-						steer.status === "delivered" && "border-border bg-input text-ink-body",
-						steer.status === "dropped" && "border-border bg-input text-ink-muted line-through",
+						steer.status === "delivered" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window",
+						steer.status === "dropped" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window line-through opacity-50",
 					)}
 				>
 					{steer.text}
@@ -1491,7 +1487,7 @@ function PastTurnView({
 							))}
 						</div>
 					) : null}
-					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
+					<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 				</div>
 			</div>
 			{contextBefore.map((notice, index) => (
