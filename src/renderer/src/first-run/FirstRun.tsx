@@ -23,6 +23,7 @@ import { hostPlatform } from "../lib/shortcuts";
 import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
 import { Reveal, cancelPrewarm, prewarmReveal } from "./reveal";
+import { playRevealScore } from "./reveal-sound";
 import { CursorGlyph } from "./cursor";
 import { ACTION_REQUIRED_STEPS, AI_HOST, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
@@ -173,6 +174,9 @@ export function FirstRun({
 	}, [screen]);
 	/** Ready → Finder through the reveal (design-mockups/finish-reveal/v5v7-hybrid.html); reduced motion keeps the plain rise. */
 	const [revealing, setRevealing] = useState(false);
+	/** Fades the reveal's sound out; the score otherwise rings to its end on its own. */
+	const stopScore = useRef<() => void>(() => undefined);
+	useEffect(() => () => stopScore.current(), []);
 	const [cinemaSkipped, setCinemaSkipped] = useState(false);
 	const beginReveal = useCallback(() => {
 		if (leaving || revealing) return;
@@ -183,6 +187,8 @@ export function FirstRun({
 		}
 		// The Finder stays under its "cover" mode; the reveal overrides it inline (switching the html attribute restyles the whole document).
 		setRevealing(true);
+		// The click is the gesture that lets the page make sound; the score is cued to the reveal's own clock.
+		stopScore.current = playRevealScore();
 	}, [leaving, revealing, begin]);
 	const releaseDesk = useCallback(() => setDeskMode(null), []);
 	/** At the mockup's dim: the Finder is fully in, the tour's first bubble takes over (the reveal already said hello, so no cinema). */
