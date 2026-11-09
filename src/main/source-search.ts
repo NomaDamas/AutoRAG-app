@@ -11,6 +11,7 @@ import { resolveConfigReadOnly } from "@autorag/librarian/core";
 import { isJsonObject } from "../shared/settings-contract";
 import { SOURCE_HIT_CONTENT_LIMIT, SOURCE_SEARCH_MAX_HITS, type SearchDatasource, type SourceHit, type SourceSearchOutcome } from "../shared/source-search-contract";
 import { contentSnippet, sharedConfigLoader, type ContentSearchDeps } from "./content-search";
+import { createDefaultSearchRelevanceGate, type SearchRelevanceGate } from "./search-relevance-gate";
 
 /** The slice of `AutoRAGLite` a datasource search drives. */
 export interface SourceSearchRuntime {
@@ -22,6 +23,8 @@ export interface SourceSearchDeps {
 	readonly loadConfig: ContentSearchDeps["loadConfig"];
 	/** Builds the runtime for the current config; called again only after the config key changed. */
 	readonly open: (raw: Record<string, unknown>) => SourceSearchRuntime;
+	/** Optional relevance filter (exact/edit-distance pass-through + Jev `noul >= 0.5` gate). */
+	readonly relevanceGate?: SearchRelevanceGate;
 }
 
 export interface SourceSearch {
@@ -95,8 +98,21 @@ export function createSourceSearch(deps: SourceSearchDeps): SourceSearch {
 				const answer = await runtime.searchSelected(needle, { datasourceIds: [datasourceId], local: false }, { topK: limit, ...(signal === undefined ? {} : { signal }) });
 				const failed = answer.diagnostics.find((diagnostic) => diagnostic.severity === "error");
 				if (answer.results.length === 0 && failed !== undefined) return { state: "error", hits: [], error: failed.reason ?? failed.message };
-				const hits = [...answer.results].sort((a, b) => b.score - a.score).slice(0, limit).map((result) => sourceHit(result, needle));
-				return { state: "ok", hits, error: null };
+				const rawHits = [...answer.results].sort((a, b) => b.score - a.score).slice(0, limit).map((result) => sourceHit(result, needle));
+				if (deps.relevanceGate === undefined || rawHits.length === 0) return { state: "ok", hits: rawHits, error: null };
+				const filtered = await deps.relevanceGate.filter(
+					needle,
+					rawHits.map((hit) => ({
+						id: hit.id,
+						sourceLabel: datasourceId,
+						title: hit.title,
+						subtitle: hit.author,
+						content: hit.content,
+						hit,
+					})),
+					signal,
+				);
+				return { state: "ok", hits: filtered.map((entry) => entry.hit), error: null };
 			} catch (error) {
 				if (signal?.aborted === true) throw error;
 				return { state: "error", hits: [], error: error instanceof Error ? error.message : String(error) };
@@ -106,9 +122,14 @@ export function createSourceSearch(deps: SourceSearchDeps): SourceSearch {
 }
 
 /** The real search over the one shared AutoRAG config, datasources included. */
-export function createDefaultSourceSearch(env: NodeJS.ProcessEnv, cwd: string): SourceSearch {
+export function createDefaultSourceSearch(
+	env: NodeJS.ProcessEnv,
+	cwd: string,
+	relevanceGate: SearchRelevanceGate = createDefaultSearchRelevanceGate(env, cwd),
+): SourceSearch {
 	return createSourceSearch({
 		loadConfig: sharedConfigLoader(env, cwd),
 		open: () => new AutoRAGLite(resolveConfigReadOnly({ flags: {}, env, cwd })),
+		relevanceGate,
 	});
 }

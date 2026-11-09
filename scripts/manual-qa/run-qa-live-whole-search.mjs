@@ -121,6 +121,50 @@ try {
 		await page.waitForSelector(".search-groups", { timeout: 5000 });
 		check("switching back to the original tab restores the whole search", (await page.locator(".search-groups").count()) === 1);
 	}
+
+	// 5b. Relevance gate (lexical/edit-distance pass-through + Jev noul >= 0.5 with sLLM fallback):
+	//     an unrelated query drops dense-vector chat noise to 0 instead of returning 30 unrelated rows per chat app,
+	//     while a semantic query ("비행기예약확인증") drops unrelated Telegram/WhatsApp noise to 0 yet keeps Kakao airline hits.
+	const searchInput = page.locator(".side-search input");
+	await searchInput.click();
+	await searchInput.fill("양자역학슈뢰딩거방정식");
+	await searchInput.press("Enter");
+	await page.waitForFunction(() => document.querySelectorAll('.search-groups [role="status"]').length === 0, null, { timeout: 120000 }).catch(() => undefined);
+	const noiseSettled = await page.locator('.search-groups [role="tab"]').evaluateAll((nodes) =>
+		nodes.map((node) => ({ key: node.getAttribute("data-group"), text: node.textContent?.trim() ?? "" })),
+	);
+	console.log(`unrelated query settled: ${JSON.stringify(noiseSettled)}`);
+	const contentNoise = noiseSettled.find((tab) => tab.key === "content");
+	const tgNoise = noiseSettled.find((tab) => tab.key === "source:telegram");
+	const waNoise = noiseSettled.find((tab) => tab.key === "source:whatsapp");
+	if (contentNoise !== undefined) check("Jev gate drops unrelated local Document Content dense-vector noise to 0", /0$/.test(contentNoise.text), contentNoise.text);
+	if (tgNoise !== undefined) check("Jev gate drops unrelated Telegram dense-vector noise to 0", /0$/.test(tgNoise.text), tgNoise.text);
+	if (waNoise !== undefined) check("Jev gate drops unrelated WhatsApp dense-vector noise to 0", /0$/.test(waNoise.text), waNoise.text);
+	await page.screenshot({ path: join(EVIDENCE, "04c-noise-gated.png") });
+
+	await searchInput.click();
+	await searchInput.fill("비행기예약확인증");
+	await searchInput.press("Enter");
+	await page.waitForFunction(() => document.querySelectorAll('.search-groups [role="status"]').length === 0, null, { timeout: 120000 }).catch(() => undefined);
+	const flightSettled = await page.locator('.search-groups [role="tab"]').evaluateAll((nodes) =>
+		nodes.map((node) => ({ key: node.getAttribute("data-group"), text: node.textContent?.trim() ?? "" })),
+	);
+	console.log(`semantic flight query settled: ${JSON.stringify(flightSettled)}`);
+	const contentFlight = flightSettled.find((tab) => tab.key === "content");
+	const tgFlight = flightSettled.find((tab) => tab.key === "source:telegram");
+	const kkFlight = flightSettled.find((tab) => tab.key === "source:kakao");
+	if (contentFlight !== undefined) check("Jev gate filters unrelated local Document Content hits on flight query (< 20)", !/20$/.test(contentFlight.text), contentFlight.text);
+	if (tgFlight !== undefined) {
+		const tgCount = Number(/(\d+)$/.exec(tgFlight.text)?.[1] ?? "999");
+		check("Jev gate suppresses unrelated Telegram hits on flight query (30 -> <= 2)", tgCount <= 2, tgFlight.text);
+	}
+	if (kkFlight !== undefined) check("Jev gate keeps semantically relevant Kakao airline hits on flight query", /[1-9]\d*$/.test(kkFlight.text), kkFlight.text);
+
+	// Restore original query from cache before testing Ask AI Search.
+	await searchInput.click();
+	await searchInput.fill(QUERY);
+	await searchInput.press("Enter");
+	await sleep(200);
 	// 6. Ask AI Search takes the same query to the chat.
 	await page.locator(".search-ask").click();
 	await page.locator(".user-msg .bubble").first().waitFor({ timeout: 10000 });

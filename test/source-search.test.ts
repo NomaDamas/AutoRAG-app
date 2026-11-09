@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RetrievalDiagnostic, RetrievalResult, RetrievalSelection } from "@autorag/librarian";
 import { createSourceSearch, sourceHit, type SourceSearchRuntime } from "../src/main/source-search";
+import { createSearchRelevanceGate } from "../src/main/search-relevance-gate";
 
 function result(id: string, score: number, metadata: Record<string, unknown>, content = "회의 일정 정리"): RetrievalResult {
 	return { id, content, source: `src:${id}`, score, metadata };
@@ -81,6 +82,47 @@ describe("datasource search", () => {
 		await search.datasources();
 		await search.search("slack", "a");
 		expect(opened()).toBe(1);
+	});
+
+	it("auto-passes exact/approx matches and drops unrelated datasource hits below Jev 0.5", async () => {
+		const gate = createSearchRelevanceGate({
+			resolveBackends: async () => ({
+				primary: {
+					name: "jev",
+					judge: async (req) => ({
+						model: "jev-1.13",
+						answers: req.questions.map((q) => ({ answer: q.question.includes("이스타항공") ? 0.88 : 0.03 })),
+					}),
+				},
+			}),
+			coalesceMs: 0,
+		});
+		const search = createSourceSearch({
+			loadConfig: async () => ({ raw: { datasources: { telegram: {}, kakao: {} } }, key: "k" }),
+			open: () => ({
+				listDatasources: () => [{ datasourceId: "telegram" }, { datasourceId: "kakao" }],
+				searchSelected: async (_query, selection) => ({
+					results:
+						selection?.datasourceIds?.[0] === "telegram"
+							? [result("tg-noise", 1, { chatTitle: "Dev" }, "게이트 형식을 이해했습니다")]
+							: [
+									result("kk-noise", 1, { chatName: "단톡방" }, "오늘 저녁 뭐 먹을까요"),
+									result("kk-sem", 0.8, { chatName: "알림톡" }, "[이스타항공] 온라인 체크인 안내"),
+									result("kk-lex", 0.6, { chatName: "여행방" }, "비행기 예약 확인서 보냈어"),
+								],
+					diagnostics: [],
+				}),
+			}),
+			relevanceGate: gate,
+		});
+
+		const [tg, kk] = await Promise.all([
+			search.search("telegram", "비행기예약확인증"),
+			search.search("kakao", "비행기예약확인증"),
+		]);
+
+		expect(tg).toEqual({ state: "ok", hits: [], error: null });
+		expect(kk.hits.map((hit) => hit.id)).toEqual(["kk-lex", "kk-sem"]);
 	});
 });
 
