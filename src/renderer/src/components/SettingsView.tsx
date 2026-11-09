@@ -429,6 +429,14 @@ export function SettingsView({
 			<aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
 				{/* Level with the Finder sidebar's head: room for the traffic lights, and the window drags from it. */}
 				<div className="settings-sidebar-head" aria-hidden="true" />
+				<div className="settings-sidebar-backrow">
+					<button type="button" className="settings-nav-item settings-sidebar-back" onClick={onBack}>
+						<span className="settings-nav-icon" aria-hidden="true">
+							<ChevronLeftIcon size={14} />
+						</span>
+						<span>{t("toolbar.back")}</span>
+					</button>
+				</div>
 				<div className="sidebar-search flex-none px-10 pt-2 pb-8">
 					<label className="side-search settings-search flex items-center gap-7 h-30 pl-9 pr-6 border border-transparent rounded-8 bg-hover text-ink-muted transition-[background,border-color,box-shadow,color] duration-(--dur-color) ease-[ease] hover:bg-hover-strong focus-within:bg-window focus-within:border-accent focus-within:text-accent-hover focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
 						<SearchIcon className="flex-none" />
@@ -458,14 +466,6 @@ export function SettingsView({
 							<Keycap label={focusSearchShortcut} />
 						) : null}
 					</label>
-				</div>
-				<div className="settings-sidebar-backrow">
-					<button type="button" className="settings-nav-item settings-sidebar-back" onClick={onBack}>
-						<span className="settings-nav-icon" aria-hidden="true">
-							<ChevronLeftIcon size={14} />
-						</span>
-						<span>{t("toolbar.back")}</span>
-					</button>
 				</div>
 				<div className="settings-sidebar-scroll">
 					<nav aria-label={t("settingsCore.view.menuAria")} style={{ display: "contents" }}>
