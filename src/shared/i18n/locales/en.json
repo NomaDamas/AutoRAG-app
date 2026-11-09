@@ -764,6 +764,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "Stop compressing?",
+    "compressStopMessage": "Compressing {{name}} stops and the partial archive is deleted.",
+    "compressStopAction": "Stop",
+    "compressKeep": "Keep Compressing",
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
     "emptyTrashAction": "Empty",
@@ -1532,6 +1536,7 @@
       "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)",
       "reduceCancelled": "Cancelled reducing {{name}}",
+      "compressCancelled": "Stopped compressing {{name}}",
       "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller · original in Trash)"
     },
     "indexStatus": {
@@ -3270,6 +3275,7 @@
     "reduceDone": "Size reduced · {{name}}",
     "reduceFailed": "Couldn’t reduce size · {{name}}",
     "reduceOpen": "Show Reduce Size status",
+    "compressOpen": "Stop compressing",
     "convertRunning": "Converting · {{name}}",
     "convertQueued": "Waiting to convert · {{name}}",
     "convertDone": "Converted · {{name}}",

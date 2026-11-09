@@ -764,6 +764,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "압축을 중지할까요?",
+    "compressStopMessage": "{{name}} 압축을 중지하고 만들던 압축 파일을 지웁니다.",
+    "compressStopAction": "중지",
+    "compressKeep": "계속 압축",
     "emptyTrashTitle": "휴지통 비우기",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
     "emptyTrashAction": "비우기",
@@ -1532,6 +1536,7 @@
       "animatedReduce": "움직이는 이미지는 용량을 줄이면 애니메이션이 사라져 지원하지 않습니다",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)",
       "reduceCancelled": "{{name}} 용량 줄이기를 취소했습니다",
+      "compressCancelled": "{{name}} 압축을 중지했습니다",
       "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소 · 원본은 휴지통에 보관됨)"
     },
     "indexStatus": {
@@ -3270,6 +3275,7 @@
     "reduceDone": "용량 줄이기 완료 · {{name}}",
     "reduceFailed": "용량 줄이기 실패 · {{name}}",
     "reduceOpen": "용량 줄이기 상태 열기",
+    "compressOpen": "압축 중지하기",
     "convertRunning": "변환 중 · {{name}}",
     "convertQueued": "변환 대기 중 · {{name}}",
     "convertDone": "변환 완료 · {{name}}",

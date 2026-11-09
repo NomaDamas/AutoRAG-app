@@ -965,6 +965,17 @@ export function App(): ReactElement {
 					onCancel={() => finder?.cancelEmptyTrash()}
 				/>
 			) : null}
+			{finder?.compressStop == null ? null : (
+				<ConfirmDialog
+					title={t("confirm.compressStopTitle")}
+					message={t("confirm.compressStopMessage", { name: finder.compressStop.name })}
+					confirmLabel={t("confirm.compressStopAction")}
+					cancelLabel={t("confirm.compressKeep")}
+					danger
+					onConfirm={() => finder.confirmCompressStop()}
+					onCancel={() => finder.keepCompressing()}
+				/>
+			)}
 			{finder?.closeEvidenceFolderConfirm === true ? (
 				<ConfirmDialog
 					title={t("confirm.closeEvidenceFolderTitle")}

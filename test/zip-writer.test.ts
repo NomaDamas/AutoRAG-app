@@ -134,4 +134,30 @@ describe("writeZip", () => {
 		await expect(writeZip(join(root, "gone.zip"), list)).rejects.toThrow();
 		expect(await readdir(root)).not.toContain("gone.zip");
 	});
+
+	it("hears every source byte once, streamed or not", async () => {
+		const files = { "a.txt": TEXT, "big.bin": randomBytes(300 * 1024), "b.txt": Buffer.from("tail") };
+		let heard = 0;
+		await writeZip(join(root, "count.zip"), await members(files), {
+			streamFileBytes: 64 * 1024,
+			chunkBytes: 16 * 1024,
+			onBytes: (bytes) => {
+				heard += bytes;
+			},
+		});
+		expect(heard).toBe(Object.values(files).reduce((sum, body) => sum + body.length, 0));
+	});
+
+	it("stops mid-file on abort and leaves no partial archive", async () => {
+		const controller = new AbortController();
+		const list = await members({ "big.bin": randomBytes(300 * 1024), "after.txt": TEXT });
+		const write = writeZip(join(root, "stopped.zip"), list, {
+			streamFileBytes: 64 * 1024,
+			chunkBytes: 16 * 1024,
+			signal: controller.signal,
+			onBytes: () => controller.abort(),
+		});
+		await expect(write).rejects.toThrow();
+		expect(await readdir(root)).toEqual(["src"]);
+	});
 });
