@@ -63,7 +63,7 @@ chmodSync(minsyncStub, 0o755);
 writeFileSync(join(DOCS, "refund-policy.txt"), ["환불 정책", "구매 후 7일 이내에는 사유와 관계없이 전액 환불이 가능합니다.", "7일이 지난 뒤에는 제품 결함이 확인된 경우에만 환불합니다.", ""].join("\n"));
 
 // A loopback proxy in front of OpenRouter that counts, and never alters, what passes.
-const traffic = { decision: [], other: [] };
+const traffic = { decision: [], other: [], statuses: [] };
 const proxy = createServer((req, res) => {
 	const chunks = [];
 	req.on("data", (chunk) => chunks.push(chunk));
@@ -82,6 +82,7 @@ const proxy = createServer((req, res) => {
 		const headers = { ...req.headers, host: "openrouter.ai", "content-length": String(body.length) };
 		delete headers["accept-encoding"];
 		const upstream = httpsRequest(`https://openrouter.ai${req.url}`, { method: req.method, headers }, (reply) => {
+			traffic.statuses.push(`${decision ? "decision" : "chat"} ${model} -> ${reply.statusCode}`);
 			res.writeHead(reply.statusCode ?? 502, reply.headers);
 			reply.pipe(res);
 		});
@@ -185,6 +186,11 @@ try {
 	}
 	console.log(`approval cards allowed: ${approvals}`);
 	const error = (await page.locator(".ai .text-danger-text").first().textContent({ timeout: 1000 }).catch(() => null)) ?? "";
+	if (error !== "" || traffic.statuses.some((status) => !status.endsWith("-> 200"))) {
+		console.log(`upstream statuses: ${JSON.stringify(traffic.statuses)}`);
+		await page.getByText("Show details", { exact: true }).first().click({ timeout: 2000 }).catch(() => undefined);
+		console.log(`error panel: ${((await page.locator(".ai").first().innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").slice(0, 900)}`);
+	}
 	check("AI Search shows no error", error === "", error);
 	const proses = page.locator(".assistant-msg .assistant-prose");
 	let answer = "";

@@ -193,7 +193,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
-  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0). MinSync replaced its BM25 index with
+  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0 or newer). MinSync replaced its BM25 index with
     learned-sparse retrieval (`nlpai-lab/KURE-Sparse-nano`), which matches Korean inflected forms
     (`인증서를` for `인증서`) with no tokenizer library, so Kiwi is gone. The installer carries the model and
     `bundled-sparse-model.ts` seeds it into MinSync's cache at startup. The first refresh after the upgrade
@@ -753,7 +753,7 @@ resumes at the same step.
   app reads this one only to draw the display. What is known of it is narrow. The
   header and the `committed` lines were measured on MinSync 0.6.1 only. The `failed`
   and `deleted` lines were not seen in a real run (their test follows MinSync's
-  source, `journal.rs`). The supported floor, 0.6.0 (`MINSYNC_MIN_VERSION`), was not
+  source, `journal.rs`). The supported floor, 0.7.1 (`MINSYNC_MIN_VERSION`), was not
   measured at all. So the tally skips any line it does not recognize, and the
   journal can only raise a count above MinSync's own `minsync.synced/total` in
   `refresh-progress.json`: a format it cannot read adds nothing, and the screens fall
@@ -774,6 +774,13 @@ resumes at the same step.
   The bar sits on fixed stage shares (parse 10%, MinSync's embedding or keyword stage 80%,
   finalize 10%); MinSync's stage is filled by `bytes.done / bytes.total` when the staged
   sizes are known and by file counts otherwise, so a few large files cannot show as nearly done.
+  Since librarian 2.13.7 MinSync syncs alongside parsing: `refresh-progress.json` keeps `phase: "parsed"` while
+  `minsync.synced/total` already moves (measured on a real 120-file refresh: parsing at 65 of 120 with MinSync at 0 of 25, then 50 of 83),
+  and `minsync.total` grows with every committed batch. `computeIndexProgress` therefore shows MinSync's stage `running` with its own counts as soon
+  as it has reported, next to the still running read stage, while the bar and the remaining time stay with the read stage (a share of a
+  growing total would move the bar backwards); once parsing ends the bar moves on to MinSync's stage. A sync that fails leaves one
+  `minsync-sync-failed` warning per file it covered; `index-refresh.ts` folds them into one `minsync-batch-skipped` diagnostic with
+  `count`, which the banner counts as files left out (`skippedFileCount`) and the next refresh retries.
   Nothing in it is filled from elapsed time; the old `computeIndexingProgress`
   (`onboarding-progress.ts`), which did that, is gone.
 
