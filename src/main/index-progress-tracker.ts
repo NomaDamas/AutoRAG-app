@@ -93,6 +93,8 @@ interface RunState {
 	tally: MinsyncJournalTally | null;
 	sizes: StagedSizes | null;
 	sizesLoading: boolean;
+	/** The furthest the whole-run bar has been drawn in this run: it is never drawn further back. */
+	fraction: number;
 }
 
 function parseTime(iso: string | null): number | null {
@@ -105,7 +107,7 @@ export function createIndexProgressTracker(deps: { readonly now?: () => number }
 	let run: RunState | null = null;
 
 	function startRun(key: string): RunState {
-		return { key, history: EMPTY_RATE_HISTORY, journalSignature: "", tally: null, sizes: null, sizesLoading: false };
+		return { key, history: EMPTY_RATE_HISTORY, journalSignature: "", tally: null, sizes: null, sizesLoading: false, fraction: 0 };
 	}
 
 	function loadSizes(root: string, target: RunState): void {
@@ -179,7 +181,11 @@ export function createIndexProgressTracker(deps: { readonly now?: () => number }
 				current.history,
 			);
 			current.history = result.history;
-			return result.snapshot;
+			// Since librarian 2.13.7 a refresh runs several MinSync syncs, and `minsync.total` is cumulative: when one sync catches
+			// up (1,000 of 1,000) the next starts at 1,000 of 1,500, which would draw the bar back. The counts stay what MinSync says;
+			// only the bar keeps its furthest measured position within the run.
+			current.fraction = Math.max(current.fraction, result.snapshot.fraction);
+			return result.snapshot.fraction >= current.fraction ? result.snapshot : { ...result.snapshot, fraction: current.fraction };
 		},
 	};
 }

@@ -19,6 +19,8 @@ export interface IndexStageView {
 	readonly id: IndexStageId;
 	readonly label: string;
 	readonly state: IndexStageState;
+	/** The stage the run's bar, counts and remaining time are about. MinSync's stage can run beside it while parsing goes on, so `running` alone is not it. */
+	readonly current: boolean;
 }
 
 /** The heartbeat is still arriving (a large file may be taking long), or it stopped too. */
@@ -136,7 +138,7 @@ function warning(detail: IndexProgressSnapshot, now: number, t: ProgressTranslat
 }
 
 export function describeIndexProgress(detail: IndexProgressSnapshot, now: number, t: ProgressTranslate): IndexProgressView {
-	const stages = detail.stages.map((stage) => ({ id: stage.id, label: stageLabel(stage.id, t), state: stage.state }));
+	const stages = detail.stages.map((stage) => ({ id: stage.id, label: stageLabel(stage.id, t), state: stage.state, current: stage.id === detail.stage }));
 	const running = detail.stage === null ? undefined : detail.stages.find((stage) => stage.id === detail.stage);
 	const name = running === undefined ? null : stageLabel(running.id, t);
 	let etaLine: string | null = null;
