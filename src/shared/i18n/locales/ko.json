@@ -287,7 +287,7 @@
     },
     "evidencePanel": {
       "emptyTitle": "답변의 근거가\n여기에 표시됩니다.",
-      "excerpts": "근거 내용 발췌",
+      "excerpts": "근거 내용",
       "openInBrowser": "브라우저에서 열기",
       "evidenceFolder": "근거 폴더",
       "evidenceFolderTooltip": "현재 대화의 근거 파일을 임시 폴더 탭으로 열기",

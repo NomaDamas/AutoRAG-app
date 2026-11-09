@@ -66,8 +66,10 @@ import {
 	CompressIcon,
 	CopyIcon,
 	DatabaseIcon,
+	ExpandIcon,
 	ExtractIcon,
 	EyeIcon,
+	FileIcon,
 	FolderGlyph,
 	ImageEditIcon,
 	LinkIcon,
@@ -180,14 +182,20 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
 	reduce: ReduceSizeIcon,
 };
 
-/** What the right sidebar shows when it has nothing to say yet: the Dazzi mark, centred, with no caption. */
-function EmptyInspectorMark(): ReactElement {
+/** What the right sidebar shows when it has nothing to say yet: the faded monochrome Dazzi mark, centred, with no caption. */
+function FadedDazziMark(): ReactElement {
 	return (
-		<div className="flex flex-1 items-center justify-center">
-			<img src={dazziMark} alt="" draggable={false} style={{ width: 52, height: 52, objectFit: "contain" }} />
+		<div className="inspector-empty flex flex-1 min-h-0 items-center justify-center">
+			<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
+			{/* Dark mode has its own lighter mark, with its fade already in the image. */}
+			<img className="hidden size-67 object-contain dark:block" src={dazziMarkMonoDark} alt="" aria-hidden="true" draggable={false} />
 		</div>
 	);
 }
+
+/** A source's 파일 찾기 / 파일 열기 button (Figma 274:7253). */
+const EVIDENCE_ACTION =
+	"inline-flex items-center gap-4 rounded-8 border border-divider bg-window py-6 pl-8 pr-9 text-meta leading-[16px] text-ink-body cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover";
 
 export function Inspector({
 	entry,
@@ -335,11 +343,7 @@ function InfoHalf({
 			{entry === null ? (
 				<>
 					{/* Nothing selected: the Dazzi mark, faded, over a composer that asks about anything. */}
-					<div className="inspector-empty flex flex-1 min-h-0 items-center justify-center">
-						<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
-						{/* Dark mode has its own lighter mark, with its fade already in the image. */}
-						<img className="hidden size-67 object-contain dark:block" src={dazziMarkMonoDark} alt="" aria-hidden="true" draggable={false} />
-					</div>
+					<FadedDazziMark />
 					{chatDock}
 				</>
 			) : (
@@ -992,7 +996,7 @@ function EvidencePanel({
 				disabled={!canOpenFolder}
 				aria-label={t("inspector.evidencePanel.evidenceFolder")}
 				title={t("inspector.evidencePanel.evidenceFolderTooltip")}
-				className="evidence-folder-btn flex-none inline-flex items-center gap-5 h-22 px-8 rounded-6 border border-border bg-window text-badge font-semibold text-ink-body whitespace-nowrap cursor-pointer transition-[background,border-color,color] duration-(--dur-color) ease-[ease] enabled:hover:border-border-strong enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
+				className="evidence-folder-btn flex-none inline-flex items-center gap-4 h-22 px-8 rounded-5 border border-border bg-window text-badge font-medium leading-[16.5px] text-ink-body whitespace-nowrap cursor-pointer transition-[background,border-color,color] duration-(--dur-color) ease-[ease] enabled:hover:border-border-strong enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
 				onClick={onOpenEvidenceFolder}
 			>
 				<FolderGlyph size={13} />
@@ -1006,11 +1010,11 @@ function EvidencePanel({
 		return (
 			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 				{canOpenFolder ? (
-					<div className="flex items-center justify-end px-16 pt-18">
+					<div className="flex items-center justify-end px-12 pt-4">
 						{folderButton}
 					</div>
 				) : null}
-				<EmptyInspectorMark />
+				<FadedDazziMark />
 			</div>
 		);
 	}
@@ -1023,68 +1027,105 @@ function EvidencePanel({
 	const local = isLocalEvidenceSource(source);
 	const excerptImages = { folder: local ? dirname(source) : null, actions: imageActions };
 	const sourceImage = local ? imageTarget(source, null) : null;
+	const open = {
+		label: local ? t("inspector.evidencePanel.openPreview") : t("inspector.evidencePanel.openInBrowser"),
+		run: () => {
+			if (source === null) return;
+			onReveal(source, local ? [...item.excerpts, ...(item.summary.length > 0 ? [item.summary] : [])] : undefined);
+		},
+	};
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
-			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
-				<div className="evidence-header flex items-center justify-between gap-8 mb-12">
-					<div className="evidence-tabs flex min-w-0 flex-1 gap-3 overflow-auto">
-						{evidence.map((entry) => (
-							<button
-								type="button"
-								key={entry.number}
-								className={cn(
-									"evidence-tab flex-none inline-flex items-center justify-center size-22 rounded-6 border text-badge font-semibold cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-									entry.number === item.number ? "bg-accent border-accent text-on-accent" : "bg-window border-border text-ink-muted hover:text-ink",
+			<div className="inspector-body flex-1 min-h-0 overflow-auto">
+				<div className="flex flex-col gap-8 px-12 pt-4 pb-14">
+					<div className="evidence-header flex items-center justify-between gap-8">
+						<div className="evidence-tabs flex min-w-0 flex-1 gap-4 overflow-auto">
+							{evidence.map((entry) => (
+								<button
+									type="button"
+									key={entry.number}
+									className={cn(
+										"evidence-tab flex-none inline-flex items-center justify-center size-20 rounded-5 border text-badge font-medium cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
+										entry.number === item.number ? "bg-accent border-accent text-on-accent" : "bg-window border-border text-ink-muted hover:text-ink",
+									)}
+									onClick={() => onSelect(entry.number)}
+								>
+									{entry.number}
+								</button>
+							))}
+						</div>
+						{folderButton}
+					</div>
+
+					<div className="preview-card flex flex-col gap-12 rounded-12 border border-divider bg-window p-14">
+						<div className="relative">
+							{sourceImage?.kind === "local" && sourceImage.renderable ? (
+								<EvidenceImagePaper key={sourceImage.path} path={sourceImage.path} name={sourceImage.name} kind={evidenceKind(item.title)} onOpen={imageActions.onOpenImage} />
+							) : (
+								<div className="preview-paper flex h-128 flex-none items-center justify-center">
+									{url === null ? <FileTile kind={evidenceKind(item.title)} large /> : <LinkIcon size={36} className="text-ink-muted" />}
+								</div>
+							)}
+							{local || url !== null ? (
+								<button
+									type="button"
+									className="absolute top-0 right-0 flex size-28 items-center justify-center rounded-8 border-0 bg-window p-0 text-ink-body shadow-[0_0_2px_rgba(0,0,0,0.3)] cursor-pointer transition-colors duration-(--dur-color) ease-out hover:text-ink"
+									aria-label={open.label}
+									title={open.label}
+									onClick={open.run}
+								>
+									<ExpandIcon size={16} />
+								</button>
+							) : null}
+						</div>
+						<div className="flex items-center gap-8">
+							{url === null ? (
+								<FileTile kind={evidenceKind(item.title)} size={22} />
+							) : (
+								<span className="flex size-22 flex-none items-center justify-center rounded-6 bg-accent-soft text-accent" aria-hidden="true">
+									<LinkIcon size={13} />
+								</span>
+							)}
+							<div className="flex min-w-0 flex-1 flex-col gap-3">
+								<div className="preview-title text-body font-medium leading-[19px] text-ink [overflow-wrap:anywhere]">{heading}</div>
+								{url === null && detail === null ? null : (
+									<div className={cn("preview-sub truncate text-badge font-medium leading-[14px]", url === null ? "text-ink-faint" : "evidence-url text-accent-text")} title={url ?? undefined}>
+										{url ?? detail}
+									</div>
 								)}
-								onClick={() => onSelect(entry.number)}
-							>
-								{entry.number}
+							</div>
+						</div>
+					</div>
+
+					{local || url !== null ? (
+						<div className="evidence-actions flex flex-wrap gap-4">
+							{local ? (
+								<button type="button" className={EVIDENCE_ACTION} onClick={() => onReveal(source!)}>
+									<FileIcon size={12} />
+									{t("inspector.chat.showInList")}
+								</button>
+							) : null}
+							<button type="button" className={EVIDENCE_ACTION} onClick={open.run}>
+								<ExpandIcon size={12} />
+								{local ? t("inspector.chat.preview") : t("inspector.evidencePanel.openInBrowser")}
 							</button>
+						</div>
+					) : null}
+
+					<div className="h-px bg-divider" aria-hidden="true" />
+					<div className="flex h-22 items-center text-meta font-medium leading-[16px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
+					<div className="flex flex-col gap-8">
+						{item.summary.length === 0 ? null : (
+							<InlineWithImages
+								text={item.summary}
+								images={excerptImages}
+								className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold"
+							/>
+						)}
+						{item.excerpts.map((excerpt, index) => (
+							<EvidenceExcerpt key={`${index}`} text={excerpt} images={excerptImages} />
 						))}
 					</div>
-					{folderButton}
-				</div>
-
-				{sourceImage?.kind === "local" && sourceImage.renderable ? (
-					<EvidenceImagePaper key={sourceImage.path} path={sourceImage.path} name={sourceImage.name} kind={evidenceKind(item.title)} onOpen={imageActions.onOpenImage} />
-				) : (
-					<div className="preview-paper flex-none h-152 flex items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-raised mb-14">
-						{url === null ? <FileTile kind={evidenceKind(item.title)} large /> : <LinkIcon size={36} className="text-ink-muted" />}
-					</div>
-				)}
-				{!local && url === null ? (
-					<div className="preview-title text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere]">
-						{item.number}. {heading}
-					</div>
-				) : (
-					<button
-						type="button"
-						className="preview-title text-left text-body font-semibold text-ink leading-[1.3] [overflow-wrap:anywhere] cursor-pointer border-0 bg-transparent p-0 transition-colors duration-(--dur-color) ease-[ease] hover:text-accent-text"
-						title={url === null ? t("inspector.evidencePanel.openPreview") : t("inspector.evidencePanel.openInBrowser")}
-						onClick={() => onReveal(source!, local ? [...item.excerpts, ...(item.summary.length > 0 ? [item.summary] : [])] : undefined)}
-					>
-						{item.number}. {heading}
-					</button>
-				)}
-				{url === null ? null : (
-					<div className="evidence-url mt-4 text-badge text-accent-text truncate" title={url}>
-						{url}
-					</div>
-				)}
-				{detail === null ? null : <div className="preview-sub mt-4 text-badge text-ink-muted">{detail}</div>}
-
-				<div className="text-badge font-semibold text-ink-muted">{t("inspector.evidencePanel.excerpts")}</div>
-				<div className="flex flex-col gap-8 mt-4">
-					{item.summary.length === 0 ? null : (
-						<InlineWithImages
-							text={item.summary}
-							images={excerptImages}
-							className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold"
-						/>
-					)}
-					{item.excerpts.map((excerpt, index) => (
-						<EvidenceExcerpt key={`${index}`} text={excerpt} images={excerptImages} />
-					))}
 				</div>
 			</div>
 		</div>
