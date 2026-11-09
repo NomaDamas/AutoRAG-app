@@ -1,4 +1,6 @@
+import type { ContentSearchResult } from "./content-search-contract";
 import type { IndexStatus } from "./index-contract";
+import type { IndexMap } from "./index-map-contract";
 import type { NewFileFormatId } from "./new-file-contract";
 
 /**
@@ -524,8 +526,12 @@ export interface FsVersionFamilyBridge {
 export interface FsIndexBridge {
 	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	/** Every file and folder under the search roots and what the index holds for each; walks the scope on each call. */
+	indexMap(): Promise<IndexMap>;
 	/** Fires when the refresh a toggle started has settled; `error` is null on success. */
 	onIndexRefreshed?(listener: (error: string | null) => void): () => void;
+	/** Files whose text matches `query` in the local document index, best first (no model runs). */
+	contentSearch(query: string, limit?: number): Promise<ContentSearchResult>;
 }
 
 export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge, FsIndexBridge, FsDragBridge {}

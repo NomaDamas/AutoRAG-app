@@ -170,8 +170,9 @@ try {
 	check("rerank choice writes rerank block", Boolean(await waitFor(() => typeof readConfig().rerank?.model === "string" && /rerank/u.test(readConfig().rerank.model))), JSON.stringify(readConfig().rerank));
 
 	await page.locator('[data-role="jev"]').click();
-	await page.locator(".settings-menu .settings-menu-item", { hasText: "Disabled" }).click();
-	check("jev off writes jev:false", Boolean(await waitFor(() => readConfig().jev === false)));
+	const jevDisabled = await page.locator(".settings-menu .settings-menu-item", { hasText: "Disabled" }).count();
+	check("jev picker keeps the required model enabled", jevDisabled === 0 && readConfig().jev !== false, JSON.stringify({ disabledOptions: jevDisabled, jev: readConfig().jev }));
+	await page.keyboard.press("Escape");
 
 	// Real /login session: API-key login for an unconfigured provider prompts for the key.
 	await page.locator(".settings-add-row").click();
@@ -259,9 +260,14 @@ try {
 	await page.locator('.linear-row:has-text("exact duplicate") [role="switch"]').click();
 	check("duplicates toggle writes excludeExactDuplicates", Boolean(await waitFor(() => readConfig().excludeExactDuplicates === false)));
 	await nav("Search Scope");
+	// "Add folder" opens the system folder dialog, which is the OS's: answer it as a person picking this folder would.
+	const picked = join(workspace, "extra");
+	mkdirSync(picked, { recursive: true });
+	await app.evaluate(({ dialog }, paths) => {
+		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths });
+	}, [picked]);
 	await page.locator("button", { hasText: "Add folder" }).click();
-	await page.locator(".settings-modal input").fill(join(workspace, "docs"));
-	await page.locator(".settings-modal .settings-btn-primary").click();
+	check("a folder picked in the system dialog is written to searchPaths", Boolean(await waitFor(() => readConfig().searchPaths?.includes(picked))), JSON.stringify(readConfig().searchPaths));
 	await page.screenshot({ path: join(EVIDENCE, "08-scope.png") });
 
 	// Account/plan are UI-only: no fabricated account data.

@@ -12,6 +12,13 @@ export { providerConnectRoute, withoutAutorag } from "./account-contract";
 
 export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel";
 
+/**
+ * `jev.backend` that makes the small chat model (`jev.sllm.model`, else the question-decomposition model) the decision
+ * model: the librarian never calls Jev, so no Jev provider or credential is needed. It is not a {@link JevBackend}: no
+ * provider serves it and it has no Jev model ids.
+ */
+export const JEV_SLLM_BACKEND = "sllm";
+
 export interface RoleModel {
 	readonly id: string;
 	readonly label: string;

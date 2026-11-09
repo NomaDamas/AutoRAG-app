@@ -12,14 +12,17 @@ import {
 	clipboard,
 	ClipboardItem,
 	dialog,
+	globalShortcut,
 	ipcMain,
 	nativeTheme,
 	Notification,
 	powerSaveBlocker,
 	protocol,
 	safeStorage,
+	screen,
 	ShareMenu,
 	shell,
+	systemPreferences,
 	type OpenDialogOptions,
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
@@ -33,8 +36,8 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc } from "../preview/node/register";
-import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
+import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, resolveConfigReadOnly, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
@@ -42,6 +45,7 @@ import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
 import { autoragHome } from "./autorag-home";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -100,7 +104,7 @@ import { resolveMcpConnectInfo } from "./mcp-connect-info";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
-import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
+import { resolveConfiguredSessionModel, resolveSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -108,6 +112,7 @@ import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
 import {
@@ -131,17 +136,22 @@ import {
 	registerServicesIpcHandlers,
 	registerSmartIndexingIpcHandlers,
 	registerSettingsIpcHandlers,
+	registerVoiceIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createVoiceService, systemMicrophoneAccess } from "./voice-service";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
 import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
 import { DEFAULT_SCAN_INTERVAL_MINUTES } from "./version-family-service";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
+import { normalizeOsLaunchRequest, OS_REQUEST_CHANNELS, parseOsRequestArgv } from "../shared/os-request-contract";
 import { listenForOsRequests, osRequestEndpoint, sendOsRequest } from "./os-request-channel";
 import { createOsRequestService, diskKindOf } from "./os-request-service";
+import { createQuickSearchShortcut, type QuickSearchShortcut } from "./quick-search-shortcut";
+import { createQuickSearchWindow, type QuickSearchWindow } from "./quick-search-window";
 import { createOsMenuIntegration, menuLabels } from "./os-menu-integration";
 import { installCli } from "./cli-install";
 import { initErrorReporting, setErrorReportingEnabled } from "./error-reporting";
@@ -241,11 +251,10 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 }
 
 function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, phase: WindowPhase): BrowserWindow {
+	const workArea = screen.getPrimaryDisplay().workAreaSize;
+	const windowSize = appWindowSize(workArea, phase);
 	const window = new BrowserWindow({
-		// Onboarding uses the prototype's 1120×720 canvas; the Finder keeps its own size.
-		...(phase === "onboarding"
-			? { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true }
-			: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 }),
+		...windowSize,
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
@@ -275,18 +284,21 @@ function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, p
 
 	loadRendererPage(window, "index.html");
 	// Only the Finder previews files; the onboarding window has nothing to preview.
-	if (phase === "finder") {
-		attachQuickLook(window, {
-			preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
-			appearance,
-			language: currentLanguage,
-			loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
-			// Spawning osascript blocks the caller for the fork; the worker pays it.
-			defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
-			quickLookChord: () => currentQuickLookChord,
-		});
-	}
+	if (phase === "finder") attachQuickLook(window, quickLookOptions(appearance));
 	return window;
+}
+
+/** The Quick Look panel's options; the Finder and the quick-search launcher each own one panel. */
+function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
+	return {
+		preload: join(import.meta.dirname, "../preload/quick-look.mjs"),
+		appearance,
+		language: currentLanguage,
+		loadPage: (preview) => loadRendererPage(preview, "quick-look.html"),
+		// Spawning osascript blocks the caller for the fork; the worker pays it.
+		defaultApp: (path) => (fsWorker === null ? Promise.resolve(null) : fsWorker.client.call<string | null>("defaultApp", [path])),
+		quickLookChord: () => currentQuickLookChord,
+	};
 }
 
 let fsWorker: FsWorkerHost | null = null;
@@ -294,6 +306,8 @@ let fsWorker: FsWorkerHost | null = null;
 let remoteHost: RemoteHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let currentQuickLookChord = "Space";
+/** The system-wide quick-search shortcut; null until startup built the launcher it summons. */
+let quickSearchShortcut: QuickSearchShortcut | null = null;
 /** The Finder window: always open, whether or not first-run onboarding is still going. */
 let mainWindow: BrowserWindow | null = null;
 /** First-run onboarding, a window of its own beside the Finder; null once it is closed or finished. */
@@ -364,6 +378,17 @@ const SOURCE_PROBE_TIMEOUT_MS = 15_000;
 
 /** Longest the onboarding model check waits for the chosen model to answer one short prompt. */
 const MODEL_CHECK_TIMEOUT_MS = 30_000;
+
+/**
+ * The question-splitting model with its credentials, resolved exactly as the
+ * answer model is: the shared config with `queryDecomposition.model` standing in
+ * for `model`. `false` (split with the answer model) checks the answer model.
+ */
+function resolveDecompositionModel(): ReturnType<typeof resolveConfiguredSessionModel> {
+	const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
+	const decomposition = config.queryDecomposition === false ? undefined : config.queryDecomposition?.model;
+	return resolveSessionModel(decomposition === undefined ? config : { ...config, model: decomposition }, process.env, process.cwd(), getAgentDir());
+}
 
 /** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
 function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
@@ -833,10 +858,15 @@ app.whenReady().then(async () => {
 			}
 			setErrorReportingEnabled(settings.errorReporting);
 			currentQuickLookChord = resolveEffectiveShortcuts(settings.shortcuts).quickLook;
+			quickSearchShortcut?.apply(settings.quickSearch);
 			applyAppearance(settings.appearance);
 			applyLanguage(settings.language);
 			applyScanInterval(settings.dupeyScanIntervalMinutes);
-			void applyRemoteAccess(settings.remoteAccess);
+			// A failed start (port taken) is shown in Settings through the status's `serverError`, not thrown at nobody.
+			applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
+				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+			});
+			void remoteHost?.setTunnelHostname(settings.remoteTunnelHostname);
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -856,6 +886,11 @@ app.whenReady().then(async () => {
 		configPath: autoragConfigPath,
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
 		journalPath: () => schedulePath.activity,
+		// Keyword-only runs MinSync too, as a keyword index; the progress screens name that stage by this switch.
+		semanticSearch: () => {
+			const configPath = autoragConfigPath();
+			return !existsSync(configPath) || readAppIndexing(readRawConfigObject(configPath)).semanticSearch;
+		},
 		// The fs worker runs the checkbox-toggle refresh, so its pid marks that run as this app's own.
 		ownPids: () => [workerHost.status().pid],
 	});
@@ -915,37 +950,48 @@ app.whenReady().then(async () => {
 		actions: ACTIONS_CHANNELS,
 		analytics: ANALYTICS_CHANNELS,
 	} as const;
+	const ensureRemoteHost = (): RemoteHost => {
+		remoteHost ??= createRemoteHost({
+			rendererRoot: join(import.meta.dirname, "../renderer"),
+			stateDir: join(app.getPath("userData"), "settings"),
+			host: "0.0.0.0",
+			port: async () => (await settingsService.get()).remotePort,
+			icons: iconProvider,
+			workerHost,
+			targets: remoteTargets,
+			window: () => mainWindow,
+			settings: () => settingsService.get(),
+			onStatusChanged: (next) => sendToAllWindows(REMOTE_CHANNELS.changed, next),
+		});
+		return remoteHost;
+	};
 	async function applyRemoteAccess(enabled: boolean): Promise<void> {
 		if (enabled) {
-			remoteHost ??= createRemoteHost({
-				rendererRoot: join(import.meta.dirname, "../renderer"),
-				host: "0.0.0.0",
-				port: (await settingsService.get()).remotePort,
-				icons: iconProvider,
-				workerHost,
-				targets: remoteTargets,
-				window: () => mainWindow,
-				settings: () => settingsService.get(),
-			});
-			await remoteHost.start();
+			await ensureRemoteHost().start();
 			return;
 		}
 		await remoteHost?.stop();
 	}
-	const remoteStatus = async (): Promise<RemoteAccessStatus> => {
-		const status = remoteHost?.status() ?? { serving: false, origin: null, sessions: 0 };
-		const port = status.origin === null ? (await settingsService.get()).remotePort : Number(new URL(status.origin).port);
-		return { serving: status.serving, origin: status.origin, port, sessions: status.sessions };
-	};
+	const remoteStatus = (): Promise<RemoteAccessStatus> => ensureRemoteHost().status();
 	ipcMain.handle(REMOTE_CHANNELS.status, () => remoteStatus());
+	// The Settings switch reports the outcome as status (`serving` / `serverError`) instead of rejecting the call.
 	ipcMain.handle(REMOTE_CHANNELS.start, async () => {
-		await applyRemoteAccess(true);
+		await applyRemoteAccess(true).catch(() => undefined);
 		return remoteStatus();
 	});
 	ipcMain.handle(REMOTE_CHANNELS.stop, async () => {
 		await applyRemoteAccess(false);
 		return remoteStatus();
 	});
+	ipcMain.handle(REMOTE_CHANNELS.startPairing, () => ensureRemoteHost().startPairing());
+	ipcMain.handle(REMOTE_CHANNELS.devices, () => ensureRemoteHost().devices());
+	ipcMain.handle(REMOTE_CHANNELS.renameDevice, (_event, id: string, label: string) => ensureRemoteHost().renameDevice(id, label));
+	ipcMain.handle(REMOTE_CHANNELS.revokeDevice, (_event, id: string) => ensureRemoteHost().revokeDevice(id));
+	ipcMain.handle(REMOTE_CHANNELS.revokeAllDevices, () => ensureRemoteHost().revokeAllDevices());
+	ipcMain.handle(REMOTE_CHANNELS.refreshNetwork, () => ensureRemoteHost().refreshNetwork());
+	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
+	ipcMain.handle(REMOTE_CHANNELS.loginTunnel, () => ensureRemoteHost().loginTunnel());
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});
@@ -990,6 +1036,26 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	const listCloudDrives = async (): Promise<readonly { readonly path: string; readonly name: string }[]> => {
+		if (process.platform === "darwin") {
+			const root = join(home, "Library", "CloudStorage");
+			const names = await readdir(root).catch(() => [] as string[]);
+			// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
+			return names
+				.filter((name) => !name.startsWith("."))
+				.map((name) => {
+					const dash = name.indexOf("-");
+					return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
+				});
+		}
+		if (process.platform === "win32") {
+			const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
+			return locations
+				.filter((location) => location.section === "cloud" && location.available)
+				.map((location) => ({ path: location.path, name: location.name }));
+		}
+		return [];
+	};
 	registerSmartIndexingIpcHandlers(
 		createSmartIndexingService({
 			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
@@ -997,6 +1063,7 @@ app.whenReady().then(async () => {
 			agentDir: getAgentDir(),
 			env: process.env,
 			language: () => currentLanguage,
+			cloudRoots: async () => (await listCloudDrives()).map((drive) => drive.path),
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
@@ -1066,6 +1133,18 @@ app.whenReady().then(async () => {
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
+	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone permission.
+	registerVoiceIpcHandlers(
+		createVoiceService({
+			env: process.env,
+			readKey: () => readDazziPlanCredential(getAgentDir()),
+			microphone: systemMicrophoneAccess({
+				platform: process.platform,
+				preferences: systemPreferences,
+				openExternal: (url) => shell.openExternal(url),
+			}),
+		}),
+	);
 	void accountService.refresh().catch(() => undefined);
 	app.once("will-quit", () => void accountService.dispose());
 
@@ -1083,26 +1162,7 @@ app.whenReady().then(async () => {
 		},
 		iCloudDrivePath:
 			process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
-		cloudDrives: async () => {
-			if (process.platform === "darwin") {
-				const root = join(home, "Library", "CloudStorage");
-				const names = await readdir(root).catch(() => [] as string[]);
-				// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
-				return names
-					.filter((name) => !name.startsWith("."))
-					.map((name) => {
-						const dash = name.indexOf("-");
-						return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
-					});
-			}
-			if (process.platform === "win32") {
-				const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
-				return locations
-					.filter((location) => location.section === "cloud" && location.available)
-					.map((location) => ({ path: location.path, name: location.name }));
-			}
-			return [];
-		},
+		cloudDrives: listCloudDrives,
 		localSpec,
 		ocrEnabled: async () => {
 			try {
@@ -1167,9 +1227,9 @@ app.whenReady().then(async () => {
 				return null;
 			}
 		},
-		checkModel: () =>
+		checkModel: (role) =>
 			checkModelHealth({
-				resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+				resolveModel: () => (role === "decomposition" ? resolveDecompositionModel() : resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir())),
 				complete: completeSimple,
 				timeoutMs: MODEL_CHECK_TIMEOUT_MS,
 				now: Date.now,
@@ -1268,6 +1328,40 @@ app.whenReady().then(async () => {
 		sendToMainWindow(OS_REQUEST_CHANNELS.available, null);
 	};
 	if (launchRequest !== null) void osRequests.push(launchRequest);
+	// The quick-search launcher: a system-wide shortcut summons it over any app (Settings → General).
+	const launcher: QuickSearchWindow = createQuickSearchWindow({
+		preload: join(import.meta.dirname, "../preload/quick-search.mjs"),
+		appearance: currentAppearance,
+		language: currentLanguage,
+		loadPage: (window) => loadRendererPage(window, "quick-search.html"),
+		revealInApp: (path) => osRequests.push({ action: "reveal", paths: [path] }),
+		// Same checks as `dazzi --ask`: a blank, oversized, or NUL-carrying question queues nothing.
+		ask: (query) => {
+			const request = normalizeOsLaunchRequest({ action: "ask", paths: [], query });
+			if (request !== null) void osRequests.push(request);
+		},
+		attach: (paths) => osRequests.push({ action: "ask", paths }),
+		status: () => quickSearchShortcut?.status() ?? { registered: false, error: null },
+		setRecording: (recording) => quickSearchShortcut?.setPaused(recording),
+		// Above the launcher, which sits at `pop-up-menu` on macOS and `screen-saver` on Windows.
+		attachPreview: (owner) => attachQuickLook(owner, { ...quickLookOptions(currentAppearance), level: "screen-saver", closeWithOwner: true }),
+	});
+	quickSearchShortcut = createQuickSearchShortcut({
+		register: (accelerator, callback) => globalShortcut.register(accelerator, callback),
+		unregister: (accelerator) => globalShortcut.unregister(accelerator),
+		onPress: () => launcher.toggle(),
+	});
+	quickSearchShortcut.apply(settings.quickSearch);
+	// Windows and Linux quit when the last app window closes; the hidden launcher must not keep the app alive.
+	app.on("browser-window-created", (_event, created) => {
+		created.once("closed", () => {
+			if (process.platform !== "darwin" && appWindows().length === 0) launcher.destroy();
+		});
+	});
+	app.once("will-quit", () => {
+		quickSearchShortcut?.dispose();
+		launcher.destroy();
+	});
 	if (settings.osMenuIntegration) {
 		// Refresh on every start: the executable path or interface language may have changed.
 		osMenu.install(menuLabels(settings.language)).catch((error: unknown) => console.error("[os-menu] refresh failed:", error));

@@ -22,10 +22,10 @@ export function SettingsPageHead({ title, description }: { readonly title: strin
 	);
 }
 
-export function Section({ title, description, children }: { readonly title: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
+export function Section({ title, description, children }: { readonly title?: string; readonly description?: string; readonly children: ReactNode }): ReactElement {
 	return (
 		<section className="settings-section">
-			<div className="linear-section-title">{title}</div>
+			{title !== undefined ? <div className="linear-section-title">{title}</div> : null}
 			{description !== undefined ? <p className="linear-section-desc">{description}</p> : null}
 			{children}
 		</section>
@@ -57,7 +57,7 @@ export function Note({ children }: { readonly children: ReactNode }): ReactEleme
 	);
 }
 
-/** Neutral app glyph: the first letter of a provider/template label. */
+/** Neutral app glyph: the first letter of a label. `ProviderIcon` falls back to it for a provider with no logo. */
 export function AppIcon({ label, small = false }: { readonly label: string; readonly small?: boolean }): ReactElement {
 	const letter = (label.trim().slice(0, 1) || "·").toUpperCase();
 	return <span className={`settings-app-icon${small ? " is-sm" : ""}`} aria-hidden="true">{letter}</span>;
@@ -174,7 +174,7 @@ export function FloatingMenu({
 	);
 }
 
-export function ModalShell({ onClose, children }: { readonly onClose: () => void; readonly children: ReactNode }): ReactElement {
+export function ModalShell({ onClose, children, className, label }: { readonly onClose: () => void; readonly children: ReactNode; readonly className?: string; readonly label?: string }): ReactElement {
 	const { t } = useTranslation();
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent): void => {
@@ -185,7 +185,7 @@ export function ModalShell({ onClose, children }: { readonly onClose: () => void
 	}, [onClose]);
 	return (
 		<div className="settings-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-			<div className="settings-modal" role="dialog" aria-modal="true">
+			<div className={className === undefined ? "settings-modal" : `settings-modal ${className}`} role="dialog" aria-modal="true" aria-label={label}>
 				<button type="button" className="settings-modal-close" aria-label={t("common.close")} onClick={onClose}>
 					<X size={14} aria-hidden="true" focusable="false" />
 				</button>

@@ -20,10 +20,14 @@ macOS 26 draws a legacy `icon.icns` shrunk inside a grey plate, so never point
 `mac.icon` back at the `.icns`.
 
 This repository is the standalone Electron Finder app: one repository, one
-app. It is not a monorepo, and no other package is built or released from
-here. Keep changes focused on `src/`, `test/`, `scripts/`, and repository
-documentation. Do not add secrets, private corpus data, generated output, or a
-vendored copy of another checkout.
+app. It is not a monorepo. The one exception is `integrations/raycast/`, the
+Raycast extension: a separate npm project with its own `package.json`,
+lockfile, and `node_modules`, which the app's install, build, tests, and
+release never touch. It reaches Dazzi only through what the bundle ships
+(`Contents/Resources/bin/dazzi` and `tools/bin/autorag`), never through app
+source imports. Otherwise keep changes focused on `src/`, `test/`, `scripts/`,
+and repository documentation. Do not add secrets, private corpus data,
+generated output, or a vendored copy of another checkout.
 
 ## The librarian is a separate public repository
 
@@ -42,7 +46,7 @@ is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 ref is a release tag or, while the librarian has no tag that carries what the
 app needs, a full commit SHA (now a commit SHA on top of v2.13.4: the librarian on MinSync 0.6.0, where SPLADE sparse retrieval
 replaces BM25 and Kiwi is gone, `minSync.embedder.id: "none"` builds a sparse-only index the app uses for keyword-only mode, and
-a `minsync` older than 0.6.0 is refused; it also brings the required decision model (`jev` can no longer be `false`; tests pass
+a `minsync` older than 0.6.0 is refused; it also brings the required decision model (`jev` can no longer be `false`; it is Jev or the small chat model, `jev.backend: "sllm"` with `jev.sllm.model`, which the app's Jev role picker offers and `createDefaultAgentFactory` resolves; tests pass
 `test/baseline-jev.ts`), opt-in reranking, and the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings
 cards still show here as unsupported. v2.13.3 holds the Dazzi context-overflow retry to half the failed request; v2.13.2 is
 MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first
@@ -385,7 +389,7 @@ switch branches in place.
 - `src/main/agents/` — the factory for helper agents (plain pi sessions that
   share the AutoRAG agent's model and sign-in) and their profiles; see
   `docs/architecture.md` "Helper agents". AI Search itself stays on the librarian.
-- `src/main/remote/` — opt-in remote browser access (Settings → 일반 → 원격 접속):
+- `src/main/remote/` — opt-in remote browser access (Settings → 원격 접속):
   an authenticated HTTP + SSE server that serves the same renderer bundle, a
   dispatcher that reuses the existing `ipcMain` handlers and the per-session fs
   worker client, and the `window.autorag` bootstrap injected into the page. See
@@ -405,12 +409,16 @@ switch branches in place.
 - `scripts/manual-qa/` — real Electron QA scripts.
 - `scripts/qa-vm.mjs`, `scripts/qa-vm/` — the `bun run qa` runner: golden
   macOS VM image setup, the two-slot VM pool, and the VM/host path choice.
+- `integrations/raycast/` — the Raycast extension (its own npm project; `npm test`,
+  `npm run lint`, `npm run dev` from that directory). The live lane that drives
+  Raycast is `scripts/manual-qa/run-qa-live-raycast.mjs` (host only).
 
 Keep bridge contract changes synchronized across the shared contract, IPC
 registration, preload bridge, and both Finder source adapters.
 
 The app test script explicitly excludes the ignored `.upstream/autorag`
-checkout so it does not execute the librarian's tests from this app root.
+checkout so it does not execute the librarian's tests from this app root, and
+`vitest.config.ts` excludes `integrations/**`, whose projects run their own tests.
 
 ## Constraints
 

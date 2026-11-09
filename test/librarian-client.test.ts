@@ -9,6 +9,7 @@ import { installErrorReporter, reportError, type ErrorReport } from "../src/main
 import type { FsLocation } from "../src/shared/fs-contract";
 import { t } from "../src/shared/i18n/core";
 import type { IndexStatus } from "../src/shared/index-contract";
+import { emptyIndexMapCounts } from "../src/shared/index-map-contract";
 
 const SCAN: DupeyScanResult = { dir: "/d", files: [], families: [], errors: [] };
 const STATUS: IndexStatus = { path: "/d/a.txt", kind: "included", excluded: false, toggleable: true, detail: "ok" };
@@ -16,6 +17,8 @@ const LOCATION: FsLocation = { name: "Documents", path: "/d", section: "favorite
 
 interface Calls {
 	search: [string, string | undefined][];
+	content: [string, number | undefined][];
+	aborted: number;
 	ensure: number;
 	stop: number;
 	scanned: string[];
@@ -27,6 +30,18 @@ interface Calls {
 /** Services that record what the thread was asked, and can be told to fail. */
 function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLocation[]>; indexRefreshed(error: string | null): void }, fail: { search?: Error } = {}): LibrarianServices {
 	return {
+		contentSearch: {
+			search: async (query, limit, signal) => {
+				calls.content.push([query, limit]);
+				if (query === "slow") {
+					const aborted = Promise.withResolvers<void>();
+					signal?.addEventListener("abort", () => aborted.resolve(), { once: true });
+					await aborted.promise;
+					calls.aborted += 1;
+				}
+				return { state: "ok", hits: [{ path: `/d/${query}.md`, snippet: query, line: 1, score: 1 }] };
+			},
+		},
 		fileNameSearch: {
 			search: async (query, scope) => {
 				calls.search.push([query, scope]);
@@ -52,6 +67,7 @@ function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLoca
 				host.indexRefreshed(excluded ? "refresh failed" : null);
 				return { ...STATUS, path, excluded };
 			},
+			indexMap: async () => ({ roots: [], nodes: [], totals: emptyIndexMapCounts(), truncated: false, folded: false }),
 		},
 	};
 }
@@ -70,7 +86,7 @@ interface Harness {
 const closers: (() => void)[] = [];
 
 function harness(options: { fail?: { search?: Error }; hang?: boolean; shutdownMs?: number } = {}): Harness {
-	const calls: Calls = { search: [], ensure: 0, stop: 0, scanned: [], shutdowns: 0, excluded: [], locationsSeen: [] };
+	const calls: Calls = { search: [], content: [], aborted: 0, ensure: 0, stop: 0, scanned: [], shutdowns: 0, excluded: [], locationsSeen: [] };
 	const refreshed: (string | null)[] = [];
 	const reports: ErrorReport[] = [];
 	let spawned = 0;
@@ -132,6 +148,20 @@ describe("createLibrarianClient", () => {
 		expect(await h.client.fileNameSearch.search("report", "/d")).toEqual(["/d/report.txt"]);
 		expect(await h.client.fileNameSearch.search("none")).toBeNull();
 		expect(h.calls.search).toEqual([["report", "/d"], ["none", undefined]]);
+	});
+
+	it("searches the local document index through the thread, and cancels a superseded search there", async () => {
+		const h = harness();
+
+		expect(await h.client.contentSearch.search("refund", 5)).toEqual({ state: "ok", hits: [{ path: "/d/refund.md", snippet: "refund", line: 1, score: 1 }] });
+		const controller = new AbortController();
+		const slow = h.client.contentSearch.search("slow", undefined, controller.signal);
+		await expect.poll(() => h.calls.content.length).toBe(2);
+		controller.abort();
+
+		await expect(slow).rejects.toMatchObject({ name: "AbortError" });
+		await expect.poll(() => h.calls.aborted).toBe(1);
+		expect(h.calls.content).toEqual([["refund", 5], ["slow", undefined]]);
 	});
 
 	it("lets the thread ask the worker for the sidebar locations", async () => {

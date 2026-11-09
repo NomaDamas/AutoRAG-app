@@ -13,9 +13,9 @@
  *      focus returns to the pane of the tab focused before — not a neighbor;
  *   5. dropping a tab on another pane's strip or body merges it there, and its
  *      emptied pane closes back to full width;
- *   6. AI Search and Settings are tabs like any other: an AI Search tab splits
- *      off beside a folder, its chat sits inside its pane, and its draft
- *      survives moving between panes; ⌘K focuses the AI tab on screen;
+ *   6. AI Search is a tab like any other: it splits off beside a folder, its chat sits inside its pane, and its
+ *      draft survives moving between panes; ⌘K focuses the AI tab on screen. Settings is a tab that takes over
+ *      the whole window instead of docking, and Back restores the split layout;
  *   7. an Evidence title opens the source folder as a new tab in the pane of
  *      the last focused tab, leaving the other pane alone;
  *   8. ⌘W and ⌘T act on the focused pane only;
@@ -340,19 +340,40 @@ try {
 	const draft = await page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`).inputValue();
 	check("the AI tab's chat (draft) survives moving to another pane", draft === "draft survives moving", draft);
 
-	// 6b. Settings is a tab too: ⌘, opens it in the focused pane and it splits off like any tab.
-	// From the pane showing the revealed folder (a click there leaves the composer), ⌘, opens Settings in that pane.
+	// 6b. Settings is a tab that takes over the whole window (its own sidebar, no panes or strips) instead of docking:
+	// ⌘, shows it, Back closes it and the split layout is exactly as it was.
+	// From the pane showing the revealed folder (a click there leaves the composer), ⌘, opens Settings.
 	await paneEl(page, aiPane.id).locator(".pathbar").click();
+	const layoutBeforeSettings = await panes(page);
 	await page.keyboard.press(chord(","));
-	await page.waitForFunction(() => [...document.querySelectorAll(".tabs .tab--active .tab__title")].some((title) => title.textContent === "Settings"));
+	await page.waitForSelector(".settings-view");
+	await page.waitForTimeout(300);
+	const chromeOnScreen = await page.evaluate(() => [...document.querySelectorAll("[data-workspace-pane], .tabs")].some((element) => element.getBoundingClientRect().width > 0));
+	check("Settings takes over the window: no pane or tab strip stays on screen", !chromeOnScreen);
+	await page.screenshot({ path: join(EVIDENCE, "11-settings-takeover.png") });
+	await page.locator(".settings-sidebar-back").click();
+	await page.waitForSelector("[data-workspace-pane] .tabs .tab");
+	await settle(page);
 	state = await panes(page);
-	const settingsPane = state.find((pane) => pane.tabs.some((entry) => entry.title === "Settings" && entry.active));
-	const settingsIndex = settingsPane.tabs.findIndex((entry) => entry.title === "Settings");
-	await dragTab(page, tabIn(page, settingsPane.id, settingsIndex), [await bodyPoint(page, settingsPane.id, 0.5, 0.04)]);
+	check(
+		"Back closes the Settings tab and restores the split layout",
+		state.length === layoutBeforeSettings.length && state.every((pane) => pane.tabs.every((entry) => entry.title !== "Settings")) && JSON.stringify(state.map((pane) => [pane.id, pane.x, pane.y, pane.width, pane.height])) === JSON.stringify(layoutBeforeSettings.map((pane) => [pane.id, pane.x, pane.y, pane.width, pane.height])),
+		JSON.stringify(state.map((pane) => [pane.id, pane.tabs.map((entry) => entry.title)])),
+	);
+
+	// A folder tab docks to the top like any tab; step 9 needs that T-junction.
+	await paneEl(page, aiPane.id).locator(".pathbar").click();
+	const idsBefore = new Set(state.map((pane) => pane.id));
+	const tabCountBefore = new Map(state.map((pane) => [pane.id, pane.tabs.length]));
+	await page.keyboard.press(chord("t"));
+	await page.waitForFunction(([ids]) => [...document.querySelectorAll("[data-workspace-pane]")].some((element) => ids[element.dataset.workspacePane] !== undefined && element.querySelectorAll(".tabs .tab").length > ids[element.dataset.workspacePane]), [Object.fromEntries(tabCountBefore)]);
 	state = await panes(page);
-	const settingsTop = state.find((pane) => pane.tabs.length === 1 && pane.tabs[0].title === "Settings");
-	check("a Settings tab splits off to the top like any tab", settingsTop !== undefined && state.some((pane) => pane.y > settingsTop.y && pane.x === settingsTop.x));
-	await page.screenshot({ path: join(EVIDENCE, "11-settings-top.png") });
+	const grown = state.find((pane) => pane.tabs.length > (tabCountBefore.get(pane.id) ?? 0));
+	await dragTab(page, tabIn(page, grown.id, grown.tabs.findIndex((entry) => entry.active)), [await bodyPoint(page, grown.id, 0.5, 0.04)]);
+	state = await panes(page);
+	const docked = state.find((pane) => !idsBefore.has(pane.id));
+	check("a folder tab splits off to the top like any tab", docked !== undefined && state.some((pane) => pane.y > docked.y && pane.x === docked.x));
+	await page.screenshot({ path: join(EVIDENCE, "11-folder-top.png") });
 
 	// 9. Drag the seam right of the leftmost pane 120px to the right.
 	const leftBefore = [...(await panes(page))].sort((a, b) => a.x - b.x)[0];

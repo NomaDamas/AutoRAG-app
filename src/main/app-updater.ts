@@ -19,11 +19,19 @@ import type { AppUpdateMode, AppUpdateSnapshot, AppUpdateState } from "../shared
 export const FIRST_CHECK_DELAY_MS = 30_000;
 export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
+/** What electron-updater's `checkForUpdates` resolves with (null when no update source is configured). */
+export interface UpdateCheckResultLike {
+	readonly updateInfo?: UpdateInfoLike;
+	/** With `autoDownload`: the download that continues after the check; rejects when it fails. */
+	readonly downloadPromise?: Promise<unknown> | null;
+}
+
 /** The slice of electron-updater's `AppUpdater` this module drives. */
 export interface UpdaterLike extends EventEmitter {
 	autoDownload: boolean;
 	autoInstallOnAppQuit: boolean;
-	checkForUpdates(): Promise<unknown>;
+	/** With `autoDownload`, resolves once an update is found; the download continues as `downloadPromise`. */
+	checkForUpdates(): Promise<UpdateCheckResultLike | null>;
 	downloadUpdate(): Promise<unknown>;
 	quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
 }
@@ -154,7 +162,9 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 		if (state.kind === "checking" || state.kind === "downloading" || state.kind === "ready") return;
 		userCheck = fromUser;
 		try {
-			await updater.checkForUpdates();
+			const result = await updater.checkForUpdates();
+			// A background download's failure is reported through the "error" event, and also rejects this promise.
+			void result?.downloadPromise?.catch(() => undefined);
 		} catch {
 			// Reported through the "error" event.
 		} finally {

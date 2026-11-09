@@ -27,6 +27,8 @@ import { ReduceSizeDialog } from "./components/primitives/ReduceSizeDialog";
 import { Sidebar } from "./components/Sidebar";
 import type { SearchMode } from "./components/SidebarSearch";
 import { Toolbar } from "./components/Toolbar";
+import { SettingsAssistantContext, SettingsAssistantSlot, useSettingsAssistantHost } from "./components/settings/SettingsAssistantDock";
+import { SettingsView } from "./components/SettingsView";
 import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Workspace";
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
@@ -35,6 +37,7 @@ import { isTagPath, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
+import { useSidebarRowMenu } from "./hooks/useSidebarRowMenu";
 import type { SidebarSettings } from "../../shared/sidebar-contract";
 import { ContextMenuSettingsContext } from "./hooks/useContextMenuSettings";
 import type { ContextMenuSettings } from "../../shared/context-menu-contract";
@@ -54,10 +57,17 @@ import { loadListColumns, saveListColumns, type ListColumnsState } from "./state
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
-import { allTabs, canCloseWorkspaceTab, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
+import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
+import { windowColumns } from "./state/window-layout";
 import { cn } from "./lib/cn";
 
 const autorag = window.autorag;
+
+/**
+ * The Finder chrome (left sidebar, toolbar and panes) stays mounted while Settings takes over, so tabs, AI chats and
+ * scroll positions survive. A utility class such as `flex` beats the `hidden` attribute, so it hides with a style.
+ */
+const HIDDEN_STYLE = { display: "none" } as const;
 
 /** How long a toast stays (--time-toast). */
 const TOAST_MS = 2400;
@@ -364,6 +374,19 @@ export function App(): ReactElement {
 		deliverToDock(handle, pending);
 	}, [aiDelivery, activeAiTabId]);
 
+	/** Settings' saves reach the window: the rows it shows, the interface language, the sidebar and the shortcuts follow. */
+	const onSettingsChanged = useCallback((settings: AppSettings): void => {
+		setShowHiddenFiles(settings.showHiddenFiles);
+		setLanguage(settings.language);
+		setSidebarSettings(settings.sidebar);
+		setShortcutSettings(settings.shortcuts);
+		void setAppLanguage(settings.language);
+	}, []);
+
+	/** While Settings is open the Finder's search box is hidden, so the focus-search shortcut goes to Settings' own. */
+	const settingsSearchRef = useRef<HTMLInputElement | null>(null);
+	const settingsOpenRef = useRef(false);
+
 	/** The window-level callbacks every pane shares: one stable object, so panes re-render only for their own state. */
 	const shell = useMemo<PaneShell>(
 		() => ({
@@ -372,18 +395,14 @@ export function App(): ReactElement {
 			directoryData,
 			quickLook: { onQuickLook: openQuickLook, closeQuickLook, isQuickLookOpen },
 			update: (change) => setWorkspace((current) => change(current)),
-			onFocusSearch: () => setSidebarVisible(true),
+			onFocusSearch: () => {
+				if (settingsOpenRef.current) settingsSearchRef.current?.focus();
+				else setSidebarVisible(true);
+			},
 			// ⌘K: the controller adopts the nearest AI Search tab (or opens one); focus its composer.
 			onFocusComposer: () => deliverToAi({}),
 			onToast: setToast,
 			deliverToAi,
-			onSettingsChanged: (settings: AppSettings) => {
-				setShowHiddenFiles(settings.showHiddenFiles);
-				setLanguage(settings.language);
-				setSidebarSettings(settings.sidebar);
-				setShortcutSettings(settings.shortcuts);
-				void setAppLanguage(settings.language);
-			},
 			setListColumns,
 			beginTabDrag: (tabId, event) => {
 				event.dataTransfer.effectAllowed = "move";
@@ -482,6 +501,11 @@ export function App(): ReactElement {
 					if (target.kind === "folder") finder.openFolder(target.path);
 					else finder.revealEvidence(target.path);
 				}
+			} else if (request.query !== null) {
+				// `dazzi --ask`, Raycast, and the quick-search launcher's "Ask Dazzi": a new AI Search tab asks at once, like
+				// the sidebar's content search, so a tab that is still answering never swallows the question.
+				finder.openAiSearch();
+				deliverToAi({ attach: request.attachments, query: request.query });
 			} else {
 				// Attached as drafts on the nearest AI Search tab: the user types the question.
 				finder.focusAiSearch();
@@ -607,6 +631,15 @@ export function App(): ReactElement {
 	const path = finder?.path ?? focusedTab?.path ?? "";
 	const aiTabActive = path === AI_SEARCH_PATH;
 	const automationsTabActive = path === AUTOMATIONS_PATH;
+	/** While the focused tab is Settings it takes over the window: its own sidebar, no tab strip or toolbar. */
+	const settingsOpen = path === SETTINGS_PATH;
+	settingsOpenRef.current = settingsOpen;
+	/** On a customizable Settings section the right sidebar is that section's AI assistant instead of the Inspector. */
+	const { host: settingsAssistant, dock: settingsAssistantDock } = useSettingsAssistantHost({
+		rightSidebarVisible: inspectorVisible,
+		setRightSidebarVisible: setInspectorVisible,
+		settingsFocused: path === SETTINGS_PATH,
+	});
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -674,8 +707,10 @@ export function App(): ReactElement {
 			deliverToAi({ attach: dropped });
 		},
 	};
+	/** A pinned Favorites row's right-click menu (사이드바에서 제거). */
+	const sidebarRowMenu = useSidebarRowMenu((id) => finder?.sidebarPins.unpin(id));
 	/** Window grid: left sidebar, the content column (toolbar over the workspace), right sidebar (the inspector). */
-	const windowColumns = `${sidebarVisible ? sidebarWidth : 0}px minmax(0,1fr) ${inspectorVisible ? inspectorWidth : 0}px`;
+	const columns = windowColumns({ sidebarVisible, sidebarWidth, inspectorVisible, inspectorWidth, settingsOpen });
 	const canCloseTabs = canCloseWorkspaceTab(workspace);
 	const split = workspace.panes.length > 1;
 
@@ -685,12 +720,13 @@ export function App(): ReactElement {
 		<ContextMenuSettingsContext value={contextMenuSettings}>
 		<ShortcutSettingsContext value={shortcutSettings}>
 		<AutomationsContext value={automations}>
+		<SettingsAssistantContext value={settingsAssistant}>
 		<div className="desk flex h-full bg-window">
 			<div
-				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden transition-[grid-template-columns] duration-200 ease-out motion-reduce:transition-none"
-				style={{ gridTemplateColumns: windowColumns, gridTemplateRows: "minmax(0, 1fr)" }}
+				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
+				style={{ gridTemplateColumns: columns, gridTemplateRows: "minmax(0, 1fr)" }}
 			>
-				<div className="min-w-0 min-h-0 overflow-hidden" inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
+				<div className="min-w-0 min-h-0 overflow-hidden" style={settingsOpen ? HIDDEN_STYLE : undefined} inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
 						activePath={aiTabActive ? AI_SEARCH_PATH : automationsTabActive ? AUTOMATIONS_PATH : (finder?.activeNavPath ?? null)}
 						settingsActive={path === SETTINGS_PATH}
@@ -721,8 +757,31 @@ export function App(): ReactElement {
 						aiSearchDrop={aiSearchDrop}
 						tagColorsDenied={tagCatalog.catalog.colorsDenied}
 						onGrantTagColors={grantTagColors}
+						favorites={
+							finder === undefined
+								? undefined
+								: {
+										shownIds: finder.sidebarPins.shownIds,
+										onPin: finder.sidebarPins.pin,
+										onMove: finder.sidebarPins.move,
+										onRowMenu: sidebarRowMenu.open,
+										pathForFile: autorag.pathForFile,
+									}
+						}
 					/></div></div>
-				<div className="flex min-w-0 min-h-0 flex-col">
+				{settingsOpen ? (
+					<div className="flex min-w-0 min-h-0" style={{ gridColumn: "1 / span 2", gridRow: 1 }}>
+						<SettingsView
+							onSettingsChanged={onSettingsChanged}
+							navWidth={sidebarWidth}
+							onBack={() => setWorkspace((current) => closeSettingsInWorkspace(current))}
+							inspectorHidden={!inspectorVisible}
+							onShowInspector={() => setInspectorVisible(true)}
+							searchRef={settingsSearchRef}
+						/>
+					</div>
+				) : null}
+				<div className="flex min-w-0 min-h-0 flex-col" style={settingsOpen ? HIDDEN_STYLE : undefined}>
 					<Toolbar
 						title={toolbarTitle}
 						canGoBack={finder?.canGoBack ?? false}
@@ -815,8 +874,10 @@ export function App(): ReactElement {
 						/>
 					</div>
 				</div>
-				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)}>
-						{automationsTabActive ? (
+				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null ? "window" : "subtle"}>
+						{settingsAssistantDock !== null ? (
+							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : (
 							<Inspector
@@ -852,7 +913,7 @@ export function App(): ReactElement {
 				{toast === null && automations.undoToast === null ? null : (
 					<Toast message={automations.undoToast?.message ?? toast ?? ""} action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }} />
 				)}
-				{sidebarVisible ? (
+				{sidebarVisible || settingsOpen ? (
 					<PaneGrip
 						position={{ left: sidebarWidth - 3 }}
 						label={t("finderComponents.resizeSidebar")}
@@ -929,6 +990,9 @@ export function App(): ReactElement {
 			{automations.menu === null ? null : (
 				<ContextMenu cursor={automations.menu.cursor} entries={automations.menu.entries} onSelect={automations.menuSelect} onClose={automations.closeMenu} />
 			)}
+			{sidebarRowMenu.menu === null ? null : (
+				<ContextMenu cursor={sidebarRowMenu.menu.cursor} entries={sidebarRowMenu.menu.entries} onSelect={sidebarRowMenu.select} onClose={sidebarRowMenu.close} />
+			)}
 			{automations.preview === null ? null : (
 				<AutomationQuickLook rule={automations.preview} onClose={automations.closePreview} onEdit={automations.edit} />
 			)}
@@ -946,6 +1010,7 @@ export function App(): ReactElement {
 				<MagicActionDialog />
 			</div>
 		</div>
+		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>
 		</ContextMenuSettingsContext>

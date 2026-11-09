@@ -1,9 +1,11 @@
 import type { IpcRenderer } from "electron";
+import type { ContentSearchResult } from "../shared/content-search-contract";
 import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsTagCatalog, FsUndoOutcome, FsVersionFamiliesResult } from "../shared/fs-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import type { FsWorkerOp } from "../shared/fs-worker-contract";
 import { FS_WORKER_PUSH, type WorkerClient } from "../shared/fs-worker-protocol";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
 
 /**
  * Typed `window.autorag.fs`. Every filesystem call goes straight to the fs
@@ -23,6 +25,7 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		previewIcon: (path, mtimeMs) => call<string | null>("previewIcon", path, mtimeMs),
 		exists: (path) => call<boolean>("exists", path),
 		search: (query, options) => call<readonly FsSearchResult[]>("search", query, options),
+		contentSearch: (query, limit) => call<ContentSearchResult>("contentSearch", query, limit),
 		locations: () => call<readonly FsLocation[]>("locations"),
 		tags: () => call<FsTagCatalog>("tags"),
 		setTags: (paths, change) => call<FsBatchResult>("setTags", paths, change),
@@ -53,6 +56,7 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		versionFamilies: () => call<FsVersionFamiliesResult>("versionFamilies"),
 		indexStatus: (paths) => call<readonly IndexStatus[]>("indexStatus", paths),
 		setIndexExcluded: (path, excluded) => call<IndexStatus>("setIndexExcluded", path, excluded),
+		indexMap: () => call<IndexMap>("indexMap"),
 		onIndexRefreshed: (listener) =>
 			worker.onPush(FS_WORKER_PUSH.indexRefreshed, (error) => listener(typeof error === "string" ? error : null)),
 		refreshVersionFamilies: () => call<FsVersionFamiliesResult>("refreshVersionFamilies"),

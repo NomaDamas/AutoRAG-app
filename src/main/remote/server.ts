@@ -1,17 +1,44 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
 import { extname } from "node:path";
 import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import type { AddressInfo } from "node:net";
-import { REMOTE_ROUTES, REMOTE_TOKEN_HEADER, type RemoteCall, type RemotePush } from "../../shared/remote-contract";
+import {
+	REMOTE_ROUTES,
+	REMOTE_TOKEN_HEADER,
+	type RemoteAccessRefusal,
+	type RemoteAccessVia,
+	type RemoteCall,
+	type RemotePush,
+} from "../../shared/remote-contract";
+import type { AppSettings } from "../../shared/settings-contract";
+import {
+	DEVICE_TOKEN_COOKIE,
+	SESSION_TOKEN_COOKIE,
+	buildDeviceCookie,
+	buildSessionCookie,
+	clearCookieHeader,
+	constantTimeTokenMatches,
+	createAuthRateLimiter,
+	isSameOriginMutation,
+	isSecureIncomingRequest,
+	parseCookieHeader,
+} from "./auth";
+import type { DeviceStore } from "./devices";
+import { renderAccessGateHtml } from "./gate";
 import { readRemoteStatic, REMOTE_BOOTSTRAP_PATH, rewriteIndexHtml } from "./static";
 
 /**
  * The opt-in remote server: while enabled it serves the same renderer bundle
- * the desktop window loads, plus the bridge endpoints a browser needs. It never
- * runs unless the setting is on, and every request is refused without the
- * session token. Native-only actions are answered by the dispatcher (not here).
+ * the desktop window loads, plus the bridge endpoints a browser needs.
+ *
+ * Authentication modes (adapted from Ovis `devswha/ovis`):
+ * 1. Session token (`x-remote-token` header, `?token=` query, or `dazzi_remote` HttpOnly cookie).
+ * 2. Paired device credential (`dazzi_device` HttpOnly cookie backed by SHA-256 hash in `DeviceStore`).
+ *
+ * Unauthenticated `GET /` renders the self-contained AccessGate (`gate.ts`) so a phone or
+ * remote browser can scan a `?pair=CODE` QR code, type a 6-digit pairing code, or unlock with
+ * the access token. Every other unauthenticated route returns 403.
  */
 
 export interface RemoteStaticResponse {
@@ -20,15 +47,26 @@ export interface RemoteStaticResponse {
 	readonly body: Uint8Array | null;
 }
 
+export interface RemoteAuthenticatedContext {
+	readonly via: RemoteAccessVia;
+	readonly deviceId: string | null;
+	readonly includeQueryToken: boolean;
+}
+
 export interface RemoteServerDeps {
 	/** `out/renderer`: the bundle the desktop window loads. */
 	readonly rendererRoot: string;
 	readonly token: string;
 	readonly host: string;
 	readonly port: number;
-	/** The bootstrap script defining `window.autorag`, built for this session. */
+	/** Fallback static bootstrap script (or dynamic per-session builder via `bootstrapScriptFor`). */
 	readonly bootstrapScript: string;
-	/** One bridge method, already authorized by the token. */
+	readonly bootstrapScriptFor?: (auth: RemoteAuthenticatedContext) => Promise<string> | string;
+	readonly devices?: DeviceStore;
+	readonly gatePrefs?: () => Promise<{ readonly language: AppSettings["language"]; readonly appearance: AppSettings["appearance"] }>;
+	/** The Dazzi mark drawn on the AccessGate, as a `data:` URL. */
+	readonly gateLogoDataUrl?: string;
+	/** One bridge method, already authorized. */
 	readonly dispatch: (call: RemoteCall, sessionId: string) => Promise<unknown>;
 	/** A browser session's push stream opened or closed (its worker client's lifetime). */
 	readonly onSessionOpen?: (sessionId: string) => void;
@@ -54,32 +92,15 @@ export interface RemoteServer {
 }
 
 const MAX_BODY_BYTES = 512 * 1024 * 1024;
+const SMALL_AUTH_BODY_BYTES = 16 * 1024;
 
-function tokenMatches(expected: string, received: string | null): boolean {
-	if (received === null) return false;
-	const a = Buffer.from(expected);
-	const b = Buffer.from(received);
-	return a.length === b.length && timingSafeEqual(a, b);
-}
-
-const SESSION_COOKIE = "dazzi_remote";
-
-/** The token may ride the header (bootstrap fetches), the query (first entry, downloads) or the session cookie the first entry sets. */
-function tokenFrom(request: IncomingMessage, url: URL): string | null {
-	const header = request.headers[REMOTE_TOKEN_HEADER];
-	if (typeof header === "string") return header;
-	const query = url.searchParams.get("token");
-	if (query !== null) return query;
-	const cookie = request.headers.cookie;
-	if (typeof cookie !== "string") return null;
-	for (const part of cookie.split(";")) {
-		const [name, ...rest] = part.trim().split("=");
-		if (name === SESSION_COOKIE) return rest.join("=") || null;
-	}
-	return null;
-}
-
-function send(response: ServerResponse, status: number, contentType: string | null, body: Uint8Array | null, cacheControl = "no-store"): void {
+function send(
+	response: ServerResponse,
+	status: number,
+	contentType: string | null,
+	body: Uint8Array | null,
+	cacheControl = "no-store",
+): void {
 	response.statusCode = status;
 	if (contentType !== null) response.setHeader("content-type", contentType);
 	response.setHeader("cache-control", cacheControl);
@@ -91,23 +112,183 @@ function send(response: ServerResponse, status: number, contentType: string | nu
 	response.end(Buffer.from(body));
 }
 
-async function readBody(request: IncomingMessage): Promise<Uint8Array> {
+function sendJson(response: ServerResponse, status: number, payload: unknown): void {
+	send(response, status, "application/json; charset=utf-8", Buffer.from(JSON.stringify(payload)));
+}
+
+async function readBody(request: IncomingMessage, maxBytes = MAX_BODY_BYTES): Promise<Uint8Array> {
 	const chunks: Buffer[] = [];
 	let total = 0;
 	for await (const chunk of request) {
 		const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string);
 		total += buffer.byteLength;
-		if (total > MAX_BODY_BYTES) throw new Error("remote request body too large");
+		if (total > maxBytes) throw new Error("remote request body too large");
 		chunks.push(buffer);
 	}
 	return Buffer.concat(chunks);
 }
 
+type RequestAuthDecision =
+	| ({ readonly authenticated: true } & RemoteAuthenticatedContext)
+	| { readonly authenticated: false; readonly reason: RemoteAccessRefusal; readonly throttledSeconds?: number };
+
 export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 	let server: Server | null = null;
 	const sessions = new Map<string, (payload: RemotePush) => void>();
+	const rateLimiter = createAuthRateLimiter();
 
-	const handleEvents = (request: IncomingMessage, response: ServerResponse, sessionId: string): void => {
+	const firstHeader = (value: string | string[] | undefined): string | null =>
+		typeof value === "string" ? value : Array.isArray(value) ? (value[0] ?? null) : null;
+
+	const decideRequestAuth = (request: IncomingMessage, url: URL): RequestAuthDecision => {
+		const client = rateLimiter.clientKey(request.socket?.remoteAddress, request.headers["x-forwarded-for"]);
+		const cookies = parseCookieHeader(request.headers.cookie);
+
+		// 1. Explicit header or query token, or session token cookie (`dazzi_remote`)
+		const headerToken = firstHeader(request.headers[REMOTE_TOKEN_HEADER]);
+		const queryToken = url.searchParams.get("token");
+		const cookieToken = cookies.get(SESSION_TOKEN_COOKIE) ?? null;
+		const presentedToken = headerToken ?? queryToken ?? cookieToken;
+
+		if (presentedToken !== null) {
+			const wait = rateLimiter.waitSeconds("presented", client);
+			if (wait > 0) {
+				return { authenticated: false, reason: "pairing_required", throttledSeconds: wait };
+			}
+			if (constantTimeTokenMatches(deps.token, presentedToken)) {
+				rateLimiter.admit(client);
+				return {
+					authenticated: true,
+					via: "token",
+					deviceId: null,
+					includeQueryToken: headerToken !== null || queryToken !== null,
+				};
+			}
+			rateLimiter.recordFailure("presented", client);
+			// If header or query token was explicitly wrong, fail immediately instead of falling back.
+			if (headerToken !== null || queryToken !== null) {
+				return { authenticated: false, reason: "pairing_required" };
+			}
+		}
+
+		// 2. Paired device cookie (`dazzi_device`)
+		const deviceCookie = cookies.get(DEVICE_TOKEN_COOKIE);
+		if (deviceCookie !== undefined && deps.devices !== undefined) {
+			const matched = deps.devices.match(deviceCookie);
+			if (matched !== null) {
+				return {
+					authenticated: true,
+					via: "device",
+					deviceId: matched.id,
+					includeQueryToken: false,
+				};
+			}
+		}
+
+		return { authenticated: false, reason: "pairing_required" };
+	};
+
+	const handlePair = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+		if (request.method !== "POST") {
+			send(response, 405, "text/plain; charset=utf-8", Buffer.from("method not allowed"));
+			return;
+		}
+		if (!isSameOriginMutation(request)) {
+			sendJson(response, 403, { ok: false, error: "cross-origin pairing refused" });
+			return;
+		}
+		if (deps.devices === undefined) {
+			sendJson(response, 503, { ok: false, error: "device pairing unavailable" });
+			return;
+		}
+		if (deps.devices.error !== null) {
+			sendJson(response, 503, { ok: false, error: "device registry unavailable" });
+			return;
+		}
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(Buffer.from(await readBody(request, SMALL_AUTH_BODY_BYTES)).toString("utf8"));
+		} catch {
+			sendJson(response, 400, { ok: false, error: "invalid json" });
+			return;
+		}
+		if (typeof parsed !== "object" || parsed === null || !("code" in parsed) || typeof parsed.code !== "string") {
+			sendJson(response, 400, { ok: false, error: "code is required" });
+			return;
+		}
+		const label = "label" in parsed ? parsed.label : undefined;
+		const paired = deps.devices.pair(parsed.code, label);
+		if (paired === null) {
+			sendJson(response, 401, { ok: false, error: "invalid or expired pairing code" });
+			return;
+		}
+		const secure = isSecureIncomingRequest(request.headers);
+		response.setHeader("set-cookie", buildDeviceCookie(paired.token, secure));
+		send(response, 204, null, null);
+	};
+
+	const handleAuth = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
+		if (request.method === "DELETE") {
+			if (!isSameOriginMutation(request)) {
+				sendJson(response, 403, { ok: false, error: "cross-origin sign-out refused" });
+				return;
+			}
+			response.setHeader("set-cookie", [
+				clearCookieHeader(SESSION_TOKEN_COOKIE),
+				clearCookieHeader(DEVICE_TOKEN_COOKIE),
+			]);
+			send(response, 204, null, null);
+			return;
+		}
+		if (request.method !== "POST") {
+			send(response, 405, "text/plain; charset=utf-8", Buffer.from("method not allowed"));
+			return;
+		}
+		if (!isSameOriginMutation(request)) {
+			sendJson(response, 403, { ok: false, error: "cross-origin sign-in refused" });
+			return;
+		}
+		const client = rateLimiter.clientKey(request.socket?.remoteAddress, request.headers["x-forwarded-for"]);
+		const waitBefore = rateLimiter.waitSeconds("sign-in", client);
+		if (waitBefore > 0) {
+			response.setHeader("retry-after", String(waitBefore));
+			sendJson(response, 429, { ok: false, error: `too many attempts; wait ${waitBefore}s` });
+			return;
+		}
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(Buffer.from(await readBody(request, SMALL_AUTH_BODY_BYTES)).toString("utf8"));
+		} catch {
+			sendJson(response, 400, { ok: false, error: "invalid json" });
+			return;
+		}
+		if (typeof parsed !== "object" || parsed === null || !("token" in parsed) || typeof parsed.token !== "string") {
+			sendJson(response, 400, { ok: false, error: "token is required" });
+			return;
+		}
+		const waitAfter = rateLimiter.waitSeconds("sign-in", client);
+		if (waitAfter > 0) {
+			response.setHeader("retry-after", String(waitAfter));
+			sendJson(response, 429, { ok: false, error: `too many attempts; wait ${waitAfter}s` });
+			return;
+		}
+		if (!constantTimeTokenMatches(deps.token, parsed.token)) {
+			rateLimiter.recordFailure("sign-in", client);
+			sendJson(response, 401, { ok: false, error: "token does not match" });
+			return;
+		}
+		rateLimiter.admit(client);
+		const secure = isSecureIncomingRequest(request.headers);
+		response.setHeader("set-cookie", buildSessionCookie(deps.token, secure));
+		send(response, 204, null, null);
+	};
+
+	const handleEvents = (
+		request: IncomingMessage,
+		response: ServerResponse,
+		sessionId: string,
+		auth: RemoteAuthenticatedContext,
+	): void => {
 		response.writeHead(200, {
 			"content-type": "text/event-stream",
 			"cache-control": "no-store",
@@ -119,22 +300,37 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 		});
 		deps.onSessionOpen?.(sessionId);
 		const keepAlive = setInterval(() => response.write(": ping\n\n"), 15_000);
-		request.on("close", () => {
+		let cleanedUp = false;
+		let unsubscribeRevoke: (() => void) | null = null;
+		const cleanup = (): void => {
+			if (cleanedUp) return;
+			cleanedUp = true;
 			clearInterval(keepAlive);
+			unsubscribeRevoke?.();
+			unsubscribeRevoke = null;
 			sessions.delete(sessionId);
 			deps.onSessionClose?.(sessionId);
-		});
+		};
+		if (auth.deviceId !== null && deps.devices !== undefined) {
+			unsubscribeRevoke = deps.devices.onRevoke(auth.deviceId, () => {
+				cleanup();
+				response.end();
+			});
+		}
+		request.on("close", cleanup);
 	};
 
 	const sessionIdFrom = (request: IncomingMessage, url: URL): string =>
-		typeof request.headers["x-remote-session"] === "string" ? request.headers["x-remote-session"] : (url.searchParams.get("session") ?? "default");
+		typeof request.headers["x-remote-session"] === "string"
+			? request.headers["x-remote-session"]
+			: (url.searchParams.get("session") ?? "default");
 
 	const handleCall = async (request: IncomingMessage, response: ServerResponse, sessionId: string): Promise<void> => {
 		const body = await readBody(request);
 		let parsed: unknown;
 		try {
 			parsed = JSON.parse(Buffer.from(body).toString("utf8"));
-		} catch (error) {
+		} catch {
 			send(response, 400, "application/json", Buffer.from(JSON.stringify({ ok: false, error: "invalid json" })));
 			return;
 		}
@@ -155,17 +351,69 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 
 	const handle = async (request: IncomingMessage, response: ServerResponse): Promise<void> => {
 		const url = new URL(request.url ?? "/", "http://remote.local");
-		if (!tokenMatches(deps.token, tokenFrom(request, url))) {
+
+		// Public pairing & auth endpoints
+		if (url.pathname === REMOTE_ROUTES.pair) {
+			await handlePair(request, response);
+			return;
+		}
+		if (url.pathname === REMOTE_ROUTES.auth) {
+			await handleAuth(request, response);
+			return;
+		}
+
+		const auth = decideRequestAuth(request, url);
+
+		if (url.pathname === REMOTE_ROUTES.health && request.method === "GET") {
+			if (auth.authenticated) {
+				sendJson(response, 200, { ok: true, authenticated: true, via: auth.via });
+			} else {
+				sendJson(response, 200, { ok: true, authenticated: false, reason: auth.reason });
+			}
+			return;
+		}
+
+		if (!auth.authenticated) {
+			if (auth.throttledSeconds !== undefined) {
+				response.setHeader("retry-after", String(auth.throttledSeconds));
+				send(response, 429, "text/plain; charset=utf-8", Buffer.from("too many wrong tokens"));
+				return;
+			}
+			// Render the interactive AccessGate at GET / when no wrong ?token= was given and pairing/auth is supported.
+			if (
+				request.method === "GET" &&
+				url.pathname === "/" &&
+				!url.searchParams.has("token") &&
+				(deps.devices !== undefined || deps.gatePrefs !== undefined)
+			) {
+				const prefs = (await deps.gatePrefs?.()) ?? { language: "ko" as const, appearance: "light" as const };
+				const html = renderAccessGateHtml({
+					language: prefs.language,
+					appearance: prefs.appearance,
+					reason: auth.reason,
+					logoDataUrl: deps.gateLogoDataUrl ?? null,
+				});
+				send(response, 200, "text/html; charset=utf-8", Buffer.from(html));
+				return;
+			}
 			send(response, 403, "text/plain; charset=utf-8", Buffer.from("remote access token required"));
 			return;
 		}
+
+		// Protect authenticated state-changing endpoints against cross-site request forgery
+		if (!isSameOriginMutation(request)) {
+			send(response, 403, "text/plain; charset=utf-8", Buffer.from("cross-origin request refused"));
+			return;
+		}
+
 		const sessionId = sessionIdFrom(request, url);
 		if (url.pathname === REMOTE_ROUTES.bootstrap && request.method === "GET") {
-			send(response, 200, "text/javascript; charset=utf-8", Buffer.from(deps.bootstrapScript));
+			const script = deps.bootstrapScriptFor ? await deps.bootstrapScriptFor(auth) : deps.bootstrapScript;
+			send(response, 200, "text/javascript; charset=utf-8", Buffer.from(script));
 			return;
 		}
 		if (url.pathname === REMOTE_ROUTES.events && request.method === "GET") {
-			handleEvents(request, response, sessionId);
+			handleEvents(request, response, sessionId, auth);
 			return;
 		}
 		if (url.pathname === REMOTE_ROUTES.call && request.method === "POST") {
@@ -207,9 +455,10 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 			}
 			const result = await deps.download(filePath);
 			if (result.status === 200) {
-				// A browser must save the file, not render it: an attachment
-				// disposition is what makes every content type land as a download.
-				response.setHeader("content-disposition", `attachment; filename*=UTF-8''${encodeURIComponent(filePath.split(/[/\\]/).pop() ?? "download")}`);
+				response.setHeader(
+					"content-disposition",
+					`attachment; filename*=UTF-8''${encodeURIComponent(filePath.split(/[/\\]/).pop() ?? "download")}`,
+				);
 			}
 			send(response, result.status, result.contentType, result.body);
 			return;
@@ -242,9 +491,10 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 				return;
 			}
 			const rewritten = rewriteIndexHtml(Buffer.from(file.body).toString("utf8"));
-			// The page's own subresources (bootstrap, fonts, chunks) carry no query
-			// token, so the first authenticated entry pins the session as a cookie.
-			response.setHeader("set-cookie", `${SESSION_COOKIE}=${deps.token}; Path=/; HttpOnly; SameSite=Strict`);
+			if (auth.via === "token" && url.searchParams.has("token")) {
+				const secure = isSecureIncomingRequest(request.headers);
+				response.setHeader("set-cookie", buildSessionCookie(deps.token, secure));
+			}
 			send(response, 200, file.contentType, Buffer.from(rewritten));
 			return;
 		}
@@ -253,8 +503,13 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 			send(response, 404, null, null);
 			return;
 		}
-		// Hashed asset names never change contents, so they may be cached hard; HTML must not be.
-		send(response, 200, file.contentType, file.body, extname(relative) === ".html" ? "no-store" : "public, max-age=31536000, immutable");
+		send(
+			response,
+			200,
+			file.contentType,
+			file.body,
+			extname(relative) === ".html" ? "no-store" : "public, max-age=31536000, immutable",
+		);
 	};
 
 	return {
@@ -266,12 +521,9 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 					else response.end();
 				});
 			});
-			await new Promise<void>((resolve, reject) => {
-				server?.once("error", reject);
-				server?.listen(deps.port, deps.host, () => resolve());
-			});
-			const address = server.address() as AddressInfo;
-			return { port: address.port, origin: `http://${deps.host === "0.0.0.0" ? "localhost" : deps.host}:${address.port}` };
+			const port = await listenNearPort(server, deps.port, deps.host);
+			if (port !== deps.port && deps.port !== 0) deps.log(`port ${deps.port} is in use; serving on ${port} instead`);
+			return { port, origin: `http://${deps.host === "0.0.0.0" ? "localhost" : deps.host}:${port}` };
 		},
 		broadcast(payload) {
 			for (const sink of sessions.values()) sink(payload);
@@ -287,6 +539,43 @@ export function createRemoteServer(deps: RemoteServerDeps): RemoteServer {
 			await new Promise<void>((resolve) => current.close(() => resolve()));
 		},
 	};
+}
+
+/** How many ports after the configured one a taken port falls back through before the OS picks one. */
+const PORT_FALLBACKS = 10;
+
+/**
+ * Listen on `port`, or, when another program holds it (a second Dazzi, the
+ * installed app next to a dev build), on the next free port after it, then on
+ * one the OS picks. The session token is new on every start, so an address
+ * from an earlier run never worked anyway; a different port loses nothing.
+ * Any error other than a taken port rejects.
+ */
+async function listenNearPort(server: Server, port: number, host: string): Promise<number> {
+	const candidates = port === 0 ? [0] : [...Array.from({ length: PORT_FALLBACKS }, (_, offset) => port + offset).filter((value) => value <= 65_535), 0];
+	let lastError: unknown = null;
+	for (const candidate of candidates) {
+		const { promise, resolve, reject } = Promise.withResolvers<void>();
+		const onError = (error: Error): void => {
+			server.off("listening", onListening);
+			reject(error);
+		};
+		const onListening = (): void => {
+			server.off("error", onError);
+			resolve();
+		};
+		server.once("error", onError);
+		server.once("listening", onListening);
+		server.listen(candidate, host);
+		try {
+			await promise;
+			return (server.address() as AddressInfo).port;
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "EADDRINUSE") throw error;
+			lastError = error;
+		}
+	}
+	throw lastError;
 }
 
 export { REMOTE_BOOTSTRAP_PATH };

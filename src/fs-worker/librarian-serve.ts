@@ -13,16 +13,20 @@ import { setAppLanguage } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
 import type { FsLocation } from "../shared/fs-contract";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
 import { installErrorReporter } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
+import type { ContentSearch } from "../main/content-search";
 import { LIBRARIAN_OP, LIBRARIAN_PUSH, LIBRARIAN_REQUEST } from "./librarian-contract";
 
 export interface LibrarianServices {
 	readonly fileNameSearch: FileNameSearchBackend;
+	readonly contentSearch: ContentSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+		indexMap(): Promise<IndexMap>;
 	};
 }
 
@@ -69,6 +73,7 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 
 	const handlers: Record<string, WorkerHandler> = {
 		[LIBRARIAN_OP.fileNameSearch]: (args) => services.fileNameSearch.search(stringArg(args, 0, "query"), typeof args[1] === "string" ? args[1] : undefined),
+		[LIBRARIAN_OP.contentSearch]: (args, signal) => services.contentSearch.search(stringArg(args, 0, "query"), typeof args[1] === "number" ? args[1] : undefined, signal),
 		[LIBRARIAN_OP.fileNameEnsureDaemon]: () => services.fileNameSearch.ensureDaemon(),
 		[LIBRARIAN_OP.fileNameStop]: () => services.fileNameSearch.stop(),
 		[LIBRARIAN_OP.scanDuplicates]: (args) => services.scanDuplicates(stringArg(args, 0, "dir")),
@@ -77,6 +82,7 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 			if (typeof args[1] !== "boolean") throw new TypeError("excluded must be a boolean");
 			return services.indexStatus.setIndexExcluded(stringArg(args, 0, "path"), args[1]);
 		},
+		[LIBRARIAN_OP.indexMap]: () => services.indexStatus.indexMap(),
 		[LIBRARIAN_OP.shutdown]: async () => {
 			await services.fileNameSearch.stop();
 			options.onShutdown?.();

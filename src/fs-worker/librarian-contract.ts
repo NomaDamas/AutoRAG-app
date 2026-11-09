@@ -12,11 +12,14 @@ import type { WorkerPort } from "../shared/fs-worker-protocol";
 /** Worker → thread requests. */
 export const LIBRARIAN_OP = {
 	fileNameSearch: "fileNameSearch",
+	/** Model-free search of the local document index (`src/main/content-search.ts`). */
+	contentSearch: "contentSearch",
 	fileNameEnsureDaemon: "fileNameEnsureDaemon",
 	fileNameStop: "fileNameStop",
 	scanDuplicates: "scanDuplicates",
 	indexStatus: "indexStatus",
 	setIndexExcluded: "setIndexExcluded",
+	indexMap: "indexMap",
 	setLanguage: "setLanguage",
 	/**
 	 * Stop the file-name index and let the librarian clean up the child processes it started. The librarian does that

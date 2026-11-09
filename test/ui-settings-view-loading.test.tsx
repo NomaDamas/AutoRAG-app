@@ -74,9 +74,12 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
+/** Settings as the window hosts it: the width of its sidebar column, a back action, and the right sidebar shown. */
+const SHELL = { navWidth: 240, onBack: () => undefined, inspectorHidden: false, onShowInspector: () => undefined };
+
 async function renderView(initialCategory: SettingsCategory): Promise<void> {
 	await act(async () => {
-		root.render(<SettingsView initialCategory={initialCategory} />);
+		root.render(<SettingsView initialCategory={initialCategory} {...SHELL} />);
 	});
 	await settle();
 }
@@ -116,7 +119,7 @@ describe("opening Settings while the datasource scan is still running", () => {
 		bridge.sourcesList.mockReturnValue(scan.promise);
 
 		await act(async () => {
-			root.render(<SettingsView initialCategory="general" />);
+			root.render(<SettingsView initialCategory="general" {...SHELL} />);
 		});
 
 		// `get` has not answered, yet the scan is already under way: it is not queued behind it.
@@ -246,5 +249,36 @@ describe("a save while an earlier scan is still running", () => {
 
 		expect(text()).toContain("179 messages");
 		expect(text()).not.toContain("No data sources connected");
+	});
+});
+
+describe("the Remote Access page", () => {
+	it("is its own page under General, and the General page no longer carries it", async () => {
+		bridge.sourcesList.mockResolvedValue(SOURCES);
+		await renderView("general");
+		expect(text()).not.toContain("Enable Remote Access");
+
+		const basic = [...host.querySelectorAll(".settings-sidebar-group-title")].find((title) => title.textContent === "General")?.parentElement;
+		const navItem = [...(basic?.querySelectorAll<HTMLButtonElement>(".settings-nav-item") ?? [])].find((button) => button.textContent?.trim() === "Remote Access");
+		expect(navItem).toBeDefined();
+		await act(async () => navItem?.click());
+		await settle();
+
+		expect(host.querySelector("h1")?.textContent).toBe("Remote Access");
+		expect(navItem?.getAttribute("aria-current")).toBe("true");
+	});
+
+	it("is found by searching for what it does", async () => {
+		bridge.sourcesList.mockResolvedValue(SOURCES);
+		await renderView("general");
+		const search = host.querySelector<HTMLInputElement>(".settings-sidebar input");
+		expect(search).not.toBeNull();
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(search, "pairing");
+			search?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		const labels = [...host.querySelectorAll(".settings-nav-item")].map((item) => item.textContent?.trim());
+		expect(labels).toContain("Remote Access");
+		expect(labels).not.toContain("General");
 	});
 });

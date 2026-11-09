@@ -12,6 +12,7 @@
 import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
+import { CONTENT_SEARCH_MAX_HITS, type ContentSearchResult } from "../shared/content-search-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
@@ -20,6 +21,7 @@ import { DUPEY_LAYER_ID, type LiveMessage } from "../shared/live-contract";
 import { isNewFileFormatId } from "../shared/new-file-contract";
 import { createChangeHub, type ChangeHub } from "../main/change-hub";
 import { createDupeyLayer } from "../main/dupey-layer";
+import type { ContentSearch } from "../main/content-search";
 import type { IconProvider } from "../main/file-icon";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import { buildFsEntry } from "../main/fs-entry";
@@ -59,6 +61,8 @@ export interface FsWorkerServiceDeps {
 	readonly watchBackend?: WatchBackend;
 	/** Defaults to the platform file-name index in the librarian thread; tests inject a stub. */
 	readonly fileNameSearch?: FileNameSearchBackend;
+	/** Defaults to the local document index in the librarian thread; tests inject a stub. */
+	readonly contentSearch?: ContentSearch;
 	/** Defaults to the AutoRAG index status in the librarian thread; tests inject a stub. */
 	readonly indexStatus?: IndexStatusService;
 	/** Defaults to the OS places; tests inject a fixture. */
@@ -177,6 +181,21 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 	// disk walk stays as the fallback when no index answers.
 	const fileNameSearch =
 		deps.fileNameSearch ?? librarian.fileNameSearch;
+	const contentSearch = deps.contentSearch ?? librarian.contentSearch;
+	/** Index hits as rows: a file that left the disk since it was indexed is dropped, the rest keep the index's order. */
+	async function searchContent(query: string, limit: number, signal: AbortSignal): Promise<ContentSearchResult> {
+		const outcome = await contentSearch.search(query, limit, signal);
+		const rows = await Promise.all(
+			outcome.hits.map(async ({ path, ...hit }) => {
+				try {
+					return { ...hit, entry: await buildFsEntry(path) };
+				} catch {
+					return null;
+				}
+			}),
+		);
+		return { state: outcome.state, hits: rows.filter((row) => row !== null) };
+	}
 	const fsService = createFsService({
 		shell: host.shell,
 		clipboard: host.clipboard,
@@ -247,6 +266,8 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		previewIcon: (args) => fsService.previewIcon(stringArg(args, 0, "path"), numberArg(args, 1, "mtimeMs")),
 		exists: (args) => fsService.exists(stringArg(args, 0, "path")),
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
+		contentSearch: (args, signal) =>
+			searchContent(stringArg(args, 0, "query"), typeof args[1] === "number" && Number.isInteger(args[1]) && args[1] > 0 ? Math.min(args[1], CONTENT_SEARCH_MAX_HITS) : CONTENT_SEARCH_MAX_HITS, signal),
 		uploadFile: (args) => {
 			const data = args[2];
 			if (!(data instanceof Uint8Array)) throw new TypeError("uploadFile expects bytes");
@@ -320,6 +341,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			if (typeof args[1] !== "boolean") throw new TypeError("excluded must be a boolean");
 			return indexStatus.setIndexExcluded(stringArg(args, 0, "path"), args[1]);
 		},
+		indexMap: () => indexStatus.indexMap(),
 		setWatchSet: (args) => watch.setWatchSet(stringsArg(args, 0, "dirs")),
 		layers: () => {
 			if (process.env.AUTORAG_FS_WATCH_DIAG === "1") console.info("[live] layers requested");

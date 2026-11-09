@@ -42,6 +42,7 @@ import {
 	type QuickLookTarget,
 	type QuickLookZoom,
 } from "../shared/contract";
+import { focusTextEntry as focusPreviewTextEntry } from "./text-entry-focus";
 import { looksLikeText } from "../shared/text-sample";
 import { needsPlaybackCopy, type VideoPlaybackPlan } from "../shared/video-playback";
 import { type Bounds, fitQuickLook, placeQuickLook, QUICK_LOOK_MIN } from "../shared/fit";
@@ -100,7 +101,17 @@ export interface QuickLookWindowOptions {
 	readonly defaultApp: (path: string) => Promise<string | null>;
 	/** Active Quick Look toggle chord (`Space` by default, or customized e.g. `Alt+P`). */
 	readonly quickLookChord?: () => string;
+	/**
+	 * Window level the panel floats at while shown, on every platform, and on every Space / virtual desktop. Absent:
+	 * macOS floats it over its owner (`floating`) and other platforms rely on the owner/child order. The quick-search
+	 * launcher floats above full-screen apps, so its preview has to sit there too, and above it.
+	 */
+	readonly level?: FloatLevel;
+	/** Close the preview when the owner window hides (the launcher hides on every dismissal). */
+	readonly closeWithOwner?: boolean;
 }
+
+type FloatLevel = Parameters<BrowserWindow["setAlwaysOnTop"]>[1];
 
 interface Session {
 	readonly owner: BrowserWindow;
@@ -123,9 +134,11 @@ interface Session {
 	readonly waiters: Map<string, () => void>;
 	readonly defaultApps: DefaultAppCache;
 	detach: () => void;
+	readonly level: FloatLevel | null;
 }
 
-let session: Session | null = null;
+/** One preview per owner window: the Finder's and the quick-search launcher's. */
+const sessions = new Set<Session>();
 let quitting = false;
 /**
  * The main process's icon provider, for the one target the preview draws an
@@ -150,7 +163,12 @@ function clearDeadline(state: Session): void {
 }
 
 function float(state: Session, on: boolean): void {
-	if (process.platform !== "darwin" || !live(state.window)) return;
+	if (!live(state.window)) return;
+	if (state.level !== null) {
+		state.window.setAlwaysOnTop(on, state.level);
+		return;
+	}
+	if (process.platform !== "darwin") return;
 	state.window.setAlwaysOnTop(on, "floating");
 }
 
@@ -265,9 +283,7 @@ async function zoomOut(state: Session, origin: Bounds | null): Promise<void> {
  */
 function focusTextEntry(state: Session): void {
 	const { window } = state;
-	if (!state.typing || !live(window) || !window.isVisible()) return;
-	window.focus();
-	window.webContents.focus();
+	focusPreviewTextEntry(window, () => state.typing && live(window));
 }
 
 function present(state: Session, report: QuickLookReady): void {
@@ -298,7 +314,7 @@ function present(state: Session, report: QuickLookReady): void {
 	focusTextEntry(state);
 }
 
-function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = state.origin): void {
+function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = state.origin, refocus = true): void {
 	state.seq += 1;
 	state.typing = false;
 	state.current = null;
@@ -308,7 +324,7 @@ function hide(state: Session, notifyOwner: boolean, origin: Bounds | null = stat
 		const opening = state.opening !== null;
 		state.opening = null;
 		if (state.shown) {
-			const refocusOwner = window.isFocused();
+			const refocusOwner = refocus && window.isFocused();
 			float(state, false);
 			if (window.isFullScreen()) {
 				window.webContents.send(PREVIEW_CHANNELS.unload);
@@ -570,16 +586,20 @@ async function act(state: Session, action: QuickLookAction): Promise<void> {
 	}
 }
 
+function ownedBy(sender: Electron.WebContents): Session | null {
+	for (const state of sessions) if (live(state.owner) && sender === state.owner.webContents) return state;
+	return null;
+}
+
 function fromOwner(event: IpcMainInvokeEvent): Session {
-	if (session === null || !live(session.owner) || event.sender !== session.owner.webContents) {
-		throw new Error("Quick Look is not attached to this window");
-	}
-	return session;
+	const state = ownedBy(event.sender);
+	if (state === null) throw new Error("Quick Look is not attached to this window");
+	return state;
 }
 
 function fromPreview(event: IpcMainInvokeEvent | IpcMainEvent): Session | null {
-	if (session === null || !live(session.window) || event.sender !== session.window.webContents) return null;
-	return session;
+	for (const state of sessions) if (live(state.window) && event.sender === state.window.webContents) return state;
+	return null;
 }
 
 /**
@@ -603,9 +623,10 @@ function ownerOrigin(state: Session, origin: unknown): Bounds | null {
  * Pre-creates the hidden Quick Look window for `owner` (sigma-file-manager
  * v1's pre-warmed quick view window) so Space only has to send a file to an
  * already loaded page. The window hides instead of closing and is reused.
+ * Returns the preview window, so an owner can tell its own preview apart from other windows taking focus.
  */
-export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOptions): void {
-	if (session !== null) session.detach();
+export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOptions): BrowserWindow {
+	for (const existing of sessions) if (existing.owner === owner) existing.detach();
 	const darwin = process.platform === "darwin";
 	const solid = (): string => (nativeTheme.shouldUseDarkColors ? SOLID_PANEL.dark : SOLID_PANEL.light);
 	const window = new BrowserWindow({
@@ -639,6 +660,8 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		},
 	});
 	if (darwin) window.setWindowButtonVisibility(false);
+	// Over the launcher, which sits on every Space and above full-screen apps.
+	if (options.level !== undefined) window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
 	// Previewed HTML and Markdown can carry links; none of them may replace the preview page.
 	window.webContents.on("will-navigate", (event) => event.preventDefault());
 	window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
@@ -659,6 +682,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		waiters: new Map(),
 		defaultApps: createDefaultAppCache(options.defaultApp),
 		detach: () => undefined,
+		level: options.level ?? null,
 	};
 
 	const onClose = (event: Electron.Event): void => {
@@ -674,6 +698,10 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		if (!darwin && live(window)) window.setBackgroundColor(solid());
 	};
 	const onOwnerLoad = (): void => hide(state, false);
+	// The owner went away, so focus must not go back to it: focusing a hidden window shows it again.
+	const onOwnerHide = (): void => {
+		if (state.shown) hide(state, true, null, false);
+	};
 	// Keys run here, before the page: a focused <video> lets its native controls
 	// consume Space and arrows, so a page keydown listener never sees them.
 	const onInput = (event: Electron.Event, input: Electron.Input): void => {
@@ -693,6 +721,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 	nativeTheme.on("updated", onTheme);
 	owner.webContents.on("did-finish-load", onOwnerLoad);
 	owner.once("closed", onOwnerClosed);
+	if (options.closeWithOwner === true) owner.on("hide", onOwnerHide);
 	state.detach = () => {
 		clearDeadline(state);
 		app.off("did-resign-active", onResignActive);
@@ -701,12 +730,14 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 		if (live(owner)) {
 			owner.webContents.off("did-finish-load", onOwnerLoad);
 			owner.off("closed", onOwnerClosed);
+			owner.off("hide", onOwnerHide);
 		}
 		if (live(window)) window.destroy();
-		if (session === state) session = null;
+		sessions.delete(state);
 	};
-	session = state;
+	sessions.add(state);
 	options.loadPage(window);
+	return window;
 }
 
 export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
@@ -721,7 +752,8 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 		await show(state, target, ownerOrigin(state, origin));
 	});
 	ipc.on(PREVIEW_CHANNELS.prefetch, (event, file: unknown) => {
-		if (session === null || !live(session.owner) || event.sender !== session.owner.webContents || !isPreviewPrefetch(file)) return;
+		const owned = ownedBy(event.sender);
+		if (owned === null || !isPreviewPrefetch(file)) return;
 		const kind = viewerForExtension(extname(file.path).slice(1));
 		if (kind !== "legacyDoc" && kind !== "legacyPpt") return;
 		officePages.prefetch(file);

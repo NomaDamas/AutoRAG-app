@@ -212,6 +212,8 @@
     "putBackCount": "Put Back {{count}} items",
     "emptyTrash": "Empty Trash",
     "newFolder": "New Folder",
+    "pinToSidebar": "Pin to Sidebar",
+    "unpinFromSidebar": "Remove from Sidebar",
     "new": "New",
     "trashShort": "Trash"
   },
@@ -322,6 +324,25 @@
     "dropPrompt": "Drag here to ask AI",
     "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
     "steerSend": "Correct the search",
+    "voiceStart": "Dictate with your voice",
+    "voiceStop": "Stop recording and transcribe",
+    "voiceCancel": "Cancel recording",
+    "voiceSend": "Stop and send",
+    "voiceTranscribing": "Transcribing…",
+    "voiceNoSpeech": "No speech was heard. Please try again.",
+    "voiceUnavailable": "No microphone is available on this device.",
+    "voiceFailed": "Could not transcribe your voice: {{message}}",
+    "micPermission": {
+      "title": "Allow microphone access",
+      "body": "To ask with your voice, Dazzi needs the microphone. It records only after you press the microphone button.",
+      "stepsMac": "Turn on Dazzi in System Settings › Privacy & Security › Microphone.",
+      "stepsWindows": "In Settings › Privacy & security › Microphone, turn on “Microphone access” and “Let desktop apps access your microphone”.",
+      "openMac": "Open System Settings",
+      "openWindows": "Open Windows Settings",
+      "notNow": "Not now",
+      "waiting": "Turn it on there and come back to Dazzi: recording starts right away.",
+      "stillDenied": "The microphone is still off. Turn it on in Settings, then come back."
+    },
     "steerHintLead": "You can type while it searches",
     "steerHintEnter": "correct",
     "steerHintAltEnter": "next question",
@@ -639,6 +660,50 @@
       "finalizing": "Finishing up"
     }
   },
+  "indexProgress": {
+    "stage": {
+      "discover": "Discovering",
+      "parse": "Parsing",
+      "embed": "Embedding",
+      "keyword": "Keyword indexing",
+      "finalize": "Finishing"
+    },
+    "line": {
+      "discover": "Looking for files",
+      "finalize": "Finishing the search index",
+      "counts": "{{stage}} {{done}} / {{total}} files ({{percent}}%)",
+      "countsOpen": "{{stage}} {{done}} files (total still being counted)"
+    },
+    "skipped": "{{count}} skipped",
+    "failed": "{{count}} failed",
+    "bytes": "Size {{done}} / {{total}} ({{percent}}%)",
+    "bytesDone": "Size {{done}} processed",
+    "eta": {
+      "calculating": "{{stage}}: calculating time left",
+      "remaining": "{{stage}}: about {{duration}} left"
+    },
+    "duration": {
+      "minutes": "{{count}} min",
+      "hours": "{{hours}} h",
+      "hoursMinutes": "{{hours}} h {{minutes}} min",
+      "days": "{{count}} days"
+    },
+    "ago": {
+      "now": "just now",
+      "seconds": "{{count}}s ago",
+      "minutes": "{{count}} min ago",
+      "hours": "{{count}} h ago"
+    },
+    "activity": {
+      "lastDone": "Last file finished {{ago}}",
+      "none": "No file has finished yet",
+      "heartbeat": "Last activity signal {{ago}}"
+    },
+    "warn": {
+      "stalledAlive": "No file has finished for {{minutes}} minutes. Work signals are still coming in, so it may be a large file.",
+      "stalledSilent": "No file has finished for {{minutes}} minutes and the work signals stopped. It may be stalled."
+    }
+  },
   "indexProblem": {
     "retrying": "Retrying now",
     "fixEmbedding": "Change embedding method",
@@ -770,7 +835,7 @@
       "account": "Continue",
       "folders": "Continue",
       "smartScan": "Continue",
-      "smartScope": "Continue",
+      "smartScope": "Continue with this scope",
       "embedding": "Continue",
       "sources": "Continue",
       "model": "Continue",
@@ -778,10 +843,7 @@
       "indexing": "Continue"
     },
     "welcome": {
-      "eyebrow": "Pro 7-day free trial",
-      "title": "Ask your\nfiles",
-      "lead": "You don't have to dig through folders. Dazzi reads what's inside your documents and answers with sources.",
-      "note": "Local by default. Some features send content to Dazzi's servers or model providers when you use them; see the Privacy Policy.",
+      "title": "Finding files is now {{app}}'s job",
       "usageStats": "Send anonymous usage statistics to help improve Dazzi. They are not designed to include files, searches or document content, and you can turn it off anytime in Settings.",
       "errorReports": "Send error reports when the app crashes or indexing fails, to help fix problems. They are not designed to include file paths, file names or document content, and you can change this anytime in Settings.",
       "usageStatsPolicy": "Privacy Policy",
@@ -789,38 +851,24 @@
         "user": "Why did last quarter's costs go down?",
         "replyLead": "Marketing costs fell ",
         "replyTail": " from the previous quarter."
-      },
-      "evidence": {
-        "revenue": "Revenue report",
-        "revenueQuote": "“Up 18% year over year…”",
-        "budget": "Budget summary",
-        "budgetQuote": "“Q3 operating cost…”"
       }
     },
     "feature": {
       "ai": {
-        "title": "AI Search",
-        "sub": "Answers and sources at once"
-      },
-      "citation": {
-        "title": "Citations",
-        "sub": "Check where answers come from"
+        "title": "AI search",
+        "sub": "Just ask. Answers come with their sources."
       },
       "versions": {
-        "title": "Version grouping",
-        "sub": "Tidy up duplicate documents"
-      },
-      "quicklook": {
-        "title": "Quick Look",
-        "sub": "Preview before opening"
+        "title": "Version cleanup",
+        "sub": "Even files like final_really_final.docx get sorted out."
       },
       "sources": {
-        "title": "Data sources",
-        "sub": "Search connected sources too"
+        "title": "App connections",
+        "sub": "Finds what's scattered across Notion, Slack, GitHub and more."
       },
       "hybrid": {
         "title": "Hybrid search",
-        "sub": "Keywords and meaning together, ordered by reranking"
+        "sub": "Finds matches by meaning, even when the words differ."
       }
     },
     "hybrid": {
@@ -910,95 +958,81 @@
       }
     },
     "smartScan": {
-      "title": "Looking through your folders…",
+      "title": "Finding sub-folders to leave out",
       "done": "Finished looking",
-      "idle": "Look through your folders?",
-      "failedTitle": "Could not look through your folders",
-      "lead": "AI is counting the files in the suggested folders",
-      "looking": "Looking at: {{path}}",
-      "cancel": "Cancel and choose by hand",
-      "note": "Found {{count}} sub-folders worth leaving out. Review them on the next screen.",
-      "noteNone": "Nothing to leave out. The folders you chose look document-heavy.",
-      "failed": "The analysis did not finish. You can pick the scope yourself on the next screen.",
+      "failedTitle": "Could not finish looking",
+      "lead": "Looking only at folder names and structure, without opening your files.",
+      "back": "Back to folder selection",
+      "manual": "Choose without a recommendation",
       "retry": "Try again",
-      "skipped": "You can pick the scope yourself without the AI scan.",
-      "start": "Scan with AI"
+      "looking": "Looking at: {{path}}"
     },
     "folders": {
       "eyebrow": "Indexing scope",
-      "title": "Choose the folders AI can read",
-      "lead": "Only the folders selected here are included in AI search. You can expand or shrink the scope later.",
-      "suggested": "Suggested locations",
+      "title": "Choose folders to index",
+      "lead": "We prepare the documents in the selected folders so AI can search them.",
+      "suggested": "Suggested folders",
       "selectAll": "Select all",
-      "add": "Add another folder",
+      "add": "Add a folder",
       "stats": "{{files}} · {{size}} · ~{{minutes}} min",
       "scanning": "Counting…",
       "scanError": "Can't read",
-      "summary": "{{folders}} folders · {{files}} files · {{size}}",
-      "summaryNote": "node_modules · .git · files over 50 MiB are excluded automatically.",
-      "localEta": "Local (this Mac) · ~{{minutes}} min",
-      "cloudEta": "Remote · ~{{minutes}} min",
-      "warning": "This scope is broad. Choosing a subfolder or remote embedding shows your first results sooner.",
-      "localEtaPc": "Local (this PC) · ~{{minutes}} min"
+      "suggestTitle": "Get sub-folders to leave out",
+      "suggestLine": "When you continue, AI looks through the sub-folders of the folders you chose and suggests ones to leave out. You review the result on the next screen."
     },
     "smartScope": {
       "policy": {
-        "title": "Smart indexing scope",
-        "tag": "Sorted by AI",
-        "lead": "Blue folders on the left are indexed in full. Red sub-folders on the right and .* hidden folders are left out of the index.",
-        "eta": "~{{minutes}} min",
-        "etaSaved": "{{percent}}% faster",
-        "rescan": "Scan again",
-        "auto": ".* hidden folders (.git, .obsidian, .cache) and node_modules are always left out"
+        "title": "Review the indexing scope",
+        "lead": "Drag folders to include or exclude them.",
+        "eta": "~{{minutes}} min"
       },
       "include": {
         "title": "Folders to include",
-        "meta": "{{folders}} folders · {{files}} files · {{size}}",
-        "remove": "Stop including",
-        "addable": "Available:",
-        "allIn": "Every suggested folder is included"
+        "meta": "{{count}} folders",
+        "all": "All"
       },
       "exclude": {
         "title": "Sub-folders to leave out",
-        "meta": "{{count}} paths · −{{size}}",
-        "add": "Add folder to leave out",
-        "restore": "Include again",
-        "restored": "Put back:",
+        "group": "{{name}} ({{count}})",
+        "noDocs": "no documents",
         "refused": {
           "isRoot": "A selected folder cannot be left out itself. Pick a sub-folder inside it.",
           "outside": "Only sub-folders of the selected folders can be left out.",
           "covered": "That folder is already left out."
         },
-        "noDocs": "no documents"
+        "empty": "No sub-folders are left out.\nDrag a folder here to leave it out.",
+        "aiTag": "AI pick"
       },
       "criteria": {
-        "show": "See how the AI decides",
-        "hide": "Hide the criteria",
-        "looked": "What the AI looked at: the file and folder names in your chosen folders, how many files of each type, and when the files last changed. It does not open any file.",
-        "keep": "What it keeps: documents you wrote, received or collected (reports, notes, contracts, papers, course material) and folders named for a project, a person or a date.",
-        "leave": "What it leaves out: logs a program made as a by-product, files apps download or export (messengers and the like), caches, temp and crash files, build or generated output, installers and app backups, and folders where many similar-named files piled up at once.",
-        "code": "Code repositories are always left out, even ones you wrote yourself: folders that are mostly source files and have a manifest such as package.json.",
-        "doubt": "When in doubt it keeps the folder. Wrongly leaving out your own document makes it vanish from search, while including some clutter only costs time.",
-        "you": "You decide. Hover an item to see the reason, undo it with the x, or add your own. The AI may judge a little differently each time."
-      }
+        "label": "How it recommends",
+        "includeTitle": "What it includes",
+        "includeBody": "Documents you wrote, downloaded or collected (reports, notes, contracts, papers, lecture materials and so on), and folders named after projects, people or dates.",
+        "excludeTitle": "What it leaves out",
+        "excludeBody": "Logs programs generate on their own, files apps downloaded or exported, cache, temporary and conflict files, build and generated output, installers and app backups, and folders piled with similarly named files."
+      },
+      "summary": {
+        "eta": "Estimated first index",
+        "total": "Total"
+      },
+      "rescan": "Recommend again"
     },
     "embedding": {
-      "title": "How should we embed?",
+      "title": "How should we analyze your documents?",
       "groupLabel": "Embedding method",
       "card": {
         "none": {
           "name": "Search by keyword",
-          "line": "Only finds documents that contain the words you type."
+          "line": "Finds only documents containing the words you type."
         },
         "cloud": {
-          "name": "Analyze on Dazzi's server",
-          "line": "Document contents are sent to Dazzi's server for analysis."
+          "name": "Analyze on the server",
+          "line": "Document content is sent to the AutoRAG server for analysis."
         },
         "local": {
           "nameMac": "Analyze on my Mac",
           "namePc": "Analyze on my PC",
-          "lineMac": "Everything is analyzed on this Mac. Your documents never leave it.",
-          "linePc": "Everything is analyzed on this PC. Your documents never leave it."
+          "lineMac": "All analysis runs on this Mac.\nYour documents never leave it.",
+          "linePc": "All analysis runs on this PC.\nYour documents never leave it."
         }
       },
       "meter": {
@@ -1010,7 +1044,7 @@
         "good": "Good"
       },
       "meterAria": "{{label}}: {{value}}",
-      "prepTime": "Setup time",
+      "prepTime": "Estimated indexing time",
       "about": "About",
       "minutes": "{{minutes}} min",
       "cached": "Ready",
@@ -1027,7 +1061,6 @@
     "sources": {
       "title": "Add the apps found on this PC to your search?",
       "checking": "Checking which other sources can be added…",
-      "empty": "No connected sources found. You can connect some later in Settings.",
       "connectMore": "Sources that need setup can be connected later in Settings.",
       "name": {
         "kakao": "KakaoTalk",
@@ -1047,24 +1080,22 @@
         "telegram": "Telegram app data detected",
         "whatsapp": "{{chats}} chats · {{messages}} messages",
         "mailcrawl": "Signed in to {{accounts}} mail accounts",
-        "github": "Signed in · Issues and Pull Requests",
+        "github": "Signed in to gh · Issues and Pull Requests",
         "notion": "Notion app data detected",
         "obsidian": "{{vaults}} vaults found"
       }
     },
     "plan": {
-      "eyebrow": "Plan",
-      "title": "How will you use it?",
+      "title": "Which plan would you like?",
       "titleReady": "Your plan is ready",
-      "lead": "Pick a plan. You can change it anytime in Settings.",
       "leadCloud": "Remote embedding needs Pro or Max. Pro starts with 7 days free.",
       "leadCloudReady": "Remote embedding is ready to use. Continue to the next step.",
       "badgeTrial": "Trial in progress",
       "badgeSubscribed": "Subscribed",
       "perMonth": "/ mo",
       "continue": "Continue",
-      "checkoutPro": "Start the 7-day free trial of Pro",
-      "checkoutAir": "Open the Air checkout page",
+      "checkoutPro": "Start the 7-day free trial",
+      "checkoutAir": "Continue with Air",
       "noteHeld": "Active on this account",
       "noteTrialing": "Trial · until {{date}}",
       "noteCancelScheduled": "Cancels · usable until {{date}}",
@@ -1073,59 +1104,95 @@
       "plan": {
         "free": {
           "name": "Free",
-          "price": "Free",
-          "tag": "To try Dazzi out",
-          "training": "Inputs and outputs may be used to improve the service"
+          "price": "$0",
+          "tag": "For those who want to try it right after signing up",
+          "training": "Inputs and outputs may be used to improve the service",
+          "features": "AI search that understands what’s inside your files\nChat with your files, just by asking\n5 lightweight chat models included\nFree credits that refill every week"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "$4/mo · cancel anytime",
-          "tag": "For people who already use another AI subscription"
+          "tag": "For people who want to bring the AI subscription they already pay for",
+          "features": "Everything in Free, plus\nChat with the models from your own AI subscription\nDazzi provides the AI that powers search\nMore weekly credits than Free"
         },
         "pro": {
           "name": "Pro",
           "price": "$20",
           "note": "7 days free with a card, then $20/mo",
-          "tag": "For people who want Dazzi to just work, with no other AI subscription",
-          "trial": "7-day free trial"
+          "tag": "For people who want Dazzi to be the only AI they need",
+          "trial": "7-day free trial",
+          "features": "Everything in Air, plus\nPowerful chat models included, no subscription to connect\nFaster requests and more credits than Air\n7-day free trial"
         },
         "max": {
           "name": "Max",
           "price": "$200",
           "note": "$200/mo · cancel anytime",
-          "tag": "For heavy, all-day use"
+          "tag": "For power users who run large folders and many tasks at once",
+          "features": "Everything in Pro, plus\nPremium models only on Max\nThe highest weekly credits, built for long tasks"
         },
         "byok": {
           "name": "BYOK",
           "price": "API costs only",
-          "tag": "Connect directly with your own key"
+          "tag": "Connect directly with your own API key"
         }
       },
-      "checkoutMax": "Open the Max checkout page",
+      "checkoutMax": "Continue with Max",
       "promo": {
         "prompt": "Have a promo code?",
         "label": "Promo code",
         "invalid": "Letters, numbers, - and _ only."
-      }
+      },
+      "tierLabel": "Plan",
+      "byokLead": "Have an API key?",
+      "byokLink": "Connect with your own API key",
+      "startFree": "Start for free"
     },
     "model": {
-      "eyebrow": "AI model",
-      "title": "Connect the model you'll use",
-      "lead": "Connect any provider you already have — an API key, a subscription sign-in, or a server on your computer — then choose the model. It has to answer a real call before you can continue.",
-      "note": "Saved to Settings → AI models, so you can change it there any time.",
+      "title": "Connect your AI models",
+      "lead": "Connect the AI services you already use, then choose a model for each role.\nYou can connect an API key, a subscription account, or a model server on your computer, and change this anytime in Settings.",
       "connectedTitle": "Connected services",
-      "none": "No service connected yet.",
+      "rolesTitle": "Models by role",
       "connect": "Connect a service",
-      "modelRow": "Model",
       "pick": "Choose a model",
-      "needService": "Connect a service first",
-      "unready": "Choose a model to continue.",
-      "ready": "✓ Ready · {{model}} answered in {{seconds}}s.",
-      "checking": "Checking that {{model}} answers…",
-      "failed": "{{model}} did not answer: {{error}}",
-      "readyResumed": "✓ Ready · {{model}} will answer your questions.",
-      "retry": "Check again"
+      "auto": "Auto",
+      "searchServices": "Search services",
+      "searchModels": "Search models",
+      "noMatch": "No results.",
+      "noModels": "No model can do this role yet. Choose Auto, or connect a service that offers one.",
+      "addCustom": "Add an OpenAI-compatible service",
+      "addLocal": "Add a server on this computer",
+      "disconnect": "Disconnect {{name}}",
+      "status": {
+        "checking": "Checking",
+        "ok": "Connected",
+        "failed": "Connection failed"
+      },
+      "role": {
+        "answer": {
+          "name": "Answers",
+          "desc": "Writes answers to your questions and summarizes documents."
+        },
+        "decomposition": {
+          "name": "Query splitting",
+          "desc": "Breaks long, complex questions into several searches."
+        },
+        "jev": {
+          "name": "Search decision (Jev)",
+          "desc": "Decides whether to answer right away or search your documents first."
+        },
+        "rerank": {
+          "name": "Reranking",
+          "desc": "Moves the most relevant documents to the top."
+        }
+      },
+      "server": {
+        "body": "Connect a company gateway or any server that uses the OpenAI API format.\nKeys you enter are encrypted and stored on this computer.",
+        "namePlaceholder": "Display name",
+        "keyPlaceholder": "Only if the server requires one",
+        "urlInvalid": "This address isn't valid. Check it and try again.",
+        "keyInvalid": "This API key isn't valid. Check it and try again."
+      }
     },
     "indexing": {
       "tip": "Tip",
@@ -1145,20 +1212,12 @@
         "minsync": "Embedding",
         "finalizing": "Tidying up"
       },
-      "phase": {
-        "parsed": "Reading documents",
-        "minsync": "Embedding",
-        "finalizing": "Tidying up"
-      },
       "title": "Dazzi is reading your files",
       "titleDone": "Everything's ready",
       "metaDone": "Checking total time",
       "metaTotal": "{{minutes}} min total",
       "metaFiles": "{{count}} files",
       "metaEstimating": "Calculating time remaining",
-      "metaUnderMinute": "Less than a minute left",
-      "metaRemaining": "~{{minutes}} min left",
-      "metaProgress": "{{processed}} / {{total}} files",
       "gateOkTitle": "You can quit now",
       "gateOkDetail": "We've read all {{files}} files. Newly changed files continue to be read in the background.",
       "gateTitleMac": "Don't quit Dazzi or turn off your Mac",
@@ -1276,13 +1335,6 @@
       "planActive": "The {{plan}} plan is active.",
       "signInFailed": "Couldn't sign in.",
       "notIndexed": "Finish indexing to open Dazzi."
-    },
-    "roles": {
-      "eyebrow": "Search helpers",
-      "title": "Choose the reranker and Jev",
-      "lead": "A Dazzi plan would provide these. With your own keys, pick them from the services you connected — or leave them as they are.",
-      "note": "Saved to Settings → AI models, so you can change them there any time.",
-      "unavailable": "None of your connected services offer this. Connect OpenRouter in Settings to use it."
     }
   },
   "finderComponents": {
@@ -1312,7 +1364,6 @@
     "searchTitle": "Search \"{{query}}\"",
     "resizeSidebar": "Resize sidebar",
     "resizeInspector": "Resize inspector",
-    "composerPlaceholder": "Ask across files, mail, and messengers (drop files here)",
     "removeAttachment": "Remove attachment",
     "locationOpenFailed": "Couldn't open the location \"{{name}}\".",
     "ejected": "Ejected \"{{name}}\".",
@@ -1522,7 +1573,8 @@
       "unknownAction": "Unknown file action.",
       "invalidAnchor": "The share anchor is invalid.",
       "invalidServiceRequest": "The service request is invalid.",
-      "invalidConversionRequest": "The conversion request is invalid."
+      "invalidConversionRequest": "The conversion request is invalid.",
+      "invalidVoiceRequest": "The voice request is invalid."
     },
     "dialogs": {
       "notificationBody": "Notifications are on.",
@@ -1636,6 +1688,9 @@
       "readyNotification": "Dazzi {{version}} is ready. It installs when you quit the app.",
       "availableNotification": "Dazzi {{version}} is available to download."
     },
+    "voice": {
+      "unreadableTranscript": "The Dazzi service returned a transcript this app cannot read."
+    },
     "account": {
       "httpStatus": "The Dazzi service answered HTTP {{status}}.",
       "callbackDone": "Signed in to Dazzi. You can close this tab.",
@@ -1695,6 +1750,23 @@
       "noOutput": "Converting to {{name}} produced no file.",
       "done": "{{name}} — converted",
       "doneFolder": "{{name}} — converted ({{count}} files in a folder)"
+    },
+    "remoteGate": {
+      "codeLabel": "Pairing code (6 digits)",
+      "codeShortError": "Enter all 6 digits of the pairing code.",
+      "codeInvalidError": "That code is wrong, used up, or expired. Generate a new code on the host computer.",
+      "codeSubmit": "Pair this device",
+      "codeSubmitting": "Pairing…",
+      "tokenToggle": "Have an access token instead?",
+      "tokenLabel": "Access token",
+      "tokenSubmit": "Unlock",
+      "tokenSubmitting": "Unlocking…",
+      "tokenInvalidError": "Access token does not match.",
+      "rateLimitedError": "Too many attempts. Please wait a moment and try again.",
+      "cookieBlockedError": "Could not confirm the session cookie. Check that cookies are enabled in this browser."
+    },
+    "smartIndexing": {
+      "cloudReason": "Cloud-sync folder: its files may live online only, so it starts out of the index. Drag it back to include it."
     }
   },
   "quickLook": {
@@ -2068,6 +2140,7 @@
       "sidebar": "Sidebar",
       "contextMenu": "Context Menu",
       "shortcuts": "Shortcuts",
+      "remote": "Remote Access",
       "ai": "AI Models",
       "web": "Web Search",
       "indexing": "Indexing",
@@ -2089,6 +2162,7 @@
         "sidebar": "sidebar favorites cloud locations tags folders hide show order customize AI",
         "contextMenu": "right click context menu magic action script automation agent extensions tags customize AI",
         "shortcuts": "shortcuts keyboard hotkeys keybindings record customize AI",
+        "remote": "remote access phone mobile browser pairing code QR Cloudflare tunnel domain devices",
         "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
         "web": "web search internet search service page reading",
         "indexing": "refresh sync incremental index update interval schedule",
@@ -2129,7 +2203,6 @@
       "addCustomModalDesc": "Enter a folder path to pin to the sidebar Favorites section.",
       "addCustomPathLabel": "Folder Path",
       "addCustomPathPlaceholder": "~/Projects or /Users/me/Work",
-      "addCustomPathPlaceholderWindows": "~\\Projects or C:\\Work",
       "addCustomConfirm": "Add",
       "sectionsTitle": "Sidebar Sections & Items",
       "sectionsDesc": "Manage the order and visibility of Favorites, Cloud, Locations, and Tags in one place. AI Search and Automations are core features and are always shown.",
@@ -2139,24 +2212,22 @@
       "emptyConnections": "No connected app attachment folders.",
       "emptyLocations": "No mounted volumes found.",
       "emptyTags": "No pinned Finder tags.",
-      "modal": {
+      "assistant": {
         "title": "AI App Customizer",
-        "subtitle": "Describe how you want your sidebar or app preferences configured.",
         "newChat": "New Chat",
         "emptyTitle": "How would you like to customize Dazzi?",
         "emptyDesc": "Tell the assistant which folders to show, how to order them, or switch themes — changes apply live.",
-        "promptMinimal": "Hide Music, Movies, Pictures, and Applications from the sidebar",
+        "promptHideMedia": "Hide the Music, Movies, and Pictures folders I don't use for work",
         "promptReorder": "Move Downloads and Documents to the top of Favorites",
-        "promptCleanSections": "Hide the Cloud and Tags sections for a cleaner sidebar",
-        "promptReset": "Reset the sidebar layout back to default",
+        "promptReset": "Put the sidebar back the way it was",
         "thinking": "Inspecting settings",
-        "placeholder": "e.g. Hide Music and Movies and put Downloads at the top…",
         "send": "Send",
         "stop": "Stop",
-        "lockedNotice": "AI Search and Automations are essential features and always remain visible.",
         "openAiSettings": "Open AI Model Settings",
-        "unavailable": "App customizer service is unavailable."
-      }
+        "unavailable": "App customizer service is unavailable.",
+        "inputLabel": "Message the assistant"
+      },
+      "addCustomPathPlaceholderWindows": "~\\Projects or C:\\Work"
     },
     "contextMenu": {
       "description": "Configure built-in items and custom Magic Actions (shell scripts and AI agent loops) shown when right-clicking files and folders.",
@@ -2217,6 +2288,7 @@
         "rename": "Rename",
         "copyPath": "Copy Path",
         "newFolder": "New Folder",
+        "pinToSidebar": "Pin to / Remove from Sidebar",
         "extract": "Extract Archive",
         "compress": "Compress (ZIP)",
         "compress7z": "Compress as 7z",
@@ -2248,25 +2320,22 @@
         "commandField": "Shell Command / Script",
         "commandPlaceholder": "e.g. shasum -a 256 \"$@\" or python3 ~/scripts/process.py \"$@\"",
         "commandHint": "Selected paths are passed as positional arguments (\"$@\") and in env vars DAZZI_FILES_JSON, DAZZI_FILE, and DAZZI_FILE_COUNT.",
-        "commandPlaceholderWindows": "e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args or python ~\\scripts\\process.py @args",
-        "commandHintWindows": "Runs in Windows PowerShell with selected paths passed in $args and env vars $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, and $env:DAZZI_FILE_COUNT.",
         "selectionField": "Selection Count",
         "targetKindField": "Target Type",
         "extensionsField": "Extension Filter (optional)",
         "extensionsPlaceholder": "Leave blank for all · e.g. pdf, docx, md",
-        "save": "Save"
+        "save": "Save",
+        "commandPlaceholderWindows": "e.g. Get-FileHash -Algorithm SHA256 -LiteralPath $args or python ~\\scripts\\process.py @args",
+        "commandHintWindows": "Runs in Windows PowerShell with selected paths passed in $args and env vars $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, and $env:DAZZI_FILE_COUNT."
       },
-      "modal": {
+      "assistant": {
         "title": "AI Context Menu & Magic Action Assistant",
-        "subtitle": "Describe the right-click buttons, scripts, or AI file actions you want.",
         "emptyTitle": "What should appear when you right-click?",
-        "emptyDesc": "Create AI agent actions or scripts scoped to specific extensions or multi-file selections, or clean up built-in items.",
-        "promptSummarizePdf": "Add a Magic Action for single PDF or Markdown files that summarizes them in 3 bullet points",
-        "promptBatchScript": "Create a Magic Action for multiple selected files that computes their SHA-256 hashes",
-        "promptCleanMenu": "Hide Compress as 7z, Copy Path, and Cut from the right-click menu",
-        "promptReset": "Reset the right-click context menu back to default",
-        "placeholder": "e.g. Add a right-click action for multiple images that lists their dimensions and sizes…",
-        "lockedNotice": "Tags always remains visible, and built-in keyboard shortcuts stay unchanged."
+        "emptyDesc": "Build your own right-click actions that summarize, compare, or tidy up files, or hide the menu items you don't use.",
+        "promptSummarizeDoc": "Make a Magic Action that sums up a PDF or Word document in three lines when I right-click it",
+        "promptCompareFiles": "Make a Magic Action that lists what changed between two files I select and right-click",
+        "promptPaperToDiscord": "Make a Magic Action that summarizes a PDF paper, posts the summary to my Discord #paper-summaries channel, and saves summary slides in a \"Paper Summaries\" folder",
+        "promptMaskToPdf": "Make a Magic Action that masks all pseudonymized personal details in an hwp or docx file, then converts it to PDF and saves it"
       }
     },
     "shortcuts": {
@@ -2334,18 +2403,15 @@
         "aiNewChat": "New AI Chat",
         "aiToggleHistory": "Toggle Chat History"
       },
-      "modal": {
+      "assistant": {
         "title": "AI Shortcut Customizer",
-        "subtitle": "Describe the shortcut changes or swaps you want in plain words.",
         "emptyTitle": "Which shortcuts would you like to change?",
         "emptyDesc": "Rebind or swap any of Dazzi's 26 default-bound shortcuts — changes take effect right away.",
-        "promptMacFinder": "Switch to Mac Finder default shortcuts",
-        "promptWindowsExplorer": "Switch to Windows File Explorer shortcuts",
-        "promptSwap": "Swap the Duplicate and Rename shortcuts",
-        "promptReset": "Reset all keyboard shortcuts back to default",
+        "promptMacFinder": "Let me use the same shortcuts as the Mac Finder",
+        "promptWindowsExplorer": "Switch to the shortcuts I know from Windows File Explorer",
+        "promptRenameF2": "Make F2 rename a file",
+        "promptReset": "Put all shortcuts back the way they were",
         "thinking": "Checking shortcuts",
-        "placeholder": "e.g. Set Rename to F2 and Focus Search to Cmd+P…",
-        "lockedNotice": "Only existing default-bound shortcuts can be edited; Esc and plain arrow keys stay reserved.",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "Shortcut customizer service is unavailable."
       }
@@ -2363,20 +2429,6 @@
       "finderDesc": "Behavior of the file browsing screen.",
       "showHiddenFiles": "Show Hidden Files",
       "showHiddenFilesHint": "Show system files that start with a dot (.) in Finder.",
-      "remoteTitle": "Remote Access",
-      "remoteSecurityHint": "HTTP is not encrypted. Use only a trusted network or an encrypted tunnel.",
-      "remoteAccess": "Enable Remote Access",
-      "remoteAccessHint": "Open this Dazzi from a browser on another device.",
-      "remoteAddress": "Browser Address",
-      "remoteStopped": "Stopped",
-      "remotePort": "Port",
-      "remotePortHint": "Default: 47833. Use 0 for an available port. Restart Dazzi after changing the port.",
-      "remoteCopyAddress": "Copy Address",
-      "remoteAddressCopied": "Address Copied",
-      "remoteCopyError": "Could not copy the address. Select it and copy manually.",
-      "remoteStatusError": "Could not read remote access status: {{error}}",
-      "remoteSettingsError": "Could not save remote access settings: {{error}}",
-      "remoteLimitations": "Dragging files out downloads them. Show in Finder and Open With are unavailable. The file clipboard is separate for each browser session. Uploads cannot be undone with Cmd+Z.",
       "launchTitle": "Startup & Updates",
       "launchAtLogin": "Launch at Login",
       "launchAtLoginHint": "Start Dazzi in the background when you turn on your computer.",
@@ -2406,7 +2458,93 @@
       "docLanguagesTitle": "Document Languages",
       "docLanguagesDesc": "Preferred languages for reading and searching documents.",
       "docLanguagesHint": "You can select multiple.",
-      "osMenuError": "Could not set the right-click menu: {{error}}"
+      "osMenuError": "Could not set the right-click menu: {{error}}",
+      "quickSearchTitle": "Quick Search",
+      "quickSearchDesc": "Open the Dazzi search bar with a shortcut, whatever app you are in.",
+      "quickSearchEnabled": "Use the Quick Search Shortcut",
+      "quickSearchEnabledHint": "Press {{shortcut}} to open the search bar. Press it again or Esc to close it.",
+      "quickSearchShortcut": "Shortcut",
+      "quickSearchShortcutHint": "Click, then press a new key combination.",
+      "quickSearchNeedsModifier": "This shortcut works in every app, so hold ⌘/Ctrl or ⌥/Alt with the key.",
+      "quickSearchTaken": "{{shortcut}} is already used by another app or the system. Choose another combination."
+    },
+    "remote": {
+      "description": "Open this Dazzi from a browser on another device, and manage the devices that can.",
+      "unavailable": "Remote access cannot be set up from this window.",
+      "securityHint": "HTTP is not encrypted. Use only a trusted network or an encrypted tunnel.",
+      "access": "Enable Remote Access",
+      "address": "Browser Address",
+      "stopped": "Stopped",
+      "port": "Port",
+      "portHint": "Default: 47833. Use 0 for an available port. Changing it restarts the server on the new port right away.",
+      "copyAddress": "Copy Address",
+      "addressCopied": "Address Copied",
+      "copyError": "Could not copy the address. Select it and copy manually.",
+      "statusError": "Could not read remote access status: {{error}}",
+      "settingsError": "Could not save remote access settings: {{error}}",
+      "pairStart": "Get Pairing Code",
+      "pairNewCode": "New Code",
+      "pairExpires": "Expires in {{time}}",
+      "pairExpired": "Code expired.",
+      "pairQrLabel": "QR code for pairing code {{code}}",
+      "pairLinkCopy": "Copy Pairing Link",
+      "pairLinkCopied": "Link Copied",
+      "tunnelStart": "Start Tunnel",
+      "tunnelStarting": "Starting…",
+      "tunnelStop": "Stop Tunnel",
+      "devicesTitle": "Paired Devices",
+      "devicesEmpty": "No devices paired yet.",
+      "deviceCurrent": "this device",
+      "deviceLastSeen": "Last seen {{when}}",
+      "deviceJustNow": "just now",
+      "deviceMinutesAgo": "{{count}} min ago",
+      "deviceHoursAgo": "{{count}} hr ago",
+      "deviceNever": "never",
+      "deviceRename": "Rename {{name}}",
+      "deviceNameInput": "Device name",
+      "deviceSave": "Save name",
+      "deviceCancel": "Cancel",
+      "deviceRevoke": "Revoke",
+      "deviceRevokeConfirm": "Confirm Revoke",
+      "devicesRevokeAll": "Revoke All",
+      "devicesRevokeAllConfirm": "Confirm Revoke All",
+      "viaToken": "Connected with the access token.",
+      "viaDevice": "Connected as a paired device.",
+      "accessHint": "When on, ways to connect and paired devices appear below.",
+      "starting": "Starting the remote access server…",
+      "connectTitle": "Connect a Device",
+      "connectHint": "Choose a route, open its address on the new device, then enter the pairing code.",
+      "routeLabel": "1. Route",
+      "routeLan": "Same Wi-Fi",
+      "routeInternet": "Internet",
+      "routeAddress": "Address",
+      "routeLanHint": "An address that devices on the same Wi-Fi or office network as this computer can open directly.",
+      "lanMissing": "No Wi-Fi or LAN address was found on this computer. Check its network connection.",
+      "pairTitle": "2. Pairing Code",
+      "pairHint": "Needed once per device, whatever the route. The QR code carries the address above together with the code.",
+      "pairNoAddress": "The QR code appears once a route above has an address. The code can still be typed in.",
+      "details": "Details",
+      "addressHint": "Opens Dazzi on this computer. It contains the access token, so do not share it.",
+      "tunnelQuickTitle": "Cloudflare temporary address",
+      "tunnelCustomTitle": "Own domain: {{hostname}}",
+      "tunnelQuickHint": "Creates a temporary https://….trycloudflare.com address without an account. The address changes every time the tunnel starts, and Cloudflare does not guarantee uptime.",
+      "tunnelCustomHint": "Connects through your own domain on Cloudflare. The address stays the same after a restart.",
+      "tunnelMissingBinary": "cloudflared is not installed on this computer. Install it (for example, brew install cloudflared) to turn this on.",
+      "tunnelErrLogin": "Sign in to Cloudflare before using your own domain.",
+      "tunnelErrServer": "The remote access server is not running.",
+      "tunnelErrTimeout": "The tunnel did not connect in time. Try again.",
+      "tunnelErrDisconnected": "The tunnel disconnected. Start it again.",
+      "tunnelErrExited": "cloudflared stopped: {{reason}}",
+      "tunnelErrSetup": "Could not set up the tunnel: {{reason}}",
+      "domainToggle": "Use my own domain",
+      "domainHint": "Enter a hostname on a domain you manage in Cloudflare (for example, dazzi.example.com) to get a fixed address instead of a temporary one. A hostname that already points elsewhere is never changed.",
+      "domainLabel": "Domain",
+      "domainInvalid": "Not a domain name: {{value}}",
+      "domainLogin": "Sign in to Cloudflare",
+      "domainLoginHint": "Approve the account that owns this domain in the browser.",
+      "domainLoggedIn": "Signed in to Cloudflare.",
+      "serverFailed": "Could not start the remote access server: {{reason}}",
+      "retryStart": "Try Again"
     },
     "account": {
       "description": "Your Dazzi account and sign-in status.",
@@ -2490,6 +2628,7 @@
       "decompositionHint": "Splits long questions into multiple search terms. A fast, cheap model works well.",
       "jevModel": "Judge Model (Jev)",
       "jevHint": "Decides whether to answer directly or search your documents.",
+      "jevSllm": "None",
       "rerankModel": "Rerank Results",
       "rerankHint": "Raises more relevant results to the top. Answers may be slightly slower.",
       "subDocUnderstanding": "Document Understanding",
@@ -3002,7 +3141,7 @@
       "foldersTitle": "Folders to search",
       "foldersDesc": "The contents of these folders are included in AI search.",
       "folderName": "Search folders",
-      "folderHint": "Add or remove folders by entering their paths directly.",
+      "folderHint": "Pick folders to add. Everything inside them is searched.",
       "addFolder": "Add folder",
       "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
       "excludeTitle": "Items to exclude",
@@ -3023,7 +3162,39 @@
       "addFolderPlaceholder": "e.g. ~/Documents",
       "addItemPlaceholder": "e.g. node_modules",
       "confirmAdd": "Add",
-      "addChip": "+ Add"
+      "addChip": "+ Add",
+      "notAdded": {
+        "duplicate": "{{path}} is already a search folder.",
+        "insideTarget": "{{path}} is already covered by a search folder above it.",
+        "notAbsolute": "{{path}} is not a full path."
+      }
+    },
+    "indexMap": {
+      "title": "Index map",
+      "coverage": "{{indexed}} of {{total}} indexed",
+      "allRoots": "All search roots",
+      "scopeLabel": "Current scope",
+      "up": "Go to parent folder",
+      "selectHint": "Hover over a segment to see its path and indexing status.",
+      "excludedHint": "This path is excluded from indexing and does not affect completion.",
+      "canvasLabel": "Radial indexing map, from search roots at the center to descendant files at the edge",
+      "loading": "Surveying the search scope…",
+      "error": "Couldn't load the map: {{message}}",
+      "unavailable": "The index map isn't available in this window.",
+      "empty": "There are no supported files in the search scope.",
+      "parcel": "{{files}} files · {{state}}",
+      "folderCounts": "{{indexed}} of {{total}} indexed",
+      "legendLabel": "Legend",
+      "progress": "Indexing now",
+      "truncated": "The search scope is too large, so only the first {{total}} files were surveyed.",
+      "state": {
+        "indexed": "Complete",
+        "partial": "Partly indexed",
+        "stale": "Needs refresh",
+        "unindexed": "Not complete",
+        "excluded": "Excluded",
+        "unindexable": "Unreadable"
+      }
     },
     "web": {
       "title": "Web search",
@@ -3119,5 +3290,233 @@
     "emptyOutput": " Finished with no text output.",
     "targetsCount": "{{count}} item(s)",
     "sidebarOpen": "Open Magic Action result"
+  },
+  "quickSearch": {
+    "title": "Quick Search",
+    "placeholder": "Search file names and contents",
+    "searching": "Searching",
+    "sections": {
+      "recent": "Recent",
+      "names": "File Names",
+      "content": "Contents",
+      "ask": "Ask Dazzi"
+    },
+    "askRow": "Ask Dazzi: “{{query}}”",
+    "emptyRecents": "Type to search. Files you opened recently show up here.",
+    "noResults": "No matching files.",
+    "contentOff": "Content search is off in keyword-only mode.",
+    "contentUnavailable": "The document index is not ready yet, so there are no content matches.",
+    "copiedFiles": "Copied {{count}} file(s). Paste them into any app.",
+    "copiedPaths": "Copied {{count}} path(s).",
+    "actionsTitle": "Actions",
+    "actions": {
+      "open": "Open",
+      "preview": "Quick Look",
+      "revealOs": "Show in Finder/Explorer",
+      "showInApp": "Show in Dazzi",
+      "copyFile": "Copy File",
+      "copyPath": "Copy Path",
+      "askAbout": "Ask Dazzi About This File",
+      "askQuery": "Ask Dazzi"
+    },
+    "hints": {
+      "preview": "Preview",
+      "copy": "Copy",
+      "actions": "Actions"
+    }
+  },
+  "mobile": {
+    "tabs": {
+      "browse": "Browse",
+      "recents": "Recents",
+      "ai": "AI Search",
+      "automations": "Automations",
+      "search": "Search",
+      "aria": "App tabs",
+      "settings": "Settings"
+    },
+    "connectedTo": "Connected to {{name}}",
+    "back": "Back",
+    "more": "More",
+    "moreFor": "Menu for {{name}}",
+    "add": "Add",
+    "settings": "Settings",
+    "collapse": "Collapse {{name}}",
+    "itemCount": "{{count}} items",
+    "itemCountSize": "{{count}} items · {{size}}",
+    "emptyFolder": "Empty folder",
+    "emptyFolderHint": "Use + to make a folder or upload files from this device",
+    "emptyTrash": "The Trash is empty",
+    "loadFailed": "Couldn't open this folder: {{message}}",
+    "loading": "Loading…",
+    "sort": {
+      "title": "Sort by",
+      "name": "Name",
+      "date": "Date modified",
+      "size": "Size",
+      "kind": "Kind"
+    },
+    "view": {
+      "options": "View options",
+      "grid": "Icons",
+      "list": "List",
+      "select": "Select"
+    },
+    "folderInfo": "Folder info",
+    "askFolder": "Ask about this folder",
+    "pathMenu": "Go to an enclosing folder",
+    "select": {
+      "all": "Select all",
+      "none": "Deselect all",
+      "done": "Done",
+      "title": "Select items",
+      "count": "{{count}} selected",
+      "move": "Move",
+      "copy": "Copy",
+      "ask": "Ask AI",
+      "trash": "Trash",
+      "restore": "Restore"
+    },
+    "swipe": {
+      "trash": "Trash",
+      "more": "More"
+    },
+    "menu": {
+      "copy": "Copy",
+      "move": "Move",
+      "download": "Download",
+      "quickLook": "Quick Look",
+      "info": "Get Info",
+      "reveal": "Show in Enclosing Folder",
+      "askOne": "AI summary",
+      "askFolder": "Ask about this folder",
+      "askMany": "Ask AI about {{count}} items",
+      "magic": "Magic actions",
+      "tools": "Quick actions",
+      "toolsHint": "Compress · Indexing · Duplicate",
+      "agent": "AI agent",
+      "script": "Script"
+    },
+    "picker": {
+      "move": "Move {{count}} items",
+      "copy": "Copy {{count}} items",
+      "subtitle": "Choose a location",
+      "choose": "Choose a folder",
+      "moveHere": "Move to {{folder}}",
+      "copyHere": "Copy to {{folder}}",
+      "noSubfolders": "No subfolders",
+      "places": "Places"
+    },
+    "rename": {
+      "title": "Rename",
+      "ok": "Done"
+    },
+    "newFolder": {
+      "title": "New folder",
+      "ok": "Create",
+      "placeholder": "New folder"
+    },
+    "confirm": {
+      "emptyTrash": "Empty the Trash?",
+      "emptyTrashBody": "Items in the Trash are deleted permanently. This can't be undone.",
+      "emptyTrashOk": "Empty Trash"
+    },
+    "toast": {
+      "undo": "Undo",
+      "show": "Show",
+      "downloading": "Downloading ‘{{name}}’…",
+      "downloadingMany": "Downloading {{count}} items…",
+      "created": "Created ‘{{name}}’",
+      "renamed": "Renamed to ‘{{name}}’",
+      "uploaded": "Uploaded ‘{{name}}’",
+      "uploadFailed": "Couldn't upload ‘{{name}}’",
+      "uploadedMany": "Uploaded {{count}} files",
+      "magicStarted": "Running ‘{{name}}’",
+      "failed": "Failed: {{message}}"
+    },
+    "info": {
+      "title": "Info",
+      "quickLook": "Quick Look",
+      "download": "Download",
+      "ask": "AI summary",
+      "askFolder": "Ask",
+      "move": "Move",
+      "indexed": "Include in AI Search",
+      "indexedOn": "Its contents can be found",
+      "indexedOff": "Only its name can be found",
+      "indexLocked": "Follows the enclosing folder's setting",
+      "versions": "Versions",
+      "versionsFoot": "Other versions of this document dupey found.",
+      "latest": "Latest",
+      "near": "Similar",
+      "exact": "Identical",
+      "tags": "Tags",
+      "noTags": "None",
+      "folderRules": "Automations for this folder"
+    },
+    "ql": {
+      "done": "Done",
+      "position": "{{index}} / {{total}}",
+      "noPreview": "This format can't be previewed in the browser.",
+      "openTab": "Open in new tab"
+    },
+    "search": {
+      "placeholder": "File names or contents",
+      "clear": "Clear",
+      "results": "All of {{machine}} · {{count}}",
+      "none": "No files named “{{query}}”",
+      "noneHint": "Ask AI Search to find it by its contents",
+      "askAi": "Ask AI Search about “{{query}}”",
+      "askAiHint": "Searches file contents, mail, and messengers",
+      "typeHint": "Search file names on this computer",
+      "exit": "Close search"
+    },
+    "recents": {
+      "empty": "No recent items",
+      "buckets": {
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "week": "This week",
+        "month": "This month",
+        "older": "Earlier"
+      }
+    },
+    "activity": {
+      "title": "Activity",
+      "count": "{{count}} tasks",
+      "empty": "Nothing is running",
+      "open": "Running and queued tasks"
+    },
+    "rules": {
+      "add": "Add a rule in AI Search",
+      "section": "Rules",
+      "foot": "Tell Dazzi what to do when files appear or change. You create and edit rules by asking in AI Search.",
+      "daemonToggle": "Run in background"
+    },
+    "ai": {
+      "history": "History",
+      "newChat": "New chat",
+      "sources": "Sources: {{count}}",
+      "suggestions": "Try asking",
+      "suggest1": "Find the quote I got last week",
+      "suggest2": "Tidy up my Downloads folder",
+      "suggest3": "Summarize my latest meeting notes"
+    },
+    "settingsHub": {
+      "title": "Settings",
+      "connection": "Remote access · {{address}} · Dazzi {{version}}",
+      "signedOut": "Not signed in"
+    },
+    "create": {
+      "newFolder": "New folder",
+      "newText": "New text document",
+      "newMarkdown": "New Markdown document",
+      "upload": "Upload from this device",
+      "uploadHint": "Photos · Files"
+    },
+    "evidence": {
+      "showInFolder": "Show in folder",
+      "preview": "Preview"
+    }
   }
 }

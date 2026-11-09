@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IDLE_INDEX_ACTIVITY, type IndexActivityItem, type IndexActivitySnapshot } from "../src/shared/index-activity-contract";
-import { describeIndexActivity } from "../src/renderer/src/state/index-activity";
+import { describeIndexActivity, localIndexRunning } from "../src/renderer/src/state/index-activity";
 import { setAppLanguage, t } from "../src/shared/i18n";
 
 function item(overrides: Partial<IndexActivityItem>): IndexActivityItem {
@@ -44,5 +44,30 @@ describe("describeIndexActivity", () => {
 			t,
 		);
 		expect(failed).toMatchObject({ tone: "error", headline: "인덱싱 실패", detail: "slack — no token" });
+	});
+});
+
+describe("localIndexRunning", () => {
+	it("is false when idle, finished, or failed", () => {
+		expect(localIndexRunning(IDLE_INDEX_ACTIVITY)).toBe(false);
+		expect(localIndexRunning(snapshot({ state: "done", items: [item({ state: "done" })] }))).toBe(false);
+		expect(localIndexRunning(snapshot({ state: "failed", items: [item({ state: "failed" })] }))).toBe(false);
+	});
+
+	it("is true while the local folders run or wait, whoever started the run", () => {
+		expect(localIndexRunning(snapshot({ items: [item({ state: "running" })] }))).toBe(true);
+		expect(localIndexRunning(snapshot({ items: [item({ state: "queued" })] }))).toBe(true);
+		expect(localIndexRunning(snapshot({ origin: "external", items: [item({ state: "running" })] }))).toBe(true);
+		expect(localIndexRunning(snapshot({ origin: "scheduled", items: [item({ state: "running" })] }))).toBe(true);
+	});
+
+	it("is true for a run that has not listed its items yet", () => {
+		expect(localIndexRunning(snapshot({ items: [] }))).toBe(true);
+	});
+
+	it("ignores a datasource sync: it never changes what the local map shows", () => {
+		expect(localIndexRunning(snapshot({ items: [item({ key: "source:slack", kind: "source", id: "slack" })] }))).toBe(false);
+		expect(localIndexRunning(snapshot({ items: [item({ state: "done" }), item({ key: "source:slack", kind: "source", id: "slack" })] }))).toBe(false);
+		expect(localIndexRunning(snapshot({ items: [item({ key: "source:slack", kind: "source", id: "slack" }), item({ state: "running" })] }))).toBe(true);
 	});
 });

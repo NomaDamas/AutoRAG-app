@@ -18,14 +18,15 @@ import type {
 	ModelCatalogEntry,
 	ProviderSummary,
 } from "../../../../shared/settings-contract";
-import { AppIcon, FloatingMenu, ModalActions, ModalShell, Note, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { ProviderIcon } from "./ProviderIcon";
+import { FloatingMenu, ModalActions, ModalShell, Note, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
-import { jevLabel, jevOptionsFor, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
+import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
-import { jevBackendFor } from "../../../../shared/ai-roles";
-import { isAllowedAgentApi, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
+import { JEV_SLLM_BACKEND, jevBackendFor } from "../../../../shared/ai-roles";
+import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
 const settings = window.autorag.settings;
@@ -50,8 +51,10 @@ const DECOMPOSITION_SPECIALS = [
 	{ value: "default", labelKey: "settingsCore.ai.decompDefault" },
 ] as const;
 
-/** Jev and rerank disable by writing `false` to their block. */
-const OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
+/** Rerank can be disabled; Jev is required by the shared AutoRAG config. */
+const RERANK_OFF_SPECIALS = [{ value: "off", labelKey: "settingsCore.ai.off" }] as const;
+/** The decision model is Jev or the small chat model; it cannot be switched off. */
+const JEV_SLLM_SPECIALS = [{ value: JEV_SLLM_BACKEND, labelKey: "settingsCore.ai.jevSllm" }] as const;
 
 interface MenuState {
 	readonly kind: "connect" | "provider" | "picker" | "thinking";
@@ -112,15 +115,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}
 
 	function writeDecomposition(entry: ModelCatalogEntry): void {
-		const model: Record<string, string> = { provider: entry.provider, id: entry.id };
-		const name = entry.name.trim();
-		const baseUrl = (entry.baseUrl ?? "").trim();
-		const env = (entry.apiKeyEnv ?? "").trim();
-		if (name.length > 0) model.name = name;
-		if (entry.api.length > 0 && isAllowedAgentApi(entry.api)) model.api = entry.api;
-		if (baseUrl.length > 0) model.baseUrl = baseUrl;
-		if (env.length > 0) model.apiKeyEnv = env;
-		void run([{ path: ["queryDecomposition"], value: { model } }]);
+		void run(decompositionConfigUpdates(entry));
 	}
 
 	/** Sign in to the AutoRAG plan through the account service (browser PKCE, encrypted key, adopted defaults). */
@@ -158,15 +153,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			setNotice(t("settingsCore.ai.envKeyCannotRemove", { name: provider.name }));
 			return;
 		}
-		const model = asRecord(getAt(snapshot.config, ["model"]));
-		const decomposition = asRecord(getAt(snapshot.config, ["queryDecomposition", "model"]));
-		const rerank = asRecord(getAt(snapshot.config, ["rerank"]));
-		const jev = asRecord(getAt(snapshot.config, ["jev"]));
-		const ops: AutoRagConfigUpdate[] = [];
-		if (stringOf(model?.provider) === provider.id) ops.push({ path: ["model"], remove: true });
-		if (stringOf(decomposition?.provider) === provider.id) ops.push({ path: ["queryDecomposition"], remove: true });
-		if (stringOf(rerank?.provider) === provider.id) ops.push({ path: ["rerank"], value: false });
-		if (stringOf(jev?.backend) === jevBackendFor(provider.id)) ops.push({ path: ["jev"], value: false });
+		const ops = providerRoleCleanup(snapshot.config, provider.id);
 		try {
 			if (ops.length > 0) await run(ops);
 			if (provider.kind === "local" || provider.kind === "custom") await settings.providersRemove(provider.id);
@@ -202,7 +189,8 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	function specialsFor(role: string): readonly { readonly value: string; readonly label: string }[] {
 		if (role === "decomposition") return DECOMPOSITION_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
-		if (role === "jev" || role === "rerank") return OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "jev") return JEV_SLLM_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
+		if (role === "rerank") return RERANK_OFF_SPECIALS.map((special) => ({ value: special.value, label: t(special.labelKey) }));
 		return [];
 	}
 
@@ -218,7 +206,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 						const meta = `${provider.subscription ? t("settingsCore.ai.subscriptionAccount") : t(KIND_LABEL_KEY[provider.kind])}${provider.baseUrl === null ? "" : ` · ${provider.baseUrl}`}${used.length > 0 ? ` · ${t("settingsCore.ai.usedFor", { roles: used.join(", ") })}` : ""}`;
 						return (
 							<div className="settings-list-row" key={provider.id}>
-								<AppIcon label={provider.name} />
+								<ProviderIcon provider={provider} />
 								<span className="settings-list-body">
 									<span className="settings-list-title">{provider.name}</span>
 									<span className="settings-list-meta">{meta}</span>
@@ -243,11 +231,11 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			</Section>
 			<Section title={t("settingsCore.ai.rolesTitle")} description={t("settingsCore.ai.rolesDesc")}>
 				<p className="settings-subsection-title">{t("settingsCore.ai.role.answer")}</p>
-				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} providerName={selectedProviderName("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
+				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} provider={selectedProvider("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
 				<p className="settings-subsection-title">{t("settingsCore.ai.subSearchAssistant")}</p>
-				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} providerName={selectedProviderName("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} providerName={selectedProviderName("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
-				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} providerName={selectedProviderName("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
+				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
 				<p className="settings-subsection-title">{t("settingsCore.ai.subDocUnderstanding")}</p>
 				<EmbeddingPicker />
 			</Section>
@@ -283,7 +271,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 								closeMenu();
 								if (menu.arg === "decomposition" && special === "same") void run([{ path: ["queryDecomposition"], value: false }]);
 								else if (menu.arg === "decomposition" && special === "default") void run([{ path: ["queryDecomposition"], remove: true }]);
-								else if (menu.arg === "jev" && special === "off") void run([{ path: ["jev"], value: false }]);
+								else if (menu.arg === "jev" && special === JEV_SLLM_BACKEND) void run(jevSllmConfigUpdates());
 								else if (menu.arg === "rerank" && special === "off") void run([{ path: ["rerank"], value: false }]);
 							}}
 						/>
@@ -339,10 +327,10 @@ function thinkingValue(snapshot: AutoRagConfigSnapshot): string {
 	return stringOf(getAt(snapshot.config, ["thinking", "final"]));
 }
 
-function selectedProviderName(role: string, config: AutoRagConfigSnapshot["config"], connected: readonly ProviderSummary[]): string | null {
+function selectedProvider(role: string, config: AutoRagConfigSnapshot["config"], connected: readonly ProviderSummary[]): ProviderSummary | null {
 	const sel = roleSelectionFor(role, config, connected);
 	if (sel?.kind !== "model") return null;
-	return connected.find((item) => item.id === sel.provider)?.name ?? null;
+	return connected.find((item) => item.id === sel.provider) ?? null;
 }
 
 /* --------------------------------------------------------------- pieces -- */
@@ -352,7 +340,7 @@ function RoleRow({
 	label,
 	hint,
 	current,
-	providerName,
+	provider,
 	onOpen,
 	thinking,
 }: {
@@ -360,7 +348,7 @@ function RoleRow({
 	readonly label: string;
 	readonly hint: string;
 	readonly current: string;
-	readonly providerName?: string | null;
+	readonly provider?: ProviderSummary | null;
 	readonly onOpen: (anchor: HTMLElement) => void;
 	readonly thinking?: { readonly onOpen: (anchor: HTMLElement) => void };
 }): ReactElement {
@@ -369,7 +357,7 @@ function RoleRow({
 		<Row name={label} hint={hint}>
 			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
 				<button type="button" className="settings-trigger" aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
-					{providerName ? <AppIcon small label={providerName} /> : null}
+					{provider ? <ProviderIcon small provider={provider} /> : null}
 					<span className="settings-trigger-label">{current}</span>
 					<ChevronDown size={14} aria-hidden="true" focusable="false" />
 				</button>

@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { useLatestCallback } from "./useLatestCallback";
 import { useFolderListings } from "./useFolderListings";
 import { useRowPipeline } from "./useRowPipeline";
-import { itemElement, useFinderKeyboard } from "./useFinderKeyboard";
+import { useFinderKeyboard } from "./useFinderKeyboard";
+import { revealTarget, type ScrollRequest } from "./list-reveal";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
 import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
 import type { QuickLookTarget } from "../../../preview/shared/contract";
@@ -18,6 +19,7 @@ import type { EntrySidecar } from "../data/entry-sidecar";
 import { navGroups, type NavGroup, type NavItem } from "../data/places";
 import { type FinderLocation, type FinderSource, pickInitialPath } from "../data/source";
 import { useTagCatalog } from "./useTagCatalog";
+import { useSidebarPins, type SidebarPins } from "./useSidebarPins";
 import { useSidebarSettings } from "./useSidebarSettings";
 import { useContextMenuSettings } from "./useContextMenuSettings";
 import { useShortcutSettings } from "./useShortcutSettings";
@@ -63,12 +65,11 @@ import {
 	applyRowClick,
 	EMPTY_SELECTION,
 	moveSelection,
+	type ScrollIntent,
 	type SelectionState,
-	SCROLL_LEAD,
 } from "../state/selection";
 import {
 	GROUP_STORAGE_KEY,
-	groupedRowTop,
 	parseGroupKey,
 	type GroupKey,
 	type GroupSection,
@@ -218,6 +219,8 @@ export interface FinderController {
 	readonly activeNavPath: string | null;
 	/** Sidebar groups built from the live OS locations. */
 	readonly navGroups: readonly NavGroup[];
+	/** Pin, unpin, and reorder of the sidebar's Favorites (they write `AppSettings.sidebar`). */
+	readonly sidebarPins: SidebarPins;
 	readonly contextMenu: { readonly cursor: { readonly x: number; readonly y: number } } | null;
 	readonly contextMenuEntries: readonly FinderMenuEntry[];
 	/** The mode the toolbar toggle shows as chosen. */
@@ -497,7 +500,13 @@ export function useFinderController(
 
 	const listRef = useRef<HTMLDivElement | null>(null);
 	const searchRef = useRef<HTMLInputElement | null>(null);
-	const scrollTarget = useRef<string | null>(null);
+	/** The row the next row set should scroll into view, and why. */
+	const scrollTarget = useRef<ScrollRequest | null>(null);
+	/** Stops a list scroll that is still waiting for a folder's open/close motion to settle. */
+	const cancelReveal = useRef<(() => void) | null>(null);
+	const requestScroll = (path: string | null, intent: ScrollIntent): void => {
+		scrollTarget.current = path === null ? null : { path, intent };
+	};
 	const pathRef = useRef("");
 	const tabsRef = useRef(tabsState.tabs);
 	const searchingRef = useRef(false);
@@ -562,6 +571,7 @@ export function useFinderController(
 	}, [source]);
 
 	const showToast = useLatestCallback((message: string) => toastRef.current?.(message));
+	const sidebarPins = useSidebarPins(locations, showToast);
 
 	/** Failures surface verbatim — the operator sees the real message. */
 	const reportError = useCallback(
@@ -841,36 +851,30 @@ export function useFinderController(
 		};
 	}, [source, sidecar, indexStatusKey, indexRevision, reportError]);
 
-	/** Keyboard movement keeps the focused item in view (list: row height 32, lead 80). */
+	useEffect(() => () => cancelReveal.current?.(), []);
+
+	/**
+	 * Keyboard movement and reveals keep the target row in view, as Finder does: a row that is already visible
+	 * leaves the scroll alone and one past an edge scrolls by what sticks out (`revealTarget`).
+	 */
 	useEffect(() => {
-		const target = scrollTarget.current;
-		if (target === null) {
-			return;
-		}
-		if (layout !== "list") {
-			// A pane or a revealed folder may still be loading; keep the target until its item renders.
-			const element = itemElement(listRef.current, target);
-			if (element !== null) {
-				scrollTarget.current = null;
-				element.scrollIntoView({ block: "nearest", inline: "nearest" });
-			}
+		const request = scrollTarget.current;
+		if (request === null) {
 			return;
 		}
 		// The previous folder's rows can still be on screen while a revealed folder
 		// loads; the target must only be consumed by the current folder's rows (a
 		// search list may come from many folders, so it is exempt).
-		const index = orderedKeys.indexOf(target);
-		if (index < 0 || (!searchingRef.current && listingDir !== path)) {
-			// The target's listing has not landed yet (a revealed folder still
-			// loading); keep the target so the next row set scrolls to it.
+		const rows = searchingRef.current || listingDir === path ? { sections: stackSections, orderedKeys } : null;
+		const cancel = revealTarget({ layout, list: listRef.current, request, rows });
+		if (cancel === null) {
+			// The target's item has not rendered yet (a pane or a revealed folder still loading); keep the
+			// request so the next row set scrolls to it.
 			return;
 		}
 		scrollTarget.current = null;
-		if (listRef.current !== null) {
-			// Group headers add height above a row, so the top comes from the
-			// grouped layout (identical to index * ROW_HEIGHT when ungrouped).
-			listRef.current.scrollTop = Math.max(0, groupedRowTop(stackSections, index) - SCROLL_LEAD);
-		}
+		cancelReveal.current?.();
+		cancelReveal.current = cancel;
 	}, [orderedKeys, layout, selection, path, listingDir, stackSections]);
 
 	const patchSelection = useLatestCallback((next: SelectionState) => {
@@ -920,7 +924,7 @@ export function useFinderController(
 				const current = activeTab(state);
 				return applyColumnChoice(state, chooseInColumn(current.path, current.chain, pane, entry), single(entry.path));
 			});
-			scrollTarget.current = entry.path;
+			requestScroll(entry.path, "step");
 		});
 
 	const stepColumns = useLatestCallback(
@@ -930,7 +934,7 @@ export function useFinderController(
 				const back = direction === "left" ? slideBack(path, chain) : null;
 				if (back !== null) {
 					setTabsState((state) => applyColumnChoice(state, back, single(back.focus)));
-					scrollTarget.current = back.focus;
+					requestScroll(back.focus, "step");
 				}
 				return;
 			}
@@ -1030,7 +1034,7 @@ export function useFinderController(
 		);
 		setQueryValue("");
 		setFlashPath(entry.path);
-		scrollTarget.current = entry.path;
+		requestScroll(entry.path, "reveal");
 	});
 
 	const openEntry = useLatestCallback(
@@ -1267,7 +1271,7 @@ export function useFinderController(
 	 */
 	const revealCreated = useLatestCallback(
 		(created: { readonly path: string; readonly name: string }) => {
-			scrollTarget.current = created.path;
+			requestScroll(created.path, "reveal");
 			patchSelection(single(created.path));
 			setRename({ path: created.path, draft: created.name });
 			refresh();
@@ -1431,7 +1435,7 @@ export function useFinderController(
 					recordActionOutput("reduceSize", outcome.output);
 					refresh();
 					if (!searchingRef.current && pathRef.current === dirname(pending.path)) {
-						scrollTarget.current = outcome.output;
+						requestScroll(outcome.output, "reveal");
 						patchSelection(single(outcome.output));
 						setFlashPath(outcome.output);
 					}
@@ -1515,7 +1519,7 @@ export function useFinderController(
 	const moveSelectionBy = useLatestCallback(
 		(delta: 1 | -1) => {
 			const next = moveSelection(orderedKeys, selection, delta);
-			scrollTarget.current = next.focus;
+			requestScroll(next.focus, "step");
 			patchSelection(next);
 		});
 
@@ -1549,7 +1553,7 @@ export function useFinderController(
 					);
 					setQueryValue("");
 					setFlashPath(entry.path);
-					scrollTarget.current = entry.path;
+					requestScroll(entry.path, "reveal");
 				})
 				.catch(reportError);
 		});
@@ -1780,7 +1784,7 @@ export function useFinderController(
 					);
 					setQueryValue("");
 					setFlashPath(entry.path);
-					scrollTarget.current = entry.path;
+					requestScroll(entry.path, "reveal");
 					return;
 				}
 				case "toggleIndex":
@@ -1803,6 +1807,14 @@ export function useFinderController(
 				case "copyPath":
 					source.copyPaths(targets).catch(reportError);
 					return;
+				case "pinToSidebar":
+					sidebarPins.pin([entry.path], null);
+					return;
+				case "unpinFromSidebar": {
+					const pinned = sidebarPins.stateOf(entry.path);
+					if (pinned?.custom === true) sidebarPins.unpin(pinned.id);
+					return;
+				}
 				case "openWith":
 					// The menu's item is the Inspector's "기타…": the OS application
 					// chooser, then one launch for the whole selection.
@@ -1990,7 +2002,7 @@ export function useFinderController(
 			patchActiveTab(navigateTab(state, parent), (current) => ({ ...current, selection: single(path) })),
 		);
 		setQueryValue("");
-		scrollTarget.current = path;
+		requestScroll(path, "reveal");
 	});
 
 	/**
@@ -2073,11 +2085,11 @@ export function useFinderController(
 	});
 
 	const focusPath = useLatestCallback((target: string) => {
-		scrollTarget.current = target;
+		requestScroll(target, "step");
 		patchSelection(single(target));
 	});
 	const moveTo = useLatestCallback((next: SelectionState) => {
-		scrollTarget.current = next.focus;
+		requestScroll(next.focus, "step");
 		patchSelection(next);
 	});
 	const focusSearch = useLatestCallback(() => {
@@ -2118,7 +2130,7 @@ export function useFinderController(
 	useEffect(() => {
 		if (!revealOnReopenRef.current) return;
 		revealOnReopenRef.current = false;
-		scrollTarget.current = selection.focus;
+		requestScroll(selection.focus, "reveal");
 	}, [shownTabId]);
 	const back = useLatestCallback(() => setTabsState((state) => goBack(state)));
 	const forward = useLatestCallback(() => setTabsState((state) => goForward(state)));
@@ -2239,6 +2251,9 @@ export function useFinderController(
 			const row = byPath.get(targetPath);
 			return row !== undefined ? { name: row.name, kind: row.kind } : { name: basename(targetPath), kind: entry.kind };
 		});
+		// One folder only: the sidebar pins a folder, never a file or a selection of rows.
+		const pinned = targetPaths.length === 1 && entry.kind === "folder" ? sidebarPins.stateOf(entry.path) : undefined;
+		const sidebarPin = pinned === undefined ? undefined : pinned === null || !pinned.shown ? "pin" : pinned.custom ? "unpin" : undefined;
 		return buildContextMenu({
 			target: { name: entry.name, kind: entry.kind },
 			targets: targetDescriptors,
@@ -2249,13 +2264,14 @@ export function useFinderController(
 			inTrash: inTrashLocation,
 			capabilities: actionCapabilities,
 			canCreateFolder: canCreateIn(menuCreateDir(menu)),
+			...(sidebarPin === undefined ? {} : { sidebarPin }),
 			services: menuServices,
 			tags: { catalog: tagCatalog.catalog, shared: sharedTags(targetPaths.map((target) => tagsOf(target))) },
 			contextMenu: contextMenuSettings,
 			shortcuts: shortcutSettings,
 		});
 		// `t` changes identity with the language, so the menu re-labels on a switch.
-	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings, shortcutSettings]);
+	}, [contextMenu, menuTargets, viewEntries, sidecar, clipboardCount, path, t, inTrashLocation, actionCapabilities, canCreateIn, menuCreateDir, layout, panePaths, menuServices, tagCatalog, tagsOf, contextMenuSettings, shortcutSettings, sidebarPins]);
 
 	const sidebarSettings = useSidebarSettings();
 	const sidebarGroups = useMemo(
@@ -2350,6 +2366,7 @@ export function useFinderController(
 		versionFamilyError,
 		activeNavPath: activeNav,
 		navGroups: sidebarGroups,
+		sidebarPins,
 		contextMenu: contextMenu === null ? null : { cursor: contextMenu.cursor },
 		contextMenuEntries,
 		viewMode,
