@@ -30,25 +30,54 @@
 
 /* ---------------------------------------------------------------- Sidebar -- */
 
+/* Settings' own sidebar fills the window's left column (the width comes from the window's sidebar width) and wears the
+ * Finder sidebar's surface, so entering Settings swaps the column's content without changing the chrome. */
 .settings-sidebar {
 	display: flex;
 	flex: none;
 	flex-direction: column;
-	gap: var(--space-2);
-	width: 220px; /* reference: the settings nav rail is wider than the Finder sidebar. */
-	overflow-y: auto;
-	padding: var(--space-16) var(--space-10);
-	background: var(--bg-chrome);
+	min-height: 0;
+	background: var(--bg-sidebar);
+	backdrop-filter: blur(18px);
 	border-right: 1px solid var(--border);
 }
 
+/* An empty head level with the Finder sidebar's: room for the window's traffic lights, and the window drags from it. */
+.settings-sidebar-head {
+	flex: none;
+	height: var(--size-toolbar);
+	-webkit-app-region: drag;
+}
+
+/* The way out: the first row under the head, above the search, built like a page row so it reads as one more button in the list. */
+.settings-sidebar-backrow {
+	flex: none;
+	padding: var(--space-2) var(--space-10) 0;
+}
+
+.settings-sidebar-scroll {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-10);
+	min-height: 0;
+	overflow-y: auto;
+	padding: var(--space-6) var(--space-10) var(--space-12);
+}
+
+/* Rows, groups and labels follow the Finder sidebar's metrics (Sidebar.tsx: ITEM_CLASS, `.side-group`, `.side-label`). */
+.settings-nav-group {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+
 .settings-sidebar-group-title {
-	padding: 14px var(--space-10) var(--space-4);
+	padding: var(--space-4) var(--space-8);
 	font-size: var(--font-size-badge);
-	font-weight: var(--weight-medium);
+	font-weight: 600;
 	color: var(--text-muted);
-	text-transform: uppercase;
-	letter-spacing: 0.04em;
+	letter-spacing: var(--tracking-label);
 }
 
 
@@ -98,15 +127,15 @@
 .settings-nav-item {
 	display: flex;
 	align-items: center;
-	gap: 9px;
+	gap: var(--space-8);
 	width: 100%;
-	height: var(--size-row);
-	padding: 0 var(--space-10);
+	height: var(--size-icon-sm);
+	padding: 0 var(--space-8);
 	border: 0;
-	border-radius: var(--radius-7);
+	border-radius: var(--radius-6);
 	background: transparent;
 	color: var(--text-body);
-	font-size: var(--font-size-sm);
+	font-size: var(--font-size-meta);
 	font-weight: var(--weight-regular);
 	text-align: left;
 	cursor: pointer;
@@ -128,8 +157,8 @@
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: var(--size-disclosure);
-	height: var(--size-disclosure);
+	width: 14px;
+	height: 14px;
 	color: var(--text-muted);
 }
 
@@ -138,6 +167,34 @@
 }
 
 /* ---------------------------------------------------------------- Content -- */
+
+.settings-main {
+	position: relative;
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+}
+
+/* No toolbar above the pages: the content begins at the window's top edge. This strip floats over the content's own
+ * top padding (it takes no row), keeps the window draggable, and holds the one button that can bring the right
+ * sidebar back (the Finder toolbar's last button does that elsewhere). */
+.settings-main-head {
+	position: absolute;
+	inset: 0 0 auto 0;
+	z-index: 1;
+	height: 36px; /* the content's top padding below. */
+	-webkit-app-region: drag;
+}
+
+/* Where the Finder toolbar's last button sits: vertically centred in a toolbar-high row, 12px from the right edge. */
+.settings-main-inspector {
+	position: absolute;
+	top: calc((var(--size-toolbar) - var(--size-toolbar-icon)) / 2);
+	right: calc(var(--space-12) + var(--window-controls-gutter));
+	-webkit-app-region: no-drag;
+}
 
 .settings-content {
 	flex: 1;
@@ -519,42 +576,6 @@
  * Everything is scoped under `.settings-view` so these generic names never
  * leak into the rest of the app.
  * ========================================================================== */
-
-/* ------------------------------------------------------- Sidebar search -- */
-
-.settings-view .settings-search {
-	position: relative;
-	margin-bottom: var(--space-6);
-}
-
-.settings-view .settings-search__icon {
-	position: absolute;
-	left: 9px;
-	top: 7px;
-	color: var(--text-muted);
-	pointer-events: none;
-}
-
-.settings-view .settings-search input {
-	width: 100%;
-	height: 28px;
-	padding: 0 10px 0 29px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-7);
-	background: var(--bg-window);
-	color: var(--text-primary);
-	font-size: 12.5px;
-	outline: none;
-}
-
-.settings-view .settings-search input::placeholder {
-	color: var(--text-faint);
-}
-
-.settings-view .settings-search input:focus {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-soft);
-}
 
 .settings-view .settings-nav-empty {
 	padding: 14px var(--space-10);

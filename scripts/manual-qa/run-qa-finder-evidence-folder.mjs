@@ -376,6 +376,8 @@ await page.locator(".sidebar__item--settings").click();
 const langSelect = page.locator("select.linear-select").nth(1);
 await langSelect.waitFor({ state: "visible" });
 await langSelect.selectOption("ko");
+// Settings takes over the window (no tab strip); Back returns to the Finder.
+await page.locator(".settings-sidebar-back").click();
 await page.locator('.tabs .tab[data-ai-search="true"]').click();
 const koEvHalf = '.inspector-half[aria-label="근거"]';
 const koEvBtn = `${koEvHalf} button[data-action="evidence-folder"]`;

@@ -89,6 +89,9 @@ try {
 	check("the gear opens Settings on the General page", (await page.locator(".settings-nav-item.is-active").innerText()).includes("General"));
 	check("the gear is marked current while Settings is open", (await page.locator(GEAR).getAttribute("aria-current")) === "true");
 	await page.screenshot({ path: join(EVIDENCE, "02-settings-general.png") });
+	// Settings takes over the window, so the Finder sidebar (and its footer) is back only after Settings' Back button.
+	await page.locator(".settings-sidebar-back").click();
+	await page.waitForSelector(GEAR, { state: "visible" });
 
 	// 3. Chart → Subscription & Usage.
 	await page.locator(USAGE).click();
@@ -97,12 +100,16 @@ try {
 	check("the chart opens Settings on Subscription & Usage", (await page.locator(".settings-nav-item.is-active").innerText()).includes("Subscription"));
 	check("the AI usage meter is on screen", await page.locator(".settings-meter").isVisible());
 	await page.screenshot({ path: join(EVIDENCE, "03-settings-usage.png") });
+	await page.locator(".settings-sidebar-back").click();
+	await page.waitForSelector(GEAR, { state: "visible" });
 
 	// 5. Korean.
 	await page.locator(GEAR).click();
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
 	await page.selectOption('select[aria-label="App Language"]', "ko");
 	await page.waitForFunction((selector) => document.querySelector(selector)?.getAttribute("aria-label") === "설정", GEAR, { timeout: 10_000 });
+	await page.locator(".settings-sidebar-back").click();
+	await page.waitForSelector(GEAR, { state: "visible" });
 	check("the footer names follow the interface language", (await page.locator(USAGE).getAttribute("aria-label")) === "AI 사용량", await page.locator(USAGE).getAttribute("aria-label"));
 	await page.locator(FOOTER).screenshot({ path: join(EVIDENCE, "04-footer-ko.png") });
 	// 6. Short window: the footer is pinned, the nav list scrolls.
