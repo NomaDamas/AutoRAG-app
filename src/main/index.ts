@@ -44,6 +44,7 @@ import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
 import { autoragHome } from "./autorag-home";
+import { seedFromLaunchFolder, withoutRootWorkspace } from "./workspace-seed";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
@@ -213,17 +214,28 @@ function migrateEmbeddingConfig(configPath: string): void {
 	}
 }
 
+/** An earlier Dazzi seeded `workspacePath` with the launch folder, `/` for a packaged app, where `.autorag` cannot be created. */
+function migrateRootWorkspace(configPath: string): void {
+	try {
+		const next = withoutRootWorkspace(readRawConfigObject(configPath), process.env, homedir());
+		if (next !== null) writeConfigObject(configPath, next);
+	} catch (error) {
+		console.error("AutoRAG workspace migration failed", error);
+	}
+}
+
 async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
 		migrateEmbeddingConfig(configPath);
+		migrateRootWorkspace(configPath);
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
 	try {
 		writeDefaultConfig(
 			configPath,
-			{ searchPaths: [process.cwd()], workspacePath: process.cwd() },
+			seedFromLaunchFolder(process.cwd(), process.env, homedir()),
 			{ atomicCreate: true, cwd: process.cwd(), env: process.env },
 		);
 		ensureAppIndexingMetadata(configPath);
