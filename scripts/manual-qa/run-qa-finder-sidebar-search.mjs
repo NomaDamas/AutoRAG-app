@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
  * Verifies the relocation and the new behavior against the built app:
  *   1. the field sits at the top of the sidebar, above the nav groups;
  *   2. the toolbar no longer holds a search field;
- *   3. focusing shows the one-line hint and no 파일 이름 / 내용 chips;
+ *   3. focusing adds neither chips nor helper copy below the field;
  *   4. Enter commits a filename search over the whole machine (scope bar, rows);
  *   5. the scope bar's folder pill narrows the commit to the folder in view;
  *   6. the whole search shows its group tabs (file names, document content), the content tab its own panel, and
@@ -74,13 +74,11 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "01-sidebar-resting.png") });
 
-	// 3. Focus shows the hint; the old File Name / Content chips are gone.
+	// 3. Focusing keeps the field compact: no scope chips or helper copy below it.
 	await search.click();
-	await page.locator(".search-hint").waitFor({ timeout: 5000 });
-	check("focusing shows the whole-search hint", (await page.locator(".search-hint").innerText()).includes("Enter"), await page.locator(".search-hint").innerText());
-	check("focusing shows no scope chips", (await page.locator(".scope-chip, .search-scopes").count()) === 0, `count=${await page.locator(".scope-chip, .search-scopes").count()}`);
-	await page.screenshot({ path: join(EVIDENCE, "02-hint-focused.png") });
-	await page.locator(".sidebar-search").screenshot({ path: join(EVIDENCE, "02-hint-element.png") });
+	check("focusing shows neither scope chips nor helper copy", (await page.locator(".scope-chip, .search-scopes, .search-hint").count()) === 0, `count=${await page.locator(".scope-chip, .search-scopes, .search-hint").count()}`);
+	await page.screenshot({ path: join(EVIDENCE, "02-search-focused.png") });
+	await page.locator(".sidebar-search").screenshot({ path: join(EVIDENCE, "02-search-element.png") });
 
 	// 4. Enter commits a filename search: scope bar + filtered rows.
 	await search.fill("notes");

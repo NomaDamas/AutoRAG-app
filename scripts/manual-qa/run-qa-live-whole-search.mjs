@@ -58,10 +58,11 @@ try {
 	await page.waitForSelector('[role="row"] .row__label', { timeout: 20000 }).catch(() => undefined);
 	const fileRowsAt = Date.now() - committed;
 	const pendingAtFiles = await page.locator('.search-groups [role="status"]').count();
-	check("file-name rows show under the group tabs", (await page.locator('[role="row"] .row__label').count()) > 0, `${fileRowsAt} ms, ${pendingAtFiles} tab(s) still answering`);
+	check("file-name rows show fast under the group tabs without waiting for datasources", (await page.locator('[role="row"] .row__label').count()) > 0 && fileRowsAt < 1500, `${fileRowsAt} ms, ${pendingAtFiles} tab(s) still answering`);
 	await page.screenshot({ path: join(EVIDENCE, "01-files-first.png") });
 
-	// 2. Files, content, then the runnable datasources in config order.
+	// 2. Files, content, then the runnable datasources in config order (file rows arrive before the librarian thread finishes cold-loading).
+	await page.waitForFunction(() => document.querySelectorAll('.search-groups [role="tab"]').length > 2, null, { timeout: 10000 }).catch(() => undefined);
 	const keys = await page.locator('.search-groups [role="tab"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-group")));
 	const sourceIds = keys.slice(2).map((key) => key?.replace(/^source:/, "") ?? "");
 	const inConfigOrder = sourceIds.every((id, index) => index === 0 || datasources.indexOf(id) > datasources.indexOf(sourceIds[index - 1]));

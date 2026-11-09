@@ -94,7 +94,6 @@ export function SidebarSearch({
 					<Keycap label={focusSearchShortcut} />
 				) : null}
 			</label>
-			{focused ? <p className="search-hint mt-6 mb-0 px-4 text-badge text-ink-muted">{t("sidebarSearch.hint")}</p> : null}
 		</div>
 	);
 }

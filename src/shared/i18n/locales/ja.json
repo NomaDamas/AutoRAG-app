@@ -88,8 +88,7 @@
   },
   "sidebarSearch": {
     "placeholder": "検索…",
-    "clearSearch": "検索をクリア",
-    "hint": "Enterでファイル名・文書の内容・接続済みアプリをまとめて検索"
+    "clearSearch": "検索をクリア"
   },
   "pathBar": {
     "notFound": "\"{{path}}\" が見つかりません。"

@@ -88,8 +88,7 @@
   },
   "sidebarSearch": {
     "placeholder": "Search…",
-    "clearSearch": "Clear search",
-    "hint": "Press Enter to search file names, document content, and connected apps at once"
+    "clearSearch": "Clear search"
   },
   "pathBar": {
     "notFound": "Can't find \"{{path}}\"."

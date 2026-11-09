@@ -88,8 +88,7 @@
   },
   "sidebarSearch": {
     "placeholder": "搜索…",
-    "clearSearch": "清除搜索",
-    "hint": "按 Enter 同时搜索文件名、文档内容和已连接的应用"
+    "clearSearch": "清除搜索"
   },
   "pathBar": {
     "notFound": "找不到 \"{{path}}\"。"
