@@ -296,6 +296,7 @@
       "title": "AI チャット",
       "placeholderFile": "このファイルについて質問",
       "placeholderFolder": "このフォルダについて質問",
+      "placeholderItems": "選択した項目について質問",
       "placeholderFollowUp": "続けて質問",
       "send": "送信",
       "stop": "停止",
@@ -560,9 +561,12 @@
       "neverRan": "まだ実行されていません",
       "ranOk": "{{time}}に実行 · 成功",
       "ranFail": "{{time}}に実行 · 失敗",
-      "folderSection": "このフォルダの自動化",
+      "folderSection": "自動化",
       "agentAccess": "AI の権限",
-      "agentProfile": "AI プロファイル"
+      "agentProfile": "AI プロファイル",
+      "more": "その他",
+      "menuEdit": "編集",
+      "menuDelete": "削除"
     },
     "quickLook": {
       "when": "いつ",

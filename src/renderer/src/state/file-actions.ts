@@ -194,33 +194,36 @@ export function openWithItems(applications: readonly OpenWithApplication[]): rea
 }
 
 /**
- * The Inspector action bar for a multi-selection: Compress only, because
- * packing several items into one archive is the one action that needs more
- * than one (a single item is not worth an archive). One menu button picks the
- * format, like the image and video menus; the in-process archiver writes both.
+ * The suggested actions for a multi-selection: Compress (packing several items into one archive; one menu button
+ * picks the format, like the image and video menus) and, where the OS has a share sheet, Share for all of them.
+ * Trash and the index button sit beside these in the inspector's action group.
  */
 export function selectionActions(capabilities: ActionCapabilities): readonly FileAction[] {
-	if (!capabilities.archive) return [];
-	return [
-		{
-			kind: "menu",
-			id: "compress",
-			label: t("inspector.actions.compress"),
-			icon: "compress",
-			items: [
-				{
-					id: "compress:zip",
-					label: t("inspector.actions.compressZip"),
-					target: { kind: "request", request: { kind: "compress", format: "zip" } },
-				},
-				{
-					id: "compress:7z",
-					label: t("inspector.actions.compress7z"),
-					target: { kind: "request", request: { kind: "compress", format: "7z" } },
-				},
-			],
-		},
-	];
+	const actions: FileAction[] = [];
+	if (capabilities.archive) actions.push(compressAction());
+	if (capabilities.share) actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
+	return actions;
+}
+
+function compressAction(): FileAction {
+	return {
+		kind: "menu",
+		id: "compress",
+		label: t("inspector.actions.compress"),
+		icon: "compress",
+		items: [
+			{
+				id: "compress:zip",
+				label: t("inspector.actions.compressZip"),
+				target: { kind: "request", request: { kind: "compress", format: "zip" } },
+			},
+			{
+				id: "compress:7z",
+				label: t("inspector.actions.compress7z"),
+				target: { kind: "request", request: { kind: "compress", format: "7z" } },
+			},
+		],
+	};
 }
 
 /**

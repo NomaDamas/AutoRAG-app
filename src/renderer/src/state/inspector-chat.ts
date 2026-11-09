@@ -5,10 +5,13 @@
  * process stores it in the same history, it carries the same title rules, and
  * ⤢ opens the same chat in an AI Search tab, where it continues.
  *
- * Each folder tab holds at most one inspector chat. The selected file is
- * context, not a filter: it is attached to the next question only the first
- * time it enters the chat, so asking again about the same file, or coming back
- * to a file the chat already has, attaches nothing.
+ * Each folder tab holds at most one inspector chat. The selection (one file,
+ * or every file of a multi-selection) is context, not a filter: each item is
+ * attached to the next question only the first time it enters the chat, so
+ * asking again about the same file, or coming back to a file the chat already
+ * has, attaches nothing. The Info view's composer only types: it shows no
+ * attachment cards, and adding files means selecting them together or going
+ * to the chat view, whose composer shows the cards with their ×.
  *
  * The inspector lets go of its chat (the chat itself stays in history) on New
  * chat, after {@link INSPECTOR_CHAT_IDLE_MS} without a question, and when the
@@ -24,7 +27,7 @@ export const INSPECTOR_CHAT_IDLE_MS = 30 * 60_000;
 
 export interface InspectorTurn {
 	readonly question: string;
-	/** Files the question brought into the chat (at most one: the selection, the first time it was asked about). */
+	/** Files the question brought into the chat: the selection's items that were new to it. */
 	readonly attachments: readonly ChatAttachment[];
 	/** The latest answer phase that arrived: Deep when there is one, else Quick. */
 	readonly answer: AnswerPhase | null;
@@ -46,16 +49,16 @@ export interface InspectorChatTab {
 	readonly mode: "info" | "chat";
 	/** The chat was let go for being idle: the Info view points at the history once. */
 	readonly expired: boolean;
-	/** The selection the person removed from the next question with the attachment card's ×. */
-	readonly dismissed: string | null;
+	/** The items the person removed from the next question with the attachment cards' ×. */
+	readonly dismissed: readonly string[];
 }
 
-export const EMPTY_INSPECTOR_CHAT_TAB: InspectorChatTab = { chat: null, mode: "info", expired: false, dismissed: null };
+export const EMPTY_INSPECTOR_CHAT_TAB: InspectorChatTab = { chat: null, mode: "info", expired: false, dismissed: [] };
 
 /** The tab as it should be shown at `now`: an idle chat that is not running is let go. */
 export function liveInspectorTab(tab: InspectorChatTab, now: number, running: boolean): InspectorChatTab {
 	if (tab.chat === null || running || now - tab.chat.updatedAt <= INSPECTOR_CHAT_IDLE_MS) return tab;
-	return { chat: null, mode: "info", expired: true, dismissed: null };
+	return { chat: null, mode: "info", expired: true, dismissed: [] };
 }
 
 /** Every local file and folder the chat has been given so far. */
@@ -66,14 +69,13 @@ export function chatContext(chat: InspectorChat | null): ReadonlySet<string> {
 }
 
 /**
- * The attachment card the composer shows for `target` (the selection): only when the chat does not have it yet and
- * the person did not take it off with ×. A first question always carries the selection.
+ * What the next question carries of `targets` (the selection): the items the chat does not have yet and the person
+ * did not take off with ×. A first question always carries the whole selection.
  */
-export function pendingAttachment(tab: InspectorChatTab, target: ChatAttachment | null): ChatAttachment | null {
-	if (target === null) return null;
-	if (tab.chat === null) return target;
-	if (tab.dismissed === target.id || chatContext(tab.chat).has(target.id)) return null;
-	return target;
+export function pendingAttachments(tab: InspectorChatTab, targets: readonly ChatAttachment[]): readonly ChatAttachment[] {
+	if (tab.chat === null) return targets;
+	const context = chatContext(tab.chat);
+	return targets.filter((target) => !tab.dismissed.includes(target.id) && !context.has(target.id));
 }
 
 /** The stored chat as inspector turns: the latest phase of each answer. */

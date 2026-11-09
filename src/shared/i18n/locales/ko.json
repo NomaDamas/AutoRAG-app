@@ -296,6 +296,7 @@
       "title": "AI 채팅",
       "placeholderFile": "이 파일에 대해 묻기",
       "placeholderFolder": "이 폴더에 대해 묻기",
+      "placeholderItems": "선택한 항목에 대해 묻기",
       "placeholderFollowUp": "이어서 묻기",
       "send": "보내기",
       "stop": "중지",
@@ -560,9 +561,12 @@
       "neverRan": "아직 실행되지 않았어요",
       "ranOk": "{{time}} 실행 · 성공",
       "ranFail": "{{time}} 실행 · 실패",
-      "folderSection": "이 폴더의 자동화",
+      "folderSection": "자동화",
       "agentAccess": "AI 권한",
-      "agentProfile": "AI 프로필"
+      "agentProfile": "AI 프로필",
+      "more": "더보기",
+      "menuEdit": "수정하기",
+      "menuDelete": "삭제하기"
     },
     "quickLook": {
       "when": "언제",

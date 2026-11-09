@@ -159,9 +159,9 @@ describe("compress", () => {
 		}
 	});
 
-	it("is the only action for a multi-selection: one menu button that picks the archive format", () => {
+	it("offers Compress (one menu button that picks the archive format) and Share for a multi-selection", () => {
 		const actions = selectionActions(DARWIN);
-		expect(ids(actions)).toEqual(["compress"]);
+		expect(ids(actions)).toEqual(["compress", "share"]);
 		expect(actions[0]).toMatchObject({ kind: "menu", icon: "compress", label: "압축" });
 		expect(menuItems(actions, "compress").map((item) => item.id)).toEqual(["compress:zip", "compress:7z"]);
 		expect(menuItems(actions, "compress").map((item) => item.label)).toEqual(["ZIP으로 압축", "7z로 압축"]);

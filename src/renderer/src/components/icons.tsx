@@ -28,6 +28,7 @@ import {
 	Copy,
 	Database,
 	Download,
+	Ellipsis,
 	ExternalLink,
 	Eye,
 	File as FileGlyph,
@@ -182,6 +183,7 @@ export const RotateIcon = glyph(RotateCw, 10, 2.8);
  * `autorag refresh` rule (the zap and the sparkles cover the rest).
  */
 export const ZapIcon = glyph(Zap, 11, 2);
+export const MoreIcon = glyph(Ellipsis, 16, 2);
 
 export const RefreshIcon = glyph(RefreshCw, 20, 1.8);
 

@@ -85,7 +85,13 @@ function value(label: string): string | undefined {
 
 /** The rules section's row for a rule, found by the title it shows. */
 function ruleRow(title: string): HTMLElement | undefined {
-	return [...host.querySelectorAll<HTMLElement>('[role="button"]')].find((element) => (element.textContent ?? "").includes(title));
+	return [...host.querySelectorAll<HTMLElement>(".rule-row")].find((element) => (element.textContent ?? "").includes(title));
+}
+
+const section = (): Element | null => host.querySelector(".automation-section");
+
+function menuItem(row: HTMLElement | undefined, name: string): HTMLButtonElement | undefined {
+	return [...(row?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])].find((element) => element.textContent === name);
 }
 
 function inspector(
@@ -272,52 +278,52 @@ describe("AutomationRulesSection", () => {
 		expect(text()).toBe("");
 	});
 
-	it("lists one row per rule, with the count, its last run, and opens the rule on click or a key", () => {
+	it("lists one card per rule under 자동화, with its last run", () => {
 		const first = rule();
 		const second = rule({ id: "hwp-to-pdf", paths: ["/Users/jeffrey/Desktop"], include: ["**/*.hwp"], run: ["hwp5", "--to", "pdf"], lastRun: null });
-		const rules = [first, second];
-		const edits: AutomationRule[] = [];
-		act(() => root.render(<AutomationRulesSection rules={rules} onEdit={(next) => edits.push(next)} onDelete={noop} />));
+		act(() => root.render(<AutomationRulesSection rules={[first, second]} onEdit={noop} onDelete={noop} />));
 
-		expect(text()).toContain("이 폴더의 자동화");
-		expect([...host.querySelectorAll("span")].some((element) => element.textContent === "2")).toBe(true);
+		expect(section()?.querySelector(".section-title")?.textContent).toBe("자동화");
+		expect(host.querySelectorAll(".rule-row")).toHaveLength(2);
 		expect(text()).toContain(ruleTitle(first));
 		expect(text()).toContain(lastRunText(first));
 		expect(text()).toContain(lastRunText(second));
-
-		const row = ruleRow(ruleTitle(first));
-		expect(row).toBeDefined();
-		expect(row?.getAttribute("tabindex")).toBe("0");
-
-		click(row);
-		press(row, "Enter");
-		press(row, " ");
-		expect(edits).toEqual([first, first, first]);
 	});
 
-	it("edits or deletes from a row's icon buttons without opening the rule", () => {
+	it("opens 수정하기 / 삭제하기 from a card's ⋯ button, and each runs once and closes the menu", () => {
 		const shown = rule();
 		const edits: AutomationRule[] = [];
 		const deletes: AutomationRule[] = [];
 		act(() => root.render(<AutomationRulesSection rules={[shown]} onEdit={(next) => edits.push(next)} onDelete={(next) => deletes.push(next)} />));
 
 		const row = ruleRow(ruleTitle(shown));
-		const edit = ariaButton("AI로 편집");
-		const remove = ariaButton("삭제");
-		expect(edit).toBeDefined();
-		expect(remove).toBeDefined();
-		expect(edit?.title).toBe("AI로 편집");
-		expect(remove?.title).toBe("삭제");
-		expect(row?.contains(edit ?? null)).toBe(true);
-		expect(row?.contains(remove ?? null)).toBe(true);
+		const more = ariaButton("더보기");
+		expect(row?.contains(more ?? null)).toBe(true);
+		expect(host.querySelector('[role="menu"]')).toBeNull();
 
-		click(edit);
-		expect(edits).toEqual([shown]);
-		expect(deletes).toEqual([]);
+		click(row);
+		expect(host.querySelector('[role="menu"]')).toBeNull();
+		expect(edits).toEqual([]);
 
-		click(remove);
+		click(more);
+		expect(more?.getAttribute("aria-expanded")).toBe("true");
+		expect([...host.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(["수정하기", "삭제하기"]);
+		click(menuItem(row, "수정하기"));
 		expect(edits).toEqual([shown]);
+		expect(host.querySelector('[role="menu"]')).toBeNull();
+
+		click(more);
+		click(menuItem(row, "삭제하기"));
 		expect(deletes).toEqual([shown]);
+		expect(edits).toEqual([shown]);
+	});
+
+	it("closes the ⋯ menu on Escape", () => {
+		act(() => root.render(<AutomationRulesSection rules={[rule()]} onEdit={noop} onDelete={noop} />));
+		click(ariaButton("더보기"));
+		expect(host.querySelector('[role="menu"]')).not.toBeNull();
+		act(() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+		expect(host.querySelector('[role="menu"]')).toBeNull();
 	});
 
 	it("asks for the rule's menu at the pointer on right click, and does not edit", () => {
@@ -338,9 +344,9 @@ describe("AutomationRulesSection", () => {
 		await act(() => setAppLanguage("en"));
 		const shown = rule();
 		act(() => root.render(<AutomationRulesSection rules={[shown]} onEdit={noop} onDelete={noop} />));
-		expect(text()).toContain("Automations on this folder");
-		expect(ariaButton("Edit with AI")).toBeDefined();
-		expect(ariaButton("Delete")).toBeDefined();
+		expect(section()?.querySelector(".section-title")?.textContent).toBe("Automations");
+		click(ariaButton("More"));
+		expect([...host.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(["Edit", "Delete"]);
 	});
 });
 
@@ -355,27 +361,29 @@ describe("Inspector's folder automations", () => {
 			),
 		);
 
-		expect(text()).toContain("이 폴더의 자동화");
+		expect(section()).not.toBeNull();
 		expect(text()).toContain(ruleTitle(parentRule));
 		expect(text()).not.toContain(ruleTitle(elsewhere));
 
-		click(ruleRow(ruleTitle(parentRule)));
+		const row = ruleRow(ruleTitle(parentRule));
+		click(row?.querySelector('button[aria-label="더보기"]'));
+		click(menuItem(row, "수정하기"));
 		expect(edits).toEqual([parentRule]);
 	});
 
 	it("shows no section for a folder nothing watches, or when the app passes no rules", () => {
 		const elsewhere = rule({ id: "hwp-to-pdf", paths: ["/Users/jeffrey/Desktop"], include: ["**/*.hwp"], run: ["hwp5", "--to", "pdf"] });
 		act(() => root.render(inspector(folder("/Users/jeffrey/Downloads"), { rules: [elsewhere], onEdit: noop, onDelete: noop })));
-		expect(text()).not.toContain("이 폴더의 자동화");
+		expect(section()).toBeNull();
 
 		act(() => root.render(inspector(folder("/Users/jeffrey/Downloads"))));
-		expect(text()).not.toContain("이 폴더의 자동화");
+		expect(section()).toBeNull();
 	});
 
 	it("keeps the file inspector free of the rules section", () => {
 		act(() => root.render(inspector(file("/Users/jeffrey/Downloads/report.pdf"), { rules: [rule()], onEdit: noop, onDelete: noop })));
 		expect(text()).toContain("report.pdf");
-		expect(text()).not.toContain("이 폴더의 자동화");
+		expect(section()).toBeNull();
 	});
 
 	it("shows the folder in view without a Trash chip and without dashes for what it does not know, and still lists its rules", () => {
@@ -383,7 +391,7 @@ describe("Inspector's folder automations", () => {
 		const entry = { ...folder("/Users/jeffrey/Downloads"), mtimeMs: Number.NaN };
 		act(() => root.render(inspector(entry, { rules: [watching], onEdit: noop, onDelete: noop }, { folderInView: true })));
 
-		expect(text()).toContain("이 폴더의 자동화");
+		expect(section()).not.toBeNull();
 		expect(text()).toContain(ruleTitle(watching));
 		expect(button("휴지통")).toBeUndefined();
 		expect(button("경로 복사")).toBeDefined();

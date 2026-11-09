@@ -43,7 +43,7 @@ import { anchorOf } from "../lib/anchor";
 import { rulesWatching } from "../state/automations";
 import { dateLabelOf, fileKindOf, kindLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows, type InfoRow as InfoRowData, type InfoSection } from "../state/inspector-info";
-import { stackCards, summarizeSelection } from "../state/inspector-multi";
+import { selectionInfoRows, stackCards, summarizeSelection } from "../state/inspector-multi";
 import { evidenceDetail, evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource } from "../state/evidence";
 import {
 	openWithItems,
@@ -147,6 +147,15 @@ export interface InspectorProps {
 	readonly folderInView?: boolean;
 	/** The AI chat's foot of the Info view (resume link, 요약, composer); see InspectorChat.tsx. */
 	readonly chatDock?: ReactNode;
+	/**
+	 * A multi-selection's index button: whether every selected entry is in the index, or null when some entry cannot
+	 * be toggled (the button is left out). Absent leaves it out too.
+	 */
+	readonly selectionIndex?: { readonly included: boolean } | null;
+	/** Include every selected entry in the index, or leave every one out. */
+	readonly onSetSelectionIndexed?: (include: boolean) => void;
+	/** Trash every selected entry. */
+	readonly onTrashSelection?: () => void;
 	/** The AI chat itself, shown instead of the Info view while the person is in it. */
 	readonly chatView?: ReactNode;
 }
@@ -193,6 +202,9 @@ export function Inspector({
 	folderInView = false,
 	chatDock,
 	chatView,
+	selectionIndex = null,
+	onSetSelectionIndexed,
+	onTrashSelection,
 }: InspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
@@ -214,7 +226,16 @@ export function Inspector({
 			) : chatView !== undefined && chatView !== null ? (
 				chatView
 			) : entries.length > 1 ? (
-				<MultiInfoHalf entries={entries} focusPath={entry?.path ?? null} actionCapabilities={actionCapabilities} onAction={onAction} />
+				<MultiInfoHalf
+					entries={entries}
+					focusPath={entry?.path ?? null}
+					actionCapabilities={actionCapabilities}
+					onAction={onAction}
+					selectionIndex={selectionIndex}
+					onSetSelectionIndexed={onSetSelectionIndexed}
+					onTrashSelection={onTrashSelection}
+					chatDock={chatDock}
+				/>
 			) : (
 				<InfoHalf
 					entry={entry}
@@ -381,7 +402,7 @@ function InfoSectionCard({
 			<div className="section-title flex h-22 items-center justify-between">
 				<span className="text-meta font-medium leading-[16px] text-ink">{title}</span>
 				{hasMoreInfoRows(rows) ? (
-					<button type="button" className="p-0 border-0 bg-transparent text-[9.5px] font-medium text-accent-text cursor-pointer hover:underline" onClick={onToggle}>
+					<button type="button" className="p-0 border-0 bg-transparent text-[10.5px] leading-[15.75px] text-accent-text cursor-pointer hover:underline" onClick={onToggle}>
 						{brief ? t("inspector.showMore") : t("inspector.showLess")}
 					</button>
 				) : null}
@@ -505,6 +526,17 @@ function usePreviewState(entry: FinderEntry): {
  */
 function PreviewPaper({ entry }: { readonly entry: FinderEntry }): ReactElement {
 	const { state, loaded, onLoad, onError } = usePreviewState(entry);
+	if (entry.kind === "folder") {
+		return (
+			<div className="preview-paper flex h-91 flex-none items-center justify-center">
+				{entry.iconUrl === undefined ? (
+					<FileTile kind="folder" large />
+				) : (
+					<img className="size-77 object-contain" src={entry.iconUrl} alt="" aria-hidden="true" draggable={false} />
+				)}
+			</div>
+		);
+	}
 	if (entry.kind !== "file" || (state.resolved && state.url === null)) {
 		return (
 			<div className="preview-paper flex-none flex items-center justify-center overflow-hidden rounded-10 border border-border bg-window h-152">
@@ -564,84 +596,113 @@ function PreviewCardImage({ entry }: { readonly entry: FinderEntry }): ReactElem
 }
 
 /**
- * The fan's poses, front card first: each deeper paper rotates a little wider
- * and steps a little further out and down, so a five-file selection still
- * reads as five distinct sheets (the Finder multi-preview reference).
+ * The stack's poses, front card first: the second paper leans out to the right behind it and the third to the left,
+ * each offset from the front card's centre (Figma "preview-stack").
  */
 const STACK_POSES: readonly string[] = [
-	"z-30 -rotate-[1.5deg]",
-	"z-20 translate-x-[16%] translate-y-[3%] rotate-[7deg] scale-[0.96]",
-	"z-10 -translate-x-[17%] translate-y-[4%] -rotate-[8.5deg] scale-[0.96]",
-	"z-[5] translate-x-[23%] translate-y-[6%] rotate-[14deg] scale-[0.92]",
-	"z-0 -translate-x-[24%] translate-y-[7%] -rotate-[15deg] scale-[0.92]",
+	"z-30 -translate-x-1/2 -translate-y-1/2",
+	"z-20 translate-x-[calc(-50%+28px)] translate-y-[calc(-50%-7px)] -rotate-6",
+	"z-10 translate-x-[calc(-50%-36px)] translate-y-[calc(-50%+8px)] rotate-8",
 ];
 
+/** The newest entry of the selection, whose date stands for the whole set in the header. */
+function newestOf(entries: readonly FinderEntry[]): FinderEntry | undefined {
+	return entries.reduce<FinderEntry | undefined>((newest, entry) => (newest === undefined || entry.mtimeMs > newest.mtimeMs ? entry : newest), undefined);
+}
+
 /**
- * The aggregate Info half for a multi-selection: a fan of the selection's own
- * previews (focused file in front), the count title, the per-kind breakdown
- * with the total size, and the created/modified date ranges. Per-file actions
- * (index chip, versions) are single-selection concerns and stay out; the
- * action bar holds only Compress, which needs several items.
+ * The aggregate Info half for a multi-selection, in the single file's card idiom: a stack of the selection's own
+ * previews (focused file in front) over the count and the per-kind breakdown, the action group (index, Trash, then
+ * Compress and Share), and 일반 정보 for the whole set with its own 간략히 / 자세히. Versions and per-file metadata are
+ * single-selection concerns and stay out.
  */
 function MultiInfoHalf({
 	entries,
 	focusPath,
 	actionCapabilities,
 	onAction,
+	selectionIndex,
+	onSetSelectionIndexed,
+	onTrashSelection,
+	chatDock,
 }: {
 	readonly entries: readonly FinderEntry[];
 	readonly focusPath: string | null;
 	readonly actionCapabilities: ActionCapabilities;
 	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
+	readonly selectionIndex: { readonly included: boolean } | null;
+	readonly onSetSelectionIndexed: ((include: boolean) => void) | undefined;
+	readonly onTrashSelection: (() => void) | undefined;
+	readonly chatDock: ReactNode;
 }): ReactElement {
-	const actions = selectionActions(actionCapabilities);
 	const { t } = useTranslation();
+	const [brief, setBrief] = useState(false);
+	const runner = useActionRunner({ onAction });
 	const summary = summarizeSelection(entries);
-	const cards = stackCards(entries, focusPath);
+	const cards = stackCards(entries, focusPath, STACK_POSES.length);
+	const front = cards[0];
+	const newest = newestOf(entries);
+	const rows = selectionInfoRows(entries, summary);
 	// DOM order paints back-to-front so the focused paper lands on top.
-	const staged = [...cards].reverse();
+	const staged = cards.map((card, depth) => ({ card, depth })).reverse();
+	const buttons: GroupButton[] = [];
+	if (selectionIndex !== null && onSetSelectionIndexed !== undefined) {
+		const included = selectionIndex.included;
+		buttons.push({
+			id: "index",
+			label: included ? t("contextMenu.includeInIndex") : t("contextMenu.excludeFromIndex"),
+			icon: <DatabaseIcon size={16} />,
+			pressed: included,
+			onClick: () => onSetSelectionIndexed(!included),
+		});
+	}
+	if (onTrashSelection !== undefined) buttons.push({ id: "trash", label: t("contextMenu.trashShort"), icon: <TrashIcon size={16} />, onClick: onTrashSelection });
+	for (const action of selectionActions(actionCapabilities)) {
+		const Icon = ACTION_ICONS[action.icon];
+		buttons.push({
+			id: action.id,
+			label: actionLabel(t, action.id, action.label),
+			icon: <Icon size={16} />,
+			onClick: (event) => runner.activate(action, anchorOf(event.currentTarget)),
+		});
+	}
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.title")}>
-			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
-				<div className="preview-stack relative flex-none flex items-center justify-center h-240 mb-14">
-					{staged.map((card, index) => {
-						const depth = staged.length - 1 - index;
-						const pose = STACK_POSES[Math.min(depth, STACK_POSES.length - 1)] ?? "";
-						return (
-							<div
-								key={card.path}
-								className={cn(
-									"preview-stack-card absolute flex h-[84%] aspect-[3/4] items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-drag",
-									pose,
-								)}
-							>
-								<PreviewCardImage entry={card} />
-								{/* Dog-eared top-right corner: the folded triangle, its own soft shadow onto the sheet. */}
+			<div className="inspector-body flex-1 min-h-0 overflow-auto flex flex-col">
+				<div className="flex flex-col gap-8 px-12 pt-4 pb-12">
+					<div className="preview-card flex flex-col gap-12 rounded-12 border border-divider bg-window p-14">
+						<div className="preview-stack relative h-201 flex-none overflow-hidden">
+							{staged.map(({ card, depth }) => (
 								<div
-									aria-hidden="true"
-									className="page-curl pointer-events-none absolute top-0 right-0 size-24 bg-[linear-gradient(225deg,rgba(20,20,40,0.16)_0%,rgba(20,20,40,0.04)_42%,var(--bg-window)_78%)] [clip-path:polygon(0_0,100%_0,100%_100%)] drop-shadow-[-1px_2px_2px_rgba(20,20,40,0.20)]"
-								/>
+									key={card.path}
+									className={cn(
+										"preview-stack-card absolute left-1/2 top-1/2 flex h-160 w-120 items-center justify-center overflow-hidden rounded-6 border border-border bg-window shadow-[0_3px_10px_rgba(0,0,0,0.14)]",
+										STACK_POSES[depth],
+									)}
+								>
+									<PreviewCardImage entry={card} />
+								</div>
+							))}
+						</div>
+						<div className="flex items-center gap-8">
+							{front === undefined ? null : <FileTile kind={fileKindOf(front)} size={22} />}
+							<div className="flex min-w-0 flex-1 flex-col gap-3">
+								<div className="preview-title text-[11.5px] font-medium text-ink leading-[1.3]">{summary.title}</div>
+								<div className="preview-sub text-[10.5px] leading-[15.75px] text-ink-muted truncate">
+									{newest === undefined ? summary.kindSummary : `${summary.kindSummary} · ${dateLabelOf(newest)}`}
+								</div>
 							</div>
-						);
-					})}
-				</div>
-				<div className="preview-title text-body font-semibold text-ink leading-[1.3]">{summary.title}</div>
-				<div className="preview-sub mt-4 text-meta text-ink-muted">
-					{summary.kindSummary}
-					{summary.sizeLabel === null ? "" : ` · ${summary.sizeLabel}`}
-				</div>
-				<div className="info-section border-t border-border pt-12 mt-12">
-					<div className="section-title mb-6">
-						<span className="text-meta font-semibold text-ink">{t("inspector.generalInfo")}</span>
+						</div>
 					</div>
-					<dl className="m-0">
-						{summary.sizeLabel === null ? null : <InfoRow label={t("inspector.totalSize")} value={summary.sizeLabel} />}
-						{summary.createdRange === null ? null : <InfoRow label={t("inspector.labels.dateCreated")} value={summary.createdRange} />}
-						{summary.modifiedRange === null ? null : <InfoRow label={t("inspector.labels.dateModified")} value={summary.modifiedRange} />}
-					</dl>
+
+					{buttons.length === 0 ? null : <ActionIconGroup buttons={buttons} menu={runner.menu} />}
+
+					<InfoSectionCard title={t("inspector.generalInfo")} rows={rows} brief={brief} onToggle={() => setBrief((current) => !current)} />
 				</div>
+				{chatDock === undefined || chatDock === null ? null : (
+					<div className="inspector-dock-slot sticky bottom-0 z-10 mt-auto bg-subtle">{chatDock}</div>
+				)}
 			</div>
-			{actions.length === 0 ? null : <ActionBar actions={actions} onAction={onAction} />}
 		</div>
 	);
 }
@@ -711,42 +772,6 @@ function useActionRunner({
 	};
 }
 
-/** The multi-selection's bottom action bar: every action the selection suggests, in priority order. */
-function ActionBar({
-	actions,
-	onAction,
-	onAskAi,
-	loadOpenWithApplications,
-}: {
-	readonly actions: readonly FileAction[];
-	readonly onAction: (target: FileActionTarget, anchor: ActionAnchor | null) => void;
-	/** Absent for a multi-selection, which has no AI Summary or open-with. */
-	readonly onAskAi?: () => void;
-	readonly loadOpenWithApplications?: () => Promise<readonly OpenWithApplication[]>;
-}): ReactElement {
-	const { t } = useTranslation();
-	const runner = useActionRunner({ onAction, onAskAi, loadOpenWithApplications });
-	return (
-		<div className="inspector-actions flex-none border-t border-border bg-chrome px-10 pt-10 pb-12">
-			<div className="grid grid-cols-4 gap-2 max-h-[45vh] overflow-y-auto">
-				{actions.map((action) => {
-					const Icon = ACTION_ICONS[action.icon];
-					return (
-						<ActionButton
-							key={action.id}
-							actionId={action.id}
-							icon={<Icon size={18} />}
-							label={actionLabel(t, action.id, action.label)}
-							onClick={(event) => runner.activate(action, anchorOf(event.currentTarget))}
-						/>
-					);
-				})}
-			</div>
-			{runner.menu}
-		</div>
-	);
-}
-
 interface GroupButton {
 	readonly id: string;
 	readonly label: string;
@@ -808,6 +833,12 @@ function FileActionGroup({
 			onClick: (event) => runner.activate(action, anchorOf(event.currentTarget)),
 		});
 	}
+	return <ActionIconGroup buttons={buttons} menu={runner.menu} />;
+}
+
+/** The action group's row of icon buttons with dividers; each name shows as a tooltip and is the accessible name. */
+function ActionIconGroup({ buttons, menu }: { readonly buttons: readonly GroupButton[]; readonly menu: ReactElement | null }): ReactElement {
+	const { t } = useTranslation();
 	return (
 		<div className="inspector-file-actions flex">
 			<div className="inline-flex max-w-full flex-wrap items-center gap-4 rounded-8 border border-divider bg-window px-4 py-2" role="toolbar" aria-label={t("inspector.fileActions")}>
@@ -836,7 +867,7 @@ function FileActionGroup({
 					</span>
 				))}
 			</div>
-			{runner.menu}
+			{menu}
 		</div>
 	);
 }
@@ -847,33 +878,6 @@ function InfoRow({ label, value }: { readonly label: string; readonly value: str
 			<dt className="flex-none text-ink-muted">{label}</dt>
 			<dd className="m-0 min-w-0 text-ink text-right [overflow-wrap:anywhere]">{value}</dd>
 		</div>
-	);
-}
-
-function ActionButton({
-	icon,
-	label,
-	actionId,
-	disabled = false,
-	onClick,
-}: {
-	readonly icon: ReactElement;
-	readonly label: string;
-	readonly actionId?: string | undefined;
-	readonly disabled?: boolean | undefined;
-	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
-}): ReactElement {
-	return (
-		<button
-			type="button"
-			data-action={actionId}
-			disabled={disabled}
-			className="inspector-action min-w-0 flex flex-col items-center gap-6 px-2 py-6 rounded-8 border-0 bg-transparent text-ink-muted text-tile leading-[1.25] text-center cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
-			onClick={onClick}
-		>
-			{icon}
-			<span className="max-w-full [word-break:keep-all]">{label}</span>
-		</button>
 	);
 }
 

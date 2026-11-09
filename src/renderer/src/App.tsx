@@ -53,7 +53,7 @@ import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { sessionEvidencePaths } from "./state/evidence";
 import { inspectorEntryFor } from "./state/inspector-target";
-import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachment } from "./state/inspector-chat";
+import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
 import { ruleTitle } from "./state/automations";
 import { watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
@@ -645,9 +645,28 @@ export function App(): ReactElement {
 	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
 	const chatRunning = inspectorChats.runningTab !== null;
 	const chatLive = chatTabId !== null && inspectorChats.runningTab === chatTabId;
-	const chatTarget: ChatAttachment | null =
-		inspectorEntry === null ? null : { kind: inspectorEntry.kind === "folder" ? "folder" : "file", id: inspectorEntry.path, name: inspectorEntry.name };
-	const chatPending = pendingAttachment(chatTab, chatTarget);
+	/** What a question is about: every selected item of a multi-selection, else the inspector's one entry. */
+	const selectedForChat = (finder?.selectedEntries.length ?? 0) > 1 ? (finder?.selectedEntries ?? []) : inspectorEntry === null ? [] : [inspectorEntry];
+	const chatTargets: readonly ChatAttachment[] = selectedForChat.map((entry) => ({
+		kind: entry.kind === "folder" ? "folder" : "file",
+		id: entry.path,
+		name: entry.name,
+	}));
+	const chatPending = pendingAttachments(chatTab, chatTargets);
+	/**
+	 * A multi-selection's index button: shown when every selected item can be toggled. Like the single file's button, an
+	 * item whose status has not arrived counts as a toggleable file in the index.
+	 */
+	const selectionIndexStates = (finder?.selectedEntries.length ?? 0) > 1
+		? (finder?.selectedEntries ?? []).map((entry) => {
+				const status = finder?.indexStatusFor(entry.path) ?? null;
+				return status === null ? { toggleable: entry.kind === "file", included: true } : { toggleable: status.toggleable, included: !status.excluded };
+			})
+		: [];
+	const selectionIndex =
+		selectionIndexStates.length > 0 && selectionIndexStates.every((state) => state.toggleable)
+			? { included: selectionIndexStates.every((state) => state.included) }
+			: null;
 	const chatMode = chatTab.chat === null ? "info" : chatTab.mode;
 	// A question asked in the AI Search tab showing the same chat shows here once the inspector is back on screen.
 	useEffect(() => {
@@ -670,7 +689,7 @@ export function App(): ReactElement {
 	/** Inspector action bar: open, share, and edits run on the focused row; a multi-selection's Compress packs every selected row. */
 	const runInspectorAction = useCallback(
 		(target: FileActionTarget, anchor: ActionAnchor | null) => {
-			if ((finder?.selectedEntries.length ?? 0) > 1) finder?.runSelectionAction(target);
+			if ((finder?.selectedEntries.length ?? 0) > 1) finder?.runSelectionAction(target, anchor);
 			else if (inspectorEntry !== null) finder?.runEntryAction(inspectorEntry, target, anchor);
 		},
 		[finder, inspectorEntry],
@@ -896,7 +915,10 @@ export function App(): ReactElement {
 								onCopyPath={(entry) => finder?.copyEntryPath(entry)}
 								onAskAi={(entry) => {
 									if (chatTabId === null) askAi(entry);
-									else void inspectorChats.summarize(chatTabId, { kind: entry.kind === "folder" ? "folder" : "file", id: entry.path, name: entry.name });
+									else {
+										const target: ChatAttachment = { kind: entry.kind === "folder" ? "folder" : "file", id: entry.path, name: entry.name };
+										void inspectorChats.summarize(chatTabId, [target], pendingAttachments(chatTab, [target]));
+									}
 								}}
 								actionCapabilities={finder?.actionCapabilities ?? NO_CAPABILITIES}
 								onAction={runInspectorAction}
@@ -916,22 +938,23 @@ export function App(): ReactElement {
 								evidenceFolderCount={localEvidencePaths.length}
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
 								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
+								selectionIndex={selectionIndex}
+								onSetSelectionIndexed={(include) => finder?.setSelectionIndexed(include)}
+								onTrashSelection={() => finder?.trashSelection()}
 								chatDock={
 									chatTabId === null ? undefined : (
 										<InspectorChatDock
 											tab={chatTab}
 											now={chatNow}
-											target={chatTarget}
-											pending={chatPending}
+											targets={chatTargets}
 											running={chatRunning}
 											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending)}
 											onSummarize={() => {
-												if (chatTarget !== null) void inspectorChats.summarize(chatTabId, chatTarget);
+												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatPending);
 											}}
 											onStop={inspectorChats.stop}
 											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
 											onOpenHistory={openAiHistory}
-											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
 										/>
 									)
 								}
@@ -939,7 +962,9 @@ export function App(): ReactElement {
 									chatTabId === null || chatTab.chat === null || chatTab.mode !== "chat" ? null : (
 										<InspectorChatView
 											tab={chatTab}
-											targetName={inspectorEntry?.name ?? basename(path)}
+											targetName={
+												selectedForChat.length > 1 ? t("finder.itemsCount", { count: selectedForChat.length }) : (inspectorEntry?.name ?? basename(path))
+											}
 											pending={chatPending}
 											running={chatLive}
 											imageActions={imageActions}

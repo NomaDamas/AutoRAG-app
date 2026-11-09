@@ -77,11 +77,6 @@ describe("the inspector's file actions", () => {
 		for (const button of group()?.querySelectorAll("button") ?? []) expect(button.textContent).toBe(button.getAttribute("aria-label"));
 	});
 
-	it("leaves the bottom action bar to multi-selections", () => {
-		render();
-		expect(host.querySelector(".inspector-actions")).toBeNull();
-	});
-
 	it("runs the clicked action on the shown file", () => {
 		const onTrash = vi.fn();
 		const onToggleIndex = vi.fn();

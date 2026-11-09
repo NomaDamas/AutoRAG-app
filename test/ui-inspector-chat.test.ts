@@ -3,7 +3,7 @@ import {
 	EMPTY_INSPECTOR_CHAT_TAB,
 	INSPECTOR_CHAT_IDLE_MS,
 	liveInspectorTab,
-	pendingAttachment,
+	pendingAttachments,
 	turnsFromHistory,
 	type InspectorChat,
 	type InspectorChatTab,
@@ -27,27 +27,32 @@ function tabWith(chat: InspectorChat | null, extra: Partial<InspectorChatTab> = 
 
 describe("the selection as context for the inspector chat", () => {
 	it("is attached to the first question", () => {
-		expect(pendingAttachment(EMPTY_INSPECTOR_CHAT_TAB, docs)).toEqual(docs);
+		expect(pendingAttachments(EMPTY_INSPECTOR_CHAT_TAB, [docs])).toEqual([docs]);
+	});
+
+	it("attaches every item of a multi-selection to the first question", () => {
+		expect(pendingAttachments(EMPTY_INSPECTOR_CHAT_TAB, [docs, deck])).toEqual([docs, deck]);
 	});
 
 	it("is not attached again once the chat has it", () => {
-		expect(pendingAttachment(tabWith(chatWith(docs)), docs)).toBeNull();
+		expect(pendingAttachments(tabWith(chatWith(docs)), [docs])).toEqual([]);
 	});
 
 	it("comes back to a file the chat already has without attaching it", () => {
-		expect(pendingAttachment(tabWith(chatWith(docs, deck)), docs)).toBeNull();
+		expect(pendingAttachments(tabWith(chatWith(docs, deck)), [docs])).toEqual([]);
 	});
 
-	it("is attached when a new file is selected mid-chat", () => {
-		expect(pendingAttachment(tabWith(chatWith(docs)), deck)).toEqual(deck);
+	it("is attached when a new file is selected mid-chat, and only what is new of a multi-selection", () => {
+		expect(pendingAttachments(tabWith(chatWith(docs)), [deck])).toEqual([deck]);
+		expect(pendingAttachments(tabWith(chatWith(docs)), [docs, deck])).toEqual([deck]);
 	});
 
 	it("stays out of the next question after the person removes it with ×", () => {
-		expect(pendingAttachment(tabWith(chatWith(docs), { dismissed: deck.id }), deck)).toBeNull();
+		expect(pendingAttachments(tabWith(chatWith(docs), { dismissed: [deck.id] }), [deck])).toEqual([]);
 	});
 
 	it("attaches nothing when nothing is selected", () => {
-		expect(pendingAttachment(tabWith(chatWith(docs)), null)).toBeNull();
+		expect(pendingAttachments(tabWith(chatWith(docs)), [])).toEqual([]);
 	});
 });
 
@@ -59,7 +64,7 @@ describe("letting go of an idle inspector chat", () => {
 	});
 
 	it("lets go after 30 minutes and points at the history", () => {
-		expect(liveInspectorTab(tab, 1_001 + INSPECTOR_CHAT_IDLE_MS, false)).toEqual({ chat: null, mode: "info", expired: true, dismissed: null });
+		expect(liveInspectorTab(tab, 1_001 + INSPECTOR_CHAT_IDLE_MS, false)).toEqual({ chat: null, mode: "info", expired: true, dismissed: [] });
 	});
 
 	it("never lets go of a chat whose answer is still streaming", () => {

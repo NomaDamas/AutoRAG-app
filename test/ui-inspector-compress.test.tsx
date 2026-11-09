@@ -60,7 +60,7 @@ function render(entries: readonly FinderEntry[], capabilities: ActionCapabilitie
 	);
 }
 
-const bar = (): HTMLElement | null => host.querySelector(".inspector-actions");
+const bar = (): HTMLElement | null => host.querySelector(".inspector-file-actions");
 const barLabels = (): string[] => [...(bar()?.querySelectorAll("button") ?? [])].map((button) => (button.textContent ?? "").trim());
 
 describe("Inspector compress", () => {

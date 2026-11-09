@@ -296,6 +296,7 @@
       "title": "AI 对话",
       "placeholderFile": "询问这个文件",
       "placeholderFolder": "询问这个文件夹",
+      "placeholderItems": "询问所选项目",
       "placeholderFollowUp": "继续提问",
       "send": "发送",
       "stop": "停止",
@@ -560,9 +561,12 @@
       "neverRan": "尚未运行",
       "ranOk": "{{time}}运行 · 成功",
       "ranFail": "{{time}}运行 · 失败",
-      "folderSection": "此文件夹的自动化",
+      "folderSection": "自动化",
       "agentAccess": "AI 权限",
-      "agentProfile": "AI 配置"
+      "agentProfile": "AI 配置",
+      "more": "更多",
+      "menuEdit": "编辑",
+      "menuDelete": "删除"
     },
     "quickLook": {
       "when": "何时",

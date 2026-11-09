@@ -3,8 +3,8 @@
  * right column, beside the file it is about.
  *
  *   InspectorChatDock  the Info view's foot: the resume link, "AI 요약", and the
- *                      composer. The first question carries the selection as
- *                      an attachment card.
+ *                      composer, which only types: the question carries the
+ *                      selection without showing it as cards.
  *   InspectorChatView  the chat itself, in place of the Info view: questions
  *                      (each with the file it brought in), answers with their
  *                      sources folded under them, and the composer. ⤢ opens
@@ -13,6 +13,7 @@
 
 import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
 import { cn } from "../lib/cn";
 import { evidenceHeading, evidenceKind, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
@@ -75,16 +76,14 @@ function AttachmentCard({
 
 function Composer({
 	pending,
-	removable,
 	placeholder,
 	running,
 	onSend,
 	onStop,
 	onDismiss,
 }: {
-	readonly pending: ChatAttachment | null;
-	/** The card can be taken off (a follow-up); a first question always carries the selection. */
-	readonly removable: boolean;
+	/** The cards above the input, each with its ×; empty for the Info view's composer, which only types. */
+	readonly pending: readonly ChatAttachment[];
 	readonly placeholder: string;
 	readonly running: boolean;
 	/** False when the question was not sent (another inspector answer is still coming): the draft stays. */
@@ -118,10 +117,12 @@ function Composer({
 	};
 	return (
 		<div className="inspector-chat-composer block">
-			<div className="flex flex-col gap-10 rounded-14 border border-divider bg-window py-8 pl-11 pr-12 shadow-[0_2px_5px_rgba(20,20,41,0.07)]">
-				{pending === null ? null : (
-					<div className="flex pr-6">
-						<AttachmentCard att={pending} small onRemove={removable ? () => onDismiss(pending.id) : undefined} />
+			<div className="flex flex-col gap-10 rounded-12 border border-divider bg-window py-8 pl-11 pr-12 shadow-[0_2px_5px_rgba(20,20,41,0.07)]">
+				{pending.length === 0 ? null : (
+					<div className="flex flex-wrap gap-x-10 gap-y-8 pt-2 pr-6">
+						{pending.map((att) => (
+							<AttachmentCard key={att.id} att={att} small onRemove={() => onDismiss(att.id)} />
+						))}
 					</div>
 				)}
 				<div className="flex items-center gap-4">
@@ -169,12 +170,18 @@ function Composer({
 	);
 }
 
+/** The composer's prompt for what the question is about: nothing in particular, a folder, a file, or several items. */
+function askPlaceholder(about: readonly ChatAttachment[], none: LocaleKey): LocaleKey {
+	if (about.length === 0) return none;
+	if (about.length > 1) return "inspector.chat.placeholderItems";
+	return about[0]?.kind === "folder" ? "inspector.chat.placeholderFolder" : "inspector.chat.placeholderFile";
+}
+
 export interface InspectorChatDockProps {
 	readonly tab: InspectorChatTab;
 	readonly now: number;
-	/** The selection as a chat attachment; null when nothing can be asked about. */
-	readonly target: ChatAttachment | null;
-	readonly pending: ChatAttachment | null;
+	/** The selection as chat attachments; empty when nothing can be asked about. */
+	readonly targets: readonly ChatAttachment[];
 	readonly running: boolean;
 	readonly onAsk: (text: string) => boolean;
 	/** "AI 요약" about the selection, asked in this chat. */
@@ -182,33 +189,13 @@ export interface InspectorChatDockProps {
 	readonly onStop: () => void;
 	readonly onResume: () => void;
 	readonly onOpenHistory: () => void;
-	readonly onDismiss: (id: string) => void;
 }
 
-export function InspectorChatDock({
-	tab,
-	now,
-	target,
-	pending,
-	running,
-	onAsk,
-	onSummarize,
-	onStop,
-	onResume,
-	onOpenHistory,
-	onDismiss,
-}: InspectorChatDockProps): ReactElement {
+export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummarize, onStop, onResume, onOpenHistory }: InspectorChatDockProps): ReactElement {
 	const { t } = useTranslation();
 	const ago = useAgo();
 	const chat = tab.chat;
-	const placeholder =
-		chat !== null
-			? t("inspector.chat.placeholderFollowUp")
-			: target === null
-				? t("inspector.chat.placeholderAny")
-				: target.kind === "folder"
-					? t("inspector.chat.placeholderFolder")
-					: t("inspector.chat.placeholderFile");
+	const placeholder = t(askPlaceholder(targets, "inspector.chat.placeholderAny"));
 	return (
 		<div className="inspector-chat-dock flex flex-col gap-4 px-12 pb-12">
 			<div className="mb-4 h-px bg-divider" aria-hidden="true" />
@@ -223,7 +210,7 @@ export function InspectorChatDock({
 					<span className="truncate">{t("inspector.chat.expired")}</span>
 				</button>
 			) : null}
-			{target === null ? null : (
+			{targets.length === 0 ? null : (
 				<div className="flex">
 					<button
 						type="button"
@@ -238,7 +225,7 @@ export function InspectorChatDock({
 					</button>
 				</div>
 			)}
-			<Composer pending={pending} removable={chat !== null} placeholder={placeholder} running={running} onSend={onAsk} onStop={onStop} onDismiss={onDismiss} />
+			<Composer pending={[]} placeholder={placeholder} running={running} onSend={onAsk} onStop={onStop} onDismiss={() => {}} />
 		</div>
 	);
 }
@@ -350,7 +337,7 @@ function TurnView({
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
-				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-meta font-medium leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+				<div className="inspector-chat-question block rounded-[18px] bg-ink-body px-12 py-8 text-meta font-medium leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
 			<div className="flex min-w-0 flex-col gap-8">
 			{text.length > 0 ? (
@@ -374,7 +361,8 @@ export interface InspectorChatViewProps {
 	readonly tab: InspectorChatTab;
 	/** The selection's name, for the way back to its Info view. */
 	readonly targetName: string;
-	readonly pending: ChatAttachment | null;
+	/** What the next question carries of the selection, as cards with their ×. */
+	readonly pending: readonly ChatAttachment[];
 	readonly running: boolean;
 	readonly imageActions: ImageActions;
 	readonly onAsk: (text: string) => boolean;
@@ -445,14 +433,7 @@ export function InspectorChatView({
 			<div className="flex-none px-8 pt-8 pb-10">
 				<Composer
 					pending={pending}
-					removable
-					placeholder={
-						pending === null
-							? t("inspector.chat.placeholderFollowUp")
-							: pending.kind === "folder"
-								? t("inspector.chat.placeholderFolder")
-								: t("inspector.chat.placeholderFile")
-					}
+					placeholder={t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
 					running={running}
 					onSend={onAsk}
 					onStop={onStop}

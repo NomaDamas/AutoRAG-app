@@ -9,8 +9,9 @@
 
 import { t } from "../../../shared/i18n/core";
 import type { FinderEntry } from "../data/entries";
-import { createdMsOf, kindLabelOf, sizeOf } from "./entry-values";
+import { createdMsOf, kindLabelOf, locationOf, sizeOf } from "./entry-values";
 import { formatSize } from "./format";
+import type { InfoRow } from "./inspector-info";
 
 /** The fan shows at most this many papers; the rest of the selection is implied. */
 export const STACK_CARD_MAX = 5;
@@ -96,4 +97,22 @@ export function stackCards(
 	const focused = focusPath === null ? undefined : entries.find((entry) => entry.path === focusPath);
 	const ordered = focused === undefined ? entries : [focused, ...entries.filter((entry) => entry !== focused)];
 	return ordered.slice(0, Math.max(1, max));
+}
+
+/**
+ * 일반 정보 for a multi-selection: kind breakdown, total size and the shared folder (left out when the selection
+ * spans folders) survive 간략히; the created and modified ranges belong to 자세히.
+ */
+export function selectionInfoRows(entries: readonly FinderEntry[], summary: SelectionSummary = summarizeSelection(entries)): readonly InfoRow[] {
+	const rows: InfoRow[] = [];
+	const push = (label: string, value: string | null, core: boolean): void => {
+		if (value !== null) rows.push({ label, value, section: "general", core });
+	};
+	const folders = new Set(entries.map((entry) => locationOf(entry)));
+	push(t("inspector.labels.kind"), summary.kindSummary, true);
+	push(t("inspector.totalSize"), summary.sizeLabel, true);
+	push(t("inspector.labels.location"), folders.size === 1 ? ([...folders][0] ?? null) : null, true);
+	push(t("inspector.labels.dateCreated"), summary.createdRange, false);
+	push(t("inspector.labels.dateModified"), summary.modifiedRange, false);
+	return rows;
 }

@@ -296,6 +296,7 @@
       "title": "AI chat",
       "placeholderFile": "Ask about this file",
       "placeholderFolder": "Ask about this folder",
+      "placeholderItems": "Ask about these items",
       "placeholderFollowUp": "Ask a follow-up",
       "send": "Send",
       "stop": "Stop",
@@ -560,9 +561,12 @@
       "neverRan": "Has not run yet",
       "ranOk": "Ran {{time}} · succeeded",
       "ranFail": "Ran {{time}} · failed",
-      "folderSection": "Automations on this folder",
+      "folderSection": "Automations",
       "agentAccess": "AI access",
-      "agentProfile": "AI profile"
+      "agentProfile": "AI profile",
+      "more": "More",
+      "menuEdit": "Edit",
+      "menuDelete": "Delete"
     },
     "quickLook": {
       "when": "When",

@@ -16,12 +16,12 @@ export interface InspectorChats {
 	/** The tab whose inspector chat has a run streaming, if any: one run at a time. */
 	readonly runningTab: number | null;
 	/**
-	 * Ask `text` in the tab's chat (starting one when it has none), with `attachment` when the chat lacks it. False when
-	 * nothing was sent: another inspector run is still streaming.
+	 * Ask `text` in the tab's chat (starting one when it has none), with `attachments` (what the chat lacks of the
+	 * selection). False when nothing was sent: another inspector run is still streaming.
 	 */
-	ask(tabId: number, text: string, attachment: ChatAttachment | null): boolean;
-	/** "요약": the summary prompt AI Search uses, about `attachment`. */
-	summarize(tabId: number, attachment: ChatAttachment): boolean;
+	ask(tabId: number, text: string, attachments: readonly ChatAttachment[]): boolean;
+	/** "요약": the summary prompt AI Search uses, about `targets`; it carries those the chat lacks (`attachments`). */
+	summarize(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[]): boolean;
 	/** Stop the inspector run that is streaming, whichever tab asked it. */
 	stop(): void;
 	setMode(tabId: number, mode: "info" | "chat"): void;
@@ -106,19 +106,18 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 	);
 
 	const ask = useCallback(
-		(tabId: number, text: string, attachment: ChatAttachment | null) => {
+		(tabId: number, text: string, attachments: readonly ChatAttachment[]) => {
 			const question = text.trim();
 			if (question.length === 0 || runRef.current !== null) return false;
 			const current = liveInspectorTab(tabsRef.current.get(tabId) ?? EMPTY_INSPECTOR_CHAT_TAB, Date.now(), false);
 			const chatId = current.chat?.chatId ?? crypto.randomUUID();
 			const searchId = crypto.randomUUID();
-			const attachments = attachment === null ? [] : [attachment];
 			const chat: InspectorChat = {
 				chatId,
 				updatedAt: Date.now(),
 				turns: [...(current.chat?.turns ?? []), { question, attachments, answer: null, draft: "", error: null, stopped: false }],
 			};
-			change(tabId, () => ({ chat, mode: "chat", expired: false, dismissed: null }));
+			change(tabId, () => ({ chat, mode: "chat", expired: false, dismissed: [] }));
 			runRef.current = { tabId, searchId };
 			setRunningTab(tabId);
 			autorag.search.start(searchId, chatId, question, attachments).catch((error: unknown) => {
@@ -134,9 +133,9 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 	);
 
 	const summarize = useCallback(
-		(tabId: number, attachment: ChatAttachment) => {
-			const request = summaryRequest(language, [], [attachment]);
-			return ask(tabId, request.prompt, attachment);
+		(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[]) => {
+			const request = summaryRequest(language, [], targets);
+			return ask(tabId, request.prompt, attachments);
 		},
 		[ask, language],
 	);
@@ -147,7 +146,10 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 	}, []);
 
 	const setMode = useCallback((tabId: number, mode: "info" | "chat") => change(tabId, (tab) => ({ ...tab, mode })), [change]);
-	const dismiss = useCallback((tabId: number, id: string) => change(tabId, (tab) => ({ ...tab, dismissed: id })), [change]);
+	const dismiss = useCallback(
+		(tabId: number, id: string) => change(tabId, (tab) => (tab.dismissed.includes(id) ? tab : { ...tab, dismissed: [...tab.dismissed, id] })),
+		[change],
+	);
 	const reset = useCallback(
 		(tabId: number) => {
 			if (runRef.current?.tabId === tabId) return;
