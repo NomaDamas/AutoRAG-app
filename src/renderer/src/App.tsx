@@ -936,7 +936,7 @@ export function App(): ReactElement {
 							<SettingsAssistantSlot dock={settingsAssistantDock} />
 						) : settingsOpen ? (
 							// Settings pages other than 사이드바, 우클릭 메뉴 and 단축키 have no AI: the sidebar shows only the faded mark (Figma 367:8769).
-							<FadedDazziMark />
+							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : (

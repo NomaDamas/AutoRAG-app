@@ -187,9 +187,11 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
  * The right sidebar with nothing to show: the faded monochrome Dazzi mark, centred (Figma 247:5981, 367:8769).
  * Dark mode has its own lighter mark, with its fade already in the image.
  */
-export function FadedDazziMark(): ReactElement {
+export function FadedDazziMark({ reserveDock = false }: { readonly reserveDock?: boolean } = {}): ReactElement {
 	return (
-		<div className="inspector-empty flex flex-1 min-h-0 items-center justify-center">
+		// `reserveDock`: a sidebar without the chat bar (Settings) keeps the 62px it takes, so the mark sits where the
+		// Finder's empty inspector shows it, centred above its chat bar.
+		<div className={cn("inspector-empty flex flex-1 min-h-0 items-center justify-center", reserveDock && "pb-62")}>
 			<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
 			<img className="hidden size-67 object-contain dark:block" src={dazziMarkMonoDark} alt="" aria-hidden="true" draggable={false} />
 		</div>
