@@ -71,6 +71,28 @@ try {
 		keys[0] === "files" && keys[1] === "content" && sourceIds.length > 0 && sourceIds.every((id) => datasources.includes(id)) && inConfigOrder,
 		`${JSON.stringify(keys)}; left out: ${JSON.stringify(datasources.filter((id) => !sourceIds.includes(id)))}`,
 	);
+	const wrapLayout = await page.evaluate(() => {
+		const bar = document.querySelector(".search-groups");
+		const list = document.querySelector('.search-groups [role="tablist"]');
+		const tabs = [...document.querySelectorAll('.search-groups [role="tab"]')];
+		if (!bar || !list || tabs.length === 0) return null;
+		const barRect = bar.getBoundingClientRect();
+		const rowTops = new Set(tabs.map((tab) => Math.round(tab.getBoundingClientRect().top)));
+		const clipped = tabs.some((tab) => {
+			const rect = tab.getBoundingClientRect();
+			return rect.left < barRect.left - 1 || rect.right > barRect.right + 1;
+		});
+		return {
+			overflowX: list.scrollWidth > list.clientWidth + 1,
+			rows: rowTops.size,
+			clipped,
+		};
+	});
+	check(
+		"many datasource tabs wrap onto multiple rows with zero horizontal scrolling or clipping",
+		wrapLayout !== null && wrapLayout.overflowX === false && wrapLayout.clipped === false && wrapLayout.rows >= 2,
+		JSON.stringify(wrapLayout),
+	);
 
 	// 3. Every tab settles; at least one datasource answers with hits.
 	await page.waitForFunction(() => document.querySelectorAll('.search-groups [role="status"]').length === 0, null, { timeout: 120000 }).catch(() => undefined);

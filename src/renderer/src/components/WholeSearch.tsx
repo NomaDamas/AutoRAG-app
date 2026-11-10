@@ -80,10 +80,10 @@ export function SearchGroupTabs({
 		listRef.current?.querySelector<HTMLButtonElement>(`[data-group="${CSS.escape(next.key)}"]`)?.focus();
 	};
 	return (
-		<div className="search-groups flex flex-none items-center gap-8 h-[34px] pl-10 pr-8 border-b border-divider bg-window">
+		<div className="search-groups flex flex-none items-start gap-8 min-h-[34px] py-5 pl-10 pr-8 border-b border-divider bg-window">
 			<div
 				ref={listRef}
-				className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto [scrollbar-width:none]"
+				className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-4"
 				role="tablist"
 				aria-label={t("wholeSearch.groups")}
 				onKeyDown={onKeyDown}
