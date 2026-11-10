@@ -35,7 +35,7 @@ import { settings } from "../settings-runtime";
 import { attachSettingsNavigation } from "../state/settings-navigation";
 import { cn } from "../lib/cn";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
-import { ChevronLeftIcon, PanelRightIcon, SearchIcon } from "./icons";
+import { ChevronLeftIcon, DazziIcon, SearchIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 
@@ -501,7 +501,7 @@ export function SettingsView({
 				<div className="settings-main-head">
 					{inspectorHidden ? (
 						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
-							<PanelRightIcon size={18} />
+							<DazziIcon size={18} />
 						</button>
 					) : null}
 				</div>

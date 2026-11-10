@@ -15,7 +15,7 @@ import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
-import { Inspector, type InspectorFamily } from "./components/Inspector";
+import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
 import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
@@ -934,6 +934,9 @@ export function App(): ReactElement {
 				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null ? "window" : "subtle"}>
 						{settingsAssistantDock !== null ? (
 							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : settingsOpen ? (
+							// Settings pages other than 사이드바, 우클릭 메뉴 and 단축키 have no AI: the sidebar shows only the faded mark (Figma 367:8769).
+							<FadedDazziMark />
 						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : (

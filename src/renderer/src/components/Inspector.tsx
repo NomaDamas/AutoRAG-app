@@ -183,6 +183,19 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
 };
 
 /** What the right sidebar shows when it has nothing to say yet: the Dazzi mark, centred, with no caption. */
+/**
+ * The right sidebar with nothing to show: the faded monochrome Dazzi mark, centred (Figma 247:5981, 367:8769).
+ * Dark mode has its own lighter mark, with its fade already in the image.
+ */
+export function FadedDazziMark(): ReactElement {
+	return (
+		<div className="inspector-empty flex flex-1 min-h-0 items-center justify-center">
+			<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
+			<img className="hidden size-67 object-contain dark:block" src={dazziMarkMonoDark} alt="" aria-hidden="true" draggable={false} />
+		</div>
+	);
+}
+
 function EmptyInspectorMark(): ReactElement {
 	return (
 		<div className="flex flex-1 items-center justify-center">
@@ -348,11 +361,7 @@ function InfoHalf({
 			{entry === null ? (
 				<>
 					{/* Nothing selected: the Dazzi mark, faded, over a composer that asks about anything. */}
-					<div className="inspector-empty flex flex-1 min-h-0 items-center justify-center">
-						<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
-						{/* Dark mode has its own lighter mark, with its fade already in the image. */}
-						<img className="hidden size-67 object-contain dark:block" src={dazziMarkMonoDark} alt="" aria-hidden="true" draggable={false} />
-					</div>
+					<FadedDazziMark />
 					{chatDock}
 				</>
 			) : (
