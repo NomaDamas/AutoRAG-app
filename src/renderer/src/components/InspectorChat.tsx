@@ -23,7 +23,7 @@ import type { ChatAttachment, CitationEvidence } from "../../../shared/search-co
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
 import { cn } from "../lib/cn";
 import { evidenceHeading, evidenceKind, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
-import { hasUnreadAnswer, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { hasUnreadAnswer, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks } from "./AiSearchPanel";
@@ -37,7 +37,7 @@ import {
 	HistoryIcon,
 	MaximizeIcon,
 	MicIcon,
-	NewChatIcon,
+	ChatNewIcon,
 	PanelCloseIcon,
 	SparklesIcon,
 	TitleChevronIcon,
@@ -45,12 +45,25 @@ import {
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 
-/** Minutes since `at`, worded short: "방금", "5분 전". */
+/** Time since `at`, worded short in its largest unit: "방금", "5분 전", "2시간 전", "3일 전", "1달 전", "1년 전". */
 function useAgo(): (at: number, now: number) => string {
 	const { t } = useTranslation();
 	return (at, now) => {
-		const minutes = Math.floor((now - at) / 60_000);
-		return minutes < 1 ? t("inspector.chat.justNow") : t("inspector.chat.minutesAgo", { count: minutes });
+		const { unit, count } = relativeAge(at, now);
+		switch (unit) {
+			case "now":
+				return t("inspector.chat.justNow");
+			case "minutes":
+				return t("inspector.chat.minutesAgo", { count });
+			case "hours":
+				return t("inspector.chat.hoursAgo", { count });
+			case "days":
+				return t("inspector.chat.daysAgo", { count });
+			case "months":
+				return t("inspector.chat.monthsAgo", { count });
+			case "years":
+				return t("inspector.chat.yearsAgo", { count });
+		}
 	};
 }
 
@@ -615,11 +628,11 @@ export function InspectorChatView({
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
 			<div className="relative flex h-35 flex-none items-center gap-4 border-y border-divider bg-subtle-alt py-6 pl-12 pr-8">
-				{/* The title keeps the narrowest sidebar's width (Figma: 137px of name, then the chevron); a wider sidebar widens the gap, not the title. */}
-				<div className="flex min-w-0 flex-1">
+				{/* At least 30px before the buttons (Figma 328:3802): a wider sidebar shows more of the title, and once it is whole the gap grows. */}
+				<div className="flex min-w-0 flex-1 pr-26">
 					<button
 						type="button"
-						className="inspector-chat-title flex min-w-0 max-w-[157px] items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-medium leading-[20px] text-ink-body cursor-pointer hover:text-ink"
+						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-medium leading-[20px] text-ink-body cursor-pointer hover:text-ink"
 						aria-haspopup="menu"
 						aria-expanded={historyOpen}
 						title={title}
@@ -632,7 +645,7 @@ export function InspectorChatView({
 					</button>
 				</div>
 				<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running} onClick={onNewChat}>
-					<NewChatIcon size={16} />
+					<ChatNewIcon size={16} />
 				</button>
 				<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
 					<MaximizeIcon size={16} />

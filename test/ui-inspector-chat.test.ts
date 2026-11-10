@@ -3,6 +3,7 @@ import {
 	EMPTY_INSPECTOR_CHAT_TAB,
 	hasUnreadAnswer,
 	pendingAttachments,
+	relativeAge,
 	turnsFromHistory,
 	type InspectorChat,
 	type InspectorChatTab,
@@ -52,6 +53,23 @@ describe("the selection as context for the inspector chat", () => {
 
 	it("attaches nothing when nothing is selected", () => {
 		expect(pendingAttachments(tabWith(chatWith(docs)), [])).toEqual([]);
+	});
+});
+
+describe("how long ago the tab's chat was", () => {
+	const minute = 60_000;
+	const day = 24 * 60 * minute;
+	it("counts minutes up to an hour, then hours, days, months and years", () => {
+		expect(relativeAge(0, 30_000)).toEqual({ unit: "now", count: 0 });
+		expect(relativeAge(0, 59 * minute)).toEqual({ unit: "minutes", count: 59 });
+		expect(relativeAge(0, 60 * minute)).toEqual({ unit: "hours", count: 1 });
+		expect(relativeAge(0, 23 * 60 * minute + 59 * minute)).toEqual({ unit: "hours", count: 23 });
+		expect(relativeAge(0, day)).toEqual({ unit: "days", count: 1 });
+		expect(relativeAge(0, 29 * day)).toEqual({ unit: "days", count: 29 });
+		expect(relativeAge(0, 30 * day)).toEqual({ unit: "months", count: 1 });
+		expect(relativeAge(0, 364 * day)).toEqual({ unit: "months", count: 12 });
+		expect(relativeAge(0, 365 * day)).toEqual({ unit: "years", count: 1 });
+		expect(relativeAge(1_000, 0)).toEqual({ unit: "now", count: 0 });
 	});
 });
 

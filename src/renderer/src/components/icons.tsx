@@ -290,6 +290,9 @@ export const ImageResizeIcon = glyph(ImageReduce, 16, 1.8);
 /** Compress into an archive (Figma Icon/zip: a zipped file, no lettering). */
 export const ZipIcon = glyph(FileArchive, 16, 1.8);
 
+/** The inspector chat header's New chat (Figma Icon/edit): a 1.2px line at 16px. */
+export const ChatNewIcon = glyph(SquarePen, 16, 1.8);
+
 /** The chat title's history menu chevron and the chat header's ×, at the header's 16px weight. */
 export const TitleChevronIcon = glyph(ChevronDown, 16, 1.8);
 export const PanelCloseIcon = glyph(X, 16, 1.8);

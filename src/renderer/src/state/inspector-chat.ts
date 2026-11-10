@@ -59,6 +59,24 @@ export interface InspectorChatTab {
 
 export const EMPTY_INSPECTOR_CHAT_TAB: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
 
+export type AgeUnit = "now" | "minutes" | "hours" | "days" | "months" | "years";
+
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
+
+/** How long ago `at` was, in the largest whole unit: "이어서 대화 · 5분 전", "· 2시간 전", "· 3일 전", "· 1달 전", "· 1년 전". */
+export function relativeAge(at: number, now: number): { readonly unit: AgeUnit; readonly count: number } {
+	const elapsed = Math.max(0, now - at);
+	if (elapsed < MINUTE) return { unit: "now", count: 0 };
+	if (elapsed < HOUR) return { unit: "minutes", count: Math.floor(elapsed / MINUTE) };
+	if (elapsed < DAY) return { unit: "hours", count: Math.floor(elapsed / HOUR) };
+	const days = Math.floor(elapsed / DAY);
+	if (days < 30) return { unit: "days", count: days };
+	if (days < 365) return { unit: "months", count: Math.floor(days / 30) };
+	return { unit: "years", count: Math.floor(days / 365) };
+}
+
 /** An answer landed in the tab's chat since the person last looked at it: "이어서 대화" carries a dot. */
 export function hasUnreadAnswer(tab: InspectorChatTab): boolean {
 	return tab.chat !== null && tab.mode === "info" && tab.chat.updatedAt > tab.seenAt;
