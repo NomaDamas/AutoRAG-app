@@ -2279,7 +2279,7 @@
 	flex-direction: column;
 	min-width: 0;
 	min-height: 0;
-	background: var(--bg-window);
+	background: var(--bg-subtle-alt);
 }
 
 .customizer-panel[hidden] {
@@ -2325,42 +2325,61 @@
 	text-align: center;
 }
 
+/* Figma 367:8865: the faded 67px mark, a 14px title and 12px line 8px apart, then the suggestions 20px below. */
 .customizer-panel__empty-orb {
 	display: grid;
 	place-items: center;
-	width: 56px;
-	height: 56px;
-	margin-bottom: var(--space-12);
+	width: 67px;
+	height: 67px;
+	margin-bottom: var(--space-8);
 	background: transparent;
 }
 
 .customizer-panel__empty-logo {
 	display: block;
-	width: 52px;
-	height: 52px;
+	width: 67px;
+	height: 67px;
 	object-fit: contain;
 	background: transparent;
 }
 
+.customizer-panel__empty-logo--light {
+	opacity: 0.5;
+}
+
+.customizer-panel__empty-logo--dark {
+	display: none;
+}
+
+:where(html[data-appearance="dark"]) .customizer-panel__empty-logo--light {
+	display: none;
+}
+
+:where(html[data-appearance="dark"]) .customizer-panel__empty-logo--dark {
+	display: block;
+}
+
 .customizer-panel__empty-title {
-	margin: 0 0 var(--space-6);
-	font-size: 15px;
-	font-weight: var(--weight-semibold);
+	margin: 0 0 var(--space-8);
+	font-size: var(--font-size-body);
+	font-weight: var(--weight-medium);
+	line-height: 19px;
 	color: var(--text-primary);
 }
 
 .customizer-panel__empty-desc {
-	margin: 0 0 var(--space-18);
-	max-width: 380px;
+	margin: 0 0 var(--space-20);
+	max-width: 269px;
 	font-size: var(--font-size-meta);
-	line-height: var(--leading-body);
+	line-height: 16px;
 	color: var(--text-muted);
+	word-break: keep-all;
 }
 
 .customizer-panel__suggestions {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-8);
+	gap: var(--space-4);
 	width: 100%;
 	max-width: 440px;
 }
@@ -2370,14 +2389,16 @@
 	align-items: center;
 	gap: var(--space-8);
 	width: 100%;
-	padding: var(--space-10) var(--space-12);
+	padding: var(--space-8) var(--space-12);
 	border: 1px solid var(--border);
 	border-radius: var(--radius-8);
-	background: var(--bg-subtle);
+	background: var(--bg-window);
 	color: var(--text-body);
 	font: inherit;
 	font-size: var(--font-size-meta);
+	line-height: 18px;
 	text-align: left;
+	word-break: keep-all;
 	cursor: pointer;
 	transition: background var(--dur-color) var(--ease-out), border-color var(--dur-color) var(--ease-out), color var(--dur-color) var(--ease-out);
 }
@@ -2502,29 +2523,24 @@
 	line-height: 1.45;
 }
 
+/* Figma 367:8883: the inspector chat's composer, floating on the panel's stage colour. */
 .customizer-panel__foot {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
-	padding: var(--space-12) var(--space-16);
-	border-top: 1px solid var(--border-divider);
-	background: var(--bg-chrome);
+	padding: var(--space-8) var(--space-8) var(--space-10);
+	background: transparent;
 }
 
 .customizer-composer {
 	display: flex;
-	align-items: flex-end;
+	align-items: center;
 	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	padding: var(--space-8) var(--space-12) var(--space-8) 11px;
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-12);
 	background: var(--bg-window);
-	transition: border-color var(--dur-color) var(--ease-out), box-shadow var(--dur-color) var(--ease-out);
-}
-
-.customizer-composer:focus-within {
-	border-color: var(--accent);
-	box-shadow: 0 0 0 3px var(--accent-soft);
+	box-shadow: 0 2px 5px rgba(20, 20, 41, 0.07);
 }
 
 .customizer-composer__input {
@@ -2538,8 +2554,8 @@
 	background: transparent;
 	color: var(--text-primary);
 	font: inherit;
-	font-size: var(--font-size-sm);
-	line-height: 1.45;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
 }
 
 .customizer-composer__input::placeholder {
@@ -2550,8 +2566,8 @@
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 28px;
-	height: 28px;
+	width: 24px;
+	height: 24px;
 	padding: 0;
 	border: 0;
 	border-radius: var(--radius-full);

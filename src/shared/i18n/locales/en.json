@@ -2256,7 +2256,8 @@
         "title": "AI App Customizer",
         "newChat": "New Chat",
         "emptyTitle": "How would you like to customize Dazzi?",
-        "emptyDesc": "Tell the assistant which folders to show, how to order them, or switch themes — changes apply live.",
+        "emptyDesc": "Change which folders the sidebar shows, and their order",
+        "placeholder": "Tell me how you want it set up",
         "promptHideMedia": "Hide the Music, Movies, and Pictures folders I don't use for work",
         "promptReorder": "Move Downloads and Documents to the top of Favorites",
         "promptReset": "Put the sidebar back the way it was",
@@ -2371,11 +2372,12 @@
       "assistant": {
         "title": "AI Context Menu & Magic Action Assistant",
         "emptyTitle": "What should appear when you right-click?",
-        "emptyDesc": "Build your own right-click actions that summarize, compare, or tidy up files, or hide the menu items you don't use.",
-        "promptSummarizeDoc": "Make a Magic Action that sums up a PDF or Word document in three lines when I right-click it",
-        "promptCompareFiles": "Make a Magic Action that lists what changed between two files I select and right-click",
-        "promptPaperToDiscord": "Make a Magic Action that summarizes a PDF paper, posts the summary to my Discord #paper-summaries channel, and saves summary slides in a \"Paper Summaries\" folder",
-        "promptMaskToPdf": "Make a Magic Action that masks all pseudonymized personal details in an hwp or docx file, then converts it to PDF and saves it"
+        "emptyDesc": "Set up the menu you get when you right-click a file, your way.",
+        "placeholder": "Tell me what to make",
+        "promptSummarizeDoc": "Summarize the key points of a PDF or Word document in three lines",
+        "promptCompareFiles": "When I pick two files, sum up what changed between them",
+        "promptPaperToDiscord": "Summarize a paper, post it to Discord #paper-summaries, and save it as slides in a \"Paper Summaries\" folder",
+        "promptMaskToPdf": "Mask the names in hwp and docx files and save them as PDF"
       }
     },
     "shortcuts": {
@@ -2446,7 +2448,8 @@
       "assistant": {
         "title": "AI Shortcut Customizer",
         "emptyTitle": "Which shortcuts would you like to change?",
-        "emptyDesc": "Rebind or swap any of Dazzi's 26 default-bound shortcuts — changes take effect right away.",
+        "emptyDesc": "Change any of the 26 built-in shortcuts to the keys you want.",
+        "placeholder": "Tell me which shortcut to change",
         "promptMacFinder": "Let me use the same shortcuts as the Mac Finder",
         "promptWindowsExplorer": "Switch to the shortcuts I know from Windows File Explorer",
         "promptRenameF2": "Make F2 rename a file",

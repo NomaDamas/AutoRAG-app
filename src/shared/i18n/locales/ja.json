@@ -2256,7 +2256,8 @@
         "title": "AI アプリカスタムアシスタント",
         "newChat": "新しい会話",
         "emptyTitle": "どのようにカスタマイズしますか？",
-        "emptyDesc": "表示するフォルダ、セクションの順序、画面モードを伝えると即座に反映されます。",
+        "emptyDesc": "サイドバーに表示するフォルダーと順序を変更できます",
+        "placeholder": "どんな構成にしたいか教えてください",
         "promptHideMedia": "仕事で使わないミュージック、ムービー、ピクチャのフォルダをサイドバーから隠して",
         "promptReorder": "ダウンロードと書類をお気に入りの一番上に移動して",
         "promptReset": "サイドバーを最初の状態に戻して",
@@ -2371,11 +2372,12 @@
       "assistant": {
         "title": "AI 右クリックメニュー＆マジックアクションアシスタント",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
-        "emptyDesc": "ファイルを右クリックしたときに要約・比較・整理をしてくれる自分だけのメニューを作ったり、使わない項目を隠したりできます。",
-        "promptSummarizeDoc": "PDFやWord文書を右クリックすると要点を3行でまとめるマジックアクションを作って",
-        "promptCompareFiles": "2つのファイルを選んで右クリックすると違いをまとめるマジックアクションを作って",
-        "promptPaperToDiscord": "PDFの論文を要約して自分のDiscordの #論文要約 チャンネルに送り、要約スライドを作って「論文要約」フォルダに入れるマジックアクションを作って",
-        "promptMaskToPdf": "hwp・docxファイルの仮名加工情報をすべてマスキングしてからPDFに変換して保存するマジックアクションを作って"
+        "emptyDesc": "ファイルを右クリックしたときのメニューを自由に設定できます。",
+        "placeholder": "作りたい機能を教えてください",
+        "promptSummarizeDoc": "PDFやWord文書の要点を3行で要約して",
+        "promptCompareFiles": "ファイルを2つ選んだら、変わった内容をまとめて",
+        "promptPaperToDiscord": "論文を要約してDiscordの #論文要約 に送り、スライドにして「論文要約」フォルダに入れて",
+        "promptMaskToPdf": "hwp・docxファイルの名前を伏せてPDFに変換して保存して"
       }
     },
     "shortcuts": {
@@ -2446,7 +2448,8 @@
       "assistant": {
         "title": "AI ショートカットカスタムアシスタント",
         "emptyTitle": "どのショートカットを変更しますか？",
-        "emptyDesc": "Dazzi に用意された26個の標準ショートカットの範囲内で自由に変更・入れ替えができます。",
+        "emptyDesc": "26個の標準ショートカットを好きなキーに変更できます。",
+        "placeholder": "変更したいショートカットを教えてください",
         "promptMacFinder": "Mac の Finder と同じショートカットで使えるようにして",
         "promptWindowsExplorer": "Windows のエクスプローラーで使っていたショートカットにして",
         "promptRenameF2": "名前の変更を F2 キーでできるようにして",

@@ -432,10 +432,14 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
 
-		// The assistant has no header band: it shows the Dazzi mark once, centered in its empty state, and no notice
+		// The assistant has no header band: it shows the faded Dazzi mark once (a light and a dark image, one shown per
+		// appearance), centered in its empty state, and no notice
 		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
 		const marks = [...(panel?.querySelectorAll<HTMLImageElement>("img") ?? [])];
-		expect(marks.map((img) => img.className)).toEqual(["customizer-panel__empty-logo"]);
+		expect(marks.map((img) => img.className)).toEqual([
+			"customizer-panel__empty-logo customizer-panel__empty-logo--light",
+			"customizer-panel__empty-logo customizer-panel__empty-logo--dark",
+		]);
 		expect(panel?.querySelector("header")).toBeNull();
 		expect(panel?.querySelector("h2")).toBeNull();
 		expect(panel?.textContent).not.toContain("원하는 사이드바 구성이나 화면 설정을");
@@ -444,9 +448,9 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 검색과 자동화는 필수 기능");
 		// New chat appears only once there is a conversation to discard
 		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
-		// The four suggestions above already show what to ask, so the composer carries no example text, only a name
+		// The composer asks in plain words what to change (Figma 367:8865); the suggestions above are the examples
 		const composer = panel?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
-		expect(composer?.getAttribute("placeholder")).toBeNull();
+		expect(composer?.getAttribute("placeholder")).toBe("어떤 구성을 원하는지 말해주세요");
 		expect(composer?.getAttribute("aria-label")).toBe("어시스턴트에게 요청");
 
 		// Hiding the right sidebar brings back the hero, whose button and banner use the transparent Dazzi mark

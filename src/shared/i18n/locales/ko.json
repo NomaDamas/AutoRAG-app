@@ -2256,7 +2256,8 @@
         "title": "AI 앱 커스텀 어시스턴트",
         "newChat": "새 대화",
         "emptyTitle": "어떤 구성을 원하시나요?",
-        "emptyDesc": "표시할 폴더, 섹션 순서, 화면 모드를 말하면 즉시 반영됩니다.",
+        "emptyDesc": "사이드바에 보일 폴더와 순서를 변경할 수 있습니다",
+        "placeholder": "어떤 구성을 원하는지 말해주세요",
         "promptHideMedia": "업무에 안 쓰는 음악, 동영상, 사진 폴더는 사이드바에서 숨겨줘",
         "promptReorder": "다운로드와 문서를 즐겨찾기 맨 위로 올려줘",
         "promptReset": "사이드바를 처음 상태로 되돌려줘",
@@ -2371,11 +2372,12 @@
       "assistant": {
         "title": "AI 우클릭 메뉴 & 매직 액션 어시스턴트",
         "emptyTitle": "우클릭 메뉴에 어떤 기능을 넣어볼까요?",
-        "emptyDesc": "파일을 우클릭했을 때 요약·비교·정리를 해 주는 나만의 메뉴를 만들거나, 잘 안 쓰는 메뉴를 숨길 수 있습니다.",
-        "promptSummarizeDoc": "PDF나 워드 문서를 우클릭하면 핵심 내용을 세 줄로 요약해 주는 매직 액션을 만들어줘",
-        "promptCompareFiles": "파일 두 개를 선택해 우클릭하면 서로 달라진 내용을 정리해 주는 매직 액션을 만들어줘",
-        "promptPaperToDiscord": "PDF 논문을 요약해서 내 디스코드 #논문-요약 채널에 보내고, 요약 슬라이드를 만들어 '논문 요약' 폴더에 넣어주는 매직 액션을 만들어줘",
-        "promptMaskToPdf": "hwp, docx 파일의 가명 정보를 모두 마스킹한 뒤 PDF로 변환해서 저장하는 매직 액션을 만들어줘"
+        "emptyDesc": "파일을 우클릭했을 때의 메뉴를 마음대로 설정할 수 있습니다.",
+        "placeholder": "어떤 기능을 만들지 알려주세요",
+        "promptSummarizeDoc": "PDF나 워드 문서 핵심 내용을 세 줄로 요약해줘",
+        "promptCompareFiles": "파일 두 개를 고르면 달라진 내용을 정리해줘",
+        "promptPaperToDiscord": "논문을 요약해 디스코드 #논문-요약에 보내고, 슬라이드로 만들어 '논문 요약' 폴더에 넣어줘",
+        "promptMaskToPdf": "hwp·docx 파일의 이름을 가리고 PDF로 바꿔 저장해줘"
       }
     },
     "shortcuts": {
@@ -2446,7 +2448,8 @@
       "assistant": {
         "title": "AI 단축키 커스텀 어시스턴트",
         "emptyTitle": "어떤 단축키를 바꿔 볼까요?",
-        "emptyDesc": "기본 제공되는 26개 단축키 안에서 원하는 키 조합으로 바꾸거나 맞바꿀 수 있습니다.",
+        "emptyDesc": "기본 단축키 26개를 원하는 키로 바꿀 수 있습니다.",
+        "placeholder": "어떤 단축키를 바꿀지 말해주세요",
         "promptMacFinder": "Mac Finder에서 쓰던 단축키 그대로 쓰게 해줘",
         "promptWindowsExplorer": "Windows 파일 탐색기에서 쓰던 단축키로 바꿔줘",
         "promptRenameF2": "이름 바꾸기를 F2 키로 바꿔줘",

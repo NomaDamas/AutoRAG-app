@@ -2256,7 +2256,8 @@
         "title": "AI 应用定制助手",
         "newChat": "新对话",
         "emptyTitle": "您希望如何定制 Dazzi？",
-        "emptyDesc": "告诉助手要显示的文件夹、分区顺序或外观模式，更改会实时生效。",
+        "emptyDesc": "可以更改侧边栏显示的文件夹及其顺序",
+        "placeholder": "告诉我你想要怎样的布局",
         "promptHideMedia": "把工作中用不到的音乐、影片和图片文件夹从侧边栏隐藏",
         "promptReorder": "把下载和文稿移到个人收藏的最上方",
         "promptReset": "把侧边栏恢复成最初的样子",
@@ -2371,11 +2372,12 @@
       "assistant": {
         "title": "AI 右键菜单与魔法动作助手",
         "emptyTitle": "想在右键菜单里加入什么功能？",
-        "emptyDesc": "可以自己做右键菜单，帮你总结、对比或整理文件，也可以把用不到的菜单项隐藏起来。",
-        "promptSummarizeDoc": "做一个魔法动作：右键 PDF 或 Word 文档时，用三句话总结要点",
-        "promptCompareFiles": "做一个魔法动作：选中两个文件右键时，列出它们之间的不同之处",
-        "promptPaperToDiscord": "做一个魔法动作：总结 PDF 论文，把摘要发到我的 Discord #论文摘要 频道，并做成摘要幻灯片放进“论文摘要”文件夹",
-        "promptMaskToPdf": "做一个魔法动作：把 hwp、docx 文件里的假名化信息全部打码，再转换成 PDF 保存"
+        "emptyDesc": "可以随心设置右键点击文件时出现的菜单。",
+        "placeholder": "告诉我要做什么功能",
+        "promptSummarizeDoc": "把 PDF 或 Word 文档的要点总结成三行",
+        "promptCompareFiles": "选两个文件时，整理出它们的不同之处",
+        "promptPaperToDiscord": "总结论文并发到 Discord #论文摘要，再做成幻灯片放进“论文摘要”文件夹",
+        "promptMaskToPdf": "遮住 hwp、docx 文件里的姓名，并转成 PDF 保存"
       }
     },
     "shortcuts": {
@@ -2446,7 +2448,8 @@
       "assistant": {
         "title": "AI 快捷键定制助手",
         "emptyTitle": "您想更改哪些快捷键？",
-        "emptyDesc": "可在 Dazzi 内置的 26 项默认快捷键范围内自由修改或互换，更改立即生效。",
+        "emptyDesc": "可以把 26 个默认快捷键改成你想要的按键。",
+        "placeholder": "告诉我要修改哪个快捷键",
         "promptMacFinder": "让我用和 Mac 访达一样的快捷键",
         "promptWindowsExplorer": "换成我在 Windows 文件资源管理器里习惯的快捷键",
         "promptRenameF2": "把重命名改成按 F2 键",

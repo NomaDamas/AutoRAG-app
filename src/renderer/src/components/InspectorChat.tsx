@@ -105,7 +105,7 @@ const composerButton =
  * The empty composer's mic: dictation into the draft, as in AI Search. Clicking it again stops listening and the
  * transcript is added to whatever is typed.
  */
-function VoiceButton({
+export function VoiceButton({
 	voice,
 	onTranscript,
 	onError,

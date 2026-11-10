@@ -268,7 +268,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
 		expect(panel).not.toBeNull();
 		expect(panel?.getAttribute("data-surface")).toBe("contextMenu");
-		expect(panel?.textContent).toContain("매직 액션");
+		expect(panel?.textContent).toContain("세 줄로 요약");
 
 		const suggestion = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		await act(async () => {
