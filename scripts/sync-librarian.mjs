@@ -21,7 +21,7 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
 // The decision model is Jev or the small chat LLM: `jev.backend: "sllm"` decides with `jev.sllm.model` and never calls Jev,
 // and `jev.fallback: false` fails a session instead of moving to it (AutoRAG#2091).
-const librarianRef = "v2.13.5";
+const librarianRef = "v2.13.7";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

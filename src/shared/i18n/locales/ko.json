@@ -140,6 +140,7 @@
     },
     "pathBar": {
       "edit": "경로로 이동",
+      "more": "숨겨진 폴더",
       "suggestions": "경로 추천",
       "invalid": "이동할 경로를 입력하세요",
       "notFound": "\"{{path}}\" 위치를 찾을 수 없습니다"
@@ -777,6 +778,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "압축을 중지할까요?",
+    "compressStopMessage": "{{name}} 압축을 중지하고 만들던 압축 파일을 지웁니다.",
+    "compressStopAction": "중지",
+    "compressKeep": "계속 압축",
     "emptyTrashTitle": "휴지통 비우기",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
     "emptyTrashAction": "비우기",
@@ -1544,6 +1549,7 @@
       "animatedReduce": "움직이는 이미지는 용량을 줄이면 애니메이션이 사라져 지원하지 않습니다",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소)",
       "reduceCancelled": "{{name}} 용량 줄이기를 취소했습니다",
+      "compressCancelled": "{{name}} 압축을 중지했습니다",
       "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% 감소 · 원본은 휴지통에 보관됨)"
     },
     "indexStatus": {
@@ -1618,6 +1624,7 @@
       "retried": "파일 시스템 오류({{code}})가 일시적으로 발생해 새로 고침을 {{retries}}번 다시 시도했습니다.",
       "filesLeftOut": "{{code}} 오류가 계속되는 파일 {{files}}개를 이번 새로 고침에서 제외했습니다. 다음 새로 고침에서 다시 시도합니다.",
       "parseKilled": "파일 {{timedOut}}개는 제한 시간을 넘겨, {{crashed}}개는 파서가 중단되어 건너뛰었습니다. 다음 새로 고침에서 다시 시도합니다.",
+      "batchSkipped": "동기화가 실패해 파일 {{files}}개가 이전 색인 상태로 남았습니다. 다음 새로 고침에서 다시 시도합니다.",
       "modelMissing": "이 컴퓨터용 임베딩 모델이 아직 내려받아지지 않아 색인을 건너뜁니다. 설정 → AI 모델 → 문서 이해 모델에서 다운로드해 주세요.",
       "preflightMissingKey": "임베더 {{id}}에는 API 키가 필요한데 {{env}}가 설정되어 있지 않습니다. 인덱싱 전에 설정해 주세요.",
       "preflightKeyEnvIgnored": "임베더 {{id}}의 apiKeyEnv가 {{configured}}로 지정되어 있지만, 인덱서는 키를 {{env}}에서만 읽고 {{env}}가 설정되어 있지 않습니다. 키를 {{env}}에 넣어 주세요.",
@@ -3282,6 +3289,7 @@
     "reduceDone": "용량 줄이기 완료 · {{name}}",
     "reduceFailed": "용량 줄이기 실패 · {{name}}",
     "reduceOpen": "용량 줄이기 상태 열기",
+    "compressOpen": "압축 중지하기",
     "convertRunning": "변환 중 · {{name}}",
     "convertQueued": "변환 대기 중 · {{name}}",
     "convertDone": "변환 완료 · {{name}}",

@@ -140,6 +140,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+      "more": "非表示のフォルダ",
       "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
@@ -777,6 +778,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "圧縮を中止しますか？",
+    "compressStopMessage": "{{name}} の圧縮を中止し、作成途中の圧縮ファイルを削除します。",
+    "compressStopAction": "中止",
+    "compressKeep": "圧縮を続ける",
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
@@ -1544,6 +1549,7 @@
       "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
       "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）",
       "reduceCancelled": "{{name}} の容量削減をキャンセルしました",
+      "compressCancelled": "{{name}} の圧縮を中止しました",
       "reducedReplaced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減・元のファイルはゴミ箱へ移動）"
     },
     "indexStatus": {
@@ -1618,6 +1624,7 @@
       "retried": "一時的なファイルシステムエラー({{code}})が発生したため、更新を {{retries}} 回再試行しました。",
       "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
       "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。",
+      "batchSkipped": "同期に失敗したため、ファイル {{files}} 件は以前のインデックスのままです。次回の更新で再試行します。",
       "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。",
       "preflightMissingKey": "エンベッダー {{id}} には API キーが必要ですが、{{env}} が設定されていません。インデックス作成の前に設定してください。",
       "preflightKeyEnvIgnored": "エンベッダー {{id}} は apiKeyEnv に {{configured}} を指定していますが、インデクサーはキーを {{env}} からしか読まず、{{env}} が設定されていません。キーを {{env}} に設定してください。",
@@ -3282,6 +3289,7 @@
     "reduceDone": "サイズ削減完了 · {{name}}",
     "reduceFailed": "サイズ削減に失敗 · {{name}}",
     "reduceOpen": "サイズ削減の状態を表示",
+    "compressOpen": "圧縮を中止",
     "convertRunning": "変換中 · {{name}}",
     "convertQueued": "変換を待機中 · {{name}}",
     "convertDone": "変換完了 · {{name}}",

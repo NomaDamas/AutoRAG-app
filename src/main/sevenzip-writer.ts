@@ -27,7 +27,7 @@
 import { Worker } from "node:worker_threads";
 import { crc32 } from "node:zlib";
 import { t } from "../shared/i18n/core";
-import { CHUNK_BYTES, streamFile } from "./archive-stream";
+import { type ArchiveProgress, CHUNK_BYTES, streamFile } from "./archive-stream";
 import { rawFs } from "./raw-fs";
 
 const { lstat, open, rm } = rawFs.promises;
@@ -41,7 +41,7 @@ export interface SevenZipMember {
 }
 
 /** Limits that bound memory and time; tests lower them to exercise block boundaries. */
-export interface SevenZipOptions {
+export interface SevenZipOptions extends ArchiveProgress {
 	/** Bytes of file content gathered into one solid block before it is compressed. */
 	readonly solidBlockBytes?: number;
 	/** A single file larger than this is streamed into its own Deflate or Copy folder instead of LZMA-compressed. */
@@ -252,12 +252,17 @@ export async function writeSevenZip(target: string, members: readonly SevenZipMe
 		const flush = async (): Promise<void> => {
 			if (pending.length === 0) return;
 			const files = pending;
+			const bytes = pendingBytes;
 			pending = [];
 			pendingBytes = 0;
+			options.signal?.throwIfAborted();
 			await writeFolder(files);
+			// Reported once compressed: LZMA, not the read, is where a block's time goes.
+			options.onBytes?.(bytes);
 		};
 
 		for (const [index, member] of members.entries()) {
+			options.signal?.throwIfAborted();
 			const stats = await lstat(member.source);
 			mtimes.writeBigUInt64LE((BigInt(Math.trunc(stats.mtimeMs)) + FILETIME_EPOCH_MS) * 10_000n, 8 * index);
 			// Windows attribute bits, plus 7-Zip's Unix extension: type and permissions in the high 16 bits.
@@ -281,6 +286,7 @@ export async function writeSevenZip(target: string, members: readonly SevenZipMe
 							await handle.write(data);
 						},
 						options.chunkBytes ?? CHUNK_BYTES,
+						options,
 					);
 					emptyStream.push(streamed.size === 0);
 					if (streamed.size === 0) continue;

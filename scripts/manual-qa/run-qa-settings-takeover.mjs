@@ -176,8 +176,8 @@ try {
 	const finderSearchClass = await page.evaluate(() => document.querySelector("aside.settings-sidebar label.side-search")?.className.replace(/\bsettings-search\b/, "").trim());
 	const back = await box("aside.settings-sidebar .settings-sidebar-back");
 	check("no title or back button at the sidebar's top-left: the head is empty", (await page.locator(".settings-sidebar-title").count()) === 0 && (await page.locator(".settings-sidebar-head button, .settings-sidebar-head :text('Settings')").count()) === 0);
-	check("the search sits right under the head, where the Finder sidebar's search does", search !== null && search.y >= 52 && search.y < 64, JSON.stringify(search));
-	check("the back button is one row directly under the search, as wide as a page row", search !== null && back !== null && back.y > search.bottom && back.y - search.bottom < 24 && (await page.locator("aside.settings-sidebar .settings-sidebar-back").innerText()).trim() === "Back", JSON.stringify({ search, back }));
+	check("the back button sits right under the head, where the Finder sidebar's search does, as wide as a page row", back !== null && back.y >= 52 && back.y < 64 && (await page.locator("aside.settings-sidebar .settings-sidebar-back").innerText()).trim() === "Back", JSON.stringify(back));
+	check("the search is one row directly under the back button", search !== null && back !== null && search.y > back.bottom && search.y - back.bottom < 24, JSON.stringify({ back, search }));
 	check("the search carries the Finder sidebar's design classes", /rounded-8/.test(finderSearchClass ?? "") && /bg-hover/.test(finderSearchClass ?? "") && /h-30/.test(finderSearchClass ?? ""), finderSearchClass);
 	const content = await box("main.settings-content");
 	check("the settings content starts right at the window's top, beside the sidebar", content !== null && content.y === 0 && content.x >= (nav?.right ?? 0), JSON.stringify(content));

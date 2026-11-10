@@ -87,7 +87,7 @@ const seed = () => {
 seed();
 writeFileSync(
 	CONFIG,
-	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: false, webSearch: false, queryDecomposition: false }) }, null, 2)}\n`,
+	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: { backend: "sllm" }, webSearch: { enabled: false }, queryDecomposition: false }) }, null, 2)}\n`,
 );
 
 const forwarded = [];

@@ -6,7 +6,7 @@ import { summarizeBundle } from "../src/preview/node/bundle";
 import { createDefaultAppCache } from "../src/preview/node/default-app";
 import { measureFolder, summarizeFolder } from "../src/preview/node/folder";
 import { describeBinary } from "../src/preview/shared/binary-kind";
-import { ANCHOR_LIMITS, isQuickLookLoad, isQuickLookReady, isQuickLookTarget } from "../src/preview/shared/contract";
+import { ANCHOR_LIMITS, isQuickLookDecoded, isQuickLookLoad, isQuickLookReady, isQuickLookTarget } from "../src/preview/shared/contract";
 import { fitQuickLook, QUICK_LOOK_TOOLBAR } from "../src/preview/shared/fit";
 import { formatClock, formatFinderDate, formatFinderSize, formatItemCount } from "../src/preview/shared/format";
 import { setAppLanguage } from "../src/shared/i18n/core";
@@ -321,5 +321,14 @@ describe("default app cache", () => {
 		expect(await cache.resolve("/x/Makefile", false)).toBe("Xcode");
 		expect(cache.known("/y/Makefile", false)).toBeNull();
 		expect(await cache.resolve("/x/broken", false)).toBeNull();
+	});
+});
+
+describe("the decoded-picture update", () => {
+	it("carries a PNG, the raw file, or nothing, always for one load", () => {
+		expect(isQuickLookDecoded({ seq: 3, mime: "image/png", truncated: false, bytes: new Uint8Array([1]) })).toBe(true);
+		expect(isQuickLookDecoded({ seq: 3, mime: "image/tiff", truncated: true, bytes: null })).toBe(true);
+		expect(isQuickLookDecoded({ mime: "image/png", truncated: false, bytes: null })).toBe(false);
+		expect(isQuickLookDecoded({ seq: 3, mime: "image/png", truncated: false, bytes: [1] })).toBe(false);
 	});
 });

@@ -179,6 +179,12 @@ function bytesOf(stage: IndexStageId, input: IndexProgressInput): IndexStageByte
 	if (isMinsyncStage(stage)) {
 		const done = input.journal?.bytesDone;
 		if (done === undefined || done === null) return null;
+		// A refresh runs several MinSync syncs since librarian 2.13.7 and the journal holds only the one in flight, while `minsync.synced`
+		// counts every sync so far. Bytes of the journal's files against the bytes of all of them would draw the bar short of
+		// where the counts are, and drop it when a new sync starts; the stage is filled by file counts until the journal covers them all.
+		const handled = nonNegative(input.minsync?.synced);
+		const journal = input.journal;
+		if (journal !== null && journal.committed + journal.deleted + journal.failed < handled) return null;
 		const total = input.embedBytesTotal ?? null;
 		return { done: total === null ? done : Math.min(done, total), total };
 	}
@@ -297,7 +303,12 @@ export function computeIndexProgress(input: IndexProgressInput, history: RateHis
 
 	const active = activeStage({ phase: input.phase, sourceTotal: input.sourceTotal, parsed: input.parsed, embedding });
 	const activeIndex = order.indexOf(active);
-	const stages = order.map((id, index) => stageProgress(id, index < activeIndex ? "done" : index === activeIndex ? "running" : "pending", input));
+	// The librarian syncs MinSync alongside parsing (2.13.7): once MinSync has reported, its stage is already working
+	// while the read stage is still running. The bar and the remaining time stay with the read stage (`active`), whose
+	// total is fixed; MinSync's total grows with every committed batch, so a share of it would move the bar backwards.
+	const minsyncId = order.find(isMinsyncStage);
+	const alongside = active === "parse" && input.minsync !== null && minsyncId !== undefined;
+	const stages = order.map((id, index) => stageProgress(id, index < activeIndex ? "done" : index === activeIndex || (alongside && id === minsyncId) ? "running" : "pending", input));
 	const running = stages[activeIndex];
 	const counts = running?.counts ?? null;
 	const measured = running?.fraction ?? null;
@@ -305,7 +316,7 @@ export function computeIndexProgress(input: IndexProgressInput, history: RateHis
 	let position = 0;
 	for (const stage of stages) {
 		if (stage.state === "done") position += STAGE_SHARE[stage.id];
-		else if (stage.state === "running" && measured !== null) position += STAGE_SHARE[stage.id] * measured;
+		else if (stage.state === "running" && stage.id === active && measured !== null) position += STAGE_SHARE[stage.id] * measured;
 	}
 	// A stage that has counted everything but not yet closed (MinSync is still writing its index) has nothing left to measure either.
 	const waitingToClose = counts !== null && counts.total !== null && counts.total > 0 && handledOf(counts) >= counts.total && active !== "finalize";

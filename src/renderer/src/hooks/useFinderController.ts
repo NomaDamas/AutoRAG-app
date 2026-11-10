@@ -6,7 +6,7 @@ import { useRowPipeline } from "./useRowPipeline";
 import { useFinderKeyboard } from "./useFinderKeyboard";
 import { revealTarget, type ScrollRequest } from "./list-reveal";
 import type { MouseEvent as ReactMouseEvent, RefObject } from "react";
-import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type OpenWithApplication } from "../../../shared/actions-contract";
+import { NO_CAPABILITIES, type ActionAnchor, type ActionCapabilities, type CompressFormat, type OpenWithApplication } from "../../../shared/actions-contract";
 import type { QuickLookTarget } from "../../../preview/shared/contract";
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagPath } from "../../../shared/fs-contract";
@@ -182,6 +182,12 @@ interface RenameState {
 	readonly draft: string;
 }
 
+/** A running Compress the user asked to stop, waiting for the confirm. */
+export interface CompressStopState {
+	readonly id: string;
+	readonly name: string;
+}
+
 export interface FinderController {
 	readonly tabs: readonly TabView[];
 	/** The window holds more than one tab, so a close can succeed. */
@@ -290,6 +296,12 @@ export interface FinderController {
 	cancelEmptyTrash(): void;
 	/** Whether the 휴지통 비우기 confirm is showing. */
 	readonly emptyTrashConfirm: boolean;
+	/** The Compress awaiting a stop answer (its sidebar row was clicked); null when none. */
+	readonly compressStop: CompressStopState | null;
+	/** Stop that Compress; the partial archive is removed. */
+	confirmCompressStop(): void;
+	/** Close the stop confirm and let the Compress run on. */
+	keepCompressing(): void;
 	/** The rename that would convert the file, waiting for the keep/replace answer or running; null when none. */
 	readonly convertRename: ConvertRenameState | null;
 	/** Convert into the new name: keep the original, or replace it (the original moves to the Trash). */
@@ -484,6 +496,8 @@ export function useFinderController(
 	const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
 	/** A rename to another format's extension: asks keep-or-replace, then converts. */
 	const [convertRename, setConvertRename] = useState<ConvertRenameState | null>(null);
+	/** The running Compress whose "stop?" confirm is showing; null when none. */
+	const [compressStop, setCompressStop] = useState<CompressStopState | null>(null);
 	/** Tab id of an Evidence Folder tab awaiting close confirmation; null when none is pending. */
 	const [closingEvidenceTabId, setClosingEvidenceTabId] = useState<number | null>(null);
 	const [flashPath, setFlashPath] = useState<string | null>(null);
@@ -1335,6 +1349,58 @@ export function useFinderController(
 		});
 
 	/**
+	 * Compress runs in the window-wide background queue: a large folder takes
+	 * minutes, so its byte progress shows in the sidebar and the window stays
+	 * usable. Clicking the row asks whether to stop it.
+	 */
+	const startCompress = useLatestCallback((paths: readonly string[], format: CompressFormat) => {
+		const [first] = paths;
+		if (first === undefined) return;
+		const id = crypto.randomUUID();
+		// The archive's own stem (main names it the same way): a file name, never translated.
+		const name = paths.length === 1 ? basename(first) : "Archive";
+		void enqueueBackgroundTask({
+			id,
+			kind: "compress",
+			headline: name,
+			queuedHeadline: name,
+			doneHeadline: name,
+			failedHeadline: name,
+			detail: t(format === "7z" ? "inspector.actions.compress7z" : "inspector.actions.compressZip"),
+			ariaLabel: t("sidebarActivity.compressOpen"),
+			onSelect: () => setCompressStop({ id, name }),
+			onCancel: () => {
+				void source.actions.cancel?.(id).catch(reportError);
+			},
+			run: async () => {
+				const outcome = await source.actions.run(paths, { kind: "compress", format, id });
+				showToast(outcome.note);
+				if (outcome.output !== null) {
+					recordActionOutput("compress", outcome.output);
+					refresh();
+				}
+			},
+		})
+			.catch((error: unknown) => {
+				if (error instanceof Error && error.message === "Task cancelled") return;
+				reportError(error);
+			})
+			.finally(() => {
+				setCompressStop((current) => (current?.id === id ? null : current));
+			});
+	});
+
+	const keepCompressing = useLatestCallback(() => setCompressStop(null));
+
+	const confirmCompressStop = useLatestCallback(() => {
+		const pending = compressStop;
+		if (pending === null) return;
+		setCompressStop(null);
+		cancelBackgroundTask(pending.id);
+		showToast(t("main.action.compressCancelled", { name: pending.name }));
+	});
+
+	/**
 	 * Run one Inspector action. "AI 요약" never lands here — the App shell owns
 	 * the composer — so this covers only the filesystem and OS actions. A
 	 * successful action relists the folder so the new file appears at once.
@@ -1357,6 +1423,10 @@ export function useFinderController(
 						if (reduceDialog !== null) return;
 						const opened = createReduceSizeDialogState(entry, crypto.randomUUID());
 						if (opened !== null) setReduceDialog(opened);
+						return;
+					}
+					if (target.request.kind === "compress") {
+						startCompress([entry.path], target.request.format ?? "zip");
 						return;
 					}
 					source.actions
@@ -1384,19 +1454,10 @@ export function useFinderController(
 	 */
 	const runSelectionAction = useLatestCallback((target: FileActionTarget) => {
 		if (target.kind !== "request" || target.request.kind !== "compress") return;
-		source.actions
-			.run(
-				selectedEntries.map((entry) => entry.path),
-				target.request,
-			)
-			.then((outcome) => {
-				showToast(outcome.note);
-				if (outcome.output !== null) {
-					recordActionOutput("compress", outcome.output);
-					refresh();
-				}
-			})
-			.catch(reportError);
+		startCompress(
+			selectedEntries.map((entry) => entry.path),
+			target.request.format ?? "zip",
+		);
 	});
 
 	const loadOpenWithApplications = useLatestCallback((entry: FinderEntry) =>
@@ -1828,21 +1889,13 @@ export function useFinderController(
 					return;
 				case "compress7z":
 					// Same one-archive-per-selection rule as zip; the undo record is still "compress".
-					source.actions
-						.run(targets, { kind: "compress", format: "7z" })
-						.then((outcome) => {
-							showToast(outcome.note);
-							if (outcome.output !== null) {
-								recordActionOutput("compress", outcome.output);
-								refresh();
-							}
-						})
-						.catch(reportError);
+					startCompress(targets, "7z");
 					return;
 				case "compress":
+					startCompress(targets, "zip");
+					return;
 				case "extract":
-					// One request for the whole selection: compress writes one archive,
-					// and extraction is offered for a single archive row only.
+					// Extraction is offered for a single archive row only.
 					source.actions
 						.run(targets, { kind: action })
 						.then((outcome) => {
@@ -2068,6 +2121,10 @@ export function useFinderController(
 		}
 		if (emptyTrashConfirm) {
 			setEmptyTrashConfirm(false);
+			return;
+		}
+		if (compressStop !== null) {
+			setCompressStop(null);
 			return;
 		}
 		if (contextMenu !== null) {
@@ -2408,6 +2465,9 @@ export function useFinderController(
 		confirmEmptyTrash,
 		cancelEmptyTrash,
 		emptyTrashConfirm,
+		compressStop,
+		confirmCompressStop,
+		keepCompressing,
 		convertRename,
 		confirmConvertRename,
 		cancelConvertRename,

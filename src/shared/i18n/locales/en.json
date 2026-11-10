@@ -140,6 +140,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+      "more": "Hidden folders",
       "suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
@@ -777,6 +778,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "Stop compressing?",
+    "compressStopMessage": "Compressing {{name}} stops and the partial archive is deleted.",
+    "compressStopAction": "Stop",
+    "compressKeep": "Keep Compressing",
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
     "emptyTrashAction": "Empty",
@@ -1544,6 +1549,7 @@
       "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)",
       "reduceCancelled": "Cancelled reducing {{name}}",
+      "compressCancelled": "Stopped compressing {{name}}",
       "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller · original in Trash)"
     },
     "indexStatus": {
@@ -1618,6 +1624,7 @@
       "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
       "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
       "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh.",
+      "batchSkipped": "{{files}} file(s) stayed at their previous index entry because the sync that covered them failed. They will be tried again on the next refresh.",
       "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model.",
       "preflightMissingKey": "The embedder {{id}} needs an API key, but {{env}} is not set. Set it before indexing.",
       "preflightKeyEnvIgnored": "The embedder {{id}} sets apiKeyEnv to {{configured}}, but the indexer reads its key only from {{env}}, and {{env}} is not set. Put the key in {{env}}.",
@@ -3282,6 +3289,7 @@
     "reduceDone": "Size reduced · {{name}}",
     "reduceFailed": "Couldn’t reduce size · {{name}}",
     "reduceOpen": "Show Reduce Size status",
+    "compressOpen": "Stop compressing",
     "convertRunning": "Converting · {{name}}",
     "convertQueued": "Waiting to convert · {{name}}",
     "convertDone": "Converted · {{name}}",

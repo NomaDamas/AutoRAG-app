@@ -10,7 +10,7 @@ export { providerConnectRoute, withoutAutorag } from "./account-contract";
  * account service read one source.
  */
 
-export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel";
+export type JevBackend = "dazzi" | "typesafe" | "openrouter" | "vercel-ai-gateway";
 
 /**
  * `jev.backend` that makes the small chat model (`jev.sllm.model`, else the question-decomposition model) the decision
@@ -33,14 +33,14 @@ interface RoleModelSpec {
 
 /**
  * Jev backend a Pi provider id maps to. `jev-use` resolves typesafe /
- * openrouter / vercel; the hosted plan is the `dazzi` backend. The Vercel AI
- * Gateway provider id is `vercel-ai-gateway`, not `vercel`.
+ * openrouter / vercel-ai-gateway; the hosted plan is the `dazzi` backend. Every
+ * other backend is the pi provider id (the librarian refuses the old `vercel`).
  */
 const JEV_BACKEND_BY_PROVIDER: Readonly<Record<string, JevBackend>> = {
 	[AUTORAG_PROVIDER_ID]: "dazzi",
 	typesafe: "typesafe",
 	openrouter: "openrouter",
-	"vercel-ai-gateway": "vercel",
+	"vercel-ai-gateway": "vercel-ai-gateway",
 };
 
 /** The Jev model ids each backend accepts. */
@@ -49,9 +49,12 @@ const JEV_MODELS_BY_BACKEND: Readonly<Record<JevBackend, readonly RoleModelSpec[
 	typesafe: [{ id: "jev-latest", labelKey: "finderState.roles.jevLatest" }],
 	openrouter: [
 		{ id: "typesafe/jev-1.13", label: "Jev 1.13" },
-		{ id: "typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" },
+		{ id: "~typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" },
 	],
-	vercel: [{ id: "typesafe/jev-latest", labelKey: "finderState.roles.jevLatest" }],
+	"vercel-ai-gateway": [
+		{ id: "typesafe-ai/jev-1.13.0", label: "Jev 1.13" },
+		{ id: "typesafe-ai/jev", labelKey: "finderState.roles.jevLatest" },
+	],
 };
 
 /** Rerank model ids each provider serves (rerank is not a general LLM role). The

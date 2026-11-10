@@ -140,6 +140,7 @@
     },
     "pathBar": {
       "edit": "前往路径",
+      "more": "隐藏的文件夹",
       "suggestions": "路径建议",
       "invalid": "请输入要前往的路径",
       "notFound": "找不到 \"{{path}}\""
@@ -777,6 +778,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "要停止压缩吗？",
+    "compressStopMessage": "将停止压缩 {{name}}，并删除未完成的压缩文件。",
+    "compressStopAction": "停止",
+    "compressKeep": "继续压缩",
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
@@ -1544,6 +1549,7 @@
       "animatedReduce": "动画图片会丢失动画，因此不支持缩小",
       "reduced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}%）",
       "reduceCancelled": "已取消缩小 {{name}} 的体积",
+      "compressCancelled": "已停止压缩 {{name}}",
       "reducedReplaced": "{{name}} — {{before}} → {{after}}（减少 {{percent}}% · 原文件已移至废纸篓）"
     },
     "indexStatus": {
@@ -1618,6 +1624,7 @@
       "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
       "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
+      "batchSkipped": "由于同步失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
       "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。",
       "preflightMissingKey": "嵌入器 {{id}} 需要 API 密钥,但未设置 {{env}}。请在建立索引前设置。",
       "preflightKeyEnvIgnored": "嵌入器 {{id}} 的 apiKeyEnv 指定为 {{configured}},但索引器只从 {{env}} 读取密钥,而 {{env}} 未设置。请把密钥放进 {{env}}。",
@@ -3282,6 +3289,7 @@
     "reduceDone": "已缩减大小 · {{name}}",
     "reduceFailed": "缩减大小失败 · {{name}}",
     "reduceOpen": "查看缩减大小状态",
+    "compressOpen": "停止压缩",
     "convertRunning": "正在转换 · {{name}}",
     "convertQueued": "等待转换 · {{name}}",
     "convertDone": "转换完成 · {{name}}",

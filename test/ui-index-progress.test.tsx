@@ -97,6 +97,25 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 		expect(entry?.title).toContain("용량 4.0 GB / 17 GB (23%)");
 	});
 
+	it("marks the stage the run is on as the one current step while MinSync's stage also works alongside parsing", async () => {
+		const snapshot = activity(
+			computeIndexProgress(realCase({ phase: "parsed", parsed: { scanned: 87, written: 87, deleted: 0, skipped: 0 }, sourceTotal: 120, minsync: { synced: 25, total: 83 }, journal: null, embedBytesTotal: null })).snapshot,
+		);
+		await act(async () => {
+			root.render(<IndexActivityCard snapshot={snapshot} />);
+			await Promise.resolve();
+		});
+		const stages = [...host.querySelectorAll(".settings-activity-stages li")].map((item) => [item.textContent, item.getAttribute("data-state")]);
+		expect(stages).toEqual([
+			["탐색", "done"],
+			["파싱", "running"],
+			["임베딩", "running"],
+			["마무리", "pending"],
+		]);
+		expect(host.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
+		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("파싱");
+	});
+
 	it("calls MinSync's step the same thing in Settings and the sidebar when nothing is embedded", async () => {
 		const snapshot = activity(computeIndexProgress(realCase({ embedding: false })).snapshot);
 		await act(async () => {

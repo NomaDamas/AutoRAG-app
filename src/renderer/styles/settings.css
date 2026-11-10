@@ -49,10 +49,10 @@
 	-webkit-app-region: drag;
 }
 
-/* The way out: one row under the search, built like a page row so it reads as one more button in the list. */
+/* The way out: the first row under the head, above the search, built like a page row so it reads as one more button in the list. */
 .settings-sidebar-backrow {
 	flex: none;
-	padding: 0 var(--space-10) var(--space-4);
+	padding: var(--space-2) var(--space-10) 0;
 }
 
 .settings-sidebar-scroll {
