@@ -3083,6 +3083,14 @@
       "empty": "연결된 데이터소스가 없습니다. 연결된 앱에서 앱을 추가하세요.",
       "footer": "바뀐 파일과 메시지만 다시 읽습니다. 처음 연결한 앱은 전체를 가져옵니다.",
       "syncAll": "모두 지금 최신화",
+      "scheduleTitle": "자동 최신화 조건",
+      "scheduleAcOnlyName": "전원 연결 시에만",
+      "scheduleAcOnlyHint": "배터리로 쓰는 동안은 자동 최신화를 건너뜁니다. 지금 최신화는 항상 됩니다.",
+      "scheduleWindowName": "지정한 시간대에만",
+      "scheduleWindowHint": "이 시간대가 될 때까지 자동 최신화를 미룹니다. 시간대가 시작된 뒤 첫 확인 때 실행됩니다.",
+      "scheduleWindowStart": "시작 시각",
+      "scheduleWindowEnd": "종료 시각",
+      "scheduleWindowSame": "시작과 종료 시각이 같습니다.",
       "localRefreshName": "로컬 폴더 새로 고침",
       "localRefreshHint": "검색 폴더의 문서를 다시 읽어 검색 색인을 갱신합니다. 바뀐 문서만 처리합니다.",
       "localRefreshButton": "지금 새로 고침",
@@ -3094,7 +3102,10 @@
       "scheduleConflicts": "이 컴퓨터에는 Dazzi를 따로 새로 고치는 예약 작업이 이미 있습니다({{list}}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.",
       "scheduleActive": "앱이 꺼져 있어도 {{minutes}}분마다 확인해, 주기가 된 항목만 새로 고칩니다.",
       "scheduleLastCheck": "마지막 확인 {{ago}}.",
-      "scheduleNever": "아직 실행된 적이 없습니다."
+      "scheduleNever": "아직 실행된 적이 없습니다.",
+      "schedulePausedBattery": "전원 연결을 기다리는 중: 인덱싱 일정이 전원이 연결된 동안에만 허용합니다({{ago}} 보류).",
+      "schedulePausedWindow": "허용된 시간대를 기다리는 중: 인덱싱 일정에 따라 {{ago}} 최신화를 보류했습니다.",
+      "schedulePausedDay": "허용된 요일을 기다리는 중: 인덱싱 일정에 따라 {{ago}} 최신화를 보류했습니다."
     },
     "apps": {
       "title": "연결된 앱",

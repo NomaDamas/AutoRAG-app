@@ -3083,6 +3083,14 @@
       "empty": "没有已连接的数据源。请在“已连接应用”中添加。",
       "footer": "仅重新读取变更的文件和消息。首次连接的应用会完整获取。",
       "syncAll": "立即全部更新",
+      "scheduleTitle": "自动刷新条件",
+      "scheduleAcOnlyName": "仅在接通电源时",
+      "scheduleAcOnlyHint": "使用电池时跳过自动刷新。“立即刷新”始终可用。",
+      "scheduleWindowName": "仅在设定时段",
+      "scheduleWindowHint": "自动刷新会等到该时段开始，并在其后的第一次检查时运行。",
+      "scheduleWindowStart": "开始时间",
+      "scheduleWindowEnd": "结束时间",
+      "scheduleWindowSame": "开始和结束时间相同。",
       "localRefreshName": "刷新本地文件夹",
       "localRefreshHint": "重新读取搜索文件夹中的文档以更新搜索索引。仅处理已变更的文档。",
       "localRefreshButton": "立即刷新",
@@ -3094,7 +3102,10 @@
       "scheduleConflicts": "此计算机已有单独刷新 Dazzi 的计划任务（{{list}}）。为避免重复处理同一文件夹，建议只使用其中一个。",
       "scheduleActive": "即使应用已关闭，也会每 {{minutes}} 分钟检查一次，仅刷新到期的项目。",
       "scheduleLastCheck": "上次检查 {{ago}}。",
-      "scheduleNever": "尚未运行过。"
+      "scheduleNever": "尚未运行过。",
+      "schedulePausedBattery": "正在等待接通电源：索引计划只允许在接通电源时运行（{{ago}}已暂缓）。",
+      "schedulePausedWindow": "正在等待允许的时段：索引计划已于{{ago}}暂缓刷新。",
+      "schedulePausedDay": "正在等待允许的日期：索引计划已于{{ago}}暂缓刷新。"
     },
     "apps": {
       "title": "已连接应用",

@@ -17,8 +17,10 @@ import type {
 	ConfigRefreshResult,
 	DataSourceRow,
 	DataSourcesSnapshot,
+	JsonObject,
 	JsonValue,
 	RefreshScheduleStatus,
+	ScheduledRunPauseReason,
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
 import { isCalendarDatasourceType } from "../../../../shared/calendar-platform";
@@ -26,6 +28,7 @@ import { newDatasourceEntry } from "../../../../shared/datasource-defaults";
 import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { excludePath, includePath } from "../../../../shared/index-scope-edit";
+import { readScheduleSettings, scheduleUpdates, type ScheduleSettings } from "../../../../shared/refresh-schedule-settings";
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
@@ -102,6 +105,37 @@ function sourceMeta(row: DataSourceRow): string {
 	if (row.install.state === "unsupported") return row.install.detail;
 	if (row.install.state === "missing") return row.install.detail;
 	return t("settingsSources.meta.notFetchedYet");
+}
+
+/** When the background job may refresh: only on AC power, and/or only inside a daily time window. Stored as `refresh.schedule`. */
+function ScheduleConditions({ config, onApply }: { readonly config: JsonObject; readonly onApply: (settings: ScheduleSettings) => Promise<void> }): ReactElement {
+	const settings = readScheduleSettings(config);
+	const [problem, setProblem] = useState<string | null>(null);
+	async function change(patch: Partial<ScheduleSettings>): Promise<void> {
+		setProblem(null);
+		try {
+			await onApply({ ...settings, ...patch });
+		} catch {
+			setProblem(t("settingsSources.indexing.scheduleWindowSame"));
+		}
+	}
+	return (
+		<Section title={t("settingsSources.indexing.scheduleTitle")}>
+			<Row name={t("settingsSources.indexing.scheduleAcOnlyName")} hint={t("settingsSources.indexing.scheduleAcOnlyHint")}>
+				<Switch checked={settings.acOnly} onChange={() => void change({ acOnly: !settings.acOnly })} ariaLabel={t("settingsSources.indexing.scheduleAcOnlyName")} />
+			</Row>
+			<Row name={t("settingsSources.indexing.scheduleWindowName")} hint={t("settingsSources.indexing.scheduleWindowHint")}>
+				<Switch checked={settings.windowEnabled} onChange={() => void change({ windowEnabled: !settings.windowEnabled })} ariaLabel={t("settingsSources.indexing.scheduleWindowName")} />
+			</Row>
+			{settings.windowEnabled ? (
+				<Row name={`${t("settingsSources.indexing.scheduleWindowStart")} – ${t("settingsSources.indexing.scheduleWindowEnd")}`}>
+					<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowStart")} value={settings.start} onChange={(event) => event.target.value !== "" && void change({ start: event.target.value })} />
+					<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowEnd")} value={settings.end} onChange={(event) => event.target.value !== "" && void change({ end: event.target.value })} />
+				</Row>
+			) : null}
+			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
+		</Section>
+	);
 }
 
 /* ============================================================== Indexing == */
@@ -239,6 +273,7 @@ export function IndexingPage({
 					onInclude={(path) => void run([listUpdate("excludePaths", includePath(excludePaths, path))])}
 				/>
 			</Section>
+			<ScheduleConditions config={snapshot.config} onApply={(next) => run(scheduleUpdates(next))} />
 			<Section title={t("settingsSources.indexing.refreshStatus")}>
 				<div className="settings-list">
 					<div className="settings-list-row settings-sync-row">
@@ -381,6 +416,12 @@ function lastAutoText(record: ScheduledRunRecord | null | undefined, now: number
  * (unsupported, install failed, another job also refreshes AutoRAG) or the
  * cadence while something is scheduled. Silent when everything is manual.
  */
+const PAUSE_KEYS = {
+	battery: "settingsSources.indexing.schedulePausedBattery",
+	"outside-window": "settingsSources.indexing.schedulePausedWindow",
+	"outside-day": "settingsSources.indexing.schedulePausedDay",
+} as const satisfies Record<ScheduledRunPauseReason, LocaleKey>;
+
 function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | null }): ReactElement | null {
 	useTranslation();
 	if (status === null) return null;
@@ -406,6 +447,14 @@ function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | nul
 			<Note key="active">
 				{t("settingsSources.indexing.scheduleActive", { minutes })}
 				{status.lastTickAt !== null ? ` ${t("settingsSources.indexing.scheduleLastCheck", { ago: agoText(status.lastTickAt, Date.now()) })}` : ` ${t("settingsSources.indexing.scheduleNever")}`}
+			</Note>,
+		);
+	}
+	// The job recorded that `refresh.schedule` held due work back; the status already drops it once the schedule is gone.
+	if (status.wanted && status.paused !== null) {
+		parts.push(
+			<Note key="paused">
+				{t(PAUSE_KEYS[status.paused.reason], { ago: agoText(status.paused.at, Date.now()) })}
 			</Note>,
 		);
 	}

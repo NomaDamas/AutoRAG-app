@@ -3083,6 +3083,14 @@
       "empty": "No data sources connected. Add one from Connected Apps.",
       "footer": "Only changed files and messages are re-read. An app connected for the first time is fully fetched.",
       "syncAll": "Update all now",
+      "scheduleTitle": "Automatic refresh conditions",
+      "scheduleAcOnlyName": "Only while plugged in",
+      "scheduleAcOnlyHint": "Skip automatic refreshes on battery power. Refresh now always works.",
+      "scheduleWindowName": "Only during set hours",
+      "scheduleWindowHint": "Automatic refreshes wait until this time of day. They run on the first check after it starts.",
+      "scheduleWindowStart": "Start time",
+      "scheduleWindowEnd": "End time",
+      "scheduleWindowSame": "The start and end time are the same.",
       "localRefreshName": "Refresh local folders",
       "localRefreshHint": "Re-read documents in the search folders to update the search index. Only changed documents are processed.",
       "localRefreshButton": "Refresh now",
@@ -3094,7 +3102,10 @@
       "scheduleConflicts": "This computer already has a scheduled task that refreshes Dazzi separately ({{list}}). To avoid processing the same folders twice, we recommend using only one.",
       "scheduleActive": "Even when the app is closed, it checks every {{minutes}} min and refreshes only the items that are due.",
       "scheduleLastCheck": "Last checked {{ago}}.",
-      "scheduleNever": "It has never run yet."
+      "scheduleNever": "It has never run yet.",
+      "schedulePausedBattery": "Waiting for power: your indexing schedule allows it only while plugged in (held back {{ago}}).",
+      "schedulePausedWindow": "Waiting for the allowed hours: your indexing schedule held the refresh back {{ago}}.",
+      "schedulePausedDay": "Waiting for an allowed day: your indexing schedule held the refresh back {{ago}}."
     },
     "apps": {
       "title": "Connected apps",
