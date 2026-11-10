@@ -128,7 +128,7 @@ export function ApprovalModeMenu({ mode, onChange, compact = false }: ApprovalMo
 				ref={triggerRef}
 				type="button"
 				className={cn(
-					"inline-flex h-26 flex-none items-center gap-4 rounded-full border-0 px-8 text-badge font-medium cursor-pointer transition-colors duration-(--dur-color) ease-out",
+					"inline-flex h-26 flex-none items-center gap-3 rounded-full border-0 px-8 text-badge font-medium leading-[16.5px] cursor-pointer transition-colors duration-(--dur-color) ease-out",
 					triggerTone(mode),
 				)}
 				aria-haspopup="menu"
