@@ -113,7 +113,7 @@ export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLa
 			placeholder={placeholder}
 			aria-label={ariaLabel}
 			className={cn(
-				"composer-field block w-full min-w-0 resize-none border-0 bg-transparent p-0 text-body leading-body text-ink-body outline-none [overflow-wrap:anywhere] placeholder:text-ink-muted",
+				"composer-field block w-full min-w-0 resize-none border-0 bg-transparent p-0 text-body leading-[21px] text-ink-body outline-none [overflow-wrap:anywhere] placeholder:text-ink-faint",
 			)}
 		/>
 	);

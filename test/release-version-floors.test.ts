@@ -26,9 +26,14 @@ describe("assertVersionFloor", () => {
 });
 
 describe("VERSION_FLOORS", () => {
-	it("keeps minsync at 0.6.0 or newer, the first release with SPLADE sparse retrieval and sparse-only indexes", () => {
-		expect(compareVersions("0.5.1", VERSION_FLOORS.minsync)).toBeLessThan(0);
-		expect(compareVersions("0.6.0", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
+	it("keeps minsync at 0.7.1 or newer: librarian 2.13.7 refuses anything older, so a bundle below it would not run", () => {
+		expect(compareVersions("0.7.0", VERSION_FLOORS.minsync)).toBeLessThan(0);
+		expect(compareVersions("0.7.1", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
+	});
+
+	it("keeps dupey at 0.2.0 or newer: librarian 2.13.7 refuses an older one, whose HWP and fallback hashes disagree with the stored ones", () => {
+		expect(compareVersions("0.1.2", VERSION_FLOORS.dupey)).toBeLessThan(0);
+		expect(compareVersions("0.2.0", VERSION_FLOORS.dupey)).toBeGreaterThanOrEqual(0);
 	});
 
 	it("keeps mailcrawl at 0.3.0+ for local mail archive indexing and lazykatok at 0.3.3+ for the embedding daemon", () => {

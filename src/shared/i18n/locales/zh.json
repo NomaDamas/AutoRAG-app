@@ -87,10 +87,6 @@
     "descending": "降序"
   },
   "sidebarSearch": {
-    "fileName": "文件名",
-    "content": "内容",
-    "fileNameHint": "在此{{machine}}全部范围内搜索文件名",
-    "contentHint": "使用 AI 搜索文件内容 ({{shortcut}})",
     "placeholder": "搜索…",
     "clearSearch": "清除搜索"
   },
@@ -102,6 +98,23 @@
     "thisMac": "这台 Mac",
     "thisComputer": "这台电脑",
     "itemsFound": "个项目"
+  },
+  "wholeSearch": {
+    "groups": "搜索结果分组",
+    "files": "文件名",
+    "content": "文档内容",
+    "pending": "正在搜索…",
+    "contentOff": "仅关键词模式下没有文档内容索引。",
+    "contentUnavailable": "文档索引尚未就绪。",
+    "contentError": "无法搜索文档内容。",
+    "noContentHits": "没有与 \"{{query}}\" 匹配的文档内容。",
+    "showInFolder": "在文件夹中显示",
+    "sourcePending": "正在搜索 {{source}}…",
+    "sourceError": "无法搜索 {{source}}：{{error}}",
+    "noSourceHits": "{{source}} 中没有与 \"{{query}}\" 匹配的内容。",
+    "openPage": "打开页面",
+    "askAi": "询问 AI 搜索",
+    "askAiHint": "用此搜索词开始 AI 搜索对话"
   },
   "tabs": {
     "close": "关闭标签页 ({{shortcut}})",
@@ -1377,7 +1390,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "搜索范围",
     "sidebar": "位置",
     "pathBar": "路径",
     "inspectorAside": "检查器",
@@ -1646,6 +1658,7 @@
       "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
       "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
+      "batchSkipped": "由于同步失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
       "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。",
       "preflightMissingKey": "嵌入器 {{id}} 需要 API 密钥,但未设置 {{env}}。请在建立索引前设置。",
       "preflightKeyEnvIgnored": "嵌入器 {{id}} 的 apiKeyEnv 指定为 {{configured}},但索引器只从 {{env}} 读取密钥,而 {{env}} 未设置。请把密钥放进 {{env}}。",

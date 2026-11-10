@@ -87,10 +87,6 @@
     "descending": "내림차순"
   },
   "sidebarSearch": {
-    "fileName": "파일 이름",
-    "content": "내용",
-    "fileNameHint": "이 {{machine}} 전체에서 파일 이름 검색",
-    "contentHint": "AI로 파일 내용 검색 ({{shortcut}})",
     "placeholder": "검색…",
     "clearSearch": "검색어 지우기"
   },
@@ -102,6 +98,23 @@
     "thisMac": "이 Mac",
     "thisComputer": "컴퓨터",
     "itemsFound": "개 항목 찾음"
+  },
+  "wholeSearch": {
+    "groups": "검색 결과 분류",
+    "files": "파일 이름",
+    "content": "문서 내용",
+    "pending": "검색 중…",
+    "contentOff": "키워드 전용 모드에서는 문서 내용 인덱스가 없습니다.",
+    "contentUnavailable": "문서 인덱스가 아직 준비되지 않았습니다.",
+    "contentError": "문서 내용을 검색하지 못했습니다.",
+    "noContentHits": "\"{{query}}\"와 일치하는 문서 내용이 없습니다.",
+    "showInFolder": "폴더에서 보기",
+    "sourcePending": "{{source}} 검색 중…",
+    "sourceError": "{{source}} 검색 실패: {{error}}",
+    "noSourceHits": "{{source}}에서 \"{{query}}\"와 일치하는 항목이 없습니다.",
+    "openPage": "페이지 열기",
+    "askAi": "AI 검색에 묻기",
+    "askAiHint": "이 검색어로 AI 검색 대화를 시작합니다"
   },
   "tabs": {
     "close": "탭 닫기 ({{shortcut}})",
@@ -289,7 +302,7 @@
     },
     "evidencePanel": {
       "emptyTitle": "답변의 근거가\n여기에 표시됩니다.",
-      "excerpts": "근거 내용 발췌",
+      "excerpts": "근거 내용",
       "openInBrowser": "브라우저에서 열기",
       "evidenceFolder": "근거 폴더",
       "evidenceFolderTooltip": "현재 대화의 근거 파일을 임시 폴더 탭으로 열기",
@@ -1377,7 +1390,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "검색 범위",
     "sidebar": "사이드바",
     "pathBar": "경로",
     "inspectorAside": "정보 창",
@@ -1646,6 +1658,7 @@
       "retried": "파일 시스템 오류({{code}})가 일시적으로 발생해 새로 고침을 {{retries}}번 다시 시도했습니다.",
       "filesLeftOut": "{{code}} 오류가 계속되는 파일 {{files}}개를 이번 새로 고침에서 제외했습니다. 다음 새로 고침에서 다시 시도합니다.",
       "parseKilled": "파일 {{timedOut}}개는 제한 시간을 넘겨, {{crashed}}개는 파서가 중단되어 건너뛰었습니다. 다음 새로 고침에서 다시 시도합니다.",
+      "batchSkipped": "동기화가 실패해 파일 {{files}}개가 이전 색인 상태로 남았습니다. 다음 새로 고침에서 다시 시도합니다.",
       "modelMissing": "이 컴퓨터용 임베딩 모델이 아직 내려받아지지 않아 색인을 건너뜁니다. 설정 → AI 모델 → 문서 이해 모델에서 다운로드해 주세요.",
       "preflightMissingKey": "임베더 {{id}}에는 API 키가 필요한데 {{env}}가 설정되어 있지 않습니다. 인덱싱 전에 설정해 주세요.",
       "preflightKeyEnvIgnored": "임베더 {{id}}의 apiKeyEnv가 {{configured}}로 지정되어 있지만, 인덱서는 키를 {{env}}에서만 읽고 {{env}}가 설정되어 있지 않습니다. 키를 {{env}}에 넣어 주세요.",

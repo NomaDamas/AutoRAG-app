@@ -123,6 +123,30 @@ describe("createAutoRagConfigService", () => {
 
 		expect(await readFile(fixture.configPath, "utf8")).toBe(before);
 	});
+	it("repairs a legacy `jev: false` on the next write instead of refusing every edit of the file", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-legacy-jev-"));
+		const fixture = await createFixture({ ...baseConfig(root), jev: false }, "autorag-config-legacy-jev-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		const snapshot = await service.patch([{ path: ["parserOptions", "maxTokens"], value: 8192 }]);
+
+		expect(snapshot.error).toBeNull();
+		const written = JSON.parse(await readFile(fixture.configPath, "utf8")) as Record<string, unknown>;
+		expect(written.jev).toEqual({ backend: "sllm" });
+		expect((written.parserOptions as Record<string, unknown>).maxTokens).toBe(8192);
+	});
+
+	it("lets the Jev role be set over a legacy `jev: false` and renames the retired Vercel backend", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-legacy-vercel-"));
+		const fixture = await createFixture({ ...baseConfig(root), jev: { backend: "vercel", model: "typesafe/jev-latest" } }, "autorag-config-legacy-vercel-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		const snapshot = await service.patch([{ path: ["rerank"], value: false }]);
+
+		expect(snapshot.error).toBeNull();
+		const written = JSON.parse(await readFile(fixture.configPath, "utf8")) as Record<string, unknown>;
+		expect(written.jev).toEqual({ backend: "vercel-ai-gateway" });
+	});
 
 	it("accepts a zero polling interval but rejects negatives and non-integers", async () => {
 		const root = await mkdtemp(join(tmpdir(), "autorag-config-polling-"));

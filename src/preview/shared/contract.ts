@@ -44,6 +44,8 @@ export const PREVIEW_CHANNELS = {
 	slides: "preview:slides",
 	/** Main -> preview window: a native document's OS thumbnail finished after the panel opened. */
 	thumbnail: "preview:thumbnail",
+	/** Main -> preview window: the OS finished decoding a picture the panel opened without (a TIFF). */
+	decoded: "preview:decoded",
 	/** Preview window -> main (invoke): creation date, location, and binary kind of the shown file. */
 	details: "preview:details",
 	/** Preview window -> main (invoke): SHA-256 of the shown file. */
@@ -116,6 +118,11 @@ export interface PreviewDocument {
 	 * still holds the package's 356px renders. False for every other document.
 	 */
 	readonly slidesRendering: boolean;
+	/**
+	 * True while the main process is still decoding the picture (a TIFF): `bytes` is null and the
+	 * panel shows a loading state until the {@link QuickLookDecoded} update lands.
+	 */
+	readonly decoding?: boolean;
 }
 
 /**
@@ -143,6 +150,17 @@ export interface QuickLookOffice {
 export interface QuickLookThumbnail {
 	readonly seq: number;
 	readonly url: string;
+}
+
+/**
+ * Main -> preview window: the decode of a document opened with `decoding: true` finished. `bytes` is
+ * the decoded PNG, the raw file for the page's own decoder, or null when the picture cannot be shown.
+ */
+export interface QuickLookDecoded {
+	readonly seq: number;
+	readonly mime: string;
+	readonly truncated: boolean;
+	readonly bytes: Uint8Array | null;
 }
 
 /**
@@ -424,6 +442,7 @@ export interface QuickLookWindowBridge {
 	onOffice(listener: (update: QuickLookOffice) => void): () => void;
 	onSlides(listener: (update: QuickLookSlides) => void): () => void;
 	onThumbnail(listener: (update: QuickLookThumbnail) => void): () => void;
+	onDecoded(listener: (update: QuickLookDecoded) => void): () => void;
 	ready(report: QuickLookReady): void;
 	zoomed(report: QuickLookZoomed): void;
 	request(action: QuickLookAction): Promise<void>;
@@ -464,6 +483,16 @@ export function isQuickLookOffice(value: unknown): value is QuickLookOffice {
 	return isRecord(value) && typeof value.seq === "number" && isOfficePage(value.office);
 }
 
+export function isQuickLookDecoded(value: unknown): value is QuickLookDecoded {
+	return (
+		isRecord(value) &&
+		typeof value.seq === "number" &&
+		typeof value.mime === "string" &&
+		typeof value.truncated === "boolean" &&
+		(value.bytes === null || value.bytes instanceof Uint8Array)
+	);
+}
+
 export function isQuickLookThumbnail(value: unknown): value is QuickLookThumbnail {
 	return isRecord(value) && typeof value.seq === "number" && typeof value.url === "string";
 }
@@ -494,6 +523,7 @@ export function isPreviewDocument(value: unknown): value is PreviewDocument {
 	if (value.native !== undefined && value.native !== null && !isNativePreview(value.native)) return false;
 	if (value.package !== undefined && typeof value.package !== "boolean") return false;
 	if (typeof value.slidesRendering !== "boolean") return false;
+	if (value.decoding !== undefined && typeof value.decoding !== "boolean") return false;
 	return value.pages === null || (Array.isArray(value.pages) && value.pages.every((page) => page instanceof Uint8Array));
 }
 

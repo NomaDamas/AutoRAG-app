@@ -2,6 +2,10 @@ import { access, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { MessageChannel } from "node:worker_threads";
+import { serveLibrarian } from "../src/fs-worker/librarian-serve";
+import { adaptNodePort } from "../src/fs-worker/thread-port";
+import { emptyIndexMapCounts } from "../src/shared/index-map-contract";
 import { createFsWorkerService, type FsWorkerService } from "../src/fs-worker/service";
 import type { DirListing, FsBatchResult, FsLocation } from "../src/shared/fs-contract";
 import { FS_WORKER_PUSH } from "../src/shared/fs-worker-protocol";
@@ -258,5 +262,98 @@ describe("fs worker service", () => {
 			[kept, "file", 2],
 		]);
 		expect(limits).toEqual([CONTENT_SEARCH_MAX_HITS, CONTENT_SEARCH_MAX_HITS]);
+	});
+
+	it("keeps file-name search and index ops off the thread running content and datasource searches", async () => {
+		const hitPath = join(root, "fast-hit.md");
+		await writeFile(hitPath, "fast");
+		const spawnedPorts: MessageChannel[] = [];
+		let threadCount = 0;
+		const searchThreads = new Set<number>();
+		const indexThreads = new Set<number>();
+		const neverSettles = new Promise<never>(() => {});
+		const worker = createFsWorkerService({
+			config: { userDataDir: join(root, "user-data") },
+			librarianThread: () => {
+				threadCount += 1;
+				const channel = new MessageChannel();
+				spawnedPorts.push(channel);
+				const id = threadCount;
+				serveLibrarian(adaptNodePort(channel.port2), {
+					services: () => ({
+						fileNameSearch: {
+							search: async () => {
+								indexThreads.add(id);
+								return [hitPath];
+							},
+							ensureDaemon: async () => {},
+							stop: async () => {},
+						},
+						contentSearch: {
+							search: () => {
+								searchThreads.add(id);
+								return neverSettles;
+							},
+						},
+						sourceSearch: {
+							datasources: async () => [{ id: "slack", type: "slack" }],
+							search: () => {
+								searchThreads.add(id);
+								return neverSettles;
+							},
+						},
+						scanDuplicates: async (dir) => ({ dir, files: [], families: [], errors: [] }),
+						indexStatus: {
+							indexStatus: async (paths) => {
+								indexThreads.add(id);
+								return paths.map((path) => ({ path, kind: "included" as const, excluded: false, toggleable: true, detail: "ok" }));
+							},
+							setIndexExcluded: async (path, excluded) => ({ path, kind: "included" as const, excluded, toggleable: true, detail: "ok" }),
+							indexMap: async () => ({ roots: [], nodes: [], totals: emptyIndexMapCounts(), truncated: false, folded: false }),
+						},
+					}),
+				});
+				return {
+					port: adaptNodePort(channel.port1),
+					onExit: () => {},
+					terminate: async () => {
+						channel.port1.close();
+						channel.port2.close();
+					},
+				};
+			},
+			host: {
+				shell: { trashItem: async () => {}, showItemInFolder: () => {}, openPath: async () => "", openExternal: async () => {} },
+				clipboard: { writeText: () => {}, writeFiles: async () => {} },
+				icons: { icons: async () => new Map(), preview: async () => null },
+			},
+			broadcast: () => {},
+			watchBackend: fakeWatcher(),
+			places: { ...places, list: async () => [{ name: "Root", path: root, section: "favorites", icon: "documents", available: true, scanned: true, ejectable: false }] },
+			versionFamilies: () => noFamilies,
+		});
+		service = worker;
+		const signal = new AbortController().signal;
+
+		// Start hung content + datasource searches first; index/filename ops must run on their own separate thread.
+		void worker.handlers.contentSearch(["query"], signal);
+		void worker.handlers.sourceSearch(["slack", "query"], signal);
+		const [statuses, hits] = await Promise.all([
+			worker.handlers.indexStatus([[hitPath]], signal) as Promise<readonly { detail: string }[]>,
+			worker.handlers.search(["fast-hit"], signal) as Promise<readonly { entry: { path: string } }[]>,
+		]);
+
+		expect(threadCount).toBe(2);
+		expect(searchThreads.size).toBe(1);
+		expect(indexThreads.size).toBe(1);
+		expect([...searchThreads][0]).not.toBe([...indexThreads][0]);
+		expect(statuses[0]?.detail).toBe("ok");
+		expect(hits.map((hit) => hit.entry.path)).toEqual([hitPath]);
+		await worker.dispose();
+		service = null;
+		for (const channel of spawnedPorts) {
+			channel.port1.close();
+			channel.port2.close();
+		}
 	});
 });
