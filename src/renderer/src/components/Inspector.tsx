@@ -375,7 +375,19 @@ function InfoHalf({
 							<div className="flex items-center gap-8">
 								<FileTile kind={fileKindOf(entry)} size={22} />
 								<div className="flex min-w-0 flex-1 flex-col gap-3">
-									<div className="preview-title text-meta font-medium text-ink leading-[16px] [overflow-wrap:anywhere]">{entry.name}</div>
+									{entry.kind === "folder" ? (
+										<div className="preview-title text-meta font-medium text-ink leading-[16px] [overflow-wrap:anywhere]">{entry.name}</div>
+									) : (
+										// The name opens the file, like 열기 (a folder's name stays text: the list is where a folder opens).
+										<button
+											type="button"
+											className="preview-title m-0 cursor-pointer border-0 bg-transparent p-0 text-left text-meta font-medium leading-[16px] text-ink [overflow-wrap:anywhere] transition-colors duration-(--dur-color) ease-out hover:text-accent-text"
+											title={t("inspector.actions.open")}
+											onClick={() => onAction({ kind: "open" }, null)}
+										>
+											{entry.name}
+										</button>
+									)}
 									<div className="preview-sub text-badge font-medium leading-[14px] text-ink-faint truncate">
 										{folderInView ? kindLabelOf(entry) : `${kindLabelOf(entry)} · ${dateLabelOf(entry)}`}
 									</div>

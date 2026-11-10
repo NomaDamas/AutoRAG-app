@@ -31,7 +31,7 @@ const pdf: FinderEntry = { name: "deck.pdf", path: "/work/deck.pdf", kind: "file
 const folder: FinderEntry = { name: "Reports", path: "/work/Reports", kind: "folder", ext: "", size: 0, mtimeMs: 1_700_000_000_000, birthtimeMs: 0 };
 
 function render(
-	handlers: { onTrash?: (entry: FinderEntry) => void; onToggleIndex?: (entry: FinderEntry) => void } = {},
+	handlers: { onTrash?: (entry: FinderEntry) => void; onToggleIndex?: (entry: FinderEntry) => void; onAction?: (target: unknown, anchor: unknown) => void } = {},
 	folderInView = false,
 	shown: FinderEntry = pdf,
 	indexStatus: IndexStatus | null = null,
@@ -48,7 +48,7 @@ function render(
 				onCopyPath={noop}
 				onAskAi={noop}
 				actionCapabilities={NO_CAPABILITIES}
-				onAction={noop}
+				onAction={handlers.onAction ?? noop}
 				loadOpenWithApplications={async () => []}
 				family={null}
 				onOpenMember={noop}
@@ -66,6 +66,22 @@ function render(
 
 const group = (): HTMLElement | null => host.querySelector('[role="toolbar"]');
 const names = (): string[] => [...(group()?.querySelectorAll("button") ?? [])].map((button) => button.getAttribute("aria-label") ?? "");
+
+describe("the inspector's file name", () => {
+	it("opens the file when clicked, and stays plain text for a folder", () => {
+		const onAction = vi.fn();
+		render({ onAction });
+		const title = host.querySelector<HTMLButtonElement>("button.preview-title");
+		expect(title?.textContent).toBe("deck.pdf");
+		expect(title?.getAttribute("title")).toBe("열기");
+		act(() => title?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(onAction).toHaveBeenCalledWith({ kind: "open" }, null);
+
+		render({ onAction }, false, folder);
+		expect(host.querySelector("button.preview-title")).toBeNull();
+		expect(host.querySelector(".preview-title")?.textContent).toBe("Reports");
+	});
+});
 
 describe("the inspector's file actions", () => {
 	it("are one row of icon buttons named by their tooltips, without Open or AI 요약", () => {
