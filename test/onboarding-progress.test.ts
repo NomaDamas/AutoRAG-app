@@ -24,6 +24,15 @@ describe("computeIndexingProgress", () => {
 		expect(done.remainingMinutes).toBe(0);
 	});
 
+	it("also counts what MinSync has committed while parsing carries on, never past what was parsed", () => {
+		const overlapped = computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 200, totalFiles: 400, minsyncFiles: 100 });
+		expect(overlapped.progress).toBe(30 + 8.75);
+		const ahead = computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 100, totalFiles: 400, minsyncFiles: 300 });
+		expect(ahead.progress).toBe(15 + 8.75);
+		const all = computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 400, totalFiles: 400, minsyncFiles: 400 });
+		expect(all.progress).toBe(95);
+	});
+
 	it("shows the floor estimate before the pre-scan reports a total", () => {
 		expect(computeIndexingProgress({ ...base, phase: "parsed", processedFiles: 0, totalFiles: 0 })).toEqual({ progress: 0, remainingMinutes: 8 });
 		expect(computeIndexingProgress({ ...base, phase: null, processedFiles: 0, totalFiles: 0 })).toEqual({ progress: 0, remainingMinutes: 8 });

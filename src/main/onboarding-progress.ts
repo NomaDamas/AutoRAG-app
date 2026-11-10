@@ -54,8 +54,12 @@ export function computeIndexingProgress(input: IndexingProgressInput): IndexingP
 		switch (input.phase) {
 			case "parsed": {
 				if (totalFiles === 0) return { progress: 0, remainingMinutes: NONE_MIN_MINUTES };
-				const measured = clamp01(processedFiles / totalFiles) * 60;
-				return { progress: measured, remainingMinutes: Math.max(0, Math.ceil((totalFiles - processedFiles) / NONE_FILES_PER_MINUTE)) };
+				// MinSync indexes the batches already parsed while parsing carries on, so both measures move here: the
+				// bar is the read share plus the share of those files MinSync has committed, and it can only be as far
+				// as the files parsed so far.
+				const read = clamp01(processedFiles / totalFiles) * 60;
+				const indexed = clamp01(Math.min(minsyncFiles, processedFiles) / totalFiles) * 35;
+				return { progress: read + indexed, remainingMinutes: Math.max(0, Math.ceil((totalFiles - processedFiles) / NONE_FILES_PER_MINUTE)) };
 			}
 			case "minsync": {
 				// MinSync's own committed files are the exact measure; before any is committed, elapsed time against the rate is the best estimate.

@@ -194,7 +194,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
-  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0). MinSync replaced its BM25 index with
+  - *Local search ranks with SPLADE* (librarian on MinSync 0.7.3). MinSync replaced its BM25 index with
     learned-sparse retrieval (`nlpai-lab/KURE-Sparse-nano`), which matches Korean inflected forms
     (`인증서를` for `인증서`) with no tokenizer library, so Kiwi is gone. The installer carries the model and
     `bundled-sparse-model.ts` seeds it into MinSync's cache at startup. The first refresh after the upgrade

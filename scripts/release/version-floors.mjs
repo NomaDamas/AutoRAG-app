@@ -2,23 +2,23 @@
  * Hard version floors for the tools the installer bundles. A resolved version below
  * its floor fails the stage instead of shipping a tool that lacks what the app relies on.
  *
- *  - `minsync` 0.6.0: the librarian queries MinSync's SPLADE sparse retrieval (`--mode sparse`, which replaced
- *    BM25) and builds sparse-only indexes (`init --embedder none`), on top of 0.5.1's durable stage protocol v2,
- *    `--progress jsonl`, and preflight exit codes. The librarian refuses an older `minsync` outright.
+ *  - `minsync` 0.7.1: the librarian refuses an older build. It queries MinSync's SPLADE sparse retrieval
+ *    (`--mode sparse`, which replaced BM25), builds sparse-only indexes (`init --embedder none`), and relies on the
+ *    durable stage protocol v2 and `--progress jsonl`; 0.7.1 is the first the librarian accepts.
  *  - `@nomadamas/mailcrawl` 0.3.0: librarian 2.13.2 requires mailcrawl 0.3.0's `--source files`
  *    (`--path`) local archive indexing (which retires `mail-export`), on top of the daemon's
  *    OpenAI embedding route.
  *  - `lazykatok` 0.3.3 gains the OpenAI-compatible embedder, the same route.
  */
 export const VERSION_FLOORS = {
-	minsync: "0.6.0",
+	minsync: "0.7.1",
 	"@nomadamas/mailcrawl": "0.3.0",
 	lazykatok: "0.3.3",
 };
 
 /** What each floor guarantees, for the error a build prints when it resolves something older. */
 const FLOOR_REASONS = {
-	minsync: "the librarian queries MinSync 0.6.0's SPLADE sparse retrieval (`--mode sparse`, replacing BM25) and builds sparse-only indexes (`init --embedder none`), on top of the durable stage protocol v2",
+	minsync: "the librarian (2.13.8) refuses an older MinSync; it queries SPLADE sparse retrieval (`--mode sparse`), builds sparse-only indexes (`init --embedder none`), and needs the durable stage protocol v2",
 	"@nomadamas/mailcrawl": "librarian 2.13.2 requires mailcrawl 0.3.0's `--source files` local archive support on top of the `minsync serve` daemon's OpenAI route",
 	lazykatok: "it is the first release that can embed through the `minsync serve` daemon's OpenAI route",
 };

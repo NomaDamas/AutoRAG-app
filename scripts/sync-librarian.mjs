@@ -19,9 +19,13 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // stderr is UTF-8 instead of CP949 mojibake (#2087), dupey skips cloud and network roots (#2085), and the CLI honors
 // the config file's webSearch section (#2083). The loop guard of file automations states the loop invariant instead of
 // banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
+// v2.13.8 adds, on top of that, MinSync 0.7.3 and pipelined indexing: the first committed batch starts a MinSync sync while
+// parsing carries on and each later sync covers every batch committed meanwhile (AutoRAG#2106), so the first documents are
+// searchable long before the last. It also bounds cloud downloads per batch (#2098), reranks the union of MinSync dense and
+// SPLADE candidates (#2103), and refuses a `minsync` older than 0.7.1.
 // The decision model is Jev or the small chat LLM: `jev.backend: "sllm"` decides with `jev.sllm.model` and never calls Jev,
 // and `jev.fallback: false` fails a session instead of moving to it (AutoRAG#2091).
-const librarianRef = "v2.13.5";
+const librarianRef = "v2.13.8";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -66,7 +66,7 @@ for (const folder of ["Desktop", "Documents", "Downloads", "Music", "Movies", "P
 mkdirSync(join(WORK, "workspace"), { recursive: true });
 mkdirSync(join(AUTORAG_HOME, "bin"), { recursive: true });
 const minsyncStub = join(AUTORAG_HOME, "bin", "minsync");
-writeFileSync(minsyncStub, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "minsync 0.6.0"; exit 0; fi\nexit 0\n');
+writeFileSync(minsyncStub, '#!/bin/sh\nif [ "$1" = "--version" ]; then echo "minsync 0.7.3"; exit 0; fi\nexit 0\n');
 chmodSync(minsyncStub, 0o755);
 
 const service = createServer((req, res) => {
