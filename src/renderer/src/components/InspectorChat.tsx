@@ -300,7 +300,7 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 	const placeholder = t(askPlaceholder(targets, "inspector.chat.placeholderAny"));
 	return (
 		// With nothing selected the dock is the panel's foot on its own: no divider above it, and the chat footer's padding.
-		<div className={cn("inspector-chat-dock flex flex-col gap-4", targets.length === 0 ? "px-8 pt-8 pb-10" : "px-12 pb-12")}>
+		<div className={cn("inspector-chat-dock flex flex-col gap-4", targets.length === 0 ? "px-12 pt-12 pb-12" : "px-12 pb-12")}>
 			{targets.length === 0 ? null : <div className="mb-4 h-px bg-divider" aria-hidden="true" />}
 			{chat !== null ? (
 				<div className="flex">
@@ -681,7 +681,7 @@ export function InspectorChatView({
 					/>
 				))}
 			</div>
-			<div className="flex-none px-12 pt-8 pb-10">
+			<div className="flex-none px-12 pt-12 pb-12">
 				<Composer
 					pending={pending}
 					placeholder={t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
