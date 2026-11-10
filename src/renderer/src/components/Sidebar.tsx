@@ -14,7 +14,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { SidebarUpdateButton } from "./SidebarUpdateButton";
 import { StatusDot } from "./primitives/StatusDot";
 import { SidebarActivityQueue } from "./SidebarActivityQueue";
-import { SidebarSearch, type SearchMode } from "./SidebarSearch";
+import { SidebarSearch } from "./SidebarSearch";
 
 /** Shared shape of a sidebar row (nav item and the footer settings button): 28px rows, 12px labels. */
 const ITEM_CLASS =
@@ -108,7 +108,7 @@ export function Sidebar({
 	readonly searchFocused: boolean;
 	readonly onSearchFocus: () => void;
 	readonly onSearchBlur: () => void;
-	readonly onSubmitSearch: (mode: SearchMode, text: string) => void;
+	readonly onSubmitSearch: (text: string) => void;
 	/** The AI Search item takes Finder rows and OS files as chat attachments. */
 	readonly aiSearchDrop: {
 		readonly hovered: boolean;

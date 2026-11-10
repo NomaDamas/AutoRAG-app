@@ -5,10 +5,11 @@ import { fileURLToPath } from "node:url";
  * Verifies the relocation and the new behavior against the built app:
  *   1. the field sits at the top of the sidebar, above the nav groups;
  *   2. the toolbar no longer holds a search field;
- *   3. focusing shows the 파일 이름 / 내용 chips, 파일 이름 active;
+ *   3. focusing adds neither chips nor helper copy below the field;
  *   4. Enter commits a filename search over the whole machine (scope bar, rows);
  *   5. the scope bar's folder pill narrows the commit to the folder in view;
- *   6. 내용 opens a new AI Search tab running the real content search;
+ *   6. the whole search shows its group tabs (file names, document content), the content tab its own panel, and
+ *      "Ask AI Search" hands the same query to a new AI Search tab;
  *   7. ⌘F focuses the sidebar field;
  *   8. the toolbar's right cluster holds Share only, and the inspector hides from its own head.
  *
@@ -54,7 +55,7 @@ try {
 	await page.waitForSelector(".sidebar__item", { timeout: 30000 });
 
 	const search = page.locator(".side-search input");
-	const chip = (label) => page.locator(".scope-chip", { hasText: new RegExp(`^${label}$`) });
+	const groupTab = (key) => page.locator(`.search-groups [role="tab"][data-group="${key}"]`);
 
 	// 1. Position: the field is above the first nav group.
 	const fieldBox = await search.boundingBox();
@@ -73,14 +74,11 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "01-sidebar-resting.png") });
 
-	// 3. Focus reveals the chips, File Name active by default.
+	// 3. Focusing keeps the field compact: no scope chips or helper copy below it.
 	await search.click();
-	await chip("File Name").waitFor({ timeout: 5000 });
-	const chipLabels = await page.locator(".scope-chip").allInnerTexts();
-	check("focusing shows the two scope chips", JSON.stringify(chipLabels) === JSON.stringify(["File Name", "Content"]), JSON.stringify(chipLabels));
-	check("File Name is the default active chip", (await chip("File Name").getAttribute("aria-pressed")) === "true");
-	await page.screenshot({ path: join(EVIDENCE, "02-chips-focused.png") });
-	await page.locator(".side-search").screenshot({ path: join(EVIDENCE, "02-chips-element.png") });
+	check("focusing shows neither scope chips nor helper copy", (await page.locator(".scope-chip, .search-scopes, .search-hint").count()) === 0, `count=${await page.locator(".scope-chip, .search-scopes, .search-hint").count()}`);
+	await page.screenshot({ path: join(EVIDENCE, "02-search-focused.png") });
+	await page.locator(".sidebar-search").screenshot({ path: join(EVIDENCE, "02-search-element.png") });
 
 	// 4. Enter commits a filename search: scope bar + filtered rows.
 	await search.fill("notes");
@@ -111,18 +109,31 @@ try {
 	check("the folder pill narrows the commit to the folder in view", scopedButton !== ALL_LABEL, scopedButton);
 	await page.screenshot({ path: join(EVIDENCE, "04-folder-scope.png") });
 
-	// 6. 내용 opens a new AI Search tab running the real content search.
-	// Clicking the scope bar's folder pill blurred the field, which hides the
-	// chips; refocus it the way a user would before picking the 내용 chip.
-	await search.click();
-	await chip("Content").click();
+	// 6. The whole search: group tabs, the content panel, and the AI Search hand-off.
 	await search.fill("approval notes");
 	await search.press("Enter");
+	await groupTab("files").waitFor({ timeout: 10000 });
+	const tabs = await page.locator('.search-groups [role="tab"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-group")));
+	check("the whole search shows the file-name and content group tabs first", tabs[0] === "files" && tabs[1] === "content", JSON.stringify(tabs));
+	check("the file-name tab is selected by default", (await groupTab("files").getAttribute("aria-selected")) === "true");
+	await groupTab("content").click();
+	await page.waitForFunction(() => document.querySelector(".search-results, .search-note:not(:has(.animate-spin))") !== null, null, { timeout: 30000 });
+	check("the content tab swaps the Finder list for its own panel", (await page.locator('[role="row"] .row__label').count()) === 0 && (await page.locator(".scope").count()) === 0);
+	await page.mouse.move(2, 2);
+	await sleep(300);
+	await page.screenshot({ path: join(EVIDENCE, "05-content-group.png") });
+	// ← on the focused group tab walks back to the file names, like any tab list.
+	await groupTab("content").focus();
+	await page.keyboard.press("ArrowLeft");
+	await page.waitForFunction(() => document.querySelector('.search-groups [data-group="files"]')?.getAttribute("aria-selected") === "true", null, { timeout: 5000 }).catch(() => undefined);
+	check("← moves the selection back to the file-name tab", (await groupTab("files").getAttribute("aria-selected")) === "true");
+	check("going back to the file names restores the scope bar", (await page.locator(".scope").count()) === 1);
+	await page.locator(".search-ask").click();
 	await page.locator(".user-msg .user-bubble-wrap").first().waitFor({ timeout: 10000 });
 	const bubble = await page.locator(".user-msg .bubble").first().innerText();
-	check("Content opens an AI Search tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
+	check("Ask AI Search opens an AI Search tab and sends the query as a user message", bubble.trim() === "approval notes", bubble.trim());
 	await sleep(400);
-	await page.screenshot({ path: join(EVIDENCE, "05-content-search.png") });
+	await page.screenshot({ path: join(EVIDENCE, "06-ask-ai.png") });
 
 	// 7. ⌘F focuses the sidebar field from anywhere.
 	await page.mouse.click(700, 300);

@@ -98,6 +98,8 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 		}),
 		indexMap: async () => ({ roots: [], nodes: [], totals: emptyIndexMapCounts(), truncated: false, folded: false }),
 		contentSearch: async () => ({ state: "ok", hits: [] }),
+		searchDatasources: async () => [],
+		sourceSearch: async () => ({ state: "ok", hits: [], error: null }),
 	};
 }
 

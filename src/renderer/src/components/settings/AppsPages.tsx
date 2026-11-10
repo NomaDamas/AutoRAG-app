@@ -27,7 +27,7 @@ import { datasourceSupported } from "../../../../shared/messenger-platform";
 import { t, type LocaleKey } from "../../../../shared/i18n/core";
 import { excludePath, includePath } from "../../../../shared/index-scope-edit";
 import { hostPlatform } from "../../lib/shortcuts";
-import { ConnectorFieldInput, TEMPLATE_BY_ID, type FieldSpec } from "./datasourceTemplates";
+import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
@@ -57,10 +57,6 @@ const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readon
 	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
 ];
 
-function templateLabel(type: string): string {
-	return TEMPLATE_BY_ID[type]?.label ?? type;
-}
-
 function sourceAliases(snapshot: AutoRagConfigSnapshot): readonly { readonly alias: string; readonly type: string }[] {
 	const datasources = asRecord(snapshot.config.datasources);
 	if (datasources === null) return [];
@@ -68,12 +64,6 @@ function sourceAliases(snapshot: AutoRagConfigSnapshot): readonly { readonly ali
 		const record = asRecord(raw);
 		return { alias, type: record !== null ? stringOf(record.type) || alias : alias };
 	});
-}
-
-/** The connection's kind ("Slack"); the alias only joins it when it tells two connections of one kind apart. */
-function sourceTitle(row: Pick<DataSourceRow, "id" | "type">): string {
-	const label = templateLabel(row.type);
-	return row.id === row.type ? label : `${label} · ${row.id}`;
 }
 
 /** A dot tone for a datasource row: syncing, blocked, paused, or healthy. */

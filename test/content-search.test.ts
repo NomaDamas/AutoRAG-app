@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { RetrievalResult, RetrievalSelection } from "@autorag/librarian";
 import { contentSnippet, createContentSearch, type ContentSearchRuntime } from "../src/main/content-search";
+import { createSearchRelevanceGate } from "../src/main/search-relevance-gate";
 
 function chunk(source: string, content: string, score: number, lineNumber?: number): RetrievalResult {
 	return { id: `${source}:${score}`, content, source, score, metadata: lineNumber === undefined ? {} : { lineNumber } };
@@ -89,6 +90,39 @@ describe("content search", () => {
 		setRaw({ searchPaths: ["/other"] });
 		await search.search("c");
 		expect(recorded.opened).toBe(2);
+	});
+
+	it("keeps lexical/edit-distance hits automatically and gates semantic-only hits through Jev >= 0.5", async () => {
+		const gate = createSearchRelevanceGate({
+			resolveBackends: async () => ({
+				primary: {
+					name: "jev",
+					judge: async (req) => ({
+						model: "jev-1.13",
+						answers: req.questions.map((q) => ({ answer: q.question.includes("airline e-ticket") ? 0.82 : 0.08 })),
+					}),
+				},
+			}),
+			coalesceMs: 0,
+		});
+		const recorded: Recorded = { queries: [], opened: 0 };
+		const search = createContentSearch({
+			loadConfig: async () => ({ raw: {}, key: "k" }),
+			open: () =>
+				runtime(recorded, {
+					results: [
+						chunk("/d/noise.md", "completely unrelated build output", 0.99),
+						chunk("/d/ticket.md", "airline e-ticket boarding confirmation", 0.85),
+						chunk("/d/exact.md", "비행기 예약 확인서 사본", 0.7),
+					],
+				}),
+			relevanceGate: gate,
+		});
+
+		const outcome = await search.search("비행기예약확인증");
+
+		expect(outcome.state).toBe("ok");
+		expect(outcome.hits.map((hit) => hit.path)).toEqual(["/d/exact.md", "/d/ticket.md"]);
 	});
 });
 

@@ -14,6 +14,9 @@ export const LIBRARIAN_OP = {
 	fileNameSearch: "fileNameSearch",
 	/** Model-free search of the local document index (`src/main/content-search.ts`). */
 	contentSearch: "contentSearch",
+	/** The connected datasources and a model-free search of one of them (`src/main/source-search.ts`). */
+	searchDatasources: "searchDatasources",
+	sourceSearch: "sourceSearch",
 	fileNameEnsureDaemon: "fileNameEnsureDaemon",
 	fileNameStop: "fileNameStop",
 	scanDuplicates: "scanDuplicates",

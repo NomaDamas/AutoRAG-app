@@ -87,10 +87,6 @@
     "descending": "Descending"
   },
   "sidebarSearch": {
-    "fileName": "File Name",
-    "content": "Content",
-    "fileNameHint": "Search file names across this {{machine}}",
-    "contentHint": "Search file contents with AI ({{shortcut}})",
     "placeholder": "Search…",
     "clearSearch": "Clear search"
   },
@@ -102,6 +98,23 @@
     "thisMac": "This Mac",
     "thisComputer": "This Computer",
     "itemsFound": "items found"
+  },
+  "wholeSearch": {
+    "groups": "Search result groups",
+    "files": "File Names",
+    "content": "Document Content",
+    "pending": "Searching…",
+    "contentOff": "Keyword-only mode has no document content index.",
+    "contentUnavailable": "The document index isn't ready yet.",
+    "contentError": "Couldn't search document content.",
+    "noContentHits": "No document content matches \"{{query}}\".",
+    "showInFolder": "Show in Folder",
+    "sourcePending": "Searching {{source}}…",
+    "sourceError": "Couldn't search {{source}}: {{error}}",
+    "noSourceHits": "Nothing in {{source}} matches \"{{query}}\".",
+    "openPage": "Open Page",
+    "askAi": "Ask AI Search",
+    "askAiHint": "Start an AI Search chat with this query"
   },
   "tabs": {
     "close": "Close tab ({{shortcut}})",
@@ -1343,7 +1356,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "Search scope",
     "sidebar": "Places",
     "pathBar": "Path",
     "inspectorAside": "Inspector",

@@ -87,10 +87,6 @@
     "descending": "내림차순"
   },
   "sidebarSearch": {
-    "fileName": "파일 이름",
-    "content": "내용",
-    "fileNameHint": "이 {{machine}} 전체에서 파일 이름 검색",
-    "contentHint": "AI로 파일 내용 검색 ({{shortcut}})",
     "placeholder": "검색…",
     "clearSearch": "검색어 지우기"
   },
@@ -102,6 +98,23 @@
     "thisMac": "이 Mac",
     "thisComputer": "컴퓨터",
     "itemsFound": "개 항목 찾음"
+  },
+  "wholeSearch": {
+    "groups": "검색 결과 분류",
+    "files": "파일 이름",
+    "content": "문서 내용",
+    "pending": "검색 중…",
+    "contentOff": "키워드 전용 모드에서는 문서 내용 인덱스가 없습니다.",
+    "contentUnavailable": "문서 인덱스가 아직 준비되지 않았습니다.",
+    "contentError": "문서 내용을 검색하지 못했습니다.",
+    "noContentHits": "\"{{query}}\"와 일치하는 문서 내용이 없습니다.",
+    "showInFolder": "폴더에서 보기",
+    "sourcePending": "{{source}} 검색 중…",
+    "sourceError": "{{source}} 검색 실패: {{error}}",
+    "noSourceHits": "{{source}}에서 \"{{query}}\"와 일치하는 항목이 없습니다.",
+    "openPage": "페이지 열기",
+    "askAi": "AI 검색에 묻기",
+    "askAiHint": "이 검색어로 AI 검색 대화를 시작합니다"
   },
   "tabs": {
     "close": "탭 닫기 ({{shortcut}})",
@@ -1343,7 +1356,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "검색 범위",
     "sidebar": "사이드바",
     "pathBar": "경로",
     "inspectorAside": "정보 창",

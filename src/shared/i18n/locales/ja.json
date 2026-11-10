@@ -87,10 +87,6 @@
     "descending": "降順"
   },
   "sidebarSearch": {
-    "fileName": "ファイル名",
-    "content": "コンテンツ",
-    "fileNameHint": "この{{machine}}全体でファイル名を検索",
-    "contentHint": "AIでファイル内容を検索 ({{shortcut}})",
     "placeholder": "検索…",
     "clearSearch": "検索をクリア"
   },
@@ -102,6 +98,23 @@
     "thisMac": "このMac",
     "thisComputer": "このPC",
     "itemsFound": "個の項目が見つかりました"
+  },
+  "wholeSearch": {
+    "groups": "検索結果のグループ",
+    "files": "ファイル名",
+    "content": "文書の内容",
+    "pending": "検索中…",
+    "contentOff": "キーワード専用モードでは文書内容のインデックスがありません。",
+    "contentUnavailable": "文書インデックスはまだ準備できていません。",
+    "contentError": "文書の内容を検索できませんでした。",
+    "noContentHits": "\"{{query}}\" に一致する文書の内容はありません。",
+    "showInFolder": "フォルダで表示",
+    "sourcePending": "{{source}} を検索中…",
+    "sourceError": "{{source}} を検索できませんでした: {{error}}",
+    "noSourceHits": "{{source}} に \"{{query}}\" と一致する項目はありません。",
+    "openPage": "ページを開く",
+    "askAi": "AI検索に聞く",
+    "askAiHint": "この検索語でAI検索のチャットを始めます"
   },
   "tabs": {
     "close": "タブを閉じる ({{shortcut}})",
@@ -1343,7 +1356,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "検索範囲",
     "sidebar": "場所",
     "pathBar": "パス",
     "inspectorAside": "インスペクタ",
