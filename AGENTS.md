@@ -43,7 +43,10 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.7:
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.8:
+`refresh.schedule` limits background indexing to AC power, local time windows, and weekdays (`checkIndexSchedule` from
+`@autorag/librarian/core` is the gate for a host with its own scheduler, such as the app's OS job); the agent's exact `calculator` tool; the
+record cut that spreads search hits across documents, on by default (`limits.recordCut`). v2.13.7:
 MinSync 0.7.1 or newer is required and a `minsync` older than that is refused, dupey 0.2.0 or newer is required, and the refresh syncs MinSync
 alongside parsing, so the progress screens show both stages running at once; a sync that fails leaves one warning per file, which the app
 folds into one counted `minsync-batch-skipped`. Beneath it: SPLADE sparse retrieval on MinSync 0.6.0, where `minSync.embedder.id: "none"` builds a
