@@ -681,7 +681,7 @@ export function InspectorChatView({
 					/>
 				))}
 			</div>
-			<div className="flex-none px-8 pt-8 pb-10">
+			<div className="flex-none px-12 pt-8 pb-10">
 				<Composer
 					pending={pending}
 					placeholder={t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
