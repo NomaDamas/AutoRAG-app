@@ -63,13 +63,14 @@ import { AutomationRulesSection } from "./AutomationRulesSection";
 import { EvidenceExcerpt, InlineWithImages } from "./EvidenceBlocks";
 import {
 	CloseIcon,
-	CompressIcon,
+	ZipIcon,
 	CopyIcon,
 	DatabaseIcon,
 	ExtractIcon,
 	EyeIcon,
 	FolderGlyph,
-	ImageEditIcon,
+	ImageConvertIcon,
+	ImageResizeIcon,
 	LinkIcon,
 	OpenIcon,
 	OpenWithIcon,
@@ -171,11 +172,12 @@ const HEAD_BUTTON =
 const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: number }) => ReactElement>> = {
 	open: OpenIcon,
 	openWith: OpenWithIcon,
-	compress: CompressIcon,
+	compress: ZipIcon,
 	extract: ExtractIcon,
 	share: ShareIcon,
 	askAi: SparklesIcon,
-	image: ImageEditIcon,
+	imageConvert: ImageConvertIcon,
+	imageResize: ImageResizeIcon,
 	video: VideoConvertIcon,
 	reduce: ReduceSizeIcon,
 };
@@ -437,7 +439,7 @@ function InfoSectionCard({
 					</button>
 				) : null}
 			</div>
-			<dl className="m-0 rounded-12 border border-divider bg-window px-14 py-4">
+			<dl className="m-0 flex flex-col gap-4">
 				{shown.map((row) => (
 					<InfoRow key={row.label} label={row.label} value={row.value} onCopy={row.copyable === true ? () => onCopy(row.value) : undefined} />
 				))}
@@ -748,7 +750,8 @@ function actionLabel(t: (key: string, fallback: string) => string, id: string, f
 		case "extract": return t("inspector.actions.extract", fallback);
 		case "share": return t("inspector.actions.share", fallback);
 		case "askAi": return t("inspector.actions.askAi", fallback);
-		case "imageEdit": return t("inspector.actions.imageEdit", fallback);
+		case "imageConvert": return t("inspector.actions.imageConvert", fallback);
+		case "imageResize": return t("inspector.actions.imageResize", fallback);
 		case "videoConvert": return t("inspector.actions.videoConvert", fallback);
 		case "reduceSize": return t("inspector.actions.reduceSize", fallback);
 		default: return fallback;
@@ -756,7 +759,7 @@ function actionLabel(t: (key: string, fallback: string) => string, id: string, f
 }
 
 /**
- * Running a suggested action: a `menu` action (`이미지 편집`, `동영상 변환`) and "다른 앱으로 열기" open their
+ * Running a suggested action: a `menu` action (`확장자 변환`, `해상도 줄이기`, `동영상 변환`, `압축`) and "다른 앱으로 열기" open their
  * variants anchored to the clicked button; a flat action runs at once. Returns the menu to render.
  */
 function useActionRunner({

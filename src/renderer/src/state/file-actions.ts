@@ -23,7 +23,7 @@ import type {
 import { archiveFormatOf } from "../../../shared/archive-formats";
 import { extensionOfName } from "../../../shared/size-reduction";
 
-export type FileActionIcon = "open" | "openWith" | "compress" | "extract" | "share" | "askAi" | "image" | "video" | "reduce";
+export type FileActionIcon = "open" | "openWith" | "compress" | "extract" | "share" | "askAi" | "imageConvert" | "imageResize" | "video" | "reduce";
 
 /** Where a click leads. `request` is the work main performs. */
 export type FileActionTarget =
@@ -113,7 +113,8 @@ function isVideo(name: string): boolean {
 	return VIDEO_EXTENSIONS.includes(fileExtension(name));
 }
 
-function imageItems(name: string, capabilities: ActionCapabilities): readonly FileActionItem[] {
+/** 확장자 변환: every other format the machine can write. */
+function imageConvertItems(name: string, capabilities: ActionCapabilities): readonly FileActionItem[] {
 	const source = imageFormatOfName(name);
 	const items: FileActionItem[] = [];
 	for (const format of capabilities.imageFormats) {
@@ -124,6 +125,13 @@ function imageItems(name: string, capabilities: ActionCapabilities): readonly Fi
 			target: { kind: "request", request: { kind: "convertImage", format } },
 		});
 	}
+	return items;
+}
+
+/** 해상도 줄이기: the longest-edge presets. */
+function imageResizeItems(name: string, capabilities: ActionCapabilities): readonly FileActionItem[] {
+	const source = imageFormatOfName(name);
+	const items: FileActionItem[] = [];
 	// Resizing rewrites the file's own format, so it needs the source format to
 	// be one the engine can encode (WebP only arrives with ffmpeg, and then only
 	// as a conversion target). GIF is excluded: both engines resize one frame,
@@ -263,9 +271,13 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 		});
 	}
 	if (isImage(subject.name)) {
-		const items = imageItems(subject.name, capabilities);
-		if (items.length > 0) {
-			actions.push({ kind: "menu", id: "imageEdit", label: t("inspector.actions.imageEdit"), icon: "image", items });
+		const convert = imageConvertItems(subject.name, capabilities);
+		if (convert.length > 0) {
+			actions.push({ kind: "menu", id: "imageConvert", label: t("inspector.actions.imageConvert"), icon: "imageConvert", items: convert });
+		}
+		const resize = imageResizeItems(subject.name, capabilities);
+		if (resize.length > 0) {
+			actions.push({ kind: "menu", id: "imageResize", label: t("inspector.actions.imageResize"), icon: "imageResize", items: resize });
 		}
 	}
 	if (isVideo(subject.name)) {
@@ -284,6 +296,8 @@ export function suggestedActions(subject: ActionSubject, capabilities: ActionCap
 			target: { kind: "request", request: { kind: "reduceSize" } },
 		});
 	}
+	// A single file zips (or 7z's) on its own too; a folder does not (Figma 231:2462, 234:5009).
+	if (capabilities.archive) actions.push(compressAction());
 	if (capabilities.share) {
 		actions.push({ kind: "action", id: "share", label: t("inspector.actions.share"), icon: "share", target: { kind: "share" } });
 	}

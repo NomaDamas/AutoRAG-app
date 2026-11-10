@@ -29,7 +29,7 @@ const deck: ChatAttachment = { kind: "file", id: "/work/deck.pdf", name: "deck.p
 
 const tab: InspectorChatTab = {
 	mode: "chat",
-	expired: false,
+	seenAt: 0,
 	dismissed: [],
 	chat: {
 		chatId: "chat-1",
@@ -65,6 +65,7 @@ function render(pending: readonly ChatAttachment[]): void {
 				onBack={noop}
 				onNewChat={noop}
 				onExpand={noop}
+				onOpenChat={noop}
 				onDismiss={noop}
 				onReveal={noop}
 				onPreview={noop}
@@ -80,16 +81,57 @@ describe("the inspector chat view", () => {
 		expect(host.querySelector(".inspector-chat-att")?.textContent).toContain("deck.pdf");
 	});
 
-	it("opens a source to its excerpt with the cited phrase marked, and 파일 찾기 / 파일 열기", () => {
+	it("lists no sources under the answer; hovering a citation number shows its source with 파일 위치로 이동 / 미리보기", () => {
 		render([]);
-		const head = host.querySelector<HTMLButtonElement>("button[aria-expanded]");
-		act(() => head?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		const marked = host.querySelector(".text-accent-text.font-medium");
+		expect(host.querySelector(".inspector-chat-source")).toBeNull();
+		const cite = host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
+		expect(cite?.textContent).toBe("1");
+		act(() => cite?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		const card = host.querySelector(".inspector-chat-source");
+		expect(card?.textContent).toContain("deck.pdf");
+		const marked = card?.querySelector(".text-accent-text.font-medium");
 		expect(marked?.textContent).toBe("곡선으로 재해석");
 		expect(marked?.parentElement?.textContent).toBe("컨셉 — 곡선으로 재해석하는 것이 목표");
-		const labels = [...host.querySelectorAll("button")].map((button) => button.textContent);
-		expect(labels).toContain("파일 찾기");
-		expect(labels).toContain("파일 열기");
+		expect([...(card?.querySelectorAll("button") ?? [])].map((button) => button.textContent)).toEqual(["파일 위치로 이동", "미리보기"]);
+	});
+
+	it("titles the chat with the selection, and offers 새 대화, AI 검색 탭에서 열기 and × (back to the Info view)", () => {
+		const backs: string[] = [];
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={tab}
+					targetName="deck.pdf"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					onAsk={() => true}
+					onStop={noop}
+					onBack={() => backs.push("back")}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+		const title = host.querySelector<HTMLButtonElement>(".inspector-chat-title");
+		expect(title?.textContent).toBe("deck.pdf");
+		expect(title?.getAttribute("aria-haspopup")).toBe("menu");
+		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+		expect(labels).toEqual(["새 대화", "AI 검색 탭에서 열기", "대화 닫기"]);
+		act(() => host.querySelector<HTMLButtonElement>('button[aria-label="대화 닫기"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(backs).toEqual(["back"]);
+	});
+
+	it("puts the approval-mode chip, icon only, left of the input", () => {
+		render([]);
+		const chip = host.querySelector<HTMLButtonElement>('.inspector-chat-composer button[aria-haspopup="menu"]');
+		expect(chip).not.toBeNull();
+		expect(chip?.textContent).toBe("");
+		expect(chip?.nextElementSibling?.tagName).toBe("INPUT");
 	});
 
 	it("asks about the waiting files, each as a card, and follows up otherwise", () => {
@@ -120,7 +162,6 @@ describe("the Info view's chat dock", () => {
 					onSummarize={noop}
 					onStop={noop}
 					onResume={noop}
-					onOpenHistory={noop}
 				/>,
 			),
 		);
@@ -128,11 +169,43 @@ describe("the Info view's chat dock", () => {
 		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
 	});
 
-	it("asks about anything with nothing selected, and offers no AI 요약", () => {
-		const empty: InspectorChatTab = { chat: null, mode: "info", expired: false, dismissed: [] };
+	it("offers 이어서 대화 instead of AI 요약 once the tab has a chat, with a dot for an answer not yet seen", () => {
+		const resumes: string[] = [];
+		const seen: InspectorChatTab = { ...tab, mode: "info", seenAt: 10 };
 		act(() =>
 			root.render(
-				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} onOpenHistory={noop} />,
+				<InspectorChatDock tab={seen} now={0} targets={[deck]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={() => resumes.push("resume")} />,
+			),
+		);
+		const chip = host.querySelector<HTMLButtonElement>(".inspector-chat-continue");
+		expect(chip?.textContent).toContain("이어서 대화");
+		expect(chip?.textContent).toContain("· 방금");
+		expect(host.textContent).not.toContain("AI 요약");
+		expect(chip?.querySelector('[aria-label="새 답변"]')).toBeNull();
+		act(() => chip?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(resumes).toEqual(["resume"]);
+
+		const unseen: InspectorChatTab = { ...tab, chat: tab.chat === null ? null : { ...tab.chat, updatedAt: 20 }, mode: "info", seenAt: 10 };
+		act(() =>
+			root.render(<InspectorChatDock tab={unseen} now={20} targets={[deck]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
+		);
+		expect(host.querySelector('.inspector-chat-continue [aria-label="새 답변"]')).not.toBeNull();
+	});
+
+	it("offers AI 요약 while the tab has no chat", () => {
+		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
+		act(() =>
+			root.render(<InspectorChatDock tab={empty} now={0} targets={[deck]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
+		);
+		expect(host.textContent).toContain("AI 요약");
+		expect(host.querySelector(".inspector-chat-continue")).toBeNull();
+	});
+
+	it("asks about anything with nothing selected, and offers no AI 요약", () => {
+		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
+		act(() =>
+			root.render(
+				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
 			),
 		);
 		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
@@ -154,10 +227,10 @@ describe("the composer's blue button", () => {
 			voice: { transcribe: async () => ({ text: "" }), prepare: async () => ({ ok: true }), openMicrophoneSettings: async () => {} },
 		});
 		try {
-			const empty: InspectorChatTab = { chat: null, mode: "info", expired: false, dismissed: [] };
+			const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
 			act(() =>
 				root.render(
-					<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} onOpenHistory={noop} />,
+					<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
 				),
 			);
 			const mic = host.querySelector<HTMLButtonElement>("button.inspector-chat-voice");

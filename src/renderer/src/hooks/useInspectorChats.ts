@@ -3,7 +3,6 @@ import type { ChatAttachment, SearchStreamEvent } from "../../../shared/search-c
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import {
 	EMPTY_INSPECTOR_CHAT_TAB,
-	liveInspectorTab,
 	turnsFromHistory,
 	updateLastTurn,
 	type InspectorChat,
@@ -11,17 +10,19 @@ import {
 } from "../state/inspector-chat";
 
 export interface InspectorChats {
-	/** Tab `tabId`'s inspector chat as of `now` (an idle chat already let go). */
-	tab(tabId: number, now: number): InspectorChatTab;
+	/** Tab `tabId`'s inspector chat. */
+	tab(tabId: number): InspectorChatTab;
 	/** The tab whose inspector chat has a run streaming, if any: one run at a time. */
 	readonly runningTab: number | null;
 	/**
-	 * Ask `text` in the tab's chat (starting one when it has none), with `attachments` (what the chat lacks of the
-	 * selection). False when nothing was sent: another inspector run is still streaming.
+	 * Ask `text` with `attachments`: in the tab's chat (starting one when it has none), or, `fresh`, in a new chat
+	 * (the Info view's composer). False when nothing was sent: another inspector run is still streaming.
 	 */
-	ask(tabId: number, text: string, attachments: readonly ChatAttachment[]): boolean;
-	/** "요약": the summary prompt AI Search uses, about `targets`; it carries those the chat lacks (`attachments`). */
-	summarize(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[]): boolean;
+	ask(tabId: number, text: string, attachments: readonly ChatAttachment[], fresh?: boolean): boolean;
+	/** "요약": the summary prompt AI Search uses, about `targets`; it carries `attachments`. */
+	summarize(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[], fresh?: boolean): boolean;
+	/** Make the stored chat `chatId` the tab's chat and show it (the chat title's history menu). */
+	open(tabId: number, chatId: string): void;
 	/** Stop the inspector run that is streaming, whichever tab asked it. */
 	stop(): void;
 	setMode(tabId: number, mode: "info" | "chat"): void;
@@ -66,7 +67,9 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 			const finish = (): void => {
 				runRef.current = null;
 				setRunningTab(null);
-				changeChat(tabId, (chat) => ({ ...chat, updatedAt: Date.now() }));
+				const now = Date.now();
+				// An answer that lands while the chat is on screen is read; one that lands behind the Info view is not.
+				change(tabId, (tab) => (tab.chat === null ? tab : { ...tab, chat: { ...tab.chat, updatedAt: now }, seenAt: tab.mode === "chat" ? now : tab.seenAt }));
 			};
 			switch (event.type) {
 				case "progress":
@@ -101,26 +104,24 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 			}
 		});
 		return unsubscribe;
-	}, [changeChat]);
+	}, [change, changeChat]);
 
-	const tab = useCallback(
-		(tabId: number, now: number) => liveInspectorTab(tabs.get(tabId) ?? EMPTY_INSPECTOR_CHAT_TAB, now, runningTab === tabId),
-		[tabs, runningTab],
-	);
+	const tab = useCallback((tabId: number) => tabs.get(tabId) ?? EMPTY_INSPECTOR_CHAT_TAB, [tabs]);
 
 	const ask = useCallback(
-		(tabId: number, text: string, attachments: readonly ChatAttachment[]) => {
+		(tabId: number, text: string, attachments: readonly ChatAttachment[], fresh = false) => {
 			const question = text.trim();
 			if (question.length === 0 || runRef.current !== null) return false;
-			const current = liveInspectorTab(tabsRef.current.get(tabId) ?? EMPTY_INSPECTOR_CHAT_TAB, Date.now(), false);
-			const chatId = current.chat?.chatId ?? crypto.randomUUID();
+			const previous = fresh ? null : (tabsRef.current.get(tabId)?.chat ?? null);
+			const chatId = previous?.chatId ?? crypto.randomUUID();
 			const searchId = crypto.randomUUID();
+			const now = Date.now();
 			const chat: InspectorChat = {
 				chatId,
-				updatedAt: Date.now(),
-				turns: [...(current.chat?.turns ?? []), { question, attachments, answer: null, draft: "", progress: "", error: null, stopped: false }],
+				updatedAt: now,
+				turns: [...(previous?.turns ?? []), { question, attachments, answer: null, draft: "", progress: "", error: null, stopped: false }],
 			};
-			change(tabId, () => ({ chat, mode: "chat", expired: false, dismissed: [] }));
+			change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
 			runRef.current = { tabId, searchId };
 			setRunningTab(tabId);
 			autorag.search.start(searchId, chatId, question, attachments).catch((error: unknown) => {
@@ -136,9 +137,9 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 	);
 
 	const summarize = useCallback(
-		(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[]) => {
+		(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[], fresh = false) => {
 			const request = summaryRequest(language, [], targets);
-			return ask(tabId, request.prompt, attachments);
+			return ask(tabId, request.prompt, attachments, fresh);
 		},
 		[ask, language],
 	);
@@ -148,7 +149,24 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 		if (run !== null) void autorag.search.cancel(run.searchId);
 	}, []);
 
-	const setMode = useCallback((tabId: number, mode: "info" | "chat") => change(tabId, (tab) => ({ ...tab, mode })), [change]);
+	const setMode = useCallback((tabId: number, mode: "info" | "chat") => change(tabId, (tab) => ({ ...tab, mode, seenAt: Date.now() })), [change]);
+
+	const open = useCallback(
+		(tabId: number, chatId: string) => {
+			if (runRef.current?.tabId === tabId) return;
+			void autorag.search
+				.historyGet(chatId)
+				.then((record) => {
+					if (record === null || runRef.current?.tabId === tabId) return;
+					const now = Date.now();
+					const stored = Date.parse(record.updatedAt);
+					const chat: InspectorChat = { chatId, turns: turnsFromHistory(record.messages), updatedAt: Number.isFinite(stored) ? stored : now };
+					change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
+				})
+				.catch((error: unknown) => console.error("inspector chat open failed", error));
+		},
+		[change],
+	);
 	const dismiss = useCallback(
 		(tabId: number, id: string) => change(tabId, (tab) => (tab.dismissed.includes(id) ? tab : { ...tab, dismissed: [...tab.dismissed, id] })),
 		[change],
@@ -191,5 +209,5 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 		});
 	}, []);
 
-	return { tab, runningTab, ask, summarize, stop, setMode, dismiss, reset, refresh, prune };
+	return { tab, runningTab, ask, summarize, open, stop, setMode, dismiss, reset, refresh, prune };
 }

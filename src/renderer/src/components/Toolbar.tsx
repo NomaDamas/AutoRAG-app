@@ -16,7 +16,7 @@ import {
 	IconsViewIcon,
 	ListRowsIcon,
 	PanelLeftIcon,
-	PanelRightIcon,
+	DazziIcon,
 	ShareIcon,
 	SortIcon,
 	PutBackIcon,
@@ -248,7 +248,7 @@ export function Toolbar({
 					aria-label={t("toolbar.showInspector")}
 					onClick={onShowInspector}
 				>
-					<PanelRightIcon size={18} />
+					<DazziIcon size={18} />
 				</button>
 			) : null}
 			{menu === null ? null : (

@@ -2,40 +2,45 @@
  * The inspector's AI chat (see `state/inspector-chat.ts`): AI Search in the
  * right column, beside the file it is about.
  *
- *   InspectorChatDock  the Info view's foot: the resume link, "AI 요약", and the
- *                      composer, which only types: the question carries the
- *                      selection without showing it as cards.
- *   InspectorChatView  the chat itself, in place of the Info view: questions
- *                      (each with the file it brought in), answers with their
- *                      sources folded under them, and the composer. ⤢ opens
- *                      the same chat in an AI Search tab.
+ *   InspectorChatDock  the Info view's foot: "이어서 대화" (back to the tab's
+ *                      chat, with a dot when an answer landed unseen) or
+ *                      "AI 요약", and the composer, which only types and always
+ *                      starts a new chat about the selection.
+ *   InspectorChatView  the chat itself, in place of the Info view: the title
+ *                      opens the recent AI Search history, questions (each with
+ *                      the file it brought in), answers whose numbered
+ *                      citations show their source on hover, and the composer.
+ *                      ⛶ opens the same chat in an AI Search tab; × goes back
+ *                      to the Info view (Figma 328:3991, 328:5742).
  */
 
-import { useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contract";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
+import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
 import { cn } from "../lib/cn";
 import { evidenceHeading, evidenceKind, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
-import { questionCount, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { hasUnreadAnswer, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks } from "./AiSearchPanel";
+import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
 import {
-	ArrowLeftIcon,
 	ArrowUpIcon,
 	CloseIcon,
-	ExpandCornersIcon,
 	ExpandIcon,
 	FileIcon,
 	HistoryIcon,
-	MessagesIcon,
+	MaximizeIcon,
 	MicIcon,
 	NewChatIcon,
+	PanelCloseIcon,
 	SparklesIcon,
+	TitleChevronIcon,
 } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
@@ -164,6 +169,7 @@ function Composer({
 	const [busyNotice, setBusyNotice] = useState(false);
 	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 	const voice = window.autorag?.voice;
+	const approval = useApprovalMode();
 	const send = (): void => {
 		const text = draft.trim();
 		if (text.length === 0) return;
@@ -195,7 +201,8 @@ function Composer({
 						))}
 					</div>
 				)}
-				<div className="flex items-center gap-4">
+				<div className="flex items-center gap-8">
+					<ApprovalModeMenu mode={approval.mode} onChange={approval.setMode} compact />
 					<input
 						className="min-w-0 flex-1 h-24 border-0 bg-transparent p-0 text-meta leading-[16px] text-ink outline-none placeholder:text-ink-faint"
 						value={draft}
@@ -254,21 +261,26 @@ function askPlaceholder(about: readonly ChatAttachment[], none: LocaleKey): Loca
 	return about[0]?.kind === "folder" ? "inspector.chat.placeholderFolder" : "inspector.chat.placeholderFile";
 }
 
+/** The dock's round chips ("이어서 대화", "AI 요약"). */
+const DOCK_CHIP =
+	"inline-flex max-w-full items-center gap-6 rounded-full border border-divider bg-window py-8 pl-9 pr-10 text-meta leading-[16px] text-ink shadow-[0_2px_5px_rgba(20,20,41,0.07)] cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default";
+
 export interface InspectorChatDockProps {
 	readonly tab: InspectorChatTab;
 	readonly now: number;
 	/** The selection as chat attachments; empty when nothing can be asked about. */
 	readonly targets: readonly ChatAttachment[];
 	readonly running: boolean;
+	/** A question typed here: it starts a new chat about the selection. */
 	readonly onAsk: (text: string) => boolean;
-	/** "AI 요약" about the selection, asked in this chat. */
+	/** "AI 요약" about the selection, in a new chat. */
 	readonly onSummarize: () => void;
 	readonly onStop: () => void;
+	/** "이어서 대화": the tab's chat, as it was. */
 	readonly onResume: () => void;
-	readonly onOpenHistory: () => void;
 }
 
-export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummarize, onStop, onResume, onOpenHistory }: InspectorChatDockProps): ReactElement {
+export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummarize, onStop, onResume }: InspectorChatDockProps): ReactElement {
 	const { t } = useTranslation();
 	const ago = useAgo();
 	const chat = tab.chat;
@@ -278,24 +290,19 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 		<div className={cn("inspector-chat-dock flex flex-col gap-4", targets.length === 0 ? "px-8 pt-8 pb-10" : "px-12 pb-12")}>
 			{targets.length === 0 ? null : <div className="mb-4 h-px bg-divider" aria-hidden="true" />}
 			{chat !== null ? (
-				<button type="button" className="mb-2 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onResume}>
-					<MessagesIcon size={12} />
-					<span className="truncate">{t("inspector.chat.resume", { count: questionCount(chat), ago: ago(chat.updatedAt, now) })}</span>
-				</button>
-			) : tab.expired ? (
-				<button type="button" className="mb-2 flex max-w-full items-center gap-4 border-0 bg-transparent p-0 text-tile text-accent-text cursor-pointer" onClick={onOpenHistory}>
-					<HistoryIcon size={12} />
-					<span className="truncate">{t("inspector.chat.expired")}</span>
-				</button>
-			) : null}
-			{targets.length === 0 ? null : (
 				<div className="flex">
-					<button
-						type="button"
-						className="inline-flex items-center gap-6 rounded-full border border-divider bg-window py-8 pl-9 pr-10 text-meta leading-[16px] text-ink shadow-[0_2px_5px_rgba(20,20,41,0.07)] cursor-pointer enabled:hover:bg-hover disabled:text-ink-muted disabled:cursor-default"
-						disabled={running}
-						onClick={onSummarize}
-					>
+					<button type="button" className={cn("inspector-chat-continue", DOCK_CHIP)} onClick={onResume}>
+						<span className="flex text-ink-muted" aria-hidden="true">
+							<HistoryIcon size={13} />
+						</span>
+						<span className="truncate">{t("inspector.chat.continue")}</span>
+						<span className="flex-none text-ink-faint">· {ago(chat.updatedAt, now)}</span>
+						{hasUnreadAnswer(tab) ? <span className="size-5 flex-none rounded-full bg-accent" role="img" aria-label={t("inspector.chat.unread")} /> : null}
+					</button>
+				</div>
+			) : targets.length === 0 ? null : (
+				<div className="flex">
+					<button type="button" className={DOCK_CHIP} disabled={running} onClick={onSummarize}>
 						<span className="flex text-accent-text" aria-hidden="true">
 							<SparklesIcon size={13} />
 						</span>
@@ -326,70 +333,62 @@ function MarkedExcerpt({ text }: { readonly text: string }): ReactElement {
 	);
 }
 
-function SourceList({
-	evidence,
+const SOURCE_ACTION =
+	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink-body cursor-pointer hover:bg-hover";
+
+/** What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). */
+function SourceCard({
+	item,
 	onReveal,
 	onPreview,
 }: {
-	readonly evidence: readonly CitationEvidence[];
+	readonly item: CitationEvidence;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
-}): ReactElement | null {
+}): ReactElement {
 	const { t } = useTranslation();
-	const [open, setOpen] = useState<number | null>(null);
-	if (evidence.length === 0) return null;
+	const local = isLocalEvidenceSource(item.source) ? item.source : null;
+	const excerpt = item.excerpts[0] ?? item.summary;
 	return (
-		<div className="flex flex-col gap-4">
-			{evidence.map((item) => {
-				const expanded = open === item.number;
-				const local = isLocalEvidenceSource(item.source) ? item.source : null;
-				const heading = evidenceHeading(item.title, item.source);
-				const excerpt = item.excerpts[0] ?? item.summary;
-				return (
-					<div key={item.number} className="overflow-hidden rounded-8 border border-divider bg-window shadow-[0_0_4px_rgba(20,20,41,0.07)]">
-						<button
-							type="button"
-							className="flex w-full items-center gap-6 rounded-8 border-0 bg-transparent px-10 py-8 text-left cursor-pointer hover:bg-hover"
-							aria-expanded={expanded}
-							onClick={() => setOpen(expanded ? null : item.number)}
-						>
-							<span className="flex size-16 flex-none items-center justify-center rounded-4 bg-selected-nav text-tile-xs font-medium text-ink-body">{item.number}</span>
-							<span className="min-w-0 flex-1 truncate text-meta font-medium leading-[16px] text-ink">{heading}</span>
-						</button>
-						{expanded ? (
-							<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
-								{excerpt.length === 0 ? null : (
-									<p className="block m-0 text-meta leading-[1.5] text-ink-body line-clamp-6">
-										<MarkedExcerpt text={excerpt} />
-									</p>
-								)}
-								{local !== null ? (
-									<div className="flex flex-wrap gap-4">
-										<button
-											type="button"
-											className="inline-flex items-center gap-4 rounded-8 border border-border-strong bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink cursor-pointer hover:bg-hover"
-											onClick={() => onReveal(local)}
-										>
-											<FileIcon size={12} />
-											{t("inspector.chat.showInList")}
-										</button>
-										<button
-											type="button"
-											className="inline-flex items-center gap-4 rounded-8 border border-border-strong bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink cursor-pointer hover:bg-hover"
-											onClick={() => onPreview(local, item.excerpts)}
-										>
-												<ExpandIcon size={12} />
-											{t("inspector.chat.preview")}
-										</button>
-									</div>
-								) : null}
-							</div>
-						) : null}
-					</div>
-				);
-			})}
+		<div className="inspector-chat-source overflow-hidden rounded-8 border border-divider bg-window shadow-menu" role="tooltip">
+			<div className="flex items-center gap-6 px-10 py-8">
+				<span className="flex size-18 flex-none items-center justify-center rounded-5 bg-accent text-badge font-medium text-on-accent">{item.number}</span>
+				<span className="min-w-0 flex-1 truncate text-meta font-medium leading-[16px] text-ink">{evidenceHeading(item.title, item.source)}</span>
+			</div>
+			{excerpt.length === 0 && local === null ? null : (
+				<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
+					{excerpt.length === 0 ? null : (
+						<p className="block m-0 text-meta leading-[1.5] text-ink-body line-clamp-6">
+							<MarkedExcerpt text={excerpt} />
+						</p>
+					)}
+					{local === null ? null : (
+						<div className="flex flex-wrap gap-4">
+							<button type="button" className={SOURCE_ACTION} onClick={() => onReveal(local)}>
+								<FileIcon size={12} />
+								{t("inspector.chat.showInList")}
+							</button>
+							<button type="button" className={SOURCE_ACTION} onClick={() => onPreview(local, item.excerpts)}>
+								<ExpandIcon size={12} />
+								{t("inspector.chat.preview")}
+							</button>
+						</div>
+					)}
+				</div>
+			)}
 		</div>
 	);
+}
+
+/** The citation number under the pointer (or focus) and where its card goes, below the number's line. */
+interface HoveredCitation {
+	readonly number: number;
+	readonly top: number;
+}
+
+/** The citation number button an event came from inside `root`, if any. */
+function citationAt(target: EventTarget | null): HTMLElement | null {
+	return target instanceof Element ? (target.closest("button.cite") as HTMLElement | null) : null;
 }
 
 function TurnView({
@@ -409,6 +408,32 @@ function TurnView({
 	const { t } = useTranslation();
 	const text = turn.answer?.answer ?? turn.draft;
 	const evidence = turn.answer?.evidence ?? [];
+	const answerRef = useRef<HTMLDivElement>(null);
+	const [hovered, setHovered] = useState<HoveredCitation | null>(null);
+	const hideTimer = useRef<number | null>(null);
+	const keep = (): void => {
+		if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+		hideTimer.current = null;
+	};
+	const hideSoon = (): void => {
+		keep();
+		hideTimer.current = window.setTimeout(() => setHovered(null), 160);
+	};
+	useEffect(() => keep, []);
+	const show = (cite: HTMLElement): void => {
+		const root = answerRef.current;
+		const number = Number(cite.textContent);
+		if (root === null || !Number.isFinite(number) || !evidence.some((item) => item.number === number)) return;
+		keep();
+		setHovered({ number, top: cite.getBoundingClientRect().bottom - root.getBoundingClientRect().top + 4 });
+	};
+	const onOver = (event: ReactMouseEvent<HTMLDivElement>): void => {
+		const cite = citationAt(event.target);
+		if (cite !== null) show(cite);
+		else if (event.target instanceof Element && event.target.closest(".inspector-chat-source") !== null) keep();
+		else if (hovered !== null) hideSoon();
+	};
+	const card = hovered === null ? null : (evidence.find((item) => item.number === hovered.number) ?? null);
 	return (
 		<>
 			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
@@ -418,29 +443,133 @@ function TurnView({
 				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-meta leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
 			<div className="flex min-w-0 flex-col gap-8">
-			{text.length > 0 ? (
-				<div className="inspector-chat-answer block min-w-0 text-meta font-medium leading-[1.5] text-ink-body break-words">
-					<ProseBlocks text={text} selected={null} unresolved={unresolvedCitationNumbers(text, evidence)} onCitation={() => {}} imageActions={imageActions} />
-				</div>
-			) : null}
-			{live && (text.length === 0 || turn.progress !== "") ? (
-				<div className="flex min-w-0 items-center text-tile text-ink-muted" role="status">
-					<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
-						{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
-					</span>
-				</div>
-			) : null}
-			{turn.error === null ? null : <p className="block m-0 text-tile text-danger-text">{turn.error}</p>}
-			{turn.stopped && turn.error === null ? <p className="block m-0 text-tile text-ink-muted">{t("inspector.chat.stopped")}</p> : null}
-			{live ? null : <SourceList evidence={evidence} onReveal={onReveal} onPreview={onPreview} />}
+				{text.length > 0 ? (
+					<div
+						ref={answerRef}
+						className="inspector-chat-answer relative block min-w-0 text-meta font-medium leading-[1.5] text-ink-body break-words [&_.cite]:bg-accent [&_.cite]:font-medium [&_.cite]:text-on-accent"
+						onMouseOver={onOver}
+						onMouseLeave={hideSoon}
+						onFocus={(event) => {
+							const cite = citationAt(event.target);
+							if (cite !== null) show(cite);
+						}}
+						onKeyDown={(event) => {
+							if (event.key === "Escape") setHovered(null);
+						}}
+					>
+						<ProseBlocks
+							text={text}
+							selected={null}
+							unresolved={unresolvedCitationNumbers(text, evidence)}
+							onCitation={(number) => setHovered((current) => (current?.number === number ? null : current))}
+							imageActions={imageActions}
+						/>
+						{card === null || hovered === null ? null : (
+							<div className="absolute right-0 left-0 z-20" style={{ top: hovered.top }} onMouseEnter={keep}>
+								<SourceCard item={card} onReveal={onReveal} onPreview={onPreview} />
+							</div>
+						)}
+					</div>
+				) : null}
+				{live && (text.length === 0 || turn.progress !== "") ? (
+					<div className="flex min-w-0 items-center text-tile text-ink-muted" role="status">
+						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
+							{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
+						</span>
+					</div>
+				) : null}
+				{turn.error === null ? null : <p className="block m-0 text-tile text-danger-text">{turn.error}</p>}
+				{turn.stopped && turn.error === null ? <p className="block m-0 text-tile text-ink-muted">{t("inspector.chat.stopped")}</p> : null}
 			</div>
 		</>
 	);
 }
 
+/** The chat title's menu: the recent AI Search chats, grouped by day; picking one makes it the tab's chat. */
+function ChatHistoryMenu({
+	currentChatId,
+	onPick,
+	onClose,
+}: {
+	readonly currentChatId: string | null;
+	readonly onPick: (chatId: string) => void;
+	readonly onClose: () => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const [groups, setGroups] = useState<readonly ChatHistoryGroup[] | null>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		let alive = true;
+		const list = window.autorag?.search?.historyList;
+		if (list === undefined) {
+			setGroups([]);
+			return;
+		}
+		void list()
+			.then((items) => {
+				if (alive) setGroups(groupChatHistory(items, new Date()));
+			})
+			.catch(() => {
+				if (alive) setGroups([]);
+			});
+		return () => {
+			alive = false;
+		};
+	}, []);
+	useEffect(() => {
+		const onDown = (event: MouseEvent): void => {
+			if (!(event.target instanceof Node) || menuRef.current?.contains(event.target) === true) return;
+			if (event.target instanceof Element && event.target.closest(".inspector-chat-title") !== null) return;
+			onClose();
+		};
+		const onKey = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") onClose();
+		};
+		window.addEventListener("mousedown", onDown);
+		window.addEventListener("keydown", onKey);
+		return () => {
+			window.removeEventListener("mousedown", onDown);
+			window.removeEventListener("keydown", onKey);
+		};
+	}, [onClose]);
+	return (
+		<div
+			ref={menuRef}
+			className="inspector-chat-history absolute top-full left-8 z-30 mt-2 flex max-h-[360px] w-208 flex-col gap-6 overflow-y-auto rounded-12 border border-divider bg-window py-12 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+			role="menu"
+			aria-label={t("inspector.chat.history")}
+		>
+			{groups === null ? null : groups.length === 0 ? (
+				<span className="block px-16 py-4 text-meta text-ink-muted">{historyEmptyText("")}</span>
+			) : (
+				groups.map((group) => (
+					<div key={group.label} className="flex flex-col">
+						<span className="block px-16 text-[10.5px] leading-[15.75px] text-ink-muted">{t(HISTORY_BUCKET_KEYS[group.label])}</span>
+						{group.items.map((item) => (
+							<button
+								type="button"
+								role="menuitem"
+								key={item.id}
+								className={cn(
+									"mx-8 block truncate rounded-8 border-0 px-16 py-8 text-left text-meta leading-[16px] text-ink cursor-pointer hover:bg-hover",
+									item.id === currentChatId ? "bg-selected-nav" : "bg-transparent",
+								)}
+								title={item.title}
+								onClick={() => onPick(item.id)}
+							>
+								{item.title}
+							</button>
+						))}
+					</div>
+				))
+			)}
+		</div>
+	);
+}
+
 export interface InspectorChatViewProps {
 	readonly tab: InspectorChatTab;
-	/** The selection's name, for the way back to its Info view. */
+	/** The selection's name: the chat's title. */
 	readonly targetName: string;
 	/** What the next question carries of the selection, as cards with their ×. */
 	readonly pending: readonly ChatAttachment[];
@@ -448,9 +577,12 @@ export interface InspectorChatViewProps {
 	readonly imageActions: ImageActions;
 	readonly onAsk: (text: string) => boolean;
 	readonly onStop: () => void;
+	/** × : back to the Info view (the sidebar stays). */
 	readonly onBack: () => void;
 	readonly onNewChat: () => void;
 	readonly onExpand: () => void;
+	/** A chat picked from the title's history menu. */
+	readonly onOpenChat: (chatId: string) => void;
 	readonly onDismiss: (id: string) => void;
 	/** Select the cited file in the file list (its folder opens first). */
 	readonly onReveal: (path: string) => void;
@@ -469,30 +601,50 @@ export function InspectorChatView({
 	onBack,
 	onNewChat,
 	onExpand,
+	onOpenChat,
 	onDismiss,
 	onReveal,
 	onPreview,
 }: InspectorChatViewProps): ReactElement {
 	const { t } = useTranslation();
+	const [historyOpen, setHistoryOpen] = useState(false);
 	const turns = tab.chat?.turns ?? [];
-	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "disabled:cursor-default");
+	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
-			<div className="flex flex-none items-center gap-4 border-b border-border pb-6 pl-12 pr-8">
+			<div className="relative flex h-35 flex-none items-center gap-4 py-6 pl-12 pr-8">
 				<button
 					type="button"
-					className="flex min-w-0 flex-1 items-center gap-8 border-0 bg-transparent p-0 text-left text-meta leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
-					onClick={onBack}
+					className="inspector-chat-title flex min-w-0 flex-1 items-center gap-4 border-0 bg-transparent p-0 text-left text-meta leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
+					aria-haspopup="menu"
+					aria-expanded={historyOpen}
+					title={t("inspector.chat.history")}
+					onClick={() => setHistoryOpen((open) => !open)}
 				>
-					<ArrowLeftIcon size={13} />
-					<span className="truncate">{t("inspector.chat.back", { name: targetName })}</span>
+					<span className="truncate">{targetName}</span>
+					<span className="flex flex-none text-ink-muted" aria-hidden="true">
+						<TitleChevronIcon size={16} />
+					</span>
 				</button>
 				<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running} onClick={onNewChat}>
-					<NewChatIcon size={14} />
+					<NewChatIcon size={16} />
 				</button>
 				<button type="button" className={headButton} aria-label={t("inspector.chat.expand")} title={t("inspector.chat.expand")} disabled={running} onClick={onExpand}>
-					<ExpandCornersIcon size={16} />
+					<MaximizeIcon size={16} />
 				</button>
+				<button type="button" className={headButton} aria-label={t("inspector.chat.close")} title={t("inspector.chat.close")} onClick={onBack}>
+					<PanelCloseIcon size={16} />
+				</button>
+				{historyOpen ? (
+					<ChatHistoryMenu
+						currentChatId={tab.chat?.chatId ?? null}
+						onClose={() => setHistoryOpen(false)}
+						onPick={(chatId) => {
+							setHistoryOpen(false);
+							if (chatId !== tab.chat?.chatId) onOpenChat(chatId);
+						}}
+					/>
+				) : null}
 			</div>
 			<div
 				className="flex min-h-0 flex-1 flex-col gap-20 overflow-y-auto px-12 py-10"
@@ -502,7 +654,7 @@ export function InspectorChatView({
 			>
 				{turns.map((turn, index) => (
 					<TurnView
-						key={`${index}`}
+						key={`${tab.chat?.chatId ?? ""}:${index}`}
 						turn={turn}
 						live={running && index === turns.length - 1}
 						imageActions={imageActions}

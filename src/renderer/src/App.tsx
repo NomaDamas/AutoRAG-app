@@ -661,7 +661,7 @@ export function App(): ReactElement {
 	const { refresh: refreshInspectorChat, prune: pruneInspectorChats } = inspectorChats;
 	const chatTabId = focusedTab !== null && focusedTab.path !== AI_SEARCH_PATH ? focusedTab.id : null;
 	const chatNow = useNow(chatTabId !== null && inspectorVisible, 30_000);
-	const chatTab = chatTabId === null ? EMPTY_INSPECTOR_CHAT_TAB : inspectorChats.tab(chatTabId, chatNow);
+	const chatTab = chatTabId === null ? EMPTY_INSPECTOR_CHAT_TAB : inspectorChats.tab(chatTabId);
 	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
 	const chatRunning = inspectorChats.runningTab !== null;
 	const chatLive = chatTabId !== null && inspectorChats.runningTab === chatTabId;
@@ -980,13 +980,12 @@ export function App(): ReactElement {
 											now={chatNow}
 											targets={chatTargets}
 											running={chatRunning}
-											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending)}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatTargets, true)}
 											onSummarize={() => {
-												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatPending);
+												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatTargets, true);
 											}}
 											onStop={inspectorChats.stop}
 											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
-											onOpenHistory={openAiHistory}
 										/>
 									)
 								}
@@ -1007,6 +1006,7 @@ export function App(): ReactElement {
 											onExpand={() => {
 												if (chatTab.chat !== null) openChatInAiTab(chatTab.chat.chatId);
 											}}
+											onOpenChat={(chatId) => inspectorChats.open(chatTabId, chatId)}
 											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
 											onReveal={(target) => finder?.revealEvidence(target)}
 											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}

@@ -93,15 +93,17 @@ describe("reduce size", () => {
 		expect(ids(suggestedActions({ name: "photo.jpg", kind: "file" }, DARWIN_FFMPEG))).toEqual([
 			"open",
 			"openWith",
-			"imageEdit",
+			"imageConvert",
+			"imageResize",
 			"reduceSize",
+			"compress",
 			"share",
 			"askAi",
 		]);
 	});
 
 	it("no longer hides an optimize entry inside the image menu", () => {
-		const items = menuItems(suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN), "imageEdit");
+		const items = [...menuItems(suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN), "imageConvert"), ...menuItems(suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN), "imageResize")];
 		expect(items.map((item) => item.id)).not.toContain("image:optimize");
 	});
 });
@@ -109,8 +111,7 @@ describe("reduce size", () => {
 describe("base action set", () => {
 	it("offers open, open-with, share and AI to a plain file", () => {
 		const actions = suggestedActions({ name: "notes.txt", kind: "file" }, DARWIN);
-		expect(ids(actions)).toEqual(["open", "openWith", "share", "askAi"]);
-		expect(actions.every((action) => action.kind === "action")).toBe(true);
+		expect(ids(actions)).toEqual(["open", "openWith", "compress", "share", "askAi"]);
 	});
 
 	it("drops open-with, archive and share for a folder", () => {
@@ -134,7 +135,7 @@ describe("base action set", () => {
 describe("archives", () => {
 	it("extracts in place", () => {
 		const actions = suggestedActions({ name: "docs.zip", kind: "file" }, DARWIN);
-		expect(ids(actions)).toEqual(["open", "openWith", "extract", "share", "askAi"]);
+		expect(ids(actions)).toEqual(["open", "openWith", "extract", "compress", "share", "askAi"]);
 	});
 
 	it("offers extraction for every archive format, but never a plain file", () => {
@@ -148,15 +149,14 @@ describe("archives", () => {
 });
 
 describe("compress", () => {
-	it("is never offered for a single file or folder, whatever the type", () => {
-		for (const subject of [
-			{ name: "notes.txt", kind: "file" },
-			{ name: "docs", kind: "folder" },
-			{ name: "photo.jpg", kind: "file" },
-			{ name: "docs.7z", kind: "file" },
-		] as const) {
-			expect(ids(suggestedActions(subject, DARWIN_FFMPEG)).filter((id) => id.startsWith("compress")), subject.name).toEqual([]);
+	it("is offered for a single file of any type, but never for a folder", () => {
+		for (const name of ["notes.txt", "photo.jpg", "docs.7z", "scan.pdf"]) {
+			const actions = suggestedActions({ name, kind: "file" }, DARWIN_FFMPEG);
+			expect(ids(actions).filter((id) => id.startsWith("compress")), name).toEqual(["compress"]);
+			expect(menuItems(actions, "compress").map((item) => item.id)).toEqual(["compress:zip", "compress:7z"]);
 		}
+		expect(ids(suggestedActions({ name: "docs", kind: "folder" }, DARWIN_FFMPEG))).not.toContain("compress");
+		expect(ids(suggestedActions({ name: "notes.txt", kind: "file" }, NO_CAPABILITIES))).not.toContain("compress");
 	});
 
 	it("offers Compress (one menu button that picks the archive format) and Share for a multi-selection", () => {
@@ -179,33 +179,37 @@ describe("compress", () => {
 	});
 });
 
-describe("image menu", () => {
-	it("offers every other native format plus resize presets, for a PNG", () => {
+/** Both image menus' items, convert first. */
+function imageItems(actions: ReturnType<typeof suggestedActions>): ReturnType<typeof menuItems> {
+	return [...menuItems(actions, "imageConvert"), ...menuItems(actions, "imageResize")];
+}
+
+describe("image menus", () => {
+	it("offers 확장자 변환 (every other native format) and 해상도 줄이기 (resize presets), for a PNG", () => {
 		const actions = suggestedActions({ name: "photo.png", kind: "file" }, DARWIN);
-		const items = menuItems(actions, "imageEdit");
-		expect(items.map((item) => item.label)).toEqual([
+		expect(actions.find((action) => action.id === "imageConvert")).toMatchObject({ kind: "menu", icon: "imageConvert", label: "확장자 변환" });
+		expect(actions.find((action) => action.id === "imageResize")).toMatchObject({ kind: "menu", icon: "imageResize", label: "해상도 줄이기" });
+		expect(menuItems(actions, "imageConvert").map((item) => item.label)).toEqual([
 			"JPEG로 변환",
 			"HEIC로 변환",
 			"AVIF로 변환",
 			"GIF로 변환",
 			"TIFF로 변환",
 			"BMP로 변환",
-			"최대 1920px",
-			"최대 1280px",
-			"최대 640px",
 		]);
-		expect(items.map((item) => item.id)).not.toContain("image:convert:png");
+		expect(menuItems(actions, "imageResize").map((item) => item.label)).toEqual(["최대 1920px", "최대 1280px", "최대 640px"]);
+		expect(menuItems(actions, "imageConvert").map((item) => item.id)).not.toContain("image:convert:png");
 	});
 
 	it("excludes the source's own format from conversion", () => {
 		const actions = suggestedActions({ name: "photo.heic", kind: "file" }, DARWIN);
-		const items = menuItems(actions, "imageEdit");
+		const items = menuItems(actions, "imageConvert");
 		expect(items.map((item) => item.label)).not.toContain("HEIC로 변환");
 	});
 
 	it("leads an iPhone HEIC/HEIF photo's menu with JPEG and sends a JPEG conversion", () => {
 		for (const name of ["IMG_0001.HEIC", "IMG_0002.heif"]) {
-			const items = menuItems(suggestedActions({ name, kind: "file" }, DARWIN_FFMPEG), "imageEdit");
+			const items = menuItems(suggestedActions({ name, kind: "file" }, DARWIN_FFMPEG), "imageConvert");
 			expect(items[0]).toEqual({
 				id: "image:convert:jpeg",
 				label: "JPEG로 변환",
@@ -224,7 +228,7 @@ describe("image menu", () => {
 
 	it("converts GIF, BMP and AVIF to every other format; resizes BMP/AVIF but never a (possibly animated) GIF", () => {
 		for (const name of ["anim.gif", "scan.bmp", "photo.avif"]) {
-			const labels = menuItems(suggestedActions({ name, kind: "file" }, DARWIN), "imageEdit").map((item) => item.label);
+			const labels = imageItems(suggestedActions({ name, kind: "file" }, DARWIN)).map((item) => item.label);
 			expect(labels).toContain("JPEG로 변환");
 			expect(labels.filter((label) => label.endsWith("로 변환"))).toHaveLength(DARWIN.imageFormats.length - 1);
 			expect(labels.includes("최대 640px")).toBe(name !== "anim.gif");
@@ -233,22 +237,31 @@ describe("image menu", () => {
 
 	it("adds WebP conversion only when the machine can encode it", () => {
 		const withoutWebp = suggestedActions({ name: "photo.jpg", kind: "file" }, DARWIN);
-		expect(menuItems(withoutWebp, "imageEdit").map((item) => item.label)).not.toContain("WebP로 변환");
+		expect(menuItems(withoutWebp, "imageConvert").map((item) => item.label)).not.toContain("WebP로 변환");
 
 		const withWebp = suggestedActions({ name: "photo.png", kind: "file" }, DARWIN_FFMPEG);
-		const labels = menuItems(withWebp, "imageEdit").map((item) => item.label);
+		const labels = menuItems(withWebp, "imageConvert").map((item) => item.label);
 		expect(labels).toContain("JPEG로 변환");
 		expect(labels).toContain("WebP로 변환");
 		expect(labels).not.toContain("PNG로 변환");
 	});
 
-	it("hides the image menu entirely without an image engine", () => {
+	it("hides both image menus without an image engine", () => {
 		const actions = suggestedActions({ name: "photo.png", kind: "file" }, NO_CAPABILITIES);
-		expect(ids(actions)).not.toContain("imageEdit");
+		expect(ids(actions)).not.toContain("imageConvert");
+		expect(ids(actions)).not.toContain("imageResize");
 	});
 
 	it("offers no image menu for a document", () => {
-		expect(ids(suggestedActions({ name: "notes.md", kind: "file" }, DARWIN_FFMPEG))).not.toContain("imageEdit");
+		const document = ids(suggestedActions({ name: "notes.md", kind: "file" }, DARWIN_FFMPEG));
+		expect(document).not.toContain("imageConvert");
+		expect(document).not.toContain("imageResize");
+	});
+
+	it("leaves 해상도 줄이기 out for a (possibly animated) GIF but still converts it", () => {
+		const actions = suggestedActions({ name: "anim.gif", kind: "file" }, DARWIN);
+		expect(ids(actions)).toContain("imageConvert");
+		expect(ids(actions)).not.toContain("imageResize");
 	});
 });
 

@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	EMPTY_INSPECTOR_CHAT_TAB,
-	INSPECTOR_CHAT_IDLE_MS,
-	liveInspectorTab,
+	hasUnreadAnswer,
 	pendingAttachments,
 	turnsFromHistory,
 	type InspectorChat,
@@ -56,19 +55,17 @@ describe("the selection as context for the inspector chat", () => {
 	});
 });
 
-describe("letting go of an idle inspector chat", () => {
-	const tab = tabWith(chatWith(docs));
+describe("an answer not yet seen", () => {
+	const chat = chatWith(docs);
 
-	it("keeps a chat that had a question in the last 30 minutes", () => {
-		expect(liveInspectorTab(tab, 1_000 + INSPECTOR_CHAT_IDLE_MS, false)).toBe(tab);
+	it("is one that landed after the person last had the chat in front of them, while the Info view shows", () => {
+		expect(hasUnreadAnswer({ ...tabWith(chat), mode: "info", seenAt: chat.updatedAt - 1 })).toBe(true);
+		expect(hasUnreadAnswer({ ...tabWith(chat), mode: "info", seenAt: chat.updatedAt })).toBe(false);
 	});
 
-	it("lets go after 30 minutes and points at the history", () => {
-		expect(liveInspectorTab(tab, 1_001 + INSPECTOR_CHAT_IDLE_MS, false)).toEqual({ chat: null, mode: "info", expired: true, dismissed: [] });
-	});
-
-	it("never lets go of a chat whose answer is still streaming", () => {
-		expect(liveInspectorTab(tab, 10 * INSPECTOR_CHAT_IDLE_MS, true)).toBe(tab);
+	it("never shows while the chat itself is on screen, or when there is no chat", () => {
+		expect(hasUnreadAnswer({ ...tabWith(chat), mode: "chat", seenAt: 0 })).toBe(false);
+		expect(hasUnreadAnswer(EMPTY_INSPECTOR_CHAT_TAB)).toBe(false);
 	});
 });
 
