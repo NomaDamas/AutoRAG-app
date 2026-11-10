@@ -3102,7 +3102,10 @@
       "scheduleConflicts": "このコンピュータには Dazzi を別途更新する定期タスクが既にあります（{{list}}）。同じフォルダを二重に処理しないよう、片方だけを使うことをおすすめします。",
       "scheduleActive": "アプリを閉じていても {{minutes}}分ごとに確認し、間隔が来た項目だけを更新します。",
       "scheduleLastCheck": "最終確認 {{ago}}。",
-      "scheduleNever": "まだ実行されたことがありません。"
+      "scheduleNever": "まだ実行されたことがありません。",
+      "schedulePausedBattery": "電源接続を待っています。インデックスのスケジュールは電源接続中のみ許可しています（{{ago}}に保留）。",
+      "schedulePausedWindow": "許可された時間帯を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。",
+      "schedulePausedDay": "許可された曜日を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。"
     },
     "apps": {
       "title": "接続済みアプリ",

@@ -20,6 +20,7 @@ import type {
 	JsonObject,
 	JsonValue,
 	RefreshScheduleStatus,
+	ScheduledRunPauseReason,
 	ScheduledRunRecord,
 } from "../../../../shared/settings-contract";
 import { isCalendarDatasourceType } from "../../../../shared/calendar-platform";
@@ -415,6 +416,12 @@ function lastAutoText(record: ScheduledRunRecord | null | undefined, now: number
  * (unsupported, install failed, another job also refreshes AutoRAG) or the
  * cadence while something is scheduled. Silent when everything is manual.
  */
+const PAUSE_KEYS = {
+	battery: "settingsSources.indexing.schedulePausedBattery",
+	"outside-window": "settingsSources.indexing.schedulePausedWindow",
+	"outside-day": "settingsSources.indexing.schedulePausedDay",
+} as const satisfies Record<ScheduledRunPauseReason, LocaleKey>;
+
 function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | null }): ReactElement | null {
 	useTranslation();
 	if (status === null) return null;
@@ -440,6 +447,14 @@ function ScheduleNote({ status }: { readonly status: RefreshScheduleStatus | nul
 			<Note key="active">
 				{t("settingsSources.indexing.scheduleActive", { minutes })}
 				{status.lastTickAt !== null ? ` ${t("settingsSources.indexing.scheduleLastCheck", { ago: agoText(status.lastTickAt, Date.now()) })}` : ` ${t("settingsSources.indexing.scheduleNever")}`}
+			</Note>,
+		);
+	}
+	// The job recorded that `refresh.schedule` held due work back; the status already drops it once the schedule is gone.
+	if (status.wanted && status.paused !== null) {
+		parts.push(
+			<Note key="paused">
+				{t(PAUSE_KEYS[status.paused.reason], { ago: agoText(status.paused.at, Date.now()) })}
 			</Note>,
 		);
 	}

@@ -3102,7 +3102,10 @@
       "scheduleConflicts": "이 컴퓨터에는 Dazzi를 따로 새로 고치는 예약 작업이 이미 있습니다({{list}}). 같은 폴더를 두 번 처리하지 않도록 한쪽만 쓰는 것을 권장합니다.",
       "scheduleActive": "앱이 꺼져 있어도 {{minutes}}분마다 확인해, 주기가 된 항목만 새로 고칩니다.",
       "scheduleLastCheck": "마지막 확인 {{ago}}.",
-      "scheduleNever": "아직 실행된 적이 없습니다."
+      "scheduleNever": "아직 실행된 적이 없습니다.",
+      "schedulePausedBattery": "전원 연결을 기다리는 중: 인덱싱 일정이 전원이 연결된 동안에만 허용합니다({{ago}} 보류).",
+      "schedulePausedWindow": "허용된 시간대를 기다리는 중: 인덱싱 일정에 따라 {{ago}} 최신화를 보류했습니다.",
+      "schedulePausedDay": "허용된 요일을 기다리는 중: 인덱싱 일정에 따라 {{ago}} 최신화를 보류했습니다."
     },
     "apps": {
       "title": "연결된 앱",

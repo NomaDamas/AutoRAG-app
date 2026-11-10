@@ -214,9 +214,12 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   - *Conditions* (설정 > 인덱싱 > 자동 최신화 조건): "전원 연결 시에만" and one daily time
     window are stored as `refresh.schedule` (`power: "ac"`, `windows: ["22:00-07:00"]`, local time; a
     start later than the end wraps midnight). The job asks the librarian's `checkIndexSchedule`
-    only once something is due; a closed schedule ends the wake-up with `paused: <reason>` in
-    `job.log`, takes no lock and writes no state, so the same items run on the first wake after it
-    opens. A malformed schedule fails open. The Settings buttons are never gated. The power
+    only once something is due; a closed schedule ends the wake-up with `paused: refresh.schedule (<reason>)`
+    in `job.log`, takes no lock, and records only `paused: { at, reason }` in `state.json` (no item is
+    marked done), so the same items run on the first wake after it opens, which clears the pause.
+    While the config still has a schedule, 인덱싱 > 최신화 상태 says why the job is waiting. A
+    malformed `refresh.schedule` is a config error like any other invalid field: the job exits 2 and
+    names the bad entry in `job.log`. The Settings buttons are never gated. The power
     source is read with `pmset` (macOS), `Win32_Battery` (Windows) or `/sys/class/power_supply`
     (Linux); an unreadable source counts as plugged in.
 - **Indexing progress** — a block above 설정 in the sidebar shows what is

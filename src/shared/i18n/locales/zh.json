@@ -3102,7 +3102,10 @@
       "scheduleConflicts": "此计算机已有单独刷新 Dazzi 的计划任务（{{list}}）。为避免重复处理同一文件夹，建议只使用其中一个。",
       "scheduleActive": "即使应用已关闭，也会每 {{minutes}} 分钟检查一次，仅刷新到期的项目。",
       "scheduleLastCheck": "上次检查 {{ago}}。",
-      "scheduleNever": "尚未运行过。"
+      "scheduleNever": "尚未运行过。",
+      "schedulePausedBattery": "正在等待接通电源：索引计划只允许在接通电源时运行（{{ago}}已暂缓）。",
+      "schedulePausedWindow": "正在等待允许的时段：索引计划已于{{ago}}暂缓刷新。",
+      "schedulePausedDay": "正在等待允许的日期：索引计划已于{{ago}}暂缓刷新。"
     },
     "apps": {
       "title": "已连接应用",

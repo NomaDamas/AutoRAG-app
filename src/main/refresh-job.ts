@@ -5,7 +5,7 @@
  */
 import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { checkIndexSchedule, readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
+import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { homedir } from "node:os";
 import { applyBundledTools } from "./bundled-tools";
 import { configureEmbeddingDaemon, stopEmbeddingDaemon } from "./embedding-daemon";
@@ -58,7 +58,6 @@ async function main(): Promise<number> {
 			paths,
 			log,
 			readRaw: () => readRawConfigObject(configPath),
-			gate: () => checkIndexSchedule(readRawConfigObject(configPath)),
 			refreshLocal: () => refreshAutoragIndex({ env, cwd }),
 			syncSource: (id) => dataSources.sync(id),
 		});
