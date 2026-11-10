@@ -191,7 +191,7 @@ const ACTION_ICONS: Readonly<Record<FileActionIcon, (props: { readonly size?: nu
  */
 export function FadedDazziMark({ reserveDock = false }: { readonly reserveDock?: boolean } = {}): ReactElement {
 	return (
-		// `reserveDock`: a sidebar without the chat bar (Settings) keeps the 68px it takes, so the mark sits where the
+		// `reserveDock`: a sidebar without the chat bar (Settings, the empty AI Search evidence) keeps the 68px it takes, so the mark sits where the
 		// Finder's empty inspector shows it, centred above its chat bar.
 		<div className={cn("inspector-empty flex flex-1 min-h-0 items-center justify-center", reserveDock && "pb-68")}>
 			<img className="size-67 object-contain opacity-50 dark:hidden" src={dazziMarkMono} alt="" aria-hidden="true" draggable={false} />
@@ -1064,7 +1064,7 @@ function EvidencePanel({
 						{folderButton}
 					</div>
 				) : null}
-				<FadedDazziMark />
+				<FadedDazziMark reserveDock />
 			</div>
 		);
 	}
