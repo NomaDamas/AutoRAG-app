@@ -27,6 +27,8 @@ const FS_WORKER_METHODS: Readonly<Record<string, string>> = {
 	exists: "exists",
 	search: "search",
 	contentSearch: "contentSearch",
+	searchDatasources: "searchDatasources",
+	sourceSearch: "sourceSearch",
 	locations: "locations",
 	tags: "tags",
 	setTags: "setTags",

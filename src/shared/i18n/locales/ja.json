@@ -87,10 +87,6 @@
     "descending": "降順"
   },
   "sidebarSearch": {
-    "fileName": "ファイル名",
-    "content": "コンテンツ",
-    "fileNameHint": "この{{machine}}全体でファイル名を検索",
-    "contentHint": "AIでファイル内容を検索 ({{shortcut}})",
     "placeholder": "検索…",
     "clearSearch": "検索をクリア"
   },
@@ -102,6 +98,23 @@
     "thisMac": "このMac",
     "thisComputer": "このPC",
     "itemsFound": "個の項目が見つかりました"
+  },
+  "wholeSearch": {
+    "groups": "検索結果のグループ",
+    "files": "ファイル名",
+    "content": "文書の内容",
+    "pending": "検索中…",
+    "contentOff": "キーワード専用モードでは文書内容のインデックスがありません。",
+    "contentUnavailable": "文書インデックスはまだ準備できていません。",
+    "contentError": "文書の内容を検索できませんでした。",
+    "noContentHits": "\"{{query}}\" に一致する文書の内容はありません。",
+    "showInFolder": "フォルダで表示",
+    "sourcePending": "{{source}} を検索中…",
+    "sourceError": "{{source}} を検索できませんでした: {{error}}",
+    "noSourceHits": "{{source}} に \"{{query}}\" と一致する項目はありません。",
+    "openPage": "ページを開く",
+    "askAi": "AI検索に聞く",
+    "askAiHint": "この検索語でAI検索のチャットを始めます"
   },
   "tabs": {
     "close": "タブを閉じる ({{shortcut}})",
@@ -1377,7 +1390,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "検索範囲",
     "sidebar": "場所",
     "pathBar": "パス",
     "inspectorAside": "インスペクタ",
@@ -1646,6 +1658,7 @@
       "retried": "一時的なファイルシステムエラー({{code}})が発生したため、更新を {{retries}} 回再試行しました。",
       "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
       "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。",
+      "batchSkipped": "同期に失敗したため、ファイル {{files}} 件は以前のインデックスのままです。次回の更新で再試行します。",
       "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。",
       "preflightMissingKey": "エンベッダー {{id}} には API キーが必要ですが、{{env}} が設定されていません。インデックス作成の前に設定してください。",
       "preflightKeyEnvIgnored": "エンベッダー {{id}} は apiKeyEnv に {{configured}} を指定していますが、インデクサーはキーを {{env}} からしか読まず、{{env}} が設定されていません。キーを {{env}} に設定してください。",

@@ -42,6 +42,10 @@ function stubServices(calls: Calls, host: { locations(): Promise<readonly FsLoca
 				return { state: "ok", hits: [{ path: `/d/${query}.md`, snippet: query, line: 1, score: 1 }] };
 			},
 		},
+		sourceSearch: {
+			datasources: async () => [],
+			search: async () => ({ state: "ok", hits: [], error: null }),
+		},
 		fileNameSearch: {
 			search: async (query, scope) => {
 				calls.search.push([query, scope]);

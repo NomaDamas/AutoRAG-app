@@ -4,6 +4,7 @@ import { isTagPath, isVirtualListing, RECENTS_PATH, tagNameOf } from "../../../s
 import type { FinderSource } from "../data/source";
 import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
 import { useFinderController, type QuickLookBridge } from "../hooks/useFinderController";
+import { useWholeSearch } from "../hooks/useWholeSearch";
 import type { ControllerStore } from "../hooks/usePaneControllers";
 import { pressRow } from "../lib/row-drag";
 import type { AiDeliveryRequest } from "../state/ai-delivery";
@@ -14,6 +15,7 @@ import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn,
 import { basename, breadcrumbTrail } from "../state/paths";
 import { requestSettingsCategory } from "../state/settings-navigation";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
+import { searchGroups, type SearchGroupKey } from "../state/whole-search";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
 import { AutomationsTab } from "./AutomationsTab";
 import { ColumnBrowser } from "./ColumnBrowser";
@@ -26,6 +28,7 @@ import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./li
 import { PathBar } from "./PathBar";
 import { ScopeBar } from "./ScopeBar";
 import { TabStrip } from "./TabStrip";
+import { ContentResults, SearchGroupTabs, SourceResults } from "./WholeSearch";
 
 const autorag = window.autorag;
 
@@ -94,6 +97,20 @@ export const FinderPane = memo(function FinderPane({
 		onFocusComposer: shell.onFocusComposer,
 		onToast: shell.onToast,
 	});
+	// The whole search (⌘F): the document index and every datasource answer next to the filename list, one group each.
+	const wholeQuery = finder.searching && !isVirtualTabPath(finder.path) ? finder.query.trim() : "";
+	const whole = useWholeSearch(shell.source, wholeQuery);
+	const [groupChoice, setGroupChoice] = useState<{ readonly query: string; readonly key: SearchGroupKey }>({ query: "", key: "files" });
+	const groups = useMemo(() => (whole === null ? [] : searchGroups(whole, finder.rows.length)), [whole, finder.rows.length]);
+	// A new query starts on the file names; a group that is gone (a datasource removed) falls back to them too.
+	const group: SearchGroupKey = groupChoice.query === wholeQuery && groups.some((candidate) => candidate.key === groupChoice.key) ? groupChoice.key : "files";
+	const selectGroup = useCallback((key: SearchGroupKey) => setGroupChoice({ query: wholeQuery, key }), [wholeQuery]);
+	const selectedDatasource = groups.find((candidate) => candidate.key === group)?.datasource ?? null;
+	const askAi = useCallback(() => {
+		if (wholeQuery === "") return;
+		finder.openAiSearch();
+		shell.deliverToAi({ query: wholeQuery });
+	}, [finder, shell, wholeQuery]);
 	const headerViewportRef = useRef<HTMLDivElement>(null);
 	// The list is the one sideways scroller; the column header follows it (`list-scroll.ts`).
 	const listElement = finder.listRef.current;
@@ -372,7 +389,8 @@ export const FinderPane = memo(function FinderPane({
 					<div className="min-h-0 flex-1 bg-subtle-alt" />
 				) : (
 					<>
-						{finder.searching ? (
+						{whole !== null ? <SearchGroupTabs groups={groups} selected={group} onSelect={selectGroup} onAskAi={askAi} /> : null}
+						{finder.searching && group === "files" ? (
 							<ScopeBar
 								scope={finder.searchScope}
 								folderName={isTagPath(finder.path) ? tagNameOf(finder.path) : basename(finder.path)}
@@ -387,7 +405,16 @@ export const FinderPane = memo(function FinderPane({
 								finder.openSettings();
 							}}
 						/>
-						{finder.layout === "icons" ? (
+						{whole !== null && group === "content" ? (
+							<ContentResults query={whole.query} content={whole.content} onOpen={finder.openEntry} onReveal={finder.revealEntryInNewTab} />
+						) : whole !== null && selectedDatasource !== null ? (
+							<SourceResults
+								query={whole.query}
+								datasource={selectedDatasource}
+								answer={whole.sources.get(selectedDatasource.id)}
+								onOpenUrl={(url) => void shell.source.openUrl(url)}
+							/>
+						) : finder.layout === "icons" ? (
 							<IconGrid
 								sections={finder.stackSections}
 								listRef={finder.listRef}

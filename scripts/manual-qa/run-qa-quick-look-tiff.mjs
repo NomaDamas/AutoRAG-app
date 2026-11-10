@@ -13,12 +13,18 @@
  *   - a 6000 px TIFF is shown shrunk to 2048 px on its long side;
  *   - the colours survive: the left half is red and the right half is blue.
  *
+ * Then a second launch puts a `sips` on PATH that takes 4 s (the OS decode of a
+ * camera scan on a busy or spun-down disk): Space must still open the panel at
+ * once, with its loading state, and the picture must replace it when the decode
+ * lands. A TIFF that cannot be read at all must open the panel with a "couldn't
+ * read" note rather than leaving Space without a reaction.
+ *
  * macOS only: other platforms keep the in-page decoder, which this lane does
  * not exercise.
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
@@ -74,43 +80,57 @@ function check(label, pass, detail = "") {
 }
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * The app pre-warms two Quick Look pages, the Finder's and the quick-search launcher's, and either can
+ * register with Playwright first. The Finder's is the one that has a file loaded after Space.
+ */
+const quickLookPages = async (app) => (await app.windows()).filter((page) => page.url().includes("quick-look.html"));
+async function loadedPage(app) {
+	for (const page of await quickLookPages(app)) {
+		if (await page.evaluate(() => document.querySelector(".qlw")?.dataset.quicklookState === "ready").catch(() => false)) return page;
+	}
+	return null;
+}
+
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "en" });
 try {
 	const main = await finderWindow(app, 30_000);
-	let preview;
-	for (let i = 0; i < 600 && preview === undefined; i += 1) {
-		preview = (await app.windows()).find((page) => page.url().includes("quick-look.html"));
-		if (preview === undefined) await sleep(50);
+	for (let i = 0; i < 600 && (await quickLookPages(app)).length < 2; i += 1) await sleep(50);
+	if ((await quickLookPages(app)).length === 0) throw new Error("Quick Look window did not pre-warm");
+	for (const page of await quickLookPages(app)) {
+		await page.evaluate(() => {
+			window.__block = 0;
+			let last = performance.now();
+			setInterval(() => {
+				const now = performance.now();
+				window.__block = Math.max(window.__block, now - last - 8);
+				last = now;
+			}, 8);
+		});
 	}
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
-	await preview.evaluate(() => {
-		window.__block = 0;
-		let last = performance.now();
-		setInterval(() => {
-			const now = performance.now();
-			window.__block = Math.max(window.__block, now - last - 8);
-			last = now;
-		}, 8);
-	});
+	const onPage = async (body, fallback) => {
+		const page = await loadedPage(app);
+		return page === null ? fallback : page.evaluate(body).catch(() => fallback);
+	};
 	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((w) => w.webContents.getURL().includes("quick-look.html"))?.isVisible() ?? false);
 	const shown = () =>
-		preview.evaluate(() => {
+		onPage(() => {
 			const image = document.querySelector("img.ql__image");
 			return image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0;
-		});
+		}, false);
 
 	async function open(name) {
 		const row = main.locator(`[data-path$="/${name}"]`).first();
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await sleep(250);
-		await preview.evaluate(() => { window.__block = 0; });
+		for (const page of await quickLookPages(app)) await page.evaluate(() => { window.__block = 0; });
 		const started = Date.now();
 		await main.keyboard.press("Space");
 		for (let i = 0; i < 6000 && !(await shown().catch(() => false)); i += 1) await sleep(10);
 		const elapsed = Date.now() - started;
 		await sleep(400);
-		return { elapsed, blocked: Math.round(await preview.evaluate(() => window.__block)) };
+		return { elapsed, blocked: Math.round(await onPage(() => window.__block, 0)) };
 	}
 	async function close() {
 		await main.keyboard.press("Space");
@@ -119,7 +139,7 @@ try {
 	}
 	/** Natural size and the colour at the middle of the left and right quarter of the shown picture. */
 	const probe = () =>
-		preview.evaluate(() => {
+		onPage(() => {
 			const image = document.querySelector("img.ql__image");
 			const canvas = document.createElement("canvas");
 			canvas.width = image.naturalWidth;
@@ -128,7 +148,7 @@ try {
 			context.drawImage(image, 0, 0);
 			const at = (fx) => Array.from(context.getImageData(Math.floor(image.naturalWidth * fx), Math.floor(image.naturalHeight / 2), 1, 1).data.slice(0, 3));
 			return { w: image.naturalWidth, h: image.naturalHeight, left: at(0.25), right: at(0.75) };
-		});
+		}, null);
 	const reddish = ([r, g, b]) => r > 200 && g < 60 && b < 60;
 	const bluish = ([r, g, b]) => b > 200 && r < 60 && g < 60;
 
@@ -145,7 +165,7 @@ try {
 	check("the page is not frozen while it opens", timing.blocked < MAX_BLOCK_MS, `longest stall ${timing.blocked}ms`);
 	check("long side is shrunk to 2048", shape.w === 2048 && shape.h === Math.round((800 * 2048) / 6000), `${shape.w}x${shape.h}`);
 	check("wide TIFF colours: left red, right blue", reddish(shape.left) && bluish(shape.right), `${shape.left} | ${shape.right}`);
-	await preview.screenshot({ path: join(EVIDENCE, "wide.png") });
+	await (await loadedPage(app))?.screenshot({ path: join(EVIDENCE, "wide.png") });
 	await close();
 
 	timing = await open("scan.tif");
@@ -154,11 +174,94 @@ try {
 	check("the page is not frozen while it opens", timing.blocked < MAX_BLOCK_MS, `longest stall ${timing.blocked}ms`);
 	check("scan is shrunk to 2048 on its long side", Math.max(shape.w, shape.h) === 2048 && Math.abs(shape.h - 1638) <= 1, `${shape.w}x${shape.h}`);
 	check("scan colours: left red, right blue", reddish(shape.left) && bluish(shape.right), `${shape.left} | ${shape.right}`);
-	await preview.screenshot({ path: join(EVIDENCE, "scan.png") });
+	await (await loadedPage(app))?.screenshot({ path: join(EVIDENCE, "scan.png") });
 	await close();
 } finally {
 	await app.close().catch(() => undefined);
 	rmSync(root, { recursive: true, force: true });
+}
+
+// Second launch: a slow OS decode, and a file that cannot be read.
+const slowRoot = mkdtempSync(join(tmpdir(), "autorag-ql-tiff-slow-"));
+const shimDir = mkdtempSync(join(tmpdir(), "autorag-ql-tiff-shim-"));
+const DECODE_DELAY_S = 4;
+writeFileSync(join(shimDir, "sips"), `#!/bin/sh\n/bin/sleep ${DECODE_DELAY_S}\nexec /usr/bin/sips "$@"\n`, { mode: 0o755 });
+{
+	const seed = join(slowRoot, "seed.bmp");
+	writeFileSync(seed, bmp(120, 80));
+	execFileSync("sips", ["-s", "format", "tiff", seed, "--out", join(slowRoot, "slow.tif")], { stdio: "ignore" });
+	execFileSync("sips", ["-s", "format", "tiff", seed, "--out", join(slowRoot, "locked.tif")], { stdio: "ignore" });
+	rmSync(seed);
+	chmodSync(join(slowRoot, "locked.tif"), 0o000);
+}
+const slowApp = await launchFinder({
+	env: { AUTORAG_QA_ROOT: slowRoot, AUTORAG_SKIP_DUPEY_CHECK: "1", PATH: `${shimDir}:${process.env.PATH ?? ""}` },
+	language: "en",
+});
+try {
+	const main = await finderWindow(slowApp, 30_000);
+	for (let i = 0; i < 600 && (await quickLookPages(slowApp)).length < 2; i += 1) await sleep(50);
+	if ((await quickLookPages(slowApp)).length === 0) throw new Error("Quick Look window did not pre-warm");
+	const onPanel = async (body, fallback) => {
+		const page = await loadedPage(slowApp);
+		return page === null ? fallback : page.evaluate(body).catch(() => fallback);
+	};
+	const panelText = () => onPanel(() => document.querySelector(".qlw")?.textContent ?? "", "");
+	const pictureWidth = () =>
+		onPanel(() => {
+			const image = document.querySelector("img.ql__image");
+			return image instanceof HTMLImageElement && image.complete ? image.naturalWidth : 0;
+		}, 0);
+	const anyVisible = () =>
+		slowApp.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.webContents.getURL().includes("quick-look.html") && w.isVisible()));
+	const select = async (name) => {
+		const row = main.locator(`[data-path$="/${name}"]`).first();
+		await row.waitFor({ timeout: 30_000 });
+		await row.click();
+		await sleep(250);
+	};
+	const closePanel = async () => {
+		await main.keyboard.press("Space");
+		for (let i = 0; i < 200 && (await anyVisible()); i += 1) await sleep(30);
+		await sleep(250);
+	};
+
+	await select("slow.tif");
+	const started = Date.now();
+	await main.keyboard.press("Space");
+	let opened = -1;
+	for (let i = 0; i < 400 && opened < 0; i += 1) {
+		if (await anyVisible()) opened = Date.now() - started;
+		else await sleep(10);
+	}
+	check("panel opens at once while the OS decode is still running", opened >= 0 && opened < DECODE_DELAY_S * 1000 - 1500, `${opened}ms`);
+	check("the panel says it is loading", (await panelText()).includes("Loading"), (await panelText()).slice(0, 60));
+	check("no picture before the decode lands", (await pictureWidth()) === 0);
+	for (let i = 0; i < 1200 && (await pictureWidth()) === 0; i += 1) await sleep(25);
+	check("the decoded picture replaces the loading state", (await pictureWidth()) === 120, `${await pictureWidth()}px`);
+	check("the loading text is gone", !(await panelText()).includes("Loading"));
+	await (await loadedPage(slowApp))?.screenshot({ path: join(EVIDENCE, "slow-decoded.png") });
+	await closePanel();
+
+	await select("locked.tif");
+	await main.keyboard.press("Space");
+	let shown = false;
+	for (let i = 0; i < 800 && !shown; i += 1) {
+		shown = (await anyVisible()) && (await panelText()).includes("locked.tif");
+		if (!shown) await sleep(25);
+	}
+	// The decode runs sips twice (pixel size, then convert), each delayed by the shim.
+	for (let i = 0; i < 1200 && (await panelText()).includes("Loading"); i += 1) await sleep(25);
+	const lockedText = await panelText();
+	check("an unreadable TIFF still opens the panel", shown);
+	check("the panel says the image could not be read", lockedText.includes("Couldn’t read the image"), lockedText.slice(0, 80));
+	await (await loadedPage(slowApp))?.screenshot({ path: join(EVIDENCE, "locked.png") });
+	await closePanel();
+} finally {
+	await slowApp.close().catch(() => undefined);
+	chmodSync(join(slowRoot, "locked.tif"), 0o600);
+	rmSync(slowRoot, { recursive: true, force: true });
+	rmSync(shimDir, { recursive: true, force: true });
 }
 
 const failed = results.filter((result) => !result.pass);

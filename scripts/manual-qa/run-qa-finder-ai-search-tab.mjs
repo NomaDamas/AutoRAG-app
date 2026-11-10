@@ -18,7 +18,7 @@
  *   9. dwelling on an AI Search tab springs it open, and a row dropped on the
  *      panel attaches;
  *  10. an external file drop on the panel attaches its absolute path;
- *  11. the sidebar 내용 search opens a new AI Search tab and sends the query;
+ *  11. the whole search's "Ask AI Search" opens a new AI Search tab and sends the query;
  *  12. a filename search from an AI Search tab lists results in that tab;
  *  13. "AI 요약" asks in the Interface language setting, not always Korean.
  * No model key is needed: nothing waits on an answer. Run `bun run build`
@@ -246,17 +246,17 @@ try {
 	check("the drag overlay clears after the drop", (await page.getByText("Drag here to ask AI").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "05-panel-drops.png") });
 
-	// 11. Sidebar 내용 opens a new AI tab and sends the query.
+	// 11. The whole search's "Ask AI Search" opens a new AI tab and sends the query.
 	const countBefore = (await tabs(page)).length;
 	const search = page.locator(".side-search input");
 	await search.click();
-	await page.locator(".scope-chip", { hasText: /^Content$/ }).click();
 	await search.fill("approval notes");
 	await search.press("Enter");
+	await page.locator(".search-ask").click();
 	await page.locator(`${PANEL} .user-msg .bubble`).first().waitFor({ timeout: 10_000 });
 	now = await tabs(page);
 	check(
-		"Content opens a new AI Search tab and sends the query",
+		"Ask AI Search opens a new AI Search tab and sends the query",
 		now.length === countBefore + 1 &&
 			now.at(-1)?.active === true &&
 			now.at(-1)?.ai === true &&
@@ -271,8 +271,7 @@ try {
 	await page.locator(".tabs .tab").first().click();
 	await page.waitForSelector(PANEL);
 	await search.click();
-	// 파일 이름 scopes the search to the tab's folder, so the hit is the fixture, fast.
-	await page.locator(".scope-chip", { hasText: /^File Name$/ }).click();
+	// A whole search from an AI Search tab lists its file names in the tab's last folder.
 	await search.fill("budget");
 	await search.press("Enter");
 	await page.waitForSelector(`[data-path="${cssAttr(BUDGET)}"]`, { timeout: 15_000 }).catch(() => undefined);

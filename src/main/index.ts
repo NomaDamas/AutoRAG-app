@@ -44,6 +44,7 @@ import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
 import { autoragHome } from "./autorag-home";
+import { seedFromLaunchFolder, withoutRootWorkspace } from "./workspace-seed";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
@@ -98,6 +99,7 @@ import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
 import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
+import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
@@ -201,13 +203,24 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
-/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has. */
+/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has, and the Jev settings the librarian now refuses. */
 function migrateEmbeddingConfig(configPath: string): void {
 	try {
-		const { raw, changed } = migrateLegacyEmbedding(readRawConfigObject(configPath));
-		if (changed) writeConfigObject(configPath, raw);
+		const embedding = migrateLegacyEmbedding(readRawConfigObject(configPath));
+		const jev = migrateLegacyJev(embedding.raw);
+		if (embedding.changed || jev.changed) writeConfigObject(configPath, jev.raw);
 	} catch (error) {
-		console.error("AutoRAG embedding config migration failed", error);
+		console.error("AutoRAG config migration failed", error);
+	}
+}
+
+/** An earlier Dazzi seeded `workspacePath` with the launch folder, `/` for a packaged app, where `.autorag` cannot be created. */
+function migrateRootWorkspace(configPath: string): void {
+	try {
+		const next = withoutRootWorkspace(readRawConfigObject(configPath), process.env, homedir());
+		if (next !== null) writeConfigObject(configPath, next);
+	} catch (error) {
+		console.error("AutoRAG workspace migration failed", error);
 	}
 }
 
@@ -215,13 +228,14 @@ async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
 		migrateEmbeddingConfig(configPath);
+		migrateRootWorkspace(configPath);
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
 	try {
 		writeDefaultConfig(
 			configPath,
-			{ searchPaths: [process.cwd()], workspacePath: process.cwd() },
+			seedFromLaunchFolder(process.cwd(), process.env, homedir()),
 			{ atomicCreate: true, cwd: process.cwd(), env: process.env },
 		);
 		ensureAppIndexingMetadata(configPath);

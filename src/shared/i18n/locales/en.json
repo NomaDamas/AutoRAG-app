@@ -87,10 +87,6 @@
     "descending": "Descending"
   },
   "sidebarSearch": {
-    "fileName": "File Name",
-    "content": "Content",
-    "fileNameHint": "Search file names across this {{machine}}",
-    "contentHint": "Search file contents with AI ({{shortcut}})",
     "placeholder": "Search…",
     "clearSearch": "Clear search"
   },
@@ -102,6 +98,23 @@
     "thisMac": "This Mac",
     "thisComputer": "This Computer",
     "itemsFound": "items found"
+  },
+  "wholeSearch": {
+    "groups": "Search result groups",
+    "files": "File Names",
+    "content": "Document Content",
+    "pending": "Searching…",
+    "contentOff": "Keyword-only mode has no document content index.",
+    "contentUnavailable": "The document index isn't ready yet.",
+    "contentError": "Couldn't search document content.",
+    "noContentHits": "No document content matches \"{{query}}\".",
+    "showInFolder": "Show in Folder",
+    "sourcePending": "Searching {{source}}…",
+    "sourceError": "Couldn't search {{source}}: {{error}}",
+    "noSourceHits": "Nothing in {{source}} matches \"{{query}}\".",
+    "openPage": "Open Page",
+    "askAi": "Ask AI Search",
+    "askAiHint": "Start an AI Search chat with this query"
   },
   "tabs": {
     "close": "Close tab ({{shortcut}})",
@@ -1377,7 +1390,6 @@
     }
   },
   "finderComponents": {
-    "searchRange": "Search scope",
     "sidebar": "Places",
     "pathBar": "Path",
     "inspectorAside": "Inspector",
@@ -1646,6 +1658,7 @@
       "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
       "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
       "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh.",
+      "batchSkipped": "{{files}} file(s) stayed at their previous index entry because the sync that covered them failed. They will be tried again on the next refresh.",
       "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model.",
       "preflightMissingKey": "The embedder {{id}} needs an API key, but {{env}} is not set. Set it before indexing.",
       "preflightKeyEnvIgnored": "The embedder {{id}} sets apiKeyEnv to {{configured}}, but the indexer reads its key only from {{env}}, and {{env}} is not set. Put the key in {{env}}.",
