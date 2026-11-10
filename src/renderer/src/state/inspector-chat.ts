@@ -44,6 +44,8 @@ export interface InspectorChat {
 	readonly turns: readonly InspectorTurn[];
 	/** Epoch ms of the last question or answer, here or in the AI Search tab showing the same chat. */
 	readonly updatedAt: number;
+	/** The stored chat's title, for a chat opened from the history menu; a chat started here shows the selection. */
+	readonly title?: string;
 }
 
 export interface InspectorChatTab {

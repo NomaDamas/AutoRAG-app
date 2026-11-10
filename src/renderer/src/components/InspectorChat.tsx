@@ -569,7 +569,7 @@ function ChatHistoryMenu({
 
 export interface InspectorChatViewProps {
 	readonly tab: InspectorChatTab;
-	/** The selection's name: the chat's title. */
+	/** The selection's name: the title of a chat started here (a chat opened from history shows its own). */
 	readonly targetName: string;
 	/** What the next question carries of the selection, as cards with their ×. */
 	readonly pending: readonly ChatAttachment[];
@@ -609,23 +609,28 @@ export function InspectorChatView({
 	const { t } = useTranslation();
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const turns = tab.chat?.turns ?? [];
+	/** A chat picked from history carries its own title; a chat started here is titled by the selection it is about. */
+	const title = tab.chat?.title ?? targetName;
 	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
-			<div className="relative flex h-35 flex-none items-center gap-4 py-6 pl-12 pr-8">
-				<button
-					type="button"
-					className="inspector-chat-title flex min-w-0 flex-1 items-center gap-4 border-0 bg-transparent p-0 text-left text-meta leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
-					aria-haspopup="menu"
-					aria-expanded={historyOpen}
-					title={t("inspector.chat.history")}
-					onClick={() => setHistoryOpen((open) => !open)}
-				>
-					<span className="truncate">{targetName}</span>
-					<span className="flex flex-none text-ink-muted" aria-hidden="true">
-						<TitleChevronIcon size={16} />
-					</span>
-				</button>
+			<div className="relative flex h-35 flex-none items-center gap-4 border-y border-divider bg-subtle-alt py-6 pl-12 pr-8">
+				{/* The title keeps the narrowest sidebar's width (Figma: 137px of name, then the chevron); a wider sidebar widens the gap, not the title. */}
+				<div className="flex min-w-0 flex-1">
+					<button
+						type="button"
+						className="inspector-chat-title flex min-w-0 max-w-[157px] items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-medium leading-[20px] text-ink-body cursor-pointer hover:text-ink"
+						aria-haspopup="menu"
+						aria-expanded={historyOpen}
+						title={title}
+						onClick={() => setHistoryOpen((open) => !open)}
+					>
+						<span className="truncate">{title}</span>
+						<span className="flex flex-none text-ink-muted" aria-hidden="true">
+							<TitleChevronIcon size={16} />
+						</span>
+					</button>
+				</div>
 				<button type="button" className={headButton} aria-label={t("inspector.chat.newChat")} title={t("inspector.chat.newChat")} disabled={running} onClick={onNewChat}>
 					<NewChatIcon size={16} />
 				</button>

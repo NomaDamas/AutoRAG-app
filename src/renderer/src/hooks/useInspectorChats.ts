@@ -160,7 +160,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 					if (record === null || runRef.current?.tabId === tabId) return;
 					const now = Date.now();
 					const stored = Date.parse(record.updatedAt);
-					const chat: InspectorChat = { chatId, turns: turnsFromHistory(record.messages), updatedAt: Number.isFinite(stored) ? stored : now };
+					const chat: InspectorChat = { chatId, title: record.title, turns: turnsFromHistory(record.messages), updatedAt: Number.isFinite(stored) ? stored : now };
 					change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
 				})
 				.catch((error: unknown) => console.error("inspector chat open failed", error));

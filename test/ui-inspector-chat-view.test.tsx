@@ -126,6 +126,31 @@ describe("the inspector chat view", () => {
 		expect(backs).toEqual(["back"]);
 	});
 
+	it("shows a chat picked from history under its own title, not the selection's name", () => {
+		const picked: InspectorChatTab = { ...tab, chat: tab.chat === null ? null : { ...tab.chat, chatId: "chat-2", title: "3분기 기획안 요약" } };
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={picked}
+					targetName="deck.pdf"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					onAsk={() => true}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+		expect(host.querySelector(".inspector-chat-title")?.textContent).toBe("3분기 기획안 요약");
+	});
+
 	it("puts the approval-mode chip, icon only, left of the input", () => {
 		render([]);
 		const chip = host.querySelector<HTMLButtonElement>('.inspector-chat-composer button[aria-haspopup="menu"]');

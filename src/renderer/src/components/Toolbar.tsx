@@ -166,7 +166,7 @@ export function Toolbar({
 			>
 				<ChevronRightIcon size={18} />
 			</button>
-			<strong className="toolbar-title min-w-150 overflow-hidden whitespace-nowrap text-ellipsis text-[15px] font-[650] text-ink">
+			<strong className="toolbar-title ml-7 min-w-150 overflow-hidden whitespace-nowrap text-ellipsis text-[14px] font-medium leading-[19px] text-ink">
 				{title}
 			</strong>
 			<span className="toolbar-spacer flex-1" />
@@ -289,7 +289,7 @@ function ToolbarControl({
 		<button
 			type="button"
 			className={[
-				"toolbar__control flex flex-none items-center gap-3 h-[25px] px-6 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease] [-webkit-app-region:no-drag]",
+				"toolbar__control ml-14 flex flex-none items-center gap-4 h-[25px] px-6 border-0 rounded-7 transition-[background,color] duration-(--dur-color) ease-[ease] [-webkit-app-region:no-drag]",
 				active || open ? "bg-sel-mute text-ink" : "bg-transparent text-ink-muted hover:bg-hover-icon hover:text-ink",
 			].join(" ")}
 			title={label}

@@ -61,7 +61,7 @@ export function TabStrip({
 	const newTabShortcut = useFormattedShortcut("newTab");
 	const { t } = useTranslation();
 	return (
-		<div className="tabs flex h-25 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
+		<div className="tabs flex h-35 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
 			{tabs.map((tab, index) => (
 				<div
 					key={tab.id}
@@ -70,7 +70,7 @@ export function TabStrip({
 					draggable={onTabDragStart !== undefined}
 					className={[
 						`tab group/tab${tab.active ? " tab--active" : ""}`,
-						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-normal select-none cursor-pointer [-webkit-app-region:no-drag]",
+						"relative flex flex-1 min-w-0 items-center justify-center px-24 text-badge font-medium leading-[14px] select-none cursor-pointer [-webkit-app-region:no-drag]",
 						index > 0 ? "border-l border-tabstrip-line" : "",
 						tab.active ? "bg-tab-active text-ink" : cn(TAB_GRADIENT, TAB_GRADIENT_HOVER, "text-tab-text"),
 						dropTabId === tab.id ? "shadow-[inset_0_0_0_1.5px_var(--accent)]" : "",
