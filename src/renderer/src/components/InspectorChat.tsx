@@ -632,7 +632,7 @@ export function InspectorChatView({
 				<div className="flex min-w-0 flex-1 pr-26">
 					<button
 						type="button"
-						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-medium leading-[20px] text-ink-body cursor-pointer hover:text-ink"
+						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
 						aria-haspopup="menu"
 						aria-expanded={historyOpen}
 						title={title}
