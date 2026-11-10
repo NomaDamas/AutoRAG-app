@@ -564,7 +564,7 @@ function ChatHistoryMenu({
 								role="menuitem"
 								key={item.id}
 								className={cn(
-									"mx-8 block truncate rounded-8 border-0 px-16 py-8 text-left text-meta leading-[16px] text-ink cursor-pointer hover:bg-hover",
+									"mx-8 block truncate rounded-8 border-0 px-16 py-8 text-left text-meta leading-[16px] text-ink-body cursor-pointer hover:bg-hover",
 									item.id === currentChatId ? "bg-selected-nav" : "bg-transparent",
 								)}
 								title={item.title}
@@ -632,7 +632,7 @@ export function InspectorChatView({
 				<div className="flex min-w-0 flex-1 pr-26">
 					<button
 						type="button"
-						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
+						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink cursor-pointer hover:text-ink-body"
 						aria-haspopup="menu"
 						aria-expanded={historyOpen}
 						title={title}

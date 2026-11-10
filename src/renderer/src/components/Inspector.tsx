@@ -367,7 +367,7 @@ function InfoHalf({
 			) : (
 				// One scroll for the whole panel; the chat dock follows the content and stays pinned at the bottom.
 				<div className="inspector-body flex-1 min-h-0 overflow-auto flex flex-col">
-					<div className="flex flex-col gap-8 px-12 pt-4 pb-12">
+					<div className="flex flex-col gap-8 px-12 pt-12 pb-12">
 						<div className="preview-card flex flex-col gap-12 rounded-12 border border-divider bg-window p-14">
 							<PreviewPaper entry={entry} />
 							<div className="flex items-center gap-8">
@@ -724,7 +724,7 @@ function MultiInfoHalf({
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.title")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto flex flex-col">
-				<div className="flex flex-col gap-8 px-12 pt-4 pb-12">
+				<div className="flex flex-col gap-8 px-12 pt-12 pb-12">
 					<div className="preview-card flex flex-col gap-12 rounded-12 border border-divider bg-window p-14">
 						<div className="preview-stack relative h-201 flex-none overflow-hidden">
 							{staged.map(({ card, depth }) => (
@@ -1060,7 +1060,7 @@ function EvidencePanel({
 		return (
 			<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 				{canOpenFolder ? (
-					<div className="flex items-center justify-end px-12 pt-4">
+					<div className="flex items-center justify-end px-12 pt-12">
 						{folderButton}
 					</div>
 				) : null}
@@ -1087,7 +1087,7 @@ function EvidencePanel({
 	return (
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto">
-				<div className="flex flex-col gap-8 px-12 pt-4 pb-14">
+				<div className="flex flex-col gap-8 px-12 pt-12 pb-14">
 					<div className="evidence-header flex items-center justify-between gap-8">
 						<div className="evidence-tabs flex min-w-0 flex-1 gap-4 overflow-auto">
 							{evidence.map((entry) => (

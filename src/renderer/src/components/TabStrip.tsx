@@ -61,7 +61,7 @@ export function TabStrip({
 	const newTabShortcut = useFormattedShortcut("newTab");
 	const { t } = useTranslation();
 	return (
-		<div className="tabs flex h-35 flex-none items-stretch overflow-hidden border-y border-divider bg-tabstrip [-webkit-app-region:drag]">
+		<div className="tabs flex h-24 flex-none items-stretch overflow-hidden border-y border-divider bg-tabstrip [-webkit-app-region:drag]">
 			{tabs.map((tab, index) => (
 				<div
 					key={tab.id}
