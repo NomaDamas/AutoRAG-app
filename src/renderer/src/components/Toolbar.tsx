@@ -131,7 +131,7 @@ export function Toolbar({
 	// macOS keeps room for the traffic lights before the icons; Windows has none, so they start at the left edge.
 	const trafficLights = hostPlatform() !== "win32";
 	return (
-		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} ${inspectorHidden ? "pr-[calc(12px+var(--window-controls-gutter))]" : "pr-12"} bg-linear-to-b from-window to-subtle-alt border-b border-border [-webkit-app-region:drag]`}>
+		<div className={`toolbar flex flex-none items-center gap-6 h-toolbar ${sidebarHidden && !trafficLights ? "pl-10" : "pl-12"} ${inspectorHidden ? "pr-[calc(12px+var(--window-controls-gutter))]" : "pr-12"} bg-linear-to-b from-window to-subtle-alt [-webkit-app-region:drag]`}>
 			{sidebarHidden ? (
 				<>
 					{trafficLights ? <span className="w-[70px] flex-none" aria-hidden="true" /> : null}

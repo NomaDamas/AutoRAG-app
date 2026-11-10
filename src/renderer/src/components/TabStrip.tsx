@@ -61,7 +61,7 @@ export function TabStrip({
 	const newTabShortcut = useFormattedShortcut("newTab");
 	const { t } = useTranslation();
 	return (
-		<div className="tabs flex h-35 flex-none items-stretch overflow-hidden border-b border-tabstrip-line bg-tabstrip [-webkit-app-region:drag]">
+		<div className="tabs flex h-35 flex-none items-stretch overflow-hidden border-y border-divider bg-tabstrip [-webkit-app-region:drag]">
 			{tabs.map((tab, index) => (
 				<div
 					key={tab.id}
@@ -122,9 +122,8 @@ export function TabStrip({
 			<button
 				type="button"
 				className={cn(
-					"tabs__new flex flex-none w-28 items-center justify-center border-0 border-l border-tabstrip-line text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
-					TAB_GRADIENT,
-					TAB_GRADIENT_HOVER,
+					// Figma 328:5789: the + sits on the active tab's colour, with no rule before it.
+					"tabs__new flex flex-none w-28 items-center justify-center border-0 bg-tab-active text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
 				)}
 				title={t("tabs.new", { shortcut: newTabShortcut, defaultValue: `New tab ${newTabShortcut}` })}
 				aria-label={t("tabs.new", { shortcut: newTabShortcut, defaultValue: `New tab ${newTabShortcut}` })}
