@@ -6,8 +6,11 @@
  *
  *   - a date question asked in AI Search is answered through the `calculator` tool, with the exact day count;
  *   - with the record cut on (the default), the agent's first local search shows the model several documents,
- *     not only the long one that matches everywhere; with `limits.recordCut.enabled: false` it shows fewer;
- *   - the app's config writes keep a `limits.recordCut` block the librarian accepts.
+ *     not only the long one that matches everywhere;
+ *   - the app's config writes keep a `limits.recordCut` block the librarian accepts, and the cut acts where it lives:
+ *     the librarian's top-50 over the index the app built is all one manual with the cut off and holds every short
+ *     note with it on (the agent decides its own searches, so its transcript cannot compare the two runs fairly);
+ *   - AI Search still answers with the cut off.
  *
  * The model is a real OpenRouter model released in 2026, reached through a loopback proxy that records, and never
  * alters, what passes. The key comes from QA_OPENROUTER_KEY, else OPENROUTER_API_KEY, else the `openrouter` entry of
@@ -16,18 +19,20 @@
  *   bun run build
  *   bun scripts/manual-qa/run-qa-live-librarian-2-13-8.mjs
  */
+import { spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
-import { finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
+import { basename, join } from "node:path";
+import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
 import { homeEnv } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/live-librarian-2-13-8");
 mkdirSync(EVIDENCE, { recursive: true });
 const LOG = join(EVIDENCE, "run.log");
 writeFileSync(LOG, "");
+const LIBRARIAN_CLI = join(ROOT, "node_modules", "@autorag", "librarian", "dist", "cli", "index.js");
 const log = (line) => {
 	console.log(line);
 	appendFileSync(LOG, `${line}\n`);
@@ -146,6 +151,11 @@ function toolResults(requests) {
 				const text = typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
 				results.push({ id: message.tool_call_id, name: names.get(message.tool_call_id) ?? "", text });
 			}
+			// The librarian may run the first search itself and hand the model its results in the prompt.
+			if (message.role === "user") {
+				const text = typeof message.content === "string" ? message.content : (message.content ?? []).map((part) => part.text ?? "").join("");
+				if (text.includes("Baseline retrieval evidence")) results.push({ id: "baseline", name: "baseline-retrieval", text });
+			}
 		}
 	}
 	return [...new Map(results.map((result) => [result.id, result])).values()];
@@ -154,6 +164,8 @@ function toolResults(requests) {
 async function ask(page, question) {
 	const before = traffic.requests.length;
 	await openAiSearch(page);
+	// Every question starts its own chat, so an answer is never carried over from an earlier one.
+	await page.locator(`${AI_PANEL} button[aria-label="New chat"]`).click();
 	await page.fill('textarea[aria-label="Ask Dazzi"]', question);
 	await page.keyboard.press("Enter");
 	const finished = () =>
@@ -164,8 +176,14 @@ async function ask(page, question) {
 		});
 	const deadline = Date.now() + 300_000;
 	await page.waitForTimeout(1500);
+	const allowOnce = page.getByRole("button", { name: "Allow once", exact: true });
 	while (!(await finished())) {
 		if (Date.now() > deadline) throw new Error("the answer did not finish within 300s");
+		// The agent may look around with a shell command; the approval gate is not what this lane tests.
+		if (await allowOnce.isVisible().catch(() => false)) {
+			log(`approved a command: ${(await page.locator("code, pre").last().innerText().catch(() => "")).slice(0, 200)}`);
+			await allowOnce.click();
+		}
 		await page.waitForTimeout(500);
 	}
 	const error = (await page.locator(".ai .text-danger-text").first().textContent({ timeout: 1000 }).catch(() => null)) ?? "";
@@ -191,12 +209,17 @@ function spread(text) {
 }
 
 async function localSearchSpread(page, label) {
+	const before = traffic.requests.length;
 	const { error, answer, results } = await ask(page, `내 문서에서 ${TOPIC} 펌프를 점검한 팀과 owner code를 모두 찾아줘. 문서마다 정리해줘.`);
-	const searches = results.filter((result) => result.name !== "calculator" && FILES.some((name) => result.text.includes(name)));
+	// Only retrieval results count: a shell listing names every file without ranking anything.
+	const searches = results.filter((result) => (result.name === "baseline-retrieval" || /search/u.test(result.name)) && FILES.some((name) => result.text.includes(name)));
 	writeFileSync(join(EVIDENCE, `search-results-${label}.json`), JSON.stringify(results, null, 2));
+	writeFileSync(join(EVIDENCE, `requests-${label}.json`), JSON.stringify(traffic.requests.slice(before).map((request) => request.messages?.map((message) => ({ role: message.role, tools: message.tool_calls?.map((call) => call.function?.name), text: (typeof message.content === "string" ? message.content : JSON.stringify(message.content ?? "")).slice(0, 400) }))), null, 2));
 	log(`[${label}] tools: ${results.map((result) => result.name).join(", ")}; answer: ${answer.replace(/\s+/g, " ").slice(0, 300)}`);
 	check(`[${label}] AI Search shows no error`, error === "", error);
 	const first = searches[0];
+	// Without a search there is nothing to measure: the comparison would pass on an empty result.
+	check(`[${label}] the agent ran a local search`, first !== undefined, results.map((result) => result.name).join(",") || "no tool call");
 	const measured = first === undefined ? { files: [], longHits: 0 } : spread(first.text);
 	log(`[${label}] first local search (${first?.name ?? "none"}): ${measured.files.length} files, manual named ${measured.longHits} times`);
 	return measured;
@@ -248,11 +271,31 @@ try {
 	check("no renderer page error (cut on)", session.pageErrors.length === 0, session.pageErrors.slice(0, 2).join(" | "));
 	await session.app.close().catch(() => undefined);
 
-	// 5. the record cut off: the same question, a fresh app, the long manual takes more of the first search
+	// 5. the record cut, measured where it acts: the librarian's retrieval over the index the app built, with the
+	// config the app wrote. The manual's 60 sections all outrank the notes, so a plain top-50 is all manual; the cut
+	// over-fetches (3 x 50) and reserves half the slots for documents not yet shown. At top-8 the over-fetched
+	// pool (24) is still all manual, so the cut cannot show there.
+	const retrieveTop50 = (label) => {
+		const result = spawnSync(process.execPath, [LIBRARIAN_CLI, "lite", "retrieve", `${TOPIC} pump`, "--json", "--top-k", "50"], { cwd: WORK, env: { ...process.env, ...env }, encoding: "utf8", timeout: 120_000 });
+		writeFileSync(join(EVIDENCE, `retrieve-top50-${label}.json`), result.stdout);
+		if (result.status !== 0) throw new Error(`lite retrieve (${label}) exited ${result.status}: ${result.stderr.slice(0, 400)}`);
+		const counts = {};
+		for (const row of JSON.parse(result.stdout).results) counts[basename(row.source)] = (counts[basename(row.source)] ?? 0) + 1;
+		log(`[${label}] lite retrieve top-50 per document: ${JSON.stringify(counts)}`);
+		return counts;
+	};
+	const offTop = retrieveTop50("cut-off");
+	check("with the record cut off (as the app wrote it), the long manual takes every top-50 slot", offTop[LONG] === 50, JSON.stringify(offTop));
+	writeConfig({ ...readConfig(), limits: undefined });
+	const onTop = retrieveTop50("cut-on");
+	check("with the record cut on (the default), every short note comes back in the same top-50", SHORT.every((name) => onTop[name] >= 1) && onTop[LONG] < 50, JSON.stringify(onTop));
+	writeConfig({ ...readConfig(), limits: { recordCut: { enabled: false } } });
+
+	// 6. the app's AI Search runs with the cut off without error
 	session = await launch("cut-off");
 	const off = await localSearchSpread(session.page, "cut-off");
 	await session.page.screenshot({ path: join(EVIDENCE, "03-cut-off-answer.png") });
-	check("with the record cut off, the first search shows fewer documents than with it on", off.files.length < on.files.length, `on=${JSON.stringify(on)} off=${JSON.stringify(off)}`);
+	log(`long-manual passages shown to the model: cut on ${on.longHits}, cut off ${off.longHits}`);
 	check("no renderer page error (cut off)", session.pageErrors.length === 0, session.pageErrors.slice(0, 2).join(" | "));
 	check("every upstream request succeeded", traffic.statuses.every((status) => status === 200), JSON.stringify(traffic.statuses));
 } catch (error) {
