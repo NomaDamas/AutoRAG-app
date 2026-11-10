@@ -1269,8 +1269,7 @@
     },
     "onboarding": {
       "indexingFailed": "인덱싱에 실패했습니다.",
-      "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 색인을 시작하지 못했습니다: {{error}}",
-      "demoTopicQuestion": "{{topic}}에 대해 알려 주세요"
+      "modelDownloadFailed": "이 컴퓨터용 임베딩 모델을 내려받지 못해 색인을 시작하지 못했습니다: {{error}}"
     },
     "lock": {
       "scheduledBusy": "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요.",

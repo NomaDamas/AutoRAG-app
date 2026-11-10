@@ -1269,8 +1269,7 @@
     },
     "onboarding": {
       "indexingFailed": "建立索引失败。",
-      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}",
-      "demoTopicQuestion": "请介绍一下{{topic}}"
+      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}"
     },
     "lock": {
       "scheduledBusy": "后台刷新正在运行。完成后请重试。",

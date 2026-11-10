@@ -75,6 +75,7 @@ import { resolveAnonymousDeviceId } from "./device-id";
 import { readDazziGuestCredential } from "./dazzi-plan-credential";
 import { quotaBlock } from "./quota-guard";
 import { createFirstRunService, type FirstRunService } from "./first-run-service";
+import { createDemoQuestionJudge } from "./demo-question-judge";
 import { closeDecision } from "./onboarding-window";
 import { FS_CHANNELS, type FsBatchResult } from "../shared/fs-contract";
 import dockIconPath from "../../build/icon.png?asset";
@@ -1106,6 +1107,15 @@ app.whenReady().then(async () => {
 			const { results } = await new AutoRAGLite(config).retrieve(query, options);
 			return results;
 		},
+		// Jev scores each question: only one a real person would recognise as theirs (0.9+) becomes the tour's.
+		judgeDemoQuestions: createDemoQuestionJudge({
+			env: process.env,
+			agentDir: getAgentDir(),
+			model: () => {
+				const jev = existsSync(autoragConfigPath()) ? readRawConfigObject(autoragConfigPath()).jev : undefined;
+				return typeof jev === "object" && jev !== null && "backend" in jev && jev.backend === "dazzi" && "model" in jev && typeof jev.model === "string" ? jev.model : undefined;
+			},
+		}),
 		scanOptions,
 		language: () => currentLanguage,
 		send: sendToMainWindow,

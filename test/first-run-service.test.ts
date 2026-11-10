@@ -7,8 +7,7 @@ import type { ConfigRefreshResult } from "../src/shared/settings-contract";
 import {
 	createFirstRunService,
 	detectCloudFolders,
-	pickVerifiedDemo,
-	documentTopic,
+	readableExcerpt,
 	parseDemoQuestions,
 	readOnboardingPending,
 	type FirstRunService,
@@ -68,6 +67,7 @@ async function makeDeps(userDataDir: string, overrides: Partial<FirstRunServiceD
 		resolveModel: async () => Promise.reject(new Error("no model is configured")),
 		complete: async () => Promise.reject(new Error("no model is configured")),
 		retrieve: async () => [],
+		judgeDemoQuestions: async (candidates) => candidates.map(() => null),
 		scanOptions: { supportedExtensions: new Set([".txt", ".md", ".pdf"]), maxSourceBytes: 1024 * 1024 },
 		language: () => "ko",
 		send: () => undefined,
@@ -284,49 +284,20 @@ describe("createFirstRunService complete", () => {
 	});
 });
 
-describe("pickVerifiedDemo", () => {
-	const docs = [
-		{ sourcePath: "/docs/a.pdf", realSourcePath: "/docs/a.pdf" },
-		{ sourcePath: "/docs/b.pdf", realSourcePath: "/docs/b.pdf" },
-	];
+describe("readableExcerpt", () => {
+	const prose = "이번 분기 사업 계획의 핵심은 신규 고객 확보입니다. 영업팀은 3월까지 파일럿 세 곳을 확정하고, 연구팀은 검색 품질 평가를 마칩니다. ".repeat(4);
 
-	it("keeps the question whose document keyword retrieval returns, preferring the best rank then the lower latency", async () => {
-		const retrieve = async (query: string): Promise<readonly { source: string }[]> =>
-			query === "second question" ? [{ source: "/docs/b.pdf" }] : [{ source: "/other.pdf" }, { source: "/docs/a.pdf" }];
-		let clock = 0;
-		const demo = await pickVerifiedDemo(
-			docs,
-			[
-				{ doc: 1, question: "first question" },
-				{ doc: 2, question: "second question" },
-			],
-			retrieve,
-			() => (clock += 5),
-		);
-		expect(demo).toEqual({ question: "second question", sourcePath: "/docs/b.pdf", latencyMs: 5 });
+	it("keeps prose and strips markup and wordless lines", () => {
+		const text = readableExcerpt(`<table><tr><td>${prose}</td></tr></table>\n\n= = = = = =\n12 34 56\n`);
+		expect(text).toContain("신규 고객 확보");
+		expect(text).not.toContain("<td>");
+		expect(text).not.toContain("= = =");
 	});
 
-	it("returns null when no question is answered from its own document", async () => {
-		const demo = await pickVerifiedDemo(docs, [{ doc: 1, question: "off target" }], async () => [{ source: "/other.pdf" }]);
-		expect(demo).toBeNull();
-	});
-
-	it("prefers the lower latency when two questions rank the same", async () => {
-		let clock = 0;
-		const retrieve = async (query: string): Promise<readonly { source: string }[]> => {
-			clock += query === "slow" ? 50 : 5;
-			return [{ source: query === "slow" ? "/docs/a.pdf" : "/docs/b.pdf" }];
-		};
-		const demo = await pickVerifiedDemo(
-			docs,
-			[
-				{ doc: 1, question: "slow" },
-				{ doc: 2, question: "fast" },
-			],
-			retrieve,
-			() => clock,
-		);
-		expect(demo).toEqual({ question: "fast", sourcePath: "/docs/b.pdf", latencyMs: 5 });
+	it("rejects numeric logs and text too short to ask about", () => {
+		expect(readableExcerpt("13 38 42\n06 38 39\n".repeat(80))).toBeNull();
+		expect(readableExcerpt("( 1 / 1 )\n= = = = = = = = = =\n".repeat(30))).toBeNull();
+		expect(readableExcerpt("짧은 메모")).toBeNull();
 	});
 });
 
@@ -336,17 +307,5 @@ describe("parseDemoQuestions", () => {
 			{ doc: 1, question: "What is X?" },
 		]);
 		expect(parseDemoQuestions("no json here")).toEqual([]);
-	});
-});
-
-describe("documentTopic", () => {
-	it("uses the first substantive line without markdown marks and cuts a long one", () => {
-		expect(documentTopic("# **2026 3분기 사업기획안**\n\n본문")).toBe("2026 3분기 사업기획안");
-		expect(documentTopic("---\n- \n12\n> 주간 회의록 요약\n")).toBe("주간 회의록 요약");
-		expect(documentTopic(`${"가".repeat(60)}\n`)).toHaveLength(36);
-	});
-
-	it("returns null when no line carries a phrase", () => {
-		expect(documentTopic("# \n- 1\n")).toBeNull();
 	});
 });

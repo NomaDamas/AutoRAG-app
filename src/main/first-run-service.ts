@@ -26,6 +26,8 @@ import type { RunOutcome } from "./index-problem-service";
 import type { FolderScanOptions } from "./onboarding-scan";
 import { createSmartIndexingService, type SmartIndexingService } from "./smart-indexing-service";
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
+import { createDemoHunt, type DemoDoc, type DemoHunt, type WrittenQuestion } from "./demo-question-hunt";
+import { DEMO_MIN_SCORE, type DemoQuestionJudge } from "./demo-question-judge";
 
 /**
  * The main-process half of the first run. The Finder window opens with the
@@ -39,9 +41,12 @@ import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexin
  *  indexing (15→90)  write the folders into the shared config keyword-only
  *                    (parsed mirror + MinSync SPLADE; no dense embedder) and run
  *                    the first index;
- *  preparing (90→99) start a duplicate (dupey) scan and pick one question from
- *                    the user's own documents that keyword retrieval proves
- *                    answers from that document;
+ *  preparing (90→99) start a duplicate (dupey) scan and, if the hunt that has
+ *                    run since indexing began has not found it yet, finish
+ *                    looking for the tour's question: one a model wrote from
+ *                    the person's own document, keyword retrieval proves is
+ *                    answered from that document, and Jev scores at or above
+ *                    {@link DEMO_MIN_SCORE};
  *  ready     (100).
  *
  * Which folders to read is the only question; no account, plan, model, source,
@@ -55,16 +60,21 @@ const SMART_INDEXING_TIMEOUT_MS = 120_000;
 /** Longest the model may take to write the tour's questions. */
 const DEMO_MODEL_TIMEOUT_MS = 45_000;
 const DEMO_MAX_TOKENS = 900;
-const MIN_TOPIC_CHARS = 4;
-const MAX_TOPIC_CHARS = 36;
+/** How often the hunt looks for newly parsed documents while the first index is still being built. */
+const HUNT_INTERVAL_MS = 5_000;
+/** Most documents the model is ever shown in one first run. */
+const MAX_HUNT_DOCS = 40;
+/** A document's cleaned excerpt must be at least this share letters, so numeric logs and form chrome never reach the model. */
+const MIN_LETTER_RATIO = 0.5;
 /** The whole preparing stage is bounded so the user never waits forever. */
 const PREPARING_TIMEOUT_MS = 90_000;
 /** Indexing's share of the one bar: `computeIndexingProgress` yields 0–100 and this maps it to 15–90. */
 const INDEXING_START = 15;
 const INDEXING_SPAN = 75;
 const MAX_DOC_BYTES = 400_000;
-const MAX_DEMO_DOCS = 8;
-/** Most parsed documents opened looking for {@link MAX_DEMO_DOCS} long enough ones. */
+/** Documents the model is shown per call. */
+const DEMO_BATCH = 8;
+/** Most parsed documents opened in one look for {@link DEMO_BATCH} readable ones. */
 const MAX_DEMO_READS = 48;
 const EXCERPT_CHARS = 2_000;
 const MIN_EXCERPT_CHARS = 200;
@@ -172,6 +182,8 @@ export interface FirstRunServiceDeps {
 	readonly complete: (model: Model<Api>, context: Context, options?: SimpleStreamOptions) => Promise<AssistantMessage>;
 	/** Keyword retrieval over the first index's effective config, used to verify the tour's question. */
 	readonly retrieve: (query: string, options?: { readonly topK?: number }) => Promise<readonly { readonly source: string }[]>;
+	/** Jev's P(yes) that each question is one the person would recognise as theirs; null where Jev could not be asked. */
+	readonly judgeDemoQuestions: DemoQuestionJudge;
 	/** The pre-scan's file rules for smart indexing, so its proposal counts match. */
 	readonly scanOptions: FolderScanOptions;
 	/** Pi's agent home; defaults to Pi's own. */
@@ -225,11 +237,6 @@ interface ParsedMirrorSnapshot {
 	readonly recentFile: string | null;
 }
 
-interface DemoDoc {
-	readonly sourcePath: string;
-	readonly realSourcePath: string;
-	readonly excerpt: string;
-}
 
 /** Cloud drives the File Provider mounts under `~/Library/CloudStorage` (macOS), by folder-name prefix. */
 const CLOUD_STORAGE_PREFIXES: readonly (readonly [string, FirstRunFolderKind])[] = [
@@ -350,7 +357,24 @@ function outputSize(path: string): number | null {
 	}
 }
 
-/** Read the parsed markdown of one document, skipping its YAML front matter, and keep the head of the body. */
+/**
+ * The readable head of a parsed document: markup stripped, lines with no words dropped. Null when what is left is
+ * short or mostly digits and symbols (a sensor log, a scanned form), which no one would ask a question about.
+ */
+export function readableExcerpt(body: string): string | null {
+	const lines = body
+		.replace(/\r/gu, "")
+		.replace(/<[^>]+>/gu, " ")
+		.split("\n")
+		.map((line) => line.replace(/\s+/gu, " ").trim())
+		.filter((line) => (line.match(/\p{L}/gu)?.length ?? 0) >= 2);
+	const text = lines.join("\n").slice(0, EXCERPT_CHARS);
+	const visible = text.replace(/\s/gu, "").length;
+	const letters = text.match(/\p{L}/gu)?.length ?? 0;
+	return text.length >= MIN_EXCERPT_CHARS && letters / visible >= MIN_LETTER_RATIO ? text : null;
+}
+
+/** Read the parsed markdown of one document, skipping its YAML front matter, and keep its readable head. */
 function readExcerpt(outputPath: string): string | null {
 	const text = readLibrarianFile(outputPath);
 	if (text === null) return null;
@@ -362,16 +386,16 @@ function readExcerpt(outputPath: string): string | null {
 			body = after < 0 ? "" : body.slice(after + 1);
 		}
 	}
-	const excerpt = body.replace(/\r/gu, "").trim().slice(0, EXCERPT_CHARS);
-	return excerpt.length >= MIN_EXCERPT_CHARS ? excerpt : null;
+	return readableExcerpt(body);
 }
 
 /**
- * Pick up to {@link MAX_DEMO_DOCS} documents to write the tour's question from:
- * substantial parsed output, not source or configuration, recent first, one per
- * folder before a folder is used twice.
+ * Up to {@link DEMO_BATCH} parsed documents the model has not seen, to write the tour's question from: readable
+ * text, not source or configuration, recent first, one per folder before a folder is used twice. A document that
+ * cannot be read well enough is remembered in `rejected` and never opened again. The mirror is read as it is, so
+ * a later look finds what indexing has parsed since.
  */
-function collectDemoDocs(workspaceRoot: string): readonly DemoDoc[] {
+function collectDemoDocs(workspaceRoot: string, seen: ReadonlySet<string>, rejected: Set<string>): readonly DemoDoc[] {
 	let entries: ParsedMirrorEntry[];
 	try {
 		entries = Object.values(loadMirrorIndex(workspaceRoot).entries);
@@ -380,34 +404,35 @@ function collectDemoDocs(workspaceRoot: string): readonly DemoDoc[] {
 	}
 	const pool = entries
 		.map((entry) => ({ entry, ext: extname(entry.sourcePath).toLowerCase() }))
-		.filter(({ ext }) => SKIP_EXTENSIONS[ext] !== true)
+		.filter(({ entry, ext }) => SKIP_EXTENSIONS[ext] !== true && !seen.has(entry.sourcePath) && !rejected.has(entry.sourcePath))
 		.sort((a, b) => {
 			const preferred = (PREFERRED_EXTENSIONS[a.ext] === true ? 0 : 1) - (PREFERRED_EXTENSIONS[b.ext] === true ? 0 : 1);
 			return preferred !== 0 ? preferred : b.entry.sourceMtimeNs - a.entry.sourceMtimeNs;
-		});
-	const sized: ParsedMirrorEntry[] = [];
-	for (const { entry } of pool) {
-		const size = outputSize(entry.outputPath);
-		if (size === null || size > MAX_DOC_BYTES) continue;
-		sized.push(entry);
-	}
+		})
+		.map(({ entry }) => entry);
 	// One document per folder first, then the rest, each group in the order above.
 	const firstPerFolder = new Set<ParsedMirrorEntry>();
 	const seenFolders = new Set<string>();
-	for (const entry of sized) {
+	for (const entry of pool) {
 		const folder = dirname(entry.sourcePath);
 		if (seenFolders.has(folder)) continue;
 		seenFolders.add(folder);
 		firstPerFolder.add(entry);
 	}
-	const ordered = [...firstPerFolder, ...sized.filter((entry) => !firstPerFolder.has(entry))];
-	// A document is long enough when its text is (characters, not bytes: a Korean note is three bytes a character),
-	// so read until enough have an excerpt rather than trusting the file size.
+	const ordered = [...firstPerFolder, ...pool.filter((entry) => !firstPerFolder.has(entry))];
+	// Readable is judged on characters, not bytes (a Korean note is three bytes a character), so open documents
+	// until enough have an excerpt rather than trusting the file size.
 	const docs: DemoDoc[] = [];
-	for (const entry of ordered.slice(0, MAX_DEMO_READS)) {
-		if (docs.length >= MAX_DEMO_DOCS) break;
-		const excerpt = readExcerpt(entry.outputPath);
-		if (excerpt === null) continue;
+	let reads = 0;
+	for (const entry of ordered) {
+		if (docs.length >= DEMO_BATCH || reads >= MAX_DEMO_READS) break;
+		reads += 1;
+		const size = outputSize(entry.outputPath);
+		const excerpt = size === null || size > MAX_DOC_BYTES ? null : readExcerpt(entry.outputPath);
+		if (excerpt === null) {
+			rejected.add(entry.sourcePath);
+			continue;
+		}
 		docs.push({ sourcePath: entry.sourcePath, realSourcePath: realpathOr(entry.sourcePath), excerpt });
 	}
 	return docs;
@@ -416,10 +441,11 @@ function collectDemoDocs(workspaceRoot: string): readonly DemoDoc[] {
 function demoPrompt(docs: readonly DemoDoc[], language: AppSettings["language"]): string {
 	const numbered = docs.map((doc, index) => `[${index + 1}]\n${doc.excerpt}`).join("\n\n");
 	return [
-		"You are writing the single question a new user's guided tour will ask about their own files.",
-		"For each numbered document excerpt below, write ONE natural, specific question a person would ask that only that document can answer.",
-		`${LANGUAGE_INSTRUCTION[language]} Never mention a file, folder, or path in the question.`,
-		"Reply with ONLY a JSON array such as [{\"doc\":1,\"question\":\"...\"}], one entry per document, and nothing else.",
+		"You are writing the one question a new user's guided tour will ask about their own files.",
+		"For each numbered document excerpt below, write ONE question this person would genuinely ask their own assistant about what the document says: about a specific fact, decision, number, or name in it, phrased the way people talk. It should make them think the assistant really read their file.",
+		`${LANGUAGE_INSTRUCTION[language]} Never mention a file, folder, or path in the question, and never ask for a summary or about the title or format.`,
+		"Leave a document out of the array when it is only data, numbers, or a blank form, or has nothing a person would ask about.",
+		"Reply with ONLY a JSON array such as [{\"doc\":1,\"question\":\"...\"}], at most one entry per document, and nothing else.",
 		"",
 		numbered,
 	].join("\n");
@@ -455,71 +481,11 @@ export function parseDemoQuestions(text: string): readonly { readonly doc: numbe
 	return questions;
 }
 
-/** The topic a document opens with: its first line, minus markdown marks, cut to a short phrase. Null when it has none. */
-export function documentTopic(excerpt: string): string | null {
-	for (const line of excerpt.split("\n")) {
-		const topic = line
-			.replace(/^(?:[\s#>*\-+•]|\d+[.)]\s)+/u, "")
-			.replace(/[*_`|]/gu, "")
-			.trim();
-		if (topic.length >= MIN_TOPIC_CHARS) return topic.length > MAX_TOPIC_CHARS ? topic.slice(0, MAX_TOPIC_CHARS).trim() : topic;
-	}
-	return null;
-}
-
-/** A question per document built from its own opening line, for when no model can write one. */
-function titleQuestions(docs: readonly DemoDoc[]): readonly { readonly doc: number; readonly question: string }[] {
-	const questions: { doc: number; question: string }[] = [];
-	docs.forEach((doc, index) => {
-		const topic = documentTopic(doc.excerpt);
-		if (topic !== null) questions.push({ doc: index + 1, question: t("main.onboarding.demoTopicQuestion", { topic }) });
-	});
-	return questions;
-}
-
 /** Resolve with `fallback` if `promise` has not settled within `ms`; the underlying work is left to finish on its own. */
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
 	const { promise: timeout, resolve } = Promise.withResolvers<T>();
 	const timer = setTimeout(() => resolve(fallback), ms);
 	return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
-
-/** A candidate document the tour's question may come from: its path and its realpath. */
-export interface DemoCandidate {
-	readonly sourcePath: string;
-	readonly realSourcePath: string;
-}
-
-/**
- * Keep only the questions keyword retrieval actually answers from their own
- * document, then choose the one that ranked best and answered fastest. A
- * question learned from the wrong document would teach the tour nothing.
- */
-export async function pickVerifiedDemo(
-	docs: readonly DemoCandidate[],
-	answers: readonly { readonly doc: number; readonly question: string }[],
-	retrieve: (query: string, options?: { readonly topK?: number }) => Promise<readonly { readonly source: string }[]>,
-	now: () => number = Date.now,
-): Promise<FirstRunDemo | null> {
-	let best: { readonly demo: FirstRunDemo; readonly rank: number } | null = null;
-	for (const { doc, question } of answers) {
-		const candidate = docs[doc - 1];
-		if (candidate === undefined) continue;
-		const askedAt = now();
-		let results: readonly { readonly source: string }[];
-		try {
-			results = await retrieve(question, { topK: 5 });
-		} catch {
-			continue;
-		}
-		const latencyMs = now() - askedAt;
-		const rank = results.findIndex((result) => realpathOr(result.source) === candidate.realSourcePath);
-		if (rank < 0) continue;
-		if (best === null || rank < best.rank || (rank === best.rank && latencyMs < best.demo.latencyMs)) {
-			best = { demo: { question, sourcePath: candidate.sourcePath, latencyMs }, rank };
-		}
-	}
-	return best?.demo ?? null;
 }
 
 export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunService {
@@ -537,6 +503,13 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	let recentFile: string | null = null;
 	let excludedFolders = 0;
 	let demo: FirstRunDemo | null = null;
+	/** The hunt for the tour's question: started with the first index, finished in `preparing`. */
+	let hunt: DemoHunt | null = null;
+	let huntLoop: Promise<void> = Promise.resolve();
+	let huntStop = false;
+	let huntWake: (() => void) | null = null;
+	/** Parsed documents that cannot make a question, across the whole run. */
+	const rejectedDemoDocs = new Set<string>();
 	let error: string | null = null;
 	let startedAt: string | null = null;
 	let finishedAt: string | null = null;
@@ -829,6 +802,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		totalFiles = Math.max(0, deps.folderTotals(folders) - excludedFiles);
 		powerBlockerId = deps.startPowerSaveBlocker();
 		pollTimer = setInterval(() => void tick().catch(() => undefined), POLL_INTERVAL_MS);
+		startHunt();
 		const result = await deps.refresh(["parsed", "minsync"]).catch((caught: unknown): ConfigRefreshResult => ({
 			ok: false,
 			methods: ["parsed", "minsync"],
@@ -843,22 +817,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		return result;
 	}
 
-	/**
-	 * One model call writes a question per document; only the ones keyword
-	 * retrieval proves are returned. Without a callable model (offline, no
-	 * credential) or when none of its questions verify, the questions come from
-	 * the documents' own titles instead, so the tour still shows AI Search.
-	 */
-	async function buildDemo(): Promise<FirstRunDemo | null> {
-		if (workspacePath === null) return null;
-		const docs = collectDemoDocs(workspacePath);
-		if (docs.length === 0) return null;
-		const written = await writeModelQuestions(docs).catch(() => []);
-		const demo = written.length === 0 ? null : await pickVerifiedDemo(docs, written, deps.retrieve, now);
-		return demo ?? pickVerifiedDemo(docs, titleQuestions(docs), deps.retrieve, now);
-	}
-
-	async function writeModelQuestions(docs: readonly DemoDoc[]): Promise<ReturnType<typeof parseDemoQuestions>> {
+	async function writeModelQuestions(docs: readonly DemoDoc[]): Promise<readonly WrittenQuestion[]> {
 		const resolved: ProfileModel = await deps.resolveModel();
 		const apiKey = resolved.apiKey ?? resolved.providerApiKeys?.[resolved.model.provider];
 		const signal = AbortSignal.timeout(DEMO_MODEL_TIMEOUT_MS);
@@ -870,16 +829,81 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		return parseDemoQuestions(assistantText(reply));
 	}
 
+	/**
+	 * Begins looking for the tour's question while the first index is still being built: every few seconds, the
+	 * documents parsed so far are put to the model, and a question the index already answers from its own document
+	 * and Jev scores at {@link DEMO_MIN_SCORE} or above ends the search. Indexing is not cut short; this only looks.
+	 */
+	function startHunt(): void {
+		if (workspacePath === null) return;
+		const root = workspacePath;
+		const current = createDemoHunt({
+			collect: (seen) => collectDemoDocs(root, seen, rejectedDemoDocs),
+			write: writeModelQuestions,
+			retrieve: (query, options) => deps.retrieve(query, options),
+			judge: deps.judgeDemoQuestions,
+			realpath: realpathOr,
+			minScore: DEMO_MIN_SCORE,
+			maxDocs: MAX_HUNT_DOCS,
+			batchSize: DEMO_BATCH,
+			now,
+		});
+		hunt = current;
+		huntStop = false;
+		huntLoop = (async () => {
+			while (!huntStop) {
+				const round = await current.round(false).catch(() => null);
+				if (hunt !== current) return;
+				if (round?.demo) {
+					demo = round.demo;
+					return;
+				}
+				if (round?.exhausted === true || huntStop) return;
+				const { promise, resolve } = Promise.withResolvers<void>();
+				const timer = setTimeout(resolve, HUNT_INTERVAL_MS);
+				huntWake = () => {
+					clearTimeout(timer);
+					resolve();
+				};
+				await promise;
+				huntWake = null;
+			}
+		})();
+	}
+
+	/** Ends the background look after its round in flight; a question it finds in that round is still kept. */
+	function stopHunt(): void {
+		huntStop = true;
+		huntWake?.();
+	}
+
+	/** Ends the hunt for good: nothing it finds from here on is taken. */
+	function abandonHunt(): void {
+		stopHunt();
+		hunt = null;
+	}
+
+	/** Indexing is over, so every document is searchable: look at what is left until a question qualifies or nothing remains. */
+	async function finishHunt(): Promise<void> {
+		const current = hunt;
+		if (current === null) return;
+		stopHunt();
+		await huntLoop;
+		huntStop = false;
+		while (!huntStop && hunt === current && demo === null) {
+			const round = await current.round(true).catch(() => null);
+			if (hunt !== current) return;
+			if (round?.demo) demo = round.demo;
+			if (round === null || round.exhausted) return;
+		}
+	}
+
 	async function preparingStage(): Promise<void> {
 		setStage("preparing", 90);
 		emitStatus();
-		const work = Promise.all([deps.refreshDuplicates().catch(() => undefined), buildDemo().catch(() => null)]);
-		const chosen = await withTimeout(
-			work.then(([, demoQuestion]) => demoQuestion),
-			PREPARING_TIMEOUT_MS,
-			null,
-		);
-		demo = chosen;
+		const work = Promise.all([deps.refreshDuplicates().catch(() => undefined), finishHunt().catch(() => undefined)]);
+		await withTimeout(work, PREPARING_TIMEOUT_MS, undefined);
+		abandonHunt();
 		setProgress(99);
 		emitStatus();
 	}
@@ -918,6 +942,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			finishedAt = new Date(now()).toISOString();
 			emitStatus();
 		} finally {
+			abandonHunt();
 			if (powerBlockerId !== null) deps.stopPowerSaveBlocker(powerBlockerId);
 			powerBlockerId = null;
 		}
@@ -960,6 +985,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			deps.onComplete();
 		},
 		dispose: () => {
+			abandonHunt();
 			stopPolling();
 			if (powerBlockerId !== null) deps.stopPowerSaveBlocker(powerBlockerId);
 			powerBlockerId = null;

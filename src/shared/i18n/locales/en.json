@@ -1269,8 +1269,7 @@
     },
     "onboarding": {
       "indexingFailed": "Indexing failed.",
-      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}",
-      "demoTopicQuestion": "Tell me about {{topic}}"
+      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}"
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",
