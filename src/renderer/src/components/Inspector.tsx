@@ -1174,7 +1174,7 @@ function EvidencePanel({
 					) : null}
 
 					<div className="h-px bg-divider" aria-hidden="true" />
-					<div className="flex h-22 items-center text-[14px] font-medium leading-[19px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
+					<div className="flex h-22 items-center text-[13px] font-medium leading-[19px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
 					<div className="evidence-excerpts flex flex-col gap-8 [&_.evidence\_\_block]:text-[13px] [&_.evidence\_\_block]:leading-[21px]">
 						{item.summary.length === 0 ? null : (
 							<InlineWithImages

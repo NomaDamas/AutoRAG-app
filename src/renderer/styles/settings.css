@@ -3510,7 +3510,7 @@
 	border: 0;
 	border-radius: var(--radius-6);
 	background: transparent;
-	color: var(--text-body);
+	color: var(--text-faint); /* Figma 353:4605: the × is the faint grey until hovered. */
 	cursor: pointer;
 }
 
@@ -3599,10 +3599,10 @@
 	line-height: 16px;
 }
 
-/* Figma 403:6999: 60px rows without rules. */
+/* Figma 403:6999: 52px rows (12px above and below the 28px tile) without rules. */
 .settings-view .settings-apps .settings-list-row {
 	gap: 12px;
-	padding: 16px 0;
+	padding: 12px 0;
 	border-bottom: 0;
 }
 
@@ -3642,7 +3642,7 @@
 
 .settings-view .settings-apps-empty {
 	margin: 0;
-	padding-bottom: 16px; /* the space a row leaves, so the rule under 내 연결 sits 20px below either. */
+	padding-bottom: 12px; /* the space a row leaves, so the rule under 내 연결 sits 20px below either. */
 	font-size: var(--font-size-meta);
 	line-height: 16px;
 	color: var(--text-muted);
@@ -3650,7 +3650,7 @@
 
 .settings-view .settings-apps-group {
 	margin-top: 24px;
-	margin-bottom: 8px; /* with the first row's 16px padding, the frame's 24px from the label to the icon. */
+	margin-bottom: 8px; /* the frame's 8px from the label to the first row. */
 	font-size: var(--font-size-meta);
 	font-weight: var(--weight-medium);
 	line-height: 16px;
@@ -3748,7 +3748,7 @@
 /* Figma 403:6999: the rule under 내 연결, 20px below its last row. */
 .settings-view .settings-apps-divider {
 	height: 1px;
-	margin: 4px 0 0;
+	margin: 8px 0 0;
 	border: 0;
 	background: var(--border-divider);
 }
