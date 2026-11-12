@@ -3569,6 +3569,17 @@
 	cursor: pointer;
 }
 
+/* Figma 353:4636: 자세히 reads in the muted grey, not the accent; it darkens on hover. */
+.settings-view .scope-dev-head .scope-link {
+	color: var(--text-muted);
+	transition: color var(--dur-color) ease-out;
+}
+
+.settings-view .scope-dev-head .scope-link:hover,
+.settings-view .scope-dev-head .scope-link:focus-visible {
+	color: var(--text-body);
+}
+
 .settings-view .scope-dev-body {
 	display: flex;
 	flex-direction: column;
