@@ -163,13 +163,6 @@ export const FileIcon = glyph(FileGlyph, 12, 2);
  * `<path>`s, which Chromium rasterizes with a soft fringe the reference's
  * single path does not have, so these carry the reference's path data.
  */
-const DazziMark = createLucideIcon("dazzi-mark", [
-	["path", { d: "M9.551 6.087C8.56 3.038 10.659 1.082 12 0.7C13.341 1.082 15.44 3.038 14.449 6.087C15.905 3.23 18.772 3.332 19.99 4.01C20.668 5.228 20.77 8.095 17.913 9.551C20.962 8.56 22.918 10.659 23.3 12C22.918 13.341 20.962 15.44 17.913 14.449C20.77 15.905 20.668 18.772 19.99 19.99C18.772 20.668 15.905 20.77 14.449 17.913C15.44 20.962 13.341 22.918 12 23.3C10.659 22.918 8.56 20.962 9.551 17.913C8.095 20.77 5.228 20.668 4.01 19.99C3.332 18.772 3.23 15.905 6.087 14.449C3.038 15.44 1.082 13.341 0.7 12C1.082 10.659 3.038 8.56 6.087 9.551C3.23 8.095 3.332 5.228 4.01 4.01C5.228 3.332 8.095 3.23 9.551 6.087Z", key: "dazzi-0" }],
-	["circle", { cx: "12", cy: "12.000", r: "5.1", key: "dazzi-1" }],
-	["path", { d: "M7.6 10.7H16.4", key: "dazzi-2" }],
-	["path", { d: "M8.3 10.7H11.3V11.8C11.3 12.198 11.142 12.579 10.861 12.861C10.579 13.142 10.198 13.3 9.8 13.3C9.402 13.3 9.021 13.142 8.739 12.861C8.458 12.579 8.3 12.198 8.3 11.8V10.7Z", fill: "currentColor", key: "dazzi-3" }],
-	["path", { d: "M12.7 10.7H15.7V11.8C15.7 12.198 15.542 12.579 15.261 12.861C14.979 13.142 14.598 13.3 14.2 13.3C13.802 13.3 13.421 13.142 13.139 12.861C12.858 12.579 12.7 12.198 12.7 11.8V10.7Z", fill: "currentColor", key: "dazzi-4" }],
-]);
 
 const ImageConvert = createLucideIcon("image-convert", [
 	["path", { d: "M21 11V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h6", key: "frame" }],
@@ -278,8 +271,39 @@ export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 	);
 }
 
-/** The Dazzi sunflower as a line icon (Figma Icon/dazzi): the right sidebar's show/hide button. */
-export const DazziIcon = glyph(DazziMark, 18, 1.35);
+/** The Dazzi sunflower as an 18px line icon (Figma 409:10998): six 1.2px petals round a filled centre, in currentColor. */
+export function SunflowerIcon({ size = 18, className }: GlyphProps): ReactElement {
+	return (
+		<svg aria-hidden="true" focusable="false" className={className} width={size} height={size} viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth={1.2}>
+			<path d="M11.025 3.9C11.025 5.391 10.118 6.6 9 6.6C7.882 6.6 6.975 5.391 6.975 3.9C6.975 2.409 7.882 1.2 9 1.2C10.118 1.2 11.025 2.409 11.025 3.9Z" />
+			<path d="M14.429 8.204C13.138 8.949 11.638 8.769 11.079 7.8C10.519 6.831 11.113 5.442 12.404 4.696C13.696 3.951 15.196 4.131 15.755 5.1C16.314 6.069 15.721 7.458 14.429 8.204Z" />
+			<path d="M12.404 13.304C11.113 12.558 10.519 11.169 11.079 10.2C11.638 9.231 13.138 9.051 14.429 9.796C15.721 10.542 16.314 11.932 15.755 12.9C15.196 13.869 13.696 14.049 12.404 13.304Z" />
+			<path d="M6.975 14.1C6.975 12.609 7.882 11.4 9 11.4C10.118 11.4 11.025 12.609 11.025 14.1C11.025 15.591 10.118 16.8 9 16.8C7.882 16.8 6.975 15.591 6.975 14.1Z" />
+			<path d="M3.571 9.796C4.862 9.051 6.362 9.231 6.922 10.2C7.481 11.169 6.887 12.558 5.596 13.304C4.304 14.049 2.804 13.869 2.245 12.9C1.686 11.932 2.279 10.542 3.571 9.796Z" />
+			<path d="M5.596 4.696C6.887 5.442 7.481 6.831 6.922 7.8C6.362 8.769 4.862 8.949 3.571 8.204C2.279 7.458 1.686 6.069 2.245 5.1C2.804 4.131 4.304 3.951 5.596 4.696Z" />
+			<circle cx="9" cy="9" r="2.7" fill="currentColor" stroke="none" />
+		</svg>
+	);
+}
+
+/**
+ * The right sidebar's toggle (Figma 409:10708 / 403:6565): closed, the blue sunflower, which turns into the plain
+ * panel icon while the pointer is on it (or it has keyboard focus), so it reads as the brand and as the control;
+ * open, the panel icon alone. The button around it carries Tailwind's `group`.
+ */
+export function InspectorToggleIcon({ open }: { readonly open: boolean }): ReactElement {
+	if (open) return <PanelRightIcon size={18} />;
+	return (
+		<>
+			<span className="flex text-accent group-hover:hidden group-focus-visible:hidden">
+				<SunflowerIcon />
+			</span>
+			<span className="hidden group-hover:flex group-focus-visible:flex">
+				<PanelRightIcon size={18} />
+			</span>
+		</>
+	);
+}
 
 /** Change an image's file format (Figma Icon/image-convert). */
 export const ImageConvertIcon = glyph(ImageConvert, 16, 1.8);

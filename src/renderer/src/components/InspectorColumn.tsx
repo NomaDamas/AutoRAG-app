@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
-import { DazziIcon } from "./icons";
+import { InspectorToggleIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 
 /**
@@ -36,12 +36,12 @@ export function InspectorColumn({
 				<div className="inspector-head flex flex-none items-center gap-8 h-toolbar bg-window px-12 [-webkit-app-region:drag]">
 					<button
 						type="button"
-						className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "text-accent [-webkit-app-region:no-drag]")}
+						className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "[-webkit-app-region:no-drag]")}
 						title={t("toolbar.hideInspector")}
 						aria-label={t("toolbar.hideInspector")}
 						onClick={onHide}
 					>
-						<DazziIcon size={18} />
+						<InspectorToggleIcon open />
 					</button>
 				</div>
 				{visible ? children : null}

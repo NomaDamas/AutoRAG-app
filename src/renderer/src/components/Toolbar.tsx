@@ -16,7 +16,7 @@ import {
 	IconsViewIcon,
 	ListRowsIcon,
 	PanelLeftIcon,
-	DazziIcon,
+	InspectorToggleIcon,
 	ShareIcon,
 	SortIcon,
 	PutBackIcon,
@@ -243,12 +243,12 @@ export function Toolbar({
 			{inspectorHidden ? (
 				<button
 					type="button"
-					className={`${NAV_BUTTON} [-webkit-app-region:no-drag]`}
+					className={`group ${NAV_BUTTON} [-webkit-app-region:no-drag]`}
 					title={t("toolbar.showInspector")}
 					aria-label={t("toolbar.showInspector")}
 					onClick={onShowInspector}
 				>
-					<DazziIcon size={18} />
+					<InspectorToggleIcon open={false} />
 				</button>
 			) : null}
 			{menu === null ? null : (
