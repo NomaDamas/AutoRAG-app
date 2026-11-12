@@ -8,12 +8,12 @@
  * reuse `LanguageSettings`.
  */
 
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
-import { Row, Section, SettingsPageHead } from "./SettingsKit";
+import { PlainRow, Row, Section, SettingsPageHead } from "./SettingsKit";
 import { asRecord, boolOf, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
 
@@ -113,18 +113,6 @@ export function ReadingPage({ snapshot, onSaved }: { readonly snapshot: AutoRagC
 
 /* ========================================================== Duplicates == */
 
-/** A setting as the 중복 파일 정리 frame draws it: a 14px medium name over a 12px line, the control at the right. */
-function PlainRow({ name, hint, children }: { readonly name: string; readonly hint: string; readonly children: ReactNode }): ReactElement {
-	return (
-		<div className="settings-plain-row">
-			<div className="settings-plain-text">
-				<span className="settings-plain-name">{name}</span>
-				<small>{hint}</small>
-			</div>
-			<div className="settings-plain-control">{children}</div>
-		</div>
-	);
-}
 
 const DUPEY_INTERVALS: readonly { readonly value: number; readonly label: LocaleKey }[] = [
 	{ value: 15, label: "settingsSources.duplicates.intervals.min15" },

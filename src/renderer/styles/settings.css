@@ -243,7 +243,7 @@
 	min-height: 0;
 	overflow-y: auto;
 	background: var(--bg-window);
-	padding: 36px 56px 64px; /* reference geometry; the token scale has no 56/64. */
+	padding: 48px 56px 64px; /* reference geometry (Figma 403:9482: the head 12px lower than before); the token scale has no 48/56/64. */
 }
 
 .settings-content-wrap {
@@ -3396,14 +3396,14 @@
 	flex: none;
 	align-items: center;
 	gap: 6px;
-	height: 35px;
-	padding: 0 14px 0 12px;
+	height: 32px;
+	padding: 0 12px;
 	border: 0;
 	border-radius: var(--radius-8);
 	background: var(--accent);
 	color: var(--text-on-accent);
 	font: inherit;
-	font-size: 12.5px;
+	font-size: var(--font-size-meta);
 	font-weight: var(--weight-medium);
 	cursor: pointer;
 	transition: background var(--dur-color) var(--ease-out);
@@ -3488,7 +3488,7 @@
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
-	font-size: 13px;
+	font-size: var(--font-size-meta);
 	line-height: 16px;
 	color: var(--text-primary);
 	text-overflow: ellipsis;
@@ -3585,7 +3585,7 @@
 
 .settings-view .settings-apps .settings-list-title {
 	font-size: 13px;
-	font-weight: var(--weight-bold);
+	font-weight: var(--weight-medium);
 	line-height: 17px;
 }
 
@@ -3594,14 +3594,17 @@
 	line-height: 16px;
 }
 
+/* Figma 403:6999: 60px rows without rules. */
 .settings-view .settings-apps .settings-list-row {
 	gap: 12px;
-	padding: 13px 0;
+	padding: 16px 0;
+	border-bottom: 0;
 }
 
 .settings-view .settings-apps .settings-app-icon {
+	border: 1px solid var(--bg-subtle-alt);
 	background: var(--bg-window);
-	box-shadow: 0 0 0 1px var(--border-divider), 0 1px 2px rgba(20, 20, 41, 0.06);
+	box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
 }
 
 .settings-view .settings-apps-open {
@@ -3629,6 +3632,7 @@
 	align-items: center;
 	gap: 4px;
 	padding: 0 12px 0 10px;
+	border-radius: var(--radius-8);
 }
 
 .settings-view .settings-apps-empty {
@@ -3639,28 +3643,25 @@
 }
 
 .settings-view .settings-apps-group {
-	margin-top: 20px;
-	padding-bottom: 8px;
-	border-bottom: 1px solid var(--border-divider);
+	margin-top: 24px;
+	margin-bottom: 8px; /* with the first row's 16px padding, the frame's 24px from the label to the icon. */
 	font-size: var(--font-size-meta);
 	font-weight: var(--weight-medium);
 	line-height: 16px;
 	color: var(--text-muted);
 }
 
-.settings-view .settings-apps-mine .settings-list-row:last-child,
-.settings-view .settings-apps .settings-list .settings-list-row:last-child {
-	border-bottom: 1px solid var(--border-divider);
-}
 
-/* Figma 386:9908: 제외 추가 is the grey secondary button (Chrome #D9D9D9, body text), the plus faint, the chevron muted. */
+
+/* Figma 386:9908: 제외 추가 is the light secondary button (Stage fill, a border, body text), the plus faint, the chevron muted. */
 .settings-view .scope-secondary-btn {
-	background: var(--border);
+	border: 1px solid var(--border);
+	background: var(--bg-subtle-alt);
 	color: var(--text-body);
 }
 
 .settings-view .scope-secondary-btn:hover:not(:disabled) {
-	background: var(--border-strong);
+	background: var(--bg-hover);
 }
 
 .settings-view .scope-secondary-btn > svg:first-child {
@@ -3682,14 +3683,16 @@
 .settings-view .settings-plain {
 	display: flex;
 	flex-direction: column;
-	gap: 25px;
+	gap: 0;
 	margin-top: 40px; /* the frame's 40px between the page head and its content, as on 검색 범위. */
 }
 
+/* Figma 403:8746 / 403:9482: each row is 64px with its two lines centred in it, the control level with the name. */
 .settings-view .settings-plain-row {
 	display: flex;
 	align-items: flex-start;
 	gap: var(--space-16);
+	padding: 13.5px 0;
 }
 
 .settings-view .settings-plain-text {

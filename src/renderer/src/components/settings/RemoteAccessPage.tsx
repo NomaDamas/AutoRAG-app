@@ -20,7 +20,7 @@ import {
 } from "../../../../shared/remote-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { QrCode } from "./QrCode";
-import { Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { PlainRow, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { Switch } from "../primitives/Switch";
 
 type ConnectRoute = "lan" | "internet";
@@ -389,7 +389,8 @@ export function RemoteAccessPage({
 			</>
 		);
 
-	const head = <SettingsPageHead title={t("settingsCore.nav.remote")} description={t("settingsCore.remote.description")} />;
+	// Figma 403:9482: the security warning is the head's second line, not a section note.
+	const head = <SettingsPageHead title={t("settingsCore.nav.remote")} description={t("settingsCore.remote.description")} note={t("settingsCore.remote.securityHint")} />;
 	if (!canManageRemote) {
 		return (
 			<>
@@ -404,12 +405,12 @@ export function RemoteAccessPage({
 	return (
 		<>
 			{head}
-			<Section description={t("settingsCore.remote.securityHint")}>
-				<Row name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
+			<div className="settings-plain">
+				<PlainRow name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.remote.access")} />
-				</Row>
+				</PlainRow>
 				{enabled && viaLabel !== null ? <p className="settings-remote-via">{viaLabel}</p> : null}
-			</Section>
+			</div>
 
 			{enabled ? (
 				<Section title={t("settingsCore.remote.connectTitle")} description={t("settingsCore.remote.connectHint")}>

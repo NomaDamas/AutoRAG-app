@@ -13,7 +13,6 @@ import type { LocaleKey } from "../../../../shared/i18n/core";
 import { addSearchRoots, removeSearchRoot, type RejectedReason, type RejectedRoot } from "../../../../shared/index-scope-edit";
 import type { PickPathKind } from "../../../../shared/onboarding-contract";
 import { DEFAULT_CODE_FOLDER_NAMES, type AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
-import { hostPlatform } from "../../lib/shortcuts";
 import { normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
 import { PromptModal, SettingsPageHead } from "./SettingsKit";
@@ -55,12 +54,7 @@ interface ExcludeChoice {
 function excludeChoices(remote: boolean): readonly ExcludeChoice[] {
 	const typed: ExcludeChoice = { id: "type", label: "settingsSources.scope.excludeType", pick: "type" };
 	if (remote) return [typed];
-	if (hostPlatform() === "darwin") return [{ id: "pick", label: "settingsSources.scope.excludePick", pick: "any" }, typed];
-	return [
-		{ id: "folder", label: "settingsSources.scope.excludePickFolder", pick: "folder" },
-		{ id: "file", label: "settingsSources.scope.excludePickFile", pick: "file" },
-		typed,
-	];
+	return [{ id: "pick", label: "settingsSources.scope.excludePick", pick: "any" }, typed];
 }
 
 function PathRow({ path, file, disabled, onRemove }: { readonly path: string; readonly file: boolean; readonly disabled: boolean; readonly onRemove: () => void }): ReactElement {
@@ -232,7 +226,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 						</div>
 					)}
 				</section>
-				<hr className="scope-divider" />
 				<section className="scope-section">
 					<div className="scope-section-head">
 						<div className="scope-section-text">

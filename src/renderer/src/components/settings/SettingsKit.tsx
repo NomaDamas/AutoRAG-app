@@ -13,11 +13,25 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactEl
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
-export function SettingsPageHead({ title, description }: { readonly title: string; readonly description: string }): ReactElement {
+export function SettingsPageHead({ title, description, note }: { readonly title: string; readonly description: string; readonly note?: string }): ReactElement {
 	return (
 		<div className="settings-page-head">
 			<h1 className="linear-title">{title}</h1>
 			<p className="linear-desc">{description}</p>
+			{note !== undefined ? <p className="linear-desc">{note}</p> : null}
+		</div>
+	);
+}
+
+/** A setting as the redesigned pages draw it (Figma 403:8746): a 14px medium name over a 12px line, the control at the right, 64px a row. */
+export function PlainRow({ name, hint, children }: { readonly name: string; readonly hint: string; readonly children: ReactNode }): ReactElement {
+	return (
+		<div className="settings-plain-row">
+			<div className="settings-plain-text">
+				<span className="settings-plain-name">{name}</span>
+				<small>{hint}</small>
+			</div>
+			<div className="settings-plain-control">{children}</div>
 		</div>
 	);
 }
