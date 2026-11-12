@@ -170,7 +170,7 @@ describe("AutomationInspector", () => {
 	it("says a rule has not run yet before its first run", () => {
 		const fresh = rule({ lastRun: null });
 		act(() => root.render(<AutomationInspector rule={fresh} onEdit={noop} onDelete={noop} />));
-		expect(text()).toContain("아직 실행되지 않았어요");
+		expect(text()).toContain("아직 실행되지 않았습니다");
 		expect(value("문제")).toBeUndefined();
 	});
 

@@ -184,14 +184,14 @@ describe("AutomationsView background service line", () => {
 
 	it("does not claim either state while the daemon is unknown", () => {
 		render(props({ state: state([rule("a")], { daemon: null }) }));
-		expect(text(bar())).toContain("백그라운드 실행 상태를 확인할 수 없어요");
+		expect(text(bar())).toContain("백그라운드 실행 상태를 확인할 수 없습니다");
 		expect(bar()?.querySelector("button")).toBeNull();
 	});
 
 	it("shows no service line at all for a user with no rules file, where there is nothing to run", () => {
 		render(props({ state: state([], { daemon: null }) }));
 		expect(bar()).toBeNull();
-		expect(text(host)).toContain("아직 자동화가 없어요");
+		expect(text(host)).toContain("아직 자동화가 없습니다");
 	});
 });
 
@@ -200,21 +200,21 @@ describe("AutomationsView empty and error states", () => {
 		const p = props({ state: state([]) });
 		render(p);
 		expect(rows()).toEqual([]);
-		expect(text(host)).toContain("아직 자동화가 없어요");
+		expect(text(host)).toContain("아직 자동화가 없습니다");
 		act(() => [...host.querySelectorAll("button")].find((b) => text(b) === "AI 검색에서 규칙 추가")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(p.onAdd).toHaveBeenCalledTimes(1);
 	});
 
 	it("shows nothing but the frame before the first read finishes, instead of a false empty list", () => {
 		render(props({ state: { ...state([]), ready: false } }));
-		expect(text(host)).not.toContain("아직 자동화가 없어요");
+		expect(text(host)).not.toContain("아직 자동화가 없습니다");
 	});
 
 	it("says when the rules file cannot be read and shows the reason, not an empty list", () => {
 		render(props({ state: state([], { configError: "Unknown field \"note\" in automations[1]" }) }));
-		expect(text(host)).toContain("규칙 파일을 읽을 수 없어요");
+		expect(text(host)).toContain("규칙 파일을 읽을 수 없습니다");
 		expect(text(host)).toContain("Unknown field \"note\" in automations[1]");
-		expect(text(host)).not.toContain("아직 자동화가 없어요");
+		expect(text(host)).not.toContain("아직 자동화가 없습니다");
 	});
 
 	it("shows a read failure beside the rules it kept", () => {

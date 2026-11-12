@@ -491,7 +491,7 @@ writeConfig([GONE]);
 
 // ── 5. The same screens in the other interface languages. ────────────────
 for (const [language, fixLabel, titleText] of [
-	["ko", "AI로 고치기", "문제가 생겼어요"],
+	["ko", "AI로 고치기", "문제가 생겼습니다"],
 	["ja", "AIで修正", "問題が発生しました"],
 	["zh", "用 AI 修复", "出现了问题"],
 ]) {
@@ -526,7 +526,7 @@ for (const [language, fixLabel, titleText] of [
 		await shot("13a-ko-healing-start");
 		await dialog.locator(".shimmer", { hasText: "검색 설정과 상태 확인 중" }).waitFor({ timeout: 15_000 });
 		await shot("13b-ko-healing-intent");
-		await waitInDialog(dialog.getByText("다시 정상으로 돌아왔어요", { exact: true }));
+		await waitInDialog(dialog.getByText("다시 정상으로 돌아왔습니다", { exact: true }));
 		await shot("13c-ko-healthy-done");
 		await dialog.getByRole("button", { name: "닫기", exact: true }).last().click();
 		await dialog.waitFor({ state: "detached" });
@@ -548,7 +548,7 @@ for (const [language, fixLabel, titleText] of [
 		]);
 		await fixButton(fixLabel).click();
 		await dialog.waitFor();
-		await waitInDialog(dialog.getByText("직접 해 주셔야 할 일이 있어요", { exact: true }));
+		await waitInDialog(dialog.getByText("직접 해 주셔야 할 일이 있습니다", { exact: true }));
 		await shot("13d-ko-needs-user-buttons");
 		await page.keyboard.press("Escape");
 		await dialog.waitFor({ state: "detached" });

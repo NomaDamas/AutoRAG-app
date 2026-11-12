@@ -70,7 +70,7 @@ describe("IndexProblemBanner", () => {
 
 	it("shows one line and one button for a refused embedder, and that button opens the embedding choice", async () => {
 		const onFixEmbedding = await render(failed("embedder-config"));
-		expect(banner()?.textContent).toContain("의미 검색을 쓸 수 없어요");
+		expect(banner()?.textContent).toContain("의미 검색을 쓸 수 없습니다");
 		expect(buttons()).toHaveLength(2);
 		expect(primary()).not.toBeNull();
 		act(() => primary()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));

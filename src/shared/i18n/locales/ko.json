@@ -32,7 +32,7 @@
     "recents": "최근 항목",
     "tags": "태그",
     "tagColorsDenied": "태그 색상 보기",
-    "tagColorsDeniedHint": "Finder의 태그 색상은 macOS가 전체 디스크 접근 권한 뒤에 두고 있어요. 허용한 뒤 앱을 다시 시작하면 색상이 보입니다.",
+    "tagColorsDeniedHint": "Finder의 태그 색상은 macOS가 전체 디스크 접근 권한 뒤에 두고 있습니다. 허용한 뒤 앱을 다시 시작하면 색상이 보입니다.",
     "tagColorsGrantToast": "전체 디스크 접근 권한을 허용하고 Dazzi를 다시 시작하세요.",
     "home": "홈",
     "applications": "응용 프로그램",
@@ -152,9 +152,9 @@
       "replace": "원본 덮어쓰기",
       "replaceHint": "덮어쓰면 원본은 휴지통으로 이동합니다.",
       "working": "‘{{newName}}’(으)로 변환하는 중…",
-      "workingHint": "처음 변환할 때는 변환 엔진을 내려받느라 시간이 더 걸릴 수 있어요.",
+      "workingHint": "처음 변환할 때는 변환 엔진을 내려받느라 시간이 더 걸릴 수 있습니다.",
       "progressAria": "변환 진행 중",
-      "unsupported": "{{from}}에서 {{to}}(으)로는 변환할 수 없는 확장자예요. 이름은 바뀌지 않았습니다.",
+      "unsupported": "{{from}}에서 {{to}}(으)로는 변환할 수 없는 확장자입니다. 이름은 바뀌지 않았습니다.",
       "replaced": "{{name}} — 변환됨, 원본은 휴지통으로 이동했습니다"
     },
     "reduce": {
@@ -316,7 +316,7 @@
       "placeholderFollowUp": "이어서 묻기",
       "send": "보내기",
       "stop": "중지",
-      "busy": "앞 질문의 답을 기다리는 중이에요",
+      "busy": "앞 질문의 답을 기다리는 중입니다",
       "justNow": "방금",
       "minutesAgo": "{{count}}분 전",
       "hoursAgo": "{{count}}시간 전",
@@ -327,7 +327,7 @@
       "expand": "AI 검색 탭에서 열기",
       "removeAttachment": "첨부 빼기",
       "thinking": "답을 찾는 중…",
-      "stopped": "답변을 중지했어요",
+      "stopped": "답변을 중지했습니다",
       "showInList": "파일 위치로 이동",
       "preview": "미리보기",
       "placeholderAny": "무엇이든 물어보세요",
@@ -355,10 +355,10 @@
     "stop": "중지",
     "openPlan": "구독 및 사용량 열기",
     "indexNotice": {
-      "indexing": "인덱싱이 아직 끝나지 않아 검색이 제대로 되지 않을 수 있어요. 아직 반영되지 않은 문서는 찾지 못해요.",
-      "failed": "마지막 인덱싱이 끝까지 진행되지 않아 검색이 제대로 되지 않을 수 있어요.",
-      "empty": "인덱싱된 문서가 없어 검색이 제대로 되지 않을 수 있어요.",
-      "few": "인덱싱된 문서가 {{count}}개뿐이라 검색이 제대로 되지 않을 수 있어요.",
+      "indexing": "인덱싱이 아직 끝나지 않아 검색이 제대로 되지 않을 수 있습니다. 아직 반영되지 않은 문서는 찾지 못합니다.",
+      "failed": "마지막 인덱싱이 끝까지 진행되지 않아 검색이 제대로 되지 않을 수 있습니다.",
+      "empty": "인덱싱된 문서가 없어 검색이 제대로 되지 않을 수 있습니다.",
+      "few": "인덱싱된 문서가 {{count}}개뿐이라 검색이 제대로 되지 않을 수 있습니다.",
       "manage": "인덱싱 관리"
     },
     "thinking": "생각하는 중…",
@@ -374,21 +374,21 @@
     "voiceCancel": "녹음 취소",
     "voiceSend": "녹음 끝내고 바로 보내기",
     "voiceTranscribing": "받아쓰는 중…",
-    "voiceNoSpeech": "말소리를 듣지 못했어요. 다시 말해 주세요.",
-    "voiceUnavailable": "이 기기에서는 마이크를 쓸 수 없어요.",
-    "voiceFailed": "음성을 받아쓰지 못했어요: {{message}}",
+    "voiceNoSpeech": "말소리를 듣지 못했습니다. 다시 말해 주세요.",
+    "voiceUnavailable": "이 기기에서는 마이크를 쓸 수 없습니다.",
+    "voiceFailed": "음성을 받아쓰지 못했습니다: {{message}}",
     "micPermission": {
-      "title": "마이크 권한이 필요해요",
-      "body": "음성으로 질문하려면 Dazzi가 마이크를 쓸 수 있어야 해요. 녹음은 마이크 버튼을 눌렀을 때만 해요.",
+      "title": "마이크 권한이 필요합니다",
+      "body": "음성으로 질문하려면 Dazzi가 마이크를 쓸 수 있어야 합니다. 녹음은 마이크 버튼을 눌렀을 때만 합니다.",
       "stepsMac": "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Dazzi를 켜 주세요.",
       "stepsWindows": "설정 › 개인 정보 및 보안 › 마이크에서 ‘마이크 액세스’와 ‘데스크톱 앱이 마이크에 액세스하도록 허용’을 켜 주세요.",
       "openMac": "시스템 설정 열기",
       "openWindows": "Windows 설정 열기",
       "notNow": "나중에",
-      "waiting": "설정에서 켜고 Dazzi로 돌아오면 바로 녹음을 시작해요.",
-      "stillDenied": "아직 마이크가 꺼져 있어요. 설정에서 켠 뒤 다시 돌아와 주세요."
+      "waiting": "설정에서 켜고 Dazzi로 돌아오면 바로 녹음을 시작합니다.",
+      "stillDenied": "아직 마이크가 꺼져 있습니다. 설정에서 켠 뒤 다시 돌아와 주세요."
     },
-    "steerHintLead": "검색 중에도 입력할 수 있어요",
+    "steerHintLead": "검색 중에도 입력할 수 있습니다",
     "steerHintEnter": "바로잡기",
     "steerHintAltEnter": "다음 질문",
     "steerPending": "반영 대기 중 · 다음 단계에 전달됩니다",
@@ -405,9 +405,9 @@
     },
     "context": {
       "compacting": "대화가 길어 이전 내용을 요약하는 중…",
-      "compacted": "이전 대화를 요약했어요",
-      "compactedHint": "이전 대화는 요약본으로 이어가요. 빠진 세부 내용이 있으면 다시 알려 주세요.",
-      "trimmed": "너무 큰 검색 결과는 일부만 사용했어요"
+      "compacted": "이전 대화를 요약했습니다",
+      "compactedHint": "이전 대화는 요약본으로 이어갑니다. 빠진 세부 내용이 있으면 다시 알려 주세요.",
+      "trimmed": "너무 큰 검색 결과는 일부만 사용했습니다"
     }
   },
   "appError": {
@@ -417,55 +417,55 @@
     "showDetails": "자세히 보기",
     "hideDetails": "자세히 닫기",
     "other": {
-      "title": "문제가 생겼어요",
-      "hint": "AI가 원인을 찾아 직접 고쳐 볼 수 있어요."
+      "title": "문제가 생겼습니다",
+      "hint": "AI가 원인을 찾아 직접 고쳐 볼 수 있습니다."
     },
     "modelMissing": {
-      "title": "사용할 AI 모델이 설정되지 않았어요",
-      "hint": "모델을 고르거나 로그인하면 바로 쓸 수 있어요. 모델 설정에서 모델, 로그인 상태, 구독을 확인하세요."
+      "title": "사용할 AI 모델이 설정되지 않았습니다",
+      "hint": "모델을 고르거나 로그인하면 바로 쓸 수 있습니다. 모델 설정에서 모델, 로그인 상태, 구독을 확인하세요."
     },
     "modelCredentials": {
-      "title": "AI 모델을 사용할 수 없어요 — 인증에 실패했어요",
-      "hint": "API 키나 로그인이 만료됐거나 올바르지 않을 수 있어요. 모델 설정에서 다시 로그인하거나 키를 확인하고, 구독이 유효한지도 확인하세요."
+      "title": "AI 모델을 사용할 수 없습니다 — 인증에 실패했습니다",
+      "hint": "API 키나 로그인이 만료됐거나 올바르지 않을 수 있습니다. 모델 설정에서 다시 로그인하거나 키를 확인하고, 구독이 유효한지도 확인하세요."
     },
     "modelSubscription": {
-      "title": "구독 또는 사용량 한도 때문에 AI 모델을 쓸 수 없어요",
-      "hint": "구독이 만료됐거나 사용량을 모두 썼을 수 있어요. 구독 및 사용량을 확인하거나, 모델 설정에서 다른 모델을 선택하세요."
+      "title": "구독 또는 사용량 한도 때문에 AI 모델을 쓸 수 없습니다",
+      "hint": "구독이 만료됐거나 사용량을 모두 썼을 수 있습니다. 구독 및 사용량을 확인하거나, 모델 설정에서 다른 모델을 선택하세요."
     },
     "modelPlan": {
-      "title": "선택한 AI 모델은 지금 플랜에 포함되어 있지 않아요",
-      "hint": "더 높은 플랜에서만 쓸 수 있는 모델이에요. 플랜을 올리거나, 모델 설정에서 지금 플랜으로 쓸 수 있는 모델을 선택하세요.",
-      "hintNamed": "{{plan}} 플랜 전용 모델이에요. {{plan}} 플랜으로 올리거나, 모델 설정에서 지금 플랜으로 쓸 수 있는 모델을 선택하세요."
+      "title": "선택한 AI 모델은 지금 플랜에 포함되어 있지 않습니다",
+      "hint": "더 높은 플랜에서만 쓸 수 있는 모델입니다. 플랜을 올리거나, 모델 설정에서 지금 플랜으로 쓸 수 있는 모델을 선택하세요.",
+      "hintNamed": "{{plan}} 플랜 전용 모델입니다. {{plan}} 플랜으로 올리거나, 모델 설정에서 지금 플랜으로 쓸 수 있는 모델을 선택하세요."
     },
     "modelNotFound": {
-      "title": "선택한 AI 모델을 찾을 수 없어요",
-      "hint": "모델이 종료됐거나 이름이 바뀌었을 수 있어요. 모델 설정에서 다른 모델을 선택하세요."
+      "title": "선택한 AI 모델을 찾을 수 없습니다",
+      "hint": "모델이 종료됐거나 이름이 바뀌었을 수 있습니다. 모델 설정에서 다른 모델을 선택하세요."
     },
     "rateLimit": {
-      "title": "요청이 몰려 잠시 막혔어요",
+      "title": "요청이 몰려 잠시 막혔습니다",
       "hint": "잠시 뒤에 다시 시도하세요. 계속되면 모델 설정에서 다른 모델을 선택해 보세요."
     },
     "network": {
-      "title": "AI 모델 서버에 연결할 수 없어요",
+      "title": "AI 모델 서버에 연결할 수 없습니다",
       "hint": "인터넷 연결을 확인하고 다시 시도하세요. 연결이 정상인데도 계속되면 모델 설정을 확인하세요."
     },
     "contextOverflow": {
-      "title": "모델이 한 번에 읽을 수 있는 양을 넘었어요",
-      "hint": "대화와 검색 결과가 너무 커서 답하지 못했어요. 새 대화를 시작하거나, 범위를 좁혀 다시 물어보세요."
+      "title": "모델이 한 번에 읽을 수 있는 양을 넘었습니다",
+      "hint": "대화와 검색 결과가 너무 커서 답하지 못했습니다. 새 대화를 시작하거나, 범위를 좁혀 다시 물어보세요."
     },
     "fix": {
       "title": "AI로 고치기",
       "running": "원인을 찾는 중…",
       "status": {
-        "fixed": "다시 정상으로 돌아왔어요",
-        "needsUser": "직접 해 주셔야 할 일이 있어요",
-        "cannotFix": "고치지 못했어요"
+        "fixed": "다시 정상으로 돌아왔습니다",
+        "needsUser": "직접 해 주셔야 할 일이 있습니다",
+        "cannotFix": "고치지 못했습니다"
       },
       "nextStepsLabel": "해야 할 일",
       "openSettings": "‘{{page}}’ 설정 열기",
       "openSource": "‘{{name}}’ 연결 열기",
-      "failedTitle": "AI로 고치지 못했어요",
-      "stopped": "중단했어요.",
+      "failedTitle": "AI로 고치지 못했습니다",
+      "stopped": "중단했습니다.",
       "minimize": "백그라운드로 전환",
       "queued": "앞선 수리가 끝나면 시작합니다…",
       "sidebar": {
@@ -505,10 +505,10 @@
     "answerPlaceholder": "답변을 입력하세요",
     "questionAria": "Dazzi의 질문",
     "approval": {
-      "headlineChange": "Dazzi가 파일을 바꾸려고 해요 — 허용할까요?",
-      "headlineRun": "Dazzi가 실행하려고 해요 — 허용할까요?",
-      "headlineUnclassified": "Dazzi가 이 명령을 실행하려고 해요 — 허용할까요?",
-      "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했어요. 내용을 살펴보고 판단해 주세요."
+      "headlineChange": "Dazzi가 파일을 바꾸려고 합니다 — 허용할까요?",
+      "headlineRun": "Dazzi가 실행하려고 합니다 — 허용할까요?",
+      "headlineUnclassified": "Dazzi가 이 명령을 실행하려고 합니다 — 허용할까요?",
+      "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했습니다. 내용을 살펴보고 판단해 주세요."
     },
     "category": {
       "delete": "삭제",
@@ -538,18 +538,18 @@
       "status": "상태"
     },
     "empty": {
-      "title": "아직 자동화가 없어요",
+      "title": "아직 자동화가 없습니다",
       "body": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요.",
       "add": "AI 검색에서 규칙 추가"
     },
     "errors": {
-      "config": "규칙 파일을 읽을 수 없어요",
+      "config": "규칙 파일을 읽을 수 없습니다",
       "configHint": "AI 검색에서 규칙을 고치거나 파일을 직접 수정하세요."
     },
     "daemon": {
       "on": "백그라운드에서 실행 중",
       "off": "꺼짐 · 규칙이 실행되지 않습니다",
-      "unknown": "백그라운드 실행 상태를 확인할 수 없어요",
+      "unknown": "백그라운드 실행 상태를 확인할 수 없습니다",
       "turnOn": "켜기",
       "turnOff": "끄기",
       "busy": "처리 중…",
@@ -579,7 +579,7 @@
       "none": "없음",
       "command": "명령",
       "ruleId": "규칙 ID",
-      "neverRan": "아직 실행되지 않았어요",
+      "neverRan": "아직 실행되지 않았습니다",
       "ranOk": "{{time}} 실행 · 성공",
       "ranFail": "{{time}} 실행 · 실패",
       "folderSection": "자동화",
@@ -599,13 +599,13 @@
     },
     "confirm": {
       "title": "‘{{title}}’ 규칙을 삭제할까요?",
-      "message": "이 규칙만 지워지고 폴더와 파일은 그대로 남아요.",
+      "message": "이 규칙만 지워지고 폴더와 파일은 그대로 남습니다.",
       "action": "삭제"
     },
     "toast": {
-      "deleted": "‘{{title}}’ 규칙을 삭제했어요",
+      "deleted": "‘{{title}}’ 규칙을 삭제했습니다",
       "undo": "실행 취소",
-      "restored": "‘{{title}}’ 규칙을 되돌렸어요"
+      "restored": "‘{{title}}’ 규칙을 되돌렸습니다"
     },
     "kinds": {
       "screenshot": "스크린샷",
@@ -744,16 +744,16 @@
     },
     "activity": {
       "lastDone": "마지막 완료 {{ago}}",
-      "none": "아직 끝난 파일이 없어요",
+      "none": "아직 끝난 파일이 없습니다",
       "heartbeat": "활동 신호 {{ago}}"
     },
     "warn": {
-      "stalledAlive": "{{minutes}}분째 끝난 파일이 없어요. 작업 신호는 계속 들어오고 있어서 큰 파일을 처리 중일 수 있어요.",
-      "stalledSilent": "{{minutes}}분째 끝난 파일이 없고 작업 신호도 끊겼어요. 멈춘 것 같아요."
+      "stalledAlive": "{{minutes}}분째 끝난 파일이 없습니다. 작업 신호는 계속 들어오고 있어서 큰 파일을 처리 중일 수 있습니다.",
+      "stalledSilent": "{{minutes}}분째 끝난 파일이 없고 작업 신호도 끊겼습니다. 멈춘 것 같습니다."
     }
   },
   "indexProblem": {
-    "retrying": "다시 시도하는 중이에요",
+    "retrying": "다시 시도하는 중입니다",
     "fixEmbedding": "임베딩 방식 바꾸기",
     "action": {
       "retryNow": "지금 다시 시도",
@@ -769,46 +769,46 @@
       "skipped": "건너뛴 파일"
     },
     "embedderConfig": {
-      "title": "의미 검색을 쓸 수 없어요",
+      "title": "의미 검색을 쓸 수 없습니다",
       "side": "의미 검색 준비 중단",
       "sideDetail": "임베딩 설정 확인 필요",
       "detail": "설정 확인 필요"
     },
     "embedderOffline": {
-      "title": "연결을 기다리는 중이에요",
+      "title": "연결을 기다리는 중입니다",
       "side": "연결 기다리는 중",
       "sideDetail": "임베딩 · 연결 확인 필요",
       "detail": "연결 확인 필요"
     },
     "modelDownload": {
-      "title": "모델 내려받기가 멈췄어요",
+      "title": "모델 내려받기가 멈췄습니다",
       "side": "모델 내려받기 멈춤",
       "sideDetail": "이어서 받기 필요",
       "detail": "내려받기 중단"
     },
     "diskFull": {
-      "title": "저장 공간이 부족해요",
+      "title": "저장 공간이 부족합니다",
       "side": "저장 공간 부족",
       "sideDetail": "공간 확보 후 다시 시도",
       "detail": "저장 공간 부족"
     },
     "folderUnreadable": {
-      "title": "‘{{folder}}’ 폴더를 읽을 수 없어요",
-      "titleMany": "폴더 {{count}}개를 읽을 수 없어요",
-      "side": "폴더를 읽을 수 없어요",
+      "title": "‘{{folder}}’ 폴더를 읽을 수 없습니다",
+      "titleMany": "폴더 {{count}}개를 읽을 수 없습니다",
+      "side": "폴더를 읽을 수 없습니다",
       "sideDetailMany": "{{count}}개 폴더"
     },
     "unknown": {
-      "title": "의미 검색 준비가 멈췄어요",
+      "title": "의미 검색 준비가 멈췄습니다",
       "side": "임베딩 멈춤",
       "sideDetail": "원인 미확인",
       "detail": "원인 미확인"
     },
     "skipped": {
-      "title": "{{count}}개 파일을 건너뛰었어요",
+      "title": "{{count}}개 파일을 건너뛰었습니다",
       "side": "{{count}}개 파일 건너뜀",
       "sideDetail": "다음 새로 고침에서 재시도",
-      "row": "{{count}}개 · 다음 새로 고침에서 자동으로 다시 시도해요"
+      "row": "{{count}}개 · 다음 새로 고침에서 자동으로 다시 시도합니다"
     }
   },
   "confirm": {
@@ -1820,7 +1820,7 @@
       "cookieBlockedError": "브라우저 쿠키를 확인할 수 없습니다. 쿠키 허용 설정을 확인한 뒤 다시 시도해 주세요."
     },
     "smartIndexing": {
-      "cloudReason": "클라우드 동기화 폴더예요. 파일이 온라인에만 있을 수 있어 기본으로 제외했어요. 포함하려면 왼쪽으로 끌어 놓으세요."
+      "cloudReason": "클라우드 동기화 폴더입니다. 파일이 온라인에만 있을 수 있어 기본으로 제외했습니다. 포함하려면 왼쪽으로 끌어 놓으세요."
     }
   },
   "quickLook": {
@@ -3413,8 +3413,8 @@
     "itemCountSize": "{{count}}개 항목 · {{size}}",
     "emptyFolder": "빈 폴더",
     "emptyFolderHint": "＋ 버튼으로 새 폴더를 만들거나 이 기기의 파일을 올리세요",
-    "emptyTrash": "휴지통이 비어 있어요",
-    "loadFailed": "이 폴더를 열 수 없어요: {{message}}",
+    "emptyTrash": "휴지통이 비어 있습니다",
+    "loadFailed": "이 폴더를 열 수 없습니다: {{message}}",
     "loading": "불러오는 중…",
     "sort": {
       "title": "정렬 기준",
@@ -3485,7 +3485,7 @@
     },
     "confirm": {
       "emptyTrash": "휴지통을 비울까요?",
-      "emptyTrashBody": "휴지통의 항목이 영구 삭제돼요. 실행 취소할 수 없어요.",
+      "emptyTrashBody": "휴지통의 항목이 영구 삭제됩니다. 실행 취소할 수 없습니다.",
       "emptyTrashOk": "휴지통 비우기"
     },
     "toast": {
@@ -3496,7 +3496,7 @@
       "created": "‘{{name}}’ 만듦",
       "renamed": "이름을 ‘{{name}}’(으)로 바꿈",
       "uploaded": "‘{{name}}’ 올림",
-      "uploadFailed": "‘{{name}}’을(를) 올리지 못했어요",
+      "uploadFailed": "‘{{name}}’을(를) 올리지 못했습니다",
       "uploadedMany": "{{count}}개 파일 올림",
       "magicStarted": "‘{{name}}’ 실행 중",
       "failed": "실패: {{message}}"
@@ -3509,9 +3509,9 @@
       "askFolder": "묻기",
       "move": "이동",
       "indexed": "AI 검색에 포함",
-      "indexedOn": "내용까지 찾을 수 있어요",
-      "indexedOff": "이름으로만 찾을 수 있어요",
-      "indexLocked": "상위 폴더 설정을 따라요",
+      "indexedOn": "내용까지 찾을 수 있습니다",
+      "indexedOff": "이름으로만 찾을 수 있습니다",
+      "indexLocked": "상위 폴더 설정을 따릅니다",
       "versions": "버전",
       "versionsFoot": "dupey가 찾은 같은 문서의 다른 버전이에요.",
       "latest": "최신",
@@ -3524,18 +3524,18 @@
     "ql": {
       "done": "완료",
       "position": "{{index}} / {{total}}",
-      "noPreview": "이 형식은 브라우저에서 미리볼 수 없어요.",
+      "noPreview": "이 형식은 브라우저에서 미리볼 수 없습니다.",
       "openTab": "새 탭에서 열기"
     },
     "search": {
       "placeholder": "파일 이름이나 내용",
       "clear": "지우기",
       "results": "{{machine}} 전체 · {{count}}개",
-      "none": "“{{query}}” 이름의 파일이 없어요",
+      "none": "“{{query}}” 이름의 파일이 없습니다",
       "noneHint": "내용으로 찾으려면 AI 검색에 물어보세요",
       "askAi": "“{{query}}” AI 검색에 묻기",
-      "askAiHint": "파일 내용, 메일, 메신저까지 찾아요",
-      "typeHint": "이 컴퓨터의 파일 이름을 검색해요",
+      "askAiHint": "파일 내용, 메일, 메신저까지 찾습니다",
+      "typeHint": "이 컴퓨터의 파일 이름을 검색합니다",
       "exit": "검색 닫기"
     },
     "recents": {
@@ -3551,7 +3551,7 @@
     "activity": {
       "title": "진행 및 대기열",
       "count": "{{count}}개 작업",
-      "empty": "진행 중인 작업이 없어요",
+      "empty": "진행 중인 작업이 없습니다",
       "open": "진행 및 대기 중인 작업"
     },
     "rules": {
