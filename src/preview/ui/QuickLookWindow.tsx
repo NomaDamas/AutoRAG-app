@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { useTranslation } from "react-i18next";
 import { setAppLanguage } from "../../shared/i18n";
 import type { QuickLookLoad, QuickLookWindowBridge, QuickLookZoom } from "../shared/contract";
-import type { QuickLookFit, Size } from "../shared/fit";
+import { QUICK_LOOK_TOOLBAR, type QuickLookFit, type Size } from "../shared/fit";
 import { extensionOf, formatBytes } from "../shared/format";
 import { describeExtension, viewerForExtension, type ViewerKind } from "../shared/registry";
 import { ZOOM_IDENTITY, zoomTransform, type ZoomDirection } from "../shared/zoom";
@@ -30,6 +30,8 @@ type StageKind = ViewerKind | "folder" | "bundle" | "error";
 const NO_INTRINSIC_SIZE: Size = { width: 0, height: 0 };
 /** Frames a measured viewer gets to lay out before the window falls back to a page shape. */
 const MEASURE_FRAMES = 12;
+/** The shortest window markup opens in: room for a few lines of the document above the composer. */
+const MARKUP_MIN_HEIGHT = 460;
 
 /**
  * Viewers that state their own panel size through the chrome (or, for
@@ -250,25 +252,44 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		};
 	}, [bridge]);
 
+	/** The size the shown viewer last asked for, before the markup minimum; markup closing returns to it. */
+	const natural = useRef<{ readonly seq: number; readonly size: Size; readonly fit: QuickLookFit } | null>(null);
+	/** True while the markup composer is open: it floats over the stage, so a short window (a few lines of text) would be all composer. */
+	const markupOpenRef = useRef(false);
+	const send = useCallback(
+		(seq: number, size: Size, fit: QuickLookFit) => {
+			natural.current = { seq, size, fit };
+			const height = markupOpenRef.current ? Math.max(size.height, MARKUP_MIN_HEIGHT - QUICK_LOOK_TOOLBAR) : size.height;
+			bridge.ready({ seq, width: size.width, height, fit });
+		},
+		[bridge],
+	);
 	const report = useCallback(
 		(size: Size, fit: QuickLookFit) => {
 			const seq = seqRef.current;
 			if (seq < 0 || reported.current === seq) return;
 			reported.current = seq;
-			bridge.ready({ seq, width: size.width, height: size.height, fit });
+			send(seq, size, fit);
 		},
-		[bridge],
+		[send],
 	);
 	const resize = useCallback(
 		(size: Size) => {
 			const seq = seqRef.current;
 			if (seq < 0) return;
 			reported.current = seq;
-			bridge.ready({ seq, width: size.width, height: size.height, fit: "clamp" });
+			send(seq, size, "clamp");
 		},
-		[bridge],
+		[send],
 	);
 	const chrome = useMemo<QuickLookChrome>(() => ({ bridge, toolbar, report, resize, hideTitle: setTitleHidden, app }), [bridge, toolbar, report, resize, app]);
+
+	const markupOpen = markupPath !== null && load !== null && markupPath === load.path;
+	useEffect(() => {
+		markupOpenRef.current = markupOpen;
+		const last = natural.current;
+		if (last !== null && last.seq === seqRef.current) send(last.seq, last.size, last.fit);
+	}, [markupOpen, send]);
 
 	const kind: StageKind = load === null ? "fallback" : load.bundle !== null ? "bundle" : load.folder !== null ? "folder" : load.document === null ? "error" : viewerForExtension(extensionOf(load.name));
 	const measured = load !== null && SELF_SIZED[kind] !== true;

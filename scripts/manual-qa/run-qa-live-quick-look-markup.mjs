@@ -242,8 +242,12 @@ try {
 	const pen = preview.locator('button[aria-label="표시하고 편집"]');
 	check("The pen button sits in the Quick Look toolbar for plan.md", (await pen.count()) === 1);
 	await shot("01-plan-preview");
+	const windowHeight = () => preview.evaluate(() => window.innerHeight);
+	const shortHeight = await windowHeight();
 	await pen.click();
 	await preview.locator("svg.ql-markup").waitFor();
+	const grown = await poll(windowHeight, (height) => height >= Math.max(shortHeight, 460), 5000);
+	check("Markup opens in a window at least 460px tall (a taller one keeps its size)", grown >= 460 && grown >= shortHeight, `${shortHeight} -> ${grown}`);
 	await preview.locator('button[aria-label="밑줄"]').click();
 	const date = await preview.getByText("2026년 11월 15일").first().boundingBox();
 	if (date === null) throw new Error("the date line is not on screen");
@@ -272,19 +276,23 @@ try {
 	const restored = await poll(() => preview.getByText("11월 15일").count(), (count) => count > 0, 15_000);
 	check("Quick Look shows the original again after Undo", restored > 0);
 	await shot("04-plan-undone");
-	await preview.keyboard.press("Escape");
+	await preview.locator(".ql-markup__composer button", { hasText: "닫기" }).click();
+	const restoredHeight = await poll(windowHeight, (height) => height === shortHeight, 5000);
+	check("Closing markup gives the window its earlier size back", restoredHeight === shortHeight && (await preview.locator("svg.ql-markup").count()) === 0, `${shortHeight} -> ${grown} -> ${restoredHeight}`);
 	await close();
 
 	// 2. Word: box the budget line and ask to change the amount.
 	if (isMac) {
 		progress.length = 0;
 		await open("budget.docx");
-		await poll(() => preview.getByText("300만").count(), (count) => count > 0, 30_000);
+		// The Word viewer renders into a sandboxed iframe.
+		const word = preview.frameLocator("iframe.ql__frame");
+		await poll(() => word.getByText("300만").count(), (count) => count > 0, 30_000);
 		await shot("05-budget-preview");
 		await preview.locator('button[aria-label="표시하고 편집"]').click();
 		await preview.locator("svg.ql-markup").waitFor();
 		await preview.locator('button[aria-label="네모"]').click();
-		const line = await preview.getByText("300만").first().boundingBox();
+		const line = await word.getByText("300만").first().boundingBox();
 		if (line === null) throw new Error("the budget line is not on screen");
 		await drag({ x: line.x - 8, y: line.y - 6 }, { x: line.x + line.width + 8, y: line.y + line.height + 6 });
 		check("The box stays on the page as a mark", (await preview.locator("[data-mark=box]").count()) === 1);
@@ -295,12 +303,12 @@ try {
 		console.log(`budget.docx after edit:\n${text}`);
 		check("The agent reports a change to the .docx", (await state.getAttribute("data-edit-state")) === "changed", await state.innerText());
 		check("budget.docx is still a Word document with the new amount and the other paragraphs", text.includes("450만") && !text.includes("300만") && text.includes("승인: 박지영") && text.includes("분기 예산"), text);
-		const shown = await poll(() => preview.getByText("450만").count(), (count) => count > 0, 30_000);
+		const shown = await poll(() => word.getByText("450만").count(), (count) => count > 0, 30_000);
 		check("Quick Look re-rendered the edited .docx", shown > 0);
 		await shot("08-budget-reloaded");
 	}
 } catch (error) {
-	check("the lane ran to the end", false, error instanceof Error ? error.message.split("\n")[0] : String(error));
+	check("the lane ran to the end", false, error instanceof Error ? `${error.message.split("\n")[0]} @ ${(error.stack ?? "").split("\n").find((line) => line.includes("run-qa-live-quick-look-markup")) ?? ""}` : String(error));
 	for (const page of app.windows()) {
 		const name = page.url().includes("quick-look.html") ? "failure-quick-look" : "failure-finder";
 		await page.screenshot({ path: join(EVIDENCE, `${name}.png`) }).catch(() => undefined);
