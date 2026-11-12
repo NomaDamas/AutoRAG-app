@@ -38,11 +38,15 @@ const tab: InspectorChatTab = {
 			{
 				question: "요약해줘",
 				attachments: [deck],
-				answer: {
+				quick: {
 					answer: "발표 자료예요 [1].",
 					evidence: [{ number: 1, title: "deck.pdf", summary: "", source: "/work/deck.pdf", excerpts: ["컨셉 — **곡선으로 재해석**하는 것이 목표"] }],
 				},
-				draft: "",
+				deep: null,
+				quickDraft: "",
+				deepDraft: "",
+				deepElapsed: null,
+				startedAt: 0,
 				progress: "",
 				error: null,
 				stopped: false,
@@ -74,14 +78,14 @@ function render(pending: readonly ChatAttachment[]): void {
 	);
 }
 
-function renderTab(next: InspectorChatTab): void {
+function renderTab(next: InspectorChatTab, running = false): void {
 	act(() =>
 		root.render(
 			<InspectorChatView
 				tab={next}
 				targetName="deck.pdf"
 				pending={[]}
-				running={false}
+				running={running}
 				imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
 				onAsk={() => true}
 				onStop={noop}
@@ -106,8 +110,12 @@ const withAnswer = (answer: string, excerpts: readonly string[]): InspectorChatT
 			{
 				question: "q",
 				attachments: [],
-				answer: { answer, evidence: [{ number: 1, title: "note.md", summary: "", source: "/work/note.md", excerpts }] },
-				draft: "",
+				quick: { answer, evidence: [{ number: 1, title: "note.md", summary: "", source: "/work/note.md", excerpts }] },
+				deep: null,
+				quickDraft: "",
+				deepDraft: "",
+				deepElapsed: null,
+				startedAt: 0,
 				progress: "",
 				error: null,
 				stopped: false,
@@ -116,7 +124,76 @@ const withAnswer = (answer: string, excerpts: readonly string[]): InspectorChatT
 	},
 });
 
+const turnOf = (patch: Partial<InspectorChatTab["chat"] extends infer C ? (C extends { turns: readonly (infer T)[] } ? T : never) : never>): InspectorChatTab => ({
+	...tab,
+	chat: {
+		chatId: "chat-3",
+		updatedAt: 0,
+		turns: [
+			{
+				question: "q",
+				attachments: [],
+				quick: null,
+				deep: null,
+				quickDraft: "",
+				deepDraft: "",
+				deepElapsed: null,
+				startedAt: 0,
+				progress: "",
+				error: null,
+				stopped: false,
+				...patch,
+			},
+		],
+	},
+});
+
 describe("the inspector chat view", () => {
+	it("keeps the Quick answer on screen while the run thinks, and under the Deep answer once it lands", () => {
+		const quick = { answer: "빠른 답변 [1]", evidence: [{ number: 1, title: "a.md", summary: "", source: "/work/a.md", excerpts: [] }] };
+		renderTab(turnOf({ quick, progress: "근거를 다시 확인하는 중" }), true);
+		const during = [...host.querySelectorAll(".inspector-chat-answer")].map((node) => node.textContent);
+		expect(during).toEqual(["빠른 답변 1"]);
+		expect(host.querySelector(".shimmer")?.textContent).toBe("근거를 다시 확인하는 중");
+
+		renderTab(turnOf({ quick, deep: { answer: "정밀 답변", evidence: [] }, deepElapsed: 7000 }));
+		expect([...host.querySelectorAll(".inspector-chat-answer")].map((node) => node.textContent)).toEqual(["빠른 답변 1", "정밀 답변"]);
+		expect(host.querySelector(".thinking-header")?.textContent).toBe("7s 동안 답변 생성");
+		expect(host.querySelector(".shimmer")).toBeNull();
+	});
+
+	it("shows a web source's address on its hover card and opens it in the browser", () => {
+		const opened: string[] = [];
+		const web = { answer: "웹에 있어요 [1]", evidence: [{ number: 1, title: "guide", summary: "", source: "https://example.com/docs/guide", excerpts: ["본문"] }] };
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={turnOf({ quick: web })}
+					targetName="x"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: (url) => opened.push(url) }}
+					onAsk={() => true}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+		act(() => host.querySelector<HTMLButtonElement>("button.cite")?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		const card = host.querySelector(".inspector-chat-source");
+		expect(card?.querySelector(".inspector-chat-source-url")?.textContent).toBe("https://example.com/docs/guide");
+		const buttons = [...(card?.querySelectorAll("button") ?? [])];
+		expect(buttons.map((button) => button.textContent)).toEqual(["브라우저에서 열기"]);
+		act(() => buttons[0]?.click());
+		expect(opened).toEqual(["https://example.com/docs/guide"]);
+	});
+
 	it("shows a [file:<path>] the librarian left as written as the file's chip, not as raw text", () => {
 		renderTab(withAnswer("정리: [file:/Users/me/Documents/archive]\n[file:/Users/me/Documents/archive/summaries]. [1]", ["x"]));
 		const chips = [...host.querySelectorAll("[data-file-mention]")].map((chip) => chip.textContent);

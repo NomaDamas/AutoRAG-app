@@ -143,7 +143,7 @@ function parentFolder(att: ChatAttachment): string | null {
 	return parts.length >= 2 ? parts[parts.length - 2] ?? null : null;
 }
 
-function formatElapsed(ms: number): string {
+export function formatElapsed(ms: number): string {
 	return `${Math.max(1, Math.round(ms / 1000))}s`;
 }
 

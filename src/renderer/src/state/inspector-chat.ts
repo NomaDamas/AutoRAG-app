@@ -22,18 +22,27 @@
  * folders, and going back to the Info view keep it.
  */
 
-import type { AnswerPhase, ChatAttachment, ChatMessage } from "../../../shared/search-contract";
+import type { AnswerPhase, ChatAttachment, ChatMessage, CitationEvidence } from "../../../shared/search-contract";
+import { mergePhaseEvidence } from "./evidence";
 import { restoreChat } from "./steering";
 
 export interface InspectorTurn {
 	readonly question: string;
 	/** Files the question brought into the chat: the selection's items that were new to it. */
 	readonly attachments: readonly ChatAttachment[];
-	/** The latest answer phase that arrived: Deep when there is one, else Quick. */
-	readonly answer: AnswerPhase | null;
-	/** Answer text streamed so far, before `answer` lands. */
-	readonly draft: string;
-	/** What the agent says it is doing (its note before a tool call); shown with the shimmer until an answer phase lands. */
+	/** The Quick answer, once it landed. It stays on screen when Deep lands after it, as in an AI Search tab. */
+	readonly quick: AnswerPhase | null;
+	/** The Deep answer, once it landed. */
+	readonly deep: AnswerPhase | null;
+	/** Quick text streamed so far, before `quick` lands. */
+	readonly quickDraft: string;
+	/** Deep text streamed so far, before `deep` lands. */
+	readonly deepDraft: string;
+	/** How long the run took when Deep landed, ms; null while it has not or for a chat read back from history. */
+	readonly deepElapsed: number | null;
+	/** Epoch ms the question was asked; 0 for a chat read back from history. */
+	readonly startedAt: number;
+	/** What the agent says it is doing (its note before a tool call); shown with the shimmer until Deep starts to arrive. */
 	readonly progress: string;
 	readonly error: string | null;
 	readonly stopped: boolean;
@@ -99,20 +108,41 @@ export function pendingAttachments(tab: InspectorChatTab, targets: readonly Chat
 	return targets.filter((target) => !tab.dismissed.includes(target.id) && !context.has(target.id));
 }
 
-/** The stored chat as inspector turns: the latest phase of each answer. */
+/** The stored chat as inspector turns: both phases of each answer, as stored. */
 export function turnsFromHistory(messages: readonly ChatMessage[]): readonly InspectorTurn[] {
-	return restoreChat(messages).map((turn) => {
-		const answer = turn.assistant?.deep ?? turn.assistant?.quick ?? null;
-		return {
-			question: turn.question.text,
-			attachments: turn.question.attachments,
-			answer,
-			draft: answer?.answer ?? "",
-			progress: "",
-			error: null,
-			stopped: turn.assistant?.stopped ?? false,
-		};
-	});
+	return restoreChat(messages).map((turn) => ({
+		question: turn.question.text,
+		attachments: turn.question.attachments,
+		quick: turn.assistant?.quick ?? null,
+		deep: turn.assistant?.deep ?? null,
+		quickDraft: "",
+		deepDraft: "",
+		deepElapsed: null,
+		startedAt: 0,
+		progress: "",
+		error: null,
+		stopped: turn.assistant?.stopped ?? false,
+	}));
+}
+
+/** A question just asked: nothing has arrived yet. */
+export function newTurn(question: string, attachments: readonly ChatAttachment[], startedAt: number): InspectorTurn {
+	return { question, attachments, quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt, progress: "", error: null, stopped: false };
+}
+
+/** What a turn shows of the Quick answer: its landed phase, else the text streamed so far. */
+export function quickTextOf(turn: InspectorTurn): string {
+	return turn.quick?.answer ?? turn.quickDraft;
+}
+
+/** What a turn shows of the Deep answer: its landed phase, else the text streamed so far. */
+export function deepTextOf(turn: InspectorTurn): string {
+	return turn.deep?.answer ?? turn.deepDraft;
+}
+
+/** Every source either phase cites, by citation number (Deep wins a number both name): what a citation chip in either phase opens. */
+export function turnEvidence(turn: InspectorTurn): readonly CitationEvidence[] {
+	return mergePhaseEvidence(turn.deep?.evidence ?? [], turn.quick?.evidence ?? []);
 }
 
 /** Replace the chat's last turn. */

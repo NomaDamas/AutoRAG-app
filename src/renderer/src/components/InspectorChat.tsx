@@ -22,11 +22,12 @@ import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
 import { cn } from "../lib/cn";
-import { evidenceHeading, evidenceKind, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
-import { hasUnreadAnswer, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
+import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { answerViewState } from "../state/answer-view";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
-import { ProseBlocks } from "./AiSearchPanel";
+import { ProseBlocks, formatElapsed } from "./AiSearchPanel";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
 import {
@@ -35,6 +36,7 @@ import {
 	ExpandIcon,
 	FileIcon,
 	HistoryIcon,
+	LinkIcon,
 	MaximizeIcon,
 	MicIcon,
 	ChatNewIcon,
@@ -335,7 +337,10 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 const SOURCE_ACTION =
 	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-4 pl-8 pr-9 text-badge leading-[16px] text-ink-body cursor-pointer hover:bg-hover";
 
-/** What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). */
+/**
+ * What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). A web source
+ * shows its address and opens in the browser; a local one can be found in the list or previewed.
+ */
 function SourceCard({
 	item,
 	imageActions,
@@ -349,15 +354,23 @@ function SourceCard({
 }): ReactElement {
 	const { t } = useTranslation();
 	const local = isLocalEvidenceSource(item.source) ? item.source : null;
+	const url = item.source === null ? null : evidenceSourceUrl(item.source);
 	const excerpts = item.excerpts.length > 0 ? item.excerpts.slice(0, 1) : item.summary.length > 0 ? [item.summary] : [];
 	const images = { folder: local === null ? null : dirname(local), actions: imageActions };
 	return (
 		<div className="inspector-chat-source overflow-hidden rounded-8 border border-divider bg-window shadow-[0_0_4px_rgba(20,20,41,0.07)]" role="tooltip">
 			<div className="flex items-center gap-6 px-10 py-8">
 				<span className="flex size-18 flex-none items-center justify-center rounded-5 bg-accent text-badge font-medium text-on-accent">{item.number}</span>
-				<span className="min-w-0 flex-1 truncate text-meta font-normal leading-[16px] text-ink">{evidenceHeading(item.title, item.source)}</span>
+				<span className="flex min-w-0 flex-1 flex-col gap-1">
+					<span className="truncate text-meta font-normal leading-[16px] text-ink">{evidenceHeading(item.title, item.source)}</span>
+					{url === null ? null : (
+						<span className="inspector-chat-source-url truncate text-badge font-medium leading-[14px] text-accent-text" title={url}>
+							{url}
+						</span>
+					)}
+				</span>
 			</div>
-			{excerpts.length === 0 && local === null ? null : (
+			{excerpts.length === 0 && local === null && url === null ? null : (
 				<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
 					{excerpts.length === 0 ? null : (
 						<div className="inspector-chat-source-body flex max-h-[260px] min-w-0 flex-col gap-6 overflow-auto text-meta leading-[1.5] text-ink-body [&_.evidence\_\_block]:text-meta [&_.evidence\_\_block]:leading-[1.5] [&_strong]:font-medium! [&_strong]:text-accent-text!">
@@ -366,16 +379,26 @@ function SourceCard({
 							))}
 						</div>
 					)}
-					{local === null ? null : (
+					{local === null && url === null ? null : (
 						<div className="flex flex-wrap gap-4">
-							<button type="button" className={SOURCE_ACTION} onClick={() => onReveal(local)}>
-								<FileIcon size={12} />
-								{t("inspector.chat.showInList")}
-							</button>
-							<button type="button" className={SOURCE_ACTION} onClick={() => onPreview(local, item.excerpts)}>
-								<ExpandIcon size={12} />
-								{t("inspector.chat.preview")}
-							</button>
+							{local === null ? null : (
+								<>
+									<button type="button" className={SOURCE_ACTION} onClick={() => onReveal(local)}>
+										<FileIcon size={12} />
+										{t("inspector.chat.showInList")}
+									</button>
+									<button type="button" className={SOURCE_ACTION} onClick={() => onPreview(local, item.excerpts)}>
+										<ExpandIcon size={12} />
+										{t("inspector.chat.preview")}
+									</button>
+								</>
+							)}
+							{url === null ? null : (
+								<button type="button" className={SOURCE_ACTION} onClick={() => imageActions.onOpenUrl(url)}>
+									<LinkIcon size={12} />
+									{t("inspector.evidencePanel.openInBrowser")}
+								</button>
+							)}
 						</div>
 					)}
 				</div>
@@ -395,23 +418,21 @@ function citationAt(target: EventTarget | null): HTMLElement | null {
 	return target instanceof Element ? (target.closest("button.cite") as HTMLElement | null) : null;
 }
 
-function TurnView({
-	turn,
-	live,
+/** One answer phase (Quick or Deep) of a turn, with the hover card of its citation numbers. */
+function PhaseAnswer({
+	text,
+	evidence,
 	imageActions,
 	onReveal,
 	onPreview,
 }: {
-	readonly turn: InspectorTurn;
-	/** The turn's run is still streaming. */
-	readonly live: boolean;
+	readonly text: string;
+	/** The sources this phase cites: a number outside it has nothing to open and is dropped, as in an AI Search tab. */
+	readonly evidence: readonly CitationEvidence[];
 	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
 }): ReactElement {
-	const { t } = useTranslation();
-	const text = turn.answer?.answer ?? turn.draft;
-	const evidence = turn.answer?.evidence ?? [];
 	const answerRef = useRef<HTMLDivElement>(null);
 	const [hovered, setHovered] = useState<HoveredCitation | null>(null);
 	const hideTimer = useRef<number | null>(null);
@@ -439,6 +460,56 @@ function TurnView({
 	};
 	const card = hovered === null ? null : (evidence.find((item) => item.number === hovered.number) ?? null);
 	return (
+		<div
+			ref={answerRef}
+			className="inspector-chat-answer relative block min-w-0 text-sm font-normal leading-[1.5] text-ink-body break-words [&_.cite]:bg-accent [&_.cite]:font-medium [&_.cite]:text-on-accent"
+			onMouseOver={onOver}
+			onMouseLeave={hideSoon}
+			onFocus={(event) => {
+				const cite = citationAt(event.target);
+				if (cite !== null) show(cite);
+			}}
+			onKeyDown={(event) => {
+				if (event.key === "Escape") setHovered(null);
+			}}
+		>
+			<ProseBlocks
+				text={text}
+				selected={null}
+				unresolved={unresolvedCitationNumbers(text, evidence)}
+				onCitation={(number) => setHovered((current) => (current?.number === number ? null : current))}
+				imageActions={imageActions}
+			/>
+			{card === null || hovered === null ? null : (
+				<div className="absolute right-0 left-0 z-20" style={{ top: hovered.top }} onMouseEnter={keep}>
+					<SourceCard item={card} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
+				</div>
+			)}
+		</div>
+	);
+}
+
+function TurnView({
+	turn,
+	live,
+	imageActions,
+	onReveal,
+	onPreview,
+}: {
+	readonly turn: InspectorTurn;
+	/** The turn's run is still streaming. */
+	readonly live: boolean;
+	readonly imageActions: ImageActions;
+	readonly onReveal: (path: string) => void;
+	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const quickText = quickTextOf(turn);
+	const deepText = deepTextOf(turn);
+	// The same rule as an AI Search tab: the shimmer line runs from the question until the Deep answer starts to arrive,
+	// below the Quick answer when there is one.
+	const shimmer = answerViewState({ pending: live, deepReady: deepText !== "" }).shimmer;
+	return (
 		<>
 			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
 				{turn.attachments.map((att) => (
@@ -447,41 +518,26 @@ function TurnView({
 				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
 			<div className="flex min-w-0 flex-col gap-8">
-				{text.length > 0 ? (
-					<div
-						ref={answerRef}
-						className="inspector-chat-answer relative block min-w-0 text-sm font-normal leading-[1.5] text-ink-body break-words [&_.cite]:bg-accent [&_.cite]:font-medium [&_.cite]:text-on-accent"
-						onMouseOver={onOver}
-						onMouseLeave={hideSoon}
-						onFocus={(event) => {
-							const cite = citationAt(event.target);
-							if (cite !== null) show(cite);
-						}}
-						onKeyDown={(event) => {
-							if (event.key === "Escape") setHovered(null);
-						}}
-					>
-						<ProseBlocks
-							text={text}
-							selected={null}
-							unresolved={unresolvedCitationNumbers(text, evidence)}
-							onCitation={(number) => setHovered((current) => (current?.number === number ? null : current))}
-							imageActions={imageActions}
-						/>
-						{card === null || hovered === null ? null : (
-							<div className="absolute right-0 left-0 z-20" style={{ top: hovered.top }} onMouseEnter={keep}>
-								<SourceCard item={card} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
-							</div>
-						)}
-					</div>
-				) : null}
-				{live && (text.length === 0 || turn.progress !== "") ? (
+				{quickText === "" ? null : (
+					<PhaseAnswer text={quickText} evidence={turn.quick?.evidence ?? []} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
+				)}
+				{shimmer ? (
 					<div className="flex min-w-0 items-center text-tile text-ink-muted" role="status">
 						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
 							{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
 						</span>
 					</div>
 				) : null}
+				{deepText === "" ? null : (
+					<div className="flex min-w-0 flex-col gap-6">
+						{turn.deepElapsed === null ? null : (
+							<div className="thinking-header flex items-center gap-5 text-tile font-medium text-ink-muted">
+								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
+							</div>
+						)}
+						<PhaseAnswer text={deepText} evidence={turn.deep?.evidence ?? []} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
+					</div>
+				)}
 				{turn.error === null ? null : <p className="block m-0 text-tile text-danger-text">{turn.error}</p>}
 				{turn.stopped && turn.error === null ? <p className="block m-0 text-tile text-ink-muted">{t("inspector.chat.stopped")}</p> : null}
 			</div>
