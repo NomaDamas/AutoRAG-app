@@ -333,7 +333,7 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 
 
 const SOURCE_ACTION =
-	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink-body cursor-pointer hover:bg-hover";
+	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-4 pl-8 pr-9 text-badge leading-[16px] text-ink-body cursor-pointer hover:bg-hover";
 
 /** What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). */
 function SourceCard({
@@ -352,15 +352,15 @@ function SourceCard({
 	const excerpts = item.excerpts.length > 0 ? item.excerpts.slice(0, 1) : item.summary.length > 0 ? [item.summary] : [];
 	const images = { folder: local === null ? null : dirname(local), actions: imageActions };
 	return (
-		<div className="inspector-chat-source overflow-hidden rounded-8 border border-divider bg-window shadow-menu" role="tooltip">
+		<div className="inspector-chat-source overflow-hidden rounded-8 border border-divider bg-window shadow-[0_0_4px_rgba(20,20,41,0.07)]" role="tooltip">
 			<div className="flex items-center gap-6 px-10 py-8">
 				<span className="flex size-18 flex-none items-center justify-center rounded-5 bg-accent text-badge font-medium text-on-accent">{item.number}</span>
-				<span className="min-w-0 flex-1 truncate text-meta font-medium leading-[16px] text-ink">{evidenceHeading(item.title, item.source)}</span>
+				<span className="min-w-0 flex-1 truncate text-meta font-normal leading-[16px] text-ink">{evidenceHeading(item.title, item.source)}</span>
 			</div>
 			{excerpts.length === 0 && local === null ? null : (
 				<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
 					{excerpts.length === 0 ? null : (
-						<div className="inspector-chat-source-body flex max-h-[260px] min-w-0 flex-col gap-6 overflow-auto text-meta [&_.evidence\_\_block]:text-meta [&_strong]:font-medium! [&_strong]:text-accent-text!">
+						<div className="inspector-chat-source-body flex max-h-[260px] min-w-0 flex-col gap-6 overflow-auto text-meta leading-[1.5] text-ink-body [&_.evidence\_\_block]:text-meta [&_.evidence\_\_block]:leading-[1.5] [&_strong]:font-medium! [&_strong]:text-accent-text!">
 							{excerpts.map((excerpt, index) => (
 								<EvidenceExcerpt key={`${index}`} text={excerpt} images={images} />
 							))}
@@ -444,13 +444,13 @@ function TurnView({
 				{turn.attachments.map((att) => (
 					<AttachmentCard key={att.id} att={att} />
 				))}
-				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-meta leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
+				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
 			<div className="flex min-w-0 flex-col gap-8">
 				{text.length > 0 ? (
 					<div
 						ref={answerRef}
-						className="inspector-chat-answer relative block min-w-0 text-meta font-medium leading-[1.5] text-ink-body break-words [&_.cite]:bg-accent [&_.cite]:font-medium [&_.cite]:text-on-accent"
+						className="inspector-chat-answer relative block min-w-0 text-sm font-normal leading-[1.5] text-ink-body break-words [&_.cite]:bg-accent [&_.cite]:font-medium [&_.cite]:text-on-accent"
 						onMouseOver={onOver}
 						onMouseLeave={hideSoon}
 						onFocus={(event) => {
@@ -544,18 +544,18 @@ function ChatHistoryMenu({
 			aria-label={t("inspector.chat.history")}
 		>
 			{groups === null ? null : groups.length === 0 ? (
-				<span className="block px-16 py-4 text-meta text-ink-muted">{historyEmptyText("")}</span>
+				<span className="block px-16 py-4 text-sm text-ink-muted">{historyEmptyText("")}</span>
 			) : (
 				groups.map((group) => (
 					<div key={group.label} className="flex flex-col">
-						<span className="block px-16 text-[10.5px] leading-[15.75px] text-ink-muted">{t(HISTORY_BUCKET_KEYS[group.label])}</span>
+						<span className="block px-16 text-badge font-medium leading-[16px] text-ink-muted">{t(HISTORY_BUCKET_KEYS[group.label])}</span>
 						{group.items.map((item) => (
 							<button
 								type="button"
 								role="menuitem"
 								key={item.id}
 								className={cn(
-									"mx-8 block truncate rounded-8 border-0 px-16 py-8 text-left text-meta leading-[16px] text-ink-body cursor-pointer hover:bg-hover",
+									"mx-8 block truncate rounded-8 border-0 px-16 py-8 text-left text-sm font-normal leading-[18px] text-ink-body cursor-pointer hover:bg-hover",
 									item.id === currentChatId ? "bg-selected-nav" : "bg-transparent",
 								)}
 								title={item.title}
@@ -618,12 +618,12 @@ export function InspectorChatView({
 	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
 	return (
 		<div className="inspector-chat flex min-h-0 flex-1 flex-col overflow-hidden" aria-label={t("inspector.chat.title")}>
-			<div className="relative flex h-35 flex-none items-center gap-4 border-y border-divider bg-subtle-alt py-6 pl-12 pr-8">
+			<div className="relative flex h-35 flex-none items-center gap-4 bg-subtle-alt py-6 pl-12 pr-8">
 				{/* At least 30px before the buttons (Figma 328:3802): a wider sidebar shows more of the title, and once it is whole the gap grows. */}
 				<div className="flex min-w-0 flex-1 pr-26">
 					<button
 						type="button"
-						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink cursor-pointer hover:text-ink-body"
+						className="inspector-chat-title flex min-w-0 max-w-full items-center gap-4 border-0 bg-transparent p-0 text-left text-sm font-normal leading-[1.5] text-ink-body cursor-pointer hover:text-ink"
 						aria-haspopup="menu"
 						aria-expanded={historyOpen}
 						title={title}
