@@ -231,7 +231,7 @@ try {
 		}
 	};
 
-	check("the mode defaults to auto", (await page.evaluate(() => window.autorag.interaction.getMode())) === "auto");
+	check("the mode defaults to full", (await page.evaluate(() => window.autorag.interaction.getMode())) === "full");
 
 	// ── 1. The model asks which report to summarize. ────────────────────────
 	await send(
