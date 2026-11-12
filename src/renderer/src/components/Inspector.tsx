@@ -1046,7 +1046,7 @@ function EvidencePanel({
 				disabled={!canOpenFolder}
 				aria-label={t("inspector.evidencePanel.evidenceFolder")}
 				title={t("inspector.evidencePanel.evidenceFolderTooltip")}
-				className="evidence-folder-btn flex-none inline-flex items-center gap-4 h-22 px-8 rounded-5 border border-border bg-window text-badge font-medium leading-[16.5px] text-ink-body whitespace-nowrap cursor-pointer transition-[background,border-color,color] duration-(--dur-color) ease-[ease] enabled:hover:border-border-strong enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
+				className="evidence-folder-btn flex-none inline-flex items-center gap-4 px-6 py-4 rounded-6 border border-border bg-window text-[10.5px] font-normal leading-[15.75px] text-ink-body whitespace-nowrap cursor-pointer transition-[background,border-color,color] duration-(--dur-color) ease-[ease] enabled:hover:border-border-strong enabled:hover:bg-hover enabled:hover:text-ink disabled:opacity-45 disabled:cursor-default"
 				onClick={onOpenEvidenceFolder}
 			>
 				<FolderGlyph size={13} />
@@ -1137,7 +1137,18 @@ function EvidencePanel({
 								</span>
 							)}
 							<div className="flex min-w-0 flex-1 flex-col gap-3">
-								<div className="preview-title text-body font-medium leading-[19px] text-ink [overflow-wrap:anywhere]">{heading}</div>
+								{local || url !== null ? (
+									<button
+										type="button"
+										className="preview-title m-0 cursor-pointer border-0 bg-transparent p-0 text-left text-[14px] font-medium leading-[19px] text-ink [overflow-wrap:anywhere] transition-colors duration-(--dur-color) ease-out hover:text-accent-text"
+										title={open.label}
+										onClick={open.run}
+									>
+										{heading}
+									</button>
+								) : (
+									<div className="preview-title text-[14px] font-medium leading-[19px] text-ink [overflow-wrap:anywhere]">{heading}</div>
+								)}
 								{url === null && detail === null ? null : (
 									<div className={cn("preview-sub truncate text-badge font-medium leading-[14px]", url === null ? "text-ink-faint" : "evidence-url text-accent-text")} title={url ?? undefined}>
 										{url ?? detail}
@@ -1163,8 +1174,8 @@ function EvidencePanel({
 					) : null}
 
 					<div className="h-px bg-divider" aria-hidden="true" />
-					<div className="flex h-22 items-center text-meta font-medium leading-[16px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
-					<div className="flex flex-col gap-8">
+					<div className="flex h-22 items-center text-[14px] font-medium leading-[19px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
+					<div className="evidence-excerpts flex flex-col gap-8 [&_.evidence\_\_block]:text-[13px] [&_.evidence\_\_block]:leading-[21px]">
 						{item.summary.length === 0 ? null : (
 							<InlineWithImages
 								text={item.summary}

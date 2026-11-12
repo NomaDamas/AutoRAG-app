@@ -76,13 +76,18 @@
 	padding: 0;
 	border: 0;
 	background: transparent;
-	color: var(--text-body);
+	color: var(--text-muted); /* Figma 403:10583: muted text, a faint chevron. */
 	font-size: var(--font-size-meta);
 	line-height: 18px;
 	cursor: pointer;
 }
 
-.settings-sidebar-back:hover {
+.settings-sidebar-back > svg {
+	color: var(--text-faint);
+}
+
+.settings-sidebar-back:hover,
+.settings-sidebar-back:hover > svg {
 	color: var(--text-primary);
 }
 

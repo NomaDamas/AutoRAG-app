@@ -220,7 +220,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 									aria-label={t("settingsCore.ai.providerMenu", { name: provider.name })}
 									onClick={(event) => setMenu(menu?.kind === "provider" && menu.arg === provider.id ? null : { kind: "provider", anchor: event.currentTarget, arg: provider.id })}
 								>
-									<Ellipsis size={20} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+									<Ellipsis size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 								</button>
 							</div>
 						);
@@ -385,16 +385,17 @@ function RoleRow({
 						!
 					</span>
 				) : null}
-				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
-					{provider ? <ProviderIcon small provider={provider} /> : null}
-					<span className={`settings-trigger-label${unset ? " is-muted" : ""}`}>{unset ? t("settingsCore.ai.pickModel") : current}</span>
-					<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
-				</button>
+				{/* Left of the picker, so every role's picker keeps the same right edge. */}
 				{thinking !== undefined ? (
 					<button type="button" className="settings-icon-btn" aria-label={t("settingsCore.ai.thinkingDepthFor", { label })} title={t("settingsCore.ai.thinkingDepth")} onClick={(event) => thinking.onOpen(event.currentTarget)}>
 						<Ellipsis size={16} aria-hidden="true" focusable="false" />
 					</button>
 				) : null}
+				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
+					{provider ? <ProviderIcon small provider={provider} /> : null}
+					<span className={`settings-trigger-label${unset ? " is-muted" : ""}`}>{unset ? t("settingsCore.ai.pickModel") : current}</span>
+					<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+				</button>
 			</span>
 		</Row>
 	);
