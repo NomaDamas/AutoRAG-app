@@ -201,6 +201,16 @@ describe("the inspector chat view", () => {
 		expect(host.querySelector(".inspector-chat-answer")?.textContent).not.toContain("[file:");
 	});
 
+	it("draws citation numbers like the AI Search tab: a pale wash, and solid blue while one is hovered", () => {
+		renderTab(withAnswer("본문 [1]", ["근거"]));
+		const cite = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
+		expect(cite()?.className).toContain("bg-accent-wash");
+		expect(cite()?.classList.contains("active")).toBe(false);
+		act(() => cite()?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		expect(cite()?.classList.contains("active")).toBe(true);
+		expect(cite()?.className).toContain("bg-accent text-on-accent");
+	});
+
 	it("renders HTML, a table, an image, and a video inside the hovered citation card", () => {
 		renderTab(withAnswer("본문 [1]", ["<table><tr><td>셀</td></tr></table>\n![사진](pic.png)\n![영상](clip.mp4)\n**표시**"]));
 		const cite = host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");

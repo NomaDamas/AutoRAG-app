@@ -463,7 +463,7 @@ function PhaseAnswer({
 	return (
 		<div
 			ref={answerRef}
-			className="inspector-chat-answer relative block min-w-0 text-sm font-normal leading-[1.5] text-ink-body break-words [&_.cite]:bg-accent [&_.cite]:font-medium [&_.cite]:text-on-accent"
+			className="inspector-chat-answer relative block min-w-0 text-sm font-normal leading-[1.5] text-ink-body break-words"
 			onMouseOver={onOver}
 			onMouseLeave={hideSoon}
 			onFocus={(event) => {
@@ -476,7 +476,8 @@ function PhaseAnswer({
 		>
 			<ProseBlocks
 				text={text}
-				selected={null}
+				/* Like the AI Search tab: every number sits in the pale wash, the one being hovered fills blue. */
+				selected={hovered?.number ?? null}
 				unresolved={unresolvedCitationNumbers(text, evidence)}
 				onCitation={(number) => setHovered((current) => (current?.number === number ? null : current))}
 				imageActions={imageActions}
