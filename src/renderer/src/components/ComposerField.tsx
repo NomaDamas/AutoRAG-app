@@ -64,9 +64,11 @@ export interface ComposerFieldProps {
 	readonly placeholder?: string | undefined;
 	readonly ariaLabel: string;
 	readonly fieldRef?: Ref<HTMLTextAreaElement>;
+	/** Merged over the default look (the inspector chat's smaller type). */
+	readonly className?: string;
 }
 
-export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLabel, fieldRef }: ComposerFieldProps): ReactElement {
+export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLabel, fieldRef, className }: ComposerFieldProps): ReactElement {
 	const localRef = useRef<HTMLTextAreaElement | null>(null);
 
 	useLayoutEffect(() => {
@@ -114,6 +116,7 @@ export function ComposerField({ value, onChange, onAltEnter, placeholder, ariaLa
 			aria-label={ariaLabel}
 			className={cn(
 				"composer-field block w-full min-w-0 resize-none border-0 bg-transparent p-0 text-body leading-[21px] text-ink-body outline-none [overflow-wrap:anywhere] placeholder:text-ink-faint",
+				className,
 			)}
 		/>
 	);

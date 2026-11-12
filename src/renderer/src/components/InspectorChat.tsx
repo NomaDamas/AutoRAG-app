@@ -14,7 +14,7 @@
  *                      to the Info view (Figma 328:3991, 328:5742).
  */
 
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contract";
 import { useTranslation } from "react-i18next";
@@ -45,6 +45,7 @@ import {
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { EvidenceExcerpt } from "./EvidenceBlocks";
+import { ComposerField } from "./ComposerField";
 import { dirname } from "../state/paths";
 
 /** Time since `at`, worded short in its largest unit: "방금", "5분 전", "2시간 전", "3일 전", "1달 전", "1년 전". */
@@ -200,12 +201,6 @@ function Composer({
 		setBusyNotice(false);
 		setDraft("");
 	};
-	const onKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>): void => {
-		// Enter that confirms a Korean/Japanese IME composition is not a send.
-		if (event.key !== "Enter" || event.nativeEvent.isComposing || event.keyCode === 229) return;
-		event.preventDefault();
-		send();
-	};
 	return (
 		<div className="inspector-chat-composer block">
 			<div className="flex flex-col gap-10 rounded-12 border border-divider bg-window py-8 pl-11 pr-12 shadow-[0_2px_5px_rgba(20,20,41,0.07)]">
@@ -216,18 +211,24 @@ function Composer({
 						))}
 					</div>
 				)}
-				<div className="flex items-center gap-8">
+				<form
+					className="flex items-end gap-8"
+					onSubmit={(event) => {
+						event.preventDefault();
+						send();
+					}}
+				>
 					<ApprovalModeMenu mode={approval.mode} onChange={approval.setMode} compact />
-					<input
-						className="min-w-0 flex-1 h-24 border-0 bg-transparent p-0 text-meta leading-[16px] text-ink outline-none placeholder:text-ink-faint"
+					<ComposerField
+						className="py-4 text-meta leading-[16px] text-ink placeholder:text-ink-faint"
 						value={draft}
 						placeholder={placeholder}
-						aria-label={placeholder}
-						onChange={(event) => {
-							setDraft(event.target.value);
+						ariaLabel={placeholder}
+						onChange={(next) => {
+							setDraft(next);
 							setBusyNotice(false);
 						}}
-						onKeyDown={onKeyDown}
+						onAltEnter={send}
 					/>
 					{running ? (
 						<button
@@ -253,7 +254,7 @@ function Composer({
 							<ArrowUpIcon size={12} />
 						</button>
 					)}
-				</div>
+				</form>
 			</div>
 			{busyNotice ? (
 				<p className="block m-0 mt-4 text-tile text-ink-muted" role="status">

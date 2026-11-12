@@ -217,21 +217,21 @@ describe("the inspector chat view", () => {
 		const chip = host.querySelector<HTMLButtonElement>('.inspector-chat-composer button[aria-haspopup="menu"]');
 		expect(chip).not.toBeNull();
 		expect(chip?.textContent).toBe("");
-		expect(chip?.nextElementSibling?.tagName).toBe("INPUT");
+		expect(chip?.nextElementSibling?.tagName).toBe("TEXTAREA");
 	});
 
 	it("asks about the waiting files, each as a card, and follows up otherwise", () => {
 		render([{ kind: "file", id: "/work/notes.pdf", name: "notes.pdf" }]);
-		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
 		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(1);
 		render([
 			{ kind: "file", id: "/work/notes.pdf", name: "notes.pdf" },
 			{ kind: "file", id: "/work/photo.jpg", name: "photo.jpg" },
 		]);
-		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("선택한 항목에 대해 묻기");
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("선택한 항목에 대해 묻기");
 		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(2);
 		render([]);
-		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("이어서 묻기");
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이어서 묻기");
 	});
 });
 
@@ -252,7 +252,7 @@ describe("the Info view's chat dock", () => {
 			),
 		);
 		expect(host.querySelector(".inspector-chat-att")).toBeNull();
-		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
 	});
 
 	it("offers 이어서 대화 instead of AI 요약 once the tab has a chat, with a dot for an answer not yet seen", () => {
@@ -294,15 +294,15 @@ describe("the Info view's chat dock", () => {
 				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
 			),
 		);
-		expect(host.querySelector("input")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
 		expect(host.textContent).not.toContain("AI 요약");
 	});
 });
 
 describe("the composer's blue button", () => {
-	const typeInto = (input: HTMLInputElement, value: string): void => {
+	const typeInto = (input: HTMLTextAreaElement, value: string): void => {
 		act(() => {
-			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
 			input.dispatchEvent(new Event("input", { bubbles: true }));
 		});
 	};
@@ -324,7 +324,7 @@ describe("the composer's blue button", () => {
 			expect(mic?.className).toContain("bg-accent");
 			expect(host.querySelector('button[aria-label="보내기"]')).toBeNull();
 
-			const input = host.querySelector<HTMLInputElement>("input");
+			const input = host.querySelector<HTMLTextAreaElement>("textarea");
 			if (input === null) throw new Error("no input");
 			typeInto(input, "요약해줘");
 			const send = host.querySelector<HTMLButtonElement>('button[aria-label="보내기"]');
