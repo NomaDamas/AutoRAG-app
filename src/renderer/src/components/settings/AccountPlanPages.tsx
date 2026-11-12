@@ -100,7 +100,7 @@ export function AccountPage(): ReactElement {
 					</PlainRow>
 				</div>
 			</section>
-			<hr className="ai-divider" />
+			<hr className="ai-divider account-divider" />
 			<section className="account-legal">
 				<h2 className="account-legal-title">{t("settingsCore.account.legal.title")}</h2>
 				<div className="account-legal-links">

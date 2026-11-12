@@ -3971,17 +3971,28 @@
 	cursor: default;
 }
 
-/* The 계정 rows are 64px with the button centred on the two lines (the section title sits 16px above). */
-.settings-view .account-rows .settings-plain-row,
-.settings-view .account-rows .settings-plain-row:first-child {
+/* Figma 412:11464: the 계정 rows centre the button on the two lines; the first row sits 8px under the
+   section title and ends 14px down, the second is a 64px row (14px top and bottom). */
+.settings-view .account-rows .settings-plain-row {
 	align-items: center;
-	padding: 13.5px 0;
+	min-height: 64px;
+	padding: 14px 0;
+}
+
+.settings-view .account-rows .settings-plain-row:first-child {
+	min-height: 0;
+	padding: 8px 0 14px;
+}
+
+/* The rule sits 24px from 계정 and from 약관 및 정책. */
+.settings-view .account-divider {
+	margin: 24px 0;
 }
 
 .settings-view .account-legal {
 	display: flex;
 	flex-direction: column;
-	gap: 12px;
+	gap: 4px;
 }
 
 .settings-view .account-legal-title {
