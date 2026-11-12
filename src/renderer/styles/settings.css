@@ -3695,6 +3695,11 @@
 	padding: 13.5px 0;
 }
 
+/* The first row starts right under the head's 40px (Figma 403:8746 / 403:9482: no top padding on it). */
+.settings-view .settings-plain-row:first-child {
+	padding-top: 0;
+}
+
 .settings-view .settings-plain-text {
 	display: flex;
 	flex: 1;
