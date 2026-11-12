@@ -23,6 +23,8 @@ import {
 	EmptyTrashIcon,
 } from "./icons";
 import { ToolbarMenu } from "./ToolbarMenu";
+import { iconButtonClass } from "./primitives/icon-button";
+import { cn } from "../lib/cn";
 
 const VIEW_OPTIONS: readonly { readonly mode: ViewMode; readonly shortcutId: ShortcutId; readonly Icon: typeof IconsViewIcon }[] = [
 	{ mode: "icons", shortcutId: "viewIcons", Icon: IconsViewIcon },
@@ -243,7 +245,7 @@ export function Toolbar({
 			{inspectorHidden ? (
 				<button
 					type="button"
-					className={`group ${NAV_BUTTON} [-webkit-app-region:no-drag]`}
+					className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "group [-webkit-app-region:no-drag]")}
 					title={t("toolbar.showInspector")}
 					aria-label={t("toolbar.showInspector")}
 					onClick={onShowInspector}

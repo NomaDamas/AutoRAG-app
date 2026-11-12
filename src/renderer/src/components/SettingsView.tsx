@@ -518,7 +518,7 @@ export function SettingsView({
 						</button>
 					) : null}
 					{inspectorHidden ? (
-						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "group settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "group settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
 							<InspectorToggleIcon open={false} />
 						</button>
 					) : null}

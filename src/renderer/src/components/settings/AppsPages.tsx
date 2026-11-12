@@ -487,6 +487,8 @@ export function AppsPage({
 					))}
 				</div>
 			</Section>
+			{/* Figma 403:6999: a rule closes 내 연결 before 앱 연결하기. */}
+			<hr className="settings-apps-divider" />
 			<Section title={t("settingsSources.apps.connectApps")}>
 				{GALLERY_GROUPS.map((group) => (
 					<div key={group.title}>

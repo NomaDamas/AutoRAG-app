@@ -36,7 +36,7 @@ export function InspectorColumn({
 				<div className="inspector-head flex flex-none items-center gap-8 h-toolbar bg-window px-12 [-webkit-app-region:drag]">
 					<button
 						type="button"
-						className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "[-webkit-app-region:no-drag]")}
+						className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "[-webkit-app-region:no-drag]")}
 						title={t("toolbar.hideInspector")}
 						aria-label={t("toolbar.hideInspector")}
 						onClick={onHide}
