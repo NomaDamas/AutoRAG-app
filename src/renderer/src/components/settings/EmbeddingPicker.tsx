@@ -50,7 +50,7 @@ function buildRequest(profileId: string, byok: ByokFields, acknowledgeRemote: bo
 	};
 }
 
-export function EmbeddingPicker(): ReactElement {
+export function EmbeddingPicker({ name, hint }: { readonly name?: string; readonly hint?: string } = {}): ReactElement {
 	const { t } = useTranslation();
 	const [state, setState] = useState<EmbeddingSettingsSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -135,10 +135,10 @@ export function EmbeddingPicker(): ReactElement {
 
 	return (
 		<>
-			<Row name={t("settingsCore.embedding.title")} hint={t("settingsCore.embedding.hint")}>
+			<Row name={name ?? t("settingsCore.embedding.title")} hint={hint ?? t("settingsCore.embedding.hint")}>
 				<button type="button" className="settings-trigger" onClick={openModal} aria-haspopup="dialog">
-					<span className={`settings-trigger-label${currentLabel === null ? " is-muted" : ""}`}>{currentLabel ?? t("settingsCore.common.notSet")}</span>
-					<ChevronDown size={14} aria-hidden="true" focusable="false" />
+					<span className={`settings-trigger-label${currentLabel === null ? " is-muted" : ""}`}>{currentLabel ?? t("settingsCore.ai.pickModel")}</span>
+					<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 				</button>
 			</Row>
 			{open ? (

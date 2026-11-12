@@ -2667,7 +2667,7 @@
       "off": "Disabled",
       "role": {
         "answer": "Answer",
-        "decomposition": "Query Decomposition",
+        "decomposition": "Question splitting",
         "rerank": "Rerank",
         "jev": "Judge"
       },
@@ -2677,18 +2677,18 @@
       "noServices": "No services connected yet. Connect one below.",
       "connectService": "Connect Service",
       "servicesTitle": "Connected Services",
-      "servicesDesc": "Choose models from connected services for the roles below.",
+      "servicesDesc": "Sign in to services like OpenAI or Anthropic, or connect them with an API key.",
       "rolesTitle": "Models by Role",
-      "rolesDesc": "Dazzi splits work by role. Choose the right model for each role.",
+      "rolesDesc": "Dazzi can use a different model for each job it does.",
       "subSearchAssistant": "Search Assist",
-      "answerModel": "Answer Model",
-      "answerHint": "Answers questions and summarizes documents.",
-      "decompositionHint": "Splits long questions into multiple search terms. A fast, cheap model works well.",
-      "jevModel": "Judge Model (Jev)",
-      "jevHint": "Decides whether to answer directly or search your documents.",
+      "answerModel": "Answering",
+      "answerHint": "Writes answers to your questions and summarizes documents.",
+      "decompositionHint": "Splits a long, complex question into several searches.",
+      "jevModel": "Search decision (Jev)",
+      "jevHint": "Decides whether to answer right away or search your documents first.",
       "jevSllm": "None",
-      "rerankModel": "Rerank Results",
-      "rerankHint": "Raises more relevant results to the top. Answers may be slightly slower.",
+      "rerankModel": "Result reranking",
+      "rerankHint": "Puts the documents most relevant to the question at the top.",
       "subDocUnderstanding": "Document Understanding",
       "selectRole": "Select {{label}}",
       "login": {
@@ -2761,7 +2761,11 @@
         "submit": "Submit"
       },
       "auto": "Auto",
-      "defaultValue": "Default"
+      "defaultValue": "Default",
+      "embeddingModel": "Document understanding",
+      "embeddingHint": "Analyzes what documents mean. Choose This PC and your documents never leave it.",
+      "pickModel": "Choose a model",
+      "roleBroken": "This model's service isn't connected. Reconnect it or choose another model."
     },
     "embedding": {
       "title": "Document Understanding Model",

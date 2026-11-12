@@ -3747,3 +3747,161 @@
 	border: 0;
 	background: var(--border-divider);
 }
+
+/* ---------------------------------------------- AI 모델 (Figma 403:10518) -- */
+
+.settings-view .ai-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-view .ai-section:first-of-type {
+	margin-top: 40px;
+}
+
+.settings-view .ai-section-head {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.settings-view .ai-section-title {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .ai-section-desc {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .ai-divider {
+	height: 1px;
+	margin: 32px 0;
+	border: 0;
+	background: var(--border-divider);
+}
+
+/* 연결된 서비스: a bordered list of 48px rows, the last one "+ 서비스 연결". */
+.settings-view .ai-services {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border-divider);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+}
+
+.settings-view .ai-service-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	height: 48px;
+	padding: 0 16px;
+	border: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+}
+
+.settings-view .ai-service-row + .ai-service-row {
+	border-top: 1px solid var(--border);
+}
+
+.settings-view .ai-service-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .ai-service-add {
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .ai-service-add:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+/* 역할별 모델: 64px rows on a Stage card (16px corners, 28px in from the sides), no rules between them. */
+.settings-view .ai-roles {
+	display: flex;
+	flex-direction: column;
+	padding: 8px 28px;
+	border-radius: 16px;
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .ai-roles .linear-row {
+	align-items: center;
+	min-height: 64px;
+	padding: 12px 0;
+	border-bottom: 0;
+}
+
+.settings-view .ai-roles .linear-row-name {
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .ai-roles .linear-row-label small {
+	margin-top: 4px;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .ai-roles .settings-split {
+	align-items: center;
+	gap: 4px;
+	height: auto;
+	border: 0;
+	background: none;
+}
+
+.settings-view .ai-roles .settings-trigger {
+	width: 152px;
+	min-width: 0;
+	height: 36px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .ai-roles .settings-trigger > svg:last-child {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .ai-roles .settings-trigger.is-broken {
+	border-color: var(--danger-text);
+}
+
+.settings-view .ai-roles .settings-split .settings-icon-btn {
+	width: 36px;
+	height: 36px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .ai-role-alert {
+	width: 12px;
+	color: var(--danger-text);
+	font-size: 12px;
+	font-weight: var(--weight-bold);
+	line-height: 12px;
+	text-align: center;
+}
