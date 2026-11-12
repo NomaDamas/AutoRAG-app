@@ -25,7 +25,7 @@ import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
 import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
-import { JEV_SLLM_BACKEND, jevBackendFor } from "../../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
@@ -215,11 +215,12 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 								<span className="ai-service-name">{provider.name}</span>
 								<button
 									type="button"
-									className="settings-icon-btn"
+									className="settings-icon-btn ai-service-more"
+									title={t("settingsCore.ai.providerMenu", { name: provider.name })}
 									aria-label={t("settingsCore.ai.providerMenu", { name: provider.name })}
 									onClick={(event) => setMenu(menu?.kind === "provider" && menu.arg === provider.id ? null : { kind: "provider", anchor: event.currentTarget, arg: provider.id })}
 								>
-									<Ellipsis size={16} aria-hidden="true" focusable="false" />
+									<Ellipsis size={20} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 								</button>
 							</div>
 						);
@@ -340,6 +341,8 @@ function answerUnset(snapshot: AutoRagConfigSnapshot): boolean {
 
 /** A role set to a model of a service that is no longer connected (Figma 403:10518: a red picker and a "!"). */
 function roleBroken(role: string, config: AutoRagConfigSnapshot["config"], connected: readonly ProviderSummary[]): boolean {
+	// The librarian writes its OpenRouter decomposition default into every fresh config; that is the default, not a broken pick.
+	if (role === "decomposition" && shouldAdoptManagedDecomposition(getAt(config, ["queryDecomposition"]))) return false;
 	const sel = roleSelectionFor(role, config, connected);
 	return sel?.kind === "model" && !connected.some((item) => item.id === sel.provider);
 }

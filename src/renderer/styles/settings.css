@@ -3905,3 +3905,22 @@
 	line-height: 12px;
 	text-align: center;
 }
+
+/* Figma 409:11077: the service's 31px letter or logo tile on the input grey, and a bare 20px "…" in the faint ink. */
+.settings-view .ai-service-row .settings-app-icon {
+	width: 31px;
+	height: 31px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+}
+
+.settings-view .ai-service-more {
+	width: 24px;
+	height: 24px;
+	color: var(--text-faint);
+}
+
+.settings-view .ai-service-more:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
