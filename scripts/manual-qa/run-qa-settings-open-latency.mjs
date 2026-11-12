@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { rmRetry } from "./platform.mjs";
+import { selectField } from "./settings-select.mjs";
 
 // Opening Settings must not wait for the datasource scan. Each backend CLI
 // (slacrawl, discrawl, ...) is asked what it holds, and a real one takes a few
@@ -64,7 +65,7 @@ try {
 
 	const clickedAt = Date.now();
 	await page.locator(".sidebar__item--settings").click();
-	await page.waitForSelector('select[aria-label="Appearance"]', { timeout: SLOW_MS });
+	await page.waitForSelector(selectField("Appearance"), { timeout: SLOW_MS });
 	const usableMs = Date.now() - clickedAt;
 	check("General page is usable before the slow scan can finish", usableMs < SLOW_MS, `${usableMs} ms (scan needs >= ${SLOW_MS} ms)`);
 	check("sidebar lists every configured connection at once", (await page.locator(".settings-nav-item--source").count()) === FAKE_CLIS.length);

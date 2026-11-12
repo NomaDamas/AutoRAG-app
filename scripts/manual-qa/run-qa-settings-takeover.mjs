@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/settings-takeover");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -283,7 +284,7 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
-	await page.selectOption('select[aria-label="App Language"]', "ko");
+	await pickSelect(page.locator(selectField("App Language")), "ko");
 	await page.waitForFunction(() => document.querySelector(".settings-sidebar-back")?.textContent?.trim() === "뒤로", null, { timeout: 10_000 });
 	check("the back row follows the interface language", (await page.locator(".settings-sidebar-back").innerText()).trim() === "뒤로");
 	await shot("07-settings-ko");

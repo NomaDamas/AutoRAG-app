@@ -16,6 +16,15 @@ import { isAppLanguage } from "../../../../shared/language-contract";
 import { LanguageSettings } from "./LanguageSettings";
 import { QuickSearchSettingsSection } from "./QuickSearchSettings";
 import { Row, Section, SettingsPageHead } from "./SettingsKit";
+import { SelectField } from "./SelectField";
+
+/** Each interface language in its own name, so it can be found whatever language the app is in. */
+const APP_LANGUAGE_OPTIONS = [
+	{ value: "ko", label: "한국어" },
+	{ value: "en", label: "English" },
+	{ value: "ja", label: "日本語" },
+	{ value: "zh", label: "简体中文" },
+] as const;
 import { Switch } from "../primitives/Switch";
 import { hostPlatform } from "../../lib/shortcuts";
 
@@ -47,24 +56,14 @@ export function GeneralPage({
 			<SettingsPageHead title={t("settingsCore.nav.general")} description={t("settingsCore.general.description")} />
 			<Section title={t("settingsCore.general.screenTitle")}>
 				<Row name={t("settingsCore.general.appearanceName")} hint={t("settingsCore.general.appearanceHint")}>
-					<select className="linear-select" aria-label={t("settingsCore.general.appearanceName")} value={appSettings.appearance} onChange={(event) => {
-						const appearance = event.currentTarget.value;
+					<SelectField className="linear-select" aria-label={t("settingsCore.general.appearanceName")} value={appSettings.appearance} options={[{ value: "light", label: t("settingsCore.general.appearanceLight") }, { value: "dark", label: t("settingsCore.general.appearanceDark") }]} onValueChange={(appearance) => {
 						if (appearance === "light" || appearance === "dark") void setApp({ appearance });
-					}}>
-						<option value="light">{t("settingsCore.general.appearanceLight")}</option>
-						<option value="dark">{t("settingsCore.general.appearanceDark")}</option>
-					</select>
+					}} />
 				</Row>
 				<Row name={t("settingsCore.general.appLanguage")} hint={t("settingsCore.general.appLanguageHint")}>
-					<select className="linear-select" aria-label={t("settingsCore.general.appLanguage")} value={appSettings.language} onChange={(event) => {
-						const language = event.currentTarget.value;
+					<SelectField className="linear-select" aria-label={t("settingsCore.general.appLanguage")} value={appSettings.language} options={APP_LANGUAGE_OPTIONS} onValueChange={(language) => {
 						if (isAppLanguage(language)) void setApp({ language });
-					}}>
-						<option value="ko">한국어</option>
-						<option value="en">English</option>
-						<option value="ja">日本語</option>
-						<option value="zh">简体中文</option>
-					</select>
+					}} />
 				</Row>
 			</Section>
 			<Section title={t("settingsCore.general.finderTitle")} description={t("settingsCore.general.finderDesc")}>

@@ -46,6 +46,7 @@ import { hostPlatform } from "../../lib/shortcuts";
 import { formatContextMenuKeycap } from "../../state/context-menu";
 import { Switch } from "../primitives/Switch";
 import { ModalActions, ModalShell, Note, Section, SettingsPageHead } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 
 type ContextMenuBridgeWindow = Window & {
 	readonly autorag?: {
@@ -213,28 +214,24 @@ function MagicActionEditorModal({
 
 				<label>
 					{t("settingsCore.contextMenu.editor.executionField")}
-					<select
+					<SelectField
 						data-testid="magic-editor-kind"
 						value={executionKind}
-						onChange={(e) => setExecutionKind(e.target.value === "script" ? "script" : "agent")}
-					>
-						<option value="agent">{t("settingsCore.contextMenu.editor.kindAgent")}</option>
-						<option value="script">{t("settingsCore.contextMenu.editor.kindScript")}</option>
-					</select>
+						options={[{ value: "agent", label: t("settingsCore.contextMenu.editor.kindAgent") }, { value: "script", label: t("settingsCore.contextMenu.editor.kindScript") }]}
+						onValueChange={(value) => setExecutionKind(value === "script" ? "script" : "agent")}
+					/>
 				</label>
 
 				{executionKind === "agent" ? (
 					<>
 						<label>
 							{t("settingsCore.contextMenu.editor.agentModeField")}
-							<select
+							<SelectField
 								data-testid="magic-editor-agent-mode"
 								value={agentMode}
-								onChange={(e) => setAgentMode(e.target.value === "organize" ? "organize" : "read")}
-							>
-								<option value="read">{t("settingsCore.contextMenu.editor.modeRead")}</option>
-								<option value="organize">{t("settingsCore.contextMenu.editor.modeOrganize")}</option>
-							</select>
+								options={[{ value: "read", label: t("settingsCore.contextMenu.editor.modeRead") }, { value: "organize", label: t("settingsCore.contextMenu.editor.modeOrganize") }]}
+								onValueChange={(value) => setAgentMode(value === "organize" ? "organize" : "read")}
+							/>
 						</label>
 						<label>
 							{t("settingsCore.contextMenu.editor.promptField")}
@@ -300,32 +297,22 @@ function MagicActionEditorModal({
 
 				<label>
 					{t("settingsCore.contextMenu.editor.selectionField")}
-					<select
+					<SelectField
 						data-testid="magic-editor-selection"
 						value={selection}
-						onChange={(e) =>
-							setSelection(e.target.value === "single" || e.target.value === "multiple" ? e.target.value : "any")
-						}
-					>
-						<option value="any">{t("settingsCore.contextMenu.condAnySelection")}</option>
-						<option value="single">{t("settingsCore.contextMenu.condSingle")}</option>
-						<option value="multiple">{t("settingsCore.contextMenu.condMultiple")}</option>
-					</select>
+						options={[{ value: "any", label: t("settingsCore.contextMenu.condAnySelection") }, { value: "single", label: t("settingsCore.contextMenu.condSingle") }, { value: "multiple", label: t("settingsCore.contextMenu.condMultiple") }]}
+						onValueChange={(value) => setSelection(value === "single" || value === "multiple" ? value : "any")}
+					/>
 				</label>
 
 				<label>
 					{t("settingsCore.contextMenu.editor.targetKindField")}
-					<select
+					<SelectField
 						data-testid="magic-editor-target-kind"
 						value={targetKind}
-						onChange={(e) =>
-							setTargetKind(e.target.value === "file" || e.target.value === "folder" ? e.target.value : "any")
-						}
-					>
-						<option value="file">{t("settingsCore.contextMenu.condFileOnly")}</option>
-						<option value="folder">{t("settingsCore.contextMenu.condFolderOnly")}</option>
-						<option value="any">{t("settingsCore.contextMenu.condAnyKind")}</option>
-					</select>
+						options={[{ value: "file", label: t("settingsCore.contextMenu.condFileOnly") }, { value: "folder", label: t("settingsCore.contextMenu.condFolderOnly") }, { value: "any", label: t("settingsCore.contextMenu.condAnyKind") }]}
+						onValueChange={(value) => setTargetKind(value === "file" || value === "folder" ? value : "any")}
+					/>
 				</label>
 
 				{targetKind !== "folder" ? (

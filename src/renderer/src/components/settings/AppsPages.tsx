@@ -29,6 +29,7 @@ import { excludePath, includePath } from "../../../../shared/index-scope-edit";
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
@@ -255,17 +256,13 @@ export function IndexingPage({
 							<StatusDot tone={localRunning ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
 							{localRunning ? t("settingsSources.indexing.localUpdating") : t("settingsSources.common.inUse")}
 						</span>
-						<select
+						<SelectField
 							className="settings-select-compact"
 							aria-label={t("settingsSources.indexing.localIntervalAria")}
 							value={String(localInterval)}
-							onChange={(event) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(event.target.value))}
-						>
-							<option value="0">{t("settingsSources.common.manual")}</option>
-							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-							))}
-						</select>
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							onValueChange={(value) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(value))}
+						/>
 						<button
 							type="button"
 							className="settings-icon-btn"
@@ -308,17 +305,13 @@ export function IndexingPage({
 											: t("settingsSources.common.off")}
 							</span>
 							{TEMPLATE_BY_ID[row.type]?.polling !== false ? (
-								<select
+								<SelectField
 									className="settings-select-compact"
 									aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
 									value={String(intervalOf(row, snapshot))}
-									onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
-								>
-									<option value="0">{t("settingsSources.common.manual")}</option>
-									{INTERVAL_OPTIONS.map((option) => (
-										<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-									))}
-								</select>
+									options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+									onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
+								/>
 							) : null}
 							<button
 								type="button"
@@ -699,17 +692,13 @@ export function SourceDetailPage({
 				</Row>
 				{template?.polling !== false ? (
 					<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>
-						<select
+						<SelectField
 							className="linear-select"
 							aria-label={t("settingsSources.sourceDetail.intervalName")}
 							value={String(polling)}
-							onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
-						>
-							<option value="0">{t("settingsSources.common.manual")}</option>
-							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-							))}
-						</select>
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							onValueChange={(value) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(value))}
+						/>
 					</Row>
 				) : null}
 			</Section>

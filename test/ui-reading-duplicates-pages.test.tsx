@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DuplicatesPage, ReadingPage } from "../src/renderer/src/components/settings/ConfigPages";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AutoRagConfigSnapshot, JsonObject } from "../src/shared/settings-contract";
+import { selectFieldText } from "./select-field-driver";
 
 // `settings-runtime` captures `window.autorag.settings` on import; hoisted code runs before the imports.
 const bridge = vi.hoisted(() => {
@@ -56,7 +57,6 @@ describe("Settings → 중복 파일 정리 (Figma 403:8746)", () => {
 	it("draws three plain rows and names each check interval as a cadence", async () => {
 		await act(async () => root.render(<DuplicatesPage snapshot={snapshotOf({})} onSaved={() => undefined} dupeyInterval={60} onDupeyInterval={() => undefined} />));
 		expect([...host.querySelectorAll(".settings-plain-name")].map((name) => name.textContent)).toEqual(["Show identical files once", "Group similar versions", "Duplicate check interval"]);
-		const select = host.querySelector<HTMLSelectElement>(".settings-plain-select");
-		expect(select?.selectedOptions[0]?.textContent).toBe("Every hour");
+		expect(selectFieldText(host.querySelector(".settings-plain-select"))).toBe("Every hour");
 	});
 });

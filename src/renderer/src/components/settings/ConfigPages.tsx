@@ -14,6 +14,7 @@ import type { LocaleKey } from "../../../../shared/i18n/core";
 import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
 import { PlainRow, SettingsPageHead } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { asRecord, boolOf, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
 
@@ -64,21 +65,14 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 					/>
 				</PlainRow>
 				<PlainRow name={t("settingsSources.web.providerName")} hint={webEnabled ? t("settingsSources.web.providerHintOn") : t("settingsSources.web.providerHintOff")}>
-					<select
+					<SelectField
 						className="linear-select settings-plain-select"
 						aria-label={t("settingsSources.web.providerName")}
 						disabled={!webEnabled}
 						value={provider}
-						onChange={(event) => {
-							const value = event.target.value;
-							void run([value.length === 0 ? { path: ["webSearch", "provider"], remove: true } : { path: ["webSearch", "provider"], value }]);
-						}}
-					>
-						<option value="">{t("settingsSources.web.auto")}</option>
-						{WEBSEARCH_PROVIDERS.map((item) => (
-							<option key={item.id} value={item.id}>{item.label}</option>
-						))}
-					</select>
+						options={[{ value: "", label: t("settingsSources.web.auto") }, ...WEBSEARCH_PROVIDERS.map((item) => ({ value: item.id, label: item.label }))]}
+						onValueChange={(value) => void run([value.length === 0 ? { path: ["webSearch", "provider"], remove: true } : { path: ["webSearch", "provider"], value }])}
+					/>
 				</PlainRow>
 				<PlainRow name={t("settingsSources.web.fetchName")} hint={webEnabled ? t("settingsSources.web.fetchHintOn") : t("settingsSources.web.fetchHintOff")}>
 					<Switch
@@ -162,11 +156,13 @@ export function DuplicatesPage({
 					/>
 				</PlainRow>
 				<PlainRow name={t("settingsSources.duplicates.intervalName")} hint={t("settingsSources.duplicates.intervalHint")}>
-					<select className="linear-select settings-plain-select" aria-label={t("settingsSources.duplicates.intervalName")} value={String(dupeyInterval)} onChange={(event) => onDupeyInterval(Number(event.target.value))}>
-						{DUPEY_INTERVALS.map((item) => (
-							<option key={item.value} value={item.value}>{t(item.label)}</option>
-						))}
-					</select>
+					<SelectField
+						className="linear-select settings-plain-select"
+						aria-label={t("settingsSources.duplicates.intervalName")}
+						value={String(dupeyInterval)}
+						options={DUPEY_INTERVALS.map((item) => ({ value: String(item.value), label: t(item.label) }))}
+						onValueChange={(value) => onDupeyInterval(Number(value))}
+					/>
 				</PlainRow>
 			</div>
 		</>

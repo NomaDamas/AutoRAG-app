@@ -6,6 +6,7 @@ import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
+import { pickSelectOption } from "./select-field-driver";
 
 const bridge = vi.hoisted(() => {
 	const settingsListeners = new Set<(settings: AppSettings) => void>();
@@ -210,19 +211,14 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 
 		// Toggle Shift modifier on and select key 'P'
 		const shiftChip = host.querySelector<HTMLButtonElement>('[data-shortcut-mod="shift"]');
-		const keySelect = host.querySelector<HTMLSelectElement>('[data-testid="shortcut-key-select"]');
+		const keySelect = host.querySelector('[data-testid="shortcut-key-select"]');
 		expect(shiftChip).not.toBeNull();
 		expect(keySelect).not.toBeNull();
 
 		await act(async () => {
 			shiftChip?.click();
 		});
-		await act(async () => {
-			if (keySelect !== null) {
-				keySelect.value = "P";
-				keySelect.dispatchEvent(new Event("change", { bubbles: true }));
-			}
-		});
+		await pickSelectOption(keySelect, "P");
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>('[data-action="save-ui-shortcut"]')?.click();
 		});

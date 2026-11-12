@@ -373,6 +373,8 @@
   --shadow-drag: 0 4px 16px rgba(20,20,40,0.12);
   --shadow-window: 0 18px 54px rgba(0,0,0,0.18);
   --shadow-menu: 0 10px 35px rgba(0,0,0,0.2);
+  /* Settings dropdowns (the 문서 읽기 list and every picker built like it): a short, tight drop, not the menu's wide halo. */
+  --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.1);
   --shadow-ql-panel: inset 0 0 0 0.5px var(--ql-hairline), inset 0 0.5px 0 var(--ql-highlight);
   --shadow-ql-segment: 0 0.5px 1.5px rgba(0,0,0,0.18);
   --shadow-ql-float: 0 0 0 0.5px var(--ql-hairline), 0 4px 14px rgba(0,0,0,0.16);

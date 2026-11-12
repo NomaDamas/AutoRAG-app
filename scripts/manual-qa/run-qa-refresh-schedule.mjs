@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { isolatedToolPath, rmRetry } from "./platform.mjs";
+import { pickSelect, selectField, selectValue } from "./settings-select.mjs";
 
 // Automatic refresh cadence against the real app: choosing a cadence writes
 // the shared config and registers a real OS job; choosing "직접" removes it.
@@ -63,15 +64,15 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
 	await page.locator(".settings-nav-item", { hasText: "Indexing" }).first().click();
-	const local = page.locator('select[aria-label="Local folder refresh interval"]');
+	const local = page.locator(selectField("Local folder refresh interval"));
 	await local.waitFor();
 
-	check("nothing is scheduled by default (manual)", (await local.inputValue()) === "0" && readConfig().appIndexing?.refreshIntervalMs === undefined);
+	check("nothing is scheduled by default (manual)", (await selectValue(local)) === "0" && readConfig().appIndexing?.refreshIntervalMs === undefined);
 	check("no OS job exists before a cadence is chosen", process.platform !== "darwin" || !existsSync(plistPath));
-	check("local cadence offers manual plus the preset cadences", (await local.locator("option").allInnerTexts()).join(",") === "Manual,5 min,15 min,30 min,1 hour,6 hours,Daily");
+	check("local cadence offers manual plus the preset cadences", (await (async () => { await local.click(); const rows = (await page.locator('.select-field__positioner [role="option"]').allInnerTexts()).map((text) => text.replace("✓", "").trim()); await page.keyboard.press("Escape"); return rows; })()).join(",") === "Manual,5 min,15 min,30 min,1 hour,6 hours,Daily");
 	await page.screenshot({ path: join(EVIDENCE, "01-manual.png") });
 
-	await local.selectOption({ label: "1 hour" });
+	await pickSelect(local, { label: "1 hour" });
 	const stored = await waitFor(() => readConfig().appIndexing?.refreshIntervalMs === 3_600_000);
 	check("choosing 1 hour writes appIndexing.refreshIntervalMs", stored === true, String(readConfig().appIndexing?.refreshIntervalMs));
 	if (process.platform === "darwin") {
@@ -84,12 +85,12 @@ try {
 	check("the page says the job is active", note === true);
 	await page.screenshot({ path: join(EVIDENCE, "02-scheduled.png") });
 
-	await page.locator('select[aria-label="slack refresh interval"]').selectOption({ label: "15 min" });
+	await pickSelect(page.locator(selectField("slack refresh interval")), { label: "15 min" });
 	check("a datasource cadence is written", (await waitFor(() => readConfig().datasources?.slack?.pollingIntervalMs === 900_000)) === true);
 	check("the wake interval follows the shortest cadence (15 minutes)", (await waitFor(async () => (await page.locator(".settings-content").innerText()).includes("checks every 15 min"))) === true);
 
-	await local.selectOption({ label: "Manual" });
-	await page.locator('select[aria-label="slack refresh interval"]').selectOption({ label: "Manual" });
+	await pickSelect(local, { label: "Manual" });
+	await pickSelect(page.locator(selectField("slack refresh interval")), { label: "Manual" });
 	check("manual again clears nothing it should keep", (await waitFor(() => readConfig().datasources?.slack?.pollingIntervalMs === 0)) === true && readConfig().datasources.slack.description === "Team Slack");
 	if (process.platform === "darwin") {
 		check("the LaunchAgent is removed once nothing is scheduled", (await waitFor(() => !existsSync(plistPath))) === true);

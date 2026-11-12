@@ -21,6 +21,7 @@ import {
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { QrCode } from "./QrCode";
 import { PlainRow, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { Switch } from "../primitives/Switch";
 
 type ConnectRoute = "lan" | "internet";
@@ -293,18 +294,13 @@ export function RemoteAccessPage({
 			<p className="settings-remote-desc">{t("settingsCore.remote.routeLanHint")}</p>
 			{lanOrigins.length === 0 ? <p className="settings-remote-desc">{t("settingsCore.remote.lanMissing")}</p> : null}
 			{lanOrigins.length > 1 ? (
-				<select
+				<SelectField
 					className="linear-select settings-remote-origin-select"
 					aria-label={t("settingsCore.remote.routeAddress")}
 					value={lanAddress ?? ""}
-					onChange={(event) => setPickedLan(event.currentTarget.value)}
-				>
-					{lanOrigins.map((item) => (
-						<option key={item} value={item}>
-							{item}
-						</option>
-					))}
-				</select>
+					options={lanOrigins.map((item) => ({ value: item, label: item }))}
+					onValueChange={setPickedLan}
+				/>
 			) : null}
 		</>
 	);

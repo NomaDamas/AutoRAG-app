@@ -16,6 +16,7 @@ import { platformKey } from "../../lib/platform-copy";
 import { localModelNeeded, useModelDownload } from "../../state/model-download";
 import { ModelDownloadPanel } from "../ModelDownloadPanel";
 import { ModalActions, ModalShell, Note, Row, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import type { Translate } from "../../onboarding/flow";
 
 const settings = window.autorag.settings;
@@ -184,10 +185,7 @@ export function EmbeddingPicker({ name, hint }: { readonly name?: string; readon
 						<>
 							<label>{t("settingsCore.embedding.serverUrl")}<input name="embedding-server-url" value={byok.baseUrl} placeholder={t("settingsCore.embedding.serverUrlPlaceholder")} onChange={(event) => { setByok((prev) => ({ ...prev, baseUrl: event.target.value })); setPlanned(null); }} /></label>
 							<label>{t("settingsCore.embedding.serverType")}
-								<select name="embedding-server-type" value={byok.protocol} onChange={(event) => { setByok((prev) => ({ ...prev, protocol: event.target.value === "tei" ? "tei" : "openai" })); setPlanned(null); }}>
-									<option value="openai">{t("settingsCore.embedding.typeOpenai")}</option>
-									<option value="tei">{t("settingsCore.embedding.typeTei")}</option>
-								</select>
+								<SelectField name="embedding-server-type" data-testid="embedding-server-type" value={byok.protocol} options={[{ value: "openai", label: t("settingsCore.embedding.typeOpenai") }, { value: "tei", label: t("settingsCore.embedding.typeTei") }]} onValueChange={(value) => { setByok((prev) => ({ ...prev, protocol: value === "tei" ? "tei" : "openai" })); setPlanned(null); }} />
 							</label>
 							<label>{t("settingsCore.embedding.apiKey")}<input name="embedding-api-key" type="password" autoComplete="off" value={byok.apiKey} placeholder={t("settingsCore.embedding.apiKeyPlaceholder")} onChange={(event) => setByok((prev) => ({ ...prev, apiKey: event.target.value }))} /></label>
 							<Note>{t(platformKey("settingsCore.embedding.apiKeyHint"))}</Note>

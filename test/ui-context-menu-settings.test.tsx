@@ -6,6 +6,8 @@ import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
+import { t } from "../src/shared/i18n/core";
+import { pickSelectOption } from "./select-field-driver";
 
 const bridge = vi.hoisted(() => {
 	const settingsListeners = new Set<(settings: AppSettings) => void>();
@@ -183,9 +185,9 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await act(async () => {
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-label"]')!, "PDF 3줄 요약");
 			setInputValue(editor!.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-prompt"]')!, "핵심 3줄 요약해줘");
-			setInputValue(editor!.querySelector<HTMLSelectElement>('[data-testid="magic-editor-selection"]')!, "single");
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-extensions"]')!, ".pdf, md");
 		});
+		await pickSelectOption(editor!.querySelector('[data-testid="magic-editor-selection"]'), t("settingsCore.contextMenu.condSingle"));
 		await settle();
 
 		await act(async () => {
@@ -332,9 +334,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			});
 			await settle();
 			const editor = document.body.querySelector('[data-testid="magic-action-editor-modal"]')!;
-			await act(async () => {
-				setInputValue(editor.querySelector<HTMLSelectElement>('[data-testid="magic-editor-kind"]')!, "script");
-			});
+			await pickSelectOption(editor.querySelector('[data-testid="magic-editor-kind"]'), t("settingsCore.contextMenu.editor.kindScript"));
 			await settle();
 
 			const cmdInput = editor.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-command"]')!;

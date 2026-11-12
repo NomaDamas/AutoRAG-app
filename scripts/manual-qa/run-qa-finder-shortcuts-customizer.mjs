@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, isMac, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { pickSelect } from "./settings-select.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-shortcuts-customizer");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -299,7 +300,7 @@ try {
 	await shot("05-shortcut-ui-editor-open");
 	// Turn off Mod modifier and choose F2
 	await page.locator('[data-shortcut-mod="mod"]').click();
-	await page.locator('[data-testid="shortcut-key-select"]').selectOption("F2");
+	await pickSelect(page.locator('[data-testid="shortcut-key-select"]'), "F2");
 	await page.locator('[data-action="save-ui-shortcut"]').click();
 	await page.waitForTimeout(250);
 

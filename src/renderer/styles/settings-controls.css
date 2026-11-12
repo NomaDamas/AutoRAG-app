@@ -248,7 +248,7 @@
 	border: 1px solid var(--border);
 	border-radius: var(--radius-8);
 	background: var(--bg-window);
-	box-shadow: var(--shadow-menu);
+	box-shadow: var(--shadow-dropdown);
 }
 
 .language-combobox__list {
@@ -292,3 +292,54 @@
 		grid-template-columns: 1fr;
 	}
 }
+
+/* -------------------------------------------------- SelectField (single choice) --
+   The closed field keeps each page's chrome (linear-select, settings-plain-select, …); these rules only make a
+   <button> sit like the <select> it replaced. The list reuses the language-combobox popup above. */
+.select-field {
+	display: inline-flex;
+	align-items: center;
+	min-width: 0;
+	text-align: left;
+	white-space: nowrap;
+	font: inherit;
+	color: var(--text-primary);
+	cursor: pointer;
+}
+
+.select-field__value {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.select-field:disabled,
+.select-field[data-disabled] {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.settings-view .select-field[data-popup-open] {
+	border-color: var(--accent);
+}
+
+.select-field__positioner {
+	z-index: 90;
+	min-width: var(--anchor-width);
+	outline: 0;
+}
+
+.select-field__positioner .language-combobox__popup {
+	outline: 0;
+}
+
+.select-field__positioner .language-combobox__item {
+	gap: var(--space-12);
+	outline: 0;
+}
+
+.select-field__positioner .language-combobox__item[data-selected] {
+	font-weight: var(--weight-medium);
+}
+

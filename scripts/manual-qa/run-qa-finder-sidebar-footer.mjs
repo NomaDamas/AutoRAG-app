@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-sidebar-footer");
@@ -85,7 +86,7 @@ try {
 
 	// 2. Gear → Settings.
 	await page.locator(GEAR).click();
-	await page.waitForSelector('select[aria-label="Appearance"]', { timeout: 15_000 });
+	await page.waitForSelector(selectField("Appearance"), { timeout: 15_000 });
 	check("the gear opens Settings on the General page", (await page.locator(".settings-nav-item.is-active").innerText()).includes("General"));
 	check("the gear is marked current while Settings is open", (await page.locator(GEAR).getAttribute("aria-current")) === "true");
 	await page.screenshot({ path: join(EVIDENCE, "02-settings-general.png") });
@@ -106,7 +107,7 @@ try {
 	// 5. Korean.
 	await page.locator(GEAR).click();
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
-	await page.selectOption('select[aria-label="App Language"]', "ko");
+	await pickSelect(page.locator(selectField("App Language")), "ko");
 	await page.waitForFunction((selector) => document.querySelector(selector)?.getAttribute("aria-label") === "설정", GEAR, { timeout: 10_000 });
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector(GEAR, { state: "visible" });

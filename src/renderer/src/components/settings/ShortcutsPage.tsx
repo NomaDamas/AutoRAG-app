@@ -40,6 +40,7 @@ import {
 } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
 import { Section, SettingsPageHead } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 
 type ShortcutsBridgeWindow = Window & {
 	readonly autorag?: {
@@ -658,18 +659,13 @@ export function ShortcutsPage({
 																	</button>
 																</div>
 
-																<select
+																<SelectField
 																	data-testid="shortcut-key-select"
 																	className="shortcut-key-select"
 																	value={rowUi.key}
-																	onChange={(event) => setUiEditor({ ...rowUi, key: event.target.value })}
-																>
-																	{SELECTABLE_SHORTCUT_KEYS.map((keyOption) => (
-																		<option key={keyOption} value={keyOption}>
-																			{keyOption}
-																		</option>
-																	))}
-																</select>
+																	options={SELECTABLE_SHORTCUT_KEYS.map((keyOption) => ({ value: keyOption, label: keyOption }))}
+																	onValueChange={(key) => setUiEditor({ ...rowUi, key })}
+																/>
 															</div>
 
 															<div className="shortcut-ui-editor__actions">

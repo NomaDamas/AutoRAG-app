@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { chord } from "./platform.mjs";
+import { pickSelect, selectField, selectValue } from "./settings-select.mjs";
 
 const evidence = process.argv[2] ?? "/tmp/autorag-global-appearance";
 mkdirSync(evidence, { recursive: true });
@@ -70,9 +71,9 @@ try {
 
 	await main.keyboard.press(chord("2"));
 	await main.locator(".sidebar__item--settings").click();
-	const appearance = main.locator('select[aria-label="Appearance"]');
+	const appearance = main.locator(selectField("Appearance"));
 	await appearance.waitFor({ timeout: 15_000 });
-	await appearance.selectOption("dark");
+	await pickSelect(appearance, "dark");
 	const dark = await poll(
 		() =>
 			Promise.all([
@@ -108,9 +109,9 @@ try {
 	check("dark appearance survives restart", persisted === "dark", String(persisted));
 	await restarted.keyboard.press(chord("2"));
 	await restarted.locator(".sidebar__item--settings").click();
-	const persistedSelect = restarted.locator('select[aria-label="Appearance"]');
+	const persistedSelect = restarted.locator(selectField("Appearance"));
 	await persistedSelect.waitFor({ timeout: 15_000 });
-	check("settings reload the persisted dark choice", (await persistedSelect.inputValue()) === "dark", await persistedSelect.inputValue());
+	check("settings reload the persisted dark choice", (await selectValue(persistedSelect)) === "dark", String(await selectValue(persistedSelect)));
 } finally {
 	await app?.close().catch(() => undefined);
 	rmSync(root, { recursive: true, force: true });

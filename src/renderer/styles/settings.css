@@ -1011,11 +1011,11 @@
 	width: 280px;
 	max-height: min(420px, calc(100vh - 24px));
 	overflow-y: auto;
-	padding: var(--space-5);
+	padding: var(--space-4);
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-8);
 	background: var(--bg-window);
-	box-shadow: var(--shadow-menu);
+	box-shadow: var(--shadow-dropdown);
 	font-size: 12.5px;
 }
 
@@ -1189,7 +1189,7 @@
 
 .settings-view .settings-menu-item:hover,
 .settings-view .settings-menu-item.is-open {
-	background: var(--bg-hover-strong);
+	background: var(--bg-hover);
 }
 .settings-view .settings-menu-item.is-danger {
 	color: var(--danger-text);
@@ -1260,6 +1260,7 @@
 
 .settings-view .settings-modal input:not([type="radio"], [type="checkbox"]),
 .settings-view .settings-modal select,
+.settings-view .settings-modal .select-field:not(.linear-select),
 .settings-view .settings-modal textarea {
 	display: block;
 	width: 100%;
@@ -1272,6 +1273,17 @@
 	color: var(--text-primary);
 	font-size: 12.5px;
 	outline: none;
+}
+
+/* The modal's dropdowns: the same flat field, with the chevron the settings selects draw. */
+.settings-view .settings-modal .select-field:not(.linear-select),
+.settings-view .shortcut-key-select {
+	display: flex;
+	padding-right: 28px;
+	background-image: linear-gradient(45deg, transparent 50%, var(--text-muted) 50%), linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+	background-position: calc(100% - 15px) 50%, calc(100% - 11px) 50%;
+	background-size: 4px 4px;
+	background-repeat: no-repeat;
 }
 
 .settings-view .settings-modal textarea {
@@ -1307,6 +1319,7 @@
 
 .settings-view .settings-modal input:focus,
 .settings-view .settings-modal select:focus,
+.settings-view .settings-modal .select-field:focus-visible,
 .settings-view .settings-modal textarea:focus {
 	border-color: var(--accent);
 	box-shadow: 0 0 0 3px var(--accent-soft);
@@ -3438,9 +3451,9 @@
 	min-width: 180px;
 	padding: 4px;
 	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
+	border-radius: var(--radius-8);
 	background: var(--bg-window);
-	box-shadow: var(--shadow-menu);
+	box-shadow: var(--shadow-dropdown);
 }
 
 .settings-view .scope-menu-item {
