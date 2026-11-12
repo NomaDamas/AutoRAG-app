@@ -78,6 +78,7 @@
 	--color-tab-hover-from: var(--tab-grad-hover-from);
 	--color-tab-hover-to: var(--tab-grad-hover-to);
 	--color-tab-active: var(--bg-tab-active);
+	--color-tab-new: var(--bg-tab-new);
 	--color-tab-text: var(--text-tab);
 	--color-code: var(--bg-code);
 	--color-chip-sent: var(--bg-chip-sent);

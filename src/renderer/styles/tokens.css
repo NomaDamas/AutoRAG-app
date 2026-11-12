@@ -34,6 +34,8 @@
   --tab-grad-hover-from: #CFCFD3;
   --tab-grad-hover-to: #C8C8CC;
   --bg-tab-active: #F2F2F5;
+  /* The tab strip's + (Figma 328:4454 / 416:12223): the active tab's colour in light, the strip's own in dark. */
+  --bg-tab-new: #F2F2F5;
   --text-tab: #5D5D62;
   --bg-code: #F4F4F7;
   --bg-chip-sent: #F3F3F7;
@@ -426,6 +428,7 @@ html[data-appearance="dark"] {
     --tab-grad-hover-from: #4A4A4C;
     --tab-grad-hover-to: #414143;
     --bg-tab-active: #505052;
+    --bg-tab-new: #38383A;
     --text-tab: #D1D1D6;
     --bg-code: #2C2C2E;
     --bg-chip-sent: #343438;
