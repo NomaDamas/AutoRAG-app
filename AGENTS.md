@@ -43,7 +43,10 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.8:
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
+by config resolution and applied by the refresh walk (the app reads it the same way, `src/main/path-exclusion.ts`); with a reranker the
+baseline search shows it the union of MinSync's dense and SPLADE candidates; the MCP server adds `autorag.convert`/`.formats` and caps repeated
+diagnostics; `AUTORAG_AUTH_MODE=environment` makes model resolution ignore stored credentials. v2.13.8:
 `refresh.schedule` limits background indexing to AC power, local time windows, and weekdays (`checkIndexSchedule` from
 `@autorag/librarian/core` is the gate for a host with its own scheduler, such as the app's OS job); the agent's exact `calculator` tool; the
 record cut that spreads search hits across documents, on by default (`limits.recordCut`). v2.13.7:

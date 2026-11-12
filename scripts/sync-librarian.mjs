@@ -25,7 +25,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // is the gate for hosts with their own scheduler, which the app's OS job is, AutoRAG#2104), the agent's exact `calculator`
 // tool (#2109, #2110), the record cut that spreads search hits across documents, on by default (#2108), status reads that
 // reuse recorded duplicate exclusions instead of scanning (#2124), and CLI refreshes stopped by SIGINT/SIGTERM (#2118).
-const librarianRef = "v2.13.8";
+// v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
+// resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
+// model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
+const librarianRef = "v2.13.12";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
