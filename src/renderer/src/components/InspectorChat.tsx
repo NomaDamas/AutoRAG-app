@@ -334,8 +334,9 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 }
 
 
+/** The citation card's actions (Figma 328:4543 / 328:4549): 12px body text, the icon in the faint grey. */
 const SOURCE_ACTION =
-	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-4 pl-8 pr-9 text-badge leading-[16px] text-ink-body cursor-pointer hover:bg-hover";
+	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-5 pl-8 pr-9 text-meta leading-[16px] text-ink-body cursor-pointer hover:bg-hover [&_svg]:flex-none [&_svg]:text-ink-faint";
 
 /**
  * What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). A web source
@@ -384,7 +385,7 @@ function SourceCard({
 							{local === null ? null : (
 								<>
 									<button type="button" className={SOURCE_ACTION} onClick={() => onReveal(local)}>
-										<FileIcon size={12} />
+										<FileIcon size={14} />
 										{t("inspector.chat.showInList")}
 									</button>
 									<button type="button" className={SOURCE_ACTION} onClick={() => onPreview(local, item.excerpts)}>
