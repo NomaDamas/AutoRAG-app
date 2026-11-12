@@ -476,7 +476,7 @@ export function SettingsView({
 									const Icon = page.icon;
 									const active = sourceAlias === null && normalizeCategory(category) === page.id;
 									return (
-										<button key={page.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
+										<button key={page.id} type="button" data-settings-nav={page.id} className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
 											<span className="settings-nav-icon" aria-hidden="true">
 												<Icon size={14} strokeWidth={1.8} />
 											</span>

@@ -404,15 +404,15 @@ export function RemoteAccessPage({
 	return (
 		<>
 			{head}
-			<Section description={t("settingsCore.remote.securityHint")}>
-				<Row name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
+			<Section anchor="remote-access" description={t("settingsCore.remote.securityHint")}>
+				<Row anchor="remote-access" name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.remote.access")} />
 				</Row>
 				{enabled && viaLabel !== null ? <p className="settings-remote-via">{viaLabel}</p> : null}
 			</Section>
 
 			{enabled ? (
-				<Section title={t("settingsCore.remote.connectTitle")} description={t("settingsCore.remote.connectHint")}>
+				<Section anchor="remote-connect" title={t("settingsCore.remote.connectTitle")} description={t("settingsCore.remote.connectHint")}>
 					<div className="settings-remote-card">
 						{!serving && serverError !== null ? (
 							<div className="settings-remote-server-error" role="alert">

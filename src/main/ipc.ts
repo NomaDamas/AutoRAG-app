@@ -9,7 +9,6 @@ import { FS_CHANNELS } from "../shared/fs-contract";
 import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
 import type { InteractionHub } from "./interaction-hub";
-import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
 import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
@@ -22,6 +21,7 @@ import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
+import { DEMO_CHANNELS, type DemoBridge } from "../shared/demo-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -38,10 +38,9 @@ import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
 import type { AccountService } from "./account-service";
-import type { OnboardingService } from "./onboarding-service";
+import type { FirstRunService } from "./first-run-service";
 import type { OsRequestService } from "./os-request-service";
 import type { ServicesService } from "./services-service";
-import type { SmartIndexingService } from "./smart-indexing-service";
 import type { ErrorFixService } from "./error-fix-service";
 import type { AppCustomizerService } from "./app-customizer-service";
 import type { MagicActionService } from "./magic-action-service";
@@ -206,14 +205,6 @@ export function registerSearchIpcHandlers(service: SearchBridge): void {
 	ipcMain.handle(SEARCH_CHANNELS.historyGet, (_event, chatId: string) => service.historyGet(chatId));
 	ipcMain.handle(SEARCH_CHANNELS.historySearch, (_event, query: string) => service.historySearch(query));
 	ipcMain.handle(SEARCH_CHANNELS.historyClear, () => service.historyClear());
-}
-
-export function registerSmartIndexingIpcHandlers(service: SmartIndexingService): void {
-	ipcMain.handle(SMART_INDEXING_CHANNELS.analyze, (_event, runId: unknown, roots: unknown) => {
-		if (typeof runId !== "string" || !Array.isArray(roots)) throw new TypeError("smartIndexing:analyze expects a run id and an array of folders");
-		return service.analyze(runId, roots);
-	});
-	ipcMain.handle(SMART_INDEXING_CHANNELS.cancel, (_event, runId: unknown) => (typeof runId === "string" ? service.cancel(runId) : undefined));
 }
 
 interface ConfigUpdatePayload {
@@ -412,31 +403,20 @@ export function registerAccountIpcHandlers(service: AccountService): void {
 	ipcMain.handle(ACCOUNT_CHANNELS.useManagedModel, () => service.useManagedModel());
 }
 
-/** First-run onboarding: every payload is validated inside the service. */
-export function registerOnboardingIpcHandlers(service: OnboardingService): void {
+/** The first run: load, permissions, folders, start/status/complete. The service validates its own state. */
+export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 	ipcMain.handle(ONBOARDING_CHANNELS.load, () => service.load());
-	ipcMain.handle(ONBOARDING_CHANNELS.save, (_event, draft: unknown) => service.save(draft));
 	ipcMain.handle(ONBOARDING_CHANNELS.permissions, () => service.permissions());
 	ipcMain.handle(ONBOARDING_CHANNELS.openFullDiskAccess, () => service.openFullDiskAccess());
-	ipcMain.handle(ONBOARDING_CHANNELS.relaunch, () => service.relaunch());
-	ipcMain.handle(ONBOARDING_CHANNELS.requestNotifications, () => service.requestNotifications());
-	ipcMain.handle(ONBOARDING_CHANNELS.openNotificationSettings, () => service.openNotificationSettings());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkNetwork, () => service.checkNetwork());
-	ipcMain.handle(ONBOARDING_CHANNELS.setLaunchAtLogin, (_event, enabled: unknown) => {
-		if (typeof enabled !== "boolean") throw new TypeError("onboarding:setLaunchAtLogin expects a boolean");
-		return service.setLaunchAtLogin(enabled);
-	});
-	ipcMain.handle(ONBOARDING_CHANNELS.folderCandidates, () => service.folderCandidates());
+	ipcMain.handle(ONBOARDING_CHANNELS.folders, () => service.folders());
 	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
-	ipcMain.handle(ONBOARDING_CHANNELS.scanFolders, (_event, paths: unknown) => {
-		if (!Array.isArray(paths)) throw new TypeError("onboarding:scanFolders expects an array of paths");
-		return service.scanFolders(paths);
+	ipcMain.handle(ONBOARDING_CHANNELS.start, (_event, folders: unknown) => {
+		if (folders !== undefined && (!Array.isArray(folders) || !folders.every((path) => typeof path === "string"))) {
+			throw new TypeError("onboarding:start expects an array of folder paths");
+		}
+		return service.start(folders as readonly string[] | undefined);
 	});
-	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
-	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkModel, (_event, role: unknown) => service.checkModel(role === "decomposition" ? "decomposition" : "answer"));
-	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
-	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
+	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());
 }
 
@@ -475,6 +455,13 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
 		return service.setDaemon(enabled);
 	});
+}
+
+/** The tutorials' practice material: the sample photo, the automation daemon and the example Magic Action. */
+export function registerDemoIpcHandlers(service: DemoBridge): void {
+	ipcMain.handle(DEMO_CHANNELS.preparePhoto, () => service.preparePhoto());
+	ipcMain.handle(DEMO_CHANNELS.ensureDaemon, () => service.ensureDaemon());
+	ipcMain.handle(DEMO_CHANNELS.prepareMagicAction, () => service.prepareMagicAction());
 }
 
 /** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */

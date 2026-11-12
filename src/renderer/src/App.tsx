@@ -20,6 +20,7 @@ import { InspectorColumn } from "./components/InspectorColumn";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
+import { FullDiskAccessDialog } from "./components/primitives/FullDiskAccessDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
 import { MagicActionDialog } from "./components/MagicActionDialog";
@@ -44,6 +45,7 @@ import { ShortcutSettingsContext } from "./hooks/useShortcutSettings";
 import type { ShortcutSettings } from "../../shared/shortcuts-contract";
 import { createControllerStore, usePaneController } from "./hooks/usePaneControllers";
 import { useAutomations } from "./hooks/useAutomations";
+import { dismissMagicActionDialog } from "./hooks/useMagicAction";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
 import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "./state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
@@ -56,8 +58,12 @@ import { loadListColumns, saveListColumns, type ListColumnsState } from "./state
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
-import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
+import { allTabs, canCloseWorkspaceTab, closeSettingsInWorkspace, createWorkspace, focusAiSearchInWorkspace, focusPane, moveTab, resizeSplit, type Workspace } from "./state/workspace";
 import { windowColumns } from "./state/window-layout";
+import { FirstRun, type FirstRunHost } from "./first-run/FirstRun";
+import { folderPaneId, splitTwoFolders, splitWithAiSearch } from "./first-run/tour";
+import { Tutorials } from "./first-run/Tutorials";
+import type { TutorialEffect, TutorialFacts } from "./first-run/tutorial-steps";
 import { cn } from "./lib/cn";
 
 const autorag = window.autorag;
@@ -229,12 +235,21 @@ export function App(): ReactElement {
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
 	const [toast, setToast] = useState<string | null>(null);
+	/** The first-run layer is up (the main process passed the pending flag; the layer's `load` is authoritative). */
+	const [firstRun, setFirstRun] = useState(() => autorag.onboarding.pending);
+	/** The layer covers the whole window, so the Finder behind it takes no input. */
+	const [firstRunCovered, setFirstRunCovered] = useState(firstRun);
+	/** The contextual tutorials run unless the main process opted this profile out (QA lanes skip onboarding). */
+	const [tutorialsAllowed, setTutorialsAllowed] = useState(false);
+	useEffect(() => {
+		void autorag.onboarding
+			.load()
+			.then((snapshot) => setTutorialsAllowed(snapshot.tutorials))
+			.catch(() => setTutorialsAllowed(false));
+	}, []);
+	const [tagColorsFdaOpen, setTagColorsFdaOpen] = useState(false);
 	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
-	const grantTagColors = useCallback(() => {
-		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
-		void autorag.onboarding.openFullDiskAccess().catch(reportTagError);
-		setToast(t("places.tagColorsGrantToast"));
-	}, [reportTagError, t]);
+	const grantTagColors = useCallback(() => setTagColorsFdaOpen(true), []);
 	const tagCatalog = useTagCatalogLoader(source, reportTagError);
 
 	useEffect(() => saveFlag(SIDEBAR_KEY, sidebarVisible), [sidebarVisible]);
@@ -341,9 +356,12 @@ export function App(): ReactElement {
 	 */
 	const aiHandlesRef = useRef(new Map<number, AiDockHandle>());
 	const aiPendingRef = useRef<AiDelivery | null>(null);
+	/** The AI Search tab the waiting delivery is for; null means whichever one is focused when it lands. */
+	const aiTargetRef = useRef<number | null>(null);
 	const [aiDelivery, setAiDelivery] = useState(0);
-	const deliverToAi = useCallback((request: AiDeliveryRequest) => {
+	const deliverToAi = useCallback((request: AiDeliveryRequest, tabId?: number) => {
 		aiPendingRef.current = mergeDelivery(aiPendingRef.current, request);
+		if (tabId !== undefined) aiTargetRef.current = tabId;
 		setAiDelivery((tick) => tick + 1);
 	}, []);
 
@@ -367,11 +385,55 @@ export function App(): ReactElement {
 	useEffect(() => {
 		const pending = aiPendingRef.current;
 		if (pending === null) return;
-		aiPendingRef.current = null;
-		const handle = activeAiTabId === null ? undefined : aiHandlesRef.current.get(activeAiTabId);
+		const target = aiTargetRef.current ?? activeAiTabId;
+		const handle = target === null ? undefined : aiHandlesRef.current.get(target);
+		// The tab was just opened and its chat is not mounted yet: keep the request for the render that mounts it.
 		if (handle === undefined) return;
+		aiPendingRef.current = null;
+		aiTargetRef.current = null;
 		deliverToDock(handle, pending);
-	}, [aiDelivery, activeAiTabId]);
+	}, [aiDelivery, activeAiTabId, aiPanelIds]);
+
+	const firstRunHost = useMemo<FirstRunHost>(
+		() => ({
+			arrange: () => {
+				setSidebarVisible(true);
+				setInspectorVisible(true);
+				setWorkspace((current) => splitWithAiSearch(current));
+			},
+			focusAi: () => {
+				setWorkspace((current) => focusAiSearchInWorkspace(current));
+			},
+			typeDraft: (text, focus = true) => {
+				const ws = workspaceRef.current;
+				const aiTab = allTabs(ws).find((tab) => tab.path === AI_SEARCH_PATH);
+				if (aiTab === undefined) return;
+				aiHandlesRef.current.get(aiTab.id)?.prefill(text, { focus });
+				if (focus) setWorkspace((current) => focusAiSearchInWorkspace(current));
+			},
+			showFamily: (family) => {
+				const paneId = folderPaneId(workspaceRef.current);
+				const head = family.entriesByPath[family.head];
+				if (paneId === null || head === undefined) return;
+				// Open the folder and scroll the stacked head row into view without selecting it yet:
+				// the user's own click on the spotlighted row unfolds the stack and opens Versions.
+				store.get(paneId)?.showEntryFolder(head);
+				setWorkspace((current) => focusPane(current, paneId));
+			},
+			versionFamilies: async () => (await source.versionFamilies()).families,
+			folderPath: () => {
+				const paneId = folderPaneId(workspaceRef.current);
+				const pane = workspaceRef.current.panes.find((candidate) => candidate.id === paneId);
+				return pane?.tabs.find((tab) => tab.id === pane.activeId)?.path ?? null;
+			},
+			setCovered: setFirstRunCovered,
+		}),
+		[source, store],
+	);
+	const endFirstRun = useCallback(() => {
+		setFirstRun(false);
+		setFirstRunCovered(false);
+	}, []);
 
 	/** Settings' saves reach the window: the rows it shows, the interface language, the sidebar and the shortcuts follow. */
 	const onSettingsChanged = useCallback((settings: AppSettings): void => {
@@ -624,6 +686,12 @@ export function App(): ReactElement {
 		setRightSidebarVisible: setInspectorVisible,
 		settingsFocused: path === SETTINGS_PATH,
 	});
+	const fileMenuOpen = finder?.contextMenu?.onEntry === true;
+	const settingsTabActive = path === SETTINGS_PATH;
+	const tutorialTriggers = useMemo(
+		() => ({ automations: automationsTabActive, fileMenu: fileMenuOpen, settings: settingsTabActive }),
+		[automationsTabActive, fileMenuOpen, settingsTabActive],
+	);
 	const { view: automationsView, store: automationsStore } = useAutomations();
 	/** The row selected, else (in a folder some rule watches) the folder itself, so its rules show with nothing selected. */
 	const inspectorEntry = inspectorEntryFor({
@@ -643,11 +711,61 @@ export function App(): ReactElement {
 	);
 	/** Edit and add leave the list for a new AI Search tab whose composer holds a draft: nothing is sent for the person. */
 	const openAiDraft = useCallback(
-		(draft: string) => {
+		(draft: string): number => {
+			// A new tab takes the next id of the window's counter: the draft goes there, not to another AI Search that is open.
+			const opened = workspaceRef.current.nextTabId;
 			finder?.openAiSearch();
-			deliverToAi({ draft });
+			deliverToAi({ draft }, opened);
+			return opened;
 		},
 		[deliverToAi, finder],
+	);
+	const runTutorialEffect = useCallback(
+		async (effect: TutorialEffect, facts: TutorialFacts): Promise<TutorialFacts | null> => {
+			try {
+				switch (effect) {
+					case "askAiForRule": {
+						const { downloads, gray } = await autorag.demo.preparePhoto();
+						// The background service must be up before the rule exists, so the first dropped photo is seen.
+						void autorag.demo.ensureDaemon();
+						return { aiTab: openAiDraft(translate("tutorials.automations.askText", { folder: downloads, gray })) };
+					}
+					case "showAutomations":
+						finder?.showAutomations();
+						return {};
+					case "arrangePhotoPanes": {
+						const { folder, photo, downloads, gray } = await autorag.demo.preparePhoto();
+						setWorkspace((current) => splitTwoFolders(current, downloads, folder));
+						return { photo, folder, downloads, gray };
+					}
+					case "showGrayFolder": {
+						// The copy is in a sub-folder of Downloads that no pane shows: bring the left pane there so the person sees it.
+						const { gray, folder } = facts;
+						if (gray !== undefined && folder !== undefined) setWorkspace((current) => splitTwoFolders(current, gray, folder));
+						return {};
+					}
+					case "createMagicAction": {
+						const { sample } = await autorag.demo.prepareMagicAction();
+						finder?.closeContextMenu();
+						finder?.openFolder(dirname(sample));
+						return { sample };
+					}
+					case "openContextMenuSettings":
+						dismissMagicActionDialog();
+						finder?.closeContextMenu();
+						requestSettingsCategory("contextMenu");
+						finder?.openSettings();
+						return {};
+					case "showRemoteSettings":
+						requestSettingsCategory("remote");
+						return {};
+				}
+			} catch (error) {
+				setToast(error instanceof Error ? error.message : String(error));
+				return null;
+			}
+		},
+		[finder, openAiDraft],
 	);
 	const automations = useAutomationsShell({
 		store: automationsStore,
@@ -709,6 +827,7 @@ export function App(): ReactElement {
 			<div
 				className="window relative grid flex-1 min-w-0 bg-window overflow-hidden"
 				style={{ gridTemplateColumns: columns, gridTemplateRows: "minmax(0, 1fr)" }}
+				inert={firstRunCovered}
 			>
 				<div className="min-w-0 min-h-0 overflow-hidden" style={settingsOpen ? HIDDEN_STYLE : undefined} inert={!sidebarVisible} aria-hidden={!sidebarVisible}><div className="h-full" style={{ width: sidebarWidth }}><Sidebar
 						groups={finder?.navGroups ?? []}
@@ -1005,6 +1124,23 @@ export function App(): ReactElement {
 				<MagicActionDialog />
 			</div>
 		</div>
+		{tagColorsFdaOpen ? (
+			<FullDiskAccessDialog
+				reason="tagColors"
+				onClose={() => setTagColorsFdaOpen(false)}
+				onConfirmed={() => {
+					setTagColorsFdaOpen(false);
+					tagCatalog.reload();
+				}}
+			/>
+		) : null}
+		{firstRun ? (
+			<FirstRun
+				host={firstRunHost}
+				onDone={endFirstRun}
+			/>
+		) : null}
+		<Tutorials enabled={tutorialsAllowed && !firstRun} triggers={tutorialTriggers} onEffect={runTutorialEffect} />
 		</SettingsAssistantContext>
 		</AutomationsContext>
 		</ShortcutSettingsContext>

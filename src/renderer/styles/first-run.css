@@ -1,0 +1,1672 @@
+/* ============================================================================
+ * First run (DESIGN.md §3a): the layer over the Finder window on a first launch.
+ *
+ * Colours come from the app tokens, so light and dark follow the appearance
+ * setting. The Finder's own `.desk` is driven only through
+ * `html[data-first-run]`: `cover` keeps it out of sight under the stage,
+ * `rise` springs it up from below once "시작하기" is pressed. Motion uses
+ * spring curves (`linear()` sampled from a damped spring, like Quick Look's
+ * zoom) on transform and opacity only, so the compositor plays it.
+ * ========================================================================== */
+
+:root {
+	/* response 0.9 s, damping 0.74: one soft settle, the "우우웅" rise. */
+	--fr-spring-rise: linear(0, 0.03, 0.106 6.5%, 0.549 19.4%, 0.738, 0.874, 0.96, 1.007 45.2%, 1.02 48.4%, 1.031 54.8%, 1);
+	/* response 0.5 s, damping 0.82: bubbles, buttons, the logo pop. */
+	--fr-spring: linear(0, 0.047, 0.157 6.5%, 0.563 16.1%, 0.675 19.4%, 0.841 25.8%, 0.897, 0.938, 0.967, 0.987, 0.999 41.9%, 1.01 48.4%, 1);
+	--fr-ink: var(--text-primary);
+	--fr-muted: var(--text-muted);
+	--fr-stage-a: #fbfbfd;
+	--fr-stage-b: #eef1f7;
+	--fr-glow: rgba(255, 196, 61, 0.32);
+	--fr-glow-cool: rgba(10, 100, 216, 0.12);
+	--fr-scrim: rgba(12, 14, 20, 0.42);
+	--fr-card: rgba(255, 255, 255, 0.86);
+	--fr-card-border: rgba(20, 20, 40, 0.08);
+	--fr-chip-border: rgba(20, 20, 40, 0.1);
+	--fr-shadow: 0 24px 60px rgba(20, 22, 40, 0.18), 0 2px 8px rgba(20, 22, 40, 0.08);
+}
+
+html[data-appearance="dark"] {
+	--fr-stage-a: #1d1e22;
+	--fr-stage-b: #141518;
+	--fr-glow: rgba(255, 196, 61, 0.2);
+	--fr-glow-cool: rgba(80, 150, 255, 0.14);
+	--fr-scrim: rgba(0, 0, 0, 0.55);
+	--fr-card: rgba(40, 41, 46, 0.9);
+	--fr-card-border: rgba(255, 255, 255, 0.08);
+	--fr-chip-border: rgba(255, 255, 255, 0.12);
+	--fr-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* -------------------------------------------------------------- the Finder */
+
+html[data-first-run="cover"] .desk {
+	opacity: 0;
+	transform: translateY(72px) scale(0.965);
+}
+
+html[data-first-run="rise"] .desk {
+	animation: fr-desk-rise 1100ms var(--fr-spring-rise) both;
+	transform-origin: 50% 100%;
+}
+
+@keyframes fr-desk-rise {
+	0% {
+		opacity: 0;
+		transform: translateY(72%) scale(0.94);
+		filter: blur(6px);
+	}
+	35% {
+		opacity: 1;
+		filter: blur(0);
+	}
+	100% {
+		opacity: 1;
+		transform: none;
+		filter: none;
+	}
+}
+
+/* ----------------------------------------------------------------- the layer */
+
+.fr-root {
+	position: fixed;
+	inset: 0;
+	z-index: 900;
+	pointer-events: none;
+	font-family: var(--font-sans);
+	color: var(--fr-ink);
+}
+
+.fr-root[data-screen="loading"],
+.fr-root[data-screen="folders"],
+.fr-root[data-screen="setup"],
+.fr-root[data-screen="ready"] {
+	pointer-events: auto;
+}
+
+.fr-stage {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background:
+		radial-gradient(60% 50% at 50% 38%, var(--fr-glow) 0%, transparent 70%),
+		radial-gradient(80% 60% at 80% 100%, var(--fr-glow-cool) 0%, transparent 70%),
+		linear-gradient(180deg, var(--fr-stage-a), var(--fr-stage-b));
+	transition: opacity 520ms ease, transform 620ms var(--fr-spring);
+}
+
+.fr-stage--leaving {
+	opacity: 0;
+	transform: scale(1.04);
+	pointer-events: none;
+}
+
+/* The window has no title bar of its own: the top strip still drags it. */
+.fr-drag {
+	position: absolute;
+	inset: 0 0 auto;
+	height: 52px;
+	-webkit-app-region: drag;
+}
+
+.fr-panel {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: min(560px, calc(100vw - 64px));
+	text-align: center;
+	animation: fr-panel-in 700ms var(--fr-spring) both;
+}
+
+@keyframes fr-panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(14px) scale(0.985);
+	}
+}
+
+.fr-logo {
+	display: block;
+	width: 112px;
+	height: 112px;
+	user-select: none;
+	-webkit-user-drag: none;
+	filter: drop-shadow(0 10px 22px rgba(240, 168, 30, 0.28));
+}
+
+.fr-logo--sm {
+	width: 76px;
+	height: 76px;
+	margin-bottom: 18px;
+}
+
+.fr-logo--xs {
+	width: 44px;
+	height: 44px;
+	filter: none;
+}
+
+.fr-logo--breathe {
+	margin-bottom: 26px;
+	animation: fr-breathe 3.2s ease-in-out infinite;
+}
+
+@keyframes fr-breathe {
+	0%,
+	100% {
+		transform: translateY(0) rotate(-2deg);
+	}
+	50% {
+		transform: translateY(-6px) rotate(2deg);
+	}
+}
+
+.fr-eyebrow {
+	margin: 0 0 8px;
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--accent-text);
+}
+
+.fr-title {
+	margin: 0;
+	font-size: 30px;
+	line-height: 1.2;
+	font-weight: 700;
+	letter-spacing: -0.02em;
+	text-wrap: balance;
+}
+
+.fr-lead {
+	margin: 12px 0 0;
+	max-width: 440px;
+	font-size: 15px;
+	line-height: 1.6;
+	color: var(--fr-muted);
+	text-wrap: pretty;
+}
+
+.fr-actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 26px;
+}
+
+.fr-waiting {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin: 18px 0 0;
+	font-size: 13px;
+	color: var(--fr-muted);
+}
+
+.fr-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--accent);
+	animation: fr-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes fr-pulse {
+	0%,
+	100% {
+		opacity: 0.35;
+		transform: scale(0.8);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+/* -------------------------------------------------------------------- setup */
+
+/* Figma 162:1244 / 162:2507: a 592-wide white track with a soft halo, the width of the game board. */
+.fr-progress {
+	position: relative;
+	width: min(592px, 100%);
+	height: 12px;
+	margin-top: 32px;
+	overflow: hidden;
+	border-radius: 999px;
+	background: var(--bg-window);
+	box-shadow: 0 0 8.5px rgba(0, 0, 0, 0.25);
+}
+
+.fr-progress-fill {
+	position: absolute;
+	inset: 0;
+	transform-origin: 0 50%;
+	border-radius: inherit;
+	background: linear-gradient(90deg, #ffb703, #ff962d 48.56%, #70aeff);
+	transition: transform 900ms var(--fr-spring);
+}
+
+.fr-progress-fill::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.55), transparent);
+	animation: fr-sheen 1.8s ease-in-out infinite;
+}
+
+@keyframes fr-sheen {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(100%);
+	}
+}
+
+.fr-progress-meta {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	width: min(592px, 100%);
+	margin-top: 11.5px;
+	font-size: 13px;
+	line-height: 18.75px;
+	color: var(--fr-muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.fr-progress-now {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+
+.fr-stage-label {
+	font-size: 13px;
+	font-weight: 400;
+	color: var(--fr-ink);
+	animation: fr-fade-up 380ms var(--fr-spring) both;
+}
+
+@keyframes fr-fade-up {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+}
+
+/* --------------------------------------------------------------- setup game */
+
+/* The floating logo is the way in: bigger hit area, a soft ring that invites a tap, a label that appears on hover. */
+.fr-intro {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	transition: opacity 300ms ease, transform 340ms ease;
+}
+
+.fr-intro--fading {
+	opacity: 0;
+	transform: translateY(-10px) scale(0.98);
+	pointer-events: none;
+}
+
+.fr-logo-btn {
+	position: relative;
+	display: grid;
+	place-items: center;
+	padding: 14px;
+	margin-bottom: 12px;
+	border: 0;
+	border-radius: 50%;
+	background: transparent;
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+	transition: transform 360ms var(--fr-spring);
+}
+
+.fr-logo-btn:hover {
+	transform: scale(1.08);
+}
+
+.fr-logo-btn:active {
+	transform: scale(0.94);
+}
+
+.fr-logo-btn:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.fr-logo-btn .fr-logo--breathe {
+	margin-bottom: 0;
+}
+
+/* The button's padding is a hit area only: the logo sits where the folder and ready screens draw theirs (Figma 162:1244). */
+.fr-intro .fr-logo-btn {
+	margin: -14px 0 3px;
+}
+
+.fr-logo-ring {
+	position: absolute;
+	inset: 6px;
+	border-radius: 50%;
+	border: 2px solid rgba(255, 183, 3, 0.55);
+	animation: fr-ring 2.6s ease-out infinite;
+	pointer-events: none;
+}
+
+@keyframes fr-ring {
+	0% {
+		opacity: 0.9;
+		transform: scale(0.82);
+	}
+	100% {
+		opacity: 0;
+		transform: scale(1.32);
+	}
+}
+
+.fr-invite {
+	position: absolute;
+	bottom: -4px;
+	padding: 3px 10px;
+	border-radius: 999px;
+	background: var(--fr-card);
+	border: 1px solid var(--fr-card-border);
+	box-shadow: 0 4px 12px rgba(20, 22, 40, 0.12);
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fr-ink);
+	white-space: nowrap;
+	opacity: 0;
+	transform: translateY(-4px);
+	transition: opacity 200ms ease, transform 300ms var(--fr-spring);
+	pointer-events: none;
+}
+
+.fr-logo-btn:hover .fr-invite,
+.fr-logo-btn:focus-visible .fr-invite {
+	opacity: 1;
+	transform: none;
+}
+
+.fr-dock {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: 100%;
+}
+
+/* The reading screen has no button; this keeps its logo and title where the folder and ready screens draw theirs (Figma 162:1244). */
+.fr-setup[data-mode="intro"] {
+	width: min(640px, calc(100vw - 64px));
+	padding-bottom: 63px;
+}
+
+.fr-setup[data-mode="game"] {
+	--cell: clamp(20px, calc((100vh - 250px) / 16), 34px);
+	width: fit-content;
+	max-width: calc(100vw - 64px);
+}
+
+.fr-setup[data-mode="game"] .fr-progress {
+	margin-top: 26px;
+}
+
+.fr-game {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	animation: fr-fade-up 520ms var(--fr-spring) both;
+}
+
+/* Figma 166:83: the counters on the left, the hint (or "다시하기" once the board is over) in the middle, ✕ on the right. */
+.fr-game-bar {
+	display: grid;
+	grid-template-columns: 1fr auto 1fr;
+	align-items: center;
+	gap: 12px;
+	min-height: 31px;
+}
+
+.fr-game-stats {
+	display: flex;
+	gap: 8px;
+	justify-self: start;
+}
+
+.fr-game-pill {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 12px;
+	border: 1px solid var(--border);
+	border-radius: 50px;
+	background: var(--bg-window);
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 21px;
+	color: var(--fr-ink);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+}
+
+.fr-game-pill-logo {
+	width: 20px;
+	height: 20px;
+	user-select: none;
+}
+
+.fr-game-pill-num {
+	min-width: 2ch;
+	text-align: right;
+}
+
+.fr-game-pill-num--time {
+	min-width: 0;
+	text-align: left;
+}
+
+.fr-game-say {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	min-width: 0;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.5;
+	white-space: nowrap;
+}
+
+.fr-game-say strong {
+	font-weight: 700;
+}
+
+.fr-game-hint {
+	color: var(--fr-muted);
+}
+
+/* Figma 162:2507: once the board is over the hint gives way to an underlined "다시하기". */
+.fr-game-again {
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 500;
+	line-height: 1.5;
+	color: var(--fr-muted);
+	text-decoration: underline;
+	text-underline-position: from-font;
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+}
+
+.fr-game-close {
+	justify-self: end;
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 1px solid var(--border);
+	border-radius: 50px;
+	background: var(--bg-window);
+	color: var(--fr-ink);
+	cursor: pointer;
+	-webkit-app-region: no-drag;
+}
+
+.fr-game-close svg {
+	opacity: 0.75;
+}
+
+.fr-game-close:hover {
+	background: var(--bg-hover-strong);
+}
+
+.fr-game-close:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.fr-board {
+	display: grid;
+	grid-template-columns: repeat(var(--cols), var(--cell));
+	gap: 2px;
+	padding: 8px;
+	border-radius: 18px;
+	background: var(--fr-card);
+	border: 1px solid var(--fr-card-border);
+	box-shadow: var(--fr-shadow);
+	user-select: none;
+	-webkit-app-region: no-drag;
+	transition: box-shadow 400ms ease;
+}
+
+.fr-board[data-over="won"] {
+	box-shadow: 0 0 0 2px rgba(255, 183, 3, 0.75), 0 24px 60px var(--fr-glow), var(--fr-shadow);
+}
+
+.fr-cell {
+	--cell-hidden: linear-gradient(180deg, #ffffff, #e9ecf3);
+	display: grid;
+	place-items: center;
+	width: var(--cell);
+	height: var(--cell);
+	border-radius: 7px;
+	font-size: calc(var(--cell) * 0.5);
+	font-weight: 700;
+	line-height: 1;
+	font-variant-numeric: tabular-nums;
+	cursor: pointer;
+	animation: fr-cell-in 460ms var(--fr-spring) var(--d, 0ms) both;
+}
+
+html[data-appearance="dark"] .fr-cell {
+	--cell-hidden: linear-gradient(180deg, #3b3d45, #2d2f36);
+}
+
+@keyframes fr-cell-in {
+	from {
+		opacity: 0;
+		transform: scale(0.6);
+	}
+}
+
+.fr-cell[data-kind="hidden"],
+.fr-cell[data-kind="flag"] {
+	background: var(--cell-hidden);
+	box-shadow: inset 0 -2px 0 rgba(20, 22, 40, 0.09), 0 1px 1px rgba(20, 22, 40, 0.06);
+	transition: background 120ms ease, transform 160ms var(--fr-spring);
+}
+
+.fr-cell[data-kind="hidden"]:hover {
+	background: linear-gradient(180deg, #fff3cf, #ffe29a);
+	transform: translateY(-1px);
+}
+
+html[data-appearance="dark"] .fr-cell[data-kind="hidden"]:hover {
+	background: linear-gradient(180deg, #5a4a22, #473a1b);
+}
+
+.fr-cell[data-kind="hidden"]:active {
+	transform: scale(0.92);
+}
+
+.fr-cell[data-kind="flag"] {
+	color: #fb8500;
+	background: linear-gradient(180deg, #fff3cf, #ffe29a);
+}
+
+html[data-appearance="dark"] .fr-cell[data-kind="flag"] {
+	background: linear-gradient(180deg, #5a4a22, #473a1b);
+}
+
+.fr-cell[data-kind="open"] {
+	background: var(--bg-input);
+	cursor: default;
+	animation: fr-cell-open 200ms var(--fr-spring) both;
+}
+
+@keyframes fr-cell-open {
+	from {
+		transform: scale(0.82);
+		opacity: 0.4;
+	}
+}
+
+.fr-cell[data-n="1"] { color: #0a64d8; }
+.fr-cell[data-n="2"] { color: #2f9e44; }
+.fr-cell[data-n="3"] { color: #e03131; }
+.fr-cell[data-n="4"] { color: #6741d9; }
+.fr-cell[data-n="5"] { color: #e8590c; }
+.fr-cell[data-n="6"] { color: #0c8599; }
+.fr-cell[data-n="7"] { color: var(--fr-ink); }
+.fr-cell[data-n="8"] { color: var(--fr-muted); }
+
+.fr-cell[data-kind="logo"],
+.fr-cell[data-kind="found"],
+.fr-cell[data-kind="boom"] {
+	background: var(--bg-input);
+	cursor: default;
+}
+
+.fr-cell[data-kind="found"] {
+	background: linear-gradient(180deg, #fff3cf, #ffe29a);
+	animation: fr-found 520ms var(--fr-spring) both;
+}
+
+html[data-appearance="dark"] .fr-cell[data-kind="found"] {
+	background: linear-gradient(180deg, #5a4a22, #473a1b);
+}
+
+@keyframes fr-found {
+	0% {
+		transform: scale(0.7);
+	}
+	60% {
+		transform: scale(1.12);
+	}
+}
+
+.fr-cell[data-kind="boom"] {
+	background: rgba(224, 49, 49, 0.2);
+	box-shadow: inset 0 0 0 2px rgba(224, 49, 49, 0.7);
+	animation: fr-boom 420ms var(--fr-spring) both;
+}
+
+@keyframes fr-boom {
+	0% {
+		transform: scale(0.8);
+	}
+	55% {
+		transform: scale(1.18);
+	}
+}
+
+.fr-cell[data-kind="wrong"] {
+	background: rgba(224, 49, 49, 0.14);
+	color: #e03131;
+	cursor: default;
+}
+
+.fr-cell-logo {
+	width: 84%;
+	height: 84%;
+	user-select: none;
+	pointer-events: none;
+	filter: drop-shadow(0 2px 3px rgba(240, 168, 30, 0.35));
+}
+
+/* Figma 162:2850: the run finished mid-game; this card takes the progress bar's place under the board. */
+.fr-dock-ready {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	margin-top: 16px;
+	padding: 12px 16px;
+	border-radius: 20px;
+	background: rgba(255, 255, 255, 0.8);
+	box-shadow: 0 2px 4px rgba(20, 22, 40, 0.08), 0 24px 30px rgba(20, 22, 40, 0.18);
+	animation: fr-fade-up 520ms var(--fr-spring) both;
+}
+
+html[data-appearance="dark"] .fr-dock-ready {
+	background: var(--fr-card);
+}
+
+.fr-logo--dock {
+	flex: none;
+	width: 52px;
+	height: 52px;
+	filter: none;
+}
+
+.fr-dock-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+}
+
+.fr-title--dock {
+	font-size: 16px;
+	font-weight: 500;
+	line-height: 19.2px;
+	letter-spacing: -0.16px;
+}
+
+.fr-dock-lead {
+	margin: 0;
+	font-size: 13px;
+	line-height: 19.5px;
+	color: var(--fr-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fr-logo-ring,
+	.fr-game,
+	.fr-cell,
+	.fr-cell[data-kind],
+	.fr-dock-ready {
+		animation: none;
+	}
+
+	.fr-intro,
+	.fr-logo-btn,
+	.fr-invite,
+	.fr-board,
+	.fr-cell {
+		transition: none;
+	}
+}
+
+/* -------------------------------------------------------------------- ready */
+
+/*
+ * Ready → Finder reveal (design-mockups/finish-reveal/v5v7-hybrid.html). The stage hands its own
+ * backdrop to `.fr-reveal-back` (below the ready panel) and the word and bloom sit in
+ * `.fr-reveal-front` (above it); `reveal.tsx` sets every opacity, transform and filter.
+ */
+.fr-stage--reveal {
+	background: transparent;
+	transition: none;
+}
+
+.fr-stage--reveal .fr-panel {
+	position: relative;
+	z-index: 1;
+	animation: none;
+}
+
+.fr-reveal,
+.fr-reveal-back,
+.fr-reveal-front {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+}
+
+.fr-reveal-back {
+	z-index: 0;
+	overflow: hidden;
+}
+
+.fr-reveal-front {
+	z-index: 2;
+	overflow: hidden;
+}
+
+.fr-reveal-base,
+.fr-reveal-bgw,
+.fr-reveal-dark {
+	position: absolute;
+	inset: 0;
+}
+
+.fr-reveal-base,
+.fr-reveal-bgw,
+.fr-reveal-dark,
+.fr-reveal-glow,
+.fr-reveal-word,
+.fr-reveal-bloom {
+	will-change: opacity, transform, filter;
+}
+
+.fr-reveal-base {
+	background: #f6f7fa;
+}
+
+.fr-reveal-bgw {
+	background:
+		radial-gradient(60% 50% at 50% 38%, var(--fr-glow) 0%, transparent 70%),
+		radial-gradient(80% 60% at 80% 100%, var(--fr-glow-cool) 0%, transparent 70%),
+		linear-gradient(180deg, var(--fr-stage-a), var(--fr-stage-b));
+}
+
+.fr-reveal-dark {
+	background:
+		radial-gradient(75% 65% at 82% 108%, rgba(30, 110, 230, 0.55), rgba(30, 110, 230, 0) 70%),
+		radial-gradient(60% 55% at 12% -6%, rgba(60, 90, 200, 0.3), rgba(60, 90, 200, 0) 70%),
+		#0b0d15;
+	opacity: 0;
+}
+
+.fr-reveal-glow {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 700px;
+	height: 700px;
+	margin: -366px 0 0 -350px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(255, 232, 180, 0.9) 0%, rgba(255, 184, 70, 0.34) 24%, rgba(120, 150, 230, 0.22) 40%, rgba(30, 110, 230, 0.16) 52%, rgba(30, 110, 230, 0) 66%);
+	opacity: 0;
+}
+
+.fr-reveal-word {
+	position: absolute;
+	left: 0;
+	right: 0;
+	padding-left: 0.14em;
+	text-align: center;
+	color: #fff;
+	font-size: 19px;
+	font-weight: 500;
+	letter-spacing: 0.14em;
+	text-shadow: 0 0 22px rgba(255, 190, 90, 0.55);
+	opacity: 0;
+}
+
+.fr-reveal-bloom {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	width: 1000px;
+	height: 1000px;
+	margin: -500px 0 0 -500px;
+	border-radius: 50%;
+	background: radial-gradient(circle, rgba(255, 250, 235, 1) 0%, rgba(255, 226, 160, 0.65) 18%, rgba(255, 190, 90, 0.22) 38%, rgba(255, 190, 90, 0) 62%);
+	opacity: 0;
+}
+
+/* The sweep lives on the sunflower (inside `.fr-done-mark`) and is masked to its shape. */
+.fr-reveal-sweep {
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 110px;
+	height: 110px;
+	overflow: hidden;
+	pointer-events: none;
+	mask-size: contain;
+	mask-repeat: no-repeat;
+	mask-position: center;
+	-webkit-mask-size: contain;
+	-webkit-mask-repeat: no-repeat;
+	-webkit-mask-position: center;
+}
+
+.fr-reveal-sweep > span {
+	position: absolute;
+	top: -20%;
+	bottom: -20%;
+	left: 0;
+	width: 52px;
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+	transform: translateX(-90px) skewX(-18deg);
+	opacity: 0;
+}
+
+/* Figma 162:1308: the logo with a green check badge on its lower right. */
+.fr-done-mark {
+	position: relative;
+	margin-bottom: 17px;
+}
+
+.fr-done-mark .fr-logo--stage {
+	margin-bottom: 0;
+}
+
+.fr-status-mark {
+	position: absolute;
+	left: 79px;
+	top: 74px;
+	display: grid;
+	place-items: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 18px;
+	background: var(--bg-window);
+	color: var(--ok-dot);
+	animation: fr-pop 700ms var(--fr-spring) 200ms both;
+}
+
+@keyframes fr-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.5) rotate(-18deg);
+	}
+}
+
+/* ---------------------------------------------------------------- folders */
+
+/* Figma 156:1125: the folders the first run will read, before it reads anything. The logo and title sizes are shared with the reading and ready screens (162:1244, 162:1308). */
+.fr-logo--stage {
+	width: 110px;
+	height: 110px;
+	margin-bottom: 17px;
+	filter: none;
+}
+
+.fr-lead--stage {
+	margin-top: 12px;
+	max-width: none;
+	font-size: 16px;
+	line-height: 24px;
+	color: var(--text-body);
+}
+
+.fr-title--stage {
+	font-size: 32px;
+	line-height: 36px;
+	letter-spacing: -0.6px;
+}
+
+/* The 16px lead runs on one line, as in Figma. */
+.fr-folders {
+	width: min(640px, calc(100vw - 64px));
+}
+
+.fr-folder-chips {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 8px;
+	width: min(440px, 100%);
+	margin-top: 28px;
+}
+
+.fr-folder-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 13px;
+	border: 1px solid var(--fr-chip-border);
+	border-radius: 50px;
+	background: var(--fr-card);
+	font: inherit;
+	font-size: 13px;
+	line-height: 18px;
+	color: var(--fr-ink);
+	cursor: pointer;
+	transition: background 150ms ease, border-color 150ms ease, color 150ms ease, transform 260ms var(--fr-spring);
+	-webkit-app-region: no-drag;
+}
+
+.fr-folder-chip:active {
+	transform: scale(0.97);
+}
+
+.fr-folder-chip:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+.fr-folder-chip[data-state="off"] {
+	border-style: dashed;
+	border-color: var(--text-faint);
+	background: transparent;
+	color: var(--fr-muted);
+}
+
+.fr-folder-chip-icon {
+	flex: none;
+}
+
+.fr-folder-chip[data-state="off"] .fr-folder-chip-icon {
+	color: var(--text-faint);
+}
+
+/* Qualified by the panel so it outranks `.fr-btn--hero` further down. Both sit at the same height (Figma 156:1125, 162:1308). Flat: no shadow or glow. */
+.fr-panel .fr-btn--stage,
+.fr-panel .fr-btn--stage:hover:not(:disabled) {
+	height: 48px;
+	padding: 0 29px;
+	border-radius: 16px;
+	font-size: 16px;
+	font-weight: 500;
+	box-shadow: none;
+	animation: none;
+}
+
+.fr-folders .fr-btn--stage {
+	margin-top: 36px;
+}
+
+.fr-ready .fr-btn--stage {
+	margin-top: 89px;
+}
+
+
+/* ------------------------------------------------------------------ buttons */
+
+.fr-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 36px;
+	padding: 0 18px;
+	border: 1px solid transparent;
+	border-radius: 10px;
+	font: inherit;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: transform 260ms var(--fr-spring), background 150ms ease, box-shadow 150ms ease, opacity 150ms ease;
+	-webkit-app-region: no-drag;
+}
+
+.fr-btn:active:not(:disabled) {
+	transform: scale(0.97);
+}
+
+.fr-btn:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.fr-btn--primary {
+	background: var(--accent);
+	color: var(--text-on-accent);
+	box-shadow: 0 6px 16px rgba(10, 100, 216, 0.28);
+}
+
+.fr-btn--primary:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+
+.fr-btn--secondary {
+	background: var(--bg-window);
+	border-color: var(--border);
+	color: var(--fr-ink);
+}
+
+.fr-btn--secondary:hover:not(:disabled) {
+	background: var(--bg-hover-strong);
+}
+
+.fr-btn--hero {
+	height: 48px;
+	margin-top: 30px;
+	padding: 0 30px;
+	border-radius: 14px;
+	font-size: 16px;
+	animation: fr-fade-up 700ms var(--fr-spring) 360ms both;
+}
+
+.fr-btn--hero:hover:not(:disabled) {
+	transform: translateY(-1px);
+	box-shadow: 0 10px 24px rgba(10, 100, 216, 0.34);
+}
+
+.fr-btn--sm {
+	height: 30px;
+	padding: 0 14px;
+	border-radius: 8px;
+	font-size: 13px;
+}
+
+.fr-btn--brand {
+	flex: 1;
+	height: 40px;
+}
+
+.fr-kbd {
+	display: inline-grid;
+	place-items: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 5px;
+	border-radius: 5px;
+	background: rgba(255, 255, 255, 0.22);
+	font: inherit;
+	font-size: 12px;
+}
+
+.fr-link {
+	padding: 4px 2px;
+	border: 0;
+	background: none;
+	font: inherit;
+	font-size: 13px;
+	color: var(--fr-muted);
+	cursor: pointer;
+}
+
+.fr-link:hover {
+	color: var(--fr-ink);
+}
+
+/* ------------------------------------------------------------------- cinema */
+
+.fr-cinema {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background: radial-gradient(70% 60% at 50% 50%, rgba(8, 9, 14, 0.5), rgba(4, 5, 8, 0.78));
+	animation: fr-dim-in 900ms ease both;
+	pointer-events: auto;
+}
+
+.fr-cinema--out {
+	animation: fr-dim-out 620ms ease both;
+}
+
+@keyframes fr-dim-in {
+	from {
+		opacity: 0;
+	}
+}
+
+@keyframes fr-dim-out {
+	to {
+		opacity: 0;
+	}
+}
+
+/* Letterbox bars slide in, the way a film opens. */
+.fr-cinema-bars::before,
+.fr-cinema-bars::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	right: 0;
+	height: 9vh;
+	background: #000;
+	animation: fr-bar 1100ms var(--fr-spring-rise) both;
+}
+
+.fr-cinema-bars::before {
+	top: 0;
+	--fr-bar-from: -100%;
+}
+
+.fr-cinema-bars::after {
+	bottom: 0;
+	--fr-bar-from: 100%;
+}
+
+@keyframes fr-bar {
+	from {
+		transform: translateY(var(--fr-bar-from));
+	}
+}
+
+.fr-cinema-copy {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	color: #fff;
+}
+
+.fr-logo--cinema {
+	width: 84px;
+	height: 84px;
+	margin-bottom: 20px;
+	animation: fr-pop 1000ms var(--fr-spring) 250ms both;
+}
+
+.fr-cinema-title {
+	margin: 0;
+	font-size: 46px;
+	font-weight: 700;
+	letter-spacing: -0.03em;
+	animation: fr-reveal 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) 450ms both;
+}
+
+.fr-cinema-sub {
+	margin: 10px 0 0;
+	font-size: 18px;
+	font-weight: 500;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: rgba(255, 255, 255, 0.72);
+	animation: fr-reveal 1400ms cubic-bezier(0.2, 0.8, 0.2, 1) 900ms both;
+}
+
+@keyframes fr-reveal {
+	from {
+		opacity: 0;
+		letter-spacing: 0.32em;
+		filter: blur(8px);
+		transform: translateY(6px);
+	}
+}
+
+/* --------------------------------------------------------------------- tour */
+
+.fr-tour {
+	position: absolute;
+	inset: 0;
+}
+
+/* The spotlight: a hole in a dim veil, drawn by one huge shadow. Clicks pass through. */
+.fr-spot {
+	position: absolute;
+	border-radius: 12px;
+	box-shadow: 0 0 0 200vmax var(--fr-scrim), 0 0 0 2px rgba(255, 255, 255, 0.85), 0 0 24px 4px rgba(10, 100, 216, 0.35);
+	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring), width 260ms var(--fr-spring), height 260ms var(--fr-spring), opacity 240ms ease;
+	pointer-events: none;
+}
+
+.fr-spot--none {
+	box-shadow: 0 0 0 200vmax var(--fr-scrim);
+}
+
+.fr-coach {
+	position: absolute;
+	width: 320px;
+	transition: left 520ms var(--fr-spring), top 520ms var(--fr-spring);
+	pointer-events: auto;
+}
+
+.fr-coach-card {
+	padding: 16px 18px 14px;
+	border: 1px solid var(--fr-card-border);
+	border-radius: 16px;
+	background: var(--fr-card);
+	box-shadow: var(--fr-shadow);
+	-webkit-backdrop-filter: blur(22px) saturate(1.6);
+	backdrop-filter: blur(22px) saturate(1.6);
+	animation: fr-bubble-in 520ms var(--fr-spring) both;
+}
+
+@keyframes fr-bubble-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px) scale(0.96);
+	}
+}
+
+.fr-coach-count {
+	margin: 0 0 6px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	color: var(--accent-text);
+	font-variant-numeric: tabular-nums;
+}
+
+.fr-coach-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0;
+	font-size: 15px;
+	font-weight: 700;
+	line-height: 1.35;
+}
+
+.fr-coach-body {
+	margin: 6px 0 0;
+	font-size: 13px;
+	line-height: 1.55;
+	color: var(--fr-muted);
+}
+
+.fr-coach-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-top: 14px;
+}
+
+.fr-coach-hint {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12.5px;
+	font-weight: 600;
+	color: var(--accent-text);
+}
+
+.fr-coach-hint-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+	animation: fr-pulse 1.3s ease-in-out infinite;
+}
+
+.fr-coach-hint .fr-kbd {
+	background: var(--bg-input);
+	color: var(--fr-muted);
+}
+
+/* Animated click-guide cursor: tracks the real target element and taps gently. */
+.fr-cursor {
+	position: absolute;
+	z-index: 2;
+	width: 26px;
+	height: 26px;
+	transition: left 260ms var(--fr-spring), top 260ms var(--fr-spring);
+	pointer-events: none;
+}
+
+.fr-cursor-ring {
+	position: absolute;
+	left: -17px;
+	top: -17px;
+	width: 34px;
+	height: 34px;
+	border-radius: 50%;
+	border: 2px solid var(--accent);
+	background: rgba(10, 100, 216, 0.16);
+	animation: fr-cursor-ripple 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.fr-cursor-glyph {
+	position: absolute;
+	left: -5px;
+	top: -3px;
+	filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.34));
+	transform-origin: 5px 3px;
+	animation: fr-cursor-tap 1.5s ease-in-out infinite;
+}
+
+@keyframes fr-cursor-tap {
+	0%,
+	100% {
+		transform: translate(8px, 10px) scale(1);
+	}
+	42% {
+		transform: translate(0, 0) scale(0.9);
+	}
+	58% {
+		transform: translate(1px, 1px) scale(0.95);
+	}
+}
+
+@keyframes fr-cursor-ripple {
+	0%,
+	34% {
+		opacity: 0;
+		transform: scale(0.45);
+	}
+	46% {
+		opacity: 0.95;
+		transform: scale(0.85);
+	}
+	88%,
+	100% {
+		opacity: 0;
+		transform: scale(1.65);
+	}
+}
+
+.fr-coach-spinner {
+	flex: none;
+	width: 13px;
+	height: 13px;
+	border: 2px solid var(--accent-soft);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	animation: spin 800ms linear infinite;
+}
+
+/* ------------------------------------------------------------------ sign-in */
+
+.fr-sheet-scrim {
+	position: absolute;
+	inset: 0;
+	display: grid;
+	place-items: center;
+	background: var(--fr-scrim);
+	-webkit-backdrop-filter: blur(6px);
+	backdrop-filter: blur(6px);
+	animation: fr-dim-in 400ms ease both;
+	pointer-events: auto;
+}
+
+.fr-signin-sheet {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	width: min(380px, calc(100vw - 64px));
+	padding: 30px 30px 18px;
+	border: 1px solid var(--fr-card-border);
+	border-radius: 22px;
+	background: var(--bg-window);
+	box-shadow: var(--fr-shadow);
+	text-align: center;
+	animation: fr-sheet-up 700ms var(--fr-spring) both;
+}
+
+@keyframes fr-sheet-up {
+	from {
+		opacity: 0;
+		transform: translateY(40px) scale(0.98);
+	}
+}
+
+.fr-signin-head {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+}
+
+.fr-signin-head .fr-logo--sm,
+.fr-signin-mark .fr-logo--sm {
+	width: 64px;
+	height: 64px;
+	margin-bottom: 14px;
+}
+
+.fr-title--sheet {
+	font-size: 22px;
+}
+
+.fr-signin-lead {
+	margin: 8px 0 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--fr-muted);
+	text-wrap: pretty;
+}
+
+.fr-signin-form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	margin-top: 20px;
+}
+
+.fr-signin-form .fr-signin-form {
+	margin-top: 0;
+}
+
+.fr-signin-sheet .fr-btn--brand {
+	flex: none;
+	width: 100%;
+}
+
+.fr-btn--wide {
+	width: 100%;
+	height: 40px;
+}
+
+.fr-divider {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 6px 0;
+	font-size: 12px;
+	color: var(--fr-muted);
+}
+
+.fr-divider::before,
+.fr-divider::after {
+	content: "";
+	flex: 1;
+	height: 1px;
+	background: var(--border);
+}
+
+.fr-field {
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
+	text-align: left;
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--fr-muted);
+}
+
+.fr-input {
+	height: 40px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--bg-input);
+	font: inherit;
+	font-size: 14px;
+	font-weight: 400;
+	color: var(--fr-ink);
+	outline: none;
+	transition: border-color 150ms ease, box-shadow 150ms ease;
+	-webkit-app-region: no-drag;
+}
+
+.fr-input:focus {
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.fr-input--code {
+	font-size: 20px;
+	font-weight: 600;
+	letter-spacing: 0.4em;
+	text-align: center;
+}
+
+.fr-signin-note {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--fr-muted);
+}
+
+.fr-signin-links {
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	gap: 6px;
+	margin: 4px 0 0;
+	color: var(--fr-muted);
+}
+
+.fr-signin-legal {
+	margin: 8px 0 0;
+	font-size: 11.5px;
+	line-height: 1.6;
+	color: var(--fr-muted);
+}
+
+.fr-link--inline {
+	padding: 0;
+	font-size: inherit;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.fr-link:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.fr-signin-error {
+	margin: 12px 0 0;
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--danger-text);
+}
+
+.fr-signin-busy {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+	margin-top: 8px;
+}
+
+.fr-signin-busy .fr-waiting {
+	align-items: flex-start;
+	text-align: left;
+}
+
+.fr-signin-busy .fr-waiting .fr-dot {
+	flex: none;
+	margin-top: 6px;
+}
+
+.fr-signin-busy strong,
+.fr-signin-busy small {
+	display: block;
+}
+
+.fr-signin-busy strong {
+	color: var(--fr-ink);
+}
+
+.fr-signin-later {
+	margin-top: 14px;
+}
+
+.fr-signin-done {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+}
+
+.fr-signin-done .fr-btn--wide {
+	margin-top: 18px;
+}
+
+.fr-signin-mark {
+	position: relative;
+}
+
+.fr-signin-check {
+	position: absolute;
+	right: -4px;
+	bottom: 10px;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border: 2px solid var(--bg-window);
+	border-radius: 50%;
+	background: #34c759;
+	color: #fff;
+	animation: fr-check-pop 600ms var(--fr-spring) 120ms both;
+}
+
+@keyframes fr-check-pop {
+	from {
+		opacity: 0;
+		transform: scale(0.4);
+	}
+}
+
+.fr-signin-email {
+	margin: 0;
+	font-size: 13px;
+	color: var(--fr-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html[data-first-run="rise"] .desk,
+	.fr-panel,
+	.fr-logo--breathe,
+	.fr-status-mark,
+	.fr-cinema-title,
+	.fr-cinema-sub,
+	.fr-cinema-bars::before,
+	.fr-cinema-bars::after,
+	.fr-coach-card,
+	.fr-signin-sheet,
+	.fr-signin-check,
+	.fr-progress-fill::after,
+	.fr-coach-hint-dot,
+	.fr-cursor-ring,
+	.fr-cursor-glyph {
+		animation: none;
+	}
+
+	.fr-spot,
+	.fr-coach,
+	.fr-cursor,
+	.fr-progress-fill {
+		transition: none;
+	}
+}

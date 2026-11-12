@@ -142,6 +142,7 @@ function leafName(path: string): string {
 
 function commandName(rule: AutomationRule): string {
 	const [program = "", second] = rule.run;
+
 	const name = leafName(program).replace(/\.exe$/i, "");
 	if (RUNTIMES.has(name.toLowerCase()) && second !== undefined && !second.startsWith("-")) return leafName(second);
 	return name;

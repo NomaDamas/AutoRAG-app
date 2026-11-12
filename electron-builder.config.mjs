@@ -90,9 +90,12 @@ const config = {
 		// app's identity so notarization accepts the bundle as a whole.
 		binaries: [],
 		extendInfo: {
-			NSDocumentsFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
-			NSDesktopFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
-			NSDownloadsFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
+			NSDocumentsFolderUsageDescription: "Dazzi reads your Documents folder on this Mac so you can browse and search your files.",
+			NSDesktopFolderUsageDescription: "Dazzi reads your Desktop folder on this Mac so you can browse and search your files.",
+			NSDownloadsFolderUsageDescription: "Dazzi reads your Downloads folder on this Mac so you can browse and search your files.",
+			NSFileProviderDomainUsageDescription: "Dazzi reads your cloud drive folders on this Mac so you can browse and search your files.",
+			NSRemovableVolumesUsageDescription: "Dazzi reads connected disks so you can browse and search your files.",
+			NSNetworkVolumesUsageDescription: "Dazzi reads connected network volumes so you can browse and search your files.",
 			NSMicrophoneUsageDescription: "Dazzi listens only while you press the microphone button, to turn your voice into a question.",
 		},
 		// Without a Developer ID the bundle is ad-hoc signed ("-"): Apple Silicon refuses to run unsigned code.

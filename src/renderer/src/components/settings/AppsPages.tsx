@@ -34,6 +34,7 @@ import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type F
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
+import { FullDiskAccessDialog } from "../primitives/FullDiskAccessDialog";
 import { Switch } from "../primitives/Switch";
 import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
@@ -585,6 +586,8 @@ export function SourceDetailPage({
 	const [busy, setBusy] = useState(false);
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [fdaNeeded, setFdaNeeded] = useState(false);
+	const [fdaDialogOpen, setFdaDialogOpen] = useState(false);
 	const activity = useIndexActivity();
 	const liveSourceState = activityItem(activity, `source:${alias}`)?.state ?? null;
 	const sourceSyncActive = busy || liveSourceState === "running" || liveSourceState === "queued";
@@ -644,7 +647,32 @@ export function SourceDetailPage({
 
 	const appRequirement = row?.install.app ?? null;
 	const downloadUrl = appRequirement?.required ? appDownloadUrl(type, hostPlatform()) : undefined;
+	const mailPaths = connector !== null ? listOf(connector.paths) : [];
+	const usesProtectedStore =
+		hostPlatform() === "darwin" &&
+		(type === "kakao" || (type === "mailcrawl" && mailPaths.some((item) => item.includes("/Library/Mail"))));
 
+	useEffect(() => {
+		if (!usesProtectedStore) {
+			setFdaNeeded(false);
+			return;
+		}
+		let live = true;
+		const check = (): void => {
+			void window.autorag?.onboarding
+				?.permissions()
+				.then((status) => {
+					if (live) setFdaNeeded(status.fullDiskAccess === false);
+				})
+				.catch(() => undefined);
+		};
+		check();
+		window.addEventListener("focus", check);
+		return () => {
+			live = false;
+			window.removeEventListener("focus", check);
+		};
+	}, [usesProtectedStore]);
 	return (
 		<div className="settings-source is-open" data-source-id={alias}>
 			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template !== undefined ? t(template.summary) : t("settingsSources.sourceDetail.fallbackSummary")} />
@@ -660,10 +688,21 @@ export function SourceDetailPage({
 						disabled={busy}
 						ariaLabel={t("settingsSources.sourceDetail.enabledName")}
 						onChange={() => {
-							void run([{ path: ["datasources", alias, "enabled"], value: !enabled }]).then(() => refresh());
+							const turningOn = !enabled;
+							void run([{ path: ["datasources", alias, "enabled"], value: turningOn }]).then(() => {
+								void refresh();
+								if (turningOn && fdaNeeded) setFdaDialogOpen(true);
+							});
 						}}
 					/>
 				</Row>
+				{usesProtectedStore && fdaNeeded ? (
+					<Row name={t("fullDiskAccess.rowName")} hint={t("fullDiskAccess.leadSource")}>
+						<button type="button" className="linear-btn" data-action="source-grant-fda" onClick={() => setFdaDialogOpen(true)}>
+							{t("fullDiskAccess.open")}
+						</button>
+					</Row>
+				) : null}
 				{appRequirement !== null && appRequirement.required ? (
 					<Row
 						name={t("settingsSources.sourceDetail.appRow", { name: appRequirement.name })}
@@ -776,6 +815,17 @@ export function SourceDetailPage({
 						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>{t("settingsSources.sourceDetail.removeSection")}</button>
 					</ModalActions>
 				</ModalShell>
+			) : null}
+			{fdaDialogOpen ? (
+				<FullDiskAccessDialog
+					reason="source"
+					onClose={() => setFdaDialogOpen(false)}
+					onConfirmed={() => {
+						setFdaDialogOpen(false);
+						setFdaNeeded(false);
+						void refresh();
+					}}
+				/>
 			) : null}
 		</div>
 	);
