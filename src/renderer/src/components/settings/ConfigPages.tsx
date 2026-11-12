@@ -8,7 +8,7 @@
  * reuse `LanguageSettings`.
  */
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
@@ -104,23 +104,36 @@ export function ReadingPage({ snapshot, onSaved }: { readonly snapshot: AutoRagC
 		<>
 			<SettingsPageHead title={t("settingsSources.reading.title")} description={t("settingsSources.reading.desc")} />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.reading.sectionTitle")} description={t("settingsSources.reading.sectionDesc")}>
+			<div className="settings-plain">
 				<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsSources.fields.docLanguages")} hint={t("settingsSources.reading.langHint")} onSaved={onSaved} fallback={["ko", "en"]} />
-			</Section>
+			</div>
 		</>
 	);
 }
 
 /* ========================================================== Duplicates == */
 
+/** A setting as the 중복 파일 정리 frame draws it: a 14px medium name over a 12px line, the control at the right. */
+function PlainRow({ name, hint, children }: { readonly name: string; readonly hint: string; readonly children: ReactNode }): ReactElement {
+	return (
+		<div className="settings-plain-row">
+			<div className="settings-plain-text">
+				<span className="settings-plain-name">{name}</span>
+				<small>{hint}</small>
+			</div>
+			<div className="settings-plain-control">{children}</div>
+		</div>
+	);
+}
+
 const DUPEY_INTERVALS: readonly { readonly value: number; readonly label: LocaleKey }[] = [
-	{ value: 15, label: "settingsSources.cadence.min15" },
-	{ value: 30, label: "settingsSources.cadence.min30" },
-	{ value: 60, label: "settingsSources.cadence.hour1" },
-	{ value: 180, label: "settingsSources.cadence.hour3" },
-	{ value: 360, label: "settingsSources.cadence.hour6" },
-	{ value: 720, label: "settingsSources.cadence.hour12" },
-	{ value: 1440, label: "settingsSources.cadence.day1" },
+	{ value: 15, label: "settingsSources.duplicates.intervals.min15" },
+	{ value: 30, label: "settingsSources.duplicates.intervals.min30" },
+	{ value: 60, label: "settingsSources.duplicates.intervals.hour1" },
+	{ value: 180, label: "settingsSources.duplicates.intervals.hour3" },
+	{ value: 360, label: "settingsSources.duplicates.intervals.hour6" },
+	{ value: 720, label: "settingsSources.duplicates.intervals.hour12" },
+	{ value: 1440, label: "settingsSources.duplicates.intervals.day1" },
 ];
 
 export function DuplicatesPage({
@@ -144,11 +157,12 @@ export function DuplicatesPage({
 		<>
 			<SettingsPageHead title={t("settingsSources.duplicates.title")} description={t("settingsSources.duplicates.desc")} />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.duplicates.section")}>
-				<Row name={t("settingsSources.duplicates.exactName")} hint={t("settingsSources.duplicates.exactHint")}>
+			{/* Figma 403:8746: three plain rows, no section heading and no rules between them. */}
+			<div className="settings-plain">
+				<PlainRow name={t("settingsSources.duplicates.exactName")} hint={t("settingsSources.duplicates.exactHint")}>
 					<Switch checked={excludeExact} ariaLabel={t("settingsSources.duplicates.exactName")} onChange={() => void run([{ path: ["excludeExactDuplicates"], value: !excludeExact }])} />
-				</Row>
-				<Row name={t("settingsSources.duplicates.versionsName")} hint={t("settingsSources.duplicates.versionsHint")}>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.duplicates.versionsName")} hint={t("settingsSources.duplicates.versionsHint")}>
 					<Switch
 						checked={dupeyEnabled}
 						ariaLabel={t("settingsSources.duplicates.versionsName")}
@@ -157,15 +171,15 @@ export function DuplicatesPage({
 							else void run([{ path: ["dupey"], value: { ...(asRecord(dupey) ?? {}), enabled: true } }]);
 						}}
 					/>
-				</Row>
-				<Row name={t("settingsSources.duplicates.intervalName")} hint={t("settingsSources.duplicates.intervalHint")}>
-					<select className="linear-select" aria-label={t("settingsSources.duplicates.intervalName")} value={String(dupeyInterval)} onChange={(event) => onDupeyInterval(Number(event.target.value))}>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.duplicates.intervalName")} hint={t("settingsSources.duplicates.intervalHint")}>
+					<select className="linear-select settings-plain-select" aria-label={t("settingsSources.duplicates.intervalName")} value={String(dupeyInterval)} onChange={(event) => onDupeyInterval(Number(event.target.value))}>
 						{DUPEY_INTERVALS.map((item) => (
 							<option key={item.value} value={item.value}>{t(item.label)}</option>
 						))}
 					</select>
-				</Row>
-			</Section>
+				</PlainRow>
+			</div>
 		</>
 	);
 }

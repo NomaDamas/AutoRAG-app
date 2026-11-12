@@ -2793,9 +2793,7 @@
       "search": "Search {{name}}",
       "openList": "Open {{name}} list",
       "noMatch": "No matching language.",
-      "custom": "Custom",
-      "inherited": "Inherited from parent language settings",
-      "resetDefault": "Default"
+      "resetDefault": "Reset to default"
     },
     "chips": {
       "add": "+ Add",
@@ -3272,20 +3270,26 @@
     "reading": {
       "title": "Document reading",
       "desc": "Set the preferred languages for reading and searching documents.",
-      "sectionTitle": "Document languages",
-      "sectionDesc": "The preferred languages for reading and searching document content.",
       "langHint": "You can select more than one."
     },
     "duplicates": {
       "title": "Duplicate cleanup",
-      "desc": "Cleans up so the same content does not repeat in search results.",
-      "section": "Search result cleanup",
-      "exactName": "Only one of each exact duplicate",
-      "exactHint": "For files with identical content, only the most recent is shown.",
+      "desc": "Keeps the same or similar files from showing up more than once in search results.",
+      "exactName": "Show identical files once",
+      "exactHint": "When contents match, only the most recently modified file is shown.",
       "versionsName": "Group similar versions",
-      "versionsHint": "Groups related files like report_final and report_final2 together.",
-      "intervalName": "Check interval",
-      "intervalHint": "How often to re-check for file changes."
+      "versionsHint": "Files whose names differ only slightly, like report_final and report_final2, are shown together on one line.",
+      "intervalName": "Duplicate check interval",
+      "intervalHint": "How often to re-check for file changes.",
+      "intervals": {
+        "min15": "Every 15 min",
+        "min30": "Every 30 min",
+        "hour1": "Every hour",
+        "hour3": "Every 3 hours",
+        "hour6": "Every 6 hours",
+        "hour12": "Every 12 hours",
+        "day1": "Every day"
+      }
     }
   },
   "localSpec": {

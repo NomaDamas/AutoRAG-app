@@ -2793,9 +2793,7 @@
       "search": "{{name}} 검색",
       "openList": "{{name}} 목록 열기",
       "noMatch": "일치하는 언어가 없습니다.",
-      "custom": "직접 설정",
-      "inherited": "상위 언어 설정 상속",
-      "resetDefault": "기본값"
+      "resetDefault": "기본값으로 변경"
     },
     "chips": {
       "add": "+ 추가",
@@ -3272,20 +3270,26 @@
     "reading": {
       "title": "문서 읽기",
       "desc": "문서를 읽고 검색할 때 우선 사용할 언어를 설정합니다.",
-      "sectionTitle": "문서 언어",
-      "sectionDesc": "문서 내용을 읽고 검색할 때 우선 사용할 언어입니다.",
       "langHint": "여러 개를 선택할 수 있습니다."
     },
     "duplicates": {
       "title": "중복 파일 정리",
-      "desc": "검색 결과에 같은 내용이 반복해서 나타나지 않도록 정리합니다.",
-      "section": "검색 결과 정리",
-      "exactName": "완전히 같은 파일은 하나만",
-      "exactHint": "내용이 같은 파일은 가장 최근 것만 보여줍니다.",
+      "desc": "같거나 비슷한 파일이 검색 결과에 여러 번 나오지 않게 합니다.",
+      "exactName": "똑같은 파일은 하나만 표시",
+      "exactHint": "내용이 같으면 가장 최근에 수정한 파일만 보여 줍니다.",
       "versionsName": "비슷한 버전 묶기",
-      "versionsHint": "보고서_최종, 보고서_최종2처럼 관련 파일을 묶어 보여줍니다.",
-      "intervalName": "검사 주기",
-      "intervalHint": "파일 변화를 다시 확인하는 주기입니다."
+      "versionsHint": "보고서_최종, 보고서_최종2처럼 이름만 다른 파일을 한 줄로 모아 보여 줍니다.",
+      "intervalName": "중복 검사 주기",
+      "intervalHint": "파일 변화를 다시 확인하는 주기입니다.",
+      "intervals": {
+        "min15": "15분마다",
+        "min30": "30분마다",
+        "hour1": "1시간마다",
+        "hour3": "3시간마다",
+        "hour6": "6시간마다",
+        "hour12": "12시간마다",
+        "day1": "하루마다"
+      }
     }
   },
   "localSpec": {

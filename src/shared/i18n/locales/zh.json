@@ -2793,9 +2793,7 @@
       "search": "搜索 {{name}}",
       "openList": "打开 {{name}} 列表",
       "noMatch": "没有匹配的语言。",
-      "custom": "自定义",
-      "inherited": "继承上级语言设置",
-      "resetDefault": "默认值"
+      "resetDefault": "恢复默认"
     },
     "chips": {
       "add": "+ 添加",
@@ -3272,20 +3270,26 @@
     "reading": {
       "title": "文档阅读",
       "desc": "设定读取和搜索文档时优先使用的语言。",
-      "sectionTitle": "文档语言",
-      "sectionDesc": "读取和搜索文档内容时优先使用的语言。",
       "langHint": "可以选择多个。"
     },
     "duplicates": {
       "title": "重复文件整理",
-      "desc": "整理以避免相同内容在搜索结果中重复出现。",
-      "section": "搜索结果整理",
-      "exactName": "完全相同的文件仅保留一个",
-      "exactHint": "内容相同的文件只显示最新的一个。",
+      "desc": "避免相同或相似的文件在搜索结果中多次出现。",
+      "exactName": "相同文件只显示一个",
+      "exactHint": "内容相同时，只显示最近修改的文件。",
       "versionsName": "归并相似版本",
-      "versionsHint": "将报告_最终、报告_最终2 之类的相关文件归并显示。",
-      "intervalName": "检查间隔",
-      "intervalHint": "重新检查文件变化的间隔。"
+      "versionsHint": "报告_最终、报告_最终2 这类仅名称不同的文件会合并为一行显示。",
+      "intervalName": "重复检查间隔",
+      "intervalHint": "重新检查文件变化的间隔。",
+      "intervals": {
+        "min15": "每 15 分钟",
+        "min30": "每 30 分钟",
+        "hour1": "每小时",
+        "hour3": "每 3 小时",
+        "hour6": "每 6 小时",
+        "hour12": "每 12 小时",
+        "day1": "每天"
+      }
     }
   },
   "localSpec": {

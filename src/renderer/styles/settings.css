@@ -3652,3 +3652,80 @@
 .settings-view .settings-apps .settings-list .settings-list-row:last-child {
 	border-bottom: 1px solid var(--border-divider);
 }
+
+/* Figma 386:9908: 제외 추가 is the grey secondary button (Chrome #D9D9D9, body text), the plus faint, the chevron muted. */
+.settings-view .scope-secondary-btn {
+	background: var(--border);
+	color: var(--text-body);
+}
+
+.settings-view .scope-secondary-btn:hover:not(:disabled) {
+	background: var(--border-strong);
+}
+
+.settings-view .scope-secondary-btn > svg:first-child {
+	color: var(--text-faint);
+}
+
+.settings-view .scope-secondary-btn > svg:last-child {
+	color: var(--text-muted);
+}
+
+/* 변경 자동 감지 is a setting, not a section: its name is medium, not bold. */
+.settings-view .scope-section--setting .scope-section-title {
+	font-weight: var(--weight-medium);
+}
+
+/* ------------------------------------------- 문서 읽기 / 중복 파일 정리 -- */
+
+/* Figma 403:8347 / 403:8746: plain rows under the page head, 25px apart, no section heading and no rules. */
+.settings-view .settings-plain {
+	display: flex;
+	flex-direction: column;
+	gap: 25px;
+	margin-top: 40px; /* the frame's 40px between the page head and its content, as on 검색 범위. */
+}
+
+.settings-view .settings-plain-row {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-16);
+}
+
+.settings-view .settings-plain-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+.settings-view .settings-plain-name {
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+}
+
+.settings-view .settings-plain-text small {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-plain-control {
+	display: flex;
+	flex: none;
+	align-items: center;
+}
+
+.settings-view .settings-plain-select {
+	width: 183px;
+	height: 36px;
+	padding: 0 32px 0 var(--space-12);
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	/* The frame's Icon/chevron-down (Lucide, 16px), not the CSS triangle the other selects draw. */
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+	background-position: calc(100% - 12px) 50%;
+	background-size: 16px 16px;
+}

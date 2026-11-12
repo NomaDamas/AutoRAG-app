@@ -99,7 +99,7 @@ function AddExclusionMenu({ choices, disabled, onChoose }: { readonly choices: r
 	}, [open]);
 	return (
 		<div className="scope-menu-anchor" ref={rootRef}>
-			<button type="button" className="scope-primary-btn" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+			<button type="button" className="scope-primary-btn scope-secondary-btn" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
 				<Plus size={14} strokeWidth={2} aria-hidden="true" focusable="false" />
 				{t("settingsSources.scope.addExclusion")}
 				<ChevronDown size={14} strokeWidth={2} aria-hidden="true" focusable="false" />
@@ -273,7 +273,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 					</div>
 				</section>
 				<hr className="scope-divider" />
-				<section className="scope-section scope-section--row">
+				<section className="scope-section scope-section--row scope-section--setting">
 					<div className="scope-section-text">
 						<h3 className="scope-section-title">{t("settingsSources.scope.autoWatch")}</h3>
 						<p className="scope-section-desc">{fsearch === false ? t("settingsSources.scope.autoWatchHintOff") : t("settingsSources.scope.autoWatchHintOn")}</p>
