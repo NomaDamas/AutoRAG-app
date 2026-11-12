@@ -36,7 +36,7 @@ import { MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
-import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
+import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, setQuickLookDocumentEdit, type QuickLookWindowOptions } from "../preview/node/register";
 import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, resolveConfigReadOnly, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
@@ -113,6 +113,7 @@ import { createSmartIndexingService } from "./smart-indexing-service";
 import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
+import { createDocumentEditService } from "./document-edit-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
@@ -1136,6 +1137,15 @@ app.whenReady().then(async () => {
 	});
 	registerMagicActionIpcHandlers(magicActionService);
 	app.once("will-quit", () => magicActionService.dispose());
+	const documentEditService = createDocumentEditService({
+		resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+		agentDir: getAgentDir(),
+		env: process.env,
+		language: () => currentLanguage,
+		backupDir: join(app.getPath("userData"), "document-edit-backups"),
+	});
+	setQuickLookDocumentEdit(documentEditService);
+	app.once("will-quit", () => void documentEditService.dispose());
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,

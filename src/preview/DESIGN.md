@@ -46,6 +46,22 @@ the window size once per load, `resize(size)` follows a later user change (the
 자세한 정보 disclosure), and `useHiddenTitle` leaves the toolbar title empty for
 panels that print the name themselves.
 
+### Mark up and edit
+
+For a document the `document-edit` agent can change (`documentEditMode` in
+`src/preview/shared/annotation.ts`: text, Markdown, HTML, code, CSV/TSV, and
+Office/HWP(X)/OpenDocument packages) the toolbar shows a pen button left of
+share. It opens `MarkupLayer` (`src/preview/ui/markup.tsx`) over the stage: a
+palette (pen, box, underline, remove last, clear) and a composer under the
+document. A mark is stored relative to the `[data-page]` element it was drawn
+on, or to the stage for a document without pages, as fractions of that box, so
+it stays on the same words while the panel scrolls, zooms, or resizes; the text
+under it is read from the DOM and sent along. Enter sends the marks and the
+instruction over `preview:edit-start`; progress, the reply, and errors come back
+on `preview:edit-event`. When the file changed, main shows it again (the caches
+key on mtime), and Undo puts the original bytes back. Another file, the
+composer's close button, or the pen button again closes the layer.
+
 ## Sizing
 
 `fitQuickLook` takes a fit mode. `aspect` scales media uniformly (images and

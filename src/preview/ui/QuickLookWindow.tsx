@@ -12,7 +12,9 @@ import { BundleView } from "./bundle";
 import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
-import { CloseIcon, FullscreenIcon, ShareIcon } from "./icons";
+import { CloseIcon, FullscreenIcon, MarkupIcon, ShareIcon } from "./icons";
+import { MarkupLayer } from "./markup";
+import { documentEditMode } from "../shared/annotation";
 import { createSlideSweep } from "./slide-sweep";
 import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
@@ -185,6 +187,8 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	const [app, setApp] = useState<string | null>(null);
 	const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
 	const [titleHidden, setTitleHidden] = useState(false);
+	/** The path the pen button's markup mode is open on; another file closes it. */
+	const [markupPath, setMarkupPath] = useState<string | null>(null);
 	const stageRef = useRef<HTMLElement | null>(null);
 	const reported = useRef(-1);
 	const seqRef = useRef(-1);
@@ -291,6 +295,8 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	}, [load, measured, report]);
 
 	const material = bridge.platform === "darwin" ? "glass" : "solid";
+	const editable = load !== null && load.document !== null && documentEditMode(load.document.ext) !== null;
+	const marking = editable && load !== null && markupPath === load.path;
 	if (load === null) return <div className={PANEL} data-material={material} data-quicklook-state="idle" />;
 	const { document, folder, bundle } = load;
 	const meta = document === null ? describeExtension(extensionOf(load.name)) : document.package === true ? describeExtension(document.ext) : `${describeExtension(document.ext)} · ${formatBytes(document.size)}`;
@@ -320,6 +326,18 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 						{titleHidden ? "" : load.name}
 					</div>
 					<div ref={setToolbar} className="qlw__slot contents" />
+					{editable ? (
+						<button
+							type="button"
+							className={TOOL_BUTTON}
+							aria-pressed={marking}
+							aria-label={t("quickLook.markup.start")}
+							title={t("quickLook.markup.start")}
+							onClick={() => setMarkupPath(marking ? null : load.path)}
+						>
+							<MarkupIcon />
+						</button>
+					) : null}
 					{bridge.platform === "darwin" ? (
 						<button type="button" className={TOOL_BUTTON} aria-label={t("toolbar.share")} title={t("toolbar.share")} onClick={share}>
 							<ShareIcon />
@@ -353,6 +371,7 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 						<PreviewBody file={document} anchor={load.anchor} />
 					)}
 				</main>
+				{marking ? <MarkupLayer bridge={bridge} path={load.path} seq={load.seq} stageRef={stageRef} onExit={() => setMarkupPath(null)} /> : null}
 			</div>
 		</ChromeProvider>
 	);

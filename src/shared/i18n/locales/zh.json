@@ -2080,7 +2080,9 @@
       "invalidCopyText": "要复制的内容无效",
       "notAbsolute": "预览路径无效",
       "missing": "找不到文件",
-      "notFile": "无法预览文件夹"
+      "notFile": "无法预览文件夹",
+      "invalidEdit": "无效的编辑请求",
+      "editUnavailable": "编辑功能尚未就绪"
     },
     "mail": {
       "from": "发件人",
@@ -2146,6 +2148,28 @@
       "searching": "正在查找引用段落…",
       "found": "已高亮引用段落",
       "missing": "未找到引用段落"
+    },
+    "markup": {
+      "start": "标注并编辑",
+      "canvas": "文档上的标注",
+      "tools": "标注工具",
+      "pen": "画笔",
+      "box": "方框",
+      "underline": "下划线",
+      "removeLast": "删除上一个标注",
+      "clear": "清除所有标注",
+      "instruction": "编辑说明",
+      "placeholder": "要怎么修改?例如:把划线的日期改为11月20日",
+      "markCount": "标注 {{count}} 处",
+      "send": "编辑",
+      "working": "正在编辑…",
+      "changed": "已编辑文档",
+      "unchanged": "文档未更改",
+      "undo": "撤销编辑",
+      "undone": "已将文档恢复原样",
+      "undoFailed": "文档在编辑后已被更改,因此未恢复",
+      "cancelled": "已停止编辑",
+      "failed": "无法编辑:{{message}}"
     }
   },
   "settingsCore": {
