@@ -17,7 +17,7 @@ function chatWith(...attachments: ChatAttachment[]): InspectorChat {
 	return {
 		chatId: "c1",
 		updatedAt: 1_000,
-		turns: attachments.map((att) => ({ question: "요약해줘", attachments: [att], answer: null, draft: "", progress: "", error: null, stopped: false })),
+		turns: attachments.map((att) => ({ question: "요약해줘", attachments: [att], quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt: 0, progress: "", error: null, stopped: false })),
 	};
 }
 
@@ -88,7 +88,7 @@ describe("an answer not yet seen", () => {
 });
 
 describe("an inspector chat read back from history", () => {
-	it("shows each question with the files it brought in and its latest answer phase", () => {
+	it("keeps both answer phases of each question, as stored", () => {
 		const quick = { answer: "빠른 답", evidence: [] };
 		const deep = { answer: "정밀한 답", evidence: [] };
 		const messages: ChatMessage[] = [
@@ -98,9 +98,9 @@ describe("an inspector chat read back from history", () => {
 			{ role: "assistant", sessionId: "s", quick, deep: null, stopped: false, at: "4" },
 		];
 		const turns = turnsFromHistory(messages);
-		expect(turns.map((turn) => [turn.question, turn.attachments.length, turn.answer?.answer])).toEqual([
-			["요약해줘", 1, "정밀한 답"],
-			["이건?", 0, "빠른 답"],
+		expect(turns.map((turn) => [turn.question, turn.attachments.length, turn.quick?.answer ?? null, turn.deep?.answer ?? null])).toEqual([
+			["요약해줘", 1, "빠른 답", "정밀한 답"],
+			["이건?", 0, "빠른 답", null],
 		]);
 	});
 });

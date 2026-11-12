@@ -3,6 +3,7 @@ import type { ChatAttachment, SearchStreamEvent } from "../../../shared/search-c
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import {
 	EMPTY_INSPECTOR_CHAT_TAB,
+	newTurn,
 	turnsFromHistory,
 	updateLastTurn,
 	type InspectorChat,
@@ -76,17 +77,26 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, progress: event.text })));
 					break;
 				case "quick-draft":
+					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, quickDraft: event.text })));
+					break;
 				case "deep-draft":
-					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, draft: event.text })));
+					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, deepDraft: event.text })));
 					break;
 				case "quick":
 					changeChat(tabId, (chat) =>
-						// Deep supersedes Quick; a Quick never replaces a Deep that already landed.
-						updateLastTurn(chat, (turn) => (turn.answer !== null ? turn : { ...turn, answer: event.phase, draft: event.phase.answer, progress: "" })),
+						updateLastTurn(chat, (turn) => ({ ...turn, quick: event.phase, quickDraft: event.phase.answer, deepDraft: turn.deep === null ? "" : turn.deepDraft, progress: "" })),
 					);
 					break;
 				case "deep":
-					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, answer: event.phase, draft: event.phase.answer, progress: "" })));
+					changeChat(tabId, (chat) =>
+						updateLastTurn(chat, (turn) => ({
+							...turn,
+							deep: event.phase,
+							deepDraft: event.phase.answer,
+							deepElapsed: turn.startedAt === 0 ? null : Date.now() - turn.startedAt,
+							progress: "",
+						})),
+					);
 					break;
 				case "error":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, error: event.message })));
@@ -119,7 +129,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 			const chat: InspectorChat = {
 				chatId,
 				updatedAt: now,
-				turns: [...(previous?.turns ?? []), { question, attachments, answer: null, draft: "", progress: "", error: null, stopped: false }],
+				turns: [...(previous?.turns ?? []), newTurn(question, attachments, now)],
 			};
 			change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
 			runRef.current = { tabId, searchId };
