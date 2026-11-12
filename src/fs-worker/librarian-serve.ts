@@ -17,11 +17,13 @@ import type { IndexMap } from "../shared/index-map-contract";
 import { installErrorReporter } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import type { ContentSearch } from "../main/content-search";
+import type { SourceSearch } from "../main/source-search";
 import { LIBRARIAN_OP, LIBRARIAN_PUSH, LIBRARIAN_REQUEST } from "./librarian-contract";
 
 export interface LibrarianServices {
 	readonly fileNameSearch: FileNameSearchBackend;
 	readonly contentSearch: ContentSearch;
+	readonly sourceSearch: SourceSearch;
 	scanDuplicates(dir: string): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
@@ -74,6 +76,9 @@ export function serveLibrarian(port: WorkerPort, options: ServeLibrarianOptions)
 	const handlers: Record<string, WorkerHandler> = {
 		[LIBRARIAN_OP.fileNameSearch]: (args) => services.fileNameSearch.search(stringArg(args, 0, "query"), typeof args[1] === "string" ? args[1] : undefined),
 		[LIBRARIAN_OP.contentSearch]: (args, signal) => services.contentSearch.search(stringArg(args, 0, "query"), typeof args[1] === "number" ? args[1] : undefined, signal),
+		[LIBRARIAN_OP.searchDatasources]: () => services.sourceSearch.datasources(),
+		[LIBRARIAN_OP.sourceSearch]: (args, signal) =>
+			services.sourceSearch.search(stringArg(args, 0, "datasourceId"), stringArg(args, 1, "query"), typeof args[2] === "number" ? args[2] : undefined, signal),
 		[LIBRARIAN_OP.fileNameEnsureDaemon]: () => services.fileNameSearch.ensureDaemon(),
 		[LIBRARIAN_OP.fileNameStop]: () => services.fileNameSearch.stop(),
 		[LIBRARIAN_OP.scanDuplicates]: (args) => services.scanDuplicates(stringArg(args, 0, "dir")),

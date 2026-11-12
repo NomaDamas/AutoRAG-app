@@ -44,7 +44,7 @@ describe("isAllowedAgentApi", () => {
 
 describe("role config updates", () => {
 	it("writes the Jev block with the backend its provider serves", () => {
-		expect(jevConfigUpdates(entry({ provider: "openrouter", id: "typesafe/jev-latest" }))).toEqual([{ path: ["jev"], value: { model: "typesafe/jev-latest", backend: "openrouter" } }]);
+		expect(jevConfigUpdates(entry({ provider: "openrouter", id: "~typesafe/jev-latest" }))).toEqual([{ path: ["jev"], value: { model: "~typesafe/jev-latest", backend: "openrouter" } }]);
 	});
 
 	it("omits the backend for a provider that serves none, instead of guessing one", () => {

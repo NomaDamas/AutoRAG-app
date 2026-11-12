@@ -86,10 +86,6 @@
     "descending": "降順"
   },
   "sidebarSearch": {
-    "fileName": "ファイル名",
-    "content": "コンテンツ",
-    "fileNameHint": "この{{machine}}全体でファイル名を検索",
-    "contentHint": "AIでファイル内容を検索 ({{shortcut}})",
     "placeholder": "検索…",
     "clearSearch": "検索をクリア"
   },
@@ -101,6 +97,23 @@
     "thisMac": "このMac",
     "thisComputer": "このPC",
     "itemsFound": "個の項目が見つかりました"
+  },
+  "wholeSearch": {
+    "groups": "検索結果のグループ",
+    "files": "ファイル名",
+    "content": "文書の内容",
+    "pending": "検索中…",
+    "contentOff": "キーワード専用モードでは文書内容のインデックスがありません。",
+    "contentUnavailable": "文書インデックスはまだ準備できていません。",
+    "contentError": "文書の内容を検索できませんでした。",
+    "noContentHits": "\"{{query}}\" に一致する文書の内容はありません。",
+    "showInFolder": "フォルダで表示",
+    "sourcePending": "{{source}} を検索中…",
+    "sourceError": "{{source}} を検索できませんでした: {{error}}",
+    "noSourceHits": "{{source}} に \"{{query}}\" と一致する項目はありません。",
+    "openPage": "ページを開く",
+    "askAi": "AI検索に聞く",
+    "askAiHint": "この検索語でAI検索のチャットを始めます"
   },
   "tabs": {
     "close": "タブを閉じる ({{shortcut}})",
@@ -126,6 +139,7 @@
     },
     "pathBar": {
       "edit": "パスへ移動",
+      "more": "非表示のフォルダ",
       "suggestions": "パス候補",
       "invalid": "移動先のパスを入力してください",
       "notFound": "\"{{path}}\" が見つかりません"
@@ -763,6 +777,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "圧縮を中止しますか？",
+    "compressStopMessage": "{{name}} の圧縮を中止し、作成途中の圧縮ファイルを削除します。",
+    "compressStopAction": "中止",
+    "compressKeep": "圧縮を続ける",
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
@@ -1017,7 +1035,6 @@
     "dragHint": "写真をドラッグしてください"
   },
   "finderComponents": {
-    "searchRange": "検索範囲",
     "sidebar": "場所",
     "pathBar": "パス",
     "inspectorAside": "インスペクタ",
@@ -1213,6 +1230,7 @@
       "animatedReduce": "動きのある画像はアニメーションが失われるため対応していません",
       "reduced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減）",
       "reduceCancelled": "{{name}} の容量削減をキャンセルしました",
+      "compressCancelled": "{{name}} の圧縮を中止しました",
       "reducedReplaced": "{{name}} — {{before}} → {{after}}（{{percent}}% 削減・元のファイルはゴミ箱へ移動）"
     },
     "indexStatus": {
@@ -1284,6 +1302,7 @@
       "retried": "一時的なファイルシステムエラー({{code}})が発生したため、更新を {{retries}} 回再試行しました。",
       "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
       "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。",
+      "batchSkipped": "同期に失敗したため、ファイル {{files}} 件は以前のインデックスのままです。次回の更新で再試行します。",
       "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。",
       "preflightMissingKey": "エンベッダー {{id}} には API キーが必要ですが、{{env}} が設定されていません。インデックス作成の前に設定してください。",
       "preflightKeyEnvIgnored": "エンベッダー {{id}} は apiKeyEnv に {{configured}} を指定していますが、インデクサーはキーを {{env}} からしか読まず、{{env}} が設定されていません。キーを {{env}} に設定してください。",
@@ -2752,6 +2771,14 @@
       "empty": "接続済みのデータソースがありません。「接続済みアプリ」で追加してください。",
       "footer": "変更されたファイルとメッセージだけを読み直します。初めて接続したアプリは全体を取得します。",
       "syncAll": "すべて今すぐ更新",
+      "scheduleTitle": "自動更新の条件",
+      "scheduleAcOnlyName": "電源接続中のみ",
+      "scheduleAcOnlyHint": "バッテリー駆動中は自動更新をスキップします。今すぐ更新は常に使えます。",
+      "scheduleWindowName": "指定した時間帯のみ",
+      "scheduleWindowHint": "この時間帯になるまで自動更新を待ちます。開始後の最初の確認で実行されます。",
+      "scheduleWindowStart": "開始時刻",
+      "scheduleWindowEnd": "終了時刻",
+      "scheduleWindowSame": "開始と終了の時刻が同じです。",
       "localRefreshName": "ローカルフォルダを更新",
       "localRefreshHint": "検索フォルダのドキュメントを読み直して検索インデックスを更新します。変更されたドキュメントのみ処理します。",
       "localRefreshButton": "今すぐ更新",
@@ -2763,7 +2790,10 @@
       "scheduleConflicts": "このコンピュータには Dazzi を別途更新する定期タスクが既にあります（{{list}}）。同じフォルダを二重に処理しないよう、片方だけを使うことをおすすめします。",
       "scheduleActive": "アプリを閉じていても {{minutes}}分ごとに確認し、間隔が来た項目だけを更新します。",
       "scheduleLastCheck": "最終確認 {{ago}}。",
-      "scheduleNever": "まだ実行されたことがありません。"
+      "scheduleNever": "まだ実行されたことがありません。",
+      "schedulePausedBattery": "電源接続を待っています。インデックスのスケジュールは電源接続中のみ許可しています（{{ago}}に保留）。",
+      "schedulePausedWindow": "許可された時間帯を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。",
+      "schedulePausedDay": "許可された曜日を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。"
     },
     "apps": {
       "title": "接続済みアプリ",
@@ -2958,6 +2988,7 @@
     "reduceDone": "サイズ削減完了 · {{name}}",
     "reduceFailed": "サイズ削減に失敗 · {{name}}",
     "reduceOpen": "サイズ削減の状態を表示",
+    "compressOpen": "圧縮を中止",
     "convertRunning": "変換中 · {{name}}",
     "convertQueued": "変換を待機中 · {{name}}",
     "convertDone": "変換完了 · {{name}}",

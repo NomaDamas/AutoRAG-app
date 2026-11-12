@@ -37,6 +37,7 @@ import {
 	type QuickLookLoad,
 	type QuickLookOffice,
 	type QuickLookSlides,
+	type QuickLookDecoded,
 	type QuickLookThumbnail,
 	type QuickLookReady,
 	type QuickLookTarget,
@@ -396,7 +397,10 @@ async function readDocument(path: string): Promise<PreviewDocument> {
 			return readPreviewFile(path, PREVIEW_BYTE_CAP, true);
 		case "decode":
 			if (kind === "raster") return readRasterPreview(path);
-			return kind === "tiff" ? readTiffPreview(path) : readHeicPreview(path);
+			// The OS decode of a TIFF takes from 0.1s to several seconds: the panel opens at once and the
+			// picture follows on the `decoded` channel (see decodeInBackground).
+			if (kind === "tiff") return { ...(await readPreviewFile(path, 0)), decoding: true };
+			return readHeicPreview(path);
 		case "extract": {
 			if (viewerForExtension(extname(path).slice(1)) === "odg") {
 				const document = await readPreviewFile(path, 0);
@@ -520,6 +524,23 @@ async function withNativeThumbnail(state: Session, seq: number, content: TargetC
 	return { ...content, document: { ...document, thumbnail } };
 }
 
+/**
+ * Decodes the picture of a document opened with `decoding: true` and hands it to the panel. A file
+ * that cannot be read arrives as `bytes: null`, which the viewer answers with its "couldn't read" note.
+ */
+async function decodeInBackground(state: Session, seq: number, path: string): Promise<void> {
+	let update: QuickLookDecoded;
+	try {
+		const document = await readTiffPreview(path);
+		update = { seq, mime: document.mime, truncated: document.truncated, bytes: document.bytes };
+	} catch (error) {
+		console.warn(`quick-look: TIFF preview for ${path} failed: ${error instanceof Error ? error.message : String(error)}`);
+		update = { seq, mime: "image/tiff", truncated: false, bytes: null };
+	}
+	if (seq !== state.seq || !live(state.window)) return;
+	state.window.webContents.send(PREVIEW_CHANNELS.decoded, update);
+}
+
 async function show(state: Session, target: QuickLookTarget, origin: Bounds | null): Promise<void> {
 	state.seq += 1;
 	state.typing = false;
@@ -544,6 +565,7 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	const load: QuickLookLoad = { seq, name: target.name, path: target.path, ...content, app: known, anchor: target.anchor ?? null };
 	state.window.setTitle(target.name);
 	state.window.webContents.send(PREVIEW_CHANNELS.load, load);
+	if (content.document?.decoding === true) void decodeInBackground(state, seq, target.path);
 	if (known === null && !launched && content.error === null) {
 		void state.defaultApps.resolve(target.path, folder).then((name) => {
 			if (seq !== state.seq || !live(state.window)) return;

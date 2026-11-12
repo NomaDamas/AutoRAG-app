@@ -8,10 +8,12 @@
  */
 
 import { existsSync } from "node:fs";
+import { basename } from "node:path";
 import { AutoRAGLite, type RetrievalDiagnostic, type RetrievalOptions, type RetrievalResult, type RetrievalSelection, type RetrievalUnsearchedSurface } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { CONTENT_SEARCH_MAX_HITS, type ContentHit, type ContentSearchOutcome } from "../shared/content-search-contract";
 import { readAppIndexing } from "./app-indexing";
+import { createDefaultSearchRelevanceGate, matchesQueryLexicallyOrApprox, type SearchRelevanceGate } from "./search-relevance-gate";
 
 /** The slice of `AutoRAGLite` a content search drives. */
 export interface ContentSearchRuntime {
@@ -27,6 +29,8 @@ export interface ContentSearchDeps {
 	readonly loadConfig: () => Promise<{ readonly raw: Record<string, unknown>; readonly key: string }>;
 	/** Builds the runtime for the current config; called again only after the key changed. */
 	readonly open: (raw: Record<string, unknown>) => ContentSearchRuntime;
+	/** Optional relevance filter (exact/edit-distance pass-through + Jev `noul >= 0.5` gate). */
+	readonly relevanceGate?: SearchRelevanceGate;
 }
 
 export interface ContentSearch {
@@ -71,14 +75,38 @@ export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
 			if (cached?.key !== key) cached = { key, runtime: deps.open(raw) };
 			const answer = await cached.runtime.searchSelected(text, LOCAL_HYBRID, { topK: limit * CHUNKS_PER_HIT, ...(signal === undefined ? {} : { signal }) });
 			if (answer.results.length === 0 && answer.unsearched.some((surface) => surface.surface === LOCAL_SURFACE)) return { state: "unavailable", hits: [] };
-			const byFile = new Map<string, ContentHit>();
+			const byFile = new Map<string, { chunk: RetrievalResult; lexical: boolean }>();
 			for (const result of [...answer.results].sort((a, b) => b.score - a.score)) {
-				if (byFile.size >= limit) break;
-				if (byFile.has(result.source)) continue;
-				byFile.set(result.source, { path: result.source, snippet: contentSnippet(result.content, text), line: lineOf(result), score: result.score });
+				const lexical = matchesQueryLexicallyOrApprox(text, `${basename(result.source)}\n${result.content}`);
+				const existing = byFile.get(result.source);
+				if (existing === undefined) {
+					if (byFile.size >= limit) continue;
+					byFile.set(result.source, { chunk: result, lexical });
+				} else if (!existing.lexical && lexical) {
+					byFile.set(result.source, { chunk: result, lexical: true });
+				}
 			}
-			return { state: "ok", hits: [...byFile.values()] };
+			const candidates = [...byFile.values()].map(({ chunk }) => ({
+				id: chunk.source,
+				sourceLabel: "local-document",
+				title: basename(chunk.source),
+				subtitle: null,
+				content: chunk.content,
+				hit: { path: chunk.source, snippet: contentSnippet(chunk.content, text), line: lineOf(chunk), score: chunk.score } satisfies ContentHit,
+			}));
+			const filtered = deps.relevanceGate === undefined ? candidates : await deps.relevanceGate.filter(text, candidates, signal);
+			return { state: "ok", hits: filtered.map((entry) => entry.hit) };
 		},
+	};
+}
+
+/** The raw shared AutoRAG config and a key that changes whenever it does. */
+export function sharedConfigLoader(env: NodeJS.ProcessEnv, cwd: string): ContentSearchDeps["loadConfig"] {
+	const input = { flags: {}, env, cwd };
+	return async () => {
+		const configPath = resolveConfigPath(input).configPath;
+		const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
+		return { raw, key: `${configPath}\n${JSON.stringify(raw)}` };
 	};
 }
 
@@ -86,14 +114,14 @@ export function createContentSearch(deps: ContentSearchDeps): ContentSearch {
  * The real search over the one shared AutoRAG config. Datasources are dropped from the runtime's config, so building it
  * constructs no datasource skill; the app's code-folder exclusions only change what a refresh writes, never a query.
  */
-export function createDefaultContentSearch(env: NodeJS.ProcessEnv, cwd: string): ContentSearch {
-	const input = { flags: {}, env, cwd };
+export function createDefaultContentSearch(
+	env: NodeJS.ProcessEnv,
+	cwd: string,
+	relevanceGate: SearchRelevanceGate = createDefaultSearchRelevanceGate(env, cwd),
+): ContentSearch {
 	return createContentSearch({
-		loadConfig: async () => {
-			const configPath = resolveConfigPath(input).configPath;
-			const raw = existsSync(configPath) ? readRawConfigObject(configPath) : {};
-			return { raw, key: `${configPath}\n${JSON.stringify(raw)}` };
-		},
-		open: () => new AutoRAGLite({ ...resolveConfigReadOnly(input), datasources: {} }),
+		loadConfig: sharedConfigLoader(env, cwd),
+		open: () => new AutoRAGLite({ ...resolveConfigReadOnly({ flags: {}, env, cwd }), datasources: {} }),
+		relevanceGate,
 	});
 }

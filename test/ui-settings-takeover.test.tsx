@@ -76,7 +76,7 @@ async function renderView(props: ShellProps = {}): Promise<void> {
 const nav = (): HTMLElement => host.querySelector<HTMLElement>("aside.settings-sidebar") as HTMLElement;
 
 describe("Settings as a takeover of the window", () => {
-	it("has no title or back button at the sidebar's top; the back button is one row under the search, above the pages", async () => {
+	it("has no title or back button in the sidebar's head; the back button is the first row under it, above the search and the pages", async () => {
 		await renderView();
 		const head = nav().firstElementChild as HTMLElement;
 		expect(head.classList.contains("settings-sidebar-head")).toBe(true);
@@ -88,8 +88,8 @@ describe("Settings as a takeover of the window", () => {
 		const firstPage = nav().querySelector(".settings-nav-item:not(.settings-sidebar-back)") as Node;
 		expect(search).not.toBeNull();
 		expect(back).not.toBeNull();
-		expect(search.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-		expect(back.compareDocumentPosition(firstPage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(back.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(search.compareDocumentPosition(firstPage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(back.textContent?.trim()).toBe("Back");
 	});
 

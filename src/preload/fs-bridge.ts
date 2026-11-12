@@ -1,5 +1,6 @@
 import type { IpcRenderer } from "electron";
 import type { ContentSearchResult } from "../shared/content-search-contract";
+import type { SearchDatasource, SourceSearchOutcome } from "../shared/source-search-contract";
 import type { DirListing, FsBatchResult, FsBridge, FsClipboard, FsEntriesPatch, FsEntry, FsEntryEnrichment, FsFileDetails, FsFinderEnrichment, FsLocation, FsSearchResult, FsTagCatalog, FsUndoOutcome, FsVersionFamiliesResult } from "../shared/fs-contract";
 import { FS_CHANNELS } from "../shared/fs-contract";
 import type { FsWorkerOp } from "../shared/fs-worker-contract";
@@ -26,6 +27,8 @@ export function createFsBridge(ipcRenderer: IpcRenderer, worker: WorkerClient): 
 		exists: (path) => call<boolean>("exists", path),
 		search: (query, options) => call<readonly FsSearchResult[]>("search", query, options),
 		contentSearch: (query, limit) => call<ContentSearchResult>("contentSearch", query, limit),
+		searchDatasources: () => call<readonly SearchDatasource[]>("searchDatasources"),
+		sourceSearch: (datasourceId, query, limit) => call<SourceSearchOutcome>("sourceSearch", datasourceId, query, limit),
 		locations: () => call<readonly FsLocation[]>("locations"),
 		tags: () => call<FsTagCatalog>("tags"),
 		setTags: (paths, change) => call<FsBatchResult>("setTags", paths, change),

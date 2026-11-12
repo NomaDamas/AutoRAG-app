@@ -432,7 +432,15 @@ still has the previous file's size when they lay out.
   freezing. Measured in the built app on an M4 Max, a 21MB scan went from a
   median 3.8s to 0.26s (the old decoder ranged 0.4-7.3s run to run), and a
   35MB TIFF, past the old 32MB whole-file cap and never shown, opens in 0.27s.
-  `run-qa-quick-look-tiff.mjs` drives this on the production build.
+  The panel opens at once with its loading state (`decoding: true`, no bytes) and
+  the decode follows on the `preview:decoded` channel (`window.ts`
+  `decodeInBackground`). `sips` takes 0.1s to several seconds per file (measured
+  0.1-4.7s for the same 21MB-class scan run to run on a loaded machine), and it
+  runs twice (pixel size, then convert); waiting for it before the panel showed
+  made Space look dead. A file that cannot be decoded or read arrives as
+  `bytes: null` and gets the "Couldn’t read the image" note.
+  `run-qa-quick-look-tiff.mjs` drives this on the production build, including a
+  4s `sips` shim and an unreadable file.
 
 - **Camera RAW, Photoshop, EPS, icns, tga, exr, Sketch, Figma** (`raster` viewer,
   `byteNeed` `decode`; `node/raster.ts`) — the page gets one PNG or JPEG

@@ -162,4 +162,27 @@ describe("the progress tracker", () => {
 		const tracker = createIndexProgressTracker({ now: () => T0 });
 		expect(embedOf(tracker.poll(root, refresh())).counts).toEqual({ done: 1, skipped: 0, failed: 1, total: 4 });
 	});
+
+	it("never draws the bar further back within a run when MinSync's total grows with each synced batch (librarian 2.13.7)", () => {
+		const tracker = createIndexProgressTracker({ now: () => T0 });
+		const shown: number[] = [];
+		// Measured on a real run: one sync catches up (1,000 of 1,000), the next one starts at 1,000 of 1,500.
+		for (const minsync of [{ synced: 400, total: 1_000 }, { synced: 800, total: 1_000 }, { synced: 1_000, total: 1_500 }, { synced: 1_200, total: 1_500 }, { synced: 1_500, total: 1_500 }]) {
+			const snapshot = tracker.poll(root, refresh({ sourceTotal: 1_500, counts: { scanned: 1_500, written: 1_500, deleted: 0, skipped: 0 }, minsync }), { embedding: false });
+			if (snapshot === null) throw new Error("no snapshot");
+			shown.push(snapshot.fraction);
+		}
+		expect(shown.every((fraction, index) => index === 0 || fraction >= (shown[index - 1] ?? 0))).toBe(true);
+		// The counts stay what MinSync reports: only the whole-run bar is held.
+		const counts = tracker.poll(root, refresh({ sourceTotal: 1_500, counts: { scanned: 1_500, written: 1_500, deleted: 0, skipped: 0 }, minsync: { synced: 1_000, total: 1_500 } }), { embedding: false })?.stages.find((stage) => stage.id === "keyword")?.counts;
+		expect(counts).toEqual({ done: 1_000, skipped: 0, failed: 0, total: 1_500 });
+	});
+
+	it("lets a new run start from zero again", () => {
+		const tracker = createIndexProgressTracker({ now: () => T0 });
+		const late = tracker.poll(root, refresh({ minsync: { synced: 3, total: 4 } }));
+		const next = tracker.poll(root, refresh({ runId: "run-2", phase: "parsed", minsync: null, sourceTotal: 100, counts: { scanned: 1, written: 1, deleted: 0, skipped: 0 } }));
+		expect(late?.fraction).toBeGreaterThan(0.5);
+		expect(next?.fraction).toBeLessThan(0.1);
+	});
 });

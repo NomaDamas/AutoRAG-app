@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { RefreshScheduleStatus } from "../shared/settings-contract";
-import { readSchedulePlan, readScheduleState, schedulePaths, wakeIntervalMs } from "./refresh-schedule";
+import { hasIndexSchedule, readSchedulePlan, readScheduleState, schedulePaths, wakeIntervalMs } from "./refresh-schedule";
 
 export const LAUNCHD_LABEL = "com.autorag.app.refresh";
 export const WINDOWS_TASK_NAME = "AutoRAGAppRefresh";
@@ -284,7 +284,8 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 	};
 
 	const status = async (error: string | null = null): Promise<RefreshScheduleStatus> => {
-		const plan = readSchedulePlan(readRaw());
+		const raw = readRaw();
+		const plan = readSchedulePlan(raw);
 		const interval = wakeIntervalMs(plan);
 		const state = readScheduleState(schedulePaths(deps.configPath()).state);
 		let installed = false;
@@ -309,6 +310,8 @@ export function createRefreshScheduler(deps: RefreshSchedulerDeps): RefreshSched
 			lastTickAt: state.lastTickAt,
 			local: state.local,
 			sources: state.sources,
+			// A pause recorded under a schedule the user has since removed would describe a limit that no longer exists.
+			paused: hasIndexSchedule(raw) ? state.paused : null,
 			conflicts: otherJobs,
 			error: queryError,
 		};

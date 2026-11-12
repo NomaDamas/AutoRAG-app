@@ -86,10 +86,6 @@
     "descending": "Descending"
   },
   "sidebarSearch": {
-    "fileName": "File Name",
-    "content": "Content",
-    "fileNameHint": "Search file names across this {{machine}}",
-    "contentHint": "Search file contents with AI ({{shortcut}})",
     "placeholder": "Search…",
     "clearSearch": "Clear search"
   },
@@ -101,6 +97,23 @@
     "thisMac": "This Mac",
     "thisComputer": "This Computer",
     "itemsFound": "items found"
+  },
+  "wholeSearch": {
+    "groups": "Search result groups",
+    "files": "File Names",
+    "content": "Document Content",
+    "pending": "Searching…",
+    "contentOff": "Keyword-only mode has no document content index.",
+    "contentUnavailable": "The document index isn't ready yet.",
+    "contentError": "Couldn't search document content.",
+    "noContentHits": "No document content matches \"{{query}}\".",
+    "showInFolder": "Show in Folder",
+    "sourcePending": "Searching {{source}}…",
+    "sourceError": "Couldn't search {{source}}: {{error}}",
+    "noSourceHits": "Nothing in {{source}} matches \"{{query}}\".",
+    "openPage": "Open Page",
+    "askAi": "Ask AI Search",
+    "askAiHint": "Start an AI Search chat with this query"
   },
   "tabs": {
     "close": "Close tab ({{shortcut}})",
@@ -126,6 +139,7 @@
     },
     "pathBar": {
       "edit": "Go to path",
+      "more": "Hidden folders",
       "suggestions": "Path suggestions",
       "invalid": "Enter a path to go to",
       "notFound": "\"{{path}}\" can't be found"
@@ -763,6 +777,10 @@
     }
   },
   "confirm": {
+    "compressStopTitle": "Stop compressing?",
+    "compressStopMessage": "Compressing {{name}} stops and the partial archive is deleted.",
+    "compressStopAction": "Stop",
+    "compressKeep": "Keep Compressing",
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
     "emptyTrashAction": "Empty",
@@ -1017,7 +1035,6 @@
     "dragHint": "Drag the photo over"
   },
   "finderComponents": {
-    "searchRange": "Search scope",
     "sidebar": "Places",
     "pathBar": "Path",
     "inspectorAside": "Inspector",
@@ -1213,6 +1230,7 @@
       "animatedReduce": "Animated images aren’t supported: shrinking would drop the animation",
       "reduced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller)",
       "reduceCancelled": "Cancelled reducing {{name}}",
+      "compressCancelled": "Stopped compressing {{name}}",
       "reducedReplaced": "{{name}} — {{before}} → {{after}} ({{percent}}% smaller · original in Trash)"
     },
     "indexStatus": {
@@ -1284,6 +1302,7 @@
       "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
       "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
       "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh.",
+      "batchSkipped": "{{files}} file(s) stayed at their previous index entry because the sync that covered them failed. They will be tried again on the next refresh.",
       "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model.",
       "preflightMissingKey": "The embedder {{id}} needs an API key, but {{env}} is not set. Set it before indexing.",
       "preflightKeyEnvIgnored": "The embedder {{id}} sets apiKeyEnv to {{configured}}, but the indexer reads its key only from {{env}}, and {{env}} is not set. Put the key in {{env}}.",
@@ -2752,6 +2771,14 @@
       "empty": "No data sources connected. Add one from Connected Apps.",
       "footer": "Only changed files and messages are re-read. An app connected for the first time is fully fetched.",
       "syncAll": "Update all now",
+      "scheduleTitle": "Automatic refresh conditions",
+      "scheduleAcOnlyName": "Only while plugged in",
+      "scheduleAcOnlyHint": "Skip automatic refreshes on battery power. Refresh now always works.",
+      "scheduleWindowName": "Only during set hours",
+      "scheduleWindowHint": "Automatic refreshes wait until this time of day. They run on the first check after it starts.",
+      "scheduleWindowStart": "Start time",
+      "scheduleWindowEnd": "End time",
+      "scheduleWindowSame": "The start and end time are the same.",
       "localRefreshName": "Refresh local folders",
       "localRefreshHint": "Re-read documents in the search folders to update the search index. Only changed documents are processed.",
       "localRefreshButton": "Refresh now",
@@ -2763,7 +2790,10 @@
       "scheduleConflicts": "This computer already has a scheduled task that refreshes Dazzi separately ({{list}}). To avoid processing the same folders twice, we recommend using only one.",
       "scheduleActive": "Even when the app is closed, it checks every {{minutes}} min and refreshes only the items that are due.",
       "scheduleLastCheck": "Last checked {{ago}}.",
-      "scheduleNever": "It has never run yet."
+      "scheduleNever": "It has never run yet.",
+      "schedulePausedBattery": "Waiting for power: your indexing schedule allows it only while plugged in (held back {{ago}}).",
+      "schedulePausedWindow": "Waiting for the allowed hours: your indexing schedule held the refresh back {{ago}}.",
+      "schedulePausedDay": "Waiting for an allowed day: your indexing schedule held the refresh back {{ago}}."
     },
     "apps": {
       "title": "Connected apps",
@@ -2958,6 +2988,7 @@
     "reduceDone": "Size reduced · {{name}}",
     "reduceFailed": "Couldn’t reduce size · {{name}}",
     "reduceOpen": "Show Reduce Size status",
+    "compressOpen": "Stop compressing",
     "convertRunning": "Converting · {{name}}",
     "convertQueued": "Waiting to convert · {{name}}",
     "convertDone": "Converted · {{name}}",

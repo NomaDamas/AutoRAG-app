@@ -65,7 +65,7 @@ export function classifyIndexFailure({ diagnostics, error }: FailureInput): Inde
 }
 
 /** Codes whose `count` is a number of files the run left out. */
-const LEFT_OUT_CODES: Readonly<Record<string, true>> = { "files-left-out": true, "parse-killed": true };
+const LEFT_OUT_CODES: Readonly<Record<string, true>> = { "files-left-out": true, "parse-killed": true, "minsync-batch-skipped": true };
 
 /**
  * Files a finished run left out, from the app's own warnings. Each `minsync-file-skipped`

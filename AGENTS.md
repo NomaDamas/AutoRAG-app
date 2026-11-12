@@ -43,13 +43,19 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the
-app needs, a full commit SHA (now the tag v2.13.8: pipelined indexing, where the first committed batch starts a MinSync sync while parsing
-carries on, on MinSync 0.7.3 (a `minsync` older than 0.7.1 is refused); before it, v2.13.5 was the librarian on MinSync 0.6.0, where SPLADE sparse retrieval
-replaces BM25 and Kiwi is gone, `minSync.embedder.id: "none"` builds a sparse-only index the app uses for keyword-only mode; it also brings the required decision model (`jev` can no longer be `false`; it is Jev or the small chat model, `jev.backend: "sllm"` with `jev.sllm.model`, which the app's Jev role picker offers and `createDefaultAgentFactory` resolves; tests pass
-`test/baseline-jev.ts`), opt-in reranking, and the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings
-cards still show here as unsupported. v2.13.3 holds the Dazzi context-overflow retry to half the failed request; v2.13.2 is
-MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.8:
+`refresh.schedule` limits background indexing to AC power, local time windows, and weekdays (`checkIndexSchedule` from
+`@autorag/librarian/core` is the gate for a host with its own scheduler, such as the app's OS job); the agent's exact `calculator` tool; the
+record cut that spreads search hits across documents, on by default (`limits.recordCut`). v2.13.7:
+MinSync 0.7.1 or newer is required and a `minsync` older than that is refused, dupey 0.2.0 or newer is required, and the refresh syncs MinSync
+alongside parsing, so the progress screens show both stages running at once; a sync that fails leaves one warning per file, which the app
+folds into one counted `minsync-batch-skipped`. Beneath it: SPLADE sparse retrieval on MinSync 0.6.0, where `minSync.embedder.id: "none"` builds a
+sparse-only index the app uses for keyword-only mode; the required decision model (`jev` can no longer be `false`, `jev.enabled` and
+`jev.backend: "vercel"` are refused: it is Jev or the small chat model, `jev.backend: "sllm"` with `jev.sllm.model`, which the app's Jev role picker offers and
+`createDefaultAgentFactory` resolves, and `src/main/jev-migration.ts` rewrites the old values; tests pass `test/baseline-jev.ts`); opt-in
+reranking; the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings cards still show here as unsupported, and which
+the librarian now skips with a `retired-datasource-skill` warning. v2.13.3 holds the Dazzi context-overflow retry to half the failed
+request; v2.13.2 is MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first
 retrieval on top of v2.12.0's file-change approval gate with its `ask`/`auto`/`full` modes, the `ask_user` tool and
 `convert_files`, and 2.11.1's file automations, `@autorag/librarian/profiles` and the helper-agent factory). It is
 raised deliberately with the alignment changes a new librarian release needs. The staging directory holds only what the librarian

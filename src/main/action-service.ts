@@ -15,6 +15,7 @@
  */
 
 import { spawn } from "node:child_process";
+import type { Stats } from "node:fs";
 import { lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import { unzlibSync, zlibSync } from "fflate";
@@ -43,6 +44,7 @@ import {
 	type ActionOutcome,
 	type ActionProgressEvent,
 	type ActionRequest,
+	type CompressFormat,
 	type ImageFormat,
 	type OpenWithApplication,
 	type VideoContainer,
@@ -107,7 +109,7 @@ export interface ActionServiceDeps {
 export interface ActionService {
 	capabilities(): Promise<ActionCapabilities>;
 	run(paths: readonly string[], request: ActionRequest, window: BrowserWindow | null): Promise<ActionOutcome>;
-	/** Stop a running cancellable action (`reduceSize`) identified by `id`. */
+	/** Stop a running cancellable action (`reduceSize`, `compress`) identified by `id`. */
 	cancel(id: string): Promise<void>;
 	/** Applications the OS registers for `path`'s type, default first (macOS; empty elsewhere). */
 	openWithApplications(path: string): Promise<readonly OpenWithApplication[]>;
@@ -419,6 +421,8 @@ interface ArchiveMember {
 	/** Archive-relative path, always "/"-separated. */
 	readonly entry: string;
 	readonly directory: boolean;
+	/** Bytes by the walk's stat (0 for a directory): the progress total. */
+	readonly size: number;
 }
 
 /**
@@ -428,17 +432,18 @@ interface ArchiveMember {
  * Appending in place keeps a tree of any size off the call stack: spreading
  * ~125k entries into one `push(...)` call throws "Maximum call stack size exceeded".
  */
-async function addArchiveMembers(members: ArchiveMember[], root: string, isDirectory: boolean): Promise<void> {
+async function addArchiveMembers(members: ArchiveMember[], root: string, rootStat: Stats, signal: AbortSignal): Promise<void> {
 	// Entry names are written NFC: Windows, Linux and Finder-created files use the
 	// composed form, while a name copied from an NFD source (older macOS volumes,
 	// other archives) lists on Windows as separate jamo and cannot be matched.
 	const name = basename(root).normalize("NFC");
-	if (!isDirectory) {
-		members.push({ source: root, entry: name, directory: false });
+	if (!rootStat.isDirectory()) {
+		members.push({ source: root, entry: name, directory: false, size: rootStat.size });
 		return;
 	}
-	members.push({ source: root, entry: `${name}/`, directory: true });
+	members.push({ source: root, entry: `${name}/`, directory: true, size: 0 });
 	const walk = async (dir: string, prefix: string): Promise<void> => {
+		signal.throwIfAborted();
 		const dirents = await rawFs.promises.readdir(dir, { withFileTypes: true });
 		dirents.sort((a, b) => a.name.localeCompare(b.name));
 		for (const dirent of dirents) {
@@ -446,10 +451,10 @@ async function addArchiveMembers(members: ArchiveMember[], root: string, isDirec
 			const source = join(dir, dirent.name);
 			const entry = `${prefix}${dirent.name.normalize("NFC")}`;
 			if (dirent.isDirectory()) {
-				members.push({ source, entry: `${entry}/`, directory: true });
+				members.push({ source, entry: `${entry}/`, directory: true, size: 0 });
 				await walk(source, `${entry}/`);
 			} else if (dirent.isFile()) {
-				members.push({ source, entry, directory: false });
+				members.push({ source, entry, directory: false, size: (await rawFs.promises.lstat(source)).size });
 			}
 		}
 	};
@@ -1199,6 +1204,45 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 	}
 
 	/**
+	 * Write `paths` into one archive next to the first. Finder's rule: named after
+	 * the sole target, or "Archive" when the selection spans several. With an
+	 * `id`, progress (by bytes compressed) goes out through `onProgress` and
+	 * `cancel(id)` stops the write and removes the partial archive.
+	 */
+	async function compress(paths: readonly string[], format: CompressFormat, id: string | undefined, window: BrowserWindow | null): Promise<ActionOutcome> {
+		const first = paths[0] as string;
+		const stem = paths.length === 1 ? basename(first) : "Archive";
+		const target = await uniqueChild(dirname(first), `${stem}.${format}`);
+		const controller = new AbortController();
+		if (id !== undefined) running.set(id, controller);
+		const { signal } = controller;
+		try {
+			const members: ArchiveMember[] = [];
+			for (const path of paths) await addArchiveMembers(members, path, await rawFs.promises.lstat(path), signal);
+			let total = 0;
+			for (const member of members) total += member.size;
+			let done = 0;
+			let reported = -1;
+			const onBytes = (bytes: number): void => {
+				done += bytes;
+				// One event per whole percent: a tree of 170k files must not flood IPC.
+				const percent = total === 0 ? 0 : Math.min(99, Math.floor((done / total) * 100));
+				if (percent === reported || id === undefined) return;
+				reported = percent;
+				deps.onProgress?.({ id, percent }, window);
+			};
+			const options = { signal, onBytes };
+			await (format === "7z" ? writeSevenZip(target, members, options) : writeZip(target, members, options));
+			return { output: target, note: t("main.action.compressed", { name: basename(target) }) };
+		} catch (error) {
+			if (signal.aborted) throw new Error(t("main.action.compressCancelled", { name: basename(target) }));
+			throw error;
+		} finally {
+			if (id !== undefined) running.delete(id);
+		}
+	}
+
+	/**
 	 * The registered handlers for `path`, default first, each application once.
 	 * Only macOS exposes this; a failed lookup degrades to "no suggestions" so
 	 * the chooser stays reachable.
@@ -1328,20 +1372,8 @@ export function createActionService(deps: ActionServiceDeps): ActionService {
 								: t("main.action.openedWithCount", { count: paths.length, app: applicationName(application) }),
 					};
 				}
-				case "compress": {
-					// Finder's rule: one archive per Compress — named after the sole
-					// target, or "Archive" when the selection spans several.
-					const format = request.format ?? "zip";
-					const stem = paths.length === 1 ? basename(first) : "Archive";
-					const target = await uniqueChild(dirname(first), `${stem}.${format}`);
-					const members: ArchiveMember[] = [];
-					for (const path of paths) {
-						const stat = await rawFs.promises.lstat(path);
-						await addArchiveMembers(members, path, stat.isDirectory());
-					}
-					await (format === "7z" ? writeSevenZip(target, members) : writeZip(target, members));
-					return { output: target, note: t("main.action.compressed", { name: basename(target) }) };
-				}
+				case "compress":
+					return compress(paths, request.format ?? "zip", request.id, window);
 				case "extract": {
 					const output = await extractArchive(sole());
 					return { output, note: t("main.action.extracted", { name: basename(output) }) };

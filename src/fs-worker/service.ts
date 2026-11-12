@@ -13,6 +13,7 @@ import { join } from "node:path";
 import { Worker } from "node:worker_threads";
 import type { FsClipboard, FsEnrichmentTarget, FsSearchOptions, FsTagChange } from "../shared/fs-contract";
 import { CONTENT_SEARCH_MAX_HITS, type ContentSearchResult } from "../shared/content-search-contract";
+import { SOURCE_SEARCH_MAX_HITS } from "../shared/source-search-contract";
 import type { FsWorkerConfig, FsWorkerOp } from "../shared/fs-worker-contract";
 import { setAppLanguage, t } from "../shared/i18n/core";
 import { isAppLanguage } from "../shared/language-contract";
@@ -22,8 +23,9 @@ import { isNewFileFormatId } from "../shared/new-file-contract";
 import { createChangeHub, type ChangeHub } from "../main/change-hub";
 import { createDupeyLayer } from "../main/dupey-layer";
 import type { ContentSearch } from "../main/content-search";
+import type { SourceSearch } from "../main/source-search";
 import type { IconProvider } from "../main/file-icon";
-import type { FileNameSearchBackend } from "../main/file-name-search";
+import { createFileNameSearch, type FileNameSearchBackend } from "../main/file-name-search";
 import { buildFsEntry } from "../main/fs-entry";
 import { createFsService, type FsOsClipboard, type FsShell } from "../main/fs-service";
 import { createFsWatchService } from "../main/fs-watch-service";
@@ -63,6 +65,8 @@ export interface FsWorkerServiceDeps {
 	readonly fileNameSearch?: FileNameSearchBackend;
 	/** Defaults to the local document index in the librarian thread; tests inject a stub. */
 	readonly contentSearch?: ContentSearch;
+	/** Defaults to the datasource search in the librarian thread; tests inject a stub. */
+	readonly sourceSearch?: SourceSearch;
 	/** Defaults to the AutoRAG index status in the librarian thread; tests inject a stub. */
 	readonly indexStatus?: IndexStatusService;
 	/** Defaults to the OS places; tests inject a fixture. */
@@ -167,25 +171,33 @@ function tagChangeArg(value: unknown): FsTagChange {
 
 export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerService {
 	const { config, host } = deps;
-	// Everything that needs `@autorag/librarian` runs in a thread of its own: loading it takes ~2 s of event loop.
-	const librarian: LibrarianClient = createLibrarianClient({
-		spawn: deps.librarianThread ?? (() => spawnLibrarianThread(config.userDataDir)),
+	const spawnThread = deps.librarianThread ?? (() => spawnLibrarianThread(config.userDataDir));
+	const librarianDeps = {
+		spawn: spawnThread,
 		locations: () => fsService.locations(),
-		onIndexRefreshed: (error) => deps.broadcast(FS_WORKER_PUSH.indexRefreshed, error),
-		onReport: (report) => reportError(report),
-	});
+		onIndexRefreshed: (error: string | null) => deps.broadcast(FS_WORKER_PUSH.indexRefreshed, error),
+		onReport: (report: Parameters<typeof reportError>[0]) => reportError(report),
+	};
+	// Everything that needs `@autorag/librarian` runs in a thread of its own: loading it takes ~2 s of event loop.
+	// Content and datasource searches get a second lazy thread so synchronous AutoRAGLite / SQLite sidecar work can
+	// never stall file-name search, index badges, or dupey scans.
+	const librarian: LibrarianClient = createLibrarianClient(librarianDeps);
+	const searchLibrarian: LibrarianClient = createLibrarianClient(librarianDeps);
 	const places =
 		deps.places ??
 		createPlaces({
 			...(config.homeDir === undefined ? {} : { homeDir: config.homeDir }),
 			...(process.platform === "win32" && config.knownFolders !== undefined ? { knownFolders: config.knownFolders } : {}),
 		});
-	// Filename search rides the platform index (fsearch / Everything); the
-	// disk walk stays as the fallback when no index answers.
-	const fileNameSearch =
-		deps.fileNameSearch ?? librarian.fileNameSearch;
-	const contentSearch = deps.contentSearch ?? librarian.contentSearch;
-	/** Index hits as rows: a file that left the disk since it was indexed is dropped, the rest keep the index's order. */
+	// On macOS/Linux `fsearch-cli` needs nothing from `@autorag/librarian`, so running it straight in the worker avoids
+	// both the librarian cold-load at startup and any thread hop; Windows Everything stays on `librarian`.
+	const directFileNameSearch =
+		deps.fileNameSearch === undefined && process.platform !== "win32"
+			? createFileNameSearch({ userDataDir: config.userDataDir, locations: () => fsService.locations() })
+			: undefined;
+	const fileNameSearch = deps.fileNameSearch ?? directFileNameSearch ?? librarian.fileNameSearch;
+	const contentSearch = deps.contentSearch ?? searchLibrarian.contentSearch;
+	const sourceSearch = deps.sourceSearch ?? searchLibrarian.sourceSearch;
 	async function searchContent(query: string, limit: number, signal: AbortSignal): Promise<ContentSearchResult> {
 		const outcome = await contentSearch.search(query, limit, signal);
 		const rows = await Promise.all(
@@ -272,6 +284,14 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 		search: (args, signal) => fsService.search(stringArg(args, 0, "query"), searchOptionsArg(args[1]), signal),
 		contentSearch: (args, signal) =>
 			searchContent(stringArg(args, 0, "query"), typeof args[1] === "number" && Number.isInteger(args[1]) && args[1] > 0 ? Math.min(args[1], CONTENT_SEARCH_MAX_HITS) : CONTENT_SEARCH_MAX_HITS, signal),
+		searchDatasources: () => sourceSearch.datasources(),
+		sourceSearch: (args, signal) =>
+			sourceSearch.search(
+				stringArg(args, 0, "datasourceId"),
+				stringArg(args, 1, "query"),
+				typeof args[2] === "number" && Number.isInteger(args[2]) && args[2] > 0 ? Math.min(args[2], SOURCE_SEARCH_MAX_HITS) : SOURCE_SEARCH_MAX_HITS,
+				signal,
+			),
 		uploadFile: (args) => {
 			const data = args[2];
 			if (!(data instanceof Uint8Array)) throw new TypeError("uploadFile expects bytes");
@@ -338,7 +358,7 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			if (!isAppLanguage(args[0])) throw new TypeError("language must be ko, en, ja, or zh");
 			await setAppLanguage(args[0]);
 			// Chosen only once a thread exists; a thread started later is told on its first call.
-			await librarian.setLanguage(args[0]);
+			await Promise.all([librarian.setLanguage(args[0]), searchLibrarian.setLanguage(args[0])]);
 		},
 		indexStatus: (args) => indexStatus.indexStatus(stringsArg(args, 0, "paths")),
 		setIndexExcluded: (args) => {
@@ -390,9 +410,10 @@ export function createFsWorkerService(deps: FsWorkerServiceDeps): FsWorkerServic
 			// `stop()` reports its own failures, so it cannot block the watch release.
 			await Promise.all([
 				watch.dispose(),
-				// An injected index (a test's) stops itself; the real one stops inside the thread's shutdown below.
-				deps.fileNameSearch?.stop() ?? Promise.resolve(),
+				// A direct or test-injected index stops itself; the Windows one stops inside `librarian`'s shutdown below.
+				(deps.fileNameSearch ?? directFileNameSearch)?.stop() ?? Promise.resolve(),
 				librarian.dispose(),
+				searchLibrarian.dispose(),
 				fsService.disposeEvidenceFolders?.() ?? Promise.resolve(),
 			]);
 		},

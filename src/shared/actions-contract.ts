@@ -45,7 +45,12 @@ const COMPRESS_FORMATS: readonly string[] = ["zip", "7z"];
  */
 export type ActionRequest =
 	| { readonly kind: "openWith"; readonly application: string | null }
-	| { readonly kind: "compress"; readonly format?: CompressFormat }
+	| {
+			readonly kind: "compress";
+			readonly format?: CompressFormat;
+			/** Names the run for `onProgress` and `cancel`. */
+			readonly id?: string;
+	  }
 	| { readonly kind: "extract" }
 	| { readonly kind: "convertImage"; readonly format: ImageFormat }
 	| { readonly kind: "resizeImage"; readonly maxEdge: number }
@@ -146,8 +151,11 @@ export function isActionRequest(value: unknown): value is ActionRequest {
 				"application" in value &&
 				(value.application === null || (typeof value.application === "string" && value.application.length > 0))
 			);
-		case "compress":
-			return !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
+		case "compress": {
+			const validId = !("id" in value) || (typeof value.id === "string" && value.id.length > 0);
+			const validFormat = !("format" in value) || (typeof value.format === "string" && COMPRESS_FORMATS.includes(value.format));
+			return validId && validFormat;
+		}
 		case "extract":
 			return true;
 		case "reduceSize": {

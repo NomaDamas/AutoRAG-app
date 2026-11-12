@@ -18,7 +18,7 @@ export function IndexProgressDetail({ detail }: { readonly detail: IndexProgress
 		<div className="settings-activity-detail" data-testid="index-progress-detail">
 			<ol className="settings-activity-stages" aria-label={view.stageName ?? undefined}>
 				{view.stages.map((stage) => (
-					<li key={stage.id} className="settings-list-meta" data-state={stage.state} aria-current={stage.state === "running" ? "step" : undefined}>
+					<li key={stage.id} className="settings-list-meta" data-state={stage.state} aria-current={stage.current && stage.state === "running" ? "step" : undefined}>
 						{stage.label}
 					</li>
 				))}

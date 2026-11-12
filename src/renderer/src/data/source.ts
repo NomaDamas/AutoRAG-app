@@ -32,12 +32,21 @@ import {
 import { type FinderEntry, entryFromFixture, entryFromFs, entryFromSearchHit, hasFileVersion } from "./entries";
 import { FIXTURE_FAMILIES, FIXTURE_INITIAL_PATH, FIXTURE_TREE } from "./fixtures";
 import type { FixtureItem } from "./entries";
+import type { ContentSearchState } from "../../../shared/content-search-contract";
+import type { SearchDatasource, SourceSearchOutcome } from "../../../shared/source-search-contract";
+import type { ContentRowInput } from "../state/launcher";
 
 /** A sidebar location; the shared contract shape, unchanged across the boundary. */
 export type FinderLocation = FsLocation;
 
 export interface SearchHits {
 	readonly entries: readonly FinderEntry[];
+}
+
+/** The local document index's answer to a whole search: one row per file, best first. */
+export interface ContentHits {
+	readonly state: ContentSearchState;
+	readonly hits: readonly ContentRowInput[];
 }
 
 /**
@@ -96,6 +105,12 @@ export interface FinderSource {
 		paths: readonly string[],
 	): Promise<{ readonly entries: readonly FinderEntry[]; readonly removed: readonly string[] }>;
 	search(query: string, options?: FsSearchOptions): Promise<readonly FinderEntry[]>;
+	/** Files whose text matches `query` in the local document index (no model runs). */
+	contentSearch(query: string): Promise<ContentHits>;
+	/** The connected datasources a whole search asks. */
+	searchDatasources(): Promise<readonly SearchDatasource[]>;
+	/** One datasource's messages, mails, or pages that match `query`. */
+	sourceSearch(datasourceId: string, query: string): Promise<SourceSearchOutcome>;
 	locations(): Promise<readonly FinderLocation[]>;
 	/** Finder's tag registry; `supported` is false off macOS and in fixtures. */
 	tags(): Promise<FsTagCatalog>;
@@ -228,6 +243,12 @@ export function createBridgeSource(
 			const hits = await fs.search(query, options);
 			return hits.map(entryFromSearchHit);
 		},
+		async contentSearch(query) {
+			const outcome = await fs.contentSearch(query);
+			return { state: outcome.state, hits: outcome.hits.map((hit) => ({ entry: entryFromFs(hit.entry), snippet: hit.snippet, line: hit.line, score: hit.score })) };
+		},
+		searchDatasources: () => fs.searchDatasources(),
+		sourceSearch: (datasourceId, query) => fs.sourceSearch(datasourceId, query),
 		locations: () => fs.locations(),
 		tags: () => fs.tags(),
 		setTags: (paths, change) => fs.setTags(paths, change),
@@ -521,6 +542,10 @@ export function createFixtureSource(): FinderSource {
 			}
 			return Promise.resolve(hits);
 		},
+		// The fixture has no document index and no connected datasource.
+		contentSearch: () => Promise.resolve({ state: "unavailable", hits: [] }),
+		searchDatasources: () => Promise.resolve([]),
+		sourceSearch: () => Promise.resolve({ state: "ok", hits: [], error: null }),
 		tags: () => Promise.resolve({ supported: false, tags: [], colorNames: [], colorsDenied: false }),
 		setTags: (paths) => Promise.resolve({ ok: [], failed: paths.map((path) => ({ path, message: t("finderState.source.tagsUnavailable") })) }),
 		locations: () =>

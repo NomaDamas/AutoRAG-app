@@ -138,7 +138,8 @@ export function SidebarActivityStack({ entries }: { readonly entries: readonly S
 					className="mx-6 h-3 rounded-t-6 border border-b-0 border-border bg-hover transition-opacity duration-(--dur-color)"
 				/>
 			) : null}
-			<ActivityCard entry={primary} extraCount={extra.length} />
+			{/* Keyed so a new task's bar starts at its own percent instead of draining from the last task's 100%. */}
+			<ActivityCard key={primary.id} entry={primary} extraCount={extra.length} />
 		</div>
 	);
 }

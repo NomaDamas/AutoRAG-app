@@ -20,6 +20,7 @@ import {
 	openEvidenceFolderTab,
 	openTab,
 	openTabAt,
+	openTabRevealing,
 	openOrSelectFolderTab,
 	openOrSelectSettingsTab,
 	selectTab,
@@ -76,6 +77,22 @@ describe("tab model", () => {
 		expect(activeTab(state).path).toBe("Documents/Finance");
 		expect(activeTab(state).back).toEqual([]);
 		expect(state.tabs[0]?.path).toBe("Recents");
+	});
+
+	it("opens a new tab on the enclosing folder with the revealed entry selected, leaving the search tab intact", () => {
+		const initial = navigateTab(createTabsState("Recents"), "/Users/me/Documents");
+		const state = openTabRevealing(initial, "/Users/me/Downloads/Project", "/Users/me/Downloads/Project/notes.md");
+		expect(state.tabs).toHaveLength(2);
+		expect(state.tabs[0]).toEqual(initial.tabs[0]);
+		expect(activeTab(state)).toMatchObject({
+			path: "/Users/me/Downloads/Project",
+			back: [],
+			selection: {
+				keys: ["/Users/me/Downloads/Project/notes.md"],
+				anchor: "/Users/me/Downloads/Project/notes.md",
+				focus: "/Users/me/Downloads/Project/notes.md",
+			},
+		});
 	});
 
 	it("blocks closing the last tab", () => {

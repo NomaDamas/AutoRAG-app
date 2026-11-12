@@ -12,6 +12,7 @@ import { formatShortcutChord } from "../../../shared/shortcuts-contract";
 import { SearchIcon, SparklesIcon } from "../components/icons";
 import { EntryTile } from "../components/primitives/EntryTile";
 import { entryFromFs, type FinderEntry } from "../data/entries";
+import { markTerms } from "../lib/mark-terms";
 import {
 	actionsFor,
 	buildLauncherRows,
@@ -43,14 +44,6 @@ function rowIconRect(list: HTMLElement | null, index: number): { x: number; y: n
 	if (icon === null || icon === undefined) return null;
 	const box = icon.getBoundingClientRect();
 	return box.width > 0 && box.height > 0 ? { x: box.x, y: box.y, width: box.width, height: box.height } : null;
-}
-
-/** The passage with every query term marked, for the snippet line. */
-function markTerms(snippet: string, query: string): ReactElement[] {
-	const terms = query.trim().split(/\s+/u).filter((term) => term.length > 1).map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-	if (terms.length === 0) return [<span key="0">{snippet}</span>];
-	const pattern = new RegExp(`(${terms.join("|")})`, "giu");
-	return snippet.split(pattern).map((part, index) => (index % 2 === 1 ? <mark key={index}>{part}</mark> : <span key={index}>{part}</span>));
 }
 
 export function QuickSearch({ bridge }: { readonly bridge: QuickSearchBridge }): ReactElement {

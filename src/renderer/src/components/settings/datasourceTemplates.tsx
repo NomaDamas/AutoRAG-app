@@ -449,6 +449,17 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 
 export const TEMPLATE_BY_ID: Readonly<Record<string, TemplateMeta>> = Object.fromEntries(TEMPLATES.map((template) => [template.id, template]));
 
+/** The template's product name ("Slack"); the bare type when no template carries it. */
+export function templateLabel(type: string): string {
+	return TEMPLATE_BY_ID[type]?.label ?? type;
+}
+
+/** The connection's kind ("Slack"); the alias only joins it when it tells two connections of one kind apart. */
+export function sourceTitle(row: { readonly id: string; readonly type: string }): string {
+	const label = templateLabel(row.type);
+	return row.id === row.type ? label : `${label} · ${row.id}`;
+}
+
 /* -------------------------------------------------------- shared constants -- */
 
 /** Redaction sentinel the main process substitutes for persisted secrets. */

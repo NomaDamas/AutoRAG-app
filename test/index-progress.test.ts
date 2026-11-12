@@ -228,6 +228,77 @@ describe("stages", () => {
 		const { snapshot } = computeIndexProgress(embedInput({ phase: "finalizing", journal: journal({ committed: 29_595 }), minsync: { synced: 29_595, total: 29_595 } }));
 		expect(snapshot.fraction).toBeLessThan(0.95);
 	});
+
+	describe("several MinSync syncs per refresh (librarian 2.13.7)", () => {
+		// Measured on a real run: the journal holds only the sync in flight (249 files) while MinSync's own count is cumulative (689 of 1,051).
+		const midRun = (overrides: Partial<IndexProgressInput> = {}): IndexProgressInput =>
+			embedInput({ embedding: false, sourceTotal: 1_500, parsed: { scanned: 1_499, written: 1_499, deleted: 0, skipped: 0 }, minsync: { synced: 689, total: 1_051 }, journal: journal({ committed: 249, bytesDone: 94_704 }), embedBytesTotal: 398_902, ...overrides });
+
+		it("fills MinSync's stage by file counts when the journal covers fewer files than MinSync has counted, so the bar does not drop at the handover", () => {
+			const handedOver = computeIndexProgress(midRun()).snapshot;
+			const keyword = stage(handedOver, "keyword");
+			expect(keyword.counts).toEqual({ done: 689, skipped: 0, failed: 0, total: 1_051 });
+			expect(keyword.bytes).toBeNull();
+			expect(keyword.fraction).toBeCloseTo(689 / 1_051, 6);
+			const parsing = computeIndexProgress(midRun({ phase: "parsed", parsed: { scanned: 1_400, written: 1_400, deleted: 0, skipped: 0 } })).snapshot;
+			expect(handedOver.fraction).toBeGreaterThanOrEqual(parsing.fraction);
+		});
+
+		it("still fills it by bytes once the journal holds every file MinSync has counted", () => {
+			const { snapshot } = computeIndexProgress(midRun({ minsync: { synced: 249, total: 1_051 } }));
+			expect(stage(snapshot, "keyword").bytes).toEqual({ done: 94_704, total: 398_902 });
+			expect(stage(snapshot, "keyword").fraction).toBeCloseTo(94_704 / 398_902, 6);
+		});
+	});
+
+	describe("MinSync syncing alongside parsing (librarian 2.13.7)", () => {
+		const parsing = { scanned: 87, written: 87, deleted: 0, skipped: 0 };
+		const alongside = (overrides: Partial<IndexProgressInput> = {}): IndexProgressInput =>
+			embedInput({ phase: "parsed", sourceTotal: 120, parsed: parsing, minsync: { synced: 25, total: 83 }, ...overrides });
+
+		it("shows MinSync's stage running with its own counts while the read stage still runs, instead of pending with nothing", () => {
+			const { snapshot } = computeIndexProgress(alongside({ embedding: false }));
+			expect(snapshot.stage).toBe("parse");
+			expect(snapshot.stages.map((s) => [s.id, s.state])).toEqual([
+				["discover", "done"],
+				["parse", "running"],
+				["keyword", "running"],
+				["finalize", "pending"],
+			]);
+			expect(stage(snapshot, "parse").counts).toEqual({ done: 87, skipped: 0, failed: 0, total: 120 });
+			expect(stage(snapshot, "keyword").counts).toEqual({ done: 25, skipped: 0, failed: 0, total: 83 });
+		});
+
+		it("names the embedding stage the same way for a run that embeds", () => {
+			const { snapshot } = computeIndexProgress(alongside());
+			expect(snapshot.stages.map((s) => [s.id, s.state])).toEqual([
+				["discover", "done"],
+				["parse", "running"],
+				["embed", "running"],
+				["finalize", "pending"],
+			]);
+		});
+
+		it("keeps the bar on the read stage while it runs: MinSync's total grows with each committed batch, so a share of it would move backwards", () => {
+			const alone = computeIndexProgress(alongside({ minsync: null })).snapshot.fraction;
+			const caughtUp = computeIndexProgress(alongside({ minsync: { synced: 25, total: 25 } })).snapshot.fraction;
+			const grown = computeIndexProgress(alongside({ minsync: { synced: 25, total: 83 } })).snapshot.fraction;
+			expect(caughtUp).toBe(alone);
+			expect(grown).toBe(alone);
+		});
+
+		it("leaves MinSync's stage pending until it has reported anything", () => {
+			const { snapshot } = computeIndexProgress(alongside({ minsync: null }));
+			expect(snapshot.stages.map((s) => s.state)).toEqual(["done", "running", "pending", "pending"]);
+		});
+
+		it("goes on to MinSync's own stage when parsing ends, with the counts it already has", () => {
+			const { snapshot } = computeIndexProgress(alongside({ phase: "minsync", parsed: { scanned: 120, written: 120, deleted: 0, skipped: 0 }, minsync: { synced: 83, total: 120 } }));
+			expect(snapshot.stage).toBe("embed");
+			expect(snapshot.stages.map((s) => s.state)).toEqual(["done", "done", "running", "pending"]);
+			expect(stage(snapshot, "embed").counts).toEqual({ done: 83, skipped: 0, failed: 0, total: 120 });
+		});
+	});
 });
 
 describe("remaining time from the observed rate", () => {

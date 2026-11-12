@@ -2,6 +2,7 @@ import type { ContentSearchResult } from "./content-search-contract";
 import type { IndexStatus } from "./index-contract";
 import type { IndexMap } from "./index-map-contract";
 import type { NewFileFormatId } from "./new-file-contract";
+import type { SearchDatasource, SourceSearchOutcome } from "./source-search-contract";
 
 /**
  * Finder contract shared by the filesystem worker, the main process, and the
@@ -532,6 +533,10 @@ export interface FsIndexBridge {
 	onIndexRefreshed?(listener: (error: string | null) => void): () => void;
 	/** Files whose text matches `query` in the local document index, best first (no model runs). */
 	contentSearch(query: string, limit?: number): Promise<ContentSearchResult>;
+	/** The connected datasources a whole search asks, in config order. */
+	searchDatasources(): Promise<readonly SearchDatasource[]>;
+	/** Messages, mails, or pages of one datasource that match `query`, best first (no model runs). */
+	sourceSearch(datasourceId: string, query: string, limit?: number): Promise<SourceSearchOutcome>;
 }
 
 export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge, FsIndexBridge, FsDragBridge {}

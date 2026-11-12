@@ -194,7 +194,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
-  - *Local search ranks with SPLADE* (librarian on MinSync 0.7.3). MinSync replaced its BM25 index with
+  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0 or newer). MinSync replaced its BM25 index with
     learned-sparse retrieval (`nlpai-lab/KURE-Sparse-nano`), which matches Korean inflected forms
     (`인증서를` for `인증서`) with no tokenizer library, so Kiwi is gone. The installer carries the model and
     `bundled-sparse-model.ts` seeds it into MinSync's cache at startup. The first refresh after the upgrade
@@ -212,6 +212,17 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
+  - *Conditions* (설정 > 인덱싱 > 자동 최신화 조건): "전원 연결 시에만" and one daily time
+    window are stored as `refresh.schedule` (`power: "ac"`, `windows: ["22:00-07:00"]`, local time; a
+    start later than the end wraps midnight). The job asks the librarian's `checkIndexSchedule`
+    only once something is due; a closed schedule ends the wake-up with `paused: refresh.schedule (<reason>)`
+    in `job.log`, takes no lock, and records only `paused: { at, reason }` in `state.json` (no item is
+    marked done), so the same items run on the first wake after it opens, which clears the pause.
+    While the config still has a schedule, 인덱싱 > 최신화 상태 says why the job is waiting. A
+    malformed `refresh.schedule` is a config error like any other invalid field: the job exits 2 and
+    names the bad entry in `job.log`. The Settings buttons are never gated. The power
+    source is read with `pmset` (macOS), `Win32_Battery` (Windows) or `/sys/class/power_supply`
+    (Linux); an unreadable source counts as plugged in.
 - **Indexing progress** — a block above 설정 in the sidebar shows what is
   indexing right now, with a progress bar: the local folders and every
   datasource, whether the run came from a Settings button, the OS job, or an
@@ -228,6 +239,13 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   reports nothing while it runs, so the bar steps per finished item and is a
   shimmer while a lone datasource syncs. Per-file and per-source progress is
   requested upstream in Marker-Inc-Korea/AutoRAG#1840.
+  Since librarian 2.13.7 MinSync syncs alongside parsing: `refresh-progress.json` keeps `phase: "parsed"` while
+  `minsync.synced/total` already moves (measured on a real 120-file refresh: parsing at 65 of 120 with MinSync at 0 of 25, then 50 of 83),
+  and `minsync.total` grows with every committed batch. `computeIndexProgress` therefore shows MinSync's stage `running` with its own counts as soon
+  as it has reported, next to the still running read stage, while the bar and the remaining time stay with the read stage (a share of a
+  growing total would move the bar backwards); once parsing ends the bar moves on to MinSync's stage. A sync that fails leaves one
+  `minsync-sync-failed` warning per file it covered; `index-refresh.ts` folds them into one `minsync-batch-skipped` diagnostic with
+  `count`, which the banner counts as files left out (`skippedFileCount`) and the next refresh retries.
 - **연결된 앱** — all connections plus a gallery of the datasource templates
   (librarian v2.11.0 adds Hister browser history and Apple Calendar &
   Reminders); each configured connection gets its own page with enable,
@@ -745,8 +763,17 @@ role, in the shared `config.json` (the config carries an explicit
 |---|---|---|
 | answer `model` | nothing, or an AutoRAG model | any other provider's model |
 | `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
-| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you tuned (`confidenceThreshold`, …) |
 | `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
+
+The librarian requires a decision model and refuses `jev: false`, `jev.enabled`, and the backend name `vercel`
+(now `vercel-ai-gateway`). A config an earlier Dazzi wrote can still hold them, so `migrateLegacyJev`
+(`src/main/jev-migration.ts`) rewrites them at launch, on every Settings write (`config:patch` re-reads the file
+through it, so one stale field never blocks an unrelated edit), and before sign-in adopts the plan's roles:
+switched off (`false`, `enabled: false`) becomes `{ "backend": "sllm" }`, `enabled: true` is dropped, `vercel`
+becomes `vercel-ai-gateway`, and OpenRouter's `typesafe/jev-latest` becomes the catalog id `~typesafe/jev-latest`.
+`scripts/manual-qa/run-qa-live-jev-sllm.mjs` runs this live: a legacy config, a Settings edit over it, and a real
+question answered with the sLLM deciding.
 
 The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);
 a list that cannot be fetched leaves that role alone. Settings › 계정 › "계정

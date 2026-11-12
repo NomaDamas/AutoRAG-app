@@ -18,6 +18,7 @@ const bridge: QuickLookWindowBridge = {
 	onOffice: () => () => undefined,
 	onSlides: () => () => undefined,
 	onThumbnail: () => () => undefined,
+	onDecoded: () => () => undefined,
 	ready: () => undefined,
 	zoomed: () => undefined,
 	request: never,

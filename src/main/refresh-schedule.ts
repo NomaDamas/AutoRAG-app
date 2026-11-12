@@ -1,6 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { ConfigRefreshResult, DataSourceSyncResult, ScheduledRunRecord } from "../shared/settings-contract";
+import { checkIndexSchedule, type ScheduleDecision } from "@autorag/librarian/core";
+import type { ConfigRefreshResult, DataSourceSyncResult, ScheduledRunPause, ScheduledRunPauseReason, ScheduledRunRecord } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { i18n, t } from "../shared/i18n/core";
 import { LIVE_QUERY_TEMPLATES } from "./datasource-index-probe";
@@ -23,6 +24,8 @@ export interface ScheduleState {
 	readonly lastTickAt: string | null;
 	readonly local: ScheduledRunRecord | null;
 	readonly sources: Readonly<Record<string, ScheduledRunRecord>>;
+	/** The newest wake-up held due work back because of `refresh.schedule`; cleared by the next run. */
+	readonly paused: ScheduledRunPause | null;
 }
 
 export interface SchedulePaths {
@@ -71,7 +74,19 @@ export function wakeIntervalMs(plan: SchedulePlan): number | null {
 }
 
 export function emptyScheduleState(): ScheduleState {
-	return { version: 1, lastTickAt: null, local: null, sources: {} };
+	return { version: 1, lastTickAt: null, local: null, sources: {}, paused: null };
+}
+
+const PAUSE_REASONS: Readonly<Record<ScheduledRunPauseReason, true>> = { battery: true, "outside-window": true, "outside-day": true };
+
+function pauseRecord(value: unknown): ScheduledRunPause | null {
+	if (!isJsonObject(value) || typeof value.at !== "string" || typeof value.reason !== "string") return null;
+	return Object.hasOwn(PAUSE_REASONS, value.reason) ? { at: value.at, reason: value.reason as ScheduledRunPauseReason } : null;
+}
+
+/** The config limits when background indexing may run (`refresh.schedule`, librarian 2.13.8+). */
+export function hasIndexSchedule(raw: Record<string, unknown>): boolean {
+	return isJsonObject(raw.refresh) && raw.refresh.schedule !== undefined;
 }
 
 function runRecord(value: unknown): ScheduledRunRecord | null {
@@ -106,6 +121,7 @@ export function readScheduleState(path: string): ScheduleState {
 		lastTickAt: typeof parsed.lastTickAt === "string" ? parsed.lastTickAt : null,
 		local: runRecord(parsed.local),
 		sources,
+		paused: pauseRecord(parsed.paused),
 	};
 }
 
@@ -154,11 +170,14 @@ export interface ScheduledRunDeps {
 	readonly now?: () => number;
 	readonly log?: (message: string) => void;
 	readonly owner?: string;
+	/** The librarian's `refresh.schedule` gate; defaults to `checkIndexSchedule` (which probes the power source only for `power: "ac"`). */
+	readonly checkSchedule?: (raw: Record<string, unknown>, now: Date) => Promise<ScheduleDecision>;
 }
 
 export type ScheduledRunOutcome =
 	| { readonly kind: "ran"; readonly local: boolean; readonly sourceIds: readonly string[]; readonly failures: number }
 	| { readonly kind: "idle" }
+	| { readonly kind: "paused"; readonly reason: ScheduledRunPauseReason }
 	| { readonly kind: "locked"; readonly heldBy: RefreshLockHolder };
 
 function localDetail(result: ConfigRefreshResult): string {
@@ -188,10 +207,22 @@ function message(error: unknown): string {
 export async function runScheduledRefresh(deps: ScheduledRunDeps): Promise<ScheduledRunOutcome> {
 	const now = deps.now ?? Date.now;
 	const log = deps.log ?? (() => undefined);
-	const plan = readSchedulePlan(deps.readRaw());
+	const raw = deps.readRaw();
+	const plan = readSchedulePlan(raw);
 	const before = readScheduleState(deps.paths.state);
 	const due = dueItems(plan, before, now());
 	if (!due.local && due.sourceIds.length === 0) return { kind: "idle" };
+
+	// The OS job is a background refresh, so the librarian's `refresh.schedule` applies to it like to `autorag watch`.
+	// Asked only when something is due, so an idle wake-up never probes the power source.
+	const check = deps.checkSchedule ?? ((config, at) => checkIndexSchedule(config, { now: at }));
+	const decision = await check(raw, new Date(now()));
+	if (!decision.allowed) {
+		const at = new Date(now()).toISOString();
+		writeScheduleState(deps.paths.state, { ...before, lastTickAt: at, paused: { at, reason: decision.reason } });
+		log(`paused: refresh.schedule (${decision.reason})`);
+		return { kind: "paused", reason: decision.reason };
+	}
 
 	const lock = acquireRefreshLock(deps.paths.lock, { owner: deps.owner ?? "scheduled-job", now });
 	if (isLockHeld(lock)) {
@@ -208,7 +239,7 @@ export async function runScheduledRefresh(deps: ScheduledRunDeps): Promise<Sched
 	const planned: ActivityItemSeed[] = [...(due.local ? [LOCAL_ITEM] : []), ...due.sourceIds.map(sourceItem)];
 	journal.begin(planned);
 	try {
-		save({ ...state, lastTickAt: new Date(now()).toISOString() });
+		save({ ...state, lastTickAt: new Date(now()).toISOString(), paused: null });
 		if (due.local) {
 			journal.start(LOCAL_ITEM.key);
 			const startedAt = now();

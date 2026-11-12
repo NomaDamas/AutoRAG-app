@@ -540,6 +540,15 @@ export interface ScheduledRunRecord {
 	readonly detail: string | null;
 }
 
+/** Why the background job held due work back: `refresh.schedule` allows indexing only on AC power, in its time windows, or on its days. */
+export type ScheduledRunPauseReason = "battery" | "outside-window" | "outside-day";
+
+/** The newest wake-up that found work due but held it back because of `refresh.schedule`. */
+export interface ScheduledRunPause {
+	readonly at: string;
+	readonly reason: ScheduledRunPauseReason;
+}
+
 /**
  * The OS-level background job that refreshes the index on a schedule, derived
  * from the shared config (`appIndexing.refreshIntervalMs`, each datasource's
@@ -558,6 +567,8 @@ export interface RefreshScheduleStatus {
 	readonly lastTickAt: string | null;
 	readonly local: ScheduledRunRecord | null;
 	readonly sources: Readonly<Record<string, ScheduledRunRecord>>;
+	/** Set while `refresh.schedule` held the due work back at the newest wake-up; null once a wake-up ran it, or without a schedule. */
+	readonly paused: ScheduledRunPause | null;
 	/** Other scheduled jobs on this machine that also refresh AutoRAG (a hand-made cron line, another launch agent). */
 	readonly conflicts: readonly string[];
 	readonly error: string | null;

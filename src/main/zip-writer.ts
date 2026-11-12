@@ -22,7 +22,7 @@
 
 import { promisify } from "node:util";
 import { crc32, deflateRaw } from "node:zlib";
-import { CHUNK_BYTES, DEFLATE_LEVEL, streamFile } from "./archive-stream";
+import { type ArchiveProgress, CHUNK_BYTES, DEFLATE_LEVEL, streamFile } from "./archive-stream";
 import { rawFs } from "./raw-fs";
 
 const { open, rm } = rawFs.promises;
@@ -36,7 +36,7 @@ export interface ZipMember {
 	readonly directory: boolean;
 }
 
-export interface ZipOptions {
+export interface ZipOptions extends ArchiveProgress {
 	/**
 	 * Sizes and offsets at or above this are written through Zip64. The format's
 	 * limit is 0xFFFFFFFF; tests lower it to exercise the Zip64 records without
@@ -136,6 +136,7 @@ export async function writeZip(target: string, members: readonly ZipMember[], op
 	try {
 		const records: CentralRecord[] = [];
 		for (const member of members) {
+			options.signal?.throwIfAborted();
 			const name = Buffer.from(member.entry, "utf8");
 			if (member.directory) {
 				const record: CentralRecord = { name, method: METHOD_STORE, crc: 0, compressedSize: 0, size: 0, offset, directory: true };
@@ -149,7 +150,7 @@ export async function writeZip(target: string, members: readonly ZipMember[], op
 				if (size > streamFileBytes) {
 					const placeholder: CentralRecord = { name, method: METHOD_STORE, crc: 0, compressedSize: 0, size: 0, offset, directory: false };
 					await write(localHeader(placeholder, stamp, threshold, true));
-					const streamed = await streamFile(source, size, write, options.chunkBytes ?? CHUNK_BYTES);
+					const streamed = await streamFile(source, size, write, options.chunkBytes ?? CHUNK_BYTES, options);
 					const record: CentralRecord = {
 						...placeholder,
 						method: streamed.method === "deflate" ? METHOD_DEFLATE : METHOD_STORE,
@@ -184,6 +185,7 @@ export async function writeZip(target: string, members: readonly ZipMember[], op
 				await write(localHeader(record, stamp, threshold, false));
 				if (body.length > 0) await write(body);
 				records.push(record);
+				options.onBytes?.(content.length);
 			} finally {
 				await source.close();
 			}

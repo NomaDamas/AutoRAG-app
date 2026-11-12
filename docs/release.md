@@ -49,7 +49,7 @@ installs one file and nothing else:
 | Dazzi app | this repo | Electron, unpacked (the bundled CLIs run under plain Node) |
 | `autorag` (agent/CLI) | `@autorag/librarian`, public `origin/main` | built by `scripts/sync-librarian.mjs` |
 | Node 24 LTS + npm | nodejs.org | runtime of the npm-based CLIs, checked against nodejs.org's SHASUMS |
-| `minsync`, `rhwp`, `himalaya`, `rclone`, `lark-cli`, `discrawl`, `telecrawl`, `wacrawl` | newest GitHub release, per platform | download verified against the sha256 GitHub publishes for the asset. `minsync` also provides the `serve` loopback embedding server the app starts and stops; the stager refuses a build below 0.6.0 (`version-floors.mjs`) |
+| `minsync`, `rhwp`, `himalaya`, `rclone`, `lark-cli`, `discrawl`, `telecrawl`, `wacrawl` | newest GitHub release, per platform | download verified against the sha256 GitHub publishes for the asset. `minsync` also provides the `serve` loopback embedding server the app starts and stops; the stager refuses a build below 0.7.1 (`version-floors.mjs`) |
 | `slacrawl`, `notcrawl` | newest GitHub release (macOS); built from the newest tag with Go (Windows, no archive published) | |
 | `dupey`, `jikji`, `clawgallery` | newest crates.io release, compiled on the build machine | |
 | `lazykatok` | newest GitHub release of `changeroa/lazykatok` (macOS only: KakaoTalk for macOS) | the release archive `lazykatok-<version>-aarch64-apple-darwin.tar.gz`, download verified against the sha256 GitHub publishes. The stager refuses a build below 0.3.3, the first with the OpenAI-compatible embedder, so it embeds through the daemon's OpenAI route |
@@ -72,11 +72,13 @@ packages it.
 "Newest" is resolved at build time, so each release ships current dependencies;
 `filee-cli` is the exception and follows the librarian's own pin, so the staged
 copy is the exact version (`FILEE_CLI_VERSION`) the librarian would otherwise
-download. Three tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
-the reason for each): `minsync` ≥ 0.7.1, `@nomadamas/mailcrawl` ≥ 0.3.0,
-`lazykatok` ≥ 0.3.3. All three reach the shared `minsync serve` embedding route;
-`minsync` 0.7.1 is the oldest the librarian runs (it queries SPLADE sparse retrieval, builds sparse-only indexes, and relies on the
-durable stage protocol v2 and JSONL sync progress streaming), and `mailcrawl` 0.3.0 adds `--source files` local archive indexing. The stager fails
+download. Four tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
+the reason for each): `minsync` ≥ 0.7.1, `dupey` ≥ 0.2.0, `@nomadamas/mailcrawl` ≥ 0.3.0,
+`lazykatok` ≥ 0.3.3. `minsync`, `mailcrawl` and `lazykatok` reach the shared `minsync serve` embedding route;
+`minsync` 0.7.1 is the oldest librarian 2.13.7 runs (it makes every committed batch searchable during the first sync, which the
+refresh's overlapped sync relies on), on top of 0.6.0's SPLADE sparse retrieval and sparse-only indexes and 0.5.1's
+durable stage protocol v2 and JSONL sync progress streaming; `dupey` 0.2.0 is the first release whose HWP and fallback hashes agree
+with the ones AutoRAG stores; `mailcrawl` 0.3.0 adds `--source files` local archive indexing. The stager fails
 rather than ship an older one.
 `components-<platform>.json` on the release lists exactly what shipped (name,
 version, source, sha256), and the build fails rather than ship a download that
