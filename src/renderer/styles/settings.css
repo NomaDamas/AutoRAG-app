@@ -4044,3 +4044,53 @@
 	color: var(--text-primary);
 	text-decoration: underline;
 }
+
+/* ------------------------------------------- 요금제 및 사용량 (Figma 415:11812) -- */
+
+.settings-view .plan-usage {
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-view .plan-usage-title {
+	margin: 0;
+	padding: 8px 0 14px;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+}
+
+/* The stage card: the reset countdown and the share used on one line, the 6px meter under it. */
+.settings-view .plan-usage-card {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 20px 24px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .plan-usage-line {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 16px;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.settings-view .plan-usage-reset {
+	color: var(--text-primary);
+}
+
+.settings-view .plan-usage-percent {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .plan-usage-meter {
+	background: var(--border);
+}
+

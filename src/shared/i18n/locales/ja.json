@@ -2619,11 +2619,9 @@
       "managedHint": "AI 検索に Dazzi アカウントに含まれるモデルを使います。ログイン後に設定できます。",
       "useManaged": "使う",
       "planDescription": "現在のプランと AI 使用量です。",
-      "currentPlan": "現在のプラン",
       "trialing": " · トライアル中",
       "cancelScheduled": "解約が予約されています。{{date}} まで現在のプランを使用できます。",
       "pastDue": "支払いに失敗しました。請求ポータルで支払い方法を確認してください。",
-      "usageTitle": "使用量",
       "usageName": "AI 使用量",
       "usageMeterAria": "クレジットの使用量",
       "usageUnavailable": "使用量を読み込めません",
@@ -2634,13 +2632,13 @@
         "acceptableUse": "利用制限ポリシー",
         "subprocessors": "個人情報の処理委託"
       },
-      "manageName": "プラン・お支払い管理",
       "openDashboard": "ダッシュボードを開く",
-      "resetsIn": "リセットまでの残り時間",
-      "resetsAt": "リセット日時",
       "resetInDays": "{{days}}日 {{hours}}時間",
       "resetInHours": "{{hours}}時間 {{minutes}}分",
-      "resetInMinutes": "{{minutes}}分"
+      "resetInMinutes": "{{minutes}}分",
+      "planManage": "プランの管理",
+      "resetIn": "{{time}}後にリセット",
+      "usedPercent": "{{percent}}% 使用済み"
     },
     "ai": {
       "description": "AI サービスを接続し、役割ごとに使うモデルを選びます。",

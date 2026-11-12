@@ -2619,11 +2619,9 @@
       "managedHint": "Use the models included with your Dazzi account for AI search. Available after you sign in.",
       "useManaged": "Use",
       "planDescription": "Your current plan and AI usage.",
-      "currentPlan": "Current Plan",
       "trialing": " · Trialing",
       "cancelScheduled": "Cancellation is scheduled. You can use the current plan until {{date}}.",
       "pastDue": "Payment failed. Check your payment method in the billing portal.",
-      "usageTitle": "Usage",
       "usageName": "AI usage",
       "usageMeterAria": "Credit usage",
       "usageUnavailable": "Could not load usage",
@@ -2634,13 +2632,13 @@
         "acceptableUse": "Usage Restrictions",
         "subprocessors": "Data Processing Partners"
       },
-      "manageName": "Plan & billing",
       "openDashboard": "Open dashboard",
-      "resetsIn": "Time until reset",
-      "resetsAt": "Resets at",
       "resetInDays": "{{days}}d {{hours}}h",
       "resetInHours": "{{hours}}h {{minutes}}m",
-      "resetInMinutes": "{{minutes}}m"
+      "resetInMinutes": "{{minutes}}m",
+      "planManage": "Manage plan",
+      "resetIn": "Resets in {{time}}",
+      "usedPercent": "{{percent}}% used"
     },
     "ai": {
       "description": "Connect AI services and choose the model for each role.",

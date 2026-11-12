@@ -2619,11 +2619,9 @@
       "managedHint": "在 AI 搜索中使用 Dazzi 账户包含的模型。登录后即可设置。",
       "useManaged": "使用",
       "planDescription": "当前套餐和 AI 用量。",
-      "currentPlan": "当前套餐",
       "trialing": " · 试用中",
       "cancelScheduled": "已预约取消。在 {{date}} 之前仍可使用当前套餐。",
       "pastDue": "支付失败。请在结算门户中检查支付方式。",
-      "usageTitle": "用量",
       "usageName": "AI 用量",
       "usageMeterAria": "额度使用量",
       "usageUnavailable": "无法加载用量",
@@ -2634,13 +2632,13 @@
         "acceptableUse": "使用限制政策",
         "subprocessors": "个人信息处理委托"
       },
-      "manageName": "套餐与付款管理",
       "openDashboard": "打开控制台",
-      "resetsIn": "距离重置还有",
-      "resetsAt": "重置时间",
       "resetInDays": "{{days}}天 {{hours}}小时",
       "resetInHours": "{{hours}}小时 {{minutes}}分钟",
-      "resetInMinutes": "{{minutes}}分钟"
+      "resetInMinutes": "{{minutes}}分钟",
+      "planManage": "管理套餐",
+      "resetIn": "{{time}}后重置",
+      "usedPercent": "已使用 {{percent}}%"
     },
     "ai": {
       "description": "连接 AI 服务，并为每个角色选择模型。",
