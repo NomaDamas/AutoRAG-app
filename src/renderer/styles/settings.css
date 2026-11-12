@@ -42,24 +42,55 @@
 	border-right: 1px solid var(--border);
 }
 
-/* An empty head level with the Finder sidebar's: room for the window's traffic lights, and the window drags from it. */
+/* A head level with the Finder sidebar's: room for the window's traffic lights, the sidebar toggle at the right, and the
+ * window drags from it. */
 .settings-sidebar-head {
+	display: flex;
 	flex: none;
+	align-items: center;
+	justify-content: flex-end;
 	height: var(--size-toolbar);
+	padding: 0 var(--space-12);
 	-webkit-app-region: drag;
 }
 
-/* The way out: the first row under the head, above the search, built like a page row so it reads as one more button in the list. */
-.settings-sidebar-backrow {
+.settings-sidebar-toggle {
+	-webkit-app-region: no-drag;
+}
+
+/* The way out (Figma 403:8201): a footer under a rule, 49px with the rule, 14px in from the edge. */
+.settings-sidebar-foot {
+	display: flex;
 	flex: none;
-	padding: var(--space-2) var(--space-10) 0;
+	align-items: center;
+	height: 49px;
+	padding: 0 var(--space-14);
+	border-top: 1px solid var(--border);
+}
+
+.settings-sidebar-back {
+	display: flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: 27px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+	cursor: pointer;
+}
+
+.settings-sidebar-back:hover {
+	color: var(--text-primary);
 }
 
 .settings-sidebar-scroll {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: var(--space-10);
+	gap: var(--space-8);
 	min-height: 0;
 	overflow-y: auto;
 	padding: var(--space-6) var(--space-10) var(--space-12);
@@ -73,11 +104,14 @@
 }
 
 .settings-sidebar-group-title {
-	padding: var(--space-4) var(--space-8);
+	display: flex;
+	align-items: center;
+	height: 24px;
+	padding: var(--space-6) 0 var(--space-4) var(--space-8);
 	font-size: var(--font-size-badge);
-	font-weight: 600;
+	font-weight: var(--weight-medium);
+	line-height: 14px;
 	color: var(--text-muted);
-	letter-spacing: var(--tracking-label);
 }
 
 
@@ -118,11 +152,6 @@
 	white-space: nowrap;
 }
 
-/* The active row is accent-filled; a brand mark drawn in currentColor must stay legible on it. */
-.settings-nav-item--source.is-active .settings-app-icon {
-	background: var(--bg-input);
-	color: var(--text-primary);
-}
 
 .settings-nav-item {
 	display: flex;
@@ -147,10 +176,10 @@
 	color: var(--text-primary);
 }
 
+/* Figma 403:8201: the open page is a grey row in ink, the Finder sidebar's selection, not an accent fill. */
 .settings-nav-item.is-active {
-	background: var(--accent);
-	color: var(--text-on-accent);
-	font-weight: var(--weight-medium);
+	background: var(--bg-selected-nav);
+	color: var(--text-primary);
 }
 
 .settings-nav-icon {
@@ -163,7 +192,19 @@
 }
 
 .settings-nav-item.is-active .settings-nav-icon {
-	color: var(--text-on-accent);
+	color: var(--text-primary);
+}
+
+/* The sidebar is hidden: its toggle sits where the Finder toolbar's does, after the traffic lights on macOS. */
+.settings-main-sidebar {
+	position: absolute;
+	top: calc((var(--size-toolbar) - var(--size-toolbar-icon)) / 2);
+	left: var(--space-10);
+	-webkit-app-region: no-drag;
+}
+
+.settings-main-sidebar--lights {
+	left: calc(var(--space-12) + 70px);
 }
 
 /* ---------------------------------------------------------------- Content -- */

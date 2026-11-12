@@ -2233,7 +2233,8 @@
       "search": "搜索设置",
       "menuAria": "设置菜单",
       "empty": "没有匹配的设置。",
-      "contentAria": "{{name}} 设置"
+      "contentAria": "{{name}} 设置",
+      "backToApp": "返回应用"
     },
     "sidebar": {
       "description": "配置侧边栏中显示的项目与分区顺序，或直接与 AI 助手对话进行个性化定制。",

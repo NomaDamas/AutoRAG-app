@@ -2233,7 +2233,8 @@
       "search": "Search settings",
       "menuAria": "Settings menu",
       "empty": "No matching settings.",
-      "contentAria": "{{name}} settings"
+      "contentAria": "{{name}} settings",
+      "backToApp": "Back to app"
     },
     "sidebar": {
       "description": "Choose which items and sections appear in the sidebar, reorder them, or customize by chatting with the AI assistant.",

@@ -2233,7 +2233,8 @@
       "search": "설정 검색",
       "menuAria": "설정 메뉴",
       "empty": "일치하는 설정이 없습니다.",
-      "contentAria": "{{name}} 설정"
+      "contentAria": "{{name}} 설정",
+      "backToApp": "앱으로 돌아가기"
     },
     "sidebar": {
       "description": "사이드바에 표시할 항목과 섹션 순서를 구성하거나 AI 어시스턴트에게 말로 요청합니다.",

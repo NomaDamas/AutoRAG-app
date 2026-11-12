@@ -818,6 +818,9 @@ export function App(): ReactElement {
 							onBack={() => setWorkspace((current) => closeSettingsInWorkspace(current))}
 							inspectorHidden={!inspectorVisible}
 							onShowInspector={() => setInspectorVisible(true)}
+							sidebarHidden={!sidebarVisible}
+							onHideSidebar={() => setSidebarVisible(false)}
+							onShowSidebar={() => setSidebarVisible(true)}
 							searchRef={settingsSearchRef}
 						/>
 					</div>

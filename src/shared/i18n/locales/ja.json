@@ -2233,7 +2233,8 @@
       "search": "設定を検索",
       "menuAria": "設定メニュー",
       "empty": "一致する設定がありません。",
-      "contentAria": "{{name}} の設定"
+      "contentAria": "{{name}} の設定",
+      "backToApp": "アプリに戻る"
     },
     "sidebar": {
       "description": "サイドバーに表示する項目やセクションの順序を構成するか、AIアシスタントと対話してカスタマイズします。",
