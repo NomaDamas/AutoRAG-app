@@ -70,7 +70,7 @@ import {
 	createLucideIcon,
 	type LucideIcon,
 } from "lucide-react";
-import type { ReactElement } from "react";
+import { type ReactElement, useId } from "react";
 
 interface GlyphProps {
 	readonly size?: number | undefined;
@@ -271,17 +271,26 @@ export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 	);
 }
 
-/** The Dazzi sunflower as an 18px line icon (Figma 409:10998): six 1.2px petals round a filled centre, in currentColor. */
+/**
+ * The sunflower mark (Figma 415:11802): six filled petals around a hollow centre. The centre is cut out with a mask,
+ * not painted white, so it shows whatever the toolbar sits on in either theme.
+ */
 export function SunflowerIcon({ size = 18, className }: GlyphProps): ReactElement {
+	const maskId = `sunflower-${useId().replace(/[^\w-]/g, "")}`;
 	return (
-		<svg aria-hidden="true" focusable="false" className={className} width={size} height={size} viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth={1.2}>
-			<path d="M11.025 3.9C11.025 5.391 10.118 6.6 9 6.6C7.882 6.6 6.975 5.391 6.975 3.9C6.975 2.409 7.882 1.2 9 1.2C10.118 1.2 11.025 2.409 11.025 3.9Z" />
-			<path d="M14.429 8.204C13.138 8.949 11.638 8.769 11.079 7.8C10.519 6.831 11.113 5.442 12.404 4.696C13.696 3.951 15.196 4.131 15.755 5.1C16.314 6.069 15.721 7.458 14.429 8.204Z" />
-			<path d="M12.404 13.304C11.113 12.558 10.519 11.169 11.079 10.2C11.638 9.231 13.138 9.051 14.429 9.796C15.721 10.542 16.314 11.932 15.755 12.9C15.196 13.869 13.696 14.049 12.404 13.304Z" />
-			<path d="M6.975 14.1C6.975 12.609 7.882 11.4 9 11.4C10.118 11.4 11.025 12.609 11.025 14.1C11.025 15.591 10.118 16.8 9 16.8C7.882 16.8 6.975 15.591 6.975 14.1Z" />
-			<path d="M3.571 9.796C4.862 9.051 6.362 9.231 6.922 10.2C7.481 11.169 6.887 12.558 5.596 13.304C4.304 14.049 2.804 13.869 2.245 12.9C1.686 11.932 2.279 10.542 3.571 9.796Z" />
-			<path d="M5.596 4.696C6.887 5.442 7.481 6.831 6.922 7.8C6.362 8.769 4.862 8.949 3.571 8.204C2.279 7.458 1.686 6.069 2.245 5.1C2.804 4.131 4.304 3.951 5.596 4.696Z" />
-			<circle cx="9" cy="9" r="2.7" fill="currentColor" stroke="none" />
+		<svg aria-hidden="true" focusable="false" className={className} width={size} height={size} viewBox="0 0 18 18" fill="currentColor" stroke="currentColor" strokeWidth={1.2}>
+			<mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
+				<rect width="18" height="18" fill="white" stroke="none" />
+				<circle cx="9" cy="9" r="2.7" fill="black" stroke="none" />
+			</mask>
+			<g mask={`url(#${maskId})`}>
+				<path d="M11.025 3.9C11.025 5.391 10.118 6.6 9 6.6C7.882 6.6 6.975 5.391 6.975 3.9C6.975 2.409 7.882 1.2 9 1.2C10.118 1.2 11.025 2.409 11.025 3.9Z" />
+				<path d="M14.429 8.204C13.138 8.949 11.638 8.769 11.079 7.8C10.519 6.831 11.113 5.442 12.404 4.696C13.696 3.951 15.196 4.131 15.755 5.1C16.314 6.069 15.721 7.458 14.429 8.204Z" />
+				<path d="M12.404 13.304C11.113 12.558 10.519 11.169 11.079 10.2C11.638 9.231 13.138 9.051 14.429 9.796C15.721 10.542 16.314 11.932 15.755 12.9C15.196 13.869 13.696 14.049 12.404 13.304Z" />
+				<path d="M6.975 14.1C6.975 12.609 7.882 11.4 9 11.4C10.118 11.4 11.025 12.609 11.025 14.1C11.025 15.591 10.118 16.8 9 16.8C7.882 16.8 6.975 15.591 6.975 14.1Z" />
+				<path d="M3.571 9.796C4.862 9.051 6.362 9.231 6.922 10.2C7.481 11.169 6.887 12.558 5.596 13.304C4.304 14.049 2.804 13.869 2.245 12.9C1.686 11.932 2.279 10.542 3.571 9.796Z" />
+				<path d="M5.596 4.696C6.887 5.442 7.481 6.831 6.922 7.8C6.362 8.769 4.862 8.949 3.571 8.204C2.279 7.458 1.686 6.069 2.245 5.1C2.804 4.131 4.304 3.951 5.596 4.696Z" />
+			</g>
 		</svg>
 	);
 }
