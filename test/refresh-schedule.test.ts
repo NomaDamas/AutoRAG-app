@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ScheduleDecision } from "@autorag/librarian/core";
 import type { ConfigRefreshResult, DataSourceSyncResult } from "../src/shared/settings-contract";
 import { acquireRefreshLock, isLockHeld } from "../src/main/refresh-lock";
 import {
@@ -182,7 +183,13 @@ describe("refresh lock", () => {
 describe("scheduled run", () => {
 	const raw = { appIndexing: { refreshIntervalMs: 60 * MIN }, datasources: { discord: { pollingIntervalMs: 15 * MIN }, slack: { pollingIntervalMs: 60 * MIN } } };
 
-	function deps(overrides: { clock: { now: number }; local?: () => Promise<ConfigRefreshResult>; source?: (id: string) => Promise<DataSourceSyncResult>; rawConfig?: Record<string, unknown> }) {
+	function deps(overrides: {
+		clock: { now: number };
+		local?: () => Promise<ConfigRefreshResult>;
+		source?: (id: string) => Promise<DataSourceSyncResult>;
+		rawConfig?: Record<string, unknown>;
+		checkSchedule?: (raw: Record<string, unknown>) => Promise<ScheduleDecision>;
+	}) {
 		const calls: string[] = [];
 		return {
 			calls,
@@ -192,9 +199,50 @@ describe("scheduled run", () => {
 				refreshLocal: overrides.local ?? (async () => (calls.push("local"), okLocal())),
 				syncSource: overrides.source ?? (async (id: string) => (calls.push(id), okSource(id))),
 				now: () => overrides.clock.now,
+				...(overrides.checkSchedule === undefined ? {} : { checkSchedule: overrides.checkSchedule }),
 			},
 		};
 	}
+
+	it("holds every due item while refresh.schedule denies a background refresh, records why, and runs them once it allows", async () => {
+		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
+		let decision: ScheduleDecision = { allowed: false, reason: "battery" };
+		const run = deps({ clock, checkSchedule: async () => decision });
+		expect(await runScheduledRefresh(run.value)).toEqual({ kind: "paused", reason: "battery" });
+		expect(run.calls).toEqual([]);
+		expect(existsSync(run.value.paths.lock)).toBe(false);
+		const paused = readScheduleState(run.value.paths.state);
+		expect(paused.paused).toEqual({ at: new Date(clock.now).toISOString(), reason: "battery" });
+		expect(paused.local).toBeNull();
+
+		clock.now += 2 * MIN;
+		decision = { allowed: true };
+		expect(await runScheduledRefresh(run.value)).toMatchObject({ kind: "ran", local: true, sourceIds: ["discord", "slack"] });
+		expect(run.calls).toEqual(["local", "discord", "slack"]);
+		expect(readScheduleState(run.value.paths.state).paused).toBeNull();
+	});
+
+	it("does not consult the schedule (or probe the power source) on a wake-up with nothing due", async () => {
+		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
+		let checks = 0;
+		const run = deps({ clock, checkSchedule: async () => (checks += 1, { allowed: true }) });
+		await runScheduledRefresh(run.value);
+		clock.now += MIN;
+		expect(await runScheduledRefresh(run.value)).toEqual({ kind: "idle" });
+		expect(checks).toBe(1);
+	});
+
+	it("applies the librarian's refresh.schedule from the config by default, at the job's clock", async () => {
+		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
+		const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+		const today = days[new Date(clock.now).getDay()];
+		const tomorrow = days[(new Date(clock.now).getDay() + 1) % 7];
+		const run = deps({ clock, rawConfig: { ...raw, refresh: { schedule: { days: [tomorrow] } } } });
+		expect(await runScheduledRefresh(run.value)).toEqual({ kind: "paused", reason: "outside-day" });
+		expect(run.calls).toEqual([]);
+		const allowed = deps({ clock, rawConfig: { ...raw, refresh: { schedule: { days: [today] } } } });
+		expect((await runScheduledRefresh(allowed.value)).kind).toBe("ran");
+	});
 
 	it("runs everything on the first wake, records each outcome, then idles until something is due again", async () => {
 		const clock = { now: Date.parse("2026-10-09T12:00:00Z") };
@@ -341,6 +389,16 @@ describe("scheduler service", () => {
 		expect(existsSync(join(h.home, "Library/LaunchAgents/com.autorag.app.refresh.plist"))).toBe(true);
 		expect(h.calls).toContain("launchctl bootstrap gui/501 " + join(h.home, "Library/LaunchAgents/com.autorag.app.refresh.plist"));
 		expect(status).toMatchObject({ supported: true, mechanism: "launchd", wanted: true, installed: true, intervalMs: 30 * MIN });
+	});
+
+	it("reports the job's last pause while the config still limits when it may index, and drops it once the limit is gone", async () => {
+		const schedule = { refresh: { schedule: { power: "ac" } } };
+		const h = harness("darwin", { appIndexing: { refreshIntervalMs: 60 * MIN }, ...schedule });
+		const paths = schedulePaths(join(dir, "config.json"));
+		writeScheduleState(paths.state, { ...emptyScheduleState(), lastTickAt: "2026-10-09T12:00:00.000Z", paused: { at: "2026-10-09T12:00:00.000Z", reason: "battery" } });
+		expect((await h.scheduler.status()).paused).toEqual({ at: "2026-10-09T12:00:00.000Z", reason: "battery" });
+		writeFileSync(join(dir, "config.json"), JSON.stringify({ appIndexing: { refreshIntervalMs: 60 * MIN } }));
+		expect((await h.scheduler.status()).paused).toBeNull();
 	});
 
 	it("removes the launch agent when nothing is wanted any more", async () => {

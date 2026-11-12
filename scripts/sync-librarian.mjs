@@ -21,7 +21,14 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // banning operations, so an AI rule can rename a file in place when the new name cannot fire the rule (AutoRAG#2092, app #475).
 // The decision model is Jev or the small chat LLM: `jev.backend: "sllm"` decides with `jev.sllm.model` and never calls Jev,
 // and `jev.fallback: false` fails a session instead of moving to it (AutoRAG#2091).
-const librarianRef = "v2.13.7";
+// v2.13.8 adds `refresh.schedule` (index only on AC power / in local time windows / on chosen weekdays; `checkIndexSchedule`
+// is the gate for hosts with their own scheduler, which the app's OS job is, AutoRAG#2104), the agent's exact `calculator`
+// tool (#2109, #2110), the record cut that spreads search hits across documents, on by default (#2108), status reads that
+// reuse recorded duplicate exclusions instead of scanning (#2124), and CLI refreshes stopped by SIGINT/SIGTERM (#2118).
+// v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
+// resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
+// model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
+const librarianRef = "v2.13.12";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -59,7 +59,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 	showHiddenFiles: false,
 	dupeyScanIntervalMinutes: 60,
 	osMenuIntegration: false,
-	approvalMode: "auto",
+	approvalMode: "full",
 	remoteAccess: false,
 	remotePort: 47833,
 	remoteTunnelHostname: "",

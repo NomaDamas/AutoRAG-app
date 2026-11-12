@@ -33,6 +33,14 @@ export function isAbsolutePath(path: string): boolean {
 	return path.startsWith("/") || isWindowsStyle(path);
 }
 
+/**
+ * An `excludePaths` entry with `*`, `?` or `[` is a glob over the whole absolute path (librarian 2.13.12), any other
+ * entry is a file or a folder. The test is the librarian's, so the app and the index never disagree on what a pattern is.
+ */
+export function isGlobExclusion(entry: string): boolean {
+	return /[*?[]/u.test(entry);
+}
+
 /** A path as it is compared: one separator, no trailing separator, and case folded where the platform ignores it. */
 function comparable(path: string): string {
 	const windows = isWindowsStyle(path);
@@ -83,7 +91,8 @@ export function addSearchRoots(scope: ScopeState, picked: readonly string[]): Ad
 export function removeSearchRoot(scope: ScopeState, path: string): ScopeState {
 	if (!scope.searchPaths.some((root) => comparable(root) === comparable(path))) return scope;
 	const searchPaths = scope.searchPaths.filter((root) => comparable(root) !== comparable(path));
-	const excludePaths = scope.excludePaths.filter((excluded) => searchPaths.some((root) => isSameOrInside(excluded, root)));
+	// A pattern is not tied to one folder: it keeps meaning something under every remaining target.
+	const excludePaths = scope.excludePaths.filter((excluded) => isGlobExclusion(excluded) || searchPaths.some((root) => isSameOrInside(excluded, root)));
 	return { searchPaths, excludePaths };
 }
 
@@ -91,7 +100,8 @@ export function removeSearchRoot(scope: ScopeState, path: string): ScopeState {
 export function coveringExclusion(excludePaths: readonly string[], path: string): string | null {
 	let nearest: string | null = null;
 	for (const excluded of excludePaths) {
-		if (!isSameOrInside(path, excluded)) continue;
+		// A pattern covers by matching, not by containment; `findExclusion` (main) answers that.
+		if (isGlobExclusion(excluded) || !isSameOrInside(path, excluded)) continue;
 		if (nearest === null || comparable(excluded).length > comparable(nearest).length) nearest = excluded;
 	}
 	return nearest;

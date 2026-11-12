@@ -211,6 +211,17 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
+  - *Conditions* (설정 > 인덱싱 > 자동 최신화 조건): "전원 연결 시에만" and one daily time
+    window are stored as `refresh.schedule` (`power: "ac"`, `windows: ["22:00-07:00"]`, local time; a
+    start later than the end wraps midnight). The job asks the librarian's `checkIndexSchedule`
+    only once something is due; a closed schedule ends the wake-up with `paused: refresh.schedule (<reason>)`
+    in `job.log`, takes no lock, and records only `paused: { at, reason }` in `state.json` (no item is
+    marked done), so the same items run on the first wake after it opens, which clears the pause.
+    While the config still has a schedule, 인덱싱 > 최신화 상태 says why the job is waiting. A
+    malformed `refresh.schedule` is a config error like any other invalid field: the job exits 2 and
+    names the bad entry in `job.log`. The Settings buttons are never gated. The power
+    source is read with `pmset` (macOS), `Win32_Battery` (Windows) or `/sys/class/power_supply`
+    (Linux); an unreadable source counts as plugged in.
 - **Indexing progress** — a block above 설정 in the sidebar shows what is
   indexing right now, with a progress bar: the local folders and every
   datasource, whether the run came from a Settings button, the OS job, or an
@@ -988,7 +999,7 @@ built for the librarian's terminal UI and ask through pi's `ctx.ui` (`select`, `
 has no terminal, so the app supplies the surface itself and the question appears in the AI Search panel in place
 of the message box (`src/shared/interaction-contract.ts` is the contract).
 
-- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `auto`; persisted by the settings
+- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `full`; persisted by the settings
   service, which refuses any other value) is chosen in the menu at the left of the message box. `ask` puts every
   shell/write/edit call to the person; `auto` lets Jev (the judgment model) approve what the request clearly
   covers and asks about the rest — with no Jev backend every call is unclassified and is asked about, as in

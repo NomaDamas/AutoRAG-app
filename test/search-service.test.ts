@@ -1096,14 +1096,14 @@ describe("createSearchService interaction", () => {
 		expect(second.setApprovalMode).toHaveBeenLastCalledWith("full");
 	});
 
-	it("falls back to auto when nothing says otherwise", async () => {
+	it("falls back to full when nothing says otherwise", async () => {
 		const agent = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
 		const { send } = collectEvents();
 		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
 
 		await service.start("search-c", "chat-c", "one", []);
 
-		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("auto");
+		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("full");
 	});
 });
 
