@@ -172,7 +172,7 @@ describe("Settings → Search Scope", () => {
 		expect(pickPaths).toHaveBeenCalledOnce();
 		expect(bridge.settings.configPatch).toHaveBeenCalledOnce();
 		expect(bridge.state.config.excludePaths).toEqual(["/r/a", "/r/b.xlsx", "/r/c"]);
-		expect(host.textContent).toContain("Exclusions you added");
+		expect([...host.querySelectorAll(".scope-list .scope-row-path")].map((row) => row.textContent)).toContain("/r/b.xlsx");
 	});
 
 	it("types an exclusion's path from 경로 직접 입력", async () => {

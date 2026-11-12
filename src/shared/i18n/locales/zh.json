@@ -3233,7 +3233,6 @@
       "addExclusion": "添加排除项",
       "excludePick": "选择文件夹或文件",
       "excludeType": "输入路径",
-      "customExcludes": "你添加的排除项",
       "devExcluded": "开发用文件夹已自动排除",
       "devMore": "详情",
       "devLess": "收起",

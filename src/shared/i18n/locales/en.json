@@ -3233,7 +3233,6 @@
       "addExclusion": "Add exclusion",
       "excludePick": "Choose folders or files",
       "excludeType": "Enter a path",
-      "customExcludes": "Exclusions you added",
       "devExcluded": "Developer folders are excluded automatically",
       "devMore": "Details",
       "devLess": "Hide",

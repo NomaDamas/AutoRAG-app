@@ -3401,14 +3401,6 @@
 	color: var(--text-muted);
 }
 
-.settings-view .scope-subtitle {
-	margin-bottom: -2px;
-	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
-	line-height: 16px;
-	color: var(--text-primary);
-}
-
 .settings-view .scope-primary-btn {
 	display: inline-flex;
 	flex: none;
@@ -3489,7 +3481,7 @@
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	min-height: 48px;
+	min-height: 56px; /* Figma 386:9908 */
 	padding: 0 16px;
 }
 
@@ -3553,7 +3545,16 @@
 	gap: 6px;
 	padding: 8px 14px;
 	border-radius: var(--radius-8);
-	background: var(--bg-input);
+	background: var(--bg-code); /* #F4F4F7 (Figma 386:10087) */
+}
+
+/* Open, the box grows to 12px above and 14px below, and 접기 takes the link blue. */
+.settings-view .scope-dev.is-open {
+	padding: 12px 14px 14px;
+}
+
+.settings-view .scope-dev.is-open .scope-dev-body {
+	padding-bottom: 0;
 }
 
 .settings-view .scope-dev-head {
@@ -3591,6 +3592,10 @@
 .settings-view .scope-dev-head .scope-link:hover,
 .settings-view .scope-dev-head .scope-link:focus-visible {
 	color: var(--text-body);
+}
+
+.settings-view .scope-dev-head .scope-link[aria-expanded="true"] {
+	color: var(--accent-text);
 }
 
 .settings-view .scope-dev-body {
@@ -3830,7 +3835,7 @@
 	display: flex;
 	align-items: center;
 	gap: 12px;
-	height: 48px;
+	height: 56px; /* Figma 409:11076 */
 	padding: 0 16px;
 	border: 0;
 	background: transparent;
@@ -3855,6 +3860,10 @@
 .settings-view .ai-service-add {
 	color: var(--text-muted);
 	cursor: pointer;
+}
+
+.settings-view .ai-service-add svg {
+	color: var(--text-faint);
 }
 
 .settings-view .ai-service-add:hover {

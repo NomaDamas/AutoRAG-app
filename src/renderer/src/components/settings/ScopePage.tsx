@@ -226,6 +226,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 						</div>
 					)}
 				</section>
+				<hr className="scope-divider" />
 				<section className="scope-section">
 					<div className="scope-section-head">
 						<div className="scope-section-text">
@@ -236,7 +237,6 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 					</div>
 					{excludePaths.length === 0 ? null : (
 						<>
-							<div className="scope-subtitle">{t("settingsSources.scope.customExcludes")}</div>
 							<div className="scope-list">
 								{excludePaths.map((path, index) => (
 									<PathRow
@@ -250,7 +250,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 							</div>
 						</>
 					)}
-					<div className="scope-dev">
+					<div className={devOpen ? "scope-dev is-open" : "scope-dev"}>
 						<div className="scope-dev-head">
 							<span className="scope-dev-title">{t("settingsSources.scope.devExcluded")}</span>
 							<button type="button" className="scope-link" aria-expanded={devOpen} onClick={() => setDevOpen((value) => !value)}>

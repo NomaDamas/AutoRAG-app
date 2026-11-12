@@ -3233,7 +3233,6 @@
       "addExclusion": "除外を追加",
       "excludePick": "フォルダやファイルを選択",
       "excludeType": "パスを入力",
-      "customExcludes": "自分で追加した除外項目",
       "devExcluded": "開発用フォルダは自動で除外中",
       "devMore": "詳しく",
       "devLess": "閉じる",

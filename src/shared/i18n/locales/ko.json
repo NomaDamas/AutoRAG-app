@@ -3233,7 +3233,6 @@
       "addExclusion": "제외 추가",
       "excludePick": "폴더나 파일 선택",
       "excludeType": "경로 직접 입력",
-      "customExcludes": "직접 추가한 제외 항목",
       "devExcluded": "개발용 폴더는 자동 제외 중",
       "devMore": "자세히",
       "devLess": "접기",
