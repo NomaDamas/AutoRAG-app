@@ -1637,7 +1637,8 @@
       "quitButton": "退出",
       "continueButton": "继续",
       "indexingInProgress": "正在建立索引。",
-      "indexingQuitDetail": "退出将停止进度。"
+      "indexingQuitDetail": "退出将停止进度。",
+      "chooseExcludeTitle": "选择要排除的项目"
     },
     "onboarding": {
       "apiKeyRequired": "需要 API 密钥。",
@@ -3146,8 +3147,6 @@
       },
       "empty": "没有已连接的应用。请在下方添加。",
       "connectApps": "连接应用",
-      "connectAppsDesc": "选择要添加的应用。",
-      "connected": "已连接",
       "connect": "连接",
       "promptTitle": "连接 {{name}}",
       "promptDesc": "设置连接 id 后添加。留空则使用模板名称。",
@@ -3155,7 +3154,8 @@
       "promptConfirm": "添加连接",
       "macOnlyCalendar": "仅在 macOS 上可用（EventKit）。",
       "macOnlySpotlight": "仅在 macOS 上可用（Spotlight）。",
-      "macOnlyWhatsapp": "仅在 macOS 上可用（WhatsApp）。"
+      "macOnlyWhatsapp": "仅在 macOS 上可用（WhatsApp）。",
+      "disconnect": "断开连接"
     },
     "sourceDetail": {
       "fallbackSummary": "管理此连接的设置。",
@@ -3195,35 +3195,38 @@
       "title": "搜索范围",
       "desc": "设定 Dazzi 读取和搜索的文件夹以及要排除的项目。",
       "foldersTitle": "要搜索的文件夹",
-      "foldersDesc": "这些文件夹的内容将纳入 AI 搜索。",
-      "folderName": "搜索文件夹",
-      "folderHint": "选择要添加的文件夹。其中的所有内容都会被搜索。",
+      "foldersDesc": "其中的所有内容都会包含在 AI 搜索中。",
       "addFolder": "添加文件夹",
       "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
       "excludeTitle": "要排除的项目",
       "excludeDesc": "不进行搜索的文件夹和文件。",
-      "excludeNote": "开发用文件夹（{{folders}}）以及所有以点开头的文件夹（.idea、.vscode、.cache 等）会自动排除。",
-      "excludeList": "排除列表",
-      "excludeListHint": "进一步排除名称匹配的文件夹和文件。",
-      "fileScopeTitle": "文件包含范围",
       "autoWatch": "自动检测更改",
       "autoWatchHintOff": "文件搜索已关闭，无法使用。",
-      "autoWatchHintOn": "文件变化时更新文件名搜索列表。文档内容索引需在索引界面手动刷新。",
+      "autoWatchHintOn": "文件变化时会自动更新文件名搜索列表。文档内容索引请在索引页面手动刷新。",
       "addFolderTitle": "添加搜索文件夹",
       "addItemTitle": "添加排除项",
       "addFolderDesc": "输入要包含在搜索中的文件夹路径。",
-      "addItemDesc": "输入要从搜索中排除的文件夹或文件名。",
+      "addItemDesc": "输入要排除的文件夹或文件的路径或名称。",
       "folderPath": "文件夹路径",
       "item": "条目",
       "addFolderPlaceholder": "例如：~/Documents",
       "addItemPlaceholder": "例如：node_modules",
       "confirmAdd": "添加",
-      "addChip": "+ 添加",
       "notAdded": {
         "duplicate": "{{path}} 已是搜索文件夹。",
         "insideTarget": "{{path}} 已包含在上级搜索文件夹中。",
         "notAbsolute": "{{path}} 不是完整路径。"
-      }
+      },
+      "addExclusion": "添加排除项",
+      "excludePick": "选择文件夹或文件",
+      "excludePickFolder": "选择文件夹",
+      "excludePickFile": "选择文件",
+      "excludeType": "输入路径",
+      "customExcludes": "你添加的排除项",
+      "devExcluded": "开发用文件夹已自动排除",
+      "devMore": "详情",
+      "devLess": "收起",
+      "devDotNote": "名称以句点(.)开头的文件夹也会全部排除。"
     },
     "indexMap": {
       "title": "索引地图",

@@ -1637,7 +1637,8 @@
       "quitButton": "종료",
       "continueButton": "계속",
       "indexingInProgress": "인덱싱이 진행 중입니다.",
-      "indexingQuitDetail": "종료하면 진행이 멈춥니다."
+      "indexingQuitDetail": "종료하면 진행이 멈춥니다.",
+      "chooseExcludeTitle": "제외할 항목 선택"
     },
     "onboarding": {
       "apiKeyRequired": "API 키가 필요합니다.",
@@ -3146,8 +3147,6 @@
       },
       "empty": "연결된 앱이 없습니다. 아래에서 추가하세요.",
       "connectApps": "앱 연결하기",
-      "connectAppsDesc": "추가할 앱을 선택하세요.",
-      "connected": "연결됨",
       "connect": "연결",
       "promptTitle": "{{name}} 연결",
       "promptDesc": "연결 id를 정하고 추가합니다. 비워두면 템플릿 이름을 사용합니다.",
@@ -3155,7 +3154,8 @@
       "promptConfirm": "연결 추가",
       "macOnlyCalendar": "macOS에서만 사용할 수 있습니다 (EventKit).",
       "macOnlySpotlight": "macOS에서만 사용할 수 있습니다 (Spotlight).",
-      "macOnlyWhatsapp": "macOS에서만 사용할 수 있습니다 (WhatsApp)."
+      "macOnlyWhatsapp": "macOS에서만 사용할 수 있습니다 (WhatsApp).",
+      "disconnect": "연결해제"
     },
     "sourceDetail": {
       "fallbackSummary": "이 연결의 설정을 관리합니다.",
@@ -3195,35 +3195,38 @@
       "title": "검색 범위",
       "desc": "Dazzi가 읽고 검색할 폴더와 제외할 항목을 정합니다.",
       "foldersTitle": "검색할 폴더",
-      "foldersDesc": "이 폴더의 내용을 AI 검색에 포함합니다.",
-      "folderName": "검색 폴더",
-      "folderHint": "폴더를 골라 추가합니다. 안에 있는 모든 항목이 검색됩니다.",
+      "foldersDesc": "안에 있는 모든 항목이 AI 검색에 포함됩니다.",
       "addFolder": "폴더 추가",
       "emptyFolderNote": "아직 검색 폴더가 없습니다. 추가하지 않으면 기본 검색 범위를 사용합니다.",
       "excludeTitle": "제외할 항목",
       "excludeDesc": "검색하지 않을 폴더와 파일입니다.",
-      "excludeNote": "개발용 폴더({{folders}})와 .으로 시작하는 모든 폴더(.idea, .vscode, .cache 등)는 자동으로 제외되어 있습니다.",
-      "excludeList": "제외 목록",
-      "excludeListHint": "이름이 일치하는 폴더·파일을 더 제외합니다.",
-      "fileScopeTitle": "파일 포함 범위",
       "autoWatch": "변경 자동 감지",
       "autoWatchHintOff": "파일 검색이 꺼져 있어 사용할 수 없습니다.",
-      "autoWatchHintOn": "파일 이름 검색 목록을 파일이 바뀔 때 갱신합니다. 문서 내용 색인은 인덱싱 화면에서 직접 새로 고칩니다.",
+      "autoWatchHintOn": "파일이 바뀌면 이름 검색 목록을 자동으로 갱신합니다. 문서 내용 색인은 인덱싱 화면에서 직접 새로고침하세요.",
       "addFolderTitle": "검색 폴더 추가",
       "addItemTitle": "제외 항목 추가",
       "addFolderDesc": "검색에 포함할 폴더 경로를 입력하세요.",
-      "addItemDesc": "검색에서 제외할 폴더·파일 이름을 입력하세요.",
+      "addItemDesc": "제외할 폴더·파일의 경로나 이름을 입력하세요.",
       "folderPath": "폴더 경로",
       "item": "항목",
       "addFolderPlaceholder": "예: ~/Documents",
       "addItemPlaceholder": "예: node_modules",
       "confirmAdd": "추가",
-      "addChip": "+ 추가",
       "notAdded": {
         "duplicate": "{{path}}은(는) 이미 검색 폴더입니다.",
         "insideTarget": "{{path}}은(는) 상위 검색 폴더에 이미 포함되어 있습니다.",
         "notAbsolute": "{{path}}은(는) 전체 경로가 아닙니다."
-      }
+      },
+      "addExclusion": "제외 추가",
+      "excludePick": "폴더나 파일 선택",
+      "excludePickFolder": "폴더 선택",
+      "excludePickFile": "파일 선택",
+      "excludeType": "경로 직접 입력",
+      "customExcludes": "직접 추가한 제외 항목",
+      "devExcluded": "개발용 폴더는 자동 제외 중",
+      "devMore": "자세히",
+      "devLess": "접기",
+      "devDotNote": "이름이 마침표(.)로 시작하는 폴더도 모두 제외됩니다."
     },
     "indexMap": {
       "title": "인덱싱 지도",

@@ -23,6 +23,13 @@ import type { IndexFailure } from "./index-failure";
 import type { IndexProgressSnapshot } from "./index-progress-contract";
 import type { SmartExclusion } from "./smart-indexing-contract";
 
+/** What `pickPaths` lets the person choose. */
+export type PickPathKind = "folder" | "file" | "any";
+
+export function isPickPathKind(value: unknown): value is PickPathKind {
+	return value === "folder" || value === "file" || value === "any";
+}
+
 export const ONBOARDING_CHANNELS = {
 	load: "onboarding:load",
 	save: "onboarding:save",
@@ -35,6 +42,7 @@ export const ONBOARDING_CHANNELS = {
 	setLaunchAtLogin: "onboarding:setLaunchAtLogin",
 	folderCandidates: "onboarding:folderCandidates",
 	pickFolders: "onboarding:pickFolders",
+	pickPaths: "onboarding:pickPaths",
 	scanFolders: "onboarding:scanFolders",
 	/** main → renderer event carrying one {@link FolderScan}. */
 	scanProgress: "onboarding:scanProgress",
@@ -314,6 +322,12 @@ export interface OnboardingBridge {
 	folderCandidates(): Promise<readonly FolderCandidate[]>;
 	/** Native multi-folder chooser; empty when cancelled. */
 	pickFolders(): Promise<readonly FolderCandidate[]>;
+	/**
+	 * Native chooser for paths to leave out of the index (Settings → 검색 범위 → 제외 추가): folders, files, or either.
+	 * "any" only shows both on macOS; Windows and Linux show a folder chooser for it, so they ask for one kind.
+	 * Empty when cancelled. Absent on a remote browser, which types the path.
+	 */
+	pickPaths?(kind: PickPathKind): Promise<readonly string[]>;
 	/** Starts (or reuses) a pre-scan for each path; totals arrive through `onScanProgress`. */
 	scanFolders(paths: readonly string[]): Promise<void>;
 	onScanProgress(listener: (scan: FolderScan) => void): () => void;

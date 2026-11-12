@@ -1637,7 +1637,8 @@
       "quitButton": "Quit",
       "continueButton": "Continue",
       "indexingInProgress": "Indexing is in progress.",
-      "indexingQuitDetail": "Quitting will stop progress."
+      "indexingQuitDetail": "Quitting will stop progress.",
+      "chooseExcludeTitle": "Choose Items to Exclude"
     },
     "onboarding": {
       "apiKeyRequired": "An API key is required.",
@@ -3146,8 +3147,6 @@
       },
       "empty": "No apps connected. Add one below.",
       "connectApps": "Connect an app",
-      "connectAppsDesc": "Choose an app to add.",
-      "connected": "Connected",
       "connect": "Connect",
       "promptTitle": "Connect {{name}}",
       "promptDesc": "Choose a connection id and add it. Leave empty to use the template name.",
@@ -3155,7 +3154,8 @@
       "promptConfirm": "Add connection",
       "macOnlyCalendar": "Only available on macOS (EventKit).",
       "macOnlySpotlight": "Only available on macOS (Spotlight).",
-      "macOnlyWhatsapp": "Only available on macOS (WhatsApp)."
+      "macOnlyWhatsapp": "Only available on macOS (WhatsApp).",
+      "disconnect": "Disconnect"
     },
     "sourceDetail": {
       "fallbackSummary": "Manage the settings for this connection.",
@@ -3195,35 +3195,38 @@
       "title": "Search scope",
       "desc": "Choose the folders Dazzi reads and searches, and what to exclude.",
       "foldersTitle": "Folders to search",
-      "foldersDesc": "The contents of these folders are included in AI search.",
-      "folderName": "Search folders",
-      "folderHint": "Pick folders to add. Everything inside them is searched.",
+      "foldersDesc": "Everything inside is included in AI search.",
       "addFolder": "Add folder",
       "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
       "excludeTitle": "Items to exclude",
       "excludeDesc": "Folders and files that will not be searched.",
-      "excludeNote": "Developer folders ({{folders}}) and all folders starting with a dot (.idea, .vscode, .cache, etc.) are excluded automatically.",
-      "excludeList": "Exclusion list",
-      "excludeListHint": "Also exclude folders and files with matching names.",
-      "fileScopeTitle": "File inclusion scope",
       "autoWatch": "Auto-detect changes",
       "autoWatchHintOff": "Unavailable because file search is off.",
-      "autoWatchHintOn": "Updates the file-name search list when files change. The document content index is refreshed manually from the Indexing screen.",
+      "autoWatchHintOn": "When files change, the file-name search list updates on its own. Refresh the document content index from the Indexing screen.",
       "addFolderTitle": "Add search folder",
       "addItemTitle": "Add exclusion",
       "addFolderDesc": "Enter the folder path to include in search.",
-      "addItemDesc": "Enter the folder or file name to exclude from search.",
+      "addItemDesc": "Enter the path or name of a folder or file to exclude.",
       "folderPath": "Folder path",
       "item": "Item",
       "addFolderPlaceholder": "e.g. ~/Documents",
       "addItemPlaceholder": "e.g. node_modules",
       "confirmAdd": "Add",
-      "addChip": "+ Add",
       "notAdded": {
         "duplicate": "{{path}} is already a search folder.",
         "insideTarget": "{{path}} is already covered by a search folder above it.",
         "notAbsolute": "{{path}} is not a full path."
-      }
+      },
+      "addExclusion": "Add exclusion",
+      "excludePick": "Choose folders or files",
+      "excludePickFolder": "Choose folders",
+      "excludePickFile": "Choose files",
+      "excludeType": "Enter a path",
+      "customExcludes": "Exclusions you added",
+      "devExcluded": "Developer folders are excluded automatically",
+      "devMore": "Details",
+      "devLess": "Hide",
+      "devDotNote": "Folders whose names start with a dot (.) are excluded too."
     },
     "indexMap": {
       "title": "Index map",

@@ -3287,3 +3287,327 @@
 .settings-view .settings-remote-revoke-btn {
 	color: var(--danger-text);
 }
+
+/* ------------------------------------------------ 검색 범위 (Figma 386:9908) -- */
+
+.settings-view .scope-page {
+	display: flex;
+	flex-direction: column;
+	gap: 32px;
+	margin-top: 40px;
+}
+
+.settings-view .scope-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-view .scope-section--row {
+	flex-direction: row;
+	align-items: center;
+	gap: 16px;
+}
+
+.settings-view .scope-section--row .scope-section-text {
+	flex: 1;
+}
+
+.settings-view .scope-section-head {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-view .scope-section-text {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.settings-view .scope-section-title {
+	margin: 0;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+	color: var(--text-primary);
+}
+
+.settings-view .scope-section-desc {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .scope-subtitle {
+	margin-bottom: -2px;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-primary);
+}
+
+.settings-view .scope-primary-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	height: 35px;
+	padding: 0 14px 0 12px;
+	border: 0;
+	border-radius: var(--radius-8);
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font: inherit;
+	font-size: 12.5px;
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+	transition: background var(--dur-color) var(--ease-out);
+}
+
+.settings-view .scope-primary-btn:hover:not(:disabled) {
+	background: var(--accent-hover);
+}
+
+.settings-view .scope-primary-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.settings-view .scope-menu-anchor {
+	position: relative;
+	flex: none;
+}
+
+.settings-view .scope-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	min-width: 180px;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-menu);
+}
+
+.settings-view .scope-menu-item {
+	display: flex;
+	align-items: center;
+	height: 30px;
+	padding: 0 10px;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .scope-menu-item:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .scope-list {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-10);
+	background: var(--bg-window);
+}
+
+.settings-view .scope-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 48px;
+	padding: 0 16px;
+}
+
+.settings-view .scope-row + .scope-row {
+	border-top: 1px solid var(--border);
+}
+
+.settings-view .scope-row-icon {
+	flex: none;
+	color: var(--text-body);
+}
+
+.settings-view .scope-row-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	font-size: 13px;
+	line-height: 16px;
+	color: var(--text-primary);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .scope-row-remove {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-body);
+	cursor: pointer;
+}
+
+.settings-view .scope-row-remove:hover:not(:disabled) {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .scope-empty {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .scope-divider {
+	width: 100%;
+	height: 1px;
+	margin: 0;
+	border: 0;
+	background: var(--border);
+}
+
+.settings-view .scope-dev {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 14px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+}
+
+.settings-view .scope-dev-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-view .scope-dev-title {
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-body);
+}
+
+.settings-view .scope-link {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--accent-text);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.settings-view .scope-dev-body {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding-bottom: 6px;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .scope-dev-names {
+	color: var(--text-muted);
+}
+
+.settings-view .scope-dev-dots {
+	color: var(--text-faint);
+}
+
+/* ------------------------------------------------ 연결된 앱 (Figma 403:6999) -- */
+
+.settings-view .settings-apps .settings-list-title {
+	font-size: 13px;
+	font-weight: var(--weight-bold);
+	line-height: 17px;
+}
+
+.settings-view .settings-apps .settings-list-meta {
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .settings-apps .settings-list-row {
+	gap: 12px;
+	padding: 13px 0;
+}
+
+.settings-view .settings-apps .settings-app-icon {
+	background: var(--bg-window);
+	box-shadow: 0 0 0 1px var(--border-divider), 0 1px 2px rgba(20, 20, 41, 0.06);
+}
+
+.settings-view .settings-apps-open {
+	display: flex;
+	flex: 1;
+	align-items: center;
+	gap: 12px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-apps-open:hover .settings-list-title {
+	color: var(--accent-text);
+}
+
+.settings-view .settings-apps-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 4px;
+	padding: 0 12px 0 10px;
+}
+
+.settings-view .settings-apps-empty {
+	margin: 0;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .settings-apps-group {
+	margin-top: 20px;
+	padding-bottom: 8px;
+	border-bottom: 1px solid var(--border-divider);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+.settings-view .settings-apps-mine .settings-list-row:last-child,
+.settings-view .settings-apps .settings-list .settings-list-row:last-child {
+	border-bottom: 1px solid var(--border-divider);
+}

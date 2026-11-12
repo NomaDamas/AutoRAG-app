@@ -1637,7 +1637,8 @@
       "quitButton": "終了",
       "continueButton": "続ける",
       "indexingInProgress": "インデックス作成中です。",
-      "indexingQuitDetail": "終了すると進行が停止します。"
+      "indexingQuitDetail": "終了すると進行が停止します。",
+      "chooseExcludeTitle": "除外する項目を選択"
     },
     "onboarding": {
       "apiKeyRequired": "API キーが必要です。",
@@ -3146,8 +3147,6 @@
       },
       "empty": "接続済みのアプリがありません。下から追加してください。",
       "connectApps": "アプリを接続",
-      "connectAppsDesc": "追加するアプリを選んでください。",
-      "connected": "接続済み",
       "connect": "接続",
       "promptTitle": "{{name}} を接続",
       "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
@@ -3155,7 +3154,8 @@
       "promptConfirm": "接続を追加",
       "macOnlyCalendar": "macOS（EventKit）でのみ利用できます。",
       "macOnlySpotlight": "macOS（Spotlight）でのみ利用できます。",
-      "macOnlyWhatsapp": "macOS（WhatsApp）でのみ利用できます。"
+      "macOnlyWhatsapp": "macOS（WhatsApp）でのみ利用できます。",
+      "disconnect": "接続を解除"
     },
     "sourceDetail": {
       "fallbackSummary": "この接続の設定を管理します。",
@@ -3195,35 +3195,38 @@
       "title": "検索範囲",
       "desc": "Dazzi が読み取って検索するフォルダと除外する項目を決めます。",
       "foldersTitle": "検索するフォルダ",
-      "foldersDesc": "これらのフォルダの内容を AI 検索に含めます。",
-      "folderName": "検索フォルダ",
-      "folderHint": "フォルダを選んで追加します。中のすべての項目が検索対象になります。",
+      "foldersDesc": "中にあるすべての項目がAI検索に含まれます。",
       "addFolder": "フォルダを追加",
       "emptyFolderNote": "検索フォルダがまだありません。追加しない場合はデフォルトの検索範囲を使います。",
       "excludeTitle": "除外する項目",
       "excludeDesc": "検索しないフォルダとファイルです。",
-      "excludeNote": "開発用フォルダ（{{folders}}）とドットで始まるすべてのフォルダ（.idea、.vscode、.cache など）は自動的に除外されています。",
-      "excludeList": "除外リスト",
-      "excludeListHint": "名前が一致するフォルダ・ファイルをさらに除外します。",
-      "fileScopeTitle": "ファイルの対象範囲",
       "autoWatch": "変更の自動検出",
       "autoWatchHintOff": "ファイル検索がオフのため使用できません。",
-      "autoWatchHintOn": "ファイル名検索の一覧をファイルが変わったときに更新します。ドキュメント内容のインデックスはインデックス画面で手動更新します。",
+      "autoWatchHintOn": "ファイルが変わると名前検索の一覧を自動で更新します。文書内容の索引はインデックス画面で手動で更新してください。",
       "addFolderTitle": "検索フォルダを追加",
       "addItemTitle": "除外項目を追加",
       "addFolderDesc": "検索に含めるフォルダのパスを入力してください。",
-      "addItemDesc": "検索から除外するフォルダ・ファイル名を入力してください。",
+      "addItemDesc": "除外するフォルダやファイルのパスまたは名前を入力してください。",
       "folderPath": "フォルダのパス",
       "item": "項目",
       "addFolderPlaceholder": "例: ~/Documents",
       "addItemPlaceholder": "例: node_modules",
       "confirmAdd": "追加",
-      "addChip": "+ 追加",
       "notAdded": {
         "duplicate": "{{path}} はすでに検索フォルダです。",
         "insideTarget": "{{path}} は上位の検索フォルダにすでに含まれています。",
         "notAbsolute": "{{path}} は完全なパスではありません。"
-      }
+      },
+      "addExclusion": "除外を追加",
+      "excludePick": "フォルダやファイルを選択",
+      "excludePickFolder": "フォルダを選択",
+      "excludePickFile": "ファイルを選択",
+      "excludeType": "パスを入力",
+      "customExcludes": "自分で追加した除外項目",
+      "devExcluded": "開発用フォルダは自動で除外中",
+      "devMore": "詳しく",
+      "devLess": "閉じる",
+      "devDotNote": "名前がピリオド(.)で始まるフォルダもすべて除外されます。"
     },
     "indexMap": {
       "title": "インデックスマップ",
