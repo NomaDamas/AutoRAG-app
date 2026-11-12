@@ -116,6 +116,26 @@ export function AnswerImage({
 		);
 	}
 
+	if (target.media !== undefined && !failed) {
+		const common = { controls: true, preload: "metadata" as const, src: previewStreamUrl(target.path), title: target.path, onError: () => setFailed(true) };
+		return (
+			<figure data-media-path={target.path} className="answer-image m-0 flex max-w-full flex-col gap-4">
+				{target.media === "video" ? (
+					<video {...common} className="block max-h-[320px] max-w-full rounded-8 border border-border bg-black" />
+				) : (
+					<audio {...common} className="block w-full max-w-[420px]" />
+				)}
+				{captioned ? (
+					<figcaption className="min-w-0 max-w-[420px] text-badge text-ink-muted">
+						<span className="block truncate" title={target.path}>
+							{alt === "" ? target.name : `${alt} · ${target.name}`}
+						</span>
+					</figcaption>
+				) : null}
+			</figure>
+		);
+	}
+
 	const open = (): void => actions.onOpenImage({ path: target.path, name: target.name });
 	const pathLine = (
 		<span className="block truncate font-mono text-badge text-ink-muted select-text" title={target.path}>

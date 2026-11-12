@@ -56,6 +56,7 @@ import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
+import { FileMention } from "./FileMention";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
@@ -1646,6 +1647,8 @@ function AnswerInline({
 								{segment.number}
 							</button>
 						);
+					case "file":
+						return <FileMention key={`${index}`} path={segment.path} onOpen={onOpenUrl} />;
 					case "link":
 						return (
 							<AnswerLink key={`${index}`} url={segment.url} onOpenUrl={onOpenUrl}>

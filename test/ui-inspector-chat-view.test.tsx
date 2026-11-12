@@ -74,7 +74,68 @@ function render(pending: readonly ChatAttachment[]): void {
 	);
 }
 
+function renderTab(next: InspectorChatTab): void {
+	act(() =>
+		root.render(
+			<InspectorChatView
+				tab={next}
+				targetName="deck.pdf"
+				pending={[]}
+				running={false}
+				imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+				onAsk={() => true}
+				onStop={noop}
+				onBack={noop}
+				onNewChat={noop}
+				onExpand={noop}
+				onOpenChat={noop}
+				onDismiss={noop}
+				onReveal={noop}
+				onPreview={noop}
+			/>,
+		),
+	);
+}
+
+const withAnswer = (answer: string, excerpts: readonly string[]): InspectorChatTab => ({
+	...tab,
+	chat: {
+		chatId: "chat-2",
+		updatedAt: 0,
+		turns: [
+			{
+				question: "q",
+				attachments: [],
+				answer: { answer, evidence: [{ number: 1, title: "note.md", summary: "", source: "/work/note.md", excerpts }] },
+				draft: "",
+				progress: "",
+				error: null,
+				stopped: false,
+			},
+		],
+	},
+});
+
 describe("the inspector chat view", () => {
+	it("shows a [file:<path>] the librarian left as written as the file's chip, not as raw text", () => {
+		renderTab(withAnswer("정리: [file:/Users/me/Documents/archive]\n[file:/Users/me/Documents/archive/summaries]. [1]", ["x"]));
+		const chips = [...host.querySelectorAll("[data-file-mention]")].map((chip) => chip.textContent);
+		expect(chips).toEqual(["archive", "summaries"]);
+		expect(host.querySelector(".inspector-chat-answer")?.textContent).not.toContain("[file:");
+	});
+
+	it("renders HTML, a table, an image, and a video inside the hovered citation card", () => {
+		renderTab(withAnswer("본문 [1]", ["<table><tr><td>셀</td></tr></table>\n![사진](pic.png)\n![영상](clip.mp4)\n**표시**"]));
+		const cite = host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
+		act(() => cite?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		const card = host.querySelector(".inspector-chat-source");
+		expect(card?.querySelector("table td")?.textContent).toBe("셀");
+		expect(card?.querySelector("img")?.getAttribute("src")).toContain("autorag-preview");
+		expect(card?.querySelector("video")?.getAttribute("src")).toContain("autorag-preview");
+		expect(card?.querySelector("strong")?.textContent).toBe("표시");
+		expect(card?.textContent).not.toContain("<td>");
+	});
+
 	it("shows the question as a bubble under the file it brought in", () => {
 		render([]);
 		expect(host.querySelector(".inspector-chat-question")?.textContent).toBe("요약해줘");
@@ -89,9 +150,9 @@ describe("the inspector chat view", () => {
 		act(() => cite?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
 		const card = host.querySelector(".inspector-chat-source");
 		expect(card?.textContent).toContain("deck.pdf");
-		const marked = card?.querySelector(".text-accent-text.font-medium");
+		const marked = card?.querySelector("strong");
 		expect(marked?.textContent).toBe("곡선으로 재해석");
-		expect(marked?.parentElement?.textContent).toBe("컨셉 — 곡선으로 재해석하는 것이 목표");
+		expect(card?.querySelector(".evidence__block")?.textContent).toBe("컨셉 — 곡선으로 재해석하는 것이 목표");
 		expect([...(card?.querySelectorAll("button") ?? [])].map((button) => button.textContent)).toEqual(["파일 위치로 이동", "미리보기"]);
 	});
 

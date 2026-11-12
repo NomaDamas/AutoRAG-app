@@ -44,6 +44,8 @@ import {
 } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
+import { EvidenceExcerpt } from "./EvidenceBlocks";
+import { dirname } from "../state/paths";
 
 /** Time since `at`, worded short in its largest unit: "방금", "5분 전", "2시간 전", "3일 전", "1달 전", "1년 전". */
 function useAgo(): (at: number, now: number) => string {
@@ -328,23 +330,6 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 	);
 }
 
-/** An excerpt with its **marked** phrases (the cited passage) in the accent, the rest as plain text. */
-function MarkedExcerpt({ text }: { readonly text: string }): ReactElement {
-	const parts = text.split(/\*\*(.+?)\*\*/g);
-	return (
-		<>
-			{parts.map((part, index) =>
-				index % 2 === 1 ? (
-					<span key={`${index}`} className="font-medium text-accent-text">
-						{part}
-					</span>
-				) : (
-					part
-				),
-			)}
-		</>
-	);
-}
 
 const SOURCE_ACTION =
 	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-4 pl-8 pr-9 text-[10.5px] leading-[15.75px] text-ink-body cursor-pointer hover:bg-hover";
@@ -352,28 +337,33 @@ const SOURCE_ACTION =
 /** What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). */
 function SourceCard({
 	item,
+	imageActions,
 	onReveal,
 	onPreview,
 }: {
 	readonly item: CitationEvidence;
+	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const local = isLocalEvidenceSource(item.source) ? item.source : null;
-	const excerpt = item.excerpts[0] ?? item.summary;
+	const excerpts = item.excerpts.length > 0 ? item.excerpts.slice(0, 1) : item.summary.length > 0 ? [item.summary] : [];
+	const images = { folder: local === null ? null : dirname(local), actions: imageActions };
 	return (
 		<div className="inspector-chat-source overflow-hidden rounded-8 border border-divider bg-window shadow-menu" role="tooltip">
 			<div className="flex items-center gap-6 px-10 py-8">
 				<span className="flex size-18 flex-none items-center justify-center rounded-5 bg-accent text-badge font-medium text-on-accent">{item.number}</span>
 				<span className="min-w-0 flex-1 truncate text-meta font-medium leading-[16px] text-ink">{evidenceHeading(item.title, item.source)}</span>
 			</div>
-			{excerpt.length === 0 && local === null ? null : (
+			{excerpts.length === 0 && local === null ? null : (
 				<div className="flex flex-col gap-6 border-t border-border px-8 pt-8 pb-10">
-					{excerpt.length === 0 ? null : (
-						<p className="block m-0 text-meta leading-[1.5] text-ink-body line-clamp-6">
-							<MarkedExcerpt text={excerpt} />
-						</p>
+					{excerpts.length === 0 ? null : (
+						<div className="inspector-chat-source-body flex max-h-[260px] min-w-0 flex-col gap-6 overflow-auto text-meta [&_.evidence\_\_block]:text-meta [&_strong]:font-medium! [&_strong]:text-accent-text!">
+							{excerpts.map((excerpt, index) => (
+								<EvidenceExcerpt key={`${index}`} text={excerpt} images={images} />
+							))}
+						</div>
 					)}
 					{local === null ? null : (
 						<div className="flex flex-wrap gap-4">
@@ -479,7 +469,7 @@ function TurnView({
 						/>
 						{card === null || hovered === null ? null : (
 							<div className="absolute right-0 left-0 z-20" style={{ top: hovered.top }} onMouseEnter={keep}>
-								<SourceCard item={card} onReveal={onReveal} onPreview={onPreview} />
+								<SourceCard item={card} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
 							</div>
 						)}
 					</div>
