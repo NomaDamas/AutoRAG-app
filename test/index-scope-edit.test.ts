@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addSearchRoots, availableActions, coveringExclusion, excludePath, includePath, removeSearchRoot, type ScopeState } from "../src/shared/index-scope-edit";
+import { addSearchRoots, availableActions, coveringExclusion, excludePath, includePath, isGlobExclusion, removeSearchRoot, type ScopeState } from "../src/shared/index-scope-edit";
 
 const scope = (searchPaths: readonly string[], excludePaths: readonly string[] = []): ScopeState => ({ searchPaths, excludePaths });
 
@@ -134,5 +134,23 @@ describe("availableActions", () => {
 	it("offers nothing for a folder the refresh never walks (node_modules and the like)", () => {
 		const result = availableActions({ path: "/a/node_modules", kind: "folder", state: "excluded", excludePaths: [] });
 		expect(result).toEqual({ exclude: false, include: false });
+	});
+});
+
+describe("glob exclusions (librarian 2.13.12)", () => {
+	it("tells a pattern from a path the way the librarian does: * ? [ make a glob", () => {
+		expect(isGlobExclusion("**/node_modules/**")).toBe(true);
+		expect(isGlobExclusion("/a/b?.txt")).toBe(true);
+		expect(isGlobExclusion("/a/[x]/y")).toBe(true);
+		expect(isGlobExclusion("/a/b")).toBe(false);
+	});
+
+	it("keeps a pattern when a target is removed: it is not tied to one folder", () => {
+		const result = removeSearchRoot(scope(["/a", "/b"], ["/a/x", "**/Downloads/**"]), "/a");
+		expect(result).toEqual({ searchPaths: ["/b"], excludePaths: ["**/Downloads/**"] });
+	});
+
+	it("never reads a pattern as a folder that covers a path", () => {
+		expect(coveringExclusion(["**/Downloads/**"], "/r/Downloads/x.txt")).toBeNull();
 	});
 });

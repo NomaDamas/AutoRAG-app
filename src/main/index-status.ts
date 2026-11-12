@@ -7,6 +7,8 @@ import { refreshAutoragIndex } from "./index-refresh";
 import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
 import type { IndexMap } from "../shared/index-map-contract";
+import { findExclusion } from "./path-exclusion";
+import { isGlobExclusion } from "../shared/index-scope-edit";
 import { buildIndexMap, scanIndexScope, type IndexScopeContext } from "./index-map";
 
 /**
@@ -38,6 +40,11 @@ function canonical(path: string): Promise<string> {
 	return realpath(path).catch(() => resolve(path));
 }
 
+/** An exclusion entry as the index compares it: a path is canonical, a glob stays as written (it is not a place). */
+function canonicalExclusion(entry: string): Promise<string> {
+	return isGlobExclusion(entry) ? Promise.resolve(entry) : canonical(entry);
+}
+
 function isUnder(path: string, root: string): boolean {
 	return path === root || path.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
 }
@@ -54,7 +61,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		return Promise.all(
 			raw.excludePaths
 				.filter((value): value is string => typeof value === "string" && value.length > 0)
-				.map((value) => canonical(isAbsolute(value) ? value : resolve(workspacePath, value))),
+				.map((value) => (isGlobExclusion(value) ? Promise.resolve(value) : canonical(isAbsolute(value) ? value : resolve(workspacePath, value)))),
 		);
 	}
 
@@ -62,7 +69,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
 		const config = await applyAppIndexing(resolveConfigReadOnly(input), raw);
 		const [exclusions, roots] = await Promise.all([
-			Promise.all((config.excludePaths ?? []).map(canonical)),
+			Promise.all((config.excludePaths ?? []).map(canonicalExclusion)),
 			Promise.all(config.searchPaths.map(canonical)),
 		]);
 		let index = emptyMirrorIndex();
@@ -89,9 +96,9 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			if (!roots.some((root) => isUnder(real, root))) {
 				return { path, kind: "outside", excluded: false, toggleable: false, detail: t("main.indexStatus.outside") };
 			}
-			const exclusion = exclusions.find((candidate) => isUnder(real, candidate));
-			const excluded = exclusion !== undefined;
-			const toggleable = exclusion === undefined || exclusion === real;
+			const exclusion = findExclusion(exclusions, real);
+			const excluded = exclusion !== null;
+			const toggleable = exclusion === null || (exclusion.kind === "path" && exclusion.entry === real);
 			const entry = entries.get(real);
 			// Both modes stage parsed files into MinSync (keyword-only as a sparse-only index): a file is in the index once staged.
 			const staged = entry !== undefined && (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false));
@@ -102,7 +109,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 							kind: "excluded",
 							excluded,
 							toggleable,
-							detail: toggleable ? t("main.indexStatus.excluded") : t("main.indexStatus.parentExcluded"),
+							detail: exclusion?.kind === "glob" ? t("main.indexStatus.patternExcluded", { pattern: exclusion.entry }) : toggleable ? t("main.indexStatus.excluded") : t("main.indexStatus.parentExcluded"),
 						}
 					: { path, kind: "pending", excluded, toggleable, detail: t("main.indexStatus.excludedPending") };
 			}
