@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink } from "lucide-react";
 import type { AccountPlanId, AccountSnapshot, AccountStatus } from "../../../../shared/account-contract";
 import { accountDashboardUrl, accountLegalUrl, creditsResetAt, splitRemaining, type AccountLegalRoute } from "../../../../shared/account-contract";
-import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { Note, PlainRow, Row, Section, SettingsPageHead } from "./SettingsKit";
 
 function openExternal(url: string): void {
 	const open = window.autorag?.fs?.openUrl;
@@ -68,41 +68,49 @@ export function AccountPage(): ReactElement {
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.account")} description={t("settingsCore.account.description")} />
-			<Section title={t("settingsCore.account.profileTitle")}>
-				<Row name={t("settingsCore.account.accountName")} hint={who}>
-					{signedIn ? (
-						<button type="button" className="linear-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
-							{t("settingsCore.account.signOut")}
+			{/* Figma 412:11464: 계정 (two 64px rows with outlined buttons), a rule, then the policy links in one line. */}
+			<section className="ai-section">
+				<div className="ai-section-head">
+					<h2 className="ai-section-title">{t("settingsCore.account.profileTitle")}</h2>
+				</div>
+				<div className="account-rows">
+					<PlainRow name={t("settingsCore.account.accountName")} hint={who}>
+						{signedIn ? (
+							<button type="button" className="settings-outline-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
+								{t("settingsCore.account.signOut")}
+							</button>
+						) : status?.state === "signingIn" ? (
+							<button type="button" className="settings-outline-btn" onClick={() => run(() => window.autorag.account.cancelSignIn())}>
+								{t("common.cancel")}
+							</button>
+						) : (
+							<button type="button" className="settings-outline-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
+								{t("settingsCore.account.signInBrowser")}
+								<ExternalLink size={14} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+							</button>
+						)}
+					</PlainRow>
+					{status?.offline === true ? <Note>{t("settingsCore.account.offline")}</Note> : null}
+					{status?.error ? <Note>{status.error}</Note> : null}
+					{error !== null ? <Note>{error}</Note> : null}
+					<PlainRow name={t("settingsCore.account.managedName")} hint={t("settingsCore.account.managedHint")}>
+						<button type="button" className="settings-outline-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
+							{t("settingsCore.account.useManaged")}
 						</button>
-					) : status?.state === "signingIn" ? (
-						<button type="button" className="linear-btn" onClick={() => run(() => window.autorag.account.cancelSignIn())}>
-							{t("common.cancel")}
-						</button>
-					) : (
-						<button type="button" className="linear-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
-							{t("settingsCore.account.signInBrowser")}
-						</button>
-					)}
-				</Row>
-				{status?.offline === true ? <Note>{t("settingsCore.account.offline")}</Note> : null}
-				{status?.error ? <Note>{status.error}</Note> : null}
-				{error !== null ? <Note>{error}</Note> : null}
-				<Row name={t("settingsCore.account.managedName")} hint={t("settingsCore.account.managedHint")}>
-					<button type="button" className="linear-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
-						{t("settingsCore.account.useManaged")}
-					</button>
-				</Row>
-			</Section>
-			<Section title={t("settingsCore.account.legal.title")}>
-				<div className="settings-legal-links">
+					</PlainRow>
+				</div>
+			</section>
+			<hr className="ai-divider" />
+			<section className="account-legal">
+				<h2 className="account-legal-title">{t("settingsCore.account.legal.title")}</h2>
+				<div className="account-legal-links">
 					{(["terms", "privacy", "acceptableUse", "subprocessors"] as const).map((route) => (
-						<button key={route} type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, route)}>
+						<button key={route} type="button" className="account-legal-link" onClick={() => openLegal(status?.baseUrl, route)}>
 							{t(`settingsCore.account.legal.${route}`)}
-							<ExternalLink size={13} aria-hidden="true" focusable="false" />
 						</button>
 					))}
 				</div>
-			</Section>
+			</section>
 		</>
 	);
 }

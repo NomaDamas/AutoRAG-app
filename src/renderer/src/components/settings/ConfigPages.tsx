@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
-import { PlainRow, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { PlainRow, SettingsPageHead } from "./SettingsKit";
 import { asRecord, boolOf, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
 
@@ -51,8 +51,9 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 		<>
 			<SettingsPageHead title={t("settingsSources.web.title")} description={t("settingsSources.web.desc")} />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.web.useSection")}>
-				<Row name={t("settingsSources.web.useSection")} hint={t("settingsSources.web.useHint")}>
+			{/* Figma 412:11269: three plain 64px rows under the head. */}
+			<div className="settings-plain">
+				<PlainRow name={t("settingsSources.web.useSection")} hint={t("settingsSources.web.useHint")}>
 					<Switch
 						checked={webEnabled}
 						ariaLabel={t("settingsSources.web.useSection")}
@@ -61,10 +62,10 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 							else void run([{ path: ["webSearch"], value: { ...(asRecord(web) ?? {}), enabled: true } }]);
 						}}
 					/>
-				</Row>
-				<Row name={t("settingsSources.web.providerName")} hint={webEnabled ? t("settingsSources.web.providerHintOn") : t("settingsSources.web.providerHintOff")}>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.web.providerName")} hint={webEnabled ? t("settingsSources.web.providerHintOn") : t("settingsSources.web.providerHintOff")}>
 					<select
-						className="linear-select"
+						className="linear-select settings-plain-select"
 						aria-label={t("settingsSources.web.providerName")}
 						disabled={!webEnabled}
 						value={provider}
@@ -78,8 +79,8 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 							<option key={item.id} value={item.id}>{item.label}</option>
 						))}
 					</select>
-				</Row>
-				<Row name={t("settingsSources.web.fetchName")} hint={webEnabled ? t("settingsSources.web.fetchHintOn") : t("settingsSources.web.fetchHintOff")}>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.web.fetchName")} hint={webEnabled ? t("settingsSources.web.fetchHintOn") : t("settingsSources.web.fetchHintOff")}>
 					<Switch
 						checked={webEnabled && fetchEnabled}
 						disabled={!webEnabled}
@@ -89,8 +90,8 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 							else void run([{ path: ["webSearch", "fetch"], value: { ...(asRecord(rawFetch) ?? {}), enabled: true } }]);
 						}}
 					/>
-				</Row>
-			</Section>
+				</PlainRow>
+			</div>
 		</>
 	);
 }

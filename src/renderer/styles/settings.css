@@ -3924,3 +3924,83 @@
 	background: var(--bg-hover);
 	color: var(--text-primary);
 }
+
+/* ---------------------------------------------- 내 계정 (Figma 412:11464) -- */
+
+/* An outlined 32px action (로그인 ↗, 사용하기): white, the Border grey, 8px corners, 12px medium body text. */
+.settings-view .settings-outline-btn {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .settings-outline-btn:hover:not(:disabled) {
+	background: var(--bg-hover);
+}
+
+.settings-view .settings-outline-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* The 계정 rows are 64px with the button centred on the two lines (the section title sits 16px above). */
+.settings-view .account-rows .settings-plain-row,
+.settings-view .account-rows .settings-plain-row:first-child {
+	align-items: center;
+	padding: 13.5px 0;
+}
+
+.settings-view .account-legal {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .account-legal-title {
+	margin: 0;
+	color: var(--text-body);
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 21px;
+}
+
+.settings-view .account-legal-links {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+/* Text links split by 12px rules. */
+.settings-view .account-legal-link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	cursor: pointer;
+}
+
+.settings-view .account-legal-link + .account-legal-link {
+	padding-left: 12px;
+	border-left: 1px solid var(--border-divider);
+}
+
+.settings-view .account-legal-link:hover {
+	color: var(--text-primary);
+	text-decoration: underline;
+}
