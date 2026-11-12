@@ -122,8 +122,8 @@ export function TabStrip({
 			<button
 				type="button"
 				className={cn(
-					// Figma 328:5789: the + sits on the active tab's colour, with no rule before it.
-					"tabs__new flex flex-none w-28 items-center justify-center border-0 bg-tab-active text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
+					// Figma 328:4454: the + sits on the active tab's colour, set off from the last tab by the same rule the tabs use.
+					"tabs__new flex flex-none w-28 items-center justify-center border-0 border-l border-tabstrip-line bg-tab-active text-tab-text hover:text-ink [-webkit-app-region:no-drag]",
 				)}
 				title={t("tabs.new", { shortcut: newTabShortcut, defaultValue: `New tab ${newTabShortcut}` })}
 				aria-label={t("tabs.new", { shortcut: newTabShortcut, defaultValue: `New tab ${newTabShortcut}` })}
