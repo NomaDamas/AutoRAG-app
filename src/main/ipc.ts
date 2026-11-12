@@ -195,8 +195,8 @@ export function registerMagicActionIpcHandlers(service: MagicActionService): voi
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
-	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments) =>
-		service.start(searchId, chatId, query, attachments),
+	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments, viewingFolder: unknown) =>
+		service.start(searchId, chatId, query, attachments, typeof viewingFolder === "string" ? viewingFolder : undefined),
 	);
 	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,

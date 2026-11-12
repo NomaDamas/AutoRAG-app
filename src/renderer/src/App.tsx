@@ -33,7 +33,7 @@ import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Wor
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
 import type { DirectoryData } from "./hooks/useDirectoryData";
-import { isTagPath, tagNameOf } from "../../shared/fs-contract";
+import { isTagPath, isVirtualListing, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
@@ -55,7 +55,7 @@ import { sessionEvidencePaths } from "./state/evidence";
 import { inspectorEntryFor } from "./state/inspector-target";
 import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
 import { ruleTitle } from "./state/automations";
-import { watchSetFor } from "./state/live";
+import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
@@ -658,6 +658,11 @@ export function App(): ReactElement {
 	}));
 	const chatPending = pendingAttachments(chatTab, chatTargets);
 	/**
+	 * The folder the tab shows, told to the agent as a hint when a question is asked with nothing selected. Not for a
+	 * search result list or another virtual listing (no folder is being looked at), and never an app tab.
+	 */
+	const viewingFolder = chatTargets.length === 0 && finder !== undefined && !finder.searching && isFilesystemPath(path) && !isVirtualListing(path) ? path : undefined;
+	/**
 	 * A multi-selection's index button: shown when every selected item can be toggled. Like the single file's button, an
 	 * item whose status has not arrived counts as a toggleable file in the index.
 	 */
@@ -970,7 +975,7 @@ export function App(): ReactElement {
 											now={chatNow}
 											targets={chatTargets}
 											running={chatRunning}
-											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatTargets, true)}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatTargets, true, viewingFolder)}
 											onSummarize={() => {
 												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatTargets, true);
 											}}
@@ -989,7 +994,7 @@ export function App(): ReactElement {
 											pending={chatPending}
 											running={chatLive}
 											imageActions={imageActions}
-											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending)}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending, false, chatTargets.length === 0 ? viewingFolder : undefined)}
 											onStop={inspectorChats.stop}
 											onBack={() => inspectorChats.setMode(chatTabId, "info")}
 											onNewChat={() => inspectorChats.reset(chatTabId)}
