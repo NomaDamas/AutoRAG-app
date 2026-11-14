@@ -4103,3 +4103,69 @@
 	background: var(--border);
 }
 
+/* ----------------------------------------------- 일반 (Figma 416:12228) -- */
+
+/* Titled groups of plain rows, 28px from the rule between them. */
+.settings-view .plain-sections {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	margin-top: 40px;
+}
+
+.settings-view .plain-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.settings-view .plain-section-title {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .plain-section-rows {
+	margin-top: 0;
+}
+
+.settings-view .plain-section-rows .settings-plain-row {
+	align-items: center;
+	padding: 14px 0;
+}
+
+.settings-view .plain-section-rows .settings-plain-row:first-child {
+	padding-top: 0;
+}
+
+.settings-view .plain-section-rows .settings-plain-row:last-child {
+	padding-bottom: 0;
+}
+
+/* A select sits on the row's first line (화면 모드, 앱 언어). */
+.settings-view .plain-section-rows.is-top .settings-plain-row {
+	align-items: flex-start;
+}
+
+.settings-view .plain-section-divider {
+	width: 100%;
+	height: 1px;
+	margin: 0;
+	border: 0;
+	background: var(--border-divider);
+}
+
+/* The quick-search chord as a keycap: Stage fill, the Divider grey, 6px corners, 12px ink. */
+.settings-view .plain-section-rows .shortcut-recorder-btn {
+	height: auto;
+	min-width: 0;
+	padding: 5px 8px;
+	border-color: var(--border-divider);
+	background: var(--bg-subtle-alt);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-regular);
+	line-height: 16px;
+}
+
