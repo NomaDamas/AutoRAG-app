@@ -46,6 +46,22 @@ the window size once per load, `resize(size)` follows a later user change (the
 자세한 정보 disclosure), and `useHiddenTitle` leaves the toolbar title empty for
 panels that print the name themselves.
 
+### Mark up and edit
+
+For a document the `document-edit` agent can change (`documentEditMode` in
+`src/preview/shared/annotation.ts`: text, Markdown, HTML, code, CSV/TSV, and
+Office/HWP(X)/OpenDocument packages) the toolbar shows a pen button left of
+share. It opens `MarkupLayer` (`src/preview/ui/markup.tsx`) over the stage: a
+palette (pen, box, underline, remove last, clear) and a composer under the
+document. A mark is stored relative to the `[data-page]` element it was drawn
+on, or to the stage for a document without pages, as fractions of that box, so
+it stays on the same words while the panel scrolls, zooms, or resizes; the text
+under it is read from the DOM and sent along. Enter sends the marks and the
+instruction over `preview:edit-start`; progress, the reply, and errors come back
+on `preview:edit-event`. When the file changed, main shows it again (the caches
+key on mtime), and Undo puts the original bytes back. Another file, the
+composer's close button, or the pen button again closes the layer.
+
 ## Sizing
 
 `fitQuickLook` takes a fit mode. `aspect` scales media uniformly (images and
@@ -519,6 +535,16 @@ a 64KB sniff of an unknown file, read on as text only when it looks like text.
 The detail calls (details, SHA-256, folder size, audio tags, data rows, archive listings) answer only for the
 path the window is showing, and the hash, folder walk, and archive listing stop when the preview
 moves on.
+
+On macOS, a POSIX read refused with `EDEADLK` (Darwin errno 11, sometimes
+reported by Node as `Unknown system error -11`) is read through Foundation's
+`NSFileCoordinator` via `/usr/bin/osascript`. The bounded read happens inside
+the coordination accessor, allowing a cloud file provider to supply the file
+before its bytes are consumed. Local reads keep the direct path; coordination
+has a 60-second deadline and preserves the viewer's byte cap. Read failures
+become a localized preview error instead of rejecting `preview:show` without
+loading the panel. `test/preview-file-read.test.ts` exercises the real native
+coordinator with a binary document after injecting the POSIX refusal.
 
 A streamed viewer names the file's version in its URL (`previewStreamUrl(path,
 file)` adds `v=<modifiedAt>:<size>` from the `PreviewDocument`; the protocol

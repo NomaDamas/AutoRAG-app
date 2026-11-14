@@ -41,6 +41,10 @@ function bridgeAnswering(answer: (path: string) => Promise<CertificatePreview>):
 		share: never,
 		copyText: never,
 		textEntry: () => undefined,
+		editDocument: async () => undefined,
+		cancelEdit: async () => undefined,
+		undoEdit: async () => false,
+		onEditEvent: () => () => undefined,
 	};
 }
 
