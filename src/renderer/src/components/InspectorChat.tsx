@@ -20,6 +20,7 @@ import { appendTranscript, type VoiceBridge } from "../../../shared/voice-contra
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
+import type { InteractionRequest } from "../../../shared/interaction-contract";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
 import { cn } from "../lib/cn";
 import { buttonClass } from "./primitives/button";
@@ -28,7 +29,8 @@ import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorCh
 import { answerViewState } from "../state/answer-view";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
-import { ProseBlocks, formatElapsed } from "./AiSearchPanel";
+import { ProseBlocks, SteerBubble, formatElapsed } from "./AiSearchPanel";
+import { InteractionDock } from "./InteractionDock";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
 import {
@@ -49,6 +51,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { EvidenceExcerpt } from "./EvidenceBlocks";
 import { ComposerField } from "./ComposerField";
+import type { SteerItem } from "../state/steering";
 import { dirname } from "../state/paths";
 
 /** Time since `at`, worded short in its largest unit: "방금", "5분 전", "2시간 전", "3일 전", "1달 전", "1년 전". */
@@ -171,6 +174,8 @@ function Composer({
 	placeholder,
 	running,
 	onSend,
+	onSteer,
+	onQueue,
 	onStop,
 	onDismiss,
 }: {
@@ -180,6 +185,13 @@ function Composer({
 	readonly running: boolean;
 	/** False when the question was not sent (another inspector answer is still coming): the draft stays. */
 	readonly onSend: (text: string) => boolean;
+	/**
+	 * Enter during a run corrects it, as in an AI Search tab. False when the run no longer takes it. Absent for a composer
+	 * that cannot reach the run (the Info view's): there the draft waits for the answer.
+	 */
+	readonly onSteer?: (text: string) => boolean;
+	/** ⌥Enter during a run: the text is asked as the next question once the run ends. */
+	readonly onQueue?: (text: string) => void;
 	readonly onStop: () => void;
 	readonly onDismiss: (id: string) => void;
 }): ReactElement {
@@ -189,12 +201,18 @@ function Composer({
 	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 	const voice = window.autorag?.voice;
 	const approval = useApprovalMode();
-	const send = (): void => {
+	const send = (altKey = false): void => {
 		const text = draft.trim();
 		if (text.length === 0) return;
 		if (running) {
-			// The draft stays: the person sends it once the answer lands.
-			setBusyNotice(true);
+			const handled = altKey ? (onQueue === undefined ? false : (onQueue(text), true)) : (onSteer?.(text) ?? false);
+			if (!handled) {
+				// The draft stays: the person sends it once the answer lands.
+				setBusyNotice(true);
+				return;
+			}
+			setBusyNotice(false);
+			setDraft("");
 			return;
 		}
 		if (!onSend(text)) {
@@ -231,8 +249,18 @@ function Composer({
 							setDraft(next);
 							setBusyNotice(false);
 						}}
-						onAltEnter={send}
+						onAltEnter={() => send(true)}
 					/>
+					{running && onSteer !== undefined && draft.trim().length > 0 ? (
+						<button
+							type="submit"
+							className={composerButton}
+							aria-label={t("aiSearch.steerSend")}
+							title={t("aiSearch.steerSend")}
+						>
+							<ArrowUpIcon size={12} />
+						</button>
+					) : null}
 					{running ? (
 						<button
 							type="button"
@@ -252,7 +280,7 @@ function Composer({
 							aria-label={t("inspector.chat.send")}
 							title={t("inspector.chat.send")}
 							disabled={draft.trim().length === 0}
-							onClick={send}
+							onClick={() => send()}
 						>
 							<ArrowUpIcon size={12} />
 						</button>
@@ -290,6 +318,8 @@ export interface InspectorChatDockProps {
 	/** The selection as chat attachments; empty when nothing can be asked about. */
 	readonly targets: readonly ChatAttachment[];
 	readonly running: boolean;
+	/** The question or approval the running chat waits on: it replaces the composer, wherever the run was asked. */
+	readonly request: InteractionRequest | null;
 	/** A question typed here: it starts a new chat about the selection. */
 	readonly onAsk: (text: string) => boolean;
 	/** "AI 요약" about the selection, in a new chat. */
@@ -299,7 +329,7 @@ export interface InspectorChatDockProps {
 	readonly onResume: () => void;
 }
 
-export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummarize, onStop, onResume }: InspectorChatDockProps): ReactElement {
+export function InspectorChatDock({ tab, now, targets, running, request, onAsk, onSummarize, onStop, onResume }: InspectorChatDockProps): ReactElement {
 	const { t } = useTranslation();
 	const ago = useAgo();
 	const chat = tab.chat;
@@ -329,7 +359,11 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 					</button>
 				</div>
 			)}
-			<Composer pending={[]} placeholder={placeholder} running={running} onSend={onAsk} onStop={onStop} onDismiss={() => {}} />
+			{request === null ? (
+				<Composer pending={[]} placeholder={placeholder} running={running} onSend={onAsk} onStop={onStop} onDismiss={() => {}} />
+			) : (
+				<InteractionDock key={request.id} request={request} onStop={onStop} />
+			)}
 		</div>
 	);
 }
@@ -497,6 +531,7 @@ function PhaseAnswer({
 function TurnView({
 	turn,
 	live,
+	steerLabels,
 	imageActions,
 	onReveal,
 	onPreview,
@@ -504,6 +539,7 @@ function TurnView({
 	readonly turn: InspectorTurn;
 	/** The turn's run is still streaming. */
 	readonly live: boolean;
+	readonly steerLabels: Readonly<Record<SteerItem["status"], string>>;
 	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
@@ -522,10 +558,20 @@ function TurnView({
 				))}
 				<div className="inspector-chat-question block rounded-[16px] bg-ink-body px-12 py-8 text-sm leading-[1.5] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 			</div>
+			{turn.steers
+				.filter((steer) => steer.timing === "before-quick")
+				.map((steer) => (
+					<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+				))}
 			<div className="flex min-w-0 flex-col gap-8">
 				{quickText === "" ? null : (
 					<PhaseAnswer text={quickText} evidence={turn.quick?.evidence ?? []} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
 				)}
+				{turn.steers
+					.filter((steer) => steer.timing === "after-quick")
+					.map((steer) => (
+						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
+					))}
 				{shimmer ? (
 					<div className="flex min-w-0 items-center text-tile text-ink-muted" role="status">
 						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
@@ -639,8 +685,16 @@ export interface InspectorChatViewProps {
 	/** What the next question carries of the selection, as cards with their ×. */
 	readonly pending: readonly ChatAttachment[];
 	readonly running: boolean;
+	/** The question or approval this chat's run waits on: it replaces the composer until the person answers. */
+	readonly request: InteractionRequest | null;
 	readonly imageActions: ImageActions;
 	readonly onAsk: (text: string) => boolean;
+	/** Enter during the run: correct it. False when the run no longer takes it. */
+	readonly onSteer: (text: string) => boolean;
+	/** ⌥Enter during the run: ask the text next, once the run ends. */
+	readonly onQueue: (text: string) => void;
+	/** Cancel the queued question at `index`. */
+	readonly onUnqueue: (index: number) => void;
 	readonly onStop: () => void;
 	/** × : back to the Info view (the sidebar stays). */
 	readonly onBack: () => void;
@@ -660,8 +714,12 @@ export function InspectorChatView({
 	targetName,
 	pending,
 	running,
+	request,
 	imageActions,
 	onAsk,
+	onSteer,
+	onQueue,
+	onUnqueue,
 	onStop,
 	onBack,
 	onNewChat,
@@ -674,6 +732,11 @@ export function InspectorChatView({
 	const { t } = useTranslation();
 	const [historyOpen, setHistoryOpen] = useState(false);
 	const turns = tab.chat?.turns ?? [];
+	const steerLabels = {
+		pending: t("aiSearch.steerPending"),
+		delivered: t("aiSearch.steerDelivered"),
+		dropped: t("aiSearch.steerDropped"),
+	};
 	/** A chat picked from history carries its own title; a chat started here is titled by the selection it is about. */
 	const title = tab.chat?.title ?? targetName;
 	const headButton = cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-body" }), "size-28 rounded-6 disabled:cursor-default");
@@ -727,21 +790,47 @@ export function InspectorChatView({
 						key={`${tab.chat?.chatId ?? ""}:${index}`}
 						turn={turn}
 						live={running && index === turns.length - 1}
+						steerLabels={steerLabels}
 						imageActions={imageActions}
 						onReveal={onReveal}
 						onPreview={onPreview}
 					/>
 				))}
+				{tab.queued.length === 0 ? null : (
+					<div className="queued-questions flex flex-col items-end gap-6" aria-label={t("aiSearch.queuedLabel")}>
+						{tab.queued.map((text, index) => (
+							<div key={`${index}:${text}`} className="queued-question flex max-w-[90%] items-center gap-8 rounded-10 border border-dashed border-border-strong px-12 py-6 text-meta text-ink-muted">
+								<span className="flex-none font-medium">{t("aiSearch.queuedLabel")}</span>
+								<span className="min-w-0 truncate text-ink-body">{text}</span>
+								<button
+									type="button"
+									className="flex size-16 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted transition-[background,color] duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-danger-text"
+									aria-label={t("aiSearch.queuedRemove")}
+									title={t("aiSearch.queuedRemove")}
+									onClick={() => onUnqueue(index)}
+								>
+									<CloseIcon size={10} />
+								</button>
+							</div>
+						))}
+					</div>
+				)}
 			</div>
 			<div className="flex-none px-12 pt-12 pb-12">
-				<Composer
-					pending={pending}
-					placeholder={t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
-					running={running}
-					onSend={onAsk}
-					onStop={onStop}
-					onDismiss={onDismiss}
-				/>
+				{request === null ? (
+					<Composer
+						pending={pending}
+						placeholder={running ? t("aiSearch.steerPlaceholder") : t(askPlaceholder(pending, "inspector.chat.placeholderFollowUp"))}
+						running={running}
+						onSend={onAsk}
+						onSteer={onSteer}
+						onQueue={onQueue}
+						onStop={onStop}
+						onDismiss={onDismiss}
+					/>
+				) : (
+					<InteractionDock key={request.id} request={request} onStop={onStop} />
+				)}
 			</div>
 		</div>
 	);

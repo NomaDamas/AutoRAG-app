@@ -2,8 +2,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatAttachment, SearchStreamEvent } from "../../../shared/search-contract";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import {
+	addSteer,
+	deliverTurnSteers,
 	EMPTY_INSPECTOR_CHAT_TAB,
 	newTurn,
+	removeSteer,
+	settleTurnSteers,
+	steerTiming,
 	turnsFromHistory,
 	updateLastTurn,
 	type InspectorChat,
@@ -15,6 +20,8 @@ export interface InspectorChats {
 	tab(tabId: number): InspectorChatTab;
 	/** The tab whose inspector chat has a run streaming, if any: one run at a time. */
 	readonly runningTab: number | null;
+	/** The streaming run's id: the agent's questions and approvals name it (`frontRequest`). */
+	readonly runSearchId: string | null;
 	/**
 	 * Ask `text` with `attachments`: in the tab's chat (starting one when it has none), or, `fresh`, in a new chat
 	 * (the Info view's composer). False when nothing was sent: another inspector run is still streaming. `viewingFolder` is
@@ -25,7 +32,16 @@ export interface InspectorChats {
 	summarize(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[], fresh?: boolean): boolean;
 	/** Make the stored chat `chatId` the tab's chat and show it (the chat title's history menu). */
 	open(tabId: number, chatId: string): void;
-	/** Stop the inspector run that is streaming, whichever tab asked it. */
+	/**
+	 * Correct the tab's streaming run with `text` (Enter in the composer): the run takes it before its next model request.
+	 * A run that no longer takes steers queues the text as the next question. False when the tab has no run streaming.
+	 */
+	steer(tabId: number, text: string): boolean;
+	/** ⌥Enter during a run: `text` is asked as the tab's next question once the run ends. */
+	queue(tabId: number, text: string): void;
+	/** Cancel the queued question at `index`. */
+	unqueue(tabId: number, index: number): void;
+	/** Stop the inspector run that is streaming, whichever tab asked it; the questions queued behind it are dropped. */
 	stop(): void;
 	setMode(tabId: number, mode: "info" | "chat"): void;
 	/** × on the attachment card: leave `id` out of the next question. */
@@ -46,7 +62,8 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 	const tabsRef = useRef(tabs);
 	tabsRef.current = tabs;
 	const runRef = useRef<{ readonly tabId: number; readonly searchId: string } | null>(null);
-	const [runningTab, setRunningTab] = useState<number | null>(null);
+	const [running, setRunning] = useState<{ readonly tabId: number; readonly searchId: string } | null>(null);
+	const runningTab = running?.tabId ?? null;
 
 	const change = useCallback((tabId: number, edit: (tab: InspectorChatTab) => InspectorChatTab) => {
 		setTabs((current) => {
@@ -68,14 +85,18 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 			const { tabId } = run;
 			const finish = (): void => {
 				runRef.current = null;
-				setRunningTab(null);
+				setRunning(null);
 				const now = Date.now();
+				changeChat(tabId, settleTurnSteers);
 				// An answer that lands while the chat is on screen is read; one that lands behind the Info view is not.
 				change(tabId, (tab) => (tab.chat === null ? tab : { ...tab, chat: { ...tab.chat, updatedAt: now }, seenAt: tab.mode === "chat" ? now : tab.seenAt }));
 			};
 			switch (event.type) {
 				case "progress":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, progress: event.text })));
+					break;
+				case "steer-delivered":
+					changeChat(tabId, deliverTurnSteers);
 					break;
 				case "quick-draft":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, quickDraft: event.text })));
@@ -105,6 +126,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 					break;
 				case "cancelled":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, stopped: true })));
+					change(tabId, (tab) => (tab.queued.length === 0 ? tab : { ...tab, queued: [] }));
 					finish();
 					break;
 				case "done":
@@ -132,19 +154,63 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 				updatedAt: now,
 				turns: [...(previous?.turns ?? []), newTurn(question, attachments, now)],
 			};
-			change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
+			change(tabId, (tab) => ({ ...tab, chat, mode: "chat", seenAt: now, dismissed: [] }));
 			runRef.current = { tabId, searchId };
-			setRunningTab(tabId);
+			setRunning({ tabId, searchId });
 			autorag.search.start(searchId, chatId, question, attachments, viewingFolder).catch((error: unknown) => {
 				if (runRef.current?.searchId !== searchId) return;
 				runRef.current = null;
-				setRunningTab(null);
+				setRunning(null);
 				const message = error instanceof Error ? error.message : String(error);
 				changeChat(tabId, (next) => updateLastTurn(next, (turn) => ({ ...turn, error: message })));
 			});
 			return true;
 		},
 		[change, changeChat],
+	);
+
+	// Questions queued during a run are asked one by one, in the same chat, once the run has ended.
+	useEffect(() => {
+		if (running !== null) return;
+		for (const [tabId, tab] of tabs) {
+			const next = tab.queued[0];
+			if (next === undefined || tab.chat === null) continue;
+			change(tabId, (current) => ({ ...current, queued: current.queued.slice(1) }));
+			ask(tabId, next, []);
+			return;
+		}
+	}, [running, tabs, change, ask]);
+
+	const steer = useCallback(
+		(tabId: number, text: string) => {
+			const run = runRef.current;
+			const trimmed = text.trim();
+			if (run === null || run.tabId !== tabId || trimmed === "" || tabsRef.current.get(tabId)?.chat == null) return false;
+			const id = crypto.randomUUID();
+			changeChat(tabId, (chat) => addSteer(chat, { id, text: trimmed, timing: steerTiming(chat), status: "pending" }));
+			// A run past its last model request, or one that is gone, does not take it: the text is asked as the next question.
+			const refused = (): void => {
+				changeChat(tabId, (chat) => removeSteer(chat, id));
+				change(tabId, (tab) => ({ ...tab, queued: [...tab.queued, trimmed] }));
+			};
+			autorag.search.steer(run.searchId, trimmed).then((accepted) => {
+				if (!accepted) refused();
+			}, refused);
+			return true;
+		},
+		[change, changeChat],
+	);
+
+	const queue = useCallback(
+		(tabId: number, text: string) => {
+			const trimmed = text.trim();
+			if (trimmed !== "") change(tabId, (tab) => ({ ...tab, queued: [...tab.queued, trimmed] }));
+		},
+		[change],
+	);
+	const unqueue = useCallback(
+		(tabId: number, index: number) => change(tabId, (tab) => ({ ...tab, queued: tab.queued.filter((_, position) => position !== index) })),
+		[change],
 	);
 
 	const summarize = useCallback(
@@ -157,8 +223,10 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 
 	const stop = useCallback(() => {
 		const run = runRef.current;
-		if (run !== null) void autorag.search.cancel(run.searchId);
-	}, []);
+		if (run === null) return;
+		change(run.tabId, (tab) => (tab.queued.length === 0 ? tab : { ...tab, queued: [] }));
+		void autorag.search.cancel(run.searchId);
+	}, [change]);
 
 	const setMode = useCallback((tabId: number, mode: "info" | "chat") => change(tabId, (tab) => ({ ...tab, mode, seenAt: Date.now() })), [change]);
 
@@ -172,7 +240,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 					const now = Date.now();
 					const stored = Date.parse(record.updatedAt);
 					const chat: InspectorChat = { chatId, title: record.title, turns: turnsFromHistory(record.messages), updatedAt: Number.isFinite(stored) ? stored : now };
-					change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
+					change(tabId, (tab) => ({ ...tab, chat, mode: "chat", seenAt: now, dismissed: [] }));
 				})
 				.catch((error: unknown) => console.error("inspector chat open failed", error));
 		},
@@ -220,5 +288,5 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 		});
 	}, []);
 
-	return { tab, runningTab, ask, summarize, open, stop, setMode, dismiss, reset, refresh, prune };
+	return { tab, runningTab, runSearchId: running?.searchId ?? null, ask, summarize, open, steer, queue, unqueue, stop, setMode, dismiss, reset, refresh, prune };
 }
