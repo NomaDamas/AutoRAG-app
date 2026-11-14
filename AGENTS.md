@@ -10,11 +10,13 @@ config, and the `AutoRAGAgent`/`AutoRAGLite` classes keep their identifiers.
 Do not rename those backend identifiers, and do not introduce a third product
 name on a user-facing surface.
 
-The logo is the sunflower-with-sunglasses mark. `build/` holds the app icon set
+The logo is the sunflower-with-sunglasses mark on a glass tile. `build/` holds the app icon set
 (`icon.icns`, `icon.ico`, `icon.png`, `icons/<size>.png`) and
 `src/renderer/src/assets/dazzi-logo.png` is the transparent mark the renderer
-draws; regenerate all of them from one transparent master rather than editing
-one in isolation. The macOS app icon is the Icon Composer bundle `build/icon.icon`
+draws; regenerate all of them from the two transparent masters
+(`build/icon.png`: the glass tile; `build/brand/dazzi-mark.png`: the sunflower alone) with
+`node scripts/brand/make-brand-assets.mjs`, then `node scripts/brand/make-mac-icon.mjs`, rather than editing
+one in isolation (`test/brand-assets.test.ts` fails when a derived file disagrees with the masters). The macOS app icon is the Icon Composer bundle `build/icon.icon`
 (`node scripts/brand/make-mac-icon.mjs` rebuilds it from `icon.png`; compiling it needs Xcode 26+).
 macOS 26 draws a legacy `icon.icns` shrunk inside a grey plate, so never point
 `mac.icon` back at the `.icns`.
