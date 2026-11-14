@@ -160,16 +160,18 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 				const sidebar = patch.sidebar === undefined ? current.settings.sidebar : normalizeSidebarSettings(patch.sidebar);
 				const contextMenu = patch.contextMenu === undefined ? current.settings.contextMenu : normalizeContextMenuSettings(patch.contextMenu);
 				const shortcuts = patch.shortcuts === undefined ? current.settings.shortcuts : normalizeShortcutSettings(patch.shortcuts);
-				let remoteTunnelHostname = current.settings.remoteTunnelHostname;
-				if (patch.remoteTunnelHostname !== undefined) {
-					const trimmed = patch.remoteTunnelHostname.trim();
+				// A rejected change leaves the stored hostname as it was; the renderer shows the reason.
+				const hostnameFrom = (patched: string | undefined, stored: string): string => {
+					if (patched === undefined) return stored;
+					const trimmed = patched.trim();
 					const normalized = trimmed === "" ? "" : normalizeTunnelHostname(trimmed);
-					// A rejected change leaves the stored hostname as it was; the renderer shows the reason.
 					if (normalized === null) throw new Error(`Not a domain name: ${trimmed}`);
-					remoteTunnelHostname = normalized;
-				}
+					return normalized;
+				};
+				const remoteTunnelHostname = hostnameFrom(patch.remoteTunnelHostname, current.settings.remoteTunnelHostname);
+				const agentTunnelHostname = hostnameFrom(patch.agentTunnelHostname, current.settings.agentTunnelHostname);
 				const quickSearch = patch.quickSearch === undefined ? current.settings.quickSearch : normalizeQuickSearchSettings(patch.quickSearch);
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname };
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname, agentTunnelHostname };
 				return current;
 			});
 			deps.onSettingsChanged?.(state.settings);

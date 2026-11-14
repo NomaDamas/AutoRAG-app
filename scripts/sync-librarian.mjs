@@ -28,7 +28,9 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
 // resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
 // model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
-const librarianRef = "v2.13.12";
+// TEMPORARY: the librarian commit that carries `autorag-mcp --http` and `--check` (AutoRAG#2155, #2156), not yet released.
+// Replace with the release tag that includes them before this leaves draft.
+const librarianRef = "a18565a61aa3681402b9b2267e5608b4fa6a4f6a";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

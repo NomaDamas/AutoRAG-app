@@ -19,6 +19,7 @@ import type { SearchBridge } from "./search-contract";
 import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
+import type { AgentConnectBridge } from "./agent-connect-contract";
 import type { RemoteAccessBridge } from "./remote-contract";
 import type { VoiceBridge } from "./voice-contract";
 import type { QuickSearchSettingsBridge } from "./quick-search-contract";
@@ -52,6 +53,8 @@ declare global {
 			readonly settings: SettingsBridge;
 			readonly services: ServicesBridge;
 			readonly remote: RemoteAccessBridge;
+			/** Agent access for cloud agents; absent in a remote browser session, which has no route to it. */
+			readonly agentConnect?: AgentConnectBridge;
 			/** The launcher's global shortcut, for Settings; absent in a remote browser session. */
 			readonly quickSearch?: QuickSearchSettingsBridge;
 			/** Absolute path of a dropped File (Electron `webUtils.getPathForFile`); "" when it has none on disk. */

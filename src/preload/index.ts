@@ -9,6 +9,7 @@ import { createBridge } from "../shared/bridge";
 import type { DevLabel } from "../shared/app-info";
 import { createPreviewBridge } from "../preview/node/bridge";
 import { REMOTE_CHANNELS, type RemoteAccessBridge, type RemoteAccessStatus } from "../shared/remote-contract";
+import { AGENT_CONNECT_CHANNELS, type AgentConnectBridge, type AgentConnectStatus } from "../shared/agent-connect-contract";
 import { QUICK_SEARCH_CHANNELS, type QuickSearchSettingsBridge } from "../shared/quick-search-contract";
 import { createActionsBridge } from "./actions-bridge";
 import { createAppCustomizerBridge } from "./app-customizer-bridge";
@@ -70,6 +71,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	settings: createSettingsBridge(ipcRenderer),
 	services: createServicesBridge(ipcRenderer),
 	remote: createRemoteBridge(ipcRenderer),
+	agentConnect: createAgentConnectBridge(ipcRenderer),
 	quickSearch: {
 		status: () => ipcRenderer.invoke(QUICK_SEARCH_CHANNELS.status),
 		setRecording: (recording: boolean) => ipcRenderer.invoke(QUICK_SEARCH_CHANNELS.recording, recording),
@@ -77,6 +79,27 @@ contextBridge.exposeInMainWorld("autorag", {
 	// Electron dropped `File.path`; only the preload can map a dropped file to its disk path.
 	pathForFile: (file: File) => webUtils.getPathForFile(file),
 });
+
+/** Agent access: the HTTP MCP server and tunnel that let a cloud agent search this machine's index. */
+function createAgentConnectBridge(ipcRenderer: IpcRenderer): AgentConnectBridge {
+	return {
+		status: () => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.status),
+		start: () => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.start),
+		stop: () => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.stop),
+		setAllowWrite: (allow) => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.setAllowWrite, allow),
+		rotateToken: () => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.rotateToken),
+		revealToken: () => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.revealToken),
+		setHostname: (hostname) => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.setHostname, hostname),
+		loginTunnel: () => ipcRenderer.invoke(AGENT_CONNECT_CHANNELS.loginTunnel),
+		onChange: (listener) => {
+			const handler = (_event: IpcRendererEvent, status: AgentConnectStatus): void => listener(status);
+			ipcRenderer.on(AGENT_CONNECT_CHANNELS.changed, handler);
+			return () => {
+				ipcRenderer.removeListener(AGENT_CONNECT_CHANNELS.changed, handler);
+			};
+		},
+	};
+}
 
 /** Remote access: live status, pairing codes, paired devices, and Quick Tunnel. */
 function createRemoteBridge(ipcRenderer: IpcRenderer): RemoteAccessBridge {

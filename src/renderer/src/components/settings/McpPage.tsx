@@ -9,9 +9,10 @@ import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import { Pencil, Plus, Trash2 } from "lucide-react";
-import type { JsonObject, JsonValue, McpExposure, McpServerRow, McpSnapshot } from "../../../../shared/settings-contract";
+import type { AppSettings, JsonObject, JsonValue, McpExposure, McpServerRow, McpSnapshot } from "../../../../shared/settings-contract";
 import { Switch } from "../primitives/Switch";
 import { errorText } from "./configSupport";
+import { AgentConnectSection } from "./AgentConnectSection";
 import { McpConnectSection } from "./McpConnectSection";
 import { ModalActions, ModalShell, Note, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 
@@ -123,7 +124,16 @@ function transportLabel(row: McpServerRow): LocaleKey {
 	return row.transport === "stdio" ? "settingsCore.mcp.transportStdio" : row.transport === "http" ? "settingsCore.mcp.transportHttp" : "settingsCore.mcp.transportUnknown";
 }
 
-export function McpPage(): ReactElement {
+export function McpPage({
+	appSettings,
+	onAppSettingsChanged,
+	onSettingsError,
+}: {
+	/** Absent only where there is nothing to switch (a test of the server list alone); the cloud-agent section needs it. */
+	readonly appSettings?: AppSettings;
+	readonly onAppSettingsChanged?: (settings: AppSettings) => void;
+	readonly onSettingsError?: (message: string) => void;
+} = {}): ReactElement {
 	const { t } = useTranslation();
 	const [snapshot, setSnapshot] = useState<McpSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -158,6 +168,9 @@ export function McpPage(): ReactElement {
 		<>
 			<SettingsPageHead title={t("settingsCore.mcp.title")} description={t("settingsCore.mcp.desc")} />
 			<McpConnectSection />
+			{appSettings !== undefined && onAppSettingsChanged !== undefined && onSettingsError !== undefined ? (
+				<AgentConnectSection appSettings={appSettings} onAppSettingsChanged={onAppSettingsChanged} onSettingsError={onSettingsError} />
+			) : null}
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 			{broken ? <div className="settings-error" role="alert">{`${t("settingsCore.mcp.fileError")} ${snapshot?.error ?? ""}`}</div> : null}
 			<Section title={t("settingsCore.mcp.listTitle")} description={t("settingsCore.mcp.listDesc")}>
