@@ -39,6 +39,7 @@ import type { IndexStatus } from "../../../shared/index-contract";
 import type { CitationEvidence } from "../../../shared/search-contract";
 import { type FinderEntry, hasFileVersion } from "../data/entries";
 import { cn } from "../lib/cn";
+import { buttonClass } from "./primitives/button";
 import { anchorOf } from "../lib/anchor";
 import { rulesWatching } from "../state/automations";
 import { dateLabelOf, fileKindOf, kindLabelOf } from "../state/entry-values";
@@ -201,8 +202,11 @@ export function FadedDazziMark({ reserveDock = false }: { readonly reserveDock?:
 }
 
 /** A source's 파일 찾기 / 파일 열기 button (Figma 274:7253). */
-const EVIDENCE_ACTION =
-	"inline-flex items-center gap-4 rounded-8 border border-divider bg-window py-6 pl-8 pr-9 text-meta leading-[16px] text-ink-body cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover";
+/** 파일 위치로 이동 / 미리보기: a Small button (Figma 435:8582); the colours are the panel's own. */
+const EVIDENCE_ACTION = cn(
+	buttonClass({ size: "sm" }),
+	"rounded-8 border border-divider bg-window text-ink-body cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover",
+);
 
 export function Inspector({
 	entry,

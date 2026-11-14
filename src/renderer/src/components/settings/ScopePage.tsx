@@ -17,6 +17,8 @@ import { normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
 import { PromptModal, SettingsPageHead } from "./SettingsKit";
 import { asRecord, boolOf, errorText, getAt, listOf, listUpdate, useConfigWriter } from "./configSupport";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 type ListKey = "searchPaths" | "excludePaths";
 
@@ -93,7 +95,7 @@ function AddExclusionMenu({ choices, disabled, onChoose }: { readonly choices: r
 	}, [open]);
 	return (
 		<div className="scope-menu-anchor" ref={rootRef}>
-			<button type="button" className="scope-primary-btn scope-secondary-btn" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+			<button type="button" className={cn("scope-primary-btn scope-secondary-btn", buttonClass({ size: "md" }))} disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
 				<Plus size={14} strokeWidth={2} aria-hidden="true" focusable="false" />
 				{t("settingsSources.scope.addExclusion")}
 				<ChevronDown size={14} strokeWidth={2} aria-hidden="true" focusable="false" />
@@ -211,7 +213,7 @@ export function ScopePage({ snapshot, onSaved }: { readonly snapshot: AutoRagCon
 							<h3 className="scope-section-title">{t("settingsSources.scope.foldersTitle")}</h3>
 							<p className="scope-section-desc">{t("settingsSources.scope.foldersDesc")}</p>
 						</div>
-						<button type="button" className="scope-primary-btn" disabled={saving} onClick={() => void addFolder()}>
+						<button type="button" className={cn("scope-primary-btn", buttonClass({ size: "md" }))} disabled={saving} onClick={() => void addFolder()}>
 							<Plus size={14} strokeWidth={2} aria-hidden="true" focusable="false" />
 							{t("settingsSources.scope.addFolder")}
 						</button>

@@ -40,6 +40,8 @@ import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
 import { IndexActivityCard } from "./IndexActivityCard";
 import { IndexMapPanel } from "./index-map/IndexMapPanel";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 const settings = window.autorag.settings;
 
@@ -522,7 +524,7 @@ export function AppsPage({
 									<span className="settings-list-meta">{sourceMeta(row)}</span>
 								</span>
 							</button>
-							<button type="button" className="linear-btn settings-apps-btn" disabled={busy} onClick={() => setDisconnecting(row.id)}>
+							<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => setDisconnecting(row.id)}>
 								<Minus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
 							</button>
 						</div>
@@ -551,7 +553,7 @@ export function AppsPage({
 											<span className="settings-list-title">{template.label}</span>
 											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
-										<button type="button" className="linear-btn settings-apps-btn" disabled={!available} onClick={() => setAddTemplate(templateId)}>
+										<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={!available} onClick={() => setAddTemplate(templateId)}>
 											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>

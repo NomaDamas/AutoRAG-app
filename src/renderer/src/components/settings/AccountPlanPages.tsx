@@ -14,6 +14,8 @@ import { ExternalLink } from "lucide-react";
 import type { AccountPlanId, AccountSnapshot, AccountStatus } from "../../../../shared/account-contract";
 import { accountDashboardUrl, accountLegalUrl, creditsResetAt, splitRemaining, type AccountLegalRoute } from "../../../../shared/account-contract";
 import { Note, PlainRow, SettingsPageHead } from "./SettingsKit";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 function openExternal(url: string): void {
 	const open = window.autorag?.fs?.openUrl;
@@ -76,15 +78,15 @@ export function AccountPage(): ReactElement {
 				<div className="account-rows">
 					<PlainRow name={t("settingsCore.account.accountName")} hint={who}>
 						{signedIn ? (
-							<button type="button" className="settings-outline-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
+							<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
 								{t("settingsCore.account.signOut")}
 							</button>
 						) : status?.state === "signingIn" ? (
-							<button type="button" className="settings-outline-btn" onClick={() => run(() => window.autorag.account.cancelSignIn())}>
+							<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} onClick={() => run(() => window.autorag.account.cancelSignIn())}>
 								{t("common.cancel")}
 							</button>
 						) : (
-							<button type="button" className="settings-outline-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
+							<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
 								{t("settingsCore.account.signInBrowser")}
 								<ExternalLink size={14} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 							</button>
@@ -94,7 +96,7 @@ export function AccountPage(): ReactElement {
 					{status?.error ? <Note>{status.error}</Note> : null}
 					{error !== null ? <Note>{error}</Note> : null}
 					<PlainRow name={t("settingsCore.account.managedName")} hint={t("settingsCore.account.managedHint")}>
-						<button type="button" className="settings-outline-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
+						<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
 							{t("settingsCore.account.useManaged")}
 						</button>
 					</PlainRow>
@@ -153,7 +155,7 @@ export function PlanPage(): ReactElement {
 						name={t("settingsCore.account.planManage")}
 						hint={plan === null ? t("settingsCore.common.unknown") : `${PLAN_LABEL[plan]}${account?.trialing === true ? t("settingsCore.account.trialing") : ""}`}
 					>
-						<button type="button" className="settings-outline-btn" onClick={() => openExternal(accountDashboardUrl(status?.baseUrl))}>
+						<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} onClick={() => openExternal(accountDashboardUrl(status?.baseUrl))}>
 							{t("settingsCore.account.openDashboard")}
 							<ExternalLink size={14} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 						</button>

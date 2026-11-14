@@ -370,6 +370,30 @@
   --ease-out: ease-out;
   --shimmer-gradient: linear-gradient(90deg,#F0F0F4 0%,#E4E4EA 50%,#F0F0F4 100%);
 
+  /* ------------------------------------------------------------------ Buttons */
+  /* Figma 435:8582 "Button": height, side padding, icon–label gap, label, icon box and icon stroke per size. */
+  --button-height-sm: 28px;
+  --button-pad-x-sm: 10px;
+  --button-gap-sm: 4px;
+  --button-font-sm: var(--font-size-meta);
+  --button-line-sm: 16px;
+  --button-icon-sm: 12px;
+  --button-icon-stroke-sm: 0.9px;
+  --button-height-md: 32px;
+  --button-pad-x-md: 12px;
+  --button-gap-md: 6px;
+  --button-font-md: var(--font-size-meta);
+  --button-line-md: 16px;
+  --button-icon-md: 14px;
+  --button-icon-stroke-md: 1.05px;
+  --button-height-lg: 36px;
+  --button-pad-x-lg: 16px;
+  --button-gap-lg: 6px;
+  --button-font-lg: var(--font-size-sm);
+  --button-line-lg: 18px;
+  --button-icon-lg: 16px;
+  --button-icon-stroke-lg: 1.2px;
+
   /* ------------------------------------------------------------------ §7 Shadows */
   --shadow-raised: 0 4px 16px rgba(20,20,40,0.08);
   --shadow-drag: 0 4px 16px rgba(20,20,40,0.12);

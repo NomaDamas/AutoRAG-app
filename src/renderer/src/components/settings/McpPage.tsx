@@ -15,6 +15,8 @@ import { errorText } from "./configSupport";
 import { McpConnectSection } from "./McpConnectSection";
 import { ModalActions, ModalShell, Note, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SelectField } from "./SelectField";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 const settings = window.autorag.settings;
 
@@ -200,7 +202,7 @@ export function McpPage(): ReactElement {
 					</div>
 				))}
 				<Row name={t("settingsCore.mcp.add")} hint={snapshot === null ? "" : t("settingsCore.mcp.file", { path: snapshot.path })}>
-					<button type="button" className="linear-btn settings-btn-primary" disabled={broken || snapshot === null} onClick={() => setEditing({ row: null })}>
+					<button type="button" className={cn("linear-btn settings-btn-primary", buttonClass({ size: "md" }))} disabled={broken || snapshot === null} onClick={() => setEditing({ row: null })}>
 						<Plus size={14} aria-hidden="true" focusable="false" /> {t("settingsCore.mcp.add")}
 					</button>
 				</Row>

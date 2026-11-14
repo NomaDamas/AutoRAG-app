@@ -7,6 +7,7 @@ import type { SearchErrorAction } from "../../../shared/search-contract";
 import { startErrorFix, useErrorFixSession, useErrorFixStore } from "../hooks/useErrorFix";
 import { describeAppError, type ErrorAction } from "../state/app-error";
 import { cn } from "../lib/cn";
+import { buttonClass } from "./primitives/button";
 import { ErrorDetails } from "./ErrorDetails";
 import { ErrorFixDialog } from "./ErrorFixDialog";
 import { SparklesIcon } from "./icons";
@@ -26,7 +27,7 @@ export interface RunErrorNoticeProps {
 	readonly fix?: boolean;
 }
 
-const BUTTON = "inline-flex flex-none cursor-pointer items-center justify-center gap-6 rounded-8 border px-12 py-6 text-meta font-medium leading-[18px] whitespace-nowrap transition-colors duration-(--dur-color) ease-out";
+const BUTTON = cn(buttonClass({ size: "sm" }), "cursor-pointer rounded-8 border transition-colors duration-(--dur-color) ease-out");
 const PRIMARY_BUTTON = "border-transparent bg-accent text-on-accent hover:bg-accent-hover";
 const SECONDARY_BUTTON = "border-border bg-window text-ink hover:bg-hover";
 

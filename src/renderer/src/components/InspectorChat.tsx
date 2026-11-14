@@ -22,6 +22,7 @@ import type { LocaleKey } from "../../../shared/i18n/core";
 import type { ChatAttachment, CitationEvidence } from "../../../shared/search-contract";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText, type ChatHistoryGroup } from "../state/history";
 import { cn } from "../lib/cn";
+import { buttonClass } from "./primitives/button";
 import { evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
 import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
 import { answerViewState } from "../state/answer-view";
@@ -335,8 +336,10 @@ export function InspectorChatDock({ tab, now, targets, running, onAsk, onSummari
 
 
 /** The citation card's actions (Figma 328:4543 / 328:4549): 12px body text, the icon in the faint grey. */
-const SOURCE_ACTION =
-	"inline-flex items-center gap-4 rounded-8 border border-divider bg-transparent py-5 pl-8 pr-9 text-meta leading-[16px] text-ink-body cursor-pointer hover:bg-hover [&_svg]:flex-none [&_svg]:text-ink-faint";
+const SOURCE_ACTION = cn(
+	buttonClass({ size: "sm" }),
+	"rounded-8 border border-divider bg-transparent text-ink-body cursor-pointer hover:bg-hover [&_svg]:text-ink-faint",
+);
 
 /**
  * What a citation number stands for, shown over the answer while the number is hovered (Figma 328:3841). A web source
