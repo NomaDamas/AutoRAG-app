@@ -47,6 +47,8 @@ import { createControllerStore, usePaneController } from "./hooks/usePaneControl
 import { useAutomations } from "./hooks/useAutomations";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
 import { useInspectorChats } from "./hooks/useInspectorChats";
+import { useInteractionQueue } from "./hooks/useInteractionQueue";
+import { frontRequest } from "./state/interaction";
 import { useNow } from "./hooks/useNow";
 import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "./state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
@@ -649,6 +651,9 @@ export function App(): ReactElement {
 	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
 	const chatRunning = inspectorChats.runningTab !== null;
 	const chatLive = chatTabId !== null && inspectorChats.runningTab === chatTabId;
+	/** What the agent of this tab's running chat waits on (an `ask_user` question or a file-change approval), if anything. */
+	const interactionQueue = useInteractionQueue();
+	const chatRequest = chatLive && inspectorChats.runSearchId !== null ? frontRequest(interactionQueue, inspectorChats.runSearchId) : null;
 	/** What a question is about: every selected item of a multi-selection, else the inspector's one entry. */
 	const selectedForChat = (finder?.selectedEntries.length ?? 0) > 1 ? (finder?.selectedEntries ?? []) : inspectorEntry === null ? [] : [inspectorEntry];
 	const chatTargets: readonly ChatAttachment[] = selectedForChat.map((entry) => ({
@@ -975,6 +980,7 @@ export function App(): ReactElement {
 											now={chatNow}
 											targets={chatTargets}
 											running={chatRunning}
+											request={chatRequest}
 											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatTargets, true, viewingFolder)}
 											onSummarize={() => {
 												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatTargets, true);
@@ -993,8 +999,12 @@ export function App(): ReactElement {
 											}
 											pending={chatPending}
 											running={chatLive}
+											request={chatRequest}
 											imageActions={imageActions}
 											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending, false, chatTargets.length === 0 ? viewingFolder : undefined)}
+											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
+											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
+											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
 											onStop={inspectorChats.stop}
 											onBack={() => inspectorChats.setMode(chatTabId, "info")}
 											onNewChat={() => inspectorChats.reset(chatTabId)}

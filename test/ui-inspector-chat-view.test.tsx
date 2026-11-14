@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { InspectorChatDock, InspectorChatView } from "../src/renderer/src/components/InspectorChat";
 import type { InspectorChatTab } from "../src/renderer/src/state/inspector-chat";
 import type { ChatAttachment } from "../src/shared/search-contract";
+import type { InteractionRequest } from "../src/shared/interaction-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
@@ -31,6 +32,7 @@ const tab: InspectorChatTab = {
 	mode: "chat",
 	seenAt: 0,
 	dismissed: [],
+	queued: [],
 	chat: {
 		chatId: "chat-1",
 		updatedAt: 0,
@@ -50,6 +52,7 @@ const tab: InspectorChatTab = {
 				progress: "",
 				error: null,
 				stopped: false,
+				steers: [],
 			},
 		],
 	},
@@ -64,7 +67,11 @@ function render(pending: readonly ChatAttachment[]): void {
 				pending={pending}
 				running={false}
 				imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+				request={null}
 				onAsk={() => true}
+				onSteer={() => false}
+				onQueue={noop}
+				onUnqueue={noop}
 				onStop={noop}
 				onBack={noop}
 				onNewChat={noop}
@@ -87,7 +94,11 @@ function renderTab(next: InspectorChatTab, running = false): void {
 				pending={[]}
 				running={running}
 				imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+				request={null}
 				onAsk={() => true}
+				onSteer={() => false}
+				onQueue={noop}
+				onUnqueue={noop}
 				onStop={noop}
 				onBack={noop}
 				onNewChat={noop}
@@ -119,6 +130,7 @@ const withAnswer = (answer: string, excerpts: readonly string[]): InspectorChatT
 				progress: "",
 				error: null,
 				stopped: false,
+				steers: [],
 			},
 		],
 	},
@@ -142,6 +154,7 @@ const turnOf = (patch: Partial<InspectorChatTab["chat"] extends infer C ? (C ext
 				progress: "",
 				error: null,
 				stopped: false,
+				steers: [],
 				...patch,
 			},
 		],
@@ -173,7 +186,11 @@ describe("the inspector chat view", () => {
 					pending={[]}
 					running={false}
 					imageActions={{ onOpenImage: noop, onOpenUrl: (url) => opened.push(url) }}
+					request={null}
 					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
 					onStop={noop}
 					onBack={noop}
 					onNewChat={noop}
@@ -253,7 +270,11 @@ describe("the inspector chat view", () => {
 					pending={[]}
 					running={false}
 					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					request={null}
 					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
 					onStop={noop}
 					onBack={() => backs.push("back")}
 					onNewChat={noop}
@@ -284,7 +305,11 @@ describe("the inspector chat view", () => {
 					pending={[]}
 					running={false}
 					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					request={null}
 					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
 					onStop={noop}
 					onBack={noop}
 					onNewChat={noop}
@@ -331,6 +356,7 @@ describe("the Info view's chat dock", () => {
 					now={0}
 					targets={[deck]}
 					running={false}
+					request={null}
 					onAsk={() => true}
 					onSummarize={noop}
 					onStop={noop}
@@ -347,7 +373,7 @@ describe("the Info view's chat dock", () => {
 		const seen: InspectorChatTab = { ...tab, mode: "info", seenAt: 10 };
 		act(() =>
 			root.render(
-				<InspectorChatDock tab={seen} now={0} targets={[deck]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={() => resumes.push("resume")} />,
+				<InspectorChatDock tab={seen} now={0} targets={[deck]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={() => resumes.push("resume")} />,
 			),
 		);
 		const chip = host.querySelector<HTMLButtonElement>(".inspector-chat-continue");
@@ -360,25 +386,25 @@ describe("the Info view's chat dock", () => {
 
 		const unseen: InspectorChatTab = { ...tab, chat: tab.chat === null ? null : { ...tab.chat, updatedAt: 20 }, mode: "info", seenAt: 10 };
 		act(() =>
-			root.render(<InspectorChatDock tab={unseen} now={20} targets={[deck]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
+			root.render(<InspectorChatDock tab={unseen} now={20} targets={[deck]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
 		);
 		expect(host.querySelector('.inspector-chat-continue [aria-label="새 답변"]')).not.toBeNull();
 	});
 
 	it("offers AI 요약 while the tab has no chat", () => {
-		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
+		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
 		act(() =>
-			root.render(<InspectorChatDock tab={empty} now={0} targets={[deck]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
+			root.render(<InspectorChatDock tab={empty} now={0} targets={[deck]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
 		);
 		expect(host.textContent).toContain("AI 요약");
 		expect(host.querySelector(".inspector-chat-continue")).toBeNull();
 	});
 
 	it("asks about anything with nothing selected, and offers no AI 요약", () => {
-		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
+		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
 		act(() =>
 			root.render(
-				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
+				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
 			),
 		);
 		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
@@ -400,10 +426,10 @@ describe("the composer's blue button", () => {
 			voice: { transcribe: async () => ({ text: "" }), prepare: async () => ({ ok: true }), openMicrophoneSettings: async () => {} },
 		});
 		try {
-			const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
+			const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
 			act(() =>
 				root.render(
-					<InspectorChatDock tab={empty} now={0} targets={[]} running={false} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
+					<InspectorChatDock tab={empty} now={0} targets={[]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
 				),
 			);
 			const mic = host.querySelector<HTMLButtonElement>("button.inspector-chat-voice");
@@ -424,5 +450,126 @@ describe("the composer's blue button", () => {
 		} finally {
 			Reflect.deleteProperty(window, "autorag");
 		}
+	});
+});
+
+describe("the inspector chat while a run streams", () => {
+	const typeInto = (input: HTMLTextAreaElement, value: string): void => {
+		act(() => {
+			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	};
+	const press = (input: HTMLTextAreaElement, init: KeyboardEventInit): void => {
+		act(() => {
+			input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init }));
+		});
+	};
+	function renderRunning(handlers: { steer?: (text: string) => boolean; queue?: (text: string) => void; request?: InteractionRequest | null; queued?: readonly string[]; steers?: InspectorChatTab["chat"] extends infer C ? (C extends { turns: readonly (infer T)[] } ? T extends { steers: infer S } ? S : never : never) : never }): void {
+		const base = turnOf({ steers: handlers.steers ?? [] });
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={{ ...base, queued: handlers.queued ?? [] }}
+					targetName="deck.pdf"
+					pending={[]}
+					running
+					request={handlers.request ?? null}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					onAsk={() => false}
+					onSteer={handlers.steer ?? (() => true)}
+					onQueue={handlers.queue ?? noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+	}
+
+	it("sends Enter as a correction of the running answer and clears the draft", () => {
+		const steered: string[] = [];
+		renderRunning({ steer: (text) => (steered.push(text), true) });
+		const input = host.querySelector<HTMLTextAreaElement>("textarea");
+		if (input === null) throw new Error("no input");
+		expect(input.getAttribute("placeholder")).toBe("검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)");
+		typeInto(input, "지난주 것만");
+		press(input, {});
+		expect(steered).toEqual(["지난주 것만"]);
+		expect(input.value).toBe("");
+	});
+
+	it("queues ⌥Enter as the next question", () => {
+		const queued: string[] = [];
+		renderRunning({ queue: (text) => queued.push(text) });
+		const input = host.querySelector<HTMLTextAreaElement>("textarea");
+		if (input === null) throw new Error("no input");
+		typeInto(input, "그 다음 질문");
+		press(input, { altKey: true });
+		expect(queued).toEqual(["그 다음 질문"]);
+		expect(input.value).toBe("");
+	});
+
+	it("keeps the draft and says so when the run takes no correction", () => {
+		renderRunning({ steer: () => false });
+		const input = host.querySelector<HTMLTextAreaElement>("textarea");
+		if (input === null) throw new Error("no input");
+		typeInto(input, "늦은 정정");
+		press(input, {});
+		expect(input.value).toBe("늦은 정정");
+		expect([...host.querySelectorAll('[role="status"]')].map((node) => node.textContent)).toContain("앞 질문의 답을 기다리는 중입니다");
+	});
+
+	it("shows a pending correction as a waiting bubble and a delivered one as applied, and lists queued questions", () => {
+		renderRunning({
+			steers: [
+				{ id: "a", text: "6월 것만", timing: "before-quick", status: "delivered" },
+				{ id: "b", text: "한국어로", timing: "after-quick", status: "pending" },
+			],
+			queued: ["다음 질문"],
+		});
+		const bubbles = [...host.querySelectorAll<HTMLElement>(".steer-msg")];
+		expect(bubbles.map((node) => [node.getAttribute("data-steer-status"), node.querySelector(".steer-bubble")?.textContent])).toEqual([
+			["delivered", "6월 것만"],
+			["pending", "한국어로"],
+		]);
+		expect(host.querySelector(".queued-question")?.textContent).toContain("다음 질문");
+	});
+
+	it("replaces the composer with the agent's question and sends the pick back through the bridge", () => {
+		const answers: unknown[] = [];
+		Reflect.set(window, "autorag", { interaction: { answer: (id: string, answer: unknown) => (answers.push([id, answer]), Promise.resolve(true)) } });
+		try {
+			renderRunning({
+				request: {
+					kind: "question",
+					id: "req-1",
+					searchId: "s-1",
+					questions: [{ question: "어느 보고서를 요약할까요?", options: [{ title: "4분기" }, { title: "3분기" }], allowMultiple: false, allowFreeform: false }],
+				},
+			});
+			expect(host.querySelector("textarea")).toBeNull();
+			expect(host.querySelector('[role="dialog"]')?.textContent).toContain("어느 보고서를 요약할까요?");
+			const pick = [...host.querySelectorAll<HTMLElement>('[role="radio"]')].find((node) => node.textContent?.includes("4분기"));
+			act(() => pick?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			expect(answers).toEqual([["req-1", { kind: "question", answers: [{ kind: "selection", selections: ["4분기"] }] }]]);
+		} finally {
+			Reflect.deleteProperty(window, "autorag");
+		}
+	});
+
+	it("shows the file-change approval card in the chat in place of the composer", () => {
+		renderRunning({
+			request: { kind: "approval", id: "req-2", searchId: "s-1", reason: "", categories: [], call: "rm /work/old.txt", sessionScope: "all" },
+		});
+		expect(host.querySelector("textarea")).toBeNull();
+		const card = host.querySelector('[role="alertdialog"]');
+		expect(card?.textContent).toContain("rm /work/old.txt");
 	});
 });

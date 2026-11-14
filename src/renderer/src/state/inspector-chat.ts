@@ -22,9 +22,9 @@
  * folders, and going back to the Info view keep it.
  */
 
-import type { AnswerPhase, ChatAttachment, ChatMessage, CitationEvidence } from "../../../shared/search-contract";
+import type { AnswerPhase, ChatAttachment, ChatMessage, CitationEvidence, SteerTiming } from "../../../shared/search-contract";
 import { mergePhaseEvidence } from "./evidence";
-import { restoreChat } from "./steering";
+import { deliverSteers, restoreChat, settleSteers, type SteerItem } from "./steering";
 
 export interface InspectorTurn {
 	readonly question: string;
@@ -46,6 +46,8 @@ export interface InspectorTurn {
 	readonly progress: string;
 	readonly error: string | null;
 	readonly stopped: boolean;
+	/** Corrections sent while the run streamed, in send order (see `state/steering.ts`). */
+	readonly steers: readonly SteerItem[];
 }
 
 export interface InspectorChat {
@@ -64,9 +66,11 @@ export interface InspectorChatTab {
 	readonly seenAt: number;
 	/** The items the person removed from the next question with the attachment cards' ×. */
 	readonly dismissed: readonly string[];
+	/** Questions typed with ⌥Enter during a run, or steers the run refused: asked one by one once it ends. */
+	readonly queued: readonly string[];
 }
 
-export const EMPTY_INSPECTOR_CHAT_TAB: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [] };
+export const EMPTY_INSPECTOR_CHAT_TAB: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
 
 export type AgeUnit = "now" | "minutes" | "hours" | "days" | "months" | "years";
 
@@ -122,12 +126,13 @@ export function turnsFromHistory(messages: readonly ChatMessage[]): readonly Ins
 		progress: "",
 		error: null,
 		stopped: turn.assistant?.stopped ?? false,
+		steers: turn.steers,
 	}));
 }
 
 /** A question just asked: nothing has arrived yet. */
 export function newTurn(question: string, attachments: readonly ChatAttachment[], startedAt: number): InspectorTurn {
-	return { question, attachments, quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt, progress: "", error: null, stopped: false };
+	return { question, attachments, quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt, progress: "", error: null, stopped: false, steers: [] };
 }
 
 /** What a turn shows of the Quick answer: its landed phase, else the text streamed so far. */
@@ -155,4 +160,36 @@ export function updateLastTurn(chat: InspectorChat, change: (turn: InspectorTurn
 /** How many questions the chat holds. */
 export function questionCount(chat: InspectorChat | null): number {
 	return chat?.turns.length ?? 0;
+}
+
+/** A correction was just sent to the chat's running turn: it waits for the next model request. */
+export function addSteer(chat: InspectorChat, steer: SteerItem): InspectorChat {
+	return updateLastTurn(chat, (turn) => ({ ...turn, steers: [...turn.steers, steer] }));
+}
+
+/** Take the steer `id` out of whichever turn holds it (the run refused it; it is asked as the next question instead). */
+export function removeSteer(chat: InspectorChat, id: string): InspectorChat {
+	if (!chat.turns.some((turn) => turn.steers.some((steer) => steer.id === id))) return chat;
+	return { ...chat, turns: chat.turns.map((turn) => (turn.steers.some((steer) => steer.id === id) ? { ...turn, steers: turn.steers.filter((steer) => steer.id !== id) } : turn)) };
+}
+
+/** A model request of the running turn took every steer sent so far. */
+export function deliverTurnSteers(chat: InspectorChat): InspectorChat {
+	return updateLastTurn(chat, (turn) => {
+		const steers = deliverSteers(turn.steers);
+		return steers === turn.steers ? turn : { ...turn, steers };
+	});
+}
+
+/** The run ended: a steer still waiting will never reach it. */
+export function settleTurnSteers(chat: InspectorChat): InspectorChat {
+	return updateLastTurn(chat, (turn) => {
+		const steers = settleSteers(turn.steers);
+		return steers === turn.steers ? turn : { ...turn, steers };
+	});
+}
+
+/** When a steer sent now reaches the running turn: after its Quick answer landed, or before. */
+export function steerTiming(chat: InspectorChat): SteerTiming {
+	return chat.turns[chat.turns.length - 1]?.quick == null ? "before-quick" : "after-quick";
 }

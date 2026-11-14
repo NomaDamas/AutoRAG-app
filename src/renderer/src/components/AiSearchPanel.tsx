@@ -27,7 +27,8 @@ import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import { chordFromKeyEvent, resolveEffectiveShortcuts } from "../../../shared/shortcuts-contract";
 import { useFormattedShortcut, useShortcutSettings } from "../hooks/useShortcutSettings";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
-import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
+import { frontRequest } from "../state/interaction";
+import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
@@ -178,7 +179,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [contextNotices, setContextNotices] = useState<readonly ContextNotice[]>([]);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
-	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
+	const interactionQueue = useInteractionQueue();
 	const [stopped, setStopped] = useState(false);
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
 	const [submittedAttachments, setSubmittedAttachments] = useState<readonly ChatAttachment[]>([]);
@@ -325,24 +326,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		},
 		[],
 	);
-
-	// The agent's open requests. `pending()` covers a request that opened before
-	// this panel subscribed (a tab switch or reload); the stream keeps it current.
-	useEffect(() => {
-		const bridge = autorag?.interaction;
-		if (bridge === undefined) return;
-		let alive = true;
-		void bridge.pending().then((requests) => {
-			if (alive) setInteractionQueue((current) => mergePending(current, requests));
-		});
-		const offRequest = bridge.onRequest((request) => setInteractionQueue((current) => openRequest(current, request)));
-		const offClosed = bridge.onClosed((event) => setInteractionQueue((current) => closeRequest(current, event.id)));
-		return () => {
-			alive = false;
-			offRequest();
-			offClosed();
-		};
-	}, []);
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
@@ -1378,7 +1361,7 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
  * Waiting: a dashed accent outline that breathes, with a pulsing dot. Taken by
  * the model: a solid bubble with a check. The run ended first: dimmed, struck.
  */
-function SteerBubble({
+export function SteerBubble({
 	steer,
 	labels,
 }: {

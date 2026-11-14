@@ -17,7 +17,7 @@ function chatWith(...attachments: ChatAttachment[]): InspectorChat {
 	return {
 		chatId: "c1",
 		updatedAt: 1_000,
-		turns: attachments.map((att) => ({ question: "요약해줘", attachments: [att], quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt: 0, progress: "", error: null, stopped: false })),
+		turns: attachments.map((att) => ({ question: "요약해줘", attachments: [att], quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt: 0, progress: "", error: null, stopped: false, steers: [] })),
 	};
 }
 
