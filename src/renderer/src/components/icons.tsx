@@ -70,7 +70,7 @@ import {
 	createLucideIcon,
 	type LucideIcon,
 } from "lucide-react";
-import { type ReactElement, useId } from "react";
+import type { ReactElement } from "react";
 
 interface GlyphProps {
 	readonly size?: number | undefined;
@@ -272,31 +272,19 @@ export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 }
 
 /**
- * The sunflower mark (Figma 415:11802): six filled petals around a hollow centre. The centre is cut out with a mask,
- * not painted white, so it shows whatever the toolbar sits on in either theme.
+ * The potted flower (Figma 491:12956): a filled flower on a stem in a pot. Its centre is cut out (even-odd), not
+ * painted white, so it shows whatever the toolbar sits on in either theme.
  */
-export function SunflowerIcon({ size = 18, className }: GlyphProps): ReactElement {
-	const maskId = `sunflower-${useId().replace(/[^\w-]/g, "")}`;
+export function PottedFlowerIcon({ size = 18, className }: GlyphProps): ReactElement {
 	return (
-		<svg aria-hidden="true" focusable="false" className={className} width={size} height={size} viewBox="0 0 18 18" fill="currentColor" stroke="currentColor" strokeWidth={1.2}>
-			<mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="18" height="18">
-				<rect width="18" height="18" fill="white" stroke="none" />
-				<circle cx="9" cy="9" r="2.7" fill="black" stroke="none" />
-			</mask>
-			<g mask={`url(#${maskId})`}>
-				<path d="M11.025 3.9C11.025 5.391 10.118 6.6 9 6.6C7.882 6.6 6.975 5.391 6.975 3.9C6.975 2.409 7.882 1.2 9 1.2C10.118 1.2 11.025 2.409 11.025 3.9Z" />
-				<path d="M14.429 8.204C13.138 8.949 11.638 8.769 11.079 7.8C10.519 6.831 11.113 5.442 12.404 4.696C13.696 3.951 15.196 4.131 15.755 5.1C16.314 6.069 15.721 7.458 14.429 8.204Z" />
-				<path d="M12.404 13.304C11.113 12.558 10.519 11.169 11.079 10.2C11.638 9.231 13.138 9.051 14.429 9.796C15.721 10.542 16.314 11.932 15.755 12.9C15.196 13.869 13.696 14.049 12.404 13.304Z" />
-				<path d="M6.975 14.1C6.975 12.609 7.882 11.4 9 11.4C10.118 11.4 11.025 12.609 11.025 14.1C11.025 15.591 10.118 16.8 9 16.8C7.882 16.8 6.975 15.591 6.975 14.1Z" />
-				<path d="M3.571 9.796C4.862 9.051 6.362 9.231 6.922 10.2C7.481 11.169 6.887 12.558 5.596 13.304C4.304 14.049 2.804 13.869 2.245 12.9C1.686 11.932 2.279 10.542 3.571 9.796Z" />
-				<path d="M5.596 4.696C6.887 5.442 7.481 6.831 6.922 7.8C6.362 8.769 4.862 8.949 3.571 8.204C2.279 7.458 1.686 6.069 2.245 5.1C2.804 4.131 4.304 3.951 5.596 4.696Z" />
-			</g>
+		<svg aria-hidden="true" focusable="false" className={className} width={size} height={size} viewBox="0 0 18 18" fill="currentColor">
+			<path fillRule="evenodd" clipRule="evenodd" d="M8.99986 0.672729C8.4405 0.67293 7.8944 0.843086 7.43392 1.16065C6.97344 1.47822 6.62033 1.9282 6.42136 2.45098C5.8625 2.47831 5.32516 2.67495 4.88067 3.01479C4.43617 3.35463 4.10553 3.82161 3.93262 4.35375C3.75972 4.8859 3.75272 5.45804 3.91257 5.99425C4.07242 6.53045 4.39155 7.00537 4.82761 7.35598C4.69523 7.84406 4.69958 8.35914 4.84017 8.84491C4.98076 9.33069 5.25219 9.76847 5.62478 10.1104C5.99737 10.4523 6.45679 10.6853 6.95282 10.7837C7.44885 10.8822 7.96241 10.8424 8.43736 10.6687V12.5632C6.76148 12.5659 5.64473 12.5805 5.00836 12.5925C4.55161 12.6007 4.02511 12.8306 3.95573 13.3837C3.94373 13.4755 3.93748 13.5767 3.93698 13.6875C3.93661 13.8536 3.94411 13.8997 3.95573 13.9912C4.01761 14.4847 4.44323 14.721 4.85873 14.7724C4.92998 15.1181 5.02523 15.5546 5.13098 15.9806C5.34586 16.8461 6.09586 17.3985 6.97448 17.4184C7.46198 17.4296 8.12011 17.4375 8.99948 17.4375C9.87961 17.4375 10.537 17.4296 11.0249 17.4187C11.9039 17.3985 12.6539 16.8461 12.8687 15.9806C12.9745 15.5546 13.0694 15.1181 13.1406 14.7724C13.5561 14.721 13.9821 14.4847 14.044 13.9916C14.0685 13.7897 14.0683 13.5856 14.0436 13.3837C13.9746 12.8306 13.4481 12.6007 12.9914 12.5925C11.8485 12.5731 10.7054 12.5634 9.56236 12.5632V10.6687C10.0373 10.8425 10.5509 10.8823 11.047 10.7838C11.5431 10.6853 12.0026 10.4523 12.3752 10.1103C12.7478 9.76835 13.0192 9.33051 13.1597 8.84467C13.3003 8.35884 13.3046 7.84371 13.1721 7.3556C13.608 7.00496 13.927 6.53007 14.0868 5.99392C14.2466 5.45778 14.2395 4.88573 14.0666 4.35367C13.8937 3.82162 13.5632 3.3547 13.1188 3.01488C12.6744 2.67506 12.1371 2.4784 11.5784 2.45098C11.3794 1.9282 11.0263 1.47822 10.5658 1.16065C10.1053 0.843086 9.55922 0.67293 8.99986 0.672729ZM8.99986 7.68748C8.5523 7.68748 8.12308 7.50969 7.80661 7.19322C7.49015 6.87675 7.31236 6.44753 7.31236 5.99998C7.31236 5.55243 7.49015 5.12321 7.80661 4.80674C8.12308 4.49027 8.5523 4.31248 8.99986 4.31248C9.44741 4.31248 9.87663 4.49027 10.1931 4.80674C10.5096 5.12321 10.6874 5.55243 10.6874 5.99998C10.6874 6.44753 10.5096 6.87675 10.1931 7.19322C9.87663 7.50969 9.44741 7.68748 8.99986 7.68748Z" />
 		</svg>
 	);
 }
 
 /**
- * The right sidebar's toggle (Figma 409:10708 / 403:6565): closed, the blue sunflower, which turns into the plain
+ * The right sidebar's toggle (Figma 409:10708 / 403:6565): closed, the blue potted flower (Figma 491:12956), which turns into the plain
  * panel icon while the pointer is on it (or it has keyboard focus), so it reads as the brand and as the control;
  * open, the panel icon alone. The button around it carries Tailwind's `group`.
  */
@@ -305,7 +293,7 @@ export function InspectorToggleIcon({ open }: { readonly open: boolean }): React
 	return (
 		<>
 			<span className="flex text-accent group-hover:hidden group-focus-visible:hidden">
-				<SunflowerIcon />
+				<PottedFlowerIcon />
 			</span>
 			<span className="hidden group-hover:flex group-focus-visible:flex">
 				<PanelRightIcon size={18} />
