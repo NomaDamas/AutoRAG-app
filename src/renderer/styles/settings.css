@@ -4448,63 +4448,18 @@
 	line-height: 16px;
 }
 
-/* The inline recorder under the row: prompt, modifier chips, the key, then 취소 / 저장. */
-.settings-view .shortcuts-recorder {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: 6px;
-	padding: 10px 16px;
-	background: var(--bg-subtle-alt);
-}
-
-.settings-view .shortcuts-recorder-prompt {
-	color: var(--text-muted);
-	font-size: var(--font-size-meta);
-	line-height: 16px;
-	white-space: nowrap;
-}
-
-.settings-view .shortcuts-recorder-chips {
-	display: inline-flex;
-	flex-wrap: wrap;
-	gap: 6px;
-}
-
-.settings-view .shortcuts-chip {
-	display: inline-flex;
-	align-items: center;
-	padding: 3px 10px;
-	border: 1px solid var(--border);
-	border-radius: var(--radius-6);
-	background: var(--bg-window);
-	color: var(--text-body);
-	font: inherit;
-	font-size: var(--font-size-meta);
-	line-height: 16px;
-	white-space: nowrap;
-	cursor: pointer;
-}
-
-.settings-view .shortcuts-chip.is-on {
-	padding: 2.5px 9.5px;
-	border: 1.5px solid var(--accent);
-	background: var(--accent-soft);
-	color: var(--accent-text);
-}
-
-.settings-view .shortcuts-key-select {
-	min-width: 0;
+/* Recording: the keycaps hold the modifiers held so far and the prompt, 12px in the accent; the chord applies on its key. */
+.settings-view .shortcuts-keycaps .shortcut-keycap-seq.is-recording {
 	gap: 4px;
+	min-height: 20px;
 }
 
-.settings-view .shortcuts-recorder-hint {
-	color: var(--text-muted);
+.settings-view .shortcuts-recording-prompt {
+	padding: 0 2px;
+	color: var(--accent-text);
 	font-size: var(--font-size-meta);
-}
-
-.settings-view .shortcuts-recorder-hint.is-conflict {
-	color: var(--danger-text);
+	line-height: 16px;
+	white-space: nowrap;
 }
 
 .settings-view .shortcuts-feedback {
@@ -4568,8 +4523,15 @@
 	border-radius: var(--radius-12);
 }
 
-.settings-view .sidebar-section.is-drop-target {
-	box-shadow: 0 -2px 0 var(--accent);
+/* While dragged, the box leaves its slot as a dashed accent outline over its faded content; the box itself follows
+   the pointer as the drag image and the others slide out of its way (reorder.tsx). */
+.settings-view .sidebar-section.is-dragging {
+	outline: 1.5px dashed var(--accent);
+	outline-offset: 4px;
+}
+
+.settings-view .sidebar-section.is-dragging > * {
+	opacity: 0.4;
 }
 
 .settings-view .sidebar-section-head {
@@ -4636,8 +4598,13 @@
 	box-sizing: border-box;
 }
 
-.settings-view .sidebar-row.is-drop-target {
-	box-shadow: inset 0 2px 0 var(--accent);
+.settings-view .sidebar-row.is-dragging {
+	background: var(--accent-soft);
+	box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.settings-view .sidebar-row.is-dragging > * {
+	opacity: 0.4;
 }
 
 .settings-view .sidebar-row.is-add {
@@ -4732,4 +4699,61 @@
 	color: var(--text-faint);
 	font-size: var(--font-size-meta);
 	line-height: 16px;
+}
+
+/* -------------------------------------------- 우클릭 메뉴 (Figma 472:2581) -- */
+
+/* A titled block (나만의 매직 액션, 우클릭 메뉴 섹션 및 항목): 14px bold title, 12px muted line 4px under it. */
+.settings-view .cmenu-block {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.settings-view .cmenu-block-title {
+	margin: 0;
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .cmenu-block-desc {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .cmenu-block-card {
+	margin-top: 6px;
+}
+
+/* The magic-action list's empty line sits in a 36px row above its add row. */
+.settings-view .sidebar-card-empty.is-compact {
+	padding: 10px 16px;
+}
+
+/* A built-in item: 13px name, the lock on 태그, the item's shortcut in faint 12px, then the switch. */
+.settings-view .sidebar-row.cmenu-row.is-locked .sidebar-row-name {
+	color: var(--text-muted);
+}
+
+.settings-view .cmenu-row-lock {
+	flex: none;
+	color: var(--text-faint);
+}
+
+.settings-view .cmenu-note {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .cmenu-note svg {
+	flex: none;
 }

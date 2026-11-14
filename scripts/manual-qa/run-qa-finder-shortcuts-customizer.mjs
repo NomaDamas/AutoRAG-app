@@ -27,7 +27,6 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, isMac, rmRetry, writeMinsyncStub } from "./platform.mjs";
-import { pickSelect } from "./settings-select.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/ai-finder-app/qa-shortcuts-customizer");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -294,20 +293,17 @@ try {
 	await page.locator('[data-action="swap-shortcut-conflict"]').click();
 	await page.waitForTimeout(250);
 
-	// Now use the inline recorder's pointer controls to set `rename` to `F2`
+	// Recording is keyboard-only: the keycaps wait for keys, and pressing F2 sets `rename` at once (no picker, no 저장).
 	await page.locator('[data-shortcut-record="rename"]').click();
-	await page.locator('[data-testid="shortcut-key-select"]').waitFor();
-	await shot("05-shortcut-ui-editor-open");
-	// Turn off Mod modifier and choose F2
-	await page.locator('[data-shortcut-mod="mod"]').click();
-	await pickSelect(page.locator('[data-testid="shortcut-key-select"]'), "F2");
-	await page.locator('[data-action="save-ui-shortcut"]').click();
+	await page.locator('[data-shortcut-record="rename"][aria-pressed="true"]').waitFor();
+	await shot("05-shortcut-recording");
+	await page.keyboard.press("F2");
 	await page.waitForTimeout(250);
 
 	const settingsFile = join(USER_DATA, "settings", "settings-state.json");
 	const persistedAfterUi = JSON.parse(readFileSync(settingsFile, "utf8"));
 	check(
-		"UI editor saves rename=F2 in settings-state.json while leaving AutoRAG config.json untouched",
+		"Pressing F2 saves rename=F2 in settings-state.json while leaving AutoRAG config.json untouched",
 		existsSync(settingsFile) &&
 			persistedAfterUi.settings.shortcuts.overrides.rename === "F2" &&
 			persistedAfterUi.settings.shortcuts.overrides.focusSearch === "Mod+P" &&

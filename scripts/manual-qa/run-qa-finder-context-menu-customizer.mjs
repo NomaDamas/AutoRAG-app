@@ -258,7 +258,8 @@ try {
 	// Hide 7z로 압축 & 경로 복사, and move `magic` section to the very top
 	await page.locator('[data-sidebar-switch="builtin:compress7z"]').click();
 	await page.locator('[data-sidebar-switch="builtin:copyPath"]').click();
-	await page.locator('[data-action="move-cmenu-section-up-magic"]').click();
+	await page.locator('[data-cmenu-section-grip="magic"]').focus();
+	await page.keyboard.press("ArrowUp");
 
 	// Add a multi-file Script Magic Action via manual editor modal
 	await page.locator('[data-action="add-magic-action"]').click();

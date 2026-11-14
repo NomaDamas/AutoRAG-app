@@ -2296,7 +2296,7 @@
       "magicTitle": "カスタムマジックアクション",
       "magicDesc": "右クリックしたファイルを入力として任意のシェルスクリプトを実行したり、AIエージェントループで分析・変換・整理を実行します。",
       "magicEmpty": "登録されたマジックアクションはありません。AIアシスタントに頼むか手動で追加してください。",
-      "addMagicAction": "+ マジックアクションを追加…",
+      "addMagicAction": "マジックアクションを追加",
       "editMagicAction": "{{name}} を編集",
       "removeMagicAction": "{{name}} を削除",
       "badgeAgentRead": "AI 分析",
@@ -2317,8 +2317,6 @@
       "lockedHint": "タグ項目は必須機能のため非表示にできません。",
       "sectionAlwaysShown": "タグセクションは常に表示されます",
       "sectionCount": "{{visible}}/{{total}} 表示",
-      "moveUp": "{{name}} を上へ移動",
-      "moveDown": "{{name}} を下へ移動",
       "sections": {
         "open": "開く・クイックルック",
         "magic": "マジックアクション",
@@ -2391,10 +2389,11 @@
         "promptCompareFiles": "ファイルを2つ選んだら、変わった内容をまとめて",
         "promptPaperToDiscord": "論文を要約してDiscordの #論文要約 に送り、スライドにして「論文要約」フォルダに入れて",
         "promptMaskToPdf": "hwp・docxファイルの名前を伏せてPDFに変換して保存して"
-      }
+      },
+      "dragHint": "{{name}} の並べ替え: ドラッグするか ↑↓ キーを押します"
     },
     "shortcuts": {
-      "description": "Dazzi の標準ショートカットは、キー入力の記録、UI での選択、または AI との会話で編集できます。",
+      "description": "Dazzi の標準ショートカットは、キーを直接押すか AI との会話で編集できます。",
       "aiHeroTitle": "AIでショートカットをカスタム",
       "aiHeroDesc": "「名前を変更を F2 に、新規フォルダを Cmd+N にして」のように言葉で手軽に変更できます。",
       "aiHeroButton": "AIでカスタム",
@@ -2408,9 +2407,7 @@
       "lockedHint": "Esc はダイアログを閉じる・操作の中止・キー記録のキャンセルに使われる必須システムキーです。",
       "recordButtonHint": "クリックして新しいキーを押してください（現在: {{shortcut}}）",
       "recordingPrompt": "キーを押してください… (Esc でキャンセル)",
-      "uiEditHint": "{{name}} のキーの組み合わせを選択",
       "resetOneHint": "{{name}} を初期値 ({{shortcut}}) に戻す",
-      "saveUi": "保存",
       "cancelUi": "キャンセル",
       "swapConflict": "入れ替える",
       "conflictNotice": "「{{shortcut}}」はすでに「{{target}}」で使用されています。",
@@ -2468,7 +2465,7 @@
       },
       "resetAll": "すべて標準に戻す",
       "changedOnly": "変更した項目のみ表示 ({{count}})",
-      "recorderPrompt": "キーを押すか選んでください"
+      "recorderPrompt": "キーを押してください"
     },
     "general": {
       "description": "Dazzi の画面、クイック検索、起動とアップデート、個人情報の送信を設定します。",

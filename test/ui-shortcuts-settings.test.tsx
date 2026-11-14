@@ -6,7 +6,6 @@ import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
-import { pickSelectOption } from "./select-field-driver";
 
 const bridge = vi.hoisted(() => {
 	const settingsListeners = new Set<(settings: AppSettings) => void>();
@@ -196,36 +195,38 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(currentSettings.shortcuts.overrides.duplicate).toBe("Mod+Shift+P");
 	});
 
-	it("supports pointer-only UI editing with modifier toggles and key selector, plus per-row and full reset", async () => {
+	it("records from the keyboard only: the keycaps wait for keys, show held modifiers, and offer no picker or 저장", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
-		// The keycaps open the row's inline recorder (Figma 445:2249): chips and a key picker that 저장 applies.
-		const uiEditBtn = host.querySelector<HTMLButtonElement>('[data-shortcut-record="focusSearch"]');
-		expect(uiEditBtn).not.toBeNull();
-
+		// The keycaps start recording in place (Figma 445:2249): no modifier chips, no key picker, no 저장.
+		const recordBtn = host.querySelector<HTMLButtonElement>('[data-shortcut-record="focusSearch"]');
+		expect(recordBtn).not.toBeNull();
 		await act(async () => {
-			uiEditBtn?.click();
+			recordBtn?.click();
 		});
+		expect(recordBtn?.getAttribute("aria-pressed")).toBe("true");
+		expect(recordBtn?.textContent).toContain("키를 누르세요");
+		expect(host.querySelector("[data-shortcut-mod]")).toBeNull();
+		expect(host.querySelector('[data-testid="shortcut-key-select"]')).toBeNull();
+		expect(host.querySelector('[data-action="save-ui-shortcut"]')).toBeNull();
 
-		// Toggle Shift modifier on and select key 'P'
-		const shiftChip = host.querySelector<HTMLButtonElement>('[data-shortcut-mod="shift"]');
-		const keySelect = host.querySelector('[data-testid="shortcut-key-select"]');
-		expect(shiftChip).not.toBeNull();
-		expect(keySelect).not.toBeNull();
-
+		// A modifier held on its own shows in the keycaps and saves nothing yet.
 		await act(async () => {
-			shiftChip?.click();
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "Meta", code: "MetaLeft", metaKey: true, bubbles: true, cancelable: true }));
 		});
-		await pickSelectOption(keySelect, "P");
+		expect(recordBtn?.textContent).toContain("⌘");
+		expect(bridge.settings.set).not.toHaveBeenCalled();
+
+		// The full chord applies at once.
 		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="save-ui-shortcut"]')?.click();
+			window.dispatchEvent(new KeyboardEvent("keydown", { key: "P", code: "KeyP", metaKey: true, shiftKey: true, bubbles: true, cancelable: true }));
 		});
 		await settle();
-
 		expect(currentSettings.shortcuts.overrides.focusSearch).toBe("Mod+Shift+P");
+		expect(host.querySelector('[data-shortcut-record="focusSearch"]')?.getAttribute("aria-pressed")).toBe("false");
 
 		// Per-row reset restores focusSearch to ⌘F
 		const resetRowBtn = host.querySelector<HTMLButtonElement>('[data-action="reset-shortcut-focusSearch"]');

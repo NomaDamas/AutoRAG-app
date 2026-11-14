@@ -6,18 +6,14 @@ import type { AppSettings, SettingsBridge } from "../../../../shared/settings-co
 import {
 	activeShortcutPreset,
 	chordFromKeyEvent,
-	decomposeShortcutChord,
 	findShortcutConflict,
-	formatHeldModifiers,
 	formatShortcutChord,
 	normalizeShortcutSettings,
 	resolveEffectiveShortcuts,
-	SELECTABLE_SHORTCUT_KEYS,
 	SHORTCUT_CATALOG,
 	shortcutChordParts,
 	shortcutSettingsForPreset,
 	swapShortcutBinding,
-	validateShortcutParts,
 	type ShortcutCatalogItem,
 	type ShortcutGroupId,
 	type ShortcutId,
@@ -28,7 +24,6 @@ import { hostPlatform } from "../../lib/shortcuts";
 import { SettingsPageHead } from "./SettingsKit";
 import { cn } from "../../lib/cn";
 import { buttonClass } from "../primitives/button";
-import { SelectField } from "./SelectField";
 
 type ShortcutsBridgeWindow = Window & {
 	readonly autorag?: {
@@ -53,14 +48,6 @@ interface PendingConflict {
 	readonly id: ShortcutId;
 	readonly chord: string;
 	readonly conflictWith: ShortcutId;
-}
-
-interface UiEditorState {
-	readonly id: ShortcutId;
-	readonly mod: boolean;
-	readonly alt: boolean;
-	readonly shift: boolean;
-	readonly key: string;
 }
 
 function renderKeycapSequence(chord: string, platform: string): ReactElement {
@@ -104,7 +91,6 @@ export function ShortcutsPage({
 		readonly reason: ShortcutInvalidReason;
 	} | null>(null);
 	const [pendingConflict, setPendingConflict] = useState<PendingConflict | null>(null);
-	const [uiEditor, setUiEditor] = useState<UiEditorState | null>(null);
 	const [changedOnly, setChangedOnly] = useState(false);
 
 	const shortcuts = useMemo(() => normalizeShortcutSettings(appSettings.shortcuts), [appSettings.shortcuts]);
@@ -150,7 +136,6 @@ export function ShortcutsPage({
 
 	const applyRecordedChord = useCallback(
 		async (id: ShortcutId, chord: string): Promise<void> => {
-			setUiEditor(null);
 			const conflictId = findShortcutConflict(id, chord, shortcuts);
 			if (conflictId !== null) {
 				setInvalidNotice(null);
@@ -187,7 +172,6 @@ export function ShortcutsPage({
 			const decoded = chordFromKeyEvent(event, platform);
 			if (decoded.kind === "cancel") {
 				setRecordingId(null);
-				setUiEditor(null);
 				setHeldMods({ mod: false, alt: false, shift: false });
 				setInvalidNotice(null);
 				return;
@@ -236,27 +220,14 @@ export function ShortcutsPage({
 	}, [recordingId, applyRecordedChord, platform, isMac]);
 
 	/**
-	 * The keycaps open the row's panel (Figma 445:2249): keys pressed now are recorded at once, or the chips and the
-	 * key picker build a chord that 저장 applies. Clicking the same keycaps again closes it.
+	 * Clicking the keycaps starts recording (Figma 445:2249): the keycaps wait for keys, and the chord pressed is
+	 * applied at once, with no picker and no 저장. Esc, a click elsewhere or the same keycaps again stops it.
 	 */
 	const startRecording = (id: ShortcutId): void => {
 		setPendingConflict(null);
 		setInvalidNotice(null);
 		setHeldMods({ mod: false, alt: false, shift: false });
-		if (recordingId === id || uiEditor?.id === id) {
-			setRecordingId(null);
-			setUiEditor(null);
-			return;
-		}
-		const currentParts = decomposeShortcutChord(effective[id]) ?? { mod: true, alt: false, shift: false, key: "A" };
-		setUiEditor({ id, mod: currentParts.mod, alt: currentParts.alt, shift: currentParts.shift, key: currentParts.key });
-		setRecordingId(id);
-	};
-
-	const closeEditor = (): void => {
-		setRecordingId(null);
-		setUiEditor(null);
-		setHeldMods({ mod: false, alt: false, shift: false });
+		setRecordingId((current) => (current === id ? null : id));
 	};
 
 	const resetSingleShortcut = async (id: ShortcutId): Promise<void> => {
@@ -272,7 +243,6 @@ export function ShortcutsPage({
 		setHeldMods({ mod: false, alt: false, shift: false });
 		setPendingConflict(null);
 		setInvalidNotice(null);
-		setUiEditor(null);
 		void updateShortcuts(shortcutSettingsForPreset(preset));
 	};
 
@@ -450,18 +420,10 @@ export function ShortcutsPage({
 										const isRecording = recordingId === item.id;
 										const rowConflict = pendingConflict?.id === item.id ? pendingConflict : null;
 										const rowInvalid = invalidNotice?.id === item.id ? invalidNotice : null;
-										const rowUi = uiEditor?.id === item.id ? uiEditor : null;
-										const editing = isRecording || rowUi !== null;
-
-										const uiValidation =
-											rowUi === null
-												? null
-												: validateShortcutParts({ mod: rowUi.mod, alt: rowUi.alt, shift: rowUi.shift, key: rowUi.key });
-										const uiConflictId =
-											rowUi !== null && uiValidation !== null && uiValidation.ok
-												? findShortcutConflict(item.id, uiValidation.chord, shortcuts)
-												: null;
 										const held = isRecording ? heldMods : { mod: false, alt: false, shift: false };
+										const heldParts = [held.mod ? (isMac ? "⌘" : "Ctrl") : null, held.alt ? (isMac ? "⌥" : "Alt") : null, held.shift ? (isMac ? "⇧" : "Shift") : null].filter(
+											(part): part is string => part !== null,
+										);
 
 										return (
 											<div key={item.id} className={cn("shortcuts-row-wrap", customized && "is-customized")} data-shortcut-row={item.id}>
@@ -483,106 +445,28 @@ export function ShortcutsPage({
 													) : null}
 													<button
 														type="button"
-														className={cn("shortcuts-keycaps", editing && "is-editing")}
+														className={cn("shortcuts-keycaps", isRecording && "is-editing")}
 														data-shortcut-record={item.id}
 														title={t("settingsCore.shortcuts.recordButtonHint", { shortcut: currentFormatted })}
 														aria-label={t("settingsCore.shortcuts.recordButtonHint", { shortcut: currentFormatted })}
-														aria-pressed={editing}
-														aria-expanded={editing}
+														aria-pressed={isRecording}
 														onClick={() => startRecording(item.id)}
 													>
-														{renderKeycapSequence(currentChord, platform)}
+														{isRecording ? (
+															<span className="shortcut-keycap-seq is-recording" aria-live="polite">
+																{heldParts.map((part, idx) => (
+																	<span key={part} className="shortcut-keycap-piece">
+																		{!isMac && idx > 0 ? <span className="shortcut-keycap-plus">+</span> : null}
+																		<kbd className="shortcut-keycap">{part}</kbd>
+																	</span>
+																))}
+																<span className="shortcuts-recording-prompt">{t("settingsCore.shortcuts.recorderPrompt")}</span>
+															</span>
+														) : (
+															renderKeycapSequence(currentChord, platform)
+														)}
 													</button>
 												</div>
-
-												{rowUi !== null ? (
-													<div className="shortcuts-recorder">
-														<span className="shortcuts-recorder-prompt">{t("settingsCore.shortcuts.recorderPrompt")}</span>
-														<div className="shortcuts-recorder-chips" role="group">
-															<button
-																type="button"
-																className={cn("shortcuts-chip", (rowUi.mod || held.mod) && "is-on")}
-																data-shortcut-mod="mod"
-																aria-pressed={rowUi.mod}
-																onClick={() => setUiEditor({ ...rowUi, mod: !rowUi.mod })}
-															>
-																{isMac ? "⌘ Cmd" : "Ctrl"}
-															</button>
-															<button
-																type="button"
-																className={cn("shortcuts-chip", (rowUi.alt || held.alt) && "is-on")}
-																data-shortcut-mod="alt"
-																aria-pressed={rowUi.alt}
-																onClick={() => setUiEditor({ ...rowUi, alt: !rowUi.alt })}
-															>
-																{isMac ? "⌥ Opt" : "Alt"}
-															</button>
-															<button
-																type="button"
-																className={cn("shortcuts-chip", (rowUi.shift || held.shift) && "is-on")}
-																data-shortcut-mod="shift"
-																aria-pressed={rowUi.shift}
-																onClick={() => setUiEditor({ ...rowUi, shift: !rowUi.shift })}
-															>
-																{isMac ? "⇧ Shift" : "Shift"}
-															</button>
-															<SelectField
-																data-testid="shortcut-key-select"
-																className="shortcuts-chip is-on shortcuts-key-select"
-																aria-label={t("settingsCore.shortcuts.uiEditHint", { name: label })}
-																value={rowUi.key}
-																options={SELECTABLE_SHORTCUT_KEYS.map((keyOption) => ({ value: keyOption, label: keyOption }))}
-																onValueChange={(key) => setUiEditor({ ...rowUi, key })}
-															/>
-														</div>
-														<span className="shortcuts-row-spacer" />
-														{uiValidation !== null && !uiValidation.ok ? (
-															<span className="shortcuts-recorder-hint">{invalidMessage(uiValidation.reason)}</span>
-														) : uiConflictId !== null && uiValidation !== null && uiValidation.ok ? (
-															<span className="shortcuts-recorder-hint is-conflict">
-																{t("settingsCore.shortcuts.conflictNotice", {
-																	shortcut: formatShortcutChord(uiValidation.chord, platform),
-																	target: actionLabel(uiConflictId),
-																})}
-															</span>
-														) : null}
-														<button
-															type="button"
-															className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
-															data-action="cancel-ui-shortcut"
-															onClick={closeEditor}
-														>
-															{t("settingsCore.shortcuts.cancelUi")}
-														</button>
-														{uiConflictId !== null && uiValidation !== null && uiValidation.ok ? (
-															<button
-																type="button"
-																className={cn(buttonClass({ size: "sm" }), "shortcuts-primary-btn")}
-																data-action="swap-shortcut-conflict"
-																onClick={() => {
-																	const swapped = swapShortcutBinding(shortcuts, item.id, uiValidation.chord);
-																	closeEditor();
-																	void updateShortcuts(swapped);
-																}}
-															>
-																<ArrowLeftRight aria-hidden="true" />
-																{t("settingsCore.shortcuts.swapConflict")}
-															</button>
-														) : (
-															<button
-																type="button"
-																className={cn(buttonClass({ size: "sm" }), "shortcuts-primary-btn")}
-																data-action="save-ui-shortcut"
-																disabled={uiValidation === null || !uiValidation.ok}
-																onClick={() => {
-																	if (uiValidation !== null && uiValidation.ok) void applyRecordedChord(item.id, uiValidation.chord);
-																}}
-															>
-																{t("settingsCore.shortcuts.saveUi")}
-															</button>
-														)}
-													</div>
-												) : null}
 
 												{rowInvalid !== null ? (
 													<div className="shortcuts-feedback is-warning" role="status">

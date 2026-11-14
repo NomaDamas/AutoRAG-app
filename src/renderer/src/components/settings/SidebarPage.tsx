@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type DragEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	AppWindow,
@@ -9,7 +9,6 @@ import {
 	File,
 	Film,
 	Folder,
-	GripVertical,
 	HardDrive,
 	Hexagon,
 	House,
@@ -58,6 +57,7 @@ import { basename, normalizeTypedPath } from "../../state/paths";
 import { Switch } from "../primitives/Switch";
 import { TagDotMark } from "../primitives/TagDot";
 import { PromptModal, SettingsPageHead } from "./SettingsKit";
+import { useReorder, useSlideAnimation } from "./reorder";
 import { cn } from "../../lib/cn";
 import { buttonClass } from "../primitives/button";
 
@@ -258,57 +258,12 @@ export function SidebarPage({
 		void updateSidebar({ ...sidebar, sectionOrder: order });
 	};
 
-	// Drag and drop by the handles (Figma 467:2293): a favorite moves among favorites, a section among sections.
-	const [drag, setDrag] = useState<{ readonly kind: "favorite" | "section"; readonly from: number } | null>(null);
-	const [dropAt, setDropAt] = useState<{ readonly kind: "favorite" | "section"; readonly index: number } | null>(null);
-	const dropTarget = (kind: "favorite" | "section", index: number) => ({
-		onDragOver: (event: DragEvent<HTMLElement>): void => {
-			if (drag?.kind !== kind) return;
-			event.preventDefault();
-			event.dataTransfer.dropEffect = "move";
-			if (dropAt?.kind !== kind || dropAt.index !== index) setDropAt({ kind, index });
-		},
-		onDrop: (event: DragEvent<HTMLElement>): void => {
-			if (drag?.kind !== kind) return;
-			event.preventDefault();
-			if (kind === "favorite") moveFavoriteTo(drag.from, index);
-			else moveSectionTo(drag.from, index);
-			setDrag(null);
-			setDropAt(null);
-		},
-	});
-	const isDropTarget = (kind: "favorite" | "section", index: number): boolean =>
-		drag?.kind === kind && drag.from !== index && dropAt?.kind === kind && dropAt.index === index;
-	const grip = (kind: "favorite" | "section", index: number, id: string, name: string, move: (from: number, to: number) => void): ReactElement => (
-		<button
-			type="button"
-			className="sidebar-grip"
-			draggable
-			data-sidebar-grip={id}
-			title={t("settingsCore.sidebar.dragHint", { name })}
-			aria-label={t("settingsCore.sidebar.dragHint", { name })}
-			onKeyDown={(event) => {
-				if (event.key === "ArrowUp") {
-					event.preventDefault();
-					move(index, index - 1);
-				} else if (event.key === "ArrowDown") {
-					event.preventDefault();
-					move(index, index + 1);
-				}
-			}}
-			onDragStart={(event) => {
-				event.dataTransfer.effectAllowed = "move";
-				event.dataTransfer.setData("text/plain", id);
-				setDrag({ kind, from: index });
-			}}
-			onDragEnd={() => {
-				setDrag(null);
-				setDropAt(null);
-			}}
-		>
-			<GripVertical size={14} strokeWidth={1.5} aria-hidden="true" />
-		</button>
-	);
+	// Drag and drop by the handles (Figma 467:2293): a favorite moves among favorites, a section among sections; the
+	// others slide out of the way while it is dragged.
+	const reorder = useReorder();
+	const pageRef = useRef<HTMLDivElement>(null);
+	useSlideAnimation(pageRef);
+	const sectionCount = sidebar.sectionOrder.length;
 
 	const sectionLabel = (sectionId: SidebarSectionId): string => {
 		switch (sectionId) {
@@ -397,7 +352,7 @@ export function SidebarPage({
 			)}
 
 			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 and 기본값으로 복원), then each section as a head over a bordered card. */}
-			<div className="sidebar-page">
+			<div className="sidebar-page" ref={pageRef}>
 				<div className="sidebar-quick" role="group" aria-label={t("settingsCore.sidebar.presetsTitle")}>
 					<span className="sidebar-quick-label">{t("settingsCore.sidebar.presetsTitle")}</span>
 					<div className="shortcuts-segmented">
@@ -433,8 +388,9 @@ export function SidebarPage({
 					</button>
 				</div>
 
-				<div className="sidebar-sections-stack">
-					{sidebar.sectionOrder.map((sectionId, idx) => {
+				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
+					{reorder.order("section", sectionCount).map((idx) => {
+						const sectionId = sidebar.sectionOrder[idx]!;
 						const isFav = sectionId === "favorites";
 						const sectionVisible = isFav ? true : !hiddenSections.has(sectionId);
 						const label = sectionLabel(sectionId);
@@ -443,12 +399,13 @@ export function SidebarPage({
 						return (
 							<section
 								key={sectionId}
-								className={cn("sidebar-section", !sectionVisible && "is-collapsed", isDropTarget("section", idx) && "is-drop-target")}
+								className={cn("sidebar-section", !sectionVisible && "is-collapsed", reorder.isDragging("section", idx) && "is-dragging")}
 								data-sidebar-section={sectionId}
-								{...dropTarget("section", idx)}
+								data-reorder-key={`section:${sectionId}`}
+								{...reorder.target("section", idx, sectionCount, moveSectionTo)}
 							>
 								<div className="sidebar-section-head">
-									{grip("section", idx, `section:${sectionId}`, label, moveSectionTo)}
+									{reorder.grip({ kind: "section", index: idx, length: sectionCount, id: `section:${sectionId}`, label: t("settingsCore.sidebar.dragHint", { name: label }), attr: "data-sidebar-grip", onMove: moveSectionTo })}
 									<span className="sidebar-section-title">{label}</span>
 									{isFav ? (
 										<span className="sidebar-always-badge" title={t("settingsCore.sidebar.sectionAlwaysShown")}>
@@ -471,7 +428,7 @@ export function SidebarPage({
 								</div>
 
 								{sectionVisible && sectionId === "favorites" ? (
-									<div className="sidebar-card">
+									<div className="sidebar-card" {...reorder.zone("favorite", moveFavoriteTo)}>
 										{([
 											["app:aiSearch", t("places.aiSearch"), Sparkles],
 											["app:automations", t("places.automations"), Zap],
@@ -489,17 +446,19 @@ export function SidebarPage({
 											</div>
 										))}
 
-										{favoriteRows.map((row, index) => {
+										{reorder.order("favorite", favoriteRows.length).map((index) => {
+											const row = favoriteRows[index]!;
 											const Icon = row.icon;
 											const visible = !hiddenItems.has(row.id);
 											return (
 												<div
 													key={row.id}
-													className={cn("sidebar-row", !visible && "is-muted", isDropTarget("favorite", index) && "is-drop-target")}
+													className={cn("sidebar-row", !visible && "is-muted", reorder.isDragging("favorite", index) && "is-dragging")}
 													data-sidebar-row={row.id}
-													{...dropTarget("favorite", index)}
+													data-reorder-key={`favorite:${row.id}`}
+													{...reorder.target("favorite", index, favoriteRows.length, moveFavoriteTo)}
 												>
-													{grip("favorite", index, row.id, row.label, moveFavoriteTo)}
+													{reorder.grip({ kind: "favorite", index, length: favoriteRows.length, id: row.id, label: t("settingsCore.sidebar.dragHint", { name: row.label }), attr: "data-sidebar-grip", onMove: moveFavoriteTo })}
 													<span className="sidebar-row-label">
 														<Icon size={14} strokeWidth={1.5} className="sidebar-row-icon" aria-hidden="true" />
 														<span className="sidebar-row-name">{row.label}</span>

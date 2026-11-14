@@ -2296,7 +2296,7 @@
       "magicTitle": "Custom Magic Actions",
       "magicDesc": "Pass right-clicked files into any shell command or run an AI agent loop to analyze, convert, or organize them.",
       "magicEmpty": "No Magic Actions yet. Ask the AI assistant or add one manually.",
-      "addMagicAction": "+ Add Magic Action…",
+      "addMagicAction": "Add Magic Action",
       "editMagicAction": "Edit {{name}}",
       "removeMagicAction": "Remove {{name}}",
       "badgeAgentRead": "AI Read",
@@ -2317,8 +2317,6 @@
       "lockedHint": "Tags is a required core item and cannot be hidden.",
       "sectionAlwaysShown": "Tags section is always shown",
       "sectionCount": "{{visible}}/{{total}} shown",
-      "moveUp": "Move {{name}} up",
-      "moveDown": "Move {{name}} down",
       "sections": {
         "open": "Open & Quick Look",
         "magic": "Magic Actions",
@@ -2391,10 +2389,11 @@
         "promptCompareFiles": "When I pick two files, sum up what changed between them",
         "promptPaperToDiscord": "Summarize a paper, post it to Discord #paper-summaries, and save it as slides in a \"Paper Summaries\" folder",
         "promptMaskToPdf": "Mask the names in hwp and docx files and save them as PDF"
-      }
+      },
+      "dragHint": "Reorder {{name}}: drag, or press ↑ or ↓"
     },
     "shortcuts": {
-      "description": "Edit Dazzi's shortcuts by recording keys, picking them, or asking the AI.",
+      "description": "Edit Dazzi's shortcuts by pressing the keys or by asking the AI.",
       "aiHeroTitle": "Customize Shortcuts with AI",
       "aiHeroDesc": "Ask in plain words — for example, \"Change Rename to F2 and New Folder to Cmd+N.\"",
       "aiHeroButton": "Customize with AI",
@@ -2408,9 +2407,7 @@
       "lockedHint": "Esc is a reserved system key used to close dialogs, cancel runs, and exit key recording.",
       "recordButtonHint": "Click and press new keys (current: {{shortcut}})",
       "recordingPrompt": "Press keys… (Esc to cancel)",
-      "uiEditHint": "Choose key combination for {{name}}",
       "resetOneHint": "Restore {{name}} to default ({{shortcut}})",
-      "saveUi": "Save",
       "cancelUi": "Cancel",
       "swapConflict": "Swap",
       "conflictNotice": "'{{shortcut}}' is already used by '{{target}}'.",
@@ -2468,7 +2465,7 @@
       },
       "resetAll": "Reset all to default",
       "changedOnly": "Show changed only ({{count}})",
-      "recorderPrompt": "Press keys or pick them"
+      "recorderPrompt": "Press keys"
     },
     "general": {
       "description": "Set up Dazzi's appearance, quick search, startup and updates, and what it sends about you.",

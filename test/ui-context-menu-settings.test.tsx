@@ -159,10 +159,11 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await settle();
 		expect(currentSettings.contextMenu.hiddenItems).toEqual(["builtin:compress7z"]);
 
-		// Move `magic` section to the very top
-		const moveMagicUp = host.querySelector<HTMLButtonElement>('[data-action="move-cmenu-section-up-magic"]');
+		// Move `magic` section to the very top: its drag handle also moves it with ↑
+		const magicGrip = host.querySelector<HTMLButtonElement>('[data-cmenu-section-grip="magic"]');
+		expect(magicGrip).not.toBeNull();
 		await act(async () => {
-			moveMagicUp?.click();
+			magicGrip?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
 		});
 		await settle();
 		expect(currentSettings.contextMenu.sectionOrder[0]).toBe("magic");
