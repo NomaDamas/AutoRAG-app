@@ -389,7 +389,7 @@ export function SidebarPage({
 				</div>
 
 				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
-					{reorder.order("section", sectionCount).map((idx) => {
+					{reorder.order("section", sidebar.sectionOrder).map((idx) => {
 						const sectionId = sidebar.sectionOrder[idx]!;
 						const isFav = sectionId === "favorites";
 						const sectionVisible = isFav ? true : !hiddenSections.has(sectionId);
@@ -446,7 +446,7 @@ export function SidebarPage({
 											</div>
 										))}
 
-										{reorder.order("favorite", favoriteRows.length).map((index) => {
+										{reorder.order("favorite", favoriteRows.map((row) => row.id)).map((index) => {
 											const row = favoriteRows[index]!;
 											const Icon = row.icon;
 											const visible = !hiddenItems.has(row.id);

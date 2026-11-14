@@ -553,7 +553,7 @@ export function ContextMenuPage({
 	};
 
 	const magicRows = (prefix: string): ReactElement[] =>
-		reorder.order("magic", magicCount).map((index) => renderMagicActionRow(contextMenu.magicActions[index]!, index, prefix));
+		reorder.order("magic", contextMenu.magicActions.map((action) => action.id)).map((index) => renderMagicActionRow(contextMenu.magicActions[index]!, index, prefix));
 
 	const isDefault = isDefaultContextMenuSettings(contextMenu);
 	const isMinimalActive =
@@ -653,7 +653,7 @@ export function ContextMenuPage({
 				</div>
 
 				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
-					{reorder.order("section", sectionCount).map((idx) => {
+					{reorder.order("section", contextMenu.sectionOrder).map((idx) => {
 						const sectionId = contextMenu.sectionOrder[idx]!;
 						const isTags = sectionId === "tags";
 						const sectionVisible = isTags ? true : !hiddenSections.has(sectionId);

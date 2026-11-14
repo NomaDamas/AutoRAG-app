@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactElement, type RefObject } from "react";
 import { GripVertical } from "lucide-react";
 
 /** `items` with the element at `from` taken out and put back at `to`. */
@@ -17,9 +17,21 @@ interface DragState {
 	readonly over: number;
 }
 
+/** A drop whose new order is still being saved: the list keeps showing it until the saved order arrives. */
+interface SettleState extends DragState {
+	/** The item keys as they were when the drop happened. */
+	readonly keys: string;
+}
+
+/** How long a dropped order is held if the saved order never arrives (the save failed): the list then shows what is stored. */
+const SETTLE_TIMEOUT_MS = 2000;
+
 export interface Reorder {
-	/** The positions to render a list of `length` in: the original indices, rearranged while one of them is dragged. */
-	readonly order: (kind: string, length: number) => readonly number[];
+	/**
+	 * The positions to render the list in, given its items' keys in stored order: the original indices, rearranged while
+	 * one of them is dragged, and kept that way after the drop until the stored order catches up.
+	 */
+	readonly order: (kind: string, keys: readonly string[]) => readonly number[];
 	/** Whether the item at original index `index` is the one being dragged. */
 	readonly isDragging: (kind: string, index: number) => boolean;
 	/** Handlers for the box that holds an item: hovering past its middle moves the dragged one there; dropping commits. */
@@ -56,14 +68,54 @@ export interface Reorder {
  * Drag-to-reorder for the settings lists (사이드바, 우클릭 메뉴). While an item is dragged the list is shown in the
  * order it would have if dropped now, so the other boxes slide out of its way (see `useSlideAnimation`) and the
  * dragged box keeps its own place as a highlighted slot; the drag image is the whole box, not just the handle.
- * Nothing is saved until the drop; leaving the list or pressing Esc puts everything back.
+ * Nothing is saved until the drop; leaving the list or pressing Esc puts everything back. The save is asynchronous, so
+ * after a drop the list goes on showing the dropped order until the stored one arrives; without that it would show
+ * the old order for a moment and every box would slide back and forth.
  */
 export function useReorder(): Reorder {
 	const [drag, setDrag] = useState<DragState | null>(null);
+	const [settle, setSettle] = useState<SettleState | null>(null);
+	const stale = useRef(false);
+	/** Each list's keys as last rendered, so a drop can remember what it was dropped on. */
+	const keysOf = useRef(new Map<string, readonly string[]>());
 
-	const order = (kind: string, length: number): readonly number[] => {
+	// The stored order has arrived (the keys changed) or never will: stop holding the dropped one.
+	useEffect(() => {
+		if (settle === null) return;
+		if (stale.current) {
+			stale.current = false;
+			setSettle(null);
+			return;
+		}
+		const timer = window.setTimeout(() => setSettle(null), SETTLE_TIMEOUT_MS);
+		return () => window.clearTimeout(timer);
+	});
+
+	/** The order while dragging, by position only. */
+	const preview = (kind: string, length: number): readonly number[] => {
 		const base = Array.from({ length }, (_, index) => index);
 		return drag?.kind === kind ? moveIndex(base, drag.from, drag.over) : base;
+	};
+
+	const order = (kind: string, keys: readonly string[]): readonly number[] => {
+		keysOf.current.set(kind, keys);
+		if (drag?.kind === kind) return preview(kind, keys.length);
+		const base = keys.map((_, index) => index);
+		if (settle?.kind !== kind) return base;
+		if (settle.keys !== keys.join("\n")) {
+			stale.current = true;
+			return base;
+		}
+		return moveIndex(base, settle.from, settle.over);
+	};
+
+	const drop = (onMove: (from: number, to: number) => void, keys: readonly string[] | undefined): void => {
+		if (drag === null) return;
+		const { kind, from, over } = drag;
+		setDrag(null);
+		if (from === over) return;
+		if (keys !== undefined) setSettle({ kind, from, over, keys: keys.join("\n") });
+		onMove(from, over);
 	};
 
 	return {
@@ -76,7 +128,7 @@ export function useReorder(): Reorder {
 				event.stopPropagation();
 				event.dataTransfer.dropEffect = "move";
 				if (index === drag.from) return;
-				const positions = order(kind, length);
+				const positions = preview(kind, length);
 				const at = positions.indexOf(index);
 				const current = positions.indexOf(drag.from);
 				// Move only once the pointer passes the box's middle, so boxes of different heights do not flicker.
@@ -90,9 +142,7 @@ export function useReorder(): Reorder {
 				if (drag?.kind !== kind) return;
 				event.preventDefault();
 				event.stopPropagation();
-				const { from, over } = drag;
-				setDrag(null);
-				if (from !== over) onMove(from, over);
+				drop(onMove, keysOf.current.get(kind));
 			},
 		}),
 		zone: (kind, onMove) => ({
@@ -104,9 +154,7 @@ export function useReorder(): Reorder {
 			onDrop: (event) => {
 				if (drag?.kind !== kind) return;
 				event.preventDefault();
-				const { from, over } = drag;
-				setDrag(null);
-				if (from !== over) onMove(from, over);
+				drop(onMove, keysOf.current.get(kind));
 			},
 		}),
 		grip: ({ kind, index, length, id, label, attr, onMove }) => (
