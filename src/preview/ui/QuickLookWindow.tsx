@@ -1,4 +1,4 @@
-import { StrictMode, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
+import { StrictMode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { createRoot } from "react-dom/client";
 import { useTranslation } from "react-i18next";
 import { setAppLanguage } from "../../shared/i18n";
@@ -13,11 +13,13 @@ import { ChromeProvider, TOOL_BUTTON, type QuickLookChrome } from "./chrome";
 import { ErrorView } from "./fallback";
 import { FolderView } from "./folder";
 import { CloseIcon, FullscreenIcon, MarkupIcon, ShareIcon } from "./icons";
-import { MarkupLayer } from "./markup";
 import { documentEditMode } from "../shared/annotation";
 import { createSlideSweep } from "./slide-sweep";
 import { ZOOM_IN, ZOOM_OUT } from "./zoom-motion";
 import "./quick-look.css";
+
+/** Drawing code loads only when the pen button is pressed; an ordinary preview never ships the pen. */
+const MarkupLayer = lazy(() => import("./markup").then((module) => ({ default: module.MarkupLayer })));
 
 declare global {
 	interface Window {
@@ -239,6 +241,8 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 			sweep.clear();
 			seqRef.current = -1;
 			setLoad(null);
+			// The window is done with this file: its markup must not reopen on the next preview of the same path.
+			setMarkupPath(null);
 		});
 		return () => {
 			offLoad();
@@ -252,17 +256,23 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 		};
 	}, [bridge]);
 
-	/** The size the shown viewer last asked for, before the markup minimum; markup closing returns to it. */
+	/** The content size the shown viewer last asked for, before the markup minimum; closing markup returns to it. */
 	const natural = useRef<{ readonly seq: number; readonly size: Size; readonly fit: QuickLookFit } | null>(null);
-	/** True while the markup composer is open: it floats over the stage, so a short window (a few lines of text) would be all composer. */
-	const markupOpenRef = useRef(false);
+	/** The last size handed to the window, so a markup toggle that changes nothing does not send it again. */
+	const applied = useRef<{ readonly seq: number; readonly width: number; readonly height: number; readonly fit: QuickLookFit } | null>(null);
+	/** The composer is open for the file on screen; a switch to another file (or a close) drops it below. */
+	const markupOpen = markupPath !== null && load !== null && markupPath === load.path;
 	const send = useCallback(
 		(seq: number, size: Size, fit: QuickLookFit) => {
 			natural.current = { seq, size, fit };
-			const height = markupOpenRef.current ? Math.max(size.height, MARKUP_MIN_HEIGHT - QUICK_LOOK_TOOLBAR) : size.height;
+			// Only while the composer is open does a short window grow to leave room for a few lines above it.
+			const height = markupOpen ? Math.max(size.height, MARKUP_MIN_HEIGHT - QUICK_LOOK_TOOLBAR) : size.height;
+			const last = applied.current;
+			if (last !== null && last.seq === seq && last.width === size.width && last.height === height && last.fit === fit) return;
+			applied.current = { seq, width: size.width, height, fit };
 			bridge.ready({ seq, width: size.width, height, fit });
 		},
-		[bridge],
+		[bridge, markupOpen],
 	);
 	const report = useCallback(
 		(size: Size, fit: QuickLookFit) => {
@@ -284,9 +294,15 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 	);
 	const chrome = useMemo<QuickLookChrome>(() => ({ bridge, toolbar, report, resize, hideTitle: setTitleHidden, app }), [bridge, toolbar, report, resize, app]);
 
-	const markupOpen = markupPath !== null && load !== null && markupPath === load.path;
+	// The shown file changed (or the window closed, which drops `load`): markup belongs to the old file
+	// and must not reopen on the next preview of that path. A same-path reload (the edit agent changed
+	// it) keeps the composer open so its run status and Undo stay in reach.
+	const shownPath = load?.path ?? null;
 	useEffect(() => {
-		markupOpenRef.current = markupOpen;
+		setMarkupPath((open) => (open !== null && open !== shownPath ? null : open));
+	}, [shownPath]);
+	// Opening or closing markup grows or shrinks the window around the composer; `send` skips a size it already sent.
+	useEffect(() => {
 		const last = natural.current;
 		if (last !== null && last.seq === seqRef.current) send(last.seq, last.size, last.fit);
 	}, [markupOpen, send]);
@@ -392,7 +408,11 @@ function QuickLookWindow({ bridge }: { readonly bridge: QuickLookWindowBridge })
 						<PreviewBody file={document} anchor={load.anchor} />
 					)}
 				</main>
-				{marking ? <MarkupLayer bridge={bridge} path={load.path} seq={load.seq} stageRef={stageRef} onExit={() => setMarkupPath(null)} /> : null}
+				{marking ? (
+					<Suspense fallback={null}>
+						<MarkupLayer bridge={bridge} path={load.path} seq={load.seq} stageRef={stageRef} onExit={() => setMarkupPath(null)} />
+					</Suspense>
+				) : null}
 			</div>
 		</ChromeProvider>
 	);

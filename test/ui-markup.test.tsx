@@ -12,11 +12,13 @@ Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 interface Harness {
 	readonly requests: Array<{ readonly runId: string; readonly request: DocumentEditRequest }>;
 	readonly undone: string[];
+	readonly textEntries: boolean[];
+	readonly cancelled: string[];
 	emit(event: DocumentEditEvent): void;
 	finish(): void;
 }
 
-function bridgeFor(harness: { requests: Harness["requests"]; undone: string[]; listeners: Set<(event: DocumentEditEvent) => void>; release: Array<() => void> }): QuickLookWindowBridge {
+function bridgeFor(harness: { requests: Harness["requests"]; undone: string[]; textEntries: boolean[]; cancelled: string[]; listeners: Set<(event: DocumentEditEvent) => void>; release: Array<() => void> }): QuickLookWindowBridge {
 	return {
 		editDocument: (runId: string, request: DocumentEditRequest) => {
 			harness.requests.push({ runId, request });
@@ -24,7 +26,9 @@ function bridgeFor(harness: { requests: Harness["requests"]; undone: string[]; l
 			harness.release.push(resolve);
 			return promise;
 		},
-		cancelEdit: async () => undefined,
+		cancelEdit: async (runId: string) => {
+			harness.cancelled.push(runId);
+		},
 		undoEdit: async (runId: string) => {
 			harness.undone.push(runId);
 			return true;
@@ -33,7 +37,9 @@ function bridgeFor(harness: { requests: Harness["requests"]; undone: string[]; l
 			harness.listeners.add(listener);
 			return () => harness.listeners.delete(listener);
 		},
-		textEntry: () => undefined,
+		textEntry: (active: boolean) => {
+			harness.textEntries.push(active);
+		},
 	} as unknown as QuickLookWindowBridge;
 }
 
@@ -59,7 +65,7 @@ afterEach(async () => {
 
 /** A stage at (0,46) 800x600 holding page 2 at (100,100) 400x500, like a paged viewer. */
 async function mount(): Promise<Harness> {
-	const state = { requests: [] as Harness["requests"], undone: [] as string[], listeners: new Set<(event: DocumentEditEvent) => void>(), release: [] as Array<() => void> };
+	const state = { requests: [] as Harness["requests"], undone: [] as string[], textEntries: [] as boolean[], cancelled: [] as string[], listeners: new Set<(event: DocumentEditEvent) => void>(), release: [] as Array<() => void> };
 	const bridge = bridgeFor(state);
 	function Stage(): React.ReactElement {
 		const stageRef = useRef<HTMLElement | null>(null);
@@ -92,6 +98,8 @@ async function mount(): Promise<Harness> {
 	return {
 		requests: state.requests,
 		undone: state.undone,
+		textEntries: state.textEntries,
+		cancelled: state.cancelled,
 		emit: (event) => act(() => state.listeners.forEach((listener) => listener(event))),
 		finish: () => state.release.forEach((resolve) => resolve()),
 	};
@@ -123,6 +131,13 @@ async function typeInstruction(text: string): Promise<HTMLTextAreaElement> {
 		field.dispatchEvent(new Event("input", { bubbles: true }));
 	});
 	return field;
+}
+
+/** Takes the composer off the page, the way switching files or closing the window does. */
+async function closeComposer(): Promise<void> {
+	await act(async () => {
+		root.render(null);
+	});
 }
 
 describe("Quick Look markup", () => {
@@ -174,5 +189,28 @@ describe("Quick Look markup", () => {
 		await act(async () => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
 		harness.emit({ type: "error", runId: "someone-else", message: "boom" });
 		expect(host.querySelector("[data-edit-state=running]")).not.toBeNull();
+	});
+
+	it("hands the keyboard back when the composer goes while its field is focused", async () => {
+		const harness = await mount();
+		const field = await typeInstruction("고쳐줘");
+		await act(async () => {
+			field.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+		});
+		expect(harness.textEntries).toContain(true);
+
+		await closeComposer();
+		expect(harness.textEntries.at(-1)).toBe(false);
+	});
+
+	it("cancels a run that was still live when the composer goes away", async () => {
+		const harness = await mount();
+		const field = await typeInstruction("고쳐줘");
+		await act(async () => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+		const runId = harness.requests[0]?.runId ?? "";
+		expect(host.querySelector("[data-edit-state=running]")).not.toBeNull();
+
+		await closeComposer();
+		expect(harness.cancelled).toEqual([runId]);
 	});
 });

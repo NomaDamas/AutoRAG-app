@@ -546,6 +546,25 @@ become a localized preview error instead of rejecting `preview:show` without
 loading the panel. `test/preview-file-read.test.ts` exercises the real native
 coordinator with a binary document after injecting the POSIX refusal.
 
+Audio tags keep their original reader, switching only a Darwin `EDEADLK` to a
+disk snapshot copied inside the coordinator's accessor and deleted after
+parsing. Byte-range streams recover only the remaining requested range through
+the coordinator's stdout, with bounded chunks and no whole-media copy per seek.
+Native `sips`/`qlmanage` errors trigger a one-byte probe, and a snapshot retry
+happens only if that probe confirms the same provider refusal.
+Successful local conversions incur no probe or snapshot. Native HEIC decoding
+remains first; the browser fallback uses `heic-to/csp`, not eval-based
+`heic2any`, with the production CSP unchanged.
+
+The markup drawing module is lazy-loaded only on pressing the pen. Closing it
+releases text-entry focus and cancels an active edit. Changing files or closing
+the preview clears markup mode; ordinary previews retain their natural sizing
+and do not start the drawing layer's observers.
+
+Legacy `.doc`/`.ppt` files whose bytes are neither OLE, ZIP nor RTF but pass the
+existing text sniff use `TextView`. Their filename/extension is retained; real
+binary Office documents still use their existing native and text readers.
+
 A streamed viewer names the file's version in its URL (`previewStreamUrl(path,
 file)` adds `v=<modifiedAt>:<size>` from the `PreviewDocument`; the protocol
 ignores it). The panel is one long-lived page, and Chromium keeps decoded

@@ -254,12 +254,47 @@ export function MarkupLayer({
 		readonly scrolled: boolean;
 	} | null>(null);
 	const runIdRef = useRef<string | null>(null);
+	/** Whether the instruction field holds focus, so leaving the page hands the keyboard back. */
+	const focusedRef = useRef(false);
+	/** Whether an edit is in flight now; read when the composer unmounts, when no effect of its own runs. */
+	const runningRef = useRef(false);
+	/** Cleared on unmount, so a submit that lands afterwards stops touching state. */
+	const aliveRef = useRef(true);
 
 	// The stage remounts on every load (the file was edited, or undone): the old marks pointed into the old page.
 	useEffect(() => {
 		setMarks([]);
 		setDrawing(null);
 	}, [seq]);
+
+	// The composer can go while its field has focus (another file, the window closing): the main process
+	// still believes a field is typing unless the blur that never landed is balanced here.
+	useEffect(
+		() => () => {
+			if (focusedRef.current) {
+				focusedRef.current = false;
+				bridge.textEntry(false);
+			}
+		},
+		[bridge],
+	);
+
+	// Leaving mid-run hands the edit back to the main process, which stops it and decides on its own reload;
+	// otherwise the run keeps going with no listener left to show its outcome.
+	useEffect(
+		() => () => {
+			const runId = runIdRef.current;
+			if (runId !== null && runningRef.current) void bridge.cancelEdit(runId);
+		},
+		[bridge],
+	);
+
+	useEffect(() => {
+		aliveRef.current = true;
+		return () => {
+			aliveRef.current = false;
+		};
+	}, []);
 
 	useLayoutEffect(() => {
 		const stage = stageRef.current;
@@ -327,6 +362,8 @@ export function MarkupLayer({
 	);
 
 	const running = run?.status === "running";
+	// Kept in a ref so the unmount cleanup, which belongs to no render, still sees whether an edit is live.
+	runningRef.current = running;
 
 	const pointAt = (event: PointerEvent<SVGSVGElement>): Point => ({
 		x: event.clientX,
@@ -429,8 +466,10 @@ export function MarkupLayer({
 				instruction: text.slice(0, MAX_INSTRUCTION),
 				marks: marks.map((placed) => placed.mark),
 			});
+			if (!aliveRef.current) return;
 			setInstruction("");
 		} catch (error) {
+			if (!aliveRef.current) return;
 			setRun({
 				status: "error",
 				runId,
@@ -582,8 +621,14 @@ export function MarkupLayer({
 							placeholder={t("quickLook.markup.placeholder")}
 							onChange={(event) => setInstruction(event.target.value)}
 							onKeyDown={onKeyDown}
-							onFocus={() => bridge.textEntry(true)}
-							onBlur={() => bridge.textEntry(false)}
+							onFocus={() => {
+								focusedRef.current = true;
+								bridge.textEntry(true);
+							}}
+							onBlur={() => {
+								focusedRef.current = false;
+								bridge.textEntry(false);
+							}}
 						/>
 						<span className="pb-8 text-ql-ink-secondary tabular-nums whitespace-nowrap">
 							{t("quickLook.markup.markCount", { count: marks.length })}

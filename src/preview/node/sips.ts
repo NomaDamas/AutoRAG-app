@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { withReadableFile } from "./provider-access";
 
 /** A 48MP HEIC or a multi-hundred-megapixel scan on a spun-down HDD still decodes well inside this. */
 export const SIPS_TIMEOUT_MS = 30_000;
@@ -30,10 +31,17 @@ export const runSips: SipsRun = async (_command, args, { timeoutMs }) => {
 /** The pixel size sips reports for an image, or null when it cannot read one. */
 export async function pixelSize(path: string): Promise<PixelSize | null> {
 	try {
-		const out = await execSips(["-g", "pixelWidth", "-g", "pixelHeight", path], SIPS_TIMEOUT_MS);
-		const width = Number(/pixelWidth:\s*(\d+)/.exec(out)?.[1]);
-		const height = Number(/pixelHeight:\s*(\d+)/.exec(out)?.[1]);
-		return width > 0 && height > 0 ? { width, height } : null;
+		return await withReadableFile(
+			path,
+			async (localPath) => {
+				const out = await execSips(["-g", "pixelWidth", "-g", "pixelHeight", localPath], SIPS_TIMEOUT_MS);
+				const width = Number(/pixelWidth:\s*(\d+)/.exec(out)?.[1]);
+				const height = Number(/pixelHeight:\s*(\d+)/.exec(out)?.[1]);
+				if (!(width > 0 && height > 0)) throw new Error(`sips reported no pixel size for ${localPath}`);
+				return { width, height };
+			},
+			true,
+		);
 	} catch {
 		return null;
 	}
@@ -56,10 +64,16 @@ export async function convertWithSips(path: string, outName: string, args: reado
 	const run = deps.run ?? runSips;
 	const dir = await mkdtemp(join(tmpdir(), "autorag-sips-"));
 	try {
-		const out = join(dir, outName);
-		await run("sips", [...args, "--out", out, path], { timeoutMs: SIPS_TIMEOUT_MS });
-		const bytes = await readFile(out);
-		return bytes.byteLength === 0 ? null : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+		return await withReadableFile(
+			path,
+			async (localPath) => {
+				const out = join(dir, outName);
+				await run("sips", [...args, "--out", out, localPath], { timeoutMs: SIPS_TIMEOUT_MS });
+				const bytes = await readFile(out);
+				return bytes.byteLength === 0 ? null : new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+			},
+			true,
+		);
 	} catch (error) {
 		(deps.warn ?? console.warn)(`quick-look: sips could not convert ${path}: ${error instanceof Error ? error.message : String(error)}`);
 		return null;

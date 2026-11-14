@@ -20,7 +20,7 @@ import { createServer } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { homedir, tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
-import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { createFinderPreview, finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { isMac, rmRetry } from "./platform.mjs";
 
 const REAL_API = "https://api.dazziapp.com";
@@ -185,15 +185,15 @@ try {
 	writeFileSync(CONFIG, `${JSON.stringify(cfg, null, 2)}\n`);
 	console.log(`live model: ${MODEL_ID}`);
 
-	const preview = await poll(async () => app.windows().find((page) => page.url().includes("quick-look.html")), (page) => page !== undefined, 30_000);
-	if (preview === undefined) throw new Error("the Quick Look window did not pre-warm");
+	const finderPreview = createFinderPreview(app, main);
+	const preview = await poll(() => finderPreview.page().catch(() => undefined), (page) => page !== undefined, 30_000);
+	if (preview === undefined) throw new Error("the Finder Quick Look window did not pre-warm");
 	preview.setDefaultTimeout(60_000);
 	const shot = async (name) => {
 		await sleep(300);
 		await preview.screenshot({ path: join(EVIDENCE, `${name}.png`) });
 	};
-	const visible = () =>
-		app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((window) => window.webContents.getURL().includes("quick-look.html") && window.isVisible()));
+	const visible = async () => (await finderPreview.state())?.visible ?? false;
 	const progress = [];
 	await preview.exposeFunction("__qaEditProgress", (text) => progress.push(text));
 	await preview.evaluate(() => window.quickLook.onEditEvent((event) => event.type === "progress" && window.__qaEditProgress(event.text)));

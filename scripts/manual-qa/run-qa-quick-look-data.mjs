@@ -14,7 +14,7 @@ import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parquetWriteBuffer } from "hyparquet-writer";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { createFinderPreview, finderWindow, launchFinder } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? "/tmp/autorag-quicklook-data";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -77,21 +77,26 @@ async function poll(read, accept, timeoutMs = 8000) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: process.env.QA_LANGUAGE ?? "en" });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
-	const visible = () =>
-		app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"))?.isVisible() ?? false);
+	// The Finder's panel, not the launcher's hidden 880×640 one (see createFinderPreview):
+	// `getAllWindows().find(...)` returned the launcher's, so `visible()` stayed false and
+	// the 8 s poll timed the first open out (the "sqlite grid appears quickly" failure).
+	const finderPreview = createFinderPreview(app, main);
+	let preview = null;
+	async function previewPage() {
+		if (preview !== null) return preview;
+		preview = await poll(() => finderPreview.page().catch(() => null), (page) => page !== null, 30_000);
+		if (preview === null) throw new Error(`the Finder's Quick Look panel did not appear: ${JSON.stringify(await finderPreview.facts().catch(() => []))}`);
+		return preview;
+	}
+	const visible = async () => (await finderPreview.state())?.visible === true;
 
 	async function open(name, ready) {
 		const row = main.getByRole("row", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
 		await row.waitFor({ timeout: 30_000 });
 		await row.click();
 		await main.keyboard.press("Space");
-		await poll(() => preview.evaluate(ready).catch(() => false), Boolean, 10_000);
+		const page = await previewPage();
+		await poll(() => page.evaluate(ready).catch(() => false), Boolean, 10_000);
 		await poll(visible, Boolean);
 		await new Promise((resolve) => setTimeout(resolve, 400));
 	}

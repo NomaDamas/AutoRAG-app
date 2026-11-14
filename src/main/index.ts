@@ -1145,7 +1145,6 @@ app.whenReady().then(async () => {
 		backupDir: join(app.getPath("userData"), "document-edit-backups"),
 	});
 	setQuickLookDocumentEdit(documentEditService);
-	app.once("will-quit", () => void documentEditService.dispose());
 	const accountService = createAccountService({
 		env: process.env,
 		credentials,
@@ -1409,7 +1408,7 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()])
+		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose(), documentEditService.dispose()])
 			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
 			.finally(() => app.exit(0));
 	});

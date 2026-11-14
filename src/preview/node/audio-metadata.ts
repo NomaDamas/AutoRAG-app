@@ -1,5 +1,6 @@
 import { parseFile } from "music-metadata";
 import type { AudioMetadata } from "../shared/contract";
+import { withReadableFile } from "./provider-access";
 
 /** Cover art larger than this is skipped: the panel shows it at 212px. */
 const PICTURE_CAP = 4 * 1024 * 1024;
@@ -10,7 +11,7 @@ const PICTURE_CAP = 4 * 1024 * 1024;
  * the media has loaded.
  */
 export async function readAudioMetadata(path: string): Promise<AudioMetadata> {
-	const { common, format } = await parseFile(path, { duration: false, skipPostHeaders: true });
+	const { common, format } = await withReadableFile(path, (localPath) => parseFile(localPath, { duration: false, skipPostHeaders: true }));
 	const picture = common.picture?.find((item) => item.data.byteLength <= PICTURE_CAP) ?? null;
 	return {
 		title: common.title ?? null,

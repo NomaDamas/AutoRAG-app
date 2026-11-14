@@ -4,6 +4,7 @@ import { t } from "../../shared/i18n/core";
 import type { PreviewDocument } from "../shared/contract";
 import { mimeForExtension } from "../shared/registry";
 import { readCoordinatedHead } from "./coordinated-read";
+import { needsFileCoordination } from "./provider-access";
 
 /** Documents parsed whole (PDF, Office, archives) are read up to this size. */
 export const PREVIEW_BYTE_CAP = 32 * 1024 * 1024;
@@ -31,9 +32,7 @@ export async function readHead(filePath: string, length: number): Promise<Uint8A
 	try {
 		return await readPosixHead(filePath, length);
 	} catch (error) {
-		// Darwin EDEADLK (11) is not mapped by libuv, which can expose it as "Unknown system error -11".
-		if (process.platform === "darwin" && typeof error === "object" && error !== null &&
-			(("code" in error && error.code === "EDEADLK") || ("errno" in error && error.errno === -11))) {
+		if (needsFileCoordination(error)) {
 			return readCoordinatedHead(filePath, length);
 		}
 		throw error;
