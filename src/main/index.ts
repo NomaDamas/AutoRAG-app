@@ -103,6 +103,8 @@ import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
+import { registerAgentConnect, type AgentConnectHost } from "./agent-connect-ipc";
+import { AGENT_CONNECT_CHANNELS } from "../shared/agent-connect-contract";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
@@ -318,6 +320,7 @@ function quickLookOptions(appearance: AppAppearance): QuickLookWindowOptions {
 let fsWorker: FsWorkerHost | null = null;
 /** Remote browser access; null until its host is built (and while the setting is off). */
 let remoteHost: RemoteHost | null = null;
+let agentConnect: AgentConnectHost | null = null;
 let providerAuthService: ProviderAuthService | null = null;
 let currentQuickLookChord = "Space";
 /** The system-wide quick-search shortcut; null until startup built the launcher it summons. */
@@ -881,6 +884,10 @@ app.whenReady().then(async () => {
 				console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
 			});
 			void remoteHost?.setTunnelHostname(settings.remoteTunnelHostname);
+			void agentConnect?.setHostname(settings.agentTunnelHostname);
+			agentConnect?.apply(settings.agentAccess).catch((error: unknown) => {
+				console.error("[agent-connect] could not apply agent access:", error instanceof Error ? error.message : error);
+			});
 			if (appliedLaunchAtLogin !== settings.launchAtLogin) {
 				appliedLaunchAtLogin = settings.launchAtLogin;
 				applyLoginItem(settings.launchAtLogin);
@@ -1006,6 +1013,19 @@ app.whenReady().then(async () => {
 	ipcMain.handle(REMOTE_CHANNELS.startTunnel, () => ensureRemoteHost().startTunnel());
 	ipcMain.handle(REMOTE_CHANNELS.stopTunnel, () => ensureRemoteHost().stopTunnel());
 	ipcMain.handle(REMOTE_CHANNELS.loginTunnel, () => ensureRemoteHost().loginTunnel());
+	// Agent access: the librarian's MCP server over HTTP behind its own tunnel, for always-on cloud agents. It is
+	// deliberately not in `remoteTargets`, so a paired browser session has no route to the owner token.
+	const mcpLaunch = () => resolveMcpConnectInfo({ resourcesPath: process.resourcesPath, entryPath: join(import.meta.dirname, "mcp-server.js"), env: process.env, platform: process.platform });
+	agentConnect = registerAgentConnect({
+		stateDir: join(app.getPath("userData"), "settings"),
+		launch: mcpLaunch,
+		env: process.env,
+		hostname: async () => (await settingsService.get()).agentTunnelHostname,
+		onChanged: (next) => sendToAllWindows(AGENT_CONNECT_CHANNELS.changed, next),
+	});
+	app.once("will-quit", () => {
+		void agentConnect?.stop();
+	});
 	app.once("will-quit", () => {
 		void remoteHost?.stop();
 	});
@@ -1015,6 +1035,9 @@ app.whenReady().then(async () => {
 	// (another Dazzi on the same profile) must not abort the rest of startup.
 	await applyRemoteAccess(settings.remoteAccess).catch((error: unknown) => {
 		console.error("[remote] could not start remote access:", error instanceof Error ? error.message : error);
+	});
+	await agentConnect?.apply(settings.agentAccess).catch((error: unknown) => {
+		console.error("[agent-connect] could not start agent access:", error instanceof Error ? error.message : error);
 	});
 	applyAppearance(settings.appearance);
 	applyLanguage(settings.language);

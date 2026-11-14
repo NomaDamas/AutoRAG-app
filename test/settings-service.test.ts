@@ -177,6 +177,29 @@ describe("createSettingsService", () => {
 		expect((await corrupted.get()).approvalMode).toBe("full");
 	});
 
+	it("keeps agent access off by default, persists the switch and its own tunnel domain, and refuses a bad domain", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-agent-"));
+		directories.push(directory);
+		const service = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		const initial = await service.get();
+		expect(initial.agentAccess).toBe(false);
+		expect(initial.agentTunnelHostname).toBe("");
+		// Agent access and remote access are independent switches with independent domains.
+		expect(initial.remoteAccess).toBe(false);
+
+		await service.set({ agentAccess: true, agentTunnelHostname: " Agents.Example.COM " });
+		const reloaded = createSettingsService({ directory, dataSources: noDataSources, models: noModels, ...baseDeps });
+		const stored = await reloaded.get();
+		expect(stored.agentAccess).toBe(true);
+		expect(stored.agentTunnelHostname).toBe("agents.example.com");
+		expect(stored.remoteTunnelHostname).toBe("");
+
+		await expect(reloaded.set({ agentTunnelHostname: "https://nope" })).rejects.toThrow(/not a domain/i);
+		expect((await reloaded.get()).agentTunnelHostname).toBe("agents.example.com");
+		await reloaded.set({ agentTunnelHostname: "" });
+		expect((await reloaded.get()).agentTunnelHostname).toBe("");
+	});
+
 	it("defaults to light appearance and persists the global dark choice", async () => {
 		const directory = await mkdtemp(join(tmpdir(), "autorag-settings-appearance-"));
 		directories.push(directory);

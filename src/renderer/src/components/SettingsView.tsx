@@ -292,7 +292,7 @@ export function SettingsPageContent({
 				/>
 			);
 		case "mcp":
-			return <McpPage />;
+			return <McpPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		default:
 			return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} onOpenSource={(alias) => onNavigate(`source:${alias}`)} />;
 	}

@@ -106,6 +106,14 @@ export interface AppSettings {
 	readonly remotePort: number;
 	/** Own Cloudflare domain for the external tunnel (`remote.example.com`); empty uses an account-less Quick Tunnel. */
 	readonly remoteTunnelHostname: string;
+	/**
+	 * Agent access: while on, Dazzi runs the librarian's MCP server over HTTP behind its own tunnel so an always-on
+	 * cloud agent (Claude Duet, OpenAI dots, Meta Muse, Grok Bot) can search the index. Independent of `remoteAccess`;
+	 * off by default; turning it off stops the server and the tunnel.
+	 */
+	readonly agentAccess: boolean;
+	/** Own Cloudflare domain for the agent address (`agents.example.com`); empty uses an account-less Quick Tunnel. */
+	readonly agentTunnelHostname: string;
 	/** User customization of sidebar visibility, ordering, and pinned folders (`settings-state.json`). */
 	readonly sidebar: SidebarSettings;
 	/** User customization of the file right-click context menu and custom Magic Actions (`settings-state.json`). */
@@ -131,6 +139,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
 	remoteAccess: false,
 	remotePort: 47833,
 	remoteTunnelHostname: "",
+	agentAccess: false,
+	agentTunnelHostname: "",
 	sidebar: DEFAULT_SIDEBAR_SETTINGS,
 	contextMenu: DEFAULT_CONTEXT_MENU_SETTINGS,
 	shortcuts: DEFAULT_SHORTCUT_SETTINGS,
