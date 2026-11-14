@@ -536,6 +536,16 @@ The detail calls (details, SHA-256, folder size, audio tags, data rows, archive 
 path the window is showing, and the hash, folder walk, and archive listing stop when the preview
 moves on.
 
+On macOS, a POSIX read refused with `EDEADLK` (Darwin errno 11, sometimes
+reported by Node as `Unknown system error -11`) is read through Foundation's
+`NSFileCoordinator` via `/usr/bin/osascript`. The bounded read happens inside
+the coordination accessor, allowing a cloud file provider to supply the file
+before its bytes are consumed. Local reads keep the direct path; coordination
+has a 60-second deadline and preserves the viewer's byte cap. Read failures
+become a localized preview error instead of rejecting `preview:show` without
+loading the panel. `test/preview-file-read.test.ts` exercises the real native
+coordinator with a binary document after injecting the POSIX refusal.
+
 A streamed viewer names the file's version in its URL (`previewStreamUrl(path,
 file)` adds `v=<modifiedAt>:<size>` from the `PreviewDocument`; the protocol
 ignores it). The panel is one long-lived page, and Chromium keeps decoded
