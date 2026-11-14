@@ -217,7 +217,7 @@ try {
 			(await autoSwitch.getAttribute("aria-checked")) === "true" &&
 			(await autoSwitch.isDisabled()),
 	);
-	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section-card").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
+	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
 	check(
 		"Favorites, Cloud, Connections, Locations, and Tags render together in one unified .sidebar-sections-stack",
 		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "connections", "locations", "tags"]),
@@ -250,7 +250,8 @@ try {
 	await page.locator('[data-sidebar-switch="place:music"]').click();
 	await page.locator('[data-sidebar-switch="place:movies"]').click();
 	// Move Downloads up above Documents
-	await page.locator('[data-action="move-up-place:downloads"]').click();
+	await page.locator('[data-sidebar-grip="place:downloads"]').focus();
+	await page.keyboard.press("ArrowUp");
 	await page.waitForTimeout(250);
 
 	const afterUiToggleLabels = await sidebarLabels();

@@ -4520,3 +4520,205 @@
 .settings-view .shortcuts-row-wrap > * + * {
 	border-top: 1px solid var(--border-divider);
 }
+
+/* ---------------------------------------------- 사이드바 (Figma 467:2293) -- */
+
+.settings-view .sidebar-page {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	margin-top: 40px;
+}
+
+/* 빠른 구성 on one line: label, the 전체 / 핵심만 segments, then 기본값으로 복원 at the end. */
+.settings-view .sidebar-quick {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 12px;
+}
+
+.settings-view .sidebar-quick-label {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-page .sidebar-sections-stack {
+	gap: 28px;
+}
+
+/* A section: its head (handle, 14px title, badge, count, switch) 8px over a bordered card. */
+.settings-view .sidebar-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	border-radius: var(--radius-12);
+}
+
+.settings-view .sidebar-section.is-drop-target {
+	box-shadow: 0 -2px 0 var(--accent);
+}
+
+.settings-view .sidebar-section-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 16px 0 12px;
+}
+
+.settings-view .sidebar-section-title {
+	color: var(--text-primary);
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-section.is-collapsed .sidebar-section-title {
+	color: var(--text-muted);
+}
+
+.settings-view .sidebar-always-badge {
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--accent-soft);
+	color: var(--accent-text);
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-always-badge.is-plain {
+	background: var(--bg-input);
+	color: var(--text-muted);
+}
+
+.settings-view .sidebar-section-count {
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-card {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view .sidebar-card > * + * {
+	border-top: 1px solid var(--border-divider);
+}
+
+/* A 49px row: handle (or lock), icon and 13px name, the grey path, then the switch. */
+.settings-view .sidebar-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 49px;
+	padding: 10px 16px;
+	box-sizing: border-box;
+}
+
+.settings-view .sidebar-row.is-drop-target {
+	box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.settings-view .sidebar-row.is-add {
+	padding-left: 34px;
+}
+
+.settings-view .sidebar-row-label {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.settings-view .sidebar-row-icon {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-body);
+}
+
+.settings-view .sidebar-row-icon.is-accent {
+	color: var(--accent);
+}
+
+.settings-view .sidebar-row-name {
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 18px;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-row.is-muted .sidebar-row-name,
+.settings-view .sidebar-row.is-muted .sidebar-row-icon {
+	color: var(--text-faint);
+}
+
+.settings-view .sidebar-row-path {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.settings-view .sidebar-row-spacer {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .sidebar-row.is-locked .sidebar-row-name {
+	color: var(--text-primary);
+}
+
+/* The drag handle (and the lock in its place on fixed rows); a non-movable row keeps the column empty. */
+.settings-view .sidebar-grip,
+.settings-view .sidebar-grip-space {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	justify-content: center;
+	width: 14px;
+	height: 14px;
+	color: var(--text-faint);
+}
+
+.settings-view .sidebar-grip {
+	padding: 0;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	cursor: grab;
+}
+
+.settings-view .sidebar-grip:hover {
+	color: var(--text-body);
+}
+
+.settings-view .sidebar-grip:active {
+	cursor: grabbing;
+}
+
+.settings-view .sidebar-card-empty {
+	margin: 0;
+	padding: 16.5px 16px;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}

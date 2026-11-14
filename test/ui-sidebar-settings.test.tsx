@@ -172,11 +172,11 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		);
 		expect(host.querySelector<HTMLButtonElement>('[data-sidebar-switch="place:music"]')?.getAttribute("aria-checked")).toBe("false");
 
-		// Reorder Downloads up
-		const moveDownloadsUp = host.querySelector<HTMLButtonElement>('[data-action="move-up-place:downloads"]');
-		expect(moveDownloadsUp).not.toBeNull();
+		// Reorder Downloads up from its drag handle with the keyboard (↑), as a keyboard user would
+		const downloadsGrip = host.querySelector<HTMLButtonElement>('[data-sidebar-grip="place:downloads"]');
+		expect(downloadsGrip).not.toBeNull();
 		await act(async () => {
-			moveDownloadsUp?.click();
+			downloadsGrip?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
 		});
 		await settle();
 		expect(currentSettings.sidebar.favoritesOrder.indexOf("place:downloads")).toBeLessThan(
@@ -418,7 +418,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		});
 		await settle();
 
-		const sectionCards = [...host.querySelectorAll<HTMLElement>(".sidebar-sections-stack .sidebar-section-card")];
+		const sectionCards = [...host.querySelectorAll<HTMLElement>(".sidebar-sections-stack .sidebar-section")];
 		expect(sectionCards.map((el) => el.getAttribute("data-sidebar-section"))).toEqual([
 			"favorites",
 			"cloud",
@@ -537,7 +537,6 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			lang: "ko" as const,
 			nav: "사이드바",
 			heroBtn: "AI로 커스텀하기",
-			sectionsTitle: "사이드바 섹션 및 항목",
 			favoritesSection: "즐겨찾기",
 			cloudSection: "클라우드",
 			locationsSection: "위치",
@@ -549,7 +548,6 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			lang: "en" as const,
 			nav: "Sidebar",
 			heroBtn: "Customize with AI",
-			sectionsTitle: "Sidebar Sections & Items",
 			favoritesSection: "Favorites",
 			cloudSection: "Cloud",
 			locationsSection: "Locations",
@@ -561,7 +559,6 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			lang: "ja" as const,
 			nav: "サイドバー",
 			heroBtn: "AIでカスタム",
-			sectionsTitle: "サイドバーのセクションと項目",
 			favoritesSection: "お気に入り",
 			cloudSection: "クラウド",
 			locationsSection: "場所",
@@ -573,7 +570,6 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			lang: "zh" as const,
 			nav: "侧边栏",
 			heroBtn: "使用 AI 定制",
-			sectionsTitle: "侧边栏分区与项目",
 			favoritesSection: "个人收藏",
 			cloudSection: "云端",
 			locationsSection: "位置",
@@ -591,7 +587,6 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		await settle();
 
 		expect(host.querySelector("h1.linear-title")?.textContent).toBe(spec.nav);
-		expect(host.textContent).toContain(spec.sectionsTitle);
 		expect(host.textContent).toContain(spec.favoritesSection);
 		expect(host.textContent).toContain(spec.cloudSection);
 		expect(host.textContent).toContain(spec.locationsSection);

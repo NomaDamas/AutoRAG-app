@@ -2238,7 +2238,7 @@
       "backToApp": "返回应用"
     },
     "sidebar": {
-      "description": "配置侧边栏中显示的项目与分区顺序，或直接与 AI 助手对话进行个性化定制。",
+      "description": "设置侧边栏显示的项目及其顺序。拖动手柄即可重新排序，也可以告诉 AI 助手。",
       "aiHeroTitle": "使用 AI 定制侧边栏与应用",
       "aiHeroDesc": "用自然语言描述即可设置，例如：“隐藏音乐和影片，并把下载和文稿移到最上方”。",
       "aiHeroButton": "使用 AI 定制",
@@ -2251,17 +2251,13 @@
       "lockedBadge": "始终显示",
       "lockedHint": "AI 搜索与自动化是核心必选项，无法隐藏。",
       "customBadge": "自定义文件夹",
-      "moveUp": "上移 {{name}}",
-      "moveDown": "下移 {{name}}",
       "removeCustom": "移除 {{name}}",
-      "addCustomFolder": "+ 添加文件夹…",
+      "addCustomFolder": "添加文件夹",
       "addCustomModalTitle": "添加文件夹到个人收藏",
       "addCustomModalDesc": "输入要固定到侧边栏个人收藏的文件夹路径。",
       "addCustomPathLabel": "文件夹路径",
       "addCustomPathPlaceholder": "~/Projects 或 /Users/me/Work",
       "addCustomConfirm": "添加",
-      "sectionsTitle": "侧边栏分区与项目",
-      "sectionsDesc": "统一管理个人收藏、云盘、位置与标签分区的顺序及各项目的显示状态。AI 搜索与自动化为核心功能，始终保持显示。",
       "sectionAlwaysShown": "个人收藏分区始终保持显示",
       "sectionCount": "显示 {{visible}}/{{total}}",
       "emptyCloud": "未连接任何云盘驱动器。",
@@ -2284,7 +2280,8 @@
         "unavailable": "应用定制服务不可用。",
         "inputLabel": "告诉助手你的需求"
       },
-      "addCustomPathPlaceholderWindows": "~\\Projects 或 C:\\Work"
+      "addCustomPathPlaceholderWindows": "~\\Projects 或 C:\\Work",
+      "dragHint": "调整 {{name}} 的顺序：拖动或按 ↑↓ 键"
     },
     "contextMenu": {
       "description": "配置右键点击文件或文件夹时显示的菜单项，以及专属魔法动作（Shell 脚本与 AI 智能体循环）。",
