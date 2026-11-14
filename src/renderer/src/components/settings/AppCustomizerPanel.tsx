@@ -380,7 +380,7 @@ export function AppCustomizerPanel({
 										<div className="customizer-turn__changes">
 											{turn.changes.map((change, idx) => (
 												<span key={idx} className="customizer-change-pill">
-													<Check size={12} strokeWidth={2.2} aria-hidden="true" />
+													<Check size={14} strokeWidth={1.8} aria-hidden="true" />
 													<span>{change.summary}</span>
 												</span>
 											))}

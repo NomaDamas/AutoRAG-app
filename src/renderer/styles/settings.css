@@ -2350,8 +2350,9 @@
 	display: grid;
 	place-items: center;
 	flex: none;
-	width: 28px;
-	height: 28px;
+	width: 20px;
+	height: 20px;
+	margin-right: 2px;
 	padding: 0;
 	border: 0;
 	border-radius: var(--radius-6);
@@ -2366,13 +2367,14 @@
 	color: var(--text-primary);
 }
 
+/* Figma 430:11205: 12px sides, 10px top and bottom, 20px between everything in the thread. */
 .customizer-panel__body {
 	display: flex;
 	flex-direction: column;
 	flex: 1;
 	min-height: 0;
 	overflow-y: auto;
-	padding: var(--space-16);
+	padding: var(--space-10) var(--space-12);
 }
 
 .customizer-panel__empty {
@@ -2471,13 +2473,13 @@
 .customizer-panel__turns {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-18);
+	gap: 20px;
 }
 
 .customizer-turn {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-10);
+	gap: 20px;
 }
 
 .customizer-turn__user-row {
@@ -2485,41 +2487,46 @@
 	justify-content: flex-end;
 }
 
-.customizer-turn__user-bubble {
-	max-width: 82%;
-	padding: var(--space-8) var(--space-12);
-	border-radius: var(--radius-12) var(--radius-12) var(--radius-3) var(--radius-12);
-	background: var(--accent);
-	color: var(--text-on-accent);
-	font-size: var(--font-size-sm);
-	line-height: 1.45;
-	white-space: pre-wrap;
-}
-
 .customizer-turn__assistant-row {
 	display: flex;
 	flex-direction: column;
 	align-items: flex-start;
-	gap: var(--space-8);
+	gap: 20px;
+}
+
+/* The question: the inspector chat's dark bubble, 13px on 1.5. */
+.customizer-turn__user-bubble {
+	max-width: 82%;
+	padding: var(--space-8) var(--space-12);
+	border-radius: 16px;
+	background: var(--text-body);
+	color: var(--bg-window);
+	font-size: var(--font-size-sm);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
 }
 
 .customizer-turn__changes {
 	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-6);
+	flex-direction: column;
+	gap: var(--space-8);
 }
 
+/* A change the assistant made: an accent check and its 12px medium label, no pill. */
 .customizer-change-pill {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-5);
-	padding: 3px var(--space-8);
-	border: 1px solid var(--ok-border);
-	border-radius: var(--radius-6);
-	background: var(--ok-bg-soft);
-	color: var(--ok-text);
-	font-size: var(--font-size-badge);
+	gap: var(--space-6);
+	color: var(--text-primary);
+	font-size: var(--font-size-meta);
 	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.customizer-change-pill svg {
+	flex: none;
+	color: var(--accent);
 }
 
 .customizer-turn__progress {
@@ -2527,18 +2534,16 @@
 	color: var(--text-muted);
 }
 
+/* The reply: plain 13px body text on the panel, as in the inspector chat. */
 .customizer-turn__reply {
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-6);
-	max-width: 92%;
-	padding: var(--space-10) var(--space-12);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-3) var(--radius-12) var(--radius-12) var(--radius-12);
-	background: var(--bg-subtle);
-	color: var(--text-primary);
+	max-width: 100%;
+	color: var(--text-body);
 	font-size: var(--font-size-sm);
-	line-height: var(--leading-body);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
 }
 
 .customizer-turn__reply p {
@@ -2587,7 +2592,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: var(--space-8);
-	padding: var(--space-12);
+	padding: var(--space-8) var(--space-12) var(--space-10);
 	background: transparent;
 }
 
