@@ -86,6 +86,11 @@ try {
 	const address = await copiedText();
 	assert.match(address, /^https:\/\/[a-z0-9-]+\.trycloudflare\.com\/mcp$/, `the address the app hands out: ${address}`);
 	results.address = address;
+	// cloudflared prints the address before its DNS name resolves or its edge routes to this machine, so a client
+	// that connects at once can fail with ENOTFOUND. Wait for the address itself to answer, as an agent's retry would.
+	await expect
+		.poll(async () => fetch(new URL("/healthz", address)).then((response) => response.status, () => 0), { timeout: 90_000, intervals: [1000] })
+		.toBe(200);
 	console.log(`AGENT_ADDRESS=${address}`);
 
 	// The token is never on the page; copying it goes straight to the clipboard.
