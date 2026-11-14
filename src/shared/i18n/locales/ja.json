@@ -2397,23 +2397,18 @@
       }
     },
     "shortcuts": {
-      "description": "Dazzi の標準ショートカットをキー入力の直接記録、UI 選択、または AI との対話で編集します。",
+      "description": "Dazzi の標準ショートカットは、キー入力の記録、UI での選択、または AI との会話で編集できます。",
       "aiHeroTitle": "AIでショートカットをカスタム",
       "aiHeroDesc": "「名前を変更を F2 に、新規フォルダを Cmd+N にして」のように言葉で手軽に変更できます。",
       "aiHeroButton": "AIでカスタム",
       "presetsTitle": "クイック構成",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows エクスプローラー",
-      "presetDefault": "初期設定",
-      "filterPlaceholder": "操作名またはキーで検索…",
+      "filterPlaceholder": "操作名やショートカットで検索",
       "filterEmpty": "一致するショートカットがありません。",
-      "sectionsTitle": "ショートカット一覧",
-      "sectionsDesc": "ショートカットボタンを押してキーボードを直接入力するか、編集アイコンから組み合わせを選択できます。標準の操作一覧内でのみ変更できます。",
-      "customizedCount": "{{count}}件カスタム済み",
       "customizedBadge": "変更済み",
       "lockedBadge": "固定",
       "lockedHint": "Esc はダイアログを閉じる・操作の中止・キー記録のキャンセルに使われる必須システムキーです。",
-      "defaultHint": "初期値: {{shortcut}}",
       "recordButtonHint": "クリックして新しいキーを押してください（現在: {{shortcut}}）",
       "recordingPrompt": "キーを押してください… (Esc でキャンセル)",
       "uiEditHint": "{{name}} のキーの組み合わせを選択",
@@ -2473,7 +2468,10 @@
         "thinking": "ショートカットを確認中",
         "openAiSettings": "AI モデル設定を開く",
         "unavailable": "ショートカットカスタムサービスを利用できません。"
-      }
+      },
+      "resetAll": "すべて標準に戻す",
+      "changedOnly": "変更した項目のみ表示 ({{count}})",
+      "recorderPrompt": "キーを押すか選んでください"
     },
     "general": {
       "description": "Dazzi の画面、クイック検索、起動とアップデート、個人情報の送信を設定します。",

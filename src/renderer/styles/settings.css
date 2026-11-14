@@ -4169,3 +4169,349 @@
 	line-height: 16px;
 }
 
+
+/* ---------------------------------------------- 단축키 (Figma 445:2249) -- */
+
+.settings-view .shortcuts-page {
+	display: flex;
+	flex-direction: column;
+	gap: 28px;
+	margin-top: 40px;
+}
+
+/* 빠른 구성: its label, the presets with the two actions, then the search. */
+.settings-view .shortcuts-quick {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .shortcuts-quick-label {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .shortcuts-quick-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.settings-view .shortcuts-segmented {
+	display: inline-flex;
+	padding: 2px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+}
+
+.settings-view .shortcuts-segment {
+	padding: 4px 12px;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-segment.is-active {
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .shortcuts-quick-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+/* The page's Small buttons: outlined (Secondary) and filled (Primary), Figma 435:8582. */
+.settings-view .shortcuts-outline-btn {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-outline-btn.is-active {
+	border-color: var(--accent);
+	color: var(--accent-text);
+}
+
+.settings-view .shortcuts-primary-btn {
+	border: 0;
+	border-radius: var(--radius-6);
+	background: var(--accent);
+	color: var(--on-accent);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 8px 8px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .shortcuts-search:focus-within {
+	border-color: var(--accent);
+}
+
+.settings-view .shortcuts-search__icon {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-search__input {
+	flex: 1;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	outline: 0;
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	line-height: 21px;
+}
+
+.settings-view .shortcuts-search__input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .shortcuts-search__clear {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-empty {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+/* A group: its 12px grey title over a bordered card of 10px-high rows. */
+.settings-view .shortcuts-group {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .shortcuts-group-title {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .shortcuts-card {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view .shortcuts-card > * + * {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .shortcuts-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 16px;
+}
+
+.settings-view .shortcuts-row-name {
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: var(--weight-medium);
+	line-height: 18px;
+	white-space: nowrap;
+}
+
+.settings-view .shortcuts-row.is-locked .shortcuts-row-name {
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-row-lock {
+	flex: none;
+	color: var(--text-muted);
+}
+
+.settings-view .shortcuts-row-spacer {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .shortcuts-badge {
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .shortcuts-reset {
+	display: grid;
+	place-items: center;
+	flex: none;
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-reset:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+/* The chord: white, the Border grey, 7px corners; each key a Stage cap. While editing, the accent wash and a 1.5px accent ring. */
+.settings-view .shortcuts-keycaps {
+	display: inline-flex;
+	flex: none;
+	align-items: center;
+	padding: 3px 6px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	background: var(--bg-window);
+	font: inherit;
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-keycaps.is-editing {
+	padding: 2.5px 5.5px;
+	border: 1.5px solid var(--accent);
+	background: var(--accent-soft);
+}
+
+.settings-view .shortcuts-keycaps.is-locked {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.settings-view .shortcuts-keycaps .shortcut-keycap {
+	min-width: 0;
+	height: auto;
+	padding: 1px 6px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-4);
+	background: var(--bg-subtle-alt);
+	color: var(--text-body);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-regular);
+	line-height: 16px;
+}
+
+/* The inline recorder under the row: prompt, modifier chips, the key, then 취소 / 저장. */
+.settings-view .shortcuts-recorder {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 16px;
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .shortcuts-recorder-prompt {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+}
+
+.settings-view .shortcuts-recorder-chips {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.settings-view .shortcuts-chip {
+	display: inline-flex;
+	align-items: center;
+	padding: 3px 10px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .shortcuts-chip.is-on {
+	padding: 2.5px 9.5px;
+	border: 1.5px solid var(--accent);
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .shortcuts-key-select {
+	min-width: 0;
+	gap: 4px;
+}
+
+.settings-view .shortcuts-recorder-hint {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .shortcuts-recorder-hint.is-conflict {
+	color: var(--danger-text);
+}
+
+.settings-view .shortcuts-feedback {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 16px;
+	background: var(--bg-subtle-alt);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .shortcuts-feedback.is-conflict {
+	color: var(--danger-text);
+}
+
+.settings-view .shortcuts-feedback-text {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .shortcuts-row-wrap > * + * {
+	border-top: 1px solid var(--border-divider);
+}

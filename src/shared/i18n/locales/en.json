@@ -2397,23 +2397,18 @@
       }
     },
     "shortcuts": {
-      "description": "Customize Dazzi's default keyboard shortcuts by pressing keys directly, picking modifiers in the UI, or chatting with AI.",
+      "description": "Edit Dazzi's shortcuts by recording keys, picking them, or asking the AI.",
       "aiHeroTitle": "Customize Shortcuts with AI",
       "aiHeroDesc": "Ask in plain words — for example, \"Change Rename to F2 and New Folder to Cmd+N.\"",
       "aiHeroButton": "Customize with AI",
       "presetsTitle": "Quick Presets",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows File Explorer",
-      "presetDefault": "Default",
-      "filterPlaceholder": "Filter by action or key…",
+      "filterPlaceholder": "Search by action name or shortcut",
       "filterEmpty": "No matching shortcuts.",
-      "sectionsTitle": "Keyboard Shortcuts",
-      "sectionsDesc": "Click a shortcut pill and press keys on your keyboard to record immediately, or use the edit icon to pick modifiers and keys. Only built-in shortcut actions can be edited.",
-      "customizedCount": "{{count}} customized",
       "customizedBadge": "Modified",
       "lockedBadge": "Locked",
       "lockedHint": "Esc is a reserved system key used to close dialogs, cancel runs, and exit key recording.",
-      "defaultHint": "Default: {{shortcut}}",
       "recordButtonHint": "Click and press new keys (current: {{shortcut}})",
       "recordingPrompt": "Press keys… (Esc to cancel)",
       "uiEditHint": "Choose key combination for {{name}}",
@@ -2473,7 +2468,10 @@
         "thinking": "Checking shortcuts",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "Shortcut customizer service is unavailable."
-      }
+      },
+      "resetAll": "Reset all to default",
+      "changedOnly": "Show changed only ({{count}})",
+      "recorderPrompt": "Press keys or pick them"
     },
     "general": {
       "description": "Set up Dazzi's appearance, quick search, startup and updates, and what it sends about you.",

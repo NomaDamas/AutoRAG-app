@@ -2397,23 +2397,18 @@
       }
     },
     "shortcuts": {
-      "description": "Dazzi의 기본 단축키를 키보드 녹화, UI 선택, 또는 AI 대화로 편집합니다.",
+      "description": "Dazzi의 기본 단축키를 키보드 녹화, UI 선택, 또는 AI 대화로 편집할 수 있습니다.",
       "aiHeroTitle": "AI로 단축키 커스텀",
       "aiHeroDesc": "\"이름 변경은 F2로 바꾸고 새 폴더는 커맨드 N으로 해줘\"처럼 말로 간편하게 바꿀 수 있습니다.",
       "aiHeroButton": "AI로 커스텀하기",
       "presetsTitle": "빠른 구성",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows 파일 탐색기",
-      "presetDefault": "기본값",
-      "filterPlaceholder": "동작 이름이나 단축키로 검색…",
+      "filterPlaceholder": "동작 이름이나 단축키로 검색",
       "filterEmpty": "일치하는 단축키 항목이 없습니다.",
-      "sectionsTitle": "단축키 목록",
-      "sectionsDesc": "단축키 버튼을 누른 뒤 키보드에서 바로 키를 눌러 녹화하거나, 편집 아이콘으로 직접 조합을 선택할 수 있습니다. 기본 동작 목록 안에서만 편집할 수 있습니다.",
-      "customizedCount": "{{count}}개 사용자 지정",
       "customizedBadge": "수정됨",
       "lockedBadge": "고정",
       "lockedHint": "Esc는 창 닫기, 작업 취소, 단축키 녹화 취소에 쓰이는 필수 시스템 키입니다.",
-      "defaultHint": "기본값: {{shortcut}}",
       "recordButtonHint": "클릭 후 새 단축키를 누르세요 (현재: {{shortcut}})",
       "recordingPrompt": "키를 누르세요… (Esc 취소)",
       "uiEditHint": "{{name}} 키 조합 직접 선택",
@@ -2473,7 +2468,10 @@
         "thinking": "단축키 구성을 살펴보는 중",
         "openAiSettings": "AI 모델 설정 열기",
         "unavailable": "단축키 커스텀 서비스를 사용할 수 없습니다."
-      }
+      },
+      "resetAll": "모두 기본값으로",
+      "changedOnly": "변경한 항목만 보기 ({{count}})",
+      "recorderPrompt": "키를 누르거나 고르세요"
     },
     "general": {
       "description": "Dazzi의 화면, 빠른 검색, 시작과 업데이트, 개인정보 전송을 설정합니다.",

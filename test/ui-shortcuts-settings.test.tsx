@@ -202,7 +202,8 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		});
 		await settle();
 
-		const uiEditBtn = host.querySelector<HTMLButtonElement>('[data-shortcut-ui-edit="focusSearch"]');
+		// The keycaps open the row's inline recorder (Figma 445:2249): chips and a key picker that 저장 applies.
+		const uiEditBtn = host.querySelector<HTMLButtonElement>('[data-shortcut-record="focusSearch"]');
 		expect(uiEditBtn).not.toBeNull();
 
 		await act(async () => {
@@ -236,19 +237,16 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(currentSettings.shortcuts.overrides.focusSearch).toBeUndefined();
 	});
 
-	it("renders the three quick presets (Mac Finder, Windows File Explorer, Default) and switches cleanly between them", async () => {
+	it("offers Mac Finder and Windows File Explorer as a segmented control, and 모두 기본값으로 resets every shortcut", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
-		const presetButtons = Array.from(host.querySelectorAll<HTMLButtonElement>(".sidebar-presets-bar .sidebar-preset-pill"));
-		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual([
-			"shortcuts-preset-mac-finder",
-			"shortcuts-preset-windows-explorer",
-			"shortcuts-preset-default",
-		]);
-		expect(presetButtons[2]?.classList.contains("is-active")).toBe(true);
+		const presetButtons = Array.from(host.querySelectorAll<HTMLButtonElement>("[data-shortcut-presets] button"));
+		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer"]);
+		expect(presetButtons.some((btn) => btn.classList.contains("is-active"))).toBe(false);
+		expect(host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-default"]')?.disabled).toBe(true);
 
 		await act(async () => {
 			presetButtons[0]?.click();
@@ -271,7 +269,7 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		});
 		await settle();
 		expect(currentSettings.shortcuts.overrides).toEqual({});
-		expect(host.querySelector('[data-action="shortcuts-preset-default"]')?.classList.contains("is-active")).toBe(true);
+		expect(host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-default"]')?.disabled).toBe(true);
 	});
 
 	it("clears any pending conflict banner when switching to a Quick Preset", async () => {
@@ -297,6 +295,27 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		await settle();
 		expect(host.querySelector('[data-action="swap-shortcut-conflict"]')).toBeNull();
 	});
+	it("shows only the changed shortcuts, with their count, while 변경한 항목만 보기 is on", async () => {
+		await act(async () => {
+			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
+		});
+		await settle();
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-windows-explorer"]')?.click();
+		});
+		await settle();
+		const filter = host.querySelector<HTMLButtonElement>('[data-action="shortcuts-changed-only"]');
+		const changed = Object.keys(currentSettings.shortcuts.overrides).length;
+		expect(changed).toBeGreaterThan(0);
+		expect(filter?.textContent).toContain(`(${changed})`);
+		await act(async () => {
+			filter?.click();
+		});
+		const rows = [...host.querySelectorAll("[data-shortcut-row]")].map((row) => row.getAttribute("data-shortcut-row"));
+		expect(rows).not.toContain("dismiss");
+		expect(rows.sort()).toEqual(Object.keys(currentSettings.shortcuts.overrides).sort());
+	});
+
 	it("docks the AI Shortcut Customizer panel with surface='shortcuts' and applies agent updates live", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);

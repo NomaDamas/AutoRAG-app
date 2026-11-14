@@ -10,7 +10,7 @@
  *      makes `⌘P` focus the search box (while old `⌘F` stops doing so), and writes
  *      `<userData>/settings/settings-state.json` without touching AutoRAG `config.json`.
  *   3. Conflict detection + one-click swap (`rename` ↔ `duplicate`) and pointer-only
- *      UI editing (`[data-shortcut-ui-edit="rename"]` → `F2`), followed by pressing
+ *      UI editing (the keycaps `[data-shortcut-record="rename"]` open the inline recorder → `F2`), followed by pressing
  *      real `F2` on a file row in Finder to trigger inline rename!
  *   4. AI Shortcut Customizer modal (`[data-action="open-shortcut-customizer"]`)
  *      offers strictly `["get_shortcuts", "update_shortcuts"]` from the
@@ -206,7 +206,7 @@ try {
 	await shot("01-settings-shortcuts-default");
 
 	const groupIds = await page
-		.locator(".sidebar-sections-stack [data-shortcut-group]")
+		.locator(".shortcuts-page [data-shortcut-group]")
 		.evaluateAll((els) => els.map((e) => e.getAttribute("data-shortcut-group")));
 	check(
 		"All 4 shortcut groups render in order (window, view, files, aiSearch)",
@@ -218,14 +218,14 @@ try {
 		(await page.locator('[data-shortcut-row="dismiss"]').count()) === 1,
 	);
 
-	// 1b. Verify the 3 Quick Presets: Mac Finder, Windows 파일 탐색기, 기본값
+	// 1b. Verify 빠른 구성: the Mac Finder / Windows 파일 탐색기 segments and 모두 기본값으로 (Figma 445:2249)
 	const presetActions = await page
-		.locator(".sidebar-presets-bar .sidebar-preset-pill")
+		.locator("[data-shortcut-presets] button")
 		.evaluateAll((els) => els.map((e) => e.getAttribute("data-action")));
 	check(
-		"Quick Presets bar strictly shows Mac Finder, Windows 파일 탐색기, and 기본값",
-		JSON.stringify(presetActions) ===
-			JSON.stringify(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer", "shortcuts-preset-default"]),
+		"빠른 구성 shows the Mac Finder and Windows 파일 탐색기 segments, plus 모두 기본값으로",
+		JSON.stringify(presetActions) === JSON.stringify(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer"]) &&
+			(await page.locator('[data-action="shortcuts-preset-default"]').count()) === 1,
 		JSON.stringify(presetActions),
 	);
 
@@ -294,8 +294,8 @@ try {
 	await page.locator('[data-action="swap-shortcut-conflict"]').click();
 	await page.waitForTimeout(250);
 
-	// Now use pointer-only UI editor to set `rename` to `F2`
-	await page.locator('[data-shortcut-ui-edit="rename"]').click();
+	// Now use the inline recorder's pointer controls to set `rename` to `F2`
+	await page.locator('[data-shortcut-record="rename"]').click();
 	await page.locator('[data-testid="shortcut-key-select"]').waitFor();
 	await shot("05-shortcut-ui-editor-open");
 	// Turn off Mod modifier and choose F2
