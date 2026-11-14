@@ -542,6 +542,33 @@ describe("createSearchService", () => {
 		expect(record?.messages[0]).toMatchObject({ role: "user", text: "who signs off refund exceptions?", attachments });
 	});
 
+	it("tells the agent the folder the person has open, as a hint, without touching the query or the stored message", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-folder", "여기 있어요", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+		await service.start("search-folder", "chat-folder", "이 폴더 경로가 뭐야?", [], "/Users/me/Documents/월간 보고");
+
+		const context = agent.setAttachmentContext.mock.calls[0]?.[0] ?? "";
+		expect(context).toContain(JSON.stringify("/Users/me/Documents/월간 보고"));
+		expect(context).toContain("not a restriction");
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("이 폴더 경로가 뭐야?");
+		const record = await service.historyGet("chat-folder");
+		expect(record?.messages[0]).toMatchObject({ role: "user", text: "이 폴더 경로가 뭐야?", attachments: [] });
+	});
+
+	it("sends no folder context when no folder is in view", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-nofolder", "답", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+		await service.start("search-nofolder", "chat-nofolder", "질문", []);
+
+		expect(agent.setAttachmentContext).toHaveBeenCalledWith("");
+	});
+
 	it("never starts the agent when the run is cancelled while attachments are read", async () => {
 		const reading = Promise.withResolvers<void>();
 		const context = Promise.withResolvers<string>();

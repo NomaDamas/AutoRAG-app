@@ -17,9 +17,10 @@ export interface InspectorChats {
 	readonly runningTab: number | null;
 	/**
 	 * Ask `text` with `attachments`: in the tab's chat (starting one when it has none), or, `fresh`, in a new chat
-	 * (the Info view's composer). False when nothing was sent: another inspector run is still streaming.
+	 * (the Info view's composer). False when nothing was sent: another inspector run is still streaming. `viewingFolder` is
+	 * the folder open in the tab when nothing is selected: the agent is told it as a hint, not as a limit.
 	 */
-	ask(tabId: number, text: string, attachments: readonly ChatAttachment[], fresh?: boolean): boolean;
+	ask(tabId: number, text: string, attachments: readonly ChatAttachment[], fresh?: boolean, viewingFolder?: string): boolean;
 	/** "요약": the summary prompt AI Search uses, about `targets`; it carries `attachments`. */
 	summarize(tabId: number, targets: readonly ChatAttachment[], attachments: readonly ChatAttachment[], fresh?: boolean): boolean;
 	/** Make the stored chat `chatId` the tab's chat and show it (the chat title's history menu). */
@@ -119,7 +120,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 	const tab = useCallback((tabId: number) => tabs.get(tabId) ?? EMPTY_INSPECTOR_CHAT_TAB, [tabs]);
 
 	const ask = useCallback(
-		(tabId: number, text: string, attachments: readonly ChatAttachment[], fresh = false) => {
+		(tabId: number, text: string, attachments: readonly ChatAttachment[], fresh = false, viewingFolder?: string) => {
 			const question = text.trim();
 			if (question.length === 0 || runRef.current !== null) return false;
 			const previous = fresh ? null : (tabsRef.current.get(tabId)?.chat ?? null);
@@ -134,7 +135,7 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 			change(tabId, () => ({ chat, mode: "chat", seenAt: now, dismissed: [] }));
 			runRef.current = { tabId, searchId };
 			setRunningTab(tabId);
-			autorag.search.start(searchId, chatId, question, attachments).catch((error: unknown) => {
+			autorag.search.start(searchId, chatId, question, attachments, viewingFolder).catch((error: unknown) => {
 				if (runRef.current?.searchId !== searchId) return;
 				runRef.current = null;
 				setRunningTab(null);
