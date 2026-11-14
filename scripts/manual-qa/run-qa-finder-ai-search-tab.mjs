@@ -29,6 +29,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, cssAttr } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const EVIDENCE = join(ROOT, ".omo/evidence/ai-finder-app/qa-ai-search-tab");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -289,9 +290,9 @@ try {
 	// 13. "AI 요약" follows the Interface language setting.
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-panel");
-	await page.locator('select[aria-label="App Language"]').selectOption("en");
+	await pickSelect(page.locator(selectField("App Language")), "en");
 	// The set IPC resolves and App adopts it (onSettingsChanged) before the tab closes.
-	await page.waitForFunction(() => document.querySelector('select[aria-label="App Language"]')?.value === "en");
+	await page.waitForFunction(() => document.querySelector('.select-field[aria-label="App Language"]')?.getAttribute("data-value") === "en");
 	await sleep(300);
 	await page.keyboard.press(chord("w"));
 	await page.locator(".sidebar__item", { hasText: "QA" }).click();

@@ -33,7 +33,7 @@ export type ExcerptPart =
 
 /** Tags that make a line HTML: block structure markdown cannot express inline. */
 const BLOCK_TAGS =
-	"table|thead|tbody|tfoot|tr|td|th|caption|colgroup|col|div|p|ul|ol|li|h[1-6]|blockquote|pre|dl|dt|dd|section|article|header|footer|nav|main|aside|figure|figcaption|details|summary|hr|center";
+	"table|thead|tbody|tfoot|tr|td|th|caption|colgroup|col|div|p|ul|ol|li|h[1-6]|blockquote|pre|dl|dt|dd|section|article|header|footer|nav|main|aside|figure|figcaption|details|summary|hr|center|video|audio";
 const BLOCK_TAG = new RegExp(`<(/?)(${BLOCK_TAGS})\\b[^<>]*>`, "giu");
 /** Block tags with no closing tag; they never hold a region open. */
 const VOID_BLOCK: Partial<Record<string, true>> = { col: true, hr: true };

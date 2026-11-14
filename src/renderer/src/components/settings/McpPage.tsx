@@ -14,6 +14,9 @@ import { Switch } from "../primitives/Switch";
 import { errorText } from "./configSupport";
 import { McpConnectSection } from "./McpConnectSection";
 import { ModalActions, ModalShell, Note, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 const settings = window.autorag.settings;
 
@@ -175,18 +178,15 @@ export function McpPage(): ReactElement {
 							<StatusDot tone={row.problem !== null ? "warn" : row.enabled && row.exposure !== "hidden" ? "ok" : "off"} />
 							{row.enabled ? t("settingsCore.mcp.on") : t("settingsCore.mcp.off")}
 						</span>
-						<select
+						<SelectField
 							className="linear-select"
 							aria-label={t("settingsCore.mcp.exposureLabel")}
 							title={t(`settingsCore.mcp.exposureHint.${row.exposure}`)}
 							value={row.exposure}
 							disabled={broken}
-							onChange={(event) => void change(() => settings.mcpUpsert({ name: row.name, replaces: row.name, config: withSwitches(row.config, { exposure: event.target.value as McpExposure }) }))}
-						>
-							{EXPOSURES.map((exposure) => (
-								<option key={exposure} value={exposure}>{t(`settingsCore.mcp.exposure.${exposure}`)}</option>
-							))}
-						</select>
+							options={EXPOSURES.map((exposure) => ({ value: exposure, label: t(`settingsCore.mcp.exposure.${exposure}`) }))}
+							onValueChange={(value) => void change(() => settings.mcpUpsert({ name: row.name, replaces: row.name, config: withSwitches(row.config, { exposure: value as McpExposure }) }))}
+						/>
 						<Switch
 							checked={row.enabled}
 							disabled={broken}
@@ -202,7 +202,7 @@ export function McpPage(): ReactElement {
 					</div>
 				))}
 				<Row name={t("settingsCore.mcp.add")} hint={snapshot === null ? "" : t("settingsCore.mcp.file", { path: snapshot.path })}>
-					<button type="button" className="linear-btn settings-btn-primary" disabled={broken || snapshot === null} onClick={() => setEditing({ row: null })}>
+					<button type="button" className={cn("linear-btn settings-btn-primary", buttonClass({ size: "md" }))} disabled={broken || snapshot === null} onClick={() => setEditing({ row: null })}>
 						<Plus size={14} aria-hidden="true" focusable="false" /> {t("settingsCore.mcp.add")}
 					</button>
 				</Row>
@@ -285,10 +285,7 @@ function ServerModal({
 			</label>
 			<label>
 				{t("settingsCore.mcp.modal.kind")}
-				<select className="linear-select" value={form.kind} onChange={(event) => set({ kind: event.target.value as Kind })}>
-					<option value="stdio">{t("settingsCore.mcp.modal.kindStdio")}</option>
-					<option value="http">{t("settingsCore.mcp.modal.kindHttp")}</option>
-				</select>
+				<SelectField className="linear-select" value={form.kind} options={[{ value: "stdio", label: t("settingsCore.mcp.modal.kindStdio") }, { value: "http", label: t("settingsCore.mcp.modal.kindHttp") }]} onValueChange={(value) => set({ kind: value as Kind })} />
 			</label>
 			{form.kind === "stdio" ? (
 				<>

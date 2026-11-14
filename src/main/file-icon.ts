@@ -46,6 +46,12 @@ import { createPriorityGate, type PriorityGate } from "./priority-gate";
 export { ICON_SIZE } from "./icon-protocol";
 /** Inspector preview tier edge in px: the large Quick Look rendering the Info panel shows. */
 export const PREVIEW_ICON_SIZE = 640;
+/**
+ * Windows' shell keeps thumbnails up to this edge in its cache. For a file it cannot open on demand (a OneDrive
+ * placeholder) it refuses a larger one ("Failed to get thumbnail from local thumbnail cache reference") while this
+ * size still comes back, so the preview tier retries here before settling for the type icon.
+ */
+export const WINDOWS_CACHED_THUMBNAIL_SIZE = 256;
 /** One listing never generates more than this many icons. */
 export const ICON_LIMIT = 240;
 /** Native thumbnail calls allowed to run at once across every concurrent listing. */
@@ -452,9 +458,20 @@ export function createIconProvider(deps: IconProviderDeps = {}): IconSource {
 
 	/** One bounded native thumbnail call; a failure or deadline degrades to "no thumbnail" and is logged. */
 	async function generateNative(target: IconTarget, gate: PriorityGate, priority: number): Promise<Uint8Array | null> {
+		const size = target.size ?? ICON_SIZE;
 		await gate.acquire(priority);
 		try {
-			return await withTimeout(thumbnail(target.path, target.size ?? ICON_SIZE), thumbnailTimeoutMs, "thumbnail");
+			let bytes: Uint8Array | null = null;
+			try {
+				bytes = await withTimeout(thumbnail(target.path, size), thumbnailTimeoutMs, "thumbnail");
+			} catch (error) {
+				if (platform !== "win32" || size <= WINDOWS_CACHED_THUMBNAIL_SIZE) throw error;
+				warn(`file-icon: ${size}px thumbnail for ${target.path} failed, retrying at ${WINDOWS_CACHED_THUMBNAIL_SIZE}px: ${errorMessage(error)}`);
+			}
+			if (bytes === null && platform === "win32" && size > WINDOWS_CACHED_THUMBNAIL_SIZE) {
+				bytes = await withTimeout(thumbnail(target.path, WINDOWS_CACHED_THUMBNAIL_SIZE), thumbnailTimeoutMs, "thumbnail");
+			}
+			return bytes;
 		} catch (error) {
 			// One unreadable/timed-out file must not cost the rest of the batch.
 			warn(`file-icon: thumbnail for ${target.path} failed: ${errorMessage(error)}`);

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { chord, isolatedToolPath, rmRetry } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 // Redesigned Settings (docs/prototypes/settings) against the real app:
 // prototype IA + search, real Pi provider catalog and /login session, role
@@ -238,7 +239,7 @@ try {
 	// --- Datasource detail writes ----------------------------------------
 	await page.locator('.settings-nav-item--source[data-source-alias="slack"]').click();
 	await page.waitForSelector('.settings-source[data-source-id="slack"]');
-	await page.locator('select[aria-label="Refresh interval"]').selectOption({ label: "1 hour" });
+	await pickSelect(page.locator(selectField("Refresh interval")), { label: "1 hour" });
 	check("polling interval writes pollingIntervalMs", Boolean(await waitFor(() => readConfig().datasources.slack.pollingIntervalMs === 3_600_000)));
 	await page.locator('.settings-source[data-source-id="slack"] [role="switch"][aria-label="Enabled"]').click();
 	check("enable toggle writes enabled:false", Boolean(await waitFor(() => readConfig().datasources.slack.enabled === false)));

@@ -51,6 +51,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { chord, cssAttr } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const REPO = fileURLToPath(new URL("../../", import.meta.url));
 const EVIDENCE = process.env.QA_OUT?.trim() || process.argv[2] || join(REPO, ".omo", "evidence", "ai-finder-app", "apple-packages");
@@ -500,10 +501,10 @@ try {
 	// 8. The Interface language reaches the viewers, switched through Settings.
 	// -----------------------------------------------------------------------
 	await main.locator(".sidebar__item--settings").click();
-	const languageSelect = main.locator('select[aria-label="App Language"]');
+	const languageSelect = main.locator(selectField("App Language"));
 	await languageSelect.waitFor({ timeout: 20_000 });
-	await languageSelect.selectOption("ko");
-	const korean = await poll(() => main.locator('select[aria-label="앱 언어"]').count(), (value) => value === 1, 15_000);
+	await pickSelect(languageSelect, "ko");
+	const korean = await poll(() => main.locator(selectField("앱 언어")).count(), (value) => value === 1, 15_000);
 	check("the real Settings UI switches the app to 한국어", korean === 1, String(korean));
 	if (korean !== 1) info("korean settings", "the Settings UI never re-rendered in Korean; the panel checks below will report whatever came back");
 	await main.keyboard.press(chord("w"));

@@ -5,6 +5,7 @@ import {
 	type IconTarget,
 	SYSTEM_ICON_CONCURRENCY,
 	THUMBNAIL_CONCURRENCY,
+	WINDOWS_CACHED_THUMBNAIL_SIZE,
 	createIconProvider,
 } from "../src/main/file-icon";
 import { iconUrl, handleIconRequest } from "../src/main/icon-protocol";
@@ -379,6 +380,44 @@ describe("createIconProvider", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+
+	it("on Windows, previews a OneDrive placeholder from its cached 256px thumbnail when the 640px one is refused", async () => {
+		// Given a Windows shell that refuses a large thumbnail (as for a OneDrive file) but serves its cached size
+		const asked: number[] = [];
+		const provider = createIconProvider({
+			platform: "win32",
+			thumbnail: async (_path, size) => {
+				asked.push(size);
+				if (size > WINDOWS_CACHED_THUMBNAIL_SIZE) throw new Error("Failed to get thumbnail from local thumbnail cache reference");
+				return BYTES;
+			},
+			systemIcon: async () => new Uint8Array([9]),
+			warn: () => undefined,
+		});
+
+		// When the Inspector asks for the photo's preview
+		const url = await provider.preview(target("/OneDrive/Desktop/photo.png"));
+
+		// Then it is the picture at 256px, not the type icon
+		expect(asked).toEqual([PREVIEW_ICON_SIZE, WINDOWS_CACHED_THUMBNAIL_SIZE]);
+		expect(url).toBe(iconUrl("/OneDrive/Desktop/photo.png", MTIME, PREVIEW_ICON_SIZE));
+		expect(provider.read("/OneDrive/Desktop/photo.png", MTIME, PREVIEW_ICON_SIZE)).toEqual(BYTES);
+	});
+
+	it("keeps one try on macOS: a refused preview is not retried at a smaller size", async () => {
+		const asked: number[] = [];
+		const provider = createIconProvider({
+			platform: "darwin",
+			thumbnail: async (_path, size) => {
+				asked.push(size);
+				throw new Error("no thumbnail");
+			},
+			systemIcon: async () => null,
+			warn: () => undefined,
+		});
+		await provider.preview(target("/docs/photo.png"));
+		expect(asked).toEqual([PREVIEW_ICON_SIZE]);
 	});
 
 	it("asks Quick Look for iWork packages at both tiers, but not for other unknown extensions", async () => {

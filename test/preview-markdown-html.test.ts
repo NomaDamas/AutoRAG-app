@@ -34,6 +34,12 @@ describe("markdown html sanitizing", () => {
 		expect(html).toContain('<img alt="remote">');
 	});
 
+	it("plays a local video or audio file through the preview protocol and drops remote ones", () => {
+		const local = previewStreamUrl("/Users/me/project/clips/a b.mp4").replace(/&/g, "&amp;");
+		const html = sanitizeMarkdownHtml('<video src="clips/a%20b.mp4" onplay="x()"></video><video src="https://cdn.example/v.mp4"></video><audio src="/etc/passwd"></audio>', DIR);
+		expect(html).toBe(`<video src="${local}" controls="" preload="metadata"></video>`);
+	});
+
 	it("unwraps unknown elements but keeps their text", () => {
 		expect(sanitizeMarkdownHtml('<custom-box><b>bold</b> text</custom-box><details><summary>more</summary>body</details>', DIR)).toBe(
 			"<b>bold</b> text<details><summary>more</summary>body</details>",

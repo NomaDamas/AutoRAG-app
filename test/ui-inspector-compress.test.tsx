@@ -60,13 +60,13 @@ function render(entries: readonly FinderEntry[], capabilities: ActionCapabilitie
 	);
 }
 
-const bar = (): HTMLElement | null => host.querySelector(".inspector-actions");
+const bar = (): HTMLElement | null => host.querySelector(".inspector-file-actions");
 const barLabels = (): string[] => [...(bar()?.querySelectorAll("button") ?? [])].map((button) => (button.textContent ?? "").trim());
 
 describe("Inspector compress", () => {
-	it("offers no Compress for a single file or folder", () => {
+	it("offers Compress for a single file (Figma 231:2462), but not for a folder", () => {
 		render([file("a.txt")], ARCHIVE);
-		expect(barLabels()).not.toContain("압축");
+		expect(barLabels()).toContain("압축");
 		render([file("docs", "folder")], ARCHIVE);
 		expect(barLabels()).not.toContain("압축");
 	});

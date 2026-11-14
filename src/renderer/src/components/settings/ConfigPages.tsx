@@ -13,7 +13,8 @@ import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import type { AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { LanguageSettings } from "./LanguageSettings";
-import { Row, Section, SettingsPageHead } from "./SettingsKit";
+import { PlainRow, SettingsPageHead } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { asRecord, boolOf, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
 
@@ -51,8 +52,9 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 		<>
 			<SettingsPageHead title={t("settingsSources.web.title")} description={t("settingsSources.web.desc")} />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.web.useSection")}>
-				<Row name={t("settingsSources.web.useSection")} hint={t("settingsSources.web.useHint")}>
+			{/* Figma 412:11269: three plain 64px rows under the head. */}
+			<div className="settings-plain">
+				<PlainRow name={t("settingsSources.web.useSection")} hint={t("settingsSources.web.useHint")}>
 					<Switch
 						checked={webEnabled}
 						ariaLabel={t("settingsSources.web.useSection")}
@@ -61,25 +63,18 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 							else void run([{ path: ["webSearch"], value: { ...(asRecord(web) ?? {}), enabled: true } }]);
 						}}
 					/>
-				</Row>
-				<Row name={t("settingsSources.web.providerName")} hint={webEnabled ? t("settingsSources.web.providerHintOn") : t("settingsSources.web.providerHintOff")}>
-					<select
-						className="linear-select"
+				</PlainRow>
+				<PlainRow name={t("settingsSources.web.providerName")} hint={webEnabled ? t("settingsSources.web.providerHintOn") : t("settingsSources.web.providerHintOff")}>
+					<SelectField
+						className="linear-select settings-plain-select"
 						aria-label={t("settingsSources.web.providerName")}
 						disabled={!webEnabled}
 						value={provider}
-						onChange={(event) => {
-							const value = event.target.value;
-							void run([value.length === 0 ? { path: ["webSearch", "provider"], remove: true } : { path: ["webSearch", "provider"], value }]);
-						}}
-					>
-						<option value="">{t("settingsSources.web.auto")}</option>
-						{WEBSEARCH_PROVIDERS.map((item) => (
-							<option key={item.id} value={item.id}>{item.label}</option>
-						))}
-					</select>
-				</Row>
-				<Row name={t("settingsSources.web.fetchName")} hint={webEnabled ? t("settingsSources.web.fetchHintOn") : t("settingsSources.web.fetchHintOff")}>
+						options={[{ value: "", label: t("settingsSources.web.auto") }, ...WEBSEARCH_PROVIDERS.map((item) => ({ value: item.id, label: item.label }))]}
+						onValueChange={(value) => void run([value.length === 0 ? { path: ["webSearch", "provider"], remove: true } : { path: ["webSearch", "provider"], value }])}
+					/>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.web.fetchName")} hint={webEnabled ? t("settingsSources.web.fetchHintOn") : t("settingsSources.web.fetchHintOff")}>
 					<Switch
 						checked={webEnabled && fetchEnabled}
 						disabled={!webEnabled}
@@ -89,8 +84,8 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 							else void run([{ path: ["webSearch", "fetch"], value: { ...(asRecord(rawFetch) ?? {}), enabled: true } }]);
 						}}
 					/>
-				</Row>
-			</Section>
+				</PlainRow>
+			</div>
 		</>
 	);
 }
@@ -104,23 +99,24 @@ export function ReadingPage({ snapshot, onSaved }: { readonly snapshot: AutoRagC
 		<>
 			<SettingsPageHead title={t("settingsSources.reading.title")} description={t("settingsSources.reading.desc")} />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.reading.sectionTitle")} description={t("settingsSources.reading.sectionDesc")}>
+			<div className="settings-plain">
 				<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsSources.fields.docLanguages")} hint={t("settingsSources.reading.langHint")} onSaved={onSaved} fallback={["ko", "en"]} />
-			</Section>
+			</div>
 		</>
 	);
 }
 
 /* ========================================================== Duplicates == */
 
+
 const DUPEY_INTERVALS: readonly { readonly value: number; readonly label: LocaleKey }[] = [
-	{ value: 15, label: "settingsSources.cadence.min15" },
-	{ value: 30, label: "settingsSources.cadence.min30" },
-	{ value: 60, label: "settingsSources.cadence.hour1" },
-	{ value: 180, label: "settingsSources.cadence.hour3" },
-	{ value: 360, label: "settingsSources.cadence.hour6" },
-	{ value: 720, label: "settingsSources.cadence.hour12" },
-	{ value: 1440, label: "settingsSources.cadence.day1" },
+	{ value: 15, label: "settingsSources.duplicates.intervals.min15" },
+	{ value: 30, label: "settingsSources.duplicates.intervals.min30" },
+	{ value: 60, label: "settingsSources.duplicates.intervals.hour1" },
+	{ value: 180, label: "settingsSources.duplicates.intervals.hour3" },
+	{ value: 360, label: "settingsSources.duplicates.intervals.hour6" },
+	{ value: 720, label: "settingsSources.duplicates.intervals.hour12" },
+	{ value: 1440, label: "settingsSources.duplicates.intervals.day1" },
 ];
 
 export function DuplicatesPage({
@@ -144,11 +140,12 @@ export function DuplicatesPage({
 		<>
 			<SettingsPageHead title={t("settingsSources.duplicates.title")} description={t("settingsSources.duplicates.desc")} />
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<Section title={t("settingsSources.duplicates.section")}>
-				<Row name={t("settingsSources.duplicates.exactName")} hint={t("settingsSources.duplicates.exactHint")}>
+			{/* Figma 403:8746: three plain rows, no section heading and no rules between them. */}
+			<div className="settings-plain">
+				<PlainRow name={t("settingsSources.duplicates.exactName")} hint={t("settingsSources.duplicates.exactHint")}>
 					<Switch checked={excludeExact} ariaLabel={t("settingsSources.duplicates.exactName")} onChange={() => void run([{ path: ["excludeExactDuplicates"], value: !excludeExact }])} />
-				</Row>
-				<Row name={t("settingsSources.duplicates.versionsName")} hint={t("settingsSources.duplicates.versionsHint")}>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.duplicates.versionsName")} hint={t("settingsSources.duplicates.versionsHint")}>
 					<Switch
 						checked={dupeyEnabled}
 						ariaLabel={t("settingsSources.duplicates.versionsName")}
@@ -157,15 +154,17 @@ export function DuplicatesPage({
 							else void run([{ path: ["dupey"], value: { ...(asRecord(dupey) ?? {}), enabled: true } }]);
 						}}
 					/>
-				</Row>
-				<Row name={t("settingsSources.duplicates.intervalName")} hint={t("settingsSources.duplicates.intervalHint")}>
-					<select className="linear-select" aria-label={t("settingsSources.duplicates.intervalName")} value={String(dupeyInterval)} onChange={(event) => onDupeyInterval(Number(event.target.value))}>
-						{DUPEY_INTERVALS.map((item) => (
-							<option key={item.value} value={item.value}>{t(item.label)}</option>
-						))}
-					</select>
-				</Row>
-			</Section>
+				</PlainRow>
+				<PlainRow name={t("settingsSources.duplicates.intervalName")} hint={t("settingsSources.duplicates.intervalHint")}>
+					<SelectField
+						className="linear-select settings-plain-select"
+						aria-label={t("settingsSources.duplicates.intervalName")}
+						value={String(dupeyInterval)}
+						options={DUPEY_INTERVALS.map((item) => ({ value: String(item.value), label: t(item.label) }))}
+						onValueChange={(value) => onDupeyInterval(Number(value))}
+					/>
+				</PlainRow>
+			</div>
 		</>
 	);
 }

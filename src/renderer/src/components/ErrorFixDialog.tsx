@@ -7,6 +7,7 @@ import { dismissErrorFixDialog, retryErrorFix, stopErrorFix, useErrorFixSession 
 import { describeAppError, type ErrorActionId } from "../state/app-error";
 import { actionLabel } from "../state/error-fix";
 import { cn } from "../lib/cn";
+import { buttonClass } from "./primitives/button";
 import { ErrorDetails } from "./ErrorDetails";
 import { CloseIcon, SparklesIcon } from "./icons";
 
@@ -24,7 +25,7 @@ export interface ErrorFixDialogProps {
 	readonly onOpenSource: (alias: string) => void;
 }
 
-const BUTTON = "inline-flex h-30 flex-none cursor-pointer items-center justify-center gap-6 rounded-6 border px-12 text-meta transition-colors duration-(--dur-color) ease-out";
+const BUTTON = cn(buttonClass({ size: "sm" }), "cursor-pointer rounded-6 border transition-colors duration-(--dur-color) ease-out");
 const SECONDARY = "border-border bg-window text-ink hover:bg-hover";
 const PRIMARY = "border-transparent bg-accent font-medium text-on-accent hover:bg-accent-hover";
 

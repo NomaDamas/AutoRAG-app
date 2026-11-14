@@ -261,8 +261,12 @@ export interface FinderController {
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
 	runEntryAction(entry: FinderEntry, target: FileActionTarget, anchor: ActionAnchor | null): void;
-	/** Run one Inspector action over the whole multi-selection (Compress). */
-	runSelectionAction(target: FileActionTarget): void;
+	/** Run one Inspector action over the whole multi-selection (Compress, Share). */
+	runSelectionAction(target: FileActionTarget, anchor?: ActionAnchor | null): void;
+	/** Trash every selected entry (the multi-selection inspector's Trash button). */
+	trashSelection(): void;
+	/** Include every selected entry in the index, or leave every one out (the multi-selection inspector's index button). */
+	setSelectionIndexed(include: boolean): void;
 	/** The applications the OS registers for `entry`'s type, default first (the "다른 앱으로 열기" menu). */
 	loadOpenWithApplications(entry: FinderEntry): Promise<readonly OpenWithApplication[]>;
 	/** The "용량 줄이기" dialog (choosing level/mode, or actively reducing with live progress); null when closed. */
@@ -1340,6 +1344,24 @@ export function useFinderController(
 
 	const trashEntry = useLatestCallback((entry: FinderEntry) => trashPaths([entry.path]));
 
+	const trashSelection = useLatestCallback(() => {
+		if (selectedEntries.length > 0) trashPaths(selectedEntries.map((entry) => entry.path));
+	});
+
+	const setSelectionIndexed = useLatestCallback((include: boolean) => {
+		const changing = selectedEntries.filter((entry) => {
+			const current = sidecar.indexStatus(entry.path);
+			return current !== null && current.toggleable && current.excluded === include;
+		});
+		if (changing.length === 0) return;
+		Promise.all(changing.map((entry) => source.setIndexExcluded(entry.path, !include)))
+			.then((statuses) => {
+				sidecar.setIndexStatuses(statuses);
+				showToast(changing.length === 1 ? indexToast(changing[0]?.name ?? "", include) : indexToast(t("finder.itemsCount", { count: changing.length }), include));
+			})
+			.catch(reportError);
+	});
+
 	const copyEntryPath = useLatestCallback(
 		(entry: FinderEntry) => {
 			source
@@ -1452,7 +1474,15 @@ export function useFinderController(
 	 * Run one Inspector action over the whole multi-selection. Compress is the
 	 * only one: it writes a single archive holding every selected row.
 	 */
-	const runSelectionAction = useLatestCallback((target: FileActionTarget) => {
+	const runSelectionAction = useLatestCallback((target: FileActionTarget, anchor: ActionAnchor | null = null) => {
+		if (target.kind === "share") {
+			if (anchor === null) {
+				showToast(t("finderComponents.shareAnchorMissing"));
+				return;
+			}
+			source.actions.share(selectedEntries.map((entry) => entry.path), anchor).catch(reportError);
+			return;
+		}
 		if (target.kind !== "request" || target.request.kind !== "compress") return;
 		startCompress(
 			selectedEntries.map((entry) => entry.path),
@@ -2446,6 +2476,8 @@ export function useFinderController(
 		actionCapabilities,
 		runEntryAction,
 		runSelectionAction,
+		trashSelection,
+		setSelectionIndexed,
 		loadOpenWithApplications,
 		reduceDialog,
 		setReduceDialogLevel,

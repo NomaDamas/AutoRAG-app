@@ -38,6 +38,8 @@ interface Setup {
 	readonly config?: Record<string, unknown>;
 	readonly remote?: boolean;
 	readonly picked?: readonly string[];
+	/** What the exclusion chooser returns. */
+	readonly pickedExclusions?: readonly string[];
 	readonly home?: string;
 }
 
@@ -46,19 +48,23 @@ function Host(): ReturnType<typeof ScopePage> {
 	return <ScopePage snapshot={snapshot} onSaved={setSnapshot} />;
 }
 
-async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked = [], home = "/home/me" }: Setup = {}): Promise<{ readonly pickFolders: ReturnType<typeof vi.fn> }> {
+async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked = [], pickedExclusions = [], home = "/home/me" }: Setup = {}): Promise<{
+	readonly pickFolders: ReturnType<typeof vi.fn>;
+	readonly pickPaths: ReturnType<typeof vi.fn>;
+}> {
 	bridge.state.config = config;
 	const pickFolders = vi.fn(async () => picked.map((path) => ({ path })));
+	const pickPaths = vi.fn(async () => pickedExclusions);
 	Reflect.set(globalThis, "autorag", {
 		settings: bridge.settings,
-		onboarding: { pickFolders },
+		onboarding: { pickFolders, pickPaths },
 		fs: {
 			locations: async () => [{ name: "me", path: home, section: "favorites", icon: "home" }],
 		},
 	});
 	Reflect.set(window, "autoragIsRemote", remote ? true : undefined);
 	await act(async () => root.render(<Host />));
-	return { pickFolders };
+	return { pickFolders, pickPaths };
 }
 
 beforeEach(async () => {
@@ -86,7 +92,9 @@ const click = (element: Element | null): Promise<void> => act(async () => {
 	element!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 });
 const button = (name: string): HTMLButtonElement | null => [...host.querySelectorAll<HTMLButtonElement>("button")].find((candidate) => candidate.textContent?.trim() === name) ?? null;
-const folderRows = (): string[] => [...host.querySelectorAll(".settings-path-line > span")].map((row) => row.textContent ?? "");
+const lists = (): HTMLElement[] => [...host.querySelectorAll<HTMLElement>(".scope-list")];
+const pathsIn = (list: HTMLElement | undefined): string[] => [...(list?.querySelectorAll(".scope-row-path") ?? [])].map((row) => row.textContent ?? "");
+const folderRows = (): string[] => pathsIn(lists()[0]);
 const alertText = (): string | null => host.querySelector('[role="alert"]')?.textContent ?? null;
 
 describe("Settings → Search Scope", () => {
@@ -94,7 +102,7 @@ describe("Settings → Search Scope", () => {
 		await mount({ config: { searchPaths: ["/r"], excludePaths: ["/r/private"] } });
 
 		expect(folderRows()).toEqual(["/r"]);
-		expect([...host.querySelectorAll(".settings-chip")].map((chip) => chip.textContent)).toContain("/r/private");
+		expect(pathsIn(lists()[1])).toEqual(["/r/private"]);
 		expect(host.querySelector(".index-map-panel")).toBeNull();
 	});
 
@@ -141,7 +149,7 @@ describe("Settings → Search Scope", () => {
 
 	it("removes a folder together with the exclusions that only meant something under it, in one write", async () => {
 		await mount({ config: { searchPaths: ["/a", "/b"], excludePaths: ["/a/x", "/b/y"] } });
-		await click(host.querySelector(".settings-path-line button"));
+		await click(lists()[0]!.querySelector(".scope-row-remove"));
 
 		expect(bridge.settings.configPatch).toHaveBeenCalledOnce();
 		expect(bridge.state.config).toEqual({ searchPaths: ["/b"], excludePaths: ["/b/y"] });
@@ -149,9 +157,45 @@ describe("Settings → Search Scope", () => {
 
 	it("removes the key itself when the last folder or the last exclusion goes, rather than writing an empty list", async () => {
 		await mount({ config: { searchPaths: ["/a"], excludePaths: ["/a/x"] } });
-		await click(host.querySelector(".settings-path-line button"));
+		await click(lists()[0]!.querySelector(".scope-row-remove"));
 
 		expect(bridge.state.config).toEqual({});
+	});
+
+	it("adds exclusions from 제외 추가's menu: the system chooser, without duplicates, in one write", async () => {
+		const { pickPaths } = await mount({ config: { searchPaths: ["/r"], excludePaths: ["/r/a"] }, pickedExclusions: ["/r/a", "/r/b.xlsx", "/r/c"] });
+		await click(button("Add exclusion"));
+		const items = [...host.querySelectorAll<HTMLButtonElement>('.scope-menu [role="menuitem"]')];
+		expect(items.at(-1)?.textContent).toBe("Enter a path");
+		await click(items[0] ?? null);
+
+		expect(pickPaths).toHaveBeenCalledOnce();
+		expect(bridge.settings.configPatch).toHaveBeenCalledOnce();
+		expect(bridge.state.config.excludePaths).toEqual(["/r/a", "/r/b.xlsx", "/r/c"]);
+		expect([...host.querySelectorAll(".scope-list .scope-row-path")].map((row) => row.textContent)).toContain("/r/b.xlsx");
+	});
+
+	it("types an exclusion's path from 경로 직접 입력", async () => {
+		const { pickPaths } = await mount();
+		await click(button("Add exclusion"));
+		await click([...host.querySelectorAll<HTMLButtonElement>('.scope-menu [role="menuitem"]')].find((item) => item.textContent === "Enter a path") ?? null);
+		expect(pickPaths).not.toHaveBeenCalled();
+
+		const input = document.body.querySelector<HTMLInputElement>(".settings-modal input");
+		await act(async () => {
+			Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, "/r/secret");
+			input!.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await click(document.body.querySelector(".settings-modal .settings-btn-primary"));
+		expect(bridge.state.config.excludePaths).toEqual(["/r/secret"]);
+	});
+
+	it("folds the automatically excluded developer folders behind 자세히", async () => {
+		await mount();
+		expect(host.querySelector(".scope-dev-body")).toBeNull();
+		await click(button("Details"));
+		expect(host.querySelector(".scope-dev-names")?.textContent).toContain("node_modules");
+		expect(button("Hide")).not.toBeNull();
 	});
 
 	it("in a remote browser, where no system dialog exists, asks for the path and expands ~ to the home folder", async () => {

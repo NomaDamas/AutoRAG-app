@@ -41,6 +41,8 @@ function renderInlineSegments(segments: readonly InlineSegment[]): ReactElement[
 				return <span key={idx}>{renderInlineSegments(seg.children)}</span>;
 			case "citation":
 				return <span key={idx}>[{seg.number}]</span>;
+			case "file":
+				return <span key={idx}>{basename(seg.path)}</span>;
 			case "image":
 				return <span key={idx}>{seg.target}</span>;
 			default:

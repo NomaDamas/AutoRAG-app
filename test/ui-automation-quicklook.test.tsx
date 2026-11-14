@@ -126,7 +126,7 @@ describe("AutomationQuickLook", () => {
 		expect(host.textContent).toContain("3분 전 실행 · ‘hwp5’ 프로그램을 찾을 수 없음");
 
 		act(() => root.render(<AutomationQuickLook rule={rule({ lastRun: null })} onClose={noop} onEdit={noop} />));
-		expect(host.textContent).toContain("아직 실행되지 않았어요");
+		expect(host.textContent).toContain("아직 실행되지 않았습니다");
 	});
 
 	it("reads in English", async () => {

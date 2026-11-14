@@ -33,7 +33,9 @@
   --tab-grad-to: #D0D0D4;
   --tab-grad-hover-from: #CFCFD3;
   --tab-grad-hover-to: #C8C8CC;
-  --bg-tab-active: #ECECEE;
+  --bg-tab-active: #F2F2F5;
+  /* The tab strip's + (Figma 328:4454 / 416:12223): the active tab's colour in light, the strip's own in dark. */
+  --bg-tab-new: #F2F2F5;
   --text-tab: #5D5D62;
   --bg-code: #F4F4F7;
   --bg-chip-sent: #F3F3F7;
@@ -233,6 +235,9 @@
   --vtag-near-text: #6B3FB5;
   --vtag-exact-bg: #FFF0DF;
   --vtag-exact-text: #B45309;
+  /* The inspector's 유사본 tag (Figma 231:2588). */
+  --vtag-similar-bg: #FDEEC1;
+  --vtag-similar-text: #C47D00;
 
   /* -------------------------------------------------------------- §3 Typography */
   --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
@@ -365,11 +370,37 @@
   --ease-out: ease-out;
   --shimmer-gradient: linear-gradient(90deg,#F0F0F4 0%,#E4E4EA 50%,#F0F0F4 100%);
 
+  /* ------------------------------------------------------------------ Buttons */
+  /* Figma 435:8582 "Button": height, side padding, icon–label gap, label, icon box and icon stroke per size. */
+  --button-height-sm: 28px;
+  --button-pad-x-sm: 10px;
+  --button-gap-sm: 4px;
+  --button-font-sm: var(--font-size-meta);
+  --button-line-sm: 16px;
+  --button-icon-sm: 12px;
+  --button-icon-stroke-sm: 0.9px;
+  --button-height-md: 32px;
+  --button-pad-x-md: 12px;
+  --button-gap-md: 6px;
+  --button-font-md: var(--font-size-meta);
+  --button-line-md: 16px;
+  --button-icon-md: 14px;
+  --button-icon-stroke-md: 1.05px;
+  --button-height-lg: 36px;
+  --button-pad-x-lg: 16px;
+  --button-gap-lg: 6px;
+  --button-font-lg: var(--font-size-sm);
+  --button-line-lg: 18px;
+  --button-icon-lg: 16px;
+  --button-icon-stroke-lg: 1.2px;
+
   /* ------------------------------------------------------------------ §7 Shadows */
   --shadow-raised: 0 4px 16px rgba(20,20,40,0.08);
   --shadow-drag: 0 4px 16px rgba(20,20,40,0.12);
   --shadow-window: 0 18px 54px rgba(0,0,0,0.18);
   --shadow-menu: 0 10px 35px rgba(0,0,0,0.2);
+  /* Settings dropdowns (the 문서 읽기 list and every picker built like it): a short, tight drop, not the menu's wide halo. */
+  --shadow-dropdown: 0 4px 12px rgba(0,0,0,0.1);
   --shadow-ql-panel: inset 0 0 0 0.5px var(--ql-hairline), inset 0 0.5px 0 var(--ql-highlight);
   --shadow-ql-segment: 0 0.5px 1.5px rgba(0,0,0,0.18);
   --shadow-ql-float: 0 0 0 0.5px var(--ql-hairline), 0 4px 14px rgba(0,0,0,0.16);
@@ -421,6 +452,7 @@ html[data-appearance="dark"] {
     --tab-grad-hover-from: #4A4A4C;
     --tab-grad-hover-to: #414143;
     --bg-tab-active: #505052;
+    --bg-tab-new: #38383A;
     --text-tab: #D1D1D6;
     --bg-code: #2C2C2E;
     --bg-chip-sent: #343438;
@@ -492,6 +524,8 @@ html[data-appearance="dark"] {
     --vtag-near-text: #BF5AF2;
     --vtag-exact-bg: rgba(255,159,10,0.2);
     --vtag-exact-text: #FF9F0A;
+    --vtag-similar-bg: rgba(255,204,0,0.2);
+    --vtag-similar-text: #FFD60A;
 
     /* ------------------------------------------------------------ Scrollbars */
     /* (none — native overlay scrollbars; see base.css §7) */

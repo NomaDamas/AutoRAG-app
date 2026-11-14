@@ -1,0 +1,575 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { InspectorChatDock, InspectorChatView } from "../src/renderer/src/components/InspectorChat";
+import type { InspectorChatTab } from "../src/renderer/src/state/inspector-chat";
+import type { ChatAttachment } from "../src/shared/search-contract";
+import type { InteractionRequest } from "../src/shared/interaction-contract";
+import { setAppLanguage } from "../src/shared/i18n";
+
+Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+
+const noop = (): void => {};
+let host: HTMLDivElement;
+let root: Root;
+
+beforeEach(async () => {
+	await setAppLanguage("ko");
+	host = document.createElement("div");
+	document.body.append(host);
+	root = createRoot(host);
+});
+
+afterEach(() => {
+	act(() => root.unmount());
+	host.remove();
+});
+
+const deck: ChatAttachment = { kind: "file", id: "/work/deck.pdf", name: "deck.pdf" };
+
+const tab: InspectorChatTab = {
+	mode: "chat",
+	seenAt: 0,
+	dismissed: [],
+	queued: [],
+	chat: {
+		chatId: "chat-1",
+		updatedAt: 0,
+		turns: [
+			{
+				question: "요약해줘",
+				attachments: [deck],
+				quick: {
+					answer: "발표 자료예요 [1].",
+					evidence: [{ number: 1, title: "deck.pdf", summary: "", source: "/work/deck.pdf", excerpts: ["컨셉 — **곡선으로 재해석**하는 것이 목표"] }],
+				},
+				deep: null,
+				quickDraft: "",
+				deepDraft: "",
+				deepElapsed: null,
+				startedAt: 0,
+				progress: "",
+				error: null,
+				stopped: false,
+				steers: [],
+			},
+		],
+	},
+};
+
+function render(pending: readonly ChatAttachment[]): void {
+	act(() =>
+		root.render(
+			<InspectorChatView
+				tab={tab}
+				targetName="deck.pdf"
+				pending={pending}
+				running={false}
+				imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+				request={null}
+				onAsk={() => true}
+				onSteer={() => false}
+				onQueue={noop}
+				onUnqueue={noop}
+				onStop={noop}
+				onBack={noop}
+				onNewChat={noop}
+				onExpand={noop}
+				onOpenChat={noop}
+				onDismiss={noop}
+				onReveal={noop}
+				onPreview={noop}
+			/>,
+		),
+	);
+}
+
+function renderTab(next: InspectorChatTab, running = false): void {
+	act(() =>
+		root.render(
+			<InspectorChatView
+				tab={next}
+				targetName="deck.pdf"
+				pending={[]}
+				running={running}
+				imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+				request={null}
+				onAsk={() => true}
+				onSteer={() => false}
+				onQueue={noop}
+				onUnqueue={noop}
+				onStop={noop}
+				onBack={noop}
+				onNewChat={noop}
+				onExpand={noop}
+				onOpenChat={noop}
+				onDismiss={noop}
+				onReveal={noop}
+				onPreview={noop}
+			/>,
+		),
+	);
+}
+
+const withAnswer = (answer: string, excerpts: readonly string[]): InspectorChatTab => ({
+	...tab,
+	chat: {
+		chatId: "chat-2",
+		updatedAt: 0,
+		turns: [
+			{
+				question: "q",
+				attachments: [],
+				quick: { answer, evidence: [{ number: 1, title: "note.md", summary: "", source: "/work/note.md", excerpts }] },
+				deep: null,
+				quickDraft: "",
+				deepDraft: "",
+				deepElapsed: null,
+				startedAt: 0,
+				progress: "",
+				error: null,
+				stopped: false,
+				steers: [],
+			},
+		],
+	},
+});
+
+const turnOf = (patch: Partial<InspectorChatTab["chat"] extends infer C ? (C extends { turns: readonly (infer T)[] } ? T : never) : never>): InspectorChatTab => ({
+	...tab,
+	chat: {
+		chatId: "chat-3",
+		updatedAt: 0,
+		turns: [
+			{
+				question: "q",
+				attachments: [],
+				quick: null,
+				deep: null,
+				quickDraft: "",
+				deepDraft: "",
+				deepElapsed: null,
+				startedAt: 0,
+				progress: "",
+				error: null,
+				stopped: false,
+				steers: [],
+				...patch,
+			},
+		],
+	},
+});
+
+describe("the inspector chat view", () => {
+	it("keeps the Quick answer on screen while the run thinks, and under the Deep answer once it lands", () => {
+		const quick = { answer: "빠른 답변 [1]", evidence: [{ number: 1, title: "a.md", summary: "", source: "/work/a.md", excerpts: [] }] };
+		renderTab(turnOf({ quick, progress: "근거를 다시 확인하는 중" }), true);
+		const during = [...host.querySelectorAll(".inspector-chat-answer")].map((node) => node.textContent);
+		expect(during).toEqual(["빠른 답변 1"]);
+		expect(host.querySelector(".shimmer")?.textContent).toBe("근거를 다시 확인하는 중");
+
+		renderTab(turnOf({ quick, deep: { answer: "정밀 답변", evidence: [] }, deepElapsed: 7000 }));
+		expect([...host.querySelectorAll(".inspector-chat-answer")].map((node) => node.textContent)).toEqual(["빠른 답변 1", "정밀 답변"]);
+		expect(host.querySelector(".thinking-header")?.textContent).toBe("7s 동안 답변 생성");
+		expect(host.querySelector(".shimmer")).toBeNull();
+	});
+
+	it("shows a web source's address on its hover card and opens it in the browser", () => {
+		const opened: string[] = [];
+		const web = { answer: "웹에 있어요 [1]", evidence: [{ number: 1, title: "guide", summary: "", source: "https://example.com/docs/guide", excerpts: ["본문"] }] };
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={turnOf({ quick: web })}
+					targetName="x"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: (url) => opened.push(url) }}
+					request={null}
+					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+		act(() => host.querySelector<HTMLButtonElement>("button.cite")?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		const card = host.querySelector(".inspector-chat-source");
+		expect(card?.querySelector(".inspector-chat-source-url")?.textContent).toBe("https://example.com/docs/guide");
+		const buttons = [...(card?.querySelectorAll("button") ?? [])];
+		expect(buttons.map((button) => button.textContent)).toEqual(["브라우저에서 열기"]);
+		act(() => buttons[0]?.click());
+		expect(opened).toEqual(["https://example.com/docs/guide"]);
+	});
+
+	it("shows a [file:<path>] the librarian left as written as the file's chip, not as raw text", () => {
+		renderTab(withAnswer("정리: [file:/Users/me/Documents/archive]\n[file:/Users/me/Documents/archive/summaries]. [1]", ["x"]));
+		const chips = [...host.querySelectorAll("[data-file-mention]")].map((chip) => chip.textContent);
+		expect(chips).toEqual(["archive", "summaries"]);
+		expect(host.querySelector(".inspector-chat-answer")?.textContent).not.toContain("[file:");
+	});
+
+	it("draws citation numbers like the AI Search tab: a pale wash, and solid blue while one is hovered", () => {
+		renderTab(withAnswer("본문 [1]", ["근거"]));
+		const cite = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
+		expect(cite()?.className).toContain("bg-accent-wash");
+		expect(cite()?.classList.contains("active")).toBe(false);
+		act(() => cite()?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		expect(cite()?.classList.contains("active")).toBe(true);
+		expect(cite()?.className).toContain("bg-accent text-on-accent");
+	});
+
+	it("renders HTML, a table, an image, and a video inside the hovered citation card", () => {
+		renderTab(withAnswer("본문 [1]", ["<table><tr><td>셀</td></tr></table>\n![사진](pic.png)\n![영상](clip.mp4)\n**표시**"]));
+		const cite = host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
+		act(() => cite?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		const card = host.querySelector(".inspector-chat-source");
+		expect(card?.querySelector("table td")?.textContent).toBe("셀");
+		expect(card?.querySelector("img")?.getAttribute("src")).toContain("autorag-preview");
+		expect(card?.querySelector("video")?.getAttribute("src")).toContain("autorag-preview");
+		expect(card?.querySelector("strong")?.textContent).toBe("표시");
+		expect(card?.textContent).not.toContain("<td>");
+	});
+
+	it("shows the question as a bubble under the file it brought in", () => {
+		render([]);
+		expect(host.querySelector(".inspector-chat-question")?.textContent).toBe("요약해줘");
+		expect(host.querySelector(".inspector-chat-att")?.textContent).toContain("deck.pdf");
+	});
+
+	it("lists no sources under the answer; hovering a citation number shows its source with 파일 위치로 이동 / 미리보기", () => {
+		render([]);
+		expect(host.querySelector(".inspector-chat-source")).toBeNull();
+		const cite = host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
+		expect(cite?.textContent).toBe("1");
+		act(() => cite?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true })));
+		const card = host.querySelector(".inspector-chat-source");
+		expect(card?.textContent).toContain("deck.pdf");
+		const marked = card?.querySelector("strong");
+		expect(marked?.textContent).toBe("곡선으로 재해석");
+		expect(card?.querySelector(".evidence__block")?.textContent).toBe("컨셉 — 곡선으로 재해석하는 것이 목표");
+		expect([...(card?.querySelectorAll("button") ?? [])].map((button) => button.textContent)).toEqual(["파일 위치로 이동", "미리보기"]);
+	});
+
+	it("titles the chat with the selection, and offers 새 대화, AI 검색 탭에서 열기 and × (back to the Info view)", () => {
+		const backs: string[] = [];
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={tab}
+					targetName="deck.pdf"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					request={null}
+					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={() => backs.push("back")}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+		const title = host.querySelector<HTMLButtonElement>(".inspector-chat-title");
+		expect(title?.textContent).toBe("deck.pdf");
+		expect(title?.getAttribute("aria-haspopup")).toBe("menu");
+		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+		expect(labels).toEqual(["새 대화", "AI 검색 탭에서 열기", "대화 닫기"]);
+		act(() => host.querySelector<HTMLButtonElement>('button[aria-label="대화 닫기"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(backs).toEqual(["back"]);
+	});
+
+	it("shows a chat picked from history under its own title, not the selection's name", () => {
+		const picked: InspectorChatTab = { ...tab, chat: tab.chat === null ? null : { ...tab.chat, chatId: "chat-2", title: "3분기 기획안 요약" } };
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={picked}
+					targetName="deck.pdf"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					request={null}
+					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+		expect(host.querySelector(".inspector-chat-title")?.textContent).toBe("3분기 기획안 요약");
+	});
+
+	it("puts the approval-mode chip, icon only, left of the input", () => {
+		render([]);
+		const chip = host.querySelector<HTMLButtonElement>('.inspector-chat-composer button[aria-haspopup="menu"]');
+		expect(chip).not.toBeNull();
+		expect(chip?.textContent).toBe("");
+		expect(chip?.nextElementSibling?.tagName).toBe("TEXTAREA");
+	});
+
+	it("asks about the waiting files, each as a card, and follows up otherwise", () => {
+		render([{ kind: "file", id: "/work/notes.pdf", name: "notes.pdf" }]);
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
+		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(1);
+		render([
+			{ kind: "file", id: "/work/notes.pdf", name: "notes.pdf" },
+			{ kind: "file", id: "/work/photo.jpg", name: "photo.jpg" },
+		]);
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("선택한 항목에 대해 묻기");
+		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(2);
+		render([]);
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이어서 묻기");
+	});
+});
+
+describe("the Info view's chat dock", () => {
+	it("only types: no attachment card, and the prompt names what the question is about", () => {
+		act(() =>
+			root.render(
+				<InspectorChatDock
+					tab={tab}
+					now={0}
+					targets={[deck]}
+					running={false}
+					request={null}
+					onAsk={() => true}
+					onSummarize={noop}
+					onStop={noop}
+					onResume={noop}
+				/>,
+			),
+		);
+		expect(host.querySelector(".inspector-chat-att")).toBeNull();
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이 파일에 대해 묻기");
+	});
+
+	it("offers 이어서 대화 instead of AI 요약 once the tab has a chat, with a dot for an answer not yet seen", () => {
+		const resumes: string[] = [];
+		const seen: InspectorChatTab = { ...tab, mode: "info", seenAt: 10 };
+		act(() =>
+			root.render(
+				<InspectorChatDock tab={seen} now={0} targets={[deck]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={() => resumes.push("resume")} />,
+			),
+		);
+		const chip = host.querySelector<HTMLButtonElement>(".inspector-chat-continue");
+		expect(chip?.textContent).toContain("이어서 대화");
+		expect(chip?.textContent).toContain("· 방금");
+		expect(host.textContent).not.toContain("AI 요약");
+		expect(chip?.querySelector('[aria-label="새 답변"]')).toBeNull();
+		act(() => chip?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		expect(resumes).toEqual(["resume"]);
+
+		const unseen: InspectorChatTab = { ...tab, chat: tab.chat === null ? null : { ...tab.chat, updatedAt: 20 }, mode: "info", seenAt: 10 };
+		act(() =>
+			root.render(<InspectorChatDock tab={unseen} now={20} targets={[deck]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
+		);
+		expect(host.querySelector('.inspector-chat-continue [aria-label="새 답변"]')).not.toBeNull();
+	});
+
+	it("offers AI 요약 while the tab has no chat", () => {
+		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
+		act(() =>
+			root.render(<InspectorChatDock tab={empty} now={0} targets={[deck]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />),
+		);
+		expect(host.textContent).toContain("AI 요약");
+		expect(host.querySelector(".inspector-chat-continue")).toBeNull();
+	});
+
+	it("asks about anything with nothing selected, and offers no AI 요약", () => {
+		const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
+		act(() =>
+			root.render(
+				<InspectorChatDock tab={empty} now={0} targets={[]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
+			),
+		);
+		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("무엇이든 물어보세요");
+		expect(host.textContent).not.toContain("AI 요약");
+	});
+});
+
+describe("the composer's blue button", () => {
+	const typeInto = (input: HTMLTextAreaElement, value: string): void => {
+		act(() => {
+			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	};
+
+	it("is the mic while nothing is typed and turns into send once text is typed, both blue", () => {
+		Reflect.set(window, "autorag", {
+			platform: "win32",
+			voice: { transcribe: async () => ({ text: "" }), prepare: async () => ({ ok: true }), openMicrophoneSettings: async () => {} },
+		});
+		try {
+			const empty: InspectorChatTab = { chat: null, mode: "info", seenAt: 0, dismissed: [], queued: [] };
+			act(() =>
+				root.render(
+					<InspectorChatDock tab={empty} now={0} targets={[]} running={false} request={null} onAsk={() => true} onSummarize={noop} onStop={noop} onResume={noop} />,
+				),
+			);
+			const mic = host.querySelector<HTMLButtonElement>("button.inspector-chat-voice");
+			expect(mic?.getAttribute("aria-label")).toBe("음성으로 입력");
+			expect(mic?.className).toContain("bg-accent");
+			expect(host.querySelector('button[aria-label="보내기"]')).toBeNull();
+
+			const input = host.querySelector<HTMLTextAreaElement>("textarea");
+			if (input === null) throw new Error("no input");
+			typeInto(input, "요약해줘");
+			const send = host.querySelector<HTMLButtonElement>('button[aria-label="보내기"]');
+			expect(send?.className).toContain("bg-accent");
+			expect(send?.disabled).toBe(false);
+			expect(host.querySelector("button.inspector-chat-voice")).toBeNull();
+
+			typeInto(input, "  ");
+			expect(host.querySelector("button.inspector-chat-voice")).not.toBeNull();
+		} finally {
+			Reflect.deleteProperty(window, "autorag");
+		}
+	});
+});
+
+describe("the inspector chat while a run streams", () => {
+	const typeInto = (input: HTMLTextAreaElement, value: string): void => {
+		act(() => {
+			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+			input.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+	};
+	const press = (input: HTMLTextAreaElement, init: KeyboardEventInit): void => {
+		act(() => {
+			input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true, ...init }));
+		});
+	};
+	function renderRunning(handlers: { steer?: (text: string) => boolean; queue?: (text: string) => void; request?: InteractionRequest | null; queued?: readonly string[]; steers?: InspectorChatTab["chat"] extends infer C ? (C extends { turns: readonly (infer T)[] } ? T extends { steers: infer S } ? S : never : never) : never }): void {
+		const base = turnOf({ steers: handlers.steers ?? [] });
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={{ ...base, queued: handlers.queued ?? [] }}
+					targetName="deck.pdf"
+					pending={[]}
+					running
+					request={handlers.request ?? null}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					onAsk={() => false}
+					onSteer={handlers.steer ?? (() => true)}
+					onQueue={handlers.queue ?? noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+				/>,
+			),
+		);
+	}
+
+	it("sends Enter as a correction of the running answer and clears the draft", () => {
+		const steered: string[] = [];
+		renderRunning({ steer: (text) => (steered.push(text), true) });
+		const input = host.querySelector<HTMLTextAreaElement>("textarea");
+		if (input === null) throw new Error("no input");
+		expect(input.getAttribute("placeholder")).toBe("검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)");
+		typeInto(input, "지난주 것만");
+		press(input, {});
+		expect(steered).toEqual(["지난주 것만"]);
+		expect(input.value).toBe("");
+	});
+
+	it("queues ⌥Enter as the next question", () => {
+		const queued: string[] = [];
+		renderRunning({ queue: (text) => queued.push(text) });
+		const input = host.querySelector<HTMLTextAreaElement>("textarea");
+		if (input === null) throw new Error("no input");
+		typeInto(input, "그 다음 질문");
+		press(input, { altKey: true });
+		expect(queued).toEqual(["그 다음 질문"]);
+		expect(input.value).toBe("");
+	});
+
+	it("keeps the draft and says so when the run takes no correction", () => {
+		renderRunning({ steer: () => false });
+		const input = host.querySelector<HTMLTextAreaElement>("textarea");
+		if (input === null) throw new Error("no input");
+		typeInto(input, "늦은 정정");
+		press(input, {});
+		expect(input.value).toBe("늦은 정정");
+		expect([...host.querySelectorAll('[role="status"]')].map((node) => node.textContent)).toContain("앞 질문의 답을 기다리는 중입니다");
+	});
+
+	it("shows a pending correction as a waiting bubble and a delivered one as applied, and lists queued questions", () => {
+		renderRunning({
+			steers: [
+				{ id: "a", text: "6월 것만", timing: "before-quick", status: "delivered" },
+				{ id: "b", text: "한국어로", timing: "after-quick", status: "pending" },
+			],
+			queued: ["다음 질문"],
+		});
+		const bubbles = [...host.querySelectorAll<HTMLElement>(".steer-msg")];
+		expect(bubbles.map((node) => [node.getAttribute("data-steer-status"), node.querySelector(".steer-bubble")?.textContent])).toEqual([
+			["delivered", "6월 것만"],
+			["pending", "한국어로"],
+		]);
+		expect(host.querySelector(".queued-question")?.textContent).toContain("다음 질문");
+	});
+
+	it("replaces the composer with the agent's question and sends the pick back through the bridge", () => {
+		const answers: unknown[] = [];
+		Reflect.set(window, "autorag", { interaction: { answer: (id: string, answer: unknown) => (answers.push([id, answer]), Promise.resolve(true)) } });
+		try {
+			renderRunning({
+				request: {
+					kind: "question",
+					id: "req-1",
+					searchId: "s-1",
+					questions: [{ question: "어느 보고서를 요약할까요?", options: [{ title: "4분기" }, { title: "3분기" }], allowMultiple: false, allowFreeform: false }],
+				},
+			});
+			expect(host.querySelector("textarea")).toBeNull();
+			expect(host.querySelector('[role="dialog"]')?.textContent).toContain("어느 보고서를 요약할까요?");
+			const pick = [...host.querySelectorAll<HTMLElement>('[role="radio"]')].find((node) => node.textContent?.includes("4분기"));
+			act(() => pick?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			expect(answers).toEqual([["req-1", { kind: "question", answers: [{ kind: "selection", selections: ["4분기"] }] }]]);
+		} finally {
+			Reflect.deleteProperty(window, "autorag");
+		}
+	});
+
+	it("shows the file-change approval card in the chat in place of the composer", () => {
+		renderRunning({
+			request: { kind: "approval", id: "req-2", searchId: "s-1", reason: "", categories: [], call: "rm /work/old.txt", sessionScope: "all" },
+		});
+		expect(host.querySelector("textarea")).toBeNull();
+		const card = host.querySelector('[role="alertdialog"]');
+		expect(card?.textContent).toContain("rm /work/old.txt");
+	});
+});

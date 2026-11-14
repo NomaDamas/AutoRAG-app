@@ -12,7 +12,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { Copy, CreditCard, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -35,7 +35,8 @@ import { settings } from "../settings-runtime";
 import { attachSettingsNavigation } from "../state/settings-navigation";
 import { cn } from "../lib/cn";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
-import { ChevronLeftIcon, PanelRightIcon, SearchIcon } from "./icons";
+import { hostPlatform } from "../lib/shortcuts";
+import { ChevronLeftIcon, InspectorToggleIcon, PanelLeftIcon, SearchIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { Keycap } from "./primitives/Keycap";
 
@@ -84,7 +85,7 @@ export const GROUP_APPS: NavGroupKey = "settingsCore.nav.group.apps";
 
 export const PAGES = [
 	{ id: "account", labelKey: "settingsCore.nav.account", icon: User, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.account" },
-	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: CreditCard, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
+	{ id: "plan", labelKey: "settingsCore.nav.plan", icon: ChartNoAxesColumn, groupKey: "settingsCore.nav.group.account", keywordsKey: "settingsCore.nav.keywords.plan" },
 	{ id: "general", labelKey: "settingsCore.nav.general", icon: Settings, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.general" },
 	{ id: "sidebar", labelKey: "settingsCore.nav.sidebar", icon: PanelLeft, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.sidebar" },
 	{ id: "contextMenu", labelKey: "settingsCore.nav.contextMenu", icon: MousePointerClick, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.contextMenu" },
@@ -309,6 +310,9 @@ export function SettingsView({
 	onBack,
 	inspectorHidden,
 	onShowInspector,
+	sidebarHidden = false,
+	onHideSidebar,
+	onShowSidebar,
 	searchRef,
 }: {
 	readonly initialCategory?: SettingsCategory;
@@ -320,6 +324,10 @@ export function SettingsView({
 	/** The window's right sidebar is hidden: the content's top-right offers to bring it back. */
 	readonly inspectorHidden: boolean;
 	readonly onShowInspector: () => void;
+	/** The window's left sidebar is hidden: Settings hides its own too, and the content's top-left offers it back. */
+	readonly sidebarHidden?: boolean;
+	readonly onHideSidebar?: () => void;
+	readonly onShowSidebar?: () => void;
 	/** The window's focus-search shortcut lands here while Settings is open (the Finder's search box is hidden). */
 	readonly searchRef?: RefObject<HTMLInputElement | null>;
 }): ReactElement {
@@ -426,16 +434,14 @@ export function SettingsView({
 
 	return (
 		<div className="settings-view settings-panel" role="region" aria-label={t("settings.title")}>
-			<aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
-				{/* Level with the Finder sidebar's head: room for the traffic lights, and the window drags from it. */}
-				<div className="settings-sidebar-head" aria-hidden="true" />
-				<div className="settings-sidebar-backrow">
-					<button type="button" className="settings-nav-item settings-sidebar-back" onClick={onBack}>
-						<span className="settings-nav-icon" aria-hidden="true">
-							<ChevronLeftIcon size={14} />
-						</span>
-						<span>{t("toolbar.back")}</span>
-					</button>
+			{sidebarHidden ? null : <aside className="settings-sidebar" style={{ width: navWidth }} aria-label={t("settingsCore.view.navAria")}>
+				{/* Level with the Finder sidebar's head: room for the traffic lights, the sidebar toggle at the right, and the window drags from it. */}
+				<div className="settings-sidebar-head">
+					{onHideSidebar === undefined ? null : (
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "settings-sidebar-toggle")} title={t("toolbar.hideSidebar")} aria-label={t("toolbar.hideSidebar")} onClick={onHideSidebar}>
+							<PanelLeftIcon size={18} />
+						</button>
+					)}
 				</div>
 				<div className="sidebar-search flex-none px-10 pt-2 pb-8">
 					<label className="side-search settings-search flex items-center gap-7 h-30 pl-9 pr-6 border border-transparent rounded-8 bg-hover text-ink-muted transition-[background,border-color,box-shadow,color] duration-(--dur-color) ease-[ease] hover:bg-hover-strong focus-within:bg-window focus-within:border-accent focus-within:text-accent-hover focus-within:shadow-[0_0_0_3px_var(--accent-soft)]">
@@ -496,12 +502,24 @@ export function SettingsView({
 					</nav>
 					{query.trim().length > 0 && groups.length === 0 && filteredSources.length === 0 ? <p className="settings-nav-empty">{t("settingsCore.view.empty")}</p> : null}
 				</div>
-			</aside>
+				{/* The way out, Figma 403:8201: the sidebar's footer. */}
+				<div className="settings-sidebar-foot">
+					<button type="button" className="settings-sidebar-back" onClick={onBack}>
+						<ChevronLeftIcon size={14} aria-hidden="true" />
+						<span>{t("settingsCore.view.backToApp")}</span>
+					</button>
+				</div>
+			</aside>}
 			<div className="settings-main">
 				<div className="settings-main-head">
+					{sidebarHidden && onShowSidebar !== undefined ? (
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "settings-main-sidebar", hostPlatform() === "win32" ? "" : "settings-main-sidebar--lights")} title={t("toolbar.showSidebar")} aria-label={t("toolbar.showSidebar")} onClick={onShowSidebar}>
+							<PanelLeftIcon size={18} />
+						</button>
+					) : null}
 					{inspectorHidden ? (
-						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-body" }), "settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
-							<PanelRightIcon size={18} />
+						<button type="button" className={cn(iconButtonClass({ size: "size-toolbar-icon", tone: "text-ink-muted" }), "group settings-main-inspector")} title={t("toolbar.showInspector")} aria-label={t("toolbar.showInspector")} onClick={onShowInspector}>
+							<InspectorToggleIcon open={false} />
 						</button>
 					) : null}
 				</div>

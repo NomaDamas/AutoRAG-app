@@ -28,16 +28,16 @@ export function ContextNoticeView({ notice }: { readonly notice: ContextNotice }
 	const { t } = useTranslation();
 	if (notice.kind === "compacted") {
 		return (
-			<div className="context-divider flex flex-col items-center gap-6 py-4" role="note" data-context="compacted">
+			<div className="context-divider flex flex-col items-center gap-7 py-4" role="note" data-context="compacted">
 				<div className="flex w-full items-center gap-10">
 					<span className="h-px min-w-24 flex-1 bg-divider" aria-hidden="true" />
-					<span className="inline-flex h-26 max-w-[80%] flex-none items-center gap-6 rounded-full border border-border bg-window px-12 text-meta font-medium text-ink-muted">
+					<span className="inline-flex max-w-[80%] flex-none items-center gap-6 rounded-full border border-border bg-window px-16 py-6 text-meta font-medium leading-[18px] text-ink-muted">
 						<CompactIcon className="flex-none text-accent" />
 						<span className="truncate">{t("aiSearch.context.compacted")}</span>
 					</span>
 					<span className="h-px min-w-24 flex-1 bg-divider" aria-hidden="true" />
 				</div>
-				<span className="max-w-[560px] text-center text-badge leading-normal text-ink-muted break-keep">{t("aiSearch.context.compactedHint")}</span>
+				<span className="max-w-[560px] text-center text-meta leading-[16px] text-ink-muted break-keep">{t("aiSearch.context.compactedHint")}</span>
 			</div>
 		);
 	}

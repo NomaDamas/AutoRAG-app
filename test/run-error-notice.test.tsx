@@ -177,7 +177,7 @@ describe("RunErrorNotice", () => {
 		expect(host.textContent).toContain(t("appError.contextOverflow.title"));
 		expect(host.textContent).toContain(t("appError.contextOverflow.hint"));
 		expect(labels()).toEqual([t("appError.showDetails"), t("aiSearch.newChat"), t("appError.askNarrower")]);
-		expect(host.querySelector("[data-notice-icon]")?.className).toContain("bg-warn-bg");
+		expect(host.querySelector("[data-notice-icon]")?.className).toContain("text-warn-text");
 
 		press(t("appError.askNarrower"));
 		press(t("aiSearch.newChat"));

@@ -7,6 +7,7 @@ import type { SearchErrorAction } from "../../../shared/search-contract";
 import { startErrorFix, useErrorFixSession, useErrorFixStore } from "../hooks/useErrorFix";
 import { describeAppError, type ErrorAction } from "../state/app-error";
 import { cn } from "../lib/cn";
+import { buttonClass } from "./primitives/button";
 import { ErrorDetails } from "./ErrorDetails";
 import { ErrorFixDialog } from "./ErrorFixDialog";
 import { SparklesIcon } from "./icons";
@@ -26,7 +27,7 @@ export interface RunErrorNoticeProps {
 	readonly fix?: boolean;
 }
 
-const BUTTON = "inline-flex h-28 flex-none cursor-pointer items-center justify-center gap-6 rounded-8 border px-12 text-meta font-medium whitespace-nowrap transition-colors duration-(--dur-color) ease-out";
+const BUTTON = cn(buttonClass({ size: "sm" }), "cursor-pointer rounded-8 border transition-colors duration-(--dur-color) ease-out");
 const PRIMARY_BUTTON = "border-transparent bg-accent text-on-accent hover:bg-accent-hover";
 const SECONDARY_BUTTON = "border-border bg-window text-ink hover:bg-hover";
 
@@ -53,25 +54,25 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 		else onOpenSettings(entry.id === "open-plan" ? "plan" : "ai");
 	};
 	return (
-		<div className="flex items-start gap-12 rounded-10 border border-border bg-subtle px-14 py-12 text-body text-ink" role="alert">
+		<div className="flex items-start gap-14 rounded-12 border border-border bg-subtle py-12 pr-24 pl-16 text-body text-ink" role="alert">
 			<div
 				className={cn(
-					"mt-1 flex size-28 flex-none items-center justify-center rounded-8",
-					warnTone ? "bg-warn-bg text-warn-text" : "bg-danger-bg-soft text-danger-text",
+					"flex size-24 flex-none items-center justify-center",
+					warnTone ? "text-warn-text" : "text-danger-text",
 				)}
 				data-notice-icon
 				aria-hidden="true"
 			>
-				<CircleAlert size={15} strokeWidth={2.1} />
+				<CircleAlert size={20} strokeWidth={1.75} />
 			</div>
-			<div className="flex min-w-0 flex-1 flex-col gap-2">
+			<div className="flex min-w-0 flex-1 flex-col">
 				{view.title === null ? (
 					<span className="select-text whitespace-pre-wrap break-words text-ink">{message}</span>
 				) : (
 					<>
-						<strong className="text-body font-semibold text-ink">{view.title}</strong>
-						{hint === null ? null : <span className="text-meta leading-normal text-ink-muted">{hint}</span>}
-						<ErrorDetails message={message} />
+						<strong className="text-body font-medium leading-[21px] text-ink">{view.title}</strong>
+						{hint === null ? null : <span className="text-meta leading-[18px] text-ink-muted">{hint}</span>}
+						<ErrorDetails message={message} className="mt-6" quiet />
 					</>
 				)}
 			</div>

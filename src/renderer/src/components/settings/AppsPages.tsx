@@ -11,7 +11,7 @@
 
 import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, ExternalLink, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, ExternalLink, Minus, Plus, RefreshCw, Trash2 } from "lucide-react";
 import type {
 	AutoRagConfigSnapshot,
 	ConfigRefreshResult,
@@ -32,6 +32,7 @@ import { readScheduleSettings, scheduleUpdates, type ScheduleSettings } from "..
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
 import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
 import { Switch } from "../primitives/Switch";
@@ -39,6 +40,8 @@ import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
 import { IndexActivityCard } from "./IndexActivityCard";
 import { IndexMapPanel } from "./index-map/IndexMapPanel";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 const settings = window.autorag.settings;
 
@@ -290,17 +293,13 @@ export function IndexingPage({
 							<StatusDot tone={localRunning ? "run" : local !== null && (local.documentCount ?? 0) > 0 ? "ok" : "warn"} />
 							{localRunning ? t("settingsSources.indexing.localUpdating") : t("settingsSources.common.inUse")}
 						</span>
-						<select
+						<SelectField
 							className="settings-select-compact"
 							aria-label={t("settingsSources.indexing.localIntervalAria")}
 							value={String(localInterval)}
-							onChange={(event) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(event.target.value))}
-						>
-							<option value="0">{t("settingsSources.common.manual")}</option>
-							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-							))}
-						</select>
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							onValueChange={(value) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(value))}
+						/>
 						<button
 							type="button"
 							className="settings-icon-btn"
@@ -343,17 +342,13 @@ export function IndexingPage({
 											: t("settingsSources.common.off")}
 							</span>
 							{TEMPLATE_BY_ID[row.type]?.polling !== false ? (
-								<select
+								<SelectField
 									className="settings-select-compact"
 									aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
 									value={String(intervalOf(row, snapshot))}
-									onChange={(event) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(event.target.value))}
-								>
-									<option value="0">{t("settingsSources.common.manual")}</option>
-									{INTERVAL_OPTIONS.map((option) => (
-										<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-									))}
-								</select>
+									options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+									onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
+								/>
 							) : null}
 							<button
 								type="button"
@@ -480,8 +475,23 @@ export function AppsPage({
 	useTranslation();
 	const [addTemplate, setAddTemplate] = useState<string | null>(null);
 	const [addError, setAddError] = useState<string | null>(null);
+	/** The connection 연결해제 asked about; it goes only after the confirmation. */
+	const [disconnecting, setDisconnecting] = useState<string | null>(null);
+	const [busy, setBusy] = useState(false);
 	const rows = sources?.sources ?? [];
-	const connectedTypes = new Set(sourceAliases(snapshot).map((entry) => entry.type));
+
+	async function disconnect(alias: string): Promise<void> {
+		setBusy(true);
+		setAddError(null);
+		try {
+			onSaved(await settings.configRemove(["datasources", alias]));
+			setDisconnecting(null);
+		} catch (cause) {
+			setAddError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setBusy(false);
+		}
+	}
 
 	async function addConnection(templateId: string, alias: string): Promise<void> {
 		setAddError(null);
@@ -500,26 +510,33 @@ export function AppsPage({
 		<>
 			<SettingsPageHead title={t("settingsSources.apps.title")} description={t("settingsSources.apps.desc")} />
 			{addError !== null ? <div className="settings-error" role="alert">{addError}</div> : null}
+			<div className="settings-apps">
 			<Section title={t("settingsSources.apps.myConnections")}>
-				{rows.length === 0 ? <Note>{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</Note> : null}
-				<div className="settings-list">
+				{rows.length === 0 ? <p className="settings-apps-empty">{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</p> : null}
+				<div className="settings-list settings-apps-mine">
 					{rows.map((row) => (
-						<button type="button" className="settings-list-row" key={row.id} onClick={() => onOpenSource(row.id)}>
-							<SourceIcon type={row.type} label={templateLabel(row.type)} />
-							<span className="settings-list-body">
-								<span className="settings-list-title">{sourceTitle(row)}</span>
-								<span className="settings-list-meta">{sourceMeta(row)}</span>
-							</span>
-							<StatusDot tone={sourceTone(row)} />
-							<ChevronRight size={16} className="settings-list-chevron" aria-hidden="true" focusable="false" />
-						</button>
+						// The name opens the connection's own page; 연결해제 removes it after a confirmation (Figma 403:6999).
+						<div className="settings-list-row" key={row.id}>
+							<button type="button" className="settings-apps-open" onClick={() => onOpenSource(row.id)}>
+								<SourceIcon type={row.type} label={templateLabel(row.type)} />
+								<span className="settings-list-body">
+									<span className="settings-list-title">{sourceTitle(row)}</span>
+									<span className="settings-list-meta">{sourceMeta(row)}</span>
+								</span>
+							</button>
+							<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => setDisconnecting(row.id)}>
+								<Minus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
+							</button>
+						</div>
 					))}
 				</div>
 			</Section>
-			<Section title={t("settingsSources.apps.connectApps")} description={t("settingsSources.apps.connectAppsDesc")}>
+			{/* Figma 403:6999: a rule closes 내 연결 before 앱 연결하기. */}
+			<hr className="settings-apps-divider" />
+			<Section title={t("settingsSources.apps.connectApps")}>
 				{GALLERY_GROUPS.map((group) => (
 					<div key={group.title}>
-						<div className="linear-section-title" style={{ marginTop: 18, fontSize: 13 }}>{t(group.title)}</div>
+						<div className="settings-apps-group">{t(group.title)}</div>
 						<div className="settings-list">
 							{group.ids.map((templateId) => {
 								const template = TEMPLATE_BY_ID[templateId];
@@ -536,8 +553,7 @@ export function AppsPage({
 											<span className="settings-list-title">{template.label}</span>
 											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
-										{connectedTypes.has(templateId) ? <span className="settings-badge">{t("settingsSources.apps.connected")}</span> : null}
-										<button type="button" className="linear-btn" disabled={!available} onClick={() => setAddTemplate(templateId)}>
+										<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={!available} onClick={() => setAddTemplate(templateId)}>
 											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>
@@ -547,6 +563,17 @@ export function AppsPage({
 					</div>
 				))}
 			</Section>
+			</div>
+			{disconnecting !== null ? (
+				<ModalShell onClose={() => setDisconnecting(null)}>
+					<h2>{t("settingsSources.sourceDetail.confirmTitle")}</h2>
+					<p>{t("settingsSources.sourceDetail.confirmBody", { alias: disconnecting })}</p>
+					<ModalActions>
+						<button type="button" className="linear-btn" onClick={() => setDisconnecting(null)}>{t("common.cancel")}</button>
+						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void disconnect(disconnecting)}>{t("settingsSources.apps.disconnect")}</button>
+					</ModalActions>
+				</ModalShell>
+			) : null}
 			{addTemplate !== null ? (
 				<PromptModal
 					title={t("settingsSources.apps.promptTitle", { name: templateLabel(addTemplate) })}
@@ -716,17 +743,13 @@ export function SourceDetailPage({
 				</Row>
 				{template?.polling !== false ? (
 					<Row name={t("settingsSources.sourceDetail.intervalName")} hint={t("settingsSources.sourceDetail.intervalHint")}>
-						<select
+						<SelectField
 							className="linear-select"
 							aria-label={t("settingsSources.sourceDetail.intervalName")}
 							value={String(polling)}
-							onChange={(event) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(event.target.value))}
-						>
-							<option value="0">{t("settingsSources.common.manual")}</option>
-							{INTERVAL_OPTIONS.map((option) => (
-								<option key={option.ms} value={option.ms}>{t(option.label)}</option>
-							))}
-						</select>
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							onValueChange={(value) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(value))}
+						/>
 					</Row>
 				) : null}
 			</Section>

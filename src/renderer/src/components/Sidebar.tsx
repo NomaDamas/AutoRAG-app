@@ -209,7 +209,11 @@ export function Sidebar({
 									>
 										{item.tag === undefined ? (
 											<Icon
-												className={cn("sidebar__item-icon flex-none", active ? "text-accent" : "text-ink-muted")}
+												className={cn(
+													"sidebar__item-icon flex-none",
+													// Like the settings sidebar, a selected row is grey with ink; only AI 검색 and 자동화 keep the blue icon.
+													!active ? "text-ink-muted" : item.view === "aiSearch" || item.view === "automations" ? "text-accent" : "text-ink",
+												)}
 												size={14}
 												strokeWidth={1.8}
 											/>
@@ -261,7 +265,7 @@ export function Sidebar({
 						className={cn(
 							iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }),
 							"sidebar__item--settings",
-							settingsActive && "bg-selected-nav text-accent-text",
+							settingsActive && "bg-selected-nav text-ink",
 						)}
 						aria-current={settingsActive ? "true" : undefined}
 						aria-label={t("places.settings")}

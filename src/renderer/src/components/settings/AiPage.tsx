@@ -19,13 +19,13 @@ import type {
 	ProviderSummary,
 } from "../../../../shared/settings-contract";
 import { ProviderIcon } from "./ProviderIcon";
-import { FloatingMenu, ModalActions, ModalShell, Note, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { FloatingMenu, ModalActions, ModalShell, Note, Row, SettingsPageHead } from "./SettingsKit";
 import { asRecord, errorText, getAt, stringOf, useConfigWriter } from "./configSupport";
 import { ConnectMenu, useProviderConnect } from "./ProviderConnect";
 import { RolePicker } from "./ModelPicker";
 import { jevLabel, jevOptionsFor, providerRoleCleanup, rerankLabel, rerankOptionsFor, roleSelectionFor } from "./roleSupport";
 import { EmbeddingPicker } from "./EmbeddingPicker";
-import { JEV_SLLM_BACKEND, jevBackendFor } from "../../../../shared/ai-roles";
+import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
 
@@ -199,46 +199,52 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 			<SettingsPageHead title={t("settingsCore.nav.ai")} description={t("settingsCore.ai.description")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{notice !== null ? <Note>{notice}</Note> : null}
-			<Section title={t("settingsCore.ai.servicesTitle")} description={t("settingsCore.ai.servicesDesc")}>
-				<div className="settings-list">
+			{/* Figma 403:10518: 연결된 서비스 is a bordered list closed by its own "+ 서비스 연결" row; a rule; then the roles on a stage card. */}
+			<section className="ai-section">
+				<div className="ai-section-head">
+					<h2 className="ai-section-title">{t("settingsCore.ai.servicesTitle")}</h2>
+					<p className="ai-section-desc">{t("settingsCore.ai.servicesDesc")}</p>
+				</div>
+				<div className="ai-services">
 					{connected.map((provider) => {
 						const used = rolesUsingProvider(snapshot, provider.id, t);
 						const meta = `${provider.subscription ? t("settingsCore.ai.subscriptionAccount") : t(KIND_LABEL_KEY[provider.kind])}${provider.baseUrl === null ? "" : ` · ${provider.baseUrl}`}${used.length > 0 ? ` · ${t("settingsCore.ai.usedFor", { roles: used.join(", ") })}` : ""}`;
 						return (
-							<div className="settings-list-row" key={provider.id}>
+							<div className="ai-service-row" key={provider.id} title={meta}>
 								<ProviderIcon provider={provider} />
-								<span className="settings-list-body">
-									<span className="settings-list-title">{provider.name}</span>
-									<span className="settings-list-meta">{meta}</span>
-								</span>
+								<span className="ai-service-name">{provider.name}</span>
 								<button
 									type="button"
-									className="settings-icon-btn"
+									className="settings-icon-btn ai-service-more"
+									title={t("settingsCore.ai.providerMenu", { name: provider.name })}
 									aria-label={t("settingsCore.ai.providerMenu", { name: provider.name })}
 									onClick={(event) => setMenu(menu?.kind === "provider" && menu.arg === provider.id ? null : { kind: "provider", anchor: event.currentTarget, arg: provider.id })}
 								>
-									<Ellipsis size={16} aria-hidden="true" focusable="false" />
+									<Ellipsis size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 								</button>
 							</div>
 						);
 					})}
-					{connected.length === 0 ? <Note>{t("settingsCore.ai.noServices")}</Note> : null}
-					<button type="button" className="settings-list-row settings-add-row" onClick={(event) => setMenu({ kind: "connect", anchor: event.currentTarget })}>
-						<Plus size={14} aria-hidden="true" focusable="false" />
+					<button type="button" className="ai-service-row ai-service-add" onClick={(event) => setMenu({ kind: "connect", anchor: event.currentTarget })}>
+						<Plus size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 						<span>{t("settingsCore.ai.connectService")}</span>
 					</button>
 				</div>
-			</Section>
-			<Section title={t("settingsCore.ai.rolesTitle")} description={t("settingsCore.ai.rolesDesc")}>
-				<p className="settings-subsection-title">{t("settingsCore.ai.role.answer")}</p>
-				<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} provider={selectedProvider("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
-				<p className="settings-subsection-title">{t("settingsCore.ai.subSearchAssistant")}</p>
-				<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
-				<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
-				<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
-				<p className="settings-subsection-title">{t("settingsCore.ai.subDocUnderstanding")}</p>
-				<EmbeddingPicker />
-			</Section>
+			</section>
+			<hr className="ai-divider" />
+			<section className="ai-section">
+				<div className="ai-section-head">
+					<h2 className="ai-section-title">{t("settingsCore.ai.rolesTitle")}</h2>
+					<p className="ai-section-desc">{t("settingsCore.ai.rolesDesc")}</p>
+				</div>
+				<div className="ai-roles">
+					<RoleRow role="answer" label={t("settingsCore.ai.answerModel")} hint={t("settingsCore.ai.answerHint")} current={answerLabel(snapshot, t)} unset={answerUnset(snapshot)} broken={roleBroken("answer", snapshot.config, connected)} provider={selectedProvider("answer", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "answer" })} thinking={{ onOpen: (anchor) => setMenu({ kind: "thinking", anchor }) }} />
+					<RoleRow role="decomposition" label={t("settingsCore.ai.role.decomposition")} hint={t("settingsCore.ai.decompositionHint")} current={decompositionLabel(snapshot, t)} broken={roleBroken("decomposition", snapshot.config, connected)} provider={selectedProvider("decomposition", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "decomposition" })} />
+					<RoleRow role="jev" label={t("settingsCore.ai.jevModel")} hint={t("settingsCore.ai.jevHint")} current={jevLabel(snapshot.config, t)} broken={roleBroken("jev", snapshot.config, connected)} provider={selectedProvider("jev", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "jev" })} />
+					<RoleRow role="rerank" label={t("settingsCore.ai.rerankModel")} hint={t("settingsCore.ai.rerankHint")} current={rerankLabel(snapshot.config, t)} broken={roleBroken("rerank", snapshot.config, connected)} provider={selectedProvider("rerank", snapshot.config, connected)} onOpen={(anchor) => setMenu({ kind: "picker", anchor, arg: "rerank" })} />
+					<EmbeddingPicker name={t("settingsCore.ai.embeddingModel")} hint={t("settingsCore.ai.embeddingHint")} />
+				</div>
+			</section>
 			{menu !== null ? (
 				<FloatingMenu anchor={menu.anchor} compact={menu.kind === "thinking"} onClose={closeMenu}>
 					{menu.kind === "connect" ? (
@@ -327,6 +333,20 @@ function thinkingValue(snapshot: AutoRagConfigSnapshot): string {
 	return stringOf(getAt(snapshot.config, ["thinking", "final"]));
 }
 
+/** The answer model has no default: until one is picked the picker shows 모델 선택 in the muted ink. */
+function answerUnset(snapshot: AutoRagConfigSnapshot): boolean {
+	const model = asRecord(getAt(snapshot.config, ["model"]));
+	return stringOf(model?.name).length === 0 && stringOf(model?.id).length === 0;
+}
+
+/** A role set to a model of a service that is no longer connected (Figma 403:10518: a red picker and a "!"). */
+function roleBroken(role: string, config: AutoRagConfigSnapshot["config"], connected: readonly ProviderSummary[]): boolean {
+	// The librarian writes its OpenRouter decomposition default into every fresh config; that is the default, not a broken pick.
+	if (role === "decomposition" && shouldAdoptManagedDecomposition(getAt(config, ["queryDecomposition"]))) return false;
+	const sel = roleSelectionFor(role, config, connected);
+	return sel?.kind === "model" && !connected.some((item) => item.id === sel.provider);
+}
+
 function selectedProvider(role: string, config: AutoRagConfigSnapshot["config"], connected: readonly ProviderSummary[]): ProviderSummary | null {
 	const sel = roleSelectionFor(role, config, connected);
 	if (sel?.kind !== "model") return null;
@@ -340,6 +360,8 @@ function RoleRow({
 	label,
 	hint,
 	current,
+	unset = false,
+	broken = false,
 	provider,
 	onOpen,
 	thinking,
@@ -348,6 +370,8 @@ function RoleRow({
 	readonly label: string;
 	readonly hint: string;
 	readonly current: string;
+	readonly unset?: boolean;
+	readonly broken?: boolean;
 	readonly provider?: ProviderSummary | null;
 	readonly onOpen: (anchor: HTMLElement) => void;
 	readonly thinking?: { readonly onOpen: (anchor: HTMLElement) => void };
@@ -356,16 +380,22 @@ function RoleRow({
 	return (
 		<Row name={label} hint={hint}>
 			<span className={`settings-split${thinking === undefined ? " is-solo" : ""}`}>
-				<button type="button" className="settings-trigger" aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
-					{provider ? <ProviderIcon small provider={provider} /> : null}
-					<span className="settings-trigger-label">{current}</span>
-					<ChevronDown size={14} aria-hidden="true" focusable="false" />
-				</button>
+				{broken ? (
+					<span className="ai-role-alert" role="img" aria-label={t("settingsCore.ai.roleBroken")} title={t("settingsCore.ai.roleBroken")}>
+						!
+					</span>
+				) : null}
+				{/* Left of the picker, so every role's picker keeps the same right edge. */}
 				{thinking !== undefined ? (
 					<button type="button" className="settings-icon-btn" aria-label={t("settingsCore.ai.thinkingDepthFor", { label })} title={t("settingsCore.ai.thinkingDepth")} onClick={(event) => thinking.onOpen(event.currentTarget)}>
 						<Ellipsis size={16} aria-hidden="true" focusable="false" />
 					</button>
 				) : null}
+				<button type="button" className={`settings-trigger${broken ? " is-broken" : ""}`} aria-label={t("settingsCore.ai.selectRole", { label })} data-role={role} onClick={(event) => onOpen(event.currentTarget)}>
+					{provider ? <ProviderIcon small provider={provider} /> : null}
+					<span className={`settings-trigger-label${unset ? " is-muted" : ""}`}>{unset ? t("settingsCore.ai.pickModel") : current}</span>
+					<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+				</button>
 			</span>
 		</Row>
 	);

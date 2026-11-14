@@ -127,23 +127,24 @@ try {
 		state.sections.find((section) => section.title === "General Info")?.toggle ?? null;
 	check("the toggle starts on Show less (fully expanded)", toggleLabel(expanded) === "Show less", String(toggleLabel(expanded)));
 
-	await page.locator(".info-section button", { hasText: "Show less" }).click();
+	// Each section has its own toggle; collapse General Info only.
+	await page.locator(".info-section", { hasText: "General Info" }).locator(".section-title button").click();
 	await page.waitForFunction(() => document.querySelector(".inspector-body")?.innerText.includes("Show more"));
 	await new Promise((resolve) => setTimeout(resolve, 200));
 	const collapsed = await probe(page);
 	await page.screenshot({ path: join(EVIDENCE, "02-photo-collapsed.png") });
 	check("Show less keeps the core Path row", hasLabel(collapsed, "Path"));
-	check("Show less keeps the core Date Created row", hasLabel(collapsed, "Date Created"));
+	check("Show less hides the Date Created row", !hasLabel(collapsed, "Date Created"));
 	check("Show less hides the Date Accessed row", !hasLabel(collapsed, "Date Accessed"));
-	check("Show less hides the Image Info section", sectionRows(collapsed, "Image Info").length === 0);
+	check("collapsing General Info leaves Image Info as it was", sectionRows(collapsed, "Image Info").length === photo_.length);
 	check("the toggle flips to Show more", toggleLabel(collapsed) === "Show more", String(toggleLabel(collapsed)));
 	check("collapsing shortens the visible list", collapsed.text.length < expanded.text.length);
 
-	await page.locator(".info-section button", { hasText: "Show more" }).click();
-	await page.waitForFunction(() => document.querySelector(".inspector-body")?.innerText.includes("Show less"));
+	await page.locator(".info-section", { hasText: "General Info" }).locator(".section-title button").click();
+	await page.waitForFunction(() => document.querySelector(".inspector-body")?.innerText.includes("Date Accessed"));
 	await new Promise((resolve) => setTimeout(resolve, 200));
 	const reexpanded = await probe(page);
-	check("Show more restores the Image Info section", sectionRows(reexpanded, "Image Info").length > 0);
+	check("Show more restores the Date Created row", hasLabel(reexpanded, "Date Created"));
 	check("Show more restores the Date Accessed row", hasLabel(reexpanded, "Date Accessed"));
 
 	// -------------------------------------------------------------- scrolling

@@ -13,13 +13,45 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactEl
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 
-export function SettingsPageHead({ title, description }: { readonly title: string; readonly description: string }): ReactElement {
+export function SettingsPageHead({ title, description, note }: { readonly title: string; readonly description: string; readonly note?: string }): ReactElement {
 	return (
 		<div className="settings-page-head">
 			<h1 className="linear-title">{title}</h1>
 			<p className="linear-desc">{description}</p>
+			{note !== undefined ? <p className="linear-desc">{note}</p> : null}
 		</div>
 	);
+}
+
+/** A setting as the redesigned pages draw it (Figma 403:8746): a 14px medium name over a 12px line, the control at the right, 64px a row. */
+export function PlainRow({ name, hint, children }: { readonly name: string; readonly hint: string; readonly children: ReactNode }): ReactElement {
+	return (
+		<div className="settings-plain-row">
+			<div className="settings-plain-text">
+				<span className="settings-plain-name">{name}</span>
+				<small>{hint}</small>
+			</div>
+			<div className="settings-plain-control">{children}</div>
+		</div>
+	);
+}
+
+/**
+ * A titled group of plain rows (Figma 416:12228, 일반): a bold 14px title 16px above rows that are separated by
+ * spacing alone. `alignTop` keeps a select on the row's first line instead of centring it on the two lines.
+ */
+export function PlainSection({ title, alignTop = false, children }: { readonly title: string; readonly alignTop?: boolean; readonly children: ReactNode }): ReactElement {
+	return (
+		<section className="plain-section">
+			<h2 className="plain-section-title">{title}</h2>
+			<div className={alignTop ? "settings-plain plain-section-rows is-top" : "settings-plain plain-section-rows"}>{children}</div>
+		</section>
+	);
+}
+
+/** The rule between two `PlainSection`s. */
+export function PlainDivider(): ReactElement {
+	return <hr className="plain-section-divider" />;
 }
 
 export function Section({ title, description, children }: { readonly title?: string; readonly description?: string; readonly children: ReactNode }): ReactElement {

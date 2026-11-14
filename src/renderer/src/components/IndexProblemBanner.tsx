@@ -4,10 +4,14 @@ import { useTranslation } from "react-i18next";
 import { dismissIndexProblem, retryIndexProblem, useIndexProblem } from "../hooks/useIndexProblem";
 import { describeIndexProblem } from "../state/index-problem";
 import { iconButtonClass } from "./primitives/icon-button";
+import { cn } from "../lib/cn";
+import { buttonClass } from "./primitives/button";
 
 /** The one button: the accent fill, at the height of the toolbar's pill controls. */
-const PRIMARY_CLASS =
-	"flex-none h-pill px-10 border-0 rounded-6 bg-accent text-on-accent text-meta whitespace-nowrap cursor-pointer transition-colors duration-(--dur-color) ease-[ease] hover:bg-accent-hover";
+const PRIMARY_CLASS = cn(
+	buttonClass({ size: "sm" }),
+	"border-0 rounded-6 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-[ease] hover:bg-accent-hover",
+);
 
 /**
  * The persistent "needs attention" line above the file list (issue #283): one

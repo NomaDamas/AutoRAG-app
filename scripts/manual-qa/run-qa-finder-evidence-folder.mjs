@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchFinder, finderWindow, openAiSearch } from "./launch-finder.mjs";
 import { chord, rmRetry } from "./platform.mjs";
+import { pickSelect } from "./settings-select.mjs";
 
 /**
  * Manual QA & Live E2E — Ask-as-Smart-Folder (Evidence Folder):
@@ -373,9 +374,9 @@ check(
 
 // 10. Switch Interface language to Korean via Settings and verify Korean UI ("근거 폴더" button & "근거 폴더 닫기" modal).
 await page.locator(".sidebar__item--settings").click();
-const langSelect = page.locator("select.linear-select").nth(1);
+const langSelect = page.locator(".select-field.linear-select").nth(1);
 await langSelect.waitFor({ state: "visible" });
-await langSelect.selectOption("ko");
+await pickSelect(langSelect, "ko");
 // Settings takes over the window (no tab strip); Back returns to the Finder.
 await page.locator(".settings-sidebar-back").click();
 await page.locator('.tabs .tab[data-ai-search="true"]').click();

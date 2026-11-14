@@ -4,10 +4,11 @@
  * `visibleInfoRows` applies the Show more / Show less collapse. Both are pure so
  * the labels and the collapse rule can be tested without a DOM.
  *
- * `core` marks the rows that survive the collapse: the Finder summary a user
- * always wants (kind, size, where, path, created, modified). Everything else —
- * access/change times, ownership, and the whole EXIF block — belongs to Show
- * more, keeping a wide photo's panel scrollable rather than endless.
+ * `core` marks the rows that survive the collapse (간략히): in 일반 정보 the
+ * Finder summary a user always wants (kind, size, where, path); in 사진 정보
+ * what a person looks a photo up by (image size, camera, when and where it was
+ * taken). Each section collapses on its own, and everything else (dates,
+ * ownership, the exposure settings) belongs to 자세히.
  */
 
 import type { FsFileDetails, FsImageMetadata } from "../../../shared/fs-contract";
@@ -23,6 +24,8 @@ export interface InfoRow {
 	readonly value: string;
 	readonly section: InfoSection;
 	readonly core: boolean;
+	/** The value is a filesystem path: clicking the row copies it. */
+	readonly copyable?: boolean;
 }
 
 function formatDecimal(value: number): string {
@@ -57,19 +60,19 @@ export function formatGeo(latitude: number, longitude: number): string {
 
 function imageRows(image: FsImageMetadata): readonly InfoRow[] {
 	const rows: InfoRow[] = [];
-	const push = (key: LocaleKey, value: string | null): void => {
-		if (value !== null) rows.push({ label: t(key), value, section: "image", core: false });
+	const push = (key: LocaleKey, value: string | null, core = false): void => {
+		if (value !== null) rows.push({ label: t(key), value, section: "image", core });
 	};
-	push("inspector.labels.imageSize", image.width !== null && image.height !== null ? formatDimensions(image.width, image.height) : null);
+	push("inspector.labels.imageSize", image.width !== null && image.height !== null ? formatDimensions(image.width, image.height) : null, true);
 	push("inspector.labels.cameraMake", image.make);
-	push("inspector.labels.cameraModel", image.model);
+	push("inspector.labels.cameraModel", image.model, true);
 	push("inspector.labels.lens", image.lens);
 	push("inspector.labels.iso", image.iso === null ? null : String(image.iso));
 	push("inspector.labels.aperture", image.fNumber === null ? null : formatAperture(image.fNumber));
 	push("inspector.labels.shutterSpeed", image.exposureTime === null ? null : formatExposure(image.exposureTime));
 	push("inspector.labels.focalLength", image.focalLength === null ? null : formatFocalLength(image.focalLength));
 	push("inspector.labels.focalLength35mm", image.focalLength35mm === null ? null : formatFocalLength(image.focalLength35mm));
-	push("inspector.labels.dateTaken", image.dateTaken === null ? null : formatTimestamp(image.dateTaken));
+	push("inspector.labels.dateTaken", image.dateTaken === null ? null : formatTimestamp(image.dateTaken), true);
 	push("inspector.labels.exposureProgram", image.exposureProgram);
 	push("inspector.labels.meteringMode", image.meteringMode);
 	push("inspector.labels.flash", image.flash);
@@ -79,22 +82,22 @@ function imageRows(image: FsImageMetadata): readonly InfoRow[] {
 	push("inspector.labels.software", image.software);
 	push("inspector.labels.artist", image.artist);
 	push("inspector.labels.copyright", image.copyright);
-	push("inspector.labels.gps", image.gps === null ? null : formatGeo(image.gps.latitude, image.gps.longitude));
+	push("inspector.labels.gps", image.gps === null ? null : formatGeo(image.gps.latitude, image.gps.longitude), true);
 	return rows;
 }
 
 /** Ordered rows for the focused entry; rich when `details` has arrived, summary otherwise. */
 export function buildInfoRows(details: FsFileDetails | null, entry: FinderEntry): readonly InfoRow[] {
 	const general: InfoRow[] = [];
-	const push = (key: LocaleKey, value: string | null, core: boolean): void => {
-		if (value !== null) general.push({ label: t(key), value, section: "general", core });
+	const push = (key: LocaleKey, value: string | null, core: boolean, copyable = false): void => {
+		if (value !== null) general.push({ label: t(key), value, section: "general", core, ...(copyable ? { copyable } : {}) });
 	};
 	push("inspector.labels.kind", kindLabelOf(entry), true);
 	push("inspector.labels.size", details === null ? sizeLabelOf(entry) : formatSize(details.size), true);
-	push("inspector.labels.location", locationOf(entry), true);
-	push("inspector.labels.path", details?.path ?? entry.path, true);
-	push("inspector.labels.dateCreated", details === null ? null : formatTimestamp(details.createdAt), true);
-	push("inspector.labels.dateModified", details === null ? dateLabelOf(entry) : formatTimestamp(details.modifiedAt), true);
+	push("inspector.labels.location", locationOf(entry), true, true);
+	push("inspector.labels.path", details?.path ?? entry.path, true, true);
+	push("inspector.labels.dateCreated", details === null ? null : formatTimestamp(details.createdAt), false);
+	push("inspector.labels.dateModified", details === null ? dateLabelOf(entry) : formatTimestamp(details.modifiedAt), false);
 	if (details !== null) {
 		push("inspector.labels.dateAccessed", formatTimestamp(details.accessedAt), false);
 		push("inspector.labels.dateChanged", formatTimestamp(details.changedAt), false);

@@ -20,8 +20,9 @@ describe("customization assistant suggestions", () => {
 				const suggestions = Object.entries(assistant).filter(([key]) => key.startsWith("prompt"));
 				expect(suggestions.length, `${surface} suggestions`).toBeGreaterThan(0);
 				for (const [key, text] of suggestions) expect(text, `${surface}.${key}`).not.toMatch(DEVELOPER_TERMS);
-				// The input box carries no example of its own: the suggestions above it are the examples.
-				expect(assistant.placeholder, `${surface}.placeholder`).toBeUndefined();
+				// The input box asks in plain words what to change (Figma 367:8865); the suggestions above it are the examples.
+				expect(assistant.placeholder, `${surface}.placeholder`).toBeTruthy();
+				expect(assistant.placeholder, `${surface}.placeholder`).not.toMatch(DEVELOPER_TERMS);
 			}
 		});
 	}

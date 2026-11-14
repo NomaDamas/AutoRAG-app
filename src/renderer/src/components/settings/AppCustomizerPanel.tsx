@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
-import dazziMark from "../../assets/dazzi-mark.png";
+import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
+import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
+import { VoiceButton } from "../InspectorChat";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
+import { appendTranscript } from "../../../../shared/voice-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
 
@@ -28,6 +31,8 @@ interface SurfaceCopy {
 	readonly title: LocaleKey;
 	readonly emptyTitle: LocaleKey;
 	readonly emptyDesc: LocaleKey;
+	/** The composer's prompt (Figma 367:8865, 367:8820, 367:8586). */
+	readonly placeholder: LocaleKey;
 	readonly suggestions: readonly LocaleKey[];
 	readonly thinking: LocaleKey;
 	readonly openAiSettings: LocaleKey;
@@ -40,6 +45,7 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		title: "settingsCore.sidebar.assistant.title",
 		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
 		emptyDesc: "settingsCore.sidebar.assistant.emptyDesc",
+		placeholder: "settingsCore.sidebar.assistant.placeholder",
 		suggestions: [
 			"settingsCore.sidebar.assistant.promptHideMedia",
 			"settingsCore.sidebar.assistant.promptReorder",
@@ -53,6 +59,7 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		title: "settingsCore.contextMenu.assistant.title",
 		emptyTitle: "settingsCore.contextMenu.assistant.emptyTitle",
 		emptyDesc: "settingsCore.contextMenu.assistant.emptyDesc",
+		placeholder: "settingsCore.contextMenu.assistant.placeholder",
 		suggestions: [
 			"settingsCore.contextMenu.assistant.promptSummarizeDoc",
 			"settingsCore.contextMenu.assistant.promptCompareFiles",
@@ -67,6 +74,7 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		title: "settingsCore.shortcuts.assistant.title",
 		emptyTitle: "settingsCore.shortcuts.assistant.emptyTitle",
 		emptyDesc: "settingsCore.shortcuts.assistant.emptyDesc",
+		placeholder: "settingsCore.shortcuts.assistant.placeholder",
 		suggestions: [
 			"settingsCore.shortcuts.assistant.promptMacFinder",
 			"settingsCore.shortcuts.assistant.promptWindowsExplorer",
@@ -94,6 +102,8 @@ function renderInlineSegments(segments: readonly InlineSegment[]): ReactElement[
 				return <span key={idx}>{ renderInlineSegments(seg.children) }</span>;
 			case "citation":
 				return <span key={idx}>[{seg.number}]</span>;
+			case "file":
+				return <span key={idx}>{seg.path}</span>;
 			case "image":
 				return <span key={idx}>{seg.target}</span>;
 			default:
@@ -325,14 +335,17 @@ export function AppCustomizerPanel({
 	};
 
 	const running = activeRunId !== null;
+	const voice = window.autorag?.voice;
 
 	return (
 		<aside className="customizer-panel" aria-label={t(copy.title)} data-testid="app-customizer-panel" data-surface={surface} hidden={hidden}>
 			<div ref={scrollRef} className="customizer-panel__body">
 				{turns.length === 0 ? (
 					<div className="customizer-panel__empty">
+						{/* The faded monochrome mark (Figma 367:8865); dark mode has its own, with the fade in the image. */}
 						<div className="customizer-panel__empty-orb" aria-hidden="true">
-							<img src={dazziMark} alt="" className="customizer-panel__empty-logo" draggable={false} />
+							<img src={dazziMarkMono} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--light" draggable={false} />
+							<img src={dazziMarkMonoDark} alt="" className="customizer-panel__empty-logo customizer-panel__empty-logo--dark" draggable={false} />
 						</div>
 						<h3 className="customizer-panel__empty-title">{t(copy.emptyTitle)}</h3>
 						<p className="customizer-panel__empty-desc">{t(copy.emptyDesc)}</p>
@@ -367,7 +380,7 @@ export function AppCustomizerPanel({
 										<div className="customizer-turn__changes">
 											{turn.changes.map((change, idx) => (
 												<span key={idx} className="customizer-change-pill">
-													<Check size={12} strokeWidth={2.2} aria-hidden="true" />
+													<Check size={14} strokeWidth={1.8} aria-hidden="true" />
 													<span>{change.summary}</span>
 												</span>
 											))}
@@ -408,9 +421,10 @@ export function AppCustomizerPanel({
 				<div className="customizer-composer">
 					<textarea
 						ref={textareaRef}
-						rows={2}
+						rows={1}
 						data-testid="app-customizer-input"
 						className="customizer-composer__input"
+						placeholder={t(copy.placeholder)}
 						aria-label={t("settingsCore.sidebar.assistant.inputLabel")}
 						value={input}
 						onChange={(event) => setInput(event.target.value)}
@@ -439,6 +453,9 @@ export function AppCustomizerPanel({
 						>
 							<Square size={12} fill="currentColor" />
 						</button>
+					) : input.trim().length === 0 && voice !== undefined ? (
+						// Nothing typed: the blue mic, as in the inspector chat; the transcript lands in the input.
+						<VoiceButton voice={voice} onTranscript={(text) => setInput((current) => appendTranscript(current, text))} onError={() => {}} />
 					) : (
 						<button
 							type="button"
@@ -449,7 +466,7 @@ export function AppCustomizerPanel({
 							aria-label={t("settingsCore.sidebar.assistant.send")}
 							onClick={() => sendMessage(input)}
 						>
-							<ArrowUp size={15} strokeWidth={2.2} />
+							<ArrowUp size={12} strokeWidth={2.4} />
 						</button>
 					)}
 				</div>

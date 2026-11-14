@@ -33,7 +33,7 @@ import type {
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
-import { buildAttachmentContext } from "./attachment-context";
+import { buildAttachmentContext, buildViewingFolderContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
 import type { ContextEvent } from "./context-watch";
 import { createAgentInteraction } from "./agent-interaction";
@@ -528,7 +528,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
-	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
+	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[], viewingFolder: string | undefined): Promise<void> {
 		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
@@ -548,7 +548,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		const stopContext = agent.onContext?.((event) => noteContext(run, event));
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
-			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			const attached = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			// The folder in view is only a hint; the renderer sends it when nothing is selected.
+			const context = [attached, buildViewingFolderContext(viewingFolder)].filter((part) => part !== "").join("\n\n");
 			if (run.cancelled) return;
 			agent.setAttachmentContext(context);
 			const hub = deps.interaction;
@@ -628,7 +630,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			chosenMode = mode;
 			for (const agent of agents.values()) agent.setApprovalMode?.(mode);
 		},
-		start: async (searchId, chatId, query, attachments) => {
+		start: async (searchId, chatId, query, attachments, viewingFolder) => {
 
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
@@ -712,7 +714,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				return;
 			}
 			run.agent = agent;
-			void consume(run, agent, query, attachments);
+			void consume(run, agent, query, attachments, viewingFolder);
 			await finish;
 		},
 		steer: async (searchId, text) => {

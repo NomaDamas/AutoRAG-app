@@ -162,8 +162,11 @@ export interface ChatRecord extends ChatSummary {
 }
 
 export interface SearchBridge {
-	/** Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. */
-	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[]): Promise<void>;
+	/**
+	 * Start a Quick+Deep search. Events stream to the sender via SEARCH_CHANNELS.event. `viewingFolder` is the folder the
+	 * person has open when they ask from the right sidebar with nothing selected: a hint to the model, never a limit.
+	 */
+	start(searchId: string, chatId: string, query: string, attachments: readonly ChatAttachment[], viewingFolder?: string): Promise<void>;
 	/**
 	 * Steer the running search `searchId` with a correction. Resolves true when
 	 * the run took it, false when that run is not running (finished, stopped,

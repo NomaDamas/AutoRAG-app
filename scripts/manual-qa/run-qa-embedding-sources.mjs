@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder } from "./launch-finder.mjs";
 import { homeDir, homeEnv, isolatedToolPath, rmRetry } from "./platform.mjs";
+import { pickSelect } from "./settings-select.mjs";
 
 // Live QA for switching where the document-understanding model runs, through the real Settings screen of the
 // built app: this computer (MinSync's `minsync serve`), the Dazzi cloud (the real hosted route, with the account
@@ -239,7 +240,7 @@ try {
 	// ---- my own TEI server --------------------------------------------------------------------------------------
 	await open();
 	await pick("My own server");
-	await modal.locator("select[name='embedding-server-type']").selectOption("tei");
+	await pickSelect(modal.locator('[data-testid="embedding-server-type"]'), "tei");
 	await modal.locator("input[name='embedding-server-url']").fill(teiUrl);
 	await apply();
 	const tei = await waitFor(() => (embedder()?.id === "tei:Qwen/Qwen3-Embedding-0.6B" ? embedder() : null), 60000);

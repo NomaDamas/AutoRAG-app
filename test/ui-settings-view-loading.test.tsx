@@ -5,6 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsView, type SettingsCategory } from "../src/renderer/src/components/SettingsView";
 import { setAppLanguage } from "../src/shared/i18n";
 import { DEFAULT_SETTINGS, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
+import { t } from "../src/shared/i18n/core";
+import { pickSelectOption } from "./select-field-driver";
 
 // The settings modules read `window.autorag.settings` while they are imported, so the bridge must exist first.
 // Its functions are re-armed per test; the object identity is what the modules captured.
@@ -99,7 +101,7 @@ function buttonLabelled(label: string): HTMLButtonElement | undefined {
 	return [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent?.trim() === label);
 }
 
-const appearanceSelect = (): Element | null => host.querySelector('select[aria-label="Appearance"]');
+const appearanceSelect = (): Element | null => host.querySelector('.select-field[aria-label="Appearance"]');
 
 describe("opening Settings while the datasource scan is still running", () => {
 	it("shows the General page as soon as the app settings and config are read", async () => {
@@ -231,13 +233,9 @@ describe("a save while an earlier scan is still running", () => {
 		await renderView("indexing");
 
 		// Changing the refresh cadence saves the config, which starts a second scan.
-		const interval = host.querySelector<HTMLSelectElement>('select[aria-label="Local folder refresh interval"]');
+		const interval = host.querySelector('.select-field[aria-label="Local folder refresh interval"]');
 		expect(interval).not.toBeNull();
-		await act(async () => {
-			if (interval === null) return;
-			Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set?.call(interval, String(60 * 60_000));
-			interval.dispatchEvent(new Event("change", { bubbles: true }));
-		});
+		await pickSelectOption(interval, t("settingsSources.cadence.hour1"));
 		await settle();
 		expect(bridge.sourcesList).toHaveBeenCalledTimes(2);
 

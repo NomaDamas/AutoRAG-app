@@ -18,6 +18,7 @@ import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type
 import { splitExcerpt, type ExcerptPart } from "../state/excerpt-format";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { FileMention } from "./FileMention";
 import { CodeBlock } from "./CodeBlock";
 import { PipeTable, TABLE, TABLE_WRAP } from "./PipeTable";
 
@@ -153,6 +154,8 @@ function InlineSegmentView({ segment, onOpenUrl }: { readonly segment: InlineSeg
 			return <code className="evidence__inline-code py-[1px] px-4 rounded-4 bg-code font-mono text-badge">{segment.text}</code>;
 		case "citation":
 			return <>{`[${segment.number}]`}</>;
+		case "file":
+			return <FileMention path={segment.path} onOpen={onOpenUrl} />;
 		case "image":
 			// A markdown image is shown below its line; a written path stays as text.
 			if (segment.source === "markdown") return null;

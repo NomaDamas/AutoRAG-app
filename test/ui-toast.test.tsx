@@ -31,7 +31,7 @@ describe("Toast", () => {
 
 	it("offers one action beside the message, and running it calls back once", () => {
 		const onAction = vi.fn();
-		act(() => root.render(<Toast message="규칙을 삭제했어요" action={{ label: "실행 취소", onAction }} />));
+		act(() => root.render(<Toast message="규칙을 삭제했습니다" action={{ label: "실행 취소", onAction }} />));
 		const button = host.querySelector("button");
 		expect(button?.textContent).toBe("실행 취소");
 		act(() => button?.dispatchEvent(new MouseEvent("click", { bubbles: true })));

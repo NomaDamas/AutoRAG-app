@@ -25,6 +25,7 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 		setLaunchAtLogin: (enabled) => ipcRenderer.invoke(ONBOARDING_CHANNELS.setLaunchAtLogin, enabled),
 		folderCandidates: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.folderCandidates),
 		pickFolders: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.pickFolders),
+		pickPaths: (kind) => ipcRenderer.invoke(ONBOARDING_CHANNELS.pickPaths, kind),
 		scanFolders: (paths) => ipcRenderer.invoke(ONBOARDING_CHANNELS.scanFolders, paths),
 		onScanProgress: (listener) => subscribe(ipcRenderer, ONBOARDING_CHANNELS.scanProgress, listener),
 		embedding: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.embedding),
