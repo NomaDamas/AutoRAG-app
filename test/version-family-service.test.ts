@@ -636,6 +636,85 @@ describe("version-family service — trash prune", () => {
 	});
 });
 
+describe("version-family service — snapshot write failure (ELECTRON-19)", () => {
+	const enospc = () => Object.assign(new Error("ENOSPC: no space left on device, write"), { code: "ENOSPC" });
+
+	it("does not leak an unhandled rejection when the interval scan cannot save the snapshot", async () => {
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown): void => {
+			unhandled.push(reason);
+		};
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			let diskFull = false;
+			const h = harness({
+				store: {
+					read: async () => null,
+					write: async () => {
+						if (diskFull) throw enospc();
+					},
+				},
+			});
+			const service = createVersionFamilyService(h.deps);
+			await service.start();
+			diskFull = true;
+			h.timers[0]?.fire();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(h.scans).toHaveLength(2);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+	});
+
+	it("keeps the scan result and says the snapshot was not saved when the disk is full", async () => {
+		const h = harness({
+			store: {
+				read: async () => null,
+				write: async () => {
+					throw enospc();
+				},
+			},
+		});
+		const service = createVersionFamilyService(h.deps);
+		const result = await service.refresh();
+
+		expect(result.families).toHaveLength(1);
+		expect(result.error?.code).toBe("scan-failed");
+		expect(result.error?.message).toContain("ENOSPC");
+	});
+
+	it("keeps a trashed duplicate out of the published stacks when the snapshot cannot be saved", async () => {
+		const stored: StoredVersionFamilies = {
+			version: 2,
+			scannedAt: "2026-09-29T09:00:00.000Z",
+			locations: ["/home/Desktop"],
+			families: [
+				{
+					head: "/home/Desktop/a.txt",
+					members: [{ path: "/home/Desktop/b.txt", relation: "exact" }],
+					entries: [fsEntry("/home/Desktop/a.txt"), fsEntry("/home/Desktop/b.txt")],
+				},
+			],
+		};
+		const h = harness(
+			{
+				store: {
+					read: async () => stored,
+					write: async () => {
+						throw enospc();
+					},
+				},
+			},
+			stored,
+		);
+		const service = createVersionFamilyService(h.deps);
+		const result = await service.removePaths(["/home/Desktop/b.txt"]);
+		expect(result.families).toEqual([]);
+	});
+});
+
 describe("pruneVersionFamilies", () => {
 	it("breaks a mtime tie by path when re-heading", () => {
 		const families: FsVersionFamily[] = [
