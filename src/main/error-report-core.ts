@@ -13,23 +13,58 @@ import type { ConfigRefreshResult } from "../shared/settings-contract";
 
 /** Longest string a report carries; error text can echo document content, so it is cut. */
 const MAX_TEXT = 500;
+/** What the scrubbing patterns read: a report is cut to {@link MAX_TEXT} anyway, and an unbounded error would make them slow. */
+const MAX_SCRUBBED_INPUT = 8_000;
 
 const PATH_START = String.raw`(?:[A-Za-z]:[\\/]|~[\\/]|/(?=[^\s/]))`;
 /** A path inside quotes ends at the closing quote, so folders with spaces go whole. */
 const QUOTED_PATH = new RegExp(String.raw`(['"\x60])(${PATH_START}[^'"\x60\n]*)\1`, "gu");
-/** A bare path ends at whitespace. `app:///` and `https://host/x` are never matched: the slash follows `:`, `/` or a word character. */
-const BARE_PATH = new RegExp(String.raw`(?<![\w:/.\\~-])${PATH_START}[^\s'"\x60<>|*?]*`, "gu");
+/** One character of a folder or file name: not a separator or quote, and not the start of a later path or the end of a file name that a space follows. */
+const NAME_CHAR = String.raw`(?:(?!\s${PATH_START})(?!\.[A-Za-z][A-Za-z0-9]{0,7}\s)[^/\\\n'"\x60<>|*?])`;
+/**
+ * A bare path. Folder and file names may hold spaces, so a segment runs to its separator unless it ends in a space
+ * (`/a/b /c` is two paths). The last segment ends at the file's extension, so `Q3 report 김.pptx` goes whole, or else
+ * at whitespace. `app:///` and `https://host/x` are never matched: the slash follows `:`, `/` or a word character.
+ */
+const BARE_PATH = new RegExp(
+	String.raw`(?<![\w:/.\\~-])${PATH_START}` +
+		String.raw`(?:(?:${NAME_CHAR}*(?<=[^\s]))?[/\\])*` +
+		String.raw`(?:${NAME_CHAR}*?\.[A-Za-z][A-Za-z0-9]{0,7}(?::\d+)*[)\]]?(?=$|[\s,;:])|[^\s/\\'"\x60<>|*?]*)`,
+	"gmu",
+);
+/**
+ * `path=files/Docs/x y.md kind=…`: a `key=value` field of a tool's log line, whose value is a relative path with no
+ * leading slash for the patterns above to find. The value runs to the next `word=` field or the end of the line.
+ */
+const PATH_FIELD = /\b(path|file|files|source|dir|root)=(.*?)(?=\s[A-Za-z_]+=|$)/gmu;
+/** The `Command failed: <file> <args…>` line of a failed child process; its arguments are the user's paths. */
+const COMMAND_FAILED = /(?:^|(?<=; ))Command failed: ([^\n]*)/gmu;
+/** A switch (`-f`, `--json`, `%f`) names what a command did; any other argument may be a path or a file name. */
+const COMMAND_SWITCH = /^(?:-{1,2}[A-Za-z][\w-]*(?:=[\w.:-]*)?|%[A-Za-z])$/u;
+
+function lastSegment(path: string): string {
+	return path.split(/[\\/]/u).at(-1) ?? "";
+}
 
 /** `<path>` plus the file extension, the one part of a file name a report may keep. */
 function pathPlaceholder(path: string): string {
-	const last = path.split(/[\\/]/u).at(-1) ?? "";
-	const extension = /(\.[A-Za-z0-9]{1,8})(?::\d+)*[)\]]?$/u.exec(last)?.[1] ?? "";
+	const extension = /(\.[A-Za-z0-9]{1,8})(?::\d+)*[)\]]?$/u.exec(lastSegment(path))?.[1] ?? "";
 	return `<path>${extension}`;
 }
 
-/** Replace absolute and home-relative paths with `<path>.ext` and cap the length. */
+/** The program's name and its switches; every other argument is dropped. Names hold spaces, so the arguments are not counted. */
+function commandPlaceholder(commandLine: string): string {
+	const [program = "", ...args] = commandLine.trim().split(/\s+/u);
+	const switches = args.filter((arg) => COMMAND_SWITCH.test(arg));
+	return [lastSegment(program), ...switches, ...(switches.length < args.length ? ["<args>"] : [])].join(" ");
+}
+
+/** Replace absolute and home-relative paths with `<path>.ext`, drop command arguments, and cap the length. */
 export function scrubText(text: string): string {
 	const scrubbed = text
+		.slice(0, MAX_SCRUBBED_INPUT)
+		.replace(COMMAND_FAILED, (_match, commandLine: string) => `Command failed: ${commandPlaceholder(commandLine)}`)
+		.replace(PATH_FIELD, (_match, key: string, value: string) => `${key}=${pathPlaceholder(value)}`)
 		.replace(QUOTED_PATH, (_match, quote: string, path: string) => `${quote}${pathPlaceholder(path)}${quote}`)
 		.replace(BARE_PATH, (path) => pathPlaceholder(path));
 	return scrubbed.length > MAX_TEXT ? `${scrubbed.slice(0, MAX_TEXT)}…` : scrubbed;
