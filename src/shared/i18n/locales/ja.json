@@ -2199,7 +2199,6 @@
       "ai": "AI モデル",
       "web": "ウェブ検索",
       "indexing": "インデックス作成",
-      "scope": "検索範囲",
       "reading": "文書の読み込み",
       "duplicates": "重複ファイルの整理",
       "apps": "すべての接続",
@@ -2220,8 +2219,7 @@
         "remote": "リモートアクセス スマホ モバイル ブラウザー ペアリング コード QR Cloudflare トンネル ドメイン 端末 remote",
         "ai": "LLM モデル プロバイダ サービス API キー サブスクリプション 埋め込み Jev 質問分解 並べ替え",
         "web": "ウェブ検索 インターネット 検索 サービス ページ読み取り",
-        "indexing": "更新 同期 増分 インデックス 更新間隔 sync",
-        "scope": "検索範囲 フォルダ 除外 パス",
+        "indexing": "更新 同期 増分 インデックス 更新間隔 sync 検索範囲 フォルダ 除外 パス",
         "reading": "書類の読み取り 言語 パーサ OCR",
         "duplicates": "重複ファイル バージョン 整理 dupey",
         "apps": "接続 アプリ データソース メッセンジャー メール クラウド",
@@ -3093,7 +3091,7 @@
     },
     "indexing": {
       "title": "インデックス",
-      "desc": "検索対象のフォルダと接続済みアプリの内容が最新かを確認し、変わった部分だけを再取得します。",
+      "desc": "検索するフォルダを決め、読み込みの進み具合を確認し、内容を最新に保ちます。",
       "progress": "進行状況",
       "refreshStatus": "更新状況",
       "localFolder": "ローカルフォルダ",
@@ -3104,8 +3102,6 @@
       "rowRefreshAria": "{{id}} を今すぐ更新",
       "rowRefreshTitle": "今すぐ更新",
       "localUpdating": "更新中…",
-      "empty": "接続済みのデータソースがありません。「接続済みアプリ」で追加してください。",
-      "footer": "変更されたファイルとメッセージだけを読み直します。初めて接続したアプリは全体を取得します。",
       "syncAll": "すべて今すぐ更新",
       "scheduleTitle": "自動更新の条件",
       "scheduleAcOnlyName": "電源接続中のみ",
@@ -3115,9 +3111,6 @@
       "scheduleWindowStart": "開始時刻",
       "scheduleWindowEnd": "終了時刻",
       "scheduleWindowSame": "開始と終了の時刻が同じです。",
-      "localRefreshName": "ローカルフォルダを更新",
-      "localRefreshHint": "検索フォルダのドキュメントを読み直して検索インデックスを更新します。変更されたドキュメントのみ処理します。",
-      "localRefreshButton": "今すぐ更新",
       "scanned": "スキャン {{scanned}} · 記録 {{written}} · 削除 {{deleted}} · スキップ {{skipped}}",
       "diagnostics": " · 診断 {{count}}件",
       "scheduleUnsupported": "このコンピュータではアプリを閉じている間の自動更新に対応していません。",
@@ -3129,7 +3122,11 @@
       "scheduleNever": "まだ実行されたことがありません。",
       "schedulePausedBattery": "電源接続を待っています。インデックスのスケジュールは電源接続中のみ許可しています（{{ago}}に保留）。",
       "schedulePausedWindow": "許可された時間帯を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。",
-      "schedulePausedDay": "許可された曜日を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。"
+      "schedulePausedDay": "許可された曜日を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。",
+      "keepTitle": "最新に保つ",
+      "keepDesc": "文書の内容を読み直す間隔です。↻を押すとすぐに読み込みます。",
+      "connectApp": "アプリを接続",
+      "connectAppHint": "「すべての接続」で選ぶ"
     },
     "apps": {
       "title": "接続済みアプリ",
@@ -3189,17 +3186,15 @@
       "spotlightOnlyNote": "Spotlight は macOS の mdfind でのみ検索できるため、このコンピューターでは接続は無効です。"
     },
     "scope": {
-      "title": "検索範囲",
-      "desc": "Dazzi が読み取って検索するフォルダと除外する項目を決めます。",
       "foldersTitle": "検索するフォルダ",
-      "foldersDesc": "中にあるすべての項目がAI検索に含まれます。",
+      "foldersDesc": "「すべて」ですべてのフォルダを合わせた進み具合を表示します。フォルダを選ぶとそのフォルダだけを表示します。",
       "addFolder": "フォルダを追加",
       "emptyFolderNote": "検索フォルダがまだありません。追加しない場合はデフォルトの検索範囲を使います。",
-      "excludeTitle": "除外する項目",
-      "excludeDesc": "検索しないフォルダとファイルです。",
-      "autoWatch": "変更の自動検出",
+      "excludeTitle": "除外した項目",
+      "excludeDesc": "上で除外した項目がパスとともにここに集まります。Xを押すと再び含めます。",
+      "autoWatch": "ファイル名をすぐ反映",
       "autoWatchHintOff": "ファイル検索がオフのため使用できません。",
-      "autoWatchHintOn": "ファイルが変わると名前検索の一覧を自動で更新します。文書内容の索引はインデックス画面で手動で更新してください。",
+      "autoWatchHintOn": "ファイルが追加・変更されると名前検索にすぐ反映します。文書の内容は上の間隔で読み直します。",
       "addFolderTitle": "検索フォルダを追加",
       "addItemTitle": "除外項目を追加",
       "addFolderDesc": "検索に含めるフォルダのパスを入力してください。",
@@ -3220,7 +3215,8 @@
       "devExcluded": "開発用フォルダは自動で除外中",
       "devMore": "詳しく",
       "devLess": "閉じる",
-      "devDotNote": "名前がピリオド(.)で始まるフォルダもすべて除外されます。"
+      "devDotNote": "名前がピリオド(.)で始まるフォルダもすべて除外されます。",
+      "allFolders": "すべて"
     },
     "indexMap": {
       "title": "インデックスマップ",
@@ -3228,8 +3224,6 @@
       "allRoots": "検索範囲全体",
       "scopeLabel": "現在の範囲",
       "up": "親フォルダに移動",
-      "selectHint": "領域にポインターを合わせると、パスと完了状況を確認できます。",
-      "excludedHint": "このパスはインデックスから除外されており、完了率には含まれません。",
       "canvasLabel": "中央のルートから外側の子ファイルへ広がる放射状インデックスマップ",
       "loading": "検索範囲を調べています…",
       "error": "地図を読み込めませんでした: {{message}}",
@@ -3247,7 +3241,11 @@
         "unindexed": "未完了",
         "excluded": "除外",
         "unindexable": "読み取り不可"
-      }
+      },
+      "rowHint": "行にポインターを合わせると「除外」が表示されます。",
+      "exclude": "除外",
+      "include": "再び含める",
+      "pathLabel": "現在の場所"
     },
     "web": {
       "title": "ウェブ検索",

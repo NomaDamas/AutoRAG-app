@@ -187,12 +187,12 @@ describe("opening Settings while the datasource scan is still running", () => {
 });
 
 describe("once the scan has finished", () => {
-	it("still tells the user when no data source is connected", async () => {
+	it("offers 앱 연결 when no data source is connected", async () => {
 		bridge.sourcesList.mockResolvedValue({ ...SOURCES, sources: [] });
 
 		await renderView("indexing");
 
-		expect(text()).toContain("No data sources connected");
+		expect(host.querySelector('[data-action="connect-app"]')?.textContent).toContain("Connect an app");
 		expect(text()).not.toContain("Checking…");
 	});
 
@@ -202,7 +202,7 @@ describe("once the scan has finished", () => {
 		await renderView("indexing");
 
 		expect(text()).not.toContain("Checking…");
-		expect(text()).toContain("No data sources connected");
+		expect(host.querySelector('[data-action="connect-app"]')).not.toBeNull();
 	});
 
 	it("shows a config error the scan found without hiding the page", async () => {

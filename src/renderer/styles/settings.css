@@ -1478,12 +1478,12 @@
 /* Where a running index just moved: a ring, never a fill, so the four state colours stay readable under it. */
 .settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch { background: transparent; box-shadow: inset 0 0 0 2px var(--accent); animation: index-map-ring 1.2s ease-in-out infinite; }
 .settings-view .index-map-edge { fill: none; stroke: var(--accent); stroke-width: 3; pointer-events: none; animation: index-map-ring 1.2s ease-in-out infinite; }
-.settings-view .index-map-folders button[data-progress]::after { flex-shrink: 0; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); content: ""; animation: index-map-ring 1.2s ease-in-out infinite; }
+.settings-view .index-map-folders .index-map-row[data-progress]::after { flex-shrink: 0; width: 7px; height: 7px; border-radius: var(--radius-full); background: var(--accent); content: ""; animation: index-map-ring 1.2s ease-in-out infinite; }
 @keyframes index-map-ring { 50% { opacity: 0.35; stroke-opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) {
 	.settings-view .index-map-legend [data-state="progress"] .index-map-legend-swatch,
 	.settings-view .index-map-edge,
-	.settings-view .index-map-folders button[data-progress]::after { animation: none; }
+	.settings-view .index-map-folders .index-map-row[data-progress]::after { animation: none; }
 }
 .settings-view .index-map-folders .index-map-parent { color: var(--text-muted); }
 .settings-view .index-map-folders .index-map-parent svg { color: var(--text-muted); }
@@ -4839,4 +4839,256 @@
 .settings-view .settings-modal label .mcp-exposure-hint {
 	display: block;
 	margin-top: 6px;
+}
+
+/* ---------------------------------------- 인덱싱 + 검색 범위 (Figma 532:9970) -- */
+
+/* The map sits in the page's 32px rhythm; its heading and the activity card come first, 12px apart. */
+.settings-view .indexing-sections .index-map-panel {
+	margin-top: 0;
+}
+
+.settings-view .index-map-head {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+/* 검색할 폴더: 전체 and each folder with its progress; the one in view is washed with the accent. */
+.settings-view .scope-row.is-pickable {
+	min-height: 48px;
+	cursor: pointer;
+}
+
+.settings-view .scope-row.is-pickable:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .scope-row.is-pickable.is-selected {
+	background: var(--accent-soft);
+}
+
+.settings-view .scope-row-icon.is-accent {
+	color: var(--accent);
+}
+
+.settings-view .scope-row-name {
+	flex: 1;
+	min-width: 0;
+	color: var(--text-primary);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
+}
+
+.settings-view .scope-row-bar {
+	flex: none;
+	width: 80px;
+	height: 5px;
+	overflow: hidden;
+	border-radius: 3px;
+	background: var(--bg-input);
+}
+
+.settings-view .scope-row-bar i {
+	display: block;
+	height: 100%;
+	border-radius: inherit;
+	background: var(--tag-blue);
+	transition: width var(--dur-color) var(--ease-out);
+}
+
+.settings-view .scope-row-percent {
+	flex: none;
+	width: 36px;
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.settings-view .scope-row-count {
+	flex: none;
+	width: 92px;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
+.settings-view .scope-row-remove-space {
+	flex: none;
+	width: 24px;
+}
+
+/* The path to the folder in view; every part but the last goes back to it. */
+.settings-view .index-map-crumbs {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 2px;
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .index-map-crumb {
+	padding: 1px 4px;
+	border: 0;
+	border-radius: var(--radius-4);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	cursor: pointer;
+}
+
+.settings-view .index-map-crumb:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .index-map-crumb.is-current {
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+	cursor: default;
+}
+
+.settings-view .index-map-crumb-sep {
+	flex: none;
+	color: var(--text-faint);
+}
+
+.settings-view .index-map-hint {
+	margin: 0;
+	padding: 8px 10px;
+	border-radius: var(--radius-8);
+	background: var(--bg-code);
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+/* Pointing at a row or a sector dims everything outside it; 제외 waits at the row's right until then. */
+.settings-view .index-map-sector,
+.settings-view .index-map-row {
+	transition: opacity var(--dur-color) var(--ease-out);
+}
+
+.settings-view .index-map-sector[data-dimmed="true"] {
+	opacity: 0.25;
+}
+
+.settings-view .index-map-folders .index-map-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding-right: 6px;
+	border-radius: var(--radius-6);
+}
+
+.settings-view .index-map-folders .index-map-row[data-hovered="true"] {
+	background: var(--bg-hover);
+}
+
+.settings-view .index-map-folders .index-map-row[data-dimmed="true"] {
+	opacity: 0.4;
+}
+
+.settings-view .index-map-folders .index-map-row-main {
+	flex: 1;
+	min-width: 0;
+}
+
+.settings-view .index-map-folders .index-map-row-main:hover {
+	background: transparent;
+}
+
+.settings-view .index-map-folders .index-map-row-main:disabled {
+	color: var(--text-primary);
+	cursor: default;
+}
+
+.settings-view .index-map-row[data-state="excluded"] .index-map-row-main span {
+	color: var(--text-muted);
+}
+
+.settings-view .index-map-row-badge {
+	flex: none;
+	padding: 1px 6px;
+	border-radius: 5px;
+	background: var(--bg-input);
+	color: var(--text-muted);
+	font-size: var(--font-size-badge);
+	font-style: normal;
+	line-height: 16px;
+}
+
+.settings-view .index-map-folders .index-map-row-action {
+	flex: none;
+	width: auto;
+	height: 24px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity var(--dur-color) var(--ease-out);
+}
+
+.settings-view .index-map-row:hover .index-map-row-action,
+.settings-view .index-map-row:focus-within .index-map-row-action,
+.settings-view .index-map-row-action.is-shown {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.settings-view .index-map-folders .index-map-row-action:hover:not(:disabled) {
+	border-color: var(--border-strong);
+	background: var(--bg-window);
+	color: var(--text-primary);
+}
+
+.settings-view .index-map-folders .index-map-row-chevron {
+	flex: none;
+	color: var(--text-faint);
+	visibility: hidden;
+}
+
+.settings-view .index-map-folders .index-map-row-chevron[data-shown="true"] {
+	visibility: visible;
+}
+
+/* 앱 연결: the last row of 최신으로 유지, to the page where apps are connected. */
+.settings-view .settings-sync-add {
+	width: 100%;
+	border: 0;
+	background: transparent;
+	color: var(--text-body);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .settings-sync-add .settings-list-title {
+	flex: 1;
+}
+
+.settings-view .settings-sync-add:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .settings-sync-name {
+	cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .index-map-sector,
+	.settings-view .index-map-row,
+	.settings-view .index-map-folders .index-map-row-action {
+		transition: none;
+	}
 }

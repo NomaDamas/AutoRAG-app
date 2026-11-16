@@ -2199,7 +2199,6 @@
       "ai": "AI Models",
       "web": "Web Search",
       "indexing": "Indexing",
-      "scope": "Search Scope",
       "reading": "Document Reading",
       "duplicates": "Duplicate Cleanup",
       "apps": "All Connections",
@@ -2220,8 +2219,7 @@
         "remote": "remote access phone mobile browser pairing code QR Cloudflare tunnel domain devices",
         "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
         "web": "web search internet search service page reading",
-        "indexing": "refresh sync incremental index update interval schedule",
-        "scope": "search scope folders exclude paths",
+        "indexing": "refresh sync incremental index update interval schedule search scope folders exclude paths",
         "reading": "document reading language parser OCR",
         "duplicates": "duplicate files versions cleanup dupey",
         "apps": "connections apps data sources messenger mail cloud",
@@ -3093,7 +3091,7 @@
     },
     "indexing": {
       "title": "Indexing",
-      "desc": "Check that your search folders and connected apps are up to date, and re-fetch only what changed.",
+      "desc": "Choose the folders to search, see how far reading has come, and keep the contents up to date.",
       "progress": "Progress",
       "refreshStatus": "Refresh status",
       "localFolder": "Local folders",
@@ -3104,8 +3102,6 @@
       "rowRefreshAria": "Update {{id}} now",
       "rowRefreshTitle": "Update now",
       "localUpdating": "Refreshing…",
-      "empty": "No data sources connected. Add one from Connected Apps.",
-      "footer": "Only changed files and messages are re-read. An app connected for the first time is fully fetched.",
       "syncAll": "Update all now",
       "scheduleTitle": "Automatic refresh conditions",
       "scheduleAcOnlyName": "Only while plugged in",
@@ -3115,9 +3111,6 @@
       "scheduleWindowStart": "Start time",
       "scheduleWindowEnd": "End time",
       "scheduleWindowSame": "The start and end time are the same.",
-      "localRefreshName": "Refresh local folders",
-      "localRefreshHint": "Re-read documents in the search folders to update the search index. Only changed documents are processed.",
-      "localRefreshButton": "Refresh now",
       "scanned": "Scanned {{scanned}} · Written {{written}} · Deleted {{deleted}} · Skipped {{skipped}}",
       "diagnostics": " · {{count}} diagnostics",
       "scheduleUnsupported": "This computer does not support automatic refresh while the app is closed.",
@@ -3129,7 +3122,11 @@
       "scheduleNever": "It has never run yet.",
       "schedulePausedBattery": "Waiting for power: your indexing schedule allows it only while plugged in (held back {{ago}}).",
       "schedulePausedWindow": "Waiting for the allowed hours: your indexing schedule held the refresh back {{ago}}.",
-      "schedulePausedDay": "Waiting for an allowed day: your indexing schedule held the refresh back {{ago}}."
+      "schedulePausedDay": "Waiting for an allowed day: your indexing schedule held the refresh back {{ago}}.",
+      "keepTitle": "Keep up to date",
+      "keepDesc": "How often document contents are read again. Press ↻ to read now.",
+      "connectApp": "Connect an app",
+      "connectAppHint": "Choose on All Connections"
     },
     "apps": {
       "title": "Connected apps",
@@ -3189,17 +3186,15 @@
       "spotlightOnlyNote": "Spotlight can only be searched through mdfind on macOS, so this connection is inactive on this computer."
     },
     "scope": {
-      "title": "Search scope",
-      "desc": "Choose the folders Dazzi reads and searches, and what to exclude.",
       "foldersTitle": "Folders to search",
-      "foldersDesc": "Everything inside is included in AI search.",
+      "foldersDesc": "'All' shows progress across every folder. Pick a folder to see just that one.",
       "addFolder": "Add folder",
       "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
-      "excludeTitle": "Items to exclude",
-      "excludeDesc": "Folders and files that will not be searched.",
-      "autoWatch": "Auto-detect changes",
+      "excludeTitle": "Excluded items",
+      "excludeDesc": "Items you leave out above gather here with their paths. Press X to include one again.",
+      "autoWatch": "Update file names instantly",
       "autoWatchHintOff": "Unavailable because file search is off.",
-      "autoWatchHintOn": "When files change, the file-name search list updates on its own. Refresh the document content index from the Indexing screen.",
+      "autoWatchHintOn": "When files are added or changed, name search picks them up at once. Document contents are read again on the schedule above.",
       "addFolderTitle": "Add search folder",
       "addItemTitle": "Add exclusion",
       "addFolderDesc": "Enter the folder path to include in search.",
@@ -3220,7 +3215,8 @@
       "devExcluded": "Developer folders are excluded automatically",
       "devMore": "Details",
       "devLess": "Hide",
-      "devDotNote": "Folders whose names start with a dot (.) are excluded too."
+      "devDotNote": "Folders whose names start with a dot (.) are excluded too.",
+      "allFolders": "All"
     },
     "indexMap": {
       "title": "Index map",
@@ -3228,8 +3224,6 @@
       "allRoots": "All search roots",
       "scopeLabel": "Current scope",
       "up": "Go to parent folder",
-      "selectHint": "Hover over a segment to see its path and indexing status.",
-      "excludedHint": "This path is excluded from indexing and does not affect completion.",
       "canvasLabel": "Radial indexing map, from search roots at the center to descendant files at the edge",
       "loading": "Surveying the search scope…",
       "error": "Couldn't load the map: {{message}}",
@@ -3247,7 +3241,11 @@
         "unindexed": "Not complete",
         "excluded": "Excluded",
         "unindexable": "Unreadable"
-      }
+      },
+      "rowHint": "Point at a row to show Exclude.",
+      "exclude": "Exclude",
+      "include": "Include again",
+      "pathLabel": "Current location"
     },
     "web": {
       "title": "Web search",

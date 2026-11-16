@@ -2199,7 +2199,6 @@
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
-      "scope": "搜索范围",
       "reading": "文档读取",
       "duplicates": "重复文件整理",
       "apps": "全部连接",
@@ -2220,8 +2219,7 @@
         "remote": "远程访问 手机 移动 浏览器 配对码 二维码 QR Cloudflare 隧道 域名 设备 remote",
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
-        "indexing": "更新 同步 增量 索引 更新周期 sync",
-        "scope": "搜索范围 文件夹 排除 路径",
+        "indexing": "更新 同步 增量 索引 更新周期 sync 搜索范围 文件夹 排除 路径",
         "reading": "文档读取 语言 解析器 OCR",
         "duplicates": "重复文件 版本 整理 dupey",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
@@ -3093,7 +3091,7 @@
     },
     "indexing": {
       "title": "索引",
-      "desc": "检查待搜索文件夹和已连接应用的内容是否为最新，并仅重新获取变更部分。",
+      "desc": "选择要搜索的文件夹，查看读取进度，并让内容保持最新。",
       "progress": "进度",
       "refreshStatus": "更新状态",
       "localFolder": "本地文件夹",
@@ -3104,8 +3102,6 @@
       "rowRefreshAria": "立即更新 {{id}}",
       "rowRefreshTitle": "立即更新",
       "localUpdating": "刷新中…",
-      "empty": "没有已连接的数据源。请在“已连接应用”中添加。",
-      "footer": "仅重新读取变更的文件和消息。首次连接的应用会完整获取。",
       "syncAll": "立即全部更新",
       "scheduleTitle": "自动刷新条件",
       "scheduleAcOnlyName": "仅在接通电源时",
@@ -3115,9 +3111,6 @@
       "scheduleWindowStart": "开始时间",
       "scheduleWindowEnd": "结束时间",
       "scheduleWindowSame": "开始和结束时间相同。",
-      "localRefreshName": "刷新本地文件夹",
-      "localRefreshHint": "重新读取搜索文件夹中的文档以更新搜索索引。仅处理已变更的文档。",
-      "localRefreshButton": "立即刷新",
       "scanned": "扫描 {{scanned}} · 写入 {{written}} · 删除 {{deleted}} · 跳过 {{skipped}}",
       "diagnostics": " · {{count}} 项诊断",
       "scheduleUnsupported": "此计算机不支持应用关闭时的自动刷新。",
@@ -3129,7 +3122,11 @@
       "scheduleNever": "尚未运行过。",
       "schedulePausedBattery": "正在等待接通电源：索引计划只允许在接通电源时运行（{{ago}}已暂缓）。",
       "schedulePausedWindow": "正在等待允许的时段：索引计划已于{{ago}}暂缓刷新。",
-      "schedulePausedDay": "正在等待允许的日期：索引计划已于{{ago}}暂缓刷新。"
+      "schedulePausedDay": "正在等待允许的日期：索引计划已于{{ago}}暂缓刷新。",
+      "keepTitle": "保持最新",
+      "keepDesc": "重新读取文档内容的周期。按 ↻ 立即读取。",
+      "connectApp": "连接应用",
+      "connectAppHint": "在“全部连接”中选择"
     },
     "apps": {
       "title": "已连接应用",
@@ -3189,17 +3186,15 @@
       "spotlightOnlyNote": "Spotlight 只能通过 macOS 的 mdfind 搜索，因此此连接在这台电脑上无效。"
     },
     "scope": {
-      "title": "搜索范围",
-      "desc": "设定 Dazzi 读取和搜索的文件夹以及要排除的项目。",
       "foldersTitle": "要搜索的文件夹",
-      "foldersDesc": "其中的所有内容都会包含在 AI 搜索中。",
+      "foldersDesc": "“全部”显示所有文件夹合计的进度。点按某个文件夹即可只查看它。",
       "addFolder": "添加文件夹",
       "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
-      "excludeTitle": "要排除的项目",
-      "excludeDesc": "不进行搜索的文件夹和文件。",
-      "autoWatch": "自动检测更改",
+      "excludeTitle": "已排除的项目",
+      "excludeDesc": "在上方排除的项目会连同路径汇集在这里。按 X 可重新包含。",
+      "autoWatch": "立即反映文件名",
       "autoWatchHintOff": "文件搜索已关闭，无法使用。",
-      "autoWatchHintOn": "文件变化时会自动更新文件名搜索列表。文档内容索引请在索引页面手动刷新。",
+      "autoWatchHintOn": "文件新增或更改时会立即反映到名称搜索中。文档内容按上方的周期重新读取。",
       "addFolderTitle": "添加搜索文件夹",
       "addItemTitle": "添加排除项",
       "addFolderDesc": "输入要包含在搜索中的文件夹路径。",
@@ -3220,7 +3215,8 @@
       "devExcluded": "开发用文件夹已自动排除",
       "devMore": "详情",
       "devLess": "收起",
-      "devDotNote": "名称以句点(.)开头的文件夹也会全部排除。"
+      "devDotNote": "名称以句点(.)开头的文件夹也会全部排除。",
+      "allFolders": "全部"
     },
     "indexMap": {
       "title": "索引地图",
@@ -3228,8 +3224,6 @@
       "allRoots": "全部搜索范围",
       "scopeLabel": "当前范围",
       "up": "返回上级文件夹",
-      "selectHint": "将指针移到区域上可查看路径和索引状态。",
-      "excludedHint": "此路径已从索引中排除，不计入完成率。",
       "canvasLabel": "从中心根目录向外层子文件展开的放射状索引地图",
       "loading": "正在勘察搜索范围…",
       "error": "无法加载地图：{{message}}",
@@ -3247,7 +3241,11 @@
         "unindexed": "未完成",
         "excluded": "已排除",
         "unindexable": "无法读取"
-      }
+      },
+      "rowHint": "将指针移到某一行上即可显示“排除”。",
+      "exclude": "排除",
+      "include": "重新包含",
+      "pathLabel": "当前位置"
     },
     "web": {
       "title": "网页搜索",

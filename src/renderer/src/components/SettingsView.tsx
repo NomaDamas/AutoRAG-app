@@ -12,7 +12,7 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { ChartNoAxesColumn, Copy, FileText, Folder, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
@@ -20,7 +20,6 @@ import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, ReadingPage, WebPage } from "./settings/ConfigPages";
-import { ScopePage } from "./settings/ScopePage";
 import { GeneralPage } from "./settings/GeneralPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
@@ -42,9 +41,9 @@ import { Keycap } from "./primitives/Keycap";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "mcp" | "indexing" | "scope" | "reading" | "duplicates" | "apps";
-/** Legacy ids stay accepted so an old deep link still lands on a page. */
-type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
+/** Legacy ids stay accepted so an old deep link still lands on a page. 검색 범위 (`scope`) is part of 인덱싱 now. */
+type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "scope";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
 
 type NavLabelKey =
@@ -58,7 +57,6 @@ type NavLabelKey =
 	| "settingsCore.nav.ai"
 	| "settingsCore.nav.web"
 	| "settingsCore.nav.indexing"
-	| "settingsCore.nav.scope"
 	| "settingsCore.nav.reading"
 	| "settingsCore.nav.duplicates"
 	| "settingsCore.nav.mcp"
@@ -94,7 +92,6 @@ export const PAGES = [
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
 	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
-	{ id: "scope", labelKey: "settingsCore.nav.scope", icon: Folder, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.scope" },
 	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.reading" },
 	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
 	{ id: "mcp", labelKey: "settingsCore.nav.mcp", icon: Server, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.mcp" },
@@ -105,6 +102,7 @@ export const PAGES = [
 export function normalizeCategory(category: SettingsCategory): SettingsCategory {
 	if (category === "llm" || category === "embedding" || category === "reranker") return "ai";
 	if (category === "sources" || category === "deep" || category === "light") return "apps";
+	if (category === "scope") return "indexing";
 	return category;
 }
 
@@ -278,9 +276,7 @@ export function SettingsPageContent({
 		case "web":
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":
-			return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} onOpenSource={(alias) => onNavigate(alias.length === 0 ? "scope" : `source:${alias}`)} />;
-		case "scope":
-			return <ScopePage snapshot={snapshot} onSaved={saveSnapshot} />;
+			return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} onOpenSource={(alias) => onNavigate(`source:${alias}`)} onOpenApps={() => onNavigate("apps")} />;
 		case "reading":
 			return <ReadingPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "duplicates":

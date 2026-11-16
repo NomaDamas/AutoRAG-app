@@ -47,7 +47,7 @@ const PAGE_KEY: Readonly<Record<ErrorFixSettingsPage, LocaleKey>> = {
 	contextMenu: "settingsCore.nav.contextMenu" as LocaleKey,
 	mcp: "settingsCore.nav.mcp",
 	indexing: "settingsCore.nav.indexing",
-	scope: "settingsCore.nav.scope",
+	scope: "settingsCore.nav.indexing",
 	reading: "settingsCore.nav.reading",
 	duplicates: "settingsCore.nav.duplicates",
 	apps: "settingsCore.nav.apps",

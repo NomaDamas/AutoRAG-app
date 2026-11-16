@@ -2,7 +2,10 @@
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ScopePage } from "../src/renderer/src/components/settings/ScopePage";
+import { IndexingPage } from "../src/renderer/src/components/settings/AppsPages";
+import { resetIndexActivityForTests } from "../src/renderer/src/hooks/useIndexActivity";
+import { buildIndexMap } from "../src/main/index-map";
+import { IDLE_INDEX_ACTIVITY } from "../src/shared/index-activity-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, JsonObject } from "../src/shared/settings-contract";
 
@@ -10,7 +13,7 @@ import type { AutoRagConfigSnapshot, AutoRagConfigUpdate, JsonObject } from "../
 // so the one bridge object they capture is the one the tests drive.
 const bridge = vi.hoisted(() => {
 	const state: { config: Record<string, unknown> } = { config: {} };
-	const settings = { configPatch: vi.fn() };
+	const settings = { configPatch: vi.fn(), configRefresh: vi.fn(), refreshScheduleGet: vi.fn(), refreshScheduleApply: vi.fn(), sourcesList: vi.fn() };
 	Reflect.set(globalThis, "autorag", { settings });
 	return { state, settings };
 });
@@ -43,9 +46,10 @@ interface Setup {
 	readonly home?: string;
 }
 
-function Host(): ReturnType<typeof ScopePage> {
+/** 검색 범위 is part of Settings → 인덱싱 now (Figma 532:9970): its folders and exclusions are tested there. */
+function Host(): ReturnType<typeof IndexingPage> {
 	const [snapshot, setSnapshot] = useState(() => snapshotOf(bridge.state.config));
-	return <ScopePage snapshot={snapshot} onSaved={setSnapshot} />;
+	return <IndexingPage snapshot={snapshot} onSaved={setSnapshot} sources={null} sourcesPending={false} setSources={vi.fn()} onOpenSource={vi.fn()} />;
 }
 
 async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked = [], pickedExclusions = [], home = "/home/me" }: Setup = {}): Promise<{
@@ -60,7 +64,10 @@ async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked 
 		onboarding: { pickFolders, pickPaths },
 		fs: {
 			locations: async () => [{ name: "me", path: home, section: "favorites", icon: "home" }],
+			indexMap: async () => buildIndexMap({ roots: [], truncated: false }),
+			onIndexRefreshed: () => () => {},
 		},
+		indexActivity: { get: async () => IDLE_INDEX_ACTIVITY, onChange: () => () => {} },
 	});
 	Reflect.set(window, "autoragIsRemote", remote ? true : undefined);
 	await act(async () => root.render(<Host />));
@@ -69,7 +76,8 @@ async function mount({ config = { searchPaths: ["/r"] }, remote = false, picked 
 
 beforeEach(async () => {
 	await setAppLanguage("en");
-	bridge.settings.configPatch.mockReset();
+	for (const mock of Object.values(bridge.settings)) mock.mockReset();
+	bridge.settings.refreshScheduleGet.mockResolvedValue(null);
 	bridge.settings.configPatch.mockImplementation(async (ops: readonly AutoRagConfigUpdate[]) => {
 		bridge.state.config = apply(bridge.state.config, ops);
 		return snapshotOf(bridge.state.config);
@@ -85,6 +93,7 @@ afterEach(() => {
 	document.body.replaceChildren();
 	Reflect.set(globalThis, "autorag", { settings: bridge.settings });
 	Reflect.deleteProperty(window, "autoragIsRemote");
+	resetIndexActivityForTests();
 });
 
 const click = (element: Element | null): Promise<void> => act(async () => {
@@ -97,13 +106,16 @@ const pathsIn = (list: HTMLElement | undefined): string[] => [...(list?.querySel
 const folderRows = (): string[] => pathsIn(lists()[0]);
 const alertText = (): string | null => host.querySelector('[role="alert"]')?.textContent ?? null;
 
-describe("Settings → Search Scope", () => {
-	it("lists the search folders and the exclusions; the index map is on Settings → Indexing, not here", async () => {
+describe("Settings → Indexing → 검색할 폴더 / 제외한 항목", () => {
+	it("lists the search folders above the map and the exclusions under it, with 전체 first", async () => {
 		await mount({ config: { searchPaths: ["/r"], excludePaths: ["/r/private"] } });
 
 		expect(folderRows()).toEqual(["/r"]);
+		expect(lists()[0]!.querySelector(".scope-row.is-total")?.textContent).toContain("All");
 		expect(pathsIn(lists()[1])).toEqual(["/r/private"]);
-		expect(host.querySelector(".index-map-panel")).toBeNull();
+		const map = host.querySelector(".index-map-panel")!;
+		expect(lists()[0]!.compareDocumentPosition(map) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(map.compareDocumentPosition(lists()[1]!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
 	it("adds the folders picked in the system dialog in one write, in the order picked", async () => {

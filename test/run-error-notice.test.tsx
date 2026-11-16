@@ -292,7 +292,7 @@ describe("the AI fix dialog", () => {
 			},
 		});
 
-		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.scope") }), t("appError.fix.openSource", { name: "kakao" })]));
+		expect(labels()).toEqual(expect.arrayContaining([t("appError.fix.openSettings", { page: t("settingsCore.nav.indexing") }), t("appError.fix.openSource", { name: "kakao" })]));
 	});
 
 	it("shows only Close (plus 자세히 보기) when a cannot-fix answer has no action button", () => {
