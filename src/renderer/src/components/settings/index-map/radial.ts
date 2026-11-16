@@ -88,7 +88,10 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 	const depthOf = (node: IndexMapNode): number => 1 + Math.max(0, ...(children.get(node.id) ?? []).map(depthOf));
 	// Deeper descendants remain in the data; drilling into a folder reveals the next nine rings.
 	const maxRings = 9;
-	const rings = Math.max(1, Math.min(maxRings, Math.max(0, ...roots.map(depthOf))));
+	// Every view keeps the ring width of the whole scope: going into a folder drops the rings outside it, it does not
+	// widen the rings that are left, so a deep folder draws a smaller flower at the same scale.
+	const scope = (children.get(null) ?? []).filter((node) => node.weight > 0 || children.has(node.id));
+	const rings = Math.max(1, Math.min(maxRings, Math.max(0, ...scope.map(depthOf))));
 	const step = (OUTER_RADIUS - RADIAL_HOLE) / rings;
 	const result: RadialSector[] = [];
 	/** Angular share of each sibling: by file count, except an excluded folder keeps its visible minimum. */

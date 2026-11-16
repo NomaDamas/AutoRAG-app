@@ -62,6 +62,16 @@ describe("radial indexing map", () => {
 		expect(focused.every((sector) => sector.outer <= 300)).toBe(true);
 	});
 
+	it("keeps the scope's ring width inside a folder: the rings outside it go, the rest do not grow", () => {
+		const chain = (depth: number, path: string): ScanDir => folder(path, [file(`${path}/f.txt`, "indexed")], depth === 0 ? [] : [chain(depth - 1, `${path}/next`)]);
+		const map = buildIndexMap({ roots: [chain(5, "/a")], truncated: false });
+		const width = (sectors: readonly { inner: number; outer: number }[]): number => sectors[0]!.outer - sectors[0]!.inner;
+		const overview = layoutRadial(map, null);
+		const inside = layoutRadial(map, map.nodes.find((node) => node.path === "/a/next/next")!.id);
+		expect(width(inside)).toBeCloseTo(width(overview));
+		expect(Math.max(...inside.map((sector) => sector.outer))).toBeLessThan(Math.max(...overview.map((sector) => sector.outer)));
+	});
+
 	it("keeps an excluded folder visible next to a huge indexed sibling", () => {
 		const many = Array.from({ length: 5000 }, (_, index) => file(`/r/big/${index}.txt`, "indexed"));
 		const off: ScanDir = { ...folder("/r/node_modules", []), sealed: emptyIndexMapCounts() };
