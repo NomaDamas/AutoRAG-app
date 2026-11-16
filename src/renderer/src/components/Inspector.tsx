@@ -25,7 +25,7 @@
  * renders no fabricated data. Esc handling stays in App's keymap.
  */
 
-import { useEffect, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
@@ -896,37 +896,89 @@ function FileActionGroup({
 	return <ActionIconGroup buttons={buttons} menu={runner.menu} />;
 }
 
-/** The action group's row of icon buttons with dividers; each name shows as a tooltip and is the accessible name. */
+/** One button and the divider before it: 28 wide, 4 + 1 + 4 for the divider and its gaps. */
+const ACTION_CELL = 37;
+/** The toolbar's border (1 + 1) and horizontal padding (4 + 4). */
+const ACTION_FRAME = 10;
+
+function ActionButton({ button }: { readonly button: GroupButton }): ReactElement {
+	return (
+		<button
+			type="button"
+			data-action={button.id}
+			aria-label={button.label}
+			aria-pressed={button.pressed}
+			className={cn(
+				"group relative flex h-32 w-28 flex-none items-center justify-center rounded-6 border-0 bg-transparent p-0 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover",
+				button.pressed === true ? "text-accent-text" : "text-ink-body",
+			)}
+			onClick={button.onClick}
+		>
+			{button.icon}
+			<span
+				className="pointer-events-none absolute left-1/2 top-full z-20 mt-6 block -translate-x-1/2 whitespace-nowrap rounded-6 bg-ink px-7 py-3 text-badge font-medium leading-[14px] text-window opacity-0 transition-opacity duration-(--dur-color) group-hover:opacity-100 group-focus-visible:opacity-100"
+				aria-hidden="true"
+			>
+				{button.label}
+			</span>
+		</button>
+	);
+}
+
+/**
+ * The action group's row of icon buttons with dividers; each name shows as a tooltip and is the accessible name. When the
+ * buttons do not fit on one row they are laid out on even columns, with a rule between the rows and no divider at a row's start.
+ */
 function ActionIconGroup({ buttons, menu }: { readonly buttons: readonly GroupButton[]; readonly menu: ReactElement | null }): ReactElement {
 	const { t } = useTranslation();
+	const frame = useRef<HTMLDivElement>(null);
+	const [columns, setColumns] = useState(Number.POSITIVE_INFINITY);
+	useLayoutEffect(() => {
+		const element = frame.current;
+		if (element === null) return;
+		// An element with no layout (hidden, or a test DOM) measures 0: keep one row rather than a column of one.
+		const measure = (): void => {
+			const width = element.clientWidth;
+			setColumns(width === 0 ? Number.POSITIVE_INFINITY : Math.max(1, Math.floor((width - ACTION_FRAME + ACTION_CELL - 28) / ACTION_CELL)));
+		};
+		measure();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(measure);
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, []);
+	const wraps = columns < buttons.length;
+	const rows: GroupButton[][] = [];
+	for (let index = 0; index < buttons.length; index += columns) rows.push(buttons.slice(index, index + columns));
 	return (
-		<div className="inspector-file-actions flex">
-			<div className="inline-flex max-w-full flex-wrap items-center gap-4 rounded-8 border border-divider bg-window px-4 py-2" role="toolbar" aria-label={t("inspector.fileActions")}>
-				{buttons.map((button, index) => (
-					<span key={button.id} className="flex items-center gap-4">
-						{index === 0 ? null : <span className="block h-32 w-px bg-divider" aria-hidden="true" />}
-						<button
-							type="button"
-							data-action={button.id}
-							aria-label={button.label}
-							aria-pressed={button.pressed}
-							className={cn(
-								"group relative flex h-32 w-28 items-center justify-center rounded-6 border-0 bg-transparent p-0 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover",
-								button.pressed === true ? "text-accent-text" : "text-ink-body",
-							)}
-							onClick={button.onClick}
+		<div ref={frame} className="inspector-file-actions flex">
+			{wraps ? (
+				<div className="flex w-full flex-col rounded-8 border border-divider bg-window px-4" role="toolbar" aria-label={t("inspector.fileActions")}>
+					{rows.map((row, rowIndex) => (
+						<div
+							key={row[0]!.id}
+							className={cn("grid py-2", rowIndex === 0 ? null : "border-t border-divider")}
+							style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
 						>
-							{button.icon}
-							<span
-								className="pointer-events-none absolute left-1/2 top-full z-20 mt-6 block -translate-x-1/2 whitespace-nowrap rounded-6 bg-ink px-7 py-3 text-badge font-medium leading-[14px] text-window opacity-0 transition-opacity duration-(--dur-color) group-hover:opacity-100 group-focus-visible:opacity-100"
-								aria-hidden="true"
-							>
-								{button.label}
-							</span>
-						</button>
-					</span>
-				))}
-			</div>
+							{row.map((button, index) => (
+								<span key={button.id} className="relative flex items-center justify-center">
+									{index === 0 ? null : <span className="absolute left-0 top-1/2 block h-32 w-px -translate-y-1/2 bg-divider" aria-hidden="true" />}
+									<ActionButton button={button} />
+								</span>
+							))}
+						</div>
+					))}
+				</div>
+			) : (
+				<div className="inline-flex max-w-full items-center gap-4 rounded-8 border border-divider bg-window px-4 py-2" role="toolbar" aria-label={t("inspector.fileActions")}>
+					{buttons.map((button, index) => (
+						<span key={button.id} className="flex items-center gap-4">
+							{index === 0 ? null : <span className="block h-32 w-px bg-divider" aria-hidden="true" />}
+							<ActionButton button={button} />
+						</span>
+					))}
+				</div>
+			)}
 			{menu}
 		</div>
 	);
