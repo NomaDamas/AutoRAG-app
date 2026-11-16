@@ -90,7 +90,7 @@ describe("app-customizer pi agent profile & toolkit", () => {
 			"update_sidebar",
 			"upsert_magic_action",
 		]);
-		expect(profile.systemPrompt).toContain("AI Search");
+		expect(profile.systemPrompt).toContain("AI Chat");
 		expect(profile.systemPrompt).toContain("Automations");
 		expect(profile.systemPrompt).toContain("Korean");
 	});
@@ -116,7 +116,7 @@ describe("app-customizer pi agent profile & toolkit", () => {
 			undefined as never,
 		);
 		const text1 = res1.content.map((b) => (b.type === "text" ? b.text : "")).join("\n");
-		expect(text1).toMatch(/AI Search|app:aiSearch/i);
+		expect(text1).toMatch(/AI Chat|app:aiSearch/i);
 		expect(text1).toMatch(/Automations|app:automations/i);
 
 		const saved1 = await settings.get();

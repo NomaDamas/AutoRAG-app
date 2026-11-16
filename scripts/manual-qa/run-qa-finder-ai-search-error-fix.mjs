@@ -1,5 +1,5 @@
 /**
- * Manual QA — what AI Search's error box offers, and "AI로 고치기", in the real app.
+ * Manual QA — what AI Chat's error box offers, and "AI로 고치기", in the real app.
  *
  * The real app runs end to end: the real librarian agent, the real error-fix helper (a pi session with the app's own
  * tools), the real preload bridge and renderer. Only the model is scripted: a loopback OpenAI-compatible server hands
@@ -162,7 +162,7 @@ const APP_ENV = {
 	ANTHROPIC_API_KEY: "",
 };
 let page;
-/** Starts the app in `language` (the first run's is English) and opens AI Search, by position: the sidebar's labels are translated. */
+/** Starts the app in `language` (the first run's is English) and opens AI Chat, by position: the sidebar's labels are translated. */
 const startApp = async (language, userDataDir) => {
 	app = await launchFinder({ userDataDir, env: APP_ENV, language });
 	page = await finderWindow(app, 30_000);

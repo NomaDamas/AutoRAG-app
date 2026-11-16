@@ -1092,8 +1092,8 @@ function EvidencePanel({
 		<div className="inspector-half flex-1 min-h-0 flex flex-col overflow-hidden relative" aria-label={t("inspector.evidence")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto">
 				<div className="flex flex-col gap-8 px-12 pt-12 pb-14">
-					<div className="evidence-header flex items-center justify-between gap-8">
-						<div className="evidence-tabs flex min-w-0 flex-1 gap-4 overflow-auto">
+					<div className="evidence-header flex items-start justify-between gap-8">
+						<div className="evidence-tabs flex min-w-0 flex-1 flex-wrap gap-4">
 							{evidence.map((entry) => (
 								<button
 									type="button"

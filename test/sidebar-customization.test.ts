@@ -49,7 +49,7 @@ const SAMPLE_TAGS: readonly FsTag[] = [
 
 describe("sidebar-contract normalization & locked items", () => {
 	it("treats AI Search and Automations (including natural-language aliases) as locked and strips them from hiddenItems", () => {
-		for (const locked of ["app:aiSearch", "aiSearch", "AI Search", "AI 검색", "app:automations", "automations", "자동화"]) {
+		for (const locked of ["app:aiSearch", "aiSearch", "AI Chat", "AI Search", "AI 채팅", "AI 검색", "app:automations", "automations", "자동화"]) {
 			expect(isLockedSidebarItemId(locked), locked).toBe(true);
 		}
 		expect(isLockedSidebarItemId("place:music")).toBe(false);
@@ -93,7 +93,7 @@ describe("navGroups with SidebarSettings", () => {
 		const groups = navGroups(SAMPLE_LOCATIONS, SAMPLE_TAGS, settings);
 
 		expect(groups.map((g) => [g.label, g.items.map((item) => item.label)])).toEqual([
-			["Favorites", ["AI Search", "Automations", "Recents", "me", "Desktop", "Documents", "Downloads", "Trash"]],
+			["Favorites", ["AI Chat", "Automations", "Recents", "me", "Desktop", "Documents", "Downloads", "Trash"]],
 			["Cloud", ["iCloud Drive"]],
 			["Locations", ["Macintosh HD"]],
 			["Tags", ["Work"]],
@@ -120,7 +120,7 @@ describe("navGroups with SidebarSettings", () => {
 		const groups = navGroups(SAMPLE_LOCATIONS, SAMPLE_TAGS, settings);
 		expect(groups).toHaveLength(1);
 		expect(groups[0]?.label).toBe("Favorites");
-		expect(groups[0]?.items.map((item) => item.label)).toEqual(["AI Search", "Automations"]);
+		expect(groups[0]?.items.map((item) => item.label)).toEqual(["AI Chat", "Automations"]);
 	});
 
 	it("reorders customizable Favorites, pins custom folders, and reorders sections while keeping AI Search and Automations first", () => {
@@ -134,7 +134,7 @@ describe("navGroups with SidebarSettings", () => {
 		const groups = navGroups(SAMPLE_LOCATIONS, SAMPLE_TAGS, settings);
 		expect(groups.map((g) => g.label)).toEqual(["Favorites", "Tags", "Locations"]);
 		expect(groups[0]?.items.slice(0, 6).map((item) => item.label)).toEqual([
-			"AI Search",
+			"AI Chat",
 			"Automations",
 			"Projects",
 			"Downloads",

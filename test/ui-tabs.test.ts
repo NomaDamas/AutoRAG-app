@@ -209,19 +209,19 @@ describe("openOrSelectSettingsTab", () => {
 	});
 });
 
-describe("AI Search tabs", () => {
-	it("titles an AI Search tab and ignores the search query", () => {
-		expect(tabTitle({ path: AI_SEARCH_PATH }, { query: "budget" })).toBe("AI 검색");
+describe("AI Chat tabs", () => {
+	it("titles an AI Chat tab and ignores the search query", () => {
+		expect(tabTitle({ path: AI_SEARCH_PATH }, { query: "budget" })).toBe("AI 채팅");
 	});
 
-	it("treats Settings and AI Search as virtual paths, never folders", () => {
+	it("treats Settings and AI Chat as virtual paths, never folders", () => {
 		expect(isVirtualTabPath(SETTINGS_PATH)).toBe(true);
 		expect(isVirtualTabPath(AI_SEARCH_PATH)).toBe(true);
-		expect(isVirtualTabPath("/Users/me/AI Search")).toBe(false);
+		expect(isVirtualTabPath("/Users/me/AI Chat")).toBe(false);
 		expect(isVirtualTabPath("Recents")).toBe(false);
 	});
 
-	it("turns the focused tab into AI Search, and Back returns to the folder", () => {
+	it("turns the focused tab into AI Chat, and Back returns to the folder", () => {
 		const two = openTabAt(createTabsState("/Users/me/Documents"), "/Users/me/Desktop");
 		const shown = showAiSearchInActiveTab(two);
 		expect(shown.tabs).toHaveLength(2);
@@ -231,12 +231,12 @@ describe("AI Search tabs", () => {
 		expect(activeTab(goBack(shown)).path).toBe("/Users/me/Desktop");
 	});
 
-	it("keeps an AI Search tab as it is when shown again", () => {
+	it("keeps an AI Chat tab as it is when shown again", () => {
 		const shown = showAiSearchInActiveTab(createTabsState("/Users/me/Documents"));
 		expect(showAiSearchInActiveTab(shown)).toBe(shown);
 	});
 
-	it("opens a new AI Search tab even when one exists", () => {
+	it("opens a new AI Chat tab even when one exists", () => {
 		const first = openAiSearchTab(createTabsState("/Users/me/Documents"));
 		const second = openAiSearchTab(selectTab(first, first.tabs[0]!.id));
 		expect(second.tabs.map((tab) => tab.path)).toEqual(["/Users/me/Documents", AI_SEARCH_PATH, AI_SEARCH_PATH]);
@@ -244,7 +244,7 @@ describe("AI Search tabs", () => {
 		expect(activeTab(second).back).toEqual([]);
 	});
 
-	it("focuses the active AI Search tab, else the nearest open one, else opens one", () => {
+	it("focuses the active AI Chat tab, else the nearest open one, else opens one", () => {
 		const docs = createTabsState("/Users/me/Documents");
 		const opened = focusAiSearchTab(docs);
 		expect(opened.tabs).toHaveLength(2);
@@ -258,7 +258,7 @@ describe("AI Search tabs", () => {
 		expect(back.activeId).toBe(opened.activeId);
 	});
 
-	it("prefers the AI Search tab closest to the focused tab", () => {
+	it("prefers the AI Chat tab closest to the focused tab", () => {
 		let state = openAiSearchTab(createTabsState("/a"));
 		const leftAi = state.activeId;
 		state = openTabAt(state, "/b");
@@ -269,7 +269,7 @@ describe("AI Search tabs", () => {
 		expect(focusAiSearchTab(selectTab(state, state.tabs[0]!.id)).activeId).toBe(leftAi);
 	});
 
-	it("keeps a tab's AI Search chat mounted after the tab navigates away, until it closes", () => {
+	it("keeps a tab's AI Chat chat mounted after the tab navigates away, until it closes", () => {
 		const tabs = [
 			{ id: 1, aiSearch: false },
 			{ id: 2, aiSearch: true },
@@ -336,7 +336,7 @@ describe("Evidence Folder tabs", () => {
 		expect(activeTab(state).fwd).toEqual([]);
 	});
 
-	it("drops evidenceFolder when switching the active tab to AI Search or choosing a column outside the root", () => {
+	it("drops evidenceFolder when switching the active tab to AI Chat or choosing a column outside the root", () => {
 		const state = openEvidenceFolderTab(createTabsState("/Users/me/Documents"), evidenceRoot);
 		const toAi = showAiSearchInActiveTab(state);
 		expect(activeTab(toAi).path).toBe(AI_SEARCH_PATH);
@@ -367,7 +367,7 @@ describe("openOrSelectFolderTab (dazzi <folder>)", () => {
 		expect(activeTab(again).path).toBe("/work/project");
 	});
 
-	it("does not mistake a Settings or AI Search tab for a folder", () => {
+	it("does not mistake a Settings or AI Chat tab for a folder", () => {
 		const state = openOrSelectFolderTab(openOrSelectSettingsTab(createTabsState("/Users/me")), "/work/project");
 		expect(state.tabs.map((tab) => tab.path)).toEqual(["/Users/me", SETTINGS_PATH, "/work/project"]);
 	});

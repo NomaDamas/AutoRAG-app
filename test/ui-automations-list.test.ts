@@ -73,7 +73,7 @@ describe("ruleMenuEntries", () => {
 
 	it("offers Quick Look, edit, add, and a danger delete on a rule", () => {
 		const entries = ruleMenuEntries({ rule: rule("a"), canOpenFolder: false });
-		expect(labels(entries)).toEqual(["quickLook:훑어보기", "-", "editRule:AI 검색에서 편집", "addRule:AI 검색에서 새 규칙 추가…", "-", "deleteRule:삭제"]);
+		expect(labels(entries)).toEqual(["quickLook:훑어보기", "-", "editRule:AI 채팅에서 편집", "addRule:AI 채팅에서 새 규칙 추가…", "-", "deleteRule:삭제"]);
 		const remove = entries.find((entry) => entry.kind === "item" && entry.action === "deleteRule");
 		expect(remove).toMatchObject({ tone: "danger" });
 	});
@@ -90,7 +90,7 @@ describe("ruleMenuEntries", () => {
 	});
 
 	it("offers only add on the empty list background", () => {
-		expect(labels(ruleMenuEntries({ rule: null, canOpenFolder: false }))).toEqual(["addRule:AI 검색에서 새 규칙 추가…"]);
+		expect(labels(ruleMenuEntries({ rule: null, canOpenFolder: false }))).toEqual(["addRule:AI 채팅에서 새 규칙 추가…"]);
 	});
 
 	it("is written in the interface language", async () => {
@@ -98,8 +98,8 @@ describe("ruleMenuEntries", () => {
 		expect(labels(ruleMenuEntries({ rule: rule("a"), canOpenFolder: false }))).toEqual([
 			"quickLook:Quick Look",
 			"-",
-			"editRule:Edit in AI Search",
-			"addRule:Add a rule in AI Search…",
+			"editRule:Edit in AI Chat",
+			"addRule:Add a rule in AI Chat…",
 			"-",
 			"deleteRule:Delete",
 		]);

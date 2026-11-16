@@ -1,7 +1,7 @@
 import { homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 /**
- * Manual QA — images in AI Search answers and evidence, in the real app.
+ * Manual QA — images in AI Chat answers and evidence, in the real app.
  *
  * Deterministic lane: seeds the chat store (<userData>/chat-history/chats.json)
  * with one chat whose answers reference images the way model output does —

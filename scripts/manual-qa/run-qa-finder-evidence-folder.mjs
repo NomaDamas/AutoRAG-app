@@ -8,7 +8,7 @@ import { pickSelect } from "./settings-select.mjs";
 
 /**
  * Manual QA & Live E2E — Ask-as-Smart-Folder (Evidence Folder):
- * - Gathers all local evidence files across a multi-turn AI Search session into a
+ * - Gathers all local evidence files across a multi-turn AI Chat session into a
  *   temporary Evidence Folder (symlinks, zero disk duplication).
  * - Opens the Evidence Folder in a new Finder tab on clicking "Evidence Folder"
  *   at the top of the Evidence panel.
@@ -344,7 +344,7 @@ check(
 	`exists=${existsSync(pastedPath)}`,
 );
 
-// 8. Return to the AI Search tab, reload session from Chat History, and click Evidence Folder again -> recreates temp folder.
+// 8. Return to the AI Chat tab, reload session from Chat History, and click Evidence Folder again -> recreates temp folder.
 await page.locator('.tabs .tab[data-ai-search="true"]').click();
 await page.locator('[aria-label="Chat history"]').click();
 await page.locator(".history-item").first().waitFor({ state: "visible" });

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+	accumulateEvidence,
+	citationSource,
 	collectSessionEvidence,
 	evidenceDetail,
 	evidenceHeading,
@@ -8,7 +10,6 @@ import {
 	findEvidenceSource,
 	isLocalEvidenceSource,
 	mergePhaseEvidence,
-	resolveActiveEvidence,
 	sessionEvidencePaths,
 	unresolvedCitationNumbers,
 } from "../src/renderer/src/state/evidence";
@@ -169,7 +170,7 @@ describe("isLocalEvidenceSource and sessionEvidencePaths", () => {
 	});
 });
 
-describe("mergePhaseEvidence and resolveActiveEvidence", () => {
+describe("mergePhaseEvidence and accumulateEvidence", () => {
 	const ev = (number: number, title: string) => ({ number, title, summary: "", source: `/doc/${title}`, excerpts: [] });
 
 	it("merges quick and deep evidence so higher numbers in quick survive when deep has fewer citations or is empty", () => {
@@ -199,31 +200,45 @@ describe("mergePhaseEvidence and resolveActiveEvidence", () => {
 		]);
 	});
 
-	it("falls back to the most recent turn with evidence when a follow-up turn has none, and switches to any clicked turn/phase", () => {
+	it("keeps every turn's sources in the tabs: turn 2's 6-8 join turn 1's 1-5", () => {
 		const turns = [
-			{
-				quick: { answer: "t0 quick [1][2][3][4]", evidence: [ev(1, "t0-q1"), ev(2, "t0-q2"), ev(3, "t0-q3"), ev(4, "t0-q4")] },
-				deep: { answer: "t0 deep [1][2]", evidence: [ev(1, "t0-d1"), ev(2, "t0-d2")] },
-			},
-			{
-				quick: { answer: "follow-up with no citations", evidence: [] },
-				deep: null,
-			},
+			{ quick: { answer: "q [1][2][3][4][5]", evidence: [1, 2, 3, 4, 5].map((n) => ev(n, `t0-${n}`)) }, deep: null },
+			{ quick: { answer: "q [6][7][8]", evidence: [6, 7, 8].map((n) => ev(n, `t1-${n}`)) }, deep: null },
 		];
 
-		// Default on load: Turn 1 has no evidence, so Turn 0's merged evidence is shown
-		expect(resolveActiveEvidence(turns, null).map((e) => `${e.number}:${e.title}`)).toEqual([
-			"1:t0-d1",
-			"2:t0-d2",
-			"3:t0-q3",
-			"4:t0-q4",
+		expect(accumulateEvidence(turns, null).map((e) => `${e.number}:${e.title}`)).toEqual([
+			"1:t0-1", "2:t0-2", "3:t0-3", "4:t0-4", "5:t0-5", "6:t1-6", "7:t1-7", "8:t1-8",
 		]);
-		// Clicking a citation in Turn 0's quick answer prioritizes Turn 0's quick evidence
-		expect(resolveActiveEvidence(turns, { turnIndex: 0, phase: "quick" }).map((e) => `${e.number}:${e.title}`)).toEqual([
-			"1:t0-q1",
-			"2:t0-q2",
-			"3:t0-q3",
-			"4:t0-q4",
-		]);
+	});
+
+	it("keeps earlier sources when a follow-up cites nothing, and lets Deep win over Quick inside a turn", () => {
+		const turns = [
+			{ quick: { answer: "[1][2][3]", evidence: [ev(1, "q1"), ev(2, "q2"), ev(3, "q3")] }, deep: { answer: "[1][2]", evidence: [ev(1, "d1"), ev(2, "d2")] } },
+			{ quick: { answer: "no citations", evidence: [] }, deep: null },
+		];
+
+		expect(accumulateEvidence(turns, null).map((e) => `${e.number}:${e.title}`)).toEqual(["1:d1", "2:d2", "3:q3"]);
+	});
+
+	it("lets the clicked turn and phase win a number that two turns share", () => {
+		const turns = [
+			{ quick: { answer: "[1]", evidence: [ev(1, "first")] }, deep: null },
+			{ quick: { answer: "[1]", evidence: [ev(1, "second")] }, deep: null },
+		];
+
+		expect(accumulateEvidence(turns, null).map((e) => e.title)).toEqual(["second"]);
+		expect(accumulateEvidence(turns, { turnIndex: 0, phase: "quick" }).map((e) => e.title)).toEqual(["first"]);
+	});
+
+	it("finds the newest turn whose text cites a source, for scrolling to it", () => {
+		const turns = [
+			{ quick: { answer: "old [1][2]", evidence: [ev(1, "a"), ev(2, "b")] }, deep: { answer: "old deep [1]", evidence: [ev(1, "a")] } },
+			{ quick: { answer: "new [3]", evidence: [ev(3, "c")] }, deep: null },
+		];
+
+		expect(citationSource(turns, 3)).toEqual({ turnIndex: 1, phase: "quick" });
+		expect(citationSource(turns, 1)).toEqual({ turnIndex: 0, phase: "deep" });
+		expect(citationSource(turns, 2)).toEqual({ turnIndex: 0, phase: "quick" });
+		expect(citationSource(turns, 9)).toBeNull();
 	});
 });

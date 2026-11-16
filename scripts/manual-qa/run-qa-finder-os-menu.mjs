@@ -5,7 +5,7 @@
 //   2. running the installed "Ask Dazzi" workflow through the real
 //      Automator runtime (`automator -i <file> <workflow>`, the same shell
 //      action Finder's Quick Actions run) hands the selected files to the
-//      RUNNING app, which attaches them to AI Search — and no second app
+//      RUNNING app, which attaches them to AI Chat — and no second app
 //      process stays behind;
 //   3. the "Show in Dazzi" workflow opens the file's folder with it selected;
 //   4. a cold start with the request flags in argv (what the workflow does when
@@ -90,7 +90,7 @@ try {
 	console.log(`automator: ${output.trim() || "(no output)"}`);
 	const pills = page.locator(`${AI_PANEL} .composer-attach-pill`);
 	const attached = await until(async () => (await pills.count()) === 2);
-	check("ask: both items attach to AI Search in the running app", attached !== false);
+	check("ask: both items attach to AI Chat in the running app", attached !== false);
 	const titles = attached === false ? [] : await pills.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("title")));
 	// APFS treats NFC and NFD names as the same file, and Automator hands paths over decomposed, so compare normalized.
 	const normalized = titles.map((title) => title?.normalize("NFC"));

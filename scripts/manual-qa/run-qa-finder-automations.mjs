@@ -3,14 +3,14 @@
  *
  * Drives the built app against the real librarian CLI (`autorag automate status`)
  * with an isolated AUTORAG_HOME and proves, with real mouse and keyboard input:
- *   1. Favorites reads AI Search, Automations, then the OS folders;
+ *   1. Favorites reads AI Chat, Automations, then the OS folders;
  *   2. the sidebar item turns the focused tab into the rules list, one row per
  *      rule, with the plain-language title, watched folder, last run, status dot,
  *      and a service line that says rules are not running (the daemon is off);
  *   3. selecting a rule fills the inspector (a failed rule names its problem),
  *      ↑/↓ move the selection, Space opens Quick Look and Esc closes it;
  *   4. the right-click menu offers the rule actions;
- *   5. Enter (edit) and "add" open a NEW AI Search tab whose composer holds a
+ *   5. Enter (edit) and "add" open a NEW AI Chat tab whose composer holds a
  *      draft in the interface language and nothing is sent (no user bubble, no
  *      running search);
  *   6. delete asks first (Esc cancels), then removes only that rule from the
@@ -97,9 +97,9 @@ runLog(ruleC.id, { startedAt: ago(19 * 60), exitCode: null, error: "spawn hwp5-q
 
 const ROW = (id) => `[role="row"][data-rule-id="${id}"]`;
 const INSPECTOR = 'aside[aria-label="Inspector"]';
-// The AI Search panel is labelled in the interface language; the host `data-ai-tab` and `aria-hidden` are not.
+// The AI Chat panel is labelled in the interface language; the host `data-ai-tab` and `aria-hidden` are not.
 const AI_PANEL = '[data-ai-tab] section.ai:not([aria-hidden="true"])';
-// The composer is the one text input of the visible AI Search panel, whatever language its label is in.
+// The composer is the one text input of the visible AI Chat panel, whatever language its label is in.
 const COMPOSER = `${AI_PANEL} .compose-box textarea`;
 const tabs = (page) =>
 	page.$$eval(".tabs .tab", (elements) =>
@@ -144,7 +144,7 @@ async function english() {
 	try {
 		// 1. Favorites order.
 		const favorites = await page.locator(".side-group").first().locator(".sidebar__item-label").allInnerTexts();
-		check("Favorites reads AI Search, Automations, then the OS folders", favorites[0] === "AI Search" && favorites[1] === "Automations" && favorites.length > 2, JSON.stringify(favorites));
+		check("Favorites reads AI Chat, Automations, then the OS folders", favorites[0] === "AI Chat" && favorites[1] === "Automations" && favorites.length > 2, JSON.stringify(favorites));
 
 		// 2. The list.
 		const before = await tabs(page);
@@ -194,7 +194,7 @@ async function english() {
 		await page.locator(ROW(ruleA.id)).click({ button: "right" });
 		await page.waitForSelector('[role="menu"]');
 		const items = (await page.locator('[role="menu"] [role="menuitem"]').allInnerTexts()).map((label) => label.replace(/\s+/g, " ").trim());
-		check("the rule menu offers Quick Look, edit, open folder, add, delete", items.length === 5 && /^Quick Look/.test(items[0]) && /^Edit in AI Search/.test(items[1]) && items[2] === "Open watched folder" && items[3].startsWith("Add a rule in AI Search") && items[4] === "Delete", JSON.stringify(items));
+		check("the rule menu offers Quick Look, edit, open folder, add, delete", items.length === 5 && /^Quick Look/.test(items[0]) && /^Edit in AI Chat/.test(items[1]) && items[2] === "Open watched folder" && items[3].startsWith("Add a rule in AI Chat") && items[4] === "Delete", JSON.stringify(items));
 		await sleep(350);
 		await page.screenshot({ path: join(EVIDENCE, "04-menu-en.png") });
 		await page.keyboard.press("Escape");
@@ -206,7 +206,7 @@ async function english() {
 		await page.keyboard.press("Enter");
 		await page.waitForSelector(COMPOSER);
 		const draft = await page.locator(COMPOSER).inputValue();
-		check("Enter opens a NEW AI Search tab", (await tabs(page)).length === tabsBeforeEdit + 1 && (await tabs(page)).find((tab) => tab.active)?.ai === true, JSON.stringify(await tabs(page)));
+		check("Enter opens a NEW AI Chat tab", (await tabs(page)).length === tabsBeforeEdit + 1 && (await tabs(page)).find((tab) => tab.active)?.ai === true, JSON.stringify(await tabs(page)));
 		check(
 			"the composer holds the edit draft, in English, naming the rule and ending where the person types",
 			draft === "Edit this automation rule — downloads-pdf-summary (PDF files are created in Downloads). What to change: ",
@@ -339,7 +339,7 @@ async function english() {
 		check("fixing the file brings the list back", JSON.stringify(await rowIds(page)) === JSON.stringify([ruleA.id, ruleB.id, ruleC.id]));
 		writeFileSync(RULES, `${JSON.stringify({ automations: [] }, null, 2)}\n`);
 		await page.waitForSelector("text=No automations yet", { timeout: 20_000 });
-		check("an empty rules file invites adding the first rule", (await text(page, "[data-rules-body]")).includes("Add a rule in AI Search"));
+		check("an empty rules file invites adding the first rule", (await text(page, "[data-rules-body]")).includes("Add a rule in AI Chat"));
 		await page.screenshot({ path: join(EVIDENCE, "10-empty-en.png") });
 		writeRules([ruleA, ruleB, ruleC]);
 		await page.waitForSelector(ROW(ruleA.id), { timeout: 20_000 });

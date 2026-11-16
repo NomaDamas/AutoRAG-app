@@ -10,7 +10,7 @@
  *      ⌥ is already down before the press;
  *   3. dropped on another folder tab, the row moves into that tab's folder;
  *   4. a multi-row selection dragged onto a folder row moves every row;
- *   5. dragged onto an AI Search tab, the row attaches and stays in place;
+ *   5. dragged onto an AI Chat tab, the row attaches and stays in place;
  *   6. Escape cancels a held drag: nothing moves;
  *   7. dragged past the window edge, the rows go to the OS file drag
  *      (`fs:startDrag` → `webContents.startDrag`) with every selected path, and
@@ -194,7 +194,7 @@ try {
 		`A=${listNames(dirA)}`,
 	);
 
-	/* ------------------------------------- 5. onto AI Search: attach, not move */
+	/* ------------------------------------- 5. onto AI Chat: attach, not move */
 	await page.keyboard.press(chord("t"));
 	await openAiSearch(page);
 	await page.locator(".tab").first().click();
@@ -203,7 +203,7 @@ try {
 	await page.waitForTimeout(400);
 	const attached = await page.$$eval(`${AI_PANEL} .composer-attach-pill`, (nodes) => nodes.map((node) => node.getAttribute("title")));
 	check(
-		"a row dropped on an AI Search tab attaches and stays in place",
+		"a row dropped on an AI Chat tab attaches and stays in place",
 		attached.includes(ATTACHED) && existsSync(ATTACHED),
 		`pills=${JSON.stringify(attached)}`,
 	);

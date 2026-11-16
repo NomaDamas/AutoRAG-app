@@ -142,7 +142,7 @@ describe("selection and keys", () => {
 	});
 });
 
-describe("editing and adding open an AI Search draft, never a sent question", () => {
+describe("editing and adding open an AI Chat draft, never a sent question", () => {
 	it("Enter and double click draft the edit for that rule, in the interface language", async () => {
 		const h = await mount([rule("downloads-pdf-summary")]);
 		press("ArrowDown");

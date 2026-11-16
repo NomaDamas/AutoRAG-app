@@ -38,7 +38,7 @@ const LANGUAGE_NAME: Readonly<Record<ReplyLanguage, string>> = {
 const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, string>>>> = {
 	ko: {
 		focusSearch: "검색창 포커스",
-		focusComposer: "AI 검색 열기",
+		focusComposer: "AI 채팅 열기",
 		openSettings: "설정 열기",
 		newTab: "새 탭",
 		reopenTab: "닫은 탭 다시 열기",
@@ -66,7 +66,7 @@ const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, 
 	},
 	en: {
 		focusSearch: "Focus Search",
-		focusComposer: "Open AI Search",
+		focusComposer: "Open AI Chat",
 		openSettings: "Open Settings",
 		newTab: "New Tab",
 		reopenTab: "Reopen Closed Tab",

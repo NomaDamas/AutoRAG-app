@@ -4,7 +4,7 @@ import { posix } from "node:path";
  * Everything the extension knows about the installed Dazzi, as pure functions so it is tested without Raycast.
  *
  * The extension talks to Dazzi only through what the app bundle ships:
- * - `Contents/Resources/bin/dazzi`: the `dazzi` launcher. `--ask QUESTION [--] [path...]` asks AI Search in a new
+ * - `Contents/Resources/bin/dazzi`: the `dazzi` launcher. `--ask QUESTION [--] [path...]` asks AI Chat in a new
  *   tab, `[--] path...` opens folders / reveals files. It hands the request to the running app over its local
  *   socket, or starts the app with it.
  * - `Contents/Resources/tools/bin/autorag`: the bundled librarian CLI. `lite retrieve <query> --json` searches the

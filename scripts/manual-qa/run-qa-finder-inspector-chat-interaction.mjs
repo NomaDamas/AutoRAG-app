@@ -1,5 +1,5 @@
 /**
- * Manual QA — the right sidebar's AI chat takes steers, approvals and questions, like an AI Search tab (real app).
+ * Manual QA — the right sidebar's AI chat takes steers, approvals and questions, like an AI Chat tab (real app).
  *
  * The real librarian agent, its file-change gate and `ask_user` tool, the real preload bridge and renderer run end to
  * end; only the model is scripted by a loopback OpenAI-compatible server. Real mouse and keyboard input.

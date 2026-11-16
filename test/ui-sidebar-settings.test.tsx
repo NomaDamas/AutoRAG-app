@@ -135,7 +135,7 @@ afterEach(async () => {
 });
 
 describe("Settings → 사이드바 (Sidebar customization & AI Customizer in the right sidebar)", () => {
-	it("renders the Sidebar tab with AI Search & Automations locked on, and toggles hideable items & presets", async () => {
+	it("renders the Sidebar tab with AI Chat & Automations locked on, and toggles hideable items & presets", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
@@ -145,7 +145,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		const navButtons = [...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")];
 		expect(navButtons.some((btn) => btn.textContent?.includes("사이드바") && btn.classList.contains("is-active"))).toBe(true);
 
-		// AI 검색 and 자동화 switches are checked and disabled (locked)
+		// AI 채팅 and 자동화 switches are checked and disabled (locked)
 		const aiSwitch = host.querySelector<HTMLButtonElement>('[data-sidebar-switch="app:aiSearch"]');
 		const autoSwitch = host.querySelector<HTMLButtonElement>('[data-sidebar-switch="app:automations"]');
 		expect(aiSwitch).not.toBeNull();
@@ -445,7 +445,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(panel?.textContent).not.toContain("원하는 사이드바 구성이나 화면 설정을");
 		expect(panel?.getAttribute("aria-label")).toBe("AI 앱 커스텀 어시스턴트");
 		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(3);
-		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 검색과 자동화는 필수 기능");
+		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 채팅과 자동화는 필수 기능");
 		// New chat appears only once there is a conversation to discard
 		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
 		// The composer asks in plain words what to change (Figma 367:8865); the suggestions above are the examples

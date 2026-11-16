@@ -55,11 +55,11 @@ const labels = (): string[] => [...host.querySelectorAll(".sidebar__item-label")
 
 describe("Sidebar app rows", () => {
 	it.each([
-		["ko", ["AI 검색", "자동화"]],
-		["en", ["AI Search", "Automations"]],
-		["ja", ["AI 検索", "自動化"]],
-		["zh", ["AI 搜索", "自动化"]],
-	] as const)("names AI Search and Automations in %s", async (language, expected) => {
+		["ko", ["AI 채팅", "자동화"]],
+		["en", ["AI Chat", "Automations"]],
+		["ja", ["AI チャット", "自動化"]],
+		["zh", ["AI 聊天", "自动化"]],
+	] as const)("names AI Chat and Automations in %s", async (language, expected) => {
 		await act(() => setAppLanguage(language));
 		renderSidebar(null);
 		expect(labels().slice(0, 2)).toEqual(expected);

@@ -5,7 +5,7 @@
 //   2. the legacy value written back while the app runs no longer blocks a Settings edit (the `config:patch`
 //      "Config field 'jev' cannot be false" error)
 //   3. Settings → AI Models shows Jev as "None" and each role writes a config the librarian accepts
-//   4. a real AI Search question is answered by a real model, and the sLLM (not Jev) served the decision calls
+//   4. a real AI Chat question is answered by a real model, and the sLLM (not Jev) served the decision calls
 //
 // Both models are real OpenRouter models released in 2026, reached through a loopback proxy that only counts what
 // passes (decision requests are the ones that carry the `submit_decisions` tool). The key comes from
@@ -191,7 +191,7 @@ try {
 		await page.getByText("Show details", { exact: true }).first().click({ timeout: 2000 }).catch(() => undefined);
 		console.log(`error panel: ${((await page.locator(".ai").first().innerText().catch(() => "")) ?? "").replace(/\s+/g, " ").slice(0, 900)}`);
 	}
-	check("AI Search shows no error", error === "", error);
+	check("AI Chat shows no error", error === "", error);
 	const proses = page.locator(".assistant-msg .assistant-prose");
 	let answer = "";
 	for (let index = 0; index < (await proses.count()); index += 1) answer += `${await proses.nth(index).innerText()}\n`;

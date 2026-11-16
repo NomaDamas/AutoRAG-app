@@ -2,7 +2,7 @@ import { getSelectedFinderItems, LaunchProps, showToast, Toast } from "@raycast/
 import { askArgs, validateQuestion } from "./lib/dazzi";
 import { runLauncher } from "./lib/launch";
 
-/** Ask Dazzi about the files selected in Finder: they are attached to the question in a new AI Search tab. */
+/** Ask Dazzi about the files selected in Finder: they are attached to the question in a new AI Chat tab. */
 export default async function Command(props: LaunchProps<{ arguments: Arguments.AskAboutSelection }>): Promise<void> {
   const check = validateQuestion(props.arguments.question);
   if (!check.ok) {

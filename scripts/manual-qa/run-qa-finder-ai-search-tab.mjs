@@ -1,25 +1,25 @@
 /**
- * Manual QA — AI Search as a tab (no bottom dock).
+ * Manual QA — AI Chat as a tab (no bottom dock).
  *
  * Drives the built app and proves:
- *   1. there is no bottom AI dock: the Finder column shows no AI Search
+ *   1. there is no bottom AI dock: the Finder column shows no AI Chat
  *      section while a folder tab is focused;
- *   2. the sidebar's Favorites list starts with "AI Search", above Recents;
+ *   2. the sidebar's Favorites list starts with "AI Chat", above Recents;
  *   4. the AI tab's chat (a composer draft) survives switching tabs, and ⌘T
- *      from an AI Search tab opens a folder tab, not another AI tab;
- *   5. ⌘K from a folder tab adopts the existing AI Search tab instead of
+ *      from an AI Chat tab opens a folder tab, not another AI tab;
+ *   5. ⌘K from a folder tab adopts the existing AI Chat tab instead of
  *      opening another;
- *   6. Inspector "AI 요약" opens a NEW AI Search tab and sends the summary
+ *   6. Inspector "AI 요약" opens a NEW AI Chat tab and sends the summary
  *      query with the file attached (user bubble + answer or inline error);
- *   7. a Finder row dragged onto an AI Search strip tab attaches there (the
+ *   7. a Finder row dragged onto an AI Chat strip tab attaches there (the
  *      file stays put) and switches to that tab;
- *   8. a Finder row dragged onto the sidebar AI Search item attaches to the
- *      focused tab, now shown as AI Search;
- *   9. dwelling on an AI Search tab springs it open, and a row dropped on the
+ *   8. a Finder row dragged onto the sidebar AI Chat item attaches to the
+ *      focused tab, now shown as AI Chat;
+ *   9. dwelling on an AI Chat tab springs it open, and a row dropped on the
  *      panel attaches;
  *  10. an external file drop on the panel attaches its absolute path;
- *  11. the whole search's "Ask AI Search" opens a new AI Search tab and sends the query;
- *  12. a filename search from an AI Search tab lists results in that tab;
+ *  11. the whole search's "Ask AI Chat" opens a new AI Chat tab and sends the query;
+ *  12. a filename search from an AI Chat tab lists results in that tab;
  *  13. "AI 요약" asks in the Interface language setting, not always Korean.
  * No model key is needed: nothing waits on an answer. Run `bun run build`
  * first. Evidence lands in the ignored `.omo/` tree.
@@ -56,7 +56,7 @@ writeFileSync(NOTES, "notes\n");
 writeFileSync(BUDGET, "item,total\n");
 writeFileSync(EXTERNAL, "# external\n");
 
-const PANEL = 'section[aria-label="AI Search"]:not([aria-hidden="true"])';
+const PANEL = 'section[aria-label="AI Chat"]:not([aria-hidden="true"])';
 const PILL = `${PANEL} .composer-attach-pill`;
 const tabs = (page) =>
 	page.$$eval(".tabs .tab", (elements) =>
@@ -93,24 +93,24 @@ try {
 
 	// 1. No bottom dock.
 	check(
-		"a folder tab shows no AI Search dock",
+		"a folder tab shows no AI Chat dock",
 		(await page.locator(PANEL).count()) === 0 && (await page.locator(".ai-grip").count()) === 0,
 		`visible panels=${await page.locator(PANEL).count()}`,
 	);
 	await page.screenshot({ path: join(EVIDENCE, "01-no-dock.png") });
 
-	// 2. Sidebar: AI Search heads Favorites, above Recents.
+	// 2. Sidebar: AI Chat heads Favorites, above Recents.
 	const favorites = await page.locator(".side-group").first().locator(".sidebar__item-label").allInnerTexts();
-	check("Favorites starts with AI Search above Recents", (favorites[0] === "AI Search" || favorites[0] === "AI 검색") && favorites.findIndex((label) => label === "Recents" || label === "최근 항목") > 0, JSON.stringify(favorites));
+	check("Favorites starts with AI Chat above Recents", (favorites[0] === "AI Chat" || favorites[0] === "AI 채팅") && favorites.findIndex((label) => label === "Recents" || label === "최근 항목") > 0, JSON.stringify(favorites));
 
-	// 3. Sidebar AI Search converts the focused tab; Back returns to the folder.
+	// 3. Sidebar AI Chat converts the focused tab; Back returns to the folder.
 	const before = await tabs(page);
-	await page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first().click();
+	await page.locator('.sidebar__item:has-text("AI Chat"), .sidebar__item:has-text("AI 채팅")').first().click();
 	await page.waitForSelector(PANEL);
 	let now = await tabs(page);
 	check(
-		"the sidebar item turns the focused tab into AI Search",
-		now.length === before.length && now.find((tab) => tab.active)?.ai === true && now.find((tab) => tab.active)?.title === "AI Search",
+		"the sidebar item turns the focused tab into AI Chat",
+		now.length === before.length && now.find((tab) => tab.active)?.ai === true && now.find((tab) => tab.active)?.title === "AI Chat",
 		JSON.stringify(now),
 	);
 	check(
@@ -118,8 +118,8 @@ try {
 		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask Dazzi"),
 	);
 	check(
-		"the sidebar marks AI Search active",
-		(await page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first().getAttribute("aria-current")) === "true",
+		"the sidebar marks AI Chat active",
+		(await page.locator('.sidebar__item:has-text("AI Chat"), .sidebar__item:has-text("AI 채팅")').first().getAttribute("aria-current")) === "true",
 	);
 	await page.screenshot({ path: join(EVIDENCE, "02-ai-tab.png") });
 	await page.locator('[aria-label="Back"], [title^="Back"], [aria-label="뒤로"], [title^="뒤로"]').first().click();
@@ -133,7 +133,7 @@ try {
 	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${cssAttr(BRIEF)}"]`);
 	now = await tabs(page);
-	check("⌘T from an AI Search tab opens a folder tab", now.length === 2 && now[1]?.active === true && now[1]?.ai === false, JSON.stringify(now));
+	check("⌘T from an AI Chat tab opens a folder tab", now.length === 2 && now[1]?.active === true && now[1]?.ai === false, JSON.stringify(now));
 	await page.locator(".tabs .tab").first().click();
 	await page.waitForSelector(PANEL);
 	check(
@@ -148,7 +148,7 @@ try {
 	await page.keyboard.press(chord("k"));
 	await page.waitForSelector(PANEL);
 	now = await tabs(page);
-	check("⌘K adopts the existing AI Search tab", now.length === 2 && now[0]?.active === true, JSON.stringify(now));
+	check("⌘K adopts the existing AI Chat tab", now.length === 2 && now[0]?.active === true, JSON.stringify(now));
 	check(
 		"⌘K focuses the composer",
 		await page.evaluate(() => document.activeElement?.getAttribute("aria-label") === "Ask Dazzi"),
@@ -162,7 +162,7 @@ try {
 	await page.locator(`${PANEL} .assistant-msg`).waitFor({ timeout: 10_000 });
 	now = await tabs(page);
 	check(
-		"AI Summary opens a new AI Search tab",
+		"AI Summary opens a new AI Chat tab",
 		now.length === 3 && now[2]?.active === true && now[2]?.ai === true,
 		JSON.stringify(now),
 	);
@@ -180,26 +180,26 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "03-ai-summary-tab.png") });
 
-	// 7. A row dragged onto an AI Search strip tab attaches there.
+	// 7. A row dragged onto an AI Chat strip tab attaches there.
 	await showFolderTab(page);
 	await page.locator(`[data-path="${cssAttr(NOTES)}"]`).dragTo(page.locator(".tabs .tab").nth(2));
 	await waitForPill(page, NOTES).catch(() => undefined);
 	now = await tabs(page);
-	check("a row dropped on an AI Search tab switches to it", now[2]?.active === true, JSON.stringify(now));
+	check("a row dropped on an AI Chat tab switches to it", now[2]?.active === true, JSON.stringify(now));
 	check(
 		"the dropped row is attached, not moved",
 		JSON.stringify(await pills(page)) === JSON.stringify([NOTES]) && existsSync(NOTES),
 		JSON.stringify(await pills(page)),
 	);
 
-	// 8. A row dragged onto the sidebar AI Search item.
+	// 8. A row dragged onto the sidebar AI Chat item.
 	await showFolderTab(page);
 	const folderTabIndex = (await tabs(page)).findIndex((tab) => tab.active);
-	await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).dragTo(page.locator('.sidebar__item:has-text("AI Search"), .sidebar__item:has-text("AI 검색")').first());
+	await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).dragTo(page.locator('.sidebar__item:has-text("AI Chat"), .sidebar__item:has-text("AI 채팅")').first());
 	await waitForPill(page, BUDGET).catch(() => undefined);
 	now = await tabs(page);
 	check(
-		"a row dropped on the sidebar item turns the focused tab into AI Search",
+		"a row dropped on the sidebar item turns the focused tab into AI Chat",
 		now[folderTabIndex]?.active === true && now[folderTabIndex]?.ai === true && now.length === 3,
 		JSON.stringify(now),
 	);
@@ -247,7 +247,7 @@ try {
 	check("the drag overlay clears after the drop", (await page.getByText("Drag here to ask AI").count()) === 0);
 	await page.screenshot({ path: join(EVIDENCE, "05-panel-drops.png") });
 
-	// 11. The whole search's "Ask AI Search" opens a new AI tab and sends the query.
+	// 11. The whole search's "Ask AI Chat" opens a new AI tab and sends the query.
 	const countBefore = (await tabs(page)).length;
 	const search = page.locator(".side-search input");
 	await search.click();
@@ -257,7 +257,7 @@ try {
 	await page.locator(`${PANEL} .user-msg .bubble`).first().waitFor({ timeout: 10_000 });
 	now = await tabs(page);
 	check(
-		"Ask AI Search opens a new AI Search tab and sends the query",
+		"Ask AI Chat opens a new AI Chat tab and sends the query",
 		now.length === countBefore + 1 &&
 			now.at(-1)?.active === true &&
 			now.at(-1)?.ai === true &&
@@ -272,14 +272,14 @@ try {
 	await page.locator(".tabs .tab").first().click();
 	await page.waitForSelector(PANEL);
 	await search.click();
-	// A whole search from an AI Search tab lists its file names in the tab's last folder.
+	// A whole search from an AI Chat tab lists its file names in the tab's last folder.
 	await search.fill("budget");
 	await search.press("Enter");
 	await page.waitForSelector(`[data-path="${cssAttr(BUDGET)}"]`, { timeout: 15_000 }).catch(() => undefined);
 	const searchTabs = await tabs(page);
 	await page.screenshot({ path: join(EVIDENCE, "07-filename-search-from-ai-tab.png") });
 	check(
-		"a filename search from an AI Search tab shows the results there",
+		"a filename search from an AI Chat tab shows the results there",
 		(await page.locator(PANEL).count()) === 0 && (await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).count()) === 1,
 		`panels=${await page.locator(PANEL).count()} rows=${await page.locator(`[data-path="${cssAttr(BUDGET)}"]`).count()} tabs=${JSON.stringify(searchTabs)}`,
 	);

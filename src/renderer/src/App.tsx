@@ -531,6 +531,16 @@ export function App(): ReactElement {
 		[t],
 	);
 
+	/** A source picked in the Inspector's evidence tabs: the AI Chat tab scrolls its text to where that source is cited. */
+	const [evidenceJump, setEvidenceJump] = useState<{ readonly number: number; readonly nonce: number } | null>(null);
+	const pickEvidenceTab = useCallback(
+		(number: number) => {
+			selectEvidence(number);
+			setEvidenceJump((current) => ({ number, nonce: (current?.nonce ?? 0) + 1 }));
+		},
+		[selectEvidence],
+	);
+
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
 	const focusPath = finder?.selection.focus ?? null;
 	const stackRows = finder?.stackRows;
@@ -908,6 +918,7 @@ export function App(): ReactElement {
 												active={id === activeAiTabId}
 												visible={box !== undefined}
 												selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
+												evidenceJump={evidenceJump}
 												onSelectEvidence={selectEvidence}
 												onPublish={publishEvidence}
 												imageActions={imageActions}
@@ -960,7 +971,7 @@ export function App(): ReactElement {
 								view={aiTabActive ? "evidence" : "info"}
 								evidence={evidence}
 								evidenceSelected={evidenceSelectedNumber}
-								onSelectEvidence={selectEvidence}
+								onSelectEvidence={pickEvidenceTab}
 								onRevealPath={(target, excerpts) => {
 									if (excerpts !== undefined) openQuickLook({ path: target, name: basename(target), anchor: excerpts });
 									else finder?.revealEvidence(target);

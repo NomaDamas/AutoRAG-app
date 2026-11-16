@@ -33,7 +33,7 @@ describe("navGroups", () => {
 
 		// Then each section keeps its own order and carries the eject affordance
 		expect(groups.map((group) => [group.label, group.items.map((item) => item.label)])).toEqual([
-			["Favorites", ["AI Search", "Automations", "Recents", "Desktop"]],
+			["Favorites", ["AI Chat", "Automations", "Recents", "Desktop"]],
 			["Cloud", ["Google Drive - a@x.com", "Google Drive - b@y.com"]],
 			["Locations", ["Macintosh HD", "SSD1"]],
 		]);
@@ -51,7 +51,7 @@ describe("navGroups", () => {
 		expect(groups.map((group) => group.label)).toEqual(["Favorites", "Locations"]);
 	});
 
-	it("always heads Favorites with the AI Search and Automations app rows", () => {
+	it("always heads Favorites with the AI Chat and Automations app rows", () => {
 		// Given only a cloud row, so the OS contributes nothing to Favorites
 		const groups = navGroups([place("Google Drive - a@x.com", "cloud", { icon: "google-drive" })]);
 
@@ -59,16 +59,16 @@ describe("navGroups", () => {
 		const favorites = groups[0];
 		expect(favorites?.label).toBe("Favorites");
 		expect(favorites?.items.map((item) => [item.label, item.view, item.kind])).toEqual([
-			["AI Search", "aiSearch", undefined],
+			["AI Chat", "aiSearch", undefined],
 			["Automations", "automations", undefined],
 		]);
 	});
 });
 
 describe("the Automations app row", () => {
-	it("sits right under AI Search in Favorites and turns the focused tab into the Automations view", () => {
+	it("sits right under AI Chat in Favorites and turns the focused tab into the Automations view", () => {
 		const favorites = navGroups([place("Recents", "favorites", { icon: "recents" }), place("Desktop", "favorites")])[0];
-		expect(favorites?.items.map((item) => item.label)).toEqual(["AI Search", "Automations", "Recents", "Desktop"]);
+		expect(favorites?.items.map((item) => item.label)).toEqual(["AI Chat", "Automations", "Recents", "Desktop"]);
 		const row = favorites?.items[1];
 		expect(row).toMatchObject({ view: "automations", path: AUTOMATIONS_PATH, available: true, ejectable: false });
 		expect(row?.kind).toBeUndefined();

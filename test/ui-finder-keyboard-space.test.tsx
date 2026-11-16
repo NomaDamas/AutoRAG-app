@@ -60,9 +60,9 @@ function press(target: HTMLElement, key: string, init: KeyboardEventInit = {}): 
 }
 
 describe("Space with a preview open", () => {
-	it("closes it from a focused button (the evidence title that opened it) on an AI Search tab", () => {
+	it("closes it from a focused button (the evidence title that opened it) on an AI Chat tab", () => {
 		const { input, quickLookSelection, closeOpenQuickLook } = actions(true);
-		act(() => root.render(<Harness path="AI Search" input={input} />));
+		act(() => root.render(<Harness path="AI Chat" input={input} />));
 		const title = host.querySelector<HTMLElement>("#evidence-title")!;
 		title.focus();
 		const event = press(title, " ");
@@ -73,7 +73,7 @@ describe("Space with a preview open", () => {
 
 	it("leaves a focused button alone when no preview is open, so Space still presses it", () => {
 		const { input, closeOpenQuickLook } = actions(false);
-		act(() => root.render(<Harness path="AI Search" input={input} />));
+		act(() => root.render(<Harness path="AI Chat" input={input} />));
 		const title = host.querySelector<HTMLElement>("#evidence-title")!;
 		title.focus();
 		const event = press(title, " ");
@@ -83,7 +83,7 @@ describe("Space with a preview open", () => {
 
 	it("never closes it while the user is typing a space into a field", () => {
 		const { input, closeOpenQuickLook } = actions(true);
-		act(() => root.render(<Harness path="AI Search" input={input} />));
+		act(() => root.render(<Harness path="AI Chat" input={input} />));
 		const composer = host.querySelector<HTMLElement>("#composer")!;
 		composer.focus();
 		const event = press(composer, " ");

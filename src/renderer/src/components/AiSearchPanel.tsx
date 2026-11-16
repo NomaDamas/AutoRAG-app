@@ -47,7 +47,8 @@ import {
 	evidenceDetail,
 	evidenceHeading,
 	evidenceKind,
-	resolveActiveEvidence,
+	accumulateEvidence,
+	citationSource,
 	unresolvedCitationNumbers,
 	type EvidenceSelectionSource,
 } from "../state/evidence";
@@ -113,6 +114,11 @@ export interface AiSearchPanelProps {
 	/** The panel's tab is on screen in some pane (split panes show several). */
 	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
+	/**
+	 * The person picked source `number` in the Inspector's evidence tabs: the panel scrolls its text to where that source
+	 * is cited. `nonce` is new for every pick, so picking the same source again scrolls again.
+	 */
+	readonly evidenceJump?: { readonly number: number; readonly nonce: number } | null;
 	readonly onSelectEvidence: (number: number) => void;
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
@@ -149,7 +155,7 @@ export function formatElapsed(ms: number): string {
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
+	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -409,7 +415,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		[pastTurns, quick, deep],
 	);
 	const evidence = useMemo(
-		() => resolveActiveEvidence(allTurnPhases, evidenceSource),
+		() => accumulateEvidence(allTurnPhases, evidenceSource),
 		[allTurnPhases, evidenceSource],
 	);
 	const sessionEvidence = useMemo(() => {
@@ -430,11 +436,24 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	function selectPhaseCitation(turnIndex: number, phase: "quick" | "deep", number: number): void {
 		const nextSource: EvidenceSelectionSource = { turnIndex, phase };
 		setEvidenceSource(nextSource);
-		const nextEvidence = resolveActiveEvidence(allTurnPhases, nextSource);
+		const nextEvidence = accumulateEvidence(allTurnPhases, nextSource);
 		if (active) onPublish(nextEvidence, sessionEvidence);
 		onSelectEvidence(number);
 		onCitation?.(number);
 	}
+
+	// A source picked in the Inspector's evidence tabs: show where the text cites it, whichever turn that is.
+	const handledJumpRef = useRef<number | null>(null);
+	useEffect(() => {
+		if (evidenceJump === null || !active || handledJumpRef.current === evidenceJump.nonce) return;
+		handledJumpRef.current = evidenceJump.nonce;
+		const source = citationSource(allTurnPhases, evidenceJump.number);
+		if (source === null) return;
+		setEvidenceSource(source);
+		const scope = bodyRef.current?.querySelector(`[data-cite-scope="${source.turnIndex}:${source.phase}"]`);
+		const target = scope?.querySelector(`[data-cite="${evidenceJump.number}"]`) ?? scope;
+		target?.scrollIntoView({ block: "center", behavior: "smooth" });
+	}, [evidenceJump, active, allTurnPhases]);
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
@@ -1061,7 +1080,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{submittedQuery === null ? null : (
 						<div className="message assistant-msg flex flex-col gap-14">
 															{quickReady ? (
-								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink">
+								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:quick`}>
 									<ProseBlocks
 										text={quickText}
 										selected={
@@ -1100,7 +1119,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed) })}</span>
 										</div>
 									)}
-																			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink">
+																			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:deep`}>
 										<ProseBlocks
 											text={deepText}
 											selected={
@@ -1446,7 +1465,7 @@ function PastTurnView({
 	const contextBefore = turn.contextNotices.filter((notice) => notice.timing === "before-quick");
 	const contextAfter = turn.contextNotices.filter((notice) => notice.timing === "after-quick");
 	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
-		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body" data-cite-scope={`${turnIndex}:${phaseKind}`}>
 			<ProseBlocks
 				text={text}
 				selected={
@@ -1625,6 +1644,7 @@ function AnswerInline({
 									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 									segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
 								)}
+								data-cite={segment.number}
 								onClick={() => onCitation(segment.number)}
 							>
 								{segment.number}

@@ -2,7 +2,7 @@
 // real keystrokes. Proves, on this Mac:
 //   1. Search Dazzi returns ranked hits from the developer's real Dazzi index (the installed app's bundled
 //      librarian CLI, model-free), and Enter-free typing updates the list;
-//   2. Ask Dazzi sends a typed question to a running Dazzi: a new AI Search tab, the question in the bubble, and a
+//   2. Ask Dazzi sends a typed question to a running Dazzi: a new AI Chat tab, the question in the bubble, and a
 //      real model's answer (live Dazzi API);
 //   3. Ask Dazzi About Selected Files attaches the Finder selection to the question;
 //   4. Open in Dazzi opens the Finder-selected folder in a tab;
@@ -216,7 +216,7 @@ try {
 	cfg.model = { provider: "dazzi", id: "z-ai/glm-5.3-flash", name: "GLM 5.3 Flash", baseUrl: `${baseUrl}/v1`, api: "openai-responses", reasoning: true, input: ["text", "image"], contextWindow: 1048576, maxTokens: 32000 };
 	writeFileSync(CONFIG, `${JSON.stringify(cfg, null, 2)}\n`);
 	const tabs = () => page.locator(".tabs .tab").count();
-	const lastBubble = () => page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) .user-msg .bubble').last().innerText();
+	const lastBubble = () => page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) .user-msg .bubble').last().innerText();
 
 	// 1. Search Dazzi over the real index. Raycast's list is read off the screen (it exposes no text to Accessibility),
 	// from Raycast's own window: it opens on whichever display has the pointer, not necessarily the main one.
@@ -243,7 +243,7 @@ try {
 	key(ESC);
 	await sleep(500);
 
-	// 2. Ask Dazzi: typed in Raycast, answered in a new AI Search tab of the running Dazzi.
+	// 2. Ask Dazzi: typed in Raycast, answered in a new AI Chat tab of the running Dazzi.
 	const tabsBefore = await tabs();
 	await openCommand("Ask Dazzi");
 	await type("Raycast에서 보낸 질문이야. 한 단어로 인사해줘.");
@@ -252,7 +252,7 @@ try {
 	check("ask: the question arrives in Dazzi", asked !== false);
 	check("ask: in a new tab", (await tabs()) === tabsBefore + 1, `${tabsBefore} → ${await tabs()}`);
 	shot("raycast-02-ask-hud");
-	const answered = await until(async () => (await page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) .assistant-prose').allInnerTexts()).join("").trim(), 240_000);
+	const answered = await until(async () => (await page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) .assistant-prose').allInnerTexts()).join("").trim(), 240_000);
 	check("ask: a real model answered", answered !== false, typeof answered === "string" ? answered.slice(0, 120) : "");
 	await page.screenshot({ path: join(EVIDENCE, "raycast-03-ask-answer.png") });
 
@@ -266,10 +266,10 @@ try {
 	key(RETURN);
 	const selected = await until(async () => (await lastBubble()).includes("Pro 플랜 월 요금"), 30_000);
 	check("selection: the question arrives in a new tab", selected !== false && (await tabs()) === tabsBeforeSelection + 1);
-	const chips = await page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) .user-msg .ref-attachments').last().innerText().catch(() => "");
+	const chips = await page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) .user-msg .ref-attachments').last().innerText().catch(() => "");
 	check("selection: the Finder selection is attached", chips.includes("plans.txt"), JSON.stringify(chips));
 	const selectionAnswer = await until(async () => {
-		const text = (await page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) .assistant-prose').allInnerTexts()).join(" ");
+		const text = (await page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) .assistant-prose').allInnerTexts()).join(" ");
 		return /20,?000/u.test(text) ? text : false;
 	}, 240_000);
 	check("selection: answered from the file (20,000)", selectionAnswer !== false, typeof selectionAnswer === "string" ? selectionAnswer.slice(0, 120) : "");

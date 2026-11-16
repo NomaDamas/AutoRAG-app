@@ -232,7 +232,7 @@ describe("rules that watch a folder", () => {
 	});
 });
 
-describe("the prompts that open an AI Search draft", () => {
+describe("the prompts that open an AI Chat draft", () => {
 	it("asks to change this rule by id, with what it does now, and leaves the change for the person to type", () => {
 		const prompt = editPrompt(rule());
 		expect(prompt).toContain("downloads-pdf-summary");

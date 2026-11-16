@@ -216,6 +216,12 @@ const ACTION_ALIAS_MAP: Readonly<Record<string, ShortcutId>> = {
 	ai질문: "focusComposer",
 	ai検索: "focusComposer",
 	ai搜索: "focusComposer",
+	aichat: "focusComposer",
+	openaichat: "focusComposer",
+	ai채팅: "focusComposer",
+	ai채팅열기: "focusComposer",
+	aiチャット: "focusComposer",
+	ai聊天: "focusComposer",
 	// openSettings
 	opensettings: "openSettings",
 	settings: "openSettings",

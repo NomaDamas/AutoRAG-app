@@ -14,7 +14,7 @@
     "cloud": "クラウド",
     "connections": "接続",
     "locations": "場所",
-    "aiSearch": "AI 検索",
+    "aiSearch": "AI チャット",
     "settings": "設定",
     "settingsHint": "設定 {{shortcut}}",
     "usage": "AI 使用量",
@@ -316,7 +316,7 @@
       "monthsAgo": "{{count}} か月前",
       "yearsAgo": "{{count}} 年前",
       "newChat": "新しい会話",
-      "expand": "AI 検索タブで開く",
+      "expand": "AI チャットタブで開く",
       "removeAttachment": "添付を外す",
       "thinking": "回答を探しています…",
       "stopped": "回答を停止しました",
@@ -325,13 +325,13 @@
       "placeholderAny": "何でも質問してください",
       "continue": "会話を続ける",
       "unread": "新しい回答",
-      "history": "最近のAI検索",
+      "history": "最近のAI チャット",
       "close": "会話を閉じる"
     },
     "fileActions": "ファイル操作"
   },
   "aiSearch": {
-    "title": "AI 検索",
+    "title": "AI チャット",
     "aiNotice": "回答はAIが生成したもので、不正確な場合があります。引用元をご確認ください。",
     "history": "チャット履歴",
     "historyShortcut": "チャット履歴 {{shortcut}}",
@@ -532,11 +532,11 @@
     "empty": {
       "title": "自動化はまだありません",
       "body": "ファイルが作られたり変更されたりしたときに Dazzi がすることを決めておきましょう。",
-      "add": "AI 検索でルールを追加"
+      "add": "AI チャットでルールを追加"
     },
     "errors": {
       "config": "ルールファイルを読み込めません",
-      "configHint": "AI 検索でルールを直すか、ファイルを直接編集してください。"
+      "configHint": "AI チャットでルールを直すか、ファイルを直接編集してください。"
     },
     "daemon": {
       "on": "バックグラウンドで実行中",
@@ -549,9 +549,9 @@
     },
     "menu": {
       "preview": "クイックルック",
-      "edit": "AI 検索で編集",
+      "edit": "AI チャットで編集",
       "reveal": "自動化タブで表示",
-      "add": "AI 検索で新しいルールを追加…",
+      "add": "AI チャットで新しいルールを追加…",
       "openFolder": "監視フォルダを開く",
       "delete": "削除"
     },
@@ -585,7 +585,7 @@
       "when": "いつ",
       "what": "すること",
       "folders": "対象フォルダ",
-      "edit": "AI 検索で編集",
+      "edit": "AI チャットで編集",
       "close": "閉じる",
       "ranFail": "{{time}}に実行 · {{reason}}"
     },
@@ -899,7 +899,7 @@
     },
     "feature": {
       "ai": {
-        "title": "AI検索",
+        "title": "AI チャット",
         "sub": "気になることはまず質問してください。出典を添えて答えます。"
       },
       "versions": {
@@ -1151,7 +1151,7 @@
           "price": "無料",
           "tag": "登録してすぐに試してみたい方へ",
           "training": "サービス向上のため入出力を利用する場合があります",
-          "features": "ファイルの中身まで理解する AI 検索\n話しかけるように質問できるファイルチャット\n軽量なチャットモデル 5 種\n毎週補充される無料クレジット"
+          "features": "ファイルの中身まで理解する AI チャット\n話しかけるように質問できるファイルチャット\n軽量なチャットモデル 5 種\n毎週補充される無料クレジット"
         },
         "air": {
           "name": "Air",
@@ -1317,7 +1317,7 @@
     "tips": {
       "1": {
         "title": "{{shortcut}}一回ですぐに質問",
-        "body": "どの画面からでもAI検索の入力欄に移動します。フォルダを開かずに文書の内容を尋ね、根拠とともに答えを得られます。"
+        "body": "どの画面からでもAI チャットの入力欄に移動します。フォルダを開かずに文書の内容を尋ね、根拠とともに答えを得られます。"
       },
       "2": {
         "title": "回答の番号を押すと根拠をプレビュー",
@@ -1330,7 +1330,7 @@
       },
       "4": {
         "title": "ファイルをドラッグして質問に添付",
-        "body": "Finderの行や他のアプリのファイル、フォルダをAI検索にドラッグすると、その範囲を基準に質問します。",
+        "body": "Finderの行や他のアプリのファイル、フォルダをAI チャットにドラッグすると、その範囲を基準に質問します。",
         "pill": "このファイルを要約して"
       },
       "5": {
@@ -1392,8 +1392,8 @@
     "expand": "展開",
     "collapse": "折りたたむ",
     "newName": "新しい名前",
-    "indexIncluded": "AI検索インデックスに含まれています",
-    "indexExcluded": "AI検索インデックスから除外されています",
+    "indexIncluded": "AI チャットインデックスに含まれています",
+    "indexExcluded": "AI チャットインデックスから除外されています",
     "stackToggle": "他のバージョン {{count}} 件 · クリックで展開",
     "webImage": "Web画像",
     "image": "画像",
@@ -2238,9 +2238,9 @@
       "presetMinimal": "主要項目のみ",
       "resetDefault": "初期設定に戻す",
       "favoritesTitle": "お気に入り",
-      "favoritesDesc": "お気に入りフォルダの表示と並び順を設定します。AI 検索と自動化は必須機能のため常に表示されます。",
+      "favoritesDesc": "お気に入りフォルダの表示と並び順を設定します。AI チャットと自動化は必須機能のため常に表示されます。",
       "lockedBadge": "常時表示",
-      "lockedHint": "AI 検索と自動化は必須項目のため非表示にできません。",
+      "lockedHint": "AI チャットと自動化は必須項目のため非表示にできません。",
       "customBadge": "カスタムフォルダ",
       "removeCustom": "{{name}} を削除",
       "addCustomFolder": "フォルダを追加",
@@ -2410,12 +2410,12 @@
         "window": "ウィンドウと移動",
         "view": "表示の切り替え",
         "files": "ファイル操作",
-        "aiSearch": "AI 検索"
+        "aiSearch": "AI チャット"
       },
       "actions": {
         "dismiss": "閉じる・キャンセル",
         "focusSearch": "検索欄にフォーカス",
-        "focusComposer": "AI 検索を開く",
+        "focusComposer": "AI チャットを開く",
         "openSettings": "設定を開く",
         "newTab": "新しいタブ",
         "reopenTab": "閉じたタブを再度開く",
@@ -2593,9 +2593,9 @@
       "signOut": "ログアウト",
       "signIn": "ログイン",
       "signInBrowser": "ログイン",
-      "managedDesc": "Dazzi アカウントの管理モデルを AI 検索で使用します。",
+      "managedDesc": "Dazzi アカウントの管理モデルを AI チャットで使用します。",
       "managedName": "Dazzi 提供モデルを使う",
-      "managedHint": "AI 検索に Dazzi アカウントに含まれるモデルを使います。ログイン後に設定できます。",
+      "managedHint": "AI チャットに Dazzi アカウントに含まれるモデルを使います。ログイン後に設定できます。",
       "useManaged": "使う",
       "planDescription": "現在のプランと AI 使用量です。",
       "trialing": " · トライアル中",
@@ -3382,7 +3382,7 @@
     "tabs": {
       "browse": "ブラウズ",
       "recents": "最近の項目",
-      "ai": "AI 検索",
+      "ai": "AI チャット",
       "automations": "自動化",
       "search": "検索",
       "aria": "アプリのタブ",
@@ -3494,7 +3494,7 @@
       "ask": "AI 要約",
       "askFolder": "聞く",
       "move": "移動",
-      "indexed": "AI 検索に含める",
+      "indexed": "AI チャットに含める",
       "indexedOn": "内容まで検索できます",
       "indexedOff": "名前だけで検索できます",
       "indexLocked": "上位フォルダの設定に従います",
@@ -3518,8 +3518,8 @@
       "clear": "消去",
       "results": "{{machine}} 全体 · {{count}} 件",
       "none": "“{{query}}” という名前のファイルはありません",
-      "noneHint": "内容で探すには AI 検索に聞いてください",
-      "askAi": "“{{query}}” について AI 検索に聞く",
+      "noneHint": "内容で探すには AI チャットに聞いてください",
+      "askAi": "“{{query}}” について AI チャットに聞く",
       "askAiHint": "ファイルの内容、メール、メッセンジャーまで探します",
       "typeHint": "このコンピュータのファイル名を検索します",
       "exit": "検索を閉じる"
@@ -3541,9 +3541,9 @@
       "open": "進行中と待機中の作業"
     },
     "rules": {
-      "add": "AI 検索でルールを追加",
+      "add": "AI チャットでルールを追加",
       "section": "ルール",
-      "foot": "ファイルが追加・変更されたときに Dazzi が行うことを決めておきます。ルールは AI 検索で言葉で作成・編集します。",
+      "foot": "ファイルが追加・変更されたときに Dazzi が行うことを決めておきます。ルールは AI チャットで言葉で作成・編集します。",
       "daemonToggle": "バックグラウンドで実行"
     },
     "ai": {

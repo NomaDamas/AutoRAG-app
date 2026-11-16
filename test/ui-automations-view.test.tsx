@@ -196,12 +196,12 @@ describe("AutomationsView background service line", () => {
 });
 
 describe("AutomationsView empty and error states", () => {
-	it("invites adding the first rule through AI Search when there are none", () => {
+	it("invites adding the first rule through AI Chat when there are none", () => {
 		const p = props({ state: state([]) });
 		render(p);
 		expect(rows()).toEqual([]);
 		expect(text(host)).toContain("아직 자동화가 없습니다");
-		act(() => [...host.querySelectorAll("button")].find((b) => text(b) === "AI 검색에서 규칙 추가")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		act(() => [...host.querySelectorAll("button")].find((b) => text(b) === "AI 채팅에서 규칙 추가")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(p.onAdd).toHaveBeenCalledTimes(1);
 	});
 

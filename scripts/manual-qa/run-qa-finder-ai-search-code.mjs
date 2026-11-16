@@ -1,5 +1,5 @@
 /**
- * Manual QA — syntax highlighting of fenced code in AI Search answers and in
+ * Manual QA — syntax highlighting of fenced code in AI Chat answers and in
  * evidence excerpts, in the real app.
  *
  * Deterministic lane: seeds the chat store (<userData>/chat-history/chats.json)

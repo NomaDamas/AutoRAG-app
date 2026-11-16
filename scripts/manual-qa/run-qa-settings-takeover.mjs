@@ -251,16 +251,16 @@ try {
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
 
-	// The Finder chrome stays mounted under Settings: an AI Search tab's composer draft survives a round trip.
-	await page.locator('.sidebar__item:has-text("AI Search")').first().click();
-	const composer = page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) textarea[aria-label="Ask Dazzi"]');
+	// The Finder chrome stays mounted under Settings: an AI Chat tab's composer draft survives a round trip.
+	await page.locator('.sidebar__item:has-text("AI Chat")').first().click();
+	const composer = page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) textarea[aria-label="Ask Dazzi"]');
 	await composer.fill("draft kept while Settings is open");
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.waitForTimeout(300);
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
-	check("Back returns to the AI Search tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
+	check("Back returns to the AI Chat tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
 	await shot("05b-ai-draft-after-settings");
 
 	// 6. A hidden Finder sidebar stays hidden; Settings still has its own.
