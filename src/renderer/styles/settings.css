@@ -5219,3 +5219,8 @@
 .settings-view .index-map-folders .index-map-row[data-opens="true"] {
 	cursor: pointer;
 }
+
+/* 제외됨 sits right after the name, not at the far end of the row. */
+.settings-view .index-map-folders .index-map-row-main span {
+	flex: 0 1 auto;
+}

@@ -283,10 +283,7 @@ export function IndexingPage({
 					header={(scope) => <SearchFoldersSection editor={editor} scope={scope} />}
 					progressHead={
 						<div className="index-map-head">
-							<div className="scope-section-text">
-								<h3 className="scope-section-title">{t("settingsSources.indexing.progress")}</h3>
-								<p className="scope-section-desc">{t("settingsSources.indexing.progressDesc")}</p>
-							</div>
+							<h3 className="scope-section-title">{t("settingsSources.indexing.progress")}</h3>
 							<IndexActivityCard snapshot={activity} hideIdle />
 						</div>
 					}

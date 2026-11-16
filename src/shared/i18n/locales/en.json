@@ -3127,7 +3127,6 @@
       "keepDesc": "Set how often changes are fetched again. Use the refresh button to refresh right away.",
       "connectApp": "Connect an app",
       "connectAppHint": "Choose in All Connections",
-      "progressDesc": "Select a folder in the chart or the list to go into it. Select the middle of the chart to go back up.",
       "liveLabel": "Live"
     },
     "apps": {
