@@ -4,6 +4,7 @@ import { ArrowUp, Check, RotateCcw, Square } from "lucide-react";
 import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
 import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
 import { VoiceButton } from "../InspectorChat";
+import { SeedLoader } from "../SeedLoader";
 import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import { appendTranscript } from "../../../../shared/voice-contract";
@@ -394,7 +395,8 @@ export function AppCustomizerPanel({
 									) : null}
 									{turn.status === "running" && turn.draft.length === 0 ? (
 										<div className="customizer-turn__progress" role="status">
-											<span className="shimmer">{turn.progress.length > 0 ? turn.progress : t(copy.thinking)}</span>
+											<SeedLoader />
+											<span className="shimmer min-w-0 truncate">{turn.progress.length > 0 ? turn.progress : t(copy.thinking)}</span>
 										</div>
 									) : null}
 									{turn.error !== null ? (

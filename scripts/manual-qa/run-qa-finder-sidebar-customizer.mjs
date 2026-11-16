@@ -312,6 +312,7 @@ try {
 	// Wait until the intermediate assistant message has committed AND the shimmer is spinning below it
 	await panel.locator(".customizer-turn__reply", { hasText: "먼저 현재 사이드바 구성을 살펴볼게요." }).waitFor({ timeout: 10_000 });
 	await panel.locator(".customizer-turn__progress .shimmer", { hasText: "현재 사이드바 설정을 확인하는 중" }).waitFor({ timeout: 10_000 });
+	check("The customizer's thinking line carries the seed loader beside the shimmer text", (await panel.locator(".customizer-turn__progress svg.seed-loader").count()) === 1);
 	const midTurnStack = await panel.evaluate((el) => {
 		const reply = el.querySelector(".customizer-turn__reply")?.getBoundingClientRect();
 		const progress = el.querySelector(".customizer-turn__progress")?.getBoundingClientRect();

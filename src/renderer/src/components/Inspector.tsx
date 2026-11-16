@@ -1289,20 +1289,17 @@ function EvidencePanel({
 						</div>
 					) : null}
 
-					<div className="h-px bg-divider" aria-hidden="true" />
-					<div className="flex h-22 items-center text-[13px] font-medium leading-[19px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
-					<div className="evidence-excerpts flex flex-col gap-8 [&_.evidence\_\_block]:text-[13px] [&_.evidence\_\_block]:leading-[21px]">
-						{item.summary.length === 0 ? null : (
-							<InlineWithImages
-								text={item.summary}
-								images={excerptImages}
-								className="evidence__block evidence__block--paragraph text-caption leading-read text-ink-body text-pretty [&_strong]:text-ink [&_strong]:font-semibold"
-							/>
-						)}
-						{item.excerpts.map((excerpt, index) => (
-							<EvidenceExcerpt key={`${index}`} text={excerpt} images={excerptImages} />
-						))}
-					</div>
+					{item.excerpts.length === 0 ? null : (
+						<>
+							<div className="h-px bg-divider" aria-hidden="true" />
+							<div className="flex h-22 items-center text-[13px] font-medium leading-[19px] text-ink">{t("inspector.evidencePanel.excerpts")}</div>
+							<div className="evidence-excerpts flex flex-col gap-8 [&_.evidence\_\_block]:text-[13px] [&_.evidence\_\_block]:leading-[21px]">
+								{item.excerpts.map((excerpt, index) => (
+									<EvidenceExcerpt key={`${index}`} text={excerpt} images={excerptImages} />
+								))}
+							</div>
+						</>
+					)}
 				</div>
 			</div>
 		</div>

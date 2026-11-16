@@ -2609,6 +2609,10 @@
 }
 
 .customizer-turn__progress {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
 	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }

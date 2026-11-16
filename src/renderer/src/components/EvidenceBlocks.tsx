@@ -103,10 +103,18 @@ export function InlineWithImages({
 	if (figures.length === 0) return line;
 	return (
 		<>
-			{isImageOnlyLine(segments) ? null : line}
+			{hasText(segments) ? line : null}
 			<ImageRow images={figures} folder={images.folder} captioned actions={images.actions} />
 		</>
 	);
+}
+
+/**
+ * True when a line says something besides its image references. The figure under the line is the image, so a path
+ * written in the text is not repeated, and a line that was only that path leaves no empty row.
+ */
+function hasText(segments: readonly InlineSegment[]): boolean {
+	return segments.some((segment) => segment.kind !== "image" && !(segment.kind === "text" && segment.text.trim() === ""));
 }
 
 function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonly images: ExcerptImages }): ReactElement {
@@ -115,10 +123,12 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 			const segments = parseInline(block.text);
 			return (
 				<>
-					<div className="evidence__block evidence__block--heading text-body font-semibold text-ink pt-4 [&_strong]:text-ink [&_strong]:font-semibold">
-						<span className="evidence__block-prefix text-ink-muted font-regular">## </span>
-						{renderInline(segments, images.actions.onOpenUrl)}
-					</div>
+					{hasText(segments) ? (
+						<div className="evidence__block evidence__block--heading text-body font-semibold text-ink pt-4 [&_strong]:text-ink [&_strong]:font-semibold">
+							<span className="evidence__block-prefix text-ink-muted font-regular">## </span>
+							{renderInline(segments, images.actions.onOpenUrl)}
+						</div>
+					) : null}
 					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
 				</>
 			);
@@ -127,14 +137,17 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 			const segments = parseInline(block.text);
 			return (
 				<>
-					<div className="evidence__block evidence__block--list flex gap-8 text-caption leading-read text-ink-body [&_strong]:text-ink [&_strong]:font-semibold">
-						<span className="evidence__block-prefix text-ink-muted font-regular [.evidence\_\_block--list_&]:flex-none">–</span>
-						<span>{renderInline(segments, images.actions.onOpenUrl)}</span>
-					</div>
+					{hasText(segments) ? (
+						<div className="evidence__block evidence__block--list flex gap-8 text-caption leading-read text-ink-body [&_strong]:text-ink [&_strong]:font-semibold">
+							<span className="evidence__block-prefix text-ink-muted font-regular [.evidence\_\_block--list_&]:flex-none">–</span>
+							<span>{renderInline(segments, images.actions.onOpenUrl)}</span>
+						</div>
+					) : null}
 					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
 				</>
 			);
 		}
+
 		case "quote":
 			return <InlineWithImages text={block.text} images={images} className="evidence__block evidence__block--quote text-caption leading-read text-ink-muted pl-10 shadow-[inset_2px_0_0_var(--border)] [&_strong]:text-ink [&_strong]:font-semibold" />;
 		case "code":
@@ -157,13 +170,8 @@ function InlineSegmentView({ segment, onOpenUrl }: { readonly segment: InlineSeg
 		case "file":
 			return <FileMention path={segment.path} onOpen={onOpenUrl} />;
 		case "image":
-			// A markdown image is shown below its line; a written path stays as text.
-			if (segment.source === "markdown") return null;
-			return segment.source === "code" ? (
-				<code className="evidence__inline-code py-[1px] px-4 rounded-4 bg-code font-mono text-badge break-all">{segment.target}</code>
-			) : (
-				<span className="break-all">{segment.target}</span>
-			);
+			// The figure under the line is the image; its path is not written out a second time.
+			return null;
 		case "link":
 			return <AnswerLink url={segment.url} onOpenUrl={onOpenUrl}>{renderInline(segment.children, onOpenUrl)}</AnswerLink>;
 		default:
