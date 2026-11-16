@@ -376,11 +376,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	 * chat again resumes from its file.
 	 */
 	const agents = new Map<string, SearchAgent>();
+	/** Agents that were answering when the config or credentials changed: they finish on what they started with, then are rebuilt. */
+	const staleAgents = new Set<SearchAgent>();
 	/** The mode the person last chose; agents built after that start in it. */
 	let chosenMode: ApprovalMode | undefined;
 	async function agentFor(chatId: string, earlier: readonly ChatMessage[]): Promise<SearchAgent> {
 		const cached = agents.get(chatId);
-		if (cached !== undefined) {
+		if (cached !== undefined && staleAgents.has(cached)) {
+			agents.delete(chatId);
+			staleAgents.delete(cached);
+			await cached.closeSession?.().catch(() => undefined);
+		} else if (cached !== undefined) {
 			// Re-insert so the Map's order is least recently used first.
 			agents.delete(chatId);
 			agents.set(chatId, cached);
@@ -417,6 +423,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function closeAgents(): Promise<void> {
 		const open = [...agents.values()];
 		agents.clear();
+		staleAgents.clear();
 		await Promise.allSettled(open.map((agent) => agent.closeSession?.()));
 	}
 
@@ -424,6 +431,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function resetAgents(): Promise<void> {
 		const answering = new Set([...active.values()].map((run) => run.agent));
 		const idle = [...agents].filter(([, agent]) => !answering.has(agent));
+		for (const [, agent] of agents) if (answering.has(agent)) staleAgents.add(agent);
 		for (const [chatId] of idle) agents.delete(chatId);
 		await Promise.allSettled(idle.map(([, agent]) => agent.closeSession?.()));
 	}

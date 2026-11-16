@@ -59,6 +59,8 @@ const POLL_INTERVAL_MS = 1000;
 const SMART_INDEXING_TIMEOUT_MS = 120_000;
 /** Longest the model may take to write the tour's questions. */
 const DEMO_MODEL_TIMEOUT_MS = 45_000;
+/** Longest the first run waits for anonymous model access before it plans without a model; indexing never needs one. */
+const MODEL_ACCESS_TIMEOUT_MS = 20_000;
 const DEMO_MAX_TOKENS = 900;
 /** How often the hunt looks for newly parsed documents while the first index is still being built. */
 const HUNT_INTERVAL_MS = 5_000;
@@ -929,10 +931,12 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		remainingMinutes = null;
 		powerBlockerId = deps.startPowerSaveBlocker();
 		try {
-			// Before the first index and the tour: a fresh unauthenticated launch provisions the
-			// guest credential and the plan's models, so smart indexing and buildDemo() have a model.
-			await deps.ensureModelAccess?.().catch(() => undefined);
+			// Scanning and indexing are local and need no model, so a slow or unreachable hosted service never delays them.
+			// The guest credential and the plan's models (smart indexing and the tour's question need a model) are
+			// provisioned meanwhile and awaited only where a model is first used. Signing in later swaps the credential.
+			const modelAccess = (deps.ensureModelAccess?.() ?? Promise.resolve()).catch(() => undefined);
 			const folders = await scanStage();
+			await withTimeout(modelAccess, MODEL_ACCESS_TIMEOUT_MS, undefined);
 			const exclusions = await planningStage(folders);
 			const result = await indexingStage(folders, exclusions);
 			if (!result.ok) return;

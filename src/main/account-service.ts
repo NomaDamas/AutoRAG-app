@@ -66,6 +66,12 @@ export interface AccountServiceDeps {
 	readonly signInTimeoutMs?: number;
 	/** Runs after the server confirmed the account (sign-in and every refresh); must not throw to callers. */
 	readonly onSignedIn?: () => Promise<void>;
+	/**
+	 * Runs whenever the key in `auth.json` changes owner: a guest key stored or dropped, a sign-in, a sign-out, a key the
+	 * server rejected. An agent built earlier holds the key it was built with (Jev, rerank and question decomposition
+	 * read it once), so the host must rebuild its agents. Must not throw to callers.
+	 */
+	readonly onCredentialChanged?: () => void;
 	/** The anonymous device id sent to `/api/desktop/guest` and on sign-in to carry the trial over. */
 	readonly deviceId?: () => Promise<string>;
 }
@@ -219,7 +225,16 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		if (deps.env.OPENAI_API_KEY === revokedOrSignedOutToken) {
 			await deps.credentials.remove("OPENAI_API_KEY").catch(() => undefined);
 		}
+		notifyCredentialChanged();
 	};
+	/** Fire-and-forget: a failing host hook never reaches the account flow. */
+	function notifyCredentialChanged(): void {
+		try {
+			deps.onCredentialChanged?.();
+		} catch (error) {
+			console.warn("[account] onCredentialChanged hook failed:", error);
+		}
+	}
 	let cached: AccountSnapshot | null | undefined;
 	let offline = false;
 	let lastError: string | null = null;
@@ -446,6 +461,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		revokedKey = null;
 		lastError = null;
 		await adoptManagedModelIfUnset();
+		notifyCredentialChanged();
 	}
 
 	async function runSignIn(abort: AbortController, options?: AccountSignInOptions): Promise<AccountStatus> {
@@ -661,6 +677,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 			}
 			if (response.status !== 401) return false;
 			await clearDazziGuestCredential(agentDir, existingGuest);
+			notifyCredentialChanged();
 		}
 		const id = await resolveDeviceId();
 		if (id === null) return false;
@@ -681,6 +698,7 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 		if (await storeDazziGuestCredential(agentDir, token)) {
 			await adoptManagedModelIfUnset(token);
 			notifySignedIn();
+			notifyCredentialChanged();
 		}
 		guestProvisionOutcome = credits.used >= credits.limit ? "exhausted" : "none";
 		return credits.used < credits.limit;
@@ -717,7 +735,10 @@ export function createAccountService(deps: AccountServiceDeps): AccountService {
 				const credits = parseCreditBalance(response.body);
 				return credits.used >= credits.limit ? "exhausted" : "ok";
 			}
-			if (response.status === 401) await clearDazziGuestCredential(agentDir, guestKey);
+			if (response.status === 401) {
+				await clearDazziGuestCredential(agentDir, guestKey);
+				notifyCredentialChanged();
+			}
 		}
 		if (await ensureGuestAccess()) return "ok";
 		return guestProvisionOutcome === "none" ? "ok" : guestProvisionOutcome;

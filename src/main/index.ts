@@ -1064,6 +1064,9 @@ app.whenReady().then(async () => {
 		send: sendToMainWindow,
 		// The picker lists the plan's models from the runtime's persisted catalog.
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
+		// A chat agent built on the guest key keeps that key for Jev, rerank and decomposition; sign-in, sign-out or a dropped
+		// guest key must reach the next question, so idle agents are rebuilt (their conversation resumes from its file).
+		onCredentialChanged: () => void searchService.resetAgents(),
 	});
 	registerAccountIpcHandlers(accountService);
 	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone permission.

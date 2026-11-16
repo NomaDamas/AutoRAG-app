@@ -204,6 +204,43 @@ describe("createFirstRunService run", () => {
 		expect(config.workspacePath).not.toBe("/repo");
 	});
 
+	it("scans while anonymous model access is still being provisioned, and plans only once it settles", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const access = Promise.withResolvers<unknown>();
+		const order: string[] = [];
+		const service = createFirstRunService(
+			await makeDeps(directory, {
+				ensureModelAccess: () => {
+					order.push("access-start");
+					return access.promise;
+				},
+				scanFolders: async () => void order.push("scan"),
+				resolveModel: async () => {
+					order.push("plan-needs-model");
+					throw new Error("no model is configured");
+				},
+			}),
+		);
+		await service.start();
+		await waitForStage(service, "scanning");
+		for (let tick = 0; tick < 30 && !order.includes("scan"); tick += 1) await flush();
+		expect(order).toEqual(["access-start", "scan"]);
+		expect((await service.status()).stage).toBe("scanning");
+		access.resolve(true);
+		expect((await waitForStage(service, "ready")).stage).toBe("ready");
+	});
+
+	it("indexes on without a model when anonymous access fails", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const service = createFirstRunService(
+			await makeDeps(directory, { ensureModelAccess: async () => Promise.reject(new Error("offline")) }),
+		);
+		await service.start();
+		const final = await waitForStage(service, "ready");
+		expect(final.stage).toBe("ready");
+		expect(final.error).toBeNull();
+	});
+
 	it("returns the run in flight instead of starting a second one", async () => {
 		const directory = await workDir("autorag-firstrun-");
 		const gate = Promise.withResolvers<ConfigRefreshResult>();

@@ -612,12 +612,15 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    The screen's button calls `start(paths)`; the service keeps only paths it
    offered, and a later `start()` without paths (the retry) reads the same ones.
 2. **Setup**: one call to `start()` and one 0–100 progress bar while the main
-   process (`src/main/first-run-service.ts`) does everything. Before it scans (and
-   before the smart-indexing helper and the tour question need one), `run()` awaits
-   `ensureModelAccess` — the account service's `ensureGuestAccess()` — so a fresh,
-   unauthenticated launch provisions the anonymous `dzg_` guest credential and
-   adopts the plan's `dazzi` models into `config.json` (an unset model only; a
-   user's own provider is left alone). The stages then run:
+   process (`src/main/first-run-service.ts`) does everything. `run()` starts
+   `ensureModelAccess` — the account service's `ensureGuestAccess()` — **in
+   parallel with the scan**, so a fresh, unauthenticated launch provisions the
+   anonymous `dzg_` guest credential and adopts the plan's `dazzi` models into
+   `config.json` (an unset model only; a user's own provider is left alone)
+   while the folders are being pre-scanned. Scanning and indexing are local and
+   need no model, so an unreachable hosted service never delays them; planning
+   waits for the access at most `MODEL_ACCESS_TIMEOUT_MS` (20 s) and otherwise
+   plans without a model. The stages then run:
    - `scanning` (0→8) pre-scans the chosen folders one at a time (by default
      Desktop, Documents, Downloads, and iCloud Drive on macOS), through the same folder-scan coordinator the indexer uses,
      which gives the total file count. On macOS each folder triggers its own
@@ -753,6 +756,21 @@ the account's current plan period and immediately invalidates the guest key;
 usage cap is per device, non-resetting until claimed, and the search preflight
 refuses a run on an exhausted or already-claimed guest (`guestQuotaStatus`)
 before it is sent.
+
+**The key changes owner at sign-in.** An AI Search chat agent reads the key once
+when it is built (Jev, rerank and question decomposition keep it), so an agent
+built on the `dzg_` guest key would go on sending it after sign-in, and the
+server refuses a claimed guest key. `createAccountService` therefore calls
+`onCredentialChanged` wherever `auth.json`'s `dazzi` entry changes owner — a guest
+key stored, a guest key the server rejected and dropped, a sign-in
+(`completeWithToken`), a sign-out or a key the server revoked — and the main
+process answers with `searchService.resetAgents()`. Idle agents are closed and
+rebuilt on the chat's next question, resuming from its session file; an agent
+that is mid-answer finishes on the key it started with and is rebuilt after
+(`staleAgents`). `scripts/manual-qa/run-qa-guest-to-account.mjs` proves it
+against the live API: a question on a guest key, sign-in, then a follow-up in the
+same chat in which every model-side request carries the `dz_` key and none is
+refused. Host-only (it needs a real account key).
 
 **What signing in changes.** A successful sign-in (the tour's sheet, Settings, or
 the AutoRAG entry in Settings › AI) points the agent at the account's models, per

@@ -442,6 +442,80 @@ describe("account status while a guest token is stored", () => {
 	});
 });
 
+describe("credential change hook", () => {
+	function buildWithHook(): { readonly service: AccountService; readonly calls: () => number } {
+		let calls = 0;
+		const hooked = createAccountService({
+			env,
+			credentials: credentialFake(env) as never,
+			cachePath: join(root, "account.json"),
+			configPath: join(root, "config.json"),
+			agentDir: root,
+			deviceId: async () => DEVICE_ID,
+			openExternal: async (url) => {
+				if (!url.includes("/desktop/authorize")) return;
+				void fetch(fake.approve(url)).catch(() => undefined);
+			},
+			send: () => undefined,
+			onCredentialChanged: () => void (calls += 1),
+		});
+		return { service: hooked, calls: () => calls };
+	}
+
+	it("fires when a guest key is stored, so an agent built without one is rebuilt", async () => {
+		const { service: hooked, calls } = buildWithHook();
+		expect(await hooked.ensureGuestAccess()).toBe(true);
+		expect(calls()).toBeGreaterThanOrEqual(1);
+	});
+
+	it("fires when sign-in replaces the guest key, and again when signing out removes the account key", async () => {
+		await storeDazziGuestCredential(root, GUEST_TOKEN);
+		const { service: hooked, calls } = buildWithHook();
+		const status = await hooked.signIn();
+		expect(status.state).toBe("signedIn");
+		const afterSignIn = calls();
+		expect(afterSignIn).toBeGreaterThanOrEqual(1);
+		await hooked.signOut();
+		expect(calls()).toBeGreaterThan(afterSignIn);
+	});
+
+	it("fires when the server rejects the stored guest key and it is dropped", async () => {
+		await storeDazziGuestCredential(root, GUEST_TOKEN);
+		fake.guestTokenValid = false;
+		const { service: hooked, calls } = buildWithHook();
+		await hooked.guestQuotaStatus();
+		expect(calls()).toBeGreaterThanOrEqual(1);
+	});
+
+	it("does not fire for a user who keeps their own provider (no credential is touched)", async () => {
+		await storeByokConfig();
+		const { service: hooked, calls } = buildWithHook();
+		expect(await hooked.ensureGuestAccess()).toBe(false);
+		expect(calls()).toBe(0);
+	});
+
+	it("never lets a failing hook break sign-in", async () => {
+		await storeDazziGuestCredential(root, GUEST_TOKEN);
+		const throwing = createAccountService({
+			env,
+			credentials: credentialFake(env) as never,
+			cachePath: join(root, "account.json"),
+			configPath: join(root, "config.json"),
+			agentDir: root,
+			deviceId: async () => DEVICE_ID,
+			openExternal: async (url) => {
+				if (!url.includes("/desktop/authorize")) return;
+				void fetch(fake.approve(url)).catch(() => undefined);
+			},
+			send: () => undefined,
+			onCredentialChanged: () => {
+				throw new Error("hook exploded");
+			},
+		});
+		expect((await throwing.signIn()).state).toBe("signedIn");
+	});
+});
+
 async function storeByokConfig(): Promise<void> {
 	await writeFile(join(root, "config.json"), `${JSON.stringify({ model: { provider: "openrouter", id: "vendor/model" } }, null, 2)}\n`, "utf8");
 }
