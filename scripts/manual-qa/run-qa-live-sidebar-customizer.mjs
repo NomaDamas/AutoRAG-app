@@ -164,7 +164,7 @@ try {
 		});
 	});
 
-	// Open Settings -> 사이드바 -> AI로 커스텀하기
+	// Open Settings -> 사이드바 -> AI에게 요청하기
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "사이드바" }).click();
 	await page.locator("h1.linear-title", { hasText: "사이드바" }).waitFor();

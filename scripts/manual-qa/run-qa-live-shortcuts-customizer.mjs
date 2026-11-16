@@ -167,7 +167,7 @@ try {
 		});
 	});
 
-	// Open Settings -> 단축키 -> AI로 커스텀하기
+	// Open Settings -> 단축키 -> AI에게 요청하기
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "단축키" }).click();
 	await page.locator("h1.linear-title", { hasText: "단축키" }).waitFor();

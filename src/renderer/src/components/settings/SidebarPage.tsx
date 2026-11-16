@@ -345,7 +345,6 @@ export function SidebarPage({
 						data-action="open-app-customizer"
 						onClick={onOpenCustomizer}
 					>
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
 						<span>{t("settingsCore.sidebar.aiHeroButton")}</span>
 					</button>
 				</div>

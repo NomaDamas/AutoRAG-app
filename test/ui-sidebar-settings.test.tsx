@@ -453,12 +453,13 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(composer?.getAttribute("placeholder")).toBe("어떤 구성을 원하는지 말해주세요");
 		expect(composer?.getAttribute("aria-label")).toBe("어시스턴트에게 요청");
 
-		// Hiding the right sidebar brings back the hero, whose button and banner use the transparent Dazzi mark
+		// Hiding the right sidebar brings back the banner (Figma 543:10349): the Dazzi mark at its left, a plain text button
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
 		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__logo")).not.toBeNull();
-		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__btn-logo")).not.toBeNull();
+		expect(host.querySelector(".sidebar-ai-hero__btn img")).toBeNull();
+		expect(host.querySelector(".sidebar-ai-hero__btn")?.textContent).toBe("AI에게 요청하기");
 	});
 
 	it("hides with the right sidebar, reopens from the hero, and follows the Settings section it belongs to", async () => {
@@ -536,7 +537,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		{
 			lang: "ko" as const,
 			nav: "사이드바",
-			heroBtn: "AI로 커스텀하기",
+			heroBtn: "AI에게 요청하기",
 			favoritesSection: "즐겨찾기",
 			cloudSection: "클라우드",
 			locationsSection: "위치",
@@ -547,7 +548,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		{
 			lang: "en" as const,
 			nav: "Sidebar",
-			heroBtn: "Customize with AI",
+			heroBtn: "Ask AI",
 			favoritesSection: "Favorites",
 			cloudSection: "Cloud",
 			locationsSection: "Locations",
@@ -558,7 +559,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		{
 			lang: "ja" as const,
 			nav: "サイドバー",
-			heroBtn: "AIでカスタム",
+			heroBtn: "AIに頼む",
 			favoritesSection: "お気に入り",
 			cloudSection: "クラウド",
 			locationsSection: "場所",
@@ -569,7 +570,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		{
 			lang: "zh" as const,
 			nav: "侧边栏",
-			heroBtn: "使用 AI 定制",
+			heroBtn: "请 AI 处理",
 			favoritesSection: "个人收藏",
 			cloudSection: "云端",
 			locationsSection: "位置",

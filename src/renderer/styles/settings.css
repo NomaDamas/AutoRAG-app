@@ -1955,15 +1955,16 @@
 	justify-content: space-between;
 	gap: var(--space-16);
 	margin-bottom: var(--space-16);
-	padding: var(--space-14) var(--space-16);
-	border: 1px solid var(--accent-pending-border);
+	padding: 12px 14px;
+	border: 1px solid var(--border-divider);
 	border-radius: var(--radius-10);
-	background: linear-gradient(135deg, var(--accent-drop-hover) 0%, var(--bg-subtle) 100%);
+	background: var(--bg-subtle-alt); /* Figma 543:10349: the Stage fill and the Divider line, no gradient. */
 }
 
 .settings-view .sidebar-ai-hero__body {
 	display: flex;
 	align-items: center;
+	flex: 1;
 	gap: var(--space-12);
 	min-width: 0;
 }
@@ -1992,33 +1993,31 @@
 }
 
 .settings-view .sidebar-ai-hero__title {
-	font-size: var(--font-size-sm);
-	font-weight: var(--weight-semibold);
+	font-size: 13px;
+	font-weight: var(--weight-bold);
+	line-height: 18px;
 	color: var(--text-primary);
 }
 
 .settings-view .sidebar-ai-hero__desc {
 	margin: 0;
 	font-size: var(--font-size-meta);
-	line-height: 1.4;
+	line-height: 17px;
 	color: var(--text-muted);
 }
 
-.settings-view .sidebar-ai-hero__btn {
+/* The accent button, 6px × 12px, 8px corners, 12px medium; no logo in it. */
+.settings-view .linear-btn.sidebar-ai-hero__btn {
 	display: inline-flex;
 	align-items: center;
-	gap: var(--space-6);
 	flex: none;
+	height: auto;
+	padding: 6px 12px;
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 18px;
 	white-space: nowrap;
-}
-
-.settings-view .sidebar-ai-hero__btn-logo {
-	display: block;
-	flex: none;
-	width: 16px;
-	height: 16px;
-	object-fit: contain;
-	background: transparent;
 }
 
 .settings-view .sidebar-presets-bar {

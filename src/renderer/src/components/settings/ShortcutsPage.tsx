@@ -311,7 +311,6 @@ export function ShortcutsPage({
 						data-action="open-shortcut-customizer"
 						onClick={onOpenCustomizer}
 					>
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
 						<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
 					</button>
 				</div>
