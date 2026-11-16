@@ -286,8 +286,8 @@ await page.locator(`${EVIDENCE_HALF} .evidence-tab`, { hasText: /^1$/ }).first()
 await page.waitForFunction((sel) => document.querySelector(sel)?.textContent?.startsWith("1. "), `${EVIDENCE_HALF} .preview-title`);
 const kindCount = async (kind) => page.locator(`${EVIDENCE_HALF} .evidence__block--${kind}`).count();
 check(
-	"evidence 1 chunk renders heading/list ×2/quote/code blocks plus the summary paragraph",
-	(await kindCount("heading")) === 1 && (await kindCount("list")) === 2 && (await kindCount("quote")) === 1 && (await kindCount("code")) === 1 && (await kindCount("paragraph")) === 1,
+	"evidence 1 chunk renders heading/list ×2/quote/code blocks and no summary paragraph repeating the answer",
+	(await kindCount("heading")) === 1 && (await kindCount("list")) === 2 && (await kindCount("quote")) === 1 && (await kindCount("code")) === 1 && (await kindCount("paragraph")) === 0,
 	JSON.stringify({ heading: await kindCount("heading"), list: await kindCount("list"), quote: await kindCount("quote"), code: await kindCount("code"), paragraph: await kindCount("paragraph") }),
 );
 const evBold = await page.locator(`${EVIDENCE_HALF} .inspector-body strong`).count();
