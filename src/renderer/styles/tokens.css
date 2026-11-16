@@ -168,6 +168,12 @@
   /* The index map's completion colours (Figma 532:9970): done is gold, partly done a lighter gold. */
   --index-map-done: #DBA245;
   --index-map-partial: #EBC881;
+  /* Not read yet is a quiet grey, not red: red would read as a failure while the flower is still growing. */
+  --index-map-pending: #DEDEE2;
+  /* The seed head inside the map: a seed per share of the folder in view, filled as its files are read. */
+  --index-map-seed: #8C5A14;
+  --index-map-seed-new: #F5B52E;
+  --index-map-seed-empty: #E8E8EB;
   --tag-orange: #F5A841;
   --switch-off: #C9C9CE;
   --highlight-marker: linear-gradient(transparent 55%, rgba(255,214,10,0.55) 55%);
@@ -446,6 +452,10 @@ html[data-appearance="dark"] {
     --bg-chrome: #2C2C2E;
     --bg-subtle: #242426;
     --bg-subtle-alt: #202022;
+    --index-map-pending: #3A3A3D;
+    --index-map-seed: #C08A35;
+    --index-map-seed-new: #FFC94D;
+    --index-map-seed-empty: #303033;
     --bg-input: #3A3A3C;
     --bg-selected-nav: #48484A;
     --bg-tabstrip: #38383A;

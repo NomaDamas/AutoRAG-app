@@ -1399,7 +1399,7 @@
 }
 .settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--index-map-done); }
 .settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--index-map-partial); }
-.settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--tag-red); }
+.settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--index-map-pending); }
 .settings-view .index-map-panel [data-state="excluded"] { --index-map-color: var(--tag-gray); }
 .settings-view .index-map-sector[data-active="true"],
 .settings-view .index-map-sector:focus-visible {
@@ -1421,7 +1421,8 @@
 	padding: var(--space-8);
 	border: 0;
 	border-radius: var(--radius-full);
-	background: var(--bg-window);
+	/* Clear, so the seed head drawn in the chart's hole shows around the readout. */
+	background: transparent;
 	color: var(--text-muted);
 	cursor: pointer;
 	font-size: var(--font-size-meta);
@@ -1435,7 +1436,26 @@
 	line-height: 1.25;
 }
 .settings-view .index-map-center small { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--font-size-meta); }
-.settings-view .index-map-center:hover { background: var(--bg-subtle); }
+.settings-view .index-map-center:hover:not(:disabled) { background: color-mix(in srgb, var(--bg-window) 60%, transparent); }
+.settings-view .index-map-center:disabled { cursor: default; }
+/* Sectors pop and seeds turn about the chart's centre (320,320 in the 640 viewBox). */
+.settings-view .index-map-sector,
+.settings-view .index-map-seeds-turn { transform-box: view-box; transform-origin: 320px 320px; }
+.settings-view .index-map-chart.is-zooming .index-map-sector { pointer-events: none; }
+.settings-view .index-map-chart.is-zooming .index-map-edge { visibility: hidden; }
+.settings-view .index-map-seeds-turn { pointer-events: none; }
+.settings-view .index-map-seed { fill: var(--index-map-seed-empty); }
+/* A seed that fills flashes bright, then settles; after a zoom they refill from the centre outward. */
+.settings-view .index-map-seed[data-lit="true"] { fill: var(--index-map-seed); animation: index-map-seed-new 1.4s var(--ease-out) backwards; }
+.settings-view .index-map-seeds.is-refill .index-map-seed[data-lit="true"] { animation-delay: calc(240ms + var(--i) * 6ms); }
+@keyframes index-map-seed-new {
+	0% { fill: var(--index-map-seed-empty); }
+	1%, 35% { fill: var(--index-map-seed-new); }
+	100% { fill: var(--index-map-seed); }
+}
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .index-map-seed[data-lit="true"] { animation: none; }
+}
 .settings-view .index-map-sidebar {
 	display: flex;
 	flex-direction: column;

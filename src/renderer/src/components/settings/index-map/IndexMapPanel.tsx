@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactElement, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, CornerLeftUp, File, Folder } from "lucide-react";
 import type { LocaleKey } from "../../../../../shared/i18n/core";
@@ -6,8 +6,72 @@ import type { IndexMapNode } from "../../../../../shared/index-map-contract";
 import { availableActions } from "../../../../../shared/index-scope-edit";
 import { useIndexActivity } from "../../../hooks/useIndexActivity";
 import { localIndexRunning } from "../../../state/index-activity";
-import { indexMapTargets, layoutRadial, nodeKey, radialState, type RadialState } from "./radial";
+import { easeInOutCubic, GOLDEN_ANGLE_DEG, lerpShape, litSeeds, motionAllowed, planTween, SEED_RADIUS, SEEDS, ZOOM_MS, type SectorTween } from "./motion";
+import { indexMapTargets, layoutRadial, nodeKey, radialState, sectorPath, type RadialSector, type RadialState } from "./radial";
 import { useLiveIndexMap } from "./useLiveIndexMap";
+
+const SVG_NS = "http://www.w3.org/2000/svg";
+/** How long the seeds take to refill after a zoom: a start delay, a step per seed, then the flash settling. */
+const REFILL_MS = 240 + SEEDS.length * 6 + 1500;
+
+/** A short outward bounce about the chart's centre: a folder that just finished, or the ring when the scope does. */
+function pop(element: Element | null | undefined, delay = 0): void {
+	if (element === null || element === undefined || typeof element.animate !== "function") return;
+	element.animate([{ transform: "scale(1)" }, { transform: "scale(1.04)", offset: 0.45 }, { transform: "scale(1)" }], { duration: 520, delay, easing: "cubic-bezier(.34,1.56,.64,1)" });
+}
+
+/**
+ * Plays a zoom: every sector moves from its old shape to its new one, and the ones that leave are drawn as stand-ins
+ * until they have folded away. Returns a function that ends it at once, in the final layout.
+ */
+function playZoom(svg: SVGSVGElement, ghosts: SVGGElement | null, plan: readonly SectorTween[]): () => void {
+	const drawn = new Map<string, SVGPathElement>();
+	svg.querySelectorAll<SVGPathElement>("path.index-map-sector[data-key]").forEach((path) => drawn.set(path.getAttribute("data-key") ?? "", path));
+	const stand: SVGPathElement[] = [];
+	const items = plan.map((tween) => {
+		if (!tween.leaving) return { tween, element: drawn.get(tween.key) };
+		if (ghosts === null) return { tween, element: undefined };
+		const element = document.createElementNS(SVG_NS, "path");
+		element.setAttribute("class", "index-map-sector");
+		element.setAttribute("data-state", tween.state);
+		element.setAttribute("aria-hidden", "true");
+		ghosts.appendChild(element);
+		stand.push(element);
+		return { tween, element };
+	});
+	const draw = (t: number): void => {
+		for (const { tween, element } of items) {
+			if (element === undefined) continue;
+			const shape = lerpShape(tween.from, tween.to, t);
+			element.setAttribute("d", sectorPath(shape.start, shape.end, shape.inner, shape.outer));
+		}
+	};
+	let frame = 0;
+	let done = false;
+	let fallback: ReturnType<typeof setTimeout> | undefined;
+	const finish = (): void => {
+		if (done) return;
+		done = true;
+		cancelAnimationFrame(frame);
+		clearTimeout(fallback);
+		draw(1);
+		for (const element of stand) element.remove();
+		svg.classList.remove("is-zooming");
+	};
+	svg.classList.add("is-zooming");
+	draw(0);
+	const began = performance.now();
+	const tick = (now: number): void => {
+		const progress = Math.min(1, (now - began) / ZOOM_MS);
+		draw(easeInOutCubic(progress));
+		if (progress < 1) frame = requestAnimationFrame(tick);
+		else finish();
+	};
+	frame = requestAnimationFrame(tick);
+	// A hidden window gets no animation frames: the map still lands in its final layout.
+	fallback = setTimeout(finish, ZOOM_MS + 250);
+	return finish;
+}
 
 const STATES: readonly RadialState[] = ["indexed", "partial", "unindexed", "excluded"];
 const STATE_LABEL: Readonly<Record<RadialState, LocaleKey>> = {
@@ -144,6 +208,74 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 		...chain.filter((node) => !(node.kind === "root" && roots.length === 1)).map((node) => ({ key: nodeKey(node), text: label(node), path: node.path })),
 	];
 
+	// ── Motion: the zoom between folders, the seed head, and the pop when a folder (or the whole scope) finishes. ──
+	const svgRef = useRef<SVGSVGElement>(null);
+	const ghostRef = useRef<SVGGElement>(null);
+	const turnRef = useRef<SVGGElement>(null);
+	const turned = useRef(0);
+	const stopZoom = useRef<() => void>(() => {});
+	const shown = useRef<{ readonly sectors: readonly RadialSector[]; readonly focusPath: string | null; readonly percentage: number | null; readonly states: ReadonlyMap<string, RadialState> } | null>(null);
+	// Each zoom remounts the seeds, so they fill again from the centre outward for the folder now in view.
+	const [seedRun, setSeedRun] = useState(0);
+	const [refilling, setRefilling] = useState(true);
+	const litCount = litSeeds(indexed, targets);
+	const focusNow = focus?.path ?? null;
+	useLayoutEffect(() => {
+		const before = shown.current;
+		shown.current = { sectors, focusPath: focusNow, percentage, states: new Map(sectors.map((sector) => [nodeKey(sector.node), radialState(sector.node)])) };
+		const svg = svgRef.current;
+		if (before === null || svg === null || !motionAllowed()) return;
+		if (before.focusPath !== focusNow) {
+			stopZoom.current();
+			const goingIn = before.focusPath === null || chain.some((node) => node.path === before.focusPath);
+			// The folder both views share, nearest first: the one entered (going in) or the one left (coming out).
+			const from = goingIn ? focus : nodes.find((node) => node.path === before.focusPath && (node.kind === "root" || node.kind === "folder"));
+			const anchors: string[] = [];
+			for (let node: IndexMapNode | undefined = from ?? undefined; node !== undefined; node = parentOf(node)) anchors.push(nodeKey(node));
+			const plan = planTween(before.sectors, sectors, anchors);
+			if (plan !== null) stopZoom.current = playZoom(svg, ghostRef.current, plan);
+			const turn = turnRef.current;
+			if (turn !== null) {
+				const direction = goingIn ? 1 : -1;
+				const start = turned.current;
+				const end = start + direction * GOLDEN_ANGLE_DEG;
+				turned.current = end;
+				turn.style.transform = `rotate(${end}deg)`;
+				if (typeof turn.animate === "function") {
+					turn.animate([
+						{ transform: `rotate(${start}deg) scale(1)` },
+						{ transform: `rotate(${start + (end - start) * 0.6}deg) scale(${goingIn ? 0.78 : 1.12})`, offset: 0.55 },
+						{ transform: `rotate(${end}deg) scale(1)` },
+					], { duration: ZOOM_MS, easing: "cubic-bezier(.4,0,.2,1)" });
+				}
+			}
+			setSeedRun((run) => run + 1);
+			setRefilling(true);
+			return;
+		}
+		const drawn = (key: string): Element | null => svg.querySelector(`path.index-map-sector[data-key="${CSS.escape(key)}"]`);
+		for (const sector of sectors) {
+			if (sector.node.kind !== "folder" && sector.node.kind !== "root") continue;
+			const key = nodeKey(sector.node);
+			const was = before.states.get(key);
+			if (was !== undefined && was !== "indexed" && radialState(sector.node) === "indexed") pop(drawn(key));
+		}
+		// The whole scope in view just finished: the first ring of more than one sector blooms, one sector after another.
+		if (before.percentage !== null && before.percentage < 100 && percentage === 100) {
+			const levels = new Map<number, RadialSector[]>();
+			for (const sector of sectors) levels.set(sector.level, [...(levels.get(sector.level) ?? []), sector]);
+			const ring = [...levels.keys()].sort((a, b) => a - b).find((level) => (levels.get(level)?.length ?? 0) > 1) ?? 0;
+			[...(levels.get(ring) ?? [])].sort((a, b) => a.start - b.start).forEach((sector, index) => pop(drawn(nodeKey(sector.node)), index * 45));
+		}
+		// Only the layout drives this; the rest is read from the render that produced it.
+	}, [sectors]);
+	useEffect(() => () => stopZoom.current(), []);
+	useEffect(() => {
+		if (!refilling) return undefined;
+		const timer = setTimeout(() => setRefilling(false), REFILL_MS);
+		return () => clearTimeout(timer);
+	}, [refilling, seedRun]);
+
 	return (
 		<>
 			{header?.(scope)}
@@ -155,8 +287,16 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 				</ul>
 				<div className="index-map-body">
 					<div className="index-map-stage">
-						<svg className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")} onPointerLeave={() => setHoverKey(null)}>
-							{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={hovered !== null && nodeKey(hovered) === nodeKey(node) ? "true" : undefined} data-dimmed={dimmed(node)} data-progress={progress.here.has(nodeKey(node)) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} {...preview(node)} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
+						<svg ref={svgRef} className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")} onPointerLeave={() => setHoverKey(null)}>
+							{map !== null && targets > 0 ? (
+								<g ref={turnRef} className="index-map-seeds-turn" aria-hidden="true">
+									<g key={seedRun} className={refilling ? "index-map-seeds is-refill" : "index-map-seeds"}>
+										{SEEDS.map((seed, index) => <circle key={index} className="index-map-seed" cx={seed.x} cy={seed.y} r={SEED_RADIUS} data-lit={index < litCount ? "true" : undefined} style={{ "--i": index } as CSSProperties} />)}
+									</g>
+								</g>
+							) : null}
+							<g ref={ghostRef} aria-hidden="true" />
+							{sectors.map(({ node, path }) => <path key={nodeKey(node)} d={path} className="index-map-sector" data-key={nodeKey(node)} data-node-id={node.id} data-state={radialState(node)} data-kind={node.kind} data-path={node.path} data-active={hovered !== null && nodeKey(hovered) === nodeKey(node) ? "true" : undefined} data-dimmed={dimmed(node)} data-progress={progress.here.has(nodeKey(node)) ? "true" : undefined} tabIndex={0} role="button" aria-label={describe(node)} {...preview(node)} onClick={() => enter(node)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); enter(node); } }}><title>{describe(node)}</title></path>)}
 							{sectors.filter(({ node }) => progress.here.has(nodeKey(node))).map(({ node, edge }) => <path key={`edge-${nodeKey(node)}`} d={edge} className="index-map-edge" data-path={node.path} aria-hidden="true" />)}
 						</svg>
 						{map !== null ? <button type="button" className="index-map-center" onClick={up} disabled={focus === null} aria-label={focus === null ? t("settingsSources.indexMap.allRoots") : t("settingsSources.indexMap.up")}>
