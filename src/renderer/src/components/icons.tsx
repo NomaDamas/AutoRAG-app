@@ -37,7 +37,6 @@ import {
 	File,
 	Eye,
 	File as FileGlyph,
-	HardDrive,
 	Film,
 	Flag,
 	FoldVertical,
