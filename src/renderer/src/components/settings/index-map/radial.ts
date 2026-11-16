@@ -86,8 +86,9 @@ export function layoutRadial(map: IndexMap, focusId: number | null): RadialSecto
 		weights.set(node.id, kids === undefined ? Math.max(1, node.weight) : kids.reduce((sum, child) => sum + (weights.get(child.id) ?? 1), 0));
 	}
 	const depthOf = (node: IndexMapNode): number => 1 + Math.max(0, ...(children.get(node.id) ?? []).map(depthOf));
-	// Deeper descendants remain in the data; drilling into a folder reveals the next nine rings.
-	const maxRings = 9;
+	// Deeper descendants remain in the data; drilling into a folder reveals the next four rings. Four keeps each ring
+	// about as thick as the seed head is wide from the hole to its rim, the proportion of the sunflower design.
+	const maxRings = 4;
 	// Every view keeps the ring width of the whole scope: going into a folder drops the rings outside it, it does not
 	// widen the rings that are left, so a deep folder draws a smaller flower at the same scale.
 	const scope = (children.get(null) ?? []).filter((node) => node.weight > 0 || children.has(node.id));

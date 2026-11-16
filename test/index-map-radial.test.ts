@@ -55,7 +55,7 @@ describe("radial indexing map", () => {
 		const map = buildIndexMap({ roots: [chain(12, "/a"), folder("/b", [file("/b/pending.txt", "unindexed")])], truncated: false });
 		const overview = layoutRadial(map, null);
 		expect(overview.some((sector) => sector.node.name === "leaf.txt")).toBe(false);
-		const deep = map.nodes.find((node) => node.path === "/a/next/next/next/next/next")!;
+		const deep = map.nodes.find((node) => node.path === `/a${"/next".repeat(10)}`)!;
 		const focused = layoutRadial(map, deep.id);
 		expect(focused.some((sector) => sector.node.name === "leaf.txt")).toBe(true);
 		expect(focused.some((sector) => sector.node.path.startsWith("/b"))).toBe(false);
@@ -67,7 +67,7 @@ describe("radial indexing map", () => {
 		const map = buildIndexMap({ roots: [chain(5, "/a")], truncated: false });
 		const width = (sectors: readonly { inner: number; outer: number }[]): number => sectors[0]!.outer - sectors[0]!.inner;
 		const overview = layoutRadial(map, null);
-		const inside = layoutRadial(map, map.nodes.find((node) => node.path === "/a/next/next")!.id);
+		const inside = layoutRadial(map, map.nodes.find((node) => node.path === "/a/next/next/next/next")!.id);
 		expect(width(inside)).toBeCloseTo(width(overview));
 		expect(Math.max(...inside.map((sector) => sector.outer))).toBeLessThan(Math.max(...overview.map((sector) => sector.outer)));
 	});
