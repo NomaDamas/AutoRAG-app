@@ -879,6 +879,14 @@
       "lead": "Now you can find anything in your {{count}} files.",
       "start": "Get started"
     },
+    "early": {
+      "lead": "A question is ready. The rest of your files keep being read in the background while you use the app.",
+      "start": "Start now"
+    },
+    "background": {
+      "counts": "Reading your files in the background · {{processed}} of {{total}}",
+      "reading": "Reading your files in the background"
+    },
     "cinema": {
       "title": "Welcome to {{name}}",
       "subtitleMac": "the AI Finder",

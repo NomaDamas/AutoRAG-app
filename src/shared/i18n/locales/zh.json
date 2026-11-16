@@ -879,6 +879,14 @@
       "lead": "现在可以在 {{count}} 个文件中查找任何内容。",
       "start": "开始使用"
     },
+    "early": {
+      "lead": "已经准备好一个问题。其余文件会在你使用应用时继续在后台读取。",
+      "start": "先开始使用"
+    },
+    "background": {
+      "counts": "正在后台读取文件 · {{processed}} / {{total}} 个",
+      "reading": "正在后台读取文件"
+    },
     "cinema": {
       "title": "欢迎来到 {{name}}",
       "subtitleMac": "你的 AI 访达",

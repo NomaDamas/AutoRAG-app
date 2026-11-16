@@ -225,8 +225,13 @@ export interface FirstRunService {
 	/** `folders` are paths from {@link folders}; others are ignored. Omitted: the last run's folders, else the default ones. */
 	start(folders?: readonly string[]): Promise<SetupStatus>;
 	status(): Promise<SetupStatus>;
-	/** Sync: is a first-run index still in flight (quit-confirmation gate). */
+	/** Sync: is a first-run index still in flight, including one that carries on after the person started the app (quit-confirmation gate). */
 	isIndexing(): boolean;
+	/**
+	 * A relaunch after the person started the app before the first index was done: reads on from where the quit stopped it.
+	 * Does nothing while the first run is still pending, or when the first index finished.
+	 */
+	resumeIndexing(): void;
 	complete(): Promise<void>;
 	dispose(): void;
 }
@@ -787,6 +792,20 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		emitStatus();
 	}
 
+	/** The one local refresh the first index and its resumption run; a refresh that throws becomes a failed result. */
+	function refreshLocal(): Promise<ConfigRefreshResult> {
+		return deps.refresh(["parsed", "minsync"]).catch((caught: unknown): ConfigRefreshResult => ({
+			ok: false,
+			methods: ["parsed", "minsync"],
+			scanned: 0,
+			written: 0,
+			deleted: 0,
+			skipped: 0,
+			diagnostics: [],
+			error: caught instanceof Error ? caught.message : String(caught),
+		}));
+	}
+
 	async function indexingStage(folders: readonly string[], exclusions: readonly SmartExclusion[]): Promise<ConfigRefreshResult> {
 		setStage("indexing", 15);
 		emitStatus();
@@ -800,6 +819,9 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			workspacePath: typeof raw.workspacePath !== "string" || raw.workspacePath === deps.cwd ? join(deps.env.AUTORAG_HOME?.trim() || join(deps.home, ".autorag"), "workspace") : null,
 		});
 		writeConfigObject(deps.configPath, next);
+		// Written before the first file is read: a quit from here on leaves an unfinished index to carry on at the next launch.
+		stateFile = { ...stateFile, indexing: { startedAt: startedAt ?? new Date(now()).toISOString(), finishedAt: null } };
+		void persist().catch(warnPersistFailed);
 		selectedFolders = folders;
 		workspacePath = await deps.resolveWorkspacePath();
 		runId += 1;
@@ -813,16 +835,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		powerBlockerId = deps.startPowerSaveBlocker();
 		pollTimer = setInterval(() => void tick().catch(() => undefined), POLL_INTERVAL_MS);
 		startHunt();
-		const result = await deps.refresh(["parsed", "minsync"]).catch((caught: unknown): ConfigRefreshResult => ({
-			ok: false,
-			methods: ["parsed", "minsync"],
-			scanned: 0,
-			written: 0,
-			deleted: 0,
-			skipped: 0,
-			diagnostics: [],
-			error: caught instanceof Error ? caught.message : String(caught),
-		}));
+		const result = await refreshLocal();
 		await settleIndexing(result);
 		return result;
 	}
@@ -960,6 +973,25 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		}
 	}
 
+	/** The index the person left running behind the app, picked up again after a quit: incremental, so only what is left is read. */
+	async function resumeUnfinishedIndex(): Promise<void> {
+		powerBlockerId = deps.startPowerSaveBlocker();
+		try {
+			const result = await refreshLocal();
+			// A run that did not finish (another refresh held the lock, a failure) stays unfinished, so the next launch tries again.
+			if (result.ok) {
+				const finished = new Date(now()).toISOString();
+				stateFile = { ...stateFile, indexing: { startedAt: stateFile.indexing?.startedAt ?? finished, finishedAt: finished } };
+				await persist().catch(warnPersistFailed);
+			}
+			deps.recordIndex({ ok: result.ok, error: result.error, diagnostics: result.diagnostics });
+			if (result.ok) await deps.refreshDuplicates().catch(() => undefined);
+		} finally {
+			if (powerBlockerId !== null) deps.stopPowerSaveBlocker(powerBlockerId);
+			powerBlockerId = null;
+		}
+	}
+
 	return {
 		pending: () => pending,
 		load: async () => ({ pending, tutorials: deps.env.AUTORAG_SKIP_ONBOARDING !== "1" }),
@@ -989,6 +1021,13 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		},
 		status: async () => snapshot(),
 		isIndexing: () => runPromise !== null,
+		resumeIndexing: () => {
+			const unfinished = stateFile.indexing;
+			if (pending || runPromise !== null || unfinished === undefined || unfinished.finishedAt !== null) return;
+			runPromise = resumeUnfinishedIndex().finally(() => {
+				runPromise = null;
+			});
+		},
 		complete: async () => {
 			if (!pending) return;
 			stateFile = { ...stateFile, completed: true };

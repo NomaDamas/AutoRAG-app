@@ -669,6 +669,21 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    A failure stops the bar and shows `[data-action="setup-retry"]`, which calls
    `start()` again (a failed run restarts; a run in flight or finished is returned
    as is).
+   **Starting before the index is read.** The tour's question is hunted while the
+   first index is still running (a round every few seconds over the parsed
+   documents so far), so `demo` can be set during `indexing`. While `stage` is
+   `indexing` and `demo` is set, `canStartEarly` (`first-run/tour.ts`) is true and
+   the setup screen shows `[data-role="early-start"]` with
+   `[data-action="start-early"]`, which takes the same path as "시작하기" into the
+   reveal and the tour. The index is not stopped: the refresh keeps running in the
+   main process, the tour and the sign-in sheet show `[data-role="background-reading"]`
+   (the file counts, from the same status stream), and the Finder's sidebar block
+   follows the run as for any refresh. A person who quits meanwhile is asked first
+   (`closeDecision` follows the index, not the onboarding flag), and the service
+   writes `{ indexing: { startedAt, finishedAt: null } }` to `state.json` before the
+   first file is read: `resumeIndexing()` at the next launch re-runs the (incremental)
+   refresh when onboarding is complete and `finishedAt` is still null, and marks it
+   finished only after a successful run.
 3. **Tour**: the Finder is fully usable. Coach bubbles (`.fr-coach[data-step]`,
    `[data-action="tour-next"]` / `tour-skip`, plus `.fr-cursor`
    on action-required steps where `tour-next` is omitted) walk the live window, which the

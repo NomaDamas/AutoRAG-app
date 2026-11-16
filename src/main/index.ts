@@ -1161,7 +1161,7 @@ app.whenReady().then(async () => {
 	registerOnboardingIpcHandlers(firstRun);
 	/** Closing the last window while the first index runs would stop it, so that close asks first. */
 	const confirmLastClose = (window: BrowserWindow, event: Electron.Event): void => {
-		const decision = closeDecision({ pending: firstRun.pending(), indexing: firstRun.isIndexing(), windowsOpen: appWindows().length });
+		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length });
 		if (decision === "allow") return;
 		event.preventDefault();
 		void dialog
@@ -1193,6 +1193,8 @@ app.whenReady().then(async () => {
 		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
 	};
 	openWindows();
+	// A first index the person left running behind the app (they started it early) and a quit cut short carries on here.
+	firstRun.resumeIndexing();
 	// A Dock click only brings the window back when none is left.
 	app.on("activate", () => {
 		if (appWindows().length === 0) openWindows();

@@ -24,7 +24,7 @@ import type { VersionFamilyData } from "../state/version-family";
 import { MineGame } from "./MineGame";
 import { Reveal, cancelPrewarm, prewarmReveal } from "./reveal";
 import { CursorGlyph } from "./cursor";
-import { ACTION_REQUIRED_STEPS, AI_HOST, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
+import { ACTION_REQUIRED_STEPS, AI_HOST, canStartEarly, initialScreen, nextStep, pickTourFamily, placeBubble, tourSteps, type FirstRunScreen, type Rect, type TourStepId } from "./tour";
 
 /** What the layer needs from the Finder window it sits on. */
 export interface FirstRunHost {
@@ -214,6 +214,7 @@ export function FirstRun({
 			) : null}
 			{screen === "tour" ? <Tour host={host} demo={status?.demo ?? null} platform={platform} skipCinema={cinemaSkipped} onEnd={() => setScreen("signin")} /> : null}
 			{screen === "signin" ? <SignInSheet platform={platform} onFinish={finish} /> : null}
+			{screen === "tour" || screen === "signin" ? <BackgroundReading status={status} /> : null}
 		</div>
 	);
 }
@@ -437,10 +438,40 @@ function SetupScreen({
 							</span>
 							<span>{remaining !== null ? t("firstRun.setup.remaining", { minutes: Math.max(1, remaining) }) : null}</span>
 						</div>
+						{canStartEarly(status) ? (
+							<div className="fr-early" data-role="early-start">
+								<p className="fr-early-lead">{t("firstRun.early.lead")}</p>
+								<button type="button" className="fr-btn fr-btn--primary" data-action="start-early" onClick={onStart}>
+									{t("firstRun.early.start")}
+								</button>
+							</div>
+						) : null}
 					</>
 				)}
 			</div>
 		</section>
+	);
+}
+
+/**
+ * The first index carries on behind the app once the person started it early: through the tour and the sign-in
+ * sheet this keeps saying so, with the same counts the setup screen showed, so the person knows why search is not
+ * complete yet. Gone when the files are read.
+ */
+function BackgroundReading({ status }: { readonly status: SetupStatus | null }): ReactElement | null {
+	const { t } = useTranslation();
+	if (status === null || status.stage === "ready" || status.stage === "failed" || status.stage === "idle") return null;
+	const total = status.totalFiles;
+	const processed = Math.min(status.processedFiles, total);
+	const progress = Math.max(0, Math.min(99, Math.round(status.progress)));
+	return (
+		<div className="fr-bg" data-role="background-reading" role="status">
+			<span className="fr-coach-spinner" aria-hidden="true" />
+			<span className="fr-bg-text">
+				{total > 0 ? t("firstRun.background.counts", { processed: processed.toLocaleString(), total: total.toLocaleString() }) : t("firstRun.background.reading")}
+			</span>
+			<span className="fr-bg-percent">{progress}%</span>
+		</div>
 	);
 }
 

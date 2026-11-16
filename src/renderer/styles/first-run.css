@@ -1670,3 +1670,76 @@ html[data-appearance="dark"] .fr-dock-ready {
 		transition: none;
 	}
 }
+
+/* ------------------------------------------------------- start before it is read */
+
+/* Under the reading bar once a verified question exists: the rest is read behind the app. */
+.fr-early {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	width: min(592px, 100%);
+	margin-top: 22px;
+	padding: 12px 14px 12px 18px;
+	border: 1px solid var(--fr-card-border);
+	border-radius: 16px;
+	background: var(--fr-card);
+	box-shadow: var(--fr-shadow);
+	-webkit-backdrop-filter: blur(22px) saturate(1.6);
+	backdrop-filter: blur(22px) saturate(1.6);
+	animation: fr-fade-up 520ms var(--fr-spring) both;
+}
+
+.fr-early-lead {
+	margin: 0;
+	font-size: 13px;
+	line-height: 19.5px;
+	color: var(--fr-ink);
+	text-align: left;
+}
+
+.fr-early .fr-btn {
+	flex: none;
+}
+
+/* While the tour and the sign-in sheet are up, the first index is still being read: said once, out of the way, at the top. */
+.fr-bg {
+	position: absolute;
+	top: 12px;
+	left: 0;
+	right: 0;
+	width: fit-content;
+	margin: 0 auto;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: calc(100vw - 48px);
+	padding: 6px 14px;
+	border: 1px solid var(--fr-card-border);
+	border-radius: 999px;
+	background: var(--fr-card);
+	box-shadow: var(--fr-shadow);
+	-webkit-backdrop-filter: blur(22px) saturate(1.6);
+	backdrop-filter: blur(22px) saturate(1.6);
+	font-size: 12px;
+	line-height: 18px;
+	color: var(--fr-muted);
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	pointer-events: none;
+	animation: fr-fade-up 520ms var(--fr-spring) both;
+}
+
+.fr-bg-text {
+	color: var(--fr-ink);
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.fr-early,
+	.fr-bg {
+		animation: none;
+	}
+}

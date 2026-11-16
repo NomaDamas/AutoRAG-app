@@ -322,6 +322,73 @@ describe("createFirstRunService complete", () => {
 	});
 });
 
+/** The persisted onboarding state's index record, read back from disk; null until the service has written one. */
+async function readIndexingFinishedAt(directory: string): Promise<string | null | undefined> {
+	const text = await readFile(join(directory, "onboarding", "state.json"), "utf8").catch(() => null);
+	if (text === null) return undefined;
+	const parsed: unknown = JSON.parse(text);
+	if (typeof parsed !== "object" || parsed === null || !("indexing" in parsed)) return undefined;
+	const indexing = parsed.indexing;
+	if (typeof indexing !== "object" || indexing === null || !("finishedAt" in indexing)) return undefined;
+	return typeof indexing.finishedAt === "string" ? indexing.finishedAt : null;
+}
+
+describe("an index that outlives the first run", () => {
+	const unfinished = { completed: true, indexing: { startedAt: "2026-11-17T00:00:00.000Z", finishedAt: null } };
+
+	it("is written down as unfinished before the first file is read, so a quit leaves it to carry on", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const gate = Promise.withResolvers<ConfigRefreshResult>();
+		const service = createFirstRunService(await makeDeps(directory, { refresh: () => gate.promise }));
+		await service.start();
+		await waitForStage(service, "indexing");
+		for (let tick = 0; tick < 60 && (await readIndexingFinishedAt(directory)) === undefined; tick += 1) await flush();
+		expect(await readIndexingFinishedAt(directory)).toBeNull();
+		expect(service.isIndexing()).toBe(true);
+		gate.resolve(OK);
+		await waitForStage(service, "ready");
+		await flush();
+		expect(typeof (await readIndexingFinishedAt(directory))).toBe("string");
+	});
+
+	it("reads on at the next launch when the first run was finished but the index was not, and marks it finished", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		await writeState(directory, unfinished);
+		let refreshes = 0;
+		const service = createFirstRunService(await makeDeps(directory, { refresh: async () => (refreshes += 1, OK) }));
+		expect(service.pending()).toBe(false);
+		service.resumeIndexing();
+		expect(service.isIndexing()).toBe(true);
+		for (let tick = 0; tick < 200 && service.isIndexing(); tick += 1) await flush();
+		expect(refreshes).toBe(1);
+		expect(typeof (await readIndexingFinishedAt(directory))).toBe("string");
+		service.resumeIndexing();
+		expect(refreshes).toBe(1);
+	});
+
+	it("stays unfinished when the resumed run does not succeed, so the launch after tries again", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		await writeState(directory, unfinished);
+		const service = createFirstRunService(await makeDeps(directory, { refresh: async () => ({ ...OK, ok: false, error: "another refresh holds the lock" }) }));
+		service.resumeIndexing();
+		for (let tick = 0; tick < 200 && service.isIndexing(); tick += 1) await flush();
+		expect(await readIndexingFinishedAt(directory)).toBeNull();
+	});
+
+	it("does not resume while the first run is still pending, or when the first index finished", async () => {
+		const pendingDir = await workDir("autorag-firstrun-");
+		await writeState(pendingDir, { completed: false, indexing: { startedAt: "2026-11-17T00:00:00.000Z", finishedAt: null } });
+		let refreshes = 0;
+		const refresh = async (): Promise<ConfigRefreshResult> => (refreshes += 1, OK);
+		createFirstRunService(await makeDeps(pendingDir, { refresh })).resumeIndexing();
+		const doneDir = await workDir("autorag-firstrun-");
+		await writeState(doneDir, { completed: true, indexing: { startedAt: "2026-11-17T00:00:00.000Z", finishedAt: "2026-11-17T00:05:00.000Z" } });
+		createFirstRunService(await makeDeps(doneDir, { refresh })).resumeIndexing();
+		await flush();
+		expect(refreshes).toBe(0);
+	});
+});
+
 describe("readableExcerpt", () => {
 	const prose = "이번 분기 사업 계획의 핵심은 신규 고객 확보입니다. 영업팀은 3월까지 파일럿 세 곳을 확정하고, 연구팀은 검색 품질 평가를 마칩니다. ".repeat(4);
 

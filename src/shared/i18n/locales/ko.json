@@ -879,6 +879,14 @@
       "lead": "이제 파일 {{count}}개 안에서 무엇이든 찾아 드릴게요.",
       "start": "시작하기"
     },
+    "early": {
+      "lead": "질문이 하나 준비됐어요. 나머지 파일은 앱을 쓰는 동안 뒤에서 계속 읽어요.",
+      "start": "먼저 시작하기"
+    },
+    "background": {
+      "counts": "뒤에서 파일을 읽는 중 · {{processed}} / {{total}}개",
+      "reading": "뒤에서 파일을 읽는 중"
+    },
     "cinema": {
       "title": "{{name}}에 오신 걸 환영해요",
       "subtitleMac": "당신의 AI 파인더",

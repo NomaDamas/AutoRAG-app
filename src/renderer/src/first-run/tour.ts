@@ -20,6 +20,15 @@ export function initialScreen(status: SetupStatus): FirstRunScreen {
 	return status.stage === "idle" ? "folders" : "setup";
 }
 
+/**
+ * Whether the person may start the app while the first index is still being read: a question the real AI Search
+ * already answered from its own document exists (the tour has something confident to show). Once the files are read
+ * (`preparing`, then `ready`) the ordinary screens take over, and the duplicate-file steps are only seconds away.
+ */
+export function canStartEarly(status: SetupStatus | null): boolean {
+	return status !== null && status.demo !== null && status.stage === "indexing";
+}
+
 export type TourStepId = "ask" | "cite" | "evidence" | "duplicates" | "versions";
 
 /** Steps that only make sense once the demo question produced a cited answer. */

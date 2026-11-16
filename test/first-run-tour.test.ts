@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SetupStatus } from "../src/shared/onboarding-contract";
-import { initialScreen, splitTwoFolders } from "../src/renderer/src/first-run/tour";
+import { canStartEarly, initialScreen, splitTwoFolders } from "../src/renderer/src/first-run/tour";
 import { grayCopy } from "../src/renderer/src/first-run/tutorial-steps";
 import { allTabs, createWorkspace, paneOf, type Workspace } from "../src/renderer/src/state/workspace";
 
@@ -26,6 +26,32 @@ describe("initialScreen", () => {
 		expect(initialScreen(status("scanning"))).toBe("setup");
 		expect(initialScreen(status("failed"))).toBe("setup");
 		expect(initialScreen(status("ready"))).toBe("ready");
+	});
+});
+
+describe("canStartEarly", () => {
+	const base: SetupStatus = {
+		stage: "indexing",
+		progress: 40,
+		remainingMinutes: 3,
+		totalFiles: 90,
+		processedFiles: 30,
+		recentFile: null,
+		excludedFolders: 0,
+		demo: { question: "What is the deposit?", sourcePath: "/Users/a/Documents/lease.pdf", latencyMs: 40 },
+		error: null,
+		startedAt: null,
+		finishedAt: null,
+	};
+
+	it("offers an early start only while the files are still being read and a verified question exists", () => {
+		expect(canStartEarly(base)).toBe(true);
+		expect(canStartEarly({ ...base, demo: null })).toBe(false);
+		expect(canStartEarly(null)).toBe(false);
+	});
+
+	it("does not offer it before reading starts, or once the reading is over", () => {
+		for (const stage of ["idle", "scanning", "planning", "preparing", "ready", "failed"] as const) expect(canStartEarly({ ...base, stage })).toBe(false);
 	});
 });
 
