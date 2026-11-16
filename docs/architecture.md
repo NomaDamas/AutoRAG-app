@@ -1064,11 +1064,12 @@ and kept for the chat's life:
 
 ### What the panel shows while a run works, and an exhausted plan
 
-- **One loading indicator.** While a run is live and the Deep answer has not started, the panel shows one shimmering text line
-  (`answerViewState`, the `shimmer` utility), in the same place whether or not Quick text exists: what the agent is doing, or
-  "Thinking…" before it has said anything. There are no grey placeholder bars. A message that goes on to call a tool is a progress
-  note, not the answer: its streamed draft is withdrawn at the tool call and its text becomes the line, so a run that is reading
-  files is never a bare animation. Stop clears the line at once.
+- **One loading indicator.** While a run is live, the panel shows one shimmering text line (the seed loader and the `shimmer`
+  utility) after everything the run has written so far, whatever phase wrote it: what the agent is doing, or "Thinking…" before
+  it has said anything. There is no Quick/Deep special case: the line is on while the run is live and off the moment it ends, so
+  an answer or a note landing never switches it off (a Deep message that goes on to call a tool used to). There are no grey
+  placeholder bars. A message that goes on to call a tool is a progress note, not the answer: its streamed draft is kept in the
+  transcript and the line keeps going under it, so a run that is reading files is never a bare animation. Stop clears the line at once.
 - **Where the line's words come from.** `progress` events carry three kinds of text. The librarian writes exactly one of them
   itself, in English: `Reviewing the query.`, the first event of every `searchDocumentsStream` (`agent.ts`); the search service
   swaps it for `aiSearch.reviewing` in the interface language (the panel shows that same string from the moment a run starts,

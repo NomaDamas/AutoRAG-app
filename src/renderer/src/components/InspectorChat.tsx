@@ -26,7 +26,6 @@ import { cn } from "../lib/cn";
 import { buttonClass } from "./primitives/button";
 import { evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
 import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
-import { answerViewState } from "../state/answer-view";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks, SteerBubble, formatElapsed } from "./AiSearchPanel";
@@ -548,9 +547,6 @@ function TurnView({
 	const { t } = useTranslation();
 	const quickText = quickTextOf(turn);
 	const deepText = deepTextOf(turn);
-	// The same rule as an AI Search tab: the shimmer line runs from the question until the Deep answer starts to arrive,
-	// below the Quick answer when there is one.
-	const shimmer = answerViewState({ pending: live, deepReady: deepText !== "" }).shimmer;
 	return (
 		<>
 			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
@@ -573,14 +569,6 @@ function TurnView({
 					.map((steer) => (
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 					))}
-				{shimmer ? (
-					<div className="flex min-w-0 items-center gap-6 text-tile text-ink-muted" role="status">
-						<SeedLoader />
-						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
-							{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
-						</span>
-					</div>
-				) : null}
 				{deepText === "" ? null : (
 					<div className="flex min-w-0 flex-col gap-6">
 						{turn.deepElapsed === null ? null : (
@@ -591,6 +579,14 @@ function TurnView({
 						<PhaseAnswer text={deepText} evidence={turn.deep?.evidence ?? []} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
 					</div>
 				)}
+				{live ? (
+					<div className="flex min-w-0 items-center gap-6 text-tile text-ink-muted" role="status">
+						<SeedLoader />
+						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
+							{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
+						</span>
+					</div>
+				) : null}
 				{turn.error === null ? null : <p className="block m-0 text-tile text-danger-text">{turn.error}</p>}
 				{turn.stopped && turn.error === null ? <p className="block m-0 text-tile text-ink-muted">{t("inspector.chat.stopped")}</p> : null}
 			</div>

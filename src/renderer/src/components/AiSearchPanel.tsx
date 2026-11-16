@@ -32,7 +32,6 @@ import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
-import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
 import { appendTranscript } from "../../../shared/voice-contract";
 import { useVoiceInput } from "../state/useVoiceInput";
@@ -885,7 +884,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// panel of that run shows it: another tab's panel has a different run id.
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
-	const { shimmer } = answerViewState({ pending: searching, deepReady });
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
@@ -1103,16 +1101,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{contextAfterQuick.map((notice, index) => (
 								<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
 							))}
-							{searching && compacting ? (
-								<CompactingStatus />
-							) : shimmer ? (
-								<div className="water-wave-thinking my-6 flex items-center gap-6 text-meta text-ink-muted" role="status">
-									<SeedLoader />
-									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
-										{progress === "" ? t("aiSearch.thinking") : progress}
-									</span>
-								</div>
-							) : null}
 
 							{deepReady ? (
 								<div className="flex flex-col gap-6">
@@ -1138,6 +1126,16 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								</div>
 							) : null}
 							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
+							{searching && compacting ? (
+								<CompactingStatus />
+							) : searching ? (
+								<div className="water-wave-thinking my-6 flex items-center gap-6 text-meta text-ink-muted" role="status">
+									<SeedLoader />
+									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
+										{progress === "" ? t("aiSearch.thinking") : progress}
+									</span>
+								</div>
+							) : null}
 						</div>
 					)}
 
