@@ -1,13 +1,16 @@
 import type { FirstRunDemo } from "../shared/onboarding-contract";
-import type { DemoQuestionJudge } from "./demo-question-judge";
+import { passesDemoBar, type DemoQuestionJudge } from "./demo-question-judge";
 
 /**
  * The search for the one question the tour shows. It runs while the first index is still being built and again
- * once it ends, and takes a question only when all three of these hold:
+ * once it ends, and takes a question only when all of these hold:
  *
  *  1. a model wrote it from one of the person's own documents;
- *  2. keyword retrieval over the index returns that document in its top results (the tour's answer will cite it);
- *  3. Jev puts "a real person would recognise this as theirs and want to ask it" at `minScore` or above.
+ *  2. keyword retrieval over the index returns that document in its top results;
+ *  3. Jev says the person would recognise it as theirs (`quality`) and that only their own document can answer it,
+ *     not a web search or general knowledge (`private`);
+ *  4. the real AutoRAG answer to it, run exactly as the tour will run it, is a real answer that cites that
+ *     document. The tour types this question and shows this answer, so it is proven before it is offered.
  *
  * A document is looked at once: whatever its question scored, it is never written for again. A question whose
  * document is not in the index yet waits for a later round instead of being thrown away.
@@ -35,8 +38,11 @@ export interface DemoHuntDeps {
 	readonly judge: DemoQuestionJudge;
 	/** Canonical form of a path the retrieval reports, to compare with {@link DemoDoc.realSourcePath}. */
 	readonly realpath: (path: string) => string;
-	/** P(yes) a question needs from Jev. */
-	readonly minScore: number;
+	/**
+	 * Runs the question through the real AutoRAG search and says whether it answered and cited a source: the cited
+	 * sources' paths, or null when there was no answer (an error, an empty or refused one).
+	 */
+	readonly answer: (question: string) => Promise<readonly string[] | null>;
 	/** Most documents the model is ever shown in one hunt. */
 	readonly maxDocs: number;
 	/** Documents per model call. */
@@ -45,7 +51,7 @@ export interface DemoHuntDeps {
 }
 
 export interface HuntRound {
-	/** The best question at or above `minScore` this round, if any. */
+	/** The best question that passed every check this round, if any. */
 	readonly demo: FirstRunDemo | null;
 	/** Nothing is left to try: no document waits for the index, none is new, or Jev cannot be asked. */
 	readonly exhausted: boolean;
@@ -123,19 +129,24 @@ export function createDemoHunt(deps: DemoHuntDeps): DemoHunt {
 
 			let demo: FirstRunDemo | null = null;
 			if (verified.length > 0) {
-				const scores = await deps.judge(verified.map(({ entry }) => ({ question: entry.question, excerpt: entry.doc.excerpt })));
-				if (scores.every((score) => score === null)) {
+				const verdicts = await deps.judge(verified.map(({ entry }) => ({ question: entry.question, excerpt: entry.doc.excerpt })));
+				if (verdicts.every((verdict) => verdict === null)) {
 					judgeUnavailable = true;
 					return { demo: null, exhausted: true };
 				}
-				let best: { score: number; rank: number; latencyMs: number } | null = null;
-				for (const [index, { entry, rank, latencyMs }] of verified.entries()) {
-					const score = scores[index] ?? null;
-					if (score === null || score < deps.minScore) continue;
-					const better = best === null || score > best.score || (score === best.score && (rank < best.rank || (rank === best.rank && latencyMs < best.latencyMs)));
-					if (!better) continue;
-					best = { score, rank, latencyMs };
+				// Best first: the higher `quality`, then the closer to the top of the search, then the faster.
+				const passed = verified
+					.flatMap((candidate, index) => {
+						const verdict = verdicts[index] ?? null;
+						return verdict !== null && passesDemoBar(verdict) ? [{ ...candidate, quality: verdict.quality }] : [];
+					})
+					.sort((a, b) => b.quality - a.quality || a.rank - b.rank || a.latencyMs - b.latencyMs);
+				// The real answer is the slow check, so it runs on one candidate at a time and stops at the first that holds.
+				for (const { entry, latencyMs } of passed) {
+					const cited = await deps.answer(entry.question).catch(() => null);
+					if (cited === null || !cited.some((source) => deps.realpath(source) === entry.doc.realSourcePath)) continue;
 					demo = { question: entry.question, sourcePath: entry.doc.sourcePath, latencyMs };
+					break;
 				}
 			}
 			return { demo, exhausted: demo === null && indexingDone && waiting.size === 0 && fresh.length === 0 };

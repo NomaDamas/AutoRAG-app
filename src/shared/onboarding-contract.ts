@@ -90,7 +90,7 @@ export interface FirstRunFolder {
 
 export type SetupStage = "idle" | "scanning" | "planning" | "indexing" | "preparing" | "ready" | "failed";
 
-/** The question the tour asks: written from one indexed document, returned by keyword retrieval from that document, and scored 0.9 or above by Jev. */
+/** The question the tour asks: written from one indexed document, returned by keyword retrieval, accepted by Jev, and answered by the real AI Search agent with a citation of that document. */
 export interface FirstRunDemo {
 	readonly question: string;
 	/** The document the question came from. */
@@ -113,7 +113,7 @@ export interface SetupStatus {
 	readonly recentFile: string | null;
 	/** Sub-folders smart indexing left out. */
 	readonly excludedFolders: number;
-	/** The tour's question; can appear while indexing, and is null at `ready` when no model could be called, Jev could not be asked, or no question reached the bar. */
+	/** The tour's question; can appear while indexing, and is null at `ready` when no model could be called, Jev could not be asked, or no question passed every check including a real cited answer. */
 	readonly demo: FirstRunDemo | null;
 	/** Why the run stopped; null unless `stage` is `failed`. */
 	readonly error: string | null;

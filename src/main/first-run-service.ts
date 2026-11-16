@@ -27,7 +27,7 @@ import type { FolderScanOptions } from "./onboarding-scan";
 import { createSmartIndexingService, type SmartIndexingService } from "./smart-indexing-service";
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
 import { createDemoHunt, type DemoDoc, type DemoHunt, type WrittenQuestion } from "./demo-question-hunt";
-import { DEMO_MIN_SCORE, type DemoQuestionJudge } from "./demo-question-judge";
+import { type DemoQuestionJudge } from "./demo-question-judge";
 
 /**
  * The main-process half of the first run. The Finder window opens with the
@@ -44,9 +44,9 @@ import { DEMO_MIN_SCORE, type DemoQuestionJudge } from "./demo-question-judge";
  *  preparing (90→99) start a duplicate (dupey) scan and, if the hunt that has
  *                    run since indexing began has not found it yet, finish
  *                    looking for the tour's question: one a model wrote from
- *                    the person's own document, keyword retrieval proves is
- *                    answered from that document, and Jev scores at or above
- *                    {@link DEMO_MIN_SCORE};
+ *                    the person's own document, keyword retrieval returns that
+ *                    document for, Jev says only that document can answer, and
+ *                    the real AutoRAG answer to it cites that document;
  *  ready     (100).
  *
  * Which folders to read is the only question; no account, plan, model, source,
@@ -66,6 +66,8 @@ const HUNT_INTERVAL_MS = 5_000;
 const MAX_HUNT_DOCS = 40;
 /** A document's cleaned excerpt must be at least this share letters, so numeric logs and form chrome never reach the model. */
 const MIN_LETTER_RATIO = 0.5;
+/** Longest the real AutoRAG answer to one candidate question may take before that question is given up on. */
+const DEMO_ANSWER_TIMEOUT_MS = 60_000;
 /** The whole preparing stage is bounded so the user never waits forever. */
 const PREPARING_TIMEOUT_MS = 90_000;
 /** Indexing's share of the one bar: `computeIndexingProgress` yields 0–100 and this maps it to 15–90. */
@@ -184,6 +186,11 @@ export interface FirstRunServiceDeps {
 	readonly retrieve: (query: string, options?: { readonly topK?: number }) => Promise<readonly { readonly source: string }[]>;
 	/** Jev's P(yes) that each question is one the person would recognise as theirs; null where Jev could not be asked. */
 	readonly judgeDemoQuestions: DemoQuestionJudge;
+	/**
+	 * Runs a question through the real AutoRAG search, the way the tour will, and returns the paths of the sources its
+	 * answer cites; null when it produced no answer (an error, an empty one). Rejects when `signal` aborts.
+	 */
+	readonly answerDemoQuestion: (question: string, signal: AbortSignal) => Promise<readonly string[] | null>;
 	/** The pre-scan's file rules for smart indexing, so its proposal counts match. */
 	readonly scanOptions: FolderScanOptions;
 	/** Pi's agent home; defaults to Pi's own. */
@@ -443,6 +450,7 @@ function demoPrompt(docs: readonly DemoDoc[], language: AppSettings["language"])
 	return [
 		"You are writing the one question a new user's guided tour will ask about their own files.",
 		"For each numbered document excerpt below, write ONE question this person would genuinely ask their own assistant about what the document says: about a specific fact, decision, number, or name in it, phrased the way people talk. It should make them think the assistant really read their file.",
+		"The answer must exist only in this person's own document. Never write a question that a web search or general knowledge could answer (public facts, how a well-known tool or product works, a license, a definition, a capital city, a news story): if the document is public material, skip it.",
 		`${LANGUAGE_INSTRUCTION[language]} Never mention a file, folder, or path in the question, and never ask for a summary or about the title or format.`,
 		"Leave a document out of the array when it is only data, numbers, or a blank form, or has nothing a person would ask about.",
 		"Reply with ONLY a JSON array such as [{\"doc\":1,\"question\":\"...\"}], at most one entry per document, and nothing else.",
@@ -832,7 +840,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	/**
 	 * Begins looking for the tour's question while the first index is still being built: every few seconds, the
 	 * documents parsed so far are put to the model, and a question the index already answers from its own document
-	 * and Jev scores at {@link DEMO_MIN_SCORE} or above ends the search. Indexing is not cut short; this only looks.
+	 * and Jev accepts, and the real AutoRAG answer cites that document, ends the search. Indexing is not cut short; this only looks.
 	 */
 	function startHunt(): void {
 		if (workspacePath === null) return;
@@ -843,7 +851,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			retrieve: (query, options) => deps.retrieve(query, options),
 			judge: deps.judgeDemoQuestions,
 			realpath: realpathOr,
-			minScore: DEMO_MIN_SCORE,
+			answer: (question) => deps.answerDemoQuestion(question, AbortSignal.timeout(DEMO_ANSWER_TIMEOUT_MS)),
 			maxDocs: MAX_HUNT_DOCS,
 			batchSize: DEMO_BATCH,
 			now,

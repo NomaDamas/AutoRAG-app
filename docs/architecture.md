@@ -795,7 +795,7 @@ owner and watchdog both died (`make onboarding-skip-index` runs the same first r
 four-document fixture home, `scripts/onboarding-fixture/`: a duplicate pair, a checklist,
 meeting notes. The wrapper indexes it before the app starts with the librarian's real
 keyword-only refresh, so the app does nothing different: it scans, plans, indexes
-(an incremental no-op), hunts for a tour question (a model writes one per document, keyword retrieval must return that document, and Jev must score it 0.9 or above; no title fallback), and answers in AI Search
+(an incremental no-op), hunts for a tour question (a model writes one per document that no web search or general knowledge could answer, keyword retrieval must return that document, Jev must say the person would recognise it and that only their own document answers it, and the real AI Search agent must answer it citing that document, in `answerQuestion`; no title fallback), and answers in AI Search
 from that index. Only the folders are small; there is no stub in the app). The QA lane covers the same flow end to end in CI
 settings (`bun scripts/manual-qa/run-qa-onboarding.mjs`). The first run indexes
 keyword-only, so the lane needs no embedding model. The first-run overlay drives

@@ -73,7 +73,7 @@ type ChatSession = {
 	dispose(): void;
 };
 
-type SearchAgent = {
+export type SearchAgent = {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
@@ -862,4 +862,25 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
 		return agent as SearchAgent;
 	};
+}
+
+/**
+ * Runs `question` through the same agent the AI Search panel builds, with no chat around it, and returns the sources
+ * the answer cites, in order, or null when it produced no answer. The first-run tour calls this before it offers a
+ * question, so the question it types into AI Search is one this index has already answered with a citation.
+ * A model failure (a run that ends in the degraded "no final answer" text) is no answer, and so is an empty one.
+ */
+export async function answerQuestion(createAgent: () => Promise<SearchAgent>, question: string, signal?: AbortSignal): Promise<readonly string[] | null> {
+	const agent = await createAgent();
+	try {
+		let final: SearchDocumentsResponse | null = null;
+		for await (const event of agent.searchDocumentsStream(question)) {
+			signal?.throwIfAborted();
+			if (event.type === "complete") final = event.response;
+		}
+		if (final === null || modelRequestFailure(final) !== null || final.answer.trim() === "") return null;
+		return final.results.flatMap((result) => (result.source === undefined ? [] : [result.source]));
+	} finally {
+		agent.abort?.();
+	}
 }

@@ -68,6 +68,7 @@ async function makeDeps(userDataDir: string, overrides: Partial<FirstRunServiceD
 		complete: async () => Promise.reject(new Error("no model is configured")),
 		retrieve: async () => [],
 		judgeDemoQuestions: async (candidates) => candidates.map(() => null),
+		answerDemoQuestion: async () => null,
 		scanOptions: { supportedExtensions: new Set([".txt", ".md", ".pdf"]), maxSourceBytes: 1024 * 1024 },
 		language: () => "ko",
 		send: () => undefined,

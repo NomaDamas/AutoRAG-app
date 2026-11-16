@@ -453,7 +453,7 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   control so the person acts on the real UI to move on. The window is already
   split (folder left, AI Search right) when the tour opens; the tour never asks
   for a drag. With a verified
-  demo question (`SetupStatus.demo`: written by a model from one of the person's own parsed documents while indexing is still running, proven by keyword retrieval to come back from that document, and scored by Jev at 0.9 or above on "would this person recognise it as theirs"; with no such question there is no demo and the steps are skipped) the question types itself into the
+  demo question (`SetupStatus.demo`: written by a model from one of the person's own parsed documents while indexing is still running, returned from that document by keyword retrieval, judged by Jev (0.9 or above that the person would recognise it as theirs, 0.7 or above that only their own document can answer it, not a web search or general knowledge), and finally run through the real AI Search agent: only a question whose real answer cites that document is offered, so what the tour types is already known to answer; with no such question there is no demo and the steps are skipped) the question types itself into the
   composer without stealing focus mid-typing, the person clicks send (or presses
   Enter) themselves, then clicks a citation chip to open the evidence panel.
   With a version family the folder tab opens without pre-selecting the row;

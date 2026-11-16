@@ -106,7 +106,7 @@ import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
-import { createDefaultAgentFactory, createSearchService } from "./search-service";
+import { answerQuestion, createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
 import { openPlanRuntime, resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
@@ -1121,7 +1121,7 @@ app.whenReady().then(async () => {
 			const { results } = await new AutoRAGLite(config).retrieve(query, options);
 			return results;
 		},
-		// Jev scores each question: only one a real person would recognise as theirs (0.9+) becomes the tour's.
+		// Jev scores each question (a real person would recognise it as theirs, and only their own document answers it).
 		judgeDemoQuestions: createDemoQuestionJudge({
 			env: process.env,
 			agentDir: getAgentDir(),
@@ -1130,6 +1130,8 @@ app.whenReady().then(async () => {
 				return typeof jev === "object" && jev !== null && "backend" in jev && jev.backend === "dazzi" && "model" in jev && typeof jev.model === "string" ? jev.model : undefined;
 			},
 		}),
+		// The tour's question is answered by the real AI Search agent before it is offered, so what the tour types is proven to answer.
+		answerDemoQuestion: (question, signal) => answerQuestion(createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }), question, signal),
 		scanOptions,
 		language: () => currentLanguage,
 		send: sendToMainWindow,
