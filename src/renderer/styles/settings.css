@@ -5231,6 +5231,15 @@
 	background: var(--bg-window);
 }
 
+/* Too narrow for the chart and the contents side by side: the contents go under the chart, full width, instead of
+   squeezing into a tall thin column. */
+.settings-view .indexing-sections .index-map-panel { container: index-map / inline-size; }
+@container index-map (max-width: 620px) {
+	.settings-view .indexing-sections .index-map-body { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+	.settings-view .indexing-sections .index-map-stage { max-width: 420px; margin-inline: auto; }
+	.settings-view .indexing-sections .index-map-folders { max-height: 320px; }
+}
+
 .settings-view .indexing-sections .index-map-folders .index-map-row {
 	gap: 8px;
 	min-height: 40px;

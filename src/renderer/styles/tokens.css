@@ -457,8 +457,9 @@ html[data-appearance="dark"] {
     --index-map-done: #EF9F27;
     --index-map-partial: #FAC775;
     --index-map-pending: #3A3A3D;
-    --index-map-seed: #BA7517;
-    --index-map-seed-new: #FAC775;
+    /* Dark: the prototype's seed head, deep brown seeds with the newest in amber. */
+    --index-map-seed: #854F0B;
+    --index-map-seed-new: #EF9F27;
     --index-map-seed-empty: #303033;
     --index-map-seed-r: 2.55px;
     --bg-input: #3A3A3C;
