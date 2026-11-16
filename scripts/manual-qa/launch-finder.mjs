@@ -83,6 +83,97 @@ export const finderWindow = (app, timeoutMs = 6000) => appWindow(app, false, tim
 /** The first-run onboarding renderer page. */
 export const onboardingWindow = (app, timeoutMs = 6000) => appWindow(app, true, timeoutMs);
 
+/** Every pre-warmed Quick Look panel page the app has right now (see {@link createFinderPreview}). */
+export async function quickLookPages(app) {
+	return (await app.windows()).filter((page) => page.url().includes("quick-look.html"));
+}
+
+/** One reading of every pre-warmed panel: its page, its window's signals, and whether its page has a file loaded. */
+async function previewPanelFacts(app, main) {
+	const mainHandle = main === undefined ? null : await app.browserWindow(main);
+	const mainId = mainHandle === null ? null : await mainHandle.evaluate((window) => window.id);
+	const facts = [];
+	for (const page of await quickLookPages(app)) {
+		const handle = await app.browserWindow(page);
+		const window = await handle.evaluate((win) => ({
+			id: win.id,
+			parentId: win.getParentWindow()?.id ?? null,
+			allWorkspaces: win.isVisibleOnAllWorkspaces(),
+			visible: win.isVisible(),
+			title: win.getTitle(),
+		}));
+		const ready = await page.evaluate(() => document.querySelector(".qlw")?.dataset.quicklookState === "ready").catch(() => false);
+		const shownName = await page.evaluate(() => document.querySelector(".qlw__name")?.textContent ?? "").catch(() => "");
+		facts.push({ page, handle, ready, shownName, ...window });
+	}
+	return { mainId, facts };
+}
+
+/** The signals a failed mapping reports, so the next reader does not have to reproduce the run to see them. */
+function previewPanelDigest(facts) {
+	return JSON.stringify(facts.map(({ id, parentId, allWorkspaces, visible, ready, title, shownName }) => ({ id, parentId, allWorkspaces, visible, ready, title, shownName })));
+}
+
+/**
+ * The Quick Look panel that belongs to the Finder (`main`), and only that one.
+ *
+ * The app always pre-warms TWO panels — the Finder's and the quick-search
+ * launcher's (`createQuickSearchWindow` attaches its own at startup) — and either
+ * can register with Playwright first, while `BrowserWindow.getAllWindows()`
+ * returns the launcher's hidden 880×640 panel first. That panel never resizes
+ * with the Finder's preview, so a lane that took "the first quick-look page" or
+ * "the first quick-look window" measured the wrong one (a constant 880×640 in
+ * every geometry check).
+ *
+ * Panels are told apart, in order, by:
+ *   1. `getParentWindow()` being the Finder (Windows/Linux, where the panel is a
+ *      child of its owner);
+ *   2. not floating on every workspace: the launcher's panel is created with
+ *      `level: "screen-saver"`, so `setVisibleOnAllWorkspaces(true, ...)` was
+ *      called on it and `isVisibleOnAllWorkspaces()` is true, while the Finder's
+ *      panel never gets that call — this resolves before any file is shown;
+ *   3. after the Finder has shown a file, the only panel whose page reached
+ *      `data-quicklook-state="ready"` or whose window is visible.
+ *
+ * Resolved once and reused. `page()` throws with the panel facts when the panels
+ * cannot be told apart, rather than silently returning the launcher's. `state()`
+ * reads the panel's own window through Playwright's `browserWindow(page)` handle,
+ * so a bounds/visibility read can never hit the other panel.
+ */
+export function createFinderPreview(app, main) {
+	let chosen = null;
+	async function resolve() {
+		if (chosen !== null) return chosen;
+		const { mainId, facts } = await previewPanelFacts(app, main);
+		if (facts.length === 0) return null;
+		const byParent = mainId === null ? undefined : facts.find((fact) => fact.parentId === mainId);
+		const finderPanels = facts.filter((fact) => fact.allWorkspaces === false);
+		const shown = facts.filter((fact) => fact.visible || fact.ready);
+		chosen = byParent ?? (finderPanels.length === 1 ? finderPanels[0] : undefined) ?? (shown.length === 1 ? shown[0] : undefined) ?? null;
+		return chosen;
+	}
+	return {
+		/** Every panel seen right now, for diagnostics. */
+		async facts() {
+			return (await previewPanelFacts(app, main)).facts;
+		},
+		/** The Finder's panel page; throws with the panel facts when they cannot be told apart. */
+		async page() {
+			const found = await resolve();
+			if (found === null) {
+				const { facts } = await previewPanelFacts(app, main);
+				throw new Error(`cannot tell the Finder's Quick Look panel apart: ${previewPanelDigest(facts)}`);
+			}
+			return found.page;
+		},
+		/** The Finder panel window's live `{ visible, bounds }`, or null when no panel has appeared yet. */
+		async state() {
+			const found = await resolve();
+			return found === null ? null : found.handle.evaluate((win) => ({ visible: win.isVisible(), bounds: win.getBounds() }));
+		},
+	};
+}
+
 /**
  * The fs worker's diagnostics (pid, restarts, per-op request counts, recent
  * requests), read in main through the handler the app registers for it.

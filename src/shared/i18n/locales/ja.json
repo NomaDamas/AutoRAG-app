@@ -2080,7 +2080,9 @@
       "invalidCopyText": "コピーする内容が正しくありません",
       "notAbsolute": "プレビューのパスが正しくありません",
       "missing": "ファイルが見つかりません",
-      "notFile": "フォルダはプレビューできません"
+      "notFile": "フォルダはプレビューできません",
+      "invalidEdit": "無効な編集リクエスト",
+      "editUnavailable": "編集機能はまだ準備できていません"
     },
     "mail": {
       "from": "差出人",
@@ -2146,6 +2148,28 @@
       "searching": "引用箇所を検索中…",
       "found": "引用箇所をハイライト表示",
       "missing": "引用箇所が見つかりません"
+    },
+    "markup": {
+      "start": "マークアップして編集",
+      "canvas": "ドキュメント上のマーク",
+      "tools": "マークツール",
+      "pen": "ペン",
+      "box": "四角",
+      "underline": "下線",
+      "removeLast": "最後のマークを消去",
+      "clear": "マークをすべて消去",
+      "instruction": "編集の指示",
+      "placeholder": "どう変更しますか?例: 下線の日付を11月20日に変更",
+      "markCount": "マーク {{count}} 件",
+      "send": "編集する",
+      "working": "編集中…",
+      "changed": "ドキュメントを編集しました",
+      "unchanged": "ドキュメントは変更されていません",
+      "undo": "編集を取り消す",
+      "undone": "ドキュメントを元に戻しました",
+      "undoFailed": "編集後にドキュメントが変更されたため、元に戻しませんでした",
+      "cancelled": "編集を中止しました",
+      "failed": "編集できませんでした: {{message}}"
     }
   },
   "settingsCore": {

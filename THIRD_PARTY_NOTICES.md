@@ -68,6 +68,14 @@ Notes on what was verified:
 |---|---|---|---|
 | cfb (SheetJS) | 1.2.2 | Apache-2.0 | Reads the OLE2 container of Outlook `.msg` files in Quick Look; also pulled in by `xlsx` and `kordoc` |
 | pdf-lib (and `@pdf-lib/standard-fonts`, `@pdf-lib/upng`) | 1.17.1 | MIT | Andrew Dillon — https://github.com/Hopding/pdf-lib (PDF 1.5 object-stream compaction and embedded image stream rewriting in Reduce Size) |
+| heic-to (CSP build, including libheif/libde265) | 1.6.7 | LGPL-3.0-or-later (wrapper); LGPL for native decoder components | Browser HEIC fallback — https://github.com/hoppergee/heic-to/tree/78345a3fcdb4a1d70d513fce2646aeff0127f7ba; license: https://github.com/hoppergee/heic-to/blob/78345a3fcdb4a1d70d513fce2646aeff0127f7ba/LICENSE |
+
+The HEIC fallback is loaded separately and only when the OS did not decode the
+picture. Its CSP build does not require JavaScript `unsafe-eval`; the app's
+production policy remains unchanged. The unmodified package source and license
+are available at the versioned upstream links above. The archive-engine-only
+permissive-license statement at the top of this file does not apply to this
+HEIC decoder.
 
 ## Bundled typeface
 

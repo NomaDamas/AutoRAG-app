@@ -16,7 +16,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync, copyFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { createFinderPreview, finderWindow, launchFinder } from "./launch-finder.mjs";
 import { isWindows } from "./platform.mjs";
 import { fitQuickLook, QUICK_LOOK_TOOLBAR } from "../../src/preview/shared/fit.ts";
 import { buildHwp } from "../../test/support/hwp-fixture.ts";
@@ -222,26 +222,35 @@ async function pass(appearance) {
 				{ width: workArea.width, height: workArea.height },
 				"clamp",
 			);
-		const preview = await poll(
-			async () => (await app.windows()).find((page) => page.url().includes("quick-look.html")),
-			(page) => page !== undefined,
-			30_000,
-		);
-		if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
-		await preview.emulateMedia({ colorScheme: appearance });
+		// The app pre-warms two Quick Look panels (the Finder's and the quick-search
+		// launcher's); the shared helper maps the Finder's, by owner/workspace, and
+		// reads its window through `browserWindow(page)` — never the first one found.
+		const finderPreview = createFinderPreview(app, main);
 		await main.emulateMedia({ colorScheme: appearance });
-		await preview.evaluate((source) => {
-			document.documentElement.dataset.appearance = source;
-		}, appearance);
 		await main.evaluate((source) => {
 			document.documentElement.dataset.appearance = source;
 		}, appearance);
-		const windowState = () =>
-			app.evaluate(({ BrowserWindow }) => {
-				const window = BrowserWindow.getAllWindows().find((item) => item.webContents.getURL().includes("quick-look.html"));
-				return window === undefined ? null : { visible: window.isVisible(), bounds: window.getBounds() };
-			});
-		const settled = () => preview.evaluate(() => document.getElementById("root")?.dataset.zoom === undefined && document.querySelector('[data-quicklook-state="ready"]') !== null);
+		let preview = null;
+		async function previewPage() {
+			if (preview !== null) return preview;
+			preview = await poll(() => finderPreview.page().catch(() => null), (page) => page !== null, 30_000);
+			if (preview === null) throw new Error(`the Finder's Quick Look panel did not appear: ${JSON.stringify(await finderPreview.facts().catch(() => []))}`);
+			await preview.emulateMedia({ colorScheme: appearance });
+			await preview.evaluate((source) => {
+				document.documentElement.dataset.appearance = source;
+			}, appearance);
+			return preview;
+		}
+		await previewPage();
+		const windowState = () => finderPreview.state();
+		const settled = () => {
+			const page = preview;
+			return page === null
+				? Promise.resolve(false)
+				: page
+						.evaluate(() => document.getElementById("root")?.dataset.zoom === undefined && document.querySelector('[data-quicklook-state="ready"]') !== null)
+						.catch(() => false);
+		};
 
 		async function open(name, ready) {
 			const row = main.getByRole("row", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
@@ -249,7 +258,8 @@ async function pass(appearance) {
 			await row.click();
 			const started = Date.now();
 			await main.keyboard.press("Space");
-			await poll(() => preview.evaluate(ready).catch(() => false), Boolean, 10_000);
+			const page = await previewPage();
+			await poll(() => page.evaluate(ready).catch(() => false), Boolean, 10_000);
 			const elapsed = Date.now() - started;
 			await poll(settled, Boolean);
 			await poll(async () => (await windowState())?.visible === true, Boolean);

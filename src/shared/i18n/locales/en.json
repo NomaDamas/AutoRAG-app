@@ -2080,7 +2080,9 @@
       "invalidCopyText": "Invalid text to copy",
       "notAbsolute": "Invalid preview path",
       "missing": "File not found",
-      "notFile": "Folders can’t be previewed"
+      "notFile": "Folders can’t be previewed",
+      "invalidEdit": "Invalid edit request",
+      "editUnavailable": "Editing isn’t ready yet"
     },
     "mail": {
       "from": "From",
@@ -2146,6 +2148,28 @@
       "searching": "Finding the cited passage…",
       "found": "Cited passage highlighted",
       "missing": "Cited passage not found"
+    },
+    "markup": {
+      "start": "Mark Up and Edit",
+      "canvas": "Marks on the document",
+      "tools": "Marking tools",
+      "pen": "Pen",
+      "box": "Box",
+      "underline": "Underline",
+      "removeLast": "Remove Last Mark",
+      "clear": "Clear Marks",
+      "instruction": "Edit instruction",
+      "placeholder": "What should change? For example: change the underlined date to November 20",
+      "markCount": "Marks: {{count}}",
+      "send": "Edit",
+      "working": "Editing…",
+      "changed": "The document was edited",
+      "unchanged": "The document was not changed",
+      "undo": "Undo Edit",
+      "undone": "The document is back as it was",
+      "undoFailed": "The document changed after the edit, so it wasn’t rolled back",
+      "cancelled": "Editing stopped",
+      "failed": "Couldn’t edit: {{message}}"
     }
   },
   "settingsCore": {

@@ -54,6 +54,8 @@
   --ql-paper: rgba(255,255,255,0.62);
   --ql-page: #FFFFFF;
   --ql-accent: #0A64D8;
+  /* Marks drawn on a previewed document for the edit agent (the pen button). */
+  --ql-annotation: #FF3B30;
   --ql-highlight: rgba(255,255,255,0.85);
   /* A cited passage on a previewed page (AI Search evidence). Pages stay white in dark mode, so one tint serves both. */
   --ql-evidence-mark: rgba(255,204,0,0.38);
@@ -508,6 +510,7 @@ html[data-appearance="dark"] {
     --ql-sunk: rgba(0,0,0,0.2);
     --ql-paper: rgba(22,22,24,0.55);
     --ql-accent: #0A84FF;
+    --ql-annotation: #FF453A;
     --ql-highlight: rgba(255,255,255,0.2);
     --ql-knockout: #2C2C2E;
     --ql-wave-off: rgba(235,235,245,0.22);

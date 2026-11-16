@@ -1,4 +1,5 @@
 import type { AppSettings } from "../../shared/settings-contract";
+import type { DocumentEditEvent, DocumentEditRequest } from "./annotation";
 import type { BinaryKind } from "./binary-kind";
 import type { ArchiveEntry } from "./archive-items";
 import type { KeyUsageName } from "./certificate";
@@ -72,6 +73,14 @@ export const PREVIEW_CHANNELS = {
 	share: "preview:share",
 	/** Preview window -> main (invoke): put text on the system clipboard. */
 	copyText: "preview:copy-text",
+	/** Preview window -> main (invoke): have the `document-edit` agent change the shown file as the marks and instruction say. */
+	editStart: "preview:edit-start",
+	/** Preview window -> main (invoke): stop the edit run. */
+	editCancel: "preview:edit-cancel",
+	/** Preview window -> main (invoke): put the file back as it was before the edit run. */
+	editUndo: "preview:edit-undo",
+	/** Main -> preview window: progress, reply, and outcome of an edit run. */
+	editEvent: "preview:edit-event",
 	/** Preview window -> main (send): a text field took or gave up focus; Space and the arrows stay with it while it has focus. */
 	textEntry: "preview:text-entry",
 } as const;
@@ -468,6 +477,12 @@ export interface QuickLookWindowBridge {
 	copyText(text: string): Promise<void>;
 	/** A viewer that shows a text field (the PDF password prompt) reports whether it has one, so the window takes focus and Space and the arrows reach the field. */
 	textEntry(active: boolean): void;
+	/** Runs the `document-edit` agent on the shown file; events arrive on `onEditEvent` under `runId`. Resolves when the run ends. */
+	editDocument(runId: string, request: DocumentEditRequest): Promise<void>;
+	cancelEdit(runId: string): Promise<void>;
+	/** True when the file was put back as it was before run `runId`. */
+	undoEdit(runId: string): Promise<boolean>;
+	onEditEvent(listener: (event: DocumentEditEvent) => void): () => void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

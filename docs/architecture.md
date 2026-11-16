@@ -988,7 +988,16 @@ the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.
 runs user-defined right-click Magic Actions on selected files and folders — either executing an arbitrary shell script
 or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
 (`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
-per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
+per action) with live `i` intent progress and streamed Markdown output. The `document-edit` helper
+(`src/main/agents/profiles/document-edit.ts`, `src/main/document-edit-service.ts`, `src/preview/shared/annotation.ts`) is
+the Quick Look pen button: it gets the marked-up file's path, the marks (tool, page, text under the mark, position as
+fractions of the page) and the instruction, plus a capture of the Quick Look window when the model takes images. Its
+`read`/`ls`/`find`/`grep` refuse credential files and the agent dir outside `skills/`; `edit`/`write` reach only that one
+file and a per-run scratch folder. Text documents (Markdown, plain text, code, HTML, CSV) get no shell; Office, HWPX and
+OpenDocument packages get `bash` in the scratch folder to unpack, edit the XML and repack, and that shell is only kept
+away from the agent dir, not fenced for writes. The service keeps the original bytes of a changed file under
+`<userData>/document-edit-backups` for Undo, refuses Undo once the file changed again, and deletes the backups at quit.
+A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Search approvals and questions

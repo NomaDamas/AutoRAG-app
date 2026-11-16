@@ -5,6 +5,8 @@ import { LANGUAGE_FLAG } from "../../shared/language-contract";
 import type { AppAppearance, AppSettings } from "../../shared/settings-contract";
 import type { IconPreviewCache } from "../../main/file-icon";
 import { listArchive } from "../../main/archive-list";
+import type { DocumentEditService } from "../../main/document-edit-service";
+import { documentEditMode, isDocumentEditRequest, type DocumentEditEvent } from "../shared/annotation";
 import { isAppBundle, isPackageDirectory } from "../../main/fs-entry";
 import {
 	app,
@@ -137,6 +139,19 @@ interface Session {
 	detach: () => void;
 	readonly level: FloatLevel | null;
 }
+
+/**
+ * The `document-edit` helper agent behind the pen button. Main sets it once the
+ * agent dir and model resolution exist; until then an edit request is refused.
+ */
+let documentEdit: DocumentEditService | null = null;
+
+export function setQuickLookDocumentEdit(service: DocumentEditService | null): void {
+	documentEdit = service;
+}
+
+/** The widest screenshot of the marked-up preview handed to the model. */
+const EDIT_SCREENSHOT_WIDTH = 1600;
 
 /** One preview per owner window: the Finder's and the quick-search launcher's. */
 const sessions = new Set<Session>();
@@ -579,6 +594,12 @@ async function show(state: Session, target: QuickLookTarget, origin: Bounds | nu
 	}, SHOW_DEADLINE_MS);
 }
 
+/** Shows `path` again after the edit agent changed it, when the panel still shows it; the caches key on mtime, so the new content renders. */
+function reloadShown(state: Session, path: string): void {
+	if (state.current?.path !== path || !live(state.window)) return;
+	void show(state, state.current, state.origin);
+}
+
 async function act(state: Session, action: QuickLookAction): Promise<void> {
 	const navigate = (delta: NavigateDelta): void => {
 		if (live(state.owner)) state.owner.webContents.send(PREVIEW_CHANNELS.navigate, delta);
@@ -862,6 +883,40 @@ export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<Ico
 			x: Math.round(anchor.x),
 			y: Math.round(anchor.y + anchor.height + 4),
 		});
+	});
+	ipc.handle(PREVIEW_CHANNELS.editStart, async (event, runId: unknown, request: unknown) => {
+		const state = fromPreview(event);
+		if (state === null) throw new Error("Quick Look is not attached to this window");
+		if (typeof runId !== "string" || runId === "" || !isDocumentEditRequest(request)) throw new Error(t("quickLook.errors.invalidEdit"));
+		const shown = shownPath(event, request.path);
+		if (documentEditMode(extname(shown.path).slice(1)) === null) throw new Error(t("quickLook.errors.invalidEdit"));
+		if (documentEdit === null) throw new Error(t("quickLook.errors.editUnavailable"));
+		const send = (update: DocumentEditEvent): void => {
+			if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.editEvent, update);
+		};
+		const screenshot = async (): Promise<Buffer | null> => {
+			if (!live(state.window)) return null;
+			const image = await state.window.webContents.capturePage();
+			if (image.isEmpty()) return null;
+			const { width } = image.getSize();
+			return (width > EDIT_SCREENSHOT_WIDTH ? image.resize({ width: EDIT_SCREENSHOT_WIDTH, quality: "good" }) : image).toPNG();
+		};
+		const outcome = await documentEdit.start(runId, request, { send, screenshot });
+		if (outcome.changed) reloadShown(state, shown.path);
+	});
+	ipc.handle(PREVIEW_CHANNELS.editCancel, async (event, runId: unknown) => {
+		if (fromPreview(event) === null || typeof runId !== "string") return;
+		await documentEdit?.cancel(runId);
+	});
+	ipc.handle(PREVIEW_CHANNELS.editUndo, async (event, runId: unknown) => {
+		const state = fromPreview(event);
+		if (state === null || typeof runId !== "string" || documentEdit === null) return false;
+		const path = state.current?.path ?? null;
+		const undone = await documentEdit.undo(runId, (update) => {
+			if (live(state.window)) state.window.webContents.send(PREVIEW_CHANNELS.editEvent, update);
+		});
+		if (undone && path !== null) reloadShown(state, path);
+		return undone;
 	});
 	ipc.handle(PREVIEW_CHANNELS.copyText, (event, text: unknown) => {
 		if (fromPreview(event) === null) throw new Error("Quick Look is not attached to this window");

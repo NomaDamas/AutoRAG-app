@@ -95,6 +95,7 @@
 	--color-ql-paper: var(--ql-paper);
 	--color-ql-page: var(--ql-page);
 	--color-ql-accent: var(--ql-accent);
+	--color-ql-annotation: var(--ql-annotation);
 	--color-ql-highlight: var(--ql-highlight);
 	--color-ql-evidence-mark: var(--ql-evidence-mark);
 	--color-ql-evidence-mark-ring: var(--ql-evidence-mark-ring);

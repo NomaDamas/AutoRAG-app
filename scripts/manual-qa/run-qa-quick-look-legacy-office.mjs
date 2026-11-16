@@ -16,7 +16,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { buildPowerPoint, buildWordDocument } from "../../test/support/legacy-office-fixture.ts";
-import { finderWindow, launchFinder } from "./launch-finder.mjs";
+import { createFinderPreview, finderWindow, launchFinder } from "./launch-finder.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? process.argv[2] ?? "/tmp/autorag-quicklook-legacy-office";
 mkdirSync(EVIDENCE, { recursive: true });
@@ -59,13 +59,16 @@ async function poll(read, accept, timeoutMs = 8000) {
 const app = await launchFinder({ env: { AUTORAG_QA_ROOT: root, AUTORAG_SKIP_DUPEY_CHECK: "1" }, language: "en" });
 try {
 	const main = await finderWindow(app, 30_000);
-	const preview = await poll(
-		async () => (await app.windows()).find((candidate) => candidate.url().includes("quick-look.html")),
-		(candidate) => candidate !== undefined,
-		30_000,
-	);
-	if (preview === undefined) throw new Error("Quick Look window did not pre-warm");
-	const visible = () => app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((item) => item.webContents.getURL().includes("quick-look.html") && item.isVisible()));
+	// The Finder's panel, not the launcher's hidden 880×640 one (see createFinderPreview).
+	const finderPreview = createFinderPreview(app, main);
+	let preview = null;
+	async function previewPage() {
+		if (preview !== null) return preview;
+		preview = await poll(() => finderPreview.page().catch(() => null), (page) => page !== null, 30_000);
+		if (preview === null) throw new Error(`the Finder's Quick Look panel did not appear: ${JSON.stringify(await finderPreview.facts().catch(() => []))}`);
+		return preview;
+	}
+	const visible = async () => (await finderPreview.state())?.visible === true;
 	const rowFor = (name) => main.getByRole("row", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).first();
 
 	async function open(name) {
@@ -74,8 +77,9 @@ try {
 		await row.click();
 		await main.keyboard.press("Space");
 		await poll(visible, Boolean, 10_000);
+		const page = await previewPage();
 		await new Promise((resolve) => setTimeout(resolve, 700));
-		return poll(() => preview.evaluate(() => document.querySelector(".ql__stage")?.textContent ?? "").catch(() => ""), (text) => text.length > 0, 8000);
+		return poll(() => page.evaluate(() => document.querySelector(".ql__stage")?.textContent ?? "").catch(() => ""), (text) => text.length > 0, 8000);
 	}
 	async function close() {
 		await main.keyboard.press("Space");
