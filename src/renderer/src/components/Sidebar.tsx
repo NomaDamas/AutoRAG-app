@@ -211,8 +211,8 @@ export function Sidebar({
 											<Icon
 												className={cn(
 													"sidebar__item-icon flex-none",
-													// Like the settings sidebar, a selected row is grey with ink; only AI 검색 and 자동화 keep the blue icon.
-													!active ? "text-ink-muted" : item.view === "aiSearch" || item.view === "automations" ? "text-accent" : "text-ink",
+													// AI 채팅 and 자동화 keep the blue icon whether or not they are selected; a selected place row is grey with ink.
+													item.view === "aiSearch" || item.view === "automations" ? "text-accent" : active ? "text-ink" : "text-ink-muted",
 												)}
 												size={14}
 												strokeWidth={1.8}
