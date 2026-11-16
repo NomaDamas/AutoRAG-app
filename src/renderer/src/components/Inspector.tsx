@@ -62,7 +62,7 @@ import { imageTarget } from "../state/answer-markdown";
 import type { FileKind } from "../state/kinds";
 import type { ImageActions } from "./AnswerImage";
 import { AutomationRulesSection } from "./AutomationRulesSection";
-import { EvidenceExcerpt, InlineWithImages } from "./EvidenceBlocks";
+import { EvidenceExcerpt } from "./EvidenceBlocks";
 import {
 	CloseIcon,
 	ZipIcon,
