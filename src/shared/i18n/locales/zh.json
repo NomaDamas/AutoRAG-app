@@ -2791,18 +2791,14 @@
     },
     "mcp": {
       "title": "MCP 服务器",
-      "desc": "将 Dazzi 连接到其他智能体，也可将外部 MCP 服务器连接到 Dazzi。",
-      "listTitle": "已连接到 Dazzi 的服务器",
-      "listDesc": "服务器会在搜索或对话开始时连接。更改从下一次搜索起生效。",
+      "desc": "让其他智能体在 Dazzi 中查找文档，或让 Dazzi 使用外部 MCP 服务器。",
+      "listTitle": "在 Dazzi 中使用外部服务器",
+      "listDesc": "添加或更改的服务器会从下一次搜索或对话开始使用。",
       "add": "添加服务器",
-      "empty": "尚未连接任何 MCP 服务器。",
-      "file": "配置文件：{{path}}",
-      "transportStdio": "运行命令",
-      "transportHttp": "HTTP",
+      "empty": "尚未添加服务器。",
+      "transportStdio": "本地",
+      "transportHttp": "远程",
       "transportUnknown": "未知",
-      "on": "使用中",
-      "off": "已关闭",
-      "problem": "问题",
       "edit": "编辑",
       "remove": "删除",
       "enabledAria": "使用 {{name}}",
@@ -2819,7 +2815,7 @@
         "direct": "像内置工具一样把全部工具提供给模型。",
         "hidden": "无法访问这些工具。"
       },
-      "trust": "MCP 服务器会在这台电脑上运行命令或连接外部服务。请只添加你信任的服务器。服务器返回的内容只会被当作数据，而不是指令。",
+      "trust": "MCP 服务器可以在这台电脑上运行命令或连接外部服务。请只添加你信任的服务器。Dazzi 不会把服务器返回的内容当作指令执行。",
       "fileError": "无法读取 MCP 配置文件，因此不会做任何修改。请修复文件后重新打开此页面。",
       "modal": {
         "addTitle": "添加 MCP 服务器",
@@ -2845,8 +2841,8 @@
         "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。"
       },
       "connect": {
-        "title": "连接其他智能体",
-        "desc": "让 Claude Code、Codex 等智能体搜索 Dazzi 已建立索引的文档。复制下面的内容并粘贴到智能体中。",
+        "title": "在其他智能体中使用 Dazzi",
+        "desc": "让 Claude Code、Codex 等智能体搜索 Dazzi 的索引。选择智能体后，注册下面的内容。",
         "tabsAria": "选择智能体",
         "tabManual": "手动填写",
         "copy": "复制",
@@ -2866,8 +2862,9 @@
           "env": "环境变量"
         },
         "readOnly": "只读",
-        "readOnlyHint": "隐藏刷新索引和保存报告的工具，让智能体只能搜索。"
-      }
+        "readOnlyHint": "智能体只能搜索，不能刷新索引或保存报告。"
+      },
+      "openFile": "打开配置文件"
     }
   },
   "settingsSources": {

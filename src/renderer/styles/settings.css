@@ -4757,3 +4757,86 @@
 .settings-view .cmenu-note svg {
 	flex: none;
 }
+
+/* ------------------------------------------ MCP 서버 (Figma 525:9533 / 527:9672) -- */
+
+/* 다른 에이전트에서 Dazzi 쓰기: the agent tabs, what to paste, and its hint with the copy button, 8px apart. */
+.settings-view .mcp-connect {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.settings-view .mcp-connect .settings-seg {
+	align-self: flex-start;
+	margin: 0;
+}
+
+.settings-view .mcp-connect .settings-snippet {
+	padding: 14px 16px;
+	border-color: transparent;
+	border-radius: var(--radius-12);
+	background: var(--bg-input);
+}
+
+.settings-view .mcp-connect .settings-snippet:hover {
+	border-color: var(--border-strong);
+}
+
+.settings-view .mcp-connect .settings-snippet-foot {
+	margin-top: 0;
+}
+
+/* Dazzi에서 외부 서버 쓰기: the trust note, then the server card, 12px apart. */
+.settings-view .mcp-servers {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.settings-view .mcp-trust {
+	align-items: flex-start;
+}
+
+.settings-view .mcp-trust svg {
+	margin-top: 1px;
+}
+
+/* A server: name, kind badge and its command or address on one line; a configuration problem in red under it. */
+.settings-view .mcp-server-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 0;
+}
+
+.settings-view .mcp-server-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.settings-view .mcp-server-line .sidebar-row-name,
+.settings-view .mcp-server-line .sidebar-always-badge {
+	flex: none;
+}
+
+.settings-view .mcp-server-problem {
+	color: var(--danger-text);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+	overflow-wrap: anywhere;
+}
+
+/* No drag handles on this card, so its add row starts at the rows' 16px. */
+.settings-view .sidebar-row.is-add.mcp-add-row {
+	padding-left: 16px;
+}
+
+/* The edit dialog's exposure hint goes under the select, not beside it. */
+.settings-view .settings-modal label .mcp-exposure-hint {
+	display: block;
+	margin-top: 6px;
+}

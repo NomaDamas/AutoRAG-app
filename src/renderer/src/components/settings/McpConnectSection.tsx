@@ -1,5 +1,5 @@
 /**
- * Settings → MCP 서버 → "다른 에이전트에 연결".
+ * Settings → MCP 서버 → "다른 에이전트에서 Dazzi 쓰기" (Figma 525:9533).
  *
  * Dazzi's own MCP server is what Claude Code, Codex, Gemini CLI, Cursor and the like start to search the
  * documents Dazzi indexed. The main process resolves how to start it (`mcpConnectInfo`); this section turns that
@@ -11,9 +11,11 @@ import { useTranslation } from "react-i18next";
 import { Check, Copy } from "lucide-react";
 import type { McpConnectInfo } from "../../../../shared/settings-contract";
 import { MCP_SERVER_NAME, clientSnippet, envLines, withReadOnly, type McpClientId } from "../../../../shared/mcp-connect";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 import { Switch } from "../primitives/Switch";
 import { errorText } from "./configSupport";
-import { Row, Section } from "./SettingsKit";
+import { PlainRow } from "./SettingsKit";
 
 const settings = window.autorag.settings;
 
@@ -105,11 +107,16 @@ export function McpConnectSection(): ReactElement {
 				].filter((field) => field.value.length > 0);
 
 	return (
-		<Section title={t("settingsCore.mcp.connect.title")} description={t("settingsCore.mcp.connect.desc")}>
+		<section className="plain-section mcp-section" data-mcp-connect="true">
+			<div className="cmenu-block">
+				<h2 className="cmenu-block-title">{t("settingsCore.mcp.connect.title")}</h2>
+				<p className="cmenu-block-desc">{t("settingsCore.mcp.connect.desc")}</p>
+			</div>
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 			{info !== null && !info.available ? <div className="settings-error" role="alert">{t("settingsCore.mcp.connect.unavailable")}</div> : null}
 			{info !== null && info.available ? (
 				<>
+					<div className="mcp-connect">
 					<div className="settings-seg" role="tablist" aria-label={t("settingsCore.mcp.connect.tabsAria")}>
 						{TABS.map((entry, index) => (
 							<button
@@ -146,7 +153,7 @@ export function McpConnectSection(): ReactElement {
 								</pre>
 								<div className="settings-snippet-foot">
 									<span className="settings-snippet-hint">{t(tab === "json" ? "settingsCore.mcp.connect.hint.json" : "settingsCore.mcp.connect.hint.terminal")}</span>
-									<button type="button" className="linear-btn settings-copy-btn" onClick={() => void copy(tab, snippet)}>
+									<button type="button" className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn settings-copy-btn")} onClick={() => void copy(tab, snippet)}>
 										<CopyMark done={copied === tab} />
 									</button>
 								</div>
@@ -177,11 +184,14 @@ export function McpConnectSection(): ReactElement {
 						{failed ? <div className="settings-error" role="alert">{t("settingsCore.mcp.connect.copyFailed")}</div> : null}
 						<span className="sr-only" role="status" aria-live="polite">{copied === null ? "" : t("settingsCore.mcp.connect.copied")}</span>
 					</div>
-					<Row name={t("settingsCore.mcp.connect.readOnly")} hint={t("settingsCore.mcp.connect.readOnlyHint")}>
-						<Switch checked={readOnly} ariaLabel={t("settingsCore.mcp.connect.readOnly")} onChange={() => setReadOnly((current) => !current)} />
-					</Row>
+					</div>
+					<div className="settings-plain plain-section-rows">
+						<PlainRow name={t("settingsCore.mcp.connect.readOnly")} hint={t("settingsCore.mcp.connect.readOnlyHint")}>
+							<Switch checked={readOnly} ariaLabel={t("settingsCore.mcp.connect.readOnly")} onChange={() => setReadOnly((current) => !current)} />
+						</PlainRow>
+					</div>
 				</>
 			) : null}
-		</Section>
+		</section>
 	);
 }
