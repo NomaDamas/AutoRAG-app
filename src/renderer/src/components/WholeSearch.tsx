@@ -14,7 +14,7 @@ import type { FinderEntry } from "../data/entries";
 import type { ContentRowInput } from "../state/launcher";
 import { dirname } from "../state/paths";
 import type { SearchGroup, SearchGroupKey, WholeSearchState } from "../state/whole-search";
-import { FileIcon, GroupIcon, LinkIcon, SourceDriveIcon, SparklesIcon } from "./icons";
+import { FileIcon, GroupIcon, LinkIcon, SourceDriveIcon } from "./icons";
 import { EntryTile } from "./primitives/EntryTile";
 import { sourceTitle } from "./settings/datasourceTemplates";
 
@@ -46,19 +46,16 @@ function countedLabel(label: string, group: SearchGroup): string {
 
 /**
  * The group tabs: a fixed order (files, content, then datasources in config order) so a tab never moves under the
- * pointer while answers land. ←/→ move between tabs like any tab list; the AI Search button on the right hands the
- * same query to the chat.
+ * pointer while answers land. ←/→ move between tabs like any tab list.
  */
 export function SearchGroupTabs({
 	groups,
 	selected,
 	onSelect,
-	onAskAi,
 }: {
 	readonly groups: readonly SearchGroup[];
 	readonly selected: SearchGroupKey;
 	readonly onSelect: (key: SearchGroupKey) => void;
-	readonly onAskAi: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const listRef = useRef<HTMLDivElement>(null);
@@ -107,15 +104,6 @@ export function SearchGroupTabs({
 					);
 				})}
 			</div>
-			<button
-				type="button"
-				className="search-ask flex flex-none items-center gap-5 h-[20px] px-7 border border-border rounded-7 bg-window text-badge text-ink-body whitespace-nowrap cursor-default hover:bg-hover hover:text-ink"
-				title={t("wholeSearch.askAiHint")}
-				onClick={onAskAi}
-			>
-				<SparklesIcon size={12} />
-				{t("wholeSearch.askAi")}
-			</button>
 		</div>
 	);
 }

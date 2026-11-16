@@ -93,12 +93,6 @@
   "pathBar": {
     "notFound": "找不到 \"{{path}}\"。"
   },
-  "scopeBar": {
-    "search": "搜索:",
-    "thisMac": "这台 Mac",
-    "thisComputer": "这台电脑",
-    "itemsFound": "个项目"
-  },
   "wholeSearch": {
     "groups": "搜索结果分组",
     "files": "文件名",
@@ -112,9 +106,7 @@
     "sourcePending": "正在搜索 {{source}}…",
     "sourceError": "无法搜索 {{source}}：{{error}}",
     "noSourceHits": "{{source}} 中没有与 \"{{query}}\" 匹配的内容。",
-    "openPage": "打开页面",
-    "askAi": "询问 AI 搜索",
-    "askAiHint": "用此搜索词开始 AI 搜索对话"
+    "openPage": "打开页面"
   },
   "tabs": {
     "close": "关闭标签页 ({{shortcut}})",

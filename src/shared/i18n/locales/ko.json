@@ -93,12 +93,6 @@
   "pathBar": {
     "notFound": "\"{{path}}\" 경로를 찾을 수 없습니다."
   },
-  "scopeBar": {
-    "search": "검색:",
-    "thisMac": "이 Mac",
-    "thisComputer": "컴퓨터",
-    "itemsFound": "개 항목 찾음"
-  },
   "wholeSearch": {
     "groups": "검색 결과 분류",
     "files": "파일 이름",
@@ -112,9 +106,7 @@
     "sourcePending": "{{source}} 검색 중…",
     "sourceError": "{{source}} 검색 실패: {{error}}",
     "noSourceHits": "{{source}}에서 \"{{query}}\"와 일치하는 항목이 없습니다.",
-    "openPage": "페이지 열기",
-    "askAi": "AI 검색에 묻기",
-    "askAiHint": "이 검색어로 AI 검색 대화를 시작합니다"
+    "openPage": "페이지 열기"
   },
   "tabs": {
     "close": "탭 닫기 ({{shortcut}})",

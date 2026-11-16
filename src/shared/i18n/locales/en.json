@@ -93,12 +93,6 @@
   "pathBar": {
     "notFound": "Can't find \"{{path}}\"."
   },
-  "scopeBar": {
-    "search": "Search:",
-    "thisMac": "This Mac",
-    "thisComputer": "This Computer",
-    "itemsFound": "items found"
-  },
   "wholeSearch": {
     "groups": "Search result groups",
     "files": "File Names",
@@ -112,9 +106,7 @@
     "sourcePending": "Searching {{source}}…",
     "sourceError": "Couldn't search {{source}}: {{error}}",
     "noSourceHits": "Nothing in {{source}} matches \"{{query}}\".",
-    "openPage": "Open Page",
-    "askAi": "Ask AI Search",
-    "askAiHint": "Start an AI Search chat with this query"
+    "openPage": "Open Page"
   },
   "tabs": {
     "close": "Close tab ({{shortcut}})",

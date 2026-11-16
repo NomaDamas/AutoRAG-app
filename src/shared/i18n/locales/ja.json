@@ -93,12 +93,6 @@
   "pathBar": {
     "notFound": "\"{{path}}\" が見つかりません。"
   },
-  "scopeBar": {
-    "search": "検索:",
-    "thisMac": "このMac",
-    "thisComputer": "このPC",
-    "itemsFound": "個の項目が見つかりました"
-  },
   "wholeSearch": {
     "groups": "検索結果のグループ",
     "files": "ファイル名",
@@ -112,9 +106,7 @@
     "sourcePending": "{{source}} を検索中…",
     "sourceError": "{{source}} を検索できませんでした: {{error}}",
     "noSourceHits": "{{source}} に \"{{query}}\" と一致する項目はありません。",
-    "openPage": "ページを開く",
-    "askAi": "AI検索に聞く",
-    "askAiHint": "この検索語でAI検索のチャットを始めます"
+    "openPage": "ページを開く"
   },
   "tabs": {
     "close": "タブを閉じる ({{shortcut}})",
