@@ -200,6 +200,24 @@ describe("IndexMapPanel", () => {
 		expect(host.querySelector(".index-map-crumb.is-current")?.getAttribute("aria-current")).toBe("location");
 	});
 
+	it("goes into a folder from anywhere on its row, its counts and chevron too, but not from its 제외", async () => {
+		const onExclude = vi.fn();
+		await open(buildIndexMap({ roots: [folder("/r", [file("/r/top.md", "indexed")], [folder("/r/a", [file("/r/a/x.md", "indexed")], [folder("/r/a/b", [file("/r/a/b/c.md", "unindexed")])])])], truncated: false }), { onExclude });
+
+		await click(rowAction("/r/a", "exclude")!);
+		expect(onExclude).toHaveBeenCalledExactlyOnceWith("/r/a");
+		expect(crumbs()).toEqual(["All"]);
+
+		await click(row("/r/a").querySelector("small")!);
+		expect(crumbs()).toEqual(["All", "a"]);
+
+		await click(row("/r/a/b").querySelector(".index-map-row-chevron")!);
+		expect(crumbs()).toEqual(["All", "a", "b"]);
+
+		await click(row("/r/a/b/c.md"));
+		expect(crumbs()).toEqual(["All", "a", "b"]);
+	});
+
 	it("tells the folder list above it each search folder's progress and which one is in view, and follows its pick", async () => {
 		let seen: MapScope | null = null;
 		const header = (scope: MapScope): null => {

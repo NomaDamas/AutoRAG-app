@@ -5214,3 +5214,8 @@
 .settings-view .scope-page.indexing-sections {
 	gap: 28px;
 }
+
+/* A folder's whole row goes into it; the pointer says so over its counts and chevron too. */
+.settings-view .index-map-folders .index-map-row[data-opens="true"] {
+	cursor: pointer;
+}

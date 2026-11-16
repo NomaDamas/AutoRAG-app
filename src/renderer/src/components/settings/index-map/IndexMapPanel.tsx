@@ -198,10 +198,16 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 										data-hovered={hovered !== null && nodeKey(hovered) === nodeKey(node) ? "true" : undefined}
 										data-dimmed={dimmed(node)}
 										data-progress={progress.inside.has(nodeKey(node)) ? "true" : undefined}
+										data-opens={opens ? "true" : undefined}
 										title={progress.inside.has(nodeKey(node)) ? t("settingsSources.indexMap.progress") : describe(node)}
 										onPointerEnter={() => setHoverKey(nodeKey(node))}
+										// Anywhere on a folder's row goes into it (its name, its counts, the chevron), except its 제외 / 포함;
+										// the name is the button, so Enter and Space do the same from the keyboard.
+										onClick={(event) => {
+											if (opens && !(event.target instanceof Element && event.target.closest(".index-map-row-action") !== null)) enter(node);
+										}}
 									>
-										<button type="button" className="index-map-row-main" disabled={!opens} {...preview(node)} onClick={() => enter(node)}>
+										<button type="button" className="index-map-row-main" disabled={!opens} {...preview(node)}>
 											{node.kind === "folder" || node.kind === "root" ? <Folder size={15} aria-hidden="true" /> : <File size={15} aria-hidden="true" />}
 											<span>{label(node)}</span>
 											{state === "excluded" ? <em className="index-map-row-badge">{t(STATE_LABEL.excluded)}</em> : null}
