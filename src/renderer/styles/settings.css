@@ -647,10 +647,16 @@
 
 .settings-view .settings-page-head .linear-title {
 	margin: 0 0 var(--space-6);
+	font-size: 22px; /* Figma 535:12679: 22px bold, 22px line, 6px above the description. */
+	font-weight: var(--weight-bold);
+	line-height: 22px;
+	letter-spacing: 0;
 }
 
 .settings-view .settings-page-head .linear-desc {
 	margin: 0;
+	font-size: 13px;
+	line-height: 21px;
 }
 
 /* ---------------------------------------------------------- List groups -- */
@@ -1950,15 +1956,73 @@
 /* ------------------------------------------------ Sidebar customization -- */
 
 .settings-view .sidebar-ai-hero {
+	position: relative;
+	isolation: isolate;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--space-16);
 	margin-bottom: var(--space-16);
 	padding: 12px 14px;
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-10);
-	background: var(--bg-subtle-alt); /* Figma 543:10349: the Stage fill and the Divider line, no gradient. */
+	border-radius: var(--radius-12);
+	background: var(--bg-window); /* Figma 535:12679: a white card on a soft shadow, no line. */
+	box-shadow: 2px 2px 6px rgb(0 0 0 / 0.15);
+}
+
+/* 20px under the page head (the head's 8px bottom margin collapses into this one). */
+.settings-view .settings-page-head + .sidebar-ai-hero {
+	margin-top: 20px;
+}
+
+/* Behind the card, a very faint yellow and blue light drifts slowly from side to side. */
+.settings-view .sidebar-ai-hero::before {
+	position: absolute;
+	inset: -5px;
+	z-index: -1;
+	border-radius: 16px;
+	background: linear-gradient(
+		110deg,
+		color-mix(in srgb, var(--tag-yellow) 70%, transparent) 0%,
+		color-mix(in srgb, var(--accent) 55%, transparent) 50%,
+		color-mix(in srgb, var(--tag-yellow) 70%, transparent) 100%
+	);
+	background-size: 300% 100%;
+	filter: blur(12px);
+	opacity: 0.28;
+	pointer-events: none;
+	content: "";
+	animation: sidebar-ai-hero-glow 10s ease-in-out infinite alternate;
+}
+
+/* The card's own white sits over the light, so the glow shows only around its edges, never through it. */
+.settings-view .sidebar-ai-hero::after {
+	position: absolute;
+	inset: 0;
+	z-index: -1;
+	border-radius: inherit;
+	background: var(--bg-window);
+	pointer-events: none;
+	content: "";
+}
+
+@keyframes sidebar-ai-hero-glow {
+	0% {
+		background-position: 0% 50%;
+		opacity: 0.2;
+	}
+	50% {
+		opacity: 0.34;
+	}
+	100% {
+		background-position: 100% 50%;
+		opacity: 0.2;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.settings-view .sidebar-ai-hero::before {
+		animation: none;
+	}
 }
 
 .settings-view .sidebar-ai-hero__body {
