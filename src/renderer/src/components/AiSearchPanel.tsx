@@ -1719,7 +1719,7 @@ function AnswerBlockView({
 	return (
 		<div className="flex flex-col gap-8">
 			{isImageOnlyLine(parsed) ? null : line}
-			<ImageRow images={images} folder={null} captioned={false} actions={imageActions} />
+			<ImageRow images={images} folder={null} actions={imageActions} />
 		</div>
 	);
 }

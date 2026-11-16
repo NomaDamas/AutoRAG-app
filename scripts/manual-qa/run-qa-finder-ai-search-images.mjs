@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
  *
  *   - local images render as pictures (decoded pixels, not raw text); in the
  *     answer they carry no caption (the Evidence panel names each source) and
- *     the full path shows on hover, while excerpt images keep their caption;
+ *     the full path shows on hover; excerpt images carry no caption either;
  *   - a missing file and an undecodable format fall back to a card that shows
  *     the path instead of a broken image;
  *   - a web image is never fetched (no remote loads from model output); its
@@ -249,8 +249,8 @@ const figure = await waitDecoded(page.locator(EVIDENCE_HALF), FIGURE);
 const inlineDiagram = await waitDecoded(page.locator(EVIDENCE_HALF), DIAGRAM);
 check("a bare image path in an excerpt renders the picture", inlineDiagram?.width === 200, JSON.stringify(inlineDiagram));
 check("a relative image in an excerpt resolves against the source folder", figure?.width === 160, JSON.stringify(figure));
-const excerptCaption = (await page.locator(`${EVIDENCE_HALF} ${byAttr("data-image-path", FIGURE)} figcaption`).innerText().catch(() => "")) ?? "";
-check("an excerpt image keeps its caption", excerptCaption.includes(basename(FIGURE)), excerptCaption);
+const excerptCaptions = await page.locator(`${EVIDENCE_HALF} figcaption`).count();
+check("an excerpt image has no file-name caption under it", excerptCaptions === 0, `figcaption=${excerptCaptions}`);
 const panelText = await page.locator(EVIDENCE_HALF).innerText();
 check("the Evidence panel does not write out the path of an image it renders", !panelText.includes(DIAGRAM) && !panelText.includes(DOCS), panelText.replace(/\s+/g, " ").slice(0, 200));
 check("the sentence around a rendered image's path stays", panelText.includes("원본 파일은") && panelText.includes("에 있습니다."), panelText.replace(/\s+/g, " ").slice(0, 200));

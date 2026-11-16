@@ -104,7 +104,7 @@ export function InlineWithImages({
 	return (
 		<>
 			{hasText(segments) ? line : null}
-			<ImageRow images={figures} folder={images.folder} captioned actions={images.actions} />
+			<ImageRow images={figures} folder={images.folder} actions={images.actions} />
 		</>
 	);
 }
@@ -129,7 +129,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 							{renderInline(segments, images.actions.onOpenUrl)}
 						</div>
 					) : null}
-					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
+					<ImageRow images={lineImages(segments)} folder={images.folder} actions={images.actions} />
 				</>
 			);
 		}
@@ -143,7 +143,7 @@ function EvidenceBlock({ block, images }: { readonly block: AnswerBlock; readonl
 							<span>{renderInline(segments, images.actions.onOpenUrl)}</span>
 						</div>
 					) : null}
-					<ImageRow images={lineImages(segments)} folder={images.folder} captioned actions={images.actions} />
+					<ImageRow images={lineImages(segments)} folder={images.folder} actions={images.actions} />
 				</>
 			);
 		}
