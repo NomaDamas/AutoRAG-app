@@ -42,7 +42,7 @@ export function RunErrorNotice({ message, action, onOpenSettings, onOpenSource, 
 	const isFixingThis = fix && store.sessions.some((entry) => entry.run.status === "running" && entry.message === message);
 
 	const run = (entry: ErrorAction): void => {
-		if (entry.id === "fix") startErrorFix(message);
+		if (entry.id === "fix") startErrorFix(message, onRephrase);
 		else if (entry.id === "new-chat") onNewChat();
 		else if (entry.id === "rephrase") onRephrase();
 		else onOpenSettings(entry.id === "open-plan" ? "plan" : "ai");

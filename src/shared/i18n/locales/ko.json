@@ -449,24 +449,28 @@
     },
     "fix": {
       "title": "AI로 고치기",
-      "running": "원인을 찾는 중…",
+      "running": "원인을 찾고 있습니다",
       "status": {
-        "fixed": "다시 정상으로 돌아왔습니다",
-        "needsUser": "직접 해 주셔야 할 일이 있습니다",
-        "cannotFix": "고치지 못했습니다"
+        "fixed": "문제를 해결했습니다",
+        "needsUser": "직접 확인이 필요합니다",
+        "cannotFix": "문제를 해결하지 못했습니다"
       },
       "nextStepsLabel": "해야 할 일",
       "openSettings": "‘{{page}}’ 설정 열기",
       "openSource": "‘{{name}}’ 연결 열기",
       "failedTitle": "AI로 고치지 못했습니다",
-      "stopped": "중단했습니다.",
+      "stopped": "문제 해결을 중단했습니다",
       "minimize": "백그라운드로 전환",
       "queued": "앞선 수리가 끝나면 시작합니다…",
       "sidebar": {
         "running": "AI로 고치는 중…",
         "queued": "AI로 고치기 대기 중",
         "open": "AI로 고치기 상태 열기"
-      }
+      },
+      "runningHint": "화면을 닫아도 계속 진행됩니다.",
+      "stop": "중단",
+      "fixedHint": "하던 작업을 다시 시도해 보세요.",
+      "cannotFixHint": "원인을 찾지 못했습니다. 오류 내용을 확인해 주세요."
     }
   },
   "interaction": {

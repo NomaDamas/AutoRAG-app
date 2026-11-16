@@ -449,24 +449,28 @@
     },
     "fix": {
       "title": "Fix with AI",
-      "running": "Looking for the cause…",
+      "running": "Looking for the cause",
       "status": {
-        "fixed": "Back to normal",
-        "needsUser": "There is something you need to do",
-        "cannotFix": "Couldn’t fix it"
+        "fixed": "Problem fixed",
+        "needsUser": "Needs your attention",
+        "cannotFix": "Couldn't fix the problem"
       },
       "nextStepsLabel": "What to do",
       "openSettings": "Open ‘{{page}}’ settings",
       "openSource": "Open the ‘{{name}}’ connection",
       "failedTitle": "Couldn’t fix it with AI",
-      "stopped": "Stopped.",
+      "stopped": "Stopped fixing the problem",
       "minimize": "Keep fixing in background",
       "queued": "Waiting for the current repair to finish…",
       "sidebar": {
         "running": "Fixing with AI…",
         "queued": "Waiting to fix with AI",
         "open": "Show Fix with AI status"
-      }
+      },
+      "runningHint": "It keeps going if you close this.",
+      "stop": "Stop",
+      "fixedHint": "Try what you were doing again.",
+      "cannotFixHint": "Couldn't find the cause. Check the error details."
     }
   },
   "interaction": {

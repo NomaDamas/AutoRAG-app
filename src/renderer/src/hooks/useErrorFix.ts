@@ -60,8 +60,27 @@ function subscribe(listener: () => void): () => void {
  * Starts a repair (or reopens the modal if the exact same error is already
  * being repaired). Other minimized repairs stay alive in the background queue.
  */
-export function startErrorFix(message: string): void {
+/**
+ * The way to try the failed task again once the repair worked ("다시 시도" on the fixed state), registered by the
+ * surface that offered the fix, by the error message it fixed. A repair started without one only closes.
+ */
+const retryTasks = new Map<string, () => void>();
+
+/** Whether a fixed repair of this error can send the person back to the task. */
+export function hasRetryTask(message: string): boolean {
+	return retryTasks.has(message);
+}
+
+/** Runs the task again (as its surface registered it) and closes the dialog. */
+export function retryErrorTask(message: string): void {
+	const retry = retryTasks.get(message);
+	publish(dismissErrorFixStore(current));
+	retry?.();
+}
+
+export function startErrorFix(message: string, retryTask?: () => void): void {
 	ensureSubscribed();
+	if (retryTask !== undefined) retryTasks.set(message, retryTask);
 	const existing = current.sessions.find((entry) => entry.run.status === "running" && entry.message === message);
 	if (existing !== undefined) {
 		publish(openErrorFixStoreById(current, existing.id));

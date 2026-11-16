@@ -449,24 +449,28 @@
     },
     "fix": {
       "title": "用 AI 修复",
-      "running": "正在查找原因…",
+      "running": "正在查找原因",
       "status": {
-        "fixed": "已恢复正常",
-        "needsUser": "需要你来处理",
-        "cannotFix": "无法修复"
+        "fixed": "问题已解决",
+        "needsUser": "需要您亲自确认",
+        "cannotFix": "未能解决问题"
       },
       "nextStepsLabel": "需要你做的事",
       "openSettings": "打开“{{page}}”设置",
       "openSource": "打开“{{name}}”连接",
       "failedTitle": "AI 未能修复",
-      "stopped": "已停止。",
+      "stopped": "已停止解决问题",
       "minimize": "在后台继续修复",
       "queued": "等待当前修复完成后开始…",
       "sidebar": {
         "running": "正在用 AI 修复…",
         "queued": "等待 AI 修复",
         "open": "查看 AI 修复状态"
-      }
+      },
+      "runningHint": "关闭此窗口后仍会继续。",
+      "stop": "停止",
+      "fixedHint": "请重新尝试刚才的操作。",
+      "cannotFixHint": "未能找到原因。请查看错误详情。"
     }
   },
   "interaction": {

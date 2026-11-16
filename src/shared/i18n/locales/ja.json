@@ -449,24 +449,28 @@
     },
     "fix": {
       "title": "AIで修正",
-      "running": "原因を調べています…",
+      "running": "原因を調べています",
       "status": {
-        "fixed": "正常に戻りました",
-        "needsUser": "あなたの操作が必要です",
-        "cannotFix": "修正できませんでした"
+        "fixed": "問題を解決しました",
+        "needsUser": "ご自身での確認が必要です",
+        "cannotFix": "問題を解決できませんでした"
       },
       "nextStepsLabel": "必要な操作",
       "openSettings": "「{{page}}」設定を開く",
       "openSource": "「{{name}}」の接続を開く",
       "failedTitle": "AIでは修正できませんでした",
-      "stopped": "中断しました。",
+      "stopped": "問題の解決を中止しました",
       "minimize": "バックグラウンドで続行",
       "queued": "前の修復が終わると開始します…",
       "sidebar": {
         "running": "AIで修正中…",
         "queued": "AIで修正を待機中",
         "open": "AIで修正の状態を表示"
-      }
+      },
+      "runningHint": "この画面を閉じても続行されます。",
+      "stop": "中止",
+      "fixedHint": "作業をもう一度試してください。",
+      "cannotFixHint": "原因が見つかりませんでした。エラーの内容を確認してください。"
     }
   },
   "interaction": {

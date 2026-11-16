@@ -1,22 +1,20 @@
-import { Minus } from "lucide-react";
+import { Check } from "lucide-react";
 import { useEffect, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { isModelProblem } from "../../../shared/app-error";
-import type { ErrorFixAction, ErrorFixResult, ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
-import { dismissErrorFixDialog, retryErrorFix, stopErrorFix, useErrorFixSession } from "../hooks/useErrorFix";
+import type { ErrorFixAction, ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
+import { dismissErrorFixDialog, hasRetryTask, retryErrorFix, retryErrorTask, stopErrorFix, useErrorFixSession } from "../hooks/useErrorFix";
 import { describeAppError, type ErrorActionId } from "../state/app-error";
 import { actionLabel } from "../state/error-fix";
 import { cn } from "../lib/cn";
-import { buttonClass } from "./primitives/button";
 import { ErrorDetails } from "./ErrorDetails";
-import { CloseIcon, SparklesIcon } from "./icons";
+import { SparklesIcon } from "./icons";
+import { NoticeBadge } from "./primitives/NoticeCard";
 
 /**
- * "AI로 고치기": runs the self-healing helper agent for the error on screen with
- * a calm visual, a single shimmering live progress line from the agent's pre-tool
- * intent, and a clean restored state on completion. Closing or minimizing while
- * `running` hides the modal and continues healing in the background (with live
- * progress shown in the sidebar); only `Stop` cancels the run.
+ * "AI로 고치기" (Figma 548:14977–14981, 중요 알림): the self-healing helper's state in one small card — looking for the
+ * cause, fixed, stopped, could not fix, or needs the person. Closing while it runs hides the card and the repair goes on
+ * in the background (the sidebar shows its progress); only 중단 cancels it.
  */
 
 export interface ErrorFixDialogProps {
@@ -25,124 +23,31 @@ export interface ErrorFixDialogProps {
 	readonly onOpenSource: (alias: string) => void;
 }
 
-const BUTTON = cn(buttonClass({ size: "sm" }), "cursor-pointer rounded-6 border transition-colors duration-(--dur-color) ease-out");
-const SECONDARY = "border-border bg-window text-ink hover:bg-hover";
-const PRIMARY = "border-transparent bg-accent font-medium text-on-accent hover:bg-accent-hover";
-
-function Button({ primary = false, onClick, children, ariaLabel }: { readonly primary?: boolean; readonly onClick: () => void; readonly children: ReactNode; readonly ariaLabel?: string }): ReactElement {
+/** Figma Button, size 28: the secondary white with the border, the primary the accent fill. */
+function Button({ primary = false, onClick, children }: { readonly primary?: boolean; readonly onClick: () => void; readonly children: ReactNode }): ReactElement {
 	return (
-		<button type="button" className={cn(BUTTON, primary ? PRIMARY : SECONDARY)} aria-label={ariaLabel} onClick={onClick}>
+		<button
+			type="button"
+			className={cn(
+				"inline-flex h-28 flex-none items-center justify-center gap-4 px-10 rounded-6 border text-meta font-medium leading-[16px] whitespace-nowrap cursor-pointer transition-opacity duration-(--dur-color) ease-out hover:opacity-80",
+				primary ? "border-transparent bg-accent text-on-accent" : "border-border bg-window text-ink-body",
+			)}
+			onClick={onClick}
+		>
 			{children}
 		</button>
 	);
 }
 
-type HealingVisualState = "healing" | "healthy" | "attention" | "error" | "stopped";
+type FixState = "healing" | "healthy" | "attention" | "error" | "stopped";
 
-function SelfHealingVisual({ state }: { readonly state: HealingVisualState }): ReactElement {
-	if (state === "healing") {
-		return (
-			<div className="relative flex size-[88px] flex-none items-center justify-center" data-healing-state="healing" aria-hidden="true">
-				<div
-					className="absolute inset-4 rounded-full animate-[healBreath_2.8s_ease-in-out_infinite]"
-					style={{ background: "radial-gradient(circle, var(--accent-soft) 0%, var(--ok-bg) 58%, transparent 76%)" }}
-				/>
-				<svg className="absolute inset-0 size-[88px]" viewBox="0 0 88 88" fill="none">
-					<circle cx="44" cy="44" r="34" stroke="var(--border)" strokeWidth="1.5" opacity="0.6" />
-					<g className="origin-center animate-[healOrbit_3.2s_linear_infinite]">
-						<circle cx="44" cy="44" r="34" stroke="var(--accent)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="64 150" />
-					</g>
-					<g className="origin-center animate-[healOrbitReverse_4.4s_linear_infinite]">
-						<circle cx="44" cy="44" r="27" stroke="var(--ok-dot)" strokeWidth="2" strokeLinecap="round" strokeDasharray="44 126" />
-					</g>
-					<circle cx="73" cy="24" r="2.2" fill="var(--accent)" className="origin-center animate-[healMote_2.4s_ease-in-out_infinite]" />
-					<circle cx="16" cy="30" r="2" fill="var(--ok-dot)" className="origin-center animate-[healMote_2.4s_ease-in-out_0.8s_infinite]" />
-					<circle cx="64" cy="72" r="1.8" fill="var(--ok-dot)" className="origin-center animate-[healMote_2.4s_ease-in-out_1.5s_infinite]" />
-				</svg>
-				<div className="relative flex size-[42px] items-center justify-center rounded-full border border-border bg-window text-accent shadow-raised">
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-						<path d="M3 12h4l2.4-5 4.2 10 2.4-5H21" />
-					</svg>
-				</div>
-			</div>
-		);
-	}
-
-	if (state === "healthy") {
-		return (
-			<div className="relative flex size-[84px] flex-none items-center justify-center" data-healing-state="healthy" aria-hidden="true">
-				<div className="absolute inset-6 rounded-full bg-ok-bg" />
-				<svg className="absolute inset-0 size-[84px]" viewBox="0 0 84 84" fill="none">
-					<circle cx="42" cy="42" r="32" stroke="var(--ok-border)" strokeWidth="2" />
-				</svg>
-				<div className="relative flex size-[46px] items-center justify-center rounded-full border border-ok-border bg-ok-bg text-ok-text animate-[healPop_0.35s_ease-out]">
-					<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-						<path d="M20 6 9 17l-5-5" />
-					</svg>
-				</div>
-			</div>
-		);
-	}
-
-	const coreClass =
-		state === "error"
-			? "border-danger-border bg-danger-bg-soft text-danger-text"
-			: state === "attention"
-				? "border-border bg-accent-soft text-accent"
-				: "border-border bg-chrome text-ink-muted";
-
-	return (
-		<div className="relative flex size-[76px] flex-none items-center justify-center" data-healing-state={state} aria-hidden="true">
-			<div className={cn("flex size-[46px] items-center justify-center rounded-full border animate-[healPop_0.28s_ease-out]", coreClass)}>
-				{state === "attention" ? (
-					<SparklesIcon />
-				) : state === "error" ? (
-					<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-						<circle cx="12" cy="12" r="9" />
-						<line x1="12" y1="8" x2="12" y2="12.5" />
-						<circle cx="12" cy="16" r="0.6" fill="currentColor" />
-					</svg>
-				) : (
-					<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-						<rect x="7" y="7" width="10" height="10" rx="2" />
-					</svg>
-				)}
-			</div>
-		</div>
-	);
-}
-
-function ResultBody({ result, errorMessage }: { readonly result: ErrorFixResult; readonly errorMessage: string }): ReactElement {
-	const { t } = useTranslation();
-	if (result.status === "fixed") {
-		return (
-			<div className="flex flex-col items-center gap-6 text-center">
-				<SelfHealingVisual state="healthy" />
-				<strong className="text-[15px] font-semibold text-ok-text">{t("appError.fix.status.fixed")}</strong>
-				<p className="m-0 max-w-[320px] whitespace-pre-wrap text-meta leading-normal text-ink-body">{result.summary}</p>
-			</div>
-		);
-	}
-	const heading = result.status === "needs-user" ? t("appError.fix.status.needsUser") : t("appError.fix.status.cannotFix");
-	const tone = result.status === "cannot-fix" ? "text-danger-text" : "text-ink";
-	return (
-		<div className="flex w-full flex-col items-center gap-8 text-center">
-			<SelfHealingVisual state={result.status === "needs-user" ? "attention" : "error"} />
-			<strong className={cn("text-[15px] font-semibold", tone)}>{heading}</strong>
-			<p className="m-0 max-w-[330px] whitespace-pre-wrap text-meta leading-normal text-ink-body">{result.summary}</p>
-			{result.nextSteps.length === 0 ? null : (
-				<div className="flex w-full flex-col gap-4 rounded-8 bg-chrome px-12 py-8 text-left">
-					<strong className="text-meta font-semibold text-ink">{t("appError.fix.nextStepsLabel")}</strong>
-					<ul className="m-0 flex list-disc flex-col gap-2 pl-18 text-meta text-ink-body">
-						{result.nextSteps.map((step) => (
-							<li key={step}>{step}</li>
-						))}
-					</ul>
-				</div>
-			)}
-			<ErrorDetails message={errorMessage} className="w-full items-center text-ink-muted" />
-		</div>
-	);
+/** The 16px mark before the title: sparkles while it works, a check once fixed, the badge when it needs attention. */
+function StateMark({ state }: { readonly state: FixState }): ReactElement | null {
+	if (state === "healing") return <SparklesIcon size={16} className="flex-none text-accent" />;
+	if (state === "healthy") return <Check className="flex-none text-accent" size={16} strokeWidth={2} aria-hidden="true" />;
+	if (state === "attention") return <NoticeBadge tone="warning" />;
+	if (state === "error") return <NoticeBadge tone="error" />;
+	return null;
 }
 
 export function ErrorFixDialog({ onOpenSettings, onOpenSource }: ErrorFixDialogProps): ReactElement | null {
@@ -177,53 +82,78 @@ export function ErrorFixDialog({ onOpenSettings, onOpenSource }: ErrorFixDialogP
 			</Button>
 		);
 
-	let body: ReactElement | null = null;
+	let state: FixState = "stopped";
+	let title: ReactNode = null;
+	let copy: ReactNode = null;
+	let footer: ReactNode = null;
 	let actions: ReactNode = null;
+	const close = <Button onClick={dismissErrorFixDialog}>{t("common.close")}</Button>;
 	if (run.status === "running") {
-		const statusText = run.progress ?? t("appError.fix.running");
-		body = (
-			<div className="flex flex-col items-center gap-10 py-4 text-center">
-				<SelfHealingVisual state="healing" />
-				<p className="m-0 max-w-[320px] text-body font-medium leading-normal text-ink-muted" role="status">
-					<span className="shimmer">{statusText}</span>
-				</p>
-			</div>
+		state = "healing";
+		// The agent's live intent is the title while it works; the line under it says the card may be closed.
+		title = (
+			<span className="shimmer" role="status">
+				{run.progress ?? t("appError.fix.running")}
+			</span>
 		);
+		copy = t("appError.fix.runningHint");
 		actions = (
 			<>
-				<Button primary onClick={dismissErrorFixDialog}>
-					{t("appError.fix.minimize")}
-				</Button>
-				<Button onClick={stopErrorFix}>{t("aiSearch.stop")}</Button>
+				{close}
+				<Button onClick={stopErrorFix}>{t("appError.fix.stop")}</Button>
 			</>
 		);
 	} else if (run.status === "done") {
 		const { result } = run;
-		body = <ResultBody result={result} errorMessage={message} />;
+		if (result.status === "fixed") {
+			state = "healthy";
+			title = t("appError.fix.status.fixed");
+			// What the AI changed, in its own words, then what to do now.
+			copy = result.summary.trim() === "" ? t("appError.fix.fixedHint") : `${result.summary.trim()}
+${t("appError.fix.fixedHint")}`;
+		} else if (result.status === "needs-user") {
+			state = "attention";
+			title = t("appError.fix.status.needsUser");
+			copy =
+				result.nextSteps.length === 0 ? (
+					result.summary
+				) : (
+					<ol className="m-0 flex list-decimal flex-col pl-16">
+						{result.nextSteps.map((step) => (
+							<li key={step}>{step}</li>
+						))}
+					</ol>
+				);
+		} else {
+			state = "error";
+			title = t("appError.fix.status.cannotFix");
+			copy = t("appError.fix.cannotFixHint");
+			footer = <ErrorDetails message={message} className="mt-0" quiet />;
+		}
 		actions = (
 			<>
+				{close}
 				{result.actions.map((action, index) => (
 					<Button key={`${action.kind}:${action.target}`} primary={index === 0} onClick={() => go(action)}>
 						{actionLabel(action, t)}
 					</Button>
 				))}
-				<Button primary={result.status === "fixed" && result.actions.length === 0} onClick={dismissErrorFixDialog}>
-					{t("common.close")}
-				</Button>
+				{result.status === "fixed" && result.actions.length === 0 && hasRetryTask(message) ? (
+					<Button primary onClick={() => retryErrorTask(message)}>
+						{t("common.retry")}
+					</Button>
+				) : null}
 			</>
 		);
 	} else if (run.status === "failed") {
 		const view = describeAppError(run.message, null, t);
-		body = (
-			<div className="flex w-full flex-col items-center gap-6 text-center">
-				<SelfHealingVisual state="error" />
-				<strong className="text-[15px] font-semibold text-danger-text">{view.kind === "other" ? t("appError.fix.failedTitle") : view.title}</strong>
-				{view.kind === "other" || view.hint === null ? null : <p className="m-0 max-w-[330px] text-meta leading-normal text-ink-body">{view.hint}</p>}
-				<ErrorDetails message={run.message} className="w-full items-center text-ink-muted" />
-			</div>
-		);
+		state = "error";
+		title = view.kind === "other" ? t("appError.fix.failedTitle") : view.title;
+		copy = view.kind === "other" || view.hint === null ? null : view.hint;
+		footer = <ErrorDetails message={run.message} className="mt-0" quiet />;
 		actions = (
 			<>
+				{close}
 				{isModelProblem(view.kind) ? (
 					view.actions.map((entry) => settingsButton(entry.id, entry.label, entry.primary))
 				) : (
@@ -231,27 +161,14 @@ export function ErrorFixDialog({ onOpenSettings, onOpenSource }: ErrorFixDialogP
 						{t("common.retry")}
 					</Button>
 				)}
-				<Button onClick={dismissErrorFixDialog}>{t("common.close")}</Button>
 			</>
 		);
 	} else if (run.status === "stopped") {
-		body = (
-			<div className="flex flex-col items-center gap-6 py-2 text-center">
-				<SelfHealingVisual state="stopped" />
-				<p className="m-0 text-body font-medium text-ink-body">{t("appError.fix.stopped")}</p>
-			</div>
-		);
-		actions = (
-			<>
-				<Button primary onClick={retryErrorFix}>
-					{t("common.retry")}
-				</Button>
-				<Button onClick={dismissErrorFixDialog}>{t("common.close")}</Button>
-			</>
-		);
+		state = "stopped";
+		title = t("appError.fix.stopped");
+		actions = close;
 	}
 
-	const isRunning = run.status === "running";
 	return (
 		<div
 			className="fixed inset-0 z-80 flex items-center justify-center bg-black/30"
@@ -261,28 +178,22 @@ export function ErrorFixDialog({ onOpenSettings, onOpenSource }: ErrorFixDialogP
 			}}
 		>
 			<div
-				className="flex max-h-[82vh] w-[392px] max-w-[92vw] flex-col gap-16 overflow-y-auto rounded-12 border border-border bg-window p-18 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex max-h-[82vh] w-[373px] max-w-[92vw] flex-col gap-12 overflow-y-auto rounded-12 border border-border bg-window px-16 py-14 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("appError.fix.title")}
+				data-healing-state={state}
 			>
-				<div className="flex items-center justify-between gap-8">
-					<strong className="flex items-center gap-6 text-[13px] font-[650] text-ink">
-						<SparklesIcon />
-						{t("appError.fix.title")}
-					</strong>
-					<button
-						type="button"
-						className="flex size-24 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted hover:bg-hover-strong"
-						aria-label={isRunning ? t("appError.fix.minimize") : t("common.close")}
-						title={isRunning ? t("appError.fix.minimize") : t("common.close")}
-						onClick={dismissErrorFixDialog}
-					>
-						{isRunning ? <Minus size={14} strokeWidth={2.4} /> : <CloseIcon />}
-					</button>
+				<div className="flex items-center gap-8">
+					<StateMark state={state} />
+					<strong className="min-w-0 flex-1 text-[14px] font-bold leading-[20px] text-ink">{title}</strong>
 				</div>
-				{body}
-				<div className="flex flex-wrap items-center justify-center gap-8">{actions}</div>
+				{copy === null ? null : <div className="min-w-0 whitespace-pre-wrap text-meta leading-[1.5] text-ink-muted">{copy}</div>}
+				<div className="flex flex-wrap items-end gap-8">
+					{footer === null ? null : <div className="min-w-0">{footer}</div>}
+					<span className="flex-1" />
+					{actions}
+				</div>
 			</div>
 		</div>
 	);
