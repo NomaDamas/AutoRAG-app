@@ -6,13 +6,14 @@ import type { IndexMapNode } from "../../../../../shared/index-map-contract";
 import { availableActions } from "../../../../../shared/index-scope-edit";
 import { useIndexActivity } from "../../../hooks/useIndexActivity";
 import { localIndexRunning } from "../../../state/index-activity";
-import { easeInOutCubic, GOLDEN_ANGLE_DEG, lerpShape, litSeeds, motionAllowed, planTween, SEED_RADIUS, SEEDS, ZOOM_MS, type SectorTween } from "./motion";
+import { easeInOutCubic, GOLDEN_ANGLE_DEG, lerpShape, litSeeds, motionAllowed, planTween, SEED_FRONTIER, SEED_RADIUS, SEED_STAGGER_MS, SEEDS, ZOOM_MS, type SectorTween } from "./motion";
 import { indexMapTargets, layoutRadial, nodeKey, radialState, sectorPath, type RadialSector, type RadialState } from "./radial";
 import { useLiveIndexMap } from "./useLiveIndexMap";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
-/** How long the seeds take to refill after a zoom: a start delay, a step per seed, then the flash settling. */
-const REFILL_MS = 240 + SEEDS.length * 6 + 1500;
+/** After a zoom the seeds stay empty while the seed head turns, then fill again one step apart, centre first. */
+const EMPTY_MS = Math.round(ZOOM_MS * 0.45);
+const REFILL_MS = SEEDS.length * SEED_STAGGER_MS + 300;
 
 /** A short outward bounce about the chart's centre: a folder that just finished, or the ring when the scope does. */
 function pop(element: Element | null | undefined, delay = 0): void {
@@ -215,10 +216,11 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 	const turned = useRef(0);
 	const stopZoom = useRef<() => void>(() => {});
 	const shown = useRef<{ readonly sectors: readonly RadialSector[]; readonly focusPath: string | null; readonly percentage: number | null; readonly states: ReadonlyMap<string, RadialState> } | null>(null);
-	// Each zoom remounts the seeds, so they fill again from the centre outward for the folder now in view.
-	const [seedRun, setSeedRun] = useState(0);
-	const [refilling, setRefilling] = useState(true);
-	const litCount = litSeeds(indexed, targets);
+	// Each zoom empties the seeds, then fills them again from the centre outward for the folder now in view.
+	const [seedPhase, setSeedPhase] = useState<"steady" | "empty" | "refill">("steady");
+	const seedTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+	const litCount = seedPhase === "empty" ? 0 : litSeeds(indexed, targets);
+	const seedState = (index: number): "true" | "new" | undefined => (index >= litCount ? undefined : index >= litCount - SEED_FRONTIER && percentage !== 100 ? "new" : "true");
 	const focusNow = focus?.path ?? null;
 	useLayoutEffect(() => {
 		const before = shown.current;
@@ -249,8 +251,12 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 					], { duration: ZOOM_MS, easing: "cubic-bezier(.4,0,.2,1)" });
 				}
 			}
-			setSeedRun((run) => run + 1);
-			setRefilling(true);
+			for (const timer of seedTimers.current) clearTimeout(timer);
+			setSeedPhase("empty");
+			seedTimers.current = [
+				setTimeout(() => setSeedPhase("refill"), EMPTY_MS),
+				setTimeout(() => setSeedPhase("steady"), EMPTY_MS + REFILL_MS),
+			];
 			return;
 		}
 		const drawn = (key: string): Element | null => svg.querySelector(`path.index-map-sector[data-key="${CSS.escape(key)}"]`);
@@ -269,12 +275,10 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 		}
 		// Only the layout drives this; the rest is read from the render that produced it.
 	}, [sectors]);
-	useEffect(() => () => stopZoom.current(), []);
-	useEffect(() => {
-		if (!refilling) return undefined;
-		const timer = setTimeout(() => setRefilling(false), REFILL_MS);
-		return () => clearTimeout(timer);
-	}, [refilling, seedRun]);
+	useEffect(() => () => {
+		stopZoom.current();
+		for (const timer of seedTimers.current) clearTimeout(timer);
+	}, []);
 
 	return (
 		<>
@@ -290,8 +294,8 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 						<svg ref={svgRef} className="index-map-chart" viewBox="0 0 640 640" role="group" aria-label={t("settingsSources.indexMap.canvasLabel")} onPointerLeave={() => setHoverKey(null)}>
 							{map !== null && targets > 0 ? (
 								<g ref={turnRef} className="index-map-seeds-turn" aria-hidden="true">
-									<g key={seedRun} className={refilling ? "index-map-seeds is-refill" : "index-map-seeds"}>
-										{SEEDS.map((seed, index) => <circle key={index} className="index-map-seed" cx={seed.x} cy={seed.y} r={SEED_RADIUS} data-lit={index < litCount ? "true" : undefined} style={{ "--i": index } as CSSProperties} />)}
+									<g className={seedPhase === "refill" ? "index-map-seeds is-refill" : "index-map-seeds"}>
+										{SEEDS.map((seed, index) => <circle key={index} className="index-map-seed" cx={seed.x} cy={seed.y} r={SEED_RADIUS} data-lit={seedState(index)} style={{ "--i": index } as CSSProperties} />)}
 									</g>
 								</g>
 							) : null}

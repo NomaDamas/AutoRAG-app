@@ -1444,17 +1444,13 @@
 .settings-view .index-map-chart.is-zooming .index-map-sector { pointer-events: none; }
 .settings-view .index-map-chart.is-zooming .index-map-edge { visibility: hidden; }
 .settings-view .index-map-seeds-turn { pointer-events: none; }
-.settings-view .index-map-seed { fill: var(--index-map-seed-empty); }
-/* A seed that fills flashes bright, then settles; after a zoom they refill from the centre outward. */
-.settings-view .index-map-seed[data-lit="true"] { fill: var(--index-map-seed); animation: index-map-seed-new 1.4s var(--ease-out) backwards; }
-.settings-view .index-map-seeds.is-refill .index-map-seed[data-lit="true"] { animation-delay: calc(240ms + var(--i) * 6ms); }
-@keyframes index-map-seed-new {
-	0% { fill: var(--index-map-seed-empty); }
-	1%, 35% { fill: var(--index-map-seed-new); }
-	100% { fill: var(--index-map-seed); }
-}
+.settings-view .index-map-seed { r: var(--index-map-seed-r); fill: var(--index-map-seed-empty); transition: fill 260ms ease; }
+.settings-view .index-map-seed[data-lit="true"] { fill: var(--index-map-seed); }
+/* The newest seeds stay bright; after a zoom the seeds fill again from the centre outward, one step apart. */
+.settings-view .index-map-seed[data-lit="new"] { fill: var(--index-map-seed-new); }
+.settings-view .index-map-seeds.is-refill .index-map-seed { transition-delay: calc(var(--i) * 7ms); }
 @media (prefers-reduced-motion: reduce) {
-	.settings-view .index-map-seed[data-lit="true"] { animation: none; }
+	.settings-view .index-map-seed { transition: none; }
 }
 .settings-view .index-map-sidebar {
 	display: flex;
@@ -5185,14 +5181,17 @@
 }
 
 .settings-view .indexing-sections .index-map-body {
-	grid-template-columns: 340px minmax(0, 1fr);
+	/* The contents column is 30% narrower than the 340px-chart layout left it; the chart takes the room, square. */
+	grid-template-columns: minmax(340px, 1fr) calc((100% - 364px) * 0.7);
 	gap: 24px;
 	align-items: start;
 	height: auto;
 }
 
 .settings-view .indexing-sections .index-map-stage {
-	height: 340px;
+	width: 100%;
+	height: auto;
+	aspect-ratio: 1;
 }
 
 .settings-view .indexing-sections .index-map-sidebar {

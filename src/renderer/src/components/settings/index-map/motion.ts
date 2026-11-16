@@ -99,17 +99,25 @@ export interface Seed {
 	readonly y: number;
 }
 
-/** Seeds sit in a band inside the hole, clear of the readout: from this radius out to just inside the first ring. */
-const SEED_INNER = 64;
-const SEED_OUTER = RADIAL_HOLE - 3;
-const SEED_SPACING = 7.4;
-export const SEED_RADIUS = 3.1;
+/**
+ * The prototype's seed head, scaled to this chart's hole (58 → 87): seeds cover the whole disc from just outside the
+ * centre to just inside the first ring, small and close, the readout drawn over them.
+ */
+const SEED_SCALE = RADIAL_HOLE / 58;
+const SEED_INNER = 4.1 * Math.sqrt(20) * SEED_SCALE;
+const SEED_OUTER = 54 * SEED_SCALE;
+const SEED_SPACING = 4.1 * SEED_SCALE;
+export const SEED_RADIUS = 1.7 * SEED_SCALE;
+/** The newest seeds, at the edge of what is filled, stay bright while the scope is still being read. */
+export const SEED_FRONTIER = 6;
+/** The step between seeds when they fill again after a zoom: the centre first, then outward. */
+export const SEED_STAGGER_MS = 7;
 
 /** The seed head: Vogel's sunflower model (seed n at the golden angle n times, radius ∝ √n), innermost first. */
 export const SEEDS: readonly Seed[] = (() => {
 	const golden = Math.PI * (3 - Math.sqrt(5));
 	const seeds: Seed[] = [];
-	for (let n = Math.ceil((SEED_INNER / SEED_SPACING) ** 2); SEED_SPACING * Math.sqrt(n) <= SEED_OUTER; n += 1) {
+	for (let n = Math.round((SEED_INNER / SEED_SPACING) ** 2); SEED_SPACING * Math.sqrt(n) <= SEED_OUTER; n += 1) {
 		const radius = SEED_SPACING * Math.sqrt(n);
 		seeds.push({ x: RADIAL_CENTER + Math.cos(n * golden) * radius, y: RADIAL_CENTER + Math.sin(n * golden) * radius });
 	}
