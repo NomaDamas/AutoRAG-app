@@ -7,7 +7,8 @@
     "retry": "다시 시도",
     "loading": "설정을 불러오는 중…",
     "error": "오류",
-    "confirm": "확인"
+    "confirm": "확인",
+    "later": "나중에"
   },
   "places": {
     "favorites": "즐겨찾기",

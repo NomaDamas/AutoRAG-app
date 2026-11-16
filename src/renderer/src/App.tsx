@@ -19,7 +19,7 @@ import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/In
 import { InspectorColumn } from "./components/InspectorColumn";
 import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
-import { Toast } from "./components/primitives/Toast";
+import { Toast, type ToastTone } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
@@ -234,8 +234,13 @@ export function App(): ReactElement {
 	const [sourceStatus, setSourceStatus] = useState<SourceStatusMap>({});
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
-	const [toast, setToast] = useState<string | null>(null);
-	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
+	const [toastState, setToastState] = useState<{ readonly message: string; readonly tone: ToastTone } | null>(null);
+	const toast = toastState?.message ?? null;
+	/** A plain notice (Figma 554:7353 with the green badge). */
+	const setToast = useCallback((message: string | null) => setToastState(message === null ? null : { message, tone: "ok" }), []);
+	/** Something failed: the same toast with the red badge. */
+	const showErrorToast = useCallback((message: string) => setToastState({ message, tone: "error" }), []);
+	const reportTagError = useCallback((error: unknown) => showErrorToast(error instanceof Error ? error.message : String(error)), [showErrorToast]);
 	const grantTagColors = useCallback(() => {
 		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
 		void autorag.onboarding.openFullDiskAccess().catch(reportTagError);
@@ -252,7 +257,7 @@ export function App(): ReactElement {
 		if (toast === null) return;
 		const timer = window.setTimeout(() => setToast(null), TOAST_MS);
 		return () => window.clearTimeout(timer);
-	}, [toast]);
+	}, [toastState]);
 
 	useEffect(() => {
 		let live = true;
@@ -522,7 +527,7 @@ export function App(): ReactElement {
 			// A citation chip with no evidence entry must never open a different
 			// result: the panel would silently show unrelated evidence.
 			if (!evidenceRef.current.some((item) => item.number === number)) {
-				setToast(t("finderComponents.evidenceNotFound", { number }));
+				showErrorToast(t("finderComponents.evidenceNotFound", { number }));
 				return;
 			}
 			setSelectedEvidence(number);
@@ -559,9 +564,9 @@ export function App(): ReactElement {
 		closingRef.current = null;
 		request.catch((error: unknown) => {
 			const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-			if (code === REMOTE_PREVIEW_FOLDER_CODE) setToast(translate("finderComponents.remotePreviewFolderUnsupported"));
-			else if (code === REMOTE_PREVIEW_UNSUPPORTED_CODE) setToast(translate("finderComponents.remotePreviewUnsupported"));
-			else setToast(error instanceof Error ? error.message : String(error));
+			if (code === REMOTE_PREVIEW_FOLDER_CODE) showErrorToast(translate("finderComponents.remotePreviewFolderUnsupported"));
+			else if (code === REMOTE_PREVIEW_UNSUPPORTED_CODE) showErrorToast(translate("finderComponents.remotePreviewUnsupported"));
+			else showErrorToast(error instanceof Error ? error.message : String(error));
 		});
 	}, [preview]);
 
@@ -733,7 +738,7 @@ export function App(): ReactElement {
 		openAiDraft,
 		openFolder: (folder) => finder?.openFolder(folder),
 		showInList: () => finder?.showAutomations(),
-		onError: setToast,
+		onError: showErrorToast,
 	});
 	const toolbarTitle =
 		path === SETTINGS_PATH
@@ -1033,7 +1038,15 @@ export function App(): ReactElement {
 						)}
 				</InspectorColumn>
 				{toast === null && automations.undoToast === null ? null : (
-					<Toast message={automations.undoToast?.message ?? toast ?? ""} action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }} />
+					<Toast
+						message={automations.undoToast?.message ?? toast ?? ""}
+						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : "ok"}
+						action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }}
+						onClose={() => {
+							setToastState(null);
+							if (automations.undoToast !== null) automations.dismissUndoToast();
+						}}
+					/>
 				)}
 				{sidebarVisible || settingsOpen ? (
 					<PaneGrip

@@ -7,7 +7,8 @@
     "retry": "重试",
     "loading": "正在加载设置…",
     "error": "错误",
-    "confirm": "确定"
+    "confirm": "确定",
+    "later": "稍后"
   },
   "places": {
     "favorites": "个人收藏",

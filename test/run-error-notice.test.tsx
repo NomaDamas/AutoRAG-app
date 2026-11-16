@@ -159,10 +159,10 @@ describe("RunErrorNotice", () => {
 		render("Search root /Users/me/Docs does not exist");
 
 		const alert = host.querySelector('[role="alert"]');
-		expect(alert?.className).toContain("bg-subtle");
+		expect(alert?.className).toContain("notice-card");
 		expect(alert?.className).toContain("border-border");
 		expect(alert?.className).not.toContain("bg-danger-bg-soft");
-		expect(alert?.querySelector("[data-notice-icon]")).not.toBeNull();
+		expect(alert?.querySelector(".notice-badge")?.getAttribute("data-tone")).toBe("error");
 		const fixBtn = buttons().find((button) => button.textContent?.includes(t("appError.fixAction")));
 		expect(fixBtn?.className).toContain("bg-accent");
 		expect(fixBtn?.className).not.toContain("text-danger-text");
@@ -177,7 +177,7 @@ describe("RunErrorNotice", () => {
 		expect(host.textContent).toContain(t("appError.contextOverflow.title"));
 		expect(host.textContent).toContain(t("appError.contextOverflow.hint"));
 		expect(labels()).toEqual([t("appError.showDetails"), t("aiSearch.newChat"), t("appError.askNarrower")]);
-		expect(host.querySelector("[data-notice-icon]")?.className).toContain("text-warn-text");
+		expect(host.querySelector(".notice-badge")?.getAttribute("data-tone")).toBe("warning");
 
 		press(t("appError.askNarrower"));
 		press(t("aiSearch.newChat"));
