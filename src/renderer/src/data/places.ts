@@ -111,7 +111,7 @@ const ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
  * path, so the row can sit in the same active-path comparison as the OS places.
  */
 const AI_SEARCH_ITEM: NavItem = {
-	label: "AI Chat",
+	label: "AI Agent",
 	path: AI_SEARCH_PATH,
 	icon: Sparkles,
 	available: true,

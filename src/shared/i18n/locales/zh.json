@@ -14,7 +14,7 @@
     "cloud": "云端",
     "connections": "连接",
     "locations": "位置",
-    "aiSearch": "AI 聊天",
+    "aiSearch": "AI 智能体",
     "settings": "设置",
     "settingsHint": "设置 {{shortcut}}",
     "usage": "AI 用量",
@@ -301,7 +301,7 @@
       "openPreview": "在预览中查看引用段落"
     },
     "chat": {
-      "title": "AI 对话",
+      "title": "AI 智能体",
       "placeholderFile": "询问这个文件",
       "placeholderFolder": "询问这个文件夹",
       "placeholderItems": "询问所选项目",
@@ -316,7 +316,7 @@
       "monthsAgo": "{{count}} 个月前",
       "yearsAgo": "{{count}} 年前",
       "newChat": "新对话",
-      "expand": "在 AI 聊天标签页中打开",
+      "expand": "在 AI 智能体标签页中打开",
       "removeAttachment": "移除附件",
       "thinking": "正在查找答案…",
       "stopped": "已停止回答",
@@ -325,14 +325,14 @@
       "placeholderAny": "随便问点什么",
       "continue": "继续对话",
       "unread": "新回答",
-      "history": "最近的 AI 聊天",
+      "history": "最近的 AI 智能体对话",
       "close": "关闭对话"
     },
     "fileActions": "文件操作",
     "moreActions": "更多"
   },
   "aiSearch": {
-    "title": "AI 聊天",
+    "title": "AI 智能体",
     "aiNotice": "回答由 AI 生成，可能不准确。请核对引用的来源。",
     "history": "对话记录",
     "historyShortcut": "对话记录 {{shortcut}}",
@@ -533,11 +533,11 @@
     "empty": {
       "title": "还没有自动化",
       "body": "预先决定当文件出现或变化时 Dazzi 要做什么。",
-      "add": "在 AI 聊天中添加规则"
+      "add": "在 AI 智能体中添加规则"
     },
     "errors": {
       "config": "无法读取规则文件",
-      "configHint": "请在 AI 聊天中修正规则，或直接编辑该文件。"
+      "configHint": "请在 AI 智能体中修正规则，或直接编辑该文件。"
     },
     "daemon": {
       "on": "正在后台运行",
@@ -550,9 +550,9 @@
     },
     "menu": {
       "preview": "快速查看",
-      "edit": "在 AI 聊天中编辑",
+      "edit": "在 AI 智能体中编辑",
       "reveal": "在自动化标签页中显示",
-      "add": "在 AI 聊天中添加新规则…",
+      "add": "在 AI 智能体中添加新规则…",
       "openFolder": "打开监视文件夹",
       "delete": "删除"
     },
@@ -586,7 +586,7 @@
       "when": "何时",
       "what": "执行",
       "folders": "目标文件夹",
-      "edit": "在 AI 聊天中编辑",
+      "edit": "在 AI 智能体中编辑",
       "close": "关闭",
       "ranFail": "{{time}}运行 · {{reason}}"
     },
@@ -900,7 +900,7 @@
     },
     "feature": {
       "ai": {
-        "title": "AI 聊天",
+        "title": "AI 智能体",
         "sub": "有问题尽管问，回答会附上出处。"
       },
       "versions": {
@@ -1152,7 +1152,7 @@
           "price": "免费",
           "tag": "适合注册后想立即体验的用户",
           "training": "输入与输出可能用于改进服务",
-          "features": "能理解文件内容的 AI 聊天\n像聊天一样向文件提问\n5 款轻量聊天模型\n每周自动补充的免费额度"
+          "features": "能理解文件内容的 AI 智能体\n像聊天一样向文件提问\n5 款轻量聊天模型\n每周自动补充的免费额度"
         },
         "air": {
           "name": "Air",
@@ -1318,7 +1318,7 @@
     "tips": {
       "1": {
         "title": "一次 {{shortcut}} 即可提问",
-        "body": "从任何界面都能跳转到 AI 聊天 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
+        "body": "从任何界面都能跳转到 AI 智能体 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
       },
       "2": {
         "title": "点击答案中的编号即可预览依据",
@@ -1331,7 +1331,7 @@
       },
       "4": {
         "title": "把文件拖入提问",
-        "body": "将 Finder 中的条目或其他应用的文件、文件夹拖入 AI 聊天，即以该范围为基准提问。",
+        "body": "将 Finder 中的条目或其他应用的文件、文件夹拖入 AI 智能体，即以该范围为基准提问。",
         "pill": "概括这个文件"
       },
       "5": {
@@ -1393,8 +1393,8 @@
     "expand": "展开",
     "collapse": "折叠",
     "newName": "新名称",
-    "indexIncluded": "已包含在 AI 聊天索引中",
-    "indexExcluded": "已从 AI 聊天索引中排除",
+    "indexIncluded": "已包含在 AI 智能体索引中",
+    "indexExcluded": "已从 AI 智能体索引中排除",
     "stackToggle": "另外 {{count}} 个版本 · 点击展开",
     "webImage": "网络图片",
     "image": "图片",
@@ -2239,9 +2239,9 @@
       "presetMinimal": "仅显示核心项",
       "resetDefault": "恢复默认设置",
       "favoritesTitle": "个人收藏项目",
-      "favoritesDesc": "设置常用文件夹的显示状态与排列顺序。AI 聊天与自动化为核心功能，始终保持显示。",
+      "favoritesDesc": "设置常用文件夹的显示状态与排列顺序。AI 智能体与自动化为核心功能，始终保持显示。",
       "lockedBadge": "始终显示",
-      "lockedHint": "AI 聊天与自动化是核心必选项，无法隐藏。",
+      "lockedHint": "AI 智能体与自动化是核心必选项，无法隐藏。",
       "customBadge": "自定义文件夹",
       "removeCustom": "移除 {{name}}",
       "addCustomFolder": "添加文件夹",
@@ -2411,12 +2411,12 @@
         "window": "窗口与导航",
         "view": "视图切换",
         "files": "文件操作",
-        "aiSearch": "AI 聊天"
+        "aiSearch": "AI 智能体"
       },
       "actions": {
         "dismiss": "关闭与取消",
         "focusSearch": "聚焦搜索框",
-        "focusComposer": "打开 AI 聊天",
+        "focusComposer": "打开 AI 智能体",
         "openSettings": "打开设置",
         "newTab": "新建标签页",
         "reopenTab": "重新打开关闭的标签页",
@@ -2594,9 +2594,9 @@
       "signOut": "退出登录",
       "signIn": "登录",
       "signInBrowser": "登录",
-      "managedDesc": "将 Dazzi 账户的托管模型用于 AI 聊天。",
+      "managedDesc": "将 Dazzi 账户的托管模型用于 AI 智能体。",
       "managedName": "使用 Dazzi 提供的模型",
-      "managedHint": "在 AI 聊天中使用 Dazzi 账户包含的模型。登录后即可设置。",
+      "managedHint": "在 AI 智能体中使用 Dazzi 账户包含的模型。登录后即可设置。",
       "useManaged": "使用",
       "planDescription": "当前套餐和 AI 用量。",
       "trialing": " · 试用中",
@@ -3383,7 +3383,7 @@
     "tabs": {
       "browse": "浏览",
       "recents": "最近使用",
-      "ai": "AI 聊天",
+      "ai": "AI 智能体",
       "automations": "自动化",
       "search": "搜索",
       "aria": "应用标签",
@@ -3495,7 +3495,7 @@
       "ask": "AI 摘要",
       "askFolder": "询问",
       "move": "移动",
-      "indexed": "纳入 AI 聊天",
+      "indexed": "纳入 AI 智能体",
       "indexedOn": "可以按内容查找",
       "indexedOff": "只能按名称查找",
       "indexLocked": "遵循上级文件夹的设置",
@@ -3519,8 +3519,8 @@
       "clear": "清除",
       "results": "{{machine}} 全部 · {{count}} 项",
       "none": "没有名为“{{query}}”的文件",
-      "noneHint": "要按内容查找，请询问 AI 聊天",
-      "askAi": "向 AI 聊天询问“{{query}}”",
+      "noneHint": "要按内容查找，请询问 AI 智能体",
+      "askAi": "向 AI 智能体询问“{{query}}”",
       "askAiHint": "搜索文件内容、邮件和即时通讯",
       "typeHint": "搜索此电脑上的文件名",
       "exit": "关闭搜索"
@@ -3542,9 +3542,9 @@
       "open": "进行中和排队的任务"
     },
     "rules": {
-      "add": "在 AI 聊天中添加规则",
+      "add": "在 AI 智能体中添加规则",
       "section": "规则",
-      "foot": "设定文件新建或变更时 Dazzi 自动执行的操作。规则在 AI 聊天中用自然语言创建和修改。",
+      "foot": "设定文件新建或变更时 Dazzi 自动执行的操作。规则在 AI 智能体中用自然语言创建和修改。",
       "daemonToggle": "在后台运行"
     },
     "ai": {

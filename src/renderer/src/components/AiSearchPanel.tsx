@@ -40,6 +40,7 @@ import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { SeedLoader } from "./SeedLoader";
 import { PipeTable } from "./PipeTable";
 import dazziLogo from "../assets/dazzi-logo.png";
 import {
@@ -1105,7 +1106,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{searching && compacting ? (
 								<CompactingStatus />
 							) : shimmer ? (
-								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
+								<div className="water-wave-thinking my-6 flex items-center gap-6 text-meta text-ink-muted" role="status">
+									<SeedLoader />
 									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
 										{progress === "" ? t("aiSearch.thinking") : progress}
 									</span>

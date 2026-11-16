@@ -14,7 +14,7 @@
     "cloud": "클라우드",
     "connections": "연결",
     "locations": "위치",
-    "aiSearch": "AI 채팅",
+    "aiSearch": "AI 에이전트",
     "settings": "설정",
     "settingsHint": "설정 {{shortcut}}",
     "usage": "AI 사용량",
@@ -301,7 +301,7 @@
       "openPreview": "미리보기에서 근거 위치 보기"
     },
     "chat": {
-      "title": "AI 채팅",
+      "title": "AI 에이전트",
       "placeholderFile": "이 파일에 대해 묻기",
       "placeholderFolder": "이 폴더에 대해 묻기",
       "placeholderItems": "선택한 항목에 대해 묻기",
@@ -316,7 +316,7 @@
       "monthsAgo": "{{count}}달 전",
       "yearsAgo": "{{count}}년 전",
       "newChat": "새 대화",
-      "expand": "AI 채팅 탭에서 열기",
+      "expand": "AI 에이전트 탭에서 열기",
       "removeAttachment": "첨부 빼기",
       "thinking": "답을 찾는 중…",
       "stopped": "답변을 중지했습니다",
@@ -325,14 +325,14 @@
       "placeholderAny": "무엇이든 물어보세요",
       "continue": "이어서 대화",
       "unread": "새 답변",
-      "history": "최근 AI 채팅 기록",
+      "history": "최근 AI 에이전트 대화",
       "close": "대화 닫기"
     },
     "fileActions": "파일 동작",
     "moreActions": "더보기"
   },
   "aiSearch": {
-    "title": "AI 채팅",
+    "title": "AI 에이전트",
     "aiNotice": "답변은 AI가 생성하며 부정확할 수 있어요. 인용된 출처를 확인하세요.",
     "history": "대화 기록",
     "historyShortcut": "대화 기록 {{shortcut}}",
@@ -533,11 +533,11 @@
     "empty": {
       "title": "아직 자동화가 없습니다",
       "body": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요.",
-      "add": "AI 채팅에서 규칙 추가"
+      "add": "AI 에이전트에서 규칙 추가"
     },
     "errors": {
       "config": "규칙 파일을 읽을 수 없습니다",
-      "configHint": "AI 채팅에서 규칙을 고치거나 파일을 직접 수정하세요."
+      "configHint": "AI 에이전트에서 규칙을 고치거나 파일을 직접 수정하세요."
     },
     "daemon": {
       "on": "백그라운드에서 실행 중",
@@ -550,9 +550,9 @@
     },
     "menu": {
       "preview": "훑어보기",
-      "edit": "AI 채팅에서 편집",
+      "edit": "AI 에이전트에서 편집",
       "reveal": "자동화 탭에서 보기",
-      "add": "AI 채팅에서 새 규칙 추가…",
+      "add": "AI 에이전트에서 새 규칙 추가…",
       "openFolder": "감시 폴더 열기",
       "delete": "삭제"
     },
@@ -586,7 +586,7 @@
       "when": "언제",
       "what": "하는 일",
       "folders": "대상 폴더",
-      "edit": "AI 채팅에서 편집",
+      "edit": "AI 에이전트에서 편집",
       "close": "닫기",
       "ranFail": "{{time}} 실행 · {{reason}}"
     },
@@ -900,7 +900,7 @@
     },
     "feature": {
       "ai": {
-        "title": "AI 채팅",
+        "title": "AI 에이전트",
         "sub": "궁금한 건 일단 물어보세요. 출처까지 붙여서 답합니다."
       },
       "versions": {
@@ -1152,7 +1152,7 @@
           "price": "무료",
           "tag": "가입 직후 바로 체험해 보려는 분께",
           "training": "서비스 개선을 위해 입력·출력을 사용할 수 있습니다",
-          "features": "파일 내용까지 이해하는 AI 채팅\n말하듯 묻고 답하는 파일 채팅\n가벼운 채팅 모델 5종\n매주 새로 채워지는 무료 크레딧"
+          "features": "파일 내용까지 이해하는 AI 에이전트\n말하듯 묻고 답하는 파일 채팅\n가벼운 채팅 모델 5종\n매주 새로 채워지는 무료 크레딧"
         },
         "air": {
           "name": "Air",
@@ -1318,7 +1318,7 @@
     "tips": {
       "1": {
         "title": "{{shortcut}} 한 번이면 바로 질문",
-        "body": "어느 화면에서든 AI 채팅 입력창으로 이동합니다. 폴더를 열지 않고 문서 내용을 묻고, 근거와 함께 답을 받으세요."
+        "body": "어느 화면에서든 AI 에이전트 입력창으로 이동합니다. 폴더를 열지 않고 문서 내용을 묻고, 근거와 함께 답을 받으세요."
       },
       "2": {
         "title": "답변의 번호를 누르면 근거를 미리보기로",
@@ -1331,7 +1331,7 @@
       },
       "4": {
         "title": "파일을 끌어다 질문에 붙이기",
-        "body": "Finder 행이나 다른 앱의 파일, 폴더를 AI 채팅로 끌어오면 그 범위를 기준으로 질문합니다.",
+        "body": "Finder 행이나 다른 앱의 파일, 폴더를 AI 에이전트로 끌어오면 그 범위를 기준으로 질문합니다.",
         "pill": "이 파일 요약해줘"
       },
       "5": {
@@ -1393,8 +1393,8 @@
     "expand": "펼치기",
     "collapse": "접기",
     "newName": "새 이름",
-    "indexIncluded": "AI 채팅 인덱스에 포함됨",
-    "indexExcluded": "AI 채팅 인덱스에서 제외됨",
+    "indexIncluded": "AI 에이전트 인덱스에 포함됨",
+    "indexExcluded": "AI 에이전트 인덱스에서 제외됨",
     "stackToggle": "다른 버전 {{count}}개 · 클릭하면 펼쳐집니다",
     "webImage": "웹 이미지",
     "image": "이미지",
@@ -2239,9 +2239,9 @@
       "presetMinimal": "핵심만 표시",
       "resetDefault": "기본값으로 복원",
       "favoritesTitle": "즐겨찾기 항목",
-      "favoritesDesc": "자주 쓰는 폴더의 표시 여부와 순서를 정합니다. AI 채팅과 자동화는 핵심 기능으로 항상 표시됩니다.",
+      "favoritesDesc": "자주 쓰는 폴더의 표시 여부와 순서를 정합니다. AI 에이전트와 자동화는 핵심 기능으로 항상 표시됩니다.",
       "lockedBadge": "항상 표시",
-      "lockedHint": "AI 채팅과 자동화는 필수 항목으로 숨길 수 없습니다.",
+      "lockedHint": "AI 에이전트와 자동화는 필수 항목으로 숨길 수 없습니다.",
       "customBadge": "사용자 폴더",
       "removeCustom": "{{name}} 제거",
       "addCustomFolder": "폴더 추가",
@@ -2411,12 +2411,12 @@
         "window": "창 및 탐색",
         "view": "보기 전환",
         "files": "파일 작업",
-        "aiSearch": "AI 채팅"
+        "aiSearch": "AI 에이전트"
       },
       "actions": {
         "dismiss": "닫기 및 취소",
         "focusSearch": "검색창 포커스",
-        "focusComposer": "AI 채팅 열기",
+        "focusComposer": "AI 에이전트 열기",
         "openSettings": "설정 열기",
         "newTab": "새 탭",
         "reopenTab": "닫은 탭 다시 열기",
@@ -2594,9 +2594,9 @@
       "signOut": "로그아웃",
       "signIn": "로그인",
       "signInBrowser": "로그인",
-      "managedDesc": "Dazzi 계정의 관리형 모델을 AI 채팅에 사용합니다.",
+      "managedDesc": "Dazzi 계정의 관리형 모델을 AI 에이전트에 사용합니다.",
       "managedName": "Dazzi 제공 모델 사용",
-      "managedHint": "AI 채팅에 Dazzi 계정에 포함된 모델을 사용합니다. 로그인 후 설정할 수 있습니다.",
+      "managedHint": "AI 에이전트에 Dazzi 계정에 포함된 모델을 사용합니다. 로그인 후 설정할 수 있습니다.",
       "useManaged": "사용하기",
       "planDescription": "현재 요금제와 AI 사용량입니다.",
       "trialing": " · 체험 중",
@@ -3383,7 +3383,7 @@
     "tabs": {
       "browse": "둘러보기",
       "recents": "최근 항목",
-      "ai": "AI 채팅",
+      "ai": "AI 에이전트",
       "automations": "자동화",
       "search": "검색",
       "aria": "앱 탭",
@@ -3495,7 +3495,7 @@
       "ask": "AI 요약",
       "askFolder": "묻기",
       "move": "이동",
-      "indexed": "AI 채팅에 포함",
+      "indexed": "AI 에이전트에 포함",
       "indexedOn": "내용까지 찾을 수 있습니다",
       "indexedOff": "이름으로만 찾을 수 있습니다",
       "indexLocked": "상위 폴더 설정을 따릅니다",
@@ -3519,8 +3519,8 @@
       "clear": "지우기",
       "results": "{{machine}} 전체 · {{count}}개",
       "none": "“{{query}}” 이름의 파일이 없습니다",
-      "noneHint": "내용으로 찾으려면 AI 채팅에 물어보세요",
-      "askAi": "“{{query}}” AI 채팅에 묻기",
+      "noneHint": "내용으로 찾으려면 AI 에이전트에 물어보세요",
+      "askAi": "“{{query}}” AI 에이전트에 묻기",
       "askAiHint": "파일 내용, 메일, 메신저까지 찾습니다",
       "typeHint": "이 컴퓨터의 파일 이름을 검색합니다",
       "exit": "검색 닫기"
@@ -3542,9 +3542,9 @@
       "open": "진행 및 대기 중인 작업"
     },
     "rules": {
-      "add": "AI 채팅에서 규칙 추가",
+      "add": "AI 에이전트에서 규칙 추가",
       "section": "규칙",
-      "foot": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요. 규칙은 AI 채팅에서 말로 만들고 고칩니다.",
+      "foot": "파일이 생기거나 바뀔 때 Dazzi가 알아서 할 일을 정해 두세요. 규칙은 AI 에이전트에서 말로 만들고 고칩니다.",
       "daemonToggle": "백그라운드 실행"
     },
     "ai": {

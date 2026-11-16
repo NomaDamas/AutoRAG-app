@@ -33,7 +33,7 @@ describe("navGroups", () => {
 
 		// Then each section keeps its own order and carries the eject affordance
 		expect(groups.map((group) => [group.label, group.items.map((item) => item.label)])).toEqual([
-			["Favorites", ["AI Chat", "Automations", "Recents", "Desktop"]],
+			["Favorites", ["AI Agent", "Automations", "Recents", "Desktop"]],
 			["Cloud", ["Google Drive - a@x.com", "Google Drive - b@y.com"]],
 			["Locations", ["Macintosh HD", "SSD1"]],
 		]);
@@ -59,7 +59,7 @@ describe("navGroups", () => {
 		const favorites = groups[0];
 		expect(favorites?.label).toBe("Favorites");
 		expect(favorites?.items.map((item) => [item.label, item.view, item.kind])).toEqual([
-			["AI Chat", "aiSearch", undefined],
+			["AI Agent", "aiSearch", undefined],
 			["Automations", "automations", undefined],
 		]);
 	});
@@ -68,7 +68,7 @@ describe("navGroups", () => {
 describe("the Automations app row", () => {
 	it("sits right under AI Chat in Favorites and turns the focused tab into the Automations view", () => {
 		const favorites = navGroups([place("Recents", "favorites", { icon: "recents" }), place("Desktop", "favorites")])[0];
-		expect(favorites?.items.map((item) => item.label)).toEqual(["AI Chat", "Automations", "Recents", "Desktop"]);
+		expect(favorites?.items.map((item) => item.label)).toEqual(["AI Agent", "Automations", "Recents", "Desktop"]);
 		const row = favorites?.items[1];
 		expect(row).toMatchObject({ view: "automations", path: AUTOMATIONS_PATH, available: true, ejectable: false });
 		expect(row?.kind).toBeUndefined();

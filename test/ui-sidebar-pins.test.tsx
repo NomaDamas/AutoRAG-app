@@ -218,7 +218,7 @@ describe("Favorites: dropping a folder between rows", () => {
 	it("leaves a drop on the AI Chat item to AI Chat", () => {
 		const { onPin, aiSearchDragOver, aiSearchDrop } = renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
 		layoutRows();
-		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Chat");
+		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Agent");
 		const data = folderDrag("/x/A");
 		fire("dragover", aiSearch as Element, { y: 90, data });
 		expect(aiSearchDragOver).toHaveBeenCalled();
@@ -431,7 +431,7 @@ describe("Finder row drag over Favorites", () => {
 	it("keeps the move cursor, and ⌥ copy, for a target that accepts without naming a verb", () => {
 		renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
 		layoutRows();
-		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Chat") as Element;
+		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Agent") as Element;
 		drag([FOLDER], aiSearch, 90);
 		expect(cursor()).toBe("move");
 		pointer("pointermove", { x: 41, y: 90, alt: true });

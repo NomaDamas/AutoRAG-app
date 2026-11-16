@@ -201,7 +201,7 @@ describe("AutomationsView empty and error states", () => {
 		render(p);
 		expect(rows()).toEqual([]);
 		expect(text(host)).toContain("아직 자동화가 없습니다");
-		act(() => [...host.querySelectorAll("button")].find((b) => text(b) === "AI 채팅에서 규칙 추가")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		act(() => [...host.querySelectorAll("button")].find((b) => text(b) === "AI 에이전트에서 규칙 추가")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(p.onAdd).toHaveBeenCalledTimes(1);
 	});
 

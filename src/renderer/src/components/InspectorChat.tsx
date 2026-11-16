@@ -30,6 +30,7 @@ import { answerViewState } from "../state/answer-view";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks, SteerBubble, formatElapsed } from "./AiSearchPanel";
+import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import type { ImageActions } from "./AnswerImage";
@@ -573,7 +574,8 @@ function TurnView({
 						<SteerBubble key={steer.id} steer={steer} labels={steerLabels} />
 					))}
 				{shimmer ? (
-					<div className="flex min-w-0 items-center text-tile text-ink-muted" role="status">
+					<div className="flex min-w-0 items-center gap-6 text-tile text-ink-muted" role="status">
+						<SeedLoader />
 						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
 							{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
 						</span>

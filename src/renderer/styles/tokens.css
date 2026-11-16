@@ -176,6 +176,10 @@
   --index-map-seed-new: #FFB300;
   --index-map-seed-empty: #F3F3F5;
   --index-map-seed-r: 2.18px;
+  /* The answer loader: a small seed head whose seeds brighten in a wave from the centre outward. Warm gold at rest,
+   * sunflower yellow on the crest; no brown, which reads as dirt at 14px. */
+  --seed-loader-rest: #E8A400;
+  --seed-loader-crest: #FFCC00;
   --tag-orange: #F5A841;
   --switch-off: #C9C9CE;
   --highlight-marker: linear-gradient(transparent 55%, rgba(255,214,10,0.55) 55%);
@@ -374,6 +378,7 @@
   --dur-knob: 200ms;
   --dur-flash-fade: 600ms;
   --dur-shimmer: 1.4s;
+  --dur-seed-wave: 1.1s;
   --dur-spin: 1.4s;
   --time-retry: 1500ms;
   --time-flash: 1800ms;
@@ -462,6 +467,8 @@ html[data-appearance="dark"] {
     --index-map-seed-new: #EF9F27;
     --index-map-seed-empty: #303033;
     --index-map-seed-r: 2.55px;
+    --seed-loader-rest: #C98E0A;
+    --seed-loader-crest: #FFD43B;
     --bg-input: #3A3A3C;
     --bg-selected-nav: #48484A;
     --bg-tabstrip: #38383A;

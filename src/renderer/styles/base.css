@@ -146,6 +146,35 @@ small {
 	}
 }
 
+/* Answer loader — `SeedLoader`: each seed brightens and swells in turn, the inner ones first, so a wave of light
+ * runs out from the centre of the seed head. */
+.seed-loader {
+	flex: none;
+	overflow: visible;
+}
+.seed-loader circle {
+	fill: var(--seed-loader-rest);
+	opacity: 0.6;
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: seedWave var(--dur-seed-wave) ease-in-out infinite;
+	animation-delay: var(--seed-delay);
+}
+
+@keyframes seedWave {
+	0%,
+	100% {
+		fill: var(--seed-loader-rest);
+		opacity: 0.6;
+		transform: scale(0.85);
+	}
+	50% {
+		fill: var(--seed-loader-crest);
+		opacity: 1;
+		transform: scale(1.2);
+	}
+}
+
 /* AI Search steer waiting for the next model request — the bubble's accent ring breathes. */
 @keyframes steerWait {
 	0%,
@@ -325,6 +354,16 @@ html:not([data-platform="darwin"]) .inspector-body {
 	@keyframes pulseDot {
 		0%,
 		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	/* The seed head holds still in its crest colour. */
+	@keyframes seedWave {
+		0%,
+		100% {
+			fill: var(--seed-loader-crest);
 			opacity: 1;
 			transform: none;
 		}

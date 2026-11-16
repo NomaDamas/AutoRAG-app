@@ -218,7 +218,7 @@ describe("the inspector chat view", () => {
 		expect(host.querySelector(".inspector-chat-answer")?.textContent).not.toContain("[file:");
 	});
 
-	it("draws citation numbers like the AI Chat tab: a pale wash, and solid blue while one is hovered", () => {
+	it("draws citation numbers like the AI Agent tab: a pale wash, and solid blue while one is hovered", () => {
 		renderTab(withAnswer("본문 [1]", ["근거"]));
 		const cite = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
 		expect(cite()?.className).toContain("bg-accent-wash");
@@ -260,7 +260,7 @@ describe("the inspector chat view", () => {
 		expect([...(card?.querySelectorAll("button") ?? [])].map((button) => button.textContent)).toEqual(["파일 위치로 이동", "미리보기"]);
 	});
 
-	it("titles the chat with the selection, and offers 새 대화, AI 채팅 탭에서 열기 and × (back to the Info view)", () => {
+	it("titles the chat with the selection, and offers 새 대화, AI 에이전트 탭에서 열기 and × (back to the Info view)", () => {
 		const backs: string[] = [];
 		act(() =>
 			root.render(
@@ -290,7 +290,7 @@ describe("the inspector chat view", () => {
 		expect(title?.textContent).toBe("deck.pdf");
 		expect(title?.getAttribute("aria-haspopup")).toBe("menu");
 		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
-		expect(labels).toEqual(["새 대화", "AI 채팅 탭에서 열기", "대화 닫기"]);
+		expect(labels).toEqual(["새 대화", "AI 에이전트 탭에서 열기", "대화 닫기"]);
 		act(() => host.querySelector<HTMLButtonElement>('button[aria-label="대화 닫기"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(backs).toEqual(["back"]);
 	});
