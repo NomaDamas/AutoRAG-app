@@ -286,7 +286,7 @@ describe("workspace-wide tab commands", () => {
 		expect(paths(left, 1)).toEqual(["/a"]);
 	});
 
-	it("⌘K prefers an AI Search tab already on screen, then one in the focused pane, then opens one", () => {
+	it("⌘K prefers an AI Chat tab already on screen, then one in the focused pane, then opens one", () => {
 		let ws = withTabs(createWorkspace("/a"), 1, AI_SEARCH_PATH);
 		ws = moveTab(ws, tabId(ws, 1, AI_SEARCH_PATH), { kind: "split", paneId: 1, edge: "right" });
 		ws = focusPane(ws, 1);
@@ -294,7 +294,7 @@ describe("workspace-wide tab commands", () => {
 		expect(visible.focusedPaneId).toBe(2);
 		expect(focusAiSearchInWorkspace(visible)).toBe(visible);
 
-		// Pane 2 (focused) holds an AI Search tab behind /c; pane 1 shows only /a.
+		// Pane 2 (focused) holds an AI Chat tab behind /c; pane 1 shows only /a.
 		const hidden = withTabs(withTabs(sideBySide(), 2, AI_SEARCH_PATH), 2, "/c");
 		const local = focusAiSearchInWorkspace(hidden);
 		expect(local.focusedPaneId).toBe(2);
@@ -378,7 +378,7 @@ describe("reopening closed tabs", () => {
 		expect(reopened.focusedPaneId).toBe(1);
 	});
 
-	it("never remembers Settings or AI Search tabs", () => {
+	it("never remembers Settings or AI Chat tabs", () => {
 		let ws = withTabs(createWorkspace("/a"), 1, SETTINGS_PATH, AI_SEARCH_PATH);
 		ws = closeWorkspaceTab(ws, tabId(ws, 1, SETTINGS_PATH));
 		ws = closeWorkspaceTab(ws, tabId(ws, 1, AI_SEARCH_PATH));

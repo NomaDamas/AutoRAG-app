@@ -201,9 +201,8 @@ describe("createSearchService", () => {
 		expect(agent.listeners.size).toBe(0);
 	});
 
-	it("withdraws the draft of a message that turns out to end on a tool call", async () => {
-		// A message that ends on a tool call is a progress note ("checking X next"),
-		// not the answer. It streams like one, so it is only known afterwards.
+	it("keeps what a message wrote before a tool call on screen, and the answer after it below it", async () => {
+		// A message that ends on a tool call streams like an answer; the person has read it, so it stays.
 		const update = (delta: string): LiveAgentEvent => ({
 			type: "message_update",
 			assistantMessageEvent: { type: "text_delta", delta },
@@ -226,38 +225,49 @@ describe("createSearchService", () => {
 
 		expect(events.filter((event) => event.type === "deep-draft")).toEqual([
 			{ type: "deep-draft", searchId: "search-note", text: "Checking the July review." },
-			{ type: "deep-draft", searchId: "search-note", text: "" },
-			{ type: "deep-draft", searchId: "search-note", text: "Final answer." },
+			{ type: "deep-draft", searchId: "search-note", text: "Checking the July review.\n\nFinal answer." },
 		]);
+		// The answer that lands carries the same text, so nothing the person read is replaced by a shorter one.
+		expect(events.find((event) => event.type === "quick" || event.type === "deep")).toMatchObject({
+			phase: { answer: "Checking the July review.\n\nFinal answer." },
+		});
+		const record = await service.historyGet("chat-note");
+		expect(record?.messages.at(-1)).toMatchObject({ role: "assistant", quick: { answer: "Checking the July review.\n\nFinal answer." } });
 	});
 
-	it("withdraws a progress note's draft as soon as the tool call starts, not when the message ends", async () => {
-		// The tool runs after message_end, which can be seconds away; the note must
-		// not sit in the answer area for that long.
+	it("stops the note's own progress line from repeating the text the answer already shows", async () => {
 		const { events, send } = collectEvents();
-		let eventsAtToolStart = -1;
 		const agent = createFakeAgent(async function*(live) {
-			live({ type: "agent_start" });
 			live({ type: "agent_start" });
 			live({ type: "message_start", message: { role: "assistant" } });
 			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Checking the July review." } });
 			live({ type: "message_update", assistantMessageEvent: { type: "toolcall_start" } });
-			// Everything the mapper emitted up to this point, before message_end is sent.
-			eventsAtToolStart = events.filter((event) => event.type === "deep-draft").length;
 			live({ type: "message_end", message: { role: "assistant", stopReason: "toolUse" } });
+			yield { type: "progress", sessionId: "s", query: "q", text: "Checking the July review." };
+			yield { type: "progress", sessionId: "s", query: "q", text: "Listing the folder" };
 			yield { type: "complete", response: createResponse("session-tool", "Final answer.", 1) };
 		});
 		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
 
 		await service.start("search-tool", "chat-tool", "refund approval", []);
 
-		// The note, then its withdrawal, were both out before message_end was sent.
-		expect(eventsAtToolStart).toBe(2);
-		const drafts = events.filter((event) => event.type === "deep-draft");
-		expect(drafts).toEqual([
-			{ type: "deep-draft", searchId: "search-tool", text: "Checking the July review." },
-			{ type: "deep-draft", searchId: "search-tool", text: "" },
-		]);
+		expect(events.filter((event) => event.type === "progress").map((event) => event.text)).toEqual(["", "Listing the folder"]);
+	});
+
+	it("takes back only a message that failed", async () => {
+		const { events, send } = collectEvents();
+		const agent = createFakeAgent(async function*(live) {
+			live({ type: "agent_start" });
+			live({ type: "message_start", message: { role: "assistant" } });
+			live({ type: "message_update", assistantMessageEvent: { type: "text_delta", delta: "Half an ans" } });
+			live({ type: "message_end", message: { role: "assistant", stopReason: "error" } });
+			yield { type: "complete", response: createResponse("session-fail", "Final answer.", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-fail", "chat-fail", "refund approval", []);
+
+		expect(events.filter((event) => event.type === "quick-draft").map((event) => event.text)).toEqual(["Half an ans", ""]);
 	});
 
 	it("hides the librarian's citation markers in drafts, including a marker still being typed", async () => {
@@ -540,6 +550,33 @@ describe("createSearchService", () => {
 		);
 		const record = await service.historyGet("chat-attach");
 		expect(record?.messages[0]).toMatchObject({ role: "user", text: "who signs off refund exceptions?", attachments });
+	});
+
+	it("tells the agent the folder the person has open, as a hint, without touching the query or the stored message", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-folder", "여기 있어요", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+		await service.start("search-folder", "chat-folder", "이 폴더 경로가 뭐야?", [], "/Users/me/Documents/월간 보고");
+
+		const context = agent.setAttachmentContext.mock.calls[0]?.[0] ?? "";
+		expect(context).toContain(JSON.stringify("/Users/me/Documents/월간 보고"));
+		expect(context).toContain("not a restriction");
+		expect(agent.searchDocumentsStream).toHaveBeenCalledWith("이 폴더 경로가 뭐야?");
+		const record = await service.historyGet("chat-folder");
+		expect(record?.messages[0]).toMatchObject({ role: "user", text: "이 폴더 경로가 뭐야?", attachments: [] });
+	});
+
+	it("sends no folder context when no folder is in view", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-nofolder", "답", 1) };
+		});
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send: () => undefined, now });
+
+		await service.start("search-nofolder", "chat-nofolder", "질문", []);
+
+		expect(agent.setAttachmentContext).toHaveBeenCalledWith("");
 	});
 
 	it("never starts the agent when the run is cancelled while attachments are read", async () => {
@@ -1096,14 +1133,14 @@ describe("createSearchService interaction", () => {
 		expect(second.setApprovalMode).toHaveBeenLastCalledWith("full");
 	});
 
-	it("falls back to auto when nothing says otherwise", async () => {
+	it("falls back to full when nothing says otherwise", async () => {
 		const agent = { ...createFakeAgent(async function*() {}), setApprovalMode: vi.fn() };
 		const { send } = collectEvents();
 		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
 
 		await service.start("search-c", "chat-c", "one", []);
 
-		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("auto");
+		expect(agent.setApprovalMode).toHaveBeenLastCalledWith("full");
 	});
 });
 

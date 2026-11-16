@@ -164,7 +164,7 @@ try {
 		});
 	});
 
-	// Open Settings -> 사이드바 -> AI로 커스텀하기
+	// Open Settings -> 사이드바 -> AI에게 요청하기
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "사이드바" }).click();
 	await page.locator("h1.linear-title", { hasText: "사이드바" }).waitFor();
@@ -173,10 +173,10 @@ try {
 	await panel.waitFor();
 	await shot("01-live-panel-opened");
 
-	// Turn 1: Ask the real model to hide Music & Movies, move Downloads to top, and try hiding AI Search & Automations
+	// Turn 1: Ask the real model to hide Music & Movies, move Downloads to top, and try hiding AI Chat & Automations
 	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
-	await page.keyboard.type("사이드바에서 음악과 동영상 폴더를 숨기고, 다운로드를 즐겨찾기 맨 위로 올려줘. 그리고 AI 검색이랑 자동화도 숨길 수 있으면 숨겨줘.");
+	await page.keyboard.type("사이드바에서 음악과 동영상 폴더를 숨기고, 다운로드를 즐겨찾기 맨 위로 올려줘. 그리고 AI 채팅이랑 자동화도 숨길 수 있으면 숨겨줘.");
 	await page.keyboard.press("Enter");
 
 	await page.waitForFunction(
@@ -212,8 +212,8 @@ try {
 		JSON.stringify({ labelsAfterTurn1, hiddenItems: persisted1.settings.sidebar.hiddenItems }),
 	);
 	check(
-		"AI 검색 and 자동화 remain visible at the top of Favorites and are NEVER in hiddenItems",
-		labelsAfterTurn1[0] === "AI 검색" &&
+		"AI 채팅 and 자동화 remain visible at the top of Favorites and are NEVER in hiddenItems",
+		labelsAfterTurn1[0] === "AI 채팅" &&
 			labelsAfterTurn1[1] === "자동화" &&
 			!persisted1.settings.sidebar.hiddenItems.includes("app:aiSearch") &&
 			!persisted1.settings.sidebar.hiddenItems.includes("app:automations"),

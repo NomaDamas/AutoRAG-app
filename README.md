@@ -78,7 +78,7 @@ Quick Look. HWP pages are drawn locally by
 <tr>
 <td width="50%" valign="top">
 
-<img src="https://dazziapp.com/assets/screens/panes-ai-2400.webp" alt="A folder pane beside an AI Search pane">
+<img src="https://dazziapp.com/assets/screens/panes-ai-2400.webp" alt="A folder pane beside an AI Chat pane">
 
 </td>
 <td width="50%" valign="top">

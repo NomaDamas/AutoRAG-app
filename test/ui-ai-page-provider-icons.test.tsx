@@ -69,7 +69,7 @@ afterEach(() => {
 });
 
 const rowIcon = (name: string): Element | null =>
-	[...host.querySelectorAll(".settings-list-row")].find((row) => row.querySelector(".settings-list-title")?.textContent === name)?.querySelector(".settings-app-icon") ?? null;
+	[...host.querySelectorAll(".ai-service-row")].find((row) => row.querySelector(".ai-service-name")?.textContent === name)?.querySelector(".settings-app-icon") ?? null;
 
 describe("AiPage provider icons", () => {
 	it("draws each connected service with its logo and keeps the first letter for one without", async () => {

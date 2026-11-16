@@ -1,5 +1,5 @@
 /**
- * Manual QA — web links in AI Search answers and evidence excerpts, in the real app.
+ * Manual QA — web links in AI Chat answers and evidence excerpts, in the real app.
  *
  * Deterministic lane: seeds the chat store (<userData>/chat-history/chats.json)
  * with one chat whose Quick answer carries markdown links, bare URLs (followed

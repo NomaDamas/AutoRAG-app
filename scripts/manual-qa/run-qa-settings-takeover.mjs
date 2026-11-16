@@ -24,6 +24,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { chord, rmRetry, writeMinsyncStub } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/settings-takeover");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -250,16 +251,16 @@ try {
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
 
-	// The Finder chrome stays mounted under Settings: an AI Search tab's composer draft survives a round trip.
-	await page.locator('.sidebar__item:has-text("AI Search")').first().click();
-	const composer = page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"]) textarea[aria-label="Ask Dazzi"]');
+	// The Finder chrome stays mounted under Settings: an AI Chat tab's composer draft survives a round trip.
+	await page.locator('.sidebar__item:has-text("AI Chat")').first().click();
+	const composer = page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"]) textarea[aria-label="Ask Dazzi"]');
 	await composer.fill("draft kept while Settings is open");
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.waitForTimeout(300);
 	await page.locator(".settings-sidebar-back").click();
 	await page.waitForSelector("aside.sidebar", { state: "visible" });
-	check("Back returns to the AI Search tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
+	check("Back returns to the AI Chat tab with its composer draft intact", (await composer.inputValue()) === "draft kept while Settings is open");
 	await shot("05b-ai-draft-after-settings");
 
 	// 6. A hidden Finder sidebar stays hidden; Settings still has its own.
@@ -283,7 +284,7 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.waitForSelector(".settings-view");
 	await page.locator(".settings-nav-item", { hasText: "General" }).click();
-	await page.selectOption('select[aria-label="App Language"]', "ko");
+	await pickSelect(page.locator(selectField("App Language")), "ko");
 	await page.waitForFunction(() => document.querySelector(".settings-sidebar-back")?.textContent?.trim() === "뒤로", null, { timeout: 10_000 });
 	check("the back row follows the interface language", (await page.locator(".settings-sidebar-back").innerText()).trim() === "뒤로");
 	await shot("07-settings-ko");

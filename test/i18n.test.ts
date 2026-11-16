@@ -63,7 +63,7 @@ describe("i18n configuration and locale keys", () => {
 	it("translates common keys in each language", async () => {
 		await setAppLanguage("ko");
 		expect(t("common.save")).toBe("저장");
-		expect(t("places.aiSearch")).toBe("AI 검색");
+		expect(t("places.aiSearch")).toBe("AI 에이전트");
 		expect(t("places.favorites")).toBe("즐겨찾기");
 		expect(t("places.settings")).toBe("설정");
 		expect(t("contextMenu.rename")).toBe("이름 변경");

@@ -1,5 +1,5 @@
 /**
- * Settings → MCP servers → "Connect other agents", on the real built app.
+ * Settings → MCP servers → "Use Dazzi from other agents", on the real built app.
  *
  * What it proves, in the order a user meets it:
  *   1. the section is on the page, in every tab, and what a copy button puts on the system clipboard is exactly the
@@ -142,8 +142,8 @@ async function englishLight() {
 		const page = await finderWindow(app);
 		await page.waitForSelector('[role="row"]');
 		await openMcpPage(page, { navLabel: "MCP Servers" });
-		const section = page.locator(".settings-section", { has: page.locator(".settings-seg") });
-		check("the section is on the page", (await section.locator(".linear-section-title").innerText()) === "Connect other agents");
+		const section = page.locator("[data-mcp-connect]");
+		check("the section is on the page", (await section.locator(".cmenu-block-title").innerText()) === "Use Dazzi from other agents");
 		const tabs = await page.locator(".settings-seg [role=tab]").allInnerTexts();
 		check("one tab per agent, then manual", JSON.stringify(tabs) === JSON.stringify(["Claude Code", "Codex", "Gemini CLI", "JSON", "Manual"]), tabs.join(" | "));
 		await page.screenshot({ path: join(OUT, "01-en-light-claude.png") });
@@ -211,8 +211,8 @@ async function koreanDark() {
 		const page = await finderWindow(app);
 		await page.waitForSelector('[role="row"]');
 		await openMcpPage(page, { navLabel: "MCP 서버" });
-		const title = await page.locator(".settings-section .linear-section-title").first().innerText();
-		check("Korean: the section title is translated", title === "다른 에이전트에 연결", title);
+		const title = await page.locator("[data-mcp-connect] .cmenu-block-title").innerText();
+		check("Korean: the section title is translated", title === "다른 에이전트에서 Dazzi 쓰기", title);
 		const dark = await page.evaluate(() => document.documentElement.getAttribute("data-appearance"));
 		check("dark appearance is on", dark === "dark", String(dark));
 		await page.screenshot({ path: join(OUT, "08-ko-dark-claude.png") });
@@ -239,5 +239,5 @@ if (fails.length > 0) {
 	console.log("FAIL:", fails);
 	process.exitCode = 1;
 } else {
-	console.log(`PASS: Settings > MCP > Connect other agents — evidence in ${OUT}`);
+	console.log(`PASS: Settings > MCP > Use Dazzi from other agents — evidence in ${OUT}`);
 }

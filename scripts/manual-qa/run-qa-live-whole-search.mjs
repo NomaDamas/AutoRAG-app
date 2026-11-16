@@ -7,7 +7,7 @@
 //   3. the datasource tabs settle from a spinner to a count or a dash, and at least one returns hits;
 //   4. the first datasource with hits lists its own rows (title, snippet) in place of the Finder list;
 //   5. the content tab lists document passages or says why the index cannot answer;
-//   6. "Ask AI Search" hands the same query to a new AI Search tab.
+//   6. "Ask AI Chat" hands the same query to a new AI Chat tab.
 //
 // It reads the real `~/.autorag/config.json` (or AUTORAG_CONFIG) and drives the real desktop, so it runs on this
 // machine only, never in a VM: `bun run build`, then
@@ -182,16 +182,16 @@ try {
 	}
 	if (kkFlight !== undefined) check("Jev gate keeps semantically relevant Kakao airline hits on flight query", /[1-9]\d*$/.test(kkFlight.text), kkFlight.text);
 
-	// Restore original query from cache before testing Ask AI Search.
+	// Restore original query from cache before testing Ask AI Chat.
 	await searchInput.click();
 	await searchInput.fill(QUERY);
 	await searchInput.press("Enter");
 	await sleep(200);
-	// 6. Ask AI Search takes the same query to the chat.
+	// 6. Ask AI Chat takes the same query to the chat.
 	await page.locator(".search-ask").click();
 	await page.locator(".user-msg .bubble").first().waitFor({ timeout: 10000 });
 	const bubble = (await page.locator(".user-msg .bubble").first().innerText()).trim();
-	check("Ask AI Search sends the query to a new AI Search tab", bubble === QUERY, bubble);
+	check("Ask AI Chat sends the query to a new AI Chat tab", bubble === QUERY, bubble);
 	await page.screenshot({ path: join(EVIDENCE, "05-ask-ai.png") });
 } catch (error) {
 	console.error(`capture failed: ${String(error).slice(0, 400)}`);

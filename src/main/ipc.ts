@@ -15,7 +15,7 @@ import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
-import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isPickPathKind, ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
@@ -194,8 +194,8 @@ export function registerMagicActionIpcHandlers(service: MagicActionService): voi
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
-	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments) =>
-		service.start(searchId, chatId, query, attachments),
+	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments, viewingFolder: unknown) =>
+		service.start(searchId, chatId, query, attachments, typeof viewingFolder === "string" ? viewingFolder : undefined),
 	);
 	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
@@ -415,6 +415,10 @@ export function registerOnboardingIpcHandlers(service: FirstRunService): void {
 			throw new TypeError("onboarding:start expects an array of folder paths");
 		}
 		return service.start(folders as readonly string[] | undefined);
+	});
+	ipcMain.handle(ONBOARDING_CHANNELS.pickPaths, (_event, kind: unknown) => {
+		if (!isPickPathKind(kind)) throw new TypeError("onboarding:pickPaths expects \"folder\", \"file\" or \"any\"");
+		return service.pickPaths(kind);
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.status, () => service.status());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());

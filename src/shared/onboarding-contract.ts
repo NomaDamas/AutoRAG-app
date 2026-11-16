@@ -25,6 +25,13 @@
  * Account and plan come at the end of the tour, never before the first index.
  */
 
+/** What `pickPaths` lets the person choose. */
+export type PickPathKind = "folder" | "file" | "any";
+
+export function isPickPathKind(value: unknown): value is PickPathKind {
+	return value === "folder" || value === "file" || value === "any";
+}
+
 export const ONBOARDING_CHANNELS = {
 	load: "onboarding:load",
 	permissions: "onboarding:permissions",
@@ -39,6 +46,8 @@ export const ONBOARDING_CHANNELS = {
 	status: "onboarding:status",
 	/** main → renderer event carrying one {@link SetupStatus}. */
 	progress: "onboarding:progress",
+	/** The native chooser Settings → 검색 범위 uses for paths to leave out of the index. */
+	pickPaths: "onboarding:pickPaths",
 	complete: "onboarding:complete",
 } as const;
 
@@ -142,5 +151,11 @@ export interface OnboardingBridge {
 	status(): Promise<SetupStatus>;
 	onProgress(listener: (status: SetupStatus) => void): () => void;
 	/** Marks the first run done: the next launch opens the Finder straight away. */
+	/**
+	 * Native chooser for paths to leave out of the index (Settings → 검색 범위 → 제외 추가): folders, files, or either.
+	 * "any" only shows both on macOS; Windows and Linux show a folder chooser for it, so they ask for one kind.
+	 * Empty when cancelled. Absent on a remote browser, which types the path.
+	 */
+	pickPaths?(kind: PickPathKind): Promise<readonly string[]>;
 	complete(): Promise<void>;
 }

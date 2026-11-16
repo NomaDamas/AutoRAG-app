@@ -78,6 +78,7 @@
 	--color-tab-hover-from: var(--tab-grad-hover-from);
 	--color-tab-hover-to: var(--tab-grad-hover-to);
 	--color-tab-active: var(--bg-tab-active);
+	--color-tab-new: var(--bg-tab-new);
 	--color-tab-text: var(--text-tab);
 	--color-code: var(--bg-code);
 	--color-chip-sent: var(--bg-chip-sent);
@@ -248,6 +249,8 @@
 	--color-vtag-near-text: var(--vtag-near-text);
 	--color-vtag-exact-bg: var(--vtag-exact-bg);
 	--color-vtag-exact-text: var(--vtag-exact-text);
+	--color-vtag-similar-bg: var(--vtag-similar-bg);
+	--color-vtag-similar-text: var(--vtag-similar-text);
 
 	/* --------------------------------------------------------- §7 Scrollbars */
 	/* (none — native overlay scrollbars; see base.css §7) */

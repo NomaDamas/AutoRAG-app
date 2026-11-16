@@ -148,6 +148,22 @@ describe("index map service", () => {
 		expect(map.totals.stale).toBe(1);
 		expect(map.totals.excluded).toBe(1);
 	});
+
+	it("leaves out what an excludePaths glob matches, and reads the glob as written", async () => {
+		const { docs, env, workspace } = await createScope();
+		const config = JSON.parse(await readFile(env.AUTORAG_CONFIG as string, "utf8")) as Record<string, unknown>;
+		await writeFile(env.AUTORAG_CONFIG as string, JSON.stringify({ ...config, excludePaths: ["**/archive/**", "**/fresh.txt"] }));
+		const service = createIndexStatusService({ env, cwd: workspace, onRefreshed: () => {} });
+
+		const map = await service.indexMap();
+		const byPath = new Map(map.nodes.map((node) => [node.path, node]));
+
+		expect(byPath.get(join(docs, "archive"))).toMatchObject({ kind: "folder", state: "excluded" });
+		expect(byPath.get(join(docs, "fresh.txt"))).toMatchObject({ state: "excluded" });
+		// The pattern is not a folder of the workspace: it excludes nothing else.
+		expect(byPath.get(join(docs, "indexed.txt"))).toMatchObject({ state: "indexed" });
+		expect(byPath.get(join(docs, "sub", "deep.txt"))).toMatchObject({ state: "unindexed" });
+	});
 });
 
 function file(dir: string, name: string, state: IndexMapState): ScanFile {

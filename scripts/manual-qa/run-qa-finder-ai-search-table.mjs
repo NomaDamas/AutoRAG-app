@@ -1,5 +1,5 @@
 /**
- * Manual QA — markdown pipe tables in AI Search answers, in the real app.
+ * Manual QA — markdown pipe tables in AI Chat answers, in the real app.
  *
  * Deterministic lane: seeds the chat store (<userData>/chat-history/chats.json)
  * with one chat whose Quick answer carries a GFM pipe table (alignment, bold,

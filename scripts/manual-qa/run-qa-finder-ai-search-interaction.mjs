@@ -7,7 +7,7 @@
  * sees is deterministic. Real mouse and keyboard input; the files on disk and the requests the model receives
  * are checked, not just the pixels.
  *
- *   1. the mode menu sits left of the message box, defaults to Auto, lists Ask / Auto / Full and persists a choice;
+ *   1. the mode menu sits left of the message box, defaults to Full, lists Ask / Auto / Full and persists a choice;
  *   2. Ask: a shell call that deletes a file stops at an approval card in place of the message box; Deny keeps
  *      the file, "Deny and tell the model" hands the note over, Allow once runs it;
  *   3. Auto (no judgment model here) asks about the call, and says it could not classify it;
@@ -210,8 +210,8 @@ const chooseMode = async (label) => {
 log("app ready");
 
 // ── 1. The mode menu. ─────────────────────────────────────────────────────
-check("the mode defaults to auto", (await mode()) === "auto", await mode());
-check("the menu button shows Auto", (await modeButton.innerText()).includes("Auto"), await modeButton.innerText());
+check("the mode defaults to full", (await mode()) === "full", await mode());
+check("the menu button shows Full", (await modeButton.innerText()).includes("Full"), await modeButton.innerText());
 const geometry = await panel.evaluate((root) => {
 	const button = root.querySelector('button[aria-label="File change approval mode"]');
 	const input = root.querySelector('textarea[aria-label="Ask Dazzi"]');
@@ -224,7 +224,7 @@ check("the mode menu sits to the left of the message box, on its row", geometry 
 await modeButton.click();
 const items = await page.locator('[role="menuitemradio"]').allInnerTexts();
 check("the menu lists Ask, Auto and Full", items.length === 3 && /Ask/.test(items[0]) && /Auto/.test(items[1]) && /Full/.test(items[2]), JSON.stringify(items));
-check("Auto is the checked item", (await page.locator('[role="menuitemradio"][aria-checked="true"]').innerText()).includes("Auto"));
+check("Full is the checked item", (await page.locator('[role="menuitemradio"][aria-checked="true"]').innerText()).includes("Full"));
 await page.waitForTimeout(400);
 await shot("01-mode-menu");
 await page.keyboard.press("Escape");

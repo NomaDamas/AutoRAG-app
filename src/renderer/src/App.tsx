@@ -15,10 +15,11 @@ import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
-import { Inspector, type InspectorFamily } from "./components/Inspector";
+import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
+import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
-import { Toast } from "./components/primitives/Toast";
+import { Toast, type ToastTone } from "./components/primitives/Toast";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { FullDiskAccessDialog } from "./components/primitives/FullDiskAccessDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
@@ -33,7 +34,7 @@ import { percentPlacement, TAB_DRAG_TYPE, WorkspaceView } from "./components/Wor
 import { createDirectoryStore } from "./data/directory-store";
 import { createEntrySidecar } from "./data/entry-sidecar";
 import type { DirectoryData } from "./hooks/useDirectoryData";
-import { isTagPath, tagNameOf } from "../../shared/fs-contract";
+import { isTagPath, isVirtualListing, tagNameOf } from "../../shared/fs-contract";
 import { useFinderSource } from "./hooks/useFinderSource";
 import { TagCatalogContext, useTagCatalogLoader } from "./hooks/useTagCatalog";
 import { SidebarSettingsContext } from "./hooks/useSidebarSettings";
@@ -47,13 +48,18 @@ import { createControllerStore, usePaneController } from "./hooks/usePaneControl
 import { useAutomations } from "./hooks/useAutomations";
 import { dismissMagicActionDialog } from "./hooks/useMagicAction";
 import { useAutomationsShell } from "./hooks/useAutomationsShell";
+import { useInspectorChats } from "./hooks/useInspectorChats";
+import { useInteractionQueue } from "./hooks/useInteractionQueue";
+import { frontRequest } from "./state/interaction";
+import { useNow } from "./hooks/useNow";
 import { deliverToDock, mergeDelivery, type AiDelivery, type AiDeliveryRequest } from "./state/ai-delivery";
 import { attachmentsFromDrop, isAttachmentDrag } from "./state/attachments";
 import { toolbarShareControl, type FileActionTarget } from "./state/file-actions";
 import { sessionEvidencePaths } from "./state/evidence";
 import { inspectorEntryFor } from "./state/inspector-target";
+import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
 import { ruleTitle } from "./state/automations";
-import { watchSetFor } from "./state/live";
+import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
@@ -234,7 +240,12 @@ export function App(): ReactElement {
 	const [sourceStatus, setSourceStatus] = useState<SourceStatusMap>({});
 	/** The sidebar AI Search item is under an attachment drag. */
 	const [aiNavDropHover, setAiNavDropHover] = useState(false);
-	const [toast, setToast] = useState<string | null>(null);
+	const [toastState, setToastState] = useState<{ readonly message: string; readonly tone: ToastTone } | null>(null);
+	const toast = toastState?.message ?? null;
+	/** A plain notice (Figma 554:7353 with the green badge). */
+	const setToast = useCallback((message: string | null) => setToastState(message === null ? null : { message, tone: "ok" }), []);
+	/** Something failed: the same toast with the red badge. */
+	const showErrorToast = useCallback((message: string) => setToastState({ message, tone: "error" }), []);
 	/** The first-run layer is up (the main process passed the pending flag; the layer's `load` is authoritative). */
 	const [firstRun, setFirstRun] = useState(() => autorag.onboarding.pending);
 	/** The layer covers the whole window, so the Finder behind it takes no input. */
@@ -248,7 +259,7 @@ export function App(): ReactElement {
 			.catch(() => setTutorialsAllowed(false));
 	}, []);
 	const [tagColorsFdaOpen, setTagColorsFdaOpen] = useState(false);
-	const reportTagError = useCallback((error: unknown) => setToast(error instanceof Error ? error.message : String(error)), []);
+	const reportTagError = useCallback((error: unknown) => showErrorToast(error instanceof Error ? error.message : String(error)), [showErrorToast]);
 	const grantTagColors = useCallback(() => setTagColorsFdaOpen(true), []);
 	const tagCatalog = useTagCatalogLoader(source, reportTagError);
 
@@ -261,7 +272,7 @@ export function App(): ReactElement {
 		if (toast === null) return;
 		const timer = window.setTimeout(() => setToast(null), TOAST_MS);
 		return () => window.clearTimeout(timer);
-	}, [toast]);
+	}, [toastState]);
 
 	useEffect(() => {
 		let live = true;
@@ -578,13 +589,23 @@ export function App(): ReactElement {
 			// A citation chip with no evidence entry must never open a different
 			// result: the panel would silently show unrelated evidence.
 			if (!evidenceRef.current.some((item) => item.number === number)) {
-				setToast(t("finderComponents.evidenceNotFound", { number }));
+				showErrorToast(t("finderComponents.evidenceNotFound", { number }));
 				return;
 			}
 			setSelectedEvidence(number);
 			setInspectorVisible(true);
 		},
 		[t],
+	);
+
+	/** A source picked in the Inspector's evidence tabs: the AI Chat tab scrolls its text to where that source is cited. */
+	const [evidenceJump, setEvidenceJump] = useState<{ readonly number: number; readonly nonce: number } | null>(null);
+	const pickEvidenceTab = useCallback(
+		(number: number) => {
+			selectEvidence(number);
+			setEvidenceJump((current) => ({ number, nonce: (current?.nonce ?? 0) + 1 }));
+		},
+		[selectEvidence],
 	);
 
 	const evidenceSelectedNumber = evidence.find((item) => item.number === selectedEvidence)?.number ?? evidence[0]?.number ?? 1;
@@ -605,9 +626,9 @@ export function App(): ReactElement {
 		closingRef.current = null;
 		request.catch((error: unknown) => {
 			const code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
-			if (code === REMOTE_PREVIEW_FOLDER_CODE) setToast(translate("finderComponents.remotePreviewFolderUnsupported"));
-			else if (code === REMOTE_PREVIEW_UNSUPPORTED_CODE) setToast(translate("finderComponents.remotePreviewUnsupported"));
-			else setToast(error instanceof Error ? error.message : String(error));
+			if (code === REMOTE_PREVIEW_FOLDER_CODE) showErrorToast(translate("finderComponents.remotePreviewFolderUnsupported"));
+			else if (code === REMOTE_PREVIEW_UNSUPPORTED_CODE) showErrorToast(translate("finderComponents.remotePreviewUnsupported"));
+			else showErrorToast(error instanceof Error ? error.message : String(error));
 		});
 	}, [preview]);
 
@@ -701,10 +722,71 @@ export function App(): ReactElement {
 		path,
 		rules: automationsView.state.rules,
 	});
+	/**
+	 * The inspector's AI chat, one per folder tab (state/inspector-chat.ts). It is an ordinary AI Search chat: the same
+	 * history keeps it, and ⤢ opens it in an AI Search tab.
+	 */
+	const inspectorChats = useInspectorChats(language);
+	const { refresh: refreshInspectorChat, prune: pruneInspectorChats } = inspectorChats;
+	const chatTabId = focusedTab !== null && focusedTab.path !== AI_SEARCH_PATH ? focusedTab.id : null;
+	const chatNow = useNow(chatTabId !== null && inspectorVisible, 30_000);
+	const chatTab = chatTabId === null ? EMPTY_INSPECTOR_CHAT_TAB : inspectorChats.tab(chatTabId);
+	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
+	const chatRunning = inspectorChats.runningTab !== null;
+	const chatLive = chatTabId !== null && inspectorChats.runningTab === chatTabId;
+	/** What the agent of this tab's running chat waits on (an `ask_user` question or a file-change approval), if anything. */
+	const interactionQueue = useInteractionQueue();
+	const chatRequest = chatLive && inspectorChats.runSearchId !== null ? frontRequest(interactionQueue, inspectorChats.runSearchId) : null;
+	/** What a question is about: every selected item of a multi-selection, else the inspector's one entry. */
+	const selectedForChat = (finder?.selectedEntries.length ?? 0) > 1 ? (finder?.selectedEntries ?? []) : inspectorEntry === null ? [] : [inspectorEntry];
+	const chatTargets: readonly ChatAttachment[] = selectedForChat.map((entry) => ({
+		kind: entry.kind === "folder" ? "folder" : "file",
+		id: entry.path,
+		name: entry.name,
+	}));
+	const chatPending = pendingAttachments(chatTab, chatTargets);
+	/**
+	 * The folder the tab shows, told to the agent as a hint when a question is asked with nothing selected. Not for a
+	 * search result list or another virtual listing (no folder is being looked at), and never an app tab.
+	 */
+	const viewingFolder = chatTargets.length === 0 && finder !== undefined && !finder.searching && isFilesystemPath(path) && !isVirtualListing(path) ? path : undefined;
+	/**
+	 * A multi-selection's index button: shown when every selected item can be toggled. Like the single file's button, an
+	 * item whose status has not arrived counts as a toggleable file in the index.
+	 */
+	const selectionIndexStates = (finder?.selectedEntries.length ?? 0) > 1
+		? (finder?.selectedEntries ?? []).map((entry) => {
+				const status = finder?.indexStatusFor(entry.path) ?? null;
+				return status === null ? { toggleable: entry.kind === "file", included: true } : { toggleable: status.toggleable, included: !status.excluded };
+			})
+		: [];
+	const selectionIndex =
+		selectionIndexStates.length > 0 && selectionIndexStates.every((state) => state.toggleable)
+			? { included: selectionIndexStates.every((state) => state.included) }
+			: null;
+	const chatMode = chatTab.chat === null ? "info" : chatTab.mode;
+	// A question asked in the AI Search tab showing the same chat shows here once the inspector is back on screen.
+	useEffect(() => {
+		if (chatTabId !== null && inspectorVisible) refreshInspectorChat(chatTabId);
+	}, [chatTabId, inspectorVisible, chatMode, refreshInspectorChat]);
+	useEffect(() => {
+		pruneInspectorChats(tabs.map((tab) => tab.id));
+	}, [tabs, pruneInspectorChats]);
+	const openChatInAiTab = useCallback(
+		(chatId: string) => {
+			finder?.openAiSearch();
+			deliverToAi({ chat: chatId });
+		},
+		[deliverToAi, finder],
+	);
+	const openAiHistory = useCallback(() => {
+		finder?.openAiSearch();
+		deliverToAi({ history: true });
+	}, [deliverToAi, finder]);
 	/** Inspector action bar: open, share, and edits run on the focused row; a multi-selection's Compress packs every selected row. */
 	const runInspectorAction = useCallback(
 		(target: FileActionTarget, anchor: ActionAnchor | null) => {
-			if ((finder?.selectedEntries.length ?? 0) > 1) finder?.runSelectionAction(target);
+			if ((finder?.selectedEntries.length ?? 0) > 1) finder?.runSelectionAction(target, anchor);
 			else if (inspectorEntry !== null) finder?.runEntryAction(inspectorEntry, target, anchor);
 		},
 		[finder, inspectorEntry],
@@ -774,7 +856,7 @@ export function App(): ReactElement {
 		openAiDraft,
 		openFolder: (folder) => finder?.openFolder(folder),
 		showInList: () => finder?.showAutomations(),
-		onError: setToast,
+		onError: showErrorToast,
 	});
 	const toolbarTitle =
 		path === SETTINGS_PATH
@@ -784,7 +866,7 @@ export function App(): ReactElement {
 				: aiTabActive
 					? t("places.aiSearch")
 					: finder?.searching === true
-						? t("finderComponents.searchTitle", { query: finder.query })
+						? t("finderComponents.searchToolbarTitle")
 						: finder?.inTrashLocation === true
 							? t("places.trash")
 							: isTagPath(path) ? tagNameOf(path) : basename(path);
@@ -880,6 +962,9 @@ export function App(): ReactElement {
 							onBack={() => setWorkspace((current) => closeSettingsInWorkspace(current))}
 							inspectorHidden={!inspectorVisible}
 							onShowInspector={() => setInspectorVisible(true)}
+							sidebarHidden={!sidebarVisible}
+							onHideSidebar={() => setSidebarVisible(false)}
+							onShowSidebar={() => setSidebarVisible(true)}
 							searchRef={settingsSearchRef}
 						/>
 					</div>
@@ -957,6 +1042,7 @@ export function App(): ReactElement {
 												active={id === activeAiTabId}
 												visible={box !== undefined}
 												selectedEvidence={evidence.length === 0 ? null : evidenceSelectedNumber}
+												evidenceJump={evidenceJump}
 												onSelectEvidence={selectEvidence}
 												onPublish={publishEvidence}
 												imageActions={imageActions}
@@ -980,6 +1066,9 @@ export function App(): ReactElement {
 				<InspectorColumn visible={inspectorVisible} width={inspectorWidth} onHide={() => setInspectorVisible(false)} surface={settingsAssistantDock !== null ? "window" : "subtle"}>
 						{settingsAssistantDock !== null ? (
 							<SettingsAssistantSlot dock={settingsAssistantDock} />
+						) : settingsOpen ? (
+							// Settings pages other than 사이드바, 우클릭 메뉴 and 단축키 have no AI: the sidebar shows only the faded mark (Figma 367:8769).
+							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
 							<AutomationInspector rule={automations.selectedRule} onEdit={automations.edit} onDelete={automations.askDelete} />
 						) : (
@@ -991,7 +1080,13 @@ export function App(): ReactElement {
 								onToggleIndex={(entry) => finder?.toggleIndex(entry)}
 								onTrash={(entry) => finder?.trashEntry(entry)}
 								onCopyPath={(entry) => finder?.copyEntryPath(entry)}
-								onAskAi={askAi}
+								onAskAi={(entry) => {
+									if (chatTabId === null) askAi(entry);
+									else {
+										const target: ChatAttachment = { kind: entry.kind === "folder" ? "folder" : "file", id: entry.path, name: entry.name };
+										void inspectorChats.summarize(chatTabId, [target], pendingAttachments(chatTab, [target]));
+									}
+								}}
 								actionCapabilities={finder?.actionCapabilities ?? NO_CAPABILITIES}
 								onAction={runInspectorAction}
 								loadOpenWithApplications={(entry) => finder?.loadOpenWithApplications(entry) ?? Promise.resolve([])}
@@ -1000,7 +1095,7 @@ export function App(): ReactElement {
 								view={aiTabActive ? "evidence" : "info"}
 								evidence={evidence}
 								evidenceSelected={evidenceSelectedNumber}
-								onSelectEvidence={selectEvidence}
+								onSelectEvidence={pickEvidenceTab}
 								onRevealPath={(target, excerpts) => {
 									if (excerpts !== undefined) openQuickLook({ path: target, name: basename(target), anchor: excerpts });
 									else finder?.revealEvidence(target);
@@ -1010,11 +1105,67 @@ export function App(): ReactElement {
 								evidenceFolderCount={localEvidencePaths.length}
 								onOpenEvidenceFolder={() => finder?.openEvidenceFolder(localEvidencePaths)}
 								automations={{ rules: automationsView.state.rules, onEdit: automations.edit, onDelete: automations.askDelete, onMenu: automations.openRuleMenu }}
+								selectionIndex={selectionIndex}
+								onSetSelectionIndexed={(include) => finder?.setSelectionIndexed(include)}
+								onTrashSelection={() => finder?.trashSelection()}
+								chatDock={
+									chatTabId === null ? undefined : (
+										<InspectorChatDock
+											tab={chatTab}
+											now={chatNow}
+											targets={chatTargets}
+											running={chatRunning}
+											request={chatRequest}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatTargets, true, viewingFolder)}
+											onSummarize={() => {
+												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatTargets, true);
+											}}
+											onStop={inspectorChats.stop}
+											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
+										/>
+									)
+								}
+								chatView={
+									chatTabId === null || chatTab.chat === null || chatTab.mode !== "chat" ? null : (
+										<InspectorChatView
+											tab={chatTab}
+											targetName={
+												selectedForChat.length > 1 ? t("finder.itemsCount", { count: selectedForChat.length }) : (inspectorEntry?.name ?? basename(path))
+											}
+											pending={chatPending}
+											running={chatLive}
+											request={chatRequest}
+											imageActions={imageActions}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending, false, chatTargets.length === 0 ? viewingFolder : undefined)}
+											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
+											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
+											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onStop={inspectorChats.stop}
+											onBack={() => inspectorChats.setMode(chatTabId, "info")}
+											onNewChat={() => inspectorChats.reset(chatTabId)}
+											onExpand={() => {
+												if (chatTab.chat !== null) openChatInAiTab(chatTab.chat.chatId);
+											}}
+											onOpenChat={(chatId) => inspectorChats.open(chatTabId, chatId)}
+											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
+											onReveal={(target) => finder?.revealEvidence(target)}
+											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}
+										/>
+									)
+								}
 							/>
 						)}
 				</InspectorColumn>
 				{toast === null && automations.undoToast === null ? null : (
-					<Toast message={automations.undoToast?.message ?? toast ?? ""} action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }} />
+					<Toast
+						message={automations.undoToast?.message ?? toast ?? ""}
+						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : "ok"}
+						action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }}
+						onClose={() => {
+							setToastState(null);
+							if (automations.undoToast !== null) automations.dismissUndoToast();
+						}}
+					/>
 				)}
 				{sidebarVisible || settingsOpen ? (
 					<PaneGrip

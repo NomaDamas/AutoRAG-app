@@ -59,7 +59,7 @@ function renderSidebar(sidebar: SidebarSettings, withFavorites = true): Handlers
 	const onPin = vi.fn();
 	const onMove = vi.fn();
 	const onRowMenu = vi.fn();
-	// The AI Search item claims a Finder drag, over and on drop, the way App's handlers do: preventDefault.
+	// The AI Chat item claims a Finder drag, over and on drop, the way App's handlers do: preventDefault.
 	const aiSearchDragOver = vi.fn((event: SyntheticEvent) => event.preventDefault());
 	const aiSearchDrop = vi.fn((event: SyntheticEvent) => event.preventDefault());
 	const drop = { hovered: false, onDragOver: aiSearchDragOver, onDragLeave: vi.fn(), onDrop: aiSearchDrop };
@@ -215,10 +215,10 @@ describe("Favorites: dropping a folder between rows", () => {
 		expect(onPin).not.toHaveBeenCalled();
 	});
 
-	it("leaves a drop on the AI Search item to AI Search", () => {
+	it("leaves a drop on the AI Chat item to AI Chat", () => {
 		const { onPin, aiSearchDragOver, aiSearchDrop } = renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
 		layoutRows();
-		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Search");
+		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Agent");
 		const data = folderDrag("/x/A");
 		fire("dragover", aiSearch as Element, { y: 90, data });
 		expect(aiSearchDragOver).toHaveBeenCalled();
@@ -240,7 +240,7 @@ describe("Favorites: dropping a folder between rows", () => {
 		expect(lines()).toEqual([]);
 	});
 
-	it("keeps the insertion line apart from the AI Search ring, which marks a drop ON an item", () => {
+	it("keeps the insertion line apart from the AI Chat ring, which marks a drop ON an item", () => {
 		renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
 		layoutRows();
 		fire("dragover", rowOf("place:desktop"), { y: 150, data: folderDrag("/x/A") });
@@ -431,7 +431,7 @@ describe("Finder row drag over Favorites", () => {
 	it("keeps the move cursor, and ⌥ copy, for a target that accepts without naming a verb", () => {
 		renderSidebar(DEFAULT_SIDEBAR_SETTINGS);
 		layoutRows();
-		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Search") as Element;
+		const aiSearch = [...host.querySelectorAll("button")].find((button) => button.getAttribute("aria-label") === "AI Agent") as Element;
 		drag([FOLDER], aiSearch, 90);
 		expect(cursor()).toBe("move");
 		pointer("pointermove", { x: 41, y: 90, alt: true });

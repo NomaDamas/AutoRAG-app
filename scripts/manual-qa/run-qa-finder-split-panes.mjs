@@ -13,7 +13,7 @@
  *      focus returns to the pane of the tab focused before — not a neighbor;
  *   5. dropping a tab on another pane's strip or body merges it there, and its
  *      emptied pane closes back to full width;
- *   6. AI Search is a tab like any other: it splits off beside a folder, its chat sits inside its pane, and its
+ *   6. AI Chat is a tab like any other: it splits off beside a folder, its chat sits inside its pane, and its
  *      draft survives moving between panes; ⌘K focuses the AI tab on screen. Settings is a tab that takes over
  *      the whole window instead of docking, and Back restores the split layout;
  *   7. an Evidence title opens the source folder as a new tab in the pane of
@@ -290,17 +290,17 @@ try {
 	state = await panes(page);
 	check("dropping on a pane body's middle merges into that pane", state.length === 1 && state[0].tabs.length === 3);
 
-	// 6. AI Search as a tab: show it in a tab, split it off to the right, type a draft, move it back.
-	await page.locator(".sidebar__item", { hasText: "AI Search" }).click();
+	// 6. AI Chat as a tab: show it in a tab, split it off to the right, type a draft, move it back.
+	await page.locator(".sidebar__item", { hasText: "AI Chat" }).click();
 	await page.waitForSelector(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`);
 	const aiTabIndex = (await panes(page))[0].tabs.findIndex((entry) => entry.active);
 	await dragTab(page, tabIn(page, left.id, aiTabIndex), [await bodyPoint(page, left.id, 0.96, 0.5)], "08-ai-drag");
 	state = await panes(page);
-	const aiPane = state.find((pane) => pane.tabs.some((entry) => entry.title === "AI Search"));
+	const aiPane = state.find((pane) => pane.tabs.some((entry) => entry.title === "AI Chat"));
 	const folderPane = state.find((pane) => pane !== aiPane);
 	const aiBox = await page.locator(AI_PANEL).boundingBox();
 	check(
-		"the AI Search chat sits inside its own pane, under its strip",
+		"the AI Chat chat sits inside its own pane, under its strip",
 		aiPane !== undefined && Math.abs(aiBox.x - aiPane.x) <= 1 && Math.abs(aiBox.width - aiPane.width) <= 1 && aiBox.y >= aiPane.y + 24,
 		JSON.stringify({ aiBox, aiPane: aiPane && { x: aiPane.x, y: aiPane.y, width: aiPane.width } }),
 	);
@@ -312,7 +312,7 @@ try {
 	await page.keyboard.press(chord("k"));
 	await sleep(300);
 	state = await panes(page);
-	check("⌘K focuses the AI Search tab on screen in the other pane", state.find((pane) => pane.id === aiPane.id).focused && state.flatMap((pane) => pane.tabs).filter((entry) => entry.title === "AI Search").length === 1);
+	check("⌘K focuses the AI Chat tab on screen in the other pane", state.find((pane) => pane.id === aiPane.id).focused && state.flatMap((pane) => pane.tabs).filter((entry) => entry.title === "AI Chat").length === 1);
 
 	// 7. Evidence → new tab in the last focused tab's pane (the AI pane), folder pane untouched.
 	await page.locator('[aria-label="Chat history"]').click();
@@ -334,7 +334,7 @@ try {
 	await page.screenshot({ path: join(EVIDENCE, "10-evidence-reveal.png") });
 
 	// The AI tab's chat survives moving into the folder pane's strip.
-	const aiIndex = revealed.tabs.findIndex((entry) => entry.title === "AI Search");
+	const aiIndex = revealed.tabs.findIndex((entry) => entry.title === "AI Chat");
 	const folderStrip = await tabIn(page, folderPane.id, 0).boundingBox();
 	await dragTab(page, tabIn(page, aiPane.id, aiIndex), [[folderStrip.x + folderStrip.width - 10, folderStrip.y + folderStrip.height / 2]]);
 	const draft = await page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`).inputValue();

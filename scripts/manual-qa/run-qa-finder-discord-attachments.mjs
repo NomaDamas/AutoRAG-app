@@ -25,6 +25,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { homeEnv } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 const EVIDENCE = process.env.QA_OUT ? join(process.env.QA_OUT, "discord-attachments") : join(ROOT, ".omo/evidence/ai-finder-app/qa-discord-attachments");
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -204,11 +205,11 @@ try {
 
 	// 8. Korean.
 	await page.locator(".sidebar__item--settings").click();
-	await page.waitForSelector('select[aria-label="App Language"]', { timeout: 15_000 }).catch(async () => {
+	await page.waitForSelector(selectField("App Language"), { timeout: 15_000 }).catch(async () => {
 		await page.locator(".settings-nav-item", { hasText: "General" }).click();
-		await page.waitForSelector('select[aria-label="App Language"]', { timeout: 15_000 });
+		await page.waitForSelector(selectField("App Language"), { timeout: 15_000 });
 	});
-	await page.selectOption('select[aria-label="App Language"]', "ko");
+	await pickSelect(page.locator(selectField("App Language")), "ko");
 	await page.waitForFunction(() => document.querySelector(".sidebar__item--settings")?.getAttribute("aria-label") === "설정", null, { timeout: 10_000 });
 	const korean = (await discordRows().allInnerTexts()).map((text) => text.trim());
 	check("the row keeps its product name in Korean", JSON.stringify(korean) === JSON.stringify(["Discord"]), JSON.stringify(korean));

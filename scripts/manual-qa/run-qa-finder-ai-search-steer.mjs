@@ -1,5 +1,5 @@
 /**
- * Manual QA — steering a running AI Search (issue #176), in the real app.
+ * Manual QA — steering a running AI Chat (issue #176), in the real app.
  *
  * Deterministic lane: replaces main's `search:start` / `search:steer` /
  * `search:cancel` handlers with a scripted run that the lane drives step by

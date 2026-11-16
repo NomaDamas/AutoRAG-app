@@ -1,4 +1,5 @@
 import { useEffect, type ChangeEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
+import { emphasizeTerms } from "../lib/mark-terms";
 import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
 import { useDirectoryData, useEntrySidecar } from "../hooks/useDirectoryData";
@@ -98,6 +99,7 @@ export function FileRow({
 	zoneFocused,
 	flash,
 	searching,
+	highlight,
 	renameDraft,
 	stackCount,
 	stackOpen,
@@ -115,6 +117,8 @@ export function FileRow({
 	readonly zoneFocused: boolean;
 	readonly flash: boolean;
 	readonly searching: boolean;
+	/** The search text while this list shows results: its terms are bold in the name (Figma 428:1845). */
+	readonly highlight?: string;
 	readonly renameDraft: string | null;
 	readonly stackCount: number;
 	readonly stackOpen: boolean;
@@ -256,7 +260,7 @@ export function FileRow({
 							isVariant && "text-ink-muted",
 						)}
 					>
-						{entry.name}
+						{highlight === undefined ? entry.name : emphasizeTerms(entry.name, highlight)}
 					</span>
 				) : (
 					<input

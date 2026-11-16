@@ -10,11 +10,13 @@ config, and the `AutoRAGAgent`/`AutoRAGLite` classes keep their identifiers.
 Do not rename those backend identifiers, and do not introduce a third product
 name on a user-facing surface.
 
-The logo is the sunflower-with-sunglasses mark. `build/` holds the app icon set
+The logo is the sunflower-with-sunglasses mark on a glass tile. `build/` holds the app icon set
 (`icon.icns`, `icon.ico`, `icon.png`, `icons/<size>.png`) and
 `src/renderer/src/assets/dazzi-logo.png` is the transparent mark the renderer
-draws; regenerate all of them from one transparent master rather than editing
-one in isolation. The macOS app icon is the Icon Composer bundle `build/icon.icon`
+draws; regenerate all of them from the two transparent masters
+(`build/icon.png`: the glass tile; `build/brand/dazzi-mark.png`: the sunflower alone) with
+`node scripts/brand/make-brand-assets.mjs`, then `node scripts/brand/make-mac-icon.mjs`, rather than editing
+one in isolation (`test/brand-assets.test.ts` fails when a derived file disagrees with the masters). The macOS app icon is the Icon Composer bundle `build/icon.icon`
 (`node scripts/brand/make-mac-icon.mjs` rebuilds it from `icon.png`; compiling it needs Xcode 26+).
 macOS 26 draws a legacy `icon.icns` shrunk inside a grey plate, so never point
 `mac.icon` back at the `.icns`.
@@ -43,7 +45,10 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.8:
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
+by config resolution and applied by the refresh walk (the app reads it the same way, `src/main/path-exclusion.ts`); with a reranker the
+baseline search shows it the union of MinSync's dense and SPLADE candidates; the MCP server adds `autorag.convert`/`.formats` and caps repeated
+diagnostics; `AUTORAG_AUTH_MODE=environment` makes model resolution ignore stored credentials. v2.13.8:
 `refresh.schedule` limits background indexing to AC power, local time windows, and weekdays (`checkIndexSchedule` from
 `@autorag/librarian/core` is the gate for a host with its own scheduler, such as the app's OS job); the agent's exact `calculator` tool; the
 record cut that spreads search hits across documents, on by default (`limits.recordCut`). v2.13.7:

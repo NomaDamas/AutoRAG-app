@@ -1,4 +1,4 @@
-// Live AI Search QA: Stop must end the turn at once. Pressing the composer's
+// Live AI Chat QA: Stop must end the turn at once. Pressing the composer's
 // stop button mid-run has to clear every generating indicator — the pending
 // shimmer and the "Thinking…" row — instead of hanging, show the stopped notice, and
 // never let the animation return while the backend unwinds.
@@ -23,7 +23,7 @@ const SETTLE_WATCH_MS = 2_500;
 const QUERY = "환불 예외 승인 규칙을 문서에서 찾아 요약해줘";
 
 if (!process.env.OPENROUTER_API_KEY) {
-	console.error("OPENROUTER_API_KEY is required for the live AI Search QA.");
+	console.error("OPENROUTER_API_KEY is required for the live AI Chat QA.");
 	process.exit(2);
 }
 

@@ -2,10 +2,8 @@
  * Settings → 일반.
  *
  * App-level preferences write through `window.autorag.settings.set` (the same
- * store the Finder reads), and the document-language list edits the shared
- * AutoRAG config's global `languages` array through `LanguageSettings` (leaf
- * `configPatch` writes, so unknown config keys survive). Remote access has its
- * own page (`RemoteAccessPage`).
+ * store the Finder reads). The document languages live on 문서 읽기 and remote
+ * access on its own page (`RemoteAccessPage`).
  */
 
 import { useEffect, useState, type ReactElement } from "react";
@@ -13,11 +11,19 @@ import { useTranslation } from "react-i18next";
 import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
-import { LanguageSettings } from "./LanguageSettings";
 import { QuickSearchSettingsSection } from "./QuickSearchSettings";
-import { Row, Section, SettingsPageHead } from "./SettingsKit";
+import { PlainDivider, PlainRow, PlainSection, SettingsPageHead } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { Switch } from "../primitives/Switch";
 import { hostPlatform } from "../../lib/shortcuts";
+
+/** Each interface language in its own name, so it can be found whatever language the app is in. */
+const APP_LANGUAGE_OPTIONS = [
+	{ value: "ko", label: "한국어" },
+	{ value: "en", label: "English" },
+	{ value: "ja", label: "日本語" },
+	{ value: "zh", label: "简体中文" },
+] as const;
 
 const autorag = window.autorag;
 export function GeneralPage({
@@ -42,62 +48,62 @@ export function GeneralPage({
 			onSettingsError(t("settingsCore.general.osMenuError", { error: cause instanceof Error ? cause.message : String(cause) }));
 		}
 	}
+	const quickSearch = typeof autorag.quickSearch?.status === "function";
+	const osMenu = hostPlatform() === "darwin" || hostPlatform() === "win32";
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.general")} description={t("settingsCore.general.description")} />
-			<Section title={t("settingsCore.general.screenTitle")}>
-				<Row name={t("settingsCore.general.appearanceName")} hint={t("settingsCore.general.appearanceHint")}>
-					<select className="linear-select" aria-label={t("settingsCore.general.appearanceName")} value={appSettings.appearance} onChange={(event) => {
-						const appearance = event.currentTarget.value;
-						if (appearance === "light" || appearance === "dark") void setApp({ appearance });
-					}}>
-						<option value="light">{t("settingsCore.general.appearanceLight")}</option>
-						<option value="dark">{t("settingsCore.general.appearanceDark")}</option>
-					</select>
-				</Row>
-				<Row name={t("settingsCore.general.appLanguage")} hint={t("settingsCore.general.appLanguageHint")}>
-					<select className="linear-select" aria-label={t("settingsCore.general.appLanguage")} value={appSettings.language} onChange={(event) => {
-						const language = event.currentTarget.value;
-						if (isAppLanguage(language)) void setApp({ language });
-					}}>
-						<option value="ko">한국어</option>
-						<option value="en">English</option>
-						<option value="ja">日本語</option>
-						<option value="zh">简体中文</option>
-					</select>
-				</Row>
-			</Section>
-			<Section title={t("settingsCore.general.finderTitle")} description={t("settingsCore.general.finderDesc")}>
-				<Row name={t("settingsCore.general.showHiddenFiles")} hint={t("settingsCore.general.showHiddenFilesHint")}>
-					<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
-				</Row>
-			</Section>
-			{typeof autorag.quickSearch?.status === "function" ? <QuickSearchSettingsSection settings={appSettings.quickSearch} setApp={setApp} /> : null}
-			<Section title={t("settingsCore.general.launchTitle")}>
-				<Row name={t("settingsCore.general.launchAtLogin")} hint={t("settingsCore.general.launchAtLoginHint")}>
-					<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel={t("settingsCore.general.launchAtLogin")} />
-				</Row>
-				{hostPlatform() === "darwin" || hostPlatform() === "win32" ? (
-					<Row name={t("settingsCore.general.osMenu")} hint={t("settingsCore.general.osMenuHint")}>
-						<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel={t("settingsCore.general.osMenu")} />
-					</Row>
+			{/* Figma 416:12228: 화면, 파일, 빠른 검색, 시작 및 업데이트, 개인정보; each a titled group of plain rows, ruled apart. */}
+			<div className="plain-sections">
+				<PlainSection title={t("settingsCore.general.screenTitle")} alignTop>
+					<PlainRow name={t("settingsCore.general.appearanceName")} hint={t("settingsCore.general.appearanceHint")}>
+						<SelectField className="linear-select settings-plain-select" aria-label={t("settingsCore.general.appearanceName")} value={appSettings.appearance} options={[{ value: "light", label: t("settingsCore.general.appearanceLight") }, { value: "dark", label: t("settingsCore.general.appearanceDark") }]} onValueChange={(appearance) => {
+							if (appearance === "light" || appearance === "dark") void setApp({ appearance });
+						}} />
+					</PlainRow>
+					<PlainRow name={t("settingsCore.general.appLanguage")} hint={t("settingsCore.general.appLanguageHint")}>
+						<SelectField className="linear-select settings-plain-select" aria-label={t("settingsCore.general.appLanguage")} value={appSettings.language} options={APP_LANGUAGE_OPTIONS} onValueChange={(language) => {
+							if (isAppLanguage(language)) void setApp({ language });
+						}} />
+					</PlainRow>
+				</PlainSection>
+				<PlainDivider />
+				<PlainSection title={t("settingsCore.general.finderTitle")}>
+					<PlainRow name={t("settingsCore.general.showHiddenFiles")} hint={t("settingsCore.general.showHiddenFilesHint")}>
+						<Switch checked={appSettings.showHiddenFiles} onChange={() => void setApp({ showHiddenFiles: !appSettings.showHiddenFiles })} ariaLabel={t("settingsCore.general.showHiddenFiles")} />
+					</PlainRow>
+				</PlainSection>
+				{quickSearch ? (
+					<>
+						<PlainDivider />
+						<QuickSearchSettingsSection settings={appSettings.quickSearch} setApp={setApp} />
+					</>
 				) : null}
-				<Row name={t("settingsCore.general.autoUpdates")} hint={t("settingsCore.general.autoUpdatesHint")}>
-					<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel={t("settingsCore.general.autoUpdates")} />
-				</Row>
-				<AppUpdateRow />
-			</Section>
-			<Section title={t("settingsCore.general.privacyTitle")}>
-				<Row name={t("settingsCore.general.errorReporting")} hint={t("settingsCore.general.errorReportingHint")}>
-					<Switch checked={appSettings.errorReporting} onChange={() => void setApp({ errorReporting: !appSettings.errorReporting })} ariaLabel={t("settingsCore.general.errorReporting")} />
-				</Row>
-				<Row name={t("settingsCore.general.usageAnalytics")} hint={t("settingsCore.general.usageAnalyticsHint")}>
-					<Switch checked={appSettings.usageAnalytics} onChange={() => void setApp({ usageAnalytics: !appSettings.usageAnalytics })} ariaLabel={t("settingsCore.general.usageAnalytics")} />
-				</Row>
-			</Section>
-			<Section title={t("settingsCore.general.docLanguagesTitle")} description={t("settingsCore.general.docLanguagesDesc")}>
-				<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsCore.general.docLanguagesTitle")} hint={t("settingsCore.general.docLanguagesHint")} onSaved={onSaved} fallback={["ko", "en"]} />
-			</Section>
+				<PlainDivider />
+				<PlainSection title={t("settingsCore.general.launchTitle")}>
+					<PlainRow name={t("settingsCore.general.launchAtLogin")} hint={t("settingsCore.general.launchAtLoginHint")}>
+						<Switch checked={appSettings.launchAtLogin} onChange={() => void setApp({ launchAtLogin: !appSettings.launchAtLogin })} ariaLabel={t("settingsCore.general.launchAtLogin")} />
+					</PlainRow>
+					{osMenu ? (
+						<PlainRow name={t("settingsCore.general.osMenu")} hint={t("settingsCore.general.osMenuHint")}>
+							<Switch checked={appSettings.osMenuIntegration} onChange={() => void setApp({ osMenuIntegration: !appSettings.osMenuIntegration })} ariaLabel={t("settingsCore.general.osMenu")} />
+						</PlainRow>
+					) : null}
+					<PlainRow name={t("settingsCore.general.autoUpdates")} hint={t("settingsCore.general.autoUpdatesHint")}>
+						<Switch checked={appSettings.autoInstallUpdates} onChange={() => void setApp({ autoInstallUpdates: !appSettings.autoInstallUpdates })} ariaLabel={t("settingsCore.general.autoUpdates")} />
+					</PlainRow>
+					<AppUpdateRow />
+				</PlainSection>
+				<PlainDivider />
+				<PlainSection title={t("settingsCore.general.privacyTitle")}>
+					<PlainRow name={t("settingsCore.general.errorReporting")} hint={t("settingsCore.general.errorReportingHint")}>
+						<Switch checked={appSettings.errorReporting} onChange={() => void setApp({ errorReporting: !appSettings.errorReporting })} ariaLabel={t("settingsCore.general.errorReporting")} />
+					</PlainRow>
+					<PlainRow name={t("settingsCore.general.usageAnalytics")} hint={t("settingsCore.general.usageAnalyticsHint")}>
+						<Switch checked={appSettings.usageAnalytics} onChange={() => void setApp({ usageAnalytics: !appSettings.usageAnalytics })} ariaLabel={t("settingsCore.general.usageAnalytics")} />
+					</PlainRow>
+				</PlainSection>
+			</div>
 		</>
 	);
 }
@@ -159,8 +165,8 @@ function AppUpdateRow(): ReactElement | null {
 			</button>
 		);
 	return (
-		<Row name={t("settingsCore.general.appUpdate")} hint={hint}>
+		<PlainRow name={t("settingsCore.general.appUpdate")} hint={hint}>
 			{action}
-		</Row>
+		</PlainRow>
 	);
 }

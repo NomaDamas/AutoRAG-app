@@ -22,6 +22,7 @@ export function createOnboardingBridge(ipcRenderer: IpcRenderer): OnboardingBrid
 			ipcRenderer.on(ONBOARDING_CHANNELS.progress, handler);
 			return () => ipcRenderer.removeListener(ONBOARDING_CHANNELS.progress, handler);
 		},
+		pickPaths: (kind) => ipcRenderer.invoke(ONBOARDING_CHANNELS.pickPaths, kind),
 		complete: () => ipcRenderer.invoke(ONBOARDING_CHANNELS.complete),
 	};
 }

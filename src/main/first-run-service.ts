@@ -13,6 +13,7 @@ import {
 	type FirstRunFolderKind,
 	type OnboardingSnapshot,
 	type PermissionStatus,
+	type PickPathKind,
 	type SetupStage,
 	type SetupStatus,
 } from "../shared/onboarding-contract";
@@ -203,6 +204,8 @@ export interface FirstRunServiceDeps {
 	readonly openExternal: (url: string) => Promise<void>;
 	/** The OS folder chooser: absolute paths, empty when cancelled. */
 	readonly pickFolders: () => Promise<readonly string[]>;
+	/** The native chooser Settings → 검색 범위 uses for paths to leave out of the index. */
+	readonly pickPaths?: (kind: PickPathKind) => Promise<readonly string[]>;
 	readonly startPowerSaveBlocker: () => number;
 	readonly stopPowerSaveBlocker: (id: number) => void;
 	readonly probeFullDiskAccess: () => Promise<boolean>;
@@ -220,6 +223,8 @@ export interface FirstRunService {
 	folders(): Promise<readonly FirstRunFolder[]>;
 	/** The folders the person picked in the OS chooser that exist on disk. */
 	pickFolders(): Promise<readonly { readonly path: string }[]>;
+	/** Absolute paths that exist among those the person picked in the native chooser; none when cancelled. */
+	pickPaths(kind: PickPathKind): Promise<readonly string[]>;
 	permissions(): Promise<PermissionStatus>;
 	openFullDiskAccess(): Promise<void>;
 	/** `folders` are paths from {@link folders}; others are ignored. Omitted: the last run's folders, else the default ones. */
@@ -997,6 +1002,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		load: async () => ({ pending, tutorials: deps.env.AUTORAG_SKIP_ONBOARDING !== "1" }),
 		folders: async () => offeredFolders(),
 		pickFolders: async () => (await deps.pickFolders()).filter((path) => isAbsolute(path) && existsSync(path)).map((path) => ({ path })),
+		pickPaths: async (kind) => ((await deps.pickPaths?.(kind)) ?? []).filter((path) => isAbsolute(path) && existsSync(path)),
 		permissions: async () => ({
 			platform: deps.platform,
 			fullDiskAccess: deps.platform === "darwin" ? await deps.probeFullDiskAccess() : null,
