@@ -3086,12 +3086,12 @@
       "notFetchedYet": "No content fetched yet",
       "notOnThisComputer": "Not available on this computer",
       "importedNone": "No {{noun}} imported",
-      "liveQuery": "Queried live on search",
+      "liveQuery": "Looked up live on every search",
       "appNeeds": "{{name}} desktop app required"
     },
     "indexing": {
       "title": "Indexing",
-      "desc": "Choose the folders to search, see how far reading has come, and keep the contents up to date.",
+      "desc": "Manage the folders to search, indexing progress, and how often content is refreshed.",
       "progress": "Progress",
       "refreshStatus": "Refresh status",
       "localFolder": "Local folders",
@@ -3102,7 +3102,7 @@
       "rowRefreshAria": "Update {{id}} now",
       "rowRefreshTitle": "Update now",
       "localUpdating": "Refreshing…",
-      "syncAll": "Update all now",
+      "syncAll": "Refresh All",
       "scheduleTitle": "Automatic refresh conditions",
       "scheduleAcOnlyName": "Only while plugged in",
       "scheduleAcOnlyHint": "Skip automatic refreshes on battery power. Refresh now always works.",
@@ -3123,10 +3123,12 @@
       "schedulePausedBattery": "Waiting for power: your indexing schedule allows it only while plugged in (held back {{ago}}).",
       "schedulePausedWindow": "Waiting for the allowed hours: your indexing schedule held the refresh back {{ago}}.",
       "schedulePausedDay": "Waiting for an allowed day: your indexing schedule held the refresh back {{ago}}.",
-      "keepTitle": "Keep up to date",
-      "keepDesc": "How often document contents are read again. Press ↻ to read now.",
+      "keepTitle": "Refresh",
+      "keepDesc": "Set how often changes are fetched again. Use the refresh button to refresh right away.",
       "connectApp": "Connect an app",
-      "connectAppHint": "Choose on All Connections"
+      "connectAppHint": "Choose in All Connections",
+      "progressDesc": "Select a folder in the chart or the list to go into it. Select the middle of the chart to go back up.",
+      "liveLabel": "Live"
     },
     "apps": {
       "title": "Connected apps",
@@ -3187,14 +3189,14 @@
     },
     "scope": {
       "foldersTitle": "Folders to search",
-      "foldersDesc": "'All' shows progress across every folder. Pick a folder to see just that one.",
+      "foldersDesc": "Select a folder to see its progress below.",
       "addFolder": "Add folder",
       "emptyFolderNote": "No search folders yet. Without any, the default search scope is used.",
       "excludeTitle": "Excluded items",
-      "excludeDesc": "Items you leave out above gather here with their paths. Press X to include one again.",
-      "autoWatch": "Update file names instantly",
+      "excludeDesc": "Folders and files left out of indexing. Remove one from the list to index it again.",
+      "autoWatch": "Reflect file names instantly",
       "autoWatchHintOff": "Unavailable because file search is off.",
-      "autoWatchHintOn": "When files are added or changed, name search picks them up at once. Document contents are read again on the schedule above.",
+      "autoWatchHintOn": "When files are added or changed, name search reflects them at once. Document contents are updated on the refresh schedule.",
       "addFolderTitle": "Add search folder",
       "addItemTitle": "Add exclusion",
       "addFolderDesc": "Enter the folder path to include in search.",
@@ -3242,10 +3244,11 @@
         "excluded": "Excluded",
         "unindexable": "Unreadable"
       },
-      "rowHint": "Point at a row to show Exclude.",
       "exclude": "Exclude",
-      "include": "Include again",
-      "pathLabel": "Current location"
+      "include": "Include",
+      "pathLabel": "Current location",
+      "upShort": "Up",
+      "excludedFolders": "{{count}} folders left out"
     },
     "web": {
       "title": "Web search",

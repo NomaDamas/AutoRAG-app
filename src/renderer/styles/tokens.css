@@ -165,6 +165,9 @@
   --tag-blue: #57A0FE;
   --tag-yellow: #EED944;
   --tag-red: #FA6159;
+  /* The index map's completion colours (Figma 532:9970): done is gold, partly done a lighter gold. */
+  --index-map-done: #DBA245;
+  --index-map-partial: #EBC881;
   --tag-orange: #F5A841;
   --switch-off: #C9C9CE;
   --highlight-marker: linear-gradient(transparent 55%, rgba(255,214,10,0.55) 55%);

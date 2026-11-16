@@ -3086,12 +3086,12 @@
       "notFetchedYet": "尚未获取任何内容",
       "notOnThisComputer": "此电脑上不可用",
       "importedNone": "未导入任何{{noun}}",
-      "liveQuery": "搜索时即时查询",
+      "liveQuery": "每次搜索时实时查询",
       "appNeeds": "需要 {{name}} 桌面应用"
     },
     "indexing": {
       "title": "索引",
-      "desc": "选择要搜索的文件夹，查看读取进度，并让内容保持最新。",
+      "desc": "管理要搜索的文件夹、索引进度和更新周期。",
       "progress": "进度",
       "refreshStatus": "更新状态",
       "localFolder": "本地文件夹",
@@ -3102,7 +3102,7 @@
       "rowRefreshAria": "立即更新 {{id}}",
       "rowRefreshTitle": "立即更新",
       "localUpdating": "刷新中…",
-      "syncAll": "立即全部更新",
+      "syncAll": "全部更新",
       "scheduleTitle": "自动刷新条件",
       "scheduleAcOnlyName": "仅在接通电源时",
       "scheduleAcOnlyHint": "使用电池时跳过自动刷新。“立即刷新”始终可用。",
@@ -3123,10 +3123,12 @@
       "schedulePausedBattery": "正在等待接通电源：索引计划只允许在接通电源时运行（{{ago}}已暂缓）。",
       "schedulePausedWindow": "正在等待允许的时段：索引计划已于{{ago}}暂缓刷新。",
       "schedulePausedDay": "正在等待允许的日期：索引计划已于{{ago}}暂缓刷新。",
-      "keepTitle": "保持最新",
-      "keepDesc": "重新读取文档内容的周期。按 ↻ 立即读取。",
+      "keepTitle": "更新",
+      "keepDesc": "设置重新获取变更内容的周期。点按刷新按钮可立即更新。",
       "connectApp": "连接应用",
-      "connectAppHint": "在“全部连接”中选择"
+      "connectAppHint": "在“全部连接”中选择",
+      "progressDesc": "在图表或列表中选择文件夹即可进入子文件夹。选择图表中央可返回上一级文件夹。",
+      "liveLabel": "实时查询"
     },
     "apps": {
       "title": "已连接应用",
@@ -3187,14 +3189,14 @@
     },
     "scope": {
       "foldersTitle": "要搜索的文件夹",
-      "foldersDesc": "“全部”显示所有文件夹合计的进度。点按某个文件夹即可只查看它。",
+      "foldersDesc": "选择文件夹即可在下方查看该文件夹的进度。",
       "addFolder": "添加文件夹",
       "emptyFolderNote": "还没有搜索文件夹。若不添加，将使用默认搜索范围。",
       "excludeTitle": "已排除的项目",
-      "excludeDesc": "在上方排除的项目会连同路径汇集在这里。按 X 可重新包含。",
-      "autoWatch": "立即反映文件名",
+      "excludeDesc": "已从索引中排除的文件夹和文件。从列表中删除后会重新建立索引。",
+      "autoWatch": "即时反映文件名",
       "autoWatchHintOff": "文件搜索已关闭，无法使用。",
-      "autoWatchHintOn": "文件新增或更改时会立即反映到名称搜索中。文档内容按上方的周期重新读取。",
+      "autoWatchHintOn": "文件新增或更改时会立即反映到名称搜索中。文档内容按更新周期刷新。",
       "addFolderTitle": "添加搜索文件夹",
       "addItemTitle": "添加排除项",
       "addFolderDesc": "输入要包含在搜索中的文件夹路径。",
@@ -3242,10 +3244,11 @@
         "excluded": "已排除",
         "unindexable": "无法读取"
       },
-      "rowHint": "将指针移到某一行上即可显示“排除”。",
       "exclude": "排除",
-      "include": "重新包含",
-      "pathLabel": "当前位置"
+      "include": "包含",
+      "pathLabel": "当前位置",
+      "upShort": "向上",
+      "excludedFolders": "已排除 {{count}} 个文件夹"
     },
     "web": {
       "title": "网页搜索",

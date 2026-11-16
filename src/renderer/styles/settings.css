@@ -1391,8 +1391,8 @@
 	stroke-width: 0.35;
 	outline: none;
 }
-.settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--tag-blue); }
-.settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--tag-yellow); }
+.settings-view .index-map-panel [data-state="indexed"] { --index-map-color: var(--index-map-done); }
+.settings-view .index-map-panel [data-state="partial"] { --index-map-color: var(--index-map-partial); }
 .settings-view .index-map-panel [data-state="unindexed"] { --index-map-color: var(--tag-red); }
 .settings-view .index-map-panel [data-state="excluded"] { --index-map-color: var(--tag-gray); }
 .settings-view .index-map-sector[data-active="true"],
@@ -4895,7 +4895,7 @@
 	display: block;
 	height: 100%;
 	border-radius: inherit;
-	background: var(--tag-blue);
+	background: var(--accent);
 	transition: width var(--dur-color) var(--ease-out);
 }
 
@@ -5009,7 +5009,7 @@
 }
 
 .settings-view .index-map-row[data-state="excluded"] .index-map-row-main span {
-	color: var(--text-muted);
+	color: var(--text-faint);
 }
 
 .settings-view .index-map-row-badge {
@@ -5091,4 +5091,126 @@
 	.settings-view .index-map-folders .index-map-row-action {
 		transition: none;
 	}
+}
+
+/* Figma 532:9970 (revised): the chart at 340px beside the folder's contents in a card of 40px rows; no rule under
+   the legend, no hint box; the refresh sources in a card of 60px rows. */
+.settings-view .indexing-sections .index-map-legend {
+	margin: 0 0 24px;
+	padding: 0;
+	border-bottom: 0;
+}
+
+.settings-view .indexing-sections .index-map-body {
+	grid-template-columns: 340px minmax(0, 1fr);
+	gap: 24px;
+	align-items: start;
+	height: auto;
+}
+
+.settings-view .indexing-sections .index-map-stage {
+	height: 340px;
+}
+
+.settings-view .indexing-sections .index-map-sidebar {
+	gap: 12px;
+	padding: 0;
+	border-left: 0;
+}
+
+.settings-view .indexing-sections .index-map-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 0;
+}
+
+.settings-view .indexing-sections .index-map-summary h3 {
+	margin: 4px 0 0;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 19px;
+}
+
+.settings-view .indexing-sections .index-map-summary p {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 16px;
+}
+
+.settings-view .indexing-sections .index-map-folders {
+	flex: none;
+	max-height: 404px;
+	padding: 0;
+	overflow: auto;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row {
+	gap: 8px;
+	min-height: 40px;
+	padding: 0 12px;
+	border-radius: 0;
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row + .index-map-row {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row-main {
+	gap: 8px;
+	height: 39px;
+	padding: 0;
+	font-size: 13px;
+}
+
+.settings-view .indexing-sections .index-map-folders small {
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .indexing-sections .index-map-folders .index-map-row-action {
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .indexing-sections .index-map-center small {
+	display: inline-flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list-row {
+	min-height: 60px;
+	padding: 12px 16px;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-list-row:last-child {
+	border-bottom: 0;
+}
+
+.settings-view [data-index-scope="refresh"] .settings-sync-add {
+	min-height: 44px;
+}
+
+.settings-view .settings-sync-live {
+	flex: none;
+	width: 128px;
+	color: var(--text-faint);
+	font-size: var(--font-size-meta);
+	text-align: center;
+}
+
+/* Figma 532:9970: the groups are 28px apart. */
+.settings-view .scope-page.indexing-sections {
+	gap: 28px;
 }

@@ -283,8 +283,11 @@ export function IndexingPage({
 					header={(scope) => <SearchFoldersSection editor={editor} scope={scope} />}
 					progressHead={
 						<div className="index-map-head">
-							<h3 className="scope-section-title">{t("settingsSources.indexing.progress")}</h3>
-							<IndexActivityCard snapshot={activity} />
+							<div className="scope-section-text">
+								<h3 className="scope-section-title">{t("settingsSources.indexing.progress")}</h3>
+								<p className="scope-section-desc">{t("settingsSources.indexing.progressDesc")}</p>
+							</div>
+							<IndexActivityCard snapshot={activity} hideIdle />
 						</div>
 					}
 				/>
@@ -363,7 +366,9 @@ export function IndexingPage({
 												? t("settingsSources.common.inUse")
 												: t("settingsSources.common.off")}
 								</span>
-								{TEMPLATE_BY_ID[row.type]?.polling !== false ? (
+								{row.index.state === "live" ? (
+									<span className="settings-sync-live">{t("settingsSources.indexing.liveLabel")}</span>
+								) : TEMPLATE_BY_ID[row.type]?.polling !== false ? (
 									<SelectField
 										className="settings-select-compact"
 										aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
@@ -372,23 +377,25 @@ export function IndexingPage({
 										onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
 									/>
 								) : null}
-								<button
-									type="button"
-									className="settings-icon-btn"
-									aria-label={t("settingsSources.indexing.rowRefreshAria", { id: row.id })}
-									title={t("settingsSources.indexing.rowRefreshTitle")}
-									disabled={!row.enabled || rowActivityState(row) !== null}
-									onClick={() => void syncOne(row.id)}
-								>
-									<RefreshCw size={16} aria-hidden="true" focusable="false" />
-								</button>
+								{/* A source asked at search time has nothing to read ahead of it. */}
+								{row.index.state === "live" ? null : (
+									<button
+										type="button"
+										className="settings-icon-btn"
+										aria-label={t("settingsSources.indexing.rowRefreshAria", { id: row.id })}
+										title={t("settingsSources.indexing.rowRefreshTitle")}
+										disabled={!row.enabled || rowActivityState(row) !== null}
+										onClick={() => void syncOne(row.id)}
+									>
+										<RefreshCw size={16} aria-hidden="true" focusable="false" />
+									</button>
+								)}
 							</div>
 						))}
 					<button type="button" className="settings-list-row settings-sync-row settings-sync-add" data-action="connect-app" onClick={() => onOpenApps?.()}>
 							<Plus size={15} aria-hidden="true" focusable="false" />
 							<span className="settings-list-title">{t("settingsSources.indexing.connectApp")}</span>
 							<span className="settings-list-meta">{t("settingsSources.indexing.connectAppHint")}</span>
-							<ChevronRight size={14} aria-hidden="true" focusable="false" />
 						</button>
 					</div>
 

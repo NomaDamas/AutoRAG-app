@@ -3086,12 +3086,12 @@
       "notFetchedYet": "まだ内容を取得していません",
       "notOnThisComputer": "このコンピューターでは利用できません",
       "importedNone": "取り込んだ{{noun}}なし",
-      "liveQuery": "検索時に都度照会",
+      "liveQuery": "検索のたびにリアルタイムで照会します",
       "appNeeds": "{{name}} デスクトップアプリが必要"
     },
     "indexing": {
       "title": "インデックス",
-      "desc": "検索するフォルダを決め、読み込みの進み具合を確認し、内容を最新に保ちます。",
+      "desc": "検索するフォルダ、インデックスの進行状況、最新化の間隔を管理します。",
       "progress": "進行状況",
       "refreshStatus": "更新状況",
       "localFolder": "ローカルフォルダ",
@@ -3102,7 +3102,7 @@
       "rowRefreshAria": "{{id}} を今すぐ更新",
       "rowRefreshTitle": "今すぐ更新",
       "localUpdating": "更新中…",
-      "syncAll": "すべて今すぐ更新",
+      "syncAll": "すべて最新化",
       "scheduleTitle": "自動更新の条件",
       "scheduleAcOnlyName": "電源接続中のみ",
       "scheduleAcOnlyHint": "バッテリー駆動中は自動更新をスキップします。今すぐ更新は常に使えます。",
@@ -3123,10 +3123,12 @@
       "schedulePausedBattery": "電源接続を待っています。インデックスのスケジュールは電源接続中のみ許可しています（{{ago}}に保留）。",
       "schedulePausedWindow": "許可された時間帯を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。",
       "schedulePausedDay": "許可された曜日を待っています。インデックスのスケジュールにより{{ago}}に更新を保留しました。",
-      "keepTitle": "最新に保つ",
-      "keepDesc": "文書の内容を読み直す間隔です。↻を押すとすぐに読み込みます。",
+      "keepTitle": "最新化",
+      "keepDesc": "変更された内容を再取得する間隔を決めます。更新ボタンですぐに最新化できます。",
       "connectApp": "アプリを接続",
-      "connectAppHint": "「すべての接続」で選ぶ"
+      "connectAppHint": "「すべての接続」で選択",
+      "progressDesc": "チャートや一覧でフォルダを選ぶと下位フォルダに移動します。チャートの中央を選ぶと上位フォルダに戻ります。",
+      "liveLabel": "リアルタイム照会"
     },
     "apps": {
       "title": "接続済みアプリ",
@@ -3187,14 +3189,14 @@
     },
     "scope": {
       "foldersTitle": "検索するフォルダ",
-      "foldersDesc": "「すべて」ですべてのフォルダを合わせた進み具合を表示します。フォルダを選ぶとそのフォルダだけを表示します。",
+      "foldersDesc": "フォルダを選ぶと、下でそのフォルダの進行状況を確認できます。",
       "addFolder": "フォルダを追加",
       "emptyFolderNote": "検索フォルダがまだありません。追加しない場合はデフォルトの検索範囲を使います。",
       "excludeTitle": "除外した項目",
-      "excludeDesc": "上で除外した項目がパスとともにここに集まります。Xを押すと再び含めます。",
-      "autoWatch": "ファイル名をすぐ反映",
+      "excludeDesc": "インデックスから除外したフォルダとファイルです。一覧から削除すると再びインデックスされます。",
+      "autoWatch": "ファイル名を即時反映",
       "autoWatchHintOff": "ファイル検索がオフのため使用できません。",
-      "autoWatchHintOn": "ファイルが追加・変更されると名前検索にすぐ反映します。文書の内容は上の間隔で読み直します。",
+      "autoWatchHintOn": "ファイルが追加・変更されると名前検索に即時反映します。文書の内容は最新化の間隔に従って更新されます。",
       "addFolderTitle": "検索フォルダを追加",
       "addItemTitle": "除外項目を追加",
       "addFolderDesc": "検索に含めるフォルダのパスを入力してください。",
@@ -3242,10 +3244,11 @@
         "excluded": "除外",
         "unindexable": "読み取り不可"
       },
-      "rowHint": "行にポインターを合わせると「除外」が表示されます。",
       "exclude": "除外",
-      "include": "再び含める",
-      "pathLabel": "現在の場所"
+      "include": "含める",
+      "pathLabel": "現在の場所",
+      "upShort": "上へ",
+      "excludedFolders": "{{count}}個のフォルダを除外"
     },
     "web": {
       "title": "ウェブ検索",

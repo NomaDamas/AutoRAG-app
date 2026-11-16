@@ -3086,12 +3086,12 @@
       "notFetchedYet": "아직 내용을 가져오지 않았습니다",
       "notOnThisComputer": "이 컴퓨터에서는 사용할 수 없습니다",
       "importedNone": "가져온 {{noun}} 없음",
-      "liveQuery": "검색할 때 바로 조회",
+      "liveQuery": "검색할 때마다 실시간으로 조회합니다",
       "appNeeds": "{{name}} 컴퓨터 앱 필요"
     },
     "indexing": {
       "title": "인덱싱",
-      "desc": "검색할 폴더를 정하고, 읽는 진행 상황을 보고, 내용을 최신으로 유지합니다.",
+      "desc": "검색할 폴더와 인덱싱 진행 상황, 최신화 주기를 관리합니다.",
       "progress": "진행 상황",
       "refreshStatus": "최신화 상태",
       "localFolder": "로컬 폴더",
@@ -3102,7 +3102,7 @@
       "rowRefreshAria": "{{id}} 지금 최신화",
       "rowRefreshTitle": "지금 최신화",
       "localUpdating": "새로 고치는 중…",
-      "syncAll": "모두 지금 최신화",
+      "syncAll": "모두 최신화",
       "scheduleTitle": "자동 최신화 조건",
       "scheduleAcOnlyName": "전원 연결 시에만",
       "scheduleAcOnlyHint": "배터리로 쓰는 동안은 자동 최신화를 건너뜁니다. 지금 최신화는 항상 됩니다.",
@@ -3123,10 +3123,12 @@
       "schedulePausedBattery": "전원 연결을 기다리는 중: 인덱싱 일정이 전원이 연결된 동안에만 허용합니다({{ago}} 보류).",
       "schedulePausedWindow": "허용된 시간대를 기다리는 중: 인덱싱 일정에 따라 {{ago}} 최신화를 보류했습니다.",
       "schedulePausedDay": "허용된 요일을 기다리는 중: 인덱싱 일정에 따라 {{ago}} 최신화를 보류했습니다.",
-      "keepTitle": "최신으로 유지",
-      "keepDesc": "문서 내용을 다시 읽는 주기입니다. ↻를 누르면 지금 바로 읽습니다.",
+      "keepTitle": "최신화",
+      "keepDesc": "바뀐 내용을 다시 가져오는 주기를 정합니다. 새로 고침 버튼으로 즉시 최신화할 수 있습니다.",
       "connectApp": "앱 연결",
-      "connectAppHint": "모든 연결 화면에서 고르기"
+      "connectAppHint": "모든 연결에서 선택",
+      "progressDesc": "차트나 목록에서 폴더를 선택하면 하위 폴더로 이동합니다. 차트 가운데를 선택하면 상위 폴더로 돌아갑니다.",
+      "liveLabel": "실시간 조회"
     },
     "apps": {
       "title": "연결된 앱",
@@ -3187,14 +3189,14 @@
     },
     "scope": {
       "foldersTitle": "검색할 폴더",
-      "foldersDesc": "'전체'에서 모든 폴더를 합친 진행도를 봅니다. 폴더를 누르면 그 폴더만 봅니다.",
+      "foldersDesc": "폴더를 선택하면 아래에서 해당 폴더의 진행 상황을 확인할 수 있습니다.",
       "addFolder": "폴더 추가",
       "emptyFolderNote": "아직 검색 폴더가 없습니다. 추가하지 않으면 기본 검색 범위를 사용합니다.",
       "excludeTitle": "제외한 항목",
-      "excludeDesc": "위에서 뺀 항목이 경로와 함께 모입니다. X를 누르면 다시 포함됩니다.",
-      "autoWatch": "파일 이름 바로 반영",
+      "excludeDesc": "인덱싱에서 제외한 폴더와 파일입니다. 목록에서 삭제하면 다시 인덱싱됩니다.",
+      "autoWatch": "파일 이름 즉시 반영",
       "autoWatchHintOff": "파일 검색이 꺼져 있어 사용할 수 없습니다.",
-      "autoWatchHintOn": "파일이 생기거나 바뀌면 이름 검색에 바로 반영합니다. 문서 내용은 위 주기에 맞춰 다시 읽습니다.",
+      "autoWatchHintOn": "파일이 추가되거나 변경되면 이름 검색에 즉시 반영합니다. 문서 내용은 최신화 주기에 따라 갱신됩니다.",
       "addFolderTitle": "검색 폴더 추가",
       "addItemTitle": "제외 항목 추가",
       "addFolderDesc": "검색에 포함할 폴더 경로를 입력하세요.",
@@ -3242,10 +3244,11 @@
         "excluded": "제외됨",
         "unindexable": "읽을 수 없음"
       },
-      "rowHint": "행에 마우스를 올리면 '제외'가 나타납니다.",
       "exclude": "제외",
-      "include": "다시 포함",
-      "pathLabel": "현재 위치"
+      "include": "포함",
+      "pathLabel": "현재 위치",
+      "upShort": "위로",
+      "excludedFolders": "{{count}}개 폴더 제외"
     },
     "web": {
       "title": "웹 검색",

@@ -97,10 +97,10 @@ describe("Settings → Indexing", () => {
 		expect(host.querySelectorAll(".index-map-chart path[data-node-id]").length).toBeGreaterThan(0);
 	});
 
-	it("shows the map when nothing is indexing too, under the idle line", async () => {
+	it("shows the map when nothing is indexing too, without an idle line (Figma 532:9970)", async () => {
 		await mount();
 
-		expect(host.querySelector('[data-testid="index-activity-idle"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="index-activity-idle"]')).toBeNull();
 		expect(host.querySelector(".index-map-panel")).not.toBeNull();
 	});
 

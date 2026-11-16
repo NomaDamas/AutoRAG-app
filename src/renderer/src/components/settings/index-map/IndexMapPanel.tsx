@@ -110,6 +110,7 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 	};
 	const listingParent = focus?.id ?? (roots.length === 1 ? roots[0]?.id : null);
 	const children = nodes.filter((node) => node.parent === listingParent);
+	const leftOut = children.filter((node) => (node.kind === "folder" || node.kind === "root") && radialState(node) === "excluded").length;
 	// While something is pointed at, everything outside it dims: the node and what is inside it stay lit.
 	const lit = useMemo(() => {
 		if (hovered === null) return null;
@@ -159,7 +160,7 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 							{sectors.filter(({ node }) => progress.here.has(nodeKey(node))).map(({ node, edge }) => <path key={`edge-${nodeKey(node)}`} d={edge} className="index-map-edge" data-path={node.path} aria-hidden="true" />)}
 						</svg>
 						{map !== null ? <button type="button" className="index-map-center" onClick={up} disabled={focus === null} aria-label={focus === null ? t("settingsSources.indexMap.allRoots") : t("settingsSources.indexMap.up")}>
-							{focus !== null ? <CornerLeftUp size={14} aria-hidden="true" /> : null}<strong>{percent}</strong><small>{focus === null ? t("settingsSources.indexMap.allRoots") : label(focus)}</small>
+							<strong>{percent}</strong><small>{focus === null ? t("settingsSources.scope.allFolders") : <><CornerLeftUp size={11} aria-hidden="true" />{t("settingsSources.indexMap.upShort")}</>}</small>
 						</button> : null}
 						{map === null && error === null ? <div className="index-map-overlay">{t("settingsSources.indexMap.loading")}</div> : null}
 						{map === null && error !== null ? <div className="index-map-overlay" role="alert">{t("settingsSources.indexMap.error", { message: error })}</div> : null}
@@ -180,9 +181,8 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 								))}
 							</nav>
 							<h3>{focus === null ? t("settingsSources.indexMap.allRoots") : label(focus)}</h3>
-							<p>{t("settingsSources.indexMap.coverage", { indexed: number.format(indexed), total: number.format(targets) })}</p>
+							<p>{[t("settingsSources.indexMap.coverage", { indexed: number.format(indexed), total: number.format(targets) }), leftOut > 0 ? t("settingsSources.indexMap.excludedFolders", { count: leftOut }) : null].filter((part) => part !== null).join(" · ")}</p>
 						</div>
-						<p className="index-map-hint">{t("settingsSources.indexMap.rowHint")}</p>
 						<div className="index-map-folders" aria-label={t("settingsSources.indexMap.scopeLabel")} onPointerLeave={() => setHoverKey(null)}>
 							{children.map((node) => {
 								const state = radialState(node);
