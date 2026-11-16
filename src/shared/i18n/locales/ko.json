@@ -1412,7 +1412,7 @@
     "resizeColumn": "{{label}} 크기 조절",
     "columnsMenu": "열",
     "evidenceNotFound": "근거 {{number}}에 대한 정보를 찾을 수 없습니다",
-    "searchTitle": "\"{{query}}\" 검색",
+    "searchTitle": "검색 결과 — “{{query}}”",
     "resizeSidebar": "사이드바 크기 조절",
     "resizeInspector": "정보 창 크기 조절",
     "removeAttachment": "첨부 제거",
@@ -1428,7 +1428,8 @@
     "remotePreviewFolderUnsupported": "폴더는 브라우저에서 미리볼 수 없습니다.",
     "onboardingDemo": {
       "meetingNotes": "회의록.md"
-    }
+    },
+    "searchToolbarTitle": "검색"
   },
   "finderState": {
     "contextMenu": {

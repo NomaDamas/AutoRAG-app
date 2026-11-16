@@ -170,7 +170,7 @@ describe("tabTitle", () => {
 	});
 
 	it("shows the tab's own search query", () => {
-		expect(tabTitle(tab, { query: "예산" })).toBe('"예산" 검색');
+		expect(tabTitle(tab, { query: "예산" })).toBe("검색 결과 — “예산”");
 	});
 
 	it("keeps the folder name when the tab's own query is blank", () => {
@@ -182,7 +182,7 @@ describe("tabTitle", () => {
 		await setAppLanguage("en");
 		try {
 			expect(tabTitle({ path: SETTINGS_PATH }, { query: "model" })).toBe("Settings");
-			expect(tabTitle(tab, { query: "budget" })).toBe('Search "budget"');
+			expect(tabTitle(tab, { query: "budget" })).toBe("Search results — “budget”");
 		} finally {
 			await setAppLanguage("ko");
 		}

@@ -35,6 +35,7 @@ import {
 	ExternalLink,
 	Eye,
 	File as FileGlyph,
+	HardDrive,
 	Film,
 	FoldVertical,
 	History,
@@ -245,6 +246,9 @@ export const SortIcon = glyph(ArrowDownUp, 16, 1.9);
 export const GroupIcon = glyph(Layers, 16, 1.9);
 
 export const DatabaseIcon = glyph(Database, 16, 1.8);
+
+/** A connected source in the search group tabs (Figma 428:1845): one drive glyph for every app. */
+export const SourceDriveIcon = glyph(HardDrive, 12, 1.8);
 
 export const UsersIcon = glyph(Users, 16, 1.8);
 

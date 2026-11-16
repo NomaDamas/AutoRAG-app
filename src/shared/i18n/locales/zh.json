@@ -1412,7 +1412,7 @@
     "resizeColumn": "调整{{label}}大小",
     "columnsMenu": "列",
     "evidenceNotFound": "找不到证据 {{number}} 的信息",
-    "searchTitle": "搜索“{{query}}”",
+    "searchTitle": "搜索结果 — “{{query}}”",
     "resizeSidebar": "调整边栏大小",
     "resizeInspector": "调整检查器大小",
     "removeAttachment": "移除附件",
@@ -1428,7 +1428,8 @@
     "remotePreviewFolderUnsupported": "文件夹无法在浏览器中预览。",
     "onboardingDemo": {
       "meetingNotes": "会议记录.md"
-    }
+    },
+    "searchToolbarTitle": "搜索"
   },
   "finderState": {
     "contextMenu": {

@@ -1412,7 +1412,7 @@
     "resizeColumn": "Resize {{label}}",
     "columnsMenu": "Columns",
     "evidenceNotFound": "No information found for evidence {{number}}",
-    "searchTitle": "Search \"{{query}}\"",
+    "searchTitle": "Search results — “{{query}}”",
     "resizeSidebar": "Resize sidebar",
     "resizeInspector": "Resize inspector",
     "removeAttachment": "Remove attachment",
@@ -1428,7 +1428,8 @@
     "remotePreviewFolderUnsupported": "Folders can't be previewed in the browser.",
     "onboardingDemo": {
       "meetingNotes": "meeting-notes.md"
-    }
+    },
+    "searchToolbarTitle": "Search"
   },
   "finderState": {
     "contextMenu": {

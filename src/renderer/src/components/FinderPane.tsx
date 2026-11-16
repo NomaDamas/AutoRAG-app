@@ -474,6 +474,7 @@ export const FinderPane = memo(function FinderPane({
 									onRetryVersionFamilies={finder.retryVersionFamilies}
 									listRef={finder.listRef}
 									searching={finder.searching}
+									{...(finder.searching ? { highlight: finder.query } : {})}
 									emptyText={finder.emptyText}
 									selectedKeys={finder.selection.keys}
 									focusedZone={focused && finder.zone === "finder"}

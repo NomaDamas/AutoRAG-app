@@ -1412,7 +1412,7 @@
     "resizeColumn": "{{label}} のサイズを変更",
     "columnsMenu": "列",
     "evidenceNotFound": "根拠 {{number}} の情報が見つかりません",
-    "searchTitle": "\"{{query}}\" を検索",
+    "searchTitle": "検索結果 — 「{{query}}」",
     "resizeSidebar": "サイドバーのサイズを変更",
     "resizeInspector": "インスペクタのサイズを変更",
     "removeAttachment": "添付を削除",
@@ -1428,7 +1428,8 @@
     "remotePreviewFolderUnsupported": "フォルダはブラウザーでプレビューできません。",
     "onboardingDemo": {
       "meetingNotes": "議事録.md"
-    }
+    },
+    "searchToolbarTitle": "検索"
   },
   "finderState": {
     "contextMenu": {

@@ -733,7 +733,7 @@ export function App(): ReactElement {
 				: aiTabActive
 					? t("places.aiSearch")
 					: finder?.searching === true
-						? t("finderComponents.searchTitle", { query: finder.query })
+						? t("finderComponents.searchToolbarTitle")
 						: finder?.inTrashLocation === true
 							? t("places.trash")
 							: isTagPath(path) ? tagNameOf(path) : basename(path);

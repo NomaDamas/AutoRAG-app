@@ -38,6 +38,7 @@ export function FileList({
 	sections,
 	listRef,
 	searching,
+	highlight,
 	emptyText,
 	selectedKeys,
 	focusedZone,
@@ -57,6 +58,8 @@ export function FileList({
 	readonly sections: readonly GroupSection<TreeRow>[];
 	readonly listRef: RefObject<HTMLDivElement | null>;
 	readonly searching: boolean;
+	/** The search text while the list shows results; its terms are bold in the names. */
+	readonly highlight?: string;
 	readonly emptyText: string;
 	readonly selectedKeys: readonly string[];
 	readonly focusedZone: boolean;
@@ -105,6 +108,7 @@ export function FileList({
 			zoneFocused={focusedZone}
 			flash={flashPath === row_.entry.path}
 			searching={searching}
+			{...(highlight === undefined ? {} : { highlight })}
 			renameDraft={renamePath === row_.entry.path && slide?.part !== "ghost" ? renameDraft : null}
 			stackCount={row_.stackCount}
 			stackOpen={row_.stackOpen}
