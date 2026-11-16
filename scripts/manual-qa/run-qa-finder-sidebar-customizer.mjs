@@ -3,7 +3,7 @@
  *
  * Drives the built Electron app end-to-end with real Playwright mouse/keyboard
  * input and a loopback OpenAI-compatible model endpoint:
- *   1. Settings → 사이드바 (Sidebar) renders locked switches for AI Search &
+ *   1. Settings → 사이드바 (Sidebar) renders locked switches for AI Chat &
  *      Automations, toggles hideable favorite items, reorders Favorites, pins
  *      a custom folder, and immediately updates the live Finder sidebar and
  *      `<userData>/settings/settings-state.json` (leaving AutoRAG `config.json`
@@ -11,7 +11,7 @@
  *   2. The AI App Customizer fills the window's right sidebar (the Inspector's column)
  *      (`[data-testid="app-customizer-panel"]`, no modal): it streams live
  *      `.shimmer` `i` intent progress while the `app-customizer` pi agent calls
- *      `get_app_settings` and `update_sidebar`, refuses to hide `AI Search` or
+ *      `get_app_settings` and `update_sidebar`, refuses to hide `AI Chat` or
  *      `Automations`, updates the live Finder sidebar and the Settings toggles
  *      beside it in real time, supports multi-turn follow-up, and collapses to
  *      the page hero and reopens with the conversation intact.
@@ -192,8 +192,8 @@ try {
 	await page.locator(".sidebar .sidebar__item-label", { hasText: "문서" }).waitFor({ timeout: 30_000 });
 	const initialLabels = await sidebarLabels();
 	check(
-		"Sidebar starts with AI 검색 and 자동화 at top of Favorites",
-		initialLabels[0] === "AI 검색" && initialLabels[1] === "자동화" && initialLabels.includes("음악") && initialLabels.includes("동영상"),
+		"Sidebar starts with AI 채팅 and 자동화 at top of Favorites",
+		initialLabels[0] === "AI 채팅" && initialLabels[1] === "자동화" && initialLabels.includes("음악") && initialLabels.includes("동영상"),
 		JSON.stringify(initialLabels),
 	);
 	const settledConfigBefore = readFileSync(CONFIG, "utf8");
@@ -207,17 +207,17 @@ try {
 	await shot("01b-settings-sidebar-bottom-sections");
 	await page.locator(".settings-content").evaluate((el) => { el.scrollTop = 0; });
 
-	// Verify AI 검색 and 자동화 switches are checked and disabled
+	// Verify AI 채팅 and 자동화 switches are checked and disabled
 	const aiSwitch = page.locator('[data-sidebar-switch="app:aiSearch"]');
 	const autoSwitch = page.locator('[data-sidebar-switch="app:automations"]');
 	check(
-		"AI 검색 and 자동화 switches in Settings are checked and locked (disabled)",
+		"AI 채팅 and 자동화 switches in Settings are checked and locked (disabled)",
 		(await aiSwitch.getAttribute("aria-checked")) === "true" &&
 			(await aiSwitch.isDisabled()) &&
 			(await autoSwitch.getAttribute("aria-checked")) === "true" &&
 			(await autoSwitch.isDisabled()),
 	);
-	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section-card").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
+	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
 	check(
 		"Favorites, Cloud, Connections, Locations, and Tags render together in one unified .sidebar-sections-stack",
 		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "connections", "locations", "tags"]),
@@ -250,13 +250,14 @@ try {
 	await page.locator('[data-sidebar-switch="place:music"]').click();
 	await page.locator('[data-sidebar-switch="place:movies"]').click();
 	// Move Downloads up above Documents
-	await page.locator('[data-action="move-up-place:downloads"]').click();
+	await page.locator('[data-sidebar-grip="place:downloads"]').focus();
+	await page.keyboard.press("ArrowUp");
 	await page.waitForTimeout(250);
 
 	const afterUiToggleLabels = await sidebarLabels();
 	check(
-		"Toggling Music & Movies in Settings immediately hides them in the live Finder sidebar while keeping AI 검색 & 자동화",
-		afterUiToggleLabels[0] === "AI 검색" &&
+		"Toggling Music & Movies in Settings immediately hides them in the live Finder sidebar while keeping AI 채팅 & 자동화",
+		afterUiToggleLabels[0] === "AI 채팅" &&
 			afterUiToggleLabels[1] === "자동화" &&
 			!afterUiToggleLabels.includes("음악") &&
 			!afterUiToggleLabels.includes("동영상") &&
@@ -279,7 +280,7 @@ try {
 	// 2. Converse with the pi agent profile in the right sidebar
 	await shot("03-customizer-panel-empty");
 
-	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Search & Automations, pinning Projects, hiding pictures) -> reply
+	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Chat & Automations, pinning Projects, hiding pictures) -> reply
 	queue.push(
 		{
 			text: "먼저 현재 사이드바 구성을 살펴볼게요.",
@@ -298,19 +299,20 @@ try {
 			delayMs: 900,
 		},
 		{
-			text: "그림 폴더를 추가로 숨기고 Projects 폴더를 즐겨찾기 상단에 고정했습니다. AI 검색과 자동화는 필수 기능이라 항상 표시됩니다.",
+			text: "그림 폴더를 추가로 숨기고 Projects 폴더를 즐겨찾기 상단에 고정했습니다. AI 채팅과 자동화는 필수 기능이라 항상 표시됩니다.",
 			delayMs: 250,
 		},
 	);
 
 	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
-	await page.keyboard.type("그림 폴더도 숨기고 Projects 폴더를 맨 위에 추가해줘. AI 검색도 숨겨봐.");
+	await page.keyboard.type("그림 폴더도 숨기고 Projects 폴더를 맨 위에 추가해줘. AI 채팅도 숨겨봐.");
 	await page.keyboard.press("Enter");
 
 	// Wait until the intermediate assistant message has committed AND the shimmer is spinning below it
 	await panel.locator(".customizer-turn__reply", { hasText: "먼저 현재 사이드바 구성을 살펴볼게요." }).waitFor({ timeout: 10_000 });
 	await panel.locator(".customizer-turn__progress .shimmer", { hasText: "현재 사이드바 설정을 확인하는 중" }).waitFor({ timeout: 10_000 });
+	check("The customizer's thinking line carries the seed loader beside the shimmer text", (await panel.locator(".customizer-turn__progress svg.seed-loader").count()) === 1);
 	const midTurnStack = await panel.evaluate((el) => {
 		const reply = el.querySelector(".customizer-turn__reply")?.getBoundingClientRect();
 		const progress = el.querySelector(".customizer-turn__progress")?.getBoundingClientRect();
@@ -342,8 +344,8 @@ try {
 
 	const afterAgentLabels = await sidebarLabels();
 	check(
-		"Pi agent tool call updates live Finder sidebar (pins Projects, hides 그림, keeps AI 검색 & 자동화 first)",
-		afterAgentLabels[0] === "AI 검색" &&
+		"Pi agent tool call updates live Finder sidebar (pins Projects, hides 그림, keeps AI 채팅 & 자동화 first)",
+		afterAgentLabels[0] === "AI 채팅" &&
 			afterAgentLabels[1] === "자동화" &&
 			afterAgentLabels[2] === "Projects" &&
 			!afterAgentLabels.includes("그림"),
@@ -402,8 +404,8 @@ try {
 
 	const enLabels = await sidebarLabels();
 	check(
-		"English Dark mode still shows AI Search and Automations at the top of the sidebar",
-		enLabels[0] === "AI Search" && enLabels[1] === "Automations" && enLabels[2] === "Projects",
+		"English Dark mode still shows AI Chat and Automations at the top of the sidebar",
+		enLabels[0] === "AI Chat" && enLabels[1] === "Automations" && enLabels[2] === "Projects",
 		JSON.stringify(enLabels),
 	);
 

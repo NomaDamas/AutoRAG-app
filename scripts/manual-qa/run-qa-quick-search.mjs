@@ -279,8 +279,8 @@ try {
 	check("the footer's Copy button copies the clicked row", Boolean(await waitFor(() => (isMac ? pasteboardFiles()[0] === FILES.report : true), 5000)));
 	const ask = page.locator('.qs__row[role=option]', { hasText: "Dazzi" });
 	await ask.dblclick();
-	const tab = await waitFor(async () => (await finder.locator('section[aria-label="AI Search"]:not([aria-hidden="true"])').count()) > 0, 10_000);
-	check("the Ask row opens AI Search in the Finder with the question", Boolean(tab));
+	const tab = await waitFor(async () => (await finder.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"])').count()) > 0, 10_000);
+	check("the Ask row opens AI Chat in the Finder with the question", Boolean(tab));
 	check("asking hands off: the launcher hides", !(await launcherVisible()));
 	await finder.screenshot({ path: join(OUT, "05-ask-handoff.png") });
 

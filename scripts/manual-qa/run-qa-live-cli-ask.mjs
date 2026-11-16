@@ -1,5 +1,5 @@
 // Live end-to-end for `dazzi --ask` (build/cli/dazzi): a question typed in a terminal (or sent by the Raycast
-// extension, which runs this same launcher) opens a new AI Search tab in the running app, is sent at once with
+// extension, which runs this same launcher) opens a new AI Chat tab in the running app, is sent at once with
 // the given files attached, and a real model answers it from them. Proves:
 //   1. `dazzi --ask "..." docs/plans.txt` against the RUNNING app: a new AI tab, the question in the sent
 //      bubble, plans.txt as its attachment chip, and an answer that uses the file (Pro = 20,000원);
@@ -145,14 +145,14 @@ const laneProcesses = () => {
 	}
 };
 const tabs = (page) => page.locator(".tabs .tab");
-const lastTurn = (page) => page.locator(`section[aria-label="AI Search"]:not([aria-hidden="true"]) .user-msg`).last();
+const lastTurn = (page) => page.locator(`section[aria-label="AI Chat"]:not([aria-hidden="true"]) .user-msg`).last();
 
-/** Waits for the visible AI Search tab to finish answering; returns the rendered answer text, or an error. */
+/** Waits for the visible AI Chat tab to finish answering; returns the rendered answer text, or an error. */
 async function answerOf(page, timeoutMs = 240_000) {
-	const panel = page.locator('section[aria-label="AI Search"]:not([aria-hidden="true"])');
+	const panel = page.locator('section[aria-label="AI Chat"]:not([aria-hidden="true"])');
 	await page.waitForFunction(
 		() => {
-			const visible = document.querySelector('section[aria-label="AI Search"]:not([aria-hidden="true"])');
+			const visible = document.querySelector('section[aria-label="AI Chat"]:not([aria-hidden="true"])');
 			if (visible === null) return false;
 			const done = visible.querySelector(".user-msg") !== null && visible.querySelector('button[aria-label="Stop"]') === null && visible.querySelector(".assistant-prose") !== null;
 			return done || (visible.textContent ?? "").includes("Something went wrong");
@@ -206,7 +206,7 @@ try {
 	check("ask: plans.txt rides along as the question's attachment", chips.includes("plans.txt"), JSON.stringify(chips));
 	await page.screenshot({ path: join(EVIDENCE, "live-cli-ask-01-sent.png") });
 	const first = await answerOf(page);
-	check("ask: AI Search shows no error", first.error === "", first.error);
+	check("ask: AI Chat shows no error", first.error === "", first.error);
 	console.log(`model answer: ${first.text.slice(0, 300)}`);
 	check("ask: a real model answered from the attached file (20,000)", /20,?000/u.test(first.text), first.text.slice(0, 200));
 	check("ask: no second app process is left behind", laneProcesses().length === processesBefore, `${processesBefore} → ${laneProcesses().length}`);

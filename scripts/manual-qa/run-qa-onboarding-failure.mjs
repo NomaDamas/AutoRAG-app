@@ -390,7 +390,7 @@ await scenario("an offline embedder: it retries itself, and closing the window k
 	const finder = state.finder;
 	await finder.waitForSelector('[role="alert"]', { timeout: 20_000 });
 	const banner = await text(finder, '[role="alert"]');
-	check("the banner says it plainly, with the one button", banner.includes("연결을 기다리는 중이에요") && banner.includes("지금 다시 시도"), banner);
+	check("the banner says it plainly, with the one button", banner.includes("연결을 기다리는 중입니다") && banner.includes("지금 다시 시도"), banner);
 	const block = await until(async () => finder.locator('.sidebar__activity[data-tone="error"]').first().innerText().catch(() => null), 90_000, "the sidebar block");
 	check("the sidebar keeps a block that does not expire", block.includes("연결 기다리는 중"), block);
 	const kept = await problem(finder);
@@ -422,7 +422,7 @@ await scenario("an offline embedder: it retries itself, and closing the window k
 	await start(state, { env: { OPENAI_API_KEY: "sk-qa" }, onboarding: false });
 	const again = state.finder;
 	await again.waitForSelector('[role="alert"]', { timeout: 30_000 });
-	check("after a relaunch the banner is still there", (await text(again, '[role="alert"]')).includes("연결을 기다리는 중이에요"));
+	check("after a relaunch the banner is still there", (await text(again, '[role="alert"]')).includes("연결을 기다리는 중입니다"));
 	check("a completed onboarding opens no onboarding window", (await indexWindows(state)).length === 1);
 	await again.locator(".sidebar__activity").first().click();
 	await again.waitForSelector(".settings-sidebar", { timeout: 10_000 });
@@ -459,7 +459,7 @@ await scenario("an unreadable folder: it goes on by itself when the folder retur
 	const page = await start(state);
 	await paused(page);
 	const title = await text(page, ".onb .ix-title");
-	check("the title names the folder", title.includes("‘Projects’") && title.includes("읽을 수 없어요"), title);
+	check("the title names the folder", title.includes("‘Projects’") && title.includes("읽을 수 없습니다"), title);
 	await checkPausedShape(page, "folder", { button: "다시 확인", link: ["‘Projects’ 빼고 계속"] });
 	const run = await status(page);
 	check("classified as an unreadable folder, naming it", run.failure?.reason === "folder-unreadable" && run.failure.folders.some((folder) => folder.endsWith("Projects")), JSON.stringify(run.failure));
@@ -625,7 +625,7 @@ await scenario("a real full disk: told apart from every other download failure, 
 		await paused(page, 240_000);
 		const run = await status(page);
 		check("a volume that is really full is classified as a full disk", run.failure?.reason === "disk-full" && run.failure?.code === "embedding-model-download-failed", JSON.stringify(run.failure));
-		check("title says there is not enough storage", (await text(page, ".onb .ix-title")).includes("저장 공간이 부족해요"), await text(page, ".onb .ix-title"));
+		check("title says there is not enough storage", (await text(page, ".onb .ix-title")).includes("저장 공간이 부족합니다"), await text(page, ".onb .ix-title"));
 		await checkPausedShape(page, "disk", { button: "공간 확보했어요, 이어서 받기", link: ["임베딩 방식 바꾸기"] });
 		check("a full disk is not retried by itself", !/\d+초 뒤/u.test(await text(page, ".onb .ix-sub")), await text(page, ".onb .ix-sub"));
 		await shot(page, "21-disk-full-paused");

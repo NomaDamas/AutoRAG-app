@@ -9,6 +9,25 @@ import {
 } from "../src/renderer/src/state/answer-markdown";
 
 describe("parseInline", () => {
+	it("reads [file:<path>] as a file mention, including a path with brackets or a <...> wrapper", () => {
+		expect(parseInline("요약은 [file:/Users/jeffrey/Documents/josh-newsletter-archive/summaries]입니다.")).toEqual([
+			{ kind: "text", text: "요약은 " },
+			{ kind: "file", path: "/Users/jeffrey/Documents/josh-newsletter-archive/summaries" },
+			{ kind: "text", text: "입니다." },
+		]);
+		expect(parseInline("[file:/a/[최종] 계약서.pdf][file:</b/c d>]")).toEqual([
+			{ kind: "file", path: "/a/[최종] 계약서.pdf" },
+			{ kind: "file", path: "/b/c d" },
+		]);
+		expect(parseInline("[file:/a/b](x)")).not.toContainEqual({ kind: "file", path: "/a/b" });
+	});
+
+	it("tells a video or audio reference from a picture", () => {
+		expect(imageTarget("/a/clip.mp4", null)).toMatchObject({ kind: "local", renderable: false, media: "video" });
+		expect(imageTarget("/a/clip.mp3", null)).toMatchObject({ kind: "local", media: "audio" });
+		expect(imageTarget("/a/clip.png", null)).not.toHaveProperty("media");
+	});
+
 	it("splits bold spans, citation chips, and plain text in order", () => {
 		expect(parseInline("최종 승인액은 **₩3.8억**이며 9월 15일 CFO가 승인했습니다. [2][4]")).toEqual([
 			{ kind: "text", text: "최종 승인액은 " },

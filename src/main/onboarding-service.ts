@@ -28,6 +28,7 @@ import {
 	type SourceDetection,
 	type SourceFacts,
 	type SourceId,
+	type PickPathKind,
 } from "../shared/onboarding-contract";
 import type { AppSettings, ConfigRefreshDiagnostic, ConfigRefreshResult } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
@@ -120,6 +121,8 @@ export interface OnboardingServiceDeps {
 	readonly openExternal: (url: string) => Promise<void>;
 	readonly relaunch: () => void;
 	readonly pickFolders: () => Promise<readonly string[]>;
+	/** The native chooser for exclusions; see `OnboardingBridge.pickPaths`. */
+	readonly pickPaths?: (kind: PickPathKind) => Promise<readonly string[]>;
 	readonly showNotification: () => Promise<boolean>;
 	readonly notificationsSupported: () => boolean;
 	readonly loginItemApplied: (enabled: boolean) => boolean;
@@ -151,6 +154,7 @@ export interface OnboardingService {
 	setLaunchAtLogin(enabled: boolean): Promise<boolean>;
 	folderCandidates(): Promise<readonly FolderCandidate[]>;
 	pickFolders(): Promise<readonly FolderCandidate[]>;
+	pickPaths(kind: PickPathKind): Promise<readonly string[]>;
 	scanFolders(paths: readonly unknown[]): Promise<void>;
 	embedding(): Promise<EmbeddingInfo>;
 	/** Starts a streamed probe (restarting any in flight); finds are pushed as `sourceDetected`, then `sourcesDone`. */
@@ -600,6 +604,10 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 				add(drive.path, drive.name, "cloud", false, false);
 			}
 			return candidates;
+		},
+		pickPaths: async (kind) => {
+			const paths = (await deps.pickPaths?.(kind)) ?? [];
+			return paths.filter((path) => isAbsoluteString(path) && existsSync(path));
 		},
 		pickFolders: async () => {
 			const paths = await deps.pickFolders();

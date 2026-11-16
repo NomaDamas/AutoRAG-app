@@ -10,7 +10,7 @@
  *      workspace); Settings' own refresh then takes the matched files out of a real MinSync index while the rest stay;
  *      the Finder's index status and the Settings → Indexing map call the matched files excluded and name the pattern;
  *      removing a search folder keeps the pattern.
- *   B. AI Search on a dense + SPLADE index with a reranker configured: the baseline search succeeds, the reranker is
+ *   B. AI Chat on a dense + SPLADE index with a reranker configured: the baseline search succeeds, the reranker is
  *      called with the union of both channels, and the answer is right.
  *
  * Part B uses a real OpenRouter model released in 2026 (QA_ANSWER_MODEL) and a rerank model through a loopback proxy that
@@ -280,7 +280,7 @@ try {
 			await page.screenshot({ path: join(EVIDENCE, "03-ai-search-rerank.png") });
 			writeFileSync(join(EVIDENCE, "rerank-requests.json"), JSON.stringify(traffic.rerank, null, 2));
 			log(`answer: ${answer.replace(/\s+/g, " ").slice(0, 300)}; statuses: ${traffic.statuses.join(",")}`);
-			check("AI Search shows no error", error === "", error);
+			check("AI Chat shows no error", error === "", error);
 			check("the reranker was called", traffic.rerank.length >= 1, `${traffic.rerank.length} rerank request(s)`);
 			const documents = traffic.rerank.flatMap((request) => (request.documents ?? []).map((doc) => (typeof doc === "string" ? doc : (doc?.text ?? JSON.stringify(doc)))));
 			check("the reranker was shown the document that holds the answer", documents.some((text) => text.includes("1111") || text.includes("2222")), `${documents.length} candidate(s)`);

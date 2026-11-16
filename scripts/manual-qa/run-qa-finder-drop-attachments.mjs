@@ -1,6 +1,6 @@
-// Live QA for AI Search drag-and-drop attachments: drives the built Finder app
+// Live QA for AI Chat drag-and-drop attachments: drives the built Finder app
 // and proves that
-//   1. Finder rows dragged onto the AI Search strip tab attach with their
+//   1. Finder rows dragged onto the AI Chat strip tab attach with their
 //      absolute paths (one row, and a multi-row selection by the sidebar item);
 //   2. files, folders, and links dropped from outside the app attach — sent
 //      through Chromium's native drop path (CDP Input.dispatchDragEvent, the
@@ -148,16 +148,16 @@ try {
 	page.on("pageerror", (error) => log(`[pageerror] ${String(error).slice(0, 300)}`));
 	await page.waitForSelector(`[data-path="${cssAttr(SECRET)}"]`, { timeout: 30_000 });
 	const cdp = await page.context().newCDPSession(page);
-	// One AI Search tab beside the folder tab: AI Search, then ⌘T back to rows.
+	// One AI Chat tab beside the folder tab: AI Chat, then ⌘T back to rows.
 	await openAiSearch(page);
 	await page.keyboard.press(chord("t"));
 	await page.waitForSelector(`[data-path="${cssAttr(SECRET)}"]`);
 
-	// 1. One Finder row dragged onto the AI Search strip tab.
+	// 1. One Finder row dragged onto the AI Chat strip tab.
 	await page.locator(`[data-path="${cssAttr(SECRET)}"]`).dragTo(page.locator(AI_TAB));
 	await waitForPill(page, SECRET).catch(() => undefined);
 	let current = await pills(page);
-	check("finder row drag onto the AI Search tab attaches its path", current.some((pill) => pill.title === SECRET), JSON.stringify(current));
+	check("finder row drag onto the AI Chat tab attaches its path", current.some((pill) => pill.title === SECRET), JSON.stringify(current));
 	await page.screenshot({ path: join(EVIDENCE, "1-finder-row.png") });
 
 	// 2. A two-row selection dragged by one of its rows onto the sidebar item carries both.
@@ -165,17 +165,17 @@ try {
 	await showRows(page);
 	await page.click(`[data-path="${cssAttr(SECRET)}"]`);
 	await page.click(`[data-path="${cssAttr(NOTES)}"]`, { modifiers: ["Meta"] });
-	await page.locator(`[data-path="${cssAttr(NOTES)}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Search" }));
+	await page.locator(`[data-path="${cssAttr(NOTES)}"]`).dragTo(page.locator(".sidebar__item", { hasText: "AI Chat" }));
 	await waitForPill(page, NOTES).catch(() => undefined);
 	current = await pills(page);
 	check(
-		"multi-row drag onto the sidebar AI Search item attaches the whole selection",
+		"multi-row drag onto the sidebar AI Chat item attaches the whole selection",
 		[SECRET, NOTES].every((path) => current.some((pill) => pill.title === path)) && current.length === 2,
 		JSON.stringify(current),
 	);
 	await page.screenshot({ path: join(EVIDENCE, "2-finder-selection.png") });
 
-	// 3. A file from another app, dropped on the AI Search panel.
+	// 3. A file from another app, dropped on the AI Chat panel.
 	await nativeDrop(page, cdp, { files: [EXTERNAL] });
 	await waitForPill(page, EXTERNAL).catch(() => undefined);
 	current = await pills(page);

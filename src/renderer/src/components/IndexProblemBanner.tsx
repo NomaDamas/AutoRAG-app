@@ -1,13 +1,8 @@
-import { TriangleAlert, X } from "lucide-react";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissIndexProblem, retryIndexProblem, useIndexProblem } from "../hooks/useIndexProblem";
 import { describeIndexProblem } from "../state/index-problem";
-import { iconButtonClass } from "./primitives/icon-button";
-
-/** The one button: the accent fill, at the height of the toolbar's pill controls. */
-const PRIMARY_CLASS =
-	"flex-none h-pill px-10 border-0 rounded-6 bg-accent text-on-accent text-meta whitespace-nowrap cursor-pointer transition-colors duration-(--dur-color) ease-[ease] hover:bg-accent-hover";
+import { NoticeCard } from "./primitives/NoticeCard";
 
 /**
  * The persistent "needs attention" line above the file list (issue #283): one
@@ -28,34 +23,24 @@ export function IndexProblemBanner({ onFixEmbedding }: { readonly onFixEmbedding
 	const [dismissedAt, setDismissedAt] = useState<string | null>(null);
 	if (view === null || view.retrying || view.primary === null || (problem.at !== null && problem.at === dismissedAt)) return null;
 	const primary = view.primary;
+	const dismiss = (): void => {
+		setDismissedAt(problem.at);
+		dismissIndexProblem();
+	};
+	// Figma 548:14204: the shared notice card over the list — a skipped file is a warning, a stopped index an error.
 	return (
-		<div
-			className="flex flex-none items-center gap-8 mx-8 mt-8 px-10 py-8 border border-error-orange-dot rounded-8 bg-error-orange-bg text-meta"
-			role="alert"
+		<NoticeCard
+			className="mx-8 mt-8 flex-none"
+			floating
+			tone={view.cardTone === "error" ? "error" : "warning"}
+			title={view.title}
+			onClose={dismiss}
+			actions={[
+				{ label: t("common.later"), onClick: dismiss },
+				{ label: primary.label, primary: true, onClick: () => (primary.kind === "fixEmbedding" ? onFixEmbedding() : retryIndexProblem()) },
+			]}
 		>
-			<TriangleAlert className="flex-none text-error-orange-text" size={16} strokeWidth={1.8} aria-hidden="true" />
-			<span className="flex-1 min-w-0 truncate text-ink" title={view.title}>
-				{view.title}
-			</span>
-			<button
-				type="button"
-				className={PRIMARY_CLASS}
-				onClick={() => (primary.kind === "fixEmbedding" ? onFixEmbedding() : retryIndexProblem())}
-			>
-				{primary.label}
-			</button>
-			<button
-				type="button"
-				className={iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" })}
-				aria-label={t("common.close")}
-				title={t("common.close")}
-				onClick={() => {
-					setDismissedAt(problem.at);
-					dismissIndexProblem();
-				}}
-			>
-				<X size={14} strokeWidth={1.8} />
-			</button>
-		</div>
+			{view.sideDetail}
+		</NoticeCard>
 	);
 }

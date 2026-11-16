@@ -1,5 +1,5 @@
 // Live end-to-end: a fresh profile that only signed in to Dazzi must be able to
-// run AI Search with no other provider configured.
+// run AI Chat with no other provider configured.
 //
 // The real app is launched on an empty profile (empty Pi agent dir, no provider
 // key in the environment) and signs in through its real account service. The
@@ -155,7 +155,7 @@ try {
 	await openAiSearch(page);
 	await page.evaluate(() => {
 		window.__qaQuickSeenDuringRun = false;
-		const panel = document.querySelector('section[aria-label="AI Search"]:not([aria-hidden="true"])');
+		const panel = document.querySelector('section[aria-label="AI Chat"]:not([aria-hidden="true"])');
 		if (!panel) return;
 		new MutationObserver(() => {
 			const inProgress = document.querySelector('button[aria-label="Stop"]') !== null;
@@ -178,8 +178,8 @@ try {
 	const proses = (await page.locator(".assistant-msg .assistant-prose").allTextContents()).map((s) => s.trim()).filter(Boolean);
 	const answer = proses.join("\n").trim();
 	const quickSeenDuringRun = await page.evaluate(() => Boolean(window.__qaQuickSeenDuringRun));
-	check("AI Search shows no credential error", !/No API key|\/login/.test(error), error || "no error");
-	check("AI Search answered", answer.length > 0, `${answer.length} chars: ${answer.slice(0, 120).replace(/\s+/g, " ")}`);
+	check("AI Chat shows no credential error", !/No API key|\/login/.test(error), error || "no error");
+	check("AI Chat answered", answer.length > 0, `${answer.length} chars: ${answer.slice(0, 120).replace(/\s+/g, " ")}`);
 	check("Quick answer rendered before run settled", quickSeenDuringRun || proses.length >= 1, `quickSeenDuringRun=${quickSeenDuringRun} proseBlocks=${proses.length}`);
 	check(
 		"Quick and Deep answers are never identical duplicates",

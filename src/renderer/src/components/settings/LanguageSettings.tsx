@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { Combobox } from "@base-ui/react";
+import { ChevronDown, X } from "lucide-react";
 import type { AutoRagConfigSnapshot, JsonObject, JsonValue } from "../../../../shared/settings-contract";
 import { isJsonObject } from "../../../../shared/settings-contract";
 import { settings } from "../../settings-runtime";
@@ -76,6 +77,8 @@ export function LanguageSettings({
 	useEffect(() => setSelected(effective), [signature]);
 
 	const selectedSet = useMemo(() => new Set(selected), [selected]);
+	/** The list opens under the whole field, not just its text input. */
+	const fieldRef = useRef<HTMLDivElement>(null);
 
 	async function save(next: readonly string[]): Promise<void> {
 		const storedValues = [...new Set(next)].filter((value): value is LanguageValue => SUPPORTED_VALUES.has(value));
@@ -99,13 +102,22 @@ export function LanguageSettings({
 		void save(values);
 	}
 
+	// Figma 403:8347 / 403:8920: the name and hint at the left (with 기본값으로 변경 once the list differs from the
+	// default), and at the right a 언어 선택… field over the chosen languages as chips.
 	return (
-		<div className="linear-row">
-			<div className="linear-row-label">
-				<span className="linear-row-name">{name}</span>
-				<small>{hint}</small>
+		<div className="language-row">
+			<div className="language-row-label">
+				<div className="language-row-text">
+					<span className="language-row-name">{name}</span>
+					<small>{hint}</small>
+				</div>
+				{stored !== undefined && fallback.length > 0 ? (
+					<button type="button" className="language-row-reset" disabled={saving} onClick={() => void save([])}>
+						{t("settingsCore.language.resetDefault")}
+					</button>
+				) : null}
 			</div>
-			<div className="linear-control language-combobox-control">
+			<div className="language-row-control">
 				<Combobox.Root<string, true>
 					multiple
 					items={LANGUAGE_ITEMS}
@@ -116,41 +128,40 @@ export function LanguageSettings({
 					autoHighlight={true}
 					disabled={saving}
 				>
-					<div className="language-combobox">
-						<div className="language-combobox__chips" aria-label={name}>
-							{selected.map((value) => (
-								<span className="language-combobox__chip" key={value}>
-									{LABELS.get(value) ?? value}
-									<button type="button" className="language-combobox__remove" aria-label={t("settingsCore.language.remove", { name: LABELS.get(value) ?? value })} onClick={() => select(selected.filter((item) => item !== value))}>
-										×
-									</button>
-								</span>
-							))}
-							<Combobox.Input className="language-combobox__input" placeholder={t("settingsCore.language.placeholder")} aria-label={t("settingsCore.language.search", { name })} />
-							<Combobox.Trigger className="language-combobox__trigger" aria-label={t("settingsCore.language.openList", { name })}>
-								⌄
-							</Combobox.Trigger>
-						</div>
-						<Combobox.Portal>
-							<Combobox.Positioner className="language-combobox__positioner" side="bottom" align="start" sideOffset={4}>
-								<Combobox.Popup className="language-combobox__popup">
-									<Combobox.List className="language-combobox__list">
-										{(value: string) => (
-											<Combobox.Item className="language-combobox__item" key={value} value={value}>
-												<span>{LABELS.get(value) ?? value}</span>
-												<Combobox.ItemIndicator className="language-combobox__indicator">{selectedSet.has(value) ? "✓" : ""}</Combobox.ItemIndicator>
-											</Combobox.Item>
-										)}
-									</Combobox.List>
-									<Combobox.Empty className="language-combobox__empty">{t("settingsCore.language.noMatch")}</Combobox.Empty>
-								</Combobox.Popup>
-							</Combobox.Positioner>
-						</Combobox.Portal>
+					<div className="language-combobox__field" ref={fieldRef}>
+						<Combobox.Input className="language-combobox__input" placeholder={t("settingsCore.language.placeholder")} aria-label={t("settingsCore.language.search", { name })} />
+						<Combobox.Trigger className="language-combobox__trigger" aria-label={t("settingsCore.language.openList", { name })}>
+							<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" />
+						</Combobox.Trigger>
 					</div>
+					<Combobox.Portal>
+						<Combobox.Positioner className="language-combobox__positioner" anchor={fieldRef} side="bottom" align="start" sideOffset={4}>
+							<Combobox.Popup className="language-combobox__popup">
+								<Combobox.List className="language-combobox__list">
+									{(value: string) => (
+										<Combobox.Item className="language-combobox__item" key={value} value={value}>
+											<span>{LABELS.get(value) ?? value}</span>
+											<Combobox.ItemIndicator className="language-combobox__indicator">{selectedSet.has(value) ? "✓" : ""}</Combobox.ItemIndicator>
+										</Combobox.Item>
+									)}
+								</Combobox.List>
+								<Combobox.Empty className="language-combobox__empty">{t("settingsCore.language.noMatch")}</Combobox.Empty>
+							</Combobox.Popup>
+						</Combobox.Positioner>
+					</Combobox.Portal>
 				</Combobox.Root>
-				{configured && fallback.length > 0 ? <span className="settings-config__note">{t("settingsCore.language.custom")}</span> : null}
-				{!configured && fallback.length > 0 ? <span className="settings-config__note">{t("settingsCore.language.inherited")}</span> : null}
-				{stored !== undefined ? <button type="button" className="linear-btn settings-config__reset" disabled={saving} onClick={() => void save([])}>{t("settingsCore.language.resetDefault")}</button> : null}
+				{selected.length > 0 ? (
+					<div className="language-combobox__chips" aria-label={name}>
+						{selected.map((value) => (
+							<span className="language-combobox__chip" key={value}>
+								{LABELS.get(value) ?? value}
+								<button type="button" className="language-combobox__remove" disabled={saving} aria-label={t("settingsCore.language.remove", { name: LABELS.get(value) ?? value })} onClick={() => select(selected.filter((item) => item !== value))}>
+									<X size={10} strokeWidth={1.5} aria-hidden="true" />
+								</button>
+							</span>
+						))}
+					</div>
+				) : null}
 				{error ? <span className="settings-inline-error">{error}</span> : null}
 			</div>
 		</div>

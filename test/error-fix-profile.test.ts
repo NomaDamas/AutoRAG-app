@@ -68,7 +68,7 @@ describe("the error-fix profile", () => {
 		const prompt = errorFixProfile({ message: "Search root /Users/me/Docs does not exist", surface: "ai-search", language: "ja", toolkit: toolkit() }).systemPrompt;
 
 		expect(prompt).toContain("Search root /Users/me/Docs does not exist");
-		expect(prompt).toContain("AI Search");
+		expect(prompt).toContain("AI Agent");
 		expect(prompt).toContain("Japanese");
 		expect(prompt).toContain("report_result");
 		expect(prompt).toMatch(/never (?:change|touch|edit)[^.]*model/iu);

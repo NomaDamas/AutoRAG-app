@@ -36,7 +36,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   folders, quick presets, and the **AI 앱 커스텀 어시스턴트** in the window's right sidebar
   (`AppCustomizerPanel` in the Inspector's column, one conversation per section), all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
-  **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
+  **AI Chat** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
 - **기본 → 단축키** — keyboard shortcut customization (`ShortcutsPage`,
   `src/shared/shortcuts-contract.ts`) across Dazzi's fixed catalog of 26
@@ -713,7 +713,7 @@ resumes at the same step.
   model afterwards. The draft only remembers the choice; the config is the authority
   (`onboarding/model-choice.ts`). The step cannot be left until the saved model has
   answered a real call (`main/model-health.ts`, `onboarding:checkModel`: the same
-  resolution and credentials the smart scan and AI Search use, one 16-token reply,
+  resolution and credentials the smart scan and AI Chat use, one 16-token reply,
   30 s limit); a refusal shows the provider's own message and a retry button, and
   `draft.model.verified` is only ever set by that answer.
 - **Roles** (BYOK, right before indexing) picks the reranker and Jev, which a Dazzi
@@ -956,7 +956,7 @@ window. Search results are not live.
 
 ## Helper agents
 
-AI Search is answered by the AutoRAG agent (`@autorag/librarian`). Every other
+AI Chat is answered by the AutoRAG agent (`@autorag/librarian`). Every other
 agent in the app is a plain pi session built by one factory,
 `createProfileSession` from `@autorag/librarian/profiles`, from an `AgentProfile`.
 The factory lives in the librarian so that the app's helper agents and the
@@ -965,7 +965,7 @@ built the same way:
 
 | Per profile | Shared by all |
 |---|---|
-| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by the librarian's `resolveSessionModel` / `resolveConfiguredSessionModel` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
+| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by the librarian's `resolveSessionModel` / `resolveConfiguredSessionModel` from the same config AI Chat uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
 
 A session is in memory and disposed by its caller: nothing is written to the
 agent dir or the working directory, and the user's own pi settings never apply.
@@ -975,12 +975,12 @@ App profiles live in `src/main/agents/profiles/`, and every profile shares `src/
 required `i` string first in its schema so the model writes a short plain phrase in the interface language before calling the tool, and the
 session streams that phrase to the UI where it is rendered with the `.shimmer` text effect. The first profile is smart indexing (thinking
 `low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
-second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
+second is the error-fix helper behind "AI로 고치기" (see "An error in AI Chat"). The third is the
 app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
 `src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 and
 Settings → 우클릭 메뉴 that inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`,
 `update_context_menu`, `upsert_magic_action`, `delete_magic_action`, `update_general_settings`) while enforcing
-the locked `AI Search` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. Alongside it,
+the locked `AI Chat` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. Alongside it,
 the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.ts`, routed when
 `AppCustomizerRequest.surface === "shortcuts"`) inspects and edits `AppSettings.shortcuts` (`get_shortcuts`,
 `update_shortcuts`) within the closed 26-action catalog. Finally, the `magic-action` helper
@@ -991,12 +991,12 @@ or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's S
 per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
-## AI Search approvals and questions
+## AI Chat approvals and questions
 
 librarian v2.12 gives the agent two ways to stop and ask the person: a **file-change approval gate** (a pi
 extension on every `bash`, `write`, `edit` and saved-automation call) and the **`ask_user` tool**. Both are
 built for the librarian's terminal UI and ask through pi's `ctx.ui` (`select`, `input`); a search run in the app
-has no terminal, so the app supplies the surface itself and the question appears in the AI Search panel in place
+has no terminal, so the app supplies the surface itself and the question appears in the AI Chat panel in place
 of the message box (`src/shared/interaction-contract.ts` is the contract).
 
 - **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `full`; persisted by the settings
@@ -1064,11 +1064,12 @@ and kept for the chat's life:
 
 ### What the panel shows while a run works, and an exhausted plan
 
-- **One loading indicator.** While a run is live and the Deep answer has not started, the panel shows one shimmering text line
-  (`answerViewState`, the `shimmer` utility), in the same place whether or not Quick text exists: what the agent is doing, or
-  "Thinking…" before it has said anything. There are no grey placeholder bars. A message that goes on to call a tool is a progress
-  note, not the answer: its streamed draft is withdrawn at the tool call and its text becomes the line, so a run that is reading
-  files is never a bare animation. Stop clears the line at once.
+- **One loading indicator.** While a run is live, the panel shows one shimmering text line (the seed loader and the `shimmer`
+  utility) after everything the run has written so far, whatever phase wrote it: what the agent is doing, or "Thinking…" before
+  it has said anything. There is no Quick/Deep special case: the line is on while the run is live and off the moment it ends, so
+  an answer or a note landing never switches it off (a Deep message that goes on to call a tool used to). There are no grey
+  placeholder bars. A message that goes on to call a tool is a progress note, not the answer: its streamed draft is kept in the
+  transcript and the line keeps going under it, so a run that is reading files is never a bare animation. Stop clears the line at once.
 - **Where the line's words come from.** `progress` events carry three kinds of text. The librarian writes exactly one of them
   itself, in English: `Reviewing the query.`, the first event of every `searchDocumentsStream` (`agent.ts`); the search service
   swaps it for `aiSearch.reviewing` in the interface language (the panel shows that same string from the moment a run starts,
@@ -1111,7 +1112,7 @@ and kept for the chat's life:
   (`ChatMessageAssistant.context`) and sends a run's error with the `new-chat` action when pi's overflow test reads it as one.
   The panel draws them with `components/ContextNotice.tsx`, and `describeAppError` turns `new-chat` into the
   `context-overflow` card (New chat, Ask narrower, no AI fix).
-- **An error in AI Search** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
+- **An error in AI Chat** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
   `classifyAppError` reads what the person can do from the wording (HTTP statuses only in the shapes the SDKs use, and never inside a
   path): no model or key (`model-missing`), a rejected key or login (`model-credentials`), a spent plan or billing problem
   (`model-subscription`), a retired model (`model-not-found`), a rate limit, a lost connection, or anything else. The first four mean
@@ -1126,7 +1127,7 @@ and kept for the chat's life:
   nothing of the raw error string is shown until they press "자세히 보기" ("Show details"), which expands the full selectable message for
   inspection or a bug report (only a pre-translated main-process plan message with `action: "open-plan"` is shown directly).
 - **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `hooks/useErrorFix.ts`, `ErrorFixDialog`, `SidebarErrorFixActivity`). A
-  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
+  helper-agent run on the AI Chat model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
   `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks), plus three tools only the app
   can offer: `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data sources, the index
   state), `refresh_index` and `report_result`, which is the answer and refuses `fixed` unless something was really changed (a file change,
@@ -1199,7 +1200,7 @@ tool writes the file, which this service then notices.
 librarian agent and takes no option for which Node to use: its `run` action (a test run
 of a rule's `autorag …` or `node …` command) and its `install_service` action both read
 `process.execPath`, which inside the app is the Dazzi binary, so a test run opened a
-second copy of the app that never exited and the AI Search turn hung. `ELECTRON_RUN_AS_NODE`
+second copy of the app that never exited and the AI Chat turn hung. `ELECTRON_RUN_AS_NODE`
 cannot be set app-wide (new windows then fail to load). `src/main/automation-runtime.ts`
 wraps just those two actions: `process.execPath` is swapped for a real Node
 (`resolveNodeBinary`: the bundled `<tools>/node`, else the first `node` on `PATH`) for the
@@ -1213,10 +1214,10 @@ and proven live by `scripts/manual-qa/run-qa-finder-automations-live.mjs`.
 A `running` daemon whose lock directory outlived a killed process still reads as
 running (`isAutomationDaemonRunning` uses `staleMs: 0` upstream).
 
-## AI Search attachments
+## AI Chat attachments
 
-Drop files, folders, or links on an AI Search tab's panel, on an AI Search tab
-in the tab strip, or on the sidebar's AI Search item to attach them to the next
+Drop files, folders, or links on an AI Chat tab's panel, on an AI Chat tab
+in the tab strip, or on the sidebar's AI Chat item to attach them to the next
 question:
 
 - **Finder rows** from the list, icon, or column view. Dragging a selected row
@@ -1227,8 +1228,8 @@ question:
 - **Links** (`text/uri-list`) dragged from a browser. A `file://` link becomes
   a file attachment.
 
-A drop on the sidebar item turns the focused tab into AI Search; a drop on an
-AI Search strip tab switches to it. A bare text drag is not an
+A drop on the sidebar item turns the focused tab into AI Chat; a drop on an
+AI Chat strip tab switches to it. A bare text drag is not an
 attachment. Attachments are deduplicated by path or URL.
 
 On send, `src/main/attachment-context.ts` builds one context block for the
@@ -1260,8 +1261,8 @@ summons a small window over any app. Pieces:
   `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
   (`AbortSignal` through the worker and the librarian thread).
 - Handoffs to the Finder reuse the os-request queue: *Show in Dazzi* is a `reveal`, *Ask about these files* an `ask`
-  (drafts on the nearest AI Search tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
-  `dazzi --ask` (a new AI Search tab sends it).
+  (drafts on the nearest AI Chat tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
+  `dazzi --ask` (a new AI Chat tab sends it).
 - `contentSearch` (`src/main/content-search.ts`, in the librarian thread) is model-free: `AutoRAGLite.searchSelected`
   over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
   Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
@@ -1281,7 +1282,7 @@ reads the copies back from the OS clipboard.
 Settings → General → **Add to the file right-click menu** (off by default)
 adds two entries to the OS file menu, the way Keka or Skim do:
 
-- **Ask Dazzi** attaches the selected files and folders to AI Search as
+- **Ask Dazzi** attaches the selected files and folders to AI Chat as
   drafts, so you type the question.
 - **Show in Dazzi** opens the file's folder with the file selected.
 
@@ -1314,7 +1315,7 @@ folder to Finder:
 ```sh
 dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
 dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
-dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Search tab asks at once, the paths attached
+dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Chat tab asks at once, the paths attached
 dazzi                          # bring Dazzi to the front
 ```
 
@@ -1325,7 +1326,7 @@ paths per call (the request limit in `src/shared/os-request-contract.ts`); more 
 an error rather than a silent cut.
 
 `--ask QUESTION` (or `--ask=QUESTION`) sends the action `ask` with the question
-in `--autorag-query=`: the renderer opens a new AI Search tab and sends the
+in `--autorag-query=`: the renderer opens a new AI Chat tab and sends the
 question with the existing paths as its attachments in one run
 (`deliverToDock` → `sendQuery(text, attachments)`), so a tab that is still
 answering never swallows it. The question needs no path; a missing attachment is
@@ -1449,9 +1450,9 @@ Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90
 encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
 `test/conversion-live.test.ts` does the same against the real binaries without the UI.
 
-## Voice input in AI Search
+## Voice input in AI Chat
 
-A microphone button in the AI Search composer dictates a question: it records, sends the clip to the
+A microphone button in the AI Chat composer dictates a question: it records, sends the clip to the
 hosted service, and appends the text to the draft. Nothing is sent as a question; the person
 reads and sends it.
 

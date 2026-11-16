@@ -1,4 +1,4 @@
-// Live AI Search QA: drives the built Finder app with Playwright and proves
+// Live AI Chat QA: drives the built Finder app with Playwright and proves
 // that a query shows the Thinking indicator (never the reasoning text), streams
 // a Quick draft and a Deep answer, and that a
 // broken config surfaces as an error instead of an endless wait.
@@ -30,7 +30,7 @@ const hasDazziAuth = (() => {
 	}
 })();
 if (!process.env.OPENROUTER_API_KEY && !hasDazziAuth) {
-	console.error("Either OPENROUTER_API_KEY or a signed-in ~/.pi/agent/auth.json (dazzi) is required for live AI Search QA.");
+	console.error("Either OPENROUTER_API_KEY or a signed-in ~/.pi/agent/auth.json (dazzi) is required for live AI Chat QA.");
 	process.exit(2);
 }
 rmSync(EVIDENCE, { recursive: true, force: true });
@@ -165,7 +165,7 @@ async function installRecorder(page) {
 			timeline.push({ t: Math.round(performance.now() - start), ...state });
 		};
 		window.__qaTimeline = timeline;
-		new MutationObserver(record).observe(document.querySelector('section[aria-label="AI Search"]:not([aria-hidden="true"])'), {
+		new MutationObserver(record).observe(document.querySelector('section[aria-label="AI Chat"]:not([aria-hidden="true"])'), {
 			subtree: true,
 			childList: true,
 			characterData: true,

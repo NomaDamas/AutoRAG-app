@@ -1254,6 +1254,19 @@ app.whenReady().then(async () => {
 			app.relaunch();
 			app.exit(0);
 		},
+		pickPaths: async (kind) => {
+			const options: OpenDialogOptions = {
+				title: t("main.dialogs.chooseExcludeTitle"),
+				buttonLabel: t("main.dialogs.addButton"),
+				properties: [
+					...(kind === "file" ? (["openFile"] as const) : kind === "folder" ? (["openDirectory"] as const) : (["openFile", "openDirectory"] as const)),
+					"multiSelections",
+				],
+			};
+			const parent = mainWindow;
+			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
+			return result.canceled ? [] : result.filePaths;
+		},
 		pickFolders: async () => {
 			const options: OpenDialogOptions = {
 				title: t("main.dialogs.chooseFolderTitle"),

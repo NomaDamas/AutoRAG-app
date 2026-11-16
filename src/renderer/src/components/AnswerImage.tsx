@@ -2,8 +2,8 @@
  * An image referenced by an AI Search answer or evidence excerpt.
  *
  * A local image Chromium can decode renders as a picture, streamed through the
- * `autorag-preview://` protocol Quick Look already uses, and captioned with its
- * file name (full path on hover); clicking it opens Quick Look. Anything that
+ * `autorag-preview://` protocol Quick Look already uses, with its full path on
+ * hover and no caption; clicking it opens Quick Look. Anything that
  * cannot be drawn — a missing or unreadable file, HEIC/TIFF, a relative link
  * with no document to resolve against — renders as a card that names the file
  * and shows its path, so the answer still says where the image is. Web images
@@ -40,21 +40,18 @@ export function lineImages(segments: readonly InlineSegment[]): readonly ImageSe
 export function ImageRow({
 	images,
 	folder,
-	captioned,
 	actions,
 }: {
 	readonly images: readonly ImageSegment[];
 	/** Folder of the document the text came from; resolves relative links. */
 	readonly folder: string | null;
-	/** Name the picture under it. Off in answer prose, where the Evidence panel already names each source. */
-	readonly captioned: boolean;
 	readonly actions: ImageActions;
 }): ReactElement | null {
 	if (images.length === 0) return null;
 	return (
 		<div className="answer-images flex flex-wrap items-start gap-8">
 			{images.map((image) => (
-				<AnswerImage key={image.target} reference={image.target} alt={image.alt} folder={folder} captioned={captioned} actions={actions} />
+				<AnswerImage key={image.target} reference={image.target} alt={image.alt} folder={folder} actions={actions} />
 			))}
 		</div>
 	);
@@ -67,13 +64,11 @@ export function AnswerImage({
 	reference,
 	alt,
 	folder,
-	captioned,
 	actions,
 }: {
 	readonly reference: string;
 	readonly alt: string;
 	readonly folder: string | null;
-	readonly captioned: boolean;
 	readonly actions: ImageActions;
 }): ReactElement {
 	const { t } = useTranslation();
@@ -116,6 +111,19 @@ export function AnswerImage({
 		);
 	}
 
+	if (target.media !== undefined && !failed) {
+		const common = { controls: true, preload: "metadata" as const, src: previewStreamUrl(target.path), title: target.path, onError: () => setFailed(true) };
+		return (
+			<figure data-media-path={target.path} className="answer-image m-0 flex max-w-full flex-col gap-4">
+				{target.media === "video" ? (
+					<video {...common} className="block max-h-[320px] max-w-full rounded-8 border border-border bg-black" />
+				) : (
+					<audio {...common} className="block w-full max-w-[420px]" />
+				)}
+			</figure>
+		);
+	}
+
 	const open = (): void => actions.onOpenImage({ path: target.path, name: target.name });
 	const pathLine = (
 		<span className="block truncate font-mono text-badge text-ink-muted select-text" title={target.path}>
@@ -142,13 +150,6 @@ export function AnswerImage({
 						onError={() => setFailed(true)}
 					/>
 				</button>
-				{captioned ? (
-					<figcaption className="min-w-0 max-w-[420px] text-badge text-ink-muted">
-						<span className="block truncate" title={target.path}>
-							{alt === "" ? target.name : `${alt} · ${target.name}`}
-						</span>
-					</figcaption>
-				) : null}
 			</figure>
 		);
 	}

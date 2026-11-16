@@ -76,21 +76,21 @@ async function renderView(props: ShellProps = {}): Promise<void> {
 const nav = (): HTMLElement => host.querySelector<HTMLElement>("aside.settings-sidebar") as HTMLElement;
 
 describe("Settings as a takeover of the window", () => {
-	it("has no title or back button in the sidebar's head; the back button is the first row under it, above the search and the pages", async () => {
+	it("has no title in the sidebar's head; the back button is the footer, under the search and the pages (Figma 403:8201)", async () => {
 		await renderView();
 		const head = nav().firstElementChild as HTMLElement;
 		expect(head.classList.contains("settings-sidebar-head")).toBe(true);
 		expect(head.textContent?.trim()).toBe("");
-		expect(head.querySelector("button")).toBeNull();
 		expect(nav().querySelector(".settings-sidebar-title")).toBeNull();
 		const search = nav().querySelector("label.side-search input") as Node;
-		const back = nav().querySelector<HTMLButtonElement>("button.settings-sidebar-back") as Node;
-		const firstPage = nav().querySelector(".settings-nav-item:not(.settings-sidebar-back)") as Node;
+		const back = nav().querySelector<HTMLButtonElement>(".settings-sidebar-foot button.settings-sidebar-back") as Node;
+		const firstPage = nav().querySelector(".settings-nav-item") as Node;
 		expect(search).not.toBeNull();
 		expect(back).not.toBeNull();
-		expect(back.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(search.compareDocumentPosition(firstPage) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-		expect(back.textContent?.trim()).toBe("Back");
+		expect(firstPage.compareDocumentPosition(back) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(nav().lastElementChild?.classList.contains("settings-sidebar-foot")).toBe(true);
+		expect(back.textContent?.trim()).toBe("Back to app");
 	});
 
 	it("wears the Finder sidebar's search: same field, a clear button once typed", async () => {

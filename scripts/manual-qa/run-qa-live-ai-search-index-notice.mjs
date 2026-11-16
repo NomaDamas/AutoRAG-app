@@ -1,4 +1,4 @@
-// Live end-to-end: AI Search warns about an index that is not ready exactly when the real Jev routes the question to
+// Live end-to-end: AI Chat warns about an index that is not ready exactly when the real Jev routes the question to
 // the local branch, and never when Jev sends it elsewhere.
 //
 // Same harness as run-qa-live-ai-search-links.mjs: a fresh profile signs in through a loopback stand-in for the Dazzi

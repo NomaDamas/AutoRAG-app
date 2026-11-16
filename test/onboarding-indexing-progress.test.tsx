@@ -147,12 +147,12 @@ describe("the first-run indexing screen", () => {
 		vi.useFakeTimers({ now: T0 + STALL_AFTER_MS + 60_000 });
 		renderScreen(status(later.snapshot));
 		vi.useRealTimers();
-		expect(host.querySelector('[data-testid="ix-stalled"]')?.textContent).toContain("11분째 끝난 파일이 없어요");
+		expect(host.querySelector('[data-testid="ix-stalled"]')?.textContent).toContain("11분째 끝난 파일이 없습니다");
 		// The line that counts minutes is not the live region; a hidden alert says it once.
 		expect(host.querySelector('[data-testid="ix-stalled"]')?.getAttribute("aria-hidden")).toBe("true");
 		expect(host.querySelector('[data-testid="ix-stalled"]')?.hasAttribute("role")).toBe(false);
 		expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1);
-		expect(host.querySelector('[role="alert"]')?.textContent).toContain("11분째 끝난 파일이 없어요");
+		expect(host.querySelector('[role="alert"]')?.textContent).toContain("11분째 끝난 파일이 없습니다");
 	});
 });
 

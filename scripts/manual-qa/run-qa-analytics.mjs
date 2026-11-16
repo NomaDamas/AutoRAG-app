@@ -144,7 +144,7 @@ let idB = "";
 	await sleep(400);
 	// Settings takes over the window; Back returns to the Finder and its sidebar.
 	await page.locator(".settings-sidebar-back").click();
-	await page.locator(".sidebar__item", { hasText: "AI Search" }).click();
+	await page.locator(".sidebar__item", { hasText: "AI Chat" }).click();
 	const composer = page.locator(`${AI_PANEL} textarea[aria-label="Ask Dazzi"]`);
 	await composer.waitFor();
 	await composer.fill(CANARY);

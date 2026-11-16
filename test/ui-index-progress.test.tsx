@@ -169,14 +169,14 @@ describe("the stalled warning", () => {
 	}
 
 	it("announces the warning once and does not read the growing minute count out again", () => {
-		show("11분째 끝난 파일이 없어요.", "alive");
-		expect(alerts()).toEqual(["11분째 끝난 파일이 없어요."]);
+		show("11분째 끝난 파일이 없습니다.", "alive");
+		expect(alerts()).toEqual(["11분째 끝난 파일이 없습니다."]);
 		expect(host.querySelector('[data-testid="stalled"]')?.getAttribute("aria-hidden")).toBe("true");
 		// A minute later the visible line says 12; the live region keeps its words, so nothing is announced.
 		show("12분째 끝난 파일이 없어요.", "alive");
 		show("13분째 끝난 파일이 없어요.", "alive");
 		expect(line()).toBe("13분째 끝난 파일이 없어요.");
-		expect(alerts()).toEqual(["11분째 끝난 파일이 없어요."]);
+		expect(alerts()).toEqual(["11분째 끝난 파일이 없습니다."]);
 	});
 
 	it("reaches Settings > Indexing as the same single alert", async () => {
@@ -195,11 +195,11 @@ describe("the stalled warning", () => {
 		}
 		expect(host.querySelector('[data-testid="index-progress-stalled"]')?.getAttribute("aria-hidden")).toBe("true");
 		expect(alerts()).toHaveLength(1);
-		expect(alerts()[0]).toContain("11분째 끝난 파일이 없어요");
+		expect(alerts()[0]).toContain("11분째 끝난 파일이 없습니다");
 	});
 
 	it("announces again when the situation changes, and not at all once the warning is gone", () => {
-		show("11분째 끝난 파일이 없어요. 작업 신호는 계속 들어오고 있어요.", "alive");
+		show("11분째 끝난 파일이 없습니다. 작업 신호는 계속 들어오고 있어요.", "alive");
 		show("14분째 끝난 파일이 없고 작업 신호도 끊겼어요.", "silent");
 		expect(alerts()).toEqual(["14분째 끝난 파일이 없고 작업 신호도 끊겼어요."]);
 		show(null, null);

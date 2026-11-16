@@ -78,7 +78,7 @@ describe("describeIndexProgress", () => {
 			return describeIndexProgress(later.snapshot, now, tr).warning;
 		};
 		expect(stalled(T0 + STALL_AFTER_MS + MIN - 5_000)).toContain("작업 신호는 계속 들어오고 있어서");
-		expect(stalled(T0)).toContain("작업 신호도 끊겼어요");
+		expect(stalled(T0)).toContain("작업 신호도 끊겼습니다");
 		expect(stalled(T0)).toContain("11분째");
 	});
 });

@@ -137,30 +137,46 @@ export function mergePhaseEvidence(
 }
 
 /**
- * Resolve the evidence list the Inspector should show for a conversation's
- * turns (`turns`, oldest first) and an optional `source` (the turn and phase
- * whose citation chip the user clicked last).
+ * Every source the conversation has cited so far, for the Inspector's evidence tabs: the citations of all turns
+ * (`turns`, oldest first) stack by citation number, so a source from the first turn stays one click away while a later
+ * turn cites more. Citation numbers run on across turns, so they rarely collide; when two turns do share a number the
+ * later turn wins, except for the turn and phase (`source`) whose chip the person last clicked, which wins for its own
+ * numbers.
  */
-export function resolveActiveEvidence(
+export function accumulateEvidence(
 	turns: readonly TurnEvidencePhases[],
 	source: EvidenceSelectionSource | null,
 ): readonly CitationEvidence[] {
-	if (source !== null) {
-		const turn = turns[source.turnIndex];
-		if (turn !== undefined) {
-			const primary = (source.phase === "quick" ? turn.quick?.evidence : turn.deep?.evidence) ?? [];
-			const secondary = (source.phase === "quick" ? turn.deep?.evidence : turn.quick?.evidence) ?? [];
-			const merged = mergePhaseEvidence(primary, secondary);
-			if (merged.length > 0) return merged;
+	const byNumber = new Map<number, CitationEvidence>();
+	const add = (items: readonly CitationEvidence[]): void => {
+		for (const item of items) byNumber.set(item.number, item);
+	};
+	for (const turn of turns) add(mergePhaseEvidence(turn.deep?.evidence ?? [], turn.quick?.evidence ?? []));
+	const clicked = source === null ? undefined : turns[source.turnIndex];
+	if (source !== null && clicked !== undefined) {
+		const primary = (source.phase === "quick" ? clicked.quick?.evidence : clicked.deep?.evidence) ?? [];
+		const secondary = (source.phase === "quick" ? clicked.deep?.evidence : clicked.quick?.evidence) ?? [];
+		add(mergePhaseEvidence(primary, secondary));
+	}
+	return [...byNumber.values()].sort((a, b) => a.number - b.number);
+}
+
+/**
+ * Where the conversation's text cites `number`, for scrolling to it: the newest turn (Deep before Quick) whose phase both
+ * cites the number and holds its evidence, the same turn {@link accumulateEvidence} takes the source from. Null when
+ * no phase does.
+ */
+export function citationSource(turns: readonly TurnEvidencePhases[], number: number): EvidenceSelectionSource | null {
+	for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
+		const turn = turns[turnIndex];
+		if (turn === undefined) continue;
+		for (const phase of ["deep", "quick"] as const) {
+			const answer = turn[phase];
+			if (answer === null) continue;
+			if (answer.evidence.some((entry) => entry.number === number) && citedNumbers(answer.answer).includes(number)) return { turnIndex, phase };
 		}
 	}
-	for (let index = turns.length - 1; index >= 0; index -= 1) {
-		const turn = turns[index];
-		if (turn === undefined) continue;
-		const merged = mergePhaseEvidence(turn.deep?.evidence ?? [], turn.quick?.evidence ?? []);
-		if (merged.length > 0) return merged;
-	}
-	return [];
+	return null;
 }
 
 /** Confidence as a percentage, shown right of the source line; `null` when the librarian measured none. */
