@@ -328,7 +328,8 @@
       "history": "Recent AI chats",
       "close": "Close chat"
     },
-    "fileActions": "File actions"
+    "fileActions": "File actions",
+    "moreActions": "More"
   },
   "aiSearch": {
     "title": "AI Chat",

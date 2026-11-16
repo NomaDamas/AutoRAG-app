@@ -328,7 +328,8 @@
       "history": "최근 AI 채팅 기록",
       "close": "대화 닫기"
     },
-    "fileActions": "파일 동작"
+    "fileActions": "파일 동작",
+    "moreActions": "더보기"
   },
   "aiSearch": {
     "title": "AI 채팅",

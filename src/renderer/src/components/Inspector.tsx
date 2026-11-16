@@ -25,7 +25,7 @@
  * renders no fabricated data. Esc handling stays in App's keymap.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { previewStreamUrl } from "../../../preview/shared/contract";
 import { hwpFirstPageUrl } from "../../../preview/ui/rhwp";
@@ -41,6 +41,7 @@ import { type FinderEntry, hasFileVersion } from "../data/entries";
 import { cn } from "../lib/cn";
 import { buttonClass } from "./primitives/button";
 import { anchorOf } from "../lib/anchor";
+import { CONTEXT_MENU_WIDTH, menuHeightForItems, menuPlacement } from "../state/context-menu";
 import { rulesWatching } from "../state/automations";
 import { dateLabelOf, fileKindOf, kindLabelOf } from "../state/entry-values";
 import { buildInfoRows, hasMoreInfoRows, visibleInfoRows, type InfoRow as InfoRowData, type InfoSection } from "../state/inspector-info";
@@ -82,6 +83,7 @@ import {
 	TrashIcon,
 	VideoConvertIcon,
 	ReduceSizeIcon,
+	MoreIcon,
 } from "./icons";
 import dazziMarkMono from "../assets/dazzi-mark-mono.png";
 import dazziMarkMonoDark from "../assets/dazzi-mark-mono-dark.png";
@@ -722,7 +724,7 @@ function MultiInfoHalf({
 			id: action.id,
 			label: actionLabel(t, action.id, action.label),
 			icon: <Icon size={16} />,
-			onClick: (event) => runner.activate(action, anchorOf(event.currentTarget)),
+			onClick: (anchor) => runner.activate(action, anchorOf(anchor)),
 		});
 	}
 	return (
@@ -837,7 +839,8 @@ interface GroupButton {
 	readonly label: string;
 	readonly icon: ReactElement;
 	readonly pressed?: boolean;
-	readonly onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void;
+	/** Called with the element a follow-up menu anchors to: the button, or the more button for an action in its menu. */
+	readonly onClick: (anchor: HTMLElement) => void;
 }
 
 /**
@@ -890,7 +893,7 @@ function FileActionGroup({
 			id: action.id,
 			label: actionLabel(t, action.id, action.label),
 			icon: <Icon size={16} />,
-			onClick: (event) => runner.activate(action, anchorOf(event.currentTarget)),
+			onClick: (anchor) => runner.activate(action, anchorOf(anchor)),
 		});
 	}
 	return <ActionIconGroup buttons={buttons} menu={runner.menu} />;
@@ -901,18 +904,20 @@ const ACTION_CELL = 37;
 /** The toolbar's border (1 + 1) and horizontal padding (4 + 4). */
 const ACTION_FRAME = 10;
 
-function ActionButton({ button }: { readonly button: GroupButton }): ReactElement {
+function ActionButton({ button, expanded }: { readonly button: GroupButton; readonly expanded?: boolean | undefined }): ReactElement {
 	return (
 		<button
 			type="button"
 			data-action={button.id}
 			aria-label={button.label}
 			aria-pressed={button.pressed}
+			aria-haspopup={expanded === undefined ? undefined : "menu"}
+			aria-expanded={expanded}
 			className={cn(
 				"group relative flex h-32 w-28 flex-none items-center justify-center rounded-6 border-0 bg-transparent p-0 cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease] hover:bg-hover",
 				button.pressed === true ? "text-accent-text" : "text-ink-body",
 			)}
-			onClick={button.onClick}
+			onClick={(event) => button.onClick(event.currentTarget)}
 		>
 			{button.icon}
 			<span
@@ -925,21 +930,90 @@ function ActionButton({ button }: { readonly button: GroupButton }): ReactElemen
 	);
 }
 
+/** The menu the "more" button opens: the actions that did not fit on the row, with their icons and names. */
+function OverflowMenu({
+	buttons,
+	anchor,
+	onClose,
+}: {
+	readonly buttons: readonly GroupButton[];
+	readonly anchor: HTMLElement;
+	readonly onClose: () => void;
+}): ReactElement {
+	const { t } = useTranslation();
+	const ref = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const onMouseDown = (event: globalThis.MouseEvent): void => {
+			if (event.target instanceof Node && (ref.current?.contains(event.target) === true || anchor.contains(event.target))) return;
+			onClose();
+		};
+		const onKeyDown = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") onClose();
+		};
+		window.addEventListener("mousedown", onMouseDown);
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			window.removeEventListener("mousedown", onMouseDown);
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [anchor, onClose]);
+	const rect = anchorOf(anchor);
+	// Right-aligned under the button, since the button is the row's last; flipped above it when the window is too short.
+	const placement = menuPlacement(
+		{ x: Math.max(0, rect.x + rect.width - CONTEXT_MENU_WIDTH), y: rect.y + rect.height + 4 },
+		{ width: CONTEXT_MENU_WIDTH, height: menuHeightForItems(buttons.length) },
+		{ width: window.innerWidth, height: window.innerHeight },
+	);
+	return (
+		<div
+			ref={ref}
+			className="menu fixed z-60 flex flex-col w-context-menu p-4 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+			role="menu"
+			aria-label={t("inspector.moreActions")}
+			style={{ left: `${placement.left}px`, top: `${placement.top}px` }}
+		>
+			{buttons.map((button) => (
+				<button
+					key={button.id}
+					type="button"
+					role="menuitem"
+					data-action={button.id}
+					className={cn(
+						"menu__item flex flex-none items-center gap-8 h-icon-sm px-10 border-0 rounded-6 bg-transparent text-sm text-left whitespace-nowrap transition-[background] duration-(--dur-color) ease-[ease] hover:bg-hover",
+						button.pressed === true ? "text-accent-text" : "text-ink",
+					)}
+					onClick={() => {
+						onClose();
+						// A follow-up menu (a format list, "Open with") opens where the more button is.
+						button.onClick(anchor);
+					}}
+				>
+					<span className="flex size-16 flex-none items-center justify-center" aria-hidden="true">
+						{button.icon}
+					</span>
+					<span className="menu__label flex-1 min-w-0 truncate">{button.label}</span>
+				</button>
+			))}
+		</div>
+	);
+}
+
 /**
- * The action group's row of icon buttons with dividers; each name shows as a tooltip and is the accessible name. When the
- * buttons do not fit on one row they are laid out on even columns, with a rule between the rows and no divider at a row's start.
+ * The action group's row of icon buttons with dividers; each name shows as a tooltip and is the accessible name. The
+ * row never wraps: when the buttons do not fit, the last place holds a "more" button whose menu lists the rest.
  */
 function ActionIconGroup({ buttons, menu }: { readonly buttons: readonly GroupButton[]; readonly menu: ReactElement | null }): ReactElement {
 	const { t } = useTranslation();
 	const frame = useRef<HTMLDivElement>(null);
 	const [columns, setColumns] = useState(Number.POSITIVE_INFINITY);
+	const [moreAnchor, setMoreAnchor] = useState<HTMLElement | null>(null);
 	useLayoutEffect(() => {
 		const element = frame.current;
 		if (element === null) return;
-		// An element with no layout (hidden, or a test DOM) measures 0: keep one row rather than a column of one.
+		// An element with no layout (hidden, or a test DOM) measures 0: show every button rather than one.
 		const measure = (): void => {
 			const width = element.clientWidth;
-			setColumns(width === 0 ? Number.POSITIVE_INFINITY : Math.max(1, Math.floor((width - ACTION_FRAME + ACTION_CELL - 28) / ACTION_CELL)));
+			setColumns(width === 0 ? Number.POSITIVE_INFINITY : Math.max(2, Math.floor((width - ACTION_FRAME + ACTION_CELL - 28) / ACTION_CELL)));
 		};
 		measure();
 		if (typeof ResizeObserver === "undefined") return;
@@ -947,38 +1021,24 @@ function ActionIconGroup({ buttons, menu }: { readonly buttons: readonly GroupBu
 		observer.observe(element);
 		return () => observer.disconnect();
 	}, []);
-	const wraps = columns < buttons.length;
-	const rows: GroupButton[][] = [];
-	for (let index = 0; index < buttons.length; index += columns) rows.push(buttons.slice(index, index + columns));
+	const overflows = columns < buttons.length;
+	const shown = overflows ? buttons.slice(0, columns - 1) : buttons;
+	const hidden = overflows ? buttons.slice(columns - 1) : [];
+	const more: GroupButton | null = overflows
+		? { id: "more", label: t("inspector.moreActions"), icon: <MoreIcon size={16} />, onClick: (anchor) => setMoreAnchor((open) => (open === null ? anchor : null)) }
+		: null;
+	if (!overflows && moreAnchor !== null) setMoreAnchor(null);
 	return (
 		<div ref={frame} className="inspector-file-actions flex">
-			{wraps ? (
-				<div className="flex w-full flex-col rounded-8 border border-divider bg-window px-4" role="toolbar" aria-label={t("inspector.fileActions")}>
-					{rows.map((row, rowIndex) => (
-						<div
-							key={row[0]!.id}
-							className={cn("grid py-2", rowIndex === 0 ? null : "border-t border-divider")}
-							style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
-						>
-							{row.map((button, index) => (
-								<span key={button.id} className="relative flex items-center justify-center">
-									{index === 0 ? null : <span className="absolute left-0 top-1/2 block h-32 w-px -translate-y-1/2 bg-divider" aria-hidden="true" />}
-									<ActionButton button={button} />
-								</span>
-							))}
-						</div>
-					))}
-				</div>
-			) : (
-				<div className="inline-flex max-w-full items-center gap-4 rounded-8 border border-divider bg-window px-4 py-2" role="toolbar" aria-label={t("inspector.fileActions")}>
-					{buttons.map((button, index) => (
-						<span key={button.id} className="flex items-center gap-4">
-							{index === 0 ? null : <span className="block h-32 w-px bg-divider" aria-hidden="true" />}
-							<ActionButton button={button} />
-						</span>
-					))}
-				</div>
-			)}
+			<div className="inline-flex max-w-full items-center gap-4 rounded-8 border border-divider bg-window px-4 py-2" role="toolbar" aria-label={t("inspector.fileActions")}>
+				{[...shown, ...(more === null ? [] : [more])].map((button, index) => (
+					<span key={button.id} className="flex items-center gap-4">
+						{index === 0 ? null : <span className="block h-32 w-px bg-divider" aria-hidden="true" />}
+						<ActionButton button={button} expanded={button.id === "more" ? moreAnchor !== null : undefined} />
+					</span>
+				))}
+			</div>
+			{moreAnchor === null ? null : <OverflowMenu buttons={hidden} anchor={moreAnchor} onClose={() => setMoreAnchor(null)} />}
 			{menu}
 		</div>
 	);

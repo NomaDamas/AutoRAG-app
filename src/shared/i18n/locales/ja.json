@@ -328,7 +328,8 @@
       "history": "最近のAI チャット",
       "close": "会話を閉じる"
     },
-    "fileActions": "ファイル操作"
+    "fileActions": "ファイル操作",
+    "moreActions": "その他"
   },
   "aiSearch": {
     "title": "AI チャット",

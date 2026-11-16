@@ -328,7 +328,8 @@
       "history": "最近的 AI 聊天",
       "close": "关闭对话"
     },
-    "fileActions": "文件操作"
+    "fileActions": "文件操作",
+    "moreActions": "更多"
   },
   "aiSearch": {
     "title": "AI 聊天",
