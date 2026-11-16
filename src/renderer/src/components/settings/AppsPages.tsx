@@ -31,7 +31,7 @@ import { excludePath, includePath } from "../../../../shared/index-scope-edit";
 import { readScheduleSettings, scheduleUpdates, type ScheduleSettings } from "../../../../shared/refresh-schedule-settings";
 import { hostPlatform } from "../../lib/shortcuts";
 import { ConnectorFieldInput, sourceTitle, TEMPLATE_BY_ID, templateLabel, type FieldSpec } from "./datasourceTemplates";
-import { ModalShell, ModalActions, Note, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { ModalShell, ModalActions, Note, PlainRow, PromptModal, Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
 import { SelectField } from "./SelectField";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
@@ -123,22 +123,26 @@ function ScheduleConditions({ config, onApply }: { readonly config: JsonObject; 
 			setProblem(t("settingsSources.indexing.scheduleWindowSame"));
 		}
 	}
+	// The redesigned row style (as on 일반): a 14px bold title, then plain rows with no rule between them.
 	return (
-		<Section title={t("settingsSources.indexing.scheduleTitle")}>
-			<Row name={t("settingsSources.indexing.scheduleAcOnlyName")} hint={t("settingsSources.indexing.scheduleAcOnlyHint")}>
-				<Switch checked={settings.acOnly} onChange={() => void change({ acOnly: !settings.acOnly })} ariaLabel={t("settingsSources.indexing.scheduleAcOnlyName")} />
-			</Row>
-			<Row name={t("settingsSources.indexing.scheduleWindowName")} hint={t("settingsSources.indexing.scheduleWindowHint")}>
-				<Switch checked={settings.windowEnabled} onChange={() => void change({ windowEnabled: !settings.windowEnabled })} ariaLabel={t("settingsSources.indexing.scheduleWindowName")} />
-			</Row>
-			{settings.windowEnabled ? (
-				<Row name={`${t("settingsSources.indexing.scheduleWindowStart")} – ${t("settingsSources.indexing.scheduleWindowEnd")}`}>
-					<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowStart")} value={settings.start} onChange={(event) => event.target.value !== "" && void change({ start: event.target.value })} />
-					<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowEnd")} value={settings.end} onChange={(event) => event.target.value !== "" && void change({ end: event.target.value })} />
-				</Row>
-			) : null}
+		<section className="scope-section" data-index-scope="schedule">
+			<h3 className="scope-section-title">{t("settingsSources.indexing.scheduleTitle")}</h3>
+			<div className="settings-plain plain-section-rows">
+				<PlainRow name={t("settingsSources.indexing.scheduleAcOnlyName")} hint={t("settingsSources.indexing.scheduleAcOnlyHint")}>
+					<Switch checked={settings.acOnly} onChange={() => void change({ acOnly: !settings.acOnly })} ariaLabel={t("settingsSources.indexing.scheduleAcOnlyName")} />
+				</PlainRow>
+				<PlainRow name={t("settingsSources.indexing.scheduleWindowName")} hint={t("settingsSources.indexing.scheduleWindowHint")}>
+					<Switch checked={settings.windowEnabled} onChange={() => void change({ windowEnabled: !settings.windowEnabled })} ariaLabel={t("settingsSources.indexing.scheduleWindowName")} />
+				</PlainRow>
+				{settings.windowEnabled ? (
+					<PlainRow name={`${t("settingsSources.indexing.scheduleWindowStart")} – ${t("settingsSources.indexing.scheduleWindowEnd")}`} hint="">
+						<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowStart")} value={settings.start} onChange={(event) => event.target.value !== "" && void change({ start: event.target.value })} />
+						<input type="time" className="settings-select-compact" aria-label={t("settingsSources.indexing.scheduleWindowEnd")} value={settings.end} onChange={(event) => event.target.value !== "" && void change({ end: event.target.value })} />
+					</PlainRow>
+				) : null}
+			</div>
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
-		</Section>
+		</section>
 	);
 }
 
@@ -405,7 +409,9 @@ export function IndexingPage({
 						</Note>
 					) : null}
 				</section>
+				<hr className="scope-divider" />
 				<ScheduleConditions config={snapshot.config} onApply={(next) => run(scheduleUpdates(next))} />
+				<hr className="scope-divider" />
 				<FileNameWatchRow snapshot={snapshot} run={run} />
 			</div>
 			{editor.prompt}
