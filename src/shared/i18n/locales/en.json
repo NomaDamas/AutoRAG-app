@@ -503,7 +503,7 @@
     "answerPlaceholder": "Type your answer",
     "questionAria": "Question from Dazzi",
     "approval": {
-      "headlineChange": "Dazzi wants to change your files. Allow this?",
+      "headlineChange": "Allow this file change?",
       "headlineRun": "Dazzi wants to run a task. Allow it?",
       "headlineUnclassified": "Dazzi wants to run this command. Allow it?",
       "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide whether to allow it."
@@ -518,7 +518,7 @@
     },
     "allowOnce": "Allow once",
     "allowSession": {
-      "categories": "Allow all of this kind this session",
+      "categories": "Allow all this session",
       "unclassified": "Allow all unclassified calls this session",
       "all": "Allow every such call this session"
     },
