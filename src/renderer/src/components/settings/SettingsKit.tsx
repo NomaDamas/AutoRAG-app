@@ -9,17 +9,55 @@
  * settings.css.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
+import type { AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
+import dazziMark from "../../assets/dazzi-mark.png";
+
+/**
+ * The invitation to the page's AI assistant, shown under the page head while the right sidebar is not showing the
+ * assistant. A page that has an assistant of its own draws that invitation itself (사이드바, 우클릭 메뉴, 단축키); every other
+ * assistant-backed page gets it from its head through this context, so the page body stays untouched.
+ */
+export interface SettingsAssistantHero {
+	readonly surface: AppCustomizerSurface;
+	readonly onOpen: () => void;
+}
+
+export const SettingsAssistantHeroContext = createContext<SettingsAssistantHero | null>(null);
+
+function AssistantHero({ surface, onOpen }: SettingsAssistantHero): ReactElement {
+	const { t } = useTranslation();
+	return (
+		<div className="sidebar-ai-hero" data-assistant-hero={surface}>
+			<div className="sidebar-ai-hero__body">
+				<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+					<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+				</span>
+				<div className="sidebar-ai-hero__copy">
+					<div className="sidebar-ai-hero__title">{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroTitle`)}</div>
+					<p className="sidebar-ai-hero__desc">{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroDesc`)}</p>
+				</div>
+			</div>
+			<button type="button" className="linear-btn settings-btn-primary sidebar-ai-hero__btn" data-action="open-app-customizer" onClick={onOpen}>
+				<span>{t(`settingsCore.assistants.${surface as ConfigAssistantSurface}.heroButton`)}</span>
+			</button>
+		</div>
+	);
+}
 
 export function SettingsPageHead({ title, description, note }: { readonly title: string; readonly description: string; readonly note?: string }): ReactElement {
+	const hero = useContext(SettingsAssistantHeroContext);
 	return (
-		<div className="settings-page-head">
-			<h1 className="linear-title">{title}</h1>
-			<p className="linear-desc">{description}</p>
-			{note !== undefined ? <p className="linear-desc">{note}</p> : null}
-		</div>
+		<>
+			<div className="settings-page-head">
+				<h1 className="linear-title">{title}</h1>
+				<p className="linear-desc">{description}</p>
+				{note !== undefined ? <p className="linear-desc">{note}</p> : null}
+			</div>
+			{hero === null ? null : <AssistantHero {...hero} />}
+		</>
 	);
 }
 

@@ -506,7 +506,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 
 		// Sections without an assistant leave the right sidebar to the Inspector
 		await act(async () => {
-			nav("일반")?.click();
+			nav("원격 접속")?.click();
 		});
 		await settle();
 		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();

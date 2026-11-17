@@ -44,17 +44,9 @@ import { ExclusionsSection, FileNameWatchRow, SearchFoldersSection, useScopeEdit
 import { cn } from "../../lib/cn";
 import { buttonClass } from "../primitives/button";
 
-const settings = window.autorag.settings;
+import { REFRESH_INTERVALS } from "../../../../shared/settings-options";
 
-/** Refresh cadences the config stores in milliseconds. */
-const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKey }[] = [
-	{ ms: 5 * 60_000, label: "settingsSources.cadence.min5" },
-	{ ms: 15 * 60_000, label: "settingsSources.cadence.min15" },
-	{ ms: 30 * 60_000, label: "settingsSources.cadence.min30" },
-	{ ms: 60 * 60_000, label: "settingsSources.cadence.hour1" },
-	{ ms: 6 * 60 * 60_000, label: "settingsSources.cadence.hour6" },
-	{ ms: 24 * 60 * 60_000, label: "settingsSources.cadence.day1" },
-];
+const settings = window.autorag.settings;
 
 const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
 	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
@@ -323,7 +315,7 @@ export function IndexingPage({
 								className="settings-select-compact"
 								aria-label={t("settingsSources.indexing.localIntervalAria")}
 								value={String(localInterval)}
-								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 								onValueChange={(value) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(value))}
 							/>
 							<button
@@ -374,7 +366,7 @@ export function IndexingPage({
 										className="settings-select-compact"
 										aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
 										value={String(intervalOf(row, snapshot))}
-										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 										onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
 									/>
 								) : null}
@@ -783,7 +775,7 @@ export function SourceDetailPage({
 							className="linear-select"
 							aria-label={t("settingsSources.sourceDetail.intervalName")}
 							value={String(polling)}
-							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 							onValueChange={(value) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(value))}
 						/>
 					</Row>

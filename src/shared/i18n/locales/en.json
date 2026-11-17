@@ -2862,6 +2862,104 @@
         "readOnlyHint": "The agent can only search; it can't refresh the index or save reports."
       },
       "openFile": "Open Config File"
+    },
+    "assistants": {
+      "general": {
+        "title": "AI General Settings Assistant",
+        "emptyTitle": "Which setting should I change?",
+        "emptyDesc": "Change the appearance, language, startup behavior and the quick-search shortcut just by asking.",
+        "placeholder": "Tell me which setting to change",
+        "prompt1": "Switch to dark mode",
+        "prompt2": "Change the app language to Japanese",
+        "prompt3": "Open Dazzi automatically when I turn on my computer",
+        "heroTitle": "Change general settings with AI",
+        "heroDesc": "Just ask, like \"Switch to dark mode and show hidden files.\"",
+        "heroButton": "Ask AI"
+      },
+      "ai": {
+        "title": "AI Model Assistant",
+        "emptyTitle": "Which model would you like to use?",
+        "emptyDesc": "Pick the models of your connected services for answering, splitting questions, judging and reranking.",
+        "placeholder": "Tell me which model to switch to",
+        "prompt1": "Show me the models I can use right now",
+        "prompt2": "Make it think more deeply when it answers",
+        "prompt3": "Turn reranking off",
+        "heroTitle": "Pick models with AI",
+        "heroDesc": "Just ask, like \"Make answers think more deeply.\"",
+        "heroButton": "Ask AI"
+      },
+      "web": {
+        "title": "AI Web Search Assistant",
+        "emptyTitle": "How would you like web search to work?",
+        "emptyDesc": "Turn web search on or off, or choose which search service to use.",
+        "placeholder": "Tell me how to change web search",
+        "prompt1": "Turn web search off",
+        "prompt2": "Use DuckDuckGo for web search",
+        "prompt3": "Turn on reading web pages too",
+        "heroTitle": "Set up web search with AI",
+        "heroDesc": "Just ask, like \"Use DuckDuckGo for web search.\"",
+        "heroButton": "Ask AI"
+      },
+      "indexing": {
+        "title": "AI Search Scope Assistant",
+        "emptyTitle": "Which folders should be searched?",
+        "emptyDesc": "Add or remove searched folders, leave things out, and change how often the index refreshes.",
+        "placeholder": "Tell me how to change the search scope",
+        "prompt1": "Add my Documents folder to the searched folders",
+        "prompt2": "Refresh automatically every hour",
+        "prompt3": "Leave my backup folder out of search",
+        "heroTitle": "Tidy the search scope with AI",
+        "heroDesc": "Just ask, like \"Add Documents and leave out the backup folder.\"",
+        "heroButton": "Ask AI"
+      },
+      "reading": {
+        "title": "AI Document Reading Assistant",
+        "emptyTitle": "Which languages are your documents in?",
+        "emptyDesc": "Choose the languages used when reading text out of documents.",
+        "placeholder": "Tell me which document languages to read",
+        "prompt1": "Read Korean and Japanese documents",
+        "prompt2": "Add English as well",
+        "prompt3": "Put the language setting back to the default",
+        "heroTitle": "Choose document languages with AI",
+        "heroDesc": "Just ask, like \"Read Korean and Japanese documents.\"",
+        "heroButton": "Ask AI"
+      },
+      "duplicates": {
+        "title": "AI Duplicate Files Assistant",
+        "emptyTitle": "How should duplicates be handled?",
+        "emptyDesc": "Change how identical files and other versions of a file are found, and how often they are checked.",
+        "placeholder": "Tell me how to change duplicate-file settings",
+        "prompt1": "Leave identical files out of search",
+        "prompt2": "Turn off finding other versions of a file",
+        "prompt3": "Check only once a day",
+        "heroTitle": "Set up duplicate files with AI",
+        "heroDesc": "Just ask, like \"Check only once a day.\"",
+        "heroButton": "Ask AI"
+      },
+      "mcp": {
+        "title": "AI MCP Server Assistant",
+        "emptyTitle": "Which tool servers should I work on?",
+        "emptyDesc": "Turn connected MCP servers on or off, change how they are shown, and add new ones.",
+        "placeholder": "Tell me how to change the MCP servers",
+        "prompt1": "Show me the connected MCP servers",
+        "prompt2": "Turn off the servers I don't use",
+        "prompt3": "Add the server at https://example.com/mcp",
+        "heroTitle": "Manage MCP servers with AI",
+        "heroDesc": "Just ask, like \"Turn off the servers I don't use.\"",
+        "heroButton": "Ask AI"
+      },
+      "apps": {
+        "title": "AI Connected Apps Assistant",
+        "emptyTitle": "Which app connection should I change?",
+        "emptyDesc": "Turn connected apps on or off, and change their description and how often they refresh.",
+        "placeholder": "Tell me how to change your connected apps",
+        "prompt1": "Tell me how my connected apps are doing",
+        "prompt2": "Refresh Slack every hour",
+        "prompt3": "Turn off the apps I don't use",
+        "heroTitle": "Manage connected apps with AI",
+        "heroDesc": "Just ask, like \"Refresh Slack every hour.\"",
+        "heroButton": "Ask AI"
+      }
     }
   },
   "settingsSources": {

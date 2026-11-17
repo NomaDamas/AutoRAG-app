@@ -21,7 +21,34 @@ export const APP_CUSTOMIZER_CHANNELS = {
 	event: "appCustomizer:event",
 } as const;
 
-export type AppCustomizerSurface = "sidebar" | "contextMenu" | "shortcuts";
+/**
+ * Every Settings section with an AI assistant in the window's right sidebar. `sidebar`, `contextMenu` and `shortcuts`
+ * edit Dazzi's own look; the rest are one section each of the shared AutoRAG config and the app preferences:
+ * `general` (app preferences), `ai` and `web` (models and web search), `indexing`, `reading` and `duplicates` (what
+ * is searched and how), `mcp` and `apps` (connected tools and apps).
+ */
+export const APP_CUSTOMIZER_SURFACES = [
+	"sidebar",
+	"contextMenu",
+	"shortcuts",
+	"general",
+	"ai",
+	"web",
+	"indexing",
+	"reading",
+	"duplicates",
+	"mcp",
+	"apps",
+] as const;
+
+export type AppCustomizerSurface = (typeof APP_CUSTOMIZER_SURFACES)[number];
+
+/** The surfaces that edit the shared AutoRAG config or the app preferences (every one but Dazzi's own sidebar, menu and shortcuts). */
+export type ConfigAssistantSurface = Exclude<AppCustomizerSurface, "sidebar" | "contextMenu" | "shortcuts">;
+
+export function isAppCustomizerSurface(value: unknown): value is AppCustomizerSurface {
+	return typeof value === "string" && (APP_CUSTOMIZER_SURFACES as readonly string[]).includes(value);
+}
 
 export interface AppCustomizerRequest {
 	readonly sessionId: string;
@@ -33,11 +60,7 @@ export interface AppCustomizerRequest {
 export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRequest {
 	if (typeof value !== "object" || value === null) return false;
 	const candidate = value as Record<string, unknown>;
-	const validSurface =
-		candidate.surface === undefined ||
-		candidate.surface === "sidebar" ||
-		candidate.surface === "contextMenu" ||
-		candidate.surface === "shortcuts";
+	const validSurface = candidate.surface === undefined || isAppCustomizerSurface(candidate.surface);
 	return (
 		validSurface &&
 		typeof candidate.sessionId === "string" &&
@@ -49,7 +72,7 @@ export function isAppCustomizerRequest(value: unknown): value is AppCustomizerRe
 
 /** One setting mutation performed by a tool call during a turn. */
 export interface AppCustomizerChange {
-	readonly kind: "sidebar" | "contextMenu" | "shortcuts" | "general";
+	readonly kind: "sidebar" | "contextMenu" | "shortcuts" | "general" | "ai" | "search" | "connections";
 	/** Short human-readable description of the change. */
 	readonly summary: string;
 	/** Settings keys modified (e.g. `["sidebar.hiddenItems"]`, `["appearance"]`). */

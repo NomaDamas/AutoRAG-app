@@ -4,25 +4,10 @@ import { Combobox } from "@base-ui/react";
 import { ChevronDown, X } from "lucide-react";
 import type { AutoRagConfigSnapshot, JsonObject, JsonValue } from "../../../../shared/settings-contract";
 import { isJsonObject } from "../../../../shared/settings-contract";
+import { DOC_LANGUAGES } from "../../../../shared/settings-options";
 import { settings } from "../../settings-runtime";
 
-export const SUPPORTED_LANGUAGES = [
-	{ value: "ko", label: "한국어" },
-	{ value: "en", label: "English" },
-	{ value: "ja", label: "日本語" },
-	{ value: "zh-hans", label: "简体中文" },
-	{ value: "zh-hant", label: "繁體中文" },
-	{ value: "fr", label: "Français" },
-	{ value: "de", label: "Deutsch" },
-	{ value: "es", label: "Español" },
-	{ value: "ru", label: "Русский" },
-	{ value: "it", label: "Italiano" },
-	{ value: "pt", label: "Português" },
-	{ value: "vi", label: "Tiếng Việt" },
-	{ value: "th", label: "ไทย" },
-	{ value: "ar", label: "العربية" },
-	{ value: "hi", label: "हिन्दी" },
-] as const;
+const SUPPORTED_LANGUAGES = DOC_LANGUAGES;
 
 type LanguageValue = (typeof SUPPORTED_LANGUAGES)[number]["value"];
 type ConfigPath = readonly string[];
