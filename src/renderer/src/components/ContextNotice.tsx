@@ -10,7 +10,7 @@ import { CompactIcon, TrimIcon } from "./icons";
 export function CompactingStatus(): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<div className="context-compacting my-6 flex items-center gap-6 text-meta text-ink-muted" role="status" data-context="compacting">
+		<div className="context-compacting my-6 flex items-center gap-6 text-body leading-[1.55] text-ink-muted" role="status" data-context="compacting">
 			<CompactIcon className="flex-none text-accent" />
 			<span className="shimmer min-w-0 truncate">{t("aiSearch.context.compacting")}</span>
 		</div>

@@ -572,7 +572,7 @@ function TurnView({
 				{deepText === "" ? null : (
 					<div className="flex min-w-0 flex-col gap-6">
 						{turn.deepElapsed === null ? null : (
-							<div className="thinking-header flex items-center gap-5 text-tile font-medium text-ink-muted">
+							<div className="thinking-header flex items-center gap-5 text-sm leading-[1.5] font-medium text-ink-muted">
 								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
 							</div>
 						)}
@@ -580,7 +580,7 @@ function TurnView({
 					</div>
 				)}
 				{live ? (
-					<div className="flex min-w-0 items-center gap-6 text-tile text-ink-muted" role="status">
+					<div className="flex min-w-0 items-center gap-6 text-sm leading-[1.5] text-ink-muted" role="status">
 						<SeedLoader />
 						<span className="shimmer min-w-0 truncate" title={turn.progress === "" ? undefined : turn.progress}>
 							{turn.progress === "" ? t("inspector.chat.thinking") : turn.progress}
