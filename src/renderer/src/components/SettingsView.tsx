@@ -19,7 +19,7 @@ import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
-import { DuplicatesPage, ReadingPage, WebPage } from "./settings/ConfigPages";
+import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
@@ -92,7 +92,6 @@ export const PAGES = [
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
 	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
-	{ id: "reading", labelKey: "settingsCore.nav.reading", icon: FileText, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.reading" },
 	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
 	{ id: "mcp", labelKey: "settingsCore.nav.mcp", icon: Server, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.mcp" },
 	{ id: "apps", labelKey: "settingsCore.nav.apps", icon: Plug, groupKey: GROUP_APPS, keywordsKey: "settingsCore.nav.keywords.apps" },
@@ -103,6 +102,8 @@ export function normalizeCategory(category: SettingsCategory): SettingsCategory 
 	if (category === "llm" || category === "embedding" || category === "reranker") return "ai";
 	if (category === "sources" || category === "deep" || category === "light") return "apps";
 	if (category === "scope") return "indexing";
+	// 문서 언어 is a section of 일반 now; a link to the old page (an AI fix, say) lands there.
+	if (category === "reading") return "general";
 	return category;
 }
 
@@ -277,8 +278,6 @@ export function SettingsPageContent({
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":
 			return <IndexingPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} setSources={setSources} onOpenSource={(alias) => onNavigate(`source:${alias}`)} onOpenApps={() => onNavigate("apps")} />;
-		case "reading":
-			return <ReadingPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "duplicates":
 			return (
 				<DuplicatesPage

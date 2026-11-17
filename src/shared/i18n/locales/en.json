@@ -2213,7 +2213,7 @@
       "keywords": {
         "account": "account sign in email name profile",
         "plan": "plan billing credits usage subscription",
-        "general": "display theme appearance language hidden files login updates statistics document language",
+        "general": "display theme appearance language hidden files login updates statistics document language document language reading parser OCR",
         "sidebar": "sidebar favorites cloud locations tags folders hide show order customize AI",
         "contextMenu": "right click context menu magic action script automation agent extensions tags customize AI",
         "shortcuts": "shortcuts keyboard hotkeys keybindings record customize AI",
@@ -2221,7 +2221,6 @@
         "ai": "LLM model provider service API key subscription embedding Jev query decomposition rerank",
         "web": "web search internet search service page reading",
         "indexing": "refresh sync incremental index indexing update interval schedule search scope folders exclude paths",
-        "reading": "document language reading parser OCR",
         "duplicates": "duplicate files versions cleanup dupey",
         "apps": "connections apps data sources messenger mail cloud",
         "mcp": "mcp server tools connect extension external tools codemode agent claude codex gemini cursor copy"
@@ -3252,7 +3251,6 @@
     },
     "reading": {
       "title": "Document language",
-      "desc": "Set the preferred languages for reading and searching documents.",
       "langHint": "You can select more than one."
     },
     "duplicates": {

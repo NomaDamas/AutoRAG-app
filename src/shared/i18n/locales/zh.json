@@ -2213,7 +2213,7 @@
       "keywords": {
         "account": "账户 登录 邮箱 名称 个人资料",
         "plan": "套餐 付款 额度 用量 订阅 billing",
-        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言",
+        "general": "显示 主题 外观 语言 隐藏文件 登录 更新 统计 文档语言 文档语言 读取 解析器 OCR",
         "sidebar": "侧边栏 个人收藏 云盘 位置 标签 文件夹 隐藏 显示 顺序 自定义 AI",
         "contextMenu": "右键 上下文菜单 魔法动作 脚本 自动化 智能体 扩展名 标签 自定义 AI",
         "shortcuts": "快捷键 键盘 热键 按键 录制 自定义 AI shortcut hotkey",
@@ -2221,7 +2221,6 @@
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
         "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径",
-        "reading": "文档语言 读取 解析器 OCR",
         "duplicates": "重复文件 版本 整理 dupey",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
         "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体 claude codex gemini cursor 复制"
@@ -3252,7 +3251,6 @@
     },
     "reading": {
       "title": "文档语言",
-      "desc": "设定读取和搜索文档时优先使用的语言。",
       "langHint": "可以选择多个。"
     },
     "duplicates": {
