@@ -1,11 +1,10 @@
-import { Check, Copy, Minus, Sparkles, Terminal } from "lucide-react";
+import { Check, Copy, Minus, Sparkles, Terminal, X } from "lucide-react";
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissMagicActionDialog, stopMagicActionRun, useMagicActionSession } from "../hooks/useMagicAction";
 import { cn } from "../lib/cn";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../state/answer-markdown";
 import { basename } from "../state/paths";
-import { CloseIcon } from "./icons";
 import { noticeButtonClass } from "./primitives/NoticeCard";
 
 /** Figma Button, size 32 (568:7806–7808): the same buttons the notice cards use. */
@@ -315,7 +314,8 @@ export function MagicActionDialog(): ReactElement | null {
 						title={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						onClick={dismissMagicActionDialog}
 					>
-						{isRunning ? <Minus size={14} strokeWidth={2.4} /> : <CloseIcon />}
+						{/* Figma Icon/close/14: a 14px X at a 1.28 stroke (the shared CloseIcon is a 10px glyph for tabs and chips). */}
+						{isRunning ? <Minus size={14} strokeWidth={1.5} aria-hidden="true" /> : <X size={14} strokeWidth={1.3} aria-hidden="true" />}
 					</button>
 				</div>
 				{body}
