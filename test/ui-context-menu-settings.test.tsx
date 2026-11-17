@@ -208,6 +208,16 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		const actionId = currentSettings.contextMenu.magicActions[0]!.id;
 		expect(host.querySelector(`[data-magic-row="${actionId}"]`)?.textContent).toContain("MCP");
 
+		// 나만의 매직 액션 edits (수정 · 삭제, no switch); 우클릭 메뉴 섹션 및 항목 only turns it on or off. Neither shows a kind badge.
+		const [cardRow, sectionRow] = [...host.querySelectorAll<HTMLElement>(`[data-magic-row="${actionId}"]`)];
+		expect(cardRow?.querySelector(`[data-action="edit-magic-${actionId}"]`)).not.toBeNull();
+		expect(cardRow?.querySelector(`[data-action="remove-magic-${actionId}"]`)).not.toBeNull();
+		expect(cardRow?.querySelector(`[data-sidebar-switch="magic:${actionId}"]`)).toBeNull();
+		expect(sectionRow?.querySelector(`[data-sidebar-switch="magic:${actionId}"]`)).not.toBeNull();
+		expect(sectionRow?.querySelector("button[data-action]")).toBeNull();
+		expect(sectionRow?.textContent).toBe("PDF 3줄 요약");
+		expect(host.querySelector(".sidebar-always-badge.is-plain")).toBeNull();
+
 		// Edit the Magic Action and toggle MCP off
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>(`[data-action="edit-magic-${actionId}"]`)?.click();

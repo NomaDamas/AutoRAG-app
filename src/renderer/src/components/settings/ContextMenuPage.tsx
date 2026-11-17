@@ -486,15 +486,13 @@ export function ContextMenuPage({
 		return [sel, kind, ext, ...extras].filter((part): part is string => part !== null).join(" · ");
 	};
 
-	const renderMagicActionRow = (action: MagicAction, index: number, prefix: string): ReactElement => {
-		const isScript = action.execution.kind === "script";
-		const RowIcon = isScript ? Terminal : Sparkles;
-		const badgeLabel = isScript
-			? t("settingsCore.contextMenu.badgeScript")
-			: action.execution.mode === "organize"
-				? t("settingsCore.contextMenu.badgeAgentOrganize")
-				: t("settingsCore.contextMenu.badgeAgentRead");
-		const summary = describeConditions(action);
+	/**
+	 * One magic action, drawn for one of its two places. In 나만의 매직 액션 (`"card"`) it is where the action is
+	 * edited: its conditions, 수정 and 삭제, no switch. In 우클릭 메뉴 섹션 및 항목 (`"section"`) it is one more menu
+	 * item: the name and the on/off switch, nothing else.
+	 */
+	const renderMagicActionRow = (action: MagicAction, index: number, prefix: string, place: "card" | "section"): ReactElement => {
+		const RowIcon = action.execution.kind === "script" ? Terminal : Sparkles;
 
 		return (
 			<div
@@ -516,44 +514,52 @@ export function ContextMenuPage({
 				<span className="sidebar-row-label">
 					<RowIcon size={14} strokeWidth={1.5} className="sidebar-row-icon is-accent" aria-hidden="true" />
 					<span className="sidebar-row-name">{action.label}</span>
-					<span className="sidebar-always-badge is-plain">{badgeLabel}</span>
 				</span>
-				<span className="sidebar-row-path" title={summary}>
-					{summary}
-				</span>
+				{place === "card" ? (
+					<span className="sidebar-row-path" title={describeConditions(action)}>
+						{describeConditions(action)}
+					</span>
+				) : null}
 				<span className="sidebar-row-spacer" />
-				<button
-					type="button"
-					className="shortcuts-reset"
-					data-action={`edit-magic-${action.id}`}
-					title={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
-					aria-label={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
-					onClick={() => setEditorState({ open: true, initial: action })}
-				>
-					<Pencil size={14} strokeWidth={1.5} />
-				</button>
-				<button
-					type="button"
-					className="shortcuts-reset"
-					data-action={`remove-magic-${action.id}`}
-					title={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
-					aria-label={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
-					onClick={() => removeMagicAction(action.id)}
-				>
-					<X size={14} strokeWidth={1.5} />
-				</button>
-				<Switch
-					checked={action.enabled}
-					dataSwitchId={`magic:${action.id}`}
-					ariaLabel={action.label}
-					onChange={() => toggleMagicActionEnabled(action.id)}
-				/>
+				{place === "card" ? (
+					<>
+						<button
+							type="button"
+							className="shortcuts-reset"
+							data-action={`edit-magic-${action.id}`}
+							title={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
+							aria-label={t("settingsCore.contextMenu.editMagicAction", { name: action.label })}
+							onClick={() => setEditorState({ open: true, initial: action })}
+						>
+							<Pencil size={14} strokeWidth={1.5} />
+						</button>
+						<button
+							type="button"
+							className="shortcuts-reset"
+							data-action={`remove-magic-${action.id}`}
+							title={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
+							aria-label={t("settingsCore.contextMenu.removeMagicAction", { name: action.label })}
+							onClick={() => removeMagicAction(action.id)}
+						>
+							<X size={14} strokeWidth={1.5} />
+						</button>
+					</>
+				) : (
+					<Switch
+						checked={action.enabled}
+						dataSwitchId={`magic:${action.id}`}
+						ariaLabel={action.label}
+						onChange={() => toggleMagicActionEnabled(action.id)}
+					/>
+				)}
 			</div>
 		);
 	};
 
-	const magicRows = (prefix: string): ReactElement[] =>
-		reorder.order("magic", contextMenu.magicActions.map((action) => action.id)).map((index) => renderMagicActionRow(contextMenu.magicActions[index]!, index, prefix));
+	const magicRows = (prefix: string, place: "card" | "section"): ReactElement[] =>
+		reorder
+			.order("magic", contextMenu.magicActions.map((action) => action.id))
+			.map((index) => renderMagicActionRow(contextMenu.magicActions[index]!, index, prefix, place));
 
 	const isDefault = isDefaultContextMenuSettings(contextMenu);
 	const isMinimalActive =
@@ -594,7 +600,7 @@ export function ContextMenuPage({
 				<section className="cmenu-block">
 					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.magicTitle")}</h3>
 					<div className="sidebar-card cmenu-block-card" data-context-menu-magic-card="true" {...reorder.zone("magic", moveMagicActionTo)}>
-						{magicCount === 0 ? <p className="sidebar-card-empty is-compact">{t("settingsCore.contextMenu.magicEmpty")}</p> : magicRows("magic")}
+						{magicCount === 0 ? <p className="sidebar-card-empty is-compact">{t("settingsCore.contextMenu.magicEmpty")}</p> : magicRows("magic", "card")}
 						<div className="sidebar-row is-add">
 							<button
 								type="button"
@@ -700,7 +706,7 @@ export function ContextMenuPage({
 											magicCount === 0 ? (
 												<p className="sidebar-card-empty">{t("settingsCore.contextMenu.magicEmpty")}</p>
 											) : (
-												magicRows("section-magic")
+												magicRows("section-magic", "section")
 											)
 										) : (
 											SECTION_ITEMS[sectionId].map((spec) => {
