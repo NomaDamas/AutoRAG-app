@@ -1106,7 +1106,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{searching && compacting ? (
 								<CompactingStatus />
 							) : shimmer ? (
-								<div className="water-wave-thinking my-6 flex items-center gap-6 text-meta text-ink-muted" role="status">
+								<div className="water-wave-thinking my-6 flex items-center gap-6 text-body leading-[1.55] text-ink-muted" role="status">
 									<SeedLoader />
 									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
 										{progress === "" ? t("aiSearch.thinking") : progress}
@@ -1117,7 +1117,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{deepReady ? (
 								<div className="flex flex-col gap-6">
 									{deepElapsed === null ? null : (
-										<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+										<div className="thinking-header flex items-center gap-5 text-body leading-[1.55] font-medium text-ink-muted">
 											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed) })}</span>
 										</div>
 									)}
@@ -1523,7 +1523,7 @@ function PastTurnView({
 				{turn.deepText === "" ? null : (
 					<div className="flex flex-col gap-6">
 						{turn.deepElapsed === null ? null : (
-							<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+							<div className="thinking-header flex items-center gap-5 text-body leading-[1.55] font-medium text-ink-muted">
 								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
 							</div>
 						)}

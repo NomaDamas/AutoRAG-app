@@ -4741,7 +4741,8 @@
 }
 
 .settings-view .sidebar-row.is-locked .sidebar-row-name {
-	color: var(--text-primary);
+	/* A row that cannot be changed reads a tone down, as on 단축키 and 우클릭 메뉴. */
+	color: var(--text-muted);
 }
 
 /* The drag handle (and the lock in its place on fixed rows); a non-movable row keeps the column empty. */
