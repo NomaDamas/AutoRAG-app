@@ -4292,7 +4292,7 @@
 	margin-top: 40px;
 }
 
-/* 빠른 구성: its label, the presets with the two actions, then the search. */
+/* 빠른 구성 under the search: its label, then the presets with the two actions. */
 .settings-view .shortcuts-quick {
 	display: flex;
 	flex-direction: column;
@@ -4825,6 +4825,11 @@
 
 .settings-view .cmenu-block-card {
 	margin-top: 6px;
+}
+
+/* 빠른 구성 sits under the 우클릭 메뉴 섹션 및 항목 title and line, 16px below it, as the sidebar page's sits over its sections. */
+.settings-view .cmenu-block-quick {
+	margin-top: 12px;
 }
 
 /* The magic-action list's empty line sits in a 36px row above its add row. */

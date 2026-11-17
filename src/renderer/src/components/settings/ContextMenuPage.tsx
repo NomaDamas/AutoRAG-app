@@ -590,43 +590,8 @@ export function ContextMenuPage({
 				</div>
 			)}
 
-			{/* Figma 472:2581: 빠른 구성, 나만의 매직 액션, then each menu section as a head over a bordered card. */}
+			{/* Figma 472:2581: 나만의 매직 액션, then 우클릭 메뉴 섹션 및 항목 with its 빠른 구성 under the title (as on the sidebar page), then each menu section as a head over a bordered card. */}
 			<div className="sidebar-page" ref={pageRef}>
-				<div className="sidebar-quick" role="group" aria-label={t("settingsCore.contextMenu.presetsTitle")}>
-					<span className="sidebar-quick-label">{t("settingsCore.contextMenu.presetsTitle")}</span>
-					<div className="shortcuts-segmented">
-						<button
-							type="button"
-							className={cn("shortcuts-segment", isShowAllActive && "is-active")}
-							data-action="context-menu-preset-all"
-							aria-pressed={isShowAllActive}
-							onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [], hiddenSections: [] })}
-						>
-							{t("settingsCore.contextMenu.presetShowAll")}
-						</button>
-						<button
-							type="button"
-							className={cn("shortcuts-segment", isMinimalActive && "is-active")}
-							data-action="context-menu-preset-minimal"
-							aria-pressed={isMinimalActive}
-							onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [...MINIMAL_HIDDEN_CONTEXT_MENU_IDS] })}
-						>
-							{t("settingsCore.contextMenu.presetMinimal")}
-						</button>
-					</div>
-					<span className="sidebar-row-spacer" />
-					<button
-						type="button"
-						className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
-						data-action="context-menu-reset-default"
-						disabled={isDefault}
-						onClick={() => void updateContextMenu(DEFAULT_CONTEXT_MENU_SETTINGS)}
-					>
-						<RotateCcw aria-hidden="true" />
-						{t("settingsCore.contextMenu.resetDefault")}
-					</button>
-				</div>
-
 				<section className="cmenu-block">
 					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.magicTitle")}</h3>
 					<div className="sidebar-card cmenu-block-card" data-context-menu-magic-card="true" {...reorder.zone("magic", moveMagicActionTo)}>
@@ -647,6 +612,40 @@ export function ContextMenuPage({
 
 				<div className="cmenu-block">
 					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.sectionsTitle")}</h3>
+					<div className="sidebar-quick cmenu-block-quick" role="group" aria-label={t("settingsCore.contextMenu.presetsTitle")}>
+						<span className="sidebar-quick-label">{t("settingsCore.contextMenu.presetsTitle")}</span>
+						<div className="shortcuts-segmented">
+							<button
+								type="button"
+								className={cn("shortcuts-segment", isShowAllActive && "is-active")}
+								data-action="context-menu-preset-all"
+								aria-pressed={isShowAllActive}
+								onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [], hiddenSections: [] })}
+							>
+								{t("settingsCore.contextMenu.presetShowAll")}
+							</button>
+							<button
+								type="button"
+								className={cn("shortcuts-segment", isMinimalActive && "is-active")}
+								data-action="context-menu-preset-minimal"
+								aria-pressed={isMinimalActive}
+								onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [...MINIMAL_HIDDEN_CONTEXT_MENU_IDS] })}
+							>
+								{t("settingsCore.contextMenu.presetMinimal")}
+							</button>
+						</div>
+						<span className="sidebar-row-spacer" />
+						<button
+							type="button"
+							className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
+							data-action="context-menu-reset-default"
+							disabled={isDefault}
+							onClick={() => void updateContextMenu(DEFAULT_CONTEXT_MENU_SETTINGS)}
+						>
+							<RotateCcw aria-hidden="true" />
+							{t("settingsCore.contextMenu.resetDefault")}
+						</button>
+					</div>
 				</div>
 
 				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
