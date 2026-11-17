@@ -257,6 +257,8 @@ export interface FinderController {
 	trashEntry(entry: FinderEntry): void;
 	/** Copy a single entry's path to the system clipboard (inspector chip). */
 	copyEntryPath(entry: FinderEntry): void;
+	/** Copy one absolute path (a path bar segment) to the system clipboard. */
+	copyPathText(path: string): void;
 	/** What this machine can run, so the Inspector action bar never offers a dead button. */
 	readonly actionCapabilities: ActionCapabilities;
 	/** Run one Inspector action (open, share, or an action request). */
@@ -1362,13 +1364,15 @@ export function useFinderController(
 			.catch(reportError);
 	});
 
-	const copyEntryPath = useLatestCallback(
-		(entry: FinderEntry) => {
+	const copyPathText = useLatestCallback(
+		(path: string) => {
 			source
-				.copyPaths([entry.path])
+				.copyPaths([path])
 				.then(() => showToast(t("toasts.copiedPath")))
 				.catch(reportError);
 		});
+
+	const copyEntryPath = useLatestCallback((entry: FinderEntry) => copyPathText(entry.path));
 
 	/**
 	 * Compress runs in the window-wide background queue: a large folder takes
@@ -2473,6 +2477,7 @@ export function useFinderController(
 		newFile,
 		trashEntry,
 		copyEntryPath,
+		copyPathText,
 		actionCapabilities,
 		runEntryAction,
 		runSelectionAction,

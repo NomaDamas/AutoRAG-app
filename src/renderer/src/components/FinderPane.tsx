@@ -478,7 +478,9 @@ export const FinderPane = memo(function FinderPane({
 							path={finder.path}
 							crumbs={finder.inTrashLocation ? [{ label: t("places.trash"), path: finder.path, separator: false, isLast: true }] : breadcrumbTrail(finder.path, Number.MAX_SAFE_INTEGER)}
 							selectedName={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.name : null}
+							selectedPath={focusedEntry !== null && focusedEntry.kind === "file" ? focusedEntry.path : null}
 							onNavigate={finder.navigate}
+							onCopyPath={finder.copyPathText}
 							onGoToPath={finder.goToPath}
 							completePath={finder.completePath}
 							openEditor={finder.pathEditingCount}
