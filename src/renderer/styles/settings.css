@@ -3716,24 +3716,33 @@
 	line-height: 16px;
 }
 
-/* Figma 403:6999: 52px rows (12px above and below the 28px tile) without rules. */
+/* Figma 387:4551 (Settings/App Connection): 12px above and below a 32px tile, 16px between tile, text and button, no rules. */
 .settings-view .settings-apps .settings-list-row {
-	gap: 12px;
+	gap: 16px;
 	padding: 12px 0;
 	border-bottom: 0;
 }
 
 .settings-view .settings-apps .settings-app-icon {
-	border: 1px solid var(--bg-subtle-alt);
+	width: 32px;
+	height: 32px;
+	border: 1.14px solid var(--bg-subtle-alt);
+	border-radius: var(--radius-8);
 	background: var(--bg-window);
-	box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+	box-shadow: 0 0 4.57px rgba(0, 0, 0, 0.25);
+}
+
+/* The logo fills 20.5px of the 32px tile. */
+.settings-view .settings-apps .settings-app-icon > svg {
+	width: 20.5px;
+	height: 20.5px;
 }
 
 .settings-view .settings-apps-open {
 	display: flex;
 	flex: 1;
 	align-items: center;
-	gap: 12px;
+	gap: 16px;
 	min-width: 0;
 	padding: 0;
 	border: 0;
@@ -3752,9 +3761,14 @@
 	display: inline-flex;
 	flex: none;
 	align-items: center;
-	gap: 4px;
-	padding: 0 12px 0 10px;
-	border-radius: var(--radius-8);
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border-radius: var(--radius-6);
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
 }
 
 .settings-view .settings-apps-empty {

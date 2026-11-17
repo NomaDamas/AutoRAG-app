@@ -551,7 +551,7 @@ export function AppsPage({
 				{rows.length === 0 ? <p className="settings-apps-empty">{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</p> : null}
 				<div className="settings-list settings-apps-mine">
 					{rows.map((row) => (
-						// The name opens the connection's own page; 연결해제 removes it after a confirmation (Figma 403:6999).
+						// The name opens the connection's own page; 연결해제 removes it after a confirmation (Figma 387:4551).
 						<div className="settings-list-row" key={row.id}>
 							<button type="button" className="settings-apps-open" onClick={() => onOpenSource(row.id)}>
 								<SourceIcon type={row.type} label={templateLabel(row.type)} />
@@ -561,7 +561,7 @@ export function AppsPage({
 								</span>
 							</button>
 							<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => setDisconnecting(row.id)}>
-								<Minus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
+								<Minus size={14} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
 							</button>
 						</div>
 					))}
@@ -590,7 +590,7 @@ export function AppsPage({
 											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
 										<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={!available} onClick={() => setAddTemplate(templateId)}>
-											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
+											<Plus size={14} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>
 								);
