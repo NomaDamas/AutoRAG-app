@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, type WebContents } from "electron";
+import { app, BrowserWindow, ipcMain, nativeImage, shell, type WebContents } from "electron";
 import {
 	ACTIONS_CHANNELS,
 	isActionAnchor,
@@ -494,4 +494,8 @@ export function registerAppUpdateIpcHandlers(service: AppUpdaterService): void {
 	ipcMain.handle(APP_UPDATE_CHANNELS.check, () => service.check());
 	ipcMain.handle(APP_UPDATE_CHANNELS.download, () => service.download());
 	ipcMain.handle(APP_UPDATE_CHANNELS.install, () => service.install());
+	ipcMain.handle(APP_UPDATE_CHANNELS.openLogs, async () => {
+		const failure = await shell.openPath(app.getPath("logs"));
+		if (failure !== "") throw new Error(failure);
+	});
 }

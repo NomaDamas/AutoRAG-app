@@ -3577,5 +3577,22 @@
       "showInFolder": "フォルダで表示",
       "preview": "プレビュー"
     }
+  },
+  "notifications": {
+    "title": "通知",
+    "open": "通知を開く",
+    "openUnread": "通知を開く（新しい通知あり）",
+    "clearPast": "過去の通知を消去",
+    "needsAction": "対応が必要",
+    "past": "過去の通知",
+    "empty": "通知はありません。",
+    "hide": "非表示",
+    "dismiss": "通知を削除",
+    "justNow": "たった今",
+    "sourceTitle": "{{name}} の接続を確認してください",
+    "openConnection": "接続を開く",
+    "openLogs": "ログを開く",
+    "settings": "通知設定",
+    "viewInCenter": "通知センターで見る"
   }
 }

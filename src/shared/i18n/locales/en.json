@@ -3577,5 +3577,22 @@
       "showInFolder": "Show in folder",
       "preview": "Preview"
     }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "open": "Open notifications",
+    "openUnread": "Open notifications, new notifications",
+    "clearPast": "Clear past notifications",
+    "needsAction": "Needs attention",
+    "past": "Earlier",
+    "empty": "No notifications.",
+    "hide": "Hide",
+    "dismiss": "Remove notification",
+    "justNow": "Just now",
+    "sourceTitle": "{{name}} connection needs attention",
+    "openConnection": "Open connection",
+    "openLogs": "Open logs",
+    "settings": "Notification settings",
+    "viewInCenter": "View in notifications"
   }
 }

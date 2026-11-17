@@ -20,6 +20,7 @@ import { InspectorColumn } from "./components/InspectorColumn";
 import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast, type ToastTone } from "./components/primitives/Toast";
+import { pushNotice, setNotificationCenterOpen } from "./state/notifications";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
 import { ErrorFixDialog } from "./components/ErrorFixDialog";
@@ -239,7 +240,11 @@ export function App(): ReactElement {
 	/** A plain notice (Figma 554:7353 with the green badge). */
 	const setToast = useCallback((message: string | null) => setToastState(message === null ? null : { message, tone: "ok" }), []);
 	/** Something failed: the same toast with the red badge. */
-	const showErrorToast = useCallback((message: string) => setToastState({ message, tone: "error" }), []);
+	const showErrorToast = useCallback((message: string) => {
+		// Every error toast is also kept in the notification center, so it can be read after the toast has gone.
+		pushNotice({ title: message });
+		setToastState({ message, tone: "error" });
+	}, []);
 	const reportTagError = useCallback((error: unknown) => showErrorToast(error instanceof Error ? error.message : String(error)), [showErrorToast]);
 	const grantTagColors = useCallback(() => {
 		// Finder's tag colours live in a store macOS guards behind Full Disk Access; it applies after a relaunch.
@@ -813,6 +818,10 @@ export function App(): ReactElement {
 							requestSettingsCategory("ai");
 							finder?.openSettings();
 						}}
+						onOpenSettingsPage={(category) => {
+							requestSettingsCategory(category);
+							finder?.openSettings();
+						}}
 						sourceStatus={sourceStatus}
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}
@@ -1041,7 +1050,19 @@ export function App(): ReactElement {
 					<Toast
 						message={automations.undoToast?.message ?? toast ?? ""}
 						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : "ok"}
-						action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }}
+						action={
+							automations.undoToast !== null
+								? { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }
+								: toastState?.tone === "error"
+									? {
+											label: t("notifications.viewInCenter"),
+											onAction: () => {
+												setToastState(null);
+												setNotificationCenterOpen(true);
+											},
+										}
+									: undefined
+						}
 						onClose={() => {
 							setToastState(null);
 							if (automations.undoToast !== null) automations.dismissUndoToast();

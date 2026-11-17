@@ -3577,5 +3577,22 @@
       "showInFolder": "在文件夹中显示",
       "preview": "预览"
     }
+  },
+  "notifications": {
+    "title": "通知",
+    "open": "打开通知",
+    "openUnread": "打开通知（有新通知）",
+    "clearPast": "清除过去的通知",
+    "needsAction": "需要处理",
+    "past": "过去的通知",
+    "empty": "没有通知。",
+    "hide": "隐藏",
+    "dismiss": "删除通知",
+    "justNow": "刚刚",
+    "sourceTitle": "{{name}} 连接需要处理",
+    "openConnection": "打开连接",
+    "openLogs": "打开日志",
+    "settings": "通知设置",
+    "viewInCenter": "在通知中心查看"
   }
 }
