@@ -459,7 +459,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		});
 		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__logo")).not.toBeNull();
 		expect(host.querySelector(".sidebar-ai-hero__btn img")).toBeNull();
-		expect(host.querySelector(".sidebar-ai-hero__btn")?.textContent).toBe("AI에게 요청하기");
+		expect(host.querySelector(".sidebar-ai-hero__btn")?.textContent).toBe("AI에게 요청");
 	});
 
 	it("hides with the right sidebar, reopens from the hero, and follows the Settings section it belongs to", async () => {
@@ -537,7 +537,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		{
 			lang: "ko" as const,
 			nav: "사이드바",
-			heroBtn: "AI에게 요청하기",
+			heroBtn: "AI에게 요청",
 			favoritesSection: "즐겨찾기",
 			cloudSection: "클라우드",
 			locationsSection: "위치",
@@ -559,7 +559,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		{
 			lang: "ja" as const,
 			nav: "サイドバー",
-			heroBtn: "AIに頼む",
+			heroBtn: "AIに依頼",
 			favoritesSection: "お気に入り",
 			cloudSection: "クラウド",
 			locationsSection: "場所",

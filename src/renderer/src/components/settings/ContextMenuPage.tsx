@@ -629,7 +629,6 @@ export function ContextMenuPage({
 
 				<section className="cmenu-block">
 					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.magicTitle")}</h3>
-					<p className="cmenu-block-desc">{t("settingsCore.contextMenu.magicDesc")}</p>
 					<div className="sidebar-card cmenu-block-card" data-context-menu-magic-card="true" {...reorder.zone("magic", moveMagicActionTo)}>
 						{magicCount === 0 ? <p className="sidebar-card-empty is-compact">{t("settingsCore.contextMenu.magicEmpty")}</p> : magicRows("magic")}
 						<div className="sidebar-row is-add">
@@ -648,7 +647,6 @@ export function ContextMenuPage({
 
 				<div className="cmenu-block">
 					<h3 className="cmenu-block-title">{t("settingsCore.contextMenu.sectionsTitle")}</h3>
-					<p className="cmenu-block-desc">{t("settingsCore.contextMenu.sectionsDesc")}</p>
 				</div>
 
 				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>

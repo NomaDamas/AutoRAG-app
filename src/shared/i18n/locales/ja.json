@@ -853,7 +853,7 @@
       "showHiddenFiles": "不可視ファイルを表示",
       "showHiddenFilesHint": "ドット(.)で始まるファイルを表示します。",
       "dedupInterval": "重複スキャン間隔",
-      "dedupIntervalHint": "dupeyバージョンファミリのスキャン間隔です。",
+      "dedupIntervalHint": "dupeyバージョンファミリをスキャンする間隔を設定できます。",
       "autoUpdates": "自動更新",
       "autoUpdatesHint": "次回のアプリアプリ再起動時にアップデートを適用します。",
       "telemetry": "匿名の診断情報を共有",
@@ -1660,7 +1660,7 @@
       "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
       "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。",
       "batchSkipped": "更新できなかったため、ファイル {{files}} 件は以前のインデックスのままです。次回の更新で再試行します。",
-      "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。",
+      "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解でダウンロードしてください。",
       "preflightMissingKey": "エンベッダー {{id}} には API キーが必要ですが、{{env}} が設定されていません。インデックス作成の前に設定してください。",
       "preflightKeyEnvIgnored": "エンベッダー {{id}} は apiKeyEnv に {{configured}} を指定していますが、インデクサーはキーを {{env}} からしか読まず、{{env}} が設定されていません。キーを {{env}} に設定してください。",
       "preflightBaseUrlV1": "{{url}} のエンベッダーが 404 を返しました。インデクサーは /v1/embeddings を自分で付け足すため、/v1 で終わるベース URL ではパスが二重になります。{{suggested}} を使ってください。",
@@ -2198,7 +2198,7 @@
       "ai": "AI モデル",
       "web": "ウェブ検索",
       "indexing": "インデックス作成",
-      "reading": "文書の読み込み",
+      "reading": "文書の言語",
       "duplicates": "重複ファイルの整理",
       "apps": "すべての接続",
       "group": {
@@ -2219,7 +2219,7 @@
         "ai": "LLM モデル プロバイダ サービス API キー サブスクリプション 埋め込み Jev 質問分解 並べ替え",
         "web": "ウェブ検索 インターネット 検索 サービス ページ読み取り",
         "indexing": "更新 同期 増分 インデックス インデックス作成 インデクシング 更新間隔 sync 検索範囲 フォルダ 除外 パス",
-        "reading": "書類の読み取り 言語 パーサ OCR",
+        "reading": "文書の言語 読み取り パーサ OCR",
         "duplicates": "重複ファイル バージョン 整理 dupey",
         "apps": "接続 アプリ データソース メッセンジャー メール クラウド",
         "mcp": "mcp サーバー ツール 接続 拡張 外部ツール codemode エージェント claude codex gemini cursor コピー"
@@ -2235,10 +2235,9 @@
       "backToApp": "アプリに戻る"
     },
     "sidebar": {
-      "description": "サイドバーに表示する項目と順序を決めます。ドラッグして移動するか、AI に頼むこともできます。",
       "aiHeroTitle": "AIでサイドバーを整理",
       "aiHeroDesc": "「ミュージックとムービーを隠して、ダウンロードを一番上にして」のように話すだけで頼めます。",
-      "aiHeroButton": "AIに頼む",
+      "aiHeroButton": "AIに依頼",
       "presetsTitle": "クイック構成",
       "presetShowAll": "すべて表示",
       "presetMinimal": "主要項目のみ",
@@ -2281,7 +2280,7 @@
       "dragHint": "{{name}} の順序は、ドラッグするか ↑↓ キーで変更できます。"
     },
     "contextMenu": {
-      "description": "ファイルやフォルダを右クリックしたときに表示する項目と、独自のマジックアクション（スクリプトやAIエージェントループ）を構成します。",
+      "description": "ファイルやフォルダを右クリックしたときに表示する項目と、独自のマジックアクションを構成します。",
       "aiHeroTitle": "AIで右クリックメニューを作成",
       "aiHeroDesc": "「PDFを右クリックしたら3行で要約して」のように、話してメニューを作れます。",
       "aiHeroButton": "AIに頼む",
@@ -2291,7 +2290,6 @@
       "resetDefault": "初期設定に戻す",
       "shortcutNote": "標準項目のキーボードショートカットは Finder 標準のまま維持され、ここでは変更できません。",
       "magicTitle": "カスタムマジックアクション",
-      "magicDesc": "右クリックしたファイルを入力として任意のシェルスクリプトを実行したり、AIエージェントループで分析・変換・整理を実行します。",
       "magicEmpty": "登録されたマジックアクションはありません。AIに頼むか手動で作成してください。",
       "addMagicAction": "マジックアクションを追加",
       "editMagicAction": "{{name}} を編集",
@@ -2309,7 +2307,6 @@
       "condSkills": "スキル",
       "condMcp": "MCP",
       "sectionsTitle": "右クリックメニューのセクションと項目",
-      "sectionsDesc": "各セクションの並び順と標準メニュー項目の表示を一括管理します。タグは必須機能のため常に表示されます。",
       "lockedBadge": "常時表示",
       "lockedHint": "タグ項目は必須機能のため非表示にできません。",
       "sectionAlwaysShown": "タグセクションは常に表示されます",
@@ -2390,7 +2387,6 @@
       "dragHint": "{{name}} の並べ替え: ドラッグするか ↑↓ キーを押します"
     },
     "shortcuts": {
-      "description": "キーを直接押すか AI に話しかけて、ショートカットを変更できます。",
       "aiHeroTitle": "AIでショートカットを変更",
       "aiHeroDesc": "「名前の変更はF2にして」のように話して変更できます。",
       "aiHeroButton": "AIに頼む",
@@ -2460,12 +2456,11 @@
         "openAiSettings": "AI モデル設定を開く",
         "unavailable": "ショートカットカスタムサービスを利用できません。"
       },
-      "resetAll": "すべて標準に戻す",
+      "resetAll": "初期設定に戻す",
       "changedOnly": "変更した項目のみ表示 ({{count}})",
       "recorderPrompt": "キーを押してください"
     },
     "general": {
-      "description": "画面、クイック検索、起動とアップデート、送信する情報を設定します。",
       "screenTitle": "画面",
       "appearanceName": "画面モード",
       "appearanceHint": "ライトテーマとダークテーマのどちらかを選びます。",
@@ -2590,7 +2585,6 @@
       "retryStart": "再試行"
     },
     "account": {
-      "description": "Dazzi アカウントのログイン状態と、アカウントが提供するモデルを管理します。",
       "profileTitle": "アカウント",
       "accountName": "Dazzi アカウント",
       "signingIn": "ブラウザでログイン中…",
@@ -2603,7 +2597,6 @@
       "managedName": "Dazzi 提供モデルを使う",
       "managedHint": "Dazzi アカウントに含まれるモデルで AI エージェントを使います。先にログインしてください。",
       "useManaged": "このモデルを使う",
-      "planDescription": "現在のプランと AI 使用量です。",
       "trialing": " · トライアル中",
       "cancelScheduled": "解約が予約されています。{{date}} まで現在のプランを使用できます。",
       "pastDue": "支払いに失敗しました。請求ポータルで支払い方法を確認してください。",
@@ -2626,7 +2619,6 @@
       "usedPercent": "{{percent}}% 使用済み"
     },
     "ai": {
-      "description": "AI サービスを接続し、役割ごとに使うモデルを選びます。",
       "kind": {
         "runtime": "ランタイムプロバイダー",
         "local": "ローカルサーバー",
@@ -2662,7 +2654,7 @@
       "servicesTitle": "接続済みサービス",
       "servicesDesc": "OpenAI や Anthropic などのサービスにログインするか、API キーを入れて接続できます。",
       "rolesTitle": "役割ごとのモデル",
-      "rolesDesc": "Dazzi が行う仕事ごとに別のモデルを使えます。",
+      "rolesDesc": "Dazzi が実行する作業ごとに別のモデルを使えます。",
       "subSearchAssistant": "検索補助",
       "answerModel": "回答の作成",
       "answerHint": "質問に答え、文書を要約します。",
@@ -2745,13 +2737,13 @@
       },
       "auto": "自動",
       "defaultValue": "デフォルト",
-      "embeddingModel": "文書理解モデル",
+      "embeddingModel": "文書理解",
       "embeddingHint": "文書の意味を分析します。この PC を選ぶと文書は外に出ません。",
       "pickModel": "モデルを選択",
       "roleBroken": "このモデルを提供するサービスが接続されていません。接続し直すか、別のモデルを選んでください。"
     },
     "embedding": {
-      "title": "文書理解モデル",
+      "title": "文書理解",
       "hint": "文書の意味を分析します。このコンピューターを選ぶと、埋め込みのために文書が外部へ送信されることはありません。",
       "body": "文書の意味を分析する埋め込みモデルをどこで実行するかを選びます。モデルは Qwen3 Embedding 0.6B に固定されており、文書の内容がコンピューターの外に出る選択には同意が必要です。",
       "dimension": "{{count}} 次元",
@@ -3090,7 +3082,6 @@
     },
     "indexing": {
       "title": "インデックス",
-      "desc": "検索するフォルダ、読み込みの進行状況、最新化の間隔を管理します。",
       "progress": "進行状況",
       "refreshStatus": "更新状況",
       "localFolder": "ローカルフォルダ",
@@ -3123,7 +3114,7 @@
       "schedulePausedWindow": "許可された時間帯を待っています。スケジュールに従い {{ago}} の最新化を保留しました。",
       "schedulePausedDay": "許可された曜日を待っています。スケジュールに従い {{ago}} の最新化を保留しました。",
       "keepTitle": "最新化",
-      "keepDesc": "変更された内容をどのくらいの頻度で再取得するかを決めます。",
+      "keepDesc": "変更された内容をどのくらいの頻度で再取得するかを設定します。",
       "connectApp": "アプリを接続",
       "connectAppHint": "「すべての接続」で選択",
       "liveLabel": "リアルタイム"
@@ -3215,7 +3206,7 @@
       "devExcluded": "開発用フォルダは自動で除外します",
       "devMore": "詳しく",
       "devLess": "閉じる",
-      "devDotNote": "名前がピリオド(.)で始まるフォルダもすべて除外されます。",
+      "devDotNote": "名前がピリオド(.)で始まるフォルダもすべて除外します。",
       "allFolders": "すべて"
     },
     "indexMap": {
@@ -3262,7 +3253,7 @@
       "fetchHintOff": "ウェブ検索がオフです。"
     },
     "reading": {
-      "title": "ドキュメントの読み取り",
+      "title": "文書の言語",
       "desc": "ドキュメントを読み取り検索するときに優先する言語を設定します。",
       "langHint": "複数選択できます。"
     },
@@ -3274,7 +3265,7 @@
       "versionsName": "類似バージョンをまとめる",
       "versionsHint": "報告書_最終、報告書_最終2 のように名前だけが違うファイルを1行にまとめて表示します。",
       "intervalName": "重複チェックの間隔",
-      "intervalHint": "ファイルの変化を再確認する間隔です。",
+      "intervalHint": "ファイルの変化を再確認する間隔を設定できます。",
       "intervals": {
         "min15": "15分ごと",
         "min30": "30分ごと",

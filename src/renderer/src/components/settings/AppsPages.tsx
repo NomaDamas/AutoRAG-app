@@ -274,7 +274,7 @@ export function IndexingPage({
 	const problem = editor.problem ?? localError ?? error;
 	return (
 		<div className="indexing-page">
-			<SettingsPageHead title={t("settingsSources.indexing.title")} description={t("settingsSources.indexing.desc")} />
+			<SettingsPageHead title={t("settingsSources.indexing.title")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{/* Figma 532:9970: 검색할 폴더 → 진행 상황 → 제외한 항목, then 최신으로 유지 and 파일 이름 바로 반영 under a rule. */}
 			<div className="scope-page indexing-sections">

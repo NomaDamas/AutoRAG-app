@@ -853,7 +853,7 @@
       "showHiddenFiles": "显示隐藏文件",
       "showHiddenFilesHint": "显示以点(.)开头的文件。",
       "dedupInterval": "重复文件扫描间隔",
-      "dedupIntervalHint": "dupey 版本家族扫描周期。",
+      "dedupIntervalHint": "可以设置 dupey 扫描版本家族的周期。",
       "autoUpdates": "自动安装更新",
       "autoUpdatesHint": "在下次应用重启时应用更新。",
       "telemetry": "分享匿名诊断数据",
@@ -1660,7 +1660,7 @@
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
       "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
       "batchSkipped": "由于更新失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
-      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。",
+      "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解”中下载。",
       "preflightMissingKey": "嵌入器 {{id}} 需要 API 密钥,但未设置 {{env}}。请在建立索引前设置。",
       "preflightKeyEnvIgnored": "嵌入器 {{id}} 的 apiKeyEnv 指定为 {{configured}},但索引器只从 {{env}} 读取密钥,而 {{env}} 未设置。请把密钥放进 {{env}}。",
       "preflightBaseUrlV1": "{{url}} 处的嵌入器返回了 404。索引器会自行追加 /v1/embeddings,因此以 /v1 结尾的基础 URL 会使路径重复。请改用 {{suggested}}。",
@@ -2198,7 +2198,7 @@
       "ai": "AI 模型",
       "web": "网页搜索",
       "indexing": "索引",
-      "reading": "文档读取",
+      "reading": "文档语言",
       "duplicates": "重复文件整理",
       "apps": "全部连接",
       "group": {
@@ -2219,7 +2219,7 @@
         "ai": "LLM 模型 提供商 服务 API 密钥 订阅 嵌入 Jev 问题拆分 重排序",
         "web": "网页搜索 互联网 搜索 服务 页面读取",
         "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径",
-        "reading": "文档读取 语言 解析器 OCR",
+        "reading": "文档语言 读取 解析器 OCR",
         "duplicates": "重复文件 版本 整理 dupey",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
         "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体 claude codex gemini cursor 复制"
@@ -2235,7 +2235,6 @@
       "backToApp": "返回应用"
     },
     "sidebar": {
-      "description": "设置侧边栏显示的项目及其顺序。可以拖动移动，也可以告诉 AI。",
       "aiHeroTitle": "用 AI 整理边栏",
       "aiHeroDesc": "只需提出要求，例如“隐藏音乐和影片，把下载移到最上面”。",
       "aiHeroButton": "请 AI 处理",
@@ -2281,7 +2280,7 @@
       "dragHint": "可拖动或按 ↑↓ 键调整 {{name}} 的顺序。"
     },
     "contextMenu": {
-      "description": "配置右键点击文件或文件夹时显示的菜单项，以及专属魔法动作（Shell 脚本与 AI 智能体循环）。",
+      "description": "配置右键点击文件或文件夹时显示的菜单项，以及专属魔法动作。",
       "aiHeroTitle": "用 AI 创建右键菜单",
       "aiHeroDesc": "可以用说的来创建菜单，例如“右键点按 PDF 时用三行总结”。",
       "aiHeroButton": "请 AI 处理",
@@ -2291,7 +2290,6 @@
       "resetDefault": "恢复默认设置",
       "shortcutNote": "内置菜单项的键盘快捷键保持 Finder 标准设置，无法在此处更改。",
       "magicTitle": "自定义魔法动作",
-      "magicDesc": "将右键选中的文件作为输入运行任意脚本，或启动 AI 智能体循环完成总结、转换与整理。",
       "magicEmpty": "暂无魔法动作。您可以请 AI 处理，或手动创建。",
       "addMagicAction": "添加魔法动作",
       "editMagicAction": "编辑 {{name}}",
@@ -2309,7 +2307,6 @@
       "condSkills": "技能",
       "condMcp": "MCP",
       "sectionsTitle": "右键菜单分区与项目",
-      "sectionsDesc": "统一管理各分区的排列顺序及内置菜单项的显示状态。标签为核心必选项，始终保持显示。",
       "lockedBadge": "始终显示",
       "lockedHint": "标签为必选核心功能，无法隐藏。",
       "sectionAlwaysShown": "标签分区始终保持显示",
@@ -2390,7 +2387,6 @@
       "dragHint": "调整 {{name}} 的顺序：拖动或按 ↑↓ 键"
     },
     "shortcuts": {
-      "description": "可以直接按下按键或告诉 AI 来更改快捷键。",
       "aiHeroTitle": "用 AI 更改快捷键",
       "aiHeroDesc": "可以用说的来更改，例如“把重命名改成 F2”。",
       "aiHeroButton": "请 AI 处理",
@@ -2460,12 +2456,11 @@
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "快捷键定制服务不可用。"
       },
-      "resetAll": "全部恢复默认",
+      "resetAll": "恢复默认设置",
       "changedOnly": "仅显示已更改项（{{count}}）",
       "recorderPrompt": "请按下按键"
     },
     "general": {
-      "description": "设置外观、快速搜索、启动与更新，以及发送的信息。",
       "screenTitle": "界面",
       "appearanceName": "显示模式",
       "appearanceHint": "选择浅色或深色主题。",
@@ -2590,7 +2585,6 @@
       "retryStart": "重试"
     },
     "account": {
-      "description": "管理 Dazzi 账户的登录状态和账户提供的模型。",
       "profileTitle": "账户",
       "accountName": "Dazzi 账户",
       "signingIn": "正在浏览器中登录…",
@@ -2603,7 +2597,6 @@
       "managedName": "使用 Dazzi 提供的模型",
       "managedHint": "使用 Dazzi 账户包含的模型运行 AI 智能体。请先登录。",
       "useManaged": "使用此模型",
-      "planDescription": "当前套餐和 AI 用量。",
       "trialing": " · 试用中",
       "cancelScheduled": "已预约取消。在 {{date}} 之前仍可使用当前套餐。",
       "pastDue": "支付失败。请在结算门户中检查支付方式。",
@@ -2626,7 +2619,6 @@
       "usedPercent": "已使用 {{percent}}%"
     },
     "ai": {
-      "description": "连接 AI 服务，并为每个角色选择模型。",
       "kind": {
         "runtime": "运行时提供商",
         "local": "本机服务器",
@@ -2662,7 +2654,7 @@
       "servicesTitle": "已连接的服务",
       "servicesDesc": "可登录 OpenAI、Anthropic 等服务，或填入 API 密钥进行连接。",
       "rolesTitle": "按角色的模型",
-      "rolesDesc": "Dazzi 可以为每项工作使用不同的模型。",
+      "rolesDesc": "Dazzi 可以为执行的每项任务使用不同的模型。",
       "subSearchAssistant": "搜索辅助",
       "answerModel": "生成回答",
       "answerHint": "回答问题并总结文档。",
@@ -2745,13 +2737,13 @@
       },
       "auto": "自动",
       "defaultValue": "默认值",
-      "embeddingModel": "文档理解模型",
+      "embeddingModel": "文档理解",
       "embeddingHint": "分析文档的含义。选择“这台电脑”时，文档不会离开本机。",
       "pickModel": "选择模型",
       "roleBroken": "提供此模型的服务未连接。请重新连接或选择其他模型。"
     },
     "embedding": {
-      "title": "文档理解模型",
+      "title": "文档理解",
       "hint": "分析文档含义。选择本机时,嵌入时不会将文档发送到外部。",
       "body": "选择分析文档含义的嵌入模型在哪里运行。模型固定为 Qwen3 Embedding 0.6B,任何会将文档内容发送到本机之外的选择都需要您同意。",
       "dimension": "{{count}} 维",
@@ -3090,7 +3082,6 @@
     },
     "indexing": {
       "title": "索引",
-      "desc": "管理要搜索的文件夹、读取进度和更新周期。",
       "progress": "进度",
       "refreshStatus": "更新状态",
       "localFolder": "本地文件夹",
@@ -3262,7 +3253,7 @@
       "fetchHintOff": "网页搜索已关闭。"
     },
     "reading": {
-      "title": "文档阅读",
+      "title": "文档语言",
       "desc": "设定读取和搜索文档时优先使用的语言。",
       "langHint": "可以选择多个。"
     },
@@ -3274,7 +3265,7 @@
       "versionsName": "归并相似版本",
       "versionsHint": "报告_最终、报告_最终2 这类仅名称不同的文件会合并为一行显示。",
       "intervalName": "重复检查间隔",
-      "intervalHint": "重新检查文件变化的间隔。",
+      "intervalHint": "可以设置重新检查文件变化的周期。",
       "intervals": {
         "min15": "每 15 分钟",
         "min30": "每 30 分钟",

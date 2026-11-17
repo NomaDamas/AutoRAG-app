@@ -292,7 +292,7 @@ export function ShortcutsPage({
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} description={t("settingsCore.shortcuts.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} />
 
 			{customizerOpen ? null : (
 				<div className="sidebar-ai-hero">
@@ -349,6 +349,7 @@ export function ShortcutsPage({
 								disabled={activePreset === "default"}
 								onClick={() => applyPreset("default")}
 							>
+								<RotateCcw aria-hidden="true" />
 								{t("settingsCore.shortcuts.resetAll")}
 							</button>
 							<button

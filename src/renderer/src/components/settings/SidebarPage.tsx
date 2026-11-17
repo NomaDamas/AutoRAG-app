@@ -326,7 +326,7 @@ export function SidebarPage({
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.sidebar")} description={t("settingsCore.sidebar.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.sidebar")} />
 
 			{customizerOpen ? null : (
 				<div className="sidebar-ai-hero">
