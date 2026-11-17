@@ -45,7 +45,7 @@ describe("validateName", () => {
 	});
 
 	it("rejects a path separator", () => {
-		expect(validateName("a/b.pdf", siblings)).toEqual({ ok: false, message: "이름에 / 는 쓸 수 없습니다" });
+		expect(validateName("a/b.pdf", siblings)).toEqual({ ok: false, message: "이름에 / 는 사용할 수 없습니다" });
 	});
 
 	it("rejects a name already used in this folder", () => {

@@ -226,7 +226,7 @@
   },
   "inspector": {
     "title": "Info",
-    "evidence": "Evidence",
+    "evidence": "Sources",
     "generalInfo": "General Info",
     "imageInfo": "Image Info",
     "versions": "Versions",
@@ -294,11 +294,11 @@
       "contains": "Contains"
     },
     "evidencePanel": {
-      "emptyTitle": "Answer evidence\nwill appear here.",
+      "emptyTitle": "Answer sources\nwill appear here.",
       "excerpts": "Evidence excerpts",
       "openInBrowser": "Open in browser",
-      "evidenceFolder": "Evidence Folder",
-      "evidenceFolderTooltip": "Open this session's evidence files in a temporary folder tab",
+      "evidenceFolder": "Sources Folder",
+      "evidenceFolderTooltip": "Open this session's source files in a temporary folder tab",
       "openPreview": "Preview at the cited passage"
     },
     "chat": {
@@ -345,7 +345,7 @@
     "emptyPromptTitle": "What can I find for you?",
     "emptyPromptDesc": "Search across files, emails, and chats for quick and deep answers side by side.",
     "generatingDeep": "Generating deep answer…",
-    "askDazzi": "Ask Dazzi",
+    "askDazzi": "Ask AI",
     "stop": "Stop",
     "openPlan": "Open Subscription & Usage",
     "indexNotice": {
@@ -412,7 +412,7 @@
     "hideDetails": "Hide details",
     "other": {
       "title": "Something went wrong",
-      "hint": "The AI can look for the cause and try to fix it for you."
+      "hint": "The AI Agent can look for the cause and try to fix it for you."
     },
     "modelMissing": {
       "title": "No AI model chosen yet",
@@ -563,7 +563,7 @@
     },
     "inspector": {
       "empty": "Select a rule\nto see its summary here.",
-      "edit": "Edit with AI",
+      "edit": "Ask AI",
       "delete": "Delete",
       "summary": "Summary",
       "showAll": "Show all",
@@ -817,8 +817,8 @@
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
     "emptyTrashAction": "Empty",
-    "closeEvidenceFolderTitle": "Close Evidence Folder",
-    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Evidence Folder. Your original files will stay untouched. Are you sure you want to close it?",
+    "closeEvidenceFolderTitle": "Close Sources Folder",
+    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Sources Folder. Your original files will stay untouched. Are you sure you want to close it?",
     "closeEvidenceFolderAction": "Close"
   },
   "settings": {
@@ -1327,7 +1327,7 @@
       },
       "2": {
         "title": "Tap a number in the answer to preview the source",
-        "body": "The numbers attached to answers are the actual document locations that were read. Tap one to preview the evidence file right there.",
+        "body": "The numbers attached to answers are the actual document locations that were read. Tap one to preview the source file right there.",
         "bubble": "Marketing costs fell 18% from the previous quarter."
       },
       "3": {
@@ -1409,7 +1409,7 @@
     "sortBy": "Sort by {{label}}",
     "resizeColumn": "Resize {{label}}",
     "columnsMenu": "Columns",
-    "evidenceNotFound": "No information found for evidence {{number}}",
+    "evidenceNotFound": "No information found for source {{number}}",
     "searchTitle": "Search results: “{{query}}”",
     "resizeSidebar": "Resize sidebar",
     "resizeInspector": "Resize inspector",
@@ -1659,7 +1659,7 @@
       "retried": "A temporary file system error ({{code}}) occurred; the refresh was retried {{retries}} time(s).",
       "filesLeftOut": "{{files}} file(s) that kept failing with {{code}} were left out of this refresh. They will be tried again on the next one.",
       "parseKilled": "{{timedOut}} file(s) were skipped for exceeding the time limit and {{crashed}} because the parser stopped. They will be tried again on the next refresh.",
-      "batchSkipped": "{{files}} file(s) stayed at their previous index entry because the sync that covered them failed. They will be tried again on the next refresh.",
+      "batchSkipped": "{{files}} file(s) stayed at their previous index entry because they could not be refreshed. They will be tried again on the next refresh.",
       "modelMissing": "Indexing was skipped because the on-device embedding model has not been downloaded yet. Download it in Settings → AI Models → Document Understanding Model.",
       "preflightMissingKey": "The embedder {{id}} needs an API key, but {{env}} is not set. Set it before indexing.",
       "preflightKeyEnvIgnored": "The embedder {{id}} sets apiKeyEnv to {{configured}}, but the indexer reads its key only from {{env}}, and {{env}} is not set. Put the key in {{env}}.",
@@ -1729,8 +1729,8 @@
         "larkNotApplicable": "Lark uses only remote API search and refuses local embeddings.",
         "defaultNotApplicable": "This data source uses its own keyword/parse index and does not use the global embedder.",
         "mailcrawlSharedEmbedder": "mailcrawl uses the same embedding server as Dazzi. When the model changes it re-indexes on the next index run.",
-        "sidecarSharedEmbedder": "The read-only sidecar over the chat archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next sync.",
-        "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next sync.",
+        "sidecarSharedEmbedder": "The read-only sidecar over the conversation archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next refresh.",
+        "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next refresh.",
         "obsidianSharedEmbedder": "An Obsidian vault follows the selected embedding model (MinSync indexes it in a workspace of its own)."
       },
       "actions": {
@@ -2275,7 +2275,7 @@
         "stop": "Stop",
         "openAiSettings": "Open AI Model Settings",
         "unavailable": "App customizer service is unavailable.",
-        "inputLabel": "Message the assistant"
+        "inputLabel": "Message the AI Agent"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects or C:\\Work",
       "dragHint": "Drag {{name}} or press ↑ or ↓ to reorder it."
@@ -2292,7 +2292,7 @@
       "shortcutNote": "Keyboard shortcuts on built-in actions stay standard to Finder and cannot be reassigned here.",
       "magicTitle": "Custom Magic Actions",
       "magicDesc": "Pass right-clicked files into any shell command or run an AI agent loop to analyze, convert, or organize them.",
-      "magicEmpty": "No Magic Actions yet. Ask the AI assistant or add one manually.",
+      "magicEmpty": "No Magic Actions yet. Ask AI or create one yourself.",
       "addMagicAction": "Add Magic Action",
       "editMagicAction": "Edit {{name}}",
       "removeMagicAction": "Remove {{name}}",
@@ -2378,7 +2378,7 @@
         "commandHintWindows": "Runs in Windows PowerShell with selected paths passed in $args and env vars $env:DAZZI_FILES_JSON, $env:DAZZI_FILE, and $env:DAZZI_FILE_COUNT."
       },
       "assistant": {
-        "title": "AI Context Menu & Magic Action Assistant",
+        "title": "Context Menu & Magic Action AI Agent",
         "emptyTitle": "What should appear when you right-click?",
         "emptyDesc": "Set up the menu you get when you right-click a file, your way.",
         "placeholder": "Tell me what to make",
@@ -3358,9 +3358,9 @@
       "recent": "Recent",
       "names": "File Names",
       "content": "Contents",
-      "ask": "Ask Dazzi"
+      "ask": "Ask AI"
     },
-    "askRow": "Ask Dazzi: “{{query}}”",
+    "askRow": "Ask AI: “{{query}}”",
     "emptyRecents": "Type to search. Files you opened recently show up here.",
     "noResults": "No matching files.",
     "contentOff": "Content search is off in keyword-only mode.",
@@ -3375,8 +3375,8 @@
       "showInApp": "Show in Dazzi",
       "copyFile": "Copy File",
       "copyPath": "Copy Path",
-      "askAbout": "Ask Dazzi About This File",
-      "askQuery": "Ask Dazzi"
+      "askAbout": "Ask AI About This File",
+      "askQuery": "Ask AI"
     },
     "hints": {
       "preview": "Preview",

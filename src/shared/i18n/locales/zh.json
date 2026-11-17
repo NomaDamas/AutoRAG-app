@@ -226,7 +226,7 @@
   },
   "inspector": {
     "title": "简介",
-    "evidence": "依据",
+    "evidence": "来源",
     "generalInfo": "常规信息",
     "imageInfo": "图像信息",
     "versions": "版本",
@@ -294,11 +294,11 @@
       "contains": "包含版本"
     },
     "evidencePanel": {
-      "emptyTitle": "回答的依据\n将显示在此处。",
+      "emptyTitle": "回答的来源\n将显示在此处。",
       "excerpts": "依据摘录",
       "openInBrowser": "在浏览器中打开",
-      "evidenceFolder": "依据文件夹",
-      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的依据文件",
+      "evidenceFolder": "来源文件夹",
+      "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的来源文件",
       "openPreview": "在预览中查看引用段落"
     },
     "chat": {
@@ -345,7 +345,7 @@
     "emptyPromptTitle": "想查找什么内容？",
     "emptyPromptDesc": "在文件、邮件和消息中全局搜索，同时提供快速回答与深度回答。",
     "generatingDeep": "正在撰写深度回答…",
-    "askDazzi": "向 Dazzi 提问",
+    "askDazzi": "询问 AI",
     "stop": "停止",
     "openPlan": "打开订阅与用量",
     "indexNotice": {
@@ -412,7 +412,7 @@
     "hideDetails": "收起详情",
     "other": {
       "title": "出现了问题",
-      "hint": "AI 可以查找原因并尝试为你修复。"
+      "hint": "AI 智能体可以查找原因并尝试为你修复。"
     },
     "modelMissing": {
       "title": "尚未选择 AI 模型",
@@ -563,7 +563,7 @@
     },
     "inspector": {
       "empty": "选择一条规则后\n摘要会显示在这里。",
-      "edit": "用 AI 编辑",
+      "edit": "请 AI 处理",
       "delete": "删除",
       "summary": "摘要",
       "showAll": "全部信息",
@@ -817,8 +817,8 @@
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
-    "closeEvidenceFolderTitle": "关闭依据文件夹",
-    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时依据文件夹，原始文件不会受到影响。确定要关闭吗？",
+    "closeEvidenceFolderTitle": "关闭来源文件夹",
+    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时来源文件夹，原始文件不会受到影响。确定要关闭吗？",
     "closeEvidenceFolderAction": "关闭"
   },
   "settings": {
@@ -1157,14 +1157,14 @@
           "price": "免费",
           "tag": "适合注册后想立即体验的用户",
           "training": "输入与输出可能用于改进服务",
-          "features": "能理解文件内容的 AI 智能体\n像聊天一样向文件提问\n5 款轻量聊天模型\n每周自动补充的免费额度"
+          "features": "能理解文件内容的 AI 智能体\n像聊天一样向文件提问\n5 款轻量对话模型\n每周自动补充的免费额度"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "每月 $4 · 随时取消",
           "tag": "适合想把已有 AI 订阅接入 Dazzi 的用户",
-          "features": "包含 Free 的全部功能，另有\n直接用你订阅的 AI 模型聊天\n搜索所需的 AI 由 Dazzi 提供\n比 Free 更多的每周额度"
+          "features": "包含 Free 的全部功能，另有\n直接用你订阅的 AI 模型对话\n搜索所需的 AI 由 Dazzi 提供\n比 Free 更多的每周额度"
         },
         "pro": {
           "name": "Pro",
@@ -1172,7 +1172,7 @@
           "note": "绑定银行卡可免费 7 天，之后每月 $20",
           "tag": "适合不订阅其他 AI、只想用 Dazzi 的用户",
           "trial": "7 天免费试用",
-          "features": "包含 Air 的全部功能，另有\n无需连接订阅，内置高性能聊天模型\n比 Air 更快的请求速度和更多额度\n7 天免费试用"
+          "features": "包含 Air 的全部功能，另有\n无需连接订阅，内置高性能对话模型\n比 Air 更快的请求速度和更多额度\n7 天免费试用"
         },
         "max": {
           "name": "Max",
@@ -1323,11 +1323,11 @@
     "tips": {
       "1": {
         "title": "一次 {{shortcut}} 即可提问",
-        "body": "从任何界面都能跳转到 AI 智能体 输入框。无需打开文件夹，就能就文档内容提问，并获得带依据的答案。"
+        "body": "从任何界面都能跳转到 AI 智能体 输入框。无需打开文件夹，就能就文档内容提问，并获得带来源的答案。"
       },
       "2": {
-        "title": "点击答案中的编号即可预览依据",
-        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接预览依据文件的内容。",
+        "title": "点击答案中的编号即可预览来源",
+        "body": "答案中附带的编号是实际读取的文档位置。点击即可直接预览来源文件的内容。",
         "bubble": "营销成本比上季度下降了 18%。"
       },
       "3": {
@@ -1409,7 +1409,7 @@
     "sortBy": "按{{label}}排序",
     "resizeColumn": "调整{{label}}大小",
     "columnsMenu": "列",
-    "evidenceNotFound": "找不到证据 {{number}} 的信息",
+    "evidenceNotFound": "找不到来源 {{number}} 的信息",
     "searchTitle": "搜索结果：“{{query}}”",
     "resizeSidebar": "调整边栏大小",
     "resizeInspector": "调整检查器大小",
@@ -1659,7 +1659,7 @@
       "retried": "出现临时文件系统错误({{code}}),刷新已重试 {{retries}} 次。",
       "filesLeftOut": "有 {{files}} 个文件持续出现 {{code}} 错误,已从本次刷新中排除,将在下次刷新时重试。",
       "parseKilled": "有 {{timedOut}} 个文件因超时、{{crashed}} 个文件因解析器中止而被跳过,将在下次刷新时重试。",
-      "batchSkipped": "由于同步失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
+      "batchSkipped": "由于更新失败,有 {{files}} 个文件仍保持之前的索引状态,将在下次刷新时重试。",
       "modelMissing": "由于尚未下载本机嵌入模型,已跳过建立索引。请在“设置 → AI 模型 → 文档理解模型”中下载。",
       "preflightMissingKey": "嵌入器 {{id}} 需要 API 密钥,但未设置 {{env}}。请在建立索引前设置。",
       "preflightKeyEnvIgnored": "嵌入器 {{id}} 的 apiKeyEnv 指定为 {{configured}},但索引器只从 {{env}} 读取密钥,而 {{env}} 未设置。请把密钥放进 {{env}}。",
@@ -1729,8 +1729,8 @@
         "larkNotApplicable": "Lark 仅使用远程 API 搜索，拒绝本地嵌入。",
         "defaultNotApplicable": "此数据源使用自己的关键词/解析索引，不使用全局嵌入器。",
         "mailcrawlSharedEmbedder": "mailcrawl 使用与 Dazzi 相同的嵌入服务器。模型更改后，会在下一次索引时自动重建。",
-        "sidecarSharedEmbedder": "聊天存档之上的只读 sidecar 使用共享嵌入器为消息生成嵌入;更改嵌入器后会在下一次同步时重新嵌入。",
-        "githubGistSharedEmbedder": "GitHub Gist 向量索引使用共享嵌入器;更改嵌入器后会在下一次同步时重新嵌入。",
+        "sidecarSharedEmbedder": "对话存档之上的只读 sidecar 使用共享嵌入器为消息生成嵌入;更改嵌入器后会在下一次更新时重新嵌入。",
+        "githubGistSharedEmbedder": "GitHub Gist 向量索引使用共享嵌入器;更改嵌入器后会在下一次更新时重新嵌入。",
         "obsidianSharedEmbedder": "Obsidian 保管库直接沿用所选的嵌入模型(MinSync 在保管库专用的工作区中建立索引)。"
       },
       "actions": {
@@ -2262,7 +2262,7 @@
       "emptyLocations": "未找到已挂载的磁盘。",
       "emptyTags": "没有固定的 Finder 标签。",
       "assistant": {
-        "title": "AI 应用定制助手",
+        "title": "应用定制 AI 智能体",
         "newChat": "新对话",
         "emptyTitle": "您希望如何定制 Dazzi？",
         "emptyDesc": "可以更改侧边栏显示的文件夹及其顺序。",
@@ -2275,7 +2275,7 @@
         "stop": "停止",
         "openAiSettings": "打开 AI 模型设置",
         "unavailable": "应用定制服务不可用。",
-        "inputLabel": "告诉助手你的需求"
+        "inputLabel": "告诉 AI 智能体你的需求"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects 或 C:\\Work",
       "dragHint": "可拖动或按 ↑↓ 键调整 {{name}} 的顺序。"
@@ -2292,7 +2292,7 @@
       "shortcutNote": "内置菜单项的键盘快捷键保持 Finder 标准设置，无法在此处更改。",
       "magicTitle": "自定义魔法动作",
       "magicDesc": "将右键选中的文件作为输入运行任意脚本，或启动 AI 智能体循环完成总结、转换与整理。",
-      "magicEmpty": "暂无魔法动作。您可以直接让 AI 助手创建，或手动添加。",
+      "magicEmpty": "暂无魔法动作。您可以请 AI 处理，或手动创建。",
       "addMagicAction": "添加魔法动作",
       "editMagicAction": "编辑 {{name}}",
       "removeMagicAction": "删除 {{name}}",
@@ -2378,7 +2378,7 @@
         "commandHintWindows": "在 Windows PowerShell 中运行，所选文件路径会通过 $args 数组以及环境变量 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT 传入。"
       },
       "assistant": {
-        "title": "AI 右键菜单与魔法动作助手",
+        "title": "右键菜单与魔法动作 AI 智能体",
         "emptyTitle": "想在右键菜单里加入什么功能？",
         "emptyDesc": "可以随心设置右键点击文件时出现的菜单。",
         "placeholder": "告诉我要做什么功能",
@@ -2448,7 +2448,7 @@
         "aiToggleHistory": "切换对话历史"
       },
       "assistant": {
-        "title": "AI 快捷键定制助手",
+        "title": "快捷键定制 AI 智能体",
         "emptyTitle": "您想更改哪些快捷键？",
         "emptyDesc": "可以把 26 个默认快捷键改成你想要的按键。",
         "placeholder": "告诉我要修改哪个快捷键",
@@ -3095,12 +3095,12 @@
       "refreshStatus": "更新状态",
       "localFolder": "本地文件夹",
       "localIntervalAria": "本地文件夹更新间隔",
-      "refreshLocalAria": "立即刷新本地文件夹",
-      "refreshTitle": "立即刷新",
+      "refreshLocalAria": "立即更新本地文件夹",
+      "refreshTitle": "立即更新",
       "rowIntervalAria": "{{id}} 更新间隔",
       "rowRefreshAria": "立即更新 {{id}}",
       "rowRefreshTitle": "立即更新",
-      "localUpdating": "刷新中…",
+      "localUpdating": "更新中…",
       "syncAll": "全部更新",
       "scheduleTitle": "自动刷新条件",
       "scheduleAcOnlyName": "仅在接通电源时",
@@ -3358,9 +3358,9 @@
       "recent": "最近使用",
       "names": "文件名",
       "content": "内容",
-      "ask": "询问 Dazzi"
+      "ask": "询问 AI"
     },
-    "askRow": "询问 Dazzi：“{{query}}”",
+    "askRow": "询问 AI：“{{query}}”",
     "emptyRecents": "输入内容开始搜索。最近打开的文件会显示在这里。",
     "noResults": "没有匹配的文件。",
     "contentOff": "仅关键词模式下内容搜索已关闭。",
@@ -3375,8 +3375,8 @@
       "showInApp": "在 Dazzi 中显示",
       "copyFile": "复制文件",
       "copyPath": "复制路径",
-      "askAbout": "就此文件询问 Dazzi",
-      "askQuery": "询问 Dazzi"
+      "askAbout": "就此文件询问 AI",
+      "askQuery": "询问 AI"
     },
     "hints": {
       "preview": "预览",

@@ -226,7 +226,7 @@
   },
   "inspector": {
     "title": "情報",
-    "evidence": "根拠",
+    "evidence": "出典",
     "generalInfo": "一般情報",
     "imageInfo": "画像情報",
     "versions": "バージョン",
@@ -294,11 +294,11 @@
       "contains": "包含"
     },
     "evidencePanel": {
-      "emptyTitle": "回答の根拠が\nここに表示されます。",
+      "emptyTitle": "回答の出典が\nここに表示されます。",
       "excerpts": "根拠の抜粋",
       "openInBrowser": "ブラウザーで開く",
-      "evidenceFolder": "根拠フォルダ",
-      "evidenceFolderTooltip": "この会話の根拠ファイルを一時フォルダタブで開く",
+      "evidenceFolder": "出典フォルダ",
+      "evidenceFolderTooltip": "この会話の出典ファイルを一時フォルダタブで開く",
       "openPreview": "引用箇所をプレビューで表示"
     },
     "chat": {
@@ -345,7 +345,7 @@
     "emptyPromptTitle": "何をお探しですか？",
     "emptyPromptDesc": "ファイル、メール、メッセージ全体から素早い回答と詳細な回答を並べて提示します。",
     "generatingDeep": "詳細な回答を生成中…",
-    "askDazzi": "Dazziに質問する",
+    "askDazzi": "AIに聞く",
     "stop": "停止",
     "openPlan": "サブスクリプションと使用量を開く",
     "indexNotice": {
@@ -412,7 +412,7 @@
     "hideDetails": "詳細を閉じる",
     "other": {
       "title": "問題が発生しました",
-      "hint": "AIが原因を調べて、直せるか試します。"
+      "hint": "AI エージェントが原因を調べて、直せるか試します。"
     },
     "modelMissing": {
       "title": "AIモデルがまだ選ばれていません",
@@ -563,7 +563,7 @@
     },
     "inspector": {
       "empty": "ルールを選択すると\nここに概要が表示されます。",
-      "edit": "AI で編集",
+      "edit": "AIに頼む",
       "delete": "削除",
       "summary": "概要",
       "showAll": "すべて表示",
@@ -817,8 +817,8 @@
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
-    "closeEvidenceFolderTitle": "根拠フォルダを閉じる",
-    "closeEvidenceFolderMessage": "このタブを閉じると一時的な根拠フォルダが削除・整理されます。元のファイルはそのまま残ります。本当に閉じますか？",
+    "closeEvidenceFolderTitle": "出典フォルダを閉じる",
+    "closeEvidenceFolderMessage": "このタブを閉じると一時的な出典フォルダが削除・整理されます。元のファイルはそのまま残ります。本当に閉じますか？",
     "closeEvidenceFolderAction": "閉じる"
   },
   "settings": {
@@ -1157,14 +1157,14 @@
           "price": "無料",
           "tag": "登録してすぐに試してみたい方へ",
           "training": "サービス向上のため入出力を利用する場合があります",
-          "features": "ファイルの中身まで理解する AI エージェント\n話しかけるように質問できるファイルチャット\n軽量なチャットモデル 5 種\n毎週補充される無料クレジット"
+          "features": "ファイルの中身まで理解する AI エージェント\n話しかけるように質問できるファイルとの会話\n軽量な会話モデル 5 種\n毎週補充される無料クレジット"
         },
         "air": {
           "name": "Air",
           "price": "$4",
           "note": "月額$4 · いつでも解約可",
           "tag": "すでに使っている AI サブスクリプションを Dazzi につなぎたい方へ",
-          "features": "Free のすべての機能 +\n使っている AI サブスクリプションのモデルでチャット\n検索に必要な AI は Dazzi が提供\nFree より多い週間クレジット"
+          "features": "Free のすべての機能 +\n使っている AI サブスクリプションのモデルで会話\n検索に必要な AI は Dazzi が提供\nFree より多い週間クレジット"
         },
         "pro": {
           "name": "Pro",
@@ -1172,7 +1172,7 @@
           "note": "カード登録で7日間無料、その後月額$20",
           "tag": "他の AI サブスクリプションなしで Dazzi だけを使いたい方へ",
           "trial": "7日間無料トライアル",
-          "features": "Air のすべての機能 +\nサブスクリプション接続なしで高性能チャットモデルを利用\nAir より速いリクエストと多いクレジット\n7 日間の無料トライアル"
+          "features": "Air のすべての機能 +\nサブスクリプション接続なしで高性能会話モデルを利用\nAir より速いリクエストと多いクレジット\n7 日間の無料トライアル"
         },
         "max": {
           "name": "Max",
@@ -1323,11 +1323,11 @@
     "tips": {
       "1": {
         "title": "{{shortcut}}一回ですぐに質問",
-        "body": "どの画面からでもAI エージェントの入力欄に移動します。フォルダを開かずに文書の内容を尋ね、根拠とともに答えを得られます。"
+        "body": "どの画面からでもAI エージェントの入力欄に移動します。フォルダを開かずに文書の内容を尋ね、出典とともに回答を得られます。"
       },
       "2": {
-        "title": "回答の番号を押すと根拠をプレビュー",
-        "body": "回答に付いた番号は実際に読んだ文書の位置です。押すと根拠のファイルの内容をその場でプレビューできます。",
+        "title": "回答の番号を押すと出典をプレビュー",
+        "body": "回答に付いた番号は実際に読んだ文書の位置です。押すと出典のファイルの内容をその場でプレビューできます。",
         "bubble": "マーケティング費用は前四半期より18%減りました。"
       },
       "3": {
@@ -1409,7 +1409,7 @@
     "sortBy": "{{label}} で並べ替え",
     "resizeColumn": "{{label}} のサイズを変更",
     "columnsMenu": "列",
-    "evidenceNotFound": "根拠 {{number}} の情報が見つかりません",
+    "evidenceNotFound": "出典 {{number}} の情報が見つかりません",
     "searchTitle": "検索結果: 「{{query}}」",
     "resizeSidebar": "サイドバーのサイズを変更",
     "resizeInspector": "インスペクタのサイズを変更",
@@ -1659,7 +1659,7 @@
       "retried": "一時的なファイルシステムエラー({{code}})が発生したため、更新を {{retries}} 回再試行しました。",
       "filesLeftOut": "{{code}} エラーが続いたファイル {{files}} 件を今回の更新から除外しました。次回の更新で再試行します。",
       "parseKilled": "制限時間を超えたファイル {{timedOut}} 件と、パーサーが停止したファイル {{crashed}} 件をスキップしました。次回の更新で再試行します。",
-      "batchSkipped": "同期に失敗したため、ファイル {{files}} 件は以前のインデックスのままです。次回の更新で再試行します。",
+      "batchSkipped": "更新できなかったため、ファイル {{files}} 件は以前のインデックスのままです。次回の更新で再試行します。",
       "modelMissing": "このコンピューター用の埋め込みモデルがまだダウンロードされていないため、インデックス作成をスキップしました。設定 → AI モデル → 文書理解モデルでダウンロードしてください。",
       "preflightMissingKey": "エンベッダー {{id}} には API キーが必要ですが、{{env}} が設定されていません。インデックス作成の前に設定してください。",
       "preflightKeyEnvIgnored": "エンベッダー {{id}} は apiKeyEnv に {{configured}} を指定していますが、インデクサーはキーを {{env}} からしか読まず、{{env}} が設定されていません。キーを {{env}} に設定してください。",
@@ -1729,8 +1729,8 @@
         "larkNotApplicable": "Lark はリモート API 検索のみを使用し、ローカル埋め込みを拒否します。",
         "defaultNotApplicable": "このデータソースは独自のキーワード/パースインデックスを使用し、グローバルエンベッダーを使用しません。",
         "mailcrawlSharedEmbedder": "mailcrawl は Dazzi と同じ埋め込みサーバーを使います。モデルが変わると、次回のインデックス作成で自動的に作り直します。",
-        "sidecarSharedEmbedder": "チャットアーカイブ上の読み取り専用サイドカーが共有エンベッダーでメッセージを埋め込みます。エンベッダーを変更すると次回の同期で再埋め込みします。",
-        "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の同期で再埋め込みします。",
+        "sidecarSharedEmbedder": "会話アーカイブ上の読み取り専用サイドカーが共有エンベッダーでメッセージを埋め込みます。エンベッダーを変更すると次回の更新で再埋め込みします。",
+        "githubGistSharedEmbedder": "GitHub Gist のベクトルインデックスは共有エンベッダーを使います。エンベッダーを変更すると次回の更新で再埋め込みします。",
         "obsidianSharedEmbedder": "Obsidian の保管庫は選択した埋め込みモデルにそのまま従います(MinSync が保管庫専用の作業領域で索引します)。"
       },
       "actions": {
@@ -2262,7 +2262,7 @@
       "emptyLocations": "マウントされたディスクはありません。",
       "emptyTags": "ピン留めされた Finder タグはありません。",
       "assistant": {
-        "title": "AI アプリカスタムアシスタント",
+        "title": "アプリカスタム AI エージェント",
         "newChat": "新しい会話",
         "emptyTitle": "どのようにカスタマイズしますか？",
         "emptyDesc": "サイドバーに表示するフォルダーと順序を変更できます。",
@@ -2275,7 +2275,7 @@
         "stop": "停止",
         "openAiSettings": "AI モデル設定を開く",
         "unavailable": "アプリカスタムサービスを利用できません。",
-        "inputLabel": "アシスタントに依頼"
+        "inputLabel": "AI エージェントに依頼"
       },
       "addCustomPathPlaceholderWindows": "~\\Projects または C:\\Work",
       "dragHint": "{{name}} の順序は、ドラッグするか ↑↓ キーで変更できます。"
@@ -2292,7 +2292,7 @@
       "shortcutNote": "標準項目のキーボードショートカットは Finder 標準のまま維持され、ここでは変更できません。",
       "magicTitle": "カスタムマジックアクション",
       "magicDesc": "右クリックしたファイルを入力として任意のシェルスクリプトを実行したり、AIエージェントループで分析・変換・整理を実行します。",
-      "magicEmpty": "登録されたマジックアクションはありません。AIアシスタントに頼むか手動で追加してください。",
+      "magicEmpty": "登録されたマジックアクションはありません。AIに頼むか手動で作成してください。",
       "addMagicAction": "マジックアクションを追加",
       "editMagicAction": "{{name}} を編集",
       "removeMagicAction": "{{name}} を削除",
@@ -2378,7 +2378,7 @@
         "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。"
       },
       "assistant": {
-        "title": "AI 右クリックメニュー＆マジックアクションアシスタント",
+        "title": "右クリックメニュー＆マジックアクション AI エージェント",
         "emptyTitle": "右クリックメニューにどんな機能を追加しますか？",
         "emptyDesc": "ファイルを右クリックしたときのメニューを自由に設定できます。",
         "placeholder": "作りたい機能を教えてください",
@@ -2448,7 +2448,7 @@
         "aiToggleHistory": "チャット履歴を切替"
       },
       "assistant": {
-        "title": "AI ショートカットカスタムアシスタント",
+        "title": "ショートカットカスタム AI エージェント",
         "emptyTitle": "どのショートカットを変更しますか？",
         "emptyDesc": "26個の標準ショートカットを好きなキーに変更できます。",
         "placeholder": "変更したいショートカットを教えてください",
@@ -3358,9 +3358,9 @@
       "recent": "最近の項目",
       "names": "ファイル名",
       "content": "内容",
-      "ask": "Dazziに聞く"
+      "ask": "AIに聞く"
     },
-    "askRow": "Dazziに聞く：「{{query}}」",
+    "askRow": "AIに聞く：「{{query}}」",
     "emptyRecents": "入力して検索します。最近開いたファイルがここに表示されます。",
     "noResults": "一致するファイルはありません。",
     "contentOff": "キーワードのみのモードのため、内容検索はオフです。",
@@ -3375,8 +3375,8 @@
       "showInApp": "Dazziで表示",
       "copyFile": "ファイルをコピー",
       "copyPath": "パスをコピー",
-      "askAbout": "このファイルについてDazziに聞く",
-      "askQuery": "Dazziに聞く"
+      "askAbout": "このファイルについてAIに聞く",
+      "askQuery": "AIに聞く"
     },
     "hints": {
       "preview": "プレビュー",

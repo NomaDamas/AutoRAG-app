@@ -219,7 +219,7 @@ describe("the inspector chat view", () => {
 	});
 
 	it("draws citation numbers like the AI Agent tab: a pale wash, and solid blue while one is hovered", () => {
-		renderTab(withAnswer("본문 [1]", ["근거"]));
+		renderTab(withAnswer("본문 [1]", ["출처"]));
 		const cite = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
 		expect(cite()?.className).toContain("bg-accent-wash");
 		expect(cite()?.classList.contains("active")).toBe(false);

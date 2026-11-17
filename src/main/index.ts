@@ -1081,7 +1081,7 @@ app.whenReady().then(async () => {
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
-	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	// "AI로 해결하기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
 	registerErrorFixIpcHandlers(
 		createErrorFixService({
 			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),

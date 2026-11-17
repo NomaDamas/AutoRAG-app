@@ -1,5 +1,5 @@
 /**
- * Where an "AI로 고치기" run stands, as the dialog shows it. Pure over the
+ * Where an "AI로 해결하기" run stands, as the dialog shows it. Pure over the
  * main process's events, like the smart-indexing run in `onboarding/smart-scope.ts`.
  */
 
