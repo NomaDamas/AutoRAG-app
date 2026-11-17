@@ -447,7 +447,13 @@ const GO_CRAWLERS = [
 	{ name: "notcrawl", repo: "openclaw/notcrawl", pattern: /_darwin_arm64\.tar\.gz$/ },
 ];
 
-const CARGO_BINARIES = [{ name: "dupey", minVersion: VERSION_FLOORS.dupey }, { name: "jikji", crate: "jikji-cli" }, { name: "clawgallery" }];
+// `wombat` (AI Sessions) is published as the crate `wombat-sessions`; `cargo install` still produces the `wombat` binary.
+const CARGO_BINARIES = [
+	{ name: "dupey", minVersion: VERSION_FLOORS.dupey },
+	{ name: "jikji", crate: "jikji-cli" },
+	{ name: "clawgallery" },
+	{ name: "wombat", crate: "wombat-sessions", minVersion: VERSION_FLOORS.wombat },
+];
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "kordoc"];
 

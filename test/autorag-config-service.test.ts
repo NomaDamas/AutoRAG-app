@@ -478,4 +478,19 @@ describe("createAutoRagConfigService", () => {
 		const after = JSON.parse(await readFile(fixture.configPath, "utf8"));
 		expect(after.refresh.schedule).toEqual({ power: "ac", windows: ["22:00-07:00"] });
 	});
+
+	it("type-checks the AI Sessions connector fields before they reach the librarian's wombat skill", async () => {
+		const root = await mkdtemp(join(tmpdir(), "autorag-config-wombat-"));
+		const fixture = await createFixture(baseConfig(root), "autorag-config-wombat-");
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await expect(service.set(["datasources", "wombat", "connector", "agents"], "claude-code")).rejects.toThrow(/agents must be a non-empty string array/);
+		await expect(service.set(["datasources", "wombat", "connector", "includeSubagents"], "yes")).rejects.toThrow(/includeSubagents must be a boolean/);
+		await expect(service.set(["datasources", "wombat", "connector", "includeEphemeral"], 1)).rejects.toThrow(/includeEphemeral must be a boolean/);
+
+		await service.set(["datasources", "wombat", "connector", "agents"], ["claude-code", "codex"]);
+		await service.set(["datasources", "wombat", "connector", "includeSubagents"], true);
+		const saved = JSON.parse(await readFile(fixture.configPath, "utf8")) as { datasources: Record<string, { connector: unknown }> };
+		expect(saved.datasources.wombat?.connector).toEqual({ agents: ["claude-code", "codex"], includeSubagents: true });
+	});
 });

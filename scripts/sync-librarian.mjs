@@ -28,7 +28,11 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
 // resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
 // model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
-const librarianRef = "v2.13.12";
+// v2.13.13 makes the `wombat` datasource (AI Sessions) run on the app's one MinSync: it hands wombat the `minsync` it resolved
+// (`--minsync-bin`), follows a sparse-only or `native:` `minSync.embedder`, sets Qwen3's query instruction in wombat's own
+// MinSync config, keeps wombat's mirror out of the local-file index (`excludePaths`), knows all 20 agents and rejects an unknown
+// one, and reads each agent's relocated home variable (AutoRAG#2182).
+const librarianRef = "v2.13.13";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -1,6 +1,6 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix, win32 } from "node:path";
 import { datasourceSupported, kakaoSupported } from "../shared/messenger-platform";
 import type { DetectedSource, SourceDetection, SourceId } from "../shared/onboarding-contract";
 import { isJsonObject } from "../shared/settings-contract";
@@ -32,7 +32,7 @@ export interface SourceDetectionDeps {
 
 /** Every connector the step can find on this host, in display order; KakaoTalk and WhatsApp are Mac-only apps. */
 function sourceOrder(platform: NodeJS.Platform): readonly SourceId[] {
-	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian"];
+	const all: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian", "wombat"];
 	return all.filter((id) => datasourceSupported(id, platform));
 }
 const GITHUB_REPO_LIMIT = 5;
@@ -247,6 +247,65 @@ async function detectMailcrawl(deps: SourceDetectionDeps): Promise<DetectedSourc
 	return accounts.length > 0 ? { id: "mailcrawl", facts: { accounts } } : null;
 }
 
+/**
+ * Where each coding agent keeps its sessions, in wombat's agent names (`wombat sync --agent <name>`). `path` is the
+ * folder wombat reads by default (`SourceRoots::default_from_env`) relative to the agent's root: the home directory,
+ * or the agent's own `env` variable when the user moved it. The order is the order the step names them in.
+ */
+interface AiSessionFolder {
+	readonly agent: string;
+	readonly env?: string;
+	/** Folder under the home directory. */
+	readonly home: readonly string[];
+	/** Folder under the `env` override, which replaces `home`. */
+	readonly underEnv: readonly string[];
+}
+
+const AI_SESSION_FOLDERS: readonly AiSessionFolder[] = [
+	{ agent: "codex", env: "CODEX_HOME", home: [".codex", "sessions"], underEnv: ["sessions"] },
+	{ agent: "claude-code", env: "CLAUDE_CONFIG_DIR", home: [".claude", "projects"], underEnv: ["projects"] },
+	{ agent: "omp", home: [".omp", "agent", "sessions"], underEnv: [] },
+	{ agent: "pi", home: [".pi", "agent", "sessions"], underEnv: [] },
+	{ agent: "opencode", home: [".local", "share", "opencode"], underEnv: [] },
+	{ agent: "hermes", env: "HERMES_HOME", home: [".hermes"], underEnv: [] },
+	{ agent: "gemini", env: "GEMINI_CLI_HOME", home: [".gemini"], underEnv: [".gemini"] },
+	{ agent: "qwen", env: "QWEN_HOME", home: [".qwen"], underEnv: [] },
+	{ agent: "copilot", env: "COPILOT_HOME", home: [".copilot"], underEnv: [] },
+	{ agent: "continue", env: "CONTINUE_GLOBAL_DIR", home: [".continue"], underEnv: [] },
+	{ agent: "codebuddy", env: "CODEBUDDY_CONFIG_DIR", home: [".codebuddy"], underEnv: [] },
+	{ agent: "vibe", env: "VIBE_HOME", home: [".vibe"], underEnv: [] },
+	{ agent: "droid", env: "FACTORY_HOME", home: [".factory"], underEnv: [] },
+	{ agent: "kiro", env: "KIRO_HOME", home: [".kiro"], underEnv: [] },
+	{ agent: "iflow", home: [".iflow", "projects"], underEnv: [] },
+	{ agent: "aside", home: [".aside"], underEnv: [] },
+];
+
+/** The folder one agent's sessions live in on this computer; a relative or empty override is ignored, as wombat ignores it. */
+function aiSessionFolder(deps: SourceDetectionDeps, entry: AiSessionFolder): string {
+	const joinPath = deps.platform === "win32" ? win32.join : posix.join;
+	const override = entry.env === undefined ? undefined : deps.env[entry.env];
+	if (override !== undefined && (posix.isAbsolute(override) || win32.isAbsolute(override))) return joinPath(override, ...entry.underEnv);
+	return joinPath(deps.home, ...entry.home);
+}
+
+/**
+ * AI Sessions: the past conversations coding agents (Claude Code, Codex, ...) left on this computer, searched through
+ * the `wombat` CLI. It is offered only when the CLI is installed and at least one agent's own session folder holds
+ * something, so a first index never starts a source that has nothing to read.
+ */
+async function detectWombat(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
+	if (!(await hasCommand(deps, "wombat"))) return null;
+	const found = await Promise.all(
+		AI_SESSION_FOLDERS.map(async (entry) => {
+			const folder = aiSessionFolder(deps, entry);
+			if (!(await deps.pathExists(folder))) return null;
+			return (await deps.readDirNames(folder)).length > 0 ? entry.agent : null;
+		}),
+	);
+	const agents = found.filter((agent): agent is string => agent !== null);
+	return agents.length > 0 ? { id: "wombat", facts: { agents } } : null;
+}
+
 async function detectGithub(deps: SourceDetectionDeps): Promise<DetectedSource | null> {
 	const envToken = deps.env.GITHUB_TOKEN;
 	let authenticated = typeof envToken === "string" && envToken.length > 0;
@@ -310,6 +369,7 @@ export async function detectSources(
 		github: detectGithub,
 		notion: detectNotion,
 		obsidian: detectObsidian,
+		wombat: detectWombat,
 	};
 	const results = await Promise.all(
 		sourceOrder(deps.platform).map(async (id) => {

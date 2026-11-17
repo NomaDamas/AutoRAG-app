@@ -76,6 +76,7 @@ const VERSION_ARGS = {
 	jikji: ["--version"],
 	dupey: ["--version"],
 	clawgallery: ["--version"],
+	wombat: ["--version"],
 	discrawl: ["--version"],
 	telecrawl: ["--version"],
 	wacrawl: ["--version"],

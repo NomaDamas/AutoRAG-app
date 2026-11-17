@@ -57,10 +57,14 @@ describe("onboarding datasource detection", () => {
 			return handler(args);
 		};
 	const noGithub = { env: {} as NodeJS.ProcessEnv };
+	const failing = (): never => {
+		throw new Error("not found");
+	};
 
 	it("offers neither Spotlight nor Apple Mail, even on macOS with a Mail folder", async () => {
 		const result = await detectSources({
-			...deps(script({ mdfind: () => "0", which: () => "/usr/bin/x" })),
+			// A Mac with Mail's folder and every CLI answering `which`, but no `wombat`: only the sources this step offers.
+			...deps(script({ mdfind: () => "0", which: (args) => (args[0] === "wombat" ? failing() : "/usr/bin/x") })),
 			...noGithub,
 			platform: "darwin",
 			pathExists: async () => true,
@@ -313,5 +317,73 @@ describe("onboarding datasource detection", () => {
 		const result = await pending;
 		expect(found).toEqual(["whatsapp", "mailcrawl"]);
 		expect(ids(result)).toEqual(["whatsapp", "mailcrawl"]);
+	});
+
+	describe("AI Sessions (wombat)", () => {
+		const doctor = (sessions: number): string => JSON.stringify({ ready: true, freshness: { indexed_sessions: sessions, indexed_turns: sessions * 10 } });
+		const sessionsOnDisk = (paths: readonly string[]) => async (path: string) => paths.some((candidate) => path === candidate);
+
+		it("offers AI Sessions when the CLI is installed and a coding agent has left sessions on this computer", async () => {
+			const result = await detectSources({
+				...deps(script({ which: () => "/usr/bin/x", wombat: () => doctor(0) })),
+				...noGithub,
+				pathExists: sessionsOnDisk(["/home/test/.claude/projects"]),
+				readDirNames: async (path) => (path === "/home/test/.claude/projects" ? ["proj-a"] : []),
+			});
+
+			expect(result.sources.find((source) => source.id === "wombat")).toEqual({ id: "wombat", facts: { agents: ["claude-code"] } });
+		});
+
+		it("does not offer it without the wombat CLI, or without any agent session to read", async () => {
+			const noCli = await detectSources({
+				...deps(script({ which: (args) => (args[0] === "wombat" ? failing() : "/usr/bin/x") })),
+				...noGithub,
+				pathExists: sessionsOnDisk(["/home/test/.claude/projects"]),
+				readDirNames: async () => ["proj-a"],
+			});
+			expect(ids(noCli)).not.toContain("wombat");
+
+			const noSessions = await detectSources({
+				...deps(script({ which: () => "/usr/bin/x", wombat: () => doctor(0) })),
+				...noGithub,
+				pathExists: async () => false,
+			});
+			expect(ids(noSessions)).not.toContain("wombat");
+		});
+
+		it("names every agent whose own default folder holds sessions, in wombat's agent names", async () => {
+			const home = "/home/test";
+			const present = [`${home}/.claude/projects`, `${home}/.codex/sessions`, `${home}/.omp/agent/sessions`, `${home}/.gemini`];
+			const result = await detectSources({
+				...deps(script({ which: () => "/usr/bin/x", wombat: () => doctor(0) })),
+				...noGithub,
+				pathExists: sessionsOnDisk(present),
+				readDirNames: async () => ["x"],
+			});
+			expect(result.sources.find((source) => source.id === "wombat")?.facts.agents).toEqual(["codex", "claude-code", "omp", "gemini"]);
+		});
+
+		it("follows an agent's relocated home variable", async () => {
+			const result = await detectSources({
+				...deps(script({ which: () => "/usr/bin/x", wombat: () => doctor(0) })),
+				env: { CODEX_HOME: "/data/codex" },
+				pathExists: sessionsOnDisk(["/data/codex/sessions"]),
+				readDirNames: async () => ["rollout.jsonl"],
+			});
+			expect(result.sources.find((source) => source.id === "wombat")?.facts.agents).toEqual(["codex"]);
+		});
+
+		it("is offered on every platform, unlike the Mac-only messengers", async () => {
+			for (const platform of ["darwin", "linux", "win32"] as const) {
+				const result = await detectSources({
+					...deps(script({ which: () => "/usr/bin/x", where: () => "C:/wombat.exe", wombat: () => doctor(0) })),
+					...noGithub,
+					platform,
+					pathExists: sessionsOnDisk(["/home/test/.claude/projects", "\\home\\test\\.claude\\projects"]),
+					readDirNames: async () => ["proj"],
+				});
+				expect(ids(result), platform).toContain("wombat");
+			}
+		});
 	});
 });

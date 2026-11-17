@@ -70,6 +70,7 @@ const SOURCE_LABELS: Readonly<Record<SourceId, string>> = {
 	github: "GitHub",
 	notion: "Notion",
 	obsidian: "Obsidian",
+	wombat: "AI Sessions",
 };
 
 export interface OnboardingServiceDeps {
@@ -205,6 +206,7 @@ const SOURCE_IDS: Readonly<Record<string, true>> = {
 	github: true,
 	notion: true,
 	obsidian: true,
+	wombat: true,
 };
 
 function onboardingStatePath(userDataDir: string): string {

@@ -59,6 +59,7 @@ const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKe
 const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
 	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
 	{ title: "settingsSources.apps.groups.docsNotes", ids: ["notion", "obsidian", "clawgallery"] },
+	{ title: "settingsSources.apps.groups.aiSessions", ids: ["wombat"] },
 	{ title: "settingsSources.apps.groups.mail", ids: ["mailcrawl"] },
 	{ title: "settingsSources.apps.groups.cloudDev", ids: ["cloud-drive", "github", "github-gist"] },
 	{ title: "settingsSources.apps.groups.newsOther", ids: ["rss", "hister", "calendar", "spotlight"] },
@@ -85,6 +86,7 @@ const UNIT_LABEL: Readonly<Record<NonNullable<DataSourceRow["index"]["unit"]>, L
 	message: "settingsSources.units.message",
 	document: "settingsSources.units.document",
 	image: "settingsSources.units.image",
+	session: "settingsSources.units.session",
 };
 
 /** The local-folder row's meta line: what the last refresh actually parsed. */

@@ -84,6 +84,10 @@ function entriesFor(datasource: IndexingDatasource, home: string): Record<string
 			}
 			return entries;
 		}
+		case "wombat":
+			// No `agents` list: detection names the agents that have sessions today, but a connection that pinned them
+			// would never see the one the user installs next month. wombat reads every agent's own default folder.
+			return { wombat: { instanceId: "default", connector: {} } };
 		case "discord":
 			return { discord: { instanceId: "default", connector: {} } };
 		case "telegram":

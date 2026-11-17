@@ -354,6 +354,8 @@ export function sourceTile(id: SourceId): { readonly brand?: string; readonly ic
 			return { brand: "notion", icon: "notebook-pen", color: "purple" };
 		case "obsidian":
 			return { brand: "obsidian", icon: "notebook-pen", color: "purple" };
+		case "wombat":
+			return { icon: "message-square-code", color: "blue" };
 	}
 }
 
@@ -363,6 +365,7 @@ export function sourceDetail(id: SourceId, facts: SourceFacts, translate: Transl
 		repos: facts.repos?.length ?? 0,
 		vaults: facts.vaults?.length ?? 0,
 		accounts: facts.accounts?.length ?? 0,
+		agents: facts.agents?.length ?? 0,
 		workspaces: facts.workspaces ?? 0,
 		chats: facts.chats ?? 0,
 		messages: facts.messages ?? 0,
@@ -374,7 +377,7 @@ export function sourceDetail(id: SourceId, facts: SourceFacts, translate: Transl
  * Probes finish in whatever order they like, so the list sorts on arrival and a
  * row never jumps because a slower probe landed later.
  */
-const SOURCE_LIST_ORDER: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian"];
+const SOURCE_LIST_ORDER: readonly SourceId[] = ["kakao", "slack", "discord", "telegram", "whatsapp", "mailcrawl", "github", "notion", "obsidian", "wombat"];
 
 export function bySourceOrder(a: { readonly id: SourceId }, b: { readonly id: SourceId }): number {
 	return SOURCE_LIST_ORDER.indexOf(a.id) - SOURCE_LIST_ORDER.indexOf(b.id);
