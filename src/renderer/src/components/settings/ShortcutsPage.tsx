@@ -316,8 +316,32 @@ export function ShortcutsPage({
 				</div>
 			)}
 
-			{/* Figma 445:2249: 빠른 구성 (the platform presets as a segmented control, reset and the changed-only filter), the search, then one bordered card per group. */}
+			{/* Figma 445:2249: the search, 빠른 구성 (the platform presets as a segmented control, reset and the changed-only filter), then one bordered card per group. */}
 			<div className="shortcuts-page">
+				<label className="shortcuts-search">
+					<Search size={14} strokeWidth={1.5} className="shortcuts-search__icon" aria-hidden="true" />
+					<input
+						type="text"
+						data-testid="shortcuts-filter-input"
+						className="shortcuts-search__input"
+						value={filterQuery}
+						placeholder={t("settingsCore.shortcuts.filterPlaceholder")}
+						aria-label={t("settingsCore.shortcuts.filterPlaceholder")}
+						onChange={(event) => setFilterQuery(event.target.value)}
+					/>
+					{filterQuery.length > 0 ? (
+						<button
+							type="button"
+							className="shortcuts-search__clear"
+							data-action="clear-shortcuts-filter"
+							aria-label={t("common.close")}
+							onClick={() => setFilterQuery("")}
+						>
+							<X size={12} />
+						</button>
+					) : null}
+				</label>
+
 				<div className="shortcuts-quick">
 					<span className="shortcuts-quick-label">{t("settingsCore.shortcuts.presetsTitle")}</span>
 					<div className="shortcuts-quick-row">
@@ -363,29 +387,6 @@ export function ShortcutsPage({
 							</button>
 						</div>
 					</div>
-					<label className="shortcuts-search">
-						<Search size={14} strokeWidth={1.5} className="shortcuts-search__icon" aria-hidden="true" />
-						<input
-							type="text"
-							data-testid="shortcuts-filter-input"
-							className="shortcuts-search__input"
-							value={filterQuery}
-							placeholder={t("settingsCore.shortcuts.filterPlaceholder")}
-							aria-label={t("settingsCore.shortcuts.filterPlaceholder")}
-							onChange={(event) => setFilterQuery(event.target.value)}
-						/>
-						{filterQuery.length > 0 ? (
-							<button
-								type="button"
-								className="shortcuts-search__clear"
-								data-action="clear-shortcuts-filter"
-								aria-label={t("common.close")}
-								onClick={() => setFilterQuery("")}
-							>
-								<X size={12} />
-							</button>
-						) : null}
-					</label>
 				</div>
 
 				{totalMatching === 0 ? (
