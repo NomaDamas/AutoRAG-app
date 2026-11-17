@@ -2280,7 +2280,6 @@
       "dragHint": "Drag {{name}} or press ↑ or ↓ to reorder it."
     },
     "contextMenu": {
-      "description": "Configure built-in items and custom Magic Actions shown when right-clicking files and folders.",
       "aiHeroTitle": "Build the right-click menu with AI",
       "aiHeroDesc": "Make menu items by saying so, like “Summarize a PDF in three lines when I right-click it.”",
       "aiHeroButton": "Ask AI",

@@ -2280,7 +2280,6 @@
       "dragHint": "{{name}} 순서는 끌거나 ↑↓ 키로 바꿀 수 있습니다."
     },
     "contextMenu": {
-      "description": "파일과 폴더를 우클릭했을 때 표시할 메뉴 항목과 나만의 매직 액션을 구성합니다.",
       "aiHeroTitle": "AI로 우클릭 메뉴 만들기",
       "aiHeroDesc": "“PDF를 우클릭하면 세 줄로 요약해줘”처럼 말로 메뉴를 만들 수 있습니다.",
       "aiHeroButton": "AI에게 요청",

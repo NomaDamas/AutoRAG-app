@@ -565,7 +565,6 @@ export function ContextMenuPage({
 		<>
 			<SettingsPageHead
 				title={t("settingsCore.nav.contextMenu")}
-				description={t("settingsCore.contextMenu.description")}
 			/>
 
 			{customizerOpen ? null : (

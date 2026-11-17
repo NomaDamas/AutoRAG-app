@@ -2280,7 +2280,6 @@
       "dragHint": "可拖动或按 ↑↓ 键调整 {{name}} 的顺序。"
     },
     "contextMenu": {
-      "description": "配置右键点击文件或文件夹时显示的菜单项，以及专属魔法动作。",
       "aiHeroTitle": "用 AI 创建右键菜单",
       "aiHeroDesc": "可以用说的来创建菜单，例如“右键点按 PDF 时用三行总结”。",
       "aiHeroButton": "请 AI 处理",
