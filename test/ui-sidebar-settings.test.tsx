@@ -450,7 +450,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
 		// The composer asks in plain words what to change (Figma 367:8865); the suggestions above are the examples
 		const composer = panel?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
-		expect(composer?.getAttribute("placeholder")).toBe("어떤 구성을 원하는지 말해주세요");
+		expect(composer?.getAttribute("placeholder")).toBe("원하는 구성을 말해 주세요");
 		expect(composer?.getAttribute("aria-label")).toBe("어시스턴트에게 요청");
 
 		// Hiding the right sidebar brings back the banner (Figma 543:10349): the Dazzi mark at its left, a plain text button

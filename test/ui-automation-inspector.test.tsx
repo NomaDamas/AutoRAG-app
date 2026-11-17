@@ -307,13 +307,13 @@ describe("AutomationRulesSection", () => {
 
 		click(more);
 		expect(more?.getAttribute("aria-expanded")).toBe("true");
-		expect([...host.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(["수정하기", "삭제하기"]);
-		click(menuItem(row, "수정하기"));
+		expect([...host.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)).toEqual(["수정", "삭제"]);
+		click(menuItem(row, "수정"));
 		expect(edits).toEqual([shown]);
 		expect(host.querySelector('[role="menu"]')).toBeNull();
 
 		click(more);
-		click(menuItem(row, "삭제하기"));
+		click(menuItem(row, "삭제"));
 		expect(deletes).toEqual([shown]);
 		expect(edits).toEqual([shown]);
 	});
@@ -367,7 +367,7 @@ describe("Inspector's folder automations", () => {
 
 		const row = ruleRow(ruleTitle(parentRule));
 		click(row?.querySelector('button[aria-label="더보기"]'));
-		click(menuItem(row, "수정하기"));
+		click(menuItem(row, "수정"));
 		expect(edits).toEqual([parentRule]);
 	});
 
