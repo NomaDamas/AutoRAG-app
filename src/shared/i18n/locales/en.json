@@ -770,7 +770,9 @@
       "title": "Semantic search isn’t available",
       "side": "Semantic search paused",
       "sideDetail": "Check the embedding settings",
-      "detail": "Check the settings"
+      "detail": "Check the settings",
+      "bannerDetail": "Check the Document Understanding Model settings. Keyword search still works.",
+      "bannerAction": "Open Settings"
     },
     "embedderOffline": {
       "title": "Waiting for a connection",
