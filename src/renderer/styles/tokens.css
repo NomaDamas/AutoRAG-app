@@ -252,15 +252,13 @@
   /* ------------------------------------------------------- §2.10 Version tags */
   /* v7 `.vtag` rules. `near`/`exact` use the reference's exact values, which
    * differ from the palette plan (plan: #F3E8FD/#7E3FBF and #FDEBD8/#C05F1A). */
-  --vtag-latest-bg: #E3F6E8;
-  --vtag-latest-text: #1F7A3A;
+  /* Figma 576:6699 / 577:6705: 최신본 in the accent blue; 동일본 and 포함본 share the amber, 유사본 the purple. */
+  --vtag-latest-bg: rgba(10,100,216,0.16);
+  --vtag-latest-text: #0A64D8;
   --vtag-near-bg: #EFE7FB;
   --vtag-near-text: #6B3FB5;
   --vtag-exact-bg: #FFF0DF;
   --vtag-exact-text: #B45309;
-  /* The inspector's 유사본 tag (Figma 231:2588). */
-  --vtag-similar-bg: #FDEEC1;
-  --vtag-similar-text: #C47D00;
 
   /* -------------------------------------------------------------- §3 Typography */
   --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
@@ -555,14 +553,12 @@ html[data-appearance="dark"] {
     --drop-overlay-bg: rgba(44,44,46,0.92);
     --tile-notion: #F5F5F7;
     --tile-notion-fg: #1C1C1E;
-    --vtag-latest-bg: rgba(48,209,88,0.2);
-    --vtag-latest-text: #30D158;
+    --vtag-latest-bg: rgba(10,132,255,0.24);
+    --vtag-latest-text: #409CFF;
     --vtag-near-bg: rgba(191,90,242,0.2);
     --vtag-near-text: #BF5AF2;
     --vtag-exact-bg: rgba(255,159,10,0.2);
     --vtag-exact-text: #FF9F0A;
-    --vtag-similar-bg: rgba(255,204,0,0.2);
-    --vtag-similar-text: #FFD60A;
 
     /* ------------------------------------------------------------ Scrollbars */
     /* (none — native overlay scrollbars; see base.css §7) */

@@ -55,7 +55,7 @@ export interface RowCallbacks {
 	readonly onVisible: (entry: FinderEntry) => void;
 }
 
-const VTAG_BASE = "vtag inline-flex flex-none items-center h-16 px-6 rounded-4 text-tile font-semibold whitespace-nowrap";
+const VTAG_BASE = "vtag inline-flex flex-none items-center h-16 px-6 rounded-4 text-tile font-bold whitespace-nowrap";
 const VTAG_TONE: Readonly<Record<"latest" | VersionRelation, string>> = {
 	latest: "bg-vtag-latest-bg text-vtag-latest-text",
 	near: "bg-vtag-near-bg text-vtag-near-text",
