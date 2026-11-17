@@ -109,7 +109,7 @@ export type PlanId = "free" | "air" | "pro" | "max" | "byok";
  * Local files are indexed through the folders step, so Spotlight/Apple Mail are
  * deliberately not offered here.
  */
-export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "notion" | "obsidian";
+export type SourceId = "kakao" | "slack" | "discord" | "telegram" | "whatsapp" | "mailcrawl" | "github" | "notion" | "obsidian" | "wombat";
 
 export interface OnboardingFolderChoice {
 	readonly path: string;
@@ -234,6 +234,8 @@ export interface SourceFacts {
 	readonly vaults?: readonly string[];
 	/** himalaya accounts whose login was verified; one mailcrawl archive each. */
 	readonly accounts?: readonly string[];
+	/** Coding agents (wombat's agent names) whose own session folder holds sessions on this computer. */
+	readonly agents?: readonly string[];
 	readonly workspaces?: number;
 	readonly channels?: number;
 	readonly chats?: number;

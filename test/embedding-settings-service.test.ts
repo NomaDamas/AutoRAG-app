@@ -466,4 +466,17 @@ describe("the local embedding spec guard", () => {
 		const result = await below(fixture, async () => vectorResponse(1024)).apply({ profileId: "byok", byok: { baseUrl: "http://127.0.0.1:11434", protocol: "openai" } });
 		expect(result).toMatchObject({ ok: true, applied: true });
 	});
+
+	it("rebuilds AI Sessions when the model changes: wombat's MinSync follows the shared embedder, so a stale index would answer from the old model", async () => {
+		const fixture = await createFixture({
+			sessions: { type: "wombat", connector: {} },
+			news: { type: "rss", connector: { feeds: [{ url: "https://example.com/feed.xml" }] } },
+		});
+		const { embedding } = buildService(fixture);
+
+		expect(await embedding.apply({ profileId: "local" })).toMatchObject({ ok: true, applied: true });
+		expect(fixture.synced).toEqual(["sessions"]);
+		const adoption = Object.fromEntries((await embedding.get()).sources.map((source) => [source.id, source.adoption]));
+		expect(adoption).toEqual({ sessions: "native", news: "not-applicable" });
+	});
 });

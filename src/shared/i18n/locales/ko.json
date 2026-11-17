@@ -1121,7 +1121,8 @@
         "mailcrawl": "메일 (mailcrawl)",
         "github": "GitHub",
         "notion": "Notion",
-        "obsidian": "Obsidian"
+        "obsidian": "Obsidian",
+        "wombat": "AI 세션"
       },
       "detail": {
         "kakao": "KakaoTalk 앱 데이터 감지됨",
@@ -1132,7 +1133,8 @@
         "mailcrawl": "메일 계정 {{accounts}}개 로그인 확인됨",
         "github": "gh 로그인됨 · Issues와 Pull Requests",
         "notion": "Notion 앱 데이터 감지됨",
-        "obsidian": "Vault {{vaults}}개 발견"
+        "obsidian": "Vault {{vaults}}개 발견",
+        "wombat": "AI 코딩 에이전트 {{agents}}종의 지난 대화를 찾았습니다"
       }
     },
     "plan": {
@@ -1731,7 +1733,8 @@
         "mailcrawlSharedEmbedder": "mailcrawl은 Dazzi가 쓰는 임베딩 서버를 그대로 사용합니다. 모델이 바뀌면 다음 색인에서 자동으로 다시 만듭니다.",
         "sidecarSharedEmbedder": "채팅 보관함 위의 읽기 전용 사이드카가 공용 임베더로 메시지를 임베딩합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다.",
         "githubGistSharedEmbedder": "GitHub Gist 벡터 색인이 공용 임베더를 사용합니다. 임베더가 바뀌면 다음 동기화에서 다시 임베딩합니다.",
-        "obsidianSharedEmbedder": "Obsidian 보관함은 선택한 임베딩 모델을 그대로 따릅니다(MinSync가 보관함 전용 작업 공간에서 색인합니다)."
+        "obsidianSharedEmbedder": "Obsidian 보관함은 선택한 임베딩 모델을 그대로 따릅니다(MinSync가 보관함 전용 작업 공간에서 색인합니다).",
+        "wombatSharedEmbedder": "AI 세션은 Dazzi와 같은 MinSync 모델을 씁니다. 모델이 바뀌면 다음 색인에서 자동으로 다시 만듭니다."
       },
       "actions": {
         "discordConfig": "datasources.<id>이 관리하는 discrawl config.toml"
@@ -2916,6 +2919,9 @@
       },
       "spotlight": {
         "summary": "macOS Spotlight(mdfind)로 로컬 파일을 실시간 조회합니다."
+      },
+      "wombat": {
+        "summary": "Claude Code, Codex 등 AI 코딩 에이전트와 나눈 지난 대화를 wombat으로 검색합니다."
       }
     },
     "groups": {
@@ -2939,7 +2945,8 @@
       "rss": "RSS / News",
       "hister": "Hister (브라우저 방문 기록)",
       "calendar": "Apple 캘린더 · 미리알림 (EventKit MCP)",
-      "spotlight": "Spotlight (mdfind)"
+      "spotlight": "Spotlight (mdfind)",
+      "aiSessions": "AI 세션"
     },
     "fields": {
       "binaryPath": "실행 파일 경로",
@@ -3025,7 +3032,11 @@
         "histerSemantic": "Hister 서버에 시맨틱 검색이 켜져 있어야 합니다 (autorag setup --sync-hister).",
         "requireWriteConfirmation": "켜 두면 확인 없이 일정이나 미리알림을 변경하지 않습니다 (--require-write-confirmation).",
         "mcpExposure": "direct는 도구를 바로 노출하고, codemode는 스크립트를 통해 호출합니다.",
-        "calendarCommand": "비워 두면 npx로 mcp-server-apple-events를 실행합니다."
+        "calendarCommand": "비워 두면 npx로 mcp-server-apple-events를 실행합니다.",
+        "agents": "비워 두면 설치된 모든 에이전트(Claude Code, Codex, OpenCode, Gemini, Kiro 등 20종)를 읽습니다. 예: claude-code, codex",
+        "includeSubagents": "서브에이전트와 사이드체인 대화도 색인합니다. 기본은 꺼짐입니다.",
+        "includeEphemeral": "헤드리스·벤치마크·임시 폴더에서 실행된 세션도 색인합니다. 기본은 꺼짐입니다.",
+        "wombatDataDir": "wombat이 대화 사본과 색인을 보관하는 폴더입니다. 비워 두면 ~/.wombat을 씁니다."
       },
       "envError": {
         "object": "환경 변수는 JSON 객체여야 합니다.",
@@ -3047,7 +3058,10 @@
         "removeAt": "피드 {{index}} 삭제",
         "addAria": "피드 추가",
         "addLabel": "+ 피드 추가"
-      }
+      },
+      "agents": "에이전트",
+      "includeSubagents": "서브에이전트 세션 포함",
+      "includeEphemeral": "임시 세션 포함"
     },
     "cadence": {
       "min5": "5분",
@@ -3062,7 +3076,8 @@
     "units": {
       "message": "메시지",
       "document": "문서",
-      "image": "이미지"
+      "image": "이미지",
+      "session": "세션"
     },
     "common": {
       "manual": "직접",
@@ -3135,6 +3150,7 @@
       "groups": {
         "messengers": "메신저",
         "docsNotes": "문서·노트",
+        "aiSessions": "AI 코딩 에이전트",
         "mail": "메일",
         "cloudDev": "클라우드·개발",
         "newsOther": "뉴스·기타"

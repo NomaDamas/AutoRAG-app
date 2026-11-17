@@ -1121,7 +1121,8 @@
         "mailcrawl": "Mail (mailcrawl)",
         "github": "GitHub",
         "notion": "Notion",
-        "obsidian": "Obsidian"
+        "obsidian": "Obsidian",
+        "wombat": "AI Sessions"
       },
       "detail": {
         "kakao": "KakaoTalk app data detected",
@@ -1132,7 +1133,8 @@
         "mailcrawl": "Signed in to {{accounts}} mail accounts",
         "github": "Signed in to gh · Issues and Pull Requests",
         "notion": "Notion app data detected",
-        "obsidian": "{{vaults}} vaults found"
+        "obsidian": "{{vaults}} vaults found",
+        "wombat": "Past conversations from {{agents}} AI coding agents found"
       }
     },
     "plan": {
@@ -1731,7 +1733,8 @@
         "mailcrawlSharedEmbedder": "mailcrawl uses the same embedding server as Dazzi. When the model changes it re-indexes on the next index run.",
         "sidecarSharedEmbedder": "The read-only sidecar over the chat archive embeds messages with the shared embedder; changing the embedder re-embeds them on the next sync.",
         "githubGistSharedEmbedder": "The GitHub Gist vector index uses the shared embedder; changing the embedder re-embeds it on the next sync.",
-        "obsidianSharedEmbedder": "An Obsidian vault follows the selected embedding model (MinSync indexes it in a workspace of its own)."
+        "obsidianSharedEmbedder": "An Obsidian vault follows the selected embedding model (MinSync indexes it in a workspace of its own).",
+        "wombatSharedEmbedder": "AI Sessions uses the same MinSync model as Dazzi. When the model changes it re-indexes on the next index run."
       },
       "actions": {
         "discordConfig": "discrawl config.toml managed by datasources.<id>"
@@ -2916,6 +2919,9 @@
       },
       "spotlight": {
         "summary": "Query local files live with macOS Spotlight (mdfind)."
+      },
+      "wombat": {
+        "summary": "Search your past conversations with AI coding agents such as Claude Code and Codex, through wombat."
       }
     },
     "groups": {
@@ -2939,7 +2945,8 @@
       "rss": "RSS / News",
       "hister": "Hister (Browser history)",
       "calendar": "Apple Calendar & Reminders (EventKit MCP)",
-      "spotlight": "Spotlight (mdfind)"
+      "spotlight": "Spotlight (mdfind)",
+      "aiSessions": "AI sessions"
     },
     "fields": {
       "binaryPath": "Executable path",
@@ -3025,7 +3032,11 @@
         "histerSemantic": "Requires semantic search enabled on the Hister server (autorag setup --sync-hister).",
         "requireWriteConfirmation": "When on, calendar and reminder writes require confirmation (--require-write-confirmation).",
         "mcpExposure": "direct exposes tools directly to the model; codemode calls them through a script.",
-        "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx."
+        "calendarCommand": "Leave empty to launch mcp-server-apple-events with npx.",
+        "agents": "Leave empty to read every installed agent (Claude Code, Codex, OpenCode, Gemini, Kiro and 15 more). Example: claude-code, codex",
+        "includeSubagents": "Also index subagent and sidechain conversations. Off by default.",
+        "includeEphemeral": "Also index sessions run headless, in benchmarks or in temporary folders. Off by default.",
+        "wombatDataDir": "The folder where wombat keeps its copy of the conversations and the index. Empty uses ~/.wombat."
       },
       "envError": {
         "object": "Environment variables must be a JSON object.",
@@ -3047,7 +3058,10 @@
         "removeAt": "Remove feed {{index}}",
         "addAria": "Add feed",
         "addLabel": "+ Add feed"
-      }
+      },
+      "agents": "Agents",
+      "includeSubagents": "Include subagent sessions",
+      "includeEphemeral": "Include temporary sessions"
     },
     "cadence": {
       "min5": "5 min",
@@ -3062,7 +3076,8 @@
     "units": {
       "message": "messages",
       "document": "documents",
-      "image": "images"
+      "image": "images",
+      "session": "sessions"
     },
     "common": {
       "manual": "Manual",
@@ -3135,6 +3150,7 @@
       "groups": {
         "messengers": "Messengers",
         "docsNotes": "Documents & notes",
+        "aiSessions": "AI coding agents",
         "mail": "Mail",
         "cloudDev": "Cloud & dev",
         "newsOther": "News & other"

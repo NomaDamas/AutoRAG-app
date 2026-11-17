@@ -40,4 +40,11 @@ describe("VERSION_FLOORS", () => {
 		expect(VERSION_FLOORS["@nomadamas/mailcrawl"]).toBe("0.3.0");
 		expect(VERSION_FLOORS.lazykatok).toBe("0.3.3");
 	});
+
+	it("keeps wombat at 0.1.3+: it is the first release that follows MinSync's own defaults and needs minsync 0.7.3", () => {
+		expect(VERSION_FLOORS.wombat).toBe("0.1.3");
+		expect(compareVersions("0.1.2", VERSION_FLOORS.wombat)).toBeLessThan(0);
+		expect(compareVersions("0.1.3", VERSION_FLOORS.wombat)).toBeGreaterThanOrEqual(0);
+		expect(() => assertVersionFloor("wombat", "0.1.2", VERSION_FLOORS.wombat)).toThrow(/wombat 0\.1\.2 is below the required 0\.1\.3/u);
+	});
 });

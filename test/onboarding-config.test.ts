@@ -200,3 +200,20 @@ describe("applyIndexingConfig", () => {
 		expect(next.model).toEqual({ provider: "old", id: "old" });
 	});
 });
+
+describe("applyIndexingConfig AI Sessions", () => {
+	it("registers wombat as a plain datasource entry that reads every agent (never pinned to the ones found today), and the librarian builds it", () => {
+		const next = applyIndexingConfig({
+			raw: {},
+			folders: ["/a"],
+			datasources: [{ id: "wombat", facts: { agents: ["claude-code", "codex"] } }],
+			home: HOME,
+			embedder: null,
+			workspacePath: null,
+		});
+		expect(next.datasources).toEqual({ wombat: { instanceId: "default", connector: {} } });
+		const built = buildDatasourceSkills(next.datasources as DatasourcesConfig);
+		expect(built.unknown).toEqual([]);
+		expect(built.skills.map((skill) => skill.describe().name)).toEqual(["wombat"]);
+	});
+});
