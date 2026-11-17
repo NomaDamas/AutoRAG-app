@@ -770,7 +770,9 @@
       "title": "无法使用语义搜索",
       "side": "语义搜索准备已中止",
       "sideDetail": "需要检查嵌入设置",
-      "detail": "需要检查设置"
+      "detail": "需要检查设置",
+      "bannerDetail": "请检查文档理解模型设置。关键词搜索仍可使用。",
+      "bannerAction": "打开设置"
     },
     "embedderOffline": {
       "title": "正在等待连接",
