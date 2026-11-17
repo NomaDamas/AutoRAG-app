@@ -212,6 +212,10 @@
   --danger-bg: rgba(239,68,68,0.12);
   --danger-bg-soft: rgba(239,68,68,0.10);
   --danger-border: rgba(239,68,68,0.4);
+  /* Text on the soft danger fill (Figma 568:7808), and a background job that ended in a warning (Figma 568:7658). */
+  --danger-text-strong: #B3261E;
+  --activity-warn-text: #B25E00;
+  --activity-warn-fill: #F5A623;
 
   --error-orange-dot: #FF8C00;
   --error-orange-text: #C2410C;
@@ -538,6 +542,9 @@ html[data-appearance="dark"] {
     --danger-bg: rgba(255,69,58,0.18);
     --danger-bg-soft: rgba(255,69,58,0.14);
     --danger-border: rgba(255,69,58,0.5);
+    --danger-text-strong: #FF6961;
+    --activity-warn-text: #FF9F0A;
+    --activity-warn-fill: #FF9F0A;
     --error-orange-text: #FF9F0A;
     --error-orange-bg: rgba(255,159,10,0.18);
     --error-orange-bg-strong: rgba(255,159,10,0.22);

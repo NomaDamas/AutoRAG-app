@@ -3333,6 +3333,9 @@
     "close": "Close",
     "copyOutput": "Copy Output",
     "copied": "Copied",
+    "saveToHistory": "Save to chat history",
+    "savedToHistory": "Saved",
+    "saveFailed": "Couldn't save to chat history.",
     "emptyOutput": " Finished with no text output.",
     "targetsCount": "{{count}} item(s)",
     "sidebarOpen": "Open Magic Action result"

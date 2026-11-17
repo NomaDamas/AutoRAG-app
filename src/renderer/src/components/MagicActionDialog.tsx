@@ -1,34 +1,41 @@
-import { Check, Copy, Minus, Terminal } from "lucide-react";
+import { Check, Copy, Minus, Sparkles, Terminal } from "lucide-react";
 import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissMagicActionDialog, stopMagicActionRun, useMagicActionSession } from "../hooks/useMagicAction";
 import { cn } from "../lib/cn";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../state/answer-markdown";
 import { basename } from "../state/paths";
-import { CloseIcon, SparklesIcon } from "./icons";
+import { CloseIcon } from "./icons";
+import { noticeButtonClass } from "./primitives/NoticeCard";
 
-const BUTTON =
-	"inline-flex h-30 flex-none cursor-pointer items-center justify-center gap-6 rounded-6 border px-12 text-meta transition-colors duration-(--dur-color) ease-out";
-const SECONDARY = "border-border bg-window text-ink hover:bg-hover";
-const PRIMARY = "border-transparent bg-accent font-medium text-on-accent hover:bg-accent-hover";
-
+/** Figma Button, size 32 (568:7806–7808): the same buttons the notice cards use. */
 function Button({
 	primary = false,
 	onClick,
 	children,
 	dataAction,
+	disabled = false,
 }: {
 	readonly primary?: boolean;
 	readonly onClick: () => void;
 	readonly children: ReactNode;
 	readonly dataAction?: string;
+	readonly disabled?: boolean;
 }): ReactElement {
 	return (
-		<button type="button" data-action={dataAction} className={cn(BUTTON, primary ? PRIMARY : SECONDARY)} onClick={onClick}>
+		<button
+			type="button"
+			data-action={dataAction}
+			className={cn(noticeButtonClass(primary), "disabled:cursor-default disabled:opacity-50 disabled:hover:opacity-50")}
+			disabled={disabled}
+			onClick={onClick}
+		>
 			{children}
 		</button>
 	);
 }
+
+type SaveState = "idle" | "saving" | "saved" | "failed";
 
 function renderInlineSegments(segments: readonly InlineSegment[]): ReactElement[] {
 	return segments.map((seg, idx) => {
@@ -54,7 +61,7 @@ function renderInlineSegments(segments: readonly InlineSegment[]): ReactElement[
 function MarkdownBody({ text }: { readonly text: string }): ReactElement {
 	const blocks = parseAnswerBlocks(text);
 	return (
-		<div className="flex flex-col gap-8 text-left text-meta leading-relaxed text-ink-body" data-testid="magic-action-output">
+		<div className="flex flex-col gap-4 text-left text-meta leading-[1.6] text-ink-body" data-testid="magic-action-output">
 			{blocks.map((block, idx) => {
 				if (block.kind === "code") {
 					return (
@@ -103,7 +110,7 @@ function MarkdownBody({ text }: { readonly text: string }): ReactElement {
 				}
 				if (block.kind === "heading") {
 					return (
-						<p key={idx} className="m-0 font-semibold text-ink">
+						<p key={idx} className="m-0 mb-4 font-bold text-ink [&:not(:first-child)]:mt-4">
 							{renderInlineSegments(parseInline(block.text))}
 						</p>
 					);
@@ -123,9 +130,11 @@ export function MagicActionDialog(): ReactElement | null {
 	const session = useMagicActionSession();
 	const { dialogOpen, run } = session;
 	const [copied, setCopied] = useState(false);
+	const [saveState, setSaveState] = useState<SaveState>("idle");
 
 	useEffect(() => {
 		setCopied(false);
+		setSaveState("idle");
 	}, [run]);
 
 	useEffect(() => {
@@ -156,6 +165,17 @@ export function MagicActionDialog(): ReactElement | null {
 		});
 	};
 
+	/** 대화 기록에 저장: the run becomes a chat in AI 에이전트's history; the button then reads 저장됨. */
+	const saveToHistory = (output: string): void => {
+		const bridge = window.autorag?.magicAction;
+		if (run.status !== "done" || bridge?.saveToHistory === undefined || saveState === "saving" || saveState === "saved") return;
+		setSaveState("saving");
+		bridge
+			.saveToHistory({ actionLabel: run.result.actionLabel, paths: run.result.paths, output })
+			.then(() => setSaveState("saved"))
+			.catch(() => setSaveState("failed"));
+	};
+
 	let body: ReactElement | null = null;
 	let footerActions: ReactNode = null;
 
@@ -167,7 +187,7 @@ export function MagicActionDialog(): ReactElement | null {
 					<span className="shimmer font-medium">{statusText}</span>
 				</div>
 				{run.draft.trim().length > 0 ? (
-					<div className="max-h-[46vh] overflow-y-auto rounded-8 border border-border bg-chrome p-12">
+					<div className="max-h-[46vh] overflow-y-auto rounded-8 bg-code p-12">
 						{run.executionKind === "script" ? (
 							<pre className="m-0 whitespace-pre-wrap break-words font-mono text-badge text-ink">{run.draft}</pre>
 						) : (
@@ -189,8 +209,9 @@ export function MagicActionDialog(): ReactElement | null {
 		);
 	} else if (run.status === "done") {
 		const output = run.result.output.trim();
+		const canSave = output.length > 0 && window.autorag?.magicAction?.saveToHistory !== undefined;
 		body = (
-			<div className="max-h-[52vh] overflow-y-auto rounded-8 border border-border bg-chrome p-12">
+			<div className="max-h-[52vh] overflow-y-auto rounded-8 bg-code p-12">
 				{output.length === 0 ? (
 					<p className="m-0 text-meta text-ink-muted" data-testid="magic-action-output">
 						{t("magicAction.emptyOutput")}
@@ -209,32 +230,41 @@ export function MagicActionDialog(): ReactElement | null {
 		);
 		footerActions = (
 			<>
+				{saveState === "failed" ? (
+					<span className="mr-auto text-meta text-danger-text" role="status">
+						{t("magicAction.saveFailed")}
+					</span>
+				) : null}
+				{canSave ? (
+					<Button primary dataAction="save-magic-action-to-history" disabled={saveState === "saving" || saveState === "saved"} onClick={() => saveToHistory(output)}>
+						{saveState === "saved" ? <Check size={14} aria-hidden="true" /> : null}
+						<span>{saveState === "saved" ? t("magicAction.savedToHistory") : t("magicAction.saveToHistory")}</span>
+					</Button>
+				) : null}
 				{output.length > 0 ? (
 					<Button dataAction="copy-magic-action-output" onClick={() => copyOutput(output)}>
-						{copied ? <Check size={13} /> : <Copy size={13} />}
+						{copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
 						<span>{copied ? t("magicAction.copied") : t("magicAction.copyOutput")}</span>
 					</Button>
 				) : null}
-				<Button primary dataAction="close-magic-action" onClick={dismissMagicActionDialog}>
+				<Button dataAction="close-magic-action" onClick={dismissMagicActionDialog}>
 					{t("magicAction.close")}
 				</Button>
 			</>
 		);
 	} else if (run.status === "failed") {
 		body = (
-			<div className="flex flex-col gap-8">
-				<strong className="text-meta font-semibold text-danger-text">{t("magicAction.failedTitle")}</strong>
-				<pre
-					className="m-0 max-h-[40vh] overflow-y-auto whitespace-pre-wrap break-words rounded-8 border border-danger-border bg-danger-bg-soft p-12 font-mono text-badge text-danger-text"
-					role="alert"
-					data-testid="magic-action-error"
-				>
-					{run.message}
-				</pre>
-			</div>
+			<p
+				className="m-0 max-h-[40vh] overflow-y-auto whitespace-pre-wrap break-words rounded-8 bg-danger-bg-soft p-12 text-meta leading-[16px] text-(--danger-text-strong)"
+				role="alert"
+				aria-label={t("magicAction.failedTitle")}
+				data-testid="magic-action-error"
+			>
+				{run.message}
+			</p>
 		);
 		footerActions = (
-			<Button primary dataAction="close-magic-action" onClick={dismissMagicActionDialog}>
+			<Button dataAction="close-magic-action" onClick={dismissMagicActionDialog}>
 				{t("magicAction.close")}
 			</Button>
 		);
@@ -243,7 +273,7 @@ export function MagicActionDialog(): ReactElement | null {
 			<p className="m-0 text-meta text-ink-muted">{t("magicAction.stoppedTitle")}</p>
 		);
 		footerActions = (
-			<Button primary dataAction="close-magic-action" onClick={dismissMagicActionDialog}>
+			<Button dataAction="close-magic-action" onClick={dismissMagicActionDialog}>
 				{t("magicAction.close")}
 			</Button>
 		);
@@ -261,27 +291,26 @@ export function MagicActionDialog(): ReactElement | null {
 			}}
 		>
 			<div
-				className="flex max-h-[84vh] w-[520px] max-w-[92vw] flex-col gap-14 overflow-hidden rounded-12 border border-border bg-window p-18 shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex max-h-[84vh] w-[520px] max-w-[92vw] flex-col gap-14 overflow-hidden rounded-12 border border-border bg-window p-18 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-label={title}
 				data-testid="magic-action-dialog"
 			>
-				<div className="flex items-center justify-between gap-8">
-					<div className="flex min-w-0 items-center gap-8">
-						<span className="flex size-24 flex-none items-center justify-center rounded-6 bg-accent-soft text-accent">
-							{isScript ? <Terminal size={13} strokeWidth={2} /> : <SparklesIcon />}
+				{/* Figma 568:7806–7808: the action's mark, its name over the file it ran on, minimise (running) or close. */}
+				<div className="flex items-center gap-8">
+					<span className="flex size-24 flex-none items-center justify-center text-accent" aria-hidden="true">
+						{isScript ? <Terminal size={14} strokeWidth={1.8} /> : <Sparkles size={14} strokeWidth={1.8} />}
+					</span>
+					<div className="flex min-w-0 flex-1 flex-col">
+						<strong className="truncate text-[13px] font-bold text-ink">{title}</strong>
+						<span className="truncate text-meta text-ink-muted" title={paths.join("\n")}>
+							{targetSummary}
 						</span>
-						<div className="flex min-w-0 flex-col">
-							<strong className="truncate text-[13px] font-semibold text-ink">{title}</strong>
-							<span className="truncate text-badge text-ink-muted" title={paths.join("\n")}>
-								{targetSummary}
-							</span>
-						</div>
 					</div>
 					<button
 						type="button"
-						className="flex size-24 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-transparent p-0 text-ink-muted hover:bg-hover-strong"
+						className="flex size-24 flex-none cursor-pointer items-center justify-center rounded-6 border-0 bg-transparent p-0 text-ink-muted hover:bg-hover"
 						aria-label={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						title={isRunning ? t("magicAction.minimize") : t("magicAction.close")}
 						onClick={dismissMagicActionDialog}

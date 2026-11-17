@@ -3333,6 +3333,9 @@
     "close": "닫기",
     "copyOutput": "결과 복사",
     "copied": "복사됨",
+    "saveToHistory": "대화 기록에 저장",
+    "savedToHistory": "저장됨",
+    "saveFailed": "대화 기록에 저장하지 못했습니다.",
     "emptyOutput": "출력된 텍스트가 없습니다.",
     "targetsCount": "대상 {{count}}개",
     "sidebarOpen": "매직 액션 실행 결과 열기"

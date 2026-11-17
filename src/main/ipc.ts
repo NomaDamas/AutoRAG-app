@@ -12,7 +12,9 @@ import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
-import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import type { ChatStore } from "./chat-store";
+import { saveMagicActionToHistory } from "./magic-action-history";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
@@ -182,7 +184,11 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	);
 }
 
-export function registerMagicActionIpcHandlers(service: MagicActionService): void {
+export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore): void {
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.saveToHistory, (_event, request: unknown) => {
+		if (!isMagicActionSaveRequest(request)) throw new TypeError("magicAction:saveToHistory expects { actionLabel, paths, output }");
+		return saveMagicActionToHistory(chatStore, request);
+	});
 	ipcMain.handle(MAGIC_ACTION_CHANNELS.start, (_event, runId: unknown, request: unknown) => {
 		if (typeof runId !== "string" || !isMagicActionRunRequest(request)) {
 			throw new TypeError("magicAction:start expects a run id and { actionId, paths }");

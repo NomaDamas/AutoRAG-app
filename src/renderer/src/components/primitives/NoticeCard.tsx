@@ -10,11 +10,11 @@ export type NoticeTone = "warning" | "error" | "ok";
  * The 16px status badge every notice leads with (Figma Icon/warning, Icon/error): a filled circle with the mark in
  * it, so the colour sits in the badge and the card itself stays neutral.
  */
-export function NoticeBadge({ tone }: { readonly tone: NoticeTone }): ReactElement {
+export function NoticeBadge({ tone, size = 16 }: { readonly tone: NoticeTone; readonly size?: number }): ReactElement {
 	const fill = tone === "warning" ? "var(--notice-warn-badge)" : tone === "error" ? "var(--danger-dot)" : "var(--ok-dot)";
 	const mark = tone === "warning" ? "#1D1D1F" : "#FFFFFF";
 	return (
-		<svg className="notice-badge flex-none" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" data-tone={tone}>
+		<svg className="notice-badge flex-none" width={size} height={size} viewBox="0 0 16 16" aria-hidden="true" data-tone={tone}>
 			<circle cx="8" cy="8" r="8" fill={fill} />
 			{tone === "warning" ? (
 				<>

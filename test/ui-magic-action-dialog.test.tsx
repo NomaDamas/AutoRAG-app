@@ -16,6 +16,7 @@ const bridge = vi.hoisted(() => {
 	const magicAction = {
 		start: vi.fn(),
 		cancel: vi.fn(),
+		saveToHistory: vi.fn(),
 		onEvent: (fn: (event: MagicActionEvent) => void) => {
 			listeners.add(fn);
 			return () => listeners.delete(fn);
@@ -51,6 +52,7 @@ beforeEach(async () => {
 	bridge.clear();
 	bridge.magicAction.start.mockReset().mockResolvedValue(undefined);
 	bridge.magicAction.cancel.mockReset().mockResolvedValue(undefined);
+	bridge.magicAction.saveToHistory.mockReset().mockResolvedValue("chat-1");
 
 	host = document.createElement("div");
 	document.body.append(host);
@@ -132,6 +134,8 @@ describe("MagicActionDialog & SidebarMagicActionActivity", () => {
 		});
 		await settle();
 		expect(host.querySelector<HTMLButtonElement>(".sidebar__magic-action")?.getAttribute("data-tone")).toBe("ok");
+		// Figma 568:7657: a finished run leads with the green check instead of the sparkles.
+		expect(host.querySelector(".sidebar__magic-action .activity-mark")).not.toBeNull();
 
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>(".sidebar__magic-action")?.click();
@@ -139,6 +143,21 @@ describe("MagicActionDialog & SidebarMagicActionActivity", () => {
 		await settle();
 		expect(host.querySelector('[data-testid="magic-action-dialog"]')).not.toBeNull();
 		expect(host.querySelector('[data-testid="magic-action-output"]')?.textContent).toContain("최종 3줄 요약");
+
+		// Figma 568:7807: 대화 기록에 저장 keeps the run as a chat, then reads 저장됨 and stays disabled.
+		const save = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-action="save-magic-action-to-history"]');
+		expect(save()?.textContent).toBe("대화 기록에 저장");
+		await act(async () => {
+			save()?.click();
+		});
+		await settle();
+		expect(bridge.magicAction.saveToHistory).toHaveBeenCalledWith({
+			actionLabel: "PDF 3줄 요약",
+			paths: ["/Users/me/Documents/report.pdf"],
+			output: "**최종 3줄 요약**\n- 항목 A\n- 항목 B",
+		});
+		expect(save()?.textContent).toBe("저장됨");
+		expect(save()?.disabled).toBe(true);
 
 		// Close clears finished session
 		await act(async () => {

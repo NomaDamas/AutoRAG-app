@@ -3333,6 +3333,9 @@
     "close": "关闭",
     "copyOutput": "复制结果",
     "copied": "已复制",
+    "saveToHistory": "保存到对话记录",
+    "savedToHistory": "已保存",
+    "saveFailed": "无法保存到对话记录。",
     "emptyOutput": "已完成，无文本输出。",
     "targetsCount": "共 {{count}} 项",
     "sidebarOpen": "查看魔法动作结果"

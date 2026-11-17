@@ -3333,6 +3333,9 @@
     "close": "閉じる",
     "copyOutput": "結果をコピー",
     "copied": "コピーしました",
+    "saveToHistory": "チャット履歴に保存",
+    "savedToHistory": "保存済み",
+    "saveFailed": "チャット履歴に保存できませんでした。",
     "emptyOutput": "出力テキストはありません。",
     "targetsCount": "対象 {{count}} 件",
     "sidebarOpen": "マジックアクションの結果を開く"
