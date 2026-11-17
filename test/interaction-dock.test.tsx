@@ -177,7 +177,7 @@ describe("InteractionDock approval card", () => {
 		expect(host.textContent).toContain(t("interaction.allowSession.unclassified"));
 	});
 
-	it("shows the change headline, the category chips, the call and the judgement reason", () => {
+	it("shows the change headline, the call, and under it the categories and the judgement reason", () => {
 		render(
 			approvalRequest({
 				sessionScope: "categories",
@@ -206,28 +206,22 @@ describe("InteractionDock approval card", () => {
 		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "allow-once" });
 	});
 
-	it("focuses Deny first, so the approving buttons need a deliberate click", () => {
+	it("focuses Skip first, so the approving buttons need a deliberate click, and Skip denies", () => {
 		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
-		expect(document.activeElement).toBe(buttonByText(t("interaction.deny")));
+		expect(document.activeElement).toBe(buttonByText(t("interaction.skip")));
+		act(() => buttonByText(t("interaction.skip")).click());
+		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny" });
+	});
+
+	it("offers only allow once, allow for the session, and skip (Figma 564:1396)", () => {
+		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
+		const labels = [...host.querySelectorAll("button")].map((button) => button.textContent);
+		expect(labels).toEqual([t("interaction.allowOnce"), t("interaction.allowSession.categories"), t("interaction.skip")]);
 	});
 
 	it("denies on Escape", () => {
 		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
 		press(document.body, "Escape");
 		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny" });
-	});
-
-	it("sends a trimmed note with 'Deny and tell the model'", () => {
-		render(approvalRequest({ sessionScope: "categories", categories: ["overwrite"] }));
-		act(() => buttonByText(t("interaction.denyWithNote")).click());
-
-		const input = host.querySelector("input");
-		expect(input).not.toBeNull();
-		act(() => setField(input!, "  work on a copy  "));
-
-		act(() => {
-			host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.sendNote")}"]`)?.click();
-		});
-		expect(answer).toHaveBeenCalledWith("a1", { kind: "approval", choice: "deny-with-note", note: "work on a copy" });
 	});
 });

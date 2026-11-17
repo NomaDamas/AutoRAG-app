@@ -503,7 +503,7 @@
     "answerPlaceholder": "输入你的答案",
     "questionAria": "Dazzi 的提问",
     "approval": {
-      "headlineChange": "Dazzi 想更改你的文件——允许吗？",
+      "headlineChange": "允许这次文件更改吗？",
       "headlineRun": "Dazzi 想运行这个——允许吗？",
       "headlineUnclassified": "Dazzi 想运行这条命令——允许吗？",
       "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定。"
@@ -518,7 +518,7 @@
     },
     "allowOnce": "仅允许这一次",
     "allowSession": {
-      "categories": "本会话允许此类全部更改",
+      "categories": "本会话中全部允许",
       "unclassified": "本会话允许所有无法分类的调用",
       "all": "本会话允许所有此类调用"
     },

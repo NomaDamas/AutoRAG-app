@@ -76,7 +76,7 @@ export function NoticeCard({
 	return (
 		<div
 			className={cn(
-				"notice-card flex flex-col gap-12 px-16 py-14 border border-border rounded-12 bg-window text-ink",
+				"notice-card flex flex-col gap-12 px-16 py-14 border border-border rounded-14 bg-window text-ink",
 				floating && "shadow-[var(--shadow-notice)]",
 				className,
 			)}

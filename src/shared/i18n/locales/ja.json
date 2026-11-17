@@ -503,7 +503,7 @@
     "answerPlaceholder": "回答を入力",
     "questionAria": "Dazzi からの質問",
     "approval": {
-      "headlineChange": "Dazzi がファイルを変更しようとしています — 許可しますか？",
+      "headlineChange": "このファイルの変更を許可しますか？",
       "headlineRun": "Dazzi が実行しようとしています — 許可しますか？",
       "headlineUnclassified": "Dazzi がこのコマンドを実行しようとしています — 許可しますか？",
       "noteUnclassified": "このコマンドがファイルを変更するかどうか事前に確認できませんでした。内容を確認して判断してください。"
@@ -518,7 +518,7 @@
     },
     "allowOnce": "今回だけ許可",
     "allowSession": {
-      "categories": "このセッションではこの種の変更をすべて許可",
+      "categories": "このセッションではすべて許可",
       "unclassified": "このセッションでは分類できない呼び出しをすべて許可",
       "all": "このセッションではこのような呼び出しをすべて許可"
     },

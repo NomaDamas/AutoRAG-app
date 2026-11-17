@@ -503,7 +503,7 @@
     "answerPlaceholder": "답변을 입력하세요",
     "questionAria": "Dazzi의 질문",
     "approval": {
-      "headlineChange": "Dazzi가 파일을 바꾸려고 합니다 — 허용할까요?",
+      "headlineChange": "이 파일 변경을 허용할까요?",
       "headlineRun": "Dazzi가 실행하려고 합니다 — 허용할까요?",
       "headlineUnclassified": "Dazzi가 이 명령을 실행하려고 합니다 — 허용할까요?",
       "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했습니다. 내용을 살펴보고 판단해 주세요."
@@ -518,7 +518,7 @@
     },
     "allowOnce": "한 번만 허용",
     "allowSession": {
-      "categories": "이 세션에서는 이런 변경을 모두 허용",
+      "categories": "이 세션에서는 모두 허용",
       "unclassified": "이 세션에서는 분류되지 않은 호출을 모두 허용",
       "all": "이 세션에서는 이런 호출을 모두 허용"
     },
