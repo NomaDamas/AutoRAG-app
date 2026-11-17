@@ -3583,7 +3583,6 @@
     "justNow": "방금 전",
     "sourceTitle": "{{name}} 연결을 확인해야 합니다",
     "openConnection": "연결 열기",
-    "openLogs": "로그 열기",
     "settings": "알림 설정",
     "viewInCenter": "알림 센터에서 보기"
   }

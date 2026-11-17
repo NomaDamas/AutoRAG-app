@@ -299,9 +299,6 @@ export function NotificationCenter({
 								)}
 							</div>
 							<div className="flex flex-none items-center border-t border-divider px-16 py-12 text-meta leading-[16px] text-ink-body">
-								<button type="button" className="border-0 bg-transparent p-0 text-inherit cursor-pointer hover:underline" onClick={() => void window.autorag?.appUpdate?.openLogs?.().catch(() => undefined)}>
-									{t("notifications.openLogs")}
-								</button>
 								<span className="flex-1" />
 								<button type="button" className="border-0 bg-transparent p-0 text-inherit cursor-pointer hover:underline" onClick={() => { onOpenSettingsPage?.("general"); close(); }}>
 									{t("notifications.settings")}

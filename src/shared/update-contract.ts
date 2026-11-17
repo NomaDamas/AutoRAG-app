@@ -36,8 +36,6 @@ export const APP_UPDATE_CHANNELS = {
 	check: "app-update:check",
 	download: "app-update:download",
 	install: "app-update:install",
-	/** Opens the app's logs folder in Finder / Explorer (the notification center's 로그 열기). */
-	openLogs: "app-update:open-logs",
 	changed: "app-update:changed",
 } as const;
 
@@ -49,8 +47,6 @@ export interface AppUpdateBridge {
 	download(): Promise<void>;
 	/** Quit and apply a `ready` update. */
 	install(): Promise<void>;
-	/** Opens the folder the app writes its logs to. */
-	openLogs(): Promise<void>;
 	/** Pushed whenever the snapshot changes; returns the unsubscribe. */
 	onChange(listener: (snapshot: AppUpdateSnapshot) => void): () => void;
 }

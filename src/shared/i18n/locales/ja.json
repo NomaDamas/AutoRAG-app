@@ -3583,7 +3583,6 @@
     "justNow": "たった今",
     "sourceTitle": "{{name}} の接続を確認してください",
     "openConnection": "接続を開く",
-    "openLogs": "ログを開く",
     "settings": "通知設定",
     "viewInCenter": "通知センターで見る"
   }

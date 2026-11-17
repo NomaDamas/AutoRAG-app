@@ -3583,7 +3583,6 @@
     "justNow": "刚刚",
     "sourceTitle": "{{name}} 连接需要处理",
     "openConnection": "打开连接",
-    "openLogs": "打开日志",
     "settings": "通知设置",
     "viewInCenter": "在通知中心查看"
   }

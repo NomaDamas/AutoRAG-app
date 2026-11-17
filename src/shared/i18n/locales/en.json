@@ -3583,7 +3583,6 @@
     "justNow": "Just now",
     "sourceTitle": "{{name}} connection needs attention",
     "openConnection": "Open connection",
-    "openLogs": "Open logs",
     "settings": "Notification settings",
     "viewInCenter": "View in notifications"
   }
