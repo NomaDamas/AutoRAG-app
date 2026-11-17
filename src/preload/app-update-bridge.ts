@@ -8,6 +8,7 @@ export function createAppUpdateBridge(ipcRenderer: IpcRenderer): AppUpdateBridge
 		check: () => ipcRenderer.invoke(APP_UPDATE_CHANNELS.check),
 		download: () => ipcRenderer.invoke(APP_UPDATE_CHANNELS.download),
 		install: () => ipcRenderer.invoke(APP_UPDATE_CHANNELS.install),
+		openLogs: () => ipcRenderer.invoke(APP_UPDATE_CHANNELS.openLogs),
 		onChange: (listener) => {
 			const handler = (_event: IpcRendererEvent, snapshot: AppUpdateSnapshot): void => listener(snapshot);
 			ipcRenderer.on(APP_UPDATE_CHANNELS.changed, handler);
