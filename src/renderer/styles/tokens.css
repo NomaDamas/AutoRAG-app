@@ -389,6 +389,8 @@
   --dur-flash-fade: 600ms;
   --dur-shimmer: 1.4s;
   --dur-seed-wave: 1.1s;
+  --dur-revision-mark: 1200ms;
+  --dur-revision-strike: 500ms;
   --dur-spin: 1.4s;
   --time-retry: 1500ms;
   --time-flash: 1800ms;

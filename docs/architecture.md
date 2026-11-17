@@ -1056,11 +1056,33 @@ and kept for the chat's life:
 - **After a restart.** `chat-sessions.ts` keeps `index.json` beside the session files (`<userData>/chat-sessions`):
   chat id → file name. `search-service` resumes from that file when it exists (`switchSession`). A chat from before
   this change, or one whose file is gone, starts a new conversation seeded with its finished turns
-  (`seedTurnsOf`: Deep answer over Quick, a steer belongs to the turn it corrected, a stopped turn carries
+  (`seedTurnsOf`: the Quick answer with its corrections applied followed by what Deep added, else Deep over Quick; a steer belongs to the turn it corrected, a stopped turn carries
   nothing). A file pi cannot read starts a new conversation instead of failing the chat.
 - **Lifetime.** At most eight conversations are open; past that the oldest chat that is not answering is closed
   (its file stays, asking again resumes it). Quitting waits for every open one (`SearchService.dispose`); "clear
   history" closes them and deletes the folder.
+
+### Corrections of the first answer
+
+When verification finds the Quick answer wrong, the librarian corrects it claim by claim with its `revise_answer` tool
+(AutoRAG#2186) instead of writing a second answer next to it. Each correction is a `revision` stream event
+(`op`: `confirm`, `retract`, `replace`, `add`; `claimId`, `original`, `replacement`, `reason`), sent between `quick` and
+`deep`.
+
+- **Pure core.** `src/shared/answer-revision.ts` applies corrections to text (`revisedAnswer`), finds what the final answer says
+  beyond the corrected first answer (`remainderAfterRevised`) and cuts the first answer into the text to draw with a mark
+  where each correction goes (`markRevisedAnswer`). It has no DOM and no React; main process and renderer load it alike.
+- **Main process.** `search-service` forwards each correction as a `revision` event and stores them on the run's assistant
+  message (`revisions`), so a chat read back from history shows them. The final answer of a corrected run is the first
+  answer with every correction applied, so `deep` carries only what it adds after that (empty when it adds nothing) with the
+  evidence of every source the corrections cite. A correction whose original the Quick text does not hold is skipped, and
+  the Quick answer is never rewritten in the store: the person's record of what they read stays as it was.
+- **Renderer.** `state/answer-revisions.ts` decides whether anything is drawn (confirmations change nothing the person reads)
+  and resolves the new citations against the Quick sources plus the final answer's. `AnswerRevisionMark` draws one
+  correction: the new words arrive marked in the sun colour with the struck words beside them; after 2.6 s the mark fades to
+  an underline and the struck words collapse (design preview "답이 고쳐질 때"). A retracted claim stays struck, with its
+  reason as the tooltip. A chat read back from history, and a person who asked for reduced motion, see the settled state at once.
+  The AI Search tab and the inspector chat draw the same thing; each corrected answer carries the line "답을 고쳤어요".
 
 ### What the panel shows while a run works, and an exhausted plan
 

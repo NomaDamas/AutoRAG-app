@@ -357,6 +357,7 @@
     },
     "thinking": "思考中…",
     "workedFor": "{{time}}間回答を生成",
+    "revised": "回答を修正しました",
     "reviewing": "質問を確認中…",
     "stopped": "回答の生成を中止しました。",
     "dropAttach": "ドロップしてチャットに添付",

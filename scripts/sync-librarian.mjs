@@ -28,7 +28,11 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
 // resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
 // model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
-const librarianRef = "v2.13.12";
+// 74d66369 (AutoRAG#2186, not yet released) adds the `revise_answer` tool: verification corrects the first answer claim
+// by claim, and `searchDocumentsStream` yields a `revision` event between `preliminary` and `complete`. When something
+// was corrected, `complete.answer` is the first answer with every correction applied, not a delta. Raise this to the
+// release tag that carries it.
+const librarianRef = "74d66369095e76922eb7ccef1f66b6814f6ac580";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

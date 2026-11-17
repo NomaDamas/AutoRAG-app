@@ -357,6 +357,7 @@
     },
     "thinking": "Thinking…",
     "workedFor": "Worked for {{time}}",
+    "revised": "Corrected the answer",
     "reviewing": "Reviewing the query.",
     "stopped": "Generation stopped.",
     "dropAttach": "Drop to attach to chat",
