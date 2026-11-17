@@ -2395,7 +2395,7 @@
       "presetWindowsExplorer": "Windows 파일 탐색기",
       "filterPlaceholder": "동작 이름이나 단축키로 검색",
       "filterEmpty": "일치하는 단축키 항목이 없습니다.",
-      "customizedBadge": "바꿈",
+      "customizedBadge": "변경됨",
       "lockedBadge": "고정",
       "lockedHint": "Esc는 창 닫기, 작업 취소, 단축키 녹화 취소에 쓰이는 필수 시스템 키입니다.",
       "recordButtonHint": "클릭 후 새 단축키를 누르세요 (현재: {{shortcut}})",
