@@ -443,15 +443,15 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(panel?.querySelector("header")).toBeNull();
 		expect(panel?.querySelector("h2")).toBeNull();
 		expect(panel?.textContent).not.toContain("원하는 사이드바 구성이나 화면 설정을");
-		expect(panel?.getAttribute("aria-label")).toBe("AI 앱 커스텀 어시스턴트");
+		expect(panel?.getAttribute("aria-label")).toBe("앱 커스텀 AI 에이전트");
 		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(3);
 		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 채팅과 자동화는 필수 기능");
 		// New chat appears only once there is a conversation to discard
 		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
 		// The composer asks in plain words what to change (Figma 367:8865); the suggestions above are the examples
 		const composer = panel?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
-		expect(composer?.getAttribute("placeholder")).toBe("어떤 구성을 원하는지 말해주세요");
-		expect(composer?.getAttribute("aria-label")).toBe("어시스턴트에게 요청");
+		expect(composer?.getAttribute("placeholder")).toBe("원하는 구성을 말해 주세요");
+		expect(composer?.getAttribute("aria-label")).toBe("AI 에이전트에게 요청");
 
 		// Hiding the right sidebar brings back the banner (Figma 543:10349): the Dazzi mark at its left, a plain text button
 		await act(async () => {
@@ -517,7 +517,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		});
 		await settle();
 		expect(panelOf()?.getAttribute("data-surface")).toBe("shortcuts");
-		expect(panelOf()?.getAttribute("aria-label")).toBe("AI 단축키 커스텀 어시스턴트");
+		expect(panelOf()?.getAttribute("aria-label")).toBe("단축키 커스텀 AI 에이전트");
 
 		await act(async () => {
 			nav("사이드바")?.click();
@@ -543,7 +543,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			locationsSection: "위치",
 			tagsSection: "태그",
 			lockedBadge: "항상 표시",
-			modalTitle: "AI 앱 커스텀 어시스턴트",
+			modalTitle: "앱 커스텀 AI 에이전트",
 		},
 		{
 			lang: "en" as const,
@@ -565,7 +565,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			locationsSection: "場所",
 			tagsSection: "タグ",
 			lockedBadge: "常時表示",
-			modalTitle: "AI アプリカスタムアシスタント",
+			modalTitle: "アプリカスタム AI エージェント",
 		},
 		{
 			lang: "zh" as const,
@@ -576,7 +576,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			locationsSection: "位置",
 			tagsSection: "标签",
 			lockedBadge: "始终显示",
-			modalTitle: "AI 应用定制助手",
+			modalTitle: "应用定制 AI 智能体",
 		},
 	])("renders fully localized Sidebar settings and AI Customizer panel in $lang", async (spec) => {
 		await setAppLanguage(spec.lang);

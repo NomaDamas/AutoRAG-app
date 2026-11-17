@@ -196,6 +196,8 @@ const ITEM_ALIAS_MAP: Readonly<Record<string, BuiltinContextMenuItemId>> = {
 	"rename": "builtin:rename",
 	"이름 변경": "builtin:rename",
 	"이름변경": "builtin:rename",
+	"이름 바꾸기": "builtin:rename",
+	"이름바꾸기": "builtin:rename",
 	"名称変更": "builtin:rename",
 	"重命名": "builtin:rename",
 	"builtin:copypath": "builtin:copyPath",

@@ -6,7 +6,7 @@
  * spent plan, a retired model) can only be cured in Settings, and the AI is
  * the thing that is down, so those errors say so plainly and lead to the page
  * that helps; anything else is the app's own setup, which the fix agent may
- * repair, so that error carries "AI로 고치기".
+ * repair, so that error carries "AI로 해결하기".
  */
 
 import type { TFunction } from "i18next";

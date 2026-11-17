@@ -219,7 +219,7 @@ describe("the inspector chat view", () => {
 	});
 
 	it("draws citation numbers like the AI Agent tab: a pale wash, and solid blue while one is hovered", () => {
-		renderTab(withAnswer("본문 [1]", ["근거"]));
+		renderTab(withAnswer("본문 [1]", ["출처"]));
 		const cite = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>(".inspector-chat-answer button.cite");
 		expect(cite()?.className).toContain("bg-accent-wash");
 		expect(cite()?.classList.contains("active")).toBe(false);
@@ -523,7 +523,7 @@ describe("the inspector chat while a run streams", () => {
 		typeInto(input, "늦은 정정");
 		press(input, {});
 		expect(input.value).toBe("늦은 정정");
-		expect([...host.querySelectorAll('[role="status"]')].map((node) => node.textContent)).toContain("앞 질문의 답을 기다리는 중입니다");
+		expect([...host.querySelectorAll('[role="status"]')].map((node) => node.textContent)).toContain("앞 질문에 답하는 중입니다.");
 	});
 
 	it("shows a pending correction as a waiting bubble and a delivered one as applied, and lists queued questions", () => {

@@ -133,6 +133,6 @@ describe("the inspector's info sections", () => {
 		expect(toggle()?.textContent).toBe("간략히");
 		act(() => toggle()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(rowLabels()).toEqual(["종류", "크기", "위치", "경로"]);
-		expect(toggle()?.textContent).toBe("자세히");
+		expect(toggle()?.textContent).toBe("자세히 보기");
 	});
 });
