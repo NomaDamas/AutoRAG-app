@@ -706,6 +706,19 @@
       "finalizing": "即将完成"
     }
   },
+  "indexStatus": {
+    "eta": "预计还需 {{duration}}",
+    "etaCalculating": "正在估算剩余时间",
+    "stopped": "索引已暂停",
+    "waiting": "正在等待下次更新",
+    "justNow": "刚刚",
+    "count": "{{done}}/{{total}} 个",
+    "paused": {
+      "battery": "接通电源后将继续进行。",
+      "window": "到了允许的时间段后将继续进行。",
+      "day": "到了允许的日期后将继续进行。"
+    }
+  },
   "indexProgress": {
     "stage": {
       "discover": "发现",

@@ -38,7 +38,7 @@ import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "
 import { Switch } from "../primitives/Switch";
 import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
-import { IndexActivityCard } from "./IndexActivityCard";
+import { IndexStatusBanner } from "./IndexStatusBanner";
 import { IndexMapPanel } from "./index-map/IndexMapPanel";
 import { ExclusionsSection, FileNameWatchRow, SearchFoldersSection, useScopeEditor } from "./IndexScope";
 import { cn } from "../../lib/cn";
@@ -285,12 +285,17 @@ export function IndexingPage({
 					onExclude={(path) => void run([listUpdate("excludePaths", excludePath(excludePaths, path))])}
 					onInclude={(path) => void run([listUpdate("excludePaths", includePath(excludePaths, path))])}
 					header={(scope) => <SearchFoldersSection editor={editor} scope={scope} />}
-					progressHead={
+					progressHead={(scope) => (
 						<div className="index-map-head">
 							<h3 className="scope-section-title">{t("settingsSources.indexing.progress")}</h3>
-							<IndexActivityCard snapshot={activity} hideIdle />
+							<IndexStatusBanner
+								snapshot={activity}
+								totals={scope.totals}
+								paused={schedule?.wanted === true ? schedule.paused : null}
+								lastRunAt={latestOf(activity.finishedAt, schedule?.local?.at ?? null)}
+							/>
 						</div>
-					}
+					)}
 				/>
 				<ExclusionsSection editor={editor} snapshot={snapshot} />
 				<hr className="scope-divider" />
@@ -435,6 +440,13 @@ function agoText(iso: string, now: number): string {
 	if (minutes < 60) return t("settingsSources.common.minutesAgo", { count: minutes });
 	if (minutes < 24 * 60) return t("settingsSources.common.hoursAgo", { count: Math.round(minutes / 60) });
 	return t("settingsSources.common.daysAgo", { count: Math.round(minutes / (24 * 60)) });
+}
+
+/** The later of two ISO times, either of which may be missing. */
+function latestOf(a: string | null, b: string | null): string | null {
+	if (a === null) return b;
+	if (b === null) return a;
+	return Date.parse(a) >= Date.parse(b) ? a : b;
 }
 
 function lastAutoText(record: ScheduledRunRecord | null | undefined, now: number): string | null {

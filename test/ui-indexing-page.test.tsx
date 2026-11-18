@@ -87,21 +87,32 @@ const click = (element: Element | null): Promise<void> => act(async () => {
 const sector = (path: string): Element | null => host.querySelector(`.index-map-chart path[data-path="${path}"]:not([data-kind="parcel"])`);
 
 describe("Settings → Indexing", () => {
-	it("shows the index map in the progress section, right under the progress bar", async () => {
+	it("shows the index map in the progress section, right under the 진행 상황 banner", async () => {
 		await mount(RUNNING);
 
 		const panel = host.querySelector(".index-map-panel");
-		const card = panel?.querySelector(".index-map-head .settings-activity");
+		const card = panel?.querySelector('.index-map-head [data-testid="index-status"]');
 		expect(card).not.toBeNull();
 		expect(card!.compareDocumentPosition(panel!.querySelector(".index-map-legend")!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		expect(host.querySelectorAll(".index-map-chart path[data-node-id]").length).toBeGreaterThan(0);
 	});
 
-	it("shows the map when nothing is indexing too, without an idle line (Figma 532:9970)", async () => {
+	it("shows the map when nothing is indexing too, under a banner that counts the scope (Figma 601:4495)", async () => {
 		await mount();
 
-		expect(host.querySelector('[data-testid="index-activity-idle"]')).toBeNull();
 		expect(host.querySelector(".index-map-panel")).not.toBeNull();
+		expect(host.querySelector(".index-status-count")?.textContent).toBe("1/2 files");
+	});
+
+	it("shows only a bar for each search folder, no counts or percent (the counts are in the banner and the map)", async () => {
+		await mount();
+
+		const rows = [...host.querySelectorAll(".scope-row.is-pickable")];
+		expect(rows.length).toBeGreaterThan(0);
+		for (const row of rows) {
+			expect(row.querySelector(".scope-row-bar")).not.toBeNull();
+			expect(row.textContent).not.toMatch(/\d+\s*\/\s*\d+|%/u);
+		}
 	});
 
 	it("leaves a folder out from the map and writes it to excludePaths", async () => {

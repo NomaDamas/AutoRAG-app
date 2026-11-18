@@ -706,6 +706,19 @@
       "finalizing": "Finishing up"
     }
   },
+  "indexStatus": {
+    "eta": "About {{duration}} left",
+    "etaCalculating": "Working out the time left",
+    "stopped": "Indexing paused",
+    "waiting": "Waiting for the next refresh",
+    "justNow": "Just now",
+    "count": "{{done}}/{{total}} files",
+    "paused": {
+      "battery": "It will continue when you plug in power.",
+      "window": "It will continue during the allowed hours.",
+      "day": "It will continue on an allowed day."
+    }
+  },
   "indexProgress": {
     "stage": {
       "discover": "Discovering",
