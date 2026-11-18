@@ -189,34 +189,70 @@ describe("web tools for the assistants that research (MCP, apps, AI models)", ()
 	});
 });
 
-describe("the AI-model assistant's shell", () => {
-	it("is offered only when the app knows the home folder, and as a guarded tool", async () => {
+describe("the AI-model assistant's shell: read anything, change only what it manages, never repeat a secret", () => {
+	/** Runs one scripted turn on the AI surface and returns what the tool results looked like to the model. */
+	async function runShell(
+		commands: readonly string[],
+		options: { readonly home: string; readonly judge?: (state: string) => number } = { home: root },
+	): Promise<{ results: string[]; reply: string }> {
 		const { settings, configPath } = build({});
 		await writeBase(configPath);
 		const registration = register();
-		let called = "";
+		const results: string[] = [];
 		const service = createAppCustomizerService({
 			send: (event) => events.push(event),
 			resolveModel: async () => ({ model: registration.getModel()! }),
 			agentDir,
-			env: {},
+			env: { HOME: options.home, PATH: process.env.PATH ?? "", AUTORAG_CONFIG: configPath },
 			cwd: root,
-			homeDir: root,
+			homeDir: options.home,
 			language: () => "en",
 			settings,
+			writeJudge: async (state, questions) => ({
+				verdicts: questions.map((question) => ({ id: question.id ?? "", type: "noul", answer: options.judge?.(state) ?? 0.02, confidence: 0.95, escalate: false }) as never),
+			}),
 			listLocations: async () => [],
 			listTags: async () => [],
 		});
 		registration.setResponses([
-			fauxAssistantMessage([fauxToolCall("bash", { i: "Looking for coding agents", command: "echo $ANTHROPIC_API_KEY" })]),
-			(context: { messages: Array<{ role: string }> }) => {
-				called = JSON.stringify(context.messages.filter((message) => message.role === "toolResult"));
+			...commands.map((command) => fauxAssistantMessage([fauxToolCall("bash", { i: "Looking", command })])),
+			(context: { messages: Array<{ role: string; content: unknown }> }) => {
+				for (const message of context.messages) if (message.role === "toolResult") results.push(JSON.stringify(message.content));
 				return fauxAssistantMessage("done");
 			},
 		] as never);
-		await service.send("run-bash", { sessionId: "s-bash", surface: "ai", message: "what agents do I have" });
-		expect(called).toMatch(/refus/i);
+		await service.send("run-shell", { sessionId: "s-shell", surface: "ai", message: "look around" });
 		service.dispose();
+		const done = events.find((event) => event.type === "turn-done");
+		return { results, reply: done?.type === "turn-done" ? done.messages.join(" ") : "" };
+	}
+
+	it("reads another agent's credential file with no confirmation, but the model only sees the value removed", async () => {
+		const home = await mkdtemp(join(tmpdir(), "shell-home-"));
+		cleanups.push(() => rm(home, { recursive: true, force: true }));
+		await mkdir(join(home, ".codex"), { recursive: true });
+		await writeFile(join(home, ".codex", "auth.json"), JSON.stringify({ OPENAI_API_KEY: "sk-proj-ShellReadFixture0123456789", tokens: { access_token: "opaque-access-token-shell-0001" } }));
+		const { results } = await runShell([`cat ${join(home, ".codex", "auth.json")}`, `grep -c token ${join(home, ".codex", "auth.json")}`], { home });
+		const seen = results.join("\n");
+		expect(events.some((event) => event.type === "prompt")).toBe(false);
+		expect(seen).toContain("OPENAI_API_KEY");
+		expect(seen).not.toContain("ShellReadFixture");
+		expect(seen).not.toContain("opaque-access-token-shell-0001");
+	});
+
+	it("does not run a write Jev puts outside the managed files, and says why", async () => {
+		const target = join(root, "outside.txt");
+		const { results } = await runShell([`echo hi > ${target}`], { home: root, judge: (state) => (state.includes("outside.txt") ? 0.95 : 0.02) });
+		expect(results.join("")).toMatch(/Refused|Jev/u);
+		await expect(readFile(target, "utf8")).rejects.toThrow();
+	});
+
+	it("appends a new environment variable to the shell profile", async () => {
+		const home = await mkdtemp(join(tmpdir(), "shell-env-"));
+		cleanups.push(() => rm(home, { recursive: true, force: true }));
+		await writeFile(join(home, ".zshrc"), "alias a=b\n");
+		await runShell([`echo 'export OPENAI_API_KEY=abc123' >> ${join(home, ".zshrc")}`], { home });
+		expect(await readFile(join(home, ".zshrc"), "utf8")).toBe("alias a=b\nexport OPENAI_API_KEY=abc123\n");
 	});
 });
 

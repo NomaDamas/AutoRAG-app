@@ -249,7 +249,9 @@ describe("connections-customizer pi agent profile & toolkit", () => {
 			"update_datasource",
 			"update_mcp_server",
 		]);
-		expect(profile.systemPrompt).toContain("Korean");
+		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
+		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		// The narrower invariants: masked field only, confirm before running, untrusted registry/web text is data.
 		expect(profile.systemPrompt).toContain("confirmedByUser");
 		expect(profile.systemPrompt).toContain("secretEnv");
@@ -264,7 +266,7 @@ describe("connections-customizer pi agent profile & toolkit", () => {
 
 		const appsProfile = connectionsCustomizerProfile({ language: "en", surface: "apps", toolkit: kit });
 		expect(appsProfile.id).toBe("connections-customizer");
-		expect(appsProfile.systemPrompt).toContain("English");
+		expect(appsProfile.systemPrompt).toContain("if it is unclear, reply in English");
 	});
 
 	it("lists MCP servers and datasources with key names only and never leaks env or header values", async () => {

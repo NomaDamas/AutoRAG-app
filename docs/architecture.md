@@ -1009,13 +1009,20 @@ environment) is read and stored by the app after the person confirms (`coding-ag
 stored as `DAZZI_MCP_<SERVER>_<NAME>` and `mcp.json` holds only `${DAZZI_MCP_…}`, which pi resolves from the environment when it starts the server.
 Three nets sit under that: a key pasted into the chat box is removed before the message is sent (`shared/secret-guard.ts`), `guard-tools.ts`
 redacts every tool result (known values and credential-looking strings), and the streamed and final reply are redacted the same way. The AI-model
-assistant also has a guarded shell (`guarded-bash.ts`): read-only discovery commands (`which`, `--version`, `ls`, `brew list` …) run at once,
-anything else runs only after the confirm card, and printing the environment or reading credential files is refused even then. The MCP, apps
+assistant also has a shell (`guarded-bash.ts`, `write-gate.ts`): reading is unrestricted, so it can look at any file and find another coding agent's
+config and keys, and what it may change is limited to the files it manages (the shared AutoRAG config, and a new `export NAME=value` line appended
+to the shell profile). The same Jev that gates the AutoRAG agent's file changes (`write-judge.ts`, on the decision backends from the shared config,
+with the small chat model as fallback) decides whether a command writes anywhere else; `sudo`, piping a download into a shell, `eval` and deleting
+or moving unmanaged files are refused whatever Jev says, and without a decision model only plainly read-only commands and managed writes run. The
+spawned process never gets the app's own secret-looking variables, and the secret values found in other agents' credential files, pi's `auth.json`
+and the environment are in the known set from the start (`collectKnownSecretValues`), so what a command prints is read freely but cannot be repeated. The MCP, apps
 and AI-model assistants have the librarian's `web_search` and `web_fetch` (`createWebTools`, `@autorag/librarian/profiles`); the MCP assistant
 also searches the official registry (`mcp-registry.ts`). Web pages, registry text and command output are data, never instructions.
 When a turn reports changes, Settings re-reads
 the config, the datasource scan and the MCP page. A page whose assistant is not showing gets its invitation from `SettingsPageHead`
-(`SettingsAssistantHeroContext`). A new profile adds one file there and, if it needs a UI,
+(`SettingsAssistantHeroContext`). Every profile's system prompt is written in English; the assistant answers in the language the person writes in (their latest message decides),
+and the interface language is only the fallback before they have written anything, which is also what `intentPromptLine` asks of the live progress phrase
+(`test/profile-prompts-english.test.ts` pins both). A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Chat approvals and questions

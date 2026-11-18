@@ -129,7 +129,9 @@ describe("general-customizer pi agent profile & toolkit", () => {
 		expect(keys).not.toContain("approvalMode");
 		expect(keys).not.toContain("dupeyScanIntervalMinutes");
 
-		expect(profile.systemPrompt).toContain("Korean");
+		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
+		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		expect(profile.systemPrompt).toContain("remoteAccess");
 		expect(profile.systemPrompt).toContain("remotePort");
 		expect(profile.systemPrompt).toContain("remoteTunnelHostname");

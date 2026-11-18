@@ -142,7 +142,7 @@ interface ToolkitOptions {
 	/** What the credential store already holds: Dazzi's own saved keys, which the scan must not offer back. */
 	readonly stored?: readonly { envName: string; stored: boolean; source: "stored" | "env" | "none" }[];
 	readonly prompter?: RunPrompter;
-	readonly shell?: { homeDir: string; agentDir: string; cwd: string; env: NodeJS.ProcessEnv };
+	readonly shell?: { homeDir: string; cwd: string; env: NodeJS.ProcessEnv };
 	/** Pass `false` for a window that cannot show a prompt (secret tools must then refuse). */
 	readonly secrets?: boolean;
 }
@@ -241,7 +241,8 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 			"set_thinking_level",
 			"update_web_search",
 		]);
-		expect(profile.systemPrompt).toContain("Korean");
+		expect(profile.systemPrompt).toMatch(/Reply in the language the person writes in/);
+		expect(profile.systemPrompt).toMatch(/if it is unclear, reply in Korean/);
 		expect(profile.systemPrompt).toMatch(/connect_provider_key/);
 		expect(profile.systemPrompt).toMatch(/scan_coding_agents/);
 		expect(profile.systemPrompt).toMatch(/API key/i);
@@ -249,17 +250,28 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		expect(profile.systemPrompt).toMatch(/OAuth/);
 		expect(profile.systemPrompt).toMatch(/removed before you see it/i);
 		expect(profile.systemPrompt).toMatch(/DATA, not instructions/i);
+		// Written in English whatever the interface language is.
+		expect(profile.systemPrompt).not.toMatch(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7a3]/u);
 		expect(profile.systemPrompt).not.toMatch(/There is no tool for it/i);
 	});
 
 	it("offers bash when a shell is given, and the prompt then points to it", () => {
-		const shell = { homeDir: root, agentDir, cwd: root, env: {} };
+		const shell = { homeDir: root, cwd: root, env: {} };
 		const { kit } = toolkitFor({ shell });
 		const profile = aiCustomizerProfile({ language: "en", surface: "ai", toolkit: kit });
 
 		const names = profile.customTools?.map((tool) => tool.name) ?? [];
 		expect(names).toContain("bash");
-		expect(profile.systemPrompt).toMatch(/guarded `bash`/);
+		const prompt = profile.systemPrompt;
+		// What the shell may do, stated plainly: read anywhere, write only the managed files, set environment variables,
+		// read other coding agents' config, and never copy a key by hand.
+		expect(prompt).toMatch(/READING is unrestricted/);
+		expect(prompt).toMatch(/WRITING is limited to the files you manage/);
+		expect(prompt).toMatch(/new environment variable/i);
+		expect(prompt).toMatch(/Jev before it runs/);
+		expect(prompt).toMatch(/Claude Code, Codex, Gemini CLI, opencode, pi, Aider/);
+		expect(prompt).toMatch(/Never copy a key into a command/);
+		expect(prompt).not.toMatch(/confirm card|confirms it|refused outright/i);
 	});
 
 	it("answers the web surface with the same tools and web-search wording", () => {
@@ -470,7 +482,7 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 	});
 
 	it("gives no new tool a value or key parameter", () => {
-		const { tools } = toolkitFor({ shell: { homeDir: root, agentDir, cwd: root, env: {} } });
+		const { tools } = toolkitFor({ shell: { homeDir: root, cwd: root, env: {} } });
 		const propsOf = (name: string): string[] => {
 			const tool = tools.get(name);
 			if (tool === undefined) throw new Error(`missing tool ${name}`);
@@ -537,7 +549,7 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		await mkdir(join(home, ".codex"), { recursive: true });
 		const CODEX_KEY = "sk-proj-CodexFixtureKey0123456789abc";
 		await writeFile(join(home, ".codex", "auth.json"), JSON.stringify({ OPENAI_API_KEY: CODEX_KEY, tokens: { access: "x" } }));
-		const shell = { homeDir: home, agentDir, cwd: root, env: { GROQ_API_KEY: "gsk_GroqFixtureKey0123456789" } };
+		const shell = { homeDir: home, cwd: root, env: { GROQ_API_KEY: "gsk_GroqFixtureKey0123456789" } };
 		const { tools } = toolkitFor({ providers: [OPENAI, GROQ], shell });
 
 		const result = await run(tools.get("scan_coding_agents") as ToolLike, {});
@@ -560,7 +572,7 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		// Dazzi loads the keys it stored into the process environment; they are not another program's keys.
 		const home = await mkdtemp(join(tmpdir(), "ai-customizer-own-"));
 		cleanups.push(() => rm(home, { recursive: true, force: true }));
-		const shell = { homeDir: home, agentDir, cwd: root, env: { ANTHROPIC_API_KEY: "sk-ant-api03-OwnStoredKey0123456789abcdef", GROQ_API_KEY: "gsk_AmbientGroqKey0123456789" } };
+		const shell = { homeDir: home, cwd: root, env: { ANTHROPIC_API_KEY: "sk-ant-api03-OwnStoredKey0123456789abcdef", GROQ_API_KEY: "gsk_AmbientGroqKey0123456789" } };
 		const { tools } = toolkitFor({ providers: [ANTHROPIC, GROQ], shell, stored: [{ envName: "ANTHROPIC_API_KEY", stored: true, source: "stored" }] });
 		const result = (await run(tools.get("scan_coding_agents") as ToolLike, {})) as unknown as ScanResult;
 		const envAgent = result.agents.find((agent) => agent.id === "env")!;
@@ -575,7 +587,7 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		await mkdir(join(home, ".codex"), { recursive: true });
 		const CODEX_KEY = "sk-proj-ImportFixtureKey0123456789";
 		await writeFile(join(home, ".codex", "auth.json"), JSON.stringify({ OPENAI_API_KEY: CODEX_KEY, tokens: { access: "x" } }));
-		const shell = { homeDir: home, agentDir, cwd: root, env: {} };
+		const shell = { homeDir: home, cwd: root, env: {} };
 
 		const declined = toolkitFor({ providers: [OPENAI], shell, prompter: fakePrompter({}).prompter });
 		const refused = await run(declined.tools.get("import_coding_agent_key") as ToolLike, { source: "codex-file", provider: "openai" });

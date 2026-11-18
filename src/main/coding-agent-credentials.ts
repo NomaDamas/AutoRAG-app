@@ -16,6 +16,7 @@ import { spawnSync } from "node:child_process";
 import { accessSync, constants, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { defaultEnvName } from "../shared/ai-role-state";
+import { isSecretKey } from "./autorag-config-service";
 import { isJsonObject, type ProviderSummary } from "../shared/settings-contract";
 
 export type CodingAgentCredentialKind = "api_key" | "oauth";
@@ -372,4 +373,58 @@ export function readImportableSource(
 		ok: true,
 		key: { agent: match.agent, providerHint: match.providerHint, envName: match.envName, source: match.source, from: match.from, value: match.value },
 	};
+}
+
+
+/** Keys inside another program's credential file whose value is a secret (a token, a key), as opposed to an id or a mode. */
+const SECRET_FIELD = /(?:^|[_-])(?:api[_-]?key|key|token|secret|password|passwd|access|refresh|accesstoken|refreshtoken|credential)s?$/iu;
+
+function secretValuesOf(node: unknown, found: Set<string>, depth = 0): void {
+	if (depth > 6) return;
+	if (Array.isArray(node)) {
+		for (const item of node) secretValuesOf(item, found, depth + 1);
+		return;
+	}
+	if (!isJsonObject(node)) return;
+	for (const [key, value] of Object.entries(node)) {
+		if (typeof value === "string") {
+			if (value.length >= 8 && SECRET_FIELD.test(key)) found.add(value);
+		} else {
+			secretValuesOf(value, found, depth + 1);
+		}
+	}
+}
+
+/**
+ * The secret values the assistant can see but must never repeat: the tokens and keys in other coding agents' credential files, in
+ * pi's `auth.json`, and in secret-looking environment variables. Reading these files is free (that is how another agent's config is
+ * found), so the values go into the known set the redaction nets use: whatever a command prints, the reply cannot echo them.
+ */
+export function collectKnownSecretValues(input: {
+	readonly homeDir: string;
+	readonly agentDir: string;
+	readonly env: NodeJS.ProcessEnv;
+}): readonly string[] {
+	const found = new Set<string>();
+	const files = [
+		join(input.homeDir, ".codex", "auth.json"),
+		join(input.homeDir, ".claude", ".credentials.json"),
+		join(input.homeDir, ".claude.json"),
+		join(input.homeDir, ".gemini", "oauth_creds.json"),
+		join(input.homeDir, ".local", "share", "opencode", "auth.json"),
+		join(input.homeDir, ".pi", "agent", "auth.json"),
+		join(input.agentDir, "auth.json"),
+	];
+	for (const file of files) {
+		try {
+			if (!existsSync(file)) continue;
+			secretValuesOf(JSON.parse(readFileSync(file, "utf8")), found);
+		} catch {
+			// An unreadable or unparseable file holds nothing the assistant could have been shown.
+		}
+	}
+	for (const [name, value] of Object.entries(input.env)) {
+		if (typeof value === "string" && value.length >= 8 && isSecretKey(name)) found.add(value);
+	}
+	return [...found];
 }

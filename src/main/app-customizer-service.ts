@@ -3,7 +3,12 @@ import { createProfileSession, createWebTools, type AgentProfile, type ProfileMo
 import type { AppCustomizerChange, AppCustomizerEvent, AppCustomizerPromptAnswer, AppCustomizerRequest, AppCustomizerSurface } from "../shared/app-customizer-contract";
 import { findSecrets, redactSecrets } from "../shared/secret-guard";
 import { createCustomizerPrompter } from "./agents/customizer-prompter";
+import { resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
 import { guardTools } from "./agents/guard-tools";
+import { createWriteJudge } from "./agents/write-judge";
+import type { WriteJudge } from "./agents/write-gate";
+import { collectKnownSecretValues } from "./coding-agent-credentials";
+import { resolveDecisionBackendsForConfig } from "./decision-model";
 import type { FsLocation, FsTag } from "../shared/fs-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
 import {
@@ -48,6 +53,11 @@ export interface AppCustomizerServiceDeps {
 	readonly language: () => ReplyLanguage;
 	/** The whole settings service: the config assistants write the shared AutoRAG config and MCP file through it, as the pages do. */
 	readonly settings: SettingsBridge;
+	/**
+	 * Jev for the AI-model assistant's shell (it decides whether a command changes anything beyond the files the assistant manages).
+	 * Defaults to the app's decision backends from the shared AutoRAG config; a test passes its own.
+	 */
+	readonly writeJudge?: WriteJudge;
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
 	readonly listTags: () => Promise<readonly FsTag[]>;
 }
@@ -136,6 +146,10 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 	const sessions = new Map<string, SessionEntry>();
 	const runs = new Map<string, ActiveRun>();
 	const prompter = createCustomizerPrompter({ send: (event) => deps.send(event) });
+	/** One judge for the whole service: it resolves the decision backends from the config once and keeps them. */
+	const defaultJudge = createWriteJudge({
+		resolveBackends: () => resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd }), deps.env, deps.cwd),
+	});
 
 	function evictOldestIfNeeded(): void {
 		if (sessions.size < MAX_OPEN_SESSIONS) return;
@@ -177,7 +191,13 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		// The librarian's own web tools, as the AutoRAG agent has them. Fetched pages and search results are data the model reads;
 		// they pass through `guardTools` like every other result, and the prompts say they are never instructions.
 		const web = WEB_SURFACES.includes(surface) ? createWebTools() : [];
+		const shellHome = (process.platform === "win32" ? deps.env.USERPROFILE : deps.env.HOME)?.trim() || deps.homeDir;
 		const knownSecrets = new Set<string>();
+		// Reading another agent's credential file is allowed, so the values in those files are known to the redaction nets from the
+		// start: whatever a command prints, no tool result or reply can repeat one.
+		if (shellHome !== undefined && surface === "ai") {
+			for (const value of collectKnownSecretValues({ homeDir: shellHome, agentDir: deps.agentDir, env: deps.env })) knownSecrets.add(value);
+		}
 		const secrets = {
 			known: knownSecrets,
 			prompter: () => (entryRef === null ? undefined : prompter.forRun({ runId: entryRef.currentRunId, sessionId })),
@@ -224,9 +244,17 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					secrets,
 					// Other coding agents keep their config under `$HOME` (`%USERPROFILE%` on Windows), which is what a person or a test
 					// sets; Electron's own home path is only the fallback.
-					...(deps.homeDir === undefined && deps.env.HOME === undefined && deps.env.USERPROFILE === undefined
+					...(shellHome === undefined
 						? {}
-						: { shell: { homeDir: (process.platform === "win32" ? deps.env.USERPROFILE : deps.env.HOME)?.trim() || deps.homeDir || "", agentDir: deps.agentDir, cwd: deps.cwd, env: deps.env } }),
+						: {
+								shell: {
+									homeDir: shellHome,
+									cwd: deps.cwd,
+									env: deps.env,
+									managedPaths: [resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath],
+									judge: deps.writeJudge ?? defaultJudge,
+								},
+							}),
 				});
 				toolkit = kit;
 				profile = aiCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));

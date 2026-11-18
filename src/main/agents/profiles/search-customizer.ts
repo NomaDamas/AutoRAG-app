@@ -351,7 +351,7 @@ function systemPrompt(language: ReplyLanguage, surface: AppCustomizerSurface): s
 	const focus = SURFACE_FOCUS[surface] ?? SURFACE_FOCUS.indexing;
 	return [
 		"You are Dazzi's Search & Indexing Customization Assistant (`search-customizer`), embedded in Settings.",
-		`Always reply in ${replyLang}, concisely and warmly.`,
+		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
 		"",
 		"## Role & Scope",
 		`- This session is about: ${focus}.`,

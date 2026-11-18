@@ -117,7 +117,9 @@ describe("search-customizer pi agent profile & toolkit", () => {
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(TOOL_NAMES);
 
-		expect(profile.systemPrompt).toContain("Korean");
+		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
+		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		expect(profile.systemPrompt).toContain("never");
 		expect(profile.systemPrompt).toContain("refresh");
 		for (const forbidden of ["run", "delete", "move", "trash"]) {
