@@ -19,7 +19,6 @@ import {
 	Music,
 	Package,
 	Plus,
-	RotateCcw,
 	Server,
 	Sparkles,
 	Trash2,
@@ -33,17 +32,17 @@ import {
 	cloudSidebarItemId,
 	connectionSidebarItemId,
 	customSidebarItemId,
-	DEFAULT_SIDEBAR_SETTINGS,
-	isDefaultSidebarSettings,
 	locationSidebarItemId,
-	MINIMAL_HIDDEN_FAVORITE_IDS,
 	normalizeSidebarSettings,
 	placeSidebarItemId,
+	sidebarPresetLayout,
+	sidebarPresetOf,
 	STANDARD_FAVORITE_KINDS,
 	tagSidebarItemId,
 	type HideableSidebarSectionId,
 	type SidebarSectionId,
 	type SidebarSettings,
+	withSidebarLayout,
 } from "../../../../shared/sidebar-contract";
 import {
 	sortByFavoritesOrder,
@@ -312,51 +311,51 @@ export function SidebarPage({
 		};
 	};
 
-	const isDefault = isDefaultSidebarSettings(sidebar);
-	const isMinimalActive =
-		MINIMAL_HIDDEN_FAVORITE_IDS.every((id) => hiddenItems.has(id)) &&
-		sidebar.hiddenItems.length === MINIMAL_HIDDEN_FAVORITE_IDS.length;
-	const isShowAllActive = sidebar.hiddenItems.length === 0 && sidebar.hiddenSections.length === 0;
+	// 전체 표시 is the default layout, so it doubles as the reset; 사용자 지정 is the last layout arranged by hand.
+	const activePreset = sidebarPresetOf(sidebar);
+	const customLayout = sidebar.custom;
 
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.sidebar")} />
 
-			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 and 기본값으로 복원), then each section as a head over a bordered card. */}
+			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 / 사용자 지정), then each section as a head over a bordered card. */}
 			<div className="sidebar-page" ref={pageRef}>
 				<div className="sidebar-quick" role="group" aria-label={t("settingsCore.sidebar.presetsTitle")}>
 					<span className="sidebar-quick-label">{t("settingsCore.sidebar.presetsTitle")}</span>
 					<div className="shortcuts-segmented">
 						<button
 							type="button"
-							className={cn("shortcuts-segment", isShowAllActive && "is-active")}
+							className={cn("shortcuts-segment", activePreset === "all" && "is-active")}
 							data-action="sidebar-preset-all"
-							aria-pressed={isShowAllActive}
-							onClick={() => void updateSidebar({ ...sidebar, hiddenItems: [], hiddenSections: [] })}
+							aria-pressed={activePreset === "all"}
+							onClick={() => void updateSidebar(withSidebarLayout(sidebar, sidebarPresetLayout("all")))}
 						>
 							{t("settingsCore.sidebar.presetShowAll")}
 						</button>
 						<button
 							type="button"
-							className={cn("shortcuts-segment", isMinimalActive && "is-active")}
+							className={cn("shortcuts-segment", activePreset === "minimal" && "is-active")}
 							data-action="sidebar-preset-minimal"
-							aria-pressed={isMinimalActive}
-							onClick={() => void updateSidebar({ ...sidebar, hiddenItems: [...MINIMAL_HIDDEN_FAVORITE_IDS] })}
+							aria-pressed={activePreset === "minimal"}
+							onClick={() => void updateSidebar(withSidebarLayout(sidebar, sidebarPresetLayout("minimal")))}
 						>
 							{t("settingsCore.sidebar.presetMinimal")}
 						</button>
+						<button
+							type="button"
+							className={cn("shortcuts-segment", activePreset === null && "is-active")}
+							data-action="sidebar-preset-custom"
+							aria-pressed={activePreset === null}
+							disabled={customLayout === undefined}
+							title={customLayout === undefined ? t("settingsCore.sidebar.presetCustomEmpty") : undefined}
+							onClick={() => {
+								if (customLayout !== undefined && activePreset !== null) void updateSidebar(withSidebarLayout(sidebar, customLayout));
+							}}
+						>
+							{t("settingsCore.sidebar.presetCustom")}
+						</button>
 					</div>
-					<span className="sidebar-row-spacer" />
-					<button
-						type="button"
-						className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
-						data-action="sidebar-reset-default"
-						disabled={isDefault}
-						onClick={() => void updateSidebar(DEFAULT_SIDEBAR_SETTINGS)}
-					>
-						<RotateCcw aria-hidden="true" />
-						{t("settingsCore.sidebar.resetDefault")}
-					</button>
 				</div>
 
 				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>

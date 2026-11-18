@@ -245,7 +245,9 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		await settle();
 
 		const presetButtons = Array.from(host.querySelectorAll<HTMLButtonElement>("[data-shortcut-presets] button"));
-		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer"]);
+		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer", "shortcuts-preset-custom"]);
+		// Nothing has been set by hand yet, so 사용자 지정 has nothing to bring back.
+		expect(host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-custom"]')?.disabled).toBe(true);
 		expect(presetButtons.some((btn) => btn.classList.contains("is-active"))).toBe(false);
 		expect(host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-default"]')?.disabled).toBe(true);
 

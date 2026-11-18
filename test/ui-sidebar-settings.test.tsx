@@ -208,16 +208,29 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		await settle();
 		expect(currentSettings.sidebar.hiddenSections).toEqual(["cloud"]);
 
-		// Reset to default restores everything
-		const resetBtn = host.querySelector<HTMLButtonElement>('[data-action="sidebar-reset-default"]');
-		expect(resetBtn?.disabled).toBe(false);
+		// The hand-made layout is 사용자 지정; there is no separate 기본값으로 복원 any more.
+		expect(host.querySelector('[data-action="sidebar-reset-default"]')).toBeNull();
+		const customPreset = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-action="sidebar-preset-custom"]');
+		expect(customPreset()?.classList.contains("is-active")).toBe(true);
+
+		// 전체 표시 is the default layout: it restores everything, and 사용자 지정 still remembers the layout above.
 		await act(async () => {
-			resetBtn?.click();
+			host.querySelector<HTMLButtonElement>('[data-action="sidebar-preset-all"]')?.click();
 		});
 		await settle();
 		expect(currentSettings.sidebar.hiddenItems).toEqual([]);
 		expect(currentSettings.sidebar.hiddenSections).toEqual([]);
 		expect(currentSettings.sidebar.favoritesOrder).toEqual([]);
+		expect(customPreset()?.disabled).toBe(false);
+		expect(customPreset()?.classList.contains("is-active")).toBe(false);
+
+		// 사용자 지정 brings the hand-made layout back.
+		await act(async () => {
+			customPreset()?.click();
+		});
+		await settle();
+		expect(currentSettings.sidebar.hiddenSections).toEqual(["cloud"]);
+		expect(currentSettings.sidebar.hiddenItems).toEqual(["place:applications", "place:music", "place:movies", "place:pictures"]);
 	});
 
 	it("offers no AI banner or assistant on 사이드바: the right sidebar stays the Inspector's, shown or hidden", async () => {

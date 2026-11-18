@@ -95,7 +95,8 @@ export function ShortcutsPage({
 			const writer = getSettingsWriter();
 			if (writer === undefined) return false;
 			try {
-				const normalized = normalizeShortcutSettings(nextShortcuts);
+				// Every write carries the remembered 사용자 지정, so a preset or a reset never drops it.
+				const normalized = normalizeShortcutSettings({ custom: shortcuts.custom, ...nextShortcuts });
 				const updated = await writer.set({ shortcuts: normalized });
 				onAppSettingsChanged(updated);
 				return true;
@@ -104,7 +105,7 @@ export function ShortcutsPage({
 				return false;
 			}
 		},
-		[onAppSettingsChanged, onSettingsError],
+		[onAppSettingsChanged, onSettingsError, shortcuts.custom],
 	);
 
 	const actionLabel = useCallback(
@@ -232,12 +233,13 @@ export function ShortcutsPage({
 		await updateShortcuts({ overrides: nextOverrides });
 	};
 
-	const applyPreset = (preset: "macFinder" | "windowsExplorer" | "default"): void => {
+	const applyPreset = (preset: "macFinder" | "windowsExplorer" | "default" | "custom"): void => {
 		setRecordingId(null);
 		setHeldMods({ mod: false, alt: false, shift: false });
 		setPendingConflict(null);
 		setInvalidNotice(null);
-		void updateShortcuts(shortcutSettingsForPreset(preset));
+		if (preset !== "custom") void updateShortcuts(shortcutSettingsForPreset(preset));
+		else if (shortcuts.custom !== undefined) void updateShortcuts({ overrides: shortcuts.custom });
 	};
 
 	const normalizedQuery = filterQuery.trim().toLowerCase();
@@ -335,6 +337,20 @@ export function ShortcutsPage({
 								onClick={() => applyPreset("windowsExplorer")}
 							>
 								{t("settingsCore.shortcuts.presetWindowsExplorer")}
+							</button>
+							{/* The last bindings set by hand; 모두 기본값으로 and the presets keep them here. */}
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === null && "is-active")}
+								data-action="shortcuts-preset-custom"
+								aria-pressed={activePreset === null}
+								disabled={shortcuts.custom === undefined}
+								title={shortcuts.custom === undefined ? t("settingsCore.shortcuts.presetCustomEmpty") : undefined}
+								onClick={() => {
+									if (activePreset !== null) applyPreset("custom");
+								}}
+							>
+								{t("settingsCore.shortcuts.presetCustom")}
 							</button>
 						</div>
 						<div className="shortcuts-quick-actions">

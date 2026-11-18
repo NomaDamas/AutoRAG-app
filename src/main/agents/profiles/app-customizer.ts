@@ -705,6 +705,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				favoritesOrder,
 				sectionOrder,
 				customFavorites,
+				custom: current.custom,
 			});
 
 			ensureLive();
@@ -920,6 +921,7 @@ export function createAppCustomizerToolkit(deps: AppCustomizerToolkitDeps): AppC
 				hiddenSections: [...hiddenSections],
 				sectionOrder,
 				magicActions,
+				custom: current.custom,
 			});
 
 			ensureLive();

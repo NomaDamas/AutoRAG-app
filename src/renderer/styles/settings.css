@@ -4339,6 +4339,12 @@
 	font-weight: var(--weight-medium);
 }
 
+/* 사용자 지정 before anything was set by hand: the app's disabled 50%. */
+.settings-view .shortcuts-segment:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
 .settings-view .shortcuts-quick-actions {
 	display: flex;
 	flex-wrap: wrap;

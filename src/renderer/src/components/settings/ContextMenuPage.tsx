@@ -1,12 +1,11 @@
 import { useCallback, useMemo, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Info, Lock, Pencil, Plus, RotateCcw, Sparkles, Terminal, X } from "lucide-react";
+import { Info, Lock, Pencil, Plus, Sparkles, Terminal, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
-	DEFAULT_CONTEXT_MENU_SETTINGS,
-	isDefaultContextMenuSettings,
-	MINIMAL_HIDDEN_CONTEXT_MENU_IDS,
+	contextMenuPresetLayout,
+	contextMenuPresetOf,
 	normalizeContextMenuSettings,
 	normalizeExtensionList,
 	normalizeMagicAction,
@@ -18,6 +17,7 @@ import {
 	type MagicActionAgentMode,
 	type MagicActionSelectionRule,
 	type MagicActionTargetKind,
+	withContextMenuLayout,
 } from "../../../../shared/context-menu-contract";
 import type { ShortcutId } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
@@ -561,11 +561,9 @@ export function ContextMenuPage({
 			.order("magic", contextMenu.magicActions.map((action) => action.id))
 			.map((index) => renderMagicActionRow(contextMenu.magicActions[index]!, index, prefix, place));
 
-	const isDefault = isDefaultContextMenuSettings(contextMenu);
-	const isMinimalActive =
-		MINIMAL_HIDDEN_CONTEXT_MENU_IDS.every((id) => hiddenItems.has(id)) &&
-		contextMenu.hiddenItems.length === MINIMAL_HIDDEN_CONTEXT_MENU_IDS.length;
-	const isShowAllActive = contextMenu.hiddenItems.length === 0 && contextMenu.hiddenSections.length === 0;
+	// 전체 표시 is the default layout, so it doubles as the reset; 사용자 지정 is the last layout arranged by hand.
+	const activePreset = contextMenuPresetOf(contextMenu);
+	const customLayout = contextMenu.custom;
 
 	return (
 		<>
@@ -622,34 +620,36 @@ export function ContextMenuPage({
 						<div className="shortcuts-segmented">
 							<button
 								type="button"
-								className={cn("shortcuts-segment", isShowAllActive && "is-active")}
+								className={cn("shortcuts-segment", activePreset === "all" && "is-active")}
 								data-action="context-menu-preset-all"
-								aria-pressed={isShowAllActive}
-								onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [], hiddenSections: [] })}
+								aria-pressed={activePreset === "all"}
+								onClick={() => void updateContextMenu(withContextMenuLayout(contextMenu, contextMenuPresetLayout("all")))}
 							>
 								{t("settingsCore.contextMenu.presetShowAll")}
 							</button>
 							<button
 								type="button"
-								className={cn("shortcuts-segment", isMinimalActive && "is-active")}
+								className={cn("shortcuts-segment", activePreset === "minimal" && "is-active")}
 								data-action="context-menu-preset-minimal"
-								aria-pressed={isMinimalActive}
-								onClick={() => void updateContextMenu({ ...contextMenu, hiddenItems: [...MINIMAL_HIDDEN_CONTEXT_MENU_IDS] })}
+								aria-pressed={activePreset === "minimal"}
+								onClick={() => void updateContextMenu(withContextMenuLayout(contextMenu, contextMenuPresetLayout("minimal")))}
 							>
 								{t("settingsCore.contextMenu.presetMinimal")}
 							</button>
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === null && "is-active")}
+								data-action="context-menu-preset-custom"
+								aria-pressed={activePreset === null}
+								disabled={customLayout === undefined}
+								title={customLayout === undefined ? t("settingsCore.contextMenu.presetCustomEmpty") : undefined}
+								onClick={() => {
+									if (customLayout !== undefined && activePreset !== null) void updateContextMenu(withContextMenuLayout(contextMenu, customLayout));
+								}}
+							>
+								{t("settingsCore.contextMenu.presetCustom")}
+							</button>
 						</div>
-						<span className="sidebar-row-spacer" />
-						<button
-							type="button"
-							className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
-							data-action="context-menu-reset-default"
-							disabled={isDefault}
-							onClick={() => void updateContextMenu(DEFAULT_CONTEXT_MENU_SETTINGS)}
-						>
-							<RotateCcw aria-hidden="true" />
-							{t("settingsCore.contextMenu.resetDefault")}
-						</button>
 					</div>
 				</div>
 

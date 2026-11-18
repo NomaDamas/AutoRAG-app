@@ -442,7 +442,8 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 			}
 
 			ensureLive();
-			await deps.settings.set({ shortcuts: working });
+			// Keep the remembered 사용자 지정 when the agent applies a preset; bindings of its own replace it.
+			await deps.settings.set({ shortcuts: normalizeShortcutSettings({ ...working, custom: normalizeShortcutSettings(currentSettings.shortcuts).custom }) });
 
 			if (params.preset !== undefined || params.resetAll === true || touchedIds.length > 0 || warnings.length > 0) {
 				const fields =
