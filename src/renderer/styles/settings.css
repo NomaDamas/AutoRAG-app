@@ -3060,7 +3060,7 @@
 	color: var(--danger-text);
 }
 
-/* ---------------------------------------------------------- Remote Access -- */
+/* ------------------------------------------- Remote Access (Figma 585:9647) -- */
 
 .settings-view .settings-remote-via {
 	margin: var(--space-8) 0 0;
@@ -3074,151 +3074,75 @@
 	gap: var(--space-8);
 }
 
-.settings-view .settings-remote-card,
-.settings-view .settings-remote-devices {
-	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
-	background: var(--bg-subtle);
-	padding: var(--space-12) var(--space-14);
-	min-width: 0;
-}
-
+/* The connect card: route and code, 20px apart, no rule between them. */
 .settings-view .settings-remote-card {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-16);
-}
-
-.settings-view .settings-remote-card,
-.settings-view .settings-remote-devices {
+	gap: 20px;
 	margin-top: var(--space-10);
-}
-
-.settings-view .settings-remote-detail__name {
-	font-size: var(--font-size-meta);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
+	padding: var(--space-16) 20px;
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	background: var(--bg-window);
+	min-width: 0;
 }
 
 .settings-view .settings-remote-step {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-8);
+	align-items: flex-start;
+	gap: var(--space-10);
 	min-width: 0;
 }
 
-.settings-view .settings-remote-step + .settings-remote-step {
-	padding-top: var(--space-16);
-	border-top: 1px solid var(--border-divider);
+.settings-view .settings-remote-step > *,
+.settings-view .settings-remote-pane,
+.settings-view .settings-remote-pane > * {
+	align-self: stretch;
 }
 
-.settings-view .settings-remote-step__label {
+.settings-view .settings-remote-step > .settings-remote-tabs {
+	align-self: flex-start;
+}
+
+.settings-view .settings-remote-step__label,
+.settings-view .settings-remote-detail__name {
 	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
+	font-weight: var(--weight-bold);
 	color: var(--text-primary);
 }
 
+/* 같은 Wi-Fi | 외부 인터넷: a segmented control, the picked one a raised white chip. */
 .settings-view .settings-remote-tabs {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-6);
-}
-
-.settings-view .settings-remote-field {
-	display: flex;
-	align-items: center;
-	gap: var(--space-8);
-	min-width: 0;
-}
-
-.settings-view .settings-remote-field > input,
-.settings-view .settings-remote-field > .settings-remote-url-line {
-	flex: 1;
-	min-width: 0;
-}
-
-.settings-view .settings-remote-field > .settings-remote-url-line {
-	padding: var(--space-6) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-6);
-	background: var(--bg-window);
-}
-
-.settings-view .settings-remote-field > .settings-remote-port {
-	flex: 0 0 120px;
-}
-
-.settings-view .settings-remote-details,
-.settings-view .settings-remote-domain {
-	min-width: 0;
-}
-
-.settings-view .settings-remote-details {
-	padding-top: var(--space-12);
-	border-top: 1px solid var(--border-divider);
-}
-
-.settings-view .settings-remote-details > summary,
-.settings-view .settings-remote-domain > summary {
-	cursor: pointer;
-	font-size: var(--font-size-meta);
-	color: var(--text-muted);
-	width: fit-content;
-}
-
-.settings-view .settings-remote-details > summary:hover,
-.settings-view .settings-remote-domain > summary:hover {
-	color: var(--text-primary);
-}
-
-.settings-view .settings-remote-details[open] > summary,
-.settings-view .settings-remote-domain[open] > summary {
-	margin-bottom: var(--space-10);
-}
-
-.settings-view .settings-remote-domain[open] {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-8);
-}
-
-.settings-view .settings-remote-domain[open] > summary {
-	margin-bottom: 0;
-}
-
-.settings-view .settings-remote-detail {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-4);
-	min-width: 0;
-}
-
-.settings-view .settings-remote-detail + .settings-remote-detail {
-	margin-top: var(--space-12);
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
 }
 
 .settings-view .settings-remote-tab {
-	height: 28px;
-	padding: 0 var(--space-12);
-	border: 1px solid var(--border);
+	padding: 5px var(--space-12);
+	border: 0;
 	border-radius: var(--radius-6);
-	background: var(--bg-window);
-	color: var(--text-body);
+	background: transparent;
+	color: var(--text-muted);
 	font: inherit;
 	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
+	line-height: normal;
+	white-space: nowrap;
 	cursor: pointer;
 }
 
 .settings-view .settings-remote-tab:hover {
-	background: var(--bg-hover);
 	color: var(--text-primary);
 }
 
 .settings-view .settings-remote-tab.is-active {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-	color: var(--accent-text);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-bold);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .settings-view .settings-remote-pane {
@@ -3228,16 +3152,11 @@
 	min-width: 0;
 }
 
-.settings-view .settings-remote-desc {
-	margin: 0;
-	font-size: var(--font-size-meta);
-	line-height: var(--leading-body);
-	color: var(--text-body);
-}
-
+.settings-view .settings-remote-desc,
 .settings-view .settings-remote-sub {
 	margin: 0;
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
 	color: var(--text-muted);
 	overflow-wrap: anywhere;
 }
@@ -3253,55 +3172,83 @@
 	min-width: 0;
 }
 
+.settings-view .settings-remote-field {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	min-width: 0;
+}
+
+/* An address: monospace on a grey well, copied with the button beside it. */
+.settings-view .settings-remote-url-line {
+	flex: 1;
+	min-width: 0;
+	padding: var(--space-8) var(--space-12);
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	color: var(--text-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .settings-view .settings-remote-pair-box {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-14);
-	padding: var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+	gap: var(--space-16);
+	padding: var(--space-14);
 	min-width: 0;
 }
 
 .settings-view .settings-remote-qr {
 	flex: none;
 	display: block;
-	border-radius: var(--radius-6);
-	border: 1px solid var(--border-divider);
 }
 
 .settings-view .settings-remote-pair-meta {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: var(--space-6);
+	align-items: flex-start;
+	gap: var(--space-8);
 	min-width: 180px;
+}
+
+.settings-view .settings-remote-code-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-12);
 }
 
 .settings-view .settings-remote-code {
 	font-family: var(--font-mono);
-	font-size: 24px;
-	font-weight: var(--weight-semibold);
-	letter-spacing: 0.14em;
+	font-size: 28px;
+	font-weight: var(--weight-bold);
+	letter-spacing: 2px;
+	line-height: normal;
 	color: var(--text-primary);
-	line-height: 1.15;
 }
 
 .settings-view .settings-remote-expiry {
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-url-line {
-	font-family: var(--font-mono);
-	font-size: var(--font-size-badge);
-	color: var(--text-body);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 100%;
+.settings-view .settings-remote-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-actions .linear-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
 }
 
 .settings-view .settings-remote-status-line {
@@ -3313,49 +3260,134 @@
 	color: var(--text-primary);
 }
 
-.settings-view .settings-remote-command {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+/* 고급 설정: under the card, a chevron and muted label that open the address and the port. */
+.settings-view .settings-remote-details,
+.settings-view .settings-remote-domain {
 	min-width: 0;
 }
 
-.settings-view .settings-remote-command code {
-	font-family: var(--font-mono);
-	font-size: var(--font-size-badge);
-	color: var(--text-primary);
-	word-break: break-all;
-	min-width: 0;
-}
-
-.settings-view .settings-remote-actions {
+.settings-view .settings-remote-details {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-8);
+	flex-direction: column;
+	gap: var(--space-12);
+	margin-top: 20px;
+	padding: 0 var(--space-4);
 }
 
-.settings-view .settings-remote-actions .linear-btn,
-.settings-view .settings-remote-device-actions .linear-btn {
+.settings-view .settings-remote-details > summary {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-6);
+	width: fit-content;
+	list-style: none;
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-devices__head {
+.settings-view .settings-remote-details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .settings-remote-details > summary > svg {
+	transform: rotate(-90deg);
+	transition: transform 120ms ease;
+}
+
+.settings-view .settings-remote-details[open] > summary > svg {
+	transform: none;
+}
+
+.settings-view .settings-remote-details > summary:hover,
+.settings-view .settings-remote-domain > summary:hover {
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-domain > summary {
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
+	width: fit-content;
+}
+
+.settings-view .settings-remote-domain[open] {
 	display: flex;
-	justify-content: flex-end;
-	margin-bottom: var(--space-8);
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+	min-width: 0;
+}
+
+.settings-view .settings-remote-port-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-remote-port {
+	width: 76px;
+	padding: var(--space-6) var(--space-10);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+}
+
+/* 연결된 기기: the title with 모든 기기 해제 at its end, then one card of rows. */
+.settings-view .settings-remote-devices-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	margin: 30px 0 var(--space-16);
+}
+
+.settings-view .settings-remote-devices-head > .linear-section-title {
+	flex: 1;
+	margin: 0;
+}
+
+.settings-view .settings-remote-revoke-all {
+	height: 28px;
+	padding: 0 var(--space-10);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+}
+
+.settings-view .settings-remote-revoke-all:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-revoke-all.is-confirm {
+	color: var(--danger-text);
+}
+
+.settings-view .settings-remote-devices {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+	overflow: hidden;
+	min-width: 0;
 }
 
 .settings-view .settings-remote-empty {
 	margin: 0;
+	padding: var(--space-12) var(--space-16);
 	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
@@ -3364,26 +3396,23 @@
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-6);
 }
 
 .settings-view .settings-remote-device-row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+	gap: var(--space-12);
+	padding: var(--space-10) var(--space-16);
 	min-width: 0;
+}
+
+.settings-view .settings-remote-device-row + .settings-remote-device-row {
+	border-top: 1px solid var(--border-divider);
 }
 
 .settings-view .settings-remote-device-info {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
 	gap: var(--space-2);
 	min-width: 0;
@@ -3394,7 +3423,7 @@
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-6);
-	font-size: var(--font-size-meta);
+	font-size: var(--font-size-sm);
 	font-weight: var(--weight-medium);
 	color: var(--text-primary);
 }
@@ -3402,9 +3431,8 @@
 .settings-view .settings-remote-device-badge {
 	display: inline-flex;
 	align-items: center;
-	height: 18px;
-	padding: 0 var(--space-6);
-	border-radius: var(--radius-5);
+	padding: 1px var(--space-6);
+	border-radius: 999px;
 	background: var(--accent-soft);
 	color: var(--accent-text);
 	font-size: var(--font-size-badge);
@@ -3412,15 +3440,17 @@
 }
 
 .settings-view .settings-remote-device-seen {
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-device-actions {
-	display: inline-flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-6);
+.settings-view .settings-remote-device-row > .settings-icon-btn {
+	width: 24px;
+	height: 24px;
+}
+
+.settings-view .settings-remote-device-row > .linear-btn.is-confirm {
+	color: var(--danger-text);
 }
 
 .settings-view .settings-remote-rename-form {
@@ -3429,10 +3459,6 @@
 	align-items: center;
 	gap: var(--space-6);
 	min-width: 0;
-}
-
-.settings-view .settings-remote-revoke-btn {
-	color: var(--danger-text);
 }
 
 /* ------------------------------------------------ 검색 범위 (Figma 386:9908) -- */
