@@ -73,6 +73,39 @@ describe("applyVersionStacks", () => {
 		expect(out[0]?.child).toBe(false);
 	});
 
+	it("renders each path once when search lists a cross-folder member beside its head and the member is clicked", () => {
+		// Search results mix folders: the head and a member from another folder are both hits.
+		const hits = [entry(HEAD), entry(CROSS_FOLDER_MEMBER)];
+		const opts = { families: buildVersionFamilies(families()), manualOpen: new Set<string>() };
+		const closed = applyVersionStacks(hits, { ...opts, selectedKeys: [] });
+		expect(closed.map((row) => [row.entry.path, row.child])).toEqual([
+			[HEAD, false],
+			[CROSS_FOLDER_MEMBER, false],
+		]);
+		// Clicking the member opens the head's stack: the member moves under its head instead of showing twice.
+		const open = applyVersionStacks(hits, { ...opts, selectedKeys: [CROSS_FOLDER_MEMBER] });
+		const paths = open.map((row) => row.entry.path);
+		expect(new Set(paths).size).toBe(paths.length);
+		expect(open.map((row) => [row.entry.path, row.child])).toEqual([
+			[HEAD, false],
+			[SAME_FOLDER_MEMBER, true],
+			[CROSS_FOLDER_MEMBER, true],
+		]);
+		// The same holds when the member sorts before its head.
+		const reversed = applyVersionStacks([...hits].reverse(), { ...opts, selectedKeys: [CROSS_FOLDER_MEMBER] });
+		expect(reversed.map((row) => row.entry.path)).toEqual([HEAD, SAME_FOLDER_MEMBER, CROSS_FOLDER_MEMBER]);
+	});
+
+	it("never emits a path twice, even when the listing repeats one", () => {
+		const out = applyVersionStacks([entry(HEAD), entry(HEAD)], {
+			families: buildVersionFamilies(families()),
+			manualOpen: new Set(),
+			selectedKeys: [HEAD],
+		});
+		const paths = out.map((row) => row.entry.path);
+		expect(paths).toEqual([HEAD, SAME_FOLDER_MEMBER, CROSS_FOLDER_MEMBER]);
+	});
+
 	it("counts members on the head and expands on selection", () => {
 		const out = applyVersionStacks([entry(HEAD)], {
 			families: buildVersionFamilies(families()),
