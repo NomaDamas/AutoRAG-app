@@ -138,11 +138,11 @@ try {
 	for (let attempt = 1; attempt <= ATTEMPTS && drawn === null; attempt += 1) {
 		console.log(`attempt ${attempt}/${ATTEMPTS} (${MODEL_ID})`);
 		if (attempt > 1) await page.locator('button[aria-label="New chat"]').click();
-		await page.fill('textarea[aria-label="Ask Dazzi"]', QUESTION);
+		await page.fill('textarea[aria-label="Ask AI"]', QUESTION);
 		await page.keyboard.press("Enter");
 		await page.waitForFunction(
 			() => {
-				const input = document.querySelector('textarea[aria-label="Ask Dazzi"]');
+				const input = document.querySelector('textarea[aria-label="Ask AI"]');
 				const done = input !== null && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector(".user-msg") !== null;
 				return done || document.querySelector(".ai .text-danger-text")?.textContent;
 			},
@@ -199,7 +199,7 @@ try {
 			const last = first.locator("button.cite").last();
 			await last.click();
 			await page.waitForTimeout(500);
-			const titles = await page.locator('.inspector-half[aria-label="Evidence"] .preview-title').allInnerTexts();
+			const titles = await page.locator('.inspector-half[aria-label="Sources"] .preview-title').allInnerTexts();
 			check("a citation of the corrected answer opens a source", titles.length > 0 && titles.every((title) => title.trim() !== ""), JSON.stringify(titles));
 		}
 
