@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { createStallWatchdog, parseCpuTime, parsePsOutput, parseTasklistCsv, runWithStallRetry } from "../src/main/minsync-watchdog";
+import {
+	createStallWatchdog,
+	type MinSyncProcess,
+	parseCpuTime,
+	parsePsOutput,
+	parseTasklistCsv,
+	runWithStallRetry,
+	stallWatchedProcesses,
+} from "../src/main/minsync-watchdog";
 
 describe("parseCpuTime", () => {
 	it("reads the formats ps and tasklist print", () => {
@@ -27,6 +35,55 @@ describe("process listings", () => {
 		const csv = '"minsync.exe","4321","Console","1","52,000 K","Running","DESKTOP\\u","0:00:42","N/A"\r\n';
 
 		expect(parseTasklistCsv(csv)).toEqual([{ pid: 4321, cpuMs: 42_000 }]);
+	});
+
+	it("reads which minsync subcommand a child runs, wherever its executable sits", () => {
+		const ps = [
+			"  200   100  0:00.02 /Users/x/.cargo/bin/minsync stage --state-dir /tmp/a b/stage",
+			"  201   100  0:12.00 /Users/x/.cargo/bin/minsync sync --full --format json --progress jsonl",
+			"  202   100  0:00.01 /Applications/Dazzi Test.app/Contents/Resources/tools/bin/minsync serve --quiet",
+			"  203   100  0:00.01 /Users/x/.cargo/bin/minsync",
+			"  204   100  0:00.01 /Users/x/bin/minsync-helper stage",
+		].join("\n");
+
+		expect(parsePsOutput(ps, 100)).toEqual([
+			{ pid: 200, cpuMs: 20, subcommand: "stage" },
+			{ pid: 201, cpuMs: 12_000, subcommand: "sync" },
+			{ pid: 202, cpuMs: 10, subcommand: "serve" },
+			{ pid: 203, cpuMs: 10 },
+		]);
+	});
+
+	it("leaves the parse step's stage child out of what the stall watchdog judges", () => {
+		const listing: MinSyncProcess[] = [
+			{ pid: 200, cpuMs: 20, subcommand: "stage" },
+			{ pid: 201, cpuMs: 12_000, subcommand: "sync" },
+			{ pid: 4321, cpuMs: 42_000 },
+		];
+
+		expect(stallWatchedProcesses(listing).map((entry) => entry.pid)).toEqual([201, 4321]);
+	});
+
+	it("an idle stage child survives the stall window while an idle sync child is killed", async () => {
+		let clock = 0;
+		const killed: number[] = [];
+		const listing: MinSyncProcess[] = [
+			{ pid: 200, cpuMs: 20, subcommand: "stage" },
+			{ pid: 201, cpuMs: 9_000, subcommand: "sync" },
+		];
+		const watchdog = createStallWatchdog({
+			sample: async () => stallWatchedProcesses(listing),
+			kill: (pid) => void killed.push(pid),
+			stallMs: 5000,
+			intervalMs: 1000,
+			now: () => clock,
+		});
+
+		await watchdog.tick();
+		clock += 6000;
+		await watchdog.tick();
+
+		expect(killed).toEqual([201]);
 	});
 });
 
@@ -180,5 +237,45 @@ describe("runWithStallRetry", () => {
 		await expect(runWithStallRetry(async () => Promise.reject(new Error("x")), () => true, dog, 2)).rejects.toThrow("x");
 
 		expect(stopped).toBe(true);
+	});
+
+	it("retries when the killed child made the attempt throw, as the parse step's stage session does", async () => {
+		const dog = fakeWatchdog();
+		let calls = 0;
+		const attempt = async (): Promise<string> => {
+			calls += 1;
+			if (calls === 1) {
+				dog.kill();
+				throw new Error("MinSync stage session ended (signal SIGTERM).");
+			}
+			return "parsed";
+		};
+
+		const result = await runWithStallRetry(attempt, () => true, dog, 2);
+
+		expect(result).toEqual({ value: "parsed", retries: 1 });
+	});
+
+	it("throws a failure the watchdog did not cause on the first attempt", async () => {
+		const dog = fakeWatchdog();
+		let calls = 0;
+
+		await expect(runWithStallRetry(async () => (calls += 1, Promise.reject(new Error("disk full"))), () => true, dog, 2)).rejects.toThrow("disk full");
+
+		expect(calls).toBe(1);
+	});
+
+	it("throws the last error once the retry budget is spent", async () => {
+		const dog = fakeWatchdog();
+		let calls = 0;
+		const attempt = async (): Promise<string> => {
+			calls += 1;
+			dog.kill();
+			throw new Error(`session ended ${calls}`);
+		};
+
+		await expect(runWithStallRetry(attempt, () => true, dog, 2)).rejects.toThrow("session ended 3");
+
+		expect(calls).toBe(3);
 	});
 });
