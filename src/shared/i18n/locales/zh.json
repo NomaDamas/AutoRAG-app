@@ -359,8 +359,7 @@
     "workedFor": "思考耗时 {{time}}",
     "reviewing": "正在核对提问…",
     "stopped": "已停止生成回答。",
-    "dropAttach": "松开即可添加到对话",
-    "dropPrompt": "拖动到此处以提问 AI",
+    "dropHere": "将文件拖放到此处",
     "steerPlaceholder": "搜索方向不对？随时纠正（例如：只看上周的消息）",
     "steerSend": "纠正搜索",
     "voiceStart": "语音输入",
@@ -704,6 +703,19 @@
       "everything": "正在为文件名建立索引",
       "fsearch": "正在为文件名建立索引",
       "finalizing": "即将完成"
+    }
+  },
+  "indexStatus": {
+    "eta": "预计还需 {{duration}}",
+    "etaCalculating": "正在估算剩余时间",
+    "stopped": "索引已暂停",
+    "waiting": "正在等待下次更新",
+    "justNow": "刚刚",
+    "count": "{{done}}/{{total}} 个",
+    "paused": {
+      "battery": "接通电源后将继续进行。",
+      "window": "到了允许的时间段后将继续进行。",
+      "day": "到了允许的日期后将继续进行。"
     }
   },
   "indexProgress": {

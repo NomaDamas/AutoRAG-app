@@ -104,8 +104,8 @@ export interface IndexMapPanelProps {
 	readonly onInclude: (path: string) => void;
 	/** Drawn above the map, with the map's view of the search folders (Settings → 인덱싱's 검색할 폴더). */
 	readonly header?: (scope: MapScope) => ReactNode;
-	/** Drawn between the header and the legend: the 진행 상황 heading and the activity card. */
-	readonly progressHead?: ReactNode;
+	/** Drawn between the header and the legend: the 진행 상황 heading and its banner, which counts from the map's totals. */
+	readonly progressHead?: ReactNode | ((scope: MapScope) => ReactNode);
 }
 
 /**
@@ -284,7 +284,7 @@ export function IndexMapPanel({ searchPaths, excludePaths, busy, onExclude, onIn
 		<>
 			{header?.(scope)}
 			<section className="index-map-panel" aria-label={t("settingsSources.indexMap.title")}>
-				{progressHead}
+				{typeof progressHead === "function" ? progressHead(scope) : progressHead}
 				<ul className="index-map-legend" aria-label={t("settingsSources.indexMap.legendLabel")}>
 					{STATES.map((state) => <li key={state} data-state={state}><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t(STATE_LABEL[state])}</span></li>)}
 					{progress.here.size > 0 ? <li data-state="progress"><span className="index-map-legend-swatch" aria-hidden="true" /><span>{t("settingsSources.indexMap.progress")}</span></li> : null}

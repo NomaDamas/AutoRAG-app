@@ -49,7 +49,7 @@ const FINDER_DRAG_TYPE = "application/x-autorag-finder-entries";
  * a hard-coded Korean literal never matches and makes "no overlay lingers"
  * checks pass vacuously.
  */
-const DOCK_OVERLAY = JSON.parse(readFileSync(join(ROOT, "src", "shared", "i18n", "locales", "en.json"), "utf8")).aiSearch.dropPrompt;
+const DOCK_OVERLAY = JSON.parse(readFileSync(join(ROOT, "src", "shared", "i18n", "locales", "en.json"), "utf8")).aiSearch.dropHere;
 
 const home = mkdtempSync(join(tmpdir(), "ulw-fileops-home-"));
 const top = join(home, "Documents", "qa-file-ops");

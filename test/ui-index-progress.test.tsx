@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { StalledWarning } from "../src/renderer/src/components/StalledWarning";
-import { IndexActivityCard } from "../src/renderer/src/components/settings/IndexActivityCard";
+import { IndexStatusBanner } from "../src/renderer/src/components/settings/IndexStatusBanner";
 import { describeIndexActivity } from "../src/renderer/src/state/index-activity";
 import { collectSidebarActivities } from "../src/renderer/src/state/sidebar-activity-queue";
 import { NO_INDEX_PROBLEM } from "../src/shared/index-problem-contract";
@@ -64,20 +64,7 @@ afterEach(() => {
 
 const text = (): string => host.textContent ?? "";
 
-describe("Settings > Indexing and the sidebar read the same snapshot", () => {
-	it("prints the stage lines under the bar in Settings", async () => {
-		const snapshot = activity(computeIndexProgress(realCase()).snapshot);
-		await act(async () => {
-			root.render(<IndexActivityCard snapshot={snapshot} />);
-			await Promise.resolve();
-		});
-		const detail = host.querySelector('[data-testid="index-progress-detail"]')?.textContent ?? "";
-		expect(detail).toContain("탐색파싱임베딩마무리");
-		expect(detail).toContain(`임베딩 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`);
-		expect(detail).toContain("용량 4.0 GB / 17 GB (23%)");
-		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("임베딩");
-	});
-
+describe("the sidebar reads the running snapshot", () => {
 	it("gives the sidebar the same percent as Settings and the same counts in its tooltip", () => {
 		const snapshot = activity(computeIndexProgress(realCase()).snapshot);
 		const view = describeIndexActivity(snapshot, t);
@@ -97,36 +84,9 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 		expect(entry?.title).toContain("용량 4.0 GB / 17 GB (23%)");
 	});
 
-	it("marks the stage the run is on as the one current step while MinSync's stage also works alongside parsing", async () => {
-		const snapshot = activity(
-			computeIndexProgress(realCase({ phase: "parsed", parsed: { scanned: 87, written: 87, deleted: 0, skipped: 0 }, sourceTotal: 120, minsync: { synced: 25, total: 83 }, journal: null, embedBytesTotal: null })).snapshot,
-		);
-		await act(async () => {
-			root.render(<IndexActivityCard snapshot={snapshot} />);
-			await Promise.resolve();
-		});
-		const stages = [...host.querySelectorAll(".settings-activity-stages li")].map((item) => [item.textContent, item.getAttribute("data-state")]);
-		expect(stages).toEqual([
-			["탐색", "done"],
-			["파싱", "running"],
-			["임베딩", "running"],
-			["마무리", "pending"],
-		]);
-		expect(host.querySelectorAll('[aria-current="step"]')).toHaveLength(1);
-		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("파싱");
-	});
-
-	it("calls MinSync's step the same thing in Settings and the sidebar when nothing is embedded", async () => {
+	it("calls MinSync's step 키워드 인덱싱 in the sidebar when nothing is embedded", () => {
 		const snapshot = activity(computeIndexProgress(realCase({ embedding: false })).snapshot);
-		await act(async () => {
-			root.render(<IndexActivityCard snapshot={snapshot} />);
-			await Promise.resolve();
-		});
-		const detail = host.querySelector('[data-testid="index-progress-detail"]')?.textContent ?? "";
 		const counts = `키워드 인덱싱 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`;
-		expect(detail).toContain("탐색파싱키워드 인덱싱마무리");
-		expect(detail).toContain(counts);
-		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("키워드 인덱싱");
 		const [entry] = collectSidebarActivities({
 			indexActivity: snapshot,
 			indexProblem: NO_INDEX_PROBLEM,
@@ -140,7 +100,7 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 		expect(entry?.title).toContain(counts);
 		// A measured stage, so a number, not the indeterminate bar the final tidy-up gets.
 		expect(entry?.percent).toBe(28);
-		expect(`${detail}${entry?.title ?? ""}`).not.toContain("임베딩");
+		expect(entry?.title ?? "").not.toContain("임베딩");
 	});
 
 	it("shows an indeterminate bar in both while the final stage runs", () => {
@@ -187,7 +147,7 @@ describe("the stalled warning", () => {
 		vi.useFakeTimers({ now: later });
 		try {
 			await act(async () => {
-				root.render(<IndexActivityCard snapshot={activity(stalled)} />);
+				root.render(<IndexStatusBanner snapshot={activity(stalled)} totals={null} paused={null} lastRunAt={null} />);
 				await Promise.resolve();
 			});
 		} finally {

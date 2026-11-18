@@ -359,8 +359,7 @@
     "workedFor": "Worked for {{time}}",
     "reviewing": "Reviewing the query.",
     "stopped": "Generation stopped.",
-    "dropAttach": "Drop to attach to chat",
-    "dropPrompt": "Drag here to ask AI",
+    "dropHere": "Drop files here",
     "steerPlaceholder": "Search going the wrong way? Correct it (e.g. only last week's messages)",
     "steerSend": "Correct the search",
     "voiceStart": "Dictate with your voice",
@@ -704,6 +703,19 @@
       "everything": "Indexing file names",
       "fsearch": "Indexing file names",
       "finalizing": "Finishing up"
+    }
+  },
+  "indexStatus": {
+    "eta": "About {{duration}} left",
+    "etaCalculating": "Working out the time left",
+    "stopped": "Indexing paused",
+    "waiting": "Waiting for the next refresh",
+    "justNow": "Just now",
+    "count": "{{done}}/{{total}} files",
+    "paused": {
+      "battery": "It will continue when you plug in power.",
+      "window": "It will continue during the allowed hours.",
+      "day": "It will continue on an allowed day."
     }
   },
   "indexProgress": {

@@ -359,8 +359,7 @@
     "workedFor": "{{time}} 동안 답변 생성",
     "reviewing": "질문 검토 중…",
     "stopped": "답변 생성을 중단했습니다.",
-    "dropAttach": "놓으면 대화에 첨부됩니다",
-    "dropPrompt": "여기로 끌어서 AI에게 묻기",
+    "dropHere": "파일을 여기에 놓으세요",
     "steerPlaceholder": "검색이 엇나가면 바로잡아 주세요 (예: 지난주 메시지만)",
     "steerSend": "검색 바로잡기",
     "voiceStart": "음성으로 입력",
@@ -704,6 +703,19 @@
       "everything": "파일 이름 인덱싱 중",
       "fsearch": "파일 이름 인덱싱 중",
       "finalizing": "마무리하는 중"
+    }
+  },
+  "indexStatus": {
+    "eta": "예상 소요 시간 {{duration}}",
+    "etaCalculating": "남은 시간 계산 중",
+    "stopped": "인덱싱 중지됨",
+    "waiting": "다음 최신화를 기다리는 중",
+    "justNow": "방금 전",
+    "count": "{{done}}/{{total}}개",
+    "paused": {
+      "battery": "전원을 연결하면 이어서 진행합니다.",
+      "window": "허용된 시간대가 되면 이어서 진행합니다.",
+      "day": "허용된 요일이 되면 이어서 진행합니다."
     }
   },
   "indexProgress": {

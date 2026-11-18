@@ -359,8 +359,7 @@
     "workedFor": "{{time}}間回答を生成",
     "reviewing": "質問を確認中…",
     "stopped": "回答の生成を中止しました。",
-    "dropAttach": "ドロップしてチャットに添付",
-    "dropPrompt": "ここにドラッグしてAIに質問",
+    "dropHere": "ここにファイルをドロップ",
     "steerPlaceholder": "検索がずれていたら修正してください（例：先週のメッセージだけ）",
     "steerSend": "検索を修正",
     "voiceStart": "音声で入力",
@@ -704,6 +703,19 @@
       "everything": "ファイル名をインデックス中",
       "fsearch": "ファイル名をインデックス中",
       "finalizing": "仕上げ中"
+    }
+  },
+  "indexStatus": {
+    "eta": "残り時間 約{{duration}}",
+    "etaCalculating": "残り時間を計算中",
+    "stopped": "インデックス作成を停止中",
+    "waiting": "次の更新を待っています",
+    "justNow": "たった今",
+    "count": "{{done}}/{{total}}件",
+    "paused": {
+      "battery": "電源につなぐと続きから進めます。",
+      "window": "許可された時間帯になると続きから進めます。",
+      "day": "許可された曜日になると続きから進めます。"
     }
   },
   "indexProgress": {
