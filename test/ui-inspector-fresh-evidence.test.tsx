@@ -62,7 +62,7 @@ describe("the inspector's tab of a source a correction brought in", () => {
 		render(1, [2]);
 		expect(tab(2).getAttribute("data-fresh")).toBe("true");
 		expect(tab(2).querySelector(".evidence-tab-dot")).not.toBeNull();
-		expect(tab(2).getAttribute("aria-label")).toBe("2번 새 근거");
+		expect(tab(2).getAttribute("aria-label")).toBe("2번 새 출처");
 		// The other tab is as it always was.
 		expect(tab(1).getAttribute("data-fresh")).toBeNull();
 		expect(tab(1).querySelector(".evidence-tab-dot")).toBeNull();
