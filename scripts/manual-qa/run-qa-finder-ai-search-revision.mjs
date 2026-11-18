@@ -118,7 +118,7 @@ const waitFor = async (predicate, label, timeoutMs = 8000) => {
 await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 await openAiSearch(page);
 const panel = page.locator(AI_PANEL);
-const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
+const composer = panel.locator('textarea[aria-label="Ask AI"]');
 const ask = async (text, expectedStarts) => {
 	await composer.click();
 	await page.keyboard.type(text);
@@ -126,7 +126,7 @@ const ask = async (text, expectedStarts) => {
 	await waitFor(async () => (await starts()).length === expectedStarts, `run ${expectedStarts} start`);
 };
 const ev = (number, title, excerpt) => ({ number, title, summary: `${title} summary`, source: `/tmp/${title}`, excerpts: [excerpt], confidence: 0.9 });
-const EVIDENCE_HALF = '.inspector-half[aria-label="Evidence"]';
+const EVIDENCE_HALF = '.inspector-half[aria-label="Sources"]';
 
 const FIRST = "- 환불은 팀장 승인이 필요합니다 [1]\n- 한도는 50만 원입니다 [2]\n- 지급은 다음 달 25일입니다 [3]";
 const replace = { op: "replace", claimId: "c1", original: "- 환불은 팀장 승인이 필요합니다 [1]", replacement: "- 환불은 이사 승인이 필요합니다 [4]", reason: "2026년 개정" };
