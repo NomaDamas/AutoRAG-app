@@ -10,5 +10,8 @@
 	<!-- Bundled CLIs load their own native add-ons (better-sqlite3, lancedb, sharp, ...). -->
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
+	<!-- Dictation in AI Search records from the microphone; the hardened runtime blocks it without this. -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
 </dict>
 </plist>

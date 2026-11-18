@@ -51,6 +51,7 @@ import {
 	type SidebarSectionId,
 	type SidebarSettings,
 } from "../../../shared/sidebar-contract";
+import { sortByFavoritesOrder } from "../../../shared/sidebar-favorites";
 import { basename, normalizeTypedPath } from "../state/paths";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH } from "../state/tabs";
 
@@ -68,6 +69,11 @@ export interface NavItem {
 	readonly view?: "aiSearch" | "automations";
 	/** A Finder tag's virtual folder: the row draws this colour as its dot (0 = a tag with no colour). */
 	readonly tag?: { readonly name: string; readonly color: FsTagColor };
+	/**
+	 * The row's `SidebarSettings` item id (`place:<kind>` or `custom:<path>`), set on the
+	 * Favorites rows the user can reorder or unpin; absent on every other row, and on the app rows.
+	 */
+	readonly sidebarId?: string;
 }
 
 export interface NavGroup {
@@ -105,7 +111,7 @@ const ICONS: Readonly<Record<FsLocationIcon, LucideIcon>> = {
  * path, so the row can sit in the same active-path comparison as the OS places.
  */
 const AI_SEARCH_ITEM: NavItem = {
-	label: "AI Search",
+	label: "AI Agent",
 	path: AI_SEARCH_PATH,
 	icon: Sparkles,
 	available: true,
@@ -158,6 +164,7 @@ export function navGroups(
 						kind: location.icon,
 						available: location.available,
 						ejectable: location.ejectable,
+						sidebarId: placeSidebarItemId(location.icon),
 					},
 				}));
 			const homePath = locations.find((location) => location.section === "favorites" && location.icon === "home")?.path ?? null;
@@ -174,16 +181,13 @@ export function navGroups(
 							icon: Folder,
 							available: true,
 							ejectable: false,
+							sidebarId: customSidebarItemId(custom.path),
 						},
 					},
 				];
 			});
 			const combined = [...osFavorites, ...customRows].filter((entry) => !hiddenItems.has(entry.id));
-			const orderIndex = new Map<string, number>(cfg.favoritesOrder.map((id, idx) => [id, idx]));
-			const ordered = combined
-				.map((entry, idx) => ({ entry, order: orderIndex.get(entry.id) ?? cfg.favoritesOrder.length + idx }))
-				.sort((a, b) => a.order - b.order)
-				.map(({ entry }) => entry.item);
+			const ordered = sortByFavoritesOrder(combined, cfg.favoritesOrder).map((entry) => entry.item);
 
 			return {
 				label: "Favorites",

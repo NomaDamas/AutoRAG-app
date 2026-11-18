@@ -31,7 +31,7 @@ const GRID_CLASS =
  * View mode 1: every entry as a large folder/doc tile on a wrapping grid, its
  * name centered underneath (v7 `.icon-grid` / `.icon-card`). Same selection,
  * open, context menu, and rename behavior as the list rows. The search summary
- * lives in the ScopeBar now, so the grid no longer renders it.
+ * lives in the 파일 이름 (n) group tab now, so the grid no longer renders it.
  *
  * Tiles are virtualized (issue #16): only the rows around the viewport mount
  * via top/bottom padding, and a keyboard/reveal target outside the window is

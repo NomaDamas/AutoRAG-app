@@ -9,6 +9,7 @@ import type {
 	FsVersionFamiliesResult,
 } from "../src/shared/fs-contract";
 import type { LiveBridge, LiveMessage } from "../src/shared/live-contract";
+import { emptyIndexMapCounts } from "../src/shared/index-map-contract";
 import {
 	createBridgeSource,
 	createFixtureSource,
@@ -96,7 +97,10 @@ function fakeFs(result: FsVersionFamiliesResult): FsBridge {
 			toggleable: true,
 			detail: "",
 		}),
+		indexMap: async () => ({ roots: [], nodes: [], totals: emptyIndexMapCounts(), truncated: false, folded: false }),
 		contentSearch: async () => ({ state: "ok", hits: [] }),
+		searchDatasources: async () => [],
+		sourceSearch: async () => ({ state: "ok", hits: [], error: null }),
 	};
 }
 

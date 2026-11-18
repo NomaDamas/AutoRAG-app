@@ -16,6 +16,10 @@ export interface AiDelivery {
 	 * presses Enter: the automation view's edit and add open a tab this way.
 	 */
 	readonly draft: string | null;
+	/** A stored chat to show (the inspector's ⤢): the tab loads it from history and continues it. */
+	readonly chat: string | null;
+	/** Open the 대화 기록 list (the inspector's "지난 대화" link). */
+	readonly history: boolean;
 }
 
 export interface AiDeliveryRequest {
@@ -23,6 +27,8 @@ export interface AiDeliveryRequest {
 	readonly query?: string;
 	readonly summarize?: readonly ChatAttachment[];
 	readonly draft?: string;
+	readonly chat?: string;
+	readonly history?: boolean;
 }
 
 /** The slice of the panel's imperative handle a delivery drives. */
@@ -33,6 +39,10 @@ export interface AiDeliveryTarget {
 	attach(atts: readonly ChatAttachment[]): void;
 	summarize(atts: readonly ChatAttachment[]): void;
 	focusComposer(): void;
+	/** Show the stored chat `id`, to continue it. */
+	openChat(id: string): void;
+	/** Open the 대화 기록 list. */
+	showHistory(): void;
 }
 
 export function mergeDelivery(pending: AiDelivery | null, request: AiDeliveryRequest): AiDelivery {
@@ -41,6 +51,8 @@ export function mergeDelivery(pending: AiDelivery | null, request: AiDeliveryReq
 		query: request.query ?? pending?.query ?? null,
 		summarize: [...(pending?.summarize ?? []), ...(request.summarize ?? [])],
 		draft: request.draft ?? pending?.draft ?? null,
+		chat: request.chat ?? pending?.chat ?? null,
+		history: request.history === true || pending?.history === true,
 	};
 }
 
@@ -50,6 +62,14 @@ export function mergeDelivery(pending: AiDelivery | null, request: AiDeliveryReq
  * attach-then-send would ask without them.
  */
 export function deliverToDock(dock: AiDeliveryTarget, delivery: AiDelivery): void {
+	if (delivery.chat !== null) {
+		dock.openChat(delivery.chat);
+		return;
+	}
+	if (delivery.history) {
+		dock.showHistory();
+		return;
+	}
 	if (delivery.summarize.length > 0) {
 		dock.summarize(delivery.summarize);
 		return;

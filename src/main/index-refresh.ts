@@ -264,10 +264,16 @@ async function runRefresh(
 				saveLearnedBatchSize(configPath, embedderKind(embedder), batch);
 			}
 		}
+		// Since librarian 2.13.7 MinSync syncs alongside parsing, and a sync that fails leaves one warning per file it
+		// covered (`minsync-sync-failed` whose source is the file, not "minsync"): a corpus-sized pile of identical lines.
+		// They become one counted diagnostic, which the banner counts as files left out; MinSync's own diagnostic stays.
+		const isBatchWarning = (diagnostic: { readonly code: unknown; readonly source?: string | undefined }): boolean => diagnostic.code === "minsync-sync-failed" && diagnostic.source !== undefined && diagnostic.source !== "minsync";
+		const batchSkipped = result.diagnostics.filter(isBatchWarning).length;
 		// Everything but MinSync's own diagnostics comes from the one full refresh; MinSync's
 		// are the last attempt's, so a superseded timeout never reaches the user.
 		diagnostics.push(
-			...result.diagnostics.filter((diagnostic) => diagnostic.source !== "minsync" && diagnostic.code !== "minsync-file-skipped").map(toDiagnostic),
+			...result.diagnostics.filter((diagnostic) => diagnostic.source !== "minsync" && diagnostic.code !== "minsync-file-skipped" && !isBatchWarning(diagnostic)).map(toDiagnostic),
+			...(batchSkipped > 0 ? [{ code: "minsync-batch-skipped", severity: "warning" as const, count: batchSkipped, message: t("main.refresh.batchSkipped", { files: batchSkipped }) }] : []),
 			...minsyncDiagnostics,
 		);
 		const failures: string[] = [];

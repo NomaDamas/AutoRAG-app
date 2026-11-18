@@ -26,19 +26,6 @@ if (IS_WIN) {
 	writeFileSync(join(bin, "slacrawl"), "#!/bin/sh\nexit 0\n");
 	chmodSync(join(bin, "slacrawl"), 0o755);
 }
-const chunkStore = join(workspace, ".autorag", "datasources", "my-drive", "my-drive");
-mkdirSync(chunkStore, { recursive: true });
-writeFileSync(join(chunkStore, "chunks.json"), JSON.stringify({
-	version: 1,
-	skill: "my-drive",
-	instance: "my-drive",
-	updatedAt: Date.now(),
-	chunks: [
-		{ chunkId: "c1", docId: "d1", hierarchy: [], content: "one", metadata: {} },
-		{ chunkId: "c2", docId: "d1", hierarchy: [], content: "two", metadata: {} },
-		{ chunkId: "c3", docId: "d2", hierarchy: [], content: "three", metadata: {} },
-	],
-}));
 const writeConfig = (datasources) => writeFileSync(configPath, `${JSON.stringify({
 	searchPaths: [join(workspace, "docs")],
 	workspacePath: workspace,
@@ -109,7 +96,8 @@ try {
 	const expected = {
 		// The fake slacrawl prints nothing parseable, so its archive is unreadable — not "empty".
 		slack: { install: "installed", agent: "connected", index: "not-indexed", status: "ready" },
-		"my-drive": { install: "missing", agent: "connected", index: "indexed", status: "attention" },
+		// The librarian removed the rclone `cloud-drive` datasource (AutoRAG#2078): the row is unsupported and never indexed.
+		"my-drive": { install: "unsupported", agent: "unsupported", index: "not-indexed", status: "attention" },
 		github: { install: "credential-missing", agent: "connected", index: "not-indexed", status: "attention" },
 		telegram: { install: "missing", agent: "disabled", status: "paused" },
 		foo: { install: "unsupported", agent: "unsupported", status: "attention" },
@@ -127,7 +115,7 @@ try {
 	}
 	await openConnection("my-drive");
 	const driveText = await row("my-drive").innerText();
-	check("my-drive shows its chunk count", driveText.includes("3 documents"), driveText.slice(0, 200));
+	check("my-drive reports no indexed documents", !/\d+ documents/.test(driveText), driveText.slice(0, 200));
 	await page.screenshot({ path: join(EVIDENCE, "01-sources-expanded.png") });
 
 	await openConnection("slack");

@@ -8,7 +8,7 @@
  *   delete, move, rename, overwrite or edit an existing file. Which calls ask is the
  *   {@link ApprovalMode}: `ask` puts every file-capable call to the person, `auto`
  *   lets Jev (the judgment model) approve what the request clearly covers and asks
- *   only about the rest, `full` never asks. The default is `auto`.
+ *   only about the rest, `full` never asks. The default is `full`.
  * - A **question** from the `ask_user` tool: the agent needs a decision or a fact
  *   it cannot find out itself. It is multiple choice, free text, or 2-4 independent
  *   questions together.
@@ -25,7 +25,7 @@ export type ApprovalMode = "ask" | "auto" | "full";
 /** Order the mode menu lists them, strictest first. */
 export const APPROVAL_MODES: readonly ApprovalMode[] = ["ask", "auto", "full"];
 
-export const DEFAULT_APPROVAL_MODE: ApprovalMode = "auto";
+export const DEFAULT_APPROVAL_MODE: ApprovalMode = "full";
 
 export function isApprovalMode(value: unknown): value is ApprovalMode {
 	return typeof value === "string" && (APPROVAL_MODES as readonly string[]).includes(value);

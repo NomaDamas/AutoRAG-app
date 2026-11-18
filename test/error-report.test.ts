@@ -95,6 +95,44 @@ describe("refreshFailureReport", () => {
 		const second = refreshFailureReport({ ...failed, error: "minsync: embedding failed for '/tmp/other/b.pdf' (port 60001)" });
 		expect(second?.fingerprint).toEqual(first?.fingerprint);
 	});
+
+	describe("MinSync's stderr log", () => {
+		const esc = "\u001b";
+		/** A MinSync `tracing` line as it reaches stderr: dimmed timestamp, colored level, dimmed target. */
+		const log = (level: string, message: string): string =>
+			`${esc}[2m2026-11-04T13:39:14.776313Z${esc}[0m ${esc}[32m ${level}${esc}[0m ${esc}[2mminsync::sync${esc}[0m${esc}[2m:${esc}[0m ${message}`;
+		const progress = Array.from({ length: 12 }, (_, i) => log("INFO", `sync progress processed=${(i + 1) * 50} total=1819`));
+		const failedWith = (stderr: string): ConfigRefreshResult => ({ ...failed, error: `minsync: sync-failed; ${stderr}` });
+
+		it("reports the error line that follows the log, not the log (ELECTRON-Y)", () => {
+			const stderr = [log("INFO", "using running minsync serve url=http://127.0.0.1:8797 pid=85132"), ...progress, "Error: embedder request failed: connection reset"].join("\n");
+			expect(refreshFailureReport(failedWith(stderr))?.extra.error).toBe("minsync: sync-failed; Error: embedder request failed: connection reset");
+		});
+
+		it("drops warnings that precede the error line, so the error is never cut off (real minsync 0.6.0 output)", () => {
+			const warning = `2026-11-04T15:35:05.493683Z  WARN minsync::sync::indexer: batch commit failed; retrying file by file stage=store error=vector store error: lance error: LanceError(IO): Permission denied (os error 13) at path "/private/tmp/ms/docs/.minsync/store/documents.lance/data/.tmpL9sm61", /Users/jeffrey/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/lance-io-8.0.0/src/object_store.rs:754:21`;
+			const stderr = [warning, warning, warning, "Error: vector store error: g11.md: lance error: LanceError(IO): Permission denied (os error 13)"].join("\n");
+			expect(refreshFailureReport(failedWith(stderr))?.extra.error).toBe(
+				"minsync: sync-failed; Error: vector store error: g11.md: lance error: LanceError(IO): Permission denied (os error 13)",
+			);
+		});
+
+		it("keeps only the last log line when MinSync died without an error line (ELECTRON-T)", () => {
+			const report = refreshFailureReport(failedWith(progress.join("\n")));
+			expect(report?.extra.error).toBe("minsync: sync-failed; 2026-11-04T13:39:14.776313Z  INFO minsync::sync: sync progress processed=600 total=1819");
+		});
+
+		it("keeps the warnings when the log ends without an error line", () => {
+			const stderr = [...progress, log("WARN", "embedder stalled, restarting")].join("\n");
+			expect(refreshFailureReport(failedWith(stderr))?.extra.error).toBe("minsync: sync-failed; 2026-11-04T13:39:14.776313Z  WARN minsync::sync: embedder stalled, restarting");
+		});
+
+		it("groups the same error however much log came before it", () => {
+			const short = refreshFailureReport(failedWith([progress[0], "Error: embedder unavailable"].join("\n")));
+			const long = refreshFailureReport(failedWith([log("INFO", "using running minsync serve"), ...progress, "Error: embedder unavailable"].join("\n")));
+			expect(long?.fingerprint).toEqual(short?.fingerprint);
+		});
+	});
 });
 
 describe("datasourceFailureReport", () => {

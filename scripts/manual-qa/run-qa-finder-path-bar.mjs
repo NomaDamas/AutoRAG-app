@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 /**
- * Manual QA — path bar fitting (macOS Finder path bar behaviour).
+ * Manual QA — path bar fitting (folders fold into a "…" dropdown, Windows Explorer style).
  *
  * Drives the real production build (out/) at device scale factor 2 against a
  * fixture folder in the real HOME, so the trail mirrors the reference:
@@ -8,16 +8,18 @@ import { homedir } from "node:os";
  *   Macintosh HD › Users › <you> › Documents › ulw-pathbar-qa › quicklook-preview-reference
  *
  * The main window is resized programmatically (its minimum size lowered for the
- * run) through every width from "all labels" down to "icons only", at several
- * window heights. At each size it checks, from the live DOM:
+ * run) through every width from "every folder" down to "… and the current folder", at
+ * several window heights. At each size it checks, from the live DOM:
  *   - the bar is one line: one line box per label, every segment on one row,
  *     nothing taller than the bar;
- *   - no ellipsis anywhere (text-overflow is `clip`, no "…" in the text);
- *   - the trail fits the bar unless even the icon-only trail is too wide;
- *   - labels give up space in order — middle segments, root, parent, last —
- *     and a clipped label carries the fade mask and is narrower than its text;
- *   - the fit is minimal: restoring the last collapsed label would not fit;
- *   - the fit does not depend on the window height.
+ *   - no text ellipsis anywhere ("…" is an icon button, never truncated text);
+ *   - the trail fits the bar unless even "…" and the narrowest last label do not;
+ *   - folders fold in order (middle segments, root, parent) and the folded ones
+ *     sit behind exactly one "…"; the last segment never folds, only clips with a fade;
+ *   - every shown label is whole, except a clipped last label;
+ *   - the fit is minimal: unfolding the last folded folder would not fit;
+ *   - the fit does not depend on the window height;
+ *   - "…" opens a dropdown that lists the folded folders in path order.
  * It then screenshots each distinct state at every height for visual review.
  * Evidence goes to .omo/evidence/ai-finder-app/qa-path-bar/.
  *
@@ -28,7 +30,7 @@ import { homedir } from "node:os";
 import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collapseOrder } from "../../src/renderer/src/state/path-fit.ts";
+import { foldOrder, trailWidth } from "../../src/renderer/src/state/path-fit.ts";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { isWindows, rmRetry } from "./platform.mjs";
 
@@ -61,12 +63,13 @@ const probe = (page) =>
 		const nav = document.querySelector("nav.pathbar");
 		const trail = nav.querySelector(".path-trail");
 		const viewport = trail.parentElement;
+		const measure = nav.querySelector(".path-measure");
 		const lineCount = (element) => {
 			const range = document.createRange();
 			range.selectNodeContents(element);
 			return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
 		};
-		const segments = [...nav.querySelectorAll(".path-seg")].map((button) => {
+		const segments = [...trail.querySelectorAll(".path-seg")].map((button) => {
 			const slot = button.querySelector(".path-label");
 			const name = slot.querySelector(".path-name");
 			const style = getComputedStyle(slot);
@@ -80,6 +83,7 @@ const probe = (page) =>
 				mask: style.maskImage,
 			};
 		});
+		const gap = Number.parseFloat(getComputedStyle(measure).columnGap) || 0;
 		const ellipsis = [...nav.querySelectorAll("*")].some((element) => getComputedStyle(element).textOverflow === "ellipsis");
 		return {
 			dpr: window.devicePixelRatio,
@@ -89,51 +93,68 @@ const probe = (page) =>
 			overflow: getComputedStyle(viewport).justifyContent === "flex-end",
 			ellipsis,
 			text: nav.innerText,
+			more: trail.querySelectorAll("[data-path-more]").length,
 			segments,
+			all: [...measure.querySelectorAll("[data-measure-segment]")].map((button) => ({ label: button.textContent, width: button.getBoundingClientRect().width })),
+			layout: {
+				separator: measure.querySelector("[data-measure-separator]").getBoundingClientRect().width + gap,
+				gap,
+				more: measure.querySelector("[data-measure-more]").getBoundingClientRect().width,
+			},
 		};
 	});
 
+/** Indices of the trail's segments that are not on the bar. */
+const hiddenOf = (state) => {
+	const shown = state.segments.map((segment) => segment.label);
+	const hidden = [];
+	let at = 0;
+	state.all.forEach((segment, index) => {
+		if (shown[at] === segment.label) at += 1;
+		else hidden.push(index);
+	});
+	return hidden;
+};
+
 const verify = (where, state) => {
 	const { segments } = state;
+	const hidden = hiddenOf(state);
 	check(`${where}: bar content is not taller than the bar`, state.bar.scrollHeight <= state.bar.height, JSON.stringify(state.bar));
 	check(`${where}: every label is one line`, segments.every((segment) => segment.lines === 1), JSON.stringify(segments.map((s) => s.lines)));
 	check(`${where}: every segment sits on one row`, new Set(segments.map((segment) => segment.top)).size === 1);
 	check(`${where}: trail is a single 20px row`, state.trail.height <= 20.5, String(state.trail.height));
-	check(`${where}: no ellipsis`, !state.ellipsis && !state.text.includes("…") && !state.text.includes("..."), state.text);
+	check(`${where}: no text ellipsis`, !state.ellipsis && !state.text.includes("…") && !state.text.includes("..."), state.text);
 	check(
-		`${where}: trail fits the bar unless the icon-only trail overflows`,
-		state.overflow ? segments.every((segment) => segment.fit === "icon") : state.trail.width <= state.viewport + 0.5,
+		`${where}: trail fits the bar unless even the dots and the last label overflow`,
+		state.overflow || state.trail.width <= state.viewport + 0.5,
 		`trail=${state.trail.width} viewport=${state.viewport} overflow=${state.overflow}`,
 	);
-	for (const segment of segments) {
-		if (segment.fit === "full") check(`${where}: ${segment.label} full shows its whole label`, Math.abs(segment.slot - segment.name) < 0.5 && segment.mask === "none");
-		if (segment.fit === "icon") check(`${where}: ${segment.label} icon hides its label`, segment.slot === 0);
+	check(`${where}: one dots button exactly when folders are folded`, state.more === (hidden.length > 0 ? 1 : 0), `more=${state.more} hidden=${hidden}`);
+	const order = foldOrder(state.all.length);
+	check(
+		`${where}: folders fold in order (middle, root, parent)`,
+		JSON.stringify(hidden) === JSON.stringify(order.slice(0, hidden.length).sort((a, b) => a - b)),
+		`hidden=${hidden} order=${order}`,
+	);
+	check(`${where}: the last segment never folds`, segments.at(-1)?.label === state.all.at(-1)?.label, segments.at(-1)?.label ?? "");
+	segments.forEach((segment, index) => {
+		const last = index === segments.length - 1;
+		if (segment.fit === "full") check(`${where}: ${segment.label} shows its whole label`, Math.abs(segment.slot - segment.name) < 0.5 && segment.mask === "none");
 		if (segment.fit === "clip") {
-			check(`${where}: ${segment.label} clip is narrower than its text`, segment.slot < segment.name && segment.slot >= 32, `${segment.slot}/${segment.name}`);
+			check(`${where}: only the last label clips, once nothing else can fold`, last && hidden.length === order.length, segment.label);
 			check(`${where}: ${segment.label} clip fades its trailing edge`, String(segment.mask).includes("linear-gradient(to right"), String(segment.mask));
 		}
-	}
-	const order = collapseOrder(segments.length).map((index) => segments[index].fit);
-	const firstNotIcon = order.findIndex((fit) => fit !== "icon");
-	const rest = firstNotIcon === -1 ? [] : order.slice(firstNotIcon);
-	check(
-		`${where}: labels give up space in order (middle, root, parent, last)`,
-		rest.length === 0 || rest.slice(1).every((fit) => fit === "full"),
-		order.join(","),
-	);
-	if (!state.overflow && !segments.some((segment) => segment.fit === "clip")) {
-		// The last label to collapse goes to its icon only when not even a
-		// 32px clip of it (or the whole label, if shorter) would fit.
-		const lastIcon = collapseOrder(segments.length).filter((index) => segments[index].fit === "icon").at(-1);
-		if (lastIcon !== undefined) {
-			const smallest = state.trail.width + Math.min(segments[lastIcon].name, 32);
-			check(`${where}: collapsing ${segments[lastIcon].label} was necessary`, smallest > state.viewport, `smallest=${smallest} viewport=${state.viewport}`);
-		}
+	});
+	if (hidden.length > 0 && !segments.some((segment) => segment.fit === "clip")) {
+		// Folding the last folded folder was necessary: unfolding it would not fit.
+		const unfolded = new Set(order.slice(0, hidden.length - 1));
+		const wider = trailWidth({ segments: state.all.map((segment) => segment.width), ...state.layout }, unfolded);
+		check(`${where}: folding ${state.all[order[hidden.length - 1]].label} was necessary`, wider > state.viewport, `unfolded=${wider} viewport=${state.viewport}`);
 	}
 };
 
-const signature = (state) => state.segments.map((segment) => (segment.fit === "clip" ? `clip:${Math.round(segment.slot)}` : segment.fit)).join(" ");
-const stateClass = (state) => state.segments.map((segment) => segment.fit).join(" ") + (state.overflow ? " overflow" : "");
+const signature = (state) => `hidden:${hiddenOf(state).join(",")}${state.segments.map((segment) => (segment.fit === "clip" ? ` clip:${Math.round(segment.slot)}` : "")).join("")}`;
+const stateClass = (state) => `hidden:${hiddenOf(state).length}${state.segments.some((segment) => segment.fit === "clip") ? " clip" : ""}${state.overflow ? " overflow" : ""}`;
 
 let app;
 try {
@@ -177,8 +198,8 @@ const deviceLabel = isWindows ? homeSegments[0] : "Macintosh HD";
 const expectedTrail = [deviceLabel, ...homeSegments.slice(isWindows ? 1 : 0), "Documents", fixtureName, leafName];
 check(
 	"trail mirrors the reference path",
-	JSON.stringify(first.segments.map((segment) => segment.label)) === JSON.stringify(expectedTrail),
-	JSON.stringify(first.segments.map((segment) => segment.label)),
+	JSON.stringify(first.all.map((segment) => segment.label)) === JSON.stringify(expectedTrail),
+	JSON.stringify(first.all.map((segment) => segment.label)),
 );
 
 	// Sweep every width at every height; remember one width per distinct state.
@@ -215,6 +236,24 @@ check(
 			if (height === 820) await page.screenshot({ path: join(EVIDENCE, `${name}-window.png`) });
 			shots.push({ name, key, width, height, fits: signature(state), labels: state.segments.map((segment) => segment.label) });
 		}
+	}
+
+	// The dots button lists the folded folders in path order, and Escape closes it.
+	{
+		await resize(NARROWEST, 820);
+		const state = await probe(page);
+		const hidden = hiddenOf(state).map((index) => state.all[index].label);
+		check("the narrowest width folds at least one folder", hidden.length > 0, String(hidden.length));
+		if (hidden.length > 0) {
+			await page.locator("nav.pathbar .path-trail [data-path-more]").click();
+			const items = await page.locator('[role="menu"] [role="menuitem"]').allInnerTexts();
+			check("the dropdown lists the folded folders in path order", JSON.stringify(items) === JSON.stringify(hidden), JSON.stringify(items));
+			check("opening the dropdown does not open the path editor", (await page.locator("nav.pathbar input").count()) === 0);
+			await page.screenshot({ path: join(EVIDENCE, "dropdown-window.png") });
+			await page.keyboard.press("Escape");
+			check("Escape closes the dropdown", (await page.locator('[role="menu"]').count()) === 0);
+		}
+		await resize(WIDEST, 900);
 	}
 
 	// A selected file joins the trail as its last segment and fits the same way,

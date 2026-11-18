@@ -4,6 +4,7 @@ import type { AppSettings } from "../../shared/settings-contract";
 import {
 	isNavigateDelta,
 	isQuickLookApp,
+	isQuickLookDecoded,
 	isQuickLookOffice,
 	isQuickLookLoad,
 	isQuickLookSlides,
@@ -80,6 +81,10 @@ export function createQuickLookWindowBridge(ipcRenderer: IpcRenderer, platform: 
 		onThumbnail: (listener) =>
 			subscribe(ipcRenderer, PREVIEW_CHANNELS.thumbnail, (update) => {
 				if (isQuickLookThumbnail(update)) listener(update);
+			}),
+		onDecoded: (listener) =>
+			subscribe(ipcRenderer, PREVIEW_CHANNELS.decoded, (update) => {
+				if (isQuickLookDecoded(update)) listener(update);
 			}),
 		ready: (report) => ipcRenderer.send(PREVIEW_CHANNELS.ready, report),
 		zoomed: (report) => ipcRenderer.send(PREVIEW_CHANNELS.zoomed, report),

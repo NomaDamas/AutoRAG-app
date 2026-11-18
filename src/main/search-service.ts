@@ -15,6 +15,7 @@ import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/libraria
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
+import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
 import { syncCalendarMcpConfig } from "./calendar-mcp";
 import type {
@@ -32,7 +33,7 @@ import type {
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
-import { buildAttachmentContext } from "./attachment-context";
+import { buildAttachmentContext, buildViewingFolderContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
 import type { ContextEvent } from "./context-watch";
 import { createAgentInteraction } from "./agent-interaction";
@@ -210,17 +211,34 @@ export function draftText(raw: string): string {
  * (Deep) prompt second, so the phase is the number of `agent_start` events
  * seen. Both answer in plain assistant text. Whether a message is the answer
  * is not known while its text streams: a message that goes on to call a tool
- * (`stopReason: "toolUse"`) is a progress note ("checking X next"), which the
- * stream reports as `progress`, never as part of the answer. So a draft is the
- * text of the message currently streaming, and it is withdrawn (an empty
- * draft) the moment that message starts a tool call, which is announced when
- * its text ends and well before the tool has finished running.
+ * (`stopReason: "toolUse"`) is a note the model wrote on the way ("checking X
+ * next"). What the person has watched stream stays on screen: such a message
+ * is kept, in order, ahead of the messages that follow it, so a phase's draft
+ * is every message the phase wrote so far, and the answer the phase ends with
+ * carries the same text ({@link LiveStream.takeNotes}). Only a message that
+ * failed (`stopReason: "error"`) is taken back: it never finished.
  */
-function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEvent) => void): (event: LiveAgentEvent) => void {
+interface LiveStream {
+	readonly handle: (event: LiveAgentEvent) => void;
+	/** The notes `phase` wrote before its last message (each already shown in its drafts); handing them over forgets them. */
+	readonly takeNotes: (phase: AnswerPhaseName) => readonly string[];
+	/** The text is a note the stream keeps in the answer: the librarian also reports it as progress, which would show it twice. */
+	readonly isNote: (text: string) => boolean;
+}
+
+const NOTE_SEPARATOR = "\n\n";
+
+function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEvent) => void): LiveStream {
 	let agentRuns = 0;
+	/** Text of the message that is streaming now. */
 	let current = "";
 	let lastDraft = "";
 	let lastStopReason: string | undefined;
+	/** The finished messages of each phase that went on to call a tool, in order. */
+	const notes: Record<AnswerPhaseName, string[]> = { quick: [], deep: [] };
+	const everNoted = new Set<string>();
+	/** The streaming message was already added to `notes`. */
+	let committed = false;
 	const thinkingPhases = new Set<AnswerPhaseName>();
 	const phase = (): AnswerPhaseName => (agentRuns > 1 ? "deep" : "quick");
 	const setDraft = (text: string): void => {
@@ -228,28 +246,47 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 		lastDraft = text;
 		emit({ type: phase() === "quick" ? "quick-draft" : "deep-draft", searchId, text });
 	};
-	return (event) => {
+	/** What the phase shows: its notes, then the message streaming now. */
+	const drafted = (visible: string): string => [...notes[phase()], ...(visible.trim() === "" ? [] : [visible])].join(NOTE_SEPARATOR);
+	const commit = (): void => {
+		if (committed) return;
+		const visible = draftText(current).trim();
+		if (visible !== "") {
+			notes[phase()].push(visible);
+			everNoted.add(visible);
+		}
+		committed = true;
+		current = "";
+	};
+	const handle = (event: LiveAgentEvent): void => {
 		if (event.type === "agent_start") {
 			// If the first phase failed with a provider error before producing a fast
 			// answer, the next agent_start produces the run's only answer (delivered
 			// into the Quick slot on `complete`), so keep streaming it as Quick.
 			if (!(agentRuns === 1 && lastStopReason === "error")) {
 				agentRuns += 1;
+				notes[phase()].length = 0;
 			}
 			lastStopReason = undefined;
 			current = "";
+			committed = false;
 			lastDraft = "";
 			return;
 		}
 		if (event.type === "message_start" && event.message?.role === "assistant") {
 			current = "";
+			committed = false;
 			return;
 		}
 		if (event.type === "message_end" && event.message?.role === "assistant") {
 			lastStopReason = event.message.stopReason;
-			// Backstop for a provider that announces no tool call before the message ends.
-			if ((event.message.stopReason === "toolUse" || event.message.stopReason === "error") && lastDraft !== "") {
-				setDraft("");
+			if (event.message.stopReason === "toolUse") {
+				// Backstop for a provider that announces no tool call before the message ends.
+				commit();
+			} else if (event.message.stopReason === "error" && !committed) {
+				// A message that failed never finished: take its text back.
+				current = "";
+				setDraft(drafted(""));
 			}
 			current = "";
 			return;
@@ -265,21 +302,25 @@ function createLiveStreamMapper(searchId: string, emit: (event: SearchStreamEven
 				return;
 			}
 			case "text_delta": {
-				if (!update.delta) return;
+				if (!update.delta || committed) return;
 				current += update.delta;
 				const visible = draftText(current);
-				if (visible.trim() !== "") setDraft(visible);
+				if (visible.trim() !== "") setDraft(drafted(visible));
 				return;
 			}
 			case "toolcall_start": {
-				// The message is a progress note, not the answer: take back its text.
-				if (lastDraft !== "") setDraft("");
-				current = "";
+				// The message is a note on the way to the answer: keep what was written, and start the next message below it.
+				commit();
 				return;
 			}
 			default:
 				return;
 		}
+	};
+	return {
+		handle,
+		takeNotes: (name) => notes[name].splice(0, notes[name].length),
+		isNote: (text) => everNoted.has(text.trim()),
 	};
 }
 
@@ -527,14 +568,19 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		}
 	}
 
-	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[]): Promise<void> {
-		const mapLive = createLiveStreamMapper(run.searchId, (event) => {
+	async function consume(run: SearchRun, agent: SearchAgent, query: string, attachments: readonly ChatAttachment[], viewingFolder: string | undefined): Promise<void> {
+		const live = createLiveStreamMapper(run.searchId, (event) => {
 			if (!run.cancelled) emit(event);
 		});
+		/** The phase as the person saw it stream: the notes the model wrote on the way, then the answer that ends the phase. */
+		const withNotes = (phase: AnswerPhase, ...names: readonly AnswerPhaseName[]): AnswerPhase => {
+			const notes = names.flatMap((name) => live.takeNotes(name));
+			return notes.length === 0 ? phase : { ...phase, answer: [...notes, phase.answer].join(NOTE_SEPARATOR) };
+		};
 		// Subscribe before the generator starts the run, or the first thinking
 		// tokens are lost.
 		const unsubscribe = agent.subscribe?.((event) => {
-			mapLive(event);
+			live.handle(event);
 			if (event.type === "tool_execution_start" && event.toolCallId !== undefined) run.toolCalls.add(event.toolCallId);
 			if (event.type === "message_start" && event.message?.role === "user" && event.message.timestamp !== undefined) run.userMessages.add(event.message.timestamp);
 			// Each model request starts with a user message, and queued steers go out with it.
@@ -547,7 +593,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		const stopContext = agent.onContext?.((event) => noteContext(run, event));
 		try {
 			// Reading a large PDF can outlast a Stop; a cancelled run never reaches the agent.
-			const context = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			const attached = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
+			// The folder in view is only a hint; the renderer sends it when nothing is selected.
+			const context = [attached, buildViewingFolderContext(viewingFolder)].filter((part) => part !== "").join("\n\n");
 			if (run.cancelled) return;
 			agent.setAttachmentContext(context);
 			const hub = deps.interaction;
@@ -556,11 +604,12 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				if (run.cancelled) return;
 				switch (event.type) {
 					case "progress":
-						emit({ type: "progress", searchId: run.searchId, text: progressText(event.text) });
+						// A note the answer already shows is not repeated on the shimmer line.
+						emit({ type: "progress", searchId: run.searchId, text: live.isNote(event.text) ? "" : progressText(event.text) });
 						break;
 					case "preliminary": {
 						run.sessionId = event.response.sessionId;
-						run.quick = mapPhase(event.response);
+						run.quick = withNotes(mapPhase(event.response), "quick");
 						emit({
 							type: "quick",
 							searchId: run.searchId,
@@ -579,7 +628,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 							break;
 						}
 						run.sessionId = event.response.sessionId;
-						const phase = mapPhase(event.response);
+						const phase = run.quick === null ? withNotes(mapPhase(event.response), "quick", "deep") : withNotes(mapPhase(event.response), "deep");
 						// Without a preliminary this is the run's only answer: Jev judged the
 						// fast answer final (or routed straight to a direct answer), so no
 						// verification ran. It belongs in the Quick slot, which already shows
@@ -627,7 +676,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			chosenMode = mode;
 			for (const agent of agents.values()) agent.setApprovalMode?.(mode);
 		},
-		start: async (searchId, chatId, query, attachments) => {
+		start: async (searchId, chatId, query, attachments, viewingFolder) => {
 
 			let resolveFinish = (): void => undefined;
 			const finish = new Promise<void>((resolve) => {
@@ -711,7 +760,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				return;
 			}
 			run.agent = agent;
-			void consume(run, agent, query, attachments);
+			void consume(run, agent, query, attachments, viewingFolder);
 			await finish;
 		},
 		steer: async (searchId, text) => {
@@ -753,12 +802,6 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 
 /** Thinking levels pi accepts; the config-service validator keeps the same list. */
 const THINKING_LEVELS: readonly string[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
-
-/** Upstream `DEFAULT_QUERY_DECOMPOSITION_MODEL`; `queryDecomposition` absent means this default. */
-const DEFAULT_QUERY_DECOMPOSITION: { readonly provider: string; readonly id: string } = {
-	provider: "openrouter",
-	id: "qwen/qwen3.7-flash",
-};
 
 type AgentThinking = NonNullable<AutoRAGAgentOptions["thinking"]>;
 type AgentThinkingLevel = NonNullable<AgentThinking["final"]>;
@@ -813,7 +856,7 @@ async function resolveDecomposition(
 	cwd: string,
 ): Promise<AgentQueryDecomposition> {
 	if (config.queryDecomposition === false) return undefined;
-	const reference = config.queryDecomposition?.model ?? DEFAULT_QUERY_DECOMPOSITION;
+	const reference = config.queryDecomposition?.model ?? OPENROUTER_DEFAULT_DECOMPOSITION_MODEL;
 	const resolved = await resolveAgentModel({ ...config, model: reference }, { env, cwd });
 	const apiKey = resolved.apiKey ?? resolved.providerApiKeys?.[resolved.model.provider];
 	return { model: applyDazziThinkingLevels(resolved.model), ...(apiKey === undefined ? {} : { apiKey }) };
@@ -844,11 +887,14 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		const agentDir = input.env.PI_CODING_AGENT_DIR ?? getAgentDir();
 		syncCalendarMcpConfig(raw, raw, agentDir);
 		const decomposition = await resolveDecomposition(effective, input.env, input.cwd);
+		const sllm = await resolveSllmDecisionModel(effective, input.env, input.cwd, agentDir, { allowFallback: false });
 		// The decomposition model's thinking is upstream-fixed off; only the
 		// two-phase answer model takes config thinking.fast/final.
 		const thinking = readThinking(raw);
+		const baseOptions = buildAgentOptions(effective);
 		const agentOptions: AutoRAGAgentOptions = {
-			...buildAgentOptions(effective),
+			...baseOptions,
+			...(sllm !== undefined ? { jev: { ...baseOptions.jev, sllm } } : {}),
 			model: resolved.model,
 			piAgentDir: agentDir,
 			piSessionDir: options.sessionDir,

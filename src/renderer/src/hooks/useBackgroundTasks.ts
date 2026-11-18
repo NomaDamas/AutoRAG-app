@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 
-export type BackgroundTaskKind = "reduce-size" | "convert-rename" | "custom";
+export type BackgroundTaskKind = "reduce-size" | "convert-rename" | "compress" | "custom";
 export type BackgroundTaskState = "queued" | "running" | "done" | "failed";
 
 export interface BackgroundTaskItem {

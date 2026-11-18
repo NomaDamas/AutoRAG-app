@@ -5,7 +5,9 @@
  * all read the same answer.
  *
  * A proposal belongs to the selected folder it lies under (`root`); once the
- * user unselects that folder its proposals neither show nor apply.
+ * user unselects that folder its proposals neither show nor apply. A proposal
+ * for a top-level folder as a whole (`path === root`) only unticks that folder
+ * when the result arrives, so it never shows or applies as an exclusion.
  */
 
 import type { EmbedMode } from "../../../shared/onboarding-contract";
@@ -27,7 +29,7 @@ export function needsAnalysis(
 }
 
 export function visibleScope(scope: readonly SmartExclusion[] | undefined, selectedRoots: readonly string[]): readonly SmartExclusion[] {
-	return (scope ?? []).filter((item) => selectedRoots.includes(item.root));
+	return (scope ?? []).filter((item) => item.path !== item.root && selectedRoots.includes(item.root));
 }
 
 export interface ExcludedTotals {

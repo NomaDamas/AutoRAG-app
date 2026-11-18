@@ -3,7 +3,7 @@
  *
  * `scanWithDupey` of the librarian spawns the CLI itself when it is given no `run`, and that spawn is nobody's to stop:
  * it is not tracked, its 120 s limit sends SIGTERM once and never SIGKILL, and nothing ends it when the thread that
- * called it is terminated. A scan of a cloud drive reads files the drive has to download first, so such a dupey can
+ * called it is terminated. A scan of a large cloud drive can take long enough that such a dupey can
  * outlive the app by tens of minutes with its parent gone (PPID 1). This runner is handed to `scanWithDupey` as its
  * `run`, so every scan's child is one the app can find, end, and wait for.
  *

@@ -260,6 +260,90 @@ describe("fsearch backend", () => {
 		await backend.ensureDaemon();
 		expect(fake.calls).toEqual([]);
 	});
+
+	it("searches AutoRAG's workspace fsearch database when no XDG default database exists", async () => {
+		const autoragHome = join(root, "autorag-home");
+		const workspace = join(root, "workspace");
+		const workspaceDb = join(workspace, ".autorag", "fsearch", "fsearch.db");
+		await mkdir(autoragHome, { recursive: true });
+		await mkdir(join(workspace, ".autorag", "fsearch"), { recursive: true });
+		await writeFile(join(autoragHome, "config.json"), JSON.stringify({ workspacePath: workspace }));
+		await writeFile(workspaceDb, "db");
+		const calls: { readonly command: string; readonly args: readonly string[] }[] = [];
+		const backend = createFileNameSearch({
+			userDataDir: join(root, "userData"),
+			locations: async () => [],
+			platform: "darwin",
+			env: { HOME: root, AUTORAG_HOME: autoragHome, XDG_DATA_HOME: join(root, "xdg") },
+			run: async (command, args) => {
+				calls.push({ command, args: [...args] });
+				if (args[0] === "--version") return { code: 0, stdout: "fsearch-cli 0.3", stderr: "" };
+				if (args[0] === "stats") {
+					if (args.includes(workspaceDb)) {
+						return { code: 0, stdout: JSON.stringify({ db: workspaceDb, live: true, files: 12, folders: 3 }), stderr: "" };
+					}
+					return { code: 1, stdout: "", stderr: "missing default db" };
+				}
+				if (args[0] === "search") {
+					return { code: 0, stdout: jsonLine("/data/Documents/plan.md") + `{"done":true,"num_results":1,"num_returned":1}`, stderr: "" };
+				}
+				return { code: 1, stdout: "", stderr: "" };
+			},
+			launch: () => 4242,
+		});
+
+		const paths = await backend.search("plan");
+
+		expect(paths).toEqual(["/data/Documents/plan.md"]);
+		const search = calls.find((call) => call.args[0] === "search");
+		expect(search?.args.slice(0, 4)).toEqual(["search", "--db", workspaceDb, "--socket"]);
+		expect(search?.args[4]).toMatch(/^\/tmp\/autorag-fsearch-\d+-[0-9a-f]{12}\.sock$/u);
+	});
+
+	it("falls over to AutoRAG's workspace fsearch database when the XDG database is empty, while keeping a populated XDG database", async () => {
+		const autoragHome = join(root, "autorag-home");
+		const workspace = join(root, "workspace");
+		const xdg = join(root, "xdg");
+		const xdgDb = join(xdg, "fsearch", "fsearch.db");
+		const workspaceDb = join(workspace, ".autorag", "fsearch", "fsearch.db");
+		await mkdir(autoragHome, { recursive: true });
+		await mkdir(join(xdg, "fsearch"), { recursive: true });
+		await mkdir(join(workspace, ".autorag", "fsearch"), { recursive: true });
+		await writeFile(join(autoragHome, "config.json"), JSON.stringify({ workspacePath: workspace }));
+		await writeFile(xdgDb, "empty");
+		await writeFile(workspaceDb, "populated");
+		let xdgFiles = 0;
+		const searchedDbs: string[] = [];
+		const makeBackend = () =>
+			createFileNameSearch({
+				userDataDir: join(root, "userData"),
+				locations: async () => [],
+				platform: "darwin",
+				env: { HOME: root, AUTORAG_HOME: autoragHome, XDG_DATA_HOME: xdg },
+				run: async (_command, args) => {
+					if (args[0] === "--version") return { code: 0, stdout: "fsearch-cli 0.3", stderr: "" };
+					if (args[0] === "stats") {
+						if (args.includes(workspaceDb)) {
+							return { code: 0, stdout: JSON.stringify({ db: workspaceDb, live: true, files: 25, folders: 4 }), stderr: "" };
+						}
+						return { code: 0, stdout: JSON.stringify({ db: xdgDb, live: true, files: xdgFiles, folders: 0 }), stderr: "" };
+					}
+					if (args[0] === "search") {
+						const dbIdx = args.indexOf("--db");
+						if (dbIdx >= 0 && typeof args[dbIdx + 1] === "string") searchedDbs.push(args[dbIdx + 1]!);
+						return { code: 0, stdout: jsonLine("/data/Documents/plan.md") + `{"done":true,"num_results":1,"num_returned":1}`, stderr: "" };
+					}
+					return { code: 1, stdout: "", stderr: "" };
+				},
+				launch: () => 4242,
+			});
+
+		await makeBackend().search("plan");
+		xdgFiles = 100;
+		await makeBackend().search("plan");
+
+		expect(searchedDbs).toEqual([workspaceDb, xdgDb]);
+	});
 });
 
 interface EverythingFake {

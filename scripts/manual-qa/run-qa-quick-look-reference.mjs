@@ -158,7 +158,10 @@ rmSync(join(root, ".cover.jpg"));
 pdfFixture(join(root, "guide.pdf"));
 const HWP_PAGES = ["첫 쪽: 2026년 사업계획서 본문", "둘째 쪽: 추진 일정과 예산", "셋째 쪽: 기대 효과"];
 writeFileSync(join(root, "사업계획서.hwp"), buildHwp(HWP_PAGES, "hwp"));
-writeFileSync(join(root, "회의록.hwpx"), buildHwp(HWP_PAGES, "hwpx"));
+// Different text on purpose: identical content makes dupey stack the two as exact duplicates and hide the .hwp row.
+// Both keep HWP_PAGES.length pages, which the layout checks below rely on.
+const HWPX_PAGES = ["첫 쪽: 주간 회의록 안건", "둘째 쪽: 논의 결과와 담당자", "셋째 쪽: 다음 회의 일정"];
+writeFileSync(join(root, "회의록.hwpx"), buildHwp(HWPX_PAGES, "hwpx"));
 writeFileSync(join(root, "landing.html"), HTML);
 writeFileSync(join(root, "build_eval.py"), CODE);
 writeFileSync(join(root, "README.md"), MARKDOWN);

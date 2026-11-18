@@ -73,6 +73,11 @@ html[data-row-drag="copy"] * {
 	cursor: copy !important;
 }
 
+html[data-row-drag="link"],
+html[data-row-drag="link"] * {
+	cursor: alias !important;
+}
+
 input::placeholder {
 	color: var(--text-muted);
 }
@@ -136,6 +141,35 @@ small {
 		transform: scale(0.85);
 	}
 	50% {
+		opacity: 1;
+		transform: scale(1.2);
+	}
+}
+
+/* Answer loader — `SeedLoader`: each seed brightens and swells in turn, the inner ones first, so a wave of light
+ * runs out from the centre of the seed head. */
+.seed-loader {
+	flex: none;
+	overflow: visible;
+}
+.seed-loader circle {
+	fill: var(--seed-loader-rest);
+	opacity: 0.6;
+	transform-box: fill-box;
+	transform-origin: center;
+	animation: seedWave var(--dur-seed-wave) ease-in-out infinite;
+	animation-delay: var(--seed-delay);
+}
+
+@keyframes seedWave {
+	0%,
+	100% {
+		fill: var(--seed-loader-rest);
+		opacity: 0.6;
+		transform: scale(0.85);
+	}
+	50% {
+		fill: var(--seed-loader-crest);
 		opacity: 1;
 		transform: scale(1.2);
 	}
@@ -230,6 +264,36 @@ small {
 	}
 }
 
+/* Folder disclosure in the list (seungwonme/AutoRAG-app#19) — while a folder opens or closes, `useDisclosureMotion` drives
+ * `--slide-q` on the rows container (0 closed .. 1 open) and `FileList` marks the rows that take part:
+ * `block` (the folder's rows, opening), `ghost` (the same rows, closing) and `below` (every row and header after
+ * them). The whole tail moves as one by `--slide-hc * (q - 1)`: the rows below start where they were and slide
+ * to where they end up. A block row is also cut off at the folder row's bottom edge, which is what makes it come
+ * out from behind that row: `--slide-d` is the row's resting distance below that edge, so the cut is
+ * `--slide-hc * (1 - q) - --slide-d`.
+ *
+ * Only transform and clip-path change, and nothing is disabled while they do, so a click or a key never waits
+ * for the motion; only the rows of a closing folder (`ghost`) stop taking the pointer, because they are already
+ * gone as far as the user is concerned. Reduced motion never enters this block (the hook starts no motion
+ * either), so the list just changes. */
+@media (prefers-reduced-motion: no-preference) {
+	[data-slide="block"],
+	[data-slide="ghost"],
+	[data-slide="below"] {
+		transform: translateY(calc(var(--slide-hc, 0px) * (var(--slide-q, 1) - 1)));
+	}
+
+	[data-slide="block"],
+	[data-slide="ghost"] {
+		clip-path: inset(max(0px, calc(var(--slide-hc, 0px) * (1 - var(--slide-q, 1)) - var(--slide-d, 0px))) 0 0 0);
+	}
+
+	/* The rows of a folder that is closing are already gone as far as the keyboard and the pointer go. */
+	[data-slide="ghost"] {
+		pointer-events: none;
+	}
+}
+
 /* §7 Scrollbars — deliberately unstyled: any ::-webkit-scrollbar rule forces
  * Chromium's classic scrollbars, which consume layout width and shift the
  * Inspector's preview whenever content starts or stops scrolling. Leaving
@@ -290,6 +354,16 @@ html:not([data-platform="darwin"]) .inspector-body {
 	@keyframes pulseDot {
 		0%,
 		100% {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	/* The seed head holds still in its crest colour. */
+	@keyframes seedWave {
+		0%,
+		100% {
+			fill: var(--seed-loader-crest);
 			opacity: 1;
 			transform: none;
 		}

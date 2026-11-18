@@ -11,7 +11,7 @@ import { flattenWrapper } from "../src/main/archive-extract";
 import { extractWithLibarchive } from "../src/main/libarchive-reader";
 import { ArchiveError } from "../src/main/archive-guard.mjs";
 import { t } from "../src/shared/i18n/core";
-import { RAR4_TREE, RAR5_ENCRYPTED, RAR5_STORED } from "./archive-fixtures";
+import { RAR4_TREE, RAR5_ENCRYPTED, RAR5_STORED, windowsTar } from "./archive-fixtures";
 
 let root: string;
 
@@ -390,6 +390,15 @@ describe("Korean file names", () => {
 		const out = await service().run([archive], { kind: "extract" }, null);
 		expect(await readdir(out.output ?? "")).toEqual([NFC]);
 		expect(await readFile(join(out.output ?? "", NFC), "utf8")).toBe("본문");
+	});
+
+	it.skipIf(!hasBin("xz"))("extracts a Korean folder whose name a Windows tool wrote in CP949", async () => {
+		const inner = join(root, "payload.tar");
+		await writeFile(inner, windowsTar());
+		execFileSync("xz", ["-f", "-k", inner], { stdio: "ignore" });
+		const out = await service().run([`${inner}.xz`], { kind: "extract" }, null);
+		expect((await readdir(out.output ?? "")).sort()).toEqual(["docs", "readme.md", "한글"].sort());
+		expect(await readFile(join(out.output ?? "", "한글", "메모.txt"), "utf8")).toBe("memo");
 	});
 
 	it.skipIf(!hasBin("xz"))("extracts a Korean file name from a .tar.xz", async () => {

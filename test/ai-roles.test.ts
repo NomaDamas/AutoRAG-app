@@ -26,7 +26,7 @@ describe("jev and rerank roles", () => {
 	it("maps the AutoRAG provider to the dazzi Jev backend alongside the existing ones", () => {
 		expect(jevBackendFor("dazzi")).toBe("dazzi");
 		expect(jevBackendFor("openrouter")).toBe("openrouter");
-		expect(jevBackendFor("vercel-ai-gateway")).toBe("vercel");
+		expect(jevBackendFor("vercel-ai-gateway")).toBe("vercel-ai-gateway");
 		expect(jevBackendFor("typesafe")).toBe("typesafe");
 		expect(jevBackendFor("anthropic")).toBeUndefined();
 	});
@@ -44,6 +44,10 @@ describe("managed Jev and rerank defaults", () => {
 		expect(shouldAdoptManagedRoles({})).toEqual({ jev: true, rerank: true });
 		expect(shouldAdoptManagedRoles({ jev: { backend: "dazzi", model: "jev-1.13" }, rerank: { provider: "dazzi" } })).toEqual({ jev: true, rerank: true });
 		expect(shouldAdoptManagedRoles({ jev: { backend: "openrouter", model: "typesafe/jev-1.13" }, rerank: { provider: "openrouter", model: "voyageai/rerank-3" } })).toEqual({ jev: false, rerank: false });
+	});
+
+	it("keeps a deliberate small-chat-model decision model when signing in to AutoRAG", () => {
+		expect(shouldAdoptManagedRoles({ jev: { backend: "sllm" } }).jev).toBe(false);
 	});
 
 	it("respects an explicit off and a malformed value as the user's choice", () => {

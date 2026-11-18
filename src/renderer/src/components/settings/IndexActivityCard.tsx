@@ -3,6 +3,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { IndexActivityItem, IndexActivitySnapshot } from "../../../../shared/index-activity-contract";
 import { dismissIndexProblem, retryIndexProblem, useIndexProblem } from "../../hooks/useIndexProblem";
+import { IndexProgressDetail } from "../IndexProgressDetail";
 import { describeIndexActivity, itemName, itemPhaseText } from "../../state/index-activity";
 import { describeIndexProblem, type IndexProblemView } from "../../state/index-problem";
 import { requestSettingsCategory } from "../../state/settings-navigation";
@@ -70,13 +71,14 @@ function ProblemCard({ view }: { readonly view: IndexProblemView }): ReactElemen
  * every item of the run. Unlike the sidebar it stays when nothing runs, saying so
  * — and while nothing runs it says what the last run left behind, if anything.
  */
-export function IndexActivityCard({ snapshot }: { readonly snapshot: IndexActivitySnapshot }): ReactElement {
+export function IndexActivityCard({ snapshot, hideIdle = false }: { readonly snapshot: IndexActivitySnapshot; readonly hideIdle?: boolean }): ReactElement | null {
 	const { t } = useTranslation();
 	const view = describeIndexActivity(snapshot, t);
 	const problem = describeIndexProblem(useIndexProblem(), t);
 	// A run in flight is the news; otherwise what the last run left behind outranks its own 15-second echo (which carries the raw error).
 	if (problem !== null && (view === null || view.tone !== "run")) return <ProblemCard view={problem} />;
 	if (view === null) {
+		if (hideIdle) return null;
 		return <p className="settings-list-meta" data-testid="index-activity-idle">{t("indexActivity.idle")}</p>;
 	}
 	return (
@@ -86,6 +88,7 @@ export function IndexActivityCard({ snapshot }: { readonly snapshot: IndexActivi
 				{view.percent !== null && view.tone === "run" ? <span className="settings-list-meta">{view.percent}%</span> : null}
 			</div>
 			<ProgressBar percent={view.percent} tone={view.tone} label={view.headline} />
+			{snapshot.progress !== null && view.tone === "run" ? <IndexProgressDetail detail={snapshot.progress} /> : null}
 			{snapshot.items.length > 0 ? (
 				<ul className="settings-activity-items">
 					{snapshot.items.map((item) => (

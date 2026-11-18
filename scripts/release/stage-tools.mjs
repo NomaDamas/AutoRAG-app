@@ -140,10 +140,11 @@ async function stageGoBinary({ name, repo }) {
 }
 
 /** Rust crates: compile the newest crates.io version into the shared cache. */
-async function stageCargoBinary({ name, crate = name }) {
+async function stageCargoBinary({ name, crate = name, minVersion }) {
 	const cargoRoot = join(CACHE_DIR, "cargo", name);
 	const targetDir = join(CACHE_DIR, "cargo-target");
 	const version = await latestCrateVersion(crate);
+	if (minVersion !== undefined) assertVersionFloor(name, version, minVersion);
 	const installArgs = ["install", crate, "--version", version, "--locked"];
 	const installed = join(cargoRoot, "bin", `${name}${exe}`);
 	const stamp = join(cargoRoot, "version.txt");
@@ -446,7 +447,7 @@ const GO_CRAWLERS = [
 	{ name: "notcrawl", repo: "openclaw/notcrawl", pattern: /_darwin_arm64\.tar\.gz$/ },
 ];
 
-const CARGO_BINARIES = [{ name: "dupey" }, { name: "jikji", crate: "jikji-cli" }, { name: "clawgallery" }];
+const CARGO_BINARIES = [{ name: "dupey", minVersion: VERSION_FLOORS.dupey }, { name: "jikji", crate: "jikji-cli" }, { name: "clawgallery" }];
 
 const NPM_PACKAGES = ["@nomadamas/mailcrawl", "kordoc"];
 

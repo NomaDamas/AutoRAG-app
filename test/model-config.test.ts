@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedAgentApi, jevConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../src/shared/model-config";
+import { isAllowedAgentApi, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../src/shared/model-config";
 import type { ModelCatalogEntry } from "../src/shared/settings-contract";
 
 const entry = (over: Partial<ModelCatalogEntry> = {}): ModelCatalogEntry => ({
@@ -44,11 +44,15 @@ describe("isAllowedAgentApi", () => {
 
 describe("role config updates", () => {
 	it("writes the Jev block with the backend its provider serves", () => {
-		expect(jevConfigUpdates(entry({ provider: "openrouter", id: "typesafe/jev-latest" }))).toEqual([{ path: ["jev"], value: { model: "typesafe/jev-latest", backend: "openrouter" } }]);
+		expect(jevConfigUpdates(entry({ provider: "openrouter", id: "~typesafe/jev-latest" }))).toEqual([{ path: ["jev"], value: { model: "~typesafe/jev-latest", backend: "openrouter" } }]);
 	});
 
 	it("omits the backend for a provider that serves none, instead of guessing one", () => {
 		expect(jevConfigUpdates(entry({ provider: "unknown", id: "x" }))).toEqual([{ path: ["jev"], value: { model: "x" } }]);
+	});
+
+	it("makes the small chat model the decision model by replacing the whole Jev block", () => {
+		expect(jevSllmConfigUpdates()).toEqual([{ path: ["jev"], value: { backend: "sllm" } }]);
 	});
 
 	it("enables the reranker on the provider and model picked", () => {

@@ -8,13 +8,17 @@ import type { ReactElement } from "react";
  */
 export function GroupHeader({
 	label,
+	slide = false,
 }: {
 	readonly label: string;
+	/** A folder is opening or closing above this header (`state/disclosure-motion`): it travels with the rows below it. */
+	readonly slide?: boolean | undefined;
 }): ReactElement {
 	return (
 		<div
 			className="group-header flex h-[40px] flex-none items-end px-12 pb-8 select-none"
 			aria-hidden="true"
+			data-slide={slide ? "below" : undefined}
 		>
 			<span className="text-tile font-semibold text-ink-muted uppercase tracking-[0.04em]">
 				{label}

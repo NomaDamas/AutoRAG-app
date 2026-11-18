@@ -6,6 +6,10 @@ import { applyAppIndexing } from "./app-indexing";
 import { refreshAutoragIndex } from "./index-refresh";
 import { t } from "../shared/i18n/core";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
+import { findExclusion } from "./path-exclusion";
+import { isGlobExclusion } from "../shared/index-scope-edit";
+import { buildIndexMap, scanIndexScope, type IndexScopeContext } from "./index-map";
 
 /**
  * The Finder index badge reads and writes the shared AutoRAG state — the same
@@ -18,6 +22,8 @@ export interface IndexStatusService {
 	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 	/** Saves the exclusion and returns at once; `onRefreshed` fires when the index caught up. */
 	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	/** Every file and folder under the search roots with what the index holds for it (Settings → 검색 범위 → 인덱싱 지도). */
+	indexMap(): Promise<IndexMap>;
 }
 
 export interface IndexStatusServiceDeps {
@@ -32,6 +38,11 @@ export interface IndexStatusServiceDeps {
 /** The mirror records canonical paths (search roots are realpath-pinned); match them. */
 function canonical(path: string): Promise<string> {
 	return realpath(path).catch(() => resolve(path));
+}
+
+/** An exclusion entry as the index compares it: a path is canonical, a glob stays as written (it is not a place). */
+function canonicalExclusion(entry: string): Promise<string> {
+	return isGlobExclusion(entry) ? Promise.resolve(entry) : canonical(entry);
 }
 
 function isUnder(path: string, root: string): boolean {
@@ -50,15 +61,15 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 		return Promise.all(
 			raw.excludePaths
 				.filter((value): value is string => typeof value === "string" && value.length > 0)
-				.map((value) => canonical(isAbsolute(value) ? value : resolve(workspacePath, value))),
+				.map((value) => (isGlobExclusion(value) ? Promise.resolve(value) : canonical(isAbsolute(value) ? value : resolve(workspacePath, value)))),
 		);
 	}
 
-	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
+	async function loadContext(): Promise<IndexScopeContext> {
 		const raw = readRawConfigObject(resolveConfigPath(input).configPath);
 		const config = await applyAppIndexing(resolveConfigReadOnly(input), raw);
 		const [exclusions, roots] = await Promise.all([
-			Promise.all((config.excludePaths ?? []).map(canonical)),
+			Promise.all((config.excludePaths ?? []).map(canonicalExclusion)),
 			Promise.all(config.searchPaths.map(canonical)),
 		]);
 		let index = emptyMirrorIndex();
@@ -68,17 +79,26 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 			// Missing or older MinSync binary: fall back to empty mirror state so Finder badges never throw.
 		}
 		const registry = createDefaultParserRegistry((config.parserOptions ?? {}) as DefaultParserRegistryOptions);
-		const entries = new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry]));
-		const skips = new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry]));
-		const minSyncRoot = config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath);
+		return {
+			roots,
+			exclusions,
+			entries: new Map(Object.values(index.entries).map((entry) => [entry.sourcePath, entry])),
+			skips: new Map(Object.values(index.skipped ?? {}).map((entry) => [entry.sourcePath, entry])),
+			minSyncRoot: config.minSync?.workspacePath ?? minSyncWorkspaceRoot(config.workspacePath),
+			indexable: (path, name) => registry.getForVirtualPath(path) !== undefined && !PRODUCT_ARTIFACT_FILE_NAMES.has(name),
+		};
+	}
+
+	async function snapshot(paths: readonly string[]): Promise<IndexStatus[]> {
+		const { roots, exclusions, entries, skips, minSyncRoot, indexable } = await loadContext();
 		return Promise.all(paths.map(async (path): Promise<IndexStatus> => {
 			const real = await canonical(path);
 			if (!roots.some((root) => isUnder(real, root))) {
 				return { path, kind: "outside", excluded: false, toggleable: false, detail: t("main.indexStatus.outside") };
 			}
-			const exclusion = exclusions.find((candidate) => isUnder(real, candidate));
-			const excluded = exclusion !== undefined;
-			const toggleable = exclusion === undefined || exclusion === real;
+			const exclusion = findExclusion(exclusions, real);
+			const excluded = exclusion !== null;
+			const toggleable = exclusion === null || (exclusion.kind === "path" && exclusion.entry === real);
 			const entry = entries.get(real);
 			// Both modes stage parsed files into MinSync (keyword-only as a sparse-only index): a file is in the index once staged.
 			const staged = entry !== undefined && (await access(minSyncDocumentPath(minSyncRoot, entry.virtualPath)).then(() => true, () => false));
@@ -89,11 +109,11 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 							kind: "excluded",
 							excluded,
 							toggleable,
-							detail: toggleable ? t("main.indexStatus.excluded") : t("main.indexStatus.parentExcluded"),
+							detail: exclusion?.kind === "glob" ? t("main.indexStatus.patternExcluded", { pattern: exclusion.entry }) : toggleable ? t("main.indexStatus.excluded") : t("main.indexStatus.parentExcluded"),
 						}
 					: { path, kind: "pending", excluded, toggleable, detail: t("main.indexStatus.excludedPending") };
 			}
-			if (registry.getForVirtualPath(real) === undefined || PRODUCT_ARTIFACT_FILE_NAMES.has(basename(real))) {
+			if (!indexable(real, basename(real))) {
 				return { path, kind: "unsupported", excluded, toggleable: false, detail: t("main.indexStatus.unsupported") };
 			}
 			if (staged) {
@@ -132,6 +152,7 @@ export function createIndexStatusService(deps: IndexStatusServiceDeps): IndexSta
 
 	return {
 		indexStatus: (paths) => snapshot(paths),
+		indexMap: async () => buildIndexMap(await scanIndexScope(await loadContext())),
 		setIndexExcluded: async (path, excluded) => {
 			const real = await canonical(path);
 			const configPath = resolveConfigPath(input).configPath;

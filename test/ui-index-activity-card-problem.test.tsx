@@ -40,6 +40,7 @@ const activity = (state: IndexActivitySnapshot["state"]): IndexActivitySnapshot 
 	finishedAt: state === "running" ? null : "2026-10-24T05:00:05.000Z",
 	items: [{ key: "local", kind: "local", id: null, state: state === "failed" ? "failed" : state === "done" ? "done" : "running", phase: state === "running" ? "parsed" : null, counts: null, error: state === "failed" ? RAW : null }],
 	fraction: state === "running" ? 0.3 : 1,
+	progress: null,
 	error: state === "failed" ? RAW : null,
 });
 

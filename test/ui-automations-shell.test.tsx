@@ -142,7 +142,7 @@ describe("selection and keys", () => {
 	});
 });
 
-describe("editing and adding open an AI Search draft, never a sent question", () => {
+describe("editing and adding open an AI Chat draft, never a sent question", () => {
 	it("Enter and double click draft the edit for that rule, in the interface language", async () => {
 		const h = await mount([rule("downloads-pdf-summary")]);
 		press("ArrowDown");
@@ -216,7 +216,7 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["a", "c"]);
 		expect(h.shell().props.selectedId).toBe("c");
 		expect(h.shell().confirm).toBeNull();
-		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 색인 최신화’ 규칙을 삭제했어요");
+		expect(h.shell().undoToast?.message).toBe("‘새 PDF → 검색 색인 최신화’ 규칙을 삭제했습니다");
 		await act(async () => {
 			await vi.advanceTimersByTimeAsync(5_100);
 		});

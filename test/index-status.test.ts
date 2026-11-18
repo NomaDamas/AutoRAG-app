@@ -168,4 +168,31 @@ describe("createIndexStatusService", () => {
 		const [status] = await service.indexStatus([join(folder, "secret.txt")]);
 		expect(status).toMatchObject({ kind: "excluded", excluded: true, toggleable: false });
 	});
+
+	it("reports a file an excludePaths glob matches as excluded, not toggleable, and says a pattern did it", async () => {
+		const fixture = await createFixture();
+		await writeFile(fixture.configPath, `${JSON.stringify({ searchPaths: [fixture.docs], workspacePath: fixture.workspace, excludePaths: ["**/docs/private/**"] }, null, 2)}\n`);
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {} });
+
+		const [hit, miss] = await service.indexStatus([join(fixture.docs, "private", "secret.txt"), join(fixture.docs, "open.txt")]);
+		expect(hit).toMatchObject({ kind: "excluded", excluded: true, toggleable: false });
+		expect(hit?.detail).toContain("**/docs/private/**");
+		expect(miss).toMatchObject({ excluded: false });
+	});
+
+	it("keeps a glob verbatim when another file is excluded: resolving it against the workspace would stop it matching", async () => {
+		const fixture = await createFixture();
+		await writeFile(fixture.configPath, `${JSON.stringify({ searchPaths: [fixture.docs], workspacePath: fixture.workspace, excludePaths: ["**/node_modules/**"] }, null, 2)}\n`);
+		const target = join(fixture.docs, "one.txt");
+		await writeFile(target, "x");
+		const service = createIndexStatusService({ env: fixture.env, cwd: fixture.workspace, onRefreshed: () => {}, refresh: async () => undefined });
+
+		await service.setIndexExcluded(target, true);
+		const added = JSON.parse(await readFile(fixture.configPath, "utf8")) as { excludePaths?: string[] };
+		expect(added.excludePaths).toEqual(["**/node_modules/**", target]);
+
+		await service.setIndexExcluded(target, false);
+		const cleared = JSON.parse(await readFile(fixture.configPath, "utf8")) as { excludePaths?: string[] };
+		expect(cleared.excludePaths).toEqual(["**/node_modules/**"]);
+	});
 });

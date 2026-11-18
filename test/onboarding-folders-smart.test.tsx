@@ -92,186 +92,118 @@ describe("SmartScanStep", () => {
 		expect(shimmer?.textContent).toBe("다운로드 하위 폴더 살펴보는 중");
 	});
 
-	it("cancels the analysis and falls back to choosing by hand", () => {
+	it("stops the analysis and goes back to choosing folders", () => {
 		const cancelSmartScan = vi.fn();
-		renderScan({ cancelSmartScan, smartRun: { status: "running", runId: "r", current: null } });
+		const setStep = vi.fn();
+		renderScan({ cancelSmartScan, setStep, smartRun: { status: "running", runId: "r", current: null } });
 
 		click(one(".si-scan-cancel"));
 		expect(cancelSmartScan).toHaveBeenCalledTimes(1);
+		expect(setStep).toHaveBeenCalledWith("folders");
 	});
 
-	it("reports a failure with its reason and offers a retry", () => {
+	it("offers a retry, the way back and a way on when the analysis fails", () => {
 		const startSmartScan = vi.fn();
-		renderScan({ startSmartScan, smartRun: { status: "error", message: "No model configured" } });
+		const setStep = vi.fn();
+		renderScan({ startSmartScan, setStep, smartRun: { status: "error", message: "No model configured" } });
 
-		expect(text(".si-scan-error")).toContain("onboarding.smartScan.failed");
-		expect(text(".si-scan-error")).toContain("No model configured");
+		expect(text("h1")).toContain("onboarding.smartScan.failedTitle");
+		expect(one(".si-scan-retry").title).toBe("No model configured");
 		click(one(".si-scan-retry"));
 		expect(startSmartScan).toHaveBeenCalledTimes(1);
 		expect(host.querySelector(".si-roaming-loupe")).toBeNull();
+		click(one(".si-scan-back"));
+		expect(setStep).toHaveBeenLastCalledWith("folders");
+		click(one(".si-scan-manual"));
+		expect(setStep).toHaveBeenLastCalledWith("smartScope");
 	});
 
-	it("says it is done, with what it proposes, once the analysis finished", () => {
-		renderScan({ smartRun: { status: "done" }, draft: { ...DRAFT, smartScope: [proposal("/docs/Zoom"), proposal("/docs/Logs", { excluded: false })] } });
+	it("shows only the finished title once the analysis is done", () => {
+		renderScan({ smartRun: { status: "done" }, draft: { ...DRAFT, smartScope: [proposal("/docs/Zoom")] } });
 
 		expect(text("h1")).toContain("onboarding.smartScan.done");
-		expect(text(".si-scan-note")).toContain("count=2");
+		expect(host.querySelector(".si-roaming-loupe")).toBeNull();
+		expect(host.querySelector("button")).toBeNull();
 	});
 });
 
 describe("SmartScopeStep, the smart-indexing scope screen", () => {
-	it("lays out a policy bar, a blue panel of included folders and a red panel of left-out ones", () => {
-		renderFolders();
+	const drag = (from: Element, to: Element): void => {
+		act(() => {
+			from.dispatchEvent(new Event("dragstart", { bubbles: true }));
+		});
+		act(() => {
+			to.dispatchEvent(new Event("dragover", { bubbles: true, cancelable: true }));
+			to.dispatchEvent(new Event("drop", { bubbles: true, cancelable: true }));
+		});
+	};
+	const pathOf = (path: string): HTMLElement => one(`.si-pill[data-path="${path}"]`);
+	const flush = async (): Promise<void> => {
+		await act(async () => {
+			await Promise.resolve();
+		});
+	};
 
-		expect(text(".si-policy-copy strong")).toContain("onboarding.smartScope.policy.title");
-		expect(host.querySelector(".si-panel.blue")).not.toBeNull();
-		expect(host.querySelector(".si-panel.red")).not.toBeNull();
-		expect(host.querySelector(".folder-card")).toBeNull();
+	it("lists the selected folders on the left and what is left out on the right, grouped by folder", () => {
+		renderFolders({ draft: { ...DRAFT, smartScope: [proposal("/docs/Telegram"), proposal("/docs/Zoom", { excluded: false }), proposal("/other/Cache", { root: "/other" })] } });
+
+		expect(all(".si-panel.blue .si-pill").map((pill) => pill.dataset.path)).toEqual(["/docs"]);
+		expect(text(".si-panel.blue .si-panel-meta")).toContain("count=1");
+		// Unselected folders the AI looked through stay on the right; a kept proposal and another root's do not show.
+		expect(all(".si-panel.red .si-pill").map((pill) => pill.dataset.path)).toEqual(["/dl", "/docs/Telegram"]);
+		expect(text(".si-summary")).toContain("onboarding.smartScope.summary.eta");
 	});
 
-	it("lists each selected folder as a blue pill with its size, and a folder that was analysed but is no longer selected as a ghost pill to put back", () => {
+	it("drags a selected folder out and back, selecting it accordingly", () => {
 		const setFolderSelected = vi.fn();
 		renderFolders({ setFolderSelected });
 
-		const blue = all(".si-panel.blue .si-pill");
-		expect(blue).toHaveLength(1);
-		expect(blue[0]?.textContent).toContain("Documents");
-		expect(blue[0]?.textContent).toContain("2.0 GB");
-		expect(text(".si-panel.blue .si-panel-meta")).toContain("folders=1");
-		expect(text(".si-panel.blue .si-panel-meta")).toContain("files=1,000");
-
-		const ghosts = all(".si-panel.blue .si-ghost-pill");
-		expect(ghosts.map((ghost) => ghost.textContent)).toEqual(["+ Downloads"]);
-		click(ghosts[0] as HTMLElement);
+		drag(pathOf("/docs"), one(".si-panel.red"));
+		expect(setFolderSelected).toHaveBeenLastCalledWith("/docs", false);
+		drag(pathOf("/dl"), one(".si-panel.blue"));
 		expect(setFolderSelected).toHaveBeenLastCalledWith("/dl", true);
 	});
 
-	it("offers no ghost pill for a folder the AI never looked at: choosing folders happens in the step before", () => {
-		renderFolders({ draft: { ...DRAFT, smartScopeRoots: ["/docs"] } });
-
-		expect(host.querySelector(".si-panel.blue .si-ghost-pill")).toBeNull();
-		expect(text(".si-panel.blue .si-panel-foot")).toContain("onboarding.smartScope.include.allIn");
-	});
-
-	it("takes a folder out of the index from its pill's x, and has no way to add or reset folders here", () => {
-		const setFolderSelected = vi.fn();
-		renderFolders({ setFolderSelected });
-
-		click(one(".si-panel.blue .si-pill-x"));
-		expect(setFolderSelected).toHaveBeenLastCalledWith("/docs", false);
-		expect(host.querySelector(".si-panel.blue .si-add-pill")).toBeNull();
-		expect(host.querySelector(".si-panel.blue .si-reset")).toBeNull();
-	});
-
-	it("lists the left-out sub-folders in red under their parent with the size they save, and puts one back with its x", () => {
+	it("drags a left-out folder back in, and ignores a drop on the side it came from", () => {
 		const setSmartExcluded = vi.fn();
-		renderFolders({
-			setSmartExcluded,
-			draft: { ...DRAFT, smartScope: [proposal("/docs/Telegram Desktop"), proposal("/docs/Zoom", { excluded: false }), proposal("/other/Cache", { root: "/other" })] },
-		});
+		renderFolders({ setSmartExcluded, draft: { ...DRAFT, smartScope: [proposal("/docs/Zoom")] } });
 
-		const red = all(".si-panel.red .si-pill");
-		expect(red).toHaveLength(1);
-		expect(red[0]?.textContent).toContain("Documents /");
-		expect(red[0]?.textContent).toContain("Telegram Desktop");
-		expect(red[0]?.textContent).toContain("500 MB");
-		expect(red[0]?.getAttribute("title")).toContain("Chat app downloads");
-		expect(text(".si-panel.red .si-panel-meta")).toContain("count=1");
-
-		click(one(".si-panel.red .si-pill-x"));
-		expect(setSmartExcluded).toHaveBeenLastCalledWith("/docs/Telegram Desktop", false);
+		drag(pathOf("/docs/Zoom"), one(".si-panel.red"));
+		expect(setSmartExcluded).not.toHaveBeenCalled();
+		drag(pathOf("/docs/Zoom"), one(".si-panel.blue"));
+		expect(setSmartExcluded).toHaveBeenCalledWith("/docs/Zoom", false);
 	});
 
-	it("shows what a left-out folder holds when the index would read nothing from it, instead of a size of zero", () => {
-		renderFolders({ draft: { ...DRAFT, smartScope: [proposal("/docs/Raw", { files: 0, bytes: 0 })] } });
+	it("opens a folder with sub-folders under a breadcrumb, excludes one by dragging, and goes back from the crumb", async () => {
+		const excludeFolder = vi.fn();
+		const measureFolders = vi.fn();
+		const listSubfolders = vi.fn(async (path: string) => (path === "/docs" ? [{ path: "/docs/2024", name: "2024" }] : []));
+		renderFolders({ excludeFolder, measureFolders, listSubfolders });
+		await flush();
 
-		const pill = one(".si-panel.red .si-pill");
+		click(pathOf("/docs"));
+		await flush();
+		expect(text(".si-crumb-here")).toBe("Documents");
+		expect(measureFolders).toHaveBeenCalledWith(["/docs/2024"]);
+		// Nothing inside it, so it offers no way further in.
+		expect(pathOf("/docs/2024").querySelector(".si-pill-open")).toBeNull();
 
-		expect(pill.textContent).toContain("onboarding.smartScope.exclude.noDocs");
-		expect(pill.textContent).not.toContain("−0");
+		drag(pathOf("/docs/2024"), one(".si-panel.red"));
+		expect(excludeFolder).toHaveBeenCalledWith("/docs/2024");
+
+		click(one(".si-crumb"));
+		await flush();
+		expect(host.querySelector(".si-crumb-here")).toBeNull();
+		expect(pathOf("/docs")).toBeTruthy();
 	});
 
-	it("offers a left-in proposal as a ghost pill to leave out again, and adds a folder of the user's own from the dashed button", () => {
-		const setSmartExcluded = vi.fn();
-		const addExclusion = vi.fn();
-		renderFolders({ setSmartExcluded, addExclusion, draft: { ...DRAFT, smartScope: [proposal("/docs/Zoom", { excluded: false })] } });
-
-		const ghosts = all(".si-panel.red .si-ghost-pill");
-		expect(ghosts.map((ghost) => ghost.textContent)).toEqual(["+ Zoom"]);
-		click(ghosts[0] as HTMLElement);
-		expect(setSmartExcluded).toHaveBeenLastCalledWith("/docs/Zoom", true);
-		click(one(".si-panel.red .si-add-pill"));
-		expect(addExclusion).toHaveBeenCalledTimes(1);
-	});
-
-	it("says what is always left out when nothing was proposed or all were put back", () => {
-		renderFolders({ draft: { ...DRAFT, smartScope: [] } });
-
-		expect(text(".si-panel.red .si-panel-foot")).toContain("onboarding.smartScope.policy.auto");
-		expect(host.querySelector(".si-panel.red .si-pill")).toBeNull();
-	});
-
-	it("shows the time the left-out files save next to the new estimate", () => {
-		renderFolders({
-			scans: new Map([["/docs", { ...SCAN, files: 8500 }]]),
-			draft: { ...DRAFT, smartScope: [proposal("/docs/Telegram Desktop", { files: 6800 })] },
-		});
-
-		expect(text(".si-eta-pill del")).toContain("minutes=100");
-		expect(text(".si-eta-pill b")).toContain("minutes=20");
-		expect(text(".si-eta-pill em")).toContain("percent=80");
-	});
-
-	it("shows the plain estimate when nothing is left out", () => {
-		renderFolders({ scans: new Map([["/docs", { ...SCAN, files: 850 }]]) });
-
-		expect(host.querySelector(".si-eta-pill del")).toBeNull();
-		expect(text(".si-eta-pill b")).toContain("minutes=10");
-	});
-
-	it("goes back to the analysis from the policy bar", () => {
-		const rescanSmart = vi.fn();
-		renderFolders({ rescanSmart });
-
-		click(one(".si-rescan"));
-		expect(rescanSmart).toHaveBeenCalledTimes(1);
-	});
-
-	it("explains in plain words how the AI decides: what it looked at, what it keeps, what it leaves out, and that you decide", () => {
+	it("explains the AI criteria in a tooltip beside the lead", () => {
 		renderFolders();
 
-		click(one(".si-criteria-toggle"));
-		const rules = all(".si-criteria li").map((item) => item.textContent ?? "");
-
-		expect(rules.map((rule) => rule.replace(/ .*/u, ""))).toEqual([
-			"onboarding.smartScope.criteria.looked",
-			"onboarding.smartScope.criteria.keep",
-			"onboarding.smartScope.criteria.leave",
-			"onboarding.smartScope.criteria.code",
-			"onboarding.smartScope.criteria.doubt",
-			"onboarding.smartScope.criteria.you",
-		]);
-	});
-
-	it("tells the user what the AI could see, and what it could not", () => {
-		renderFolders();
-
-		click(one(".si-criteria-toggle"));
-		const text = text0(".si-criteria");
-
-		expect(text).toContain("onboarding.smartScope.criteria.looked");
-		// Names, counts and dates only: the UI makes no claim about reading contents.
-		expect(text).not.toMatch(/\d+%/u);
-	});
-
-	it("keeps the explanation folded until asked", () => {
-		renderFolders();
-
-		expect(host.querySelector(".si-criteria")).toBeNull();
-		click(one(".si-criteria-toggle"));
-		expect(host.querySelector(".si-criteria")).not.toBeNull();
-		click(one(".si-criteria-toggle"));
-		expect(host.querySelector(".si-criteria")).toBeNull();
+		expect(text(".si-criteria-toggle")).toContain("onboarding.smartScope.criteria.label");
+		expect(one(".si-criteria").getAttribute("role")).toBe("tooltip");
+		expect(text(".si-criteria")).toContain("onboarding.smartScope.criteria.includeBody");
+		expect(text(".si-criteria")).toContain("onboarding.smartScope.criteria.excludeBody");
 	});
 });
 
@@ -322,12 +254,13 @@ describe("FoldersStep, where the folders to look through are chosen", () => {
 		expect(addFolders).toHaveBeenCalledTimes(1);
 	});
 
-	it("sums the selected folders into a summary with the local and remote estimate", () => {
-		renderPicker();
+	it("offers the sub-folder recommendation as a switch, on until turned off", () => {
+		const setSmartSuggest = vi.fn();
+		renderPicker({ setSmartSuggest });
 
-		expect(text(".summary-main strong")).toContain("folders=1");
-		expect(text(".summary-main strong")).toContain("files=1,000");
-		expect(text(".eta-row")).toContain("minutes=12");
+		expect(one(".folder-suggest .switch").classList.contains("on")).toBe(true);
+		click(one(".folder-suggest .switch"));
+		expect(setSmartSuggest).toHaveBeenCalledWith(false);
 	});
 
 	it("does not show the smart-indexing panels: those come after the scan", () => {

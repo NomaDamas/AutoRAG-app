@@ -46,8 +46,8 @@ import {
 	usageConsentOnLeaving,
 	type Translate,
 } from "./flow";
-import { Icon } from "./marks";
-import type { OnboardingCtx, OverlayKind } from "./context";
+import { AppLogo, FooterBackKey, FooterEnterArrow, Icon } from "./marks";
+import type { OnboardingCtx, OverlayKind, SubFolder } from "./context";
 import {
 	addExclusion as withExclusion,
 	needsAnalysis,
@@ -56,7 +56,6 @@ import {
 	reduceSmartRun,
 	setScopeExcluded,
 	setScopeMeasure,
-	type AddExclusionStatus,
 	type SmartRun,
 } from "./smart-scope";
 import { IndexingScreen } from "./IndexingScreen";
@@ -68,7 +67,6 @@ import { SmartScopeStep } from "./steps/SmartScope";
 import { ModelStep } from "./steps/Model";
 import { PermissionsStep } from "./steps/Permissions";
 import { PlanStep } from "./steps/Plan";
-import { RolesStep } from "./steps/Roles";
 import { SourcesStep } from "./steps/Sources";
 import { WelcomeStep } from "./steps/Welcome";
 
@@ -148,6 +146,17 @@ function leaveDetour(draft: OnboardingDraft): OnboardingDraft {
 
 const trimTrailingSeparators = (path: string): string => path.replace(/[\\/]+$/u, "");
 
+/** How long a finished scan stays on screen before the scope screen opens. */
+const SCAN_DONE_HOLD_MS = 900;
+
+/** Folders directly inside `path`; the scope screen browses with it, and an unreadable folder just has none. */
+function listSubfolders(path: string): Promise<readonly SubFolder[]> {
+	return window.autorag.fs.listDir(path).then(
+		(listing) => listing.entries.filter((entry) => entry.kind === "folder" && !entry.name.startsWith(".") && entry.name !== "node_modules").map(({ path: child, name }) => ({ path: child, name })),
+		() => [],
+	);
+}
+
 export function Onboarding({ onComplete }: { readonly onComplete: () => void }): ReactElement {
 	const { t: translateFn } = useTranslation();
 	// The onboarding copy lives under a fixed `onboarding` namespace tree; a loose
@@ -159,6 +168,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const [permission, setPermission] = useState<PermissionStatus | null>(null);
 	const [fdaPending, setFdaPending] = useState(false);
 	const [scans, setScans] = useState<ReadonlyMap<string, FolderScan>>(new Map());
+	const scansRef = useRef(scans);
+	scansRef.current = scans;
 	const [embedding, setEmbedding] = useState<EmbeddingInfo | null>(null);
 	const modelDownload = useModelDownload();
 	const modelDownloadRef = useRef(modelDownload);
@@ -213,6 +224,9 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	permissionRef.current = permission;
 	accountRef.current = account;
 	localAllowedRef.current = localEmbeddingAllowed(embedding?.localSpec ?? null);
+	const noSources = sourcesDone && detectedSources.length === 0;
+	const noSourcesRef = useRef(noSources);
+	noSourcesRef.current = noSources;
 	useEffect(() => {
 		overlayRef.current = overlay;
 	}, [overlay]);
@@ -249,7 +263,11 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return;
 			}
 			setPermission(perms);
-			const draft = snapshot.draft ?? seedDraft(folders, perms);
+			// Steps that were folded away resume where their work now happens: roles in the model step, permissions
+			// at the account, and the folder choice in the scan that now makes it.
+			const saved = snapshot.draft ?? seedDraft(folders, perms);
+			const moved = { roles: "model", permissions: "account", folders: "smartScan" } as const;
+			const draft = saved.stepId in moved ? { ...saved, stepId: moved[saved.stepId as keyof typeof moved] } : saved;
 			// A resumed draft may hold folders added through the dialog; list them
 			// again (they are not built-in candidates) so they stay visible.
 			const known = new Set(folders.map((candidate) => candidate.path));
@@ -294,7 +312,18 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				setSmartRun((previous) => reduceSmartRun(previous, event));
 				if (event.type === "result" && event.runId === smartRunIdRef.current) {
 					const analysed = smartRootsRef.current;
-					setDraft((current) => (current === null ? current : { ...current, smartScope: event.exclusions, smartScopeRoots: analysed }));
+					// A folder proposed as a whole is one of the analysed folders themselves: it starts unticked, the others ticked.
+					const whole = new Set(event.exclusions.filter((item) => item.path === item.root).map((item) => item.path));
+					setDraft((current) =>
+						current === null
+							? current
+							: {
+									...current,
+									folders: current.folders.map((folder) => (analysed.includes(folder.path) ? { ...folder, selected: !whole.has(folder.path) } : folder)),
+									smartScope: event.exclusions,
+									smartScopeRoots: analysed,
+								},
+					);
 				}
 			}),
 		[],
@@ -352,7 +381,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	const flow =
 		draft === null
 			? []
-			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed, canSelectCloudEmbedding(account));
+			: buildFlow(draft.plan, shouldSkipPlanStep(draft.planConfirmed, currentEmbed, account), currentEmbed, canSelectCloudEmbedding(account), noSources);
 
 	const startIndexing = useCallback((): void => {
 		const current = draftRef.current;
@@ -423,10 +452,16 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn, noSourcesRef.current);
 		// Leaving the embedding choice that a stopped index sent the user to goes straight back to the index.
 		const detour = current.resumeAt === "indexing" && current.stepId === "embedding";
-		const target = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
+		const following = detour ? "indexing" : list[list.indexOf(current.stepId) + 1];
+		const all = current.folders.map((folder) => folder.path);
+		// Without the recommendation, or with proposals that still cover every folder, there is nothing to scan: go straight to the scope.
+		const skipScan = following === "smartScan" && (current.smartSuggest === false || !needsAnalysis(all, current.smartScopeRoots, current.smartScope));
+		const target = skipScan ? "smartScope" : following;
+		// Turning the recommendation off drops what the AI proposed, keeping only folders the user left out by hand.
+		const manual = following === "smartScan" && current.smartSuggest === false;
 		const consent = usageConsentOnLeaving(current.stepId, shareUsageRef.current);
 		const errorConsent = errorReportsConsentOnLeaving(current.stepId, shareErrorsRef.current);
 		if (consent !== null && errorConsent !== null) {
@@ -434,12 +469,31 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			void autorag.settings.set({ usageAnalytics: consent, errorReporting: errorConsent }).catch((error: unknown) => console.error("[onboarding] privacy choices not saved:", error));
 		}
 		if (detour) setIndexStatus(null);
+		const base = detour ? leaveDetour(current) : current;
+		const { smartScopeRoots: _analysed, ...unanalysed } = base;
 		setDraft({
-			...(detour ? leaveDetour(current) : current),
+			...(manual ? { ...unanalysed, smartScope: (base.smartScope ?? []).filter((item) => item.reason === "") } : base),
 			...(current.stepId === "plan" ? { planConfirmed: true } : {}),
 			...(target === undefined ? {} : { stepId: target }),
 		});
 	}, [currentAdvance, openCheckout]);
+
+	/** The scope screen's way back: drops the proposals and runs the recommendation again on every folder. */
+	const rescan = useCallback((): void => {
+		const runId = smartRunIdRef.current;
+		smartRunIdRef.current = null;
+		setSmartRun(initialSmartRun);
+		if (runId !== null) {
+			void autorag.smartIndexing.cancel(runId);
+		}
+		setDraft((current) => {
+			if (current === null) {
+				return current;
+			}
+			const { smartScope: _dropped, smartScopeRoots: _roots, ...rest } = current;
+			return { ...rest, stepId: "smartScan" };
+		});
+	}, []);
 
 	const back = useCallback((): void => {
 		const current = draftRef.current;
@@ -453,10 +507,17 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		const signedIn = accountRef.current?.state === "signedIn";
 		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
-		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn, noSourcesRef.current);
+		// A plan just chosen has dropped out of the list, but the model step that follows it still steps back to it.
+		if (current.stepId === "model" && list.indexOf("model") > list.indexOf("embedding") && !shouldSkipPlanStep(false, embed, accountRef.current)) {
+			setDraft({ ...current, stepId: "plan", planConfirmed: false });
+			return;
+		}
 		const index = list.indexOf(current.stepId);
 		if (index > 0) {
-			const target = list[index - 1];
+			// The scan screen moves on by itself, so stepping back passes over it.
+			const previous = list[index - 1];
+			const target = previous === "smartScan" ? list[index - 2] : previous;
 			if (target !== undefined) {
 				setDraft({ ...current, stepId: target });
 			}
@@ -493,8 +554,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			const left = new Set(paths.map(trimTrailingSeparators));
 			const folders = current.folders.map((folder) => (left.has(trimTrailingSeparators(folder.path)) ? { ...folder, selected: false } : folder));
 			if (!folders.some((folder) => folder.selected)) {
-				// Nothing is left to index: choose folders again.
-				setDraft({ ...current, folders, stepId: "folders" });
+				// Nothing is left to index: choose folders again on the scope screen.
+				setDraft({ ...current, folders, stepId: "smartScope" });
 				return;
 			}
 			const updated = { ...current, folders };
@@ -523,14 +584,14 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		return () => window.clearInterval(id);
 	}, [stepId, permission?.platform, permission?.fullDiskAccess]);
 
-	// Pre-scan every candidate on the folders step; on a resume past it, still scan the
-	// selected folders so later steps' totals and ETA are real.
+	// Pre-scan every candidate while the scope is decided (an unticked one still shows its size there); later,
+	// still scan the selected folders so those steps' totals and ETA are real.
 	useEffect(() => {
 		if (stepId === "welcome" || stepId === "permissions" || stepId === "account" || stepId === "model") {
 			return;
 		}
 		const wanted =
-			stepId === "folders"
+			stepId === "smartScan" || stepId === "smartScope"
 				? candidates.map((candidate) => candidate.path)
 				: (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
 		const missing = wanted.filter((path) => !scannedRef.current.has(path));
@@ -554,7 +615,7 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 	}, [stepId]);
 
 	const startSmartScan = useCallback((): void => {
-		const folders = (draftRef.current?.folders ?? []).filter((folder) => folder.selected).map((folder) => folder.path);
+		const folders = (draftRef.current?.folders ?? []).map((folder) => folder.path);
 		if (folders.length === 0) {
 			return;
 		}
@@ -569,16 +630,15 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		});
 	}, []);
 
-	// Entering the scan screen starts the analysis of the folders chosen in the step before. Proposals from an earlier
-	// pass are kept while they cover every selected folder; one that was cancelled or failed is left as it is, with a
-	// button to run it again.
+	// Entering the scan screen starts the analysis of every detected folder. Proposals from an earlier pass are kept
+	// while they cover every folder; one that was cancelled or failed is left as it is, with a button to run it again.
 	useEffect(() => {
 		const current = draftRef.current;
 		if (stepId !== "smartScan" || current === null) {
 			return;
 		}
-		const selected = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-		if (!needsAnalysis(selected, current.smartScopeRoots, current.smartScope)) {
+		const all = current.folders.map((folder) => folder.path);
+		if (!needsAnalysis(all, current.smartScopeRoots, current.smartScope)) {
 			return;
 		}
 		if (smartRunRef.current.status !== "idle" || smartRunIdRef.current !== null) {
@@ -586,6 +646,20 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 		}
 		startSmartScan();
 	}, [stepId, startSmartScan]);
+
+	// A finished scan has no footer to press: it shows its result for a moment, then opens the scope screen.
+	const [dissolving, setDissolving] = useState(false);
+	const scanFinished = stepId === "smartScan" && (smartRun.status === "done" || (smartRun.status === "idle" && draft?.smartScope !== undefined));
+	useEffect(() => {
+		if (!scanFinished) {
+			return;
+		}
+		const timer = window.setTimeout(() => {
+			setDissolving(true);
+			setDraft((current) => (current === null || current.stepId !== "smartScan" ? current : { ...current, stepId: "smartScope" }));
+		}, SCAN_DONE_HOLD_MS);
+		return () => window.clearTimeout(timer);
+	}, [scanFinished]);
 
 	// A folder the user left out by hand is measured by the pre-scan; its size lands in the draft when that scan is done.
 	useEffect(() => {
@@ -630,6 +704,21 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			offDone();
 		};
 	}, [stepId]);
+
+	// Detection only runs on the sources step, so finding nothing is learned there: move on to what follows it.
+	useEffect(() => {
+		const current = draftRef.current;
+		if (!noSources || stepId !== "sources" || current === null) {
+			return;
+		}
+		const signedIn = accountRef.current?.state === "signedIn";
+		const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
+		const list = buildFlow(current.plan, shouldSkipPlanStep(current.planConfirmed, embed, accountRef.current), embed, signedIn);
+		const following = list[list.indexOf("sources") + 1];
+		if (following !== undefined) {
+			setDraft({ ...current, stepId: following });
+		}
+	}, [noSources, stepId]);
 
 	useEffect(() => {
 		if (stepId !== "indexing") {
@@ -825,51 +914,32 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				void autorag.smartIndexing.cancel(runId);
 			}
 		},
-		rescanSmart: () => {
-			const runId = smartRunIdRef.current;
-			smartRunIdRef.current = null;
-			setSmartRun(initialSmartRun);
-			if (runId !== null) {
-				void autorag.smartIndexing.cancel(runId);
-			}
-			setDraft((current) => {
-				if (current === null) {
-					return current;
-				}
-				const { smartScope: _dropped, smartScopeRoots: _roots, ...rest } = current;
-				return { ...rest, stepId: "smartScan" };
-			});
-		},
 		setSmartExcluded: (path, excluded) =>
 			setDraft((current) =>
 				current === null || current.smartScope === undefined ? current : { ...current, smartScope: setScopeExcluded(current.smartScope, path, excluded) },
 			),
-		addExclusion: () => {
-			void bridge.pickFolders().then((picked) => {
-				const current = draftRef.current;
-				if (current === null || picked.length === 0) {
-					return;
-				}
-				const roots = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
-				let scope = current.smartScope;
-				const added: string[] = [];
-				let refused: AddExclusionStatus | null = null;
-				for (const candidate of picked) {
-					const result = withExclusion(scope, candidate.path, roots);
-					if (result.status === "added") {
-						scope = result.scope;
-						added.push(candidate.path);
-					} else {
-						refused = result.status;
-					}
-				}
-				if (added.length > 0) {
-					patch({ smartScope: scope ?? [] });
-					void bridge.scanFolders(added);
-				} else if (refused !== null) {
-					showToast(t(`onboarding.folders.exclude.refused.${refused}`));
-				}
-			});
+		smartSuggest: draft?.smartSuggest !== false,
+		setSmartSuggest: (on) => patch({ smartSuggest: on }),
+		excludeFolder: (path) => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const roots = current.folders.filter((folder) => folder.selected).map((folder) => folder.path);
+			const result = withExclusion(current.smartScope, path, roots);
+			if (result.status !== "added") {
+				showToast(t(`onboarding.smartScope.exclude.refused.${result.status}`));
+				return;
+			}
+			patch({ smartScope: result.scope });
+			void bridge.scanFolders([path]);
+		},
+		listSubfolders,
+		measureFolders: (paths) => {
+			const missing = paths.filter((path) => !scansRef.current.has(path));
+			if (missing.length > 0) {
+				void bridge.scanFolders(missing);
+			}
 		},
 		addFolders: () => {
 			void bridge.pickFolders().then((picked) => {
@@ -947,6 +1017,21 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 				return;
 			}
 			patch({ plan });
+		},
+		connectOwnKey: () => {
+			const current = draftRef.current;
+			if (current === null) {
+				return;
+			}
+			const signedIn = accountRef.current?.state === "signedIn";
+			const embed = resolveEmbed(current.embed, signedIn, localAllowedRef.current);
+			if (!isPlanSelectable("byok", embed)) {
+				return;
+			}
+			// What "continue" from the plan step would open, with BYOK chosen there.
+			const list = buildFlow("byok", false, embed, signedIn, noSourcesRef.current);
+			const following = list[list.indexOf("plan") + 1];
+			setDraft({ ...current, plan: "byok", planConfirmed: true, ...(following === undefined ? {} : { stepId: following }) });
 		},
 		signIn,
 		sendEmailOtp,
@@ -1059,9 +1144,8 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 			case "plan":
 				return <PlanStep ctx={ctx} />;
 			case "model":
-				return <ModelStep ctx={ctx} />;
 			case "roles":
-				return <RolesStep ctx={ctx} />;
+				return <ModelStep ctx={ctx} />;
 			case "indexing":
 				return <IndexingScreen ctx={ctx} />;
 		}
@@ -1077,25 +1161,35 @@ export function Onboarding({ onComplete }: { readonly onComplete: () => void }):
 					))}
 				</div>
 				<div className="footer-actions">
-					<button type="button" className="footer-btn" disabled={footerIndex <= 0} onClick={back}>
-						{t("onboarding.footerBack")}
-						<Icon name="backspace" size={16} />
-					</button>
-					<button type="button" className="footer-btn" disabled={!currentAdvance()} onClick={next}>
+					{draft.stepId === "welcome" ? null : (
+						<button type="button" className="footer-btn back" disabled={footerIndex <= 0} onClick={draft.stepId === "smartScope" && draft.smartSuggest !== false ? rescan : back}>
+							{t(draft.stepId === "smartScope" && draft.smartSuggest !== false ? "onboarding.smartScope.rescan" : "onboarding.footerBack")}
+							<FooterBackKey />
+						</button>
+					)}
+					<button type="button" className="footer-btn next" disabled={!currentAdvance()} onClick={next}>
 						{t(primaryLabelKey(draft.stepId, draft.plan, planHeld(draft.plan, account)))}
-						<Icon name="corner-down-left" size={16} />
+						<FooterEnterArrow />
 					</button>
 				</div>
 			</>
 		);
 
 	return (
-		<div className={cn("onb", draft.stepId === "indexing" && "immersive")}>
+		<div className={cn("onb", draft.stepId === "indexing" && "immersive", draft.stepId === "smartScan" && "no-footer", dissolving && "dissolving")}>
 			<header className="titlebar">
 				<div className="window-title">{WINDOW_TITLE}</div>
 			</header>
-			<div className="stage">{renderStep()}</div>
-			<footer className="footer">{footer}</footer>
+			<div className="stage">
+				{renderStep()}
+				{/* The finished scan stays on top of the scope screen and fades away, so one dissolves into the other. */}
+				{dissolving ? (
+					<div className="si-dissolve" aria-hidden="true" inert onAnimationEnd={() => setDissolving(false)}>
+						<SmartScanStep ctx={ctx} />
+					</div>
+				) : null}
+			</div>
+			{draft.stepId === "smartScan" ? null : <footer className="footer">{footer}</footer>}
 			<div className={cn("toast", toast !== null && "show")}>{toast}</div>
 			<div className="scrim" hidden={overlay === null}>
 				{renderOverlay(overlay, { t, ctx, onClose: () => setOverlay(null) })}

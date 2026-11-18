@@ -4,10 +4,11 @@ import { basename, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchFinder, finderWindow, openAiSearch } from "./launch-finder.mjs";
 import { chord, rmRetry } from "./platform.mjs";
+import { pickSelect } from "./settings-select.mjs";
 
 /**
  * Manual QA & Live E2E — Ask-as-Smart-Folder (Evidence Folder):
- * - Gathers all local evidence files across a multi-turn AI Search session into a
+ * - Gathers all local evidence files across a multi-turn AI Chat session into a
  *   temporary Evidence Folder (symlinks, zero disk duplication).
  * - Opens the Evidence Folder in a new Finder tab on clicking "Evidence Folder"
  *   at the top of the Evidence panel.
@@ -343,7 +344,7 @@ check(
 	`exists=${existsSync(pastedPath)}`,
 );
 
-// 8. Return to the AI Search tab, reload session from Chat History, and click Evidence Folder again -> recreates temp folder.
+// 8. Return to the AI Chat tab, reload session from Chat History, and click Evidence Folder again -> recreates temp folder.
 await page.locator('.tabs .tab[data-ai-search="true"]').click();
 await page.locator('[aria-label="Chat history"]').click();
 await page.locator(".history-item").first().waitFor({ state: "visible" });
@@ -373,9 +374,11 @@ check(
 
 // 10. Switch Interface language to Korean via Settings and verify Korean UI ("근거 폴더" button & "근거 폴더 닫기" modal).
 await page.locator(".sidebar__item--settings").click();
-const langSelect = page.locator("select.linear-select").nth(1);
+const langSelect = page.locator(".select-field.linear-select").nth(1);
 await langSelect.waitFor({ state: "visible" });
-await langSelect.selectOption("ko");
+await pickSelect(langSelect, "ko");
+// Settings takes over the window (no tab strip); Back returns to the Finder.
+await page.locator(".settings-sidebar-back").click();
 await page.locator('.tabs .tab[data-ai-search="true"]').click();
 const koEvHalf = '.inspector-half[aria-label="근거"]';
 const koEvBtn = `${koEvHalf} button[data-action="evidence-folder"]`;

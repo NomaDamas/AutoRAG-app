@@ -11,9 +11,9 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { HardDrive, Home } from "lucide-react";
+import { HardDrive, Home, MoreHorizontal } from "lucide-react";
 import { cn } from "../lib/cn";
-import { fitPathBar, sameFit, type PathFit, type SegmentFit } from "../state/path-fit";
+import { FITS, fitPathBar, sameFit, type PathFit } from "../state/path-fit";
 import { volumeLabel, windowsRootPath, type Crumb, type PathCompletion } from "../state/paths";
 import { kindFromExtension } from "../state/kinds";
 import { FileTile } from "./primitives/FileTile";
@@ -22,8 +22,10 @@ import { FileTile } from "./primitives/FileTile";
  * v7 `.pathbar` (proto:.pathbar): macOS path bar at the foot of the Finder column.
  *
  * One line, always. The trail is measured against the bar and `fitPathBar`
- * decides, per segment, whether the label shows in full, is clipped behind a
- * trailing fade (never an ellipsis), or is dropped so only the icon remains.
+ * decides which folders fold into a "…" button (Windows Explorer style): the
+ * current folder and as many of its parents as fit stay on the bar in full, and
+ * "…" opens a dropdown of the folded ones. Only when even "…" and the current
+ * folder do not fit does the last label narrow behind a trailing fade.
  *
  * A click anywhere that is not a folder segment (the gaps, the trailing space,
  * the volume or file segment) turns the bar into a text field holding the full
@@ -40,14 +42,15 @@ interface PathSegment {
 	readonly icon: ReactNode;
 }
 
-/** Narrowest clipped label slot (4px icon gap + a few glyphs); below it the segment shows its icon only. */
+/** Narrowest clipped label slot for the last segment (4px icon gap + a few glyphs). */
 const MIN_LABEL = 32;
-const NO_FIT: PathFit = { segments: [], overflow: false };
-const FULL: SegmentFit = { mode: "full" };
 
 const SEGMENT_CLASS =
 	"path-seg inline-flex h-20 flex-none items-center rounded-4 border-0 bg-transparent px-5 text-badge text-inherit";
 const ICON_CLASS = "path-ic grid size-14 flex-none place-items-center text-ink-faint";
+const SEPARATOR_CLASS = "path-sep flex-none px-1 text-meta text-ink-faint";
+const MORE_CLASS =
+	"path-more inline-flex h-20 flex-none cursor-pointer items-center rounded-4 border-0 bg-transparent px-5 text-badge text-ink-muted hover:bg-hover hover:text-ink";
 /** The last `--fade-label` px of a clipped label fade out, so the word looks cut rather than elided. */
 const FADE_END = "[mask-image:linear-gradient(to_right,#000_calc(100%_-_var(--fade-label)),transparent)]";
 /** An overflowing icon-only trail is pinned to its end and fades out at the start edge. */
@@ -113,25 +116,27 @@ export function PathBar({
 	}
 
 	const viewportRef = useRef<HTMLDivElement>(null);
-	const trailRef = useRef<HTMLDivElement>(null);
-	const [fit, setFit] = useState<PathFit>(NO_FIT);
+	const measureRef = useRef<HTMLDivElement>(null);
+	const [fit, setFit] = useState<PathFit>(FITS);
 
 	const refit = useCallback(() => {
 		const viewport = viewportRef.current;
-		const trail = trailRef.current;
-		if (viewport === null || trail === null) return;
-		// Each `.path-label` slot holds one unconstrained `.path-name`, so the
-		// name's box is the label's natural width whatever the slot is showing.
-		const labels: number[] = [];
-		let slots = 0;
-		for (const slot of trail.querySelectorAll<HTMLElement>(".path-label")) {
-			slots += slot.getBoundingClientRect().width;
-			labels.push(slot.firstElementChild?.getBoundingClientRect().width ?? 0);
-		}
+		const measure = measureRef.current;
+		if (viewport === null || measure === null) return;
+		// The measuring copy holds every segment in full, one separator and "…", so a fit never depends on what is showing.
+		const widths = [...measure.querySelectorAll<HTMLElement>("[data-measure-segment]")].map((element) => element.getBoundingClientRect().width);
+		const separator = measure.querySelector<HTMLElement>("[data-measure-separator]");
+		const more = measure.querySelector<HTMLElement>("[data-measure-more]");
+		const lastLabel = measure.querySelector<HTMLElement>("[data-measure-segment]:last-of-type .path-label");
+		const gap = Number.parseFloat(getComputedStyle(measure).columnGap) || 0;
 		const next = fitPathBar({
 			available: viewport.getBoundingClientRect().width,
-			fixed: trail.getBoundingClientRect().width - slots,
-			labels,
+			segments: widths,
+			// A separator sits in its item with the item's own gap before the segment.
+			separator: (separator?.getBoundingClientRect().width ?? 0) + gap,
+			gap,
+			more: more?.getBoundingClientRect().width ?? 0,
+			lastLabel: lastLabel?.getBoundingClientRect().width ?? 0,
 			minLabel: MIN_LABEL,
 		});
 		setFit((current) => (sameFit(current, next) ? current : next));
@@ -198,8 +203,72 @@ export function PathBar({
 		if (!editing) onEditorClosed();
 	}, [editing, onEditorClosed]);
 
+	// "…": the folded folders, in path order, as a dropdown above the bar (the bar sits at the foot of the window).
+	const hiddenSet = new Set(fit.hidden);
+	const hiddenSegments = segments.filter((_, index) => hiddenSet.has(index));
+	const items: ({ readonly kind: "segment"; readonly segment: PathSegment; readonly index: number } | { readonly kind: "more" })[] = [];
+	segments.forEach((segment, index) => {
+		if (!hiddenSet.has(index)) items.push({ kind: "segment", segment, index });
+		else if (items.at(-1)?.kind !== "more") items.push({ kind: "more" });
+	});
+	const moreRef = useRef<HTMLButtonElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+	const [moreOpen, setMoreOpen] = useState(false);
+	const [moreAt, setMoreAt] = useState<{ readonly left: number; readonly bottom: number } | null>(null);
+	const hasHidden = hiddenSegments.length > 0;
+	// The menu belongs to this folder and this fold: a new location or a fit that folds nothing closes it.
+	useEffect(() => {
+		setMoreOpen(false);
+	}, [path]);
+	useEffect(() => {
+		if (!hasHidden) setMoreOpen(false);
+	}, [hasHidden]);
+	const toggleMore = (): void => {
+		const box = moreRef.current?.getBoundingClientRect();
+		if (box === undefined) return;
+		setMoreAt({ left: box.left, bottom: window.innerHeight - box.top + 4 });
+		setMoreOpen((open) => !open);
+	};
+	useLayoutEffect(() => {
+		if (moreOpen) menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+	}, [moreOpen]);
+	useEffect(() => {
+		if (!moreOpen) return;
+		const onPointer = (event: PointerEvent): void => {
+			if (!(event.target instanceof Element) || event.target.closest("[data-path-more]") === null) setMoreOpen(false);
+		};
+		// Escape closes the menu and stays here: the Finder keymap would otherwise dismiss something else.
+		const onKey = (event: globalThis.KeyboardEvent): void => {
+			if (event.key !== "Escape") return;
+			event.preventDefault();
+			event.stopPropagation();
+			setMoreOpen(false);
+			moreRef.current?.focus();
+		};
+		const onResize = (): void => setMoreOpen(false);
+		document.addEventListener("pointerdown", onPointer, true);
+		window.addEventListener("keydown", onKey, true);
+		window.addEventListener("resize", onResize);
+		return () => {
+			document.removeEventListener("pointerdown", onPointer, true);
+			window.removeEventListener("keydown", onKey, true);
+			window.removeEventListener("resize", onResize);
+		};
+	}, [moreOpen]);
+	const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+		if (event.key !== "ArrowDown" && event.key !== "ArrowUp" && event.key !== "Home" && event.key !== "End") return;
+		event.preventDefault();
+		event.stopPropagation();
+		const options = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+		if (options.length === 0) return;
+		const at = options.indexOf(document.activeElement as HTMLButtonElement);
+		const next =
+			event.key === "Home" ? 0 : event.key === "End" ? options.length - 1 : (at + (event.key === "ArrowDown" ? 1 : -1) + options.length) % options.length;
+		options[next]?.focus();
+	};
+
 	const startEditing = (event: MouseEvent<HTMLElement>): void => {
-		if (editing || (event.target as Element).closest("[data-crumb-path]") !== null) return;
+		if (editing || (event.target as Element).closest("[data-crumb-path], [data-path-more]") !== null) return;
 		setDraft(path);
 		setCompletionEnabled(false);
 		setEditFor(path);
@@ -252,37 +321,83 @@ export function PathBar({
 				ref={viewportRef}
 				className={cn("flex min-w-0 flex-1 overflow-hidden", fit.overflow && ["justify-end", FADE_START], editing && "invisible")}
 			>
-				<div ref={trailRef} className="path-trail flex w-max flex-none items-center gap-1">
-					{segments.map((segment, index) => {
-						const segmentFit = fit.segments[index] ?? FULL;
+				<div className="path-trail flex w-max flex-none items-center gap-1">
+					{items.map((item, index) => {
+						const separator = index > 0 && items[index - 1]?.kind !== "more" ? <span className={SEPARATOR_CLASS}>›</span> : null;
+						if (item.kind === "more") {
+							return (
+								<span key="$more" className="flex flex-none items-center gap-1">
+									{separator}
+									<button
+										ref={moreRef}
+										type="button"
+										className={cn(MORE_CLASS, moreOpen && "bg-hover text-ink")}
+										data-path-more=""
+										aria-haspopup="menu"
+										aria-expanded={moreOpen}
+										aria-label={t("finder.pathBar.more")}
+										title={t("finder.pathBar.more")}
+										onClick={toggleMore}
+									>
+										<MoreHorizontal size={14} strokeWidth={1.8} />
+									</button>
+								</span>
+							);
+						}
+						const segment = item.segment;
+						const clip = item.index === segments.length - 1 ? fit.lastClip : null;
 						return (
 							<span key={segment.key} className="flex flex-none items-center gap-1">
-								{index > 0 ? <span className="path-sep flex-none px-1 text-meta text-ink-faint">›</span> : null}
-								<button
-									type="button"
-									className={cn(SEGMENT_CLASS, segment.path !== null && "cursor-pointer hover:bg-hover hover:text-ink")}
-									title={segment.path ?? segment.label}
-									data-crumb-path={segment.path ?? undefined}
-									onClick={segment.path === null ? undefined : () => onNavigate(segment.path ?? "")}
-								>
-									<span className={ICON_CLASS}>{segment.icon}</span>
-									<span
-										className={cn(
-											"path-label flex flex-none overflow-hidden",
-											segmentFit.mode === "clip" && FADE_END,
-											segmentFit.mode === "icon" && "w-0",
-										)}
-										style={segmentFit.mode === "clip" ? { width: segmentFit.width } : undefined}
-										data-fit={segmentFit.mode}
-									>
-										<span className="path-name flex-none pl-4">{segment.label}</span>
-									</span>
-								</button>
+								{separator}
+								<SegmentButton segment={segment} clip={clip} onNavigate={onNavigate} />
 							</span>
 						);
 					})}
 				</div>
 			</div>
+			{/* The measuring copy: every segment in full, one separator and "…", out of sight and out of reach. */}
+			<div ref={measureRef} aria-hidden="true" inert className="path-measure pointer-events-none invisible absolute left-0 top-0 flex w-max items-center gap-1">
+				{segments.map((segment) => (
+					<SegmentButton key={segment.key} segment={segment} clip={null} onNavigate={onNavigate} measure />
+				))}
+				<span className={SEPARATOR_CLASS} data-measure-separator="">
+					›
+				</span>
+				<span className={MORE_CLASS} data-measure-more="">
+					<MoreHorizontal size={14} strokeWidth={1.8} />
+				</span>
+			</div>
+			{moreOpen && moreAt !== null ? (
+				<div
+					ref={menuRef}
+					role="menu"
+					aria-label={t("finder.pathBar.more")}
+					data-path-more=""
+					className="path-more-menu fixed z-30 max-h-224 min-w-160 overflow-y-auto rounded-6 border border-border bg-window p-2 whitespace-nowrap shadow-lg"
+					style={{ left: moreAt.left, bottom: moreAt.bottom }}
+					onKeyDown={onMenuKeyDown}
+				>
+					{hiddenSegments.map((segment) => (
+						<button
+							key={segment.key}
+							type="button"
+							role="menuitem"
+							disabled={segment.path === null}
+							title={segment.path ?? segment.label}
+							data-crumb-path={segment.path ?? undefined}
+							className="flex h-28 w-full items-center gap-6 rounded-4 border-0 bg-transparent px-6 text-left text-badge text-ink-body enabled:cursor-pointer enabled:hover:bg-hover enabled:focus-visible:bg-hover disabled:text-ink-faint focus-visible:outline-none"
+							onClick={() => {
+								if (segment.path === null) return;
+								setMoreOpen(false);
+								onNavigate(segment.path);
+							}}
+						>
+							<span className={ICON_CLASS}>{segment.icon}</span>
+							<span className="min-w-0 flex-1 truncate">{segment.label}</span>
+						</button>
+					))}
+				</div>
+			) : null}
 			{editing ? (
 				<>
 					<div className="absolute inset-x-4 top-1/2 h-20 -translate-y-1/2">
@@ -337,5 +452,36 @@ export function PathBar({
 				</>
 			) : null}
 		</nav>
+	);
+}
+
+/** One folder (or the volume / selected file) on the bar. `measure` renders the measuring copy's version, without the `.path-*` names lanes read. */
+function SegmentButton({
+	segment,
+	clip,
+	onNavigate,
+	measure = false,
+}: {
+	readonly segment: PathSegment;
+	/** Width of the label slot when the last segment narrows; null shows the label in full. */
+	readonly clip: number | null;
+	readonly onNavigate: (path: string) => void;
+	readonly measure?: boolean;
+}): ReactElement {
+	return (
+		<button
+			type="button"
+			tabIndex={measure ? -1 : undefined}
+			className={cn(measure ? SEGMENT_CLASS.replace("path-seg ", "") : SEGMENT_CLASS, !measure && segment.path !== null && "cursor-pointer hover:bg-hover hover:text-ink")}
+			title={measure ? undefined : (segment.path ?? segment.label)}
+			data-crumb-path={measure ? undefined : (segment.path ?? undefined)}
+			data-measure-segment={measure ? "" : undefined}
+			onClick={measure || segment.path === null ? undefined : () => onNavigate(segment.path ?? "")}
+		>
+			<span className={ICON_CLASS}>{segment.icon}</span>
+			<span className={cn("path-label flex flex-none overflow-hidden", clip !== null && FADE_END)} style={clip !== null ? { width: clip } : undefined} data-fit={clip !== null ? "clip" : "full"}>
+				<span className={cn(!measure && "path-name", "flex-none pl-4")}>{segment.label}</span>
+			</span>
+		</button>
 	);
 }

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSettingsService } from "../src/main/settings-service";
 import {
+	BUILTIN_CONTEXT_MENU_ITEM_IDS,
 	CONTEXT_MENU_SECTION_IDS,
 	DEFAULT_CONTEXT_MENU_SETTINGS,
 	isDefaultContextMenuSettings,
@@ -107,6 +108,32 @@ describe("context-menu-contract normalization, locked Tags invariant & MagicActi
 		});
 		expect(isDefaultContextMenuSettings(normalized)).toBe(false);
 		expect(isDefaultContextMenuSettings(DEFAULT_CONTEXT_MENU_SETTINGS)).toBe(true);
+	});
+
+	it("resolves 사이드바에 고정 / 제거 in every language to one hideable built-in item", () => {
+		expect(BUILTIN_CONTEXT_MENU_ITEM_IDS).toContain("builtin:pinToSidebar");
+		for (const alias of [
+			"builtin:pinToSidebar",
+			"builtin:pintosidebar",
+			"builtin:unpinFromSidebar",
+			"Pin to Sidebar",
+			"Remove from Sidebar",
+			"사이드바에 고정",
+			"사이드바에서 제거",
+			"サイドバーに固定",
+			"サイドバーから削除",
+			"固定到边栏",
+			"从边栏中移除",
+		]) {
+			expect(normalizeContextMenuItemId(alias), alias).toBe("builtin:pinToSidebar");
+			expect(isLockedContextMenuItemId(alias), alias).toBe(false);
+		}
+		const normalized = normalizeContextMenuSettings({ hiddenItems: ["사이드바에 고정", "builtin:pinToSidebar", "builtin:newFolder"] });
+		expect(normalized.hiddenItems).toEqual(["builtin:pinToSidebar", "builtin:newFolder"]);
+		expect(isDefaultContextMenuSettings(normalized)).toBe(false);
+		// The aliases are specific enough not to capture the neighbours.
+		expect(normalizeContextMenuItemId("새 폴더")).toBe("builtin:newFolder");
+		expect(normalizeContextMenuItemId("제거")).toBe("");
 	});
 
 	it("normalizes extension lists from comma/space/dot strings or arrays", () => {

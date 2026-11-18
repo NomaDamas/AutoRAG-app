@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ROW_DRAG_THRESHOLD, rowDragPhase } from "../src/renderer/src/state/row-drag";
+import { ROW_DRAG_THRESHOLD, rowDragCursor, rowDragPhase } from "../src/renderer/src/state/row-drag";
 
 const viewport = { width: 800, height: 600 };
 const start = { x: 100, y: 100 };
@@ -28,5 +28,25 @@ describe("rowDragPhase", () => {
 
 	it("stays native once the drag has left, even back over the window", () => {
 		expect(rowDragPhase("native", start, { x: 400, y: 300 }, viewport)).toBe("native");
+	});
+});
+
+describe("rowDragCursor", () => {
+	it("shows no-drop when no target accepted, whatever a target wrote", () => {
+		expect(rowDragCursor(false, "copy", false)).toBe("none");
+		expect(rowDragCursor(false, "none", true)).toBe("none");
+	});
+
+	it("shows the verb the accepting target wrote, ⌥ or not", () => {
+		for (const verb of ["copy", "link", "move"] as const) {
+			expect(rowDragCursor(true, verb, false)).toBe(verb);
+			expect(rowDragCursor(true, verb, true)).toBe(verb);
+		}
+	});
+
+	it("moves the rows when the target wrote no verb, and ⌥ copies", () => {
+		expect(rowDragCursor(true, "none", false)).toBe("move");
+		expect(rowDragCursor(true, "none", true)).toBe("copy");
+		expect(rowDragCursor(true, "", false)).toBe("move");
 	});
 });

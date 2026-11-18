@@ -42,6 +42,8 @@ export interface ApprovalModeMenuProps {
 	readonly mode: ApprovalMode;
 	/** Persists the mode; the panel shows the mode `setMode` resolves to. */
 	readonly onChange: (mode: ApprovalMode) => void;
+	/** Icon and chevron only (the inspector chat's narrow composer); the label stays the button's name. */
+	readonly compact?: boolean;
 }
 
 /**
@@ -76,7 +78,7 @@ export function useApprovalMode(): { readonly mode: ApprovalMode; readonly setMo
 	return { mode, setMode };
 }
 
-export function ApprovalModeMenu({ mode, onChange }: ApprovalModeMenuProps): ReactElement {
+export function ApprovalModeMenu({ mode, onChange, compact = false }: ApprovalModeMenuProps): ReactElement {
 	const { t } = useTranslation();
 	const [open, setOpen] = useState(false);
 	const triggerRef = useRef<HTMLButtonElement>(null);
@@ -126,7 +128,7 @@ export function ApprovalModeMenu({ mode, onChange }: ApprovalModeMenuProps): Rea
 				ref={triggerRef}
 				type="button"
 				className={cn(
-					"inline-flex h-26 flex-none items-center gap-4 rounded-full border-0 px-8 text-badge font-medium cursor-pointer transition-colors duration-(--dur-color) ease-out",
+					"inline-flex h-26 flex-none items-center gap-3 rounded-full border-0 px-8 text-badge font-medium leading-[16.5px] cursor-pointer transition-colors duration-(--dur-color) ease-out",
 					triggerTone(mode),
 				)}
 				aria-haspopup="menu"
@@ -141,7 +143,7 @@ export function ApprovalModeMenu({ mode, onChange }: ApprovalModeMenuProps): Rea
 				}}
 			>
 				<CurrentIcon size={13} />
-				<span>{t(modeLabelKey(mode))}</span>
+				{compact ? null : <span>{t(modeLabelKey(mode))}</span>}
 				<ChevronDown size={11} />
 			</button>
 

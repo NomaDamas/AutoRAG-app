@@ -1,3 +1,5 @@
+import type { IndexProgressSnapshot } from "./index-progress-contract";
+
 /**
  * What the app is indexing right now: the local-folder refresh (parsed mirror →
  * MinSync → Jikji …) and every datasource sync, whoever started it — this app,
@@ -51,10 +53,15 @@ export interface IndexActivitySnapshot {
 	readonly items: readonly IndexActivityItem[];
 	/**
 	 * Bar position, 0..1; `null` = indeterminate (something runs but nothing it
-	 * reports says how far). The librarian reports phases, not per-file totals,
-	 * so this counts finished items plus a phase estimate for the local refresh.
+	 * reports says how far). Counts finished items plus the measured part of the
+	 * local refresh's stage (see `progress`); nothing here is filled by elapsed time.
 	 */
 	readonly fraction: number | null;
+	/**
+	 * Stage-by-stage counts, bytes, remaining time and liveness of the local refresh while it
+	 * runs; `null` when no local refresh is running. Onboarding shows the same shape.
+	 */
+	readonly progress: IndexProgressSnapshot | null;
 	readonly error: string | null;
 }
 
@@ -65,6 +72,7 @@ export const IDLE_INDEX_ACTIVITY: IndexActivitySnapshot = {
 	finishedAt: null,
 	items: [],
 	fraction: null,
+	progress: null,
 	error: null,
 };
 

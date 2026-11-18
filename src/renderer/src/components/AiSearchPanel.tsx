@@ -2,6 +2,7 @@ import {
 	forwardRef,
 	useEffect,
 	useImperativeHandle,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -26,14 +27,19 @@ import type { ErrorFixSettingsPage } from "../../../shared/error-fix-contract";
 import { chordFromKeyEvent, resolveEffectiveShortcuts } from "../../../shared/shortcuts-contract";
 import { useFormattedShortcut, useShortcutSettings } from "../hooks/useShortcutSettings";
 import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerItem } from "../state/steering";
-import { closeRequest, EMPTY_QUEUE, frontRequest, mergePending, openRequest, type InteractionQueue } from "../state/interaction";
+import { frontRequest } from "../state/interaction";
+import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
-import { answerViewState } from "../state/answer-view";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { appendTranscript } from "../../../shared/voice-contract";
+import { useVoiceInput } from "../state/useVoiceInput";
+import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
+import { VoiceWaveform } from "./VoiceWaveform";
 import { ImageRow, lineImages, type ImageActions } from "./AnswerImage";
 import { AnswerLink } from "./AnswerLink";
+import { SeedLoader } from "./SeedLoader";
 import { PipeTable } from "./PipeTable";
 import dazziLogo from "../assets/dazzi-logo.png";
 import {
@@ -41,16 +47,18 @@ import {
 	evidenceDetail,
 	evidenceHeading,
 	evidenceKind,
-	resolveActiveEvidence,
+	accumulateEvidence,
+	citationSource,
 	unresolvedCitationNumbers,
 	type EvidenceSelectionSource,
 } from "../state/evidence";
 import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
-import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, NewChatIcon, SparklesIcon } from "./icons";
+import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
 import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
+import { FileMention } from "./FileMention";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
 import { ComposerField } from "./ComposerField";
 import { InteractionDock } from "./InteractionDock";
@@ -91,6 +99,10 @@ export interface AiDockHandle {
 	toggleHistory(): void;
 	/** Start a new conversation, like the panel's 새 대화 button. */
 	newChat(): void;
+	/** Show stored chat `id` (the inspector's ⤢), to continue it here; ignored while a run streams. */
+	openChat(id: string): void;
+	/** Open the 대화 기록 list (it stays open if it already is). */
+	showHistory(): void;
 }
 
 export interface AiSearchPanelProps {
@@ -102,6 +114,11 @@ export interface AiSearchPanelProps {
 	/** The panel's tab is on screen in some pane (split panes show several). */
 	readonly visible: boolean;
 	readonly selectedEvidence: number | null;
+	/**
+	 * The person picked source `number` in the Inspector's evidence tabs: the panel scrolls its text to where that source
+	 * is cited. `nonce` is new for every pick, so picking the same source again scrolls again.
+	 */
+	readonly evidenceJump?: { readonly number: number; readonly nonce: number } | null;
 	readonly onSelectEvidence: (number: number) => void;
 	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
@@ -133,12 +150,12 @@ function parentFolder(att: ChatAttachment): string | null {
 	return parts.length >= 2 ? parts[parts.length - 2] ?? null : null;
 }
 
-function formatElapsed(ms: number): string {
+export function formatElapsed(ms: number): string {
 	return `${Math.max(1, Math.round(ms / 1000))}s`;
 }
 
 export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(function AiSearchPanel(
-	{ active, visible, selectedEvidence, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
+	{ active, visible, selectedEvidence, evidenceJump = null, onSelectEvidence, onPublish, imageActions, language, onOpenSettings, onOpenSource, onCitation, phone = false },
 	ref,
 ): ReactElement {
 	const { t } = useTranslation();
@@ -168,7 +185,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [contextNotices, setContextNotices] = useState<readonly ContextNotice[]>([]);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
-	const [interactionQueue, setInteractionQueue] = useState<InteractionQueue>(EMPTY_QUEUE);
+	const interactionQueue = useInteractionQueue();
 	const [stopped, setStopped] = useState(false);
 	const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
 	const [submittedAttachments, setSubmittedAttachments] = useState<readonly ChatAttachment[]>([]);
@@ -199,6 +216,69 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
+	const composeBoxRef = useRef<HTMLDivElement | null>(null);
+	const lastIdleHeightRef = useRef<number | null>(null);
+	const prevVoiceActiveRef = useRef(false);
+	/** What went wrong with dictation (not signed in, microphone refused, nothing heard): a line by the composer, never the run's error card. */
+	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
+	const voice = useVoiceInput({
+		voice: autorag.voice,
+		language,
+		onTranscript: (text, submitImmediately) => {
+			const merged = appendTranscript(query, text);
+			setVoiceNotice(null);
+			if (submitImmediately === true) {
+				sendDraft(merged, false);
+				return;
+			}
+			setQuery(merged);
+		},
+		onError: setVoiceNotice,
+	});
+	const voiceActive = voice.phase === "listening" || voice.phase === "transcribing";
+
+	useEffect(() => {
+		if (voiceActive) return;
+		const box = composeBoxRef.current;
+		if (box === null) return;
+		const recordHeight = (): void => {
+			const h = box.getBoundingClientRect().height;
+			if (h > 0) lastIdleHeightRef.current = h;
+		};
+		recordHeight();
+		if (typeof ResizeObserver === "undefined") return;
+		const observer = new ResizeObserver(recordHeight);
+		observer.observe(box);
+		return () => observer.disconnect();
+	}, [voiceActive]);
+
+	useLayoutEffect(() => {
+		if (prevVoiceActiveRef.current === voiceActive) return;
+		prevVoiceActiveRef.current = voiceActive;
+		const box = composeBoxRef.current;
+		const fromHeight = voiceActive ? lastIdleHeightRef.current : 48;
+		if (box !== null && fromHeight !== null) {
+			const toHeight = box.getBoundingClientRect().height;
+			const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+			if (!reduced && toHeight > 0 && Math.abs(fromHeight - toHeight) > 2 && typeof box.animate === "function") {
+				box.animate(
+					[
+						{ height: `${fromHeight}px`, overflow: "hidden" },
+						{ height: `${toHeight}px`, overflow: "hidden" },
+					],
+					{ duration: 180, easing: "cubic-bezier(0.2, 0, 0, 1)" },
+				);
+			}
+		}
+		if (!voiceActive) {
+			const field = inputRef.current;
+			if (field !== null) {
+				field.focus();
+				const end = field.value.length;
+				field.setSelectionRange(end, end);
+			}
+		}
+	}, [voiceActive]);
 	/** The request the dock shows right now; the submit guard and Escape read it. */
 	const visibleRequestRef = useRef<InteractionRequest | null>(null);
 	const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -252,24 +332,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		},
 		[],
 	);
-
-	// The agent's open requests. `pending()` covers a request that opened before
-	// this panel subscribed (a tab switch or reload); the stream keeps it current.
-	useEffect(() => {
-		const bridge = autorag?.interaction;
-		if (bridge === undefined) return;
-		let alive = true;
-		void bridge.pending().then((requests) => {
-			if (alive) setInteractionQueue((current) => mergePending(current, requests));
-		});
-		const offRequest = bridge.onRequest((request) => setInteractionQueue((current) => openRequest(current, request)));
-		const offClosed = bridge.onClosed((event) => setInteractionQueue((current) => closeRequest(current, event.id)));
-		return () => {
-			alive = false;
-			offRequest();
-			offClosed();
-		};
-	}, []);
 
 	useEffect(() => {
 		const unsubscribe = autorag.search.onEvent?.((event: SearchStreamEvent) => {
@@ -353,7 +415,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		[pastTurns, quick, deep],
 	);
 	const evidence = useMemo(
-		() => resolveActiveEvidence(allTurnPhases, evidenceSource),
+		() => accumulateEvidence(allTurnPhases, evidenceSource),
 		[allTurnPhases, evidenceSource],
 	);
 	const sessionEvidence = useMemo(() => {
@@ -374,11 +436,24 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	function selectPhaseCitation(turnIndex: number, phase: "quick" | "deep", number: number): void {
 		const nextSource: EvidenceSelectionSource = { turnIndex, phase };
 		setEvidenceSource(nextSource);
-		const nextEvidence = resolveActiveEvidence(allTurnPhases, nextSource);
+		const nextEvidence = accumulateEvidence(allTurnPhases, nextSource);
 		if (active) onPublish(nextEvidence, sessionEvidence);
 		onSelectEvidence(number);
 		onCitation?.(number);
 	}
+
+	// A source picked in the Inspector's evidence tabs: show where the text cites it, whichever turn that is.
+	const handledJumpRef = useRef<number | null>(null);
+	useEffect(() => {
+		if (evidenceJump === null || !active || handledJumpRef.current === evidenceJump.nonce) return;
+		handledJumpRef.current = evidenceJump.nonce;
+		const source = citationSource(allTurnPhases, evidenceJump.number);
+		if (source === null) return;
+		setEvidenceSource(source);
+		const scope = bodyRef.current?.querySelector(`[data-cite-scope="${source.turnIndex}:${source.phase}"]`);
+		const target = scope?.querySelector(`[data-cite="${evidenceJump.number}"]`) ?? scope;
+		target?.scrollIntoView({ block: "center", behavior: "smooth" });
+	}, [evidenceJump, active, allTurnPhases]);
 
 	const historyGroups = useMemo(() => groupChatHistory(history, new Date()), [history]);
 
@@ -407,6 +482,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				return;
 			}
 			if (historyOpen) return;
+			if (event.key === "Escape" && voice.phase === "listening") {
+				event.preventDefault();
+				voice.cancel();
+				return;
+			}
 			if (event.key === "Escape" && searchIdRef.current !== null) {
 				// The dock owns Escape while it is open: it dismisses the request (cancel
 				// or deny), not the run.
@@ -527,8 +607,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	 * the next question. Steers carry text only; drafted attachments stay in
 	 * the tray for the next question.
 	 */
-	function send(altKey: boolean): void {
-		const text = query.trim();
+	function sendDraft(rawDraft: string, altKey: boolean): void {
+		const text = rawDraft.trim();
 		const runId = searchIdRef.current;
 		const action = composerAction({ searching: runId !== null, altKey });
 		if (action === "ask") {
@@ -552,6 +632,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			setSteers((current) => current.filter((steer) => steer.id !== id));
 			setQueued((current) => [...current, text]);
 		});
+	}
+
+	function send(altKey: boolean): void {
+		sendDraft(query, altKey);
 	}
 
 	function clearHistoryDebounce(): void {
@@ -737,6 +821,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		},
 		toggleHistory,
 		newChat,
+		openChat(id: string): void {
+			if (searchIdRef.current !== null) return;
+			void loadHistory(id);
+		},
+		showHistory(): void {
+			if (!historyOpen) void openHistory();
+		},
 	}));
 
 	function onDockDragEnter(event: ReactDragEvent): void {
@@ -793,7 +884,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// panel of that run shows it: another tab's panel has a different run id.
 	const interactionRequest = searchId === null ? null : frontRequest(interactionQueue, searchId);
 	visibleRequestRef.current = interactionRequest;
-	const { shimmer } = answerViewState({ pending: searching, deepReady });
 	const showEmpty = submittedQuery === null && error === null && !quickReady && !deepReady;
 	const steersBeforeQuick = steers.filter((steer) => steer.timing === "before-quick");
 	const steersAfterQuick = steers.filter((steer) => steer.timing === "after-quick");
@@ -816,11 +906,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			onDragLeave={onDockDragLeave}
 			onDrop={onDockDrop}
 		>
-			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 border-b border-border select-none">
+			<div className="ai-head flex flex-none items-center gap-8 h-tab px-12 select-none">
 				<span className="ai-mark grid flex-none place-items-center text-accent">
 					<SparklesIcon />
 				</span>
-				<strong className="flex-none text-sm font-semibold text-ink">{t("aiSearch.title")}</strong>
+				<strong className="flex-none text-sm font-medium leading-[19.5px] text-ink">{t("aiSearch.title")}</strong>
 				<span className="flex-1" />
 				<button
 					type="button"
@@ -845,7 +935,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			{historyOpen ? (
 				<>
 					<div className="absolute inset-0 z-20" aria-hidden="true" onClick={closeHistory} />
-					<div className="history absolute right-12 top-40 z-30 flex max-h-[72%] w-360 flex-col overflow-hidden rounded-12 border border-border bg-window shadow-menu" aria-label={t("aiSearch.history")}>
+					<div className="history absolute right-16 top-36 z-30 flex max-h-[72%] w-358 flex-col overflow-hidden rounded-[16px] border border-divider bg-window py-12 shadow-[0_0_10px_rgba(0,0,0,0.2)]" aria-label={t("aiSearch.history")}>
 						<input
 							autoFocus
 							value={historyQuery}
@@ -869,15 +959,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							}}
 							placeholder={t("aiSearch.searchHistory")}
 							aria-label={t("aiSearch.searchHistory")}
-							className="h-[38px] w-full flex-none border-x-0 border-t-0 border-b border-divider bg-transparent px-12 text-sm text-ink outline-none placeholder:text-ink-muted"
+							className="w-full flex-none border-0 bg-transparent px-16 pt-4 pb-12 text-body font-medium leading-[19px] text-ink outline-none placeholder:text-ink-faint"
 						/>
-						<div className="history-list min-h-0 flex-1 overflow-auto p-5">
+						<div className="history-list min-h-0 flex-1 overflow-auto">
 							{historyGroups.length === 0 ? (
-								<span className="block px-12 py-28 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
+								<span className="block px-16 py-24 text-center text-meta text-ink-muted">{historyEmptyText(historyQuery)}</span>
 							) : (
 								historyGroups.map((group) => (
 									<div key={group.label}>
-										<div className="history-group px-8 py-8 text-tile font-bold text-ink-muted">
+										<div className="history-group px-16 pt-4 pb-2 text-badge font-bold leading-[15px] text-ink-muted">
 											{t(HISTORY_BUCKET_KEYS[group.label])}
 										</div>
 										{group.items.map((item) => (
@@ -885,17 +975,17 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 												type="button"
 												key={item.id}
 												className={cn(
-													"history-item flex w-full items-start gap-8 rounded-7 border-0 p-8 text-sm text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
+													"history-item flex w-full items-start gap-8 border-0 px-16 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-history-current",
 													item.id === chatId ? "current bg-accent-history-current" : "bg-transparent",
 												)}
 												onClick={() => void loadHistory(item.id)}
 											>
-												<span className={cn("hist-dot mt-5 size-5 flex-none rounded-full", item.id === chatId ? "bg-accent" : "bg-transparent")} />
-												<span className="hist-copy min-w-0 flex-1">
-													<b className="block truncate font-bold text-ink">{item.title}</b>
-													<small className="mt-2 block truncate text-badge text-ink-muted">{item.snippet}</small>
+												
+												<span className="hist-copy flex min-w-0 flex-1 flex-col gap-1">
+													<b className="block truncate text-sm font-medium leading-[19.5px] text-ink">{item.title}</b>
+													<small className="block truncate text-caption leading-[16.5px] text-ink-muted">{item.snippet}</small>
 												</span>
-												<span className="hist-time flex-none text-tile text-ink-muted">{item.time}</span>
+												<span className="hist-time flex-none text-badge font-medium leading-[14px] text-ink-faint">{item.time}</span>
 											</button>
 										))}
 									</div>
@@ -925,8 +1015,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							</div>
 						) : (
 							<div className="ai-empty my-28 text-center">
-								<strong className="block text-title font-semibold text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
-								<p className="mt-8 text-body leading-[1.5] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
+								<strong className="block text-title font-medium leading-[27px] text-ink">{t("aiSearch.emptyPromptTitle")}</strong>
+								<p className="mt-8 text-body leading-[21px] text-ink-muted break-keep">{t("aiSearch.emptyPromptDesc")}</p>
 							</div>
 						)
 					) : null}
@@ -959,7 +1049,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										))}
 									</div>
 								) : null}
-								<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{submittedQuery}</div>
+								<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{submittedQuery}</div>
 							</div>
 						</div>
 					)}
@@ -988,8 +1078,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 					{submittedQuery === null ? null : (
 						<div className="message assistant-msg flex flex-col gap-14">
-							{quickReady ? (
-								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+															{quickReady ? (
+								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:quick`}>
 									<ProseBlocks
 										text={quickText}
 										selected={
@@ -1011,24 +1101,15 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 							{contextAfterQuick.map((notice, index) => (
 								<ContextNoticeView key={`${notice.kind}:${index}`} notice={notice} />
 							))}
-							{searching && compacting ? (
-								<CompactingStatus />
-							) : shimmer ? (
-								<div className="water-wave-thinking my-6 flex items-center text-meta text-ink-muted" role="status">
-									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
-										{progress === "" ? t("aiSearch.thinking") : progress}
-									</span>
-								</div>
-							) : null}
 
 							{deepReady ? (
 								<div className="flex flex-col gap-6">
 									{deepElapsed === null ? null : (
-										<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+										<div className="thinking-header flex items-center gap-5 text-body leading-[1.55] font-medium text-ink-muted">
 											<span>{t("aiSearch.workedFor", { time: formatElapsed(deepElapsed) })}</span>
 										</div>
 									)}
-									<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+																			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:deep`}>
 										<ProseBlocks
 											text={deepText}
 											selected={
@@ -1045,6 +1126,16 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 								</div>
 							) : null}
 							{phone && (deepReady || quickReady) ? <SourceCards evidence={(deepReady ? deep : quick)?.evidence ?? []} onSelect={(number) => selectPhaseCitation(pastTurns.length, deepReady ? "deep" : "quick", number)} /> : null}
+							{searching && compacting ? (
+								<CompactingStatus />
+							) : searching ? (
+								<div className="water-wave-thinking my-6 flex items-center gap-6 text-body leading-[1.55] text-ink-muted" role="status">
+									<SeedLoader />
+									<span className="shimmer min-w-0 truncate" title={progress === "" ? undefined : progress}>
+										{progress === "" ? t("aiSearch.thinking") : progress}
+									</span>
+								</div>
+							) : null}
 						</div>
 					)}
 
@@ -1108,60 +1199,135 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						</div>
 					) : null}
 					<div
-						className="compose-box flex flex-col gap-6 rounded-14 border border-border bg-input px-14 pt-12 pb-8 transition-colors duration-(--dur-color) ease-out focus-within:border-accent"
+						ref={composeBoxRef}
+						className={cn(
+															"compose-box border border-divider bg-window shadow-[0_2px_5px_rgba(20,20,41,0.07)] transition-[border-color,border-radius] duration-(--dur-color) ease-out",
+							voiceActive ? "voice-bar flex h-48 flex-row items-center gap-10 rounded-full px-8" : "flex flex-col gap-8 rounded-[16px] px-16 py-12",
+						)}
 						onMouseDown={(event) => {
+							if (voiceActive) return;
 							// A click on the box's own padding or toolbar gap lands in the field, like any chat composer.
 							if (!(event.target instanceof HTMLElement) || event.target.closest("button, textarea") !== null) return;
 							event.preventDefault();
 							inputRef.current?.focus();
 						}}
 					>
-						<ComposerField
-							fieldRef={inputRef}
-							value={query}
-							onChange={setQuery}
-							onAltEnter={() => send(true)}
-							placeholder={searching ? t("aiSearch.steerPlaceholder") : undefined}
-							ariaLabel={t("aiSearch.askDazzi")}
-						/>
-						<div className="composer-toolbar flex items-center justify-between gap-8">
-							<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
-							<div className="composer-actions flex items-center gap-7">
-								{searching && query.trim().length > 0 ? (
-									<button
-										type="submit"
-										className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
-										title={t("aiSearch.steerSend")}
-										aria-label={t("aiSearch.steerSend")}
-									>
-										<ArrowUpIcon />
-									</button>
-								) : null}
-								{searching ? (
+						{voice.phase === "listening" ? (
+							<>
+								<button
+									type="button"
+									className="voice-cancel flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border border-border bg-transparent p-0 text-ink-body transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong hover:text-ink"
+									title={t("aiSearch.voiceCancel")}
+									aria-label={t("aiSearch.voiceCancel")}
+									onClick={voice.cancel}
+								>
+									<TabCloseIcon size={13} />
+								</button>
+								<div className="flex min-w-0 flex-1 items-center px-4">
+									<VoiceWaveform stream={voice.stream} />
+								</div>
+								<div className="flex flex-none items-center gap-7">
 									<button
 										type="button"
-										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
-										title={t("aiSearch.stop")}
-										aria-label={t("aiSearch.stop")}
-										onClick={() => void stop()}
+										className="voice-button voice-stop flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border border-border bg-transparent p-0 text-ink transition-colors duration-(--dur-color) ease-out hover:bg-hover-strong"
+										title={t("aiSearch.voiceStop")}
+										aria-label={t("aiSearch.voiceStop")}
+										aria-pressed="true"
+										onClick={voice.toggle}
 									>
-										<Square size={10} strokeWidth={3} fill="currentColor" />
+										<Square size={10} strokeWidth={0} fill="currentColor" className="rounded-[2px]" />
 									</button>
-								) : (
 									<button
-										type="submit"
-										className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong"
-										title={t("aiSearch.askDazzi")}
-										aria-label={t("aiSearch.askDazzi")}
-										disabled={query.trim().length === 0 && attachments.length === 0}
+										type="button"
+										className="voice-send flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-ink p-0 text-window transition-opacity duration-(--dur-color) ease-out hover:opacity-85"
+										title={t("aiSearch.voiceSend")}
+										aria-label={t("aiSearch.voiceSend")}
+										onClick={voice.stopAndSend}
 									>
 										<ArrowUpIcon />
 									</button>
-								)}
+								</div>
+							</>
+						) : voice.phase === "transcribing" ? (
+							<div
+								className="voice-transcribing flex w-full items-center justify-center gap-8 text-body text-ink-muted select-none"
+								role="status"
+								aria-live="polite"
+							>
+								<span
+									className="size-12 flex-none rounded-full border-[1.75px] border-border border-t-ink-body animate-spin"
+									aria-hidden="true"
+								/>
+								<span>{t("aiSearch.voiceTranscribing")}</span>
 							</div>
-						</div>
+						) : (
+							<>
+								<ComposerField
+									fieldRef={inputRef}
+									value={query}
+									onChange={setQuery}
+									onAltEnter={() => send(true)}
+									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
+									ariaLabel={t("aiSearch.askDazzi")}
+								/>
+								{voiceNotice === null ? null : (
+									<p className="voice-notice m-0 select-text text-meta leading-normal text-ink-muted" role="alert">
+										{voiceNotice}
+									</p>
+								)}
+								<div className="composer-toolbar flex items-center justify-between gap-8">
+									<ApprovalModeMenu mode={approvalMode} onChange={changeMode} />
+																			<div className="composer-actions flex items-center gap-7">
+										{searching && query.trim().length > 0 ? (
+											<button
+												type="submit"
+												className="send steer-send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.steerSend")}
+												aria-label={t("aiSearch.steerSend")}
+											>
+												<ArrowUpIcon />
+											</button>
+										) : null}
+										{searching ? (
+											<button
+												type="button"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-ink text-on-accent cursor-pointer"
+												title={t("aiSearch.stop")}
+												aria-label={t("aiSearch.stop")}
+												onClick={() => void stop()}
+											>
+												<Square size={10} strokeWidth={3} fill="currentColor" />
+											</button>
+																					) : query.trim().length === 0 && attachments.length === 0 ? (
+											<button
+												type="button"
+												className="voice-button flex size-32 flex-none cursor-pointer items-center justify-center rounded-full border-0 bg-accent text-on-accent transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.voiceStart")}
+												aria-label={t("aiSearch.voiceStart")}
+												aria-pressed="false"
+												onClick={() => {
+													setVoiceNotice(null);
+													voice.toggle();
+												}}
+											>
+												<MicIcon size={17} />
+											</button>
+										) : (
+											<button
+												type="submit"
+												className="send flex size-32 flex-none items-center justify-center rounded-full border-0 bg-accent text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-accent-hover"
+												title={t("aiSearch.askDazzi")}
+												aria-label={t("aiSearch.askDazzi")}
+											>
+												<ArrowUpIcon />
+											</button>
+										)}
+									</div>
+								</div>
+							</>
+						)}
 					</div>
-					<p className="mt-6 text-center text-tile text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
+					<p className="mt-12 text-center text-[10.5px] leading-[15.75px] text-ink-muted select-none">{t("aiSearch.aiNotice")}</p>
 				</div>
 				)}
 			</form>
@@ -1176,34 +1342,35 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
+			{voice.permission === null ? null : (
+				<MicrophonePermissionDialog state={voice.permission} platform={autorag.platform} onOpenSettings={voice.openSettings} onClose={voice.dismissPermission} />
+			)}
 		</section>
 	);
 });
 
 /** The 16px glyph of an attachment chip: the file-kind tile, the folder glyph, or a link badge. */
-function AttachmentGlyph({ att }: { readonly att: ChatAttachment }): ReactElement {
+function AttachmentGlyph({ att, size = 16 }: { readonly att: ChatAttachment; readonly size?: 16 | 18 }): ReactElement {
 	switch (att.kind) {
 		case "url":
 			return (
-				<span className="flex size-16 flex-none items-center justify-center rounded-4 bg-accent-soft text-accent" aria-hidden="true">
+				<span className={cn("flex flex-none items-center justify-center bg-accent-soft text-accent", size === 18 ? "size-18 rounded-5" : "size-16 rounded-4")} aria-hidden="true">
 					<LinkIcon size={11} />
 				</span>
 			);
 		case "folder":
-			return <FileTile kind="folder" size={16} />;
+			return <FileTile kind="folder" size={size} />;
 		case "file":
-			return <FileTile kind={evidenceKind(att.name)} size={16} />;
+			return <FileTile kind={evidenceKind(att.name)} size={size} />;
 	}
 }
 
 /** A referenced file badge above the user bubble (v7 `.ref-file-chip`). */
 function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
-	const folder = parentFolder(att);
 	return (
-		<span className="ref-file-chip inline-flex h-chip items-center gap-6 rounded-6 border border-border bg-input px-8 text-ink" title={att.id}>
-			<AttachmentGlyph att={att} />
-			<span className="ref-chip-name text-meta font-medium text-ink">{att.name}</span>
-			{folder === null ? null : <span className="ref-chip-sub text-badge text-ink-muted">· {folder}</span>}
+		<span className="ref-file-chip inline-flex items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5 text-ink" title={att.id}>
+			<AttachmentGlyph att={att} size={18} />
+			<span className="ref-chip-name text-meta leading-[1.4] text-ink">{att.name}</span>
 		</span>
 	);
 }
@@ -1213,7 +1380,7 @@ function RefFileChip({ att }: { readonly att: ChatAttachment }): ReactElement {
  * Waiting: a dashed accent outline that breathes, with a pulsing dot. Taken by
  * the model: a solid bubble with a check. The run ended first: dimmed, struck.
  */
-function SteerBubble({
+export function SteerBubble({
 	steer,
 	labels,
 }: {
@@ -1227,8 +1394,8 @@ function SteerBubble({
 					className={cn(
 						"bubble steer-bubble rounded-10 border px-14 py-10 text-body leading-[1.5] break-words whitespace-pre-wrap transition-[border-color,background-color,color] duration-(--dur-color) ease-out",
 						steer.status === "pending" && "border-dashed border-accent bg-accent-wash text-ink-body animate-[steerWait_1.6s_ease-in-out_infinite]",
-						steer.status === "delivered" && "border-border bg-input text-ink-body",
-						steer.status === "dropped" && "border-border bg-input text-ink-muted line-through",
+						steer.status === "delivered" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window",
+						steer.status === "dropped" && "rounded-[16px] border-transparent bg-ink-body px-16 leading-[21px] text-window line-through opacity-50",
 					)}
 				>
 					{steer.text}
@@ -1298,7 +1465,7 @@ function PastTurnView({
 	const contextBefore = turn.contextNotices.filter((notice) => notice.timing === "before-quick");
 	const contextAfter = turn.contextNotices.filter((notice) => notice.timing === "after-quick");
 	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
-		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body">
+		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body" data-cite-scope={`${turnIndex}:${phaseKind}`}>
 			<ProseBlocks
 				text={text}
 				selected={
@@ -1323,7 +1490,7 @@ function PastTurnView({
 							))}
 						</div>
 					) : null}
-					<div className="bubble w-full rounded-10 border border-border bg-input px-14 py-10 text-body leading-[1.5] text-ink-body break-words whitespace-pre-wrap">{turn.question}</div>
+					<div className="bubble rounded-[16px] bg-ink-body px-16 py-10 text-body leading-[21px] text-window break-words whitespace-pre-wrap">{turn.question}</div>
 				</div>
 			</div>
 			{contextBefore.map((notice, index) => (
@@ -1354,7 +1521,7 @@ function PastTurnView({
 				{turn.deepText === "" ? null : (
 					<div className="flex flex-col gap-6">
 						{turn.deepElapsed === null ? null : (
-							<div className="thinking-header flex items-center gap-5 text-meta font-medium text-ink-muted">
+							<div className="thinking-header flex items-center gap-5 text-body leading-[1.55] font-medium text-ink-muted">
 								<span>{t("aiSearch.workedFor", { time: formatElapsed(turn.deepElapsed) })}</span>
 							</div>
 						)}
@@ -1477,11 +1644,14 @@ function AnswerInline({
 									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
 									segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
 								)}
+								data-cite={segment.number}
 								onClick={() => onCitation(segment.number)}
 							>
 								{segment.number}
 							</button>
 						);
+					case "file":
+						return <FileMention key={`${index}`} path={segment.path} onOpen={onOpenUrl} />;
 					case "link":
 						return (
 							<AnswerLink key={`${index}`} url={segment.url} onOpenUrl={onOpenUrl}>
@@ -1547,7 +1717,7 @@ function AnswerBlockView({
 	return (
 		<div className="flex flex-col gap-8">
 			{isImageOnlyLine(parsed) ? null : line}
-			<ImageRow images={images} folder={null} captioned={false} actions={imageActions} />
+			<ImageRow images={images} folder={null} actions={imageActions} />
 		</div>
 	);
 }

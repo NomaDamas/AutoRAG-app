@@ -17,9 +17,11 @@ import type { AppLanguage } from "../shared/i18n/core";
 import type { FsLocation } from "../shared/fs-contract";
 import type { DupeyScanOptions } from "../shared/version-scan-scope";
 import type { IndexStatus } from "../shared/index-contract";
+import type { IndexMap } from "../shared/index-map-contract";
 import type { ErrorReport } from "../main/error-report-core";
 import type { FileNameSearchBackend } from "../main/file-name-search";
 import type { ContentSearch } from "../main/content-search";
+import type { SourceSearch } from "../main/source-search";
 import { LIBRARIAN_OP, LIBRARIAN_PUSH, LIBRARIAN_REQUEST, type LibrarianThread } from "./librarian-contract";
 
 export interface LibrarianClientDeps {
@@ -42,10 +44,12 @@ export interface LibrarianClientDeps {
 export interface LibrarianClient {
 	readonly fileNameSearch: FileNameSearchBackend;
 	readonly contentSearch: ContentSearch;
+	readonly sourceSearch: SourceSearch;
 	scanDuplicates(dir: string, options?: DupeyScanOptions): Promise<DupeyScanResult>;
 	readonly indexStatus: {
 		indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 		setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+		indexMap(): Promise<IndexMap>;
 	};
 	/** Remembered for every thread, and sent to the running one. */
 	setLanguage(language: AppLanguage): Promise<void>;
@@ -135,11 +139,17 @@ export function createLibrarianClient(deps: LibrarianClientDeps): LibrarianClien
 		contentSearch: {
 			search: (query, limit, signal) => call(LIBRARIAN_OP.contentSearch, limit === undefined ? [query] : [query, limit], signal),
 		},
+		sourceSearch: {
+			datasources: () => call(LIBRARIAN_OP.searchDatasources),
+			search: (datasourceId, query, limit, signal) =>
+				call(LIBRARIAN_OP.sourceSearch, limit === undefined ? [datasourceId, query] : [datasourceId, query, limit], signal),
+		},
 		scanDuplicates: (dir, options) =>
 			call(LIBRARIAN_OP.scanDuplicates, options?.excludeDirs === undefined ? [dir] : [dir, options.excludeDirs]),
 		indexStatus: {
 			indexStatus: (paths) => call(LIBRARIAN_OP.indexStatus, [paths]),
 			setIndexExcluded: (path, excluded) => call(LIBRARIAN_OP.setIndexExcluded, [path, excluded]),
+			indexMap: () => call(LIBRARIAN_OP.indexMap),
 		},
 		async setLanguage(next) {
 			language = next;

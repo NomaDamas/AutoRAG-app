@@ -1,6 +1,7 @@
 import { stat } from "node:fs/promises";
-import { isAbsolute } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
+import { t } from "../shared/i18n/core";
 import type { SmartExclusion, SmartIndexingEvent } from "../shared/smart-indexing-contract";
 import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
 import { createFolderSurvey } from "./agents/profiles/folder-stats";
@@ -29,6 +30,11 @@ export interface SmartIndexingServiceDeps {
 	readonly env: NodeJS.ProcessEnv;
 	/** The interface language, read per run: the agent writes its reasons in it. */
 	readonly language: () => ReplyLanguage;
+	/**
+	 * Roots of the cloud-sync folders (Google Drive, OneDrive, Dropbox; iCloud Drive is not one). A selected folder that is
+	 * one of them, or lies inside one, is proposed for leaving out as a whole and is never shown to the agent.
+	 */
+	readonly cloudRoots: () => Promise<readonly string[]>;
 	/** The pre-scan's file rules, so counts match it. */
 	readonly scanOptions: FolderScanOptions;
 	/** Longest a run may take; default {@link DEFAULT_TIMEOUT_MS}. */
@@ -66,6 +72,12 @@ async function existingFolders(candidates: readonly unknown[]): Promise<string[]
 	return folders;
 }
 
+/** `folder` is `root` or lies inside it. */
+function isWithin(root: string, folder: string): boolean {
+	const rel = relative(resolve(root), resolve(folder));
+	return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+}
+
 export function createSmartIndexingService(deps: SmartIndexingServiceDeps): SmartIndexingService {
 	const runs = new Map<string, Run>();
 
@@ -78,7 +90,16 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 		return exclusions;
 	}
 
-	async function execute(runId: string, run: Run, roots: readonly string[]): Promise<void> {
+	/** Cloud folders left out as wholes: no survey, no look inside, the user can still drag one back in. */
+	async function cloudExclusions(folders: readonly string[], run: Run): Promise<SmartExclusion[]> {
+		const reason = t("main.smartIndexing.cloudReason");
+		return measured(
+			folders.map((folder) => ({ path: folder, root: folder, reason })),
+			run.measure.signal,
+		);
+	}
+
+	async function execute(runId: string, run: Run, roots: readonly string[], cloud: readonly string[]): Promise<void> {
 		const survey = createFolderSurvey(roots, { supportedExtensions: deps.scanOptions.supportedExtensions, maxSourceBytes: deps.scanOptions.maxSourceBytes });
 		const collector = createProposalCollector(roots, survey);
 		let session: AgentSession | null = null;
@@ -114,7 +135,7 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 			if (!collector.answered() && !(run.timedOut && collector.proposals().length > 0)) {
 				throw new Error(run.timedOut ? "The analysis timed out before the AI reported anything." : "The AI ended without reporting which folders to exclude.");
 			}
-			const exclusions = await measured(collector.proposals(), run.measure.signal);
+			const exclusions = [...(await measured(collector.proposals(), run.measure.signal)), ...(await cloudExclusions(cloud, run))];
 			if (!run.cancelled) deps.send({ type: "result", runId, exclusions });
 		} catch (error) {
 			if (!run.cancelled) deps.send({ type: "error", runId, message: errorText(error) });
@@ -126,15 +147,23 @@ export function createSmartIndexingService(deps: SmartIndexingServiceDeps): Smar
 
 	return {
 		analyze: async (runId, candidates) => {
-			const roots = await existingFolders(candidates);
-			if (roots.length === 0) {
+			const folders = await existingFolders(candidates);
+			const cloudRoots = await deps.cloudRoots().catch(() => [] as readonly string[]);
+			const cloud = folders.filter((folder) => cloudRoots.some((root) => isWithin(root, folder)));
+			const roots = folders.filter((folder) => !cloud.includes(folder));
+			if (folders.length === 0) {
 				deps.send({ type: "result", runId, exclusions: [] });
 				return;
 			}
 			const run: Run = { abort: new AbortController(), measure: new AbortController(), cancelled: false, timedOut: false };
 			runs.set(runId, run);
 			try {
-				await execute(runId, run, roots);
+				if (roots.length === 0) {
+					const exclusions = await cloudExclusions(cloud, run);
+					if (!run.cancelled) deps.send({ type: "result", runId, exclusions });
+				} else {
+					await execute(runId, run, roots, cloud);
+				}
 			} finally {
 				runs.delete(runId);
 			}

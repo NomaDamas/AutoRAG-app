@@ -264,6 +264,21 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 		return snapshot;
 	}
 
+	/**
+	 * Saves the snapshot for the next launch. The in-memory snapshot is the live truth, so a failed write (a full disk,
+	 * a read-only profile) is reported through `lastError` and logged, never thrown: callers include timers and
+	 * fire-and-forget refreshes that nothing awaits, where a rejection is an unhandled one that can end the process.
+	 */
+	async function persist(value: StoredVersionFamilies): Promise<void> {
+		try {
+			await deps.store.write(value);
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			console.warn(`version families could not be saved: ${reason}`);
+			lastError = { code: "scan-failed", message: `Version stacks could not be saved: ${reason}`, installCommand: null };
+		}
+	}
+
 	function envelope(stored: StoredVersionFamilies | null): FsVersionFamiliesResult {
 		return {
 			families: stored?.families ?? [],
@@ -323,7 +338,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 						Object.entries(stored.stamps ?? {}).filter(([path]) => !vanished.has(path)),
 					),
 				};
-				await deps.store.write(pruned);
+				await persist(pruned);
 				snapshot = pruned;
 				current = (await verifyStored(pruned, only)).result;
 			}
@@ -421,7 +436,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 						? { ...stored, stamps: { ...(stored.stamps ?? {}), [path]: DIRTY_STAMP } }
 						: stored;
 					if (changed) {
-						await deps.store.write(nextStored);
+						await persist(nextStored);
 						snapshot = nextStored;
 					}
 					touchedAt.set(path, ++mutationSeq);
@@ -438,7 +453,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 						Object.entries(stored.stamps ?? {}).filter(([candidate]) => candidate !== path),
 					),
 				};
-				await deps.store.write(pruned);
+				await persist(pruned);
 				snapshot = pruned;
 				await publishVerified(pruned);
 				deps.onChanged?.();
@@ -484,8 +499,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 
 	/**
 	 * Writes what the scans learned when they read nothing, so the snapshot's families and its `scannedAt` stay as they
-	 * were. Without it a restart scans again every folder that timed out: 120 s each, and a cloud drive's files downloaded
-	 * for nothing. Writes only when that memory changed.
+	 * were. Without it a restart spends up to 120 s retrying each folder that timed out. Writes only when that memory changed.
 	 */
 	async function persistScanMemory(locations: readonly string[]): Promise<void> {
 		const stored = await load();
@@ -501,7 +515,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 			families: [],
 		};
 		const next: StoredVersionFamilies = { ...base, ...memory };
-		await deps.store.write(next);
+		await persist(next);
 		snapshot = next;
 	}
 
@@ -759,7 +773,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 				const previous = published;
 				const currentBase =
 					previous ?? (await verifyStored(await load())).result;
-				const current: FsVersionFamiliesResult = { ...currentBase, error: null, scanFailures: failures };
+				const current: FsVersionFamiliesResult = { ...currentBase, error: lastError, scanFailures: failures };
 				const changed =
 					previous === undefined ||
 					previous.scannedAt !== current.scannedAt ||
@@ -801,10 +815,10 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 					Object.entries(stored.stamps ?? {}).filter(([path]) => !verified.vanished.includes(path)),
 				),
 			};
-			await deps.store.write(persisted);
+			await persist(persisted);
 			snapshot = persisted;
 			emit(
-				{ ...verified.result, families: pruneVersionFamilies(verified.result.families, honored) },
+				{ ...verified.result, families: pruneVersionFamilies(verified.result.families, honored), error: lastError },
 			);
 			deps.onChanged?.();
 			for (const path of honored) {
@@ -885,7 +899,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 					Object.entries(stored.stamps ?? {}).filter(([path]) => !removed.has(path)),
 				),
 			};
-			await deps.store.write(pruned);
+			await persist(pruned);
 			snapshot = pruned;
 			const current: FsVersionFamiliesResult = {
 				...envelope(pruned),
@@ -968,7 +982,7 @@ export function createVersionFamilyService(deps: VersionFamilyServiceDeps): Vers
 						families: await rebuildRemappedEntries(remapped.families, remapped.remapped),
 						stamps: remapped.stamps,
 					};
-					await deps.store.write(nextStored);
+					await persist(nextStored);
 					snapshot = nextStored;
 					const only = affectedFamilyPaths(nextStored.families, new Set([...updates, ...deleted]));
 					return publishVerified(nextStored, only);

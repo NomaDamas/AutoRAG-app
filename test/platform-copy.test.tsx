@@ -45,7 +45,6 @@ describe("copy that names the machine", () => {
 		"settingsCore.embedding.apiKeyHintPc",
 		"settingsCore.ai.server.bodyLocalPc",
 		"onboarding.account.leadPc",
-		"onboarding.folders.localEtaPc",
 	];
 
 	it("has a PC sentence in every language that never calls the machine a Mac", () => {
@@ -59,18 +58,15 @@ describe("copy that names the machine", () => {
 	});
 
 	it("keeps the Mac sentences naming the Mac", () => {
-		for (const key of ["settingsCore.embedding.apiKeyHint", "settingsCore.ai.server.bodyLocal", "onboarding.account.lead", "onboarding.folders.localEta"]) {
+		for (const key of ["settingsCore.embedding.apiKeyHint", "settingsCore.ai.server.bodyLocal", "onboarding.account.lead"]) {
 			expect(lookup("en", key), key).toMatch(/Mac/u);
 		}
 	});
 
-	it("the folders step estimates the local run in PC words on Windows, Mac words elsewhere", () => {
+	it("the folders step shows each folder's count and processing time on its card", () => {
 		const candidates = [{ path: "/docs", name: "Documents", displayPath: "~/Documents", kind: "documents" as const, defaultSelected: true, ocrOff: false }];
 		const scans = new Map([["/docs", { path: "/docs", files: 1000, bytes: 1, onlineOnly: 0, done: true, error: null }]]);
 		act(() => root.render(<FoldersStep ctx={onboardingCtx({ platform: "win32", candidates, scans, draft: BASE_DRAFT })} />));
-		expect(shown()).toContain("onboarding.folders.localEtaPc");
-		act(() => root.render(<FoldersStep ctx={onboardingCtx({ platform: "darwin", candidates, scans, draft: BASE_DRAFT })} />));
-		expect(shown()).toContain("onboarding.folders.localEta ");
-		expect(shown()).not.toContain("onboarding.folders.localEtaPc");
+		expect(shown()).toContain("onboarding.folders.stats files=1,000");
 	});
 });

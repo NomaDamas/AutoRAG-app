@@ -10,7 +10,7 @@ import { cn } from "../../lib/cn";
 import { Icon } from "../marks";
 import { localSpecMessage } from "../../../../shared/local-embedding-spec";
 import type { IndexFailureReason } from "../../../../shared/index-failure";
-import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
+import { canSelectCloudEmbedding, embedCards, formatSize, localEmbeddingAllowed, planHeld, resolveEmbed, scanTotals, type EmbedCard } from "../flow";
 import type { OnboardingCtx } from "../context";
 import { ModelDownloadPanel } from "../../components/ModelDownloadPanel";
 
@@ -53,10 +53,7 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 	const cardColumn = (id: EmbedCard["id"]): number => cards.findIndex((card) => card.id === id) + 1;
 
 	const choose = (card: EmbedCard): void => {
-		if (card.blocked !== null) {
-			// Say why the card cannot be chosen, instead of leaving a click that does nothing.
-			ctx.toast(localSpecMessage(card.blocked, t));
-		} else if (!card.disabled) {
+		if (!card.disabled) {
 			ctx.setEmbedMode(card.id);
 		}
 	};
@@ -120,6 +117,7 @@ export function EmbeddingStep({ ctx }: { readonly ctx: OnboardingCtx }): ReactEl
 				<div className="em-title">
 					<h3>{t(card.nameKey)}</h3>
 					{card.tag === null ? null : <span className={cn("em-tag", card.tag.tone)}>{t(card.tag.labelKey)}</span>}
+					{card.id === "cloud" && !planHeld("pro", account) ? <span className="em-tag trial">{t("onboarding.plan.plan.pro.trial")}</span> : null}
 				</div>
 				<p className="em-line">{t(card.lineKey)}</p>
 				<div className="em-meters">

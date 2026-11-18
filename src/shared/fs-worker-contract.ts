@@ -25,6 +25,9 @@ export type FsWorkerOp =
 	| "search"
 	/** Model-free search of the local document index; the quick-search launcher lists its files. */
 	| "contentSearch"
+	/** The connected datasources, and a model-free search of one of them: the Finder search's source tabs. */
+	| "searchDatasources"
+	| "sourceSearch"
 	| "locations"
 	| "ejectLocation"
 	| "tags"
@@ -60,6 +63,7 @@ export type FsWorkerOp =
 	| "setLanguage"
 	| "indexStatus"
 	| "setIndexExcluded"
+	| "indexMap"
 	| "setWatchSet"
 	| "layers"
 	/** The app that opens a path (Quick Look's "Open with"); main asks so it never spawns a child itself. */

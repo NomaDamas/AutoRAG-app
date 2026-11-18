@@ -132,6 +132,14 @@ export function openTabAt(state: TabsState, path: string): TabsState {
 	};
 }
 
+/** Open a new tab on `folder` with `entryPath` selected, leaving the caller's tab (for example an active search) untouched. */
+export function openTabRevealing(state: TabsState, folder: string, entryPath: string): TabsState {
+	return patchActiveTab(openTabAt(state, folder), (tab) => ({
+		...tab,
+		selection: { keys: [entryPath], anchor: entryPath, focus: entryPath },
+	}));
+}
+
 /** `dazzi <folder>`: the tab already showing the folder, else a new tab on it. */
 export function openOrSelectFolderTab(state: TabsState, path: string): TabsState {
 	const existing = state.tabs.find((tab) => tab.path === path);

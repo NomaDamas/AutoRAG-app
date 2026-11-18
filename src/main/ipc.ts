@@ -16,7 +16,7 @@ import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
-import { ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
+import { isPickPathKind, ONBOARDING_CHANNELS } from "../shared/onboarding-contract";
 import { isServiceRunRequest, SERVICES_CHANNELS } from "../shared/services-contract";
 import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
@@ -28,6 +28,8 @@ import type { AppUpdaterService } from "./app-updater";
 import type { ActionService } from "./action-service";
 import type { ConversionService } from "./conversion-service";
 import { CONVERSION_CHANNELS, isConversionRequest } from "../shared/conversion-contract";
+import { VOICE_CHANNELS, isVoiceClip } from "../shared/voice-contract";
+import type { VoiceService } from "./voice-service";
 import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
@@ -98,6 +100,16 @@ export function registerActionsIpcHandlers(service: ActionService): void {
 		if (typeof id !== "string" || id.length === 0) throw new Error(t("main.ipc.unknownAction"));
 		return service.cancel(id);
 	});
+}
+
+/** Dictation: transcribe one recorded clip, the readiness check (sign-in, microphone permission) before recording, and the OS microphone settings. */
+export function registerVoiceIpcHandlers(service: VoiceService): void {
+	ipcMain.handle(VOICE_CHANNELS.transcribe, (_event, clip: unknown) => {
+		if (!isVoiceClip(clip)) throw new Error(t("main.ipc.invalidVoiceRequest"));
+		return service.transcribe(clip);
+	});
+	ipcMain.handle(VOICE_CHANNELS.prepare, () => service.prepare());
+	ipcMain.handle(VOICE_CHANNELS.openMicrophoneSettings, () => service.openMicrophoneSettings());
 }
 
 /** Convert-on-rename: ask what a rename means, run the conversion into the new name, or stop one. */
@@ -183,8 +195,8 @@ export function registerMagicActionIpcHandlers(service: MagicActionService): voi
 }
 
 export function registerSearchIpcHandlers(service: SearchBridge): void {
-	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments) =>
-		service.start(searchId, chatId, query, attachments),
+	ipcMain.handle(SEARCH_CHANNELS.start, (_event, searchId: string, chatId: string, query: string, attachments, viewingFolder: unknown) =>
+		service.start(searchId, chatId, query, attachments, typeof viewingFolder === "string" ? viewingFolder : undefined),
 	);
 	ipcMain.handle(SEARCH_CHANNELS.steer, (_event, searchId: unknown, text: unknown) =>
 		typeof searchId === "string" && typeof text === "string" ? service.steer(searchId, text) : false,
@@ -416,13 +428,17 @@ export function registerOnboardingIpcHandlers(service: OnboardingService): void 
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.folderCandidates, () => service.folderCandidates());
 	ipcMain.handle(ONBOARDING_CHANNELS.pickFolders, () => service.pickFolders());
+	ipcMain.handle(ONBOARDING_CHANNELS.pickPaths, (_event, kind: unknown) => {
+		if (!isPickPathKind(kind)) throw new TypeError("onboarding:pickPaths expects \"folder\", \"file\" or \"any\"");
+		return service.pickPaths(kind);
+	});
 	ipcMain.handle(ONBOARDING_CHANNELS.scanFolders, (_event, paths: unknown) => {
 		if (!Array.isArray(paths)) throw new TypeError("onboarding:scanFolders expects an array of paths");
 		return service.scanFolders(paths);
 	});
 	ipcMain.handle(ONBOARDING_CHANNELS.embedding, () => service.embedding());
 	ipcMain.handle(ONBOARDING_CHANNELS.detectSources, () => service.detectSources());
-	ipcMain.handle(ONBOARDING_CHANNELS.checkModel, () => service.checkModel());
+	ipcMain.handle(ONBOARDING_CHANNELS.checkModel, (_event, role: unknown) => service.checkModel(role === "decomposition" ? "decomposition" : "answer"));
 	ipcMain.handle(ONBOARDING_CHANNELS.startIndexing, (_event, request: unknown) => service.startIndexing(request));
 	ipcMain.handle(ONBOARDING_CHANNELS.indexStatus, () => service.indexStatus());
 	ipcMain.handle(ONBOARDING_CHANNELS.complete, () => service.complete());

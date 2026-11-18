@@ -19,7 +19,6 @@ import { RECENTS_PATH } from "../src/shared/fs-contract";
 // Index status is unrelated to drops; keep the real pane, controller, rows,
 // transfer planning, and directory store connected so a wiring regression fails.
 vi.mock("../src/renderer/src/components/IndexProblemBanner", () => ({ IndexProblemBanner: () => null }));
-vi.mock("../src/renderer/src/components/SettingsView", () => ({ SettingsView: () => null }));
 vi.mock("../src/renderer/src/components/AutomationsTab", () => ({ AutomationsTab: () => null }));
 
 type UploadFiles = (folder: string, files: File[]) => Promise<{ name: string; ok: boolean }[]>;
@@ -112,7 +111,6 @@ async function mount(mode: ViewMode = "list", path = "/host") {
 		onFocusComposer: () => undefined,
 		onToast,
 		deliverToAi: () => undefined,
-		onSettingsChanged: () => undefined,
 		setListColumns: () => undefined,
 		beginTabDrag: () => undefined,
 		endTabDrag: () => undefined,

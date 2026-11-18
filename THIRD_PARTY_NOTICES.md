@@ -79,6 +79,91 @@ The font file ships unmodified as the app's UI typeface
 (`src/renderer/styles/fonts/`). The full license text is in
 `src/renderer/styles/fonts/Pretendard-OFL.txt`.
 
+## Provider logos
+
+Settings → AI 모델, the model picker, and the onboarding model step draw each
+AI provider with its logo (`src/renderer/src/components/settings/providerLogos.ts`
+maps provider ids to marks). The marks are vendored as path data in
+`src/renderer/src/components/settings/providerLogoPaths.ts`, generated from the
+monochrome files of `@lobehub/icons-static-svg` 1.102.0 by
+`scripts/brand/vendor-provider-logos.mjs`. A provider without a mark here (Radius,
+TypeSafe, Xiaomi, local and custom servers) shows its first letter instead.
+
+| Component | Version | License | Copyright / source |
+|---|---|---|---|
+| @lobehub/icons-static-svg | 1.102.0 | MIT | Copyright (c) 2023 LobeHub — https://github.com/lobehub/lobe-icons |
+
+The MIT license covers LobeHub's files, **not the marks**: every logo below is a
+trademark of its owner. Dazzi uses it only to name the service a row connects to
+(nominative use); it does not mean the owner sponsors or endorses Dazzi, and a logo
+must not be used for anything else (a brand's own usage guidelines apply to any
+other use). Remove a mark by deleting its entry in `providerLogos.ts` and in the
+script's `LOGOS` list; the row then falls back to its first letter.
+
+| Logo | Brand | Provider ids |
+|---|---|---|
+| `anthropic` | Anthropic | `anthropic` |
+| `azure` | Microsoft Azure | `azure` |
+| `baseten` | Baseten | `baseten` |
+| `bedrock` | Amazon Bedrock | `amazon-bedrock` |
+| `cerebras` | Cerebras | `cerebras` |
+| `cloudflare` | Cloudflare | `cloudflare-ai-gateway` |
+| `codex` | OpenAI Codex | `openai-codex` |
+| `deepseek` | DeepSeek | `deepseek` |
+| `fireworks` | Fireworks AI | `fireworks` |
+| `gemini` | Google Gemini | `google` |
+| `githubcopilot` | GitHub Copilot | `github-copilot` |
+| `groq` | Groq | `groq` |
+| `huggingface` | Hugging Face | `huggingface` |
+| `kimi` | Kimi | `kimi-coding` |
+| `ling` | Ling | `ant-ling` |
+| `meta` | Meta | `meta` |
+| `minimax` | MiniMax | `minimax`, `minimax-cn` |
+| `mistral` | Mistral AI | `mistral` |
+| `moonshot` | Moonshot AI | `moonshotai`, `moonshotai-cn` |
+| `nvidia` | NVIDIA | `nvidia` |
+| `openai` | OpenAI | `openai` |
+| `opencode` | OpenCode | `opencode`, `opencode-go` |
+| `openrouter` | OpenRouter | `openrouter` |
+| `qwen` | Qwen | `qwen-token-plan`, `qwen-token-plan-cn`, `qwen-token-plan-individual` |
+| `together` | Together AI | `together` |
+| `vercel` | Vercel | `vercel-ai-gateway` |
+| `vertexai` | Google Vertex AI | `google-vertex` |
+| `workersai` | Cloudflare Workers AI | `cloudflare-workers-ai` |
+| `xai` | xAI | `xai` |
+| `zai` | Z.AI | `zai`, `zai-coding-cn` |
+
+The Dazzi plan's own row uses the Dazzi logo (`src/renderer/src/assets/dazzi-logo.png`).
+
+<details>
+<summary>MIT license text of @lobehub/icons-static-svg</summary>
+
+```text
+MIT License
+
+Copyright (c) 2023 LobeHub
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+</details>
+
 ## Programs and models bundled in the installers
 
 The macOS and Windows installers ship these programs unmodified, as separate

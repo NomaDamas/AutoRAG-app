@@ -123,6 +123,11 @@ async function namesIn(dir: string): Promise<string[]> {
 	}
 }
 
+/** A Node system error: one that carries the errno `code` string (ENOENT, EIO, UNKNOWN, ...). */
+function isSystemError(error: unknown): error is Error & { readonly code: string } {
+	return error instanceof Error && "code" in error && typeof error.code === "string";
+}
+
 function location(
 	section: FsLocation["section"],
 	name: string,
@@ -254,6 +259,8 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 	const cloudStorage = join(home, "Library", "CloudStorage");
 	const iCloud = join(home, "Library", "Mobile Documents", "com~apple~CloudDocs");
 	let userSid: Promise<string | null> | null = null;
+	/** Windows drive letters already reported as unavailable, as `<letter>:<code>`. */
+	const warnedDrives = new Set<string>();
 	/** Cloud + disk rows cost subprocesses; they are reused until the signature moves. */
 	let cached: { readonly signature: string; readonly rows: Promise<readonly FsLocation[]> } | null = null;
 
@@ -410,13 +417,37 @@ export function createPlaces(deps: PlacesDeps = {}): Places {
 		return [...cloud, ...disks];
 	}
 
+	/**
+	 * One Windows drive letter: "ready" when its root answers, "absent" when no such drive exists (ENOENT), and
+	 * "unavailable" when the OS knows the letter but access() fails with anything else. libuv maps every Win32 error
+	 * it has no entry for to `UNKNOWN` (an empty card reader or disc drive is ERROR_NOT_READY, a dead network share
+	 * ERROR_BAD_NETPATH), and one such drive must not take the whole sidebar and the version-family scan down with it.
+	 * Errors without a system `code` are bugs, not drive states, and still propagate.
+	 */
+	async function driveState(letter: string): Promise<"ready" | "absent" | "unavailable"> {
+		try {
+			return (await pathExists(`${letter}:\\`)) ? "ready" : "absent";
+		} catch (error) {
+			if (!isSystemError(error)) throw error;
+			// The watch polls every 2 s: say it once per drive and error code, not on every tick.
+			const key = `${letter}:${error.code}`;
+			if (!warnedDrives.has(key)) {
+				warnedDrives.add(key);
+				console.warn(`places: drive ${letter}: is unavailable, skipping it: ${errorMessage(error)}`);
+			}
+			return "unavailable";
+		}
+	}
+
 	/** What is mounted or connected at the OS level; the cached cloud and disk rows are valid while it holds. */
 	async function mountSignature(): Promise<string> {
 		if (windows) {
 			const letters: string[] = [];
 			for (let code = 65; code <= 90; code += 1) {
 				const letter = String.fromCharCode(code);
-				if (await pathExists(`${letter}:\\`)) letters.push(letter);
+				const state = await driveState(letter);
+				// An unavailable drive keeps its own mark, so media arriving in it still moves the signature.
+				if (state !== "absent") letters.push(state === "ready" ? letter : `${letter}!`);
 			}
 			return letters.join("");
 		}

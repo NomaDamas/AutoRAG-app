@@ -130,7 +130,7 @@ pairing code (or open the full `?token=...` Browser Address from **Details**).
   `POST /remote/upload`, `POST /remote/pair`, `POST /remote/auth`) enforce
   same-origin / `Sec-Fetch-Site` and custom header checks (`x-dazzi-remote: 1`).
 - **Full host authority:** Any authenticated remote session has the same file
-  and AI Search permissions as the desktop app. Turn off **Enable Remote
+  and AI Chat permissions as the desktop app. Turn off **Enable Remote
   Access** or revoke paired devices whenever access is no longer needed.
 
 ## Browser capabilities and limitations
@@ -140,7 +140,7 @@ The browser uses the same Finder interface and host services as the desktop:
 - Browse host folders, change views, select files, and search.
 - Create, rename, move, copy, duplicate, and trash host files, subject to the
   host's filesystem permissions.
-- Use AI Search with the host's configured models and indexed sources.
+- Use AI Chat with the host's configured models and indexed sources.
 - Open supported file previews (images, PDF, plain text, and browser-playable
   audio/video) in a browser tab. Formats a browser cannot render directly, such
   as archives or Office/HWP documents, show an unsupported notice instead;
@@ -153,6 +153,7 @@ Browser actions that need native operating-system integration differ:
 - Opening a file uses a browser download rather than the host's default app.
 - **Show in Finder**, **Open With**, native share sheets, OS services, and
   native file conversion are unavailable.
+- Voice input in AI Chat (the microphone button) is unavailable.
 - Quick Look uses browser previews rather than a native Quick Look window.
 - The file cut/copy clipboard belongs to each browser session. It is not the
   host's system clipboard and is lost when the page reloads or closes.
@@ -169,7 +170,7 @@ A browser whose screen is phone-sized (the shorter side is 500 CSS px or less,
 or a desktop browser narrowed to that width) gets a phone layout instead of the
 desktop Finder. It runs the same host services; only the layout changes:
 
-- Four tabs (**둘러보기 / Browse**, **AI 검색 / AI Search**, **자동화 /
+- Four tabs (**둘러보기 / Browse**, **AI 채팅 / AI Chat**, **자동화 /
   Automations**, **설정 / Settings**) and a search button replace the sidebar
   and the tab strip. Browse lists the sidebar's places, **최근 항목 / Recents**
   among them; each folder opens as a full screen, and the folder title opens a
@@ -184,14 +185,14 @@ desktop Finder. It runs the same host services; only the layout changes:
 - The info sheet replaces the inspector; the previewer is full screen and
   swipes between the folder's files; uploads come from **＋ → 이 기기에서
   올리기 / Upload from this device**.
-- AI Search keeps the desktop panel's chat, laid out for a phone: example
+- AI Chat keeps the desktop panel's chat, laid out for a phone: example
   questions on an empty chat, and each answer's sources as cards under it.
   Tapping a citation number or a source card opens that source's evidence
   sheet. A red badge on the tab counts questions and approvals waiting for an
   answer.
 - Automations lists the rules with the background switch on top; each rule
   opens its own page (when it runs, what it does, its last run) with
-  **AI 검색에서 편집 / Edit in AI Search** and delete.
+  **AI 채팅에서 편집 / Edit in AI Chat** and delete.
 - Settings lists the desktop's settings pages and opens them one at a time.
 - Background work (indexing, magic actions, fixes) shows above the tab bar; tap
   it for the full queue.

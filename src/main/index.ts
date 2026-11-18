@@ -19,8 +19,10 @@ import {
 	powerSaveBlocker,
 	protocol,
 	safeStorage,
+	screen,
 	ShareMenu,
 	shell,
+	systemPreferences,
 	type OpenDialogOptions,
 } from "electron";
 import { APPEARANCE_CHANNELS } from "../shared/appearance-contract";
@@ -35,14 +37,16 @@ import { ACTIONS_CHANNELS } from "../shared/actions-contract";
 import type { AppAppearance, AppSettings, ConfigRefreshResult } from "../shared/settings-contract";
 import { resolveEffectiveShortcuts } from "../shared/shortcuts-contract";
 import { attachQuickLook, PREVIEW_PRIVILEGED_SCHEME, registerPreviewProtocol, registerQuickLookIpc, type QuickLookWindowOptions } from "../preview/node/register";
-import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, writeDefaultConfig } from "@autorag/librarian";
+import { createDefaultParserRegistry, DEFAULT_MAX_SOURCE_BYTES, resolveConfigReadOnly, writeDefaultConfig } from "@autorag/librarian";
 import { readRawConfigObject, resolveConfigPath, writeConfigObject } from "@autorag/librarian/core";
 import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../shared/settings-contract";
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
 import { autoragHome } from "./autorag-home";
+import { seedFromLaunchFolder, withoutRootWorkspace } from "./workspace-seed";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
+import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -95,13 +99,14 @@ import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
 import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
+import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
 import { createMcpSettingsService } from "./mcp-settings-service";
 import { resolveMcpConnectInfo } from "./mcp-connect-info";
 import { createDefaultAgentFactory, createSearchService } from "./search-service";
 import { createInteractionHub } from "./interaction-hub";
 import { INTERACTION_CHANNELS, type ApprovalMode } from "../shared/interaction-contract";
-import { resolveConfiguredSessionModel } from "@autorag/librarian/profiles";
+import { resolveConfiguredSessionModel, resolveSessionModel } from "@autorag/librarian/profiles";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { checkModelHealth } from "./model-health";
 import { createSmartIndexingService } from "./smart-indexing-service";
@@ -109,6 +114,7 @@ import { createErrorFixService } from "./error-fix-service";
 import { createAppCustomizerService } from "./app-customizer-service";
 import { createMagicActionService } from "./magic-action-service";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { appWindowSize } from "./window-size";
 import { createSettingsService } from "./settings-service";
 import { detectSystemLanguage } from "./system-language";
 import {
@@ -132,8 +138,11 @@ import {
 	registerServicesIpcHandlers,
 	registerSmartIndexingIpcHandlers,
 	registerSettingsIpcHandlers,
+	registerVoiceIpcHandlers,
 } from "./ipc";
 import { createActionService } from "./action-service";
+import { createVoiceService, systemMicrophoneAccess } from "./voice-service";
+import { readDazziPlanCredential } from "./dazzi-plan-credential";
 import { createFileeConversionService, readFileeSettings } from "./conversion-service";
 import { createFileePdfReducer } from "./pdf-reducer";
 import { createServicesService } from "./services-service";
@@ -194,13 +203,24 @@ function ensureAppIndexingMetadata(configPath: string): void {
 	}
 }
 
-/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has. */
+/** Rewrite what an earlier Dazzi left in the config for the embedding runtime it no longer has, and the Jev settings the librarian now refuses. */
 function migrateEmbeddingConfig(configPath: string): void {
 	try {
-		const { raw, changed } = migrateLegacyEmbedding(readRawConfigObject(configPath));
-		if (changed) writeConfigObject(configPath, raw);
+		const embedding = migrateLegacyEmbedding(readRawConfigObject(configPath));
+		const jev = migrateLegacyJev(embedding.raw);
+		if (embedding.changed || jev.changed) writeConfigObject(configPath, jev.raw);
 	} catch (error) {
-		console.error("AutoRAG embedding config migration failed", error);
+		console.error("AutoRAG config migration failed", error);
+	}
+}
+
+/** An earlier Dazzi seeded `workspacePath` with the launch folder, `/` for a packaged app, where `.autorag` cannot be created. */
+function migrateRootWorkspace(configPath: string): void {
+	try {
+		const next = withoutRootWorkspace(readRawConfigObject(configPath), process.env, homedir());
+		if (next !== null) writeConfigObject(configPath, next);
+	} catch (error) {
+		console.error("AutoRAG workspace migration failed", error);
 	}
 }
 
@@ -208,13 +228,14 @@ async function ensureAutoRAGConfig(): Promise<void> {
 	const configPath = autoragConfigPath();
 	if (await access(configPath).then(() => true, () => false)) {
 		migrateEmbeddingConfig(configPath);
+		migrateRootWorkspace(configPath);
 		ensureAppIndexingMetadata(configPath);
 		return;
 	}
 	try {
 		writeDefaultConfig(
 			configPath,
-			{ searchPaths: [process.cwd()], workspacePath: process.cwd() },
+			seedFromLaunchFolder(process.cwd(), process.env, homedir()),
 			{ atomicCreate: true, cwd: process.cwd(), env: process.env },
 		);
 		ensureAppIndexingMetadata(configPath);
@@ -244,11 +265,10 @@ function loadRendererPage(window: BrowserWindow, page: string): void {
 }
 
 function createAppWindow(devLabel: DevLabel | null, appearance: AppAppearance, phase: WindowPhase): BrowserWindow {
+	const workArea = screen.getPrimaryDisplay().workAreaSize;
+	const windowSize = appWindowSize(workArea, phase);
 	const window = new BrowserWindow({
-		// Onboarding uses the prototype's 1120×720 canvas; the Finder keeps its own size.
-		...(phase === "onboarding"
-			? { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true }
-			: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 }),
+		...windowSize,
 		title: formatWindowTitle(APP_FULL_NAME, APP_VERSION, devLabel),
 		// Windows and Linux take the window/taskbar icon here; macOS uses the bundle icon (the Dock icon below when unpackaged).
 		...(process.platform === "darwin" ? {} : { icon: windowIconPath }),
@@ -372,6 +392,17 @@ const SOURCE_PROBE_TIMEOUT_MS = 15_000;
 
 /** Longest the onboarding model check waits for the chosen model to answer one short prompt. */
 const MODEL_CHECK_TIMEOUT_MS = 30_000;
+
+/**
+ * The question-splitting model with its credentials, resolved exactly as the
+ * answer model is: the shared config with `queryDecomposition.model` standing in
+ * for `model`. `false` (split with the answer model) checks the answer model.
+ */
+function resolveDecompositionModel(): ReturnType<typeof resolveConfiguredSessionModel> {
+	const config = resolveConfigReadOnly({ flags: {}, env: process.env, cwd: process.cwd() });
+	const decomposition = config.queryDecomposition === false ? undefined : config.queryDecomposition?.model;
+	return resolveSessionModel(decomposition === undefined ? config : { ...config, model: decomposition }, process.env, process.cwd(), getAgentDir());
+}
 
 /** Runs one OS command with a deadline (5s by default); rejects with stderr (or the spawn error). */
 function runCommand(command: string, args: readonly string[], timeoutMs = 5000): Promise<string> {
@@ -869,6 +900,11 @@ app.whenReady().then(async () => {
 		configPath: autoragConfigPath,
 		resolveWorkspacePath: async () => (await resolveEffectiveConfig({ env: process.env, cwd: process.cwd() })).config.workspacePath,
 		journalPath: () => schedulePath.activity,
+		// Keyword-only runs MinSync too, as a keyword index; the progress screens name that stage by this switch.
+		semanticSearch: () => {
+			const configPath = autoragConfigPath();
+			return !existsSync(configPath) || readAppIndexing(readRawConfigObject(configPath)).semanticSearch;
+		},
 		// The fs worker runs the checkbox-toggle refresh, so its pid marks that run as this app's own.
 		ownPids: () => [workerHost.status().pid],
 	});
@@ -1014,6 +1050,26 @@ app.whenReady().then(async () => {
 		...(process.platform === "darwin" ? { listDatalessPaths: listMacDatalessPaths } : {}),
 		emit: (scan) => sendToMainWindow(ONBOARDING_CHANNELS.scanProgress, scan),
 	});
+	const listCloudDrives = async (): Promise<readonly { readonly path: string; readonly name: string }[]> => {
+		if (process.platform === "darwin") {
+			const root = join(home, "Library", "CloudStorage");
+			const names = await readdir(root).catch(() => [] as string[]);
+			// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
+			return names
+				.filter((name) => !name.startsWith("."))
+				.map((name) => {
+					const dash = name.indexOf("-");
+					return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
+				});
+		}
+		if (process.platform === "win32") {
+			const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
+			return locations
+				.filter((location) => location.section === "cloud" && location.available)
+				.map((location) => ({ path: location.path, name: location.name }));
+		}
+		return [];
+	};
 	registerSmartIndexingIpcHandlers(
 		createSmartIndexingService({
 			send: (event) => sendToMainWindow(SMART_INDEXING_CHANNELS.event, event),
@@ -1021,6 +1077,7 @@ app.whenReady().then(async () => {
 			agentDir: getAgentDir(),
 			env: process.env,
 			language: () => currentLanguage,
+			cloudRoots: async () => (await listCloudDrives()).map((drive) => drive.path),
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
@@ -1090,6 +1147,18 @@ app.whenReady().then(async () => {
 		onSignedIn: () => providerAuth.syncAutoragCatalog(),
 	});
 	registerAccountIpcHandlers(accountService);
+	// Dictation for AI Search: the hosted speech-to-text endpoint with the account key, and the OS microphone permission.
+	registerVoiceIpcHandlers(
+		createVoiceService({
+			env: process.env,
+			readKey: () => readDazziPlanCredential(getAgentDir()),
+			microphone: systemMicrophoneAccess({
+				platform: process.platform,
+				preferences: systemPreferences,
+				openExternal: (url) => shell.openExternal(url),
+			}),
+		}),
+	);
 	void accountService.refresh().catch(() => undefined);
 	app.once("will-quit", () => void accountService.dispose());
 
@@ -1107,26 +1176,7 @@ app.whenReady().then(async () => {
 		},
 		iCloudDrivePath:
 			process.platform === "darwin" ? join(home, "Library", "Mobile Documents", "com~apple~CloudDocs") : null,
-		cloudDrives: async () => {
-			if (process.platform === "darwin") {
-				const root = join(home, "Library", "CloudStorage");
-				const names = await readdir(root).catch(() => [] as string[]);
-				// File Provider folders are `<Provider>-<account>`; accounts may contain `-`.
-				return names
-					.filter((name) => !name.startsWith("."))
-					.map((name) => {
-						const dash = name.indexOf("-");
-						return { path: join(root, name), name: dash < 0 ? name : `${name.slice(0, dash)} · ${name.slice(dash + 1)}` };
-					});
-			}
-			if (process.platform === "win32") {
-				const locations = await workerHost.client.call<readonly { readonly section: string; readonly available: boolean; readonly path: string; readonly name: string }[]>("locations");
-				return locations
-					.filter((location) => location.section === "cloud" && location.available)
-					.map((location) => ({ path: location.path, name: location.name }));
-			}
-			return [];
-		},
+		cloudDrives: listCloudDrives,
 		localSpec,
 		ocrEnabled: async () => {
 			try {
@@ -1191,9 +1241,9 @@ app.whenReady().then(async () => {
 				return null;
 			}
 		},
-		checkModel: () =>
+		checkModel: (role) =>
 			checkModelHealth({
-				resolveModel: () => resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir()),
+				resolveModel: () => (role === "decomposition" ? resolveDecompositionModel() : resolveConfiguredSessionModel(process.env, process.cwd(), getAgentDir())),
 				complete: completeSimple,
 				timeoutMs: MODEL_CHECK_TIMEOUT_MS,
 				now: Date.now,
@@ -1203,6 +1253,19 @@ app.whenReady().then(async () => {
 		relaunch: () => {
 			app.relaunch();
 			app.exit(0);
+		},
+		pickPaths: async (kind) => {
+			const options: OpenDialogOptions = {
+				title: t("main.dialogs.chooseExcludeTitle"),
+				buttonLabel: t("main.dialogs.addButton"),
+				properties: [
+					...(kind === "file" ? (["openFile"] as const) : kind === "folder" ? (["openDirectory"] as const) : (["openFile", "openDirectory"] as const)),
+					"multiSelections",
+				],
+			};
+			const parent = mainWindow;
+			const result = parent === null || parent.isDestroyed() ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(parent, options);
+			return result.canceled ? [] : result.filePaths;
 		},
 		pickFolders: async () => {
 			const options: OpenDialogOptions = {

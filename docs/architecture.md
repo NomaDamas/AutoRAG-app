@@ -33,17 +33,17 @@ second datasource or model configuration. The sidebar is searchable and grouped:
 - **기본 → 일반** — appearance, app language, hidden files, launch at login,
   automatic updates, error reports, and document languages.
 - **기본 → 사이드바** — sidebar item and section visibility, ordering, custom pinned
-  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** (`AppCustomizerModal`)
-  dialog, all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
+  folders, quick presets, and the **AI 앱 커스텀 어시스턴트** in the window's right sidebar
+  (`AppCustomizerPanel` in the Inspector's column, one conversation per section), all persisted in Dazzi's own `settings-state.json` (`AppSettings.sidebar`,
   `src/shared/sidebar-contract.ts`) rather than the shared AutoRAG config.
-  **AI Search** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
+  **AI Chat** (`app:aiSearch`) and **Automations** (`app:automations`, 자동화) are
   locked core rows at the top of Favorites and can never be hidden.
 - **기본 → 단축키** — keyboard shortcut customization (`ShortcutsPage`,
   `src/shared/shortcuts-contract.ts`) across Dazzi's fixed catalog of 26
   default-bound actions (`window`, `view`, `files`, `aiSearch`), with live
   key-press recording (`chordFromKeyEvent`), pointer modifier+key UI editing,
   conflict swap, three quick presets (`Mac Finder`, `Windows 파일 탐색기`, `기본값`), and the `shortcut-customizer` helper agent
-  profile (`AppCustomizerModal` with `surface="shortcuts"`), persisted in
+  profile (`AppCustomizerPanel` in the right sidebar, with `surface="shortcuts"`), persisted in
   `settings-state.json` (`AppSettings.shortcuts`). Arbitrary new actions cannot
   be added, and `Esc` (`dismiss`) plus plain arrow navigation stay locked.
 - **AI → AI 모델** — the AutoRAG plan is listed first and connects through the
@@ -193,7 +193,7 @@ second datasource or model configuration. The sidebar is searchable and grouped:
     timeout, `index-refresh` halves `batchSize` and re-runs `syncMinSync` in the
     same refresh. Since MinSync 0.4.10 a file over `[sync] max_file_bytes`
     (64 MiB) is skipped the same way at the `size_guard` stage, before it is read.
-  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0). MinSync replaced its BM25 index with
+  - *Local search ranks with SPLADE* (librarian on MinSync 0.6.0 or newer). MinSync replaced its BM25 index with
     learned-sparse retrieval (`nlpai-lab/KURE-Sparse-nano`), which matches Korean inflected forms
     (`인증서를` for `인증서`) with no tokenizer library, so Kiwi is gone. The installer carries the model and
     `bundled-sparse-model.ts` seeds it into MinSync's cache at startup. The first refresh after the upgrade
@@ -211,6 +211,17 @@ second datasource or model configuration. The sidebar is searchable and grouped:
   a tick never overlap. Results land in `app-refresh/state.json` beside the
   config. The app never edits a crontab line or LaunchAgent it did not create and
   only warns when another job already refreshes AutoRAG.
+  - *Conditions* (설정 > 인덱싱 > 자동 최신화 조건): "전원 연결 시에만" and one daily time
+    window are stored as `refresh.schedule` (`power: "ac"`, `windows: ["22:00-07:00"]`, local time; a
+    start later than the end wraps midnight). The job asks the librarian's `checkIndexSchedule`
+    only once something is due; a closed schedule ends the wake-up with `paused: refresh.schedule (<reason>)`
+    in `job.log`, takes no lock, and records only `paused: { at, reason }` in `state.json` (no item is
+    marked done), so the same items run on the first wake after it opens, which clears the pause.
+    While the config still has a schedule, 인덱싱 > 최신화 상태 says why the job is waiting. A
+    malformed `refresh.schedule` is a config error like any other invalid field: the job exits 2 and
+    names the bad entry in `job.log`. The Settings buttons are never gated. The power
+    source is read with `pmset` (macOS), `Win32_Battery` (Windows) or `/sys/class/power_supply`
+    (Linux); an unreadable source counts as plugged in.
 - **Indexing progress** — a block above 설정 in the sidebar shows what is
   indexing right now, with a progress bar: the local folders and every
   datasource, whether the run came from a Settings button, the OS job, or an
@@ -301,8 +312,11 @@ tokens in Pi's `auth.json`, and credential-only keys (for example
 are rejected; corpus-bearing requests stay on loopback.
 
 The Settings tab is an app-owned UI location, not a filesystem path; it never
-issues directory listings, incremental reads, or watcher requests. Returning to
-a Finder tab restores its existing folder listing and watch set.
+issues directory listings, incremental reads, or watcher requests. While it is
+focused it takes over the window (its own sidebar, no tab strip or toolbar) and
+the Finder chrome stays mounted but hidden; Back closes the tab and returns to
+the Finder tab focused before it, whose folder listing and watch set are
+restored as they were.
 
 ## Filesystem worker
 
@@ -338,7 +352,7 @@ dupey runs under the app's own runner (`src/main/dupey-runner.ts`), not under th
 librarian's: the thread hands `scanWithDupey` a `run` backed by `createDupeyRunner`
 (`src/fs-worker/librarian-dupey.ts`). The librarian's own spawn tracks no child, sends
 SIGTERM once at its 120 s limit and nothing ends it when the thread is terminated, so
-a scan of a cloud drive, which waits on files the drive has to download, left `dupey`
+a long-running scan of a cloud drive left `dupey`
 processes at PPID 1 for tens of minutes after a quit. The runner keeps every child it
 starts. A call that outlasts 120 s fails with `dupey timed out.` and its process gets
 SIGTERM, then SIGKILL 5 s later if it is still there. `shutdown` sends SIGTERM to every
@@ -369,6 +383,141 @@ path still stops it first. The fsearch daemon on macOS and Linux stays detached 
 purpose (restarting it re-scans every watched folder). QA lane:
 `scripts/manual-qa/run-qa-finder-force-quit.mjs` (quit, `taskkill /T /F`, and
 `taskkill /F` on main alone).
+
+### Index map
+
+Settings → 인덱싱 shows the **index map** in its progress section, directly under
+the progress card (`AppsPages.tsx` `IndexingPage`), so the bar says how far the run
+is and the map says where. The map (`index-map/IndexMapPanel.tsx`) is a
+DaisyDisk-style radial hierarchy. Search roots occupy the innermost ring; descendant
+folders and files appear progressively farther out. Folder sectors partition angles
+by represented file count, not bytes; individual files are narrow radial strokes.
+`radial.ts` computes SVG annular paths, with up to nine visible rings. The legend
+sits above the chart. Clicking a folder reveals its subtree and the center goes up.
+The side panel shows the hovered/focused item's path, completion and child list;
+inside a folder its first row is `..`, which goes up one level like the center. The
+center shows only the percentage and the scope name. The map has no refresh button of
+its own: the Indexing page's row for the local folders has it.
+
+**Where the run is working** (`index-map/progress.ts`). The run's progress snapshot
+counts files per stage but names no path (`lastFile` is a bare file name), so the
+places come from the map itself: on every read while the local folders are being
+indexed, `mapProgress` compares it with the read before and names the nodes whose
+files moved forward, meaning the `indexed` or `stale` count rose (a file is read into
+the mirror, where it counts as stale until MinSync stages it, then staged). Leaving
+something out, or a different set of search folders, is not progress, and a node with
+no counterpart before is credited to its folder. Only the innermost nodes are named
+(`here`); the folders above them are `inside`. `here` gets a pulsing arc along the
+outer edge of its sector (`.index-map-edge`, a separate element, so the sector keeps
+its state colour and stays the one thing to click), `inside` gets a dot on its row in
+the list, and the legend gains an "indexing now" entry **only while an arc is shown**
+(an entry explaining a mark that is not on screen would mislead). An arc lasts until
+the next read; a read that finds nothing new clears it, and nothing is shown while no
+run is on. Nothing is estimated or animated by time: a place is named only when a file
+in it really changed state. Reduced-motion turns the pulse off and keeps the arc.
+
+What this does and does not show, measured on 9,000 files in three folders (542 s,
+real MinSync, keyword-only): during the read stage (about 50 s, card on "Parsing")
+the arc moved folder by folder, alpha, then alpha and beta, then beta and gamma, then
+gamma, which is the "where". Staging then marked all 9,000 files `indexed` between two
+reads, so the arc covered everything for one read. The remaining ~470 s (87% of the
+run, card on "Embedding") changed no file's state, so the map has nothing to point at
+and shows no arc; the progress card above it is the only thing that says what is
+happening. What MinSync does inside that stretch was not inspected. The resolution is
+one read (`INDEX_MAP_REFRESH_MS`, 10 s): a corpus whose stage ends inside one read
+(1,200 tiny files do) rings everything it touched in that read, which is why the lane
+uses a few thousand files.
+
+**What the person can change from the map.** Clicking a folder or file **picks** it
+(hovering only previews, so the action stays reachable after the pointer leaves). The
+side panel then offers the one change that would work (rules in
+`src/shared/index-scope-edit.ts`, pure and tested): *Exclude from indexing* adds the
+path to `excludePaths`; *Include in indexing* removes it, but only when that exact
+path is in the list. A folder excluded only because a folder above it is, a search
+root, a folded parcel and a folder the refresh never walks (`node_modules` and the
+like) offer nothing. The write goes through the serialized config writer (an empty
+list removes its key) and the map reads again at once (`useLiveIndexMap`
+`revision`). A refresh is not started by itself. Changing the **search folders**
+returns the map to the whole scope; changing only exclusions keeps the view, except
+that excluding the folder in view steps out of it.
+
+Settings → 검색 범위 (`ScopePage.tsx`) is where the folders themselves are edited, and
+has no map. *Add folder* opens the system folder dialog (`onboarding.pickFolders`,
+several at once); a remote browser has no dialog, so it asks for a path and expands
+`~`. `addSearchRoots` refuses a folder already listed, one inside a listed folder
+(indexing it twice would double-count it) and a relative path, and says why; a new
+folder that contains listed ones replaces them. *Delete* removes a folder and, in the
+same write, the exclusions that only meant something under it. The exclusion list
+below it shows every entry, those the map wrote included.
+
+**The open map keeps itself current** (`useLiveIndexMap.ts`). While the local
+folders are being indexed, by this app, the scheduled job or `autorag watch`
+(`localIndexRunning` over `useIndexActivity`), it reads the map again every
+`INDEX_MAP_REFRESH_MS` (10 s), once when a run starts, once when it ends, once when
+the scope it describes changes, and at once when a refresh settles
+(`onIndexRefreshed`). Nothing polls while idle. The
+update is silent by construction: reads never overlap (a slow scan is not asked
+again, and a push that arrives during one triggers one more read after it); a
+failed re-read keeps the last good map and shows no error (only a first read with
+nothing to keep shows one, and it is retried at the same pace); an answer equal
+to the one shown keeps the same object, so the chart does not redraw. The focused
+folder, the picked item and the hovered item are kept by path and kind, not node id,
+because ids are renumbered when the tree changes. A scan walks the disk, so a 10 s
+interval on a large scope costs one walk per tick, never two at once.
+
+Angles follow file counts, with one exception: an excluded folder holds few or no
+counted files, so by count it would be a hairline beside a large sibling (42
+excluded folders in a 6,866-file scope were each about 0.05° wide: in the data,
+invisible on screen). `layoutRadial` gives each excluded sector at least about 4°,
+capped at a quarter of its parent's ring, and the siblings share what is left in
+proportion. Folding into parcels is silent; only a truncated scan prints a note.
+
+`src/main/index-map.ts` runs on the librarian thread (`indexMap` in
+`librarian-contract.ts`). It walks without symlinks and respects refresh's
+skip-directory names and depth limit. Eligibility uses the same configured
+parser registry as the index badge: unsupported files and product artifacts
+are omitted before classification, even if an old mirror entry remains.
+Unsupported-only ordinary branches are pruned. An excluded/skip-rule folder
+is sealed rather than recursively entered: only supported files directly
+inside contribute excluded counts, and even a zero-count folder stays as a gray
+marker. The marker's angular space is not a recursive file count.
+
+An eligible file is **indexed** when the mirror's mtime/size still match and
+MinSync has staged it, **stale** when it changed or was not staged, or
+**unindexed** when not held. Supported parse/skipping failures remain
+**unindexable** unfinished targets. Unlike the Finder badge's pending-removal
+state, map exclusion wins immediately over an old mirrored entry.
+Folder completion is indexed / (indexed + stale + unindexed + unindexable),
+excluding all excluded counts. All complete is blue, some complete yellow,
+none complete red, and excluded folders gray. Stale/failed files are red.
+The center displays the actual completion percentage for the current scope;
+zero targets displays a dash, and rounding cannot report 100% with work left.
+There is no simulated opening tally or continuous render loop.
+
+The scan stops at `INDEX_MAP_MAX_ENTRIES` and reports `truncated`.
+`buildIndexMap` uses the existing file-cap/depth ladder to fit
+`INDEX_MAP_NODE_BUDGET`, folding files into per-state parcels while preserving
+counts. The reload keeps the focused folder, the picked item and the hovered item,
+since all are kept by path.
+The UI strings ship in Korean, English, Japanese and Simplified Chinese.
+Regression coverage: `test/index-map.test.ts`, `test/index-map-radial.test.ts`,
+`test/index-map-identity.test.ts`, `test/index-scope-edit.test.ts` (the edit rules),
+`test/index-map-progress.test.ts` (what counts as moving), `test/ui-index-map-live.test.tsx`
+(polling, silent failures, no overlap, re-read on a changed scope, progress marks only
+while running), `test/ui-index-map-panel.test.tsx` (picking, previewing, the offered
+action, the ring, legend entry and row marks), `test/ui-indexing-page.test.tsx` (the
+map under the progress card, exclude and include written to the config),
+`test/ui-scope-page.test.tsx` (add/remove against a fake config, the remote path) and
+`test/index-activity-view.test.ts` (`localIndexRunning`).
+Real app QA: `scripts/manual-qa/run-qa-finder-index-map.mjs` (English/Korean, four
+colors, eligible-only percentages, drill/up/`..`, excluded folders wide enough to see
+and hover, a real refresh followed by the open map without it emptying or losing the
+hovered item, exclude and include from the map checked against the saved config, and
+a folder added, refused and removed on Search Scope with the map following) and
+`scripts/manual-qa/run-qa-index-progress-map.mjs` (a few hundred real files indexed by
+a real run started from the page's own button, sampled once a second: the card above
+the map, the legend entry only while an arc is on, arcs on part of the map that move
+from folder to folder, row marks, and everything gone at 100% when it ends).
 
 ## Error reports (Sentry)
 
@@ -583,7 +732,7 @@ resumes at the same step.
   model afterwards. The draft only remembers the choice; the config is the authority
   (`onboarding/model-choice.ts`). The step cannot be left until the saved model has
   answered a real call (`main/model-health.ts`, `onboarding:checkModel`: the same
-  resolution and credentials the smart scan and AI Search use, one 16-token reply,
+  resolution and credentials the smart scan and AI Chat use, one 16-token reply,
   30 s limit); a refusal shows the provider's own message and a retry button, and
   `draft.model.verified` is only ever set by that answer.
 - **Roles** (BYOK, right before indexing) picks the reranker and Jev, which a Dazzi
@@ -614,6 +763,56 @@ resumes at the same step.
   `progress.jsonl`) reads first and applies its snapshot only if its run is still
   the live one and still `running`, so a tick that straddles the end of the refresh
   can no longer turn a `failed` or `success` back into `running`.
+  The librarian writes `success` (or `failed`) for its own pass before `refresh()`
+  returns, and the batch-halving retry of a timed-out MinSync step (`index-refresh`
+  re-runs `syncMinSync()` after that write) never rewrites the file. A tick that
+  reads such a view therefore keeps the last measured snapshot, the phase and the
+  bar of the last running view, without its remaining time (`holdIndexProgress`),
+  instead of recomputing from a file that no longer describes the work; the bar
+  never moves backwards on the way to `finish()`.
+  The numbers on the screen, in the sidebar activity entry and in Settings >
+  Indexing are one `IndexProgressSnapshot` (`src/shared/index-progress-contract.ts`),
+  computed by `computeIndexProgress` (`src/shared/index-progress.ts`) from what the
+  processes wrote down: the librarian's `refresh-progress.json` (`sourceFiles.total`,
+  `parsedCounts`, `minsync.synced/total`, `updatedAt`, which MinSync's 5 s heartbeat
+  rewrites) and MinSync's `progress.jsonl` (header, then one
+  `{"item":"files/<path>.md","version":...,"outcome":"committed|failed|deleted"}` line
+  per file, no sizes, no timestamps).
+  That journal is MinSync's private interrupted-run format: the librarian's own
+  docs say AutoRAG does not read MinSync's private snapshot/journal formats, and the
+  app reads this one only to draw the display. What is known of it is narrow. The
+  header and the `committed` lines were measured on MinSync 0.6.1 only. The `failed`
+  and `deleted` lines were not seen in a real run (their test follows MinSync's
+  source, `journal.rs`). The supported floor, 0.7.1 (`MINSYNC_MIN_VERSION`), was not
+  measured at all. So the tally skips any line it does not recognize, and the
+  journal can only raise a count above MinSync's own `minsync.synced/total` in
+  `refresh-progress.json`: a format it cannot read adds nothing, and the screens fall
+  back to MinSync's count. The file-by-file tally and the size of every staged
+  document (read once per run from `.autorag/minsync/files`) come from
+  `src/main/index-progress-tracker.ts`. A committed file with no staged size makes
+  the byte figure unknown (`bytesDone: null`: the screens show file counts only)
+  instead of adding 0 to it.
+  The tracker is owned once by the onboarding service and once by the activity
+  service, and keeps the rolling-rate samples between polls. Keyword-only mode
+  (`appIndexing.semanticSearch: false`) still runs MinSync as a sparse-only index
+  (`onboarding-service.ts` `startIndexing`, `index-refresh.ts`), so its MinSync step
+  is a counted stage like the embedding one, named `keyword` (키워드 색인) instead
+  of `embed`. Both trackers are told which it is: the onboarding service from the
+  chosen embed mode, the activity service from the config file through its
+  `semanticSearch` dependency (re-read when the file changes). The first-run screen,
+  the sidebar and Settings > Indexing therefore print the same name and file counts.
+  The bar sits on fixed stage shares (parse 10%, MinSync's embedding or keyword stage 80%,
+  finalize 10%); MinSync's stage is filled by `bytes.done / bytes.total` when the staged
+  sizes are known and by file counts otherwise, so a few large files cannot show as nearly done.
+  Since librarian 2.13.7 MinSync syncs alongside parsing: `refresh-progress.json` keeps `phase: "parsed"` while
+  `minsync.synced/total` already moves (measured on a real 120-file refresh: parsing at 65 of 120 with MinSync at 0 of 25, then 50 of 83),
+  and `minsync.total` grows with every committed batch. `computeIndexProgress` therefore shows MinSync's stage `running` with its own counts as soon
+  as it has reported, next to the still running read stage, while the bar and the remaining time stay with the read stage (a share of a
+  growing total would move the bar backwards); once parsing ends the bar moves on to MinSync's stage. A sync that fails leaves one
+  `minsync-sync-failed` warning per file it covered; `index-refresh.ts` folds them into one `minsync-batch-skipped` diagnostic with
+  `count`, which the banner counts as files left out (`skippedFileCount`) and the next refresh retries.
+  Nothing in it is filled from elapsed time; the old `computeIndexingProgress`
+  (`onboarding-progress.ts`), which did that, is gone.
 
 Account and plan are real. The account step signs in against the hosted AutoRAG
 service (`AUTORAG_BASE_URL`, default `https://api.dazziapp.com`); no password and
@@ -653,8 +852,17 @@ role, in the shared `config.json` (the config carries an explicit
 |---|---|---|
 | answer `model` | nothing, or an AutoRAG model | any other provider's model |
 | `queryDecomposition` | nothing, an AutoRAG model, or the librarian's untouched default | another model you chose (including another OpenRouter one) or `false` |
-| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `false`, another backend, or an AutoRAG block you switched off (`enabled: false`) or tuned |
+| `jev` | nothing, the librarian's untouched OpenRouter default, or a bare AutoRAG block | `{ "backend": "sllm" }` (the small chat model decides, no Jev), another backend, or an AutoRAG block you tuned (`confidenceThreshold`, …) |
 | `rerank` | the same | the same (`topN`, `baseUrl`, … count as tuning) |
+
+The librarian requires a decision model and refuses `jev: false`, `jev.enabled`, and the backend name `vercel`
+(now `vercel-ai-gateway`). A config an earlier Dazzi wrote can still hold them, so `migrateLegacyJev`
+(`src/main/jev-migration.ts`) rewrites them at launch, on every Settings write (`config:patch` re-reads the file
+through it, so one stale field never blocks an unrelated edit), and before sign-in adopts the plan's roles:
+switched off (`false`, `enabled: false`) becomes `{ "backend": "sllm" }`, `enabled: true` is dropped, `vercel`
+becomes `vercel-ai-gateway`, and OpenRouter's `typesafe/jev-latest` becomes the catalog id `~typesafe/jev-latest`.
+`scripts/manual-qa/run-qa-live-jev-sllm.mjs` runs this live: a legacy config, a Settings edit over it, and a real
+question answered with the sLLM deciding.
 
 The model ids come from the server (`GET /v1/models`, `?operation=jev|rerank`);
 a list that cannot be fetched leaves that role alone. Settings › 계정 › "계정
@@ -789,14 +997,11 @@ time-out splits a drive; a whole-root call that fails for another reason is repo
 and the whole drive is tried again by the next scan. The way back is "Check again":
 it reads a split drive whole once more, and if that finishes the split and the folders'
 time-outs are forgotten and the scheduled scans read the whole drive again; if it
-fails, the folder scans go on. That attempt can take a full 120 s and asks the drive for
-files it has not downloaded yet, so the scheduled scans never make it. The split trades
+fails, the folder scans go on. That attempt can take a full 120 s, so only a manual retry makes it. The split trades
 away stacks whose files sit in two different top-level folders of such a drive: the
-folder scans no longer find them, until a whole-drive scan finishes. The app cannot make
-dupey skip a file that is not downloaded yet; it has no such option. A split drive is
-still read folder by folder on every scheduled scan (the folders that did not time
-out), which reads files the drive may have to download: the scan interval in Settings
-is what limits that.
+folder scans no longer find them, until a whole-drive scan finishes. A scheduled scan
+still reads each top-level folder that has not timed out. The scan interval in Settings
+controls how often those folders are read.
 
 The snapshot's format version stays 2. `splitLocations` and `timedOutScopes` are
 optional fields, an older snapshot loads without them, and a build that does not know
@@ -807,7 +1012,7 @@ dropped on read without losing the rest.
 
 ## Helper agents
 
-AI Search is answered by the AutoRAG agent (`@autorag/librarian`). Every other
+AI Chat is answered by the AutoRAG agent (`@autorag/librarian`). Every other
 agent in the app is a plain pi session built by one factory,
 `createProfileSession` from `@autorag/librarian/profiles`, from an `AgentProfile`.
 The factory lives in the librarian so that the app's helper agents and the
@@ -816,7 +1021,7 @@ built the same way:
 
 | Per profile | Shared by all |
 |---|---|
-| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by the librarian's `resolveSessionModel` / `resolveConfiguredSessionModel` from the same config AI Search uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
+| system prompt, tool names (pi built-ins such as `read ls find grep`, which open any path on the machine, so a profile that must stay inside a folder uses none), custom tools, thinking level, whether pi loads AGENTS.md / skills / extensions (each off unless the profile asks) | the model and its credentials, resolved by the librarian's `resolveSessionModel` / `resolveConfiguredSessionModel` from the same config AI Chat uses; pi's `auth.json` / `models.json` in the agent dir, so one sign-in serves every agent |
 
 A session is in memory and disposed by its caller: nothing is written to the
 agent dir or the working directory, and the user's own pi settings never apply.
@@ -826,12 +1031,12 @@ App profiles live in `src/main/agents/profiles/`, and every profile shares `src/
 required `i` string first in its schema so the model writes a short plain phrase in the interface language before calling the tool, and the
 session streams that phrase to the UI where it is rendered with the `.shimmer` text effect. The first profile is smart indexing (thinking
 `low`; looks only through `folder_survey` and `list_folder`, answers only through a `propose_exclusions` tool that validates paths). The
-second is the error-fix helper behind "AI로 고치기" (see "An error in AI Search"). The third is the
+second is the error-fix helper behind "AI로 고치기" (see "An error in AI Chat"). The third is the
 app-customizer helper (`src/main/agents/profiles/app-customizer.ts`, `src/main/app-customizer-service.ts`,
 `src/shared/app-customizer-contract.ts`), a multi-turn conversational session in Settings → 사이드바 and
 Settings → 우클릭 메뉴 that inspects and edits Dazzi's `AppSettings` (`get_app_settings`, `update_sidebar`,
 `update_context_menu`, `upsert_magic_action`, `delete_magic_action`, `update_general_settings`) while enforcing
-the locked `AI Search` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. Alongside it,
+the locked `AI Chat` / `Automations` sidebar invariant and the locked `Tags` context-menu invariant. Alongside it,
 the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.ts`, routed when
 `AppCustomizerRequest.surface === "shortcuts"`) inspects and edits `AppSettings.shortcuts` (`get_shortcuts`,
 `update_shortcuts`) within the closed 26-action catalog. Finally, the `magic-action` helper
@@ -842,15 +1047,15 @@ or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's S
 per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
-## AI Search approvals and questions
+## AI Chat approvals and questions
 
 librarian v2.12 gives the agent two ways to stop and ask the person: a **file-change approval gate** (a pi
 extension on every `bash`, `write`, `edit` and saved-automation call) and the **`ask_user` tool**. Both are
 built for the librarian's terminal UI and ask through pi's `ctx.ui` (`select`, `input`); a search run in the app
-has no terminal, so the app supplies the surface itself and the question appears in the AI Search panel in place
+has no terminal, so the app supplies the surface itself and the question appears in the AI Chat panel in place
 of the message box (`src/shared/interaction-contract.ts` is the contract).
 
-- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `auto`; persisted by the settings
+- **Modes.** `AppSettings.approvalMode` (`ask` | `auto` | `full`, default `full`; persisted by the settings
   service, which refuses any other value) is chosen in the menu at the left of the message box. `ask` puts every
   shell/write/edit call to the person; `auto` lets Jev (the judgment model) approve what the request clearly
   covers and asks about the rest — with no Jev backend every call is unclassified and is asked about, as in
@@ -915,11 +1120,12 @@ and kept for the chat's life:
 
 ### What the panel shows while a run works, and an exhausted plan
 
-- **One loading indicator.** While a run is live and the Deep answer has not started, the panel shows one shimmering text line
-  (`answerViewState`, the `shimmer` utility), in the same place whether or not Quick text exists: what the agent is doing, or
-  "Thinking…" before it has said anything. There are no grey placeholder bars. A message that goes on to call a tool is a progress
-  note, not the answer: its streamed draft is withdrawn at the tool call and its text becomes the line, so a run that is reading
-  files is never a bare animation. Stop clears the line at once.
+- **One loading indicator.** While a run is live, the panel shows one shimmering text line (the seed loader and the `shimmer`
+  utility) after everything the run has written so far, whatever phase wrote it: what the agent is doing, or "Thinking…" before
+  it has said anything. There is no Quick/Deep special case: the line is on while the run is live and off the moment it ends, so
+  an answer or a note landing never switches it off (a Deep message that goes on to call a tool used to). There are no grey
+  placeholder bars. A message that goes on to call a tool is a progress note, not the answer: its streamed draft is kept in the
+  transcript and the line keeps going under it, so a run that is reading files is never a bare animation. Stop clears the line at once.
 - **Where the line's words come from.** `progress` events carry three kinds of text. The librarian writes exactly one of them
   itself, in English: `Reviewing the query.`, the first event of every `searchDocumentsStream` (`agent.ts`); the search service
   swaps it for `aiSearch.reviewing` in the interface language (the panel shows that same string from the moment a run starts,
@@ -962,7 +1168,7 @@ and kept for the chat's life:
   (`ChatMessageAssistant.context`) and sends a run's error with the `new-chat` action when pi's overflow test reads it as one.
   The panel draws them with `components/ContextNotice.tsx`, and `describeAppError` turns `new-chat` into the
   `context-overflow` card (New chat, Ask narrower, no AI fix).
-- **An error in AI Search** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
+- **An error in AI Chat** (`RunErrorNotice`, `state/app-error.ts`, `shared/app-error.ts`). Errors reach the renderer as strings, so
   `classifyAppError` reads what the person can do from the wording (HTTP statuses only in the shapes the SDKs use, and never inside a
   path): no model or key (`model-missing`), a rejected key or login (`model-credentials`), a spent plan or billing problem
   (`model-subscription`), a retired model (`model-not-found`), a rate limit, a lost connection, or anything else. The first four mean
@@ -977,7 +1183,7 @@ and kept for the chat's life:
   nothing of the raw error string is shown until they press "자세히 보기" ("Show details"), which expands the full selectable message for
   inspection or a bug report (only a pre-translated main-process plan message with `action: "open-plan"` is shown directly).
 - **AI로 고치기** (`error-fix-service.ts`, `agents/profiles/error-fix.ts`, `agents/profiles/error-fix-files.ts`, `hooks/useErrorFix.ts`, `ErrorFixDialog`, `SidebarErrorFixActivity`). A
-  helper-agent run on the AI Search model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
+  helper-agent run on the AI Chat model (`resolveConfiguredSessionModel`), thinking `medium`. It works with pi's own `read`, `ls`,
   `find`, `grep`, `edit`, `write` and `bash` (built with pi's tool factories and their `operations` hooks), plus three tools only the app
   can offer: `diagnose` (the config with secrets redacted, whether every path written in it exists, the model, the data sources, the index
   state), `refresh_index` and `report_result`, which is the answer and refuses `fixed` unless something was really changed (a file change,
@@ -1050,7 +1256,7 @@ tool writes the file, which this service then notices.
 librarian agent and takes no option for which Node to use: its `run` action (a test run
 of a rule's `autorag …` or `node …` command) and its `install_service` action both read
 `process.execPath`, which inside the app is the Dazzi binary, so a test run opened a
-second copy of the app that never exited and the AI Search turn hung. `ELECTRON_RUN_AS_NODE`
+second copy of the app that never exited and the AI Chat turn hung. `ELECTRON_RUN_AS_NODE`
 cannot be set app-wide (new windows then fail to load). `src/main/automation-runtime.ts`
 wraps just those two actions: `process.execPath` is swapped for a real Node
 (`resolveNodeBinary`: the bundled `<tools>/node`, else the first `node` on `PATH`) for the
@@ -1064,10 +1270,10 @@ and proven live by `scripts/manual-qa/run-qa-finder-automations-live.mjs`.
 A `running` daemon whose lock directory outlived a killed process still reads as
 running (`isAutomationDaemonRunning` uses `staleMs: 0` upstream).
 
-## AI Search attachments
+## AI Chat attachments
 
-Drop files, folders, or links on an AI Search tab's panel, on an AI Search tab
-in the tab strip, or on the sidebar's AI Search item to attach them to the next
+Drop files, folders, or links on an AI Chat tab's panel, on an AI Chat tab
+in the tab strip, or on the sidebar's AI Chat item to attach them to the next
 question:
 
 - **Finder rows** from the list, icon, or column view. Dragging a selected row
@@ -1078,8 +1284,8 @@ question:
 - **Links** (`text/uri-list`) dragged from a browser. A `file://` link becomes
   a file attachment.
 
-A drop on the sidebar item turns the focused tab into AI Search; a drop on an
-AI Search strip tab switches to it. A bare text drag is not an
+A drop on the sidebar item turns the focused tab into AI Chat; a drop on an
+AI Chat strip tab switches to it. A bare text drag is not an
 attachment. Attachments are deduplicated by path or URL.
 
 On send, `src/main/attachment-context.ts` builds one context block for the
@@ -1111,8 +1317,8 @@ summons a small window over any app. Pieces:
   `clipboardSet` / `copyPathsToClipboard`, `listDir("Recents")`. Each keystroke cancels the previous query's call
   (`AbortSignal` through the worker and the librarian thread).
 - Handoffs to the Finder reuse the os-request queue: *Show in Dazzi* is a `reveal`, *Ask about these files* an `ask`
-  (drafts on the nearest AI Search tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
-  `dazzi --ask` (a new AI Search tab sends it).
+  (drafts on the nearest AI Chat tab), *Ask Dazzi* an `ask` with a `query` and no paths, validated like
+  `dazzi --ask` (a new AI Chat tab sends it).
 - `contentSearch` (`src/main/content-search.ts`, in the librarian thread) is model-free: `AutoRAGLite.searchSelected`
   over the local MinSync **hybrid** method only (`datasourceIds: []`), so a keystroke never spawns a datasource CLI.
   Results collapse to one row per file with a snippet; `off` in keyword-only mode, `unavailable` when the local surface
@@ -1132,7 +1338,7 @@ reads the copies back from the OS clipboard.
 Settings → General → **Add to the file right-click menu** (off by default)
 adds two entries to the OS file menu, the way Keka or Skim do:
 
-- **Ask Dazzi** attaches the selected files and folders to AI Search as
+- **Ask Dazzi** attaches the selected files and folders to AI Chat as
   drafts, so you type the question.
 - **Show in Dazzi** opens the file's folder with the file selected.
 
@@ -1165,7 +1371,7 @@ folder to Finder:
 ```sh
 dazzi ~/Documents/project      # a folder opens in a tab (the tab that already shows it is reused)
 dazzi report.pdf notes/        # a file is shown selected in its folder; several paths at once
-dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Search tab asks at once, the paths attached
+dazzi --ask "이번 분기 계약서 요약해줘" contracts/   # a new AI Chat tab asks at once, the paths attached
 dazzi                          # bring Dazzi to the front
 ```
 
@@ -1176,7 +1382,7 @@ paths per call (the request limit in `src/shared/os-request-contract.ts`); more 
 an error rather than a silent cut.
 
 `--ask QUESTION` (or `--ask=QUESTION`) sends the action `ask` with the question
-in `--autorag-query=`: the renderer opens a new AI Search tab and sends the
+in `--autorag-query=`: the renderer opens a new AI Chat tab and sends the
 question with the existing paths as its attachments in one run
 (`deliverToDock` → `sendQuery(text, attachments)`), so a tab that is still
 answering never swallows it. The question needs no path; a missing attachment is
@@ -1299,6 +1505,57 @@ Cancel stops the Filee process.
 Esc, an unsupported route (mp3 → pdf), a same-format rename, Cancel while a 90 s 1080p MP4 → WebM
 encode runs (asserts filee and ffmpeg are gone, nothing partial remains), and no leftover staging folder.
 `test/conversion-live.test.ts` does the same against the real binaries without the UI.
+
+## Voice input in AI Chat
+
+A microphone button in the AI Chat composer dictates a question: it records, sends the clip to the
+hosted service, and appends the text to the draft. Nothing is sent as a question; the person
+reads and sends it.
+
+- **Where the audio goes.** `src/main/voice-service.ts` posts the clip as multipart to the Dazzi
+  server's `POST /v1/audio/transcriptions` (model `google/stt-v2-standard`, Google Cloud
+  Speech-to-Text V2, `latest_long`) with the account key from Pi's `auth.json`. The server holds the
+  Google service account, meters the call against the weekly credits (`transcription` operation,
+  $0.016 per audio minute), and answers `{ text, duration }`. The key and the Google credentials never
+  reach the renderer. The audio leaves the computer, so unlike indexing there is no on-device path.
+- **Limits.** The service takes 10 MB and 60 seconds per request. A recording ends itself at 55 s
+  (`VOICE_MAX_SECONDS`) and is sent; a clip over 10 MB is refused in `isVoiceClip` before the request.
+  Speech the service cannot make out is not an error: the text is empty and the composer says nothing
+  was heard.
+- **Language.** The recognition language follows the Interface language (`voiceLanguageCode`:
+  `ko-KR`, `en-US`, `ja-JP`, `cmn-Hans-CN`).
+- **Before recording.** `prepare()` answers `ready`, `signed-out` (the service would refuse the clip, so
+  nothing is recorded and the system's microphone prompt is not raised) or `microphone-denied`
+  (`systemMicrophoneAccess`).
+- **Microphone permission.**
+  - macOS: the first press raises the system's own Allow / Don't Allow prompt
+    (`askForMediaAccess`; `NSMicrophoneUsageDescription`, and the `com.apple.security.device.audio-input`
+    entitlement for the hardened runtime). macOS shows that prompt once per app.
+  - Windows: Electron's `getMediaAccessStatus` follows the three switches in Settings › Privacy &
+    security › Microphone ("Microphone access", "Let apps access your microphone", "Let desktop apps
+    access your microphone"): any of them off is `denied`. Measured on Windows 11 by turning each off in
+    the Settings app. Run from a non-interactive session (SSH, a service) it always says `granted`, so
+    test it on the desktop. Windows has no prompt of an app's own.
+  - Linux: Electron offers neither call; the browser layer's own permission decides.
+  - When the microphone is refused (`microphone-denied`, or `getUserMedia` failing with
+    `NotAllowedError`) the composer opens `MicrophonePermissionDialog` instead of recording. Its main
+    button opens the system's microphone settings (`x-apple.systempreferences:…Privacy_Microphone`,
+    `ms-settings:privacy-microphone`). When the window regains focus the dialog checks again: if the
+    microphone is now allowed it closes and the recording the person asked for starts; if not it says the
+    microphone is still off. "Not now" and Esc close it without recording.
+- **Recording.** `useVoiceInput` (`MediaRecorder`, `audio/webm;codecs=opus` first) holds the microphone
+  only while recording and releases it on stop, cancel, error and unmount. While listening or
+  transcribing, the composer collapses from any multi-line draft height into a single-row neutral pill
+  (`voice-bar`): left cancel (`×`), full-width `VoiceWaveform` (dotted baseline on silence, monochrome
+  bars fed by `AudioContext` + `AnalyserNode`), stop-to-draft (`■`) and stop-and-send (`↑`), followed by
+  a centered `받아쓰는 중…` / `Transcribing…` indicator before expanding back to the full draft height.
+  Other errors are shown as a line under the field, not as the run's error card.
+- **Bridge.** `window.autorag.voice` (`src/shared/voice-contract.ts`): `transcribe(clip)`, `prepare()`,
+  `openMicrophoneSettings()`. All are native-only in a remote browser session.
+
+To test it without speaking, launch Chromium with `--no-sandbox --use-fake-device-for-media-stream
+--use-file-for-fake-audio-capture=<48 kHz stereo wav>%noloop`: with the audio sandbox on, the fake
+device delivers silence.
 
 ## Manual QA
 

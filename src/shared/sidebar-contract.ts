@@ -103,6 +103,24 @@ const ITEM_ALIAS_MAP: Readonly<Record<string, string>> = {
 	"ai検索": "app:aiSearch",
 	"ai 搜索": "app:aiSearch",
 	"ai搜索": "app:aiSearch",
+	"ai chat": "app:aiSearch",
+	"aichat": "app:aiSearch",
+	"ai-chat": "app:aiSearch",
+	"ai 채팅": "app:aiSearch",
+	"ai채팅": "app:aiSearch",
+	"ai チャット": "app:aiSearch",
+	"aiチャット": "app:aiSearch",
+	"ai 聊天": "app:aiSearch",
+	"ai聊天": "app:aiSearch",
+	"ai agent": "app:aiSearch",
+	"aiagent": "app:aiSearch",
+	"ai-agent": "app:aiSearch",
+	"ai 에이전트": "app:aiSearch",
+	"ai에이전트": "app:aiSearch",
+	"ai エージェント": "app:aiSearch",
+	"aiエージェント": "app:aiSearch",
+	"ai 智能体": "app:aiSearch",
+	"ai智能体": "app:aiSearch",
 	"app:automations": "app:automations",
 	"automations": "app:automations",
 	"automation": "app:automations",
@@ -178,6 +196,11 @@ export function placeSidebarItemId(kind: FsLocationIcon): string {
 /** Canonical sidebar item ID for a custom pinned folder (`custom:/path`). */
 export function customSidebarItemId(path: string): string {
 	return `custom:${path}`;
+}
+
+/** The folder path of a custom pin's item ID (`custom:/path` -> `/path`); null for any other ID. */
+export function customPathOfSidebarItemId(id: string): string | null {
+	return id.startsWith("custom:") ? id.slice("custom:".length) : null;
 }
 
 /** Canonical sidebar item ID for a cloud drive (`cloud:/path`). */

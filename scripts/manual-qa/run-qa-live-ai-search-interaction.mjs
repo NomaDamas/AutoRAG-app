@@ -87,7 +87,7 @@ const seed = () => {
 seed();
 writeFileSync(
 	CONFIG,
-	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: false, webSearch: false, queryDecomposition: false }) }, null, 2)}\n`,
+	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: { backend: "sllm" }, webSearch: { enabled: false }, queryDecomposition: false }) }, null, 2)}\n`,
 );
 
 const forwarded = [];
@@ -231,7 +231,7 @@ try {
 		}
 	};
 
-	check("the mode defaults to auto", (await page.evaluate(() => window.autorag.interaction.getMode())) === "auto");
+	check("the mode defaults to full", (await page.evaluate(() => window.autorag.interaction.getMode())) === "full");
 
 	// ── 1. The model asks which report to summarize. ────────────────────────
 	await send(

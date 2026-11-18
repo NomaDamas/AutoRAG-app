@@ -687,20 +687,21 @@ export function createFsService(deps: FsServiceDeps): FsService {
 	 */
 	async function indexedHits(paths: readonly string[], scope: string | undefined): Promise<readonly FsSearchResult[]> {
 		const known = (await locations()).filter((location) => location.path !== RECENTS_PATH);
-		const results: FsSearchResult[] = [];
-		for (const path of paths) {
-			if (results.length >= SEARCH_MAX_RESULTS) break;
-			if (isInsideSystemFolder(path, scope) || discord.isInternalPath(path)) continue;
-			try {
-				results.push({ entry: await buildFsEntry(path, platform), location: searchLocation(path, known) });
-			} catch (error) {
-				// The index can be stale: a path that vanished since indexing is skipped.
-				if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
-					console.warn(`fs:search skipping ${path}: ${errorMessage(error)}`);
+		const filtered = paths.filter((path) => !isInsideSystemFolder(path, scope) && !discord.isInternalPath(path));
+		const hydrated = await Promise.all(
+			filtered.map(async (path): Promise<FsSearchResult | null> => {
+				try {
+					return { entry: await buildFsEntry(path, platform), location: searchLocation(path, known) };
+				} catch (error) {
+					// The index can be stale: a path that vanished since indexing is skipped.
+					if (!hasErrorCode(error, "ENOENT") && !hasErrorCode(error, "ENOTDIR")) {
+						console.warn(`fs:search skipping ${path}: ${errorMessage(error)}`);
+					}
+					return null;
 				}
-			}
-		}
-		return results;
+			}),
+		);
+		return hydrated.filter((hit): hit is FsSearchResult => hit !== null).slice(0, SEARCH_MAX_RESULTS);
 	}
 
 	function searchLocation(path: string, known: readonly FsLocation[]): string {

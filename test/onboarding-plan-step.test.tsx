@@ -56,16 +56,31 @@ function render(overrides: Partial<OnboardingCtx> & { readonly plan?: PlanId } =
 const cards = (): HTMLElement[] => [...host.querySelectorAll<HTMLElement>(".plan-card")];
 
 describe("plan step", () => {
-	it("lists Free, Air, Pro, Max and BYOK in that order", () => {
+	it("shows Free, Air and one card that switches between Pro and Max, with BYOK as a link", () => {
 		render();
 
-		expect(cards().map((card) => card.querySelector(".plan-name")?.firstChild?.textContent)).toEqual([
-			"onboarding.plan.plan.free.name",
-			"onboarding.plan.plan.air.name",
-			"onboarding.plan.plan.pro.name",
-			"onboarding.plan.plan.max.name",
-			"onboarding.plan.plan.byok.name",
-		]);
+		expect(cards().map((card) => card.dataset.plan)).toEqual(["free", "air", "pro"]);
+		expect([...host.querySelectorAll(".plan-tier")].map((tab) => tab.textContent)).toEqual(["onboarding.plan.plan.pro.name", "onboarding.plan.plan.max.name"]);
+		expect(host.querySelector(".plan-byok button")?.textContent).toContain("onboarding.plan.byokLink");
+	});
+
+	it("switches the third card to Max and chooses it", () => {
+		const choosePlan = vi.fn();
+		render({ plan: "free", choosePlan });
+
+		act(() => host.querySelectorAll<HTMLButtonElement>(".plan-tier")[1]?.click());
+		expect(choosePlan).toHaveBeenCalledWith("max");
+		expect(choosePlan).toHaveBeenCalledTimes(1);
+		expect(cards()[2]?.dataset.plan).toBe("max");
+		expect(host.querySelector(".plan-trial")).toBeNull();
+	});
+
+	it("goes straight on with BYOK from the link under the cards", () => {
+		const connectOwnKey = vi.fn();
+		render({ plan: "free", connectOwnKey });
+
+		act(() => host.querySelector<HTMLButtonElement>(".plan-byok button")?.click());
+		expect(connectOwnKey).toHaveBeenCalledTimes(1);
 	});
 
 	it("puts the free trial on the Pro card as its own call-out, once", () => {
@@ -88,7 +103,8 @@ describe("plan step", () => {
 		const choosePlan = vi.fn();
 		render({ plan: "max", choosePlan });
 
-		expect(cards().map((card) => card.classList.contains("selected"))).toEqual([false, false, false, true, false]);
+		expect(cards().map((card) => card.classList.contains("selected"))).toEqual([false, false, true]);
+		expect(cards()[2]?.dataset.plan).toBe("max");
 		act(() => cards()[1]?.click());
 		expect(choosePlan).toHaveBeenCalledWith("air");
 	});
@@ -187,7 +203,8 @@ describe("plan step", () => {
 	it("narrows the choice to Pro and Max when remote embedding is chosen", () => {
 		render({ plan: "pro", draft: { ...BASE_DRAFT, stepId: "plan", plan: "pro", embed: "cloud" } });
 
-		expect(cards().map((card) => card.getAttribute("aria-disabled"))).toEqual(["true", "true", "false", "false", "true"]);
+		expect(cards().map((card) => card.getAttribute("aria-disabled"))).toEqual(["true", "true", "false"]);
+		expect(host.querySelector(".plan-byok")).toBeNull();
 	});
 
 	it("shows the trial a Pro account is in, and not the offer again", () => {

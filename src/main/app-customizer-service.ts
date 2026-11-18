@@ -81,14 +81,15 @@ function hasToolCall(message: unknown): boolean {
 	return msg.content.some((entry) => recordOf(entry)?.type === "toolCall");
 }
 
-function latestAssistantReply(session: AgentSession): string {
-	for (let i = session.messages.length - 1; i >= 0; i -= 1) {
+function assistantMessagesSince(session: AgentSession, startIndex: number): readonly string[] {
+	const messages: string[] = [];
+	for (let i = startIndex; i < session.messages.length; i += 1) {
 		const msg = recordOf(session.messages[i]);
-		if (msg?.role !== "assistant") continue;
+		if (msg?.role !== "assistant" || msg.stopReason === "error") continue;
 		const text = assistantTextFromMessage(msg);
-		if (text.length > 0) return text;
+		if (text.length > 0) messages.push(text);
 	}
-	return "";
+	return messages;
 }
 
 export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppCustomizerService {
@@ -216,29 +217,57 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				};
 				run.abort.signal.addEventListener("abort", onAbort, { once: true });
 
-				unsubscribeProgress = subscribeProfileProgress(entry.session, (text) => {
-					if (!run.cancelled) {
-						deps.send({ type: "progress", runId, sessionId: request.sessionId, text });
-					}
-				});
-
+				const startMessageCount = entry.session.messages.length;
+				const committedMessages: string[] = [];
+				let committedCurrent = false;
 				let lastDraft = "";
+				const commitStepText = (text: string): void => {
+					committedCurrent = true;
+					if (text.length > 0) {
+						lastDraft = "";
+						committedMessages.push(text);
+						deps.send({ type: "assistant-message", runId, sessionId: request.sessionId, text });
+					} else if (lastDraft !== "") {
+						lastDraft = "";
+						deps.send({ type: "draft", runId, sessionId: request.sessionId, text: "" });
+					}
+				};
+
+				// Subscribed before `subscribeProfileProgress` so a step's spoken text commits before its tool's `i` shimmer.
 				unsubscribeDraft = entry.session.subscribe((event) => {
 					if (run.cancelled) return;
 					const ev = recordOf(event);
+					if (ev?.type === "message_start" && recordOf(ev.message)?.role === "assistant") {
+						committedCurrent = false;
+						lastDraft = "";
+						return;
+					}
 					if (ev?.type === "message_update") {
+						const text = assistantTextFromMessage(ev.message);
 						if (hasToolCall(ev.message)) {
-							if (lastDraft !== "") {
-								lastDraft = "";
-								deps.send({ type: "draft", runId, sessionId: request.sessionId, text: "" });
-							}
+							if (!committedCurrent) commitStepText(text);
 							return;
 						}
-						const draft = assistantTextFromMessage(ev.message);
-						if (draft !== lastDraft) {
-							lastDraft = draft;
-							deps.send({ type: "draft", runId, sessionId: request.sessionId, text: draft });
+						if (!committedCurrent && text !== lastDraft) {
+							lastDraft = text;
+							deps.send({ type: "draft", runId, sessionId: request.sessionId, text });
 						}
+						return;
+					}
+					if (ev?.type === "message_end" && recordOf(ev.message)?.role === "assistant") {
+						const msg = recordOf(ev.message);
+						if (msg?.stopReason === "toolUse" && !committedCurrent) {
+							commitStepText(assistantTextFromMessage(msg));
+						} else if (msg?.stopReason === "error" && lastDraft !== "") {
+							lastDraft = "";
+							deps.send({ type: "draft", runId, sessionId: request.sessionId, text: "" });
+						}
+					}
+				});
+
+				unsubscribeProgress = subscribeProfileProgress(entry.session, (text) => {
+					if (!run.cancelled && committedMessages.at(-1) !== text) {
+						deps.send({ type: "progress", runId, sessionId: request.sessionId, text });
 					}
 				});
 
@@ -258,20 +287,20 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				if (failure !== null) throw new Error(failure);
 
 				const changes = entry.toolkit.takeChanges();
-				const rawReply = latestAssistantReply(entry.session);
-				const reply =
-					rawReply.length > 0
-						? rawReply
+				const spoken = assistantMessagesSince(entry.session, startMessageCount);
+				const messages =
+					spoken.length > 0
+						? spoken
 						: changes.length > 0
-							? changes.map((c) => c.summary).join(" · ")
-							: "";
+							? [changes.map((c) => c.summary).join(" · ")]
+							: [];
 				const updatedSettings = await deps.settings.get();
 
 				deps.send({
 					type: "turn-done",
 					runId,
 					sessionId: request.sessionId,
-					reply,
+					messages,
 					changes,
 					settings: updatedSettings,
 				});

@@ -71,6 +71,11 @@ export function defaultEnvName(provider: string): string {
 	return base.length === 0 ? "" : `${base}_API_KEY`;
 }
 
+/** A list is written whole; an empty one removes the key, as the rest of Settings does. */
+export function listUpdate(key: string, list: readonly string[]): AutoRagConfigUpdate {
+	return list.length === 0 ? { path: [key], remove: true } : { path: [key], value: [...list] };
+}
+
 /** Commit batched leaf writes, serialized, surfacing the first failure. */
 export function useConfigWriter(onSaved: (next: AutoRagConfigSnapshot) => void): {
 	readonly saving: boolean;

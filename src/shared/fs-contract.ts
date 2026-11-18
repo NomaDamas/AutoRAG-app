@@ -1,6 +1,8 @@
 import type { ContentSearchResult } from "./content-search-contract";
 import type { IndexStatus } from "./index-contract";
+import type { IndexMap } from "./index-map-contract";
 import type { NewFileFormatId } from "./new-file-contract";
+import type { SearchDatasource, SourceSearchOutcome } from "./source-search-contract";
 
 /**
  * Finder contract shared by the filesystem worker, the main process, and the
@@ -525,10 +527,16 @@ export interface FsVersionFamilyBridge {
 export interface FsIndexBridge {
 	indexStatus(paths: readonly string[]): Promise<readonly IndexStatus[]>;
 	setIndexExcluded(path: string, excluded: boolean): Promise<IndexStatus>;
+	/** Every file and folder under the search roots and what the index holds for each; walks the scope on each call. */
+	indexMap(): Promise<IndexMap>;
 	/** Fires when the refresh a toggle started has settled; `error` is null on success. */
 	onIndexRefreshed?(listener: (error: string | null) => void): () => void;
 	/** Files whose text matches `query` in the local document index, best first (no model runs). */
 	contentSearch(query: string, limit?: number): Promise<ContentSearchResult>;
+	/** The connected datasources a whole search asks, in config order. */
+	searchDatasources(): Promise<readonly SearchDatasource[]>;
+	/** Messages, mails, or pages of one datasource that match `query`, best first (no model runs). */
+	sourceSearch(datasourceId: string, query: string, limit?: number): Promise<SourceSearchOutcome>;
 }
 
 export interface FsBridge extends FsCoreBridge, FsVersionFamilyBridge, FsIndexBridge, FsDragBridge {}
@@ -547,8 +555,8 @@ export interface FsVersionFamily {
 }
 
 /**
- * A failure of the version-family feature as a whole: the dupey CLI is missing (`dupey-missing`), or the snapshot
- * could not be requested at all (`scan-failed`, raised by the renderer). A scan that fails for one folder is an
+ * A failure of the version-family feature as a whole: the dupey CLI is missing or unsupported (`dupey-missing`),
+ * or the snapshot could not be requested or persisted (`scan-failed`). A scan that fails for one folder is an
  * `FsVersionFamilyScanFailure` instead and never becomes one of these.
  */
 export interface FsVersionFamilyError {

@@ -80,6 +80,19 @@ export function readFinderDragPaths(data: Pick<DropData<unknown>, "types" | "get
 	return finderEntries(data.getData(FINDER_DRAG_TYPE)).map((attachment) => attachment.id);
 }
 
+/** The folders a Finder row drag carries (the sidebar pins these); [] when the payload is absent or malformed. */
+export function readFinderDragFolders(data: Pick<DropData<unknown>, "types" | "getData">): readonly string[] {
+	if (!isFinderDrag(data.types)) return [];
+	return finderEntries(data.getData(FINDER_DRAG_TYPE))
+		.filter((attachment) => attachment.kind === "folder")
+		.map((attachment) => attachment.id);
+}
+
+/** Whether a drag carries OS files (dragged in from another app); their names are readable only at the drop. */
+export function isOsFileDrag(types: ArrayLike<string>): boolean {
+	return Array.from(types).includes(FILES);
+}
+
 /** The rows a drag carries: the whole selection when the grabbed row is in it, else just that row. */
 export function finderDragEntries<E extends FinderDragEntry>(
 	entry: E,

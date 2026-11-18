@@ -11,7 +11,7 @@
 // QA_LIVE_MODEL picks the Dazzi plan model (default deepseek/deepseek-v4.1-flash, listed by OpenRouter's live catalog with
 // created=2026-09-10; never pick a model from memory, read https://openrouter.ai/api/v1/models).
 //
-//   1. The search folder in the config is gone (it was moved up one level). AI Search says so; "Fix with AI" runs the real model
+//   1. The search folder in the config is gone (it was moved up one level). AI Chat says so; "Fix with AI" runs the real model
 //      as the error-fix agent with pi's own file and shell tools; it must look (read, ls, find, diagnose), repoint the folder in the config file (edit or write), leave a backup of the
 //      old config, and report `fixed`. The config on disk is then checked, not just the dialog. "Search again" answers from the
 //      file in the repaired folder (a number only that file holds).
@@ -175,7 +175,7 @@ try {
 	await notice.waitFor({ timeout: 120_000 });
 	const brokenText = await notice.innerText();
 	console.log(`the error as the person sees it: ${brokenText.replace(/\s+/g, " ").slice(0, 300)}`);
-	check("AI Search hides the raw path behind Show details and offers Fix with AI", !brokenText.includes(MOVED_FROM) && brokenText.includes("Show details") && (await panel.getByRole("button", { name: "Fix with AI", exact: true }).count()) === 1);
+	check("AI Chat hides the raw path behind Show details and offers Fix with AI", !brokenText.includes(MOVED_FROM) && brokenText.includes("Show details") && (await panel.getByRole("button", { name: "Fix with AI", exact: true }).count()) === 1);
 	await shot("01-broken-folder");
 
 	const configBefore = JSON.parse(readFileSync(CONFIG, "utf8"));

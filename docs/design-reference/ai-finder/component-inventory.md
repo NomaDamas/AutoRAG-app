@@ -54,7 +54,7 @@ AppShell (window, 14px radius, shadow)
 │   └── Footer
 │       ├── IndexingProgress (bar + label)
 │       ├── RequestsButton (bell, count badge)
-│       └── SettingsButton (gear, ⌘, keycap)
+│       └── SettingsButton (gear only; ⌘, in the tooltip, no keycap)
 │
 ├── FinderColumn (grid col 2)
 │   ├── TabStrip (48px)

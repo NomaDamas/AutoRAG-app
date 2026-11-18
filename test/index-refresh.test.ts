@@ -8,6 +8,7 @@ import type * as Librarian from "@autorag/librarian";
 import { existsSync, readFileSync } from "node:fs";
 import { MailcrawlClient } from "@autorag/librarian";
 import { refreshAutoragIndex } from "../src/main/index-refresh";
+import { skippedFileCount } from "../src/main/index-failure";
 import { t } from "../src/shared/i18n/core";
 
 const refresh = vi.hoisted(() => vi.fn());
@@ -296,6 +297,51 @@ describe("refreshAutoragIndex against unreliable folders and files", () => {
 		expect(outcome.diagnostics.find((diagnostic) => diagnostic.code === "files-left-out")?.count).toBe(1);
 		expect(excludes.at(-1)).toContain(locked);
 		expect(excludes[0]).not.toContain(locked);
+	});
+
+	describe("MinSync syncing alongside parsing (librarian 2.13.7)", () => {
+		const perFile = (count: number): unknown[] =>
+			Array.from({ length: count }, (_value, index) => ({
+				code: "minsync-sync-failed",
+				severity: "warning",
+				message: "This file stayed at its previous index entry: the sync that covered it could not index it and the next sync retries it. boom",
+				source: `/docs/file-${index}.md`,
+			}));
+
+		it("turns the one warning per file of a failed batch into one counted diagnostic, which the banner counts as left-out files", async () => {
+			refresh.mockResolvedValue({ ...(result(undefined) as object), diagnostics: perFile(60) });
+
+			const outcome = await refreshAutoragIndex(await fixture());
+
+			const left = outcome.diagnostics.filter((diagnostic) => diagnostic.code === "minsync-batch-skipped");
+			expect(left).toHaveLength(1);
+			expect(left[0]).toMatchObject({ severity: "warning", count: 60 });
+			expect(outcome.diagnostics.filter((diagnostic) => diagnostic.code === "minsync-sync-failed")).toHaveLength(0);
+			expect(outcome.ok).toBe(true);
+			expect(skippedFileCount(outcome.diagnostics)).toBe(60);
+		});
+
+		it("still fails the run on MinSync's own failure, and counts only the files' warnings next to it", async () => {
+			refresh.mockResolvedValue({
+				...(result(undefined) as object),
+				minsync: { ok: false, reason: "sync-failed" },
+				diagnostics: [{ code: "minsync-sync-failed", severity: "error", message: "boom", source: "minsync" }, ...perFile(3)],
+			});
+
+			const outcome = await refreshAutoragIndex(await fixture());
+
+			expect(outcome.ok).toBe(false);
+			expect(outcome.error).toContain("minsync: sync-failed");
+			expect(outcome.diagnostics.find((diagnostic) => diagnostic.code === "minsync-batch-skipped")?.count).toBe(3);
+		});
+
+		it("leaves a run with no per-file warnings without the diagnostic", async () => {
+			refresh.mockResolvedValue(result(undefined));
+
+			const outcome = await refreshAutoragIndex(await fixture());
+
+			expect(outcome.diagnostics.some((diagnostic) => diagnostic.code === "minsync-batch-skipped")).toBe(false);
+		});
 	});
 
 	it("reports a full disk as the failure it is instead of retrying it", async () => {

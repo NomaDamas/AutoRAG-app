@@ -32,3 +32,20 @@ export function rowDragPhase(phase: RowDragPhase, start: DragPoint, point: DragP
 	if (phase === "pending" && Math.hypot(point.x - start.x, point.y - start.y) < ROW_DRAG_THRESHOLD) return "pending";
 	return outside ? "native" : "inside";
 }
+
+/** The cursor a held in-app row drag shows (`html[data-row-drag]`). */
+export type RowDragCursor = "none" | "move" | "copy" | "link";
+
+/**
+ * The verb the cursor shows for the target under the pointer. A target that
+ * accepted the drag says what it does by writing `dropEffect` on the
+ * `dragover` it received (a pin is "copy": the folder stays where it is), and
+ * the cursor says the same. A target that wrote nothing is a plain file drop:
+ * the rows move, and ⌥ copies. `accepted` is false when no target called
+ * `preventDefault`, which shows the no-drop cursor whatever was written.
+ */
+export function rowDragCursor(accepted: boolean, dropEffect: string, altKey: boolean): RowDragCursor {
+	if (!accepted) return "none";
+	if (dropEffect === "copy" || dropEffect === "link" || dropEffect === "move") return dropEffect;
+	return altKey ? "copy" : "move";
+}

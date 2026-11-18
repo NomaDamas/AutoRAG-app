@@ -49,7 +49,7 @@ const GLYPH_BY_TEMPLATE: Readonly<Record<string, LucideIcon>> = {
 /** Marks darker than this vanish on a dark theme, so they follow the text color instead. */
 const MIN_BRAND_LUMA = 0.2;
 
-function brandFill(hex: string): string {
+export function brandFill(hex: string): string {
 	const channel = (offset: number): number => Number.parseInt(hex.slice(offset, offset + 2), 16) / 255;
 	const luma = 0.2126 * channel(0) + 0.7152 * channel(2) + 0.0722 * channel(4);
 	return luma < MIN_BRAND_LUMA ? "currentColor" : `#${hex}`;

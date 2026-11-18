@@ -17,6 +17,7 @@ import { dirname } from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
 import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
 import { ArchiveError, archiveEntryPath, normalizeEntryName } from "./archive-guard.mjs";
+import { decodeLegacyName } from "./archive-names.mjs";
 
 const ENCRYPTED_MESSAGE = "암호로 보호된 압축 파일은 풀 수 없습니다";
 const COMBINED_MESSAGE = "압축 파일이 손상되었거나 암호로 보호되어 있습니다";
@@ -34,7 +35,10 @@ async function extract({ sourcePath, destDir, limits }) {
 		let entries = 0;
 		let bytes = 0;
 		for (const entry of reader.entries()) {
-			const name = normalizeEntryName(entry.getPathname());
+			// A name the engine cannot hold as UTF-8 arrives as its raw bytes,
+			// one Latin-1 character each; `decodeLegacyName` puts it back before
+			// the guard judges it.
+			const name = normalizeEntryName(decodeLegacyName(entry.getPathname()));
 			if (name.length === 0) continue;
 			entries += 1;
 			if (entries > limits.maxEntries) throw new ArchiveError("압축 파일의 항목 수가 너무 많습니다");

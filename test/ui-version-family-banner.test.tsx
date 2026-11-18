@@ -44,7 +44,7 @@ describe("VersionFamilyBanner", () => {
 		expect(text).toContain("other folders is unaffected");
 		// A scoped failure is not dupey's raw message, and it still offers a retry.
 		expect(text).not.toContain("dupey");
-		expect(host.querySelector(".list__error-retry")?.textContent).toBe("Check again");
+		expect(host.querySelector("button")?.textContent).toBe("Check again");
 
 		await act(() => setAppLanguage("ko"));
 		expect(host.querySelector(".list__error-text")?.textContent).toContain("다른 폴더의 버전 묶기는 그대로입니다");

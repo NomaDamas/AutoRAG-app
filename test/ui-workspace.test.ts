@@ -6,6 +6,7 @@ import {
 	canDropTab,
 	CLOSED_TAB_LIMIT,
 	closeWorkspaceTab,
+	closeSettingsInWorkspace,
 	createWorkspace,
 	dropZoneAt,
 	evacuateWorkspace,
@@ -250,7 +251,42 @@ describe("workspace-wide tab commands", () => {
 		expect(activePath(fresh, 2)).toBe(SETTINGS_PATH);
 	});
 
-	it("⌘K prefers an AI Search tab already on screen, then one in the focused pane, then opens one", () => {
+	it("leaving Settings closes its tab and returns to the tab focused before it", () => {
+		let ws = withTabs(createWorkspace("/a"), 1, "/b");
+		ws = openOrSelectSettingsInWorkspace(ws);
+		expect(activePath(ws, 1)).toBe(SETTINGS_PATH);
+		const left = closeSettingsInWorkspace(ws);
+		expect(paths(left, 1)).toEqual(["/a", "/b"]);
+		expect(activePath(left, 1)).toBe("/b");
+		expect(left.closedTabs).toEqual([]);
+	});
+
+	it("leaving Settings in a split pane keeps the other pane and the focus where it was", () => {
+		let ws = sideBySide();
+		ws = focusPane(ws, 1);
+		ws = openOrSelectSettingsInWorkspace(ws);
+		expect(ws.focusedPaneId).toBe(1);
+		const left = closeSettingsInWorkspace(ws);
+		expect(paths(left, 1)).toEqual(["/a"]);
+		expect(activePath(left, 1)).toBe("/a");
+		expect(left.panes).toHaveLength(2);
+		expect(left.focusedPaneId).toBe(1);
+	});
+
+	it("leaving Settings does nothing when no Settings tab is open", () => {
+		const ws = createWorkspace("/a");
+		expect(closeSettingsInWorkspace(ws)).toBe(ws);
+	});
+
+	it("leaving Settings as the window's only tab shows the folder it came from instead of closing", () => {
+		let ws = createWorkspace("/a");
+		ws = updatePaneTabs(ws, 1, (state) => navigateTab(state, SETTINGS_PATH));
+		expect(paths(ws, 1)).toEqual([SETTINGS_PATH]);
+		const left = closeSettingsInWorkspace(ws);
+		expect(paths(left, 1)).toEqual(["/a"]);
+	});
+
+	it("⌘K prefers an AI Chat tab already on screen, then one in the focused pane, then opens one", () => {
 		let ws = withTabs(createWorkspace("/a"), 1, AI_SEARCH_PATH);
 		ws = moveTab(ws, tabId(ws, 1, AI_SEARCH_PATH), { kind: "split", paneId: 1, edge: "right" });
 		ws = focusPane(ws, 1);
@@ -258,7 +294,7 @@ describe("workspace-wide tab commands", () => {
 		expect(visible.focusedPaneId).toBe(2);
 		expect(focusAiSearchInWorkspace(visible)).toBe(visible);
 
-		// Pane 2 (focused) holds an AI Search tab behind /c; pane 1 shows only /a.
+		// Pane 2 (focused) holds an AI Chat tab behind /c; pane 1 shows only /a.
 		const hidden = withTabs(withTabs(sideBySide(), 2, AI_SEARCH_PATH), 2, "/c");
 		const local = focusAiSearchInWorkspace(hidden);
 		expect(local.focusedPaneId).toBe(2);
@@ -342,7 +378,7 @@ describe("reopening closed tabs", () => {
 		expect(reopened.focusedPaneId).toBe(1);
 	});
 
-	it("never remembers Settings or AI Search tabs", () => {
+	it("never remembers Settings or AI Chat tabs", () => {
 		let ws = withTabs(createWorkspace("/a"), 1, SETTINGS_PATH, AI_SEARCH_PATH);
 		ws = closeWorkspaceTab(ws, tabId(ws, 1, SETTINGS_PATH));
 		ws = closeWorkspaceTab(ws, tabId(ws, 1, AI_SEARCH_PATH));

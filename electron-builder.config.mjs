@@ -93,6 +93,7 @@ const config = {
 			NSDocumentsFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
 			NSDesktopFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
 			NSDownloadsFolderUsageDescription: "Dazzi indexes and searches the folders you choose.",
+			NSMicrophoneUsageDescription: "Dazzi listens only while you press the microphone button, to turn your voice into a question.",
 		},
 		// Without a Developer ID the bundle is ad-hoc signed ("-"): Apple Silicon refuses to run unsigned code.
 		...(hasMacSigning ? {} : { identity: "-" }),

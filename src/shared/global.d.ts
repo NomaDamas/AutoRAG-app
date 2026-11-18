@@ -20,6 +20,7 @@ import type { SmartIndexingBridge } from "./smart-indexing-contract";
 import type { SettingsBridge } from "./settings-contract";
 import type { ServicesBridge } from "./services-contract";
 import type { RemoteAccessBridge } from "./remote-contract";
+import type { VoiceBridge } from "./voice-contract";
 import type { QuickSearchSettingsBridge } from "./quick-search-contract";
 import type { AppUpdateBridge } from "./update-contract";
 import type { AutomationBridge } from "./automation-contract";
@@ -43,6 +44,7 @@ declare global {
 			readonly live: LiveBridge;
 			readonly modelDownload: ModelDownloadBridge;
 			readonly onboarding: OnboardingBridge;
+			readonly voice: VoiceBridge;
 			readonly osRequests: OsRequestBridge;
 			readonly preview: PreviewBridge;
 			readonly search: SearchBridge;

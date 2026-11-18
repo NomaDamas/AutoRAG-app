@@ -23,6 +23,8 @@ export type InlineSegment =
 	| { readonly kind: "bold"; readonly text: string }
 	| { readonly kind: "code"; readonly text: string }
 	| { readonly kind: "citation"; readonly number: number }
+	/** `[file:<path>]`: a local file or folder the model named; the librarian leaves it as written when the path is not a regular file. */
+	| { readonly kind: "file"; readonly path: string }
 	| {
 			readonly kind: "image";
 			/** The reference as written: a path, a relative link, or a URL. */
@@ -67,6 +69,7 @@ const INLINE = new RegExp(
 		String.raw`\[([1-9]\d*)\]`,
 		String.raw`(?<![\p{L}\p{N}_/.:~\\-])((?:\/|[A-Za-z]:\\)[^\s"'<>()\[\]*` + "`" + String.raw`]*?\.(?:${IMAGE_EXTENSIONS}))(?!\.?[A-Za-z0-9])`,
 		String.raw`(?<![A-Za-z0-9_])(https?:\/\/[A-Za-z0-9\-._~:/?#@!$&'()*+,;=%]+)`,
+		String.raw`\[file:((?:[^\[\]\n]|\[[^\[\]\n]*\])+)\](?!\()`,
 	].join("|"),
 	"giu",
 );
@@ -114,7 +117,7 @@ export function parseInline(text: string): readonly InlineSegment[] {
 		if (index > cursor) {
 			segments.push({ kind: "text", text: text.slice(cursor, index) });
 		}
-		const [, angleAlt, angleRef, alt, ref, bold, code, label, labelAngleUrl, labelUrl, autolink, citation, bare, bareUrl] = match;
+		const [, angleAlt, angleRef, alt, ref, bold, code, label, labelAngleUrl, labelUrl, autolink, citation, bare, bareUrl, filePath] = match;
 		let length = match[0].length;
 		if (angleRef !== undefined) {
 			segments.push({ kind: "image", target: angleRef.trim(), alt: angleAlt ?? "", source: "markdown" });
@@ -140,6 +143,10 @@ export function parseInline(text: string): readonly InlineSegment[] {
 			const url = webUrl(written);
 			length = written.length;
 			segments.push(url === null ? { kind: "text", text: written } : { kind: "link", url, children: [{ kind: "text", text: written }] });
+		} else if (filePath !== undefined) {
+			const written = filePath.trim();
+			const path = written.startsWith("<") && written.endsWith(">") ? written.slice(1, -1).trim() : written;
+			segments.push(path === "" ? { kind: "text", text: match[0] } : { kind: "file", path });
 		}
 		cursor = index + length;
 	}
@@ -165,6 +172,8 @@ export type ImageTarget =
 			readonly name: string;
 			/** False for formats Chromium cannot decode (HEIC, TIFF): show a card, not a broken image. */
 			readonly renderable: boolean;
+			/** Set for a video or audio file: it plays inline instead of drawing as a picture. */
+			readonly media?: "video" | "audio";
 	  }
 	| { readonly kind: "web"; readonly url: string }
 	/** A relative link with no document folder to resolve it against. */
@@ -205,7 +214,8 @@ export function imageTarget(reference: string, folder: string | null): ImageTarg
 	if (path === null) return { kind: "unresolved", text: reference };
 	const name = basename(path);
 	const ext = /\.([^.]+)$/u.exec(name)?.[1] ?? "";
-	return { kind: "local", path, name, renderable: viewerForExtension(ext) === "image" };
+	const viewer = viewerForExtension(ext);
+	return { kind: "local", path, name, renderable: viewer === "image", ...(viewer === "video" || viewer === "audio" ? { media: viewer } : {}) };
 }
 
 /**

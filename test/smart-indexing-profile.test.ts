@@ -33,11 +33,20 @@ describe("proposal collector", () => {
 		expect(collector.proposals()).toEqual([{ path: join(root, "Telegram Desktop"), root, reason: "Chat app downloads" }]);
 	});
 
+	it("takes one of the given folders as a whole, as its own root, and lets it swallow proposals inside it", async () => {
+		const collector = createProposalCollector([root]);
+
+		await collector.propose([{ path: join(root, "Docs"), reason: "inside" }]);
+		const outcome = await collector.propose([{ path: root, reason: "all app data" }]);
+
+		expect(outcome.accepted).toEqual([root]);
+		expect(collector.proposals()).toEqual([{ path: root, root, reason: "all app data" }]);
+	});
+
 	it("rejects what is not a folder inside a root, and says why so the model can correct itself", async () => {
 		const collector = createProposalCollector([root]);
 
 		const outcome = await collector.propose([
-			{ path: root, reason: "everything" },
 			{ path: other, reason: "outside" },
 			{ path: join(root, "missing"), reason: "gone" },
 			{ path: join(root, "note.md"), reason: "a file" },
@@ -48,7 +57,6 @@ describe("proposal collector", () => {
 
 		expect(outcome.accepted).toEqual([]);
 		expect(outcome.rejected.map((entry) => entry.path)).toEqual([
-			root,
 			other,
 			join(root, "missing"),
 			join(root, "note.md"),

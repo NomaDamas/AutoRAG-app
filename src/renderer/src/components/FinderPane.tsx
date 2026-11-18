@@ -1,10 +1,10 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import type { AppSettings } from "../../../shared/settings-contract";
 import { isTagPath, isVirtualListing, RECENTS_PATH, tagNameOf } from "../../../shared/fs-contract";
 import type { FinderSource } from "../data/source";
 import { DirectoryDataContext, type DirectoryData } from "../hooks/useDirectoryData";
 import { useFinderController, type QuickLookBridge } from "../hooks/useFinderController";
+import { useWholeSearch } from "../hooks/useWholeSearch";
 import type { ControllerStore } from "../hooks/usePaneControllers";
 import { pressRow } from "../lib/row-drag";
 import type { AiDeliveryRequest } from "../state/ai-delivery";
@@ -15,6 +15,7 @@ import { listFixedWidth, resetListColumns, setListColumnWidth, toggleListColumn,
 import { basename, breadcrumbTrail } from "../state/paths";
 import { requestSettingsCategory } from "../state/settings-navigation";
 import { AI_SEARCH_PATH, AUTOMATIONS_PATH, isVirtualTabPath, SETTINGS_PATH } from "../state/tabs";
+import { searchGroups, type SearchGroupKey } from "../state/whole-search";
 import { focusPane, type Pane, type Workspace } from "../state/workspace";
 import { AutomationsTab } from "./AutomationsTab";
 import { ColumnBrowser } from "./ColumnBrowser";
@@ -25,9 +26,8 @@ import { IconGrid } from "./IconGrid";
 import { IndexProblemBanner } from "./IndexProblemBanner";
 import { HEADER_VIEWPORT_CLASS, LIST_COLUMN_CLASS, followScrollLeft } from "./list-scroll";
 import { PathBar } from "./PathBar";
-import { ScopeBar } from "./ScopeBar";
-import { SettingsView } from "./SettingsView";
 import { TabStrip } from "./TabStrip";
+import { ContentResults, SearchGroupTabs, SourceResults } from "./WholeSearch";
 
 const autorag = window.autorag;
 
@@ -54,7 +54,6 @@ export interface PaneShell {
 	onToast(message: string): void;
 	/** Attach to / send a query in the focused AI Search tab once it is visible. */
 	deliverToAi(request: AiDeliveryRequest): void;
-	onSettingsChanged(settings: AppSettings): void;
 	setListColumns(change: (current: ListColumnsState) => ListColumnsState): void;
 	/** A strip tab started a drag: the workspace shows where it can land. */
 	beginTabDrag(tabId: number, event: DragEvent<HTMLDivElement>): void;
@@ -97,6 +96,15 @@ export const FinderPane = memo(function FinderPane({
 		onFocusComposer: shell.onFocusComposer,
 		onToast: shell.onToast,
 	});
+	// The whole search (⌘F): the document index and every datasource answer next to the filename list, one group each.
+	const wholeQuery = finder.searching && !isVirtualTabPath(finder.path) ? finder.query.trim() : "";
+	const whole = useWholeSearch(shell.source, wholeQuery);
+	const [groupChoice, setGroupChoice] = useState<{ readonly query: string; readonly key: SearchGroupKey }>({ query: "", key: "files" });
+	const groups = useMemo(() => (whole === null ? [] : searchGroups(whole, finder.rows.length)), [whole, finder.rows.length]);
+	// A new query starts on the file names; a group that is gone (a datasource removed) falls back to them too.
+	const group: SearchGroupKey = groupChoice.query === wholeQuery && groups.some((candidate) => candidate.key === groupChoice.key) ? groupChoice.key : "files";
+	const selectGroup = useCallback((key: SearchGroupKey) => setGroupChoice({ query: wholeQuery, key }), [wholeQuery]);
+	const selectedDatasource = groups.find((candidate) => candidate.key === group)?.datasource ?? null;
 	const headerViewportRef = useRef<HTMLDivElement>(null);
 	// The list is the one sideways scroller; the column header follows it (`list-scroll.ts`).
 	const listElement = finder.listRef.current;
@@ -366,7 +374,8 @@ export const FinderPane = memo(function FinderPane({
 					}}
 				/>
 				{finder.path === SETTINGS_PATH ? (
-					<SettingsView onSettingsChanged={shell.onSettingsChanged} />
+					// Settings takes over the whole window (App renders it) while this tab is focused.
+					<div className="min-h-0 flex-1 bg-subtle-alt" />
 				) : finder.path === AUTOMATIONS_PATH ? (
 					<AutomationsTab />
 				) : finder.path === AI_SEARCH_PATH ? (
@@ -374,14 +383,8 @@ export const FinderPane = memo(function FinderPane({
 					<div className="min-h-0 flex-1 bg-subtle-alt" />
 				) : (
 					<>
-						{finder.searching ? (
-							<ScopeBar
-								scope={finder.searchScope}
-								folderName={isTagPath(finder.path) ? tagNameOf(finder.path) : basename(finder.path)}
-								resultCount={finder.rows.length}
-								onScopeChange={finder.setSearchScope}
-							/>
-						) : null}
+						{/* Figma 428:1845: the group tabs sit right on the results; no scope row, no ask button. */}
+						{whole !== null ? <SearchGroupTabs groups={groups} selected={group} onSelect={selectGroup} /> : null}
 						<IndexProblemBanner
 							onFixEmbedding={() => {
 								// The embedding choice lives on Settings > AI.
@@ -389,7 +392,16 @@ export const FinderPane = memo(function FinderPane({
 								finder.openSettings();
 							}}
 						/>
-						{finder.layout === "icons" ? (
+						{whole !== null && group === "content" ? (
+							<ContentResults query={whole.query} content={whole.content} onOpen={finder.openEntry} onReveal={finder.revealEntryInNewTab} />
+						) : whole !== null && selectedDatasource !== null ? (
+							<SourceResults
+								query={whole.query}
+								datasource={selectedDatasource}
+								answer={whole.sources.get(selectedDatasource.id)}
+								onOpenUrl={(url) => void shell.source.openUrl(url)}
+							/>
+						) : finder.layout === "icons" ? (
 							<IconGrid
 								sections={finder.stackSections}
 								listRef={finder.listRef}
@@ -449,6 +461,7 @@ export const FinderPane = memo(function FinderPane({
 									onRetryVersionFamilies={finder.retryVersionFamilies}
 									listRef={finder.listRef}
 									searching={finder.searching}
+									{...(finder.searching ? { highlight: finder.query } : {})}
 									emptyText={finder.emptyText}
 									selectedKeys={finder.selection.keys}
 									focusedZone={focused && finder.zone === "finder"}

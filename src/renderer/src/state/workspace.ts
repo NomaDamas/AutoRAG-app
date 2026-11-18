@@ -18,6 +18,7 @@ import {
 	AUTOMATIONS_PATH,
 	createTabsState,
 	evacuateTabs,
+	exitVirtualTab,
 	focusAiSearchTab,
 	isVirtualTabPath,
 	openAiSearchTab,
@@ -538,6 +539,18 @@ export function openOrSelectSettingsInWorkspace(ws: Workspace): Workspace {
 	const existing = allTabs(ws).find((tab) => tab.path === SETTINGS_PATH);
 	if (existing !== undefined) return focusTab(ws, existing.id);
 	return updatePaneTabs(ws, ws.focusedPaneId, (state) => openTabAt(state, SETTINGS_PATH));
+}
+
+/**
+ * Settings' back button: the Settings tab closes and focus returns to the tab focused before it. The window's last
+ * tab never closes, so a Settings tab that is all there is shows the folder it came from instead.
+ */
+export function closeSettingsInWorkspace(ws: Workspace): Workspace {
+	const settings = allTabs(ws).find((tab) => tab.path === SETTINGS_PATH);
+	if (settings === undefined) return ws;
+	if (canCloseWorkspaceTab(ws)) return closeWorkspaceTab(ws, settings.id);
+	const pane = paneHolding(ws, settings.id);
+	return pane === undefined ? ws : updatePaneTabs(ws, pane.id, exitVirtualTab);
 }
 
 /** Sidebar 자동화 / "자동화 탭에서 보기": the open Automations tab wherever it is, else the focused tab turns into it. */

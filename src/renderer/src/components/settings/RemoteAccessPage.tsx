@@ -20,7 +20,8 @@ import {
 } from "../../../../shared/remote-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
 import { QrCode } from "./QrCode";
-import { Row, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { PlainRow, Section, SettingsPageHead, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import { Switch } from "../primitives/Switch";
 
 type ConnectRoute = "lan" | "internet";
@@ -293,18 +294,13 @@ export function RemoteAccessPage({
 			<p className="settings-remote-desc">{t("settingsCore.remote.routeLanHint")}</p>
 			{lanOrigins.length === 0 ? <p className="settings-remote-desc">{t("settingsCore.remote.lanMissing")}</p> : null}
 			{lanOrigins.length > 1 ? (
-				<select
+				<SelectField
 					className="linear-select settings-remote-origin-select"
 					aria-label={t("settingsCore.remote.routeAddress")}
 					value={lanAddress ?? ""}
-					onChange={(event) => setPickedLan(event.currentTarget.value)}
-				>
-					{lanOrigins.map((item) => (
-						<option key={item} value={item}>
-							{item}
-						</option>
-					))}
-				</select>
+					options={lanOrigins.map((item) => ({ value: item, label: item }))}
+					onValueChange={setPickedLan}
+				/>
 			) : null}
 		</>
 	);
@@ -389,7 +385,8 @@ export function RemoteAccessPage({
 			</>
 		);
 
-	const head = <SettingsPageHead title={t("settingsCore.nav.remote")} description={t("settingsCore.remote.description")} />;
+	// Figma 403:9482: the security warning is the head's second line, not a section note.
+	const head = <SettingsPageHead title={t("settingsCore.nav.remote")} description={t("settingsCore.remote.description")} note={t("settingsCore.remote.securityHint")} />;
 	if (!canManageRemote) {
 		return (
 			<>
@@ -404,12 +401,12 @@ export function RemoteAccessPage({
 	return (
 		<>
 			{head}
-			<Section description={t("settingsCore.remote.securityHint")}>
-				<Row name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
+			<div className="settings-plain">
+				<PlainRow name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.remote.access")} />
-				</Row>
+				</PlainRow>
 				{enabled && viaLabel !== null ? <p className="settings-remote-via">{viaLabel}</p> : null}
-			</Section>
+			</div>
 
 			{enabled ? (
 				<Section title={t("settingsCore.remote.connectTitle")} description={t("settingsCore.remote.connectHint")}>

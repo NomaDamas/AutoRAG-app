@@ -58,8 +58,8 @@ async function render(next: IndexProblem): Promise<Mock> {
 
 const banner = (): HTMLElement | null => host.querySelector<HTMLElement>('[role="alert"]');
 const buttons = (): HTMLButtonElement[] => [...host.querySelectorAll<HTMLButtonElement>('[role="alert"] button')];
-/** The one labelled action; the dismiss is the icon button that carries an `aria-label` instead. */
-const primary = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[role="alert"] button:not([aria-label])');
+/** The accent action; 나중에 and the × both dismiss. */
+const primary = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[role="alert"] button.bg-accent');
 const dismissButton = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[role="alert"] button[aria-label]');
 
 describe("IndexProblemBanner", () => {
@@ -70,8 +70,8 @@ describe("IndexProblemBanner", () => {
 
 	it("shows one line and one button for a refused embedder, and that button opens the embedding choice", async () => {
 		const onFixEmbedding = await render(failed("embedder-config"));
-		expect(banner()?.textContent).toContain("의미 검색을 쓸 수 없어요");
-		expect(buttons()).toHaveLength(2);
+		expect(banner()?.textContent).toContain("의미 검색을 쓸 수 없습니다");
+		expect(buttons()).toHaveLength(3);
 		expect(primary()).not.toBeNull();
 		act(() => primary()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(onFixEmbedding).toHaveBeenCalledTimes(1);
@@ -81,7 +81,7 @@ describe("IndexProblemBanner", () => {
 	it("shows one line and one button while the embedder is unreachable, and that button retries", async () => {
 		const onFixEmbedding = await render(failed("embedder-offline"));
 		expect(banner()?.textContent).toBeTruthy();
-		expect(buttons()).toHaveLength(2);
+		expect(buttons()).toHaveLength(3);
 		expect(primary()).not.toBeNull();
 		act(() => primary()?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(retry).toHaveBeenCalledTimes(1);

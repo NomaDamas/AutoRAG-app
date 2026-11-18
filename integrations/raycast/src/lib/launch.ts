@@ -1,4 +1,5 @@
 import { closeMainWindow, showHUD, showToast, Toast } from "@raycast/api";
+import { showFailureToast } from "@raycast/utils";
 import { launcherOutcome, launcherPath } from "./dazzi";
 import { DazziNotFoundError, resolveDazziApp, run } from "./runtime";
 
@@ -11,17 +12,23 @@ export async function runLauncher(args: readonly string[], success: string): Pro
   try {
     app = await resolveDazziApp();
   } catch (error) {
-    await showToast({
-      style: Toast.Style.Failure,
+    await showFailureToast(error, {
       title: "Dazzi is not installed",
-      message:
-        error instanceof DazziNotFoundError
-          ? "Install Dazzi, or set its location in the extension preferences."
-          : String(error),
+      ...(error instanceof DazziNotFoundError
+        ? { message: "Install Dazzi, or set its location in the extension preferences." }
+        : {}),
     });
     return;
   }
   const result = await run(app, launcherPath(app), args, { timeoutMs: 30_000 });
+  if (result.failure !== undefined) {
+    await showToast({
+      style: Toast.Style.Failure,
+      title: "Dazzi did not take the request",
+      message: `${result.failure.message} (${result.failure.code})`,
+    });
+    return;
+  }
   const outcome = launcherOutcome(result.status, result.stderr);
   if (outcome.kind === "ok") {
     await closeMainWindow();

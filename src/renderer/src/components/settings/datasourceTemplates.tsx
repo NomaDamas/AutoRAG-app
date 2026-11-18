@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import { isJsonObject } from "../../../../shared/settings-contract";
+import { SelectField } from "./SelectField";
 
 /* ------------------------------------------------------------- field schema -- */
 
@@ -449,6 +450,17 @@ export const TEMPLATES: readonly TemplateMeta[] = [
 
 export const TEMPLATE_BY_ID: Readonly<Record<string, TemplateMeta>> = Object.fromEntries(TEMPLATES.map((template) => [template.id, template]));
 
+/** The template's product name ("Slack"); the bare type when no template carries it. */
+export function templateLabel(type: string): string {
+	return TEMPLATE_BY_ID[type]?.label ?? type;
+}
+
+/** The connection's kind ("Slack"); the alias only joins it when it tells two connections of one kind apart. */
+export function sourceTitle(row: { readonly id: string; readonly type: string }): string {
+	const label = templateLabel(row.type);
+	return row.id === row.type ? label : `${label} · ${row.id}`;
+}
+
 /* -------------------------------------------------------- shared constants -- */
 
 /** Redaction sentinel the main process substitutes for persisted secrets. */
@@ -506,25 +518,21 @@ export function ConnectorFieldInput({ field, value, onChange }: { readonly field
 						? value
 						: "";
 			return (
-				<select
+				<SelectField
 					className="linear-select"
 					style={CONTROL_INPUT}
 					aria-label={t(field.label)}
 					value={current}
-					onChange={(event) => {
-						const label = event.target.value;
+					options={[
+						{ value: "", label: t("settingsSources.fields.defaultOption") },
+						...options.map((option) => ({ value: option, label: option })),
+						...(current.length > 0 && !options.includes(current) ? [{ value: current, label: current }] : []),
+					]}
+					onValueChange={(label) => {
 						if (optionValues !== undefined) onChange(label.length === 0 ? undefined : optionValues[label]);
 						else onChange(label.length === 0 ? undefined : label);
 					}}
-				>
-					<option value="">{t("settingsSources.fields.defaultOption")}</option>
-					{options.map((option) => (
-						<option key={option} value={option}>
-							{option}
-						</option>
-					))}
-					{current.length > 0 && !options.includes(current) ? <option value={current}>{current}</option> : null}
-				</select>
+				/>
 			);
 		}
 		case "stringList":

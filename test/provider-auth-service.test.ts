@@ -224,6 +224,17 @@ describe("createProviderAuthService", () => {
 		expect(env[custom?.apiKeyEnv ?? ""]).toBe("super-secret-key");
 	});
 
+	it("lists a keyless custom server as connected once its models are discovered", async () => {
+		const { service } = await fixture(openAiFetch);
+
+		const providers = await service.upsert({ kind: "local", label: "Local QA", baseUrl: "http://127.0.0.1:8765/v1" });
+		const custom = providers.find((provider) => provider.name === "Local QA");
+
+		expect(custom?.authConfigured).toBe(true);
+		expect(custom?.models.every((model) => model.available)).toBe(true);
+		expect(custom?.models.map((model) => model.id)).toEqual(["llama3.1", "qwen3"]);
+	});
+
 	it("removes a provider and its stored key", async () => {
 		const { service, agentDir } = await fixture(openAiFetch);
 

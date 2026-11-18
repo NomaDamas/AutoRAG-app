@@ -1,5 +1,5 @@
 /**
- * Settings → 내 계정 / 구독 및 사용량.
+ * Settings → 내 계정 / 요금제 및 사용량.
  *
  * Both pages show what the hosted AutoRAG service confirmed for the signed-in
  * account (`window.autorag.account`). Nothing here is invented: while signed
@@ -13,7 +13,9 @@ import { useTranslation } from "react-i18next";
 import { ExternalLink } from "lucide-react";
 import type { AccountPlanId, AccountSnapshot, AccountStatus } from "../../../../shared/account-contract";
 import { accountDashboardUrl, accountLegalUrl, creditsResetAt, splitRemaining, type AccountLegalRoute } from "../../../../shared/account-contract";
-import { Note, Row, Section, SettingsPageHead } from "./SettingsKit";
+import { Note, PlainRow, SettingsPageHead } from "./SettingsKit";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 function openExternal(url: string): void {
 	const open = window.autorag?.fs?.openUrl;
@@ -68,41 +70,49 @@ export function AccountPage(): ReactElement {
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.account")} description={t("settingsCore.account.description")} />
-			<Section title={t("settingsCore.account.profileTitle")}>
-				<Row name={t("settingsCore.account.accountName")} hint={who}>
-					{signedIn ? (
-						<button type="button" className="linear-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
-							{t("settingsCore.account.signOut")}
+			{/* Figma 412:11464: 계정 (two 64px rows with outlined buttons), a rule, then the policy links in one line. */}
+			<section className="ai-section">
+				<div className="ai-section-head">
+					<h2 className="ai-section-title">{t("settingsCore.account.profileTitle")}</h2>
+				</div>
+				<div className="account-rows">
+					<PlainRow name={t("settingsCore.account.accountName")} hint={who}>
+						{signedIn ? (
+							<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => run(() => window.autorag.account.signOut())}>
+								{t("settingsCore.account.signOut")}
+							</button>
+						) : status?.state === "signingIn" ? (
+							<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} onClick={() => run(() => window.autorag.account.cancelSignIn())}>
+								{t("common.cancel")}
+							</button>
+						) : (
+							<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
+								{t("settingsCore.account.signInBrowser")}
+								<ExternalLink size={14} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+							</button>
+						)}
+					</PlainRow>
+					{status?.offline === true ? <Note>{t("settingsCore.account.offline")}</Note> : null}
+					{status?.error ? <Note>{status.error}</Note> : null}
+					{error !== null ? <Note>{error}</Note> : null}
+					<PlainRow name={t("settingsCore.account.managedName")} hint={t("settingsCore.account.managedHint")}>
+						<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
+							{t("settingsCore.account.useManaged")}
 						</button>
-					) : status?.state === "signingIn" ? (
-						<button type="button" className="linear-btn" onClick={() => run(() => window.autorag.account.cancelSignIn())}>
-							{t("common.cancel")}
-						</button>
-					) : (
-						<button type="button" className="linear-btn" disabled={busy} onClick={() => run(() => window.autorag.account.signIn())}>
-							{t("settingsCore.account.signInBrowser")}
-						</button>
-					)}
-				</Row>
-				{status?.offline === true ? <Note>{t("settingsCore.account.offline")}</Note> : null}
-				{status?.error ? <Note>{status.error}</Note> : null}
-				{error !== null ? <Note>{error}</Note> : null}
-				<Row name={t("settingsCore.account.managedName")} hint={t("settingsCore.account.managedHint")}>
-					<button type="button" className="linear-btn" disabled={!signedIn || busy} onClick={() => run(() => window.autorag.account.useManagedModel())}>
-						{t("settingsCore.account.useManaged")}
-					</button>
-				</Row>
-			</Section>
-			<Section title={t("settingsCore.account.legal.title")}>
-				<div className="settings-legal-links">
+					</PlainRow>
+				</div>
+			</section>
+			<hr className="ai-divider account-divider" />
+			<section className="account-legal">
+				<h2 className="account-legal-title">{t("settingsCore.account.legal.title")}</h2>
+				<div className="account-legal-links">
 					{(["terms", "privacy", "acceptableUse", "subprocessors"] as const).map((route) => (
-						<button key={route} type="button" className="linear-btn settings-btn-quiet" onClick={() => openLegal(status?.baseUrl, route)}>
+						<button key={route} type="button" className="account-legal-link" onClick={() => openLegal(status?.baseUrl, route)}>
 							{t(`settingsCore.account.legal.${route}`)}
-							<ExternalLink size={13} aria-hidden="true" focusable="false" />
 						</button>
 					))}
 				</div>
-			</Section>
+			</section>
 		</>
 	);
 }
@@ -138,40 +148,38 @@ export function PlanPage(): ReactElement {
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.plan")} description={t("settingsCore.account.planDescription")} />
-			<Section title={t("settingsCore.account.currentPlan")}>
-				<Row name={t("settingsCore.account.currentPlan")}>
-					<span className="settings-value is-strong">
-						{plan === null ? t("settingsCore.common.unknown") : `${PLAN_LABEL[plan]}${account?.trialing === true ? t("settingsCore.account.trialing") : ""}`}
-					</span>
-				</Row>
-				{account?.cancelScheduled === true && renewal !== null ? <Note>{t("settingsCore.account.cancelScheduled", { date: renewal })}</Note> : null}
-				{account !== null && account.status === "past_due" ? <Note>{t("settingsCore.account.pastDue")}</Note> : null}
-				{error !== null ? <Note>{error}</Note> : null}
-				<Row name={t("settingsCore.account.manageName")}>
-					<button type="button" className="linear-btn" onClick={() => openExternal(accountDashboardUrl(status?.baseUrl))}>
-						{t("settingsCore.account.openDashboard")}
-						<ExternalLink size={13} aria-hidden="true" focusable="false" />
-					</button>
-				</Row>
-			</Section>
-			<Section title={t("settingsCore.account.usageTitle")}>
-				<Row name={t("settingsCore.account.usageName")} stack>
-					<div className="settings-usage">
-						<div className="settings-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={t("settingsCore.account.usageMeterAria")}>
-							<span style={{ width: `${percent}%` }} />
-						</div>
-						<div className="settings-usage-legend">
-							<span>{account === null ? t("settingsCore.account.usageUnavailable") : `${percent}%`}</span>
-						</div>
+			{/* Figma 415:11812: 요금제 관리 (the plan under its name, the dashboard button), a rule, then AI 사용량 on a stage card. */}
+			<section className="ai-section">
+				<div className="account-rows">
+					<PlainRow
+						name={t("settingsCore.account.planManage")}
+						hint={plan === null ? t("settingsCore.common.unknown") : `${PLAN_LABEL[plan]}${account?.trialing === true ? t("settingsCore.account.trialing") : ""}`}
+					>
+						<button type="button" className={cn("settings-outline-btn", buttonClass({ size: "md" }))} onClick={() => openExternal(accountDashboardUrl(status?.baseUrl))}>
+							{t("settingsCore.account.openDashboard")}
+							<ExternalLink size={14} strokeWidth={1.5} aria-hidden="true" focusable="false" />
+						</button>
+					</PlainRow>
+					{account?.cancelScheduled === true && renewal !== null ? <Note>{t("settingsCore.account.cancelScheduled", { date: renewal })}</Note> : null}
+					{account !== null && account.status === "past_due" ? <Note>{t("settingsCore.account.pastDue")}</Note> : null}
+					{error !== null ? <Note>{error}</Note> : null}
+				</div>
+			</section>
+			<hr className="ai-divider account-divider" />
+			<section className="plan-usage">
+				<h2 className="plan-usage-title">{t("settingsCore.account.usageName")}</h2>
+				<div className="plan-usage-card">
+					<div className="plan-usage-line">
+						<span className="plan-usage-reset" title={account === null ? undefined : reset.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}>
+							{account === null ? t("settingsCore.account.usageUnavailable") : t("settingsCore.account.resetIn", { time: remaining })}
+						</span>
+						{account === null ? null : <span className="plan-usage-percent">{t("settingsCore.account.usedPercent", { percent })}</span>}
 					</div>
-				</Row>
-				<Row name={t("settingsCore.account.resetsIn")}>
-					<span className="settings-value is-strong">{account === null ? t("settingsCore.common.unknown") : remaining}</span>
-				</Row>
-				<Row name={t("settingsCore.account.resetsAt")}>
-					<span className="settings-value">{account === null ? t("settingsCore.common.unknown") : reset.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}</span>
-				</Row>
-			</Section>
+					<div className="settings-meter plan-usage-meter" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-label={t("settingsCore.account.usageMeterAria")}>
+						<span style={{ width: `${percent}%` }} />
+					</div>
+				</div>
+			</section>
 		</>
 	);
 }

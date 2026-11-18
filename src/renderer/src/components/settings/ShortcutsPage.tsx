@@ -1,37 +1,19 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import {
-	AlertTriangle,
-	ArrowLeftRight,
-	Eye,
-	Folder,
-	Keyboard,
-	LayoutGrid,
-	Lock,
-	RotateCcw,
-	Search,
-	SlidersHorizontal,
-	Sparkles,
-	X,
-	type LucideIcon,
-} from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, Lock, RotateCcw, Search, X } from "lucide-react";
 import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	activeShortcutPreset,
 	chordFromKeyEvent,
-	decomposeShortcutChord,
 	findShortcutConflict,
-	formatHeldModifiers,
 	formatShortcutChord,
 	normalizeShortcutSettings,
 	resolveEffectiveShortcuts,
-	SELECTABLE_SHORTCUT_KEYS,
 	SHORTCUT_CATALOG,
 	shortcutChordParts,
 	shortcutSettingsForPreset,
 	swapShortcutBinding,
-	validateShortcutParts,
 	type ShortcutCatalogItem,
 	type ShortcutGroupId,
 	type ShortcutId,
@@ -39,8 +21,9 @@ import {
 	type ShortcutSettings,
 } from "../../../../shared/shortcuts-contract";
 import { hostPlatform } from "../../lib/shortcuts";
-import { AppCustomizerModal } from "./AppCustomizerModal";
-import { Section, SettingsPageHead } from "./SettingsKit";
+import { SettingsPageHead } from "./SettingsKit";
+import { cn } from "../../lib/cn";
+import { buttonClass } from "../primitives/button";
 
 type ShortcutsBridgeWindow = Window & {
 	readonly autorag?: {
@@ -54,12 +37,6 @@ function getSettingsWriter(): Pick<SettingsBridge, "set"> | undefined {
 
 const GROUP_ORDER: readonly ShortcutGroupId[] = ["window", "view", "files", "aiSearch"];
 
-const GROUP_ICONS: Readonly<Record<ShortcutGroupId, LucideIcon>> = {
-	window: LayoutGrid,
-	view: Eye,
-	files: Folder,
-	aiSearch: Sparkles,
-};
 
 interface HeldModifiers {
 	readonly mod: boolean;
@@ -71,14 +48,6 @@ interface PendingConflict {
 	readonly id: ShortcutId;
 	readonly chord: string;
 	readonly conflictWith: ShortcutId;
-}
-
-interface UiEditorState {
-	readonly id: ShortcutId;
-	readonly mod: boolean;
-	readonly alt: boolean;
-	readonly shift: boolean;
-	readonly key: string;
 }
 
 function renderKeycapSequence(chord: string, platform: string): ReactElement {
@@ -100,18 +69,20 @@ export function ShortcutsPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	onOpenAiSettings,
+	customizerOpen,
+	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	readonly onOpenAiSettings?: () => void;
+	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
+	readonly customizerOpen: boolean;
+	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
 	const isMac = platform === "darwin";
 
-	const [customizerOpen, setCustomizerOpen] = useState(false);
 	const [filterQuery, setFilterQuery] = useState("");
 	const [recordingId, setRecordingId] = useState<ShortcutId | null>(null);
 	const [heldMods, setHeldMods] = useState<HeldModifiers>({ mod: false, alt: false, shift: false });
@@ -120,7 +91,7 @@ export function ShortcutsPage({
 		readonly reason: ShortcutInvalidReason;
 	} | null>(null);
 	const [pendingConflict, setPendingConflict] = useState<PendingConflict | null>(null);
-	const [uiEditor, setUiEditor] = useState<UiEditorState | null>(null);
+	const [changedOnly, setChangedOnly] = useState(false);
 
 	const shortcuts = useMemo(() => normalizeShortcutSettings(appSettings.shortcuts), [appSettings.shortcuts]);
 	const effective = useMemo(() => resolveEffectiveShortcuts(shortcuts), [shortcuts]);
@@ -248,41 +219,15 @@ export function ShortcutsPage({
 		};
 	}, [recordingId, applyRecordedChord, platform, isMac]);
 
+	/**
+	 * Clicking the keycaps starts recording (Figma 445:2249): the keycaps wait for keys, and the chord pressed is
+	 * applied at once, with no picker and no 저장. Esc, a click elsewhere or the same keycaps again stops it.
+	 */
 	const startRecording = (id: ShortcutId): void => {
-		if (recordingId === id) {
-			setRecordingId(null);
-			setHeldMods({ mod: false, alt: false, shift: false });
-			return;
-		}
-		setUiEditor(null);
 		setPendingConflict(null);
 		setInvalidNotice(null);
 		setHeldMods({ mod: false, alt: false, shift: false });
-		setRecordingId(id);
-	};
-
-	const toggleUiEditor = (id: ShortcutId): void => {
-		setRecordingId(null);
-		setHeldMods({ mod: false, alt: false, shift: false });
-		setPendingConflict(null);
-		setInvalidNotice(null);
-		if (uiEditor?.id === id) {
-			setUiEditor(null);
-			return;
-		}
-		const currentParts = decomposeShortcutChord(effective[id]) ?? {
-			mod: true,
-			alt: false,
-			shift: false,
-			key: "A",
-		};
-		setUiEditor({
-			id,
-			mod: currentParts.mod,
-			alt: currentParts.alt,
-			shift: currentParts.shift,
-			key: currentParts.key,
-		});
+		setRecordingId((current) => (current === id ? null : id));
 	};
 
 	const resetSingleShortcut = async (id: ShortcutId): Promise<void> => {
@@ -298,7 +243,6 @@ export function ShortcutsPage({
 		setHeldMods({ mod: false, alt: false, shift: false });
 		setPendingConflict(null);
 		setInvalidNotice(null);
-		setUiEditor(null);
 		void updateShortcuts(shortcutSettingsForPreset(preset));
 	};
 
@@ -312,6 +256,7 @@ export function ShortcutsPage({
 			aiSearch: [],
 		};
 		for (const item of SHORTCUT_CATALOG) {
+			if (changedOnly && effective[item.id] === item.defaultChord) continue;
 			if (normalizedQuery.length > 0) {
 				const label = actionLabel(item.id).toLowerCase();
 				const currentStr = formatShortcutChord(effective[item.id], platform).toLowerCase();
@@ -330,13 +275,14 @@ export function ShortcutsPage({
 			byGroup[item.group].push(item);
 		}
 		return byGroup;
-	}, [normalizedQuery, actionLabel, effective, platform]);
+	}, [normalizedQuery, actionLabel, effective, platform, changedOnly]);
 
 	const showLockedDismiss =
-		normalizedQuery.length === 0 ||
+		!changedOnly &&
+		(normalizedQuery.length === 0 ||
 		t("settingsCore.shortcuts.actions.dismiss").toLowerCase().includes(normalizedQuery) ||
 		"esc".includes(normalizedQuery) ||
-		"escape".includes(normalizedQuery);
+		"escape".includes(normalizedQuery));
 
 	const totalMatching =
 		GROUP_ORDER.reduce((sum, group) => sum + groupedItems[group].length, 0) + (showLockedDismiss ? 1 : 0);
@@ -348,400 +294,227 @@ export function ShortcutsPage({
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} description={t("settingsCore.shortcuts.description")} />
 
-			<div className="sidebar-ai-hero">
-				<div className="sidebar-ai-hero__body">
-					<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-						<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-					</span>
-					<div className="sidebar-ai-hero__copy">
-						<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
-						<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
+			{customizerOpen ? null : (
+				<div className="sidebar-ai-hero">
+					<div className="sidebar-ai-hero__body">
+						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
+							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
+						</span>
+						<div className="sidebar-ai-hero__copy">
+							<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
+							<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
+						</div>
 					</div>
-				</div>
-				<button
-					type="button"
-					className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-					data-action="open-shortcut-customizer"
-					onClick={() => setCustomizerOpen(true)}
-				>
-					<img src={dazziMark} alt="" className="sidebar-ai-hero__btn-logo" aria-hidden="true" draggable={false} />
-					<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
-				</button>
-			</div>
-
-			<div className="sidebar-presets-bar" role="group" aria-label={t("settingsCore.shortcuts.presetsTitle")}>
-				<span className="sidebar-presets-bar__label">{t("settingsCore.shortcuts.presetsTitle")}</span>
-				<div className="sidebar-presets-bar__actions">
 					<button
 						type="button"
-						className={`sidebar-preset-pill${activePreset === "macFinder" ? " is-active" : ""}`}
-						data-action="shortcuts-preset-mac-finder"
-						aria-pressed={activePreset === "macFinder"}
-						onClick={() => applyPreset("macFinder")}
+						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
+						data-action="open-shortcut-customizer"
+						onClick={onOpenCustomizer}
 					>
-						{t("settingsCore.shortcuts.presetMacFinder")}
-					</button>
-					<button
-						type="button"
-						className={`sidebar-preset-pill${activePreset === "windowsExplorer" ? " is-active" : ""}`}
-						data-action="shortcuts-preset-windows-explorer"
-						aria-pressed={activePreset === "windowsExplorer"}
-						onClick={() => applyPreset("windowsExplorer")}
-					>
-						{t("settingsCore.shortcuts.presetWindowsExplorer")}
-					</button>
-					<button
-						type="button"
-						className={`sidebar-preset-pill${activePreset === "default" ? " is-active" : ""}`}
-						data-action="shortcuts-preset-default"
-						aria-pressed={activePreset === "default"}
-						onClick={() => applyPreset("default")}
-					>
-						{t("settingsCore.shortcuts.presetDefault")}
+						<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
 					</button>
 				</div>
-			</div>
+			)}
 
-			<div className="shortcuts-toolbar">
-				<label className="shortcuts-filter-box">
-					<Search size={13} className="shortcuts-filter-box__icon" aria-hidden="true" />
-					<input
-						type="text"
-						data-testid="shortcuts-filter-input"
-						className="shortcuts-filter-box__input"
-						value={filterQuery}
-						placeholder={t("settingsCore.shortcuts.filterPlaceholder")}
-						aria-label={t("settingsCore.shortcuts.filterPlaceholder")}
-						onChange={(event) => setFilterQuery(event.target.value)}
-					/>
-					{filterQuery.length > 0 ? (
-						<button
-							type="button"
-							className="shortcuts-filter-box__clear"
-							data-action="clear-shortcuts-filter"
-							aria-label={t("common.close")}
-							onClick={() => setFilterQuery("")}
-						>
-							<X size={12} />
-						</button>
-					) : null}
-				</label>
-				{customizedCount > 0 ? (
-					<span className="sidebar-custom-badge">{t("settingsCore.shortcuts.customizedCount", { count: customizedCount })}</span>
-				) : null}
-			</div>
+			{/* Figma 445:2249: 빠른 구성 (the platform presets as a segmented control, reset and the changed-only filter), the search, then one bordered card per group. */}
+			<div className="shortcuts-page">
+				<div className="shortcuts-quick">
+					<span className="shortcuts-quick-label">{t("settingsCore.shortcuts.presetsTitle")}</span>
+					<div className="shortcuts-quick-row">
+						<div className="shortcuts-segmented" role="group" aria-label={t("settingsCore.shortcuts.presetsTitle")} data-shortcut-presets>
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === "macFinder" && "is-active")}
+								data-action="shortcuts-preset-mac-finder"
+								aria-pressed={activePreset === "macFinder"}
+								onClick={() => applyPreset("macFinder")}
+							>
+								{t("settingsCore.shortcuts.presetMacFinder")}
+							</button>
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === "windowsExplorer" && "is-active")}
+								data-action="shortcuts-preset-windows-explorer"
+								aria-pressed={activePreset === "windowsExplorer"}
+								onClick={() => applyPreset("windowsExplorer")}
+							>
+								{t("settingsCore.shortcuts.presetWindowsExplorer")}
+							</button>
+						</div>
+						<div className="shortcuts-quick-actions">
+							<button
+								type="button"
+								className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
+								data-action="shortcuts-preset-default"
+								disabled={activePreset === "default"}
+								onClick={() => applyPreset("default")}
+							>
+								{t("settingsCore.shortcuts.resetAll")}
+							</button>
+							<button
+								type="button"
+								className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn", changedOnly && "is-active")}
+								data-action="shortcuts-changed-only"
+								aria-pressed={changedOnly}
+								disabled={!changedOnly && customizedCount === 0}
+								onClick={() => setChangedOnly((value) => !value)}
+							>
+								{t("settingsCore.shortcuts.changedOnly", { count: customizedCount })}
+							</button>
+						</div>
+					</div>
+					<label className="shortcuts-search">
+						<Search size={14} strokeWidth={1.5} className="shortcuts-search__icon" aria-hidden="true" />
+						<input
+							type="text"
+							data-testid="shortcuts-filter-input"
+							className="shortcuts-search__input"
+							value={filterQuery}
+							placeholder={t("settingsCore.shortcuts.filterPlaceholder")}
+							aria-label={t("settingsCore.shortcuts.filterPlaceholder")}
+							onChange={(event) => setFilterQuery(event.target.value)}
+						/>
+						{filterQuery.length > 0 ? (
+							<button
+								type="button"
+								className="shortcuts-search__clear"
+								data-action="clear-shortcuts-filter"
+								aria-label={t("common.close")}
+								onClick={() => setFilterQuery("")}
+							>
+								<X size={12} />
+							</button>
+						) : null}
+					</label>
+				</div>
 
-			<Section title={t("settingsCore.shortcuts.sectionsTitle")} description={t("settingsCore.shortcuts.sectionsDesc")}>
 				{totalMatching === 0 ? (
-					<p className="linear-section-desc">{t("settingsCore.shortcuts.filterEmpty")}</p>
+					<p className="shortcuts-empty">{t("settingsCore.shortcuts.filterEmpty")}</p>
 				) : (
-					<div className="sidebar-sections-stack">
-						{GROUP_ORDER.map((groupId) => {
-							const items = groupedItems[groupId];
-							const includeLocked = groupId === "window" && showLockedDismiss;
-							if (items.length === 0 && !includeLocked) return null;
-							const GroupIcon = GROUP_ICONS[groupId];
-							const groupTitle = t(`settingsCore.shortcuts.groups.${groupId}`);
-
-							return (
-								<div key={groupId} className="sidebar-section-card" data-shortcut-group={groupId}>
-									<div className="sidebar-section-card__head">
-										<span className="sidebar-section-card__glyph" aria-hidden="true">
-											<GroupIcon size={15} />
-										</span>
-										<div className="sidebar-section-card__title-wrap">
-											<span className="sidebar-section-card__title">{groupTitle}</span>
+					GROUP_ORDER.map((groupId) => {
+						const items = groupedItems[groupId];
+						const includeLocked = groupId === "window" && showLockedDismiss;
+						if (items.length === 0 && !includeLocked) return null;
+						return (
+							<section key={groupId} className="shortcuts-group" data-shortcut-group={groupId}>
+								<h3 className="shortcuts-group-title">{t(`settingsCore.shortcuts.groups.${groupId}`)}</h3>
+								<div className="shortcuts-card">
+									{includeLocked ? (
+										<div className="shortcuts-row is-locked" data-shortcut-row="dismiss" title={t("settingsCore.shortcuts.lockedHint")}>
+											<span className="shortcuts-row-name">{t("settingsCore.shortcuts.actions.dismiss")}</span>
+											<Lock size={14} strokeWidth={1.5} className="shortcuts-row-lock" aria-label={t("settingsCore.shortcuts.lockedBadge")} />
+											<span className="shortcuts-row-spacer" />
+											<span className="shortcuts-keycaps is-locked" aria-disabled="true">
+												<kbd className="shortcut-keycap">Esc</kbd>
+											</span>
 										</div>
-									</div>
+									) : null}
 
-									<div className="sidebar-section-card__items">
-										{includeLocked ? (
-											<div
-												className="sidebar-custom-row shortcut-row is-locked"
-												data-shortcut-row="dismiss"
-												title={t("settingsCore.shortcuts.lockedHint")}
-											>
-												<div className="sidebar-custom-row__order" aria-hidden="true">
-													<Lock size={12} className="sidebar-custom-row__lock-glyph" />
-												</div>
-												<div className="sidebar-custom-row__main">
-													<span className="sidebar-custom-row__name">{t("settingsCore.shortcuts.actions.dismiss")}</span>
-													<span className="sidebar-custom-badge is-locked">{t("settingsCore.shortcuts.lockedBadge")}</span>
-												</div>
-												<div className="shortcut-row__controls">
-													<span className="shortcut-recorder-btn is-locked" aria-disabled="true">
-														<kbd className="shortcut-keycap">Esc</kbd>
-													</span>
-												</div>
-											</div>
-										) : null}
+									{items.map((item) => {
+										const label = actionLabel(item.id);
+										const currentChord = effective[item.id];
+										const currentFormatted = formatShortcutChord(currentChord, platform);
+										const defaultFormatted = formatShortcutChord(item.defaultChord, platform);
+										const customized = currentChord !== item.defaultChord;
+										const isRecording = recordingId === item.id;
+										const rowConflict = pendingConflict?.id === item.id ? pendingConflict : null;
+										const rowInvalid = invalidNotice?.id === item.id ? invalidNotice : null;
+										const held = isRecording ? heldMods : { mod: false, alt: false, shift: false };
+										const heldParts = [held.mod ? (isMac ? "⌘" : "Ctrl") : null, held.alt ? (isMac ? "⌥" : "Alt") : null, held.shift ? (isMac ? "⇧" : "Shift") : null].filter(
+											(part): part is string => part !== null,
+										);
 
-										{items.map((item) => {
-											const label = actionLabel(item.id);
-											const currentChord = effective[item.id];
-											const currentFormatted = formatShortcutChord(currentChord, platform);
-											const defaultFormatted = formatShortcutChord(item.defaultChord, platform);
-											const customized = currentChord !== item.defaultChord;
-											const isRecording = recordingId === item.id;
-											const heldPreview = isRecording ? formatHeldModifiers(heldMods, platform) : "";
-											const rowConflict = pendingConflict?.id === item.id ? pendingConflict : null;
-											const rowInvalid = invalidNotice?.id === item.id ? invalidNotice : null;
-											const rowUi = uiEditor?.id === item.id ? uiEditor : null;
-
-											const uiValidation =
-												rowUi === null
-													? null
-													: validateShortcutParts({
-															mod: rowUi.mod,
-															alt: rowUi.alt,
-															shift: rowUi.shift,
-															key: rowUi.key,
-														});
-											const uiConflictId =
-												rowUi !== null && uiValidation !== null && uiValidation.ok
-													? findShortcutConflict(item.id, uiValidation.chord, shortcuts)
-													: null;
-
-											return (
-												<div
-													key={item.id}
-													className={`shortcut-row-wrap${customized ? " is-customized" : ""}`}
-													data-shortcut-row={item.id}
-												>
-													<div className="sidebar-custom-row shortcut-row">
-														<span className="sidebar-custom-row__icon" aria-hidden="true">
-															<Keyboard size={14} />
-														</span>
-														<div className="sidebar-custom-row__main">
-															<span className="sidebar-custom-row__name">{label}</span>
-															{customized ? (
-																<>
-																	<span className="sidebar-custom-badge">{t("settingsCore.shortcuts.customizedBadge")}</span>
-																	<span className="sidebar-custom-row__sub">
-																		{t("settingsCore.shortcuts.defaultHint", { shortcut: defaultFormatted })}
+										return (
+											<div key={item.id} className={cn("shortcuts-row-wrap", customized && "is-customized")} data-shortcut-row={item.id}>
+												<div className="shortcuts-row">
+													<span className="shortcuts-row-name">{label}</span>
+													{customized ? <span className="shortcuts-badge">{t("settingsCore.shortcuts.customizedBadge")}</span> : null}
+													<span className="shortcuts-row-spacer" />
+													{customized ? (
+														<button
+															type="button"
+															className="shortcuts-reset"
+															data-action={`reset-shortcut-${item.id}`}
+															title={t("settingsCore.shortcuts.resetOneHint", { name: label, shortcut: defaultFormatted })}
+															aria-label={t("settingsCore.shortcuts.resetOneHint", { name: label, shortcut: defaultFormatted })}
+															onClick={() => void resetSingleShortcut(item.id)}
+														>
+															<RotateCcw size={14} strokeWidth={1.5} />
+														</button>
+													) : null}
+													<button
+														type="button"
+														className={cn("shortcuts-keycaps", isRecording && "is-editing")}
+														data-shortcut-record={item.id}
+														title={t("settingsCore.shortcuts.recordButtonHint", { shortcut: currentFormatted })}
+														aria-label={t("settingsCore.shortcuts.recordButtonHint", { shortcut: currentFormatted })}
+														aria-pressed={isRecording}
+														onClick={() => startRecording(item.id)}
+													>
+														{isRecording ? (
+															<span className="shortcut-keycap-seq is-recording" aria-live="polite">
+																{heldParts.map((part, idx) => (
+																	<span key={part} className="shortcut-keycap-piece">
+																		{!isMac && idx > 0 ? <span className="shortcut-keycap-plus">+</span> : null}
+																		<kbd className="shortcut-keycap">{part}</kbd>
 																	</span>
-																</>
-															) : null}
-														</div>
-														<div className="shortcut-row__controls">
-															<button
-																type="button"
-																className={`shortcut-recorder-btn${isRecording ? " is-recording" : ""}${customized ? " is-customized" : ""}`}
-																data-shortcut-record={item.id}
-																title={t("settingsCore.shortcuts.recordButtonHint", { shortcut: currentFormatted })}
-																aria-label={t("settingsCore.shortcuts.recordButtonHint", { shortcut: currentFormatted })}
-																aria-pressed={isRecording}
-																onClick={() => startRecording(item.id)}
-															>
-																{isRecording ? (
-																	<>
-																		<span className="shortcut-recorder-btn__dot" aria-hidden="true" />
-																		<span className="shortcut-recorder-btn__prompt">
-																			{heldPreview.length > 0 ? heldPreview : t("settingsCore.shortcuts.recordingPrompt")}
-																		</span>
-																	</>
-																) : (
-																	renderKeycapSequence(currentChord, platform)
-																)}
-															</button>
+																))}
+																<span className="shortcuts-recording-prompt">{t("settingsCore.shortcuts.recorderPrompt")}</span>
+															</span>
+														) : (
+															renderKeycapSequence(currentChord, platform)
+														)}
+													</button>
+												</div>
 
-															<button
-																type="button"
-																className={`shortcut-icon-btn${rowUi !== null ? " is-active" : ""}`}
-																data-shortcut-ui-edit={item.id}
-																title={t("settingsCore.shortcuts.uiEditHint", { name: label })}
-																aria-label={t("settingsCore.shortcuts.uiEditHint", { name: label })}
-																aria-expanded={rowUi !== null}
-																onClick={() => toggleUiEditor(item.id)}
-															>
-																<SlidersHorizontal size={13} />
-															</button>
-
-															{customized ? (
-																<button
-																	type="button"
-																	className="shortcut-icon-btn"
-																	data-action={`reset-shortcut-${item.id}`}
-																	title={t("settingsCore.shortcuts.resetOneHint", {
-																		name: label,
-																		shortcut: defaultFormatted,
-																	})}
-																	aria-label={t("settingsCore.shortcuts.resetOneHint", {
-																		name: label,
-																		shortcut: defaultFormatted,
-																	})}
-																	onClick={() => void resetSingleShortcut(item.id)}
-																>
-																	<RotateCcw size={13} />
-																</button>
-															) : null}
-														</div>
+												{rowInvalid !== null ? (
+													<div className="shortcuts-feedback is-warning" role="status">
+														<AlertTriangle size={13} aria-hidden="true" />
+														<span>{invalidMessage(rowInvalid.reason)}</span>
 													</div>
+												) : null}
 
-													{rowInvalid !== null ? (
-														<div className="shortcut-feedback is-warning" role="status">
-															<AlertTriangle size={13} aria-hidden="true" />
-															<span>{invalidMessage(rowInvalid.reason)}</span>
-														</div>
-													) : null}
-
-													{rowConflict !== null ? (
-														<div className="shortcut-feedback is-conflict" role="alert">
-															<div className="shortcut-feedback__text">
-																<AlertTriangle size={13} aria-hidden="true" />
-																<span>
-																	{t("settingsCore.shortcuts.conflictNotice", {
-																		shortcut: formatShortcutChord(rowConflict.chord, platform),
-																		target: actionLabel(rowConflict.conflictWith),
-																	})}
-																</span>
-															</div>
-															<div className="shortcut-feedback__actions">
-																<button
-																	type="button"
-																	className="linear-btn settings-btn-primary shortcut-feedback__btn"
-																	data-action="swap-shortcut-conflict"
-																	onClick={() => {
-																		const swapped = swapShortcutBinding(shortcuts, item.id, rowConflict.chord);
-																		setPendingConflict(null);
-																		void updateShortcuts(swapped);
-																	}}
-																>
-																	<ArrowLeftRight size={12} aria-hidden="true" />
-																	<span>{t("settingsCore.shortcuts.swapConflict")}</span>
-																</button>
-																<button
-																	type="button"
-																	className="linear-btn shortcut-feedback__btn"
-																	data-action="cancel-shortcut-conflict"
-																	onClick={() => setPendingConflict(null)}
-																>
-																	{t("settingsCore.shortcuts.cancelUi")}
-																</button>
-															</div>
-														</div>
-													) : null}
-
-													{rowUi !== null ? (
-														<div className="shortcut-ui-editor">
-															<div className="shortcut-ui-editor__controls">
-																<div className="shortcut-ui-editor__mods" role="group">
-																	<button
-																		type="button"
-																		className={`shortcut-mod-chip${rowUi.mod ? " is-active" : ""}`}
-																		data-shortcut-mod="mod"
-																		aria-pressed={rowUi.mod}
-																		onClick={() => setUiEditor({ ...rowUi, mod: !rowUi.mod })}
-																	>
-																		{isMac ? "⌘ Cmd" : "Ctrl"}
-																	</button>
-																	<button
-																		type="button"
-																		className={`shortcut-mod-chip${rowUi.alt ? " is-active" : ""}`}
-																		data-shortcut-mod="alt"
-																		aria-pressed={rowUi.alt}
-																		onClick={() => setUiEditor({ ...rowUi, alt: !rowUi.alt })}
-																	>
-																		{isMac ? "⌥ Opt" : "Alt"}
-																	</button>
-																	<button
-																		type="button"
-																		className={`shortcut-mod-chip${rowUi.shift ? " is-active" : ""}`}
-																		data-shortcut-mod="shift"
-																		aria-pressed={rowUi.shift}
-																		onClick={() => setUiEditor({ ...rowUi, shift: !rowUi.shift })}
-																	>
-																		{isMac ? "⇧ Shift" : "Shift"}
-																	</button>
-																</div>
-
-																<select
-																	data-testid="shortcut-key-select"
-																	className="shortcut-key-select"
-																	value={rowUi.key}
-																	onChange={(event) => setUiEditor({ ...rowUi, key: event.target.value })}
-																>
-																	{SELECTABLE_SHORTCUT_KEYS.map((keyOption) => (
-																		<option key={keyOption} value={keyOption}>
-																			{keyOption}
-																		</option>
-																	))}
-																</select>
-															</div>
-
-															<div className="shortcut-ui-editor__actions">
-																{uiValidation !== null && !uiValidation.ok ? (
-																	<span className="shortcut-ui-editor__hint">
-																		{invalidMessage(uiValidation.reason)}
-																	</span>
-																) : uiConflictId !== null && uiValidation !== null && uiValidation.ok ? (
-																	<>
-																		<span className="shortcut-ui-editor__hint is-conflict">
-																			{t("settingsCore.shortcuts.conflictNotice", {
-																				shortcut: formatShortcutChord(uiValidation.chord, platform),
-																				target: actionLabel(uiConflictId),
-																			})}
-																		</span>
-																		<button
-																			type="button"
-																			className="linear-btn settings-btn-primary shortcut-feedback__btn"
-																			data-action="swap-shortcut-conflict"
-																			onClick={() => {
-																				const swapped = swapShortcutBinding(shortcuts, item.id, uiValidation.chord);
-																				setUiEditor(null);
-																				void updateShortcuts(swapped);
-																			}}
-																		>
-																			<ArrowLeftRight size={12} aria-hidden="true" />
-																			<span>{t("settingsCore.shortcuts.swapConflict")}</span>
-																		</button>
-																	</>
-																) : (
-																	<button
-																		type="button"
-																		className="linear-btn settings-btn-primary shortcut-feedback__btn"
-																		data-action="save-ui-shortcut"
-																		disabled={uiValidation === null || !uiValidation.ok}
-																		onClick={() => {
-																			if (uiValidation !== null && uiValidation.ok) {
-																				setUiEditor(null);
-																				void applyRecordedChord(item.id, uiValidation.chord);
-																			}
-																		}}
-																	>
-																		{t("settingsCore.shortcuts.saveUi")}
-																	</button>
-																)}
-																<button
-																	type="button"
-																	className="linear-btn shortcut-feedback__btn"
-																	data-action="cancel-ui-shortcut"
-																	onClick={() => setUiEditor(null)}
-																>
-																	{t("settingsCore.shortcuts.cancelUi")}
-																</button>
-															</div>
-														</div>
-													) : null}
-												</div>
-											);
-										})}
-									</div>
+												{rowConflict !== null ? (
+													<div className="shortcuts-feedback is-conflict" role="alert">
+														<AlertTriangle size={13} aria-hidden="true" />
+														<span className="shortcuts-feedback-text">
+															{t("settingsCore.shortcuts.conflictNotice", {
+																shortcut: formatShortcutChord(rowConflict.chord, platform),
+																target: actionLabel(rowConflict.conflictWith),
+															})}
+														</span>
+														<button
+															type="button"
+															className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
+															data-action="cancel-shortcut-conflict"
+															onClick={() => setPendingConflict(null)}
+														>
+															{t("settingsCore.shortcuts.cancelUi")}
+														</button>
+														<button
+															type="button"
+															className={cn(buttonClass({ size: "sm" }), "shortcuts-primary-btn")}
+															data-action="swap-shortcut-conflict"
+															onClick={() => {
+																const swapped = swapShortcutBinding(shortcuts, item.id, rowConflict.chord);
+																setPendingConflict(null);
+																void updateShortcuts(swapped);
+															}}
+														>
+															<ArrowLeftRight aria-hidden="true" />
+															{t("settingsCore.shortcuts.swapConflict")}
+														</button>
+													</div>
+												) : null}
+											</div>
+										);
+									})}
 								</div>
-							);
-						})}
-					</div>
+							</section>
+						);
+					})
 				)}
-			</Section>
-
-			{customizerOpen ? (
-				<AppCustomizerModal
-					surface="shortcuts"
-					onClose={() => setCustomizerOpen(false)}
-					onSettingsUpdated={onAppSettingsChanged}
-					onOpenAiSettings={onOpenAiSettings}
-				/>
-			) : null}
+			</div>
 		</>
 	);
 }

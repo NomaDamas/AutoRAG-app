@@ -1,5 +1,5 @@
 /**
- * Manual QA — a follow-up question continues the same AI Search chat.
+ * Manual QA — a follow-up question continues the same AI Chat chat.
  *
  * Deterministic lane: replaces main's `search:start` / `search:cancel` handlers
  * with a scripted backend that records the chat id of every run and settles

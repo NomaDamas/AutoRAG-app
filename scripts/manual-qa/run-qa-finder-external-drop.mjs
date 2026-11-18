@@ -11,7 +11,7 @@
 //   5. copies into the tab's folder when dropped on another tab;
 //   6. copies into the listing folder when dropped on the empty background;
 //   7. is ignored when the drag carries only a web link;
-//   8. still attaches (never transfers) when dropped on the AI Search panel;
+//   8. still attaches (never transfers) when dropped on the AI Chat panel;
 //   9. joins ⌘Z: undo removes the copy the external drop created.
 //
 // Drops go through Chromium's native drop path (CDP Input.dispatchDragEvent
@@ -244,7 +244,7 @@ try {
 	);
 	await page.screenshot({ path: join(EVIDENCE, "4-undo.png") });
 
-	/* -------------------------------------- 9. AI Search still attaches, not moves */
+	/* -------------------------------------- 9. AI Chat still attaches, not moves */
 	await page.keyboard.press("Meta+t");
 	await openAiSearch(page);
 	await dropFiles(page, cdp, [DROPPED], page.locator(AI_PANEL));
@@ -257,7 +257,7 @@ try {
 		.catch(() => undefined);
 	const pills = await page.$$eval(".composer-attach-pill", (elements) => elements.map((element) => element.getAttribute("title")));
 	check(
-		"an OS file dropped on AI Search attaches instead of transferring",
+		"an OS file dropped on AI Chat attaches instead of transferring",
 		pills.includes(DROPPED) && existsSync(DROPPED),
 		`pills=${JSON.stringify(pills)}`,
 	);

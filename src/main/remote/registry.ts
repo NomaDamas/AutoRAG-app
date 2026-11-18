@@ -27,6 +27,8 @@ const FS_WORKER_METHODS: Readonly<Record<string, string>> = {
 	exists: "exists",
 	search: "search",
 	contentSearch: "contentSearch",
+	searchDatasources: "searchDatasources",
+	sourceSearch: "sourceSearch",
 	locations: "locations",
 	tags: "tags",
 	setTags: "setTags",
@@ -49,6 +51,7 @@ const FS_WORKER_METHODS: Readonly<Record<string, string>> = {
 	refreshVersionFamilies: "refreshVersionFamilies",
 	indexStatus: "indexStatus",
 	setIndexExcluded: "setIndexExcluded",
+	indexMap: "indexMap",
 };
 
 const LIVE_WORKER_METHODS: Readonly<Record<string, string>> = {

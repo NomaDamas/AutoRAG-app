@@ -7,11 +7,14 @@
  */
 
 import { parentPort, workerData } from "node:worker_threads";
-import { scanWithDupey } from "@autorag/librarian";
+import { EverythingClient, scanWithDupey } from "@autorag/librarian";
 import { createDefaultContentSearch } from "../main/content-search";
 import { createDupeyRunner } from "../main/dupey-runner";
 import { createFileNameSearch } from "../main/file-name-search";
 import { createIndexStatusService } from "../main/index-status";
+import { createDefaultSearchRelevanceGate } from "../main/search-relevance-gate";
+import { createDefaultSourceSearch } from "../main/source-search";
+import { launchTiedToParent } from "../main/tied-launch";
 import type { LibrarianThreadData } from "./librarian-contract";
 import { createDuplicateScans } from "./librarian-dupey";
 import { serveLibrarian } from "./librarian-serve";
@@ -27,13 +30,22 @@ const duplicateScans = createDuplicateScans({ scan: scanWithDupey, runner: dupey
 process.once("exit", () => dupeyRunner.killAll());
 
 serveLibrarian(adaptNodePort(parentPort), {
-	services: (host) => ({
-		fileNameSearch: createFileNameSearch({ userDataDir, locations: host.locations }),
-		contentSearch: createDefaultContentSearch(process.env, process.cwd()),
-		scanDuplicates: duplicateScans.scanDuplicates,
-		stopDuplicateScans: duplicateScans.stop,
-		indexStatus: createIndexStatusService({ env: process.env, cwd: process.cwd(), onRefreshed: host.indexRefreshed }),
-	}),
+	services: (host) => {
+		const relevanceGate = createDefaultSearchRelevanceGate(process.env, process.cwd());
+		return {
+			fileNameSearch: createFileNameSearch({
+				userDataDir,
+				locations: host.locations,
+				// The librarian launches the daemon detached by default; tied to this process it cannot outlive a force-kill.
+				everythingFactory: (options) => new EverythingClient({ ...options, launch: launchTiedToParent }),
+			}),
+			contentSearch: createDefaultContentSearch(process.env, process.cwd(), relevanceGate),
+			sourceSearch: createDefaultSourceSearch(process.env, process.cwd(), relevanceGate),
+			scanDuplicates: duplicateScans.scanDuplicates,
+			stopDuplicateScans: duplicateScans.stop,
+			indexStatus: createIndexStatusService({ env: process.env, cwd: process.cwd(), onRefreshed: host.indexRefreshed }),
+		};
+	},
 	// The librarian ends the MinSync children it started on `exit`, which a terminated thread never receives.
 	onShutdown: () => {
 		process.emit("exit", 0);

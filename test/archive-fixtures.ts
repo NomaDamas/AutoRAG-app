@@ -126,3 +126,63 @@ export function cabArchive(files: readonly { readonly name: string; readonly dat
 	block.writeUInt16LE(total, 6);
 	return Buffer.concat([header, folder, ...entries, block, ...bodies]);
 }
+
+/** One ustar member: `name` is written verbatim, so a caller controls its exact bytes. */
+interface UstarEntry {
+	readonly name: Buffer;
+	/** The tar type flag: `0` for a file, `5` for a directory. */
+	readonly type: "0" | "5";
+	readonly data?: Buffer;
+	readonly modified: number;
+}
+
+/** A minimal, checksum-valid ustar whose names are the bytes given rather than text. */
+function ustar(entries: readonly UstarEntry[]): Buffer {
+	const blocks: Buffer[] = [];
+	for (const entry of entries) {
+		const data = entry.data ?? Buffer.alloc(0);
+		const header = Buffer.alloc(512);
+		header.set(entry.name, 0);
+		header.write("0000644\0", 100, 8, "ascii");
+		header.write("0000000\0", 108, 8, "ascii");
+		header.write("0000000\0", 116, 8, "ascii");
+		header.write(`${data.length.toString(8).padStart(11, "0")}\0`, 124, 12, "ascii");
+		header.write(`${Math.floor(entry.modified / 1000).toString(8).padStart(11, "0")}\0`, 136, 12, "ascii");
+		header.write("        ", 148, 8, "ascii");
+		header.write(entry.type, 156, 1, "ascii");
+		header.write("ustar\0", 257, 6, "ascii");
+		header.write("00", 263, 2, "ascii");
+		let sum = 0;
+		for (const byte of header) sum += byte;
+		header.write(`${sum.toString(8).padStart(6, "0")}\0 `, 148, 8, "ascii");
+		blocks.push(header);
+		if (data.length > 0) {
+			blocks.push(data);
+			const padding = (512 - (data.length % 512)) % 512;
+			if (padding > 0) blocks.push(Buffer.alloc(padding));
+		}
+	}
+	blocks.push(Buffer.alloc(1024));
+	return Buffer.concat(blocks);
+}
+
+/**
+ * The fixture tree as a plain ustar whose Korean names are the CP949 bytes a
+ * Korean Windows tool writes there (`tar --format ustar` on Windows): ustar,
+ * cpio, and ISO 9660 cannot declare a charset, so the reader gets bytes it
+ * cannot convert to UTF-8. Its top level is the same three children with the
+ * same dates as every other fixture, so a listing has to show them unchanged.
+ */
+export function windowsTar(): Buffer {
+	const folder = Buffer.from([0xc7, 0xd1, 0xb1, 0xdb]); /* 한글 */
+	const member = Buffer.from([0xb8, 0xde, 0xb8, 0xf0, 0x2e, 0x74, 0x78, 0x74]); /* 메모.txt */
+	return ustar([
+		{ name: Buffer.from("readme.md"), type: "0", data: Buffer.from("top"), modified: FIXTURE_DATES.readme },
+		{ name: Buffer.from("docs/"), type: "5", modified: FIXTURE_DATES.docs },
+		{ name: Buffer.from("docs/sub/"), type: "5", modified: FIXTURE_DATES.docsSub },
+		{ name: Buffer.from("docs/a.txt"), type: "0", data: Buffer.from("hello"), modified: FIXTURE_DATES.docs },
+		{ name: Buffer.from("docs/sub/b.txt"), type: "0", data: Buffer.from("world"), modified: FIXTURE_DATES.docsSub },
+		{ name: Buffer.concat([folder, Buffer.from("/")]), type: "5", modified: FIXTURE_DATES.korean },
+		{ name: Buffer.concat([folder, Buffer.from("/"), member]), type: "0", data: Buffer.from("memo"), modified: FIXTURE_DATES.korean },
+	]);
+}

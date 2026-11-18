@@ -79,7 +79,7 @@ writeFileSync(
 );
 writeFileSync(
 	CONFIG,
-	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: false, webSearch: false, queryDecomposition: false }) }, null, 2)}\n`,
+	`${JSON.stringify({ searchPaths: [DOCS], workspacePath: join(WORK, "workspace"), memoryPath: join(WORK, "memory.json"), minSync: { enabled: true, autoInstall: true, embedder: { id: "native:Qwen/Qwen3-Embedding-0.6B", dimension: 1024 } }, jikji: false, ...(OPENROUTER_MODEL === "" ? {} : { jev: { backend: "sllm" }, webSearch: { enabled: false }, queryDecomposition: false }) }, null, 2)}\n`,
 );
 
 const service = createServer((req, res) => {
@@ -191,7 +191,7 @@ try {
 	}
 	console.log(`approval cards allowed: ${approvals}`);
 	const error = (await page.locator(".ai .text-danger-text").first().textContent({ timeout: 1000 }).catch(() => null)) ?? "";
-	check("AI Search shows no error", error === "", error);
+	check("AI Chat shows no error", error === "", error);
 
 	const proses = page.locator(".assistant-msg .assistant-prose");
 	const count = await proses.count();

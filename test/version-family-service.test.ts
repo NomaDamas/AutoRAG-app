@@ -20,7 +20,7 @@ import {
 import { DIRTY_STAMP, type FileStamp } from "../src/main/version-family-verify";
 import { RECENTS_PATH, type FsEntry, type FsLocation, type FsVersionFamily } from "../src/shared/fs-contract";
 
-const dupeyAvailable = { status: async () => ({ available: true, version: "dupey 0.1.2", error: null }) };
+const dupeyAvailable = { status: async () => ({ available: true, version: "dupey 0.2.0", error: null }) };
 const dupeyMissing = { status: async () => ({ available: false, version: null, error: "spawn dupey ENOENT" }) };
 const fixtureStamp = (path: string, overrides: Partial<FileStamp> = {}): FileStamp => ({
 	dev: "fixture",
@@ -125,8 +125,13 @@ function harness(
 
 describe("dupey probe", () => {
 	it("reports the version when the CLI answers", async () => {
+		const probe = createDupeyProbe({ run: async () => "dupey 0.2.0" });
+		expect(await probe.status()).toEqual({ available: true, version: "dupey 0.2.0", error: null });
+	});
+
+	it("rejects an older dupey before the owned scan runner can use its hashes", async () => {
 		const probe = createDupeyProbe({ run: async () => "dupey 0.1.2" });
-		expect(await probe.status()).toEqual({ available: true, version: "dupey 0.1.2", error: null });
+		expect(await probe.status()).toMatchObject({ available: false, error: expect.stringContaining("0.2.0") });
 	});
 
 	it("reports the spawn failure when the CLI is missing", async () => {
@@ -146,7 +151,7 @@ describe("dupey probe", () => {
 		const probe = createDupeyProbe({
 			run: async () => {
 				calls += 1;
-				return "dupey 0.1.2";
+				return "dupey 0.2.0";
 			},
 			ttlMs: 1000,
 			now: () => clock,
@@ -1341,6 +1346,85 @@ describe("version-family service — trash prune", () => {
 		expect((await service.result()).families[0]?.members.map((member) => member.path)).toEqual([
 			"/home/Desktop/c.txt",
 		]);
+	});
+});
+
+describe("version-family service — snapshot write failure (ELECTRON-19)", () => {
+	const enospc = () => Object.assign(new Error("ENOSPC: no space left on device, write"), { code: "ENOSPC" });
+
+	it("does not leak an unhandled rejection when the interval scan cannot save the snapshot", async () => {
+		const unhandled: unknown[] = [];
+		const onUnhandled = (reason: unknown): void => {
+			unhandled.push(reason);
+		};
+		process.on("unhandledRejection", onUnhandled);
+		try {
+			let diskFull = false;
+			const h = harness({
+				store: {
+					read: async () => null,
+					write: async () => {
+						if (diskFull) throw enospc();
+					},
+				},
+			});
+			const service = createVersionFamilyService(h.deps);
+			await service.start();
+			diskFull = true;
+			h.timers[0]?.fire();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+
+			expect(h.scans).toHaveLength(2);
+			expect(unhandled).toEqual([]);
+		} finally {
+			process.off("unhandledRejection", onUnhandled);
+		}
+	});
+
+	it("keeps the scan result and says the snapshot was not saved when the disk is full", async () => {
+		const h = harness({
+			store: {
+				read: async () => null,
+				write: async () => {
+					throw enospc();
+				},
+			},
+		});
+		const service = createVersionFamilyService(h.deps);
+		const result = await service.refresh();
+
+		expect(result.families).toHaveLength(1);
+		expect(result.error?.code).toBe("scan-failed");
+		expect(result.error?.message).toContain("ENOSPC");
+	});
+
+	it("keeps a trashed duplicate out of the published stacks when the snapshot cannot be saved", async () => {
+		const stored: StoredVersionFamilies = {
+			version: 2,
+			scannedAt: "2026-09-29T09:00:00.000Z",
+			locations: ["/home/Desktop"],
+			families: [
+				{
+					head: "/home/Desktop/a.txt",
+					members: [{ path: "/home/Desktop/b.txt", relation: "exact" }],
+					entries: [fsEntry("/home/Desktop/a.txt"), fsEntry("/home/Desktop/b.txt")],
+				},
+			],
+		};
+		const h = harness(
+			{
+				store: {
+					read: async () => stored,
+					write: async () => {
+						throw enospc();
+					},
+				},
+			},
+			stored,
+		);
+		const service = createVersionFamilyService(h.deps);
+		const result = await service.removePaths(["/home/Desktop/b.txt"]);
+		expect(result.families).toEqual([]);
 	});
 });
 

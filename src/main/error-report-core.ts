@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import type { ConfigRefreshResult } from "../shared/settings-contract";
 
 /**
@@ -114,10 +115,41 @@ function groupingText(text: string): string {
 	return text.replace(/\d+/gu, "N").slice(0, 120);
 }
 
+/** A `tracing` log line, as MinSync writes its log to stderr: `2026-11-04T13:39:14.776313Z  INFO target: message`. */
+const LOG_LINE = /^\d{4}-\d\d-\d\dT[\d:.]+Z\s+(TRACE|DEBUG|INFO|WARN|ERROR)\s/u;
+
+/**
+ * A tool's stderr carries its whole log before the line that says why it failed, and only the first
+ * {@link MAX_TEXT} characters of a report survive. Each run of log lines is dropped when text (the
+ * `Error: …` line) follows it; a run that ends the text keeps its WARN/ERROR lines, or else its last line,
+ * which shows where the tool stopped.
+ */
+function withoutToolLog(error: string): string {
+	// MinSync colors its log; the librarian appends stderr after `step: reason; `, so the first log line shares that line.
+	const lines = stripVTControlCharacters(error).replace(/; (?=\d{4}-\d\d-\d\dT)/gu, ";\n").split("\n");
+	const kept: string[] = [];
+	for (let start = 0; start < lines.length; ) {
+		if (!LOG_LINE.test(lines[start] ?? "")) {
+			kept.push(lines[start] ?? "");
+			start += 1;
+			continue;
+		}
+		let end = start;
+		while (end < lines.length && LOG_LINE.test(lines[end] ?? "")) end += 1;
+		if (end === lines.length) {
+			const run = lines.slice(start, end);
+			const loud = run.filter((line) => /^(WARN|ERROR)$/u.test(LOG_LINE.exec(line)?.[1] ?? ""));
+			kept.push(...(loud.length > 0 ? loud : run.slice(-1)));
+		}
+		start = end;
+	}
+	return kept.join("\n").replace(/;\n/gu, "; ");
+}
+
 /** A refresh that reported `ok: false`, or null when it succeeded. */
 export function refreshFailureReport(result: ConfigRefreshResult): ErrorReport | null {
 	if (result.ok) return null;
-	const error = scrubText(result.error ?? "refresh failed");
+	const error = scrubText(withoutToolLog(result.error ?? "refresh failed"));
 	const steps = failingSteps(error);
 	return {
 		title: `Index refresh failed: ${steps.join(", ")}`,

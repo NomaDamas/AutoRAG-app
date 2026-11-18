@@ -16,6 +16,7 @@ import { platformKey } from "../../lib/platform-copy";
 import { localModelNeeded, useModelDownload } from "../../state/model-download";
 import { ModelDownloadPanel } from "../ModelDownloadPanel";
 import { ModalActions, ModalShell, Note, Row, StatusDot } from "./SettingsKit";
+import { SelectField } from "./SelectField";
 import type { Translate } from "../../onboarding/flow";
 
 const settings = window.autorag.settings;
@@ -50,7 +51,7 @@ function buildRequest(profileId: string, byok: ByokFields, acknowledgeRemote: bo
 	};
 }
 
-export function EmbeddingPicker(): ReactElement {
+export function EmbeddingPicker({ name, hint }: { readonly name?: string; readonly hint?: string } = {}): ReactElement {
 	const { t } = useTranslation();
 	const [state, setState] = useState<EmbeddingSettingsSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -135,10 +136,10 @@ export function EmbeddingPicker(): ReactElement {
 
 	return (
 		<>
-			<Row name={t("settingsCore.embedding.title")} hint={t("settingsCore.embedding.hint")}>
+			<Row name={name ?? t("settingsCore.embedding.title")} hint={hint ?? t("settingsCore.embedding.hint")}>
 				<button type="button" className="settings-trigger" onClick={openModal} aria-haspopup="dialog">
-					<span className={`settings-trigger-label${currentLabel === null ? " is-muted" : ""}`}>{currentLabel ?? t("settingsCore.common.notSet")}</span>
-					<ChevronDown size={14} aria-hidden="true" focusable="false" />
+					<span className={`settings-trigger-label${currentLabel === null ? " is-muted" : ""}`}>{currentLabel ?? t("settingsCore.ai.pickModel")}</span>
+					<ChevronDown size={16} strokeWidth={1.5} aria-hidden="true" focusable="false" />
 				</button>
 			</Row>
 			{open ? (
@@ -184,10 +185,7 @@ export function EmbeddingPicker(): ReactElement {
 						<>
 							<label>{t("settingsCore.embedding.serverUrl")}<input name="embedding-server-url" value={byok.baseUrl} placeholder={t("settingsCore.embedding.serverUrlPlaceholder")} onChange={(event) => { setByok((prev) => ({ ...prev, baseUrl: event.target.value })); setPlanned(null); }} /></label>
 							<label>{t("settingsCore.embedding.serverType")}
-								<select name="embedding-server-type" value={byok.protocol} onChange={(event) => { setByok((prev) => ({ ...prev, protocol: event.target.value === "tei" ? "tei" : "openai" })); setPlanned(null); }}>
-									<option value="openai">{t("settingsCore.embedding.typeOpenai")}</option>
-									<option value="tei">{t("settingsCore.embedding.typeTei")}</option>
-								</select>
+								<SelectField name="embedding-server-type" data-testid="embedding-server-type" value={byok.protocol} options={[{ value: "openai", label: t("settingsCore.embedding.typeOpenai") }, { value: "tei", label: t("settingsCore.embedding.typeTei") }]} onValueChange={(value) => { setByok((prev) => ({ ...prev, protocol: value === "tei" ? "tei" : "openai" })); setPlanned(null); }} />
 							</label>
 							<label>{t("settingsCore.embedding.apiKey")}<input name="embedding-api-key" type="password" autoComplete="off" value={byok.apiKey} placeholder={t("settingsCore.embedding.apiKeyPlaceholder")} onChange={(event) => setByok((prev) => ({ ...prev, apiKey: event.target.value }))} /></label>
 							<Note>{t(platformKey("settingsCore.embedding.apiKeyHint"))}</Note>

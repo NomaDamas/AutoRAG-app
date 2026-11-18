@@ -1,5 +1,5 @@
 /**
- * Manual QA — the AI Search composer wraps and scrolls a long draft.
+ * Manual QA — the AI Chat composer wraps and scrolls a long draft.
  *
  * Drives the built app in real Chromium (layout and scrolling are the browser's own) and proves, in English
  * and Korean:
@@ -52,7 +52,7 @@ async function run(language) {
 		const page = await finderWindow(app, 30_000);
 		page.setDefaultTimeout(15_000);
 		page.on("pageerror", (error) => console.log(`[pageerror] ${String(error).slice(0, 300)}`));
-		await page.locator(".sidebar__item", { hasText: /AI Search|AI 검색/u }).first().click();
+		await page.locator(".sidebar__item", { hasText: /AI Chat|AI 채팅/u }).first().click();
 		await page.waitForSelector('section.ai:not([aria-hidden="true"]) textarea', { timeout: 30_000 });
 		const panel = page.locator('section.ai:not([aria-hidden="true"])');
 		const field = panel.locator(`textarea[aria-label="${copy.ask}"]`);

@@ -17,6 +17,7 @@ import { Unzip, UnzipInflate } from "fflate";
 import type { ArchiveFormat } from "../shared/archive-formats";
 import { t } from "../shared/i18n/core";
 import { ArchiveError, archiveEntryPath } from "./archive-guard.mjs";
+import { decodeLegacyName } from "./archive-names.mjs";
 import { ByteReader, writeChunk, type ArchiveLimits } from "./archive-common";
 import { TAR_BLOCK_SIZE, extractTar, looksLikeTar } from "./tar-reader";
 import { extractWithLibarchive } from "./libarchive-reader";
@@ -89,26 +90,6 @@ async function scanZipDirectory(path: string): Promise<ZipDirectoryScan> {
 }
 
 /**
- * Recover the real name of a zip entry written without the UTF-8 flag. fflate
- * returns those as Latin-1, so each character is one original byte. Many tools
- * (Info-ZIP on Linux, Python) write UTF-8 without the flag; Korean Windows
- * Explorer writes CP949. UTF-8 is tried first because it is strict — a CP949
- * name is almost never valid UTF-8 — and a name that is neither stays as read.
- */
-function decodeLegacyZipName(name: string): string {
-	if (!/[\u0080-\u00ff]/.test(name) || /[^\u0000-\u00ff]/.test(name)) return name;
-	const bytes = Buffer.from(name, "latin1");
-	for (const label of ["utf-8", "euc-kr"]) {
-		try {
-			return new TextDecoder(label, { fatal: true }).decode(bytes);
-		} catch {
-			// Not this encoding; try the next.
-		}
-	}
-	return name;
-}
-
-/**
  * Stream a zip into `destDir`. Entries write as they complete, so peak memory
  * tracks the largest member; an entry escaping `destDir` (zip-slip) or a name
  * with a NUL/absolute path sinks the whole extraction.
@@ -136,7 +117,7 @@ async function readZip(source: string, destDir: string, limits: ArchiveLimits): 
 	const unzipper = new Unzip((file) => {
 		entries += 1;
 		if (failure === null && entries > limits.maxEntries) failure = new ArchiveError(t("main.archive.tooManyEntries"));
-		const target = resolveEntry(scan.legacyNames.has(file.name) ? decodeLegacyZipName(file.name) : file.name);
+		const target = resolveEntry(scan.legacyNames.has(file.name) ? decodeLegacyName(file.name) : file.name);
 		if (target === null || target.directory) {
 			if (target !== null) writes.push(mkdir(target.path, { recursive: true }).then(() => undefined));
 			file.ondata = () => {};

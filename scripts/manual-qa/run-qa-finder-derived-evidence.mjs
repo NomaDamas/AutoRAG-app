@@ -141,7 +141,7 @@ await select(2);
 text = await evidenceText();
 check("a datasource chunk is headed by datasource and instance", (await title()) === "2. kakao · work", await title());
 check("the opaque chunk id is not the heading", !(await title()).includes("msg-91"), await title());
-check("the cited sentence is shown as the summary", text.includes("재무팀이 7월 리뷰에서 정책을 확인했습니다"), text.replace(/\s+/g, " ").slice(0, 140));
+check("the cited sentence of the answer is not repeated in the panel", !text.includes("재무팀이 7월 리뷰에서 정책을 확인했습니다") && text.includes("7월 리뷰에서 정책 확인했습니다"), text.replace(/\s+/g, " ").slice(0, 140));
 check("no relevance line for the datasource chunk either", !text.includes("Relevance"), "absent");
 await page.screenshot({ path: join(EVIDENCE, "2-datasource-chunk.png") });
 

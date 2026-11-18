@@ -1,15 +1,11 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import {
-	EverythingClient,
-	buildFSearchSearchArgs,
-	parseFSearchJsonLines,
-	type EverythingSearchRequest,
-} from "@autorag/librarian";
+import type { EverythingSearchRequest } from "@autorag/librarian";
 import { RECENTS_PATH, type FsLocation } from "../shared/fs-contract";
-import { launchTiedToParent } from "./tied-launch";
 
 /**
  * Fast filename search for the Finder, routed through a platform index instead
@@ -93,10 +89,108 @@ export interface FileNameSearchDeps {
 const DEFAULT_TIMEOUT_MS = 30_000;
 const STARTUP_TIMEOUT_MS = 10_000;
 const PROBE_TIMEOUT_MS = 5_000;
+const FAST_XDG_PROBE_TIMEOUT_MS = 250;
 const POLL_INTERVAL_MS = 250;
 const SEARCH_MAX_RESULTS = 200;
+const FSEARCH_CANDIDATE_CAP = 1_000;
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
+interface FsearchTarget {
+	readonly dbPath: string;
+	readonly socketPath: string;
+}
+
+/**
+ * Short, stable daemon socket path for an AutoRAG workspace database — matches
+ * `FSearchClient.fsearchSocketPath` in `@autorag/librarian` so we connect to the
+ * live watch daemon Dazzi's index refresh already keeps running.
+ */
+function fsearchWorkspaceSocketPath(dbPath: string): string {
+	let canonical: string;
+	try {
+		canonical = realpathSync(dbPath);
+	} catch {
+		canonical = resolve(dbPath);
+	}
+	const hash = createHash("sha256").update(canonical).digest("hex").slice(0, 12);
+	return `/tmp/autorag-fsearch-${process.getuid?.() ?? 0}-${hash}.sock`;
+}
+
+function buildFSearchArgs(
+	dbPath: string,
+	socketPath: string,
+	request: { readonly query: string; readonly maxResults: number; readonly path?: string },
+): string[] {
+	const limit = request.path !== undefined ? FSEARCH_CANDIDATE_CAP : Math.min(request.maxResults, FSEARCH_CANDIDATE_CAP);
+	return ["search", "--db", dbPath, "--socket", socketPath, "--json", "-r", "--limit", String(limit), "--", request.query];
+}
+
+function parseFSearchPaths(stdout: string): string[] {
+	const paths: string[] = [];
+	for (const line of stdout.split("\n")) {
+		const text = line.trim();
+		if (text.length === 0) continue;
+		const record = JSON.parse(text) as { done?: unknown; path?: unknown };
+		if (record.done === true) continue;
+		paths.push(String(record.path ?? ""));
+	}
+	return paths;
+}
+
+function userHomeDir(env: NodeJS.ProcessEnv): string {
+	const candidate = env.HOME ?? env.USERPROFILE;
+	return candidate && isAbsolute(candidate) ? candidate : homedir();
+}
+
+function expandConfiguredPath(raw: string, baseDir: string, home: string): string {
+	if (raw === "~") return home;
+	if (raw.startsWith("~/") || raw.startsWith("~\\")) return join(home, raw.slice(2));
+	return isAbsolute(raw) ? raw : resolve(baseDir, raw);
+}
+
+function workspaceFsearchTarget(env: NodeJS.ProcessEnv): FsearchTarget | undefined {
+	const home = userHomeDir(env);
+	const autoragHome = env.AUTORAG_HOME?.trim() ? resolve(env.AUTORAG_HOME.trim()) : join(home, ".autorag");
+	const configPath = env.AUTORAG_CONFIG?.trim() || join(autoragHome, "config.json");
+	let workspacePath = env.AUTORAG_WORKSPACE?.trim() ? resolve(env.AUTORAG_WORKSPACE.trim()) : undefined;
+	if (workspacePath === undefined && existsSync(configPath)) {
+		try {
+			const raw = JSON.parse(readFileSync(configPath, "utf8")) as { workspacePath?: unknown };
+			if (typeof raw.workspacePath === "string" && raw.workspacePath.trim().length > 0) {
+				workspacePath = expandConfiguredPath(raw.workspacePath.trim(), dirname(resolve(configPath)), home);
+			}
+		} catch {
+			// Malformed config → skip workspace fallback.
+		}
+	}
+	workspacePath ??= join(autoragHome, "workspace");
+	const dbPath = join(workspacePath, ".autorag", "fsearch", "fsearch.db");
+	if (!existsSync(dbPath)) return undefined;
+	return { dbPath, socketPath: fsearchWorkspaceSocketPath(dbPath) };
+}
+
+function xdgFsearchTarget(env: NodeJS.ProcessEnv): FsearchTarget | undefined {
+	const home = userHomeDir(env);
+	const xdgData = env.XDG_DATA_HOME?.trim() ? resolve(env.XDG_DATA_HOME.trim()) : join(home, ".local", "share");
+	const dbPath = join(xdgData, "fsearch", "fsearch.db");
+	if (!existsSync(dbPath)) return undefined;
+	return { dbPath, socketPath: `${dbPath}.sock` };
+}
+
+function parseStatsDb(stdout: string): { readonly db?: string; readonly live: boolean; readonly empty: boolean } | undefined {
+	try {
+		const parsed = JSON.parse(stdout.trim()) as { db?: unknown; live?: unknown; files?: unknown; folders?: unknown };
+		const files = typeof parsed.files === "number" ? parsed.files : undefined;
+		const folders = typeof parsed.folders === "number" ? parsed.folders : undefined;
+		return {
+			...(typeof parsed.db === "string" && parsed.db.length > 0 ? { db: parsed.db } : {}),
+			live: parsed.live === true,
+			empty: files !== undefined && folders !== undefined && files + folders === 0,
+		};
+	} catch {
+		return undefined;
+	}
+}
 /**
  * `fsearch-cli` on the login PATH; a Finder-launched app inherits a minimal
  * PATH, so the Homebrew/Linux install locations are probed too.
@@ -154,6 +248,7 @@ export function createFileNameSearch(deps: FileNameSearchDeps): FileNameSearchBa
 }
 
 function createFsearchBackend(deps: FileNameSearchDeps, warn: (message: string) => void): FileNameSearchBackend {
+	const env = deps.env ?? process.env;
 	const run = deps.run ?? runProcess;
 	const launch = deps.launch ?? launchDetached;
 	const isAlive = deps.isProcessAlive ?? defaultIsProcessAlive;
@@ -161,8 +256,9 @@ function createFsearchBackend(deps: FileNameSearchDeps, warn: (message: string) 
 	const pidPath = join(deps.userDataDir, "fsearch", "watch.pid");
 	let binary: string | undefined;
 	let binaryResolved = false;
-	let database: string | undefined;
-	let databaseResolved = false;
+	let target: FsearchTarget | undefined;
+	let targetResolved = false;
+	let targetInFlight: Promise<FsearchTarget | undefined> | undefined;
 	let spawnedPid: number | undefined;
 
 	async function resolveBinary(): Promise<string | undefined> {
@@ -178,55 +274,68 @@ function createFsearchBackend(deps: FileNameSearchDeps, warn: (message: string) 
 		return undefined;
 	}
 
-	/** The `fsearch-cli` default database, reported by `stats`; undefined when none exists. */
-	async function resolveDatabase(binaryPath: string): Promise<string | undefined> {
-		if (databaseResolved) return database;
-		databaseResolved = true;
-		const stats = await run(binaryPath, ["stats"], PROBE_TIMEOUT_MS * 2);
-		if (stats.code !== 0) return undefined;
-		try {
-			const parsed: unknown = JSON.parse(stats.stdout.trim());
-			const path = (parsed as { db?: unknown }).db;
-			if (typeof path === "string" && path.length > 0) database = path;
-		} catch {
-			// Non-JSON stats → no database to search.
-		}
-		return database;
+	/**
+	 * Resolve a populated `fsearch` database + socket once:
+	 * 1. Probe the user's XDG default database first (passing `--socket` when the file exists on disk so a live
+	 *    daemon answers in ~30 ms instead of cold-loading a multi-hundred-MB index from disk).
+	 * 2. When no XDG database exists, or when it is empty/wedged while Dazzi's own workspace index exists,
+	 *    fall over to `<workspacePath>/.autorag/fsearch/fsearch.db` and its short `/tmp` socket.
+	 */
+	function resolveTarget(binaryPath: string): Promise<FsearchTarget | undefined> {
+		if (targetResolved) return Promise.resolve(target);
+		targetInFlight ??= (async () => {
+			const workspace = workspaceFsearchTarget(env);
+			const xdg = xdgFsearchTarget(env);
+			const xdgTimeout = workspace !== undefined ? FAST_XDG_PROBE_TIMEOUT_MS : PROBE_TIMEOUT_MS * 2;
+			const xdgArgs = xdg !== undefined ? ["stats", "--db", xdg.dbPath, "--socket", xdg.socketPath] : ["stats"];
+			const xdgStats = await run(binaryPath, xdgArgs, xdgTimeout);
+			if (xdgStats.code === 0) {
+				const parsed = parseStatsDb(xdgStats.stdout);
+				const dbPath = parsed?.db ?? xdg?.dbPath;
+				if (parsed !== undefined && dbPath !== undefined && (!parsed.empty || workspace === undefined)) {
+					target = { dbPath, socketPath: `${dbPath}.sock` };
+					targetResolved = true;
+					return target;
+				}
+			}
+			if (workspace !== undefined) {
+				const wsStats = await run(binaryPath, ["stats", "--db", workspace.dbPath, "--socket", workspace.socketPath], PROBE_TIMEOUT_MS * 2);
+				const parsed = wsStats.code === 0 ? parseStatsDb(wsStats.stdout) : undefined;
+				if (parsed !== undefined && !parsed.empty) {
+					target = workspace;
+					targetResolved = true;
+					return target;
+				}
+			}
+			targetResolved = true;
+			return undefined;
+		})().finally(() => {
+			targetInFlight = undefined;
+		});
+		return targetInFlight;
 	}
 
-	function socketFor(dbPath: string): string {
-		return `${dbPath}.sock`;
-	}
-
-	async function isLive(binaryPath: string, dbPath: string): Promise<boolean> {
-		const stats = await run(binaryPath, ["stats", "--db", dbPath, "--socket", socketFor(dbPath)], PROBE_TIMEOUT_MS * 2);
+	async function isLive(binaryPath: string, current: FsearchTarget): Promise<boolean> {
+		const stats = await run(binaryPath, ["stats", "--db", current.dbPath, "--socket", current.socketPath], PROBE_TIMEOUT_MS * 2);
 		if (stats.code !== 0) return false;
-		try {
-			return (JSON.parse(stats.stdout.trim()) as { live?: unknown }).live === true;
-		} catch {
-			return false;
-		}
+		return parseStatsDb(stats.stdout)?.live === true;
 	}
 
 	return {
 		async search(query, scope) {
 			const binaryPath = await resolveBinary();
 			if (binaryPath === undefined) return null;
-			const dbPath = await resolveDatabase(binaryPath);
-			if (dbPath === undefined) return null;
-			const request = {
+			const current = await resolveTarget(binaryPath);
+			if (current === undefined) return null;
+			const args = buildFSearchArgs(current.dbPath, current.socketPath, {
 				query: fsearchRegexQuery(query),
-				regex: true,
 				maxResults: SEARCH_MAX_RESULTS,
 				...(scope === undefined ? {} : { path: scope }),
-			};
-			const args = buildFSearchSearchArgs(dbPath, socketFor(dbPath), request);
+			});
 			const result = await run(binaryPath, args, DEFAULT_TIMEOUT_MS);
 			if (result.code !== 0) return null;
 			try {
-				const paths = parseFSearchJsonLines(result.stdout).entries.map((entry) => entry.path);
-				// `buildFSearchSearchArgs` does not restrict by path itself: fsearch-cli
-				// returns up to the cap and the caller narrows to the scope subtree.
+				const paths = parseFSearchPaths(result.stdout);
 				const scoped =
 					scope === undefined ? paths : paths.filter((path) => path === scope || path.startsWith(`${scope}/`));
 				return scoped.slice(0, SEARCH_MAX_RESULTS);
@@ -238,21 +347,21 @@ function createFsearchBackend(deps: FileNameSearchDeps, warn: (message: string) 
 			try {
 				const binaryPath = await resolveBinary();
 				if (binaryPath === undefined) return;
-				const dbPath = await resolveDatabase(binaryPath);
-				if (dbPath === undefined) return;
-				if (await isLive(binaryPath, dbPath)) return;
+				const current = await resolveTarget(binaryPath);
+				if (current === undefined) return;
+				if (await isLive(binaryPath, current)) return;
 				// A tracked daemon that is still rescanning is not `live` yet;
 				// spawning another would only lose the socket race, so adopt it.
 				const tracked = readPid(pidPath);
 				if (tracked !== undefined && isAlive(tracked)) return;
-				const pid = launch(binaryPath, ["watch", "--db", dbPath, "--socket", socketFor(dbPath), "--quiet"]);
+				const pid = launch(binaryPath, ["watch", "--db", current.dbPath, "--socket", current.socketPath, "--quiet"]);
 				if (pid === undefined) return;
 				spawnedPid = pid;
 				mkdirSync(join(deps.userDataDir, "fsearch"), { recursive: true });
 				writeFileSync(pidPath, String(pid));
 				const deadline = Date.now() + STARTUP_TIMEOUT_MS;
 				while (Date.now() < deadline) {
-					if (await isLive(binaryPath, dbPath)) return;
+					if (await isLive(binaryPath, current)) return;
 					await sleep(POLL_INTERVAL_MS);
 				}
 			} catch (error) {
@@ -281,11 +390,10 @@ function createEverythingBackend(deps: FileNameSearchDeps, warn: (message: strin
 			const folders = (await deps.locations())
 				.filter((location) => location.scanned && location.available && location.path !== RECENTS_PATH)
 				.map((location) => location.path);
-			// The librarian launches the daemon detached by default; tied to this process it cannot outlive a force-kill.
-			client = (deps.everythingFactory ?? ((options) => new EverythingClient({ ...options, launch: launchTiedToParent })))({
-				root: deps.userDataDir,
-				folders,
-			});
+			if (deps.everythingFactory === undefined) {
+				throw new Error("everythingFactory is required on win32");
+			}
+			client = deps.everythingFactory({ root: deps.userDataDir, folders });
 		}
 		return client;
 	}

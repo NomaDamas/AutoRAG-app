@@ -10,11 +10,13 @@ config, and the `AutoRAGAgent`/`AutoRAGLite` classes keep their identifiers.
 Do not rename those backend identifiers, and do not introduce a third product
 name on a user-facing surface.
 
-The logo is the sunflower-with-sunglasses mark. `build/` holds the app icon set
+The logo is the sunflower-with-sunglasses mark on a glass tile. `build/` holds the app icon set
 (`icon.icns`, `icon.ico`, `icon.png`, `icons/<size>.png`) and
 `src/renderer/src/assets/dazzi-logo.png` is the transparent mark the renderer
-draws; regenerate all of them from one transparent master rather than editing
-one in isolation. The macOS app icon is the Icon Composer bundle `build/icon.icon`
+draws; regenerate all of them from the two transparent masters
+(`build/icon.png`: the glass tile; `build/brand/dazzi-mark.png`: the sunflower alone) with
+`node scripts/brand/make-brand-assets.mjs`, then `node scripts/brand/make-mac-icon.mjs`, rather than editing
+one in isolation (`test/brand-assets.test.ts` fails when a derived file disagrees with the masters). The macOS app icon is the Icon Composer bundle `build/icon.icon`
 (`node scripts/brand/make-mac-icon.mjs` rebuilds it from `icon.png`; compiling it needs Xcode 26+).
 macOS 26 draws a legacy `icon.icns` shrunk inside a grey plate, so never point
 `mac.icon` back at the `.icns`.
@@ -43,13 +45,22 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the
-app needs, a full commit SHA (now a commit SHA on top of v2.13.4: the librarian on MinSync 0.6.0, where SPLADE sparse retrieval
-replaces BM25 and Kiwi is gone, `minSync.embedder.id: "none"` builds a sparse-only index the app uses for keyword-only mode, and
-a `minsync` older than 0.6.0 is refused; it also brings the required decision model (`jev` can no longer be `false`; tests pass
-`test/baseline-jev.ts`), opt-in reranking, and the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings
-cards still show here as unsupported. v2.13.3 holds the Dazzi context-overflow retry to half the failed request; v2.13.2 is
-MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
+by config resolution and applied by the refresh walk (the app reads it the same way, `src/main/path-exclusion.ts`); with a reranker the
+baseline search shows it the union of MinSync's dense and SPLADE candidates; the MCP server adds `autorag.convert`/`.formats` and caps repeated
+diagnostics; `AUTORAG_AUTH_MODE=environment` makes model resolution ignore stored credentials. v2.13.8:
+`refresh.schedule` limits background indexing to AC power, local time windows, and weekdays (`checkIndexSchedule` from
+`@autorag/librarian/core` is the gate for a host with its own scheduler, such as the app's OS job); the agent's exact `calculator` tool; the
+record cut that spreads search hits across documents, on by default (`limits.recordCut`). v2.13.7:
+MinSync 0.7.1 or newer is required and a `minsync` older than that is refused, dupey 0.2.0 or newer is required, and the refresh syncs MinSync
+alongside parsing, so the progress screens show both stages running at once; a sync that fails leaves one warning per file, which the app
+folds into one counted `minsync-batch-skipped`. Beneath it: SPLADE sparse retrieval on MinSync 0.6.0, where `minSync.embedder.id: "none"` builds a
+sparse-only index the app uses for keyword-only mode; the required decision model (`jev` can no longer be `false`, `jev.enabled` and
+`jev.backend: "vercel"` are refused: it is Jev or the small chat model, `jev.backend: "sllm"` with `jev.sllm.model`, which the app's Jev role picker offers and
+`createDefaultAgentFactory` resolves, and `src/main/jev-migration.ts` rewrites the old values; tests pass `test/baseline-jev.ts`); opt-in
+reranking; the removal of the Spotlight and rclone `cloud-drive` datasources, whose settings cards still show here as unsupported, and which
+the librarian now skips with a `retired-datasource-skill` warning. v2.13.3 holds the Dazzi context-overflow retry to half the failed
+request; v2.13.2 is MinSync durable stages, `mailcrawl` 0.3.0 `--source files`, pi 1.4.0, and Discord attachment downloads; v2.13.0 is hybrid-first
 retrieval on top of v2.12.0's file-change approval gate with its `ask`/`auto`/`full` modes, the `ask_user` tool and
 `convert_files`, and 2.11.1's file automations, `@autorag/librarian/profiles` and the helper-agent factory). It is
 raised deliberately with the alignment changes a new librarian release needs. The staging directory holds only what the librarian

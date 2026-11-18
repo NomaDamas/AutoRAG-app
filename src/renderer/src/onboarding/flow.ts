@@ -13,12 +13,12 @@ import { isPaidPlanId, planCovers } from "../../../shared/account-contract";
 import type {
 	EmbedMode,
 	FolderScan,
-	IndexingPhase,
 	OnboardingStepId,
 	PlanId,
 	SourceFacts,
 	SourceId,
 } from "../../../shared/onboarding-contract";
+import { indexStagesFor, type IndexStageId } from "../../../shared/index-progress-contract";
 import type { LocalSpecVerdict } from "../../../shared/local-embedding-spec";
 import { CLOUD_FILES_PER_MINUTE, LOCAL_FILES_PER_MINUTE, NONE_FILES_PER_MINUTE, NONE_MIN_MINUTES } from "../../../shared/onboarding-contract";
 import { datasourceSupported } from "../../../shared/messenger-platform";
@@ -31,21 +31,26 @@ export type Translate = (key: string, options?: Record<string, unknown>) => stri
  * The prototype's `flow()`: cloud embedding puts the plan step right after
  * embedding; the keyword-only and local modes put it after the sources step.
  * A confirmed plan (or an already active Air/Pro subscription) drops out of the
- * list, and the model and role steps only exist for BYOK.
+ * list, and the model step only exists for BYOK.
  *
  * The smart scan runs on the agent's model, so a user who chose BYOK on the
  * account step (not signed in) connects that model right after it, before any
  * folder is scanned. A signed-in user who only picks BYOK on the plan step has
- * already scanned with the account's model; theirs comes after the plan. Someone
- * who brings their own key and skips the Dazzi plan also picks the reranker and
- * Jev, which the plan would otherwise provide, right before the first index.
+ * already scanned with the account's model; theirs comes after the plan. The
+ * model step also picks the helper roles (question splitting, Jev, reranking)
+ * the Dazzi plan would otherwise provide. A finished detection that found no
+ * source leaves nothing to ask, so the sources step drops out too.
+ *
+ * There is no folder or permission step: the scan looks through every detected
+ * folder and proposes which to index, and the scope step is where the user reviews it.
  */
-export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean): OnboardingStepId[] {
+export function buildFlow(plan: PlanId, planConfirmed: boolean, embed: EmbedMode, signedIn: boolean, noSources = false): OnboardingStepId[] {
 	const mid: OnboardingStepId[] = embed === "cloud" ? ["plan", "sources"] : ["sources", "plan"];
 	const modelFirst = plan === "byok" && !signedIn;
-	const tail: OnboardingStepId[] = plan !== "byok" ? ["indexing"] : modelFirst ? ["roles", "indexing"] : ["model", "roles", "indexing"];
-	const head: OnboardingStepId[] = ["welcome", "permissions", "account", ...(modelFirst ? (["model"] as const) : []), "folders", "smartScan", "smartScope", "embedding"];
-	return head.concat(planConfirmed ? mid.filter((id) => id !== "plan") : mid).concat(tail);
+	const tail: OnboardingStepId[] = plan !== "byok" || modelFirst ? ["indexing"] : ["model", "indexing"];
+	const head: OnboardingStepId[] = ["welcome", "account", ...(modelFirst ? (["model"] as const) : []), "smartScan", "smartScope", "embedding"];
+	const middle = mid.filter((id) => !(planConfirmed && id === "plan") && !(noSources && id === "sources"));
+	return head.concat(middle).concat(tail);
 }
 
 export function stepIndex(flow: readonly OnboardingStepId[], stepId: OnboardingStepId): number {
@@ -129,7 +134,7 @@ export function canAdvance(state: AdvanceState): boolean {
 			if (isPaidPlanId(state.plan) && !state.promoValid) return false;
 			return state.signedIn || state.plan === "byok";
 		case "smartScan":
-			// The folders were chosen in the step before; the next screen is where the AI's proposals are reviewed.
+			// The next screen is where the AI's proposals are reviewed.
 			return !state.smartScanning;
 		case "folders":
 		case "smartScope":
@@ -162,7 +167,10 @@ export function primaryLabelKey(stepId: OnboardingStepId, plan: PlanId, held: bo
 	if (stepId !== "plan") {
 		return `onboarding.stepLabel.${stepId}`;
 	}
-	if (held || plan === "free" || plan === "byok") {
+	if (plan === "free") {
+		return "onboarding.plan.startFree";
+	}
+	if (held || plan === "byok") {
 		return "onboarding.plan.continue";
 	}
 	return plan === "pro" ? "onboarding.plan.checkoutPro" : plan === "max" ? "onboarding.plan.checkoutMax" : "onboarding.plan.checkoutAir";
@@ -373,17 +381,11 @@ export function bySourceOrder(a: { readonly id: SourceId }, b: { readonly id: So
 }
 
 /**
- * The indexing phase strip for a run. The embedding phase only exists when
- * something is embedded, so the keyword-only path goes straight from reading
- * documents to finalizing.
+ * The stage strip for a run: discover, parse, embed, finalize. When nothing is embedded (keyword-only) MinSync still
+ * runs, so its stage stays in third place under the name of the keyword index.
  */
-export function indexingPhases(embed: EmbedMode): readonly IndexingPhase[] {
-	return embed === "none" ? ["parsed", "finalizing"] : ["parsed", "minsync", "finalizing"];
-}
-
-/** Phase → position in that run's strip. */
-export function phaseIndex(embed: EmbedMode, phase: IndexingPhase): number {
-	return Math.max(0, indexingPhases(embed).indexOf(phase));
+export function indexingStages(embed: EmbedMode): readonly IndexStageId[] {
+	return indexStagesFor(embed !== "none");
 }
 
 export type TipArt =

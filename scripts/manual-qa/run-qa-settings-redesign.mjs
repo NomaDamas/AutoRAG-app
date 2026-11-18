@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchFinder, finderWindow } from "./launch-finder.mjs";
 import { chord, isolatedToolPath, rmRetry } from "./platform.mjs";
+import { pickSelect, selectField } from "./settings-select.mjs";
 
 // Redesigned Settings (docs/prototypes/settings) against the real app:
 // prototype IA + search, real Pi provider catalog and /login session, role
@@ -170,8 +171,9 @@ try {
 	check("rerank choice writes rerank block", Boolean(await waitFor(() => typeof readConfig().rerank?.model === "string" && /rerank/u.test(readConfig().rerank.model))), JSON.stringify(readConfig().rerank));
 
 	await page.locator('[data-role="jev"]').click();
-	await page.locator(".settings-menu .settings-menu-item", { hasText: "Disabled" }).click();
-	check("jev off writes jev:false", Boolean(await waitFor(() => readConfig().jev === false)));
+	const jevDisabled = await page.locator(".settings-menu .settings-menu-item", { hasText: "Disabled" }).count();
+	check("jev picker keeps the required model enabled", jevDisabled === 0 && readConfig().jev !== false, JSON.stringify({ disabledOptions: jevDisabled, jev: readConfig().jev }));
+	await page.keyboard.press("Escape");
 
 	// Real /login session: API-key login for an unconfigured provider prompts for the key.
 	await page.locator(".settings-add-row").click();
@@ -237,7 +239,7 @@ try {
 	// --- Datasource detail writes ----------------------------------------
 	await page.locator('.settings-nav-item--source[data-source-alias="slack"]').click();
 	await page.waitForSelector('.settings-source[data-source-id="slack"]');
-	await page.locator('select[aria-label="Refresh interval"]').selectOption({ label: "1 hour" });
+	await pickSelect(page.locator(selectField("Refresh interval")), { label: "1 hour" });
 	check("polling interval writes pollingIntervalMs", Boolean(await waitFor(() => readConfig().datasources.slack.pollingIntervalMs === 3_600_000)));
 	await page.locator('.settings-source[data-source-id="slack"] [role="switch"][aria-label="Enabled"]').click();
 	check("enable toggle writes enabled:false", Boolean(await waitFor(() => readConfig().datasources.slack.enabled === false)));
@@ -259,9 +261,14 @@ try {
 	await page.locator('.linear-row:has-text("exact duplicate") [role="switch"]').click();
 	check("duplicates toggle writes excludeExactDuplicates", Boolean(await waitFor(() => readConfig().excludeExactDuplicates === false)));
 	await nav("Search Scope");
+	// "Add folder" opens the system folder dialog, which is the OS's: answer it as a person picking this folder would.
+	const picked = join(workspace, "extra");
+	mkdirSync(picked, { recursive: true });
+	await app.evaluate(({ dialog }, paths) => {
+		dialog.showOpenDialog = async () => ({ canceled: false, filePaths: paths });
+	}, [picked]);
 	await page.locator("button", { hasText: "Add folder" }).click();
-	await page.locator(".settings-modal input").fill(join(workspace, "docs"));
-	await page.locator(".settings-modal .settings-btn-primary").click();
+	check("a folder picked in the system dialog is written to searchPaths", Boolean(await waitFor(() => readConfig().searchPaths?.includes(picked))), JSON.stringify(readConfig().searchPaths));
 	await page.screenshot({ path: join(EVIDENCE, "08-scope.png") });
 
 	// Account/plan are UI-only: no fabricated account data.

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import { mkdir, readdir, rename, rm, stat, utimes } from "node:fs/promises";
 import { join } from "node:path";
@@ -37,9 +37,76 @@ const PROBE_TIMEOUT_MS = 10_000;
 const DEFAULT_MAX_BYTES = 4 * 1024 ** 3;
 const PART_SUFFIX = ".part";
 const COPY_SUFFIX = ".mp4";
+/** How long the polite request (SIGTERM) gets before the process tree is killed outright. */
+const KILL_GRACE_MS = 3000;
+/** How many times, and how far apart, a partial output Windows still refuses to release is retried. */
+const REMOVE_ATTEMPTS = 25;
+const REMOVE_RETRY_MS = 100;
+/** The errno Windows hands back while a gone writer's handle is still being torn down. */
+const HELD_CODES: readonly string[] = ["EPERM", "EBUSY"];
 
 function isEnoent(error: unknown): boolean {
 	return typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT";
+}
+
+/** True for the error Windows answers a removal with while a gone writer's handle is still being torn down. */
+function isHeld(error: unknown): boolean {
+	if (typeof error !== "object" || error === null || !("code" in error)) return false;
+	return typeof error.code === "string" && HELD_CODES.indexOf(error.code) >= 0;
+}
+
+/**
+ * Ends the program this app started and everything it started. The program is not always the one writing the
+ * partial output: a launcher (a shim on the Windows `PATH`) runs the real ffmpeg as its own child, and that
+ * child holds the file. `taskkill /t` on Windows and the program's own process group elsewhere end both.
+ */
+async function killTree(child: ChildProcess, signal: "SIGTERM" | "SIGKILL"): Promise<void> {
+	const pid = child.pid;
+	if (pid === undefined) return;
+	if (process.platform === "win32") {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });
+		killer.once("error", () => {
+			try {
+				child.kill(signal);
+			} catch {
+				// Already exited.
+			}
+			resolve();
+		});
+		killer.once("close", () => resolve());
+		await promise;
+		return;
+	}
+	try {
+		process.kill(-pid, signal);
+	} catch {
+		// The group is already gone, or the program never became its leader.
+		try {
+			child.kill(signal);
+		} catch {
+			// Already exited.
+		}
+	}
+}
+
+/**
+ * Deletes one partial output. Its writer has exited by now, but Windows can still refuse the removal for a
+ * moment while that writer's handle is torn down, so only that refusal is retried; anything else is thrown as
+ * it is. A `.part` the retries could not take is thrown too, and the next run's sweep clears it.
+ */
+async function removePartial(path: string): Promise<void> {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			await rm(path, { force: true });
+			return;
+		} catch (error) {
+			if (attempt >= REMOVE_ATTEMPTS || !isHeld(error)) throw error;
+			const { promise, resolve } = Promise.withResolvers<void>();
+			setTimeout(resolve, REMOVE_RETRY_MS);
+			await promise;
+		}
+	}
 }
 
 function encodeArgs(source: string, target: string, encode: PlaybackEncode): string[] {
@@ -72,9 +139,27 @@ function encodeArgs(source: string, target: string, encode: PlaybackEncode): str
 /** Runs one ffmpeg rewrite; true when it exited cleanly and was not aborted. */
 function runEncode(command: string, args: readonly string[], durationSeconds: number | null, signal: AbortSignal | undefined, onFraction: (fraction: number) => void): Promise<boolean> {
 	const { promise, resolve } = Promise.withResolvers<boolean>();
-	const child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"], windowsHide: true });
+	// The run leads its own process group, so one abort can end the program and whatever it started.
+	const child = spawn(command, args, { stdio: ["ignore", "pipe", "ignore"], detached: process.platform !== "win32", windowsHide: true });
+	let escalation: NodeJS.Timeout | undefined;
+	let termination: Promise<void> | null = null;
+	let settled = false;
 	const stop = (): void => {
-		child.kill("SIGTERM");
+		termination ??= killTree(child, "SIGTERM");
+		// A program that ignores the polite request must not outlive the request that stopped it.
+		escalation ??= setTimeout(() => {
+			void killTree(child, "SIGKILL");
+		}, KILL_GRACE_MS);
+	};
+	const settle = (clean: boolean): void => {
+		if (settled) return;
+		settled = true;
+		clearTimeout(escalation);
+		void (async () => {
+			if (termination !== null) await termination;
+			signal?.removeEventListener("abort", stop);
+			resolve(clean);
+		})();
 	};
 	signal?.addEventListener("abort", stop, { once: true });
 	let pending = "";
@@ -89,11 +174,13 @@ function runEncode(command: string, args: readonly string[], durationSeconds: nu
 			onFraction(Math.min(1, Number(match[1]) / 1e6 / durationSeconds));
 		}
 	});
-	child.on("error", () => resolve(false));
-	child.on("close", (code) => {
-		signal?.removeEventListener("abort", stop);
-		resolve(code === 0 && signal?.aborted !== true);
+	// A program that cannot be started has no process to wait for; a running one is settled by `close`, which
+	// comes after it exited and after an abort's tree kill completed, so the caller never deletes the partial
+	// output while its writer still holds it.
+	child.on("error", () => {
+		if (child.pid === undefined) settle(false);
 	});
+	child.on("close", (code) => settle(code === 0 && signal?.aborted !== true));
 	if (signal?.aborted === true) stop();
 	return promise;
 }
@@ -130,7 +217,7 @@ export function createVideoPlayback(deps: VideoPlaybackDeps): VideoPlayback {
 		ready ??= (async () => {
 			await mkdir(deps.dir, { recursive: true });
 			for (const name of await readdir(deps.dir)) {
-				if (name.endsWith(PART_SUFFIX)) await rm(join(deps.dir, name), { force: true });
+				if (name.endsWith(PART_SUFFIX)) await removePartial(join(deps.dir, name));
 			}
 		})();
 		return ready;
@@ -180,7 +267,7 @@ export function createVideoPlayback(deps: VideoPlaybackDeps): VideoPlayback {
 			if (done || signal?.aborted) break;
 		}
 		if (!done) {
-			await rm(part, { force: true });
+			await removePartial(part);
 			return native;
 		}
 		await rename(part, target);

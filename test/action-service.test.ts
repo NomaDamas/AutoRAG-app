@@ -252,6 +252,40 @@ describe("archive round-trip", () => {
 		expect(second.output).toBe(join(root, "Archive 2.7z"));
 	});
 
+	// V8 throws "Maximum call stack size exceeded" once a call receives about 125k spread arguments;
+	// a checkout with node_modules easily lists more entries than that.
+	it("compresses a folder with more entries than a call can take as arguments", { timeout: 180_000 }, async () => {
+		const { service } = makeService();
+		const source = join(root, "big");
+		const dirs = 130;
+		const perDir = 1000;
+		await Promise.all(
+			Array.from({ length: dirs }, async (_, d) => {
+				const dir = join(source, `d${d}`);
+				await mkdir(dir, { recursive: true });
+				for (let f = 0; f < perDir; f += 1) await writeFile(join(dir, `f${f}`), "x");
+			}),
+		);
+		const packed = await service.run([source], { kind: "compress", format: "7z" }, null);
+		// The shared afterEach hook has a short timeout; 130k files take longer than that to remove.
+		await rm(source, { recursive: true, force: true });
+		const archive = await readFile(packed.output ?? "");
+		const reader = new ArchiveReader(
+			await libarchiveWasm({ wasmBinary: await readFile(new URL("../src/main/vendor/libarchive.wasm", import.meta.url)) }),
+			new Int8Array(archive.buffer, archive.byteOffset, archive.byteLength),
+		);
+		let entries = 0;
+		let last = "";
+		for (const entry of reader.entries()) {
+			entries += 1;
+			last = entry.getPathname();
+		}
+		reader.free();
+		// The root, its directories, and every file.
+		expect(entries).toBe(1 + dirs + dirs * perDir);
+		expect(last).toBe("big/d99/f999");
+	});
+
 	it("names a single-file archive after the full file name", async () => {
 		const { service } = makeService();
 		const file = join(root, "note.txt");
@@ -992,6 +1026,46 @@ describe("reduceSize", () => {
 		await service.cancel("job-pdf");
 		await expect(running).rejects.toThrow(t("main.action.reduceCancelled", { name: "scan.pdf" }));
 		expect(await readdir(root)).toEqual(["scan.pdf"]);
+	});
+
+	it("reports compress progress for the job id, rising by whole percents to the end", async () => {
+		const progress: number[] = [];
+		const service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			onProgress: (event) => {
+				expect(event.id).toBe("job-zip");
+				progress.push(event.percent);
+			},
+			run: async () => ({ stdout: "", stderr: "" }),
+		});
+		const docs = join(root, "docs");
+		await mkdir(docs);
+		for (let i = 0; i < 8; i += 1) await writeFile(join(docs, `${i}.txt`), `line ${i}\n`.repeat(4000 * (i + 1)));
+		const outcome = await service.run([docs], { kind: "compress", format: "zip", id: "job-zip" }, null);
+		expect(Object.keys(unzipSync(new Uint8Array(await readFile(outcome.output ?? ""))))).toHaveLength(9);
+		// One event per file here; each later than the last, never reaching 100 before the outcome.
+		expect(progress).toHaveLength(8);
+		expect(progress).toEqual([...progress].sort((a, b) => a - b));
+		expect(new Set(progress).size).toBe(progress.length);
+		expect(progress.at(-1)).toBe(99);
+	});
+
+	it("cancels a running compress, removes the partial archive, and rejects as cancelled", async () => {
+		let service!: ActionService;
+		service = createActionService({
+			platform: "darwin",
+			applications: { pick: async () => null },
+			// Stop as soon as the first file is in: the write is mid-archive.
+			onProgress: () => void service.cancel("job-stop"),
+			run: async () => ({ stdout: "", stderr: "" }),
+		});
+		const docs = join(root, "docs");
+		await mkdir(docs);
+		for (let i = 0; i < 4; i += 1) await writeFile(join(docs, `${i}.txt`), "text\n".repeat(10_000));
+		const running = service.run([docs], { kind: "compress", format: "zip", id: "job-stop" }, null);
+		await expect(running).rejects.toThrow(t("main.action.compressCancelled", { name: "docs.zip" }));
+		expect(await readdir(root)).toEqual(["docs"]);
 	});
 
 	it("falls back to object-stream compaction when Filee left a digital PDF unshrunk", async () => {

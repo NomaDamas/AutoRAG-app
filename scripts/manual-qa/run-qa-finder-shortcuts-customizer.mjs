@@ -10,7 +10,7 @@
  *      makes `⌘P` focus the search box (while old `⌘F` stops doing so), and writes
  *      `<userData>/settings/settings-state.json` without touching AutoRAG `config.json`.
  *   3. Conflict detection + one-click swap (`rename` ↔ `duplicate`) and pointer-only
- *      UI editing (`[data-shortcut-ui-edit="rename"]` → `F2`), followed by pressing
+ *      UI editing (the keycaps `[data-shortcut-record="rename"]` open the inline recorder → `F2`), followed by pressing
  *      real `F2` on a file row in Finder to trigger inline rename!
  *   4. AI Shortcut Customizer modal (`[data-action="open-shortcut-customizer"]`)
  *      offers strictly `["get_shortcuts", "update_shortcuts"]` from the
@@ -205,7 +205,7 @@ try {
 	await shot("01-settings-shortcuts-default");
 
 	const groupIds = await page
-		.locator(".sidebar-sections-stack [data-shortcut-group]")
+		.locator(".shortcuts-page [data-shortcut-group]")
 		.evaluateAll((els) => els.map((e) => e.getAttribute("data-shortcut-group")));
 	check(
 		"All 4 shortcut groups render in order (window, view, files, aiSearch)",
@@ -217,14 +217,14 @@ try {
 		(await page.locator('[data-shortcut-row="dismiss"]').count()) === 1,
 	);
 
-	// 1b. Verify the 3 Quick Presets: Mac Finder, Windows 파일 탐색기, 기본값
+	// 1b. Verify 빠른 구성: the Mac Finder / Windows 파일 탐색기 segments and 모두 기본값으로 (Figma 445:2249)
 	const presetActions = await page
-		.locator(".sidebar-presets-bar .sidebar-preset-pill")
+		.locator("[data-shortcut-presets] button")
 		.evaluateAll((els) => els.map((e) => e.getAttribute("data-action")));
 	check(
-		"Quick Presets bar strictly shows Mac Finder, Windows 파일 탐색기, and 기본값",
-		JSON.stringify(presetActions) ===
-			JSON.stringify(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer", "shortcuts-preset-default"]),
+		"빠른 구성 shows the Mac Finder and Windows 파일 탐색기 segments, plus 모두 기본값으로",
+		JSON.stringify(presetActions) === JSON.stringify(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer"]) &&
+			(await page.locator('[data-action="shortcuts-preset-default"]').count()) === 1,
 		JSON.stringify(presetActions),
 	);
 
@@ -276,11 +276,11 @@ try {
 		updatedKeycap,
 	);
 
-	// Verify live shortcut dispatch: pressing Mod+P focuses the sidebar search input!
+	// Verify live shortcut dispatch: with Settings open (the Finder's search box is hidden), Mod+P focuses Settings' own search input.
 	await page.keyboard.press(chord("p"));
 	await page.waitForTimeout(150);
-	const searchInputFocused = await page.locator(".side-search input").evaluate((el) => document.activeElement === el);
-	check("Pressing newly recorded Mod+P focuses the live sidebar search input", searchInputFocused);
+	const searchInputFocused = await page.locator(".settings-search input").evaluate((el) => document.activeElement === el);
+	check("Pressing newly recorded Mod+P focuses Settings' search input while Settings is open", searchInputFocused);
 	// Blur search input so we continue cleanly
 	await page.locator("h1.linear-title", { hasText: "단축키" }).click();
 
@@ -293,20 +293,17 @@ try {
 	await page.locator('[data-action="swap-shortcut-conflict"]').click();
 	await page.waitForTimeout(250);
 
-	// Now use pointer-only UI editor to set `rename` to `F2`
-	await page.locator('[data-shortcut-ui-edit="rename"]').click();
-	await page.locator('[data-testid="shortcut-key-select"]').waitFor();
-	await shot("05-shortcut-ui-editor-open");
-	// Turn off Mod modifier and choose F2
-	await page.locator('[data-shortcut-mod="mod"]').click();
-	await page.locator('[data-testid="shortcut-key-select"]').selectOption("F2");
-	await page.locator('[data-action="save-ui-shortcut"]').click();
+	// Recording is keyboard-only: the keycaps wait for keys, and pressing F2 sets `rename` at once (no picker, no 저장).
+	await page.locator('[data-shortcut-record="rename"]').click();
+	await page.locator('[data-shortcut-record="rename"][aria-pressed="true"]').waitFor();
+	await shot("05-shortcut-recording");
+	await page.keyboard.press("F2");
 	await page.waitForTimeout(250);
 
 	const settingsFile = join(USER_DATA, "settings", "settings-state.json");
 	const persistedAfterUi = JSON.parse(readFileSync(settingsFile, "utf8"));
 	check(
-		"UI editor saves rename=F2 in settings-state.json while leaving AutoRAG config.json untouched",
+		"Pressing F2 saves rename=F2 in settings-state.json while leaving AutoRAG config.json untouched",
 		existsSync(settingsFile) &&
 			persistedAfterUi.settings.shortcuts.overrides.rename === "F2" &&
 			persistedAfterUi.settings.shortcuts.overrides.focusSearch === "Mod+P" &&
@@ -315,6 +312,8 @@ try {
 	);
 
 	// Navigate to Documents in Finder, select report.txt, and press real F2 to prove live rename dispatch!
+	// Settings takes over the window; its Back button returns to the Finder and its sidebar.
+	await page.locator(".settings-sidebar-back").click();
 	await page.locator(".sidebar .sidebar__item", { hasText: "문서" }).click();
 	const reportRow = page.locator('[data-path$="report.txt"]').first();
 	await reportRow.waitFor();
@@ -325,13 +324,12 @@ try {
 	check("Pressing customized F2 in Finder opens inline rename on the selected file", renameInputCount >= 1, `inputs=${renameInputCount}`);
 	await page.keyboard.press("Escape");
 
-	// Return to Settings -> 단축키 and open AI Shortcut Customizer modal
+	// Return to Settings -> 단축키, where the AI Shortcut Customizer fills the window's right sidebar
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "단축키" }).click();
-	await page.locator('[data-action="open-shortcut-customizer"]').click();
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("06-shortcut-customizer-modal-empty");
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="shortcuts"]');
+	await panel.waitFor();
+	await shot("06-shortcut-customizer-panel-empty");
 
 	queue.push(
 		{ tool: "get_shortcuts", args: { i: "현재 단축키 목록을 확인하는 중" }, delayMs: 250 },
@@ -351,16 +349,18 @@ try {
 		},
 	);
 
-	const modalInput = modal.locator('textarea[data-testid="app-customizer-input"]');
-	await modalInput.click();
+	const panelInput = panel.locator('textarea[data-testid="app-customizer-input"]');
+	await panelInput.click();
 	await page.keyboard.type("새 폴더를 커맨드 N으로 바꾸고 터미널 열기도 커맨드 J로 추가해줘");
 	await page.keyboard.press("Enter");
 
-	await modal.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
+	await panel.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
 	await shot("07-shortcut-customizer-shimmer");
 
-	await modal.locator(".customizer-turn__reply", { hasText: "새 폴더 단축키를" }).waitFor({ timeout: 15_000 });
+	await panel.locator(".customizer-turn__reply", { hasText: "새 폴더 단축키를" }).waitFor({ timeout: 15_000 });
 	await shot("08-shortcut-customizer-turn-done");
+	const newFolderKeycap = await page.locator('[data-shortcut-record="newFolder"]').evaluate((el) => (el.textContent ?? "").replace(/\s+/g, ""));
+	check("The newFolder keycap beside the assistant updates live from ⌘⇧N to ⌘N", newFolderKeycap === "⌘N", newFolderKeycap);
 
 	check(
 		"Pi shortcut-customizer profile offered strictly get_shortcuts and update_shortcuts tools",
@@ -376,8 +376,8 @@ try {
 		JSON.stringify(persistedAfterAgent.settings.shortcuts),
 	);
 
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
 
 	// 4. Verify English Dark, Japanese Light, and Simplified Chinese Light localizations
 	await page.evaluate(() => window.autorag.settings.set({ language: "en", appearance: "dark" }));

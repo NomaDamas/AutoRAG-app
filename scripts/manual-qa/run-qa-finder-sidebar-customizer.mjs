@@ -1,18 +1,20 @@
 /**
- * Manual QA — Sidebar customization & AI App Customizer modal in the real app.
+ * Manual QA — Sidebar customization & the AI App Customizer in the window's right sidebar, in the real app.
  *
  * Drives the built Electron app end-to-end with real Playwright mouse/keyboard
  * input and a loopback OpenAI-compatible model endpoint:
- *   1. Settings → 사이드바 (Sidebar) renders locked switches for AI Search &
+ *   1. Settings → 사이드바 (Sidebar) renders locked switches for AI Chat &
  *      Automations, toggles hideable favorite items, reorders Favorites, pins
  *      a custom folder, and immediately updates the live Finder sidebar and
  *      `<userData>/settings/settings-state.json` (leaving AutoRAG `config.json`
  *      untouched).
- *   2. Opening the AI App Customizer modal (`[data-action="open-app-customizer"]`)
- *      streams live `.shimmer` `i` intent progress while the `app-customizer`
- *      pi agent calls `get_app_settings` and `update_sidebar`, refuses to hide
- *      `AI Search` or `Automations`, updates the live Finder sidebar and
- *      Settings toggles in real time, and supports multi-turn follow-up.
+ *   2. The AI App Customizer fills the window's right sidebar (the Inspector's column)
+ *      (`[data-testid="app-customizer-panel"]`, no modal): it streams live
+ *      `.shimmer` `i` intent progress while the `app-customizer` pi agent calls
+ *      `get_app_settings` and `update_sidebar`, refuses to hide `AI Chat` or
+ *      `Automations`, updates the live Finder sidebar and the Settings toggles
+ *      beside it in real time, supports multi-turn follow-up, and collapses to
+ *      the page hero and reopens with the conversation intact.
  *   3. Verifies both Korean Light and English Dark visual states.
  *
  * Run in a VM:
@@ -91,7 +93,12 @@ const server = createServer((req, res) => {
 					type: "function",
 					function: { name: step.tool, arguments: JSON.stringify(step.args) },
 				};
-				res.write(frame({ role: "assistant", tool_calls: [call] }, null));
+				if (step.text) {
+					res.write(frame({ role: "assistant", content: step.text }, null));
+					res.write(frame({ tool_calls: [call] }, null));
+				} else {
+					res.write(frame({ role: "assistant", tool_calls: [call] }, null));
+				}
 				res.write(frame({}, "tool_calls"));
 			} else {
 				res.write(frame({ role: "assistant", content: step.text }, null));
@@ -185,8 +192,8 @@ try {
 	await page.locator(".sidebar .sidebar__item-label", { hasText: "문서" }).waitFor({ timeout: 30_000 });
 	const initialLabels = await sidebarLabels();
 	check(
-		"Sidebar starts with AI 검색 and 자동화 at top of Favorites",
-		initialLabels[0] === "AI 검색" && initialLabels[1] === "자동화" && initialLabels.includes("음악") && initialLabels.includes("동영상"),
+		"Sidebar starts with AI 채팅 and 자동화 at top of Favorites",
+		initialLabels[0] === "AI 채팅" && initialLabels[1] === "자동화" && initialLabels.includes("음악") && initialLabels.includes("동영상"),
 		JSON.stringify(initialLabels),
 	);
 	const settledConfigBefore = readFileSync(CONFIG, "utf8");
@@ -200,36 +207,57 @@ try {
 	await shot("01b-settings-sidebar-bottom-sections");
 	await page.locator(".settings-content").evaluate((el) => { el.scrollTop = 0; });
 
-	// Verify AI 검색 and 자동화 switches are checked and disabled
+	// Verify AI 채팅 and 자동화 switches are checked and disabled
 	const aiSwitch = page.locator('[data-sidebar-switch="app:aiSearch"]');
 	const autoSwitch = page.locator('[data-sidebar-switch="app:automations"]');
 	check(
-		"AI 검색 and 자동화 switches in Settings are checked and locked (disabled)",
+		"AI 채팅 and 자동화 switches in Settings are checked and locked (disabled)",
 		(await aiSwitch.getAttribute("aria-checked")) === "true" &&
 			(await aiSwitch.isDisabled()) &&
 			(await autoSwitch.getAttribute("aria-checked")) === "true" &&
 			(await autoSwitch.isDisabled()),
 	);
-	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section-card").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
+	const sectionIds = await page.locator(".sidebar-sections-stack .sidebar-section").evaluateAll((els) => els.map((e) => e.getAttribute("data-sidebar-section")));
 	check(
 		"Favorites, Cloud, Connections, Locations, and Tags render together in one unified .sidebar-sections-stack",
 		JSON.stringify(sectionIds) === JSON.stringify(["favorites", "cloud", "connections", "locations", "tags"]),
 		JSON.stringify(sectionIds),
 	);
-	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
-	check("AI Customizer hero displays the transparent Dazzi sunflower mark image", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
+	const panel = page.locator('[data-testid="app-customizer-panel"][data-surface="sidebar"]');
+	await panel.waitFor();
+	const layout = await page.evaluate(() => {
+		const content = document.querySelector(".settings-content")?.getBoundingClientRect();
+		const side = document.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		const box = side?.getBoundingClientRect();
+		return content && side && box
+			? { contentRight: Math.round(content.right), panelLeft: Math.round(box.left), panelRight: Math.round(box.right), windowWidth: window.innerWidth, insideSettings: side.closest(".settings-view") !== null, inspectorShown: document.querySelector("aside.inspector") !== null }
+			: null;
+	});
+	check(
+		"AI Customizer fills the window's right sidebar (outside the Settings page, flush with the window's right edge, in place of the Inspector)",
+		layout !== null && layout.panelLeft >= layout.contentRight && layout.panelRight === layout.windowWidth && !layout.insideSettings && !layout.inspectorShown,
+		JSON.stringify(layout),
+	);
+	check("The page hero is hidden while the assistant is in the right sidebar", (await page.locator('[data-action="open-app-customizer"]').count()) === 0);
+	const panelMarks = await panel.locator("img").evaluateAll((imgs) => imgs.map((img) => ({ cls: img.className, width: img.naturalWidth })));
+	check(
+		"The assistant has no header band, shows the transparent Dazzi mark once (centered in its empty state), and no notice under the composer",
+		panelMarks.length === 1 && panelMarks[0].cls === "customizer-panel__empty-logo" && panelMarks[0].width > 0 && (await panel.locator("header, h2").count()) === 0 && (await panel.locator(".customizer-panel__foot").innerText()).trim().length === 0,
+		JSON.stringify(panelMarks),
+	);
 
 	// Toggle Music and Movies off in Settings UI
 	await page.locator('[data-sidebar-switch="place:music"]').click();
 	await page.locator('[data-sidebar-switch="place:movies"]').click();
 	// Move Downloads up above Documents
-	await page.locator('[data-action="move-up-place:downloads"]').click();
+	await page.locator('[data-sidebar-grip="place:downloads"]').focus();
+	await page.keyboard.press("ArrowUp");
 	await page.waitForTimeout(250);
 
 	const afterUiToggleLabels = await sidebarLabels();
 	check(
-		"Toggling Music & Movies in Settings immediately hides them in the live Finder sidebar while keeping AI 검색 & 자동화",
-		afterUiToggleLabels[0] === "AI 검색" &&
+		"Toggling Music & Movies in Settings immediately hides them in the live Finder sidebar while keeping AI 채팅 & 자동화",
+		afterUiToggleLabels[0] === "AI 채팅" &&
 			afterUiToggleLabels[1] === "자동화" &&
 			!afterUiToggleLabels.includes("음악") &&
 			!afterUiToggleLabels.includes("동영상") &&
@@ -249,15 +277,17 @@ try {
 		JSON.stringify({ sidebar: persisted.settings.sidebar, configUnchanged: readFileSync(CONFIG, "utf8") === settledConfigBefore }),
 	);
 
-	// 2. Open AI App Customizer Modal and converse with the pi agent profile
-	await page.locator('[data-action="open-app-customizer"]').click();
-	const modal = page.locator('[data-testid="app-customizer-modal"]');
-	await modal.waitFor();
-	await shot("03-customizer-modal-empty");
+	// 2. Converse with the pi agent profile in the right sidebar
+	await shot("03-customizer-panel-empty");
 
-	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Search & Automations, pinning Projects, hiding pictures) -> reply
+	// Queue scripted agent steps: inspect -> update_sidebar (including trying to hide AI Chat & Automations, pinning Projects, hiding pictures) -> reply
 	queue.push(
-		{ tool: "get_app_settings", args: { i: "현재 사이드바 설정을 확인하는 중" }, delayMs: 250 },
+		{
+			text: "먼저 현재 사이드바 구성을 살펴볼게요.",
+			tool: "get_app_settings",
+			args: { i: "현재 사이드바 설정을 확인하는 중" },
+			delayMs: 200,
+		},
 		{
 			tool: "update_sidebar",
 			args: {
@@ -266,30 +296,56 @@ try {
 				addCustomFavorites: [{ path: PROJECTS_DIR, label: "Projects" }],
 				favoritesOrder: ["custom:" + PROJECTS_DIR, "place:downloads", "place:documents"],
 			},
-			delayMs: 350,
+			delayMs: 900,
 		},
 		{
-			text: "그림 폴더를 추가로 숨기고 Projects 폴더를 즐겨찾기 상단에 고정했습니다. AI 검색과 자동화는 필수 기능이라 항상 표시됩니다.",
+			text: "그림 폴더를 추가로 숨기고 Projects 폴더를 즐겨찾기 상단에 고정했습니다. AI 채팅과 자동화는 필수 기능이라 항상 표시됩니다.",
+			delayMs: 250,
 		},
 	);
 
-	const input = modal.locator('textarea[data-testid="app-customizer-input"]');
+	const input = panel.locator('textarea[data-testid="app-customizer-input"]');
 	await input.click();
-	await page.keyboard.type("그림 폴더도 숨기고 Projects 폴더를 맨 위에 추가해줘. AI 검색도 숨겨봐.");
+	await page.keyboard.type("그림 폴더도 숨기고 Projects 폴더를 맨 위에 추가해줘. AI 채팅도 숨겨봐.");
 	await page.keyboard.press("Enter");
 
-	// Capture live shimmer progress
-	await modal.locator(".customizer-turn__progress .shimmer").waitFor({ timeout: 10_000 });
-	await shot("04-customizer-modal-shimmer-progress");
+	// Wait until the intermediate assistant message has committed AND the shimmer is spinning below it
+	await panel.locator(".customizer-turn__reply", { hasText: "먼저 현재 사이드바 구성을 살펴볼게요." }).waitFor({ timeout: 10_000 });
+	await panel.locator(".customizer-turn__progress .shimmer", { hasText: "현재 사이드바 설정을 확인하는 중" }).waitFor({ timeout: 10_000 });
+	check("The customizer's thinking line carries the seed loader beside the shimmer text", (await panel.locator(".customizer-turn__progress svg.seed-loader").count()) === 1);
+	const midTurnStack = await panel.evaluate((el) => {
+		const reply = el.querySelector(".customizer-turn__reply")?.getBoundingClientRect();
+		const progress = el.querySelector(".customizer-turn__progress")?.getBoundingClientRect();
+		return reply && progress ? { replyBottom: Math.round(reply.bottom), progressTop: Math.round(progress.top) } : null;
+	});
+	check(
+		"Intermediate assistant message stays visible with the live shimmer rendered below it while thinking continues",
+		midTurnStack !== null && midTurnStack.replyBottom <= midTurnStack.progressTop,
+		JSON.stringify(midTurnStack),
+	);
+	await shot("04-customizer-panel-shimmer-progress");
 
-	// Wait for turn reply
-	await modal.locator(".customizer-turn__reply", { hasText: "Projects 폴더를 즐겨찾기 상단에 고정했습니다" }).waitFor({ timeout: 15_000 });
-	await shot("05-customizer-modal-turn1-done");
+	// Wait for final turn reply and confirm both assistant bubbles remain in order
+	await panel.locator(".customizer-turn__reply", { hasText: "Projects 폴더를 즐겨찾기 상단에 고정했습니다" }).waitFor({ timeout: 15_000 });
+	const turn1Bubbles = await panel.locator(".customizer-turn").first().locator(".customizer-turn__reply").allInnerTexts();
+	check(
+		"Turn 1 keeps both the intermediate assistant message and the final reply in order",
+		turn1Bubbles.length === 2 &&
+			turn1Bubbles[0].includes("먼저 현재 사이드바 구성을 살펴볼게요.") &&
+			turn1Bubbles[1].includes("Projects 폴더를 즐겨찾기 상단에 고정했습니다"),
+		JSON.stringify(turn1Bubbles),
+	);
+	await shot("05-customizer-panel-turn1-done");
+	// While the agent's change lands, the switch beside the panel reflects it without closing anything
+	check(
+		"Settings toggles beside the assistant reflect the agent change live (그림 switch off)",
+		(await page.locator('[data-sidebar-switch="place:pictures"]').getAttribute("aria-checked")) === "false",
+	);
 
 	const afterAgentLabels = await sidebarLabels();
 	check(
-		"Pi agent tool call updates live Finder sidebar (pins Projects, hides 그림, keeps AI 검색 & 자동화 first)",
-		afterAgentLabels[0] === "AI 검색" &&
+		"Pi agent tool call updates live Finder sidebar (pins Projects, hides 그림, keeps AI 채팅 & 자동화 first)",
+		afterAgentLabels[0] === "AI 채팅" &&
 			afterAgentLabels[1] === "자동화" &&
 			afterAgentLabels[2] === "Projects" &&
 			!afterAgentLabels.includes("그림"),
@@ -309,7 +365,7 @@ try {
 		JSON.stringify(seenRequests[0]?.tools),
 	);
 
-	// Turn 2 in the same modal conversation: switch appearance to dark & language to English via agent
+	// Turn 2 in the same panel conversation: switch appearance to dark & language to English via agent
 	queue.push(
 		{
 			tool: "update_general_settings",
@@ -322,18 +378,34 @@ try {
 	await input.click();
 	await page.keyboard.type("다크 모드와 영어로 바꿔줘");
 	await page.keyboard.press("Enter");
-	await modal.locator(".customizer-turn__reply", { hasText: "Switched Dazzi to Dark mode and English." }).waitFor({ timeout: 15_000 });
-	await shot("06-customizer-modal-turn2-dark-en");
+	await panel.locator(".customizer-turn__reply", { hasText: "Switched Dazzi to Dark mode and English." }).waitFor({ timeout: 15_000 });
+	await shot("06-customizer-panel-turn2-dark-en");
 
-	// Close modal and capture dark-mode English Sidebar settings page
-	await modal.locator('[data-action="close-app-customizer"]').click();
-	await modal.waitFor({ state: "detached" });
+	// Hide the right sidebar from the toolbar, check the hero comes back, reopen it, and the conversation is still there
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
 	await shot("07-settings-sidebar-dark-en");
+	const heroLogoWidth = await page.locator("img.sidebar-ai-hero__logo").evaluate((img) => img.naturalWidth);
+	check("Hiding the right sidebar restores the AI hero with the transparent Dazzi mark", heroLogoWidth > 0, `naturalWidth=${heroLogoWidth}`);
+	await page.locator('[data-action="open-app-customizer"]').click();
+	await panel.waitFor();
+	check(
+		"Reopening the assistant keeps both turns and focuses the composer",
+		(await panel.locator(".customizer-turn").count()) === 2 &&
+			(await page.evaluate(() => document.activeElement?.getAttribute("data-testid"))) === "app-customizer-input",
+	);
+	await shot("07b-customizer-panel-reopened");
+	// A second round trip through the same toggle keeps the conversation
+	await page.locator("button[aria-label=\"정보 가리기\"], button[aria-label=\"Hide inspector\"], button[aria-label=\"情報パネルを非表示\"], button[aria-label=\"隐藏检查器\"]").first().click();
+	await panel.waitFor({ state: "hidden" });
+	await page.locator("button[aria-label=\"정보 보기\"], button[aria-label=\"Show inspector\"], button[aria-label=\"情報パネルを表示\"], button[aria-label=\"显示检查器\"]").first().click();
+	await panel.waitFor();
+	check("A second hide/show through the toolbar toggle keeps the conversation", (await panel.locator(".customizer-turn").count()) === 2);
 
 	const enLabels = await sidebarLabels();
 	check(
-		"English Dark mode still shows AI Search and Automations at the top of the sidebar",
-		enLabels[0] === "AI Search" && enLabels[1] === "Automations" && enLabels[2] === "Projects",
+		"English Dark mode still shows AI Chat and Automations at the top of the sidebar",
+		enLabels[0] === "AI Chat" && enLabels[1] === "Automations" && enLabels[2] === "Projects",
 		JSON.stringify(enLabels),
 	);
 

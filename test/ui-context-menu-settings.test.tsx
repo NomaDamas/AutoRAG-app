@@ -2,10 +2,12 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SettingsView } from "../src/renderer/src/components/SettingsView";
+import { SettingsWithRightSidebar } from "./support/settings-right-sidebar";
 import { setAppLanguage } from "../src/shared/i18n";
 import type { AppCustomizerEvent } from "../src/shared/app-customizer-contract";
 import { DEFAULT_SETTINGS, type AppSettings, type AutoRagConfigSnapshot, type DataSourcesSnapshot } from "../src/shared/settings-contract";
+import { t } from "../src/shared/i18n/core";
+import { pickSelectOption } from "./select-field-driver";
 
 const bridge = vi.hoisted(() => {
 	const settingsListeners = new Set<(settings: AppSettings) => void>();
@@ -132,7 +134,7 @@ afterEach(async () => {
 describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Actions)", () => {
 	it("renders Tags locked on, toggles built-in items & presets, reorders sections, and adds/edits/removes custom Magic Actions", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
@@ -157,10 +159,11 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await settle();
 		expect(currentSettings.contextMenu.hiddenItems).toEqual(["builtin:compress7z"]);
 
-		// Move `magic` section to the very top
-		const moveMagicUp = host.querySelector<HTMLButtonElement>('[data-action="move-cmenu-section-up-magic"]');
+		// Move `magic` section to the very top: its drag handle also moves it with ↑
+		const magicGrip = host.querySelector<HTMLButtonElement>('[data-cmenu-section-grip="magic"]');
+		expect(magicGrip).not.toBeNull();
 		await act(async () => {
-			moveMagicUp?.click();
+			magicGrip?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, cancelable: true }));
 		});
 		await settle();
 		expect(currentSettings.contextMenu.sectionOrder[0]).toBe("magic");
@@ -183,9 +186,9 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		await act(async () => {
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-label"]')!, "PDF 3줄 요약");
 			setInputValue(editor!.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-prompt"]')!, "핵심 3줄 요약해줘");
-			setInputValue(editor!.querySelector<HTMLSelectElement>('[data-testid="magic-editor-selection"]')!, "single");
 			setInputValue(editor!.querySelector<HTMLInputElement>('[data-testid="magic-editor-extensions"]')!, ".pdf, md");
 		});
+		await pickSelectOption(editor!.querySelector('[data-testid="magic-editor-selection"]'), t("settingsCore.contextMenu.condSingle"));
 		await settle();
 
 		await act(async () => {
@@ -232,22 +235,45 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(0);
 	});
 
-	it("opens the AI Customizer modal in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
+	it("lists 사이드바에 고정 / 제거 in the actions section and shows or hides it on its own", async () => {
 		await act(async () => {
-			root.render(<SettingsView initialCategory="contextMenu" />);
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
+		const row = host.querySelector<HTMLElement>('[data-cmenu-row="builtin:pinToSidebar"]');
+		expect(row?.textContent).toContain("사이드바에 고정 / 제거");
+		const rows = [...host.querySelectorAll<HTMLElement>("[data-cmenu-row]")].map((entry) => entry.dataset.cmenuRow);
+		expect(rows.indexOf("builtin:pinToSidebar")).toBe(rows.indexOf("builtin:newFolder") + 1);
+
+		const pinSwitch = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-sidebar-switch="builtin:pinToSidebar"]');
+		expect(pinSwitch()?.getAttribute("aria-checked")).toBe("true");
 		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-action="open-context-menu-customizer"]')?.click();
+			pinSwitch()?.click();
+		});
+		await settle();
+		expect(currentSettings.contextMenu.hiddenItems).toEqual(["builtin:pinToSidebar"]);
+		expect(pinSwitch()?.getAttribute("aria-checked")).toBe("false");
+
+		await act(async () => {
+			pinSwitch()?.click();
+		});
+		await settle();
+		expect(currentSettings.contextMenu.hiddenItems).toEqual([]);
+	});
+
+	it("docks the AI Customizer panel in contextMenu mode with context-menu prompt suggestions and applies agent changes", async () => {
+		await act(async () => {
+			root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 		});
 		await settle();
 
-		const modal = document.querySelector('[data-testid="app-customizer-modal"]');
-		expect(modal).not.toBeNull();
-		expect(modal?.textContent).toContain("매직 액션");
+		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
+		expect(panel).not.toBeNull();
+		expect(panel?.getAttribute("data-surface")).toBe("contextMenu");
+		expect(panel?.textContent).toContain("세 줄로 요약");
 
-		const suggestion = modal?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
+		const suggestion = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
 		await act(async () => {
 			suggestion?.click();
 		});
@@ -278,7 +304,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				type: "turn-done",
 				runId,
 				sessionId: req.sessionId,
-				reply: "PDF 3줄 요약 매직 액션을 추가했습니다.",
+				messages: ["PDF 3줄 요약 매직 액션을 추가했습니다."],
 				changes: [{ kind: "contextMenu", summary: "매직 액션 저장: PDF 3줄 요약", fields: ["contextMenu.magicActions"] }],
 				settings: nextSettings,
 			});
@@ -297,7 +323,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 				shortcuts: { overrides: { quickLook: "Alt+P", rename: "F2" } },
 			};
 			await act(async () => {
-				root.render(<SettingsView initialCategory="contextMenu" />);
+				root.render(<SettingsWithRightSidebar initialCategory="contextMenu" />);
 			});
 			await settle();
 
@@ -309,9 +335,7 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			});
 			await settle();
 			const editor = document.body.querySelector('[data-testid="magic-action-editor-modal"]')!;
-			await act(async () => {
-				setInputValue(editor.querySelector<HTMLSelectElement>('[data-testid="magic-editor-kind"]')!, "script");
-			});
+			await pickSelectOption(editor.querySelector('[data-testid="magic-editor-kind"]'), t("settingsCore.contextMenu.editor.kindScript"));
 			await settle();
 
 			const cmdInput = editor.querySelector<HTMLTextAreaElement>('[data-testid="magic-editor-command"]')!;

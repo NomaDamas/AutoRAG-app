@@ -145,7 +145,7 @@ try {
 		{ timeout: 240_000 },
 	);
 	const error = (await page.locator(".ai .text-danger-text").first().textContent({ timeout: 1000 }).catch(() => null)) ?? "";
-	check("AI Search shows no error", error === "", error);
+	check("AI Chat shows no error", error === "", error);
 
 	const proses = page.locator(".assistant-msg .assistant-prose");
 	const count = await proses.count();

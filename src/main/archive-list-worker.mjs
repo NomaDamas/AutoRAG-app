@@ -17,6 +17,7 @@ import { readFileSync } from "node:fs";
 import { zstdDecompressSync } from "node:zlib";
 import { parentPort, workerData } from "node:worker_threads";
 import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
+import { decodeLegacyName } from "./archive-names.mjs";
 
 /** A failure the panel explains; anything else the engine throws is a damaged archive. */
 class Refusal extends Error {
@@ -97,7 +98,9 @@ async function list({ sourcePath, limits }) {
 			if (entries.length >= limits.maxEntries) throw new Refusal("tooManyEntries");
 			// The archive-level flag is only known once a header is read, so it is asked per entry.
 			if (reader.hasEncryptedData() === true || entry.isEncrypted()) throw new Refusal("encrypted");
-			const name = entry.getPathname();
+			// A name the engine cannot hold as UTF-8 arrives as its raw bytes,
+			// one Latin-1 character each; `decodeLegacyName` puts it back.
+			const name = decodeLegacyName(entry.getPathname());
 			if (name.length === 0) continue;
 			const modified = entry.getModificationTime();
 			entries.push({

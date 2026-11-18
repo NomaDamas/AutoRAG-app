@@ -145,8 +145,8 @@ export function PermissionRow({ icon, tone, name, tag, tagTone, desc, action }: 
 			</div>
 			<div className="permission-main">
 				<div className="permission-name">
-					{name}
 					{tag !== undefined ? <span className={cn("tag", tagTone ?? "opt")}>{tag}</span> : null}
+					{name}
 				</div>
 				{desc !== undefined ? <div className="permission-desc">{desc}</div> : null}
 			</div>
