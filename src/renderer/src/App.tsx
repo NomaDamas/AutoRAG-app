@@ -339,11 +339,16 @@ export function App(): ReactElement {
 	const [sessionEvidence, setSessionEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
 
+	const [freshEvidence, setFreshEvidence] = useState<readonly number[]>([]);
 	const publishEvidence = useCallback(
-		(items: readonly CitationEvidence[], sessionItems?: readonly CitationEvidence[]) => {
+		(items: readonly CitationEvidence[], sessionItems?: readonly CitationEvidence[], freshItems?: readonly number[]) => {
 			evidenceRef.current = items;
 			setEvidence(items);
 			setSessionEvidence(sessionItems ?? items);
+			setFreshEvidence((current) => {
+				const next = freshItems ?? [];
+				return current.length === next.length && current.every((number, index) => number === next[index]) ? current : next;
+			});
 			setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 		},
 		[],
@@ -984,6 +989,7 @@ export function App(): ReactElement {
 								onOpenMember={openMemberEntry}
 								view={aiTabActive ? "evidence" : "info"}
 								evidence={evidence}
+								freshEvidence={freshEvidence}
 								evidenceSelected={evidenceSelectedNumber}
 								onSelectEvidence={pickEvidenceTab}
 								onRevealPath={(target, excerpts) => {

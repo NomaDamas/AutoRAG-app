@@ -299,7 +299,8 @@
       "openInBrowser": "브라우저에서 열기",
       "evidenceFolder": "출처 폴더",
       "evidenceFolderTooltip": "현재 대화의 출처 파일을 임시 폴더 탭으로 열기",
-      "openPreview": "미리보기에서 근거 위치 보기"
+      "openPreview": "미리보기에서 근거 위치 보기",
+      "newSource": "{{number}}번 새 출처"
     },
     "chat": {
       "title": "AI 에이전트",

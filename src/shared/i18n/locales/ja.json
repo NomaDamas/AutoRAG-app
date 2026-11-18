@@ -299,7 +299,8 @@
       "openInBrowser": "ブラウザーで開く",
       "evidenceFolder": "出典フォルダ",
       "evidenceFolderTooltip": "この会話の出典ファイルを一時フォルダタブで開く",
-      "openPreview": "引用箇所をプレビューで表示"
+      "openPreview": "引用箇所をプレビューで表示",
+      "newSource": "新しい出典 {{number}}"
     },
     "chat": {
       "title": "AI エージェント",

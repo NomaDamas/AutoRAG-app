@@ -22,6 +22,7 @@
  * folders, and going back to the Info view keep it.
  */
 
+import type { AnswerRevision } from "../../../shared/answer-revision";
 import type { AnswerPhase, ChatAttachment, ChatMessage, CitationEvidence, SteerTiming } from "../../../shared/search-contract";
 import { mergePhaseEvidence } from "./evidence";
 import { deliverSteers, restoreChat, settleSteers, type SteerItem } from "./steering";
@@ -48,6 +49,8 @@ export interface InspectorTurn {
 	readonly stopped: boolean;
 	/** Corrections sent while the run streamed, in send order (see `state/steering.ts`). */
 	readonly steers: readonly SteerItem[];
+	/** The corrections the verification made to the Quick answer, in the order they arrived (see `state/answer-revisions.ts`). */
+	readonly revisions: readonly AnswerRevision[];
 }
 
 export interface InspectorChat {
@@ -127,12 +130,18 @@ export function turnsFromHistory(messages: readonly ChatMessage[]): readonly Ins
 		error: null,
 		stopped: turn.assistant?.stopped ?? false,
 		steers: turn.steers,
+		revisions: turn.assistant?.revisions ?? [],
 	}));
 }
 
 /** A question just asked: nothing has arrived yet. */
 export function newTurn(question: string, attachments: readonly ChatAttachment[], startedAt: number): InspectorTurn {
-	return { question, attachments, quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt, progress: "", error: null, stopped: false, steers: [] };
+	return { question, attachments, quick: null, deep: null, quickDraft: "", deepDraft: "", deepElapsed: null, startedAt, progress: "", error: null, stopped: false, steers: [], revisions: [] };
+}
+
+/** The verification corrected the running turn's Quick answer. */
+export function addTurnRevision(chat: InspectorChat, revision: AnswerRevision): InspectorChat {
+	return updateLastTurn(chat, (turn) => ({ ...turn, revisions: [...turn.revisions, revision] }));
 }
 
 /** What a turn shows of the Quick answer: its landed phase, else the text streamed so far. */
