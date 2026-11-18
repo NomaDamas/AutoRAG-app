@@ -2788,13 +2788,13 @@
       "enabledAria": "使用 {{name}}",
       "exposureLabel": "工具提供方式",
       "exposure": {
-        "codemode": "通过脚本调用",
+        "codemode": "代码模式",
         "deferred": "按需加载",
         "direct": "直接提供给模型",
         "hidden": "隐藏"
       },
       "exposureHint": {
-        "codemode": "模型通过简短脚本调用工具(默认)。",
+        "codemode": "工具较多的服务器使用代码模式更快、更准确。",
         "deferred": "仅将通过 tool_search 找到的工具提供给模型。",
         "direct": "像内置工具一样把全部工具提供给模型。",
         "hidden": "无法访问这些工具。"
@@ -2811,18 +2811,22 @@
         "kindHttp": "HTTP 地址",
         "command": "命令",
         "commandPlaceholder": "npx",
-        "args": "参数(每行一个)",
+        "args": "参数",
         "url": "地址",
         "urlPlaceholder": "https://example.com/mcp",
         "headers": "请求头(每行一个，名称: 值)",
         "env": "环境变量(每行一个，名称=值)",
         "envHint": "值中可以用 ${NAME} 引用环境变量。",
-        "description": "说明(让模型知道何时使用)",
+        "description": "说明",
         "save": "保存",
         "advanced": "此条目包含应用无法编辑的设置，会原样保留。",
         "badLine": "无法读取这一行：\"{{line}}\"。",
         "removeTitle": "删除 \"{{name}}\"？",
-        "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。"
+        "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。",
+        "argsHint": "每行输入一个。",
+        "advancedToggle": "高级设置",
+        "envFormatHint": "每行输入一个，格式为 名称=值。\n值中可以用 ${NAME} 引用其他环境变量。",
+        "descriptionHint": "AI 会参考它来判断何时使用此服务器。"
       },
       "connect": {
         "title": "在其他智能体中使用 Dazzi",

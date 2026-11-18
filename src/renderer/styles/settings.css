@@ -1369,6 +1369,176 @@
 	cursor: progress;
 }
 
+/* -------------------------------------------- 중요 알림 (Figma 580:15140) -- */
+
+/* A short yes/no question: a small card, title and close on one line, the actions at 32px. */
+.settings-view .settings-modal.settings-alert {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+	width: min(416px, calc(100% - 32px));
+	padding: var(--space-14) var(--space-16);
+	border-radius: 14px;
+	box-shadow: var(--shadow-notice);
+}
+
+.settings-view .settings-alert h2 {
+	margin: 0;
+	padding-right: 32px;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 24px;
+}
+
+.settings-view .settings-alert p {
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-alert .settings-modal-close,
+.settings-view .mcp-server-modal .settings-modal-close {
+	border-radius: var(--radius-6);
+	color: var(--text-muted);
+}
+
+.settings-view .settings-alert .settings-modal-close {
+	top: var(--space-14);
+	right: var(--space-16);
+}
+
+.settings-view .settings-alert .settings-modal-actions {
+	margin-top: 0;
+}
+
+.settings-view .settings-alert .settings-modal-actions .linear-btn {
+	height: 32px;
+	font-weight: var(--weight-medium);
+}
+
+/* ------------------------------------- MCP 서버 추가 모달 (Figma 588:419) -- */
+
+.settings-view .settings-modal.mcp-server-modal {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-16);
+	padding: 20px;
+	border: 0;
+	border-radius: 16px;
+	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.settings-view .mcp-server-modal h2 {
+	margin: 0;
+	padding-right: 32px;
+	font-size: 14px;
+	font-weight: var(--weight-medium);
+	line-height: 19px;
+}
+
+/* The close icon's centre sits on the title's line, 20px in from the right edge. */
+.settings-view .mcp-server-modal .settings-modal-close {
+	top: 17.5px;
+	right: 15px;
+}
+
+.settings-view .mcp-server-modal label {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin-top: 0;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .mcp-server-modal label > input,
+.settings-view .mcp-server-modal label > textarea,
+.settings-view .mcp-server-modal label > .select-field {
+	margin-top: 0;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-regular);
+}
+
+.settings-view .mcp-server-modal textarea.is-mono {
+	font-family: var(--font-mono);
+	line-height: 18px;
+	padding: var(--space-6) var(--space-10);
+}
+
+.settings-view .mcp-server-modal textarea.is-mono[rows="2"] {
+	height: 50px;
+}
+
+.settings-view .mcp-server-modal label > small {
+	display: block;
+	margin-top: 0;
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-regular);
+	line-height: 1.3;
+	color: var(--text-muted);
+	white-space: pre-line;
+}
+
+.settings-view .mcp-advanced {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+}
+
+.settings-view .mcp-advanced > summary {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	width: fit-content;
+	list-style: none;
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	color: var(--text-muted);
+}
+
+.settings-view .mcp-advanced > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .mcp-advanced > summary:hover {
+	color: var(--text-primary);
+}
+
+.settings-view .mcp-advanced > summary > svg {
+	transform: rotate(-90deg);
+	transition: transform 120ms ease;
+}
+
+.settings-view .mcp-advanced[open] > summary > svg {
+	transform: none;
+}
+
+.settings-view .mcp-advanced-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.settings-view .mcp-server-modal .settings-modal-note,
+.settings-view .mcp-server-modal .settings-modal-error {
+	margin-top: 0;
+}
+
+.settings-view .mcp-server-modal .settings-modal-actions {
+	margin-top: 0;
+}
+
+.settings-view .mcp-server-modal .settings-modal-actions .linear-btn {
+	height: 28px;
+	padding: 0 var(--space-10);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .mcp-server-modal .settings-modal-actions .linear-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
 /* ------------------------------------------------- Indexing · progress map -- */
 
 /* The map needs room the 680px reading column does not give; only this page widens. */
@@ -4973,7 +5143,6 @@
 /* The edit dialog's exposure hint goes under the select, not beside it. */
 .settings-view .settings-modal label .mcp-exposure-hint {
 	display: block;
-	margin-top: 6px;
 }
 
 /* ---------------------------------------- 인덱싱 + 검색 범위 (Figma 532:9970) -- */

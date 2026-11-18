@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { ExternalLink, Info, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ExternalLink, Info, Pencil, Plus, Trash2 } from "lucide-react";
 import type { JsonObject, JsonValue, McpExposure, McpServerRow, McpSnapshot } from "../../../../shared/settings-contract";
 import { Switch } from "../primitives/Switch";
 import { errorText } from "./configSupport";
@@ -256,14 +256,15 @@ export function McpPage(): ReactElement {
 				/>
 			) : null}
 			{removing !== null ? (
-				<ModalShell onClose={() => setRemoving(null)}>
+				// Figma 580:15140 (중요 알림): a small card; 삭제 is the blue "yes", not a red button.
+				<ModalShell className="settings-alert" onClose={() => setRemoving(null)} label={t("settingsCore.mcp.modal.removeTitle", { name: removing.name })}>
 					<h2>{t("settingsCore.mcp.modal.removeTitle", { name: removing.name })}</h2>
 					<p>{t("settingsCore.mcp.modal.removeBody")}</p>
 					<ModalActions>
 						<button type="button" className="linear-btn" onClick={() => setRemoving(null)}>{t("common.cancel")}</button>
 						<button
 							type="button"
-							className="linear-btn is-danger"
+							className="linear-btn settings-btn-primary"
 							onClick={() => {
 								const target = removing;
 								setRemoving(null);
@@ -296,6 +297,10 @@ function ServerModal({
 	const [busy, setBusy] = useState(false);
 	const set = (patch: Partial<FormState>): void => setForm((current) => ({ ...current, ...patch }));
 	const target = form.kind === "http" ? form.url.trim() : form.command.trim();
+	// 고급 설정 starts open only when editing a server that already uses one of its fields.
+	const [advancedOpen, setAdvancedOpen] = useState(
+		row !== null && (form.env.trim() !== "" || form.headers.trim() !== "" || form.description.trim() !== "" || exposure !== "codemode"),
+	);
 	const hasOwnSettings = row !== null && Object.keys(row.config).some((key) => !MANAGED_KEYS.includes(key) && key !== "enabled" && key !== "exposure");
 
 	async function submit(): Promise<void> {
@@ -315,7 +320,8 @@ function ServerModal({
 	}
 
 	return (
-		<ModalShell onClose={onClose}>
+		// Figma 588:419: name, kind and what it runs up front; env (or headers), description and exposure behind 고급 설정.
+		<ModalShell className="mcp-server-modal" onClose={onClose} label={row === null ? t("settingsCore.mcp.modal.addTitle") : t("settingsCore.mcp.modal.editTitle")}>
 			<h2>{row === null ? t("settingsCore.mcp.modal.addTitle") : t("settingsCore.mcp.modal.editTitle")}</h2>
 			<label>
 				{t("settingsCore.mcp.modal.name")}
@@ -333,42 +339,53 @@ function ServerModal({
 					</label>
 					<label>
 						{t("settingsCore.mcp.modal.args")}
-						<textarea rows={3} value={form.args} onChange={(event) => set({ args: event.target.value })} />
-					</label>
-					<label>
-						{t("settingsCore.mcp.modal.env")}
-						<textarea rows={2} value={form.env} onChange={(event) => set({ env: event.target.value })} />
-						<small>{t("settingsCore.mcp.modal.envHint")}</small>
+						<textarea className="is-mono" rows={3} value={form.args} onChange={(event) => set({ args: event.target.value })} />
+						<small>{t("settingsCore.mcp.modal.argsHint")}</small>
 					</label>
 				</>
 			) : (
-				<>
-					<label>
-						{t("settingsCore.mcp.modal.url")}
-						<input value={form.url} placeholder={t("settingsCore.mcp.modal.urlPlaceholder")} onChange={(event) => set({ url: event.target.value })} />
-					</label>
-					<label>
-						{t("settingsCore.mcp.modal.headers")}
-						<textarea rows={2} value={form.headers} onChange={(event) => set({ headers: event.target.value })} />
-						<small>{t("settingsCore.mcp.modal.envHint")}</small>
-					</label>
-				</>
+				<label>
+					{t("settingsCore.mcp.modal.url")}
+					<input value={form.url} placeholder={t("settingsCore.mcp.modal.urlPlaceholder")} onChange={(event) => set({ url: event.target.value })} />
+				</label>
 			)}
-			<label>
-				{t("settingsCore.mcp.modal.description")}
-				<input value={form.description} onChange={(event) => set({ description: event.target.value })} />
-			</label>
-			<label>
-				{t("settingsCore.mcp.exposureLabel")}
-				<SelectField
-					className="linear-select"
-					aria-label={t("settingsCore.mcp.exposureLabel")}
-					value={exposure}
-					options={EXPOSURES.map((value) => ({ value, label: t(`settingsCore.mcp.exposure.${value}`) }))}
-					onValueChange={(value) => setExposure(value as McpExposure)}
-				/>
-				<small className="mcp-exposure-hint">{t(`settingsCore.mcp.exposureHint.${exposure}`)}</small>
-			</label>
+			<details className="mcp-advanced" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+				<summary>
+					<ChevronDown size={13} aria-hidden="true" />
+					{t("settingsCore.mcp.modal.advancedToggle")}
+				</summary>
+				<div className="mcp-advanced-fields">
+					{form.kind === "stdio" ? (
+						<label>
+							{t("settingsCore.mcp.modal.env")}
+							<textarea className="is-mono" rows={2} value={form.env} onChange={(event) => set({ env: event.target.value })} />
+							<small>{t("settingsCore.mcp.modal.envFormatHint")}</small>
+						</label>
+					) : (
+						<label>
+							{t("settingsCore.mcp.modal.headers")}
+							<textarea className="is-mono" rows={2} value={form.headers} onChange={(event) => set({ headers: event.target.value })} />
+							<small>{t("settingsCore.mcp.modal.envHint")}</small>
+						</label>
+					)}
+					<label>
+						{t("settingsCore.mcp.modal.description")}
+						<input value={form.description} onChange={(event) => set({ description: event.target.value })} />
+						<small>{t("settingsCore.mcp.modal.descriptionHint")}</small>
+					</label>
+					<label>
+						{t("settingsCore.mcp.exposureLabel")}
+						<SelectField
+							className="linear-select"
+							aria-label={t("settingsCore.mcp.exposureLabel")}
+							value={exposure}
+							options={EXPOSURES.map((value) => ({ value, label: t(`settingsCore.mcp.exposure.${value}`) }))}
+							onValueChange={(value) => setExposure(value as McpExposure)}
+						/>
+						<small className="mcp-exposure-hint">{t(`settingsCore.mcp.exposureHint.${exposure}`)}</small>
+					</label>
+				</div>
+			</details>
 			{hasOwnSettings ? <p className="settings-modal-note">{t("settingsCore.mcp.modal.advanced")}</p> : null}
 			{error !== null ? <p className="settings-modal-error">{error}</p> : null}
 			<ModalActions>

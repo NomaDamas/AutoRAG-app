@@ -2788,13 +2788,13 @@
       "enabledAria": "Use {{name}}",
       "exposureLabel": "How tools are offered",
       "exposure": {
-        "codemode": "Called from scripts",
+        "codemode": "Code Mode",
         "deferred": "Loaded on demand",
         "direct": "Offered to the model",
         "hidden": "Hidden"
       },
       "exposureHint": {
-        "codemode": "The model calls the tools from a short script (default).",
+        "codemode": "For servers with many tools, code mode is faster and more accurate.",
         "deferred": "Only tools found with tool_search are offered to the model.",
         "direct": "Every tool is offered to the model like a built-in tool.",
         "hidden": "The tools cannot be reached."
@@ -2811,18 +2811,22 @@
         "kindHttp": "HTTP URL",
         "command": "Command",
         "commandPlaceholder": "npx",
-        "args": "Arguments (one per line)",
+        "args": "Arguments",
         "url": "URL",
         "urlPlaceholder": "https://example.com/mcp",
         "headers": "Headers (one per line, Name: value)",
         "env": "Environment (one per line, NAME=value)",
         "envHint": "Values may reference environment variables as ${NAME}.",
-        "description": "Description (so the model knows when to use it)",
+        "description": "Description",
         "save": "Save",
         "advanced": "This entry has settings the app does not edit; they are kept as they are.",
         "badLine": "Cannot read the line \"{{line}}\".",
         "removeTitle": "Remove \"{{name}}\"?",
-        "removeBody": "The server is deleted from the config file. Data the server stored is left alone."
+        "removeBody": "The server is deleted from the config file. Data the server stored is left alone.",
+        "argsHint": "One per line.",
+        "advancedToggle": "Advanced",
+        "envFormatHint": "One per line, as NAME=value.\nA value can refer to another environment variable as ${NAME}.",
+        "descriptionHint": "Helps the AI decide when to use this server."
       },
       "connect": {
         "title": "Use Dazzi from other agents",

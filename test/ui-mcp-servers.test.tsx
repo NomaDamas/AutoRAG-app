@@ -107,4 +107,38 @@ describe("Settings → MCP → servers in Dazzi", () => {
 		expect(host.querySelector('[data-action="add-mcp-server"]')?.textContent).toBe("Add server");
 		expect(host.querySelector('[data-action="open-mcp-config"]')).toBeNull();
 	});
+	const press = async (element: Element | null): Promise<void> => {
+		await act(async () => {
+			element?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+		await settle();
+	};
+
+	it("asks before removing in the small alert card, with 삭제 as the blue answer (Figma 580:15140)", async () => {
+		await render(SNAPSHOT);
+		await press(host.querySelector('[data-action="remove-mcp-filesystem"]'));
+		const alert = host.querySelector<HTMLElement>(".settings-modal.settings-alert");
+		expect(alert?.querySelector("h2")?.textContent).toBe('Remove "filesystem"?');
+		const actions = [...(alert?.querySelectorAll(".settings-modal-actions button") ?? [])];
+		expect(actions.map((button) => button.textContent)).toEqual(["Cancel", "Remove"]);
+		expect(actions[1]?.classList.contains("settings-btn-primary")).toBe(true);
+		expect(actions[1]?.classList.contains("is-danger")).toBe(false);
+	});
+
+	it("adds a server with env, description and exposure behind a closed 고급 설정 (Figma 588:419)", async () => {
+		await render(SNAPSHOT);
+		await press(host.querySelector('[data-action="add-mcp-server"]'));
+		const modal = host.querySelector<HTMLElement>(".settings-modal.mcp-server-modal");
+		const advanced = modal?.querySelector<HTMLDetailsElement>("details.mcp-advanced");
+		expect(advanced?.open).toBe(false);
+		expect(advanced?.querySelector("summary")?.textContent).toBe("Advanced");
+		expect(advanced?.querySelector('[aria-label="How tools are offered"]')).not.toBeNull();
+		expect(modal?.textContent).toContain("One per line.");
+	});
+
+	it("opens 고급 설정 when editing a server that already uses one of its fields", async () => {
+		await render({ ...SNAPSHOT, servers: [{ ...SNAPSHOT.servers[0]!, config: { command: "npx", env: { TOKEN: "x" } } }] });
+		await press(host.querySelector('[data-action="edit-mcp-filesystem"]'));
+		expect(host.querySelector<HTMLDetailsElement>("details.mcp-advanced")?.open).toBe(true);
+	});
 });

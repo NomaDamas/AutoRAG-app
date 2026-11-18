@@ -2788,13 +2788,13 @@
       "enabledAria": "{{name}} を使う",
       "exposureLabel": "ツールの公開方法",
       "exposure": {
-        "codemode": "スクリプトから呼び出し",
+        "codemode": "コードモード",
         "deferred": "必要なときに読み込み",
         "direct": "モデルに直接提供",
         "hidden": "非表示"
       },
       "exposureHint": {
-        "codemode": "モデルが短いスクリプトでツールを呼び出します(既定)。",
+        "codemode": "ツールが多いサーバーでは、コードモードのほうが速く正確です。",
         "deferred": "tool_search で見つけたツールだけをモデルに提供します。",
         "direct": "内蔵ツールのようにすべてモデルに提供します。",
         "hidden": "ツールを利用できません。"
@@ -2811,18 +2811,22 @@
         "kindHttp": "HTTP の URL",
         "command": "コマンド",
         "commandPlaceholder": "npx",
-        "args": "引数(1 行に 1 つ)",
+        "args": "引数",
         "url": "URL",
         "urlPlaceholder": "https://example.com/mcp",
         "headers": "ヘッダー(1 行に 1 つ、名前: 値)",
         "env": "環境変数(1 行に 1 つ、名前=値)",
         "envHint": "値には ${NAME} の形で環境変数を参照できます。",
-        "description": "説明(モデルがいつ使うか分かるように)",
+        "description": "説明",
         "save": "保存",
         "advanced": "この項目にはアプリで編集できない設定があり、そのまま保持されます。",
         "badLine": "\"{{line}}\" の行を読み取れません。",
         "removeTitle": "\"{{name}}\" を削除しますか?",
-        "removeBody": "設定ファイルからこのサーバーが削除されます。サーバーが保存したデータはそのまま残ります。"
+        "removeBody": "設定ファイルからこのサーバーが削除されます。サーバーが保存したデータはそのまま残ります。",
+        "argsHint": "1 行に 1 つずつ入力します。",
+        "advancedToggle": "詳細設定",
+        "envFormatHint": "1 行に 1 つずつ、名前=値 の形式で入力します。\n値では ${NAME} で別の環境変数を参照できます。",
+        "descriptionHint": "AI がこのサーバーをいつ使うかを判断する際に参考にします。"
       },
       "connect": {
         "title": "他のエージェントから Dazzi を使う",
