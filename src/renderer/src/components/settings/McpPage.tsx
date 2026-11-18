@@ -8,13 +8,12 @@
 import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../../shared/i18n/core";
-import { ChevronDown, ExternalLink, Info, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronRight, ExternalLink, Globe, Info, KeyRound, Pencil, Plus, Terminal, TextAlignStart, Trash2, Wrench } from "lucide-react";
 import type { JsonObject, JsonValue, McpExposure, McpServerRow, McpSnapshot } from "../../../../shared/settings-contract";
 import { Switch } from "../primitives/Switch";
 import { errorText } from "./configSupport";
 import { McpConnectSection } from "./McpConnectSection";
 import { ModalActions, ModalShell, PlainDivider, SettingsPageHead } from "./SettingsKit";
-import { SelectField } from "./SelectField";
 import { cn } from "../../lib/cn";
 import { buttonClass } from "../primitives/button";
 
@@ -280,6 +279,21 @@ export function McpPage(): ReactElement {
 	);
 }
 
+/** The names a `NAME=value` (or `Name: value`) block sets, for a row's one-line summary. */
+function keysOf(text: string, separator: "=" | ":"): readonly string[] {
+	return text
+		.split("\n")
+		.map((line) => line.trim())
+		.filter((line) => line.length > 0)
+		.map((line) => line.split(separator)[0]!.trim())
+		.filter((key) => key.length > 0);
+}
+
+/**
+ * MCP 서버 추가/수정, in the 매직 액션 만들기 format (Figma 598:3131): the name as the title, 연결 방식 as a
+ * segmented control, what it runs on the grey card, then one list of rows for 환경 변수 (or 헤더), the tool
+ * exposure and the description.
+ */
 function ServerModal({
 	row,
 	onClose,
@@ -297,11 +311,13 @@ function ServerModal({
 	const [busy, setBusy] = useState(false);
 	const set = (patch: Partial<FormState>): void => setForm((current) => ({ ...current, ...patch }));
 	const target = form.kind === "http" ? form.url.trim() : form.command.trim();
-	// 고급 설정 starts open only when editing a server that already uses one of its fields.
-	const [advancedOpen, setAdvancedOpen] = useState(
-		row !== null && (form.env.trim() !== "" || form.headers.trim() !== "" || form.description.trim() !== "" || exposure !== "codemode"),
-	);
 	const hasOwnSettings = row !== null && Object.keys(row.config).some((key) => !MANAGED_KEYS.includes(key) && key !== "enabled" && key !== "exposure");
+	// A row starts open only when editing a server that already uses it.
+	const [initialOpen] = useState(() => ({
+		vars: row !== null && (form.env.trim() !== "" || form.headers.trim() !== ""),
+		exposure: row !== null && exposure !== "codemode",
+		description: row !== null && form.description.trim() !== "",
+	}));
 
 	async function submit(): Promise<void> {
 		const built = configFrom(form, row?.config ?? null);
@@ -319,81 +335,151 @@ function ServerModal({
 		}
 	}
 
+	const isStdio = form.kind === "stdio";
+	const varKeys = isStdio ? keysOf(form.env, "=") : keysOf(form.headers, ":");
+	const none = t("settingsCore.mcp.modal.noneValue");
+	const HeaderIcon = isStdio ? Terminal : Globe;
+
 	return (
-		// Figma 588:419: name, kind and what it runs up front; env (or headers), description and exposure behind 고급 설정.
-		<ModalShell className="mcp-server-modal" onClose={onClose} label={row === null ? t("settingsCore.mcp.modal.addTitle") : t("settingsCore.mcp.modal.editTitle")}>
-			<h2>{row === null ? t("settingsCore.mcp.modal.addTitle") : t("settingsCore.mcp.modal.editTitle")}</h2>
-			<label>
-				{t("settingsCore.mcp.modal.name")}
-				<input autoFocus value={form.name} placeholder={t("settingsCore.mcp.modal.namePlaceholder")} onChange={(event) => set({ name: event.target.value })} />
-			</label>
-			<label>
-				{t("settingsCore.mcp.modal.kind")}
-				<SelectField className="linear-select" value={form.kind} options={[{ value: "stdio", label: t("settingsCore.mcp.modal.kindStdio") }, { value: "http", label: t("settingsCore.mcp.modal.kindHttp") }]} onValueChange={(value) => set({ kind: value as Kind })} />
-			</label>
-			{form.kind === "stdio" ? (
-				<>
-					<label>
-						{t("settingsCore.mcp.modal.command")}
-						<input value={form.command} placeholder={t("settingsCore.mcp.modal.commandPlaceholder")} onChange={(event) => set({ command: event.target.value })} />
-					</label>
-					<label>
-						{t("settingsCore.mcp.modal.args")}
-						<textarea className="is-mono" rows={3} value={form.args} onChange={(event) => set({ args: event.target.value })} />
-						<small>{t("settingsCore.mcp.modal.argsHint")}</small>
-					</label>
-				</>
-			) : (
-				<label>
-					{t("settingsCore.mcp.modal.url")}
-					<input value={form.url} placeholder={t("settingsCore.mcp.modal.urlPlaceholder")} onChange={(event) => set({ url: event.target.value })} />
-				</label>
-			)}
-			<details className="mcp-advanced" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
-				<summary>
-					<ChevronDown size={13} aria-hidden="true" />
-					{t("settingsCore.mcp.modal.advancedToggle")}
-				</summary>
-				<div className="mcp-advanced-fields">
-					{form.kind === "stdio" ? (
-						<label>
-							{t("settingsCore.mcp.modal.env")}
-							<textarea className="is-mono" rows={2} value={form.env} onChange={(event) => set({ env: event.target.value })} />
-							<small>{t("settingsCore.mcp.modal.envFormatHint")}</small>
-						</label>
+		<ModalShell className="magic-editor-modal" onClose={onClose} label={row === null ? t("settingsCore.mcp.modal.addTitle") : t("settingsCore.mcp.modal.editTitle")}>
+			<div className="magic-editor" data-testid="mcp-server-modal">
+				<div className="magic-editor-head">
+					<span className="magic-editor-tile" aria-hidden="true">
+						<HeaderIcon size={20} />
+					</span>
+					<div className="magic-editor-name">
+						<input
+							autoFocus
+							aria-label={t("settingsCore.mcp.modal.name")}
+							value={form.name}
+							placeholder={t("settingsCore.mcp.modal.namePlaceholder")}
+							onChange={(event) => set({ name: event.target.value })}
+						/>
+						<span>{t("settingsCore.mcp.modal.nameHint")}</span>
+					</div>
+				</div>
+
+				<div className="magic-editor-kind">
+					<span className="magic-editor-caption">{t("settingsCore.mcp.modal.kind")}</span>
+					<div className="magic-editor-seg" role="radiogroup" aria-label={t("settingsCore.mcp.modal.kind")}>
+						{(
+							[
+								{ value: "stdio", label: t("settingsCore.mcp.modal.kindStdio"), Icon: Terminal },
+								{ value: "http", label: t("settingsCore.mcp.modal.kindHttp"), Icon: Globe },
+							] as const
+						).map((option) => (
+							<button
+								key={option.value}
+								type="button"
+								role="radio"
+								aria-checked={form.kind === option.value}
+								className={cn(form.kind === option.value && "is-active")}
+								data-testid={`mcp-kind-${option.value}`}
+								onClick={() => set({ kind: option.value })}
+							>
+								<option.Icon size={14} aria-hidden="true" />
+								{option.label}
+							</button>
+						))}
+					</div>
+				</div>
+
+				<div className="magic-editor-card mcp-editor-card">
+					{isStdio ? (
+						<>
+							<label className="mcp-editor-line">
+								<span className="magic-editor-caption">{t("settingsCore.mcp.modal.command")}</span>
+								<input className="is-mono" value={form.command} placeholder={t("settingsCore.mcp.modal.commandPlaceholder")} onChange={(event) => set({ command: event.target.value })} />
+							</label>
+							<label className="mcp-editor-line">
+								<span className="magic-editor-caption">{t("settingsCore.mcp.modal.args")}</span>
+								<textarea className="is-mono" rows={3} value={form.args} placeholder={t("settingsCore.mcp.modal.argsPlaceholder")} onChange={(event) => set({ args: event.target.value })} />
+								<small>{t("settingsCore.mcp.modal.argsHint")}</small>
+							</label>
+						</>
 					) : (
-						<label>
-							{t("settingsCore.mcp.modal.headers")}
-							<textarea className="is-mono" rows={2} value={form.headers} onChange={(event) => set({ headers: event.target.value })} />
-							<small>{t("settingsCore.mcp.modal.envHint")}</small>
+						<label className="mcp-editor-line">
+							<span className="magic-editor-caption">{t("settingsCore.mcp.modal.url")}</span>
+							<input className="is-mono" value={form.url} placeholder={t("settingsCore.mcp.modal.urlPlaceholder")} onChange={(event) => set({ url: event.target.value })} />
 						</label>
 					)}
-					<label>
-						{t("settingsCore.mcp.modal.description")}
-						<input value={form.description} onChange={(event) => set({ description: event.target.value })} />
-						<small>{t("settingsCore.mcp.modal.descriptionHint")}</small>
-					</label>
-					<label>
-						{t("settingsCore.mcp.exposureLabel")}
-						<SelectField
-							className="linear-select"
-							aria-label={t("settingsCore.mcp.exposureLabel")}
-							value={exposure}
-							options={EXPOSURES.map((value) => ({ value, label: t(`settingsCore.mcp.exposure.${value}`) }))}
-							onValueChange={(value) => setExposure(value as McpExposure)}
-						/>
-						<small className="mcp-exposure-hint">{t(`settingsCore.mcp.exposureHint.${exposure}`)}</small>
-					</label>
 				</div>
-			</details>
-			{hasOwnSettings ? <p className="settings-modal-note">{t("settingsCore.mcp.modal.advanced")}</p> : null}
-			{error !== null ? <p className="settings-modal-error">{error}</p> : null}
-			<ModalActions>
-				<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
-				<button type="button" className="linear-btn settings-btn-primary" disabled={busy || form.name.trim().length === 0 || target.length === 0} onClick={() => void submit()}>
-					{t("settingsCore.mcp.modal.save")}
-				</button>
-			</ModalActions>
+
+				<div className="magic-editor-group">
+					<details className="magic-editor-section" data-mcp-section="vars" open={initialOpen.vars}>
+						<summary>
+							<KeyRound size={16} aria-hidden="true" />
+							<span className="magic-editor-section-name">{t(isStdio ? "settingsCore.mcp.modal.envRow" : "settingsCore.mcp.modal.headersRow")}</span>
+							<span className="magic-editor-section-value">{varKeys.length > 0 ? varKeys.join(", ") : none}</span>
+							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
+						</summary>
+						<div className="magic-editor-sub">
+							<label className="magic-editor-field">
+								<textarea
+									className="is-mono"
+									rows={3}
+									aria-label={t(isStdio ? "settingsCore.mcp.modal.env" : "settingsCore.mcp.modal.headers")}
+									value={isStdio ? form.env : form.headers}
+									placeholder={t(isStdio ? "settingsCore.mcp.modal.envPlaceholder" : "settingsCore.mcp.modal.headersPlaceholder")}
+									onChange={(event) => set(isStdio ? { env: event.target.value } : { headers: event.target.value })}
+								/>
+								<small>{t(isStdio ? "settingsCore.mcp.modal.envFormatHint" : "settingsCore.mcp.modal.headersFormatHint")}</small>
+							</label>
+						</div>
+					</details>
+					<details className="magic-editor-section" data-mcp-section="exposure" open={initialOpen.exposure}>
+						<summary>
+							<Wrench size={16} aria-hidden="true" />
+							<span className="magic-editor-section-name">{t("settingsCore.mcp.exposureLabel")}</span>
+							<span className="magic-editor-section-value">{t(`settingsCore.mcp.exposure.${exposure}`)}</span>
+							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
+						</summary>
+						<div className="magic-editor-sub">
+							<div className="mcp-editor-choices" role="radiogroup" aria-label={t("settingsCore.mcp.exposureLabel")}>
+								{EXPOSURES.map((value) => (
+									<button
+										key={value}
+										type="button"
+										role="radio"
+										aria-checked={exposure === value}
+										data-testid={`mcp-exposure-${value}`}
+										onClick={() => setExposure(value)}
+									>
+										<span className="magic-editor-switch-text">
+											<span>{t(`settingsCore.mcp.exposure.${value}`)}</span>
+											<small>{t(`settingsCore.mcp.exposureHint.${value}`)}</small>
+										</span>
+										{exposure === value ? <Check size={14} aria-hidden="true" /> : null}
+									</button>
+								))}
+							</div>
+						</div>
+					</details>
+					<details className="magic-editor-section" data-mcp-section="description" open={initialOpen.description}>
+						<summary>
+							<TextAlignStart size={16} aria-hidden="true" />
+							<span className="magic-editor-section-name">{t("settingsCore.mcp.modal.description")}</span>
+							<span className="magic-editor-section-value">{form.description.trim() !== "" ? form.description.trim() : none}</span>
+							<ChevronRight size={14} aria-hidden="true" className="magic-editor-section-chevron" />
+						</summary>
+						<div className="magic-editor-sub">
+							<label className="magic-editor-field">
+								<input aria-label={t("settingsCore.mcp.modal.description")} value={form.description} onChange={(event) => set({ description: event.target.value })} />
+								<small>{t("settingsCore.mcp.modal.descriptionHint")}</small>
+							</label>
+						</div>
+					</details>
+				</div>
+
+				{hasOwnSettings ? <p className="settings-modal-note mcp-editor-note">{t("settingsCore.mcp.modal.advanced")}</p> : null}
+				{error !== null ? <p className="settings-modal-error mcp-editor-note">{error}</p> : null}
+				<ModalActions>
+					<button type="button" className="linear-btn" onClick={onClose} disabled={busy}>{t("common.cancel")}</button>
+					<button type="button" className="linear-btn settings-btn-primary" disabled={busy || form.name.trim().length === 0 || target.length === 0} onClick={() => void submit()}>
+						{t("settingsCore.mcp.modal.save")}
+					</button>
+				</ModalActions>
+			</div>
 		</ModalShell>
 	);
 }

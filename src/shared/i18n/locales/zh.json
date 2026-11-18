@@ -2835,7 +2835,7 @@
         "addTitle": "添加 MCP 服务器",
         "editTitle": "编辑 MCP 服务器",
         "name": "名称",
-        "namePlaceholder": "例如：filesystem",
+        "namePlaceholder": "服务器名称",
         "kind": "连接方式",
         "kindStdio": "运行命令(stdio)",
         "kindHttp": "HTTP 地址",
@@ -2854,9 +2854,16 @@
         "removeTitle": "删除 \"{{name}}\"？",
         "removeBody": "该服务器会从配置文件中删除。服务器自己保存的数据不受影响。",
         "argsHint": "每行输入一个。",
-        "advancedToggle": "高级设置",
         "envFormatHint": "每行输入一个，格式为 名称=值。\n值中可以用 ${NAME} 引用其他环境变量。",
-        "descriptionHint": "AI 会参考它来判断何时使用此服务器。"
+        "descriptionHint": "AI 会参考它来判断何时使用此服务器。",
+        "nameHint": "将以此名称显示在 MCP 服务器列表中",
+        "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem",
+        "envRow": "环境变量",
+        "headersRow": "请求头",
+        "noneValue": "无",
+        "envPlaceholder": "API_KEY=${MY_API_KEY}",
+        "headersPlaceholder": "Authorization: Bearer ${TOKEN}",
+        "headersFormatHint": "每行一个，格式为 名称: 值。\n值中可用 ${NAME} 引用环境变量。"
       },
       "connect": {
         "title": "在其他智能体中使用 Dazzi",

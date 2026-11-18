@@ -2835,7 +2835,7 @@
         "addTitle": "MCP サーバーを追加",
         "editTitle": "MCP サーバーを編集",
         "name": "名前",
-        "namePlaceholder": "例: filesystem",
+        "namePlaceholder": "サーバー名",
         "kind": "接続方式",
         "kindStdio": "コマンドを実行(stdio)",
         "kindHttp": "HTTP の URL",
@@ -2854,9 +2854,16 @@
         "removeTitle": "\"{{name}}\" を削除しますか?",
         "removeBody": "設定ファイルからこのサーバーが削除されます。サーバーが保存したデータはそのまま残ります。",
         "argsHint": "1 行に 1 つずつ入力します。",
-        "advancedToggle": "詳細設定",
         "envFormatHint": "1 行に 1 つずつ、名前=値 の形式で入力します。\n値では ${NAME} で別の環境変数を参照できます。",
-        "descriptionHint": "AI がこのサーバーをいつ使うかを判断する際に参考にします。"
+        "descriptionHint": "AI がこのサーバーをいつ使うかを判断する際に参考にします。",
+        "nameHint": "MCPサーバー一覧にこの名前で表示されます",
+        "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem",
+        "envRow": "環境変数",
+        "headersRow": "ヘッダー",
+        "noneValue": "なし",
+        "envPlaceholder": "API_KEY=${MY_API_KEY}",
+        "headersPlaceholder": "Authorization: Bearer ${TOKEN}",
+        "headersFormatHint": "1行に1つずつ「名前: 値」の形式で入力します。\n値では ${NAME} で環境変数を参照できます。"
       },
       "connect": {
         "title": "他のエージェントから Dazzi を使う",

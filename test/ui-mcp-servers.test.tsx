@@ -125,20 +125,31 @@ describe("Settings → MCP → servers in Dazzi", () => {
 		expect(actions[1]?.classList.contains("is-danger")).toBe(false);
 	});
 
-	it("adds a server with env, description and exposure behind a closed 고급 설정 (Figma 588:419)", async () => {
+	it("adds a server in the 매직 액션 만들기 format: name as title, 연결 방식 tabs, rows closed (Figma 598:3131)", async () => {
 		await render(SNAPSHOT);
 		await press(host.querySelector('[data-action="add-mcp-server"]'));
-		const modal = host.querySelector<HTMLElement>(".settings-modal.mcp-server-modal");
-		const advanced = modal?.querySelector<HTMLDetailsElement>("details.mcp-advanced");
-		expect(advanced?.open).toBe(false);
-		expect(advanced?.querySelector("summary")?.textContent).toBe("Advanced");
-		expect(advanced?.querySelector('[aria-label="How tools are offered"]')).not.toBeNull();
+		const modal = host.querySelector<HTMLElement>('[data-testid="mcp-server-modal"]');
+		expect(modal?.closest(".settings-modal")?.classList.contains("magic-editor-modal")).toBe(true);
+		expect(modal?.querySelector<HTMLInputElement>(".magic-editor-name > input")?.placeholder).toBe("Server name");
+		expect(modal?.querySelector('[data-testid="mcp-kind-stdio"]')?.getAttribute("aria-checked")).toBe("true");
 		expect(modal?.textContent).toContain("One per line.");
+		const sections = [...(modal?.querySelectorAll<HTMLDetailsElement>("details.magic-editor-section") ?? [])];
+		expect(sections.map((section) => section.querySelector(".magic-editor-section-name")?.textContent)).toEqual(["Environment Variables", "How tools are offered", "Description"]);
+		expect(sections.every((section) => !section.open)).toBe(true);
+		expect(modal?.querySelector('[data-mcp-section="exposure"] .magic-editor-section-value')?.textContent).toBe("Code Mode");
+		expect(modal?.querySelector('[role="radiogroup"][aria-label="How tools are offered"]')).not.toBeNull();
+		// HTTP swaps the card to the URL and the first row to 헤더.
+		await press(modal?.querySelector('[data-testid="mcp-kind-http"]') ?? null);
+		expect(modal?.querySelector('[data-mcp-section="vars"] .magic-editor-section-name')?.textContent).toBe("Headers");
+		expect(modal?.querySelector<HTMLInputElement>(".mcp-editor-line > input")?.placeholder).toBe("https://example.com/mcp");
 	});
 
-	it("opens 고급 설정 when editing a server that already uses one of its fields", async () => {
+	it("opens the rows a server already uses when editing it, and names its variables", async () => {
 		await render({ ...SNAPSHOT, servers: [{ ...SNAPSHOT.servers[0]!, config: { command: "npx", env: { TOKEN: "x" } } }] });
 		await press(host.querySelector('[data-action="edit-mcp-filesystem"]'));
-		expect(host.querySelector<HTMLDetailsElement>("details.mcp-advanced")?.open).toBe(true);
+		const vars = host.querySelector<HTMLDetailsElement>('[data-mcp-section="vars"]');
+		expect(vars?.open).toBe(true);
+		expect(vars?.querySelector(".magic-editor-section-value")?.textContent).toBe("TOKEN");
+		expect(host.querySelector<HTMLDetailsElement>('[data-mcp-section="description"]')?.open).toBe(false);
 	});
 });

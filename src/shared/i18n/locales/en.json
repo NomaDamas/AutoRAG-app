@@ -2835,7 +2835,7 @@
         "addTitle": "Add MCP server",
         "editTitle": "Edit MCP server",
         "name": "Name",
-        "namePlaceholder": "e.g. filesystem",
+        "namePlaceholder": "Server name",
         "kind": "Connection",
         "kindStdio": "Run a command (stdio)",
         "kindHttp": "HTTP URL",
@@ -2854,9 +2854,16 @@
         "removeTitle": "Remove \"{{name}}\"?",
         "removeBody": "The server is deleted from the config file. Data the server stored is left alone.",
         "argsHint": "One per line.",
-        "advancedToggle": "Advanced",
         "envFormatHint": "One per line, as NAME=value.\nA value can refer to another environment variable as ${NAME}.",
-        "descriptionHint": "Helps the AI decide when to use this server."
+        "descriptionHint": "Helps the AI decide when to use this server.",
+        "nameHint": "Shown with this name in the MCP server list",
+        "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem",
+        "envRow": "Environment Variables",
+        "headersRow": "Headers",
+        "noneValue": "None",
+        "envPlaceholder": "API_KEY=${MY_API_KEY}",
+        "headersPlaceholder": "Authorization: Bearer ${TOKEN}",
+        "headersFormatHint": "One per line, as Name: value.\nA value can refer to an environment variable with ${NAME}."
       },
       "connect": {
         "title": "Use Dazzi from other agents",

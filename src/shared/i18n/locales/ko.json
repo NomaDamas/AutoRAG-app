@@ -2835,7 +2835,7 @@
         "addTitle": "MCP 서버 추가",
         "editTitle": "MCP 서버 수정",
         "name": "이름",
-        "namePlaceholder": "예: filesystem",
+        "namePlaceholder": "서버 이름",
         "kind": "연결 방식",
         "kindStdio": "명령 실행(stdio)",
         "kindHttp": "HTTP 주소",
@@ -2854,9 +2854,16 @@
         "removeTitle": "\"{{name}}\" 서버를 삭제할까요?",
         "removeBody": "설정 파일에서 이 서버가 삭제됩니다. 서버가 저장한 데이터는 그대로입니다.",
         "argsHint": "한 줄에 하나씩 입력합니다.",
-        "advancedToggle": "고급 설정",
         "envFormatHint": "한 줄에 하나씩 이름=값 형식으로 입력합니다.\n값에서 ${NAME}으로 다른 환경 변수를 참조할 수 있습니다.",
-        "descriptionHint": "AI가 이 서버를 언제 사용할지 판단하는 데 참고합니다."
+        "descriptionHint": "AI가 이 서버를 언제 사용할지 판단하는 데 참고합니다.",
+        "nameHint": "MCP 서버 목록에 이 이름으로 표시됩니다",
+        "argsPlaceholder": "-y\n@modelcontextprotocol/server-filesystem",
+        "envRow": "환경 변수",
+        "headersRow": "헤더",
+        "noneValue": "없음",
+        "envPlaceholder": "API_KEY=${MY_API_KEY}",
+        "headersPlaceholder": "Authorization: Bearer ${TOKEN}",
+        "headersFormatHint": "한 줄에 하나씩 이름: 값 형식으로 입력합니다.\n값에서 ${NAME}으로 환경 변수를 참조할 수 있습니다."
       },
       "connect": {
         "title": "다른 에이전트에서 Dazzi 사용하기",
