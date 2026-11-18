@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SetupStatus } from "../src/shared/onboarding-contract";
 import type { ConfigRefreshResult } from "../src/shared/settings-contract";
 import {
@@ -78,6 +78,8 @@ async function makeDeps(userDataDir: string, overrides: Partial<FirstRunServiceD
 		stopPowerSaveBlocker: () => undefined,
 		probeFullDiskAccess: async () => false,
 		onComplete: () => undefined,
+		// These tests are about the stages; the tests of the question gate turn it back on.
+		requireQuestion: false,
 		...overrides,
 	};
 }
@@ -184,7 +186,7 @@ describe("createFirstRunService run", () => {
 		expect(final.demo).toBeNull();
 		expect(final.error).toBeNull();
 		const stages = [...new Set(seen.map((entry) => entry.stage))];
-		expect(stages).toEqual(["scanning", "planning", "indexing", "preparing", "ready"]);
+		expect(stages).toEqual(["scanning", "planning", "duplicates", "indexing", "preparing", "ready"]);
 		expect(Math.min(...seen.map((entry) => entry.progress))).toBeGreaterThanOrEqual(0);
 		expect(final.progress).toBeGreaterThanOrEqual(Math.max(...seen.slice(0, -1).map((entry) => entry.progress)));
 	});
@@ -277,6 +279,50 @@ describe("createFirstRunService run", () => {
 		expect(final.error).toBeNull();
 	});
 
+	it("shows the duplicate scan as its own stage and moves the bar while it runs, never past the next stage's start", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const scan = Promise.withResolvers<void>();
+		const seen: SetupStatus[] = [];
+		let clock = 1_000_000;
+		const service = createFirstRunService(
+			await makeDeps(directory, {
+				now: () => clock,
+				refreshDuplicates: () => scan.promise,
+				send: (_channel, payload) => seen.push(payload as SetupStatus),
+			}),
+		);
+		await service.start();
+		await waitForStage(service, "duplicates");
+		const before = (await service.status()).progress;
+		// Time passes with dupey still scanning: the bar creeps through its band and stops short of the index's start.
+		clock += 120_000;
+		for (let tick = 0; tick < 1_500 && (await service.status()).progress <= before; tick += 1) await flush();
+		const during = await service.status();
+		expect(during.stage).toBe("duplicates");
+		expect(during.progress).toBeGreaterThan(before);
+		expect(during.progress).toBeLessThan(20);
+		scan.resolve();
+		await waitForStage(service, "ready");
+		const stages = seen.map((entry) => entry.stage);
+		expect(stages.indexOf("duplicates")).toBeGreaterThan(stages.indexOf("planning"));
+		expect(stages.indexOf("duplicates")).toBeLessThan(stages.indexOf("indexing"));
+		// The bar only ever moves forward.
+		const bars = seen.map((entry) => entry.progress);
+		expect(bars).toEqual([...bars].sort((a, b) => a - b));
+	});
+
+	it("does not reach ready without the tour's question: it stops on the retry screen with the index kept", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const service = createFirstRunService(await makeDeps(directory, { requireQuestion: true }));
+		await service.start();
+		const final = await waitForStage(service, "failed");
+		expect(final.stage).toBe("failed");
+		expect(final.demo).toBeNull();
+		expect(final.error).not.toBeNull();
+		// The first index itself finished: the retry is about the question, and the index is recorded as done.
+		await vi.waitFor(async () => expect(typeof (await readIndexingFinishedAt(directory))).toBe("string"), { timeout: 3_000 });
+	});
+
 	it("returns the run in flight instead of starting a second one", async () => {
 		const directory = await workDir("autorag-firstrun-");
 		const gate = Promise.withResolvers<ConfigRefreshResult>();
@@ -358,11 +404,16 @@ describe("createFirstRunService complete", () => {
 	});
 });
 
-/** The persisted onboarding state's index record, read back from disk; null until the service has written one. */
+/** The persisted onboarding state's index record, read back from disk; undefined until the service has written one (a file caught mid-write counts as not yet written). */
 async function readIndexingFinishedAt(directory: string): Promise<string | null | undefined> {
 	const text = await readFile(join(directory, "onboarding", "state.json"), "utf8").catch(() => null);
-	if (text === null) return undefined;
-	const parsed: unknown = JSON.parse(text);
+	if (text === null || text.trim() === "") return undefined;
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(text);
+	} catch {
+		return undefined;
+	}
 	if (typeof parsed !== "object" || parsed === null || !("indexing" in parsed)) return undefined;
 	const indexing = parsed.indexing;
 	if (typeof indexing !== "object" || indexing === null || !("finishedAt" in indexing)) return undefined;

@@ -51,7 +51,7 @@ describe("canStartEarly", () => {
 	});
 
 	it("does not offer it before reading starts, or once the reading is over", () => {
-		for (const stage of ["idle", "scanning", "planning", "preparing", "ready", "failed"] as const) expect(canStartEarly({ ...base, stage })).toBe(false);
+		for (const stage of ["idle", "scanning", "planning", "duplicates", "preparing", "ready", "failed"] as const) expect(canStartEarly({ ...base, stage })).toBe(false);
 	});
 });
 

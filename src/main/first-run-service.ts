@@ -36,18 +36,20 @@ import { type DemoQuestionJudge } from "./demo-question-judge";
  * (`folders`), the person switches any of them, and `start` takes the chosen
  * ones. A single progress bar follows while this service does the rest on its own:
  *
- *  scanning  (0→8)   pre-scan the chosen folders, which gives the file total;
- *  planning  (8→15)  when a model can be called, take every smart-indexing
+ *  scanning  (0→6)   pre-scan the chosen folders, which gives the file total;
+ *  planning  (6→12)  when a model can be called, take every smart-indexing
  *                    exclusion it proposes; otherwise continue silently;
- *  indexing (15→90)  write the folders into the shared config keyword-only
+ *  duplicates (12→20) the duplicate (dupey) scan, started with the folders and run beside
+ *                    planning; the first index waits for it, and the bar creeps by time;
+ *  indexing (20→90)  write the folders into the shared config keyword-only
  *                    (parsed mirror + MinSync SPLADE; no dense embedder) and run
  *                    the first index;
- *  preparing (90→99) start a duplicate (dupey) scan and, if the hunt that has
- *                    run since indexing began has not found it yet, finish
- *                    looking for the tour's question: one a model wrote from
- *                    the person's own document, keyword retrieval returns that
- *                    document for, Jev says only that document can answer, and
- *                    the real AutoRAG answer to it cites that document;
+ *  preparing (90→98) finish looking for the tour's question, which the hunt that
+ *                    has run since indexing began may already have found: one a model
+ *                    wrote from the person's own document, keyword retrieval returns
+ *                    that document for, Jev says only that document can answer, and
+ *                    the real AutoRAG answer to it cites that document. Without one
+ *                    the run fails (retry screen) rather than open an empty tour;
  *  ready     (100).
  *
  * Which folders to read is the only question; no account, plan, model, source,
@@ -71,17 +73,33 @@ const MAX_HUNT_DOCS = 40;
 const MIN_LETTER_RATIO = 0.5;
 /** Longest the real AutoRAG answer to one candidate question may take before that question is given up on. */
 const DEMO_ANSWER_TIMEOUT_MS = 60_000;
-/** The whole preparing stage is bounded so the user never waits forever. */
-const PREPARING_TIMEOUT_MS = 90_000;
+/**
+ * The first run does not end without the tour's question, so the hunt for it is not cut off at a short bound: it ends when it
+ * finds one or has nothing left to try. This ceiling only keeps a hunt that hangs (a model call that never returns) from holding the bar forever.
+ */
+const PREPARING_TIMEOUT_MS = 6 * 60_000;
 /**
  * Longest the first run holds the first index back for the duplicate (dupey) scan. The scan takes a few minutes on a large
  * profile; it starts as soon as the folders are known and runs beside smart indexing, so by the time indexing would start it is
  * usually done. A scan that is still running after this carries on in the background and the tour simply skips its duplicate steps.
  */
 const DUPLICATE_SCAN_TIMEOUT_MS = 240_000;
-/** Indexing's share of the one bar: `computeIndexingProgress` yields 0–100 and this maps it to 15–90. */
-const INDEXING_START = 15;
-const INDEXING_SPAN = 75;
+/**
+ * The one bar's bands: scanning 0→{@link SCAN_END}, planning →{@link PLAN_END}, the duplicate scan →{@link DUPLICATES_END},
+ * indexing →{@link INDEXING_END} (`computeIndexingProgress` yields 0–100 and this maps it onto the band), preparing →{@link PREPARING_END}.
+ */
+const SCAN_END = 6;
+const PLAN_END = 12;
+const DUPLICATES_END = 20;
+const INDEXING_START = DUPLICATES_END;
+const INDEXING_SPAN = 70;
+const INDEXING_END = INDEXING_START + INDEXING_SPAN;
+const PREPARING_END = 98;
+/** dupey and the question hunt report no progress, so their bands fill by elapsed time: about two thirds full after this long, never full until the work is done. */
+const DUPLICATES_CREEP_MS = 90_000;
+const PREPARING_CREEP_MS = 60_000;
+/** How often a creeping band moves the bar. */
+const CREEP_TICK_MS = 1_000;
 const MAX_DOC_BYTES = 400_000;
 /** Documents the model is shown per call. */
 const DEMO_BATCH = 8;
@@ -216,6 +234,8 @@ export interface FirstRunServiceDeps {
 	readonly stopPowerSaveBlocker: (id: number) => void;
 	readonly probeFullDiskAccess: () => Promise<boolean>;
 	readonly onComplete: () => void;
+	/** The run ends without a proven question when this is false (tests with no model). The app leaves it unset: no question, no tour. */
+	readonly requireQuestion?: boolean;
 	/** Provisions anonymous model access (the guest credential + adopted models) before indexing and the tour. */
 	readonly ensureModelAccess?: () => Promise<unknown>;
 	readonly now?: () => number;
@@ -760,18 +780,48 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			if (deps.scanFailed?.(folder) !== true) readable.push(folder);
 		}
 		totalFiles = deps.folderTotals(readable);
-		setProgress(8);
+		setProgress(SCAN_END);
 		emitStatus();
 		return readable;
 	}
 
+	/**
+	 * Moves the bar through a band while work with no progress signal of its own runs (dupey, the hunt for the tour's question), so a
+	 * wait of minutes never looks stuck. It closes in on the band's end the longer it takes and reaches it only when `finish` is called.
+	 */
+	function creepBar(from: number, to: number, halfLifeMs: number): { readonly stop: () => void; readonly finish: () => void } {
+		const startedAtMs = now();
+		const timer = setInterval(() => {
+			const elapsed = now() - startedAtMs;
+			setProgress(from + (to - from) * (1 - 0.5 ** (elapsed / halfLifeMs)));
+			emitStatus();
+		}, CREEP_TICK_MS);
+		return {
+			stop: () => clearInterval(timer),
+			finish: () => {
+				clearInterval(timer);
+				setProgress(to);
+				emitStatus();
+			},
+		};
+	}
+
+	/** The duplicate scan is its own stage on the bar: it holds the first index back, and says so, instead of waiting out of sight. */
+	async function duplicatesStage(scan: Promise<unknown>): Promise<void> {
+		setStage("duplicates", PLAN_END);
+		emitStatus();
+		const creep = creepBar(PLAN_END, DUPLICATES_END, DUPLICATES_CREEP_MS);
+		await withTimeout(scan, DUPLICATE_SCAN_TIMEOUT_MS, undefined);
+		creep.finish();
+	}
+
 	async function planningStage(roots: readonly string[]): Promise<readonly SmartExclusion[]> {
-		setStage("planning", 8);
+		setStage("planning", SCAN_END);
 		emitStatus();
 		const exclusions = roots.length === 0 ? [] : await planExclusions(roots);
 		excludedFolders = exclusions.length;
 		excludedFiles = exclusions.reduce((sum, exclusion) => sum + exclusion.files, 0);
-		setProgress(15);
+		setProgress(PLAN_END);
 		emitStatus();
 		return exclusions;
 	}
@@ -793,7 +843,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		void persist().catch(warnPersistFailed);
 		deps.recordIndex({ ok: result.ok, error: result.error, diagnostics: result.diagnostics });
 		if (result.ok) {
-			setProgress(90);
+			setProgress(INDEXING_END);
 			return;
 		}
 		stage = "failed";
@@ -818,7 +868,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	}
 
 	async function indexingStage(folders: readonly string[], exclusions: readonly SmartExclusion[]): Promise<ConfigRefreshResult> {
-		setStage("indexing", 15);
+		setStage("indexing", INDEXING_START);
 		emitStatus();
 		const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 		const next = applyIndexingConfig({
@@ -933,11 +983,19 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	}
 
 	async function preparingStage(): Promise<void> {
-		setStage("preparing", 90);
+		setStage("preparing", INDEXING_END);
 		emitStatus();
-		await withTimeout(finishHunt().catch(() => undefined), PREPARING_TIMEOUT_MS, undefined);
+		const creep = creepBar(INDEXING_END, PREPARING_END, PREPARING_CREEP_MS);
+		try {
+			await withTimeout(finishHunt().catch(() => undefined), PREPARING_TIMEOUT_MS, undefined);
+		} finally {
+			creep.stop();
+		}
 		abandonHunt();
-		setProgress(99);
+		// The tour and the app open on a question that was proven against this person's own files. Without one the run stops here, on
+		// the retry screen (the index is kept; a retry only looks for the question again) instead of opening on an empty tour.
+		if (demo === null && deps.requireQuestion !== false) throw new Error(t("main.onboarding.noQuestion"));
+		setProgress(PREPARING_END);
 		emitStatus();
 	}
 
@@ -964,7 +1022,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			const duplicates = deps.refreshDuplicates().catch(() => undefined);
 			await withTimeout(modelAccess, MODEL_ACCESS_TIMEOUT_MS, undefined);
 			const exclusions = await planningStage(folders);
-			await withTimeout(duplicates, DUPLICATE_SCAN_TIMEOUT_MS, undefined);
+			await duplicatesStage(duplicates);
 			const result = await indexingStage(folders, exclusions);
 			if (!result.ok) return;
 			await preparingStage();

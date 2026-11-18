@@ -1129,7 +1129,8 @@
     },
     "onboarding": {
       "indexingFailed": "建立索引失败。",
-      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}"
+      "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}",
+      "noQuestion": "暂时没能找到第一个问题。重试会跳过已读取的文件并继续。"
     },
     "lock": {
       "scheduledBusy": "后台刷新正在运行。完成后请重试。",
@@ -3093,8 +3094,9 @@
         "idle": "正在开始",
         "scanning": "正在查看文件夹",
         "planning": "正在挑选需要的文件",
+        "duplicates": "正在查找重复文件",
         "indexing": "正在读取文件",
-        "preparing": "正在收尾",
+        "preparing": "正在生成第一个问题",
         "ready": "已就绪",
         "failed": "已停止"
       },

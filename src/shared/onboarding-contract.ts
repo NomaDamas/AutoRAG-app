@@ -14,13 +14,15 @@
  *  2. `planning`  — when a model can be called, smart indexing proposes generated
  *     sub-folders to leave out and every proposal is taken; without a model the
  *     app's code-folder exclusions are all there is;
- *  3. `indexing`  — writes the folders into the shared AutoRAG config in
+ *  3. `duplicates` — the duplicate (dupey) scan, started with the folders and run beside
+ *     planning; the first index waits for it (the tour's duplicate steps read its result);
+ *  4. `indexing`  — writes the folders into the shared AutoRAG config in
  *     keyword-only mode (parsed mirror + MinSync's bundled SPLADE encoder; dense
  *     embedding stays opt-in in Settings) and runs the first index;
- *  4. `preparing` — starts a duplicate (dupey) scan, and picks one question from
- *     the user's own documents that keyword retrieval provably answers from that
- *     document, for the guided tour;
- *  5. `ready`.
+ *  5. `preparing` — picks one question from the user's own documents that keyword
+ *     retrieval provably answers from that document and the real AI Search answers
+ *     with a citation of it, for the guided tour; the run does not end without one;
+ *  6. `ready`.
  *
  * Account and plan come at the end of the tour, never before the first index.
  */
@@ -97,7 +99,7 @@ export interface FirstRunFolder {
 	readonly selected: boolean;
 }
 
-export type SetupStage = "idle" | "scanning" | "planning" | "indexing" | "preparing" | "ready" | "failed";
+export type SetupStage = "idle" | "scanning" | "planning" | "duplicates" | "indexing" | "preparing" | "ready" | "failed";
 
 /** The question the tour asks: written from one indexed document, returned by keyword retrieval, accepted by Jev, and answered by the real AI Search agent with a citation of that document. */
 export interface FirstRunDemo {

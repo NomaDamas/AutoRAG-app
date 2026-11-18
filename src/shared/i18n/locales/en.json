@@ -1129,7 +1129,8 @@
     },
     "onboarding": {
       "indexingFailed": "Indexing failed.",
-      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}"
+      "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}",
+      "noQuestion": "Couldn't find a first question yet. Trying again skips the files already read and carries on."
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",
@@ -3093,8 +3094,9 @@
         "idle": "Starting",
         "scanning": "Looking through your folders",
         "planning": "Picking the files that matter",
+        "duplicates": "Looking for duplicate files",
         "indexing": "Reading your files",
-        "preparing": "Finishing up",
+        "preparing": "Writing your first question",
         "ready": "Ready",
         "failed": "Stopped"
       },

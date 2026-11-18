@@ -621,7 +621,7 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    need no model, so an unreachable hosted service never delays them; planning
    waits for the access at most `MODEL_ACCESS_TIMEOUT_MS` (20 s) and otherwise
    plans without a model. The stages then run:
-   - `scanning` (0→8) pre-scans the chosen folders one at a time (by default
+   - `scanning` (0→6) pre-scans the chosen folders one at a time (by default
      Desktop, Documents, Downloads, and iCloud Drive on macOS), through the same folder-scan coordinator the indexer uses,
      which gives the total file count. On macOS each folder triggers its own
      per-folder TCC consent dialog as it is read; a refused folder fails its
@@ -632,16 +632,17 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
      `~/Library/Mail`) open `FullDiskAccessDialog` (one button: opens Privacy &
      Security › Full Disk Access while ungranted, flips to confirm-and-continue
      once `probeFullDiskAccess` passes; System Settings offers Quit & Reopen);
-   - the **duplicate (dupey) scan** starts the moment the folders are known (`refreshDuplicates`, the fs worker's
-     version-family refresh) and runs beside `planning`. It takes a few minutes on a large profile, so the first
-     index waits for it (at most `DUPLICATE_SCAN_TIMEOUT_MS`, 4 min; a scan still running then carries on in the
-     background, and one that fails or finds nothing never fails the run). The tour's duplicate steps read its
-     snapshot, so it has to be there before the tour opens, not after;
-   - `planning` (8→15) runs the smart-indexing helper agent over those roots
+   - `duplicates` (12→20) is the **duplicate (dupey) scan** and is its own stage on the bar. It starts the moment the folders are
+     known (`refreshDuplicates`, the fs worker's version-family refresh) and runs beside `planning`; the first index waits for
+     it. dupey reports no progress, so the bar creeps through its band by elapsed time (`creepBar`: it closes in on the band's
+     end, and reaches it only when the scan is done). The wait is at most `DUPLICATE_SCAN_TIMEOUT_MS` (4 min); a scan still
+     running then carries on in the background, and one that fails or finds nothing never fails the run. The tour's duplicate
+     steps read its snapshot, so it has to be there before the tour opens, not after;
+   - `planning` (6→12) runs the smart-indexing helper agent over those roots
      (see "Helper agents") and **takes every proposal** it makes; a model that is
      not configured, errors, or times out simply yields no exclusions and the run
      carries on silently. `excludedFolders` is the count taken;
-   - `indexing` (15→90) writes the folders into the shared AutoRAG config in
+   - `indexing` (20→90) writes the folders into the shared AutoRAG config in
      **keyword-only** mode and runs the first index. `applyIndexingConfig` sets
      `searchPaths`, merges the left-out paths into `excludePaths`, sets
      `appIndexing.semanticSearch: false`, and moves a `workspacePath` still
@@ -655,24 +656,25 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
      finalizing 95–99, `NONE_FILES_PER_MINUTE` for the ETA with the
      `NONE_MIN_MINUTES` floor until the pre-scan reports a total). A power-save
      blocker is held for the run;
-   - `preparing` (90→99) picks the tour's one question: it reads the parsed mirror, takes up to eight
+   - `preparing` (90→98) picks the tour's one question: it reads the parsed mirror, takes up to eight
      substantial, non-code documents (recent first, one per folder), reads a
      ~2,000-character excerpt of each, and asks the configured answer model
      (`resolveConfiguredSessionModel` + `completeSimple`) for one natural,
      interface-language question per document. Each question is then verified
      with **model-free keyword retrieval** (`new AutoRAGLite(effectiveConfig)`
-     `.retrieve`, `topK: 5`); a question counts only when its own document comes
-     back, and the best rank then the lowest latency wins. The whole stage is
-     bounded (~90 s) and any failure leaves `demo = null` — the tour then skips
-     its question steps;
-   - `ready` (100) with the demo question (or null). The demo question and the
+     `.retrieve`, `topK: 5`), judged by Jev, and answered by the real AutoRAG agent, which must cite
+     that document. The first run **does not reach `ready` without that question**: the stage ends when the hunt finds
+     one or has nothing left to try (`PREPARING_TIMEOUT_MS`, 6 min, only guards a hunt that hangs), and with no question
+     it fails with `main.onboarding.noQuestion` on the retry screen instead of opening an empty tour. dupey and the hunt
+     report no progress, so this band creeps by elapsed time too;
+   - `ready` (100) with the demo question. The demo question and the
      excerpts are sent only to the model provider the user configured (their own
      BYOK provider, or the Dazzi API for a managed model) and only when a model
      is configured at all; the excerpts never leave the machine otherwise
      (see `docs/compliance/data-flows.md`).
    A failure stops the bar and shows `[data-action="setup-retry"]`, which calls
-   `start()` again (a failed run restarts; a run in flight or finished is returned
-   as is).
+   `start()` again (a failed run restarts from the first stage; the index is incremental, so files already read are
+   skipped, and a run in flight or finished is returned as is).
    **Starting before the index is read.** The tour's question is hunted while the
    first index is still running (a round every few seconds over the parsed
    documents so far), so `demo` can be set during `indexing`. While `stage` is

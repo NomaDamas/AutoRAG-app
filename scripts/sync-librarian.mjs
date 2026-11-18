@@ -28,7 +28,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
 // resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
 // model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
-const librarianRef = "v2.13.12";
+// v2.13.14 lets a query read a MinSync index beside its first sync (#2183, #2200): only a sync that began clean (no cursor, marker or
+// journal of an earlier run) is read beside, one query at a time and decided when the query runs, and a later sync waits for those
+// queries. The app's first run uses it to prove the tour's question against the index while it is still being built.
+const librarianRef = "v2.13.14";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
