@@ -6,6 +6,7 @@ import type { AppAppearance, AppSettings } from "../../shared/settings-contract"
 import type { IconPreviewCache } from "../../main/file-icon";
 import { listArchive } from "../../main/archive-list";
 import { isAppBundle, isPackageDirectory } from "../../main/fs-entry";
+import { whenQuitting } from "../../main/quit-signal";
 import {
 	app,
 	BrowserWindow,
@@ -765,7 +766,7 @@ export function attachQuickLook(owner: BrowserWindow, options: QuickLookWindowOp
 export function registerQuickLookIpc(icons: (BundleIconSource & Partial<Pick<IconPreviewCache, "cachedPreview">>) | null = null, ipc: IpcMain = ipcMain): void {
 	iconSource = icons;
 	keynoteSlides = createKeynoteSlideCache({ dir: join(app.getPath("userData"), "keynote-slides") });
-	app.on("before-quit", () => {
+	whenQuitting(() => {
 		quitting = true;
 	});
 	ipc.handle(PREVIEW_CHANNELS.show, async (event, target: unknown, origin: unknown) => {

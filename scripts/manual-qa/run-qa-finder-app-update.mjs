@@ -15,12 +15,12 @@
  *
  * What it does:
  *   - copies the app, writes `resources/app-update.yml` pointing at a local feed, and re-signs the copy;
- *   - builds a payload: the same app at version 0.1.1 (Info.plist + package.json), re-signed, zipped;
+ *   - builds a payload: the same app one patch version up (Info.plist + package.json), re-signed, zipped;
  *   - serves `latest/latest-mac.yml` + the zip over HTTP (Range supported) from a temp directory;
  *   - launches the copy with "auto-install updates" off and checks the footer button through the states
- *     unsupported-free idle (feed says 0.1.0: disabled, not emphasised) → available (feed says 0.1.1: emphasised,
- *     enabled) → click → downloading → ready → click → the app quits, Squirrel installs, and the relaunched
- *     bundle on disk is 0.1.1.
+ *     unsupported-free idle (feed says the running version: disabled, not emphasised) → available (feed says the next
+ *     patch version: emphasised, enabled) → click → downloading → ready → click → the app quits, Squirrel installs, and
+ *     the relaunched bundle on disk is the next version.
  *
  * Screenshots of the footer in each state land in the ignored `.omo/` tree.
  */
@@ -66,13 +66,23 @@ if (identity === undefined) {
 	process.exit(2);
 }
 
+// The payload is the app under test one patch version up: electron-updater never downgrades, so a fixed number
+// (the lane once hardcoded 0.1.1) stops working as soon as the app's own version passes it.
+const sourceVersion = run("/usr/libexec/PlistBuddy", ["-c", "Print :CFBundleShortVersionString", join(sourceApp, "Contents/Info.plist")]).trim();
+const versionParts = /^(\d+)\.(\d+)\.(\d+)$/.exec(sourceVersion);
+if (versionParts === null) {
+	console.error(`cannot derive the next version from ${sourceVersion}: expected MAJOR.MINOR.PATCH`);
+	process.exit(2);
+}
+const nextVersion = `${versionParts[1]}.${versionParts[2]}.${Number(versionParts[3]) + 1}`;
+
 const PORT = 47_000 + Math.floor(Math.random() * 1000);
 const work = realpathSync(mkdtempSync(join(tmpdir(), "dazzi-update-e2e-")));
 const feedDir = join(work, "feed");
 const userDataDir = join(work, "user-data");
 const home = join(work, "home");
 mkdirSync(join(feedDir, "latest"), { recursive: true });
-mkdirSync(join(feedDir, "v0.1.1"), { recursive: true });
+mkdirSync(join(feedDir, `v${nextVersion}`), { recursive: true });
 mkdirSync(join(userDataDir, "settings"), { recursive: true });
 mkdirSync(home, { recursive: true });
 // "Install updates automatically" off: a found update waits for the click instead of downloading by itself.
@@ -135,13 +145,13 @@ try {
 	const payloadApp = join(work, "payload/Dazzi.app");
 	mkdirSync(join(work, "payload"), { recursive: true });
 	run("ditto", [installedApp, payloadApp]);
-	plistSet(payloadApp, "CFBundleShortVersionString", "0.1.1");
-	plistSet(payloadApp, "CFBundleVersion", "0.1.1");
+	plistSet(payloadApp, "CFBundleShortVersionString", nextVersion);
+	plistSet(payloadApp, "CFBundleVersion", nextVersion);
 	// (the payload is a copy of the re-identified app, so it already carries E2E_BUNDLE_ID)
 	const pkgPath = join(payloadApp, "Contents/Resources/app/package.json");
-	writeFileSync(pkgPath, readFileSync(pkgPath, "utf8").replace(/"version":\s*"[^"]+"/, '"version": "0.1.1"'));
+	writeFileSync(pkgPath, readFileSync(pkgPath, "utf8").replace(/"version":\s*"[^"]+"/, `"version": "${nextVersion}"`));
 	sign(payloadApp);
-	const zip = join(feedDir, "v0.1.1/Dazzi-0.1.1-arm64.zip");
+	const zip = join(feedDir, `v${nextVersion}/Dazzi-${nextVersion}-arm64.zip`);
 	run("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", payloadApp, zip]);
 	console.log(`payload ${statSync(zip).size} bytes; installed copy is ${currentVersion}`);
 
@@ -180,12 +190,12 @@ try {
 	check("up to date: the button is not emphasised", (await page.locator(`${UPDATE} [data-emphasis="true"]`).count()) === 0);
 	await shot("01-up-to-date");
 
-	// The feed publishes 0.1.1.
-	writeFileSync(join(feedDir, "latest/latest-mac.yml"), feedYml("0.1.1", zip));
+	// The feed publishes the next version.
+	writeFileSync(join(feedDir, "latest/latest-mac.yml"), feedYml(nextVersion, zip));
 	await page.evaluate(() => window.autorag.appUpdate.check());
 	check("new version on the feed → the button becomes available", await waitState("available", 30_000), `state=${await state()}`);
 	check("available: enabled and emphasised", !(await page.locator(UPDATE).isDisabled()) && (await page.locator(`${UPDATE} [data-emphasis="true"]`).count()) === 1);
-	check("available: tooltip names the new version", /0\.1\.1/.test((await page.locator(UPDATE).getAttribute("title")) ?? ""), await page.locator(UPDATE).getAttribute("title"));
+	check("available: tooltip names the new version", (await page.locator(UPDATE).getAttribute("title"))?.includes(nextVersion) === true, await page.locator(UPDATE).getAttribute("title"));
 	await shot("02-available");
 
 	// Click → real download through the feed.
@@ -196,29 +206,35 @@ try {
 		await shot("03-downloading");
 	}
 	check("the update downloads and is staged by Squirrel.Mac", await waitState("ready", Number(process.env.QA_READY_TIMEOUT_MS ?? 240_000)), `state=${await state()}`);
-	check("the feed server served the zip", requests.some((line) => line.includes("/v0.1.1/Dazzi-0.1.1-arm64.zip")), requests.join(" | "));
+	check("the feed server served the zip", requests.some((line) => line.includes(`/v${nextVersion}/Dazzi-${nextVersion}-arm64.zip`)), requests.join(" | "));
 	check("ready: tooltip offers the restart", /restart/i.test((await page.locator(UPDATE).getAttribute("title")) ?? ""), await page.locator(UPDATE).getAttribute("title"));
 	await shot("04-ready");
 
 	// Click → quit, Squirrel swaps the bundle, the new version relaunches.
-	const closed = new Promise((resolve) => app.process().once("exit", resolve));
+	const originalPid = app.process().pid;
+	const closed = new Promise((resolve) => app.process().once("exit", () => resolve(true)));
 	await page.locator(UPDATE).click();
-	await Promise.race([closed, sleep(60_000)]);
+	// quitAndInstall closes every window first and only then hands over to ShipIt: one window that refuses to close
+	// (the hidden quick-search launcher and Quick Look panels hide instead of closing) leaves the app running forever.
+	const quit = await Promise.race([closed, sleep(60_000).then(() => false)]);
+	check("the app quits on the restart click (every window lets quitAndInstall close it)", quit === true);
 	// ShipIt swaps the bundle after the app quits; validating and copying a multi-GB bundle takes minutes.
 	let installed = bundleVersion(installedApp);
-	for (let i = 0; i < 900 && installed !== "0.1.1"; i += 1) {
+	for (let i = 0; i < 900 && quit === true && installed !== nextVersion; i += 1) {
 		await sleep(1000);
 		installed = bundleVersion(installedApp);
 	}
-	check("after the click the app on disk is the new version", installed === "0.1.1", `CFBundleShortVersionString=${installed}`);
+	check("after the click the app on disk is the new version", installed === nextVersion, `CFBundleShortVersionString=${installed}`);
+	// A new process: the original one still running (it never quit) must not count as the relaunch.
+	const runningPids = () => (spawnSync("pgrep", ["-f", `${installedApp}/Contents/MacOS/Dazzi`], { encoding: "utf8" }).stdout ?? "").split("\n").filter(Boolean).map(Number);
 	let relaunched = false;
 	for (let i = 0; i < 120 && !relaunched; i += 1) {
-		relaunched = spawnSync("pgrep", ["-f", `${installedApp}/Contents/MacOS/Dazzi`]).status === 0;
+		relaunched = runningPids().some((pid) => pid !== originalPid);
 		if (!relaunched) await sleep(1000);
 	}
-	check("the updated app relaunched", relaunched);
+	check("the updated app relaunched as a new process", relaunched && installed === nextVersion);
 	const shipIt = join(process.env.HOME ?? "", "Library/Caches", `${E2E_BUNDLE_ID}.ShipIt`);
-	if (installed !== "0.1.1" && existsSync(join(shipIt, "ShipIt_stderr.log"))) console.log(`ShipIt log:\n${readFileSync(join(shipIt, "ShipIt_stderr.log"), "utf8").split("\n").slice(-40).join("\n")}`);
+	if (installed !== nextVersion && existsSync(join(shipIt, "ShipIt_stderr.log"))) console.log(`ShipIt log:\n${readFileSync(join(shipIt, "ShipIt_stderr.log"), "utf8").split("\n").slice(-40).join("\n")}`);
 	spawnSync("rm", ["-rf", shipIt]);
 	const verify = spawnSync("codesign", ["--verify", "--deep", "--strict", installedApp], { encoding: "utf8" });
 	check("the installed bundle's signature verifies", verify.status === 0, verify.stderr.trim());

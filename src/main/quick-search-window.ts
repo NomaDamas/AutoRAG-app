@@ -15,6 +15,7 @@ import { app, BrowserWindow, ipcMain, nativeTheme, screen } from "electron";
 import { LANGUAGE_FLAG } from "../shared/language-contract";
 import { QUICK_SEARCH_CHANNELS, type QuickSearchHideMode, type QuickSearchStatus } from "../shared/quick-search-contract";
 import type { AppSettings } from "../shared/settings-contract";
+import { whenQuitting } from "./quit-signal";
 
 export const QUICK_SEARCH_WIDTH = 720;
 export const QUICK_SEARCH_HEIGHT = 468;
@@ -70,9 +71,9 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 	let window: BrowserWindow | null = null;
 	let preview: BrowserWindow | null = null;
 	let destroyed = false;
-	/** Set on `before-quit`: the quit closes every window, and this one must not refuse. */
+	/** Set when the app starts to quit (see {@link whenQuitting}): the quit closes every window, and this one must not refuse. */
 	let quitting = false;
-	app.once("before-quit", () => {
+	whenQuitting(() => {
 		quitting = true;
 	});
 	/** A Dazzi window was in front when the launcher was summoned: dismissing it must not hide the app on macOS. */
