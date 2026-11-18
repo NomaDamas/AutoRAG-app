@@ -178,6 +178,20 @@ try {
 		check("the replaced words have left once the change settled", (await msg.locator("[data-revision=replace] del").count()) === 0);
 		check("a retracted claim stays struck", (await msg.locator("[data-revision=retract]").count()) === (await msg.locator("[data-revision=retract] del").count()));
 
+		// A source a correction brought in is marked in the answer and in the inspector alike (whatever the model corrected).
+		const freshChips = await msg.locator("button.cite[data-fresh]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-cite")));
+		const freshTabs = await page.locator(".evidence-tab[data-fresh]").evaluateAll((nodes) => nodes.map((node) => (node.textContent ?? "").trim()));
+		console.log(`  new sources: chips ${JSON.stringify(freshChips)}, inspector tabs ${JSON.stringify(freshTabs)}`);
+		check("every new-source chip sits inside a correction", (await msg.locator("button.cite[data-fresh]:not([data-revision] *)").count()) === 0);
+		check("the inspector marks exactly the sources the chips mark (the open one excepted)", freshTabs.every((tab) => freshChips.includes(tab)), `${JSON.stringify(freshChips)} vs ${JSON.stringify(freshTabs)}`);
+		if (freshChips.length > 0) {
+			const target = msg.locator("button.cite[data-fresh]").first();
+			const number = await target.getAttribute("data-cite");
+			await target.click();
+			await page.waitForTimeout(500);
+			check("opening a new source ends its mark in the answer and in the inspector", (await msg.locator(`button.cite[data-cite='${number}']`).first().getAttribute("data-fresh")) === null && (await page.locator(`.evidence-tab[data-fresh]`).filter({ hasText: new RegExp(`^${number}$`, "u") }).count()) === 0, String(number));
+		}
+
 		// No chip left dead: each citation chip in the corrected answer opens a source.
 		const cites = await first.locator("button.cite").evaluateAll((nodes) => nodes.map((node) => node.textContent));
 		console.log(`  citation chips in the corrected answer: ${JSON.stringify(cites)}`);

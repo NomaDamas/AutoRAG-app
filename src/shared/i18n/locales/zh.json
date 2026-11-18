@@ -299,7 +299,8 @@
       "openInBrowser": "在浏览器中打开",
       "evidenceFolder": "来源文件夹",
       "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的来源文件",
-      "openPreview": "在预览中查看引用段落"
+      "openPreview": "在预览中查看引用段落",
+      "newSource": "新来源 {{number}}"
     },
     "chat": {
       "title": "AI 智能体",

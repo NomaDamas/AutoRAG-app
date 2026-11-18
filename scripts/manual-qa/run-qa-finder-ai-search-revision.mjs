@@ -147,13 +147,27 @@ const during = {
 };
 check("the struck words stand beside the new ones", during.del[0] === "환불은 팀장 승인이 필요합니다" && during.ins[0]?.startsWith("환불은 이사 승인이 필요합니다"), JSON.stringify(during));
 check("the reason is the correction's tooltip", during.title === "2026년 개정", during.title);
-check("no line is added above the answer: it starts with the first claim", during.head.trimStart().startsWith("환불은"), during.head.slice(0, 40));
+check("no line is added above the answer: its first line is the first claim's bullet", during.head.trimStart().startsWith("–"), during.head.slice(0, 40));
 check("the unchanged claims stay as they were", during.head.includes("한도는 50만 원입니다") && during.head.includes("지급은 다음 달 25일입니다"));
 await page.screenshot({ path: join(EVIDENCE, "02-correction-arrives.png") });
 
 await call("revision", retract);
 await call("finish", { deep: { answer: "", evidence: [ev(4, "new-policy.md", "이사 승인 (2026년 개정)")] } });
 await waitFor(async () => (await panel.locator(".assistant-prose del").count()) === 2, "both corrections drawn");
+
+// A source the correction brought in is the sun colour in the answer and in the inspector until it is opened.
+const newChip = panel.locator("[data-revision=replace] ins .cite[data-cite='4']");
+await waitFor(async () => (await newChip.getAttribute("data-fresh")) === "true", "the new source's chip wears the new colour");
+const chipColour = await newChip.evaluate((el) => getComputedStyle(el).backgroundColor);
+const oldChipColour = await panel.locator(".cite[data-cite='2']").first().evaluate((el) => getComputedStyle(el).backgroundColor);
+check("the new source's chip is the sun colour, the others keep the usual wash", chipColour !== oldChipColour && /rgb\(245, 180, 0\)/u.test(chipColour), `${chipColour} vs ${oldChipColour}`);
+await waitFor(async () => (await page.locator(".evidence-tab[data-fresh='true']").count()) === 1, "the new source's tab in the inspector");
+const freshTab = page.locator(".evidence-tab[data-fresh='true']");
+check("only the new source's tab in the inspector has a dot, and it says so", (await freshTab.innerText()).trim() === "4" && (await freshTab.locator(".evidence-tab-dot").count()) === 1 && ((await freshTab.getAttribute("aria-label")) ?? "").includes("4"), await freshTab.getAttribute("aria-label"));
+await page.waitForTimeout(700);
+await page.screenshot({ path: join(EVIDENCE, "02b-new-source-marked.png") });
+await page.screenshot({ path: join(EVIDENCE, "02c-new-source-zoom-answer.png"), clip: { x: 230, y: 175, width: 460, height: 100 } });
+await page.screenshot({ path: join(EVIDENCE, "02d-new-source-zoom-tabs.png"), clip: { x: 1140, y: 55, width: 300, height: 40 } });
 
 // 2. The motion ends: the replaced words leave, the retracted claim stays struck.
 await waitFor(async () => (await panel.locator("[data-revision=replace] del").count()) === 0, "struck words collapse", 6000);
@@ -171,6 +185,9 @@ await panel.locator("[data-revision=replace] ins .cite", { hasText: /^4$/ }).cli
 await waitFor(async () => ((await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent()) ?? "").includes("new-policy.md"), "new citation opens");
 check("the new citation opens the source the final answer sent", ((await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent()) ?? "").includes("new-policy.md"), await page.locator(`${EVIDENCE_HALF} .preview-title`).textContent());
 check("only one answer is shown: the final answer added nothing", (await panel.locator(".assistant-prose").count()) === 1, String(await panel.locator(".assistant-prose").count()));
+check("opening the new source ends its emphasis: the chip is the selected one, not a new one", (await panel.locator("[data-revision=replace] ins .cite[data-cite='4']").getAttribute("data-fresh")) === null, await panel.locator("[data-revision=replace] ins .cite[data-cite='4']").getAttribute("class"));
+check("opening the new source ends its emphasis: its tab has no dot", (await page.locator(".evidence-tab[data-fresh]").count()) === 0 && (await page.locator(".evidence-tab-dot").count()) === 0, String(await page.locator(".evidence-tab-dot").count()));
+await page.screenshot({ path: join(EVIDENCE, "04-new-source-opened.png") });
 
 // 4. A run that corrects nothing draws as it always did.
 await ask("한도는요?", 2);

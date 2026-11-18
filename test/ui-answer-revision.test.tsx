@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ProseBlocks } from "../src/renderer/src/components/AiSearchPanel";
-import { drawQuickAnswer, markedCitationText, markQuickAnswer, splitRevisionMarks } from "../src/renderer/src/state/answer-revisions";
+import { drawQuickAnswer, markedCitationText, markQuickAnswer, newCitationNumbers, splitRevisionMarks } from "../src/renderer/src/state/answer-revisions";
 import { addTurnRevision, newTurn, turnEvidence, turnsFromHistory } from "../src/renderer/src/state/inspector-chat";
 import type { AnswerRevision } from "../src/shared/answer-revision";
 import type { ChatMessage } from "../src/shared/search-contract";
@@ -44,7 +44,7 @@ function render(revisions: readonly AnswerRevision[], animate: boolean, resolved
 				unresolved={[1, 2, 3, 4].filter((n) => !resolved.includes(n))}
 				onCitation={() => undefined}
 				imageActions={actions}
-				revisions={{ changes: marked.changes, animate }}
+				revisions={{ changes: marked.changes, animate, fresh: [] }}
 			/>,
 		),
 	);
@@ -72,7 +72,7 @@ describe("a corrected claim in the first answer", () => {
 	it("drops the struck claim's own citation and keeps the new one as a chip that can be opened", () => {
 		const onCitation = vi.fn();
 		const marked = markQuickAnswer(FIRST, [replace]);
-		act(() => root.render(<ProseBlocks text={marked!.text} selected={null} unresolved={[]} onCitation={onCitation} imageActions={actions} revisions={{ changes: marked!.changes, animate: true }} />));
+		act(() => root.render(<ProseBlocks text={marked!.text} selected={null} unresolved={[]} onCitation={onCitation} imageActions={actions} revisions={{ changes: marked!.changes, animate: true, fresh: [] }} />));
 		expect(host.querySelector("del")?.querySelector("button.cite")).toBeNull();
 		const chip = host.querySelector("ins button.cite") as HTMLButtonElement;
 		expect(chip.textContent).toBe("4");
@@ -133,6 +133,47 @@ describe("a corrected claim in the first answer", () => {
 		render([replace, retract, add], false);
 		expect(host.querySelectorAll("[data-revision]")).toHaveLength(3);
 		expect([...host.querySelectorAll("[data-revision]")].map((el) => el.getAttribute("data-revision"))).toEqual(["replace", "retract", "add"]);
+	});
+});
+
+describe("a source the correction brought in", () => {
+	const evidenceOf = (...numbers: number[]) => numbers.map((number) => ({ number, title: `${number}.md`, summary: "", source: `/${number}.md`, excerpts: [] }));
+
+	it("is one the new words cite that the first answer did not, and that has something to open", () => {
+		const marked = markQuickAnswer(FIRST, [replace, add])!;
+		expect(newCitationNumbers(FIRST, marked.changes, evidenceOf(1, 2, 3, 4))).toEqual([4]);
+		// Not yet sent by the final answer: nothing to open, so nothing to highlight.
+		expect(newCitationNumbers(FIRST, marked.changes, evidenceOf(1, 2, 3))).toEqual([]);
+		// A source the first answer already cited is not new however often the correction cites it again.
+		const again: AnswerRevision = { op: "replace", claimId: "c2", original: "- 한도는 50만 원입니다 [2]", replacement: "- 한도는 70만 원입니다 [1]", reason: "정정" };
+		expect(newCitationNumbers(FIRST, markQuickAnswer(FIRST, [again])!.changes, evidenceOf(1, 2, 3))).toEqual([]);
+	});
+
+	it("comes with the drawn answer, and a retraction brings in nothing", () => {
+		const quick = { answer: FIRST, evidence: evidenceOf(1, 2, 3) };
+		const deep = { answer: "", evidence: evidenceOf(4) };
+		expect(drawQuickAnswer(quick, deep, [replace])?.fresh).toEqual([4]);
+		expect(drawQuickAnswer(quick, deep, [retract])?.fresh).toEqual([]);
+	});
+
+	it("wears the sun colour in the answer until it has been opened, and only while the correction is new", () => {
+		const marked = markQuickAnswer(FIRST, [replace])!;
+		const draw = (fresh: readonly number[], selected: number | null = null) =>
+			act(() => root.render(<ProseBlocks text={marked.text} selected={selected} unresolved={[]} onCitation={() => undefined} imageActions={actions} revisions={{ changes: marked.changes, animate: true, fresh }} />));
+		draw([4]);
+		const chip = (): HTMLElement => host.querySelector('ins button.cite[data-cite="4"]') as HTMLElement;
+		expect(chip().getAttribute("data-fresh")).toBe("true");
+		expect(chip().className).toContain("bg-source-new");
+		// The chips of the claims that were already there keep the usual look.
+		expect(host.querySelector('button.cite[data-cite="2"]')?.getAttribute("data-fresh")).toBeNull();
+		// Opened: it is selected, so it takes the selected look rather than the new one.
+		draw([4], 4);
+		expect(chip().getAttribute("data-fresh")).toBeNull();
+		expect(chip().className).toContain("bg-accent");
+		// Read back from history: nothing is new.
+		draw([]);
+		expect(chip().getAttribute("data-fresh")).toBeNull();
+		expect(chip().className).toContain("bg-accent-wash");
 	});
 });
 

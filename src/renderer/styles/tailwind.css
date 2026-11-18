@@ -208,6 +208,8 @@
 	--color-warn-text: var(--warn-text);
 	--color-warn-bg: var(--warn-bg);
 	--color-warn-bg-strong: var(--warn-bg-strong);
+	--color-source-new: var(--source-new);
+	--color-source-new-text: var(--source-new-text);
 	--color-info-dot: var(--info-dot);
 	--color-info-text: var(--info-text);
 	--color-info-bg: var(--info-bg);
@@ -397,6 +399,7 @@
 	--animate-shimmer: shimmer var(--dur-shimmer) linear infinite;
 	--animate-pane-in: paneIn var(--dur-pane) var(--ease-pane);
 	--animate-drop-in: dropIn var(--dur-menu) var(--ease-out);
+	--animate-source-pop: popIn var(--dur-source-pop) var(--ease-pop);
 }
 
 /* ============================================================================

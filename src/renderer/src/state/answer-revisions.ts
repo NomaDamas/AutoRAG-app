@@ -6,6 +6,7 @@
 
 import { isAnswerChange, markRevisedAnswer, REVISION_MARK, type AnswerChange, type AnswerRevision } from "../../../shared/answer-revision";
 import type { AnswerPhase, CitationEvidence } from "../../../shared/search-contract";
+import { citedNumbers } from "./answer-markdown";
 import { mergePhaseEvidence, unresolvedCitationNumbers } from "./evidence";
 
 /** The Quick answer's text with a mark where each correction goes, and the corrections the marks stand for. */
@@ -57,6 +58,24 @@ export interface QuickAnswerDraw extends QuickAnswerMarks {
 	readonly unresolved: readonly number[];
 	/** The sources the answer's chips open. */
 	readonly evidence: readonly CitationEvidence[];
+	/** The sources the corrections brought in: cited by their new words, not by the answer the person first read. */
+	readonly fresh: readonly number[];
+}
+
+/**
+ * The sources a correction newly cites: the numbers its new words cite that the first answer did not and that have
+ * something to open. A source the first answer already showed is not new however often a correction cites it again.
+ */
+export function newCitationNumbers(firstAnswer: string, changes: readonly AnswerChange[], evidence: readonly { readonly number: number }[]): readonly number[] {
+	const had = new Set(citedNumbers(firstAnswer));
+	const known = new Set(evidence.map((item) => item.number));
+	const added = new Set<number>();
+	for (const change of changes) {
+		for (const number of citedNumbers(change.inserted)) {
+			if (!had.has(number) && known.has(number)) added.add(number);
+		}
+	}
+	return [...added].sort((a, b) => a - b);
 }
 
 /**
@@ -69,5 +88,5 @@ export function drawQuickAnswer(quick: AnswerPhase | null, deep: AnswerPhase | n
 	const marked = markQuickAnswer(quick.answer, revisions);
 	if (marked === null) return null;
 	const evidence = mergePhaseEvidence(deep?.evidence ?? [], quick.evidence);
-	return { ...marked, evidence, unresolved: unresolvedCitationNumbers(markedCitationText(marked), evidence) };
+	return { ...marked, evidence, unresolved: unresolvedCitationNumbers(markedCitationText(marked), evidence), fresh: newCitationNumbers(quick.answer, marked.changes, evidence) };
 }

@@ -123,7 +123,7 @@ export interface AiSearchPanelProps {
 	 */
 	readonly evidenceJump?: { readonly number: number; readonly nonce: number } | null;
 	readonly onSelectEvidence: (number: number) => void;
-	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
+	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[], freshEvidence?: readonly number[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
@@ -440,17 +440,31 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		return collectSessionEvidence(phases);
 	}, [pastTurns, quick, deep]);
 
+	// The sources the corrections just brought in, until the person has opened them: their chips in the answer and their
+	// tabs in the inspector wear the sun colour meanwhile. A chat read back from history shows none of them as new.
+	const [seenFresh, setSeenFresh] = useState<readonly number[]>([]);
+	const quickFresh = useMemo(() => (revisionsMove ? (drawQuickAnswer(quick, deep, revisions)?.fresh ?? []) : []), [revisionsMove, quick, deep, revisions]);
+	const unseenFresh = useMemo(() => quickFresh.filter((number) => !seenFresh.includes(number)), [quickFresh, seenFresh]);
+	useEffect(() => {
+		if (revisions.length === 0) setSeenFresh([]);
+	}, [revisions]);
+	useEffect(() => {
+		if (active && selectedEvidence !== null && quickFresh.includes(selectedEvidence)) {
+			setSeenFresh((current) => (current.includes(selectedEvidence) ? current : [...current, selectedEvidence]));
+		}
+	}, [active, selectedEvidence, quickFresh]);
+
 	// Only the visible tab's chat feeds the inspector; it keeps that evidence
 	// while the user browses folders in other tabs.
 	useEffect(() => {
-		if (active) onPublish(evidence, sessionEvidence);
-	}, [active, evidence, sessionEvidence, onPublish]);
+		if (active) onPublish(evidence, sessionEvidence, unseenFresh);
+	}, [active, evidence, sessionEvidence, unseenFresh, onPublish]);
 
 	function selectPhaseCitation(turnIndex: number, phase: "quick" | "deep", number: number): void {
 		const nextSource: EvidenceSelectionSource = { turnIndex, phase };
 		setEvidenceSource(nextSource);
 		const nextEvidence = accumulateEvidence(allTurnPhases, nextSource);
-		if (active) onPublish(nextEvidence, sessionEvidence);
+		if (active) onPublish(nextEvidence, sessionEvidence, unseenFresh.filter((fresh) => fresh !== number));
 		onSelectEvidence(number);
 		onCitation?.(number);
 	}
@@ -1114,7 +1128,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 										unresolved={quickDraw?.unresolved ?? quickUnresolved}
 										onCitation={(number) => selectPhaseCitation(pastTurns.length, "quick", number)}
 										imageActions={imageActions}
-										{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: revisionsMove } })}
+										{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: revisionsMove, fresh: quickDraw.fresh.filter((number) => !seenFresh.includes(number)) } })}
 									/>
 								</div>
 							) : null}
@@ -1505,7 +1519,7 @@ function PastTurnView({
 					unresolved={drawn?.unresolved ?? unresolvedCitationNumbers(text, phase?.evidence ?? [])}
 					onCitation={(number) => onCitation(turnIndex, phaseKind, number)}
 					imageActions={imageActions}
-					{...(drawn === null ? {} : { revisions: { changes: drawn.changes, animate: false } })}
+					{...(drawn === null ? {} : { revisions: { changes: drawn.changes, animate: false, fresh: [] } })}
 				/>
 			</div>
 		);
@@ -1618,10 +1632,14 @@ export function ProseBlocks({
 	);
 }
 
-/** The corrections an answer's text holds a mark for, and whether they arrived just now (they move) or are read back (they are settled). */
+/**
+ * The corrections an answer's text holds a mark for, whether they arrived just now (they move) or are read back (they are
+ * settled), and the sources they brought in that the person has not opened yet (their chips wear the sun colour).
+ */
 export interface RevisionDraw {
 	readonly changes: readonly AnswerChange[];
 	readonly animate: boolean;
+	readonly fresh: readonly number[];
 }
 
 /** Inline segments of one answer line: bold, code, image paths as written, citation chips, and web links. */
@@ -1669,7 +1687,7 @@ function AnswerInline({
 								{segment.target}
 							</span>
 						);
-					case "citation":
+					case "citation": {
 						// A citation whose number has no matching evidence entry (a real
 						// library behavior: see Marker-Inc-Korea/AutoRAG#1788) is dropped
 						// from the rendered answer. There is nothing to open, so leaving a
@@ -1678,20 +1696,25 @@ function AnswerInline({
 						if (unresolved.includes(segment.number)) {
 							return null;
 						}
+						// A source the correction brought in wears the sun colour (and pops in) until the person has opened it.
+						const fresh = revisions?.fresh.includes(segment.number) === true && segment.number !== selected;
 						return (
 							<button
 								type="button"
 								key={`${index}`}
 								className={cn(
-									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-									segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-revision-mark) ease-[ease]",
+									segment.number === selected ? "active bg-accent text-on-accent" : fresh ? "bg-source-new text-source-new-text hover:brightness-110" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+									fresh && revisions?.animate === true && "animate-source-pop",
 								)}
 								data-cite={segment.number}
+								data-fresh={fresh ? "true" : undefined}
 								onClick={() => onCitation(segment.number)}
 							>
 								{segment.number}
 							</button>
 						);
+					}
 					case "file":
 						return <FileMention key={`${index}`} path={segment.path} onOpen={onOpenUrl} />;
 					case "link":
@@ -1733,7 +1756,7 @@ function AnswerText({
 				if (change === undefined) return null;
 				return (
 					<AnswerRevisionMark key={`${index}`} change={change} animate={revisions.animate}>
-						<AnswerInline segments={parseInline(change.inserted)} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} />
+						<AnswerInline segments={parseInline(change.inserted)} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} revisions={revisions} />
 					</AnswerRevisionMark>
 				);
 			})}

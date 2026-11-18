@@ -1086,6 +1086,11 @@ When verification finds the Quick answer wrong, the librarian corrects it claim 
   finding is not drawn like a replacement: no strike and no sun colour, but its own block on an accent rail that rises in and
   keeps the rail once settled. A replaced claim that fits one line collapses by its measured width, so the lines below it
   never move; one that wraps only fades before it leaves.
+  A source a correction brought in (cited by its new words, not by the first answer, with evidence sent by the final
+  answer) is new until the person opens it: its chip in the answer is the sun colour and pops in, and its tab in the
+  inspector's evidence panel carries a sun dot and the name "새 근거 N" (design preview "답이 고쳐질 때"). The answer
+  panel owns that set (`drawQuickAnswer().fresh` minus the sources opened), publishes it to the inspector with the
+  evidence (`onPublish`), and a chat read back from history marks nothing as new.
 
 ### What the panel shows while a run works, and an exhausted plan
 

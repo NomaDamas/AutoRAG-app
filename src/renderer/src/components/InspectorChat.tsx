@@ -576,7 +576,7 @@ function TurnView({
 						imageActions={imageActions}
 						onReveal={onReveal}
 						onPreview={onPreview}
-						{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: turn.startedAt !== 0 }, unresolved: quickDraw.unresolved })}
+						{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: turn.startedAt !== 0, fresh: turn.startedAt !== 0 ? quickDraw.fresh : [] }, unresolved: quickDraw.unresolved })}
 					/>
 				)}
 				{turn.steers
