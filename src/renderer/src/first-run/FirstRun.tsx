@@ -52,6 +52,8 @@ const CINEMA_OUT_MS = 3700;
 const INTRO_FADE_MS = 340;
 /** How often the reading screen re-reads the run's status in case a progress event was missed. */
 const SETUP_POLL_MS = 3000;
+/** How long the duplicates step waits for its family's row to appear before the tour ends without it. */
+const DUPLICATE_ROW_WAIT_MS = 6_000;
 
 type DeskMode = "cover" | "rise" | null;
 
@@ -685,6 +687,18 @@ function Tour({
 	useEffect(() => {
 		if (step === "duplicates" && family !== null && family !== undefined) hostRef.current.showFamily(family);
 	}, [step, family]);
+
+	// The duplicate steps are the tour's last: when the family's row is not on screen a few seconds after the folder opened (the scan
+	// found copies the Finder cannot list, or the list did not scroll to it), there is nothing to point at, so the tour ends instead of waiting.
+	useEffect(() => {
+		if (step !== "duplicates" || family === null || family === undefined) return;
+		const target = clickTargetFor("duplicates", family, true);
+		if (target === null) return;
+		const timer = window.setTimeout(() => {
+			if (stepRef.current === "duplicates" && document.querySelector(target) === null) onEnd();
+		}, DUPLICATE_ROW_WAIT_MS);
+		return () => window.clearTimeout(timer);
+	}, [step, family, onEnd]);
 
 	const askReady = step === "ask" && typed >= question.length;
 	const citeReady = step === "cite" && answer === "done" && cited;

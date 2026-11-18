@@ -73,6 +73,12 @@ const MIN_LETTER_RATIO = 0.5;
 const DEMO_ANSWER_TIMEOUT_MS = 60_000;
 /** The whole preparing stage is bounded so the user never waits forever. */
 const PREPARING_TIMEOUT_MS = 90_000;
+/**
+ * Longest the first run holds the first index back for the duplicate (dupey) scan. The scan takes a few minutes on a large
+ * profile; it starts as soon as the folders are known and runs beside smart indexing, so by the time indexing would start it is
+ * usually done. A scan that is still running after this carries on in the background and the tour simply skips its duplicate steps.
+ */
+const DUPLICATE_SCAN_TIMEOUT_MS = 240_000;
 /** Indexing's share of the one bar: `computeIndexingProgress` yields 0–100 and this maps it to 15–90. */
 const INDEXING_START = 15;
 const INDEXING_SPAN = 75;
@@ -929,8 +935,7 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 	async function preparingStage(): Promise<void> {
 		setStage("preparing", 90);
 		emitStatus();
-		const work = Promise.all([deps.refreshDuplicates().catch(() => undefined), finishHunt().catch(() => undefined)]);
-		await withTimeout(work, PREPARING_TIMEOUT_MS, undefined);
+		await withTimeout(finishHunt().catch(() => undefined), PREPARING_TIMEOUT_MS, undefined);
 		abandonHunt();
 		setProgress(99);
 		emitStatus();
@@ -954,8 +959,12 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 			// provisioned meanwhile and awaited only where a model is first used. Signing in later swaps the credential.
 			const modelAccess = (deps.ensureModelAccess?.() ?? Promise.resolve()).catch(() => undefined);
 			const folders = await scanStage();
+			// The duplicate scan needs only the folders, so it starts now and runs beside smart indexing. The tour's duplicate
+			// steps read its result, and they cannot show what has not been found yet.
+			const duplicates = deps.refreshDuplicates().catch(() => undefined);
 			await withTimeout(modelAccess, MODEL_ACCESS_TIMEOUT_MS, undefined);
 			const exclusions = await planningStage(folders);
+			await withTimeout(duplicates, DUPLICATE_SCAN_TIMEOUT_MS, undefined);
 			const result = await indexingStage(folders, exclusions);
 			if (!result.ok) return;
 			await preparingStage();

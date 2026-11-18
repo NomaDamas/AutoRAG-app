@@ -632,6 +632,11 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
      `~/Library/Mail`) open `FullDiskAccessDialog` (one button: opens Privacy &
      Security › Full Disk Access while ungranted, flips to confirm-and-continue
      once `probeFullDiskAccess` passes; System Settings offers Quit & Reopen);
+   - the **duplicate (dupey) scan** starts the moment the folders are known (`refreshDuplicates`, the fs worker's
+     version-family refresh) and runs beside `planning`. It takes a few minutes on a large profile, so the first
+     index waits for it (at most `DUPLICATE_SCAN_TIMEOUT_MS`, 4 min; a scan still running then carries on in the
+     background, and one that fails or finds nothing never fails the run). The tour's duplicate steps read its
+     snapshot, so it has to be there before the tour opens, not after;
    - `planning` (8→15) runs the smart-indexing helper agent over those roots
      (see "Helper agents") and **takes every proposal** it makes; a model that is
      not configured, errors, or times out simply yields no exclusions and the run
@@ -650,8 +655,7 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
      finalizing 95–99, `NONE_FILES_PER_MINUTE` for the ETA with the
      `NONE_MIN_MINUTES` floor until the pre-scan reports a total). A power-save
      blocker is held for the run;
-   - `preparing` (90→99) starts a duplicate (dupey) scan in the background and
-     picks the tour's one question: it reads the parsed mirror, takes up to eight
+   - `preparing` (90→99) picks the tour's one question: it reads the parsed mirror, takes up to eight
      substantial, non-code documents (recent first, one per folder), reads a
      ~2,000-character excerpt of each, and asks the configured answer model
      (`resolveConfiguredSessionModel` + `completeSimple`) for one natural,
@@ -691,7 +695,9 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    sending the typed demo question (`ask`), clicking the citation chip (`cite`),
    inspecting the evidence (`evidence`), clicking a duplicate family row
    (`duplicates`), and checking its Versions section (`versions`). Steps with no
-   data (no demo question, no duplicate family) are skipped.
+   data (no demo question, no duplicate family) are skipped. The duplicates step also gives up on its own: when its
+   family's row is not on screen `DUPLICATE_ROW_WAIT_MS` (6 s) after the folder opened, the tour ends rather than
+   wait for a click that has nothing to land on.
 4. **Sign-in**: only at the very end of the tour does the sheet
    `.fr-signin-sheet` offer Google / GitHub sign-in, the in-app email code, and
    "나중에 할게요" (`[data-action="signin-later"]`); a finished sign-in shows

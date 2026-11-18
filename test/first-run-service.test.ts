@@ -241,6 +241,42 @@ describe("createFirstRunService run", () => {
 		expect(final.error).toBeNull();
 	});
 
+	it("scans for duplicates as soon as the folders are known and holds the first index back until that scan settles", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const scan = Promise.withResolvers<void>();
+		const order: string[] = [];
+		const service = createFirstRunService(
+			await makeDeps(directory, {
+				scanFolders: async () => void order.push("folders"),
+				refreshDuplicates: () => {
+					order.push("duplicates-start");
+					return scan.promise.then(() => void order.push("duplicates-done"));
+				},
+				refresh: async () => {
+					order.push("index");
+					return OK;
+				},
+			}),
+		);
+		await service.start();
+		for (let tick = 0; tick < 60 && !order.includes("duplicates-start"); tick += 1) await flush();
+		for (let tick = 0; tick < 20; tick += 1) await flush();
+		// Folders known, scan running, and the index has not been started behind it.
+		expect(order).toEqual(["folders", "duplicates-start"]);
+		scan.resolve();
+		expect((await waitForStage(service, "ready")).stage).toBe("ready");
+		expect(order).toEqual(["folders", "duplicates-start", "duplicates-done", "index"]);
+	});
+
+	it("indexes on when the duplicate scan fails", async () => {
+		const directory = await workDir("autorag-firstrun-");
+		const service = createFirstRunService(await makeDeps(directory, { refreshDuplicates: async () => Promise.reject(new Error("dupey is missing")) }));
+		await service.start();
+		const final = await waitForStage(service, "ready");
+		expect(final.stage).toBe("ready");
+		expect(final.error).toBeNull();
+	});
+
 	it("returns the run in flight instead of starting a second one", async () => {
 		const directory = await workDir("autorag-firstrun-");
 		const gate = Promise.withResolvers<ConfigRefreshResult>();
