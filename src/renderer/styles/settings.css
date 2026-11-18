@@ -3494,6 +3494,12 @@
 	min-width: 0;
 }
 
+/* 이 컴퓨터에서 열기 and 포트 are two separate settings: 24px apart. <details> lays its content out as blocks
+   (its flex gap does not reach the slotted children), so the space is a margin. */
+.settings-view .settings-remote-detail + .settings-remote-detail {
+	margin-top: 24px;
+}
+
 .settings-view .settings-remote-port-field {
 	display: flex;
 	flex-direction: column;
