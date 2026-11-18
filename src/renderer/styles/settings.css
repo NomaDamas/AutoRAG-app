@@ -247,6 +247,9 @@
 	min-width: 0;
 	min-height: 0;
 	overflow-y: auto;
+	/* Keep the scrollbar's lane even when a page is short, so the centred column does not jump sideways when a
+	   page grows past the window (원격 접속 turned on) or shrinks again. */
+	scrollbar-gutter: stable;
 	background: var(--bg-window);
 	padding: 48px 56px 64px; /* reference geometry (Figma 403:9482: the head 12px lower than before); the token scale has no 48/56/64. */
 }
@@ -1241,9 +1244,11 @@
 
 .settings-view .settings-modal h2 {
 	margin: 0 0 var(--space-6);
+	padding-right: 32px;
 	color: var(--text-primary);
 	font-size: 15px;
 	font-weight: var(--weight-semibold);
+	line-height: 24px;
 }
 
 .settings-view .settings-modal p {
@@ -1331,19 +1336,24 @@
 	box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/*
+ * One close button for every settings modal: a 14px X in a 24px square, 16px from the right edge, centred on the
+ * title's 24px line. `top` is the modal's top padding, so a variant with other padding only moves it down.
+ * `right` starts inside the modal's 1px border, so 15px here is 16px from the edge; the borderless variant says 16px.
+ */
 .settings-view .settings-modal-close {
 	position: absolute;
-	top: var(--space-12);
-	right: var(--space-12);
+	top: 22px;
+	right: 15px;
 	display: grid;
 	place-items: center;
 	width: 24px;
 	height: 24px;
 	padding: 0;
 	border: 0;
-	border-radius: var(--radius-full);
+	border-radius: var(--radius-6);
 	background: transparent;
-	color: var(--text-faint);
+	color: var(--text-muted);
 	cursor: pointer;
 }
 
@@ -1367,6 +1377,585 @@
 .settings-view .settings-modal-actions .linear-btn:disabled {
 	opacity: 0.6;
 	cursor: progress;
+}
+
+/* -------------------------------------------- 중요 알림 (Figma 580:15140) -- */
+
+/* A short yes/no question: a small card, title and close on one line, the actions at 32px. */
+.settings-view .settings-modal.settings-alert {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-12);
+	width: min(416px, calc(100% - 32px));
+	padding: var(--space-14) var(--space-16);
+	border-radius: 14px;
+	box-shadow: var(--shadow-notice);
+}
+
+.settings-view .settings-alert h2 {
+	margin: 0;
+	padding-right: 32px;
+	font-size: 14px;
+	font-weight: var(--weight-bold);
+	line-height: 24px;
+}
+
+.settings-view .settings-alert p {
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-alert .settings-modal-close {
+	top: var(--space-14);
+}
+
+.settings-view .magic-editor-modal .settings-modal-close {
+	top: 22px;
+	right: var(--space-16);
+}
+
+.settings-view .settings-alert .settings-modal-actions {
+	margin-top: 0;
+}
+
+.settings-view .settings-alert .settings-modal-actions .linear-btn {
+	height: 32px;
+	font-weight: var(--weight-medium);
+}
+
+/* --------------------------------------- 매직 액션 만들기 모달 (Figma 598:3131) -- */
+
+.settings-view .settings-modal.magic-editor-modal {
+	width: min(468px, calc(100% - 32px));
+	padding: 22px 20px 18px;
+	border: 0;
+	border-radius: 16px;
+	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+.settings-view .magic-editor {
+	display: flex;
+	flex-direction: column;
+}
+
+/* The icon starts on the content's left edge, like 처리 방식 below, and sits on the name's 24px line, 10px before it. */
+.settings-view .magic-editor-head {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-10);
+	padding-right: 32px;
+}
+
+.settings-view .magic-editor-tile {
+	display: flex;
+	flex: none;
+	align-items: center;
+	height: 24px;
+	color: var(--accent-text);
+}
+
+/* The name is the title: a borderless 17px field with the hint under it. */
+.settings-view .magic-editor-name {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .settings-modal .magic-editor-name > input {
+	height: 24px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: 17px;
+	font-weight: var(--weight-bold);
+	line-height: 24px;
+}
+
+.settings-view .settings-modal .magic-editor-name > input:focus {
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-name > input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .magic-editor-name > span,
+.settings-view .magic-editor-caption {
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+/* 처리 방식: a full-width segmented control, the picked half a white chip. */
+.settings-view .magic-editor-kind {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: 20px 0 var(--space-12);
+}
+
+.settings-view .magic-editor-seg {
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--bg-input);
+}
+
+.settings-view .magic-editor-seg > button {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-6);
+	min-width: 0;
+	padding: var(--space-6) var(--space-12);
+	border: 0.5px solid transparent;
+	border-radius: var(--radius-8);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 13px;
+	line-height: 19px;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-seg > button.is-active {
+	border-color: var(--border);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+}
+
+/* The instruction card: the prompt (or the command) on grey, with its permission chip underneath. */
+.settings-view .magic-editor-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding: var(--space-12) var(--space-12) var(--space-10);
+	border-radius: var(--radius-12);
+	background: var(--bg-chrome);
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea {
+	height: auto;
+	min-height: 84px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: 14px;
+	line-height: 22px;
+	resize: none;
+	field-sizing: content;
+	max-height: 220px;
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea:focus {
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-card > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .magic-editor-card-bar {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-modal p.magic-editor-card-hint {
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	overflow-wrap: anywhere;
+}
+
+.settings-view .magic-editor-mode {
+	position: relative;
+}
+
+.settings-view .magic-editor-mode-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: 5px var(--space-10);
+	border: 0.5px solid var(--border);
+	border-radius: 13px;
+	background: var(--bg-window);
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 17px;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mode-chip:hover,
+.settings-view .magic-editor-mode-chip[aria-expanded="true"] {
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-mode-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 2;
+	width: 300px;
+	margin: 0;
+	padding: var(--space-4);
+	list-style: none;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-menu);
+}
+
+.settings-view .magic-editor-mode-menu button {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-8);
+	width: 100%;
+	padding: var(--space-6) var(--space-8);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mode-menu button > svg {
+	flex: none;
+	margin-top: 1px;
+}
+
+.settings-view .magic-editor-mode-menu button:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .magic-editor-mode-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .magic-editor-mode-text > small {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+}
+
+/* 표시할 대상 and 고급 설정: one bordered group of rows, each opening a tinted panel. */
+.settings-view .magic-editor-group {
+	margin-top: var(--space-16);
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-12);
+	overflow: hidden;
+}
+
+.settings-view .magic-editor-section + .magic-editor-section {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .magic-editor-section > summary {
+	display: flex;
+	align-items: center;
+	gap: var(--space-10);
+	height: 44px;
+	padding: 0 var(--space-14);
+	list-style: none;
+	cursor: pointer;
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-section > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .magic-editor-section > summary > svg {
+	flex: none;
+}
+
+.settings-view .magic-editor-section-name {
+	flex: none;
+	font-size: 14px;
+	line-height: 20px;
+}
+
+.settings-view .magic-editor-section-value {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-section-chevron {
+	color: var(--text-muted);
+	transition: transform 120ms ease;
+}
+
+.settings-view .magic-editor-section[open] > summary > .magic-editor-section-chevron {
+	transform: rotate(90deg);
+}
+
+.settings-view .magic-editor-sub {
+	padding: var(--space-4) var(--space-14);
+	border-top: 0.5px solid var(--border-divider);
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .magic-editor-sub > * + * {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .magic-editor-sub-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	min-height: 40px;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-sub-row > span {
+	flex: none;
+}
+
+.settings-view .magic-editor-sub-row.is-switch {
+	padding: var(--space-8) 0;
+}
+
+.settings-view .magic-editor-switch-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .magic-editor-switch-text > small {
+	font-size: var(--font-size-badge);
+	line-height: 1.4;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-mini-seg {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .magic-editor-mini-seg > button {
+	padding: 3px var(--space-10);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 17px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mini-seg > button:hover:not(.is-active) {
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-mini-seg > button.is-active {
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+/* 확장자: blue chips (a click removes one), then the field that adds the next. */
+.settings-view .magic-editor-exts {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	align-items: center;
+	gap: var(--space-6);
+	min-width: 0;
+	padding: var(--space-6) 0;
+}
+
+.settings-view .magic-editor-ext {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: 28px;
+	padding: 0 var(--space-12);
+	border: 0;
+	border-radius: 14px;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	cursor: pointer;
+}
+
+.settings-view .settings-modal .magic-editor-exts > input {
+	width: 150px;
+	height: 27px;
+	margin: 0;
+	padding: 0 var(--space-8);
+	border: 0.5px solid var(--border);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-modal label.magic-editor-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin: 0;
+	padding: var(--space-10) 0;
+	font-size: 13px;
+}
+
+.settings-view .settings-modal label.magic-editor-field > input {
+	margin: 0;
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .magic-editor .settings-modal-actions {
+	margin-top: 20px;
+}
+
+.settings-view .magic-editor .settings-modal-actions .linear-btn {
+	height: 28px;
+	padding: 0 var(--space-10);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .magic-editor .settings-modal-actions .linear-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+/* MCP 서버 추가/수정 in the same dialog: the card holds labelled monospace lines instead of one prompt. */
+.settings-view .mcp-editor-card {
+	gap: 0;
+	padding: 0 var(--space-12);
+}
+
+.settings-view .settings-modal label.mcp-editor-line {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	margin: 0;
+	padding: var(--space-10) 0;
+}
+
+.settings-view .mcp-editor-line + .mcp-editor-line {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .settings-modal .mcp-editor-line > input,
+.settings-view .settings-modal .mcp-editor-line > textarea {
+	height: auto;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 20px;
+	resize: none;
+}
+
+.settings-view .settings-modal .mcp-editor-line > textarea {
+	field-sizing: content;
+	min-height: 60px;
+	max-height: 160px;
+}
+
+.settings-view .settings-modal .mcp-editor-line > input:focus,
+.settings-view .settings-modal .mcp-editor-line > textarea:focus {
+	box-shadow: none;
+}
+
+.settings-view .mcp-editor-line > input::placeholder,
+.settings-view .mcp-editor-line > textarea::placeholder,
+.settings-view .magic-editor-field > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .mcp-editor-line > small,
+.settings-view .magic-editor-field > small {
+	font-size: var(--font-size-badge);
+	line-height: 1.4;
+	color: var(--text-muted);
+	white-space: pre-line;
+}
+
+.settings-view .settings-modal label.magic-editor-field > textarea {
+	margin: 0;
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+	field-sizing: content;
+	min-height: 62px;
+	resize: none;
+}
+
+/* 도구 노출 방식: one row per choice, its hint under the name and a check on the picked one. */
+.settings-view .mcp-editor-choices {
+	display: flex;
+	flex-direction: column;
+	padding: var(--space-4) 0;
+}
+
+.settings-view .mcp-editor-choices > button {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	padding: var(--space-6) var(--space-8);
+	margin: 0 calc(-1 * var(--space-8));
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .mcp-editor-choices > button:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .mcp-editor-choices > button > svg {
+	flex: none;
+	color: var(--accent-text);
+}
+
+.settings-view .magic-editor .mcp-editor-note {
+	margin-top: var(--space-12);
 }
 
 /* ------------------------------------------------- Indexing · progress map -- */
@@ -3060,7 +3649,7 @@
 	color: var(--danger-text);
 }
 
-/* ---------------------------------------------------------- Remote Access -- */
+/* ------------------------------------------- Remote Access (Figma 585:9647) -- */
 
 .settings-view .settings-remote-via {
 	margin: var(--space-8) 0 0;
@@ -3074,151 +3663,75 @@
 	gap: var(--space-8);
 }
 
-.settings-view .settings-remote-card,
-.settings-view .settings-remote-devices {
-	border: 1px solid var(--border);
-	border-radius: var(--radius-10);
-	background: var(--bg-subtle);
-	padding: var(--space-12) var(--space-14);
-	min-width: 0;
-}
-
+/* The connect card: route and code, 20px apart, no rule between them. */
 .settings-view .settings-remote-card {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-16);
-}
-
-.settings-view .settings-remote-card,
-.settings-view .settings-remote-devices {
+	gap: 20px;
 	margin-top: var(--space-10);
-}
-
-.settings-view .settings-remote-detail__name {
-	font-size: var(--font-size-meta);
-	font-weight: var(--weight-semibold);
-	color: var(--text-primary);
+	padding: var(--space-16) 20px;
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	background: var(--bg-window);
+	min-width: 0;
 }
 
 .settings-view .settings-remote-step {
 	display: flex;
 	flex-direction: column;
-	gap: var(--space-8);
+	align-items: flex-start;
+	gap: var(--space-10);
 	min-width: 0;
 }
 
-.settings-view .settings-remote-step + .settings-remote-step {
-	padding-top: var(--space-16);
-	border-top: 1px solid var(--border-divider);
+.settings-view .settings-remote-step > *,
+.settings-view .settings-remote-pane,
+.settings-view .settings-remote-pane > * {
+	align-self: stretch;
 }
 
-.settings-view .settings-remote-step__label {
+.settings-view .settings-remote-step > .settings-remote-tabs {
+	align-self: flex-start;
+}
+
+.settings-view .settings-remote-step__label,
+.settings-view .settings-remote-detail__name {
 	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
+	font-weight: var(--weight-bold);
 	color: var(--text-primary);
 }
 
+/* 같은 Wi-Fi | 외부 인터넷: a segmented control, the picked one a raised white chip. */
 .settings-view .settings-remote-tabs {
-	display: flex;
-	flex-wrap: wrap;
-	gap: var(--space-6);
-}
-
-.settings-view .settings-remote-field {
-	display: flex;
-	align-items: center;
-	gap: var(--space-8);
-	min-width: 0;
-}
-
-.settings-view .settings-remote-field > input,
-.settings-view .settings-remote-field > .settings-remote-url-line {
-	flex: 1;
-	min-width: 0;
-}
-
-.settings-view .settings-remote-field > .settings-remote-url-line {
-	padding: var(--space-6) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-6);
-	background: var(--bg-window);
-}
-
-.settings-view .settings-remote-field > .settings-remote-port {
-	flex: 0 0 120px;
-}
-
-.settings-view .settings-remote-details,
-.settings-view .settings-remote-domain {
-	min-width: 0;
-}
-
-.settings-view .settings-remote-details {
-	padding-top: var(--space-12);
-	border-top: 1px solid var(--border-divider);
-}
-
-.settings-view .settings-remote-details > summary,
-.settings-view .settings-remote-domain > summary {
-	cursor: pointer;
-	font-size: var(--font-size-meta);
-	color: var(--text-muted);
-	width: fit-content;
-}
-
-.settings-view .settings-remote-details > summary:hover,
-.settings-view .settings-remote-domain > summary:hover {
-	color: var(--text-primary);
-}
-
-.settings-view .settings-remote-details[open] > summary,
-.settings-view .settings-remote-domain[open] > summary {
-	margin-bottom: var(--space-10);
-}
-
-.settings-view .settings-remote-domain[open] {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-8);
-}
-
-.settings-view .settings-remote-domain[open] > summary {
-	margin-bottom: 0;
-}
-
-.settings-view .settings-remote-detail {
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-4);
-	min-width: 0;
-}
-
-.settings-view .settings-remote-detail + .settings-remote-detail {
-	margin-top: var(--space-12);
+	display: inline-flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
 }
 
 .settings-view .settings-remote-tab {
-	height: 28px;
-	padding: 0 var(--space-12);
-	border: 1px solid var(--border);
+	padding: 5px var(--space-12);
+	border: 0;
 	border-radius: var(--radius-6);
-	background: var(--bg-window);
-	color: var(--text-body);
+	background: transparent;
+	color: var(--text-muted);
 	font: inherit;
 	font-size: var(--font-size-meta);
-	font-weight: var(--weight-medium);
+	line-height: normal;
+	white-space: nowrap;
 	cursor: pointer;
 }
 
 .settings-view .settings-remote-tab:hover {
-	background: var(--bg-hover);
 	color: var(--text-primary);
 }
 
 .settings-view .settings-remote-tab.is-active {
-	border-color: var(--accent);
-	background: var(--accent-soft);
-	color: var(--accent-text);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-bold);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .settings-view .settings-remote-pane {
@@ -3228,16 +3741,11 @@
 	min-width: 0;
 }
 
-.settings-view .settings-remote-desc {
-	margin: 0;
-	font-size: var(--font-size-meta);
-	line-height: var(--leading-body);
-	color: var(--text-body);
-}
-
+.settings-view .settings-remote-desc,
 .settings-view .settings-remote-sub {
 	margin: 0;
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
 	color: var(--text-muted);
 	overflow-wrap: anywhere;
 }
@@ -3253,55 +3761,83 @@
 	min-width: 0;
 }
 
+.settings-view .settings-remote-field {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	min-width: 0;
+}
+
+/* An address: monospace on a grey well, copied with the button beside it. */
+.settings-view .settings-remote-url-line {
+	flex: 1;
+	min-width: 0;
+	padding: var(--space-8) var(--space-12);
+	border-radius: var(--radius-8);
+	background: var(--bg-input);
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	color: var(--text-primary);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .settings-view .settings-remote-pair-box {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-14);
-	padding: var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+	gap: var(--space-16);
+	padding: var(--space-14);
 	min-width: 0;
 }
 
 .settings-view .settings-remote-qr {
 	flex: none;
 	display: block;
-	border-radius: var(--radius-6);
-	border: 1px solid var(--border-divider);
 }
 
 .settings-view .settings-remote-pair-meta {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: var(--space-6);
+	align-items: flex-start;
+	gap: var(--space-8);
 	min-width: 180px;
+}
+
+.settings-view .settings-remote-code-line {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-12);
 }
 
 .settings-view .settings-remote-code {
 	font-family: var(--font-mono);
-	font-size: 24px;
-	font-weight: var(--weight-semibold);
-	letter-spacing: 0.14em;
+	font-size: 28px;
+	font-weight: var(--weight-bold);
+	letter-spacing: 2px;
+	line-height: normal;
 	color: var(--text-primary);
-	line-height: 1.15;
 }
 
 .settings-view .settings-remote-expiry {
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-url-line {
-	font-family: var(--font-mono);
-	font-size: var(--font-size-badge);
-	color: var(--text-body);
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	max-width: 100%;
+.settings-view .settings-remote-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-actions .linear-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
 }
 
 .settings-view .settings-remote-status-line {
@@ -3313,49 +3849,140 @@
 	color: var(--text-primary);
 }
 
-.settings-view .settings-remote-command {
-	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+/* 고급 설정: under the card, a chevron and muted label that open the address and the port. */
+.settings-view .settings-remote-details,
+.settings-view .settings-remote-domain {
 	min-width: 0;
 }
 
-.settings-view .settings-remote-command code {
-	font-family: var(--font-mono);
-	font-size: var(--font-size-badge);
-	color: var(--text-primary);
-	word-break: break-all;
-	min-width: 0;
-}
-
-.settings-view .settings-remote-actions {
+.settings-view .settings-remote-details {
 	display: flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-8);
+	flex-direction: column;
+	gap: var(--space-12);
+	margin-top: 20px;
+	padding: 0 var(--space-4);
 }
 
-.settings-view .settings-remote-actions .linear-btn,
-.settings-view .settings-remote-device-actions .linear-btn {
+.settings-view .settings-remote-details > summary {
 	display: inline-flex;
 	align-items: center;
 	gap: var(--space-6);
+	width: fit-content;
+	list-style: none;
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-devices__head {
+.settings-view .settings-remote-details > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .settings-remote-details > summary > svg {
+	transform: rotate(-90deg);
+	transition: transform 120ms ease;
+}
+
+.settings-view .settings-remote-details[open] > summary > svg {
+	transform: none;
+}
+
+.settings-view .settings-remote-details > summary:hover,
+.settings-view .settings-remote-domain > summary:hover {
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-domain > summary {
+	cursor: pointer;
+	font-size: var(--font-size-meta);
+	color: var(--text-muted);
+	width: fit-content;
+}
+
+.settings-view .settings-remote-domain[open] {
 	display: flex;
-	justify-content: flex-end;
-	margin-bottom: var(--space-8);
+	flex-direction: column;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-remote-detail {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-10);
+	min-width: 0;
+}
+
+/* 이 컴퓨터에서 열기 and 포트 are two separate settings: 24px apart. <details> lays its content out as blocks
+   (its flex gap does not reach the slotted children), so the space is a margin. */
+.settings-view .settings-remote-detail + .settings-remote-detail {
+	margin-top: 24px;
+}
+
+.settings-view .settings-remote-port-field {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: var(--space-6);
+}
+
+.settings-view .settings-remote-port {
+	width: 76px;
+	padding: var(--space-6) var(--space-10);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-6);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+}
+
+/* 연결된 기기: the title with 모든 기기 해제 at its end, then one card of rows. */
+.settings-view .settings-remote-devices-head {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+	margin: 30px 0 var(--space-16);
+}
+
+.settings-view .settings-remote-devices-head > .linear-section-title {
+	flex: 1;
+	margin: 0;
+}
+
+.settings-view .settings-remote-revoke-all {
+	height: 28px;
+	padding: 0 var(--space-10);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	cursor: pointer;
+}
+
+.settings-view .settings-remote-revoke-all:hover {
+	background: var(--bg-hover);
+	color: var(--text-primary);
+}
+
+.settings-view .settings-remote-revoke-all.is-confirm {
+	color: var(--danger-text);
+}
+
+.settings-view .settings-remote-devices {
+	border: 1px solid var(--border);
+	border-radius: var(--radius-12);
+	background: var(--bg-window);
+	overflow: hidden;
+	min-width: 0;
 }
 
 .settings-view .settings-remote-empty {
 	margin: 0;
+	padding: var(--space-12) var(--space-16);
 	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
@@ -3364,26 +3991,23 @@
 	list-style: none;
 	margin: 0;
 	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: var(--space-6);
 }
 
 .settings-view .settings-remote-device-row {
 	display: flex;
-	flex-wrap: wrap;
 	align-items: center;
-	justify-content: space-between;
-	gap: var(--space-8);
-	padding: var(--space-8) var(--space-10);
-	border: 1px solid var(--border-divider);
-	border-radius: var(--radius-8);
-	background: var(--bg-window);
+	gap: var(--space-12);
+	padding: var(--space-10) var(--space-16);
 	min-width: 0;
+}
+
+.settings-view .settings-remote-device-row + .settings-remote-device-row {
+	border-top: 1px solid var(--border-divider);
 }
 
 .settings-view .settings-remote-device-info {
 	display: flex;
+	flex: 1;
 	flex-direction: column;
 	gap: var(--space-2);
 	min-width: 0;
@@ -3394,7 +4018,7 @@
 	flex-wrap: wrap;
 	align-items: center;
 	gap: var(--space-6);
-	font-size: var(--font-size-meta);
+	font-size: var(--font-size-sm);
 	font-weight: var(--weight-medium);
 	color: var(--text-primary);
 }
@@ -3402,9 +4026,8 @@
 .settings-view .settings-remote-device-badge {
 	display: inline-flex;
 	align-items: center;
-	height: 18px;
-	padding: 0 var(--space-6);
-	border-radius: var(--radius-5);
+	padding: 1px var(--space-6);
+	border-radius: 999px;
 	background: var(--accent-soft);
 	color: var(--accent-text);
 	font-size: var(--font-size-badge);
@@ -3412,15 +4035,17 @@
 }
 
 .settings-view .settings-remote-device-seen {
-	font-size: var(--font-size-badge);
+	font-size: var(--font-size-meta);
 	color: var(--text-muted);
 }
 
-.settings-view .settings-remote-device-actions {
-	display: inline-flex;
-	flex-wrap: wrap;
-	align-items: center;
-	gap: var(--space-6);
+.settings-view .settings-remote-device-row > .settings-icon-btn {
+	width: 24px;
+	height: 24px;
+}
+
+.settings-view .settings-remote-device-row > .linear-btn.is-confirm {
+	color: var(--danger-text);
 }
 
 .settings-view .settings-remote-rename-form {
@@ -3429,10 +4054,6 @@
 	align-items: center;
 	gap: var(--space-6);
 	min-width: 0;
-}
-
-.settings-view .settings-remote-revoke-btn {
-	color: var(--danger-text);
 }
 
 /* ------------------------------------------------ 검색 범위 (Figma 386:9908) -- */
@@ -3636,9 +4257,9 @@
 	background: var(--bg-code); /* #F4F4F7 (Figma 386:10087) */
 }
 
-/* Open, the box grows to 12px above and 14px below, and 접기 takes the link blue. */
+/* Open, the box grows only below (14px), so 개발용 폴더는 자동으로 제외합니다 stays where it sits closed. */
 .settings-view .scope-dev.is-open {
-	padding: 12px 14px 14px;
+	padding: 8px 14px 14px;
 }
 
 .settings-view .scope-dev.is-open .scope-dev-body {
@@ -3716,24 +4337,33 @@
 	line-height: 16px;
 }
 
-/* Figma 403:6999: 52px rows (12px above and below the 28px tile) without rules. */
+/* Figma 387:4551 (Settings/App Connection): 12px above and below a 32px tile, 16px between tile, text and button, no rules. */
 .settings-view .settings-apps .settings-list-row {
-	gap: 12px;
+	gap: 16px;
 	padding: 12px 0;
 	border-bottom: 0;
 }
 
 .settings-view .settings-apps .settings-app-icon {
-	border: 1px solid var(--bg-subtle-alt);
+	width: 32px;
+	height: 32px;
+	border: 1.14px solid var(--bg-subtle-alt);
+	border-radius: var(--radius-8);
 	background: var(--bg-window);
-	box-shadow: 0 0 4px rgba(0, 0, 0, 0.25);
+	box-shadow: 0 0 4.57px rgba(0, 0, 0, 0.25);
+}
+
+/* The logo fills 20.5px of the 32px tile. */
+.settings-view .settings-apps .settings-app-icon > svg {
+	width: 20.5px;
+	height: 20.5px;
 }
 
 .settings-view .settings-apps-open {
 	display: flex;
 	flex: 1;
 	align-items: center;
-	gap: 12px;
+	gap: 16px;
 	min-width: 0;
 	padding: 0;
 	border: 0;
@@ -3752,9 +4382,14 @@
 	display: inline-flex;
 	flex: none;
 	align-items: center;
-	gap: 4px;
-	padding: 0 12px 0 10px;
-	border-radius: var(--radius-8);
+	gap: 6px;
+	height: 32px;
+	padding: 0 12px;
+	border-radius: var(--radius-6);
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	font-weight: var(--weight-medium);
+	line-height: 16px;
 }
 
 .settings-view .settings-apps-empty {
@@ -3816,6 +4451,11 @@
 	align-items: flex-start;
 	gap: var(--space-16);
 	padding: 13.5px 0;
+}
+
+/* 원격 접속 허용: the switch sits in the middle of the title and its hint. */
+.settings-view .settings-remote-toggle > .settings-plain-row {
+	align-items: center;
 }
 
 /* The first row starts right under the head's 40px (Figma 403:8746 / 403:9482: no top padding on it). */
@@ -4278,7 +4918,7 @@
 	margin-top: 40px;
 }
 
-/* 빠른 구성: its label, the presets with the two actions, then the search. */
+/* 빠른 구성 under the search: its label, then the presets with the two actions. */
 .settings-view .shortcuts-quick {
 	display: flex;
 	flex-direction: column;
@@ -4323,6 +4963,12 @@
 	background: var(--bg-window);
 	color: var(--text-primary);
 	font-weight: var(--weight-medium);
+}
+
+/* 사용자 지정 before anything was set by hand: the app's disabled 50%. */
+.settings-view .shortcuts-segment:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 
 .settings-view .shortcuts-quick-actions {
@@ -4813,6 +5459,11 @@
 	margin-top: 6px;
 }
 
+/* 빠른 구성 sits under the 우클릭 메뉴 섹션 및 항목 title and line, 16px below it, as the sidebar page's sits over its sections. */
+.settings-view .cmenu-block-quick {
+	margin-top: 12px;
+}
+
 /* The magic-action list's empty line sits in a 36px row above its add row. */
 .settings-view .sidebar-card-empty.is-compact {
 	padding: 10px 16px;
@@ -4917,12 +5568,6 @@
 /* No drag handles on this card, so its add row starts at the rows' 16px. */
 .settings-view .sidebar-row.is-add.mcp-add-row {
 	padding-left: 16px;
-}
-
-/* The edit dialog's exposure hint goes under the select, not beside it. */
-.settings-view .settings-modal label .mcp-exposure-hint {
-	display: block;
-	margin-top: 6px;
 }
 
 /* ---------------------------------------- 인덱싱 + 검색 범위 (Figma 532:9970) -- */

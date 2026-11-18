@@ -192,7 +192,8 @@ describe("shortcuts-contract fixed catalog & normalization", () => {
 
 		await service.set({ shortcuts: { overrides: { focusSearch: "Mod+P" } } });
 		const rawOnDisk = JSON.parse(await readFile(file, "utf8"));
-		expect(rawOnDisk.settings.shortcuts).toEqual({ overrides: { focusSearch: "Mod+P" } });
+		// Bindings set by hand are also the remembered 사용자 지정.
+		expect(rawOnDisk.settings.shortcuts).toEqual({ overrides: { focusSearch: "Mod+P" }, custom: { focusSearch: "Mod+P" } });
 	});
 });
 

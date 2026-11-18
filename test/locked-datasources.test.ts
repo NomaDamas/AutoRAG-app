@@ -63,7 +63,7 @@ describe("lockDataSources", () => {
 			paths,
 		).sync("slack");
 		expect(started).toBe(false);
-		expect(outcome).toMatchObject({ ok: false, error: "백그라운드 새로 고침이 실행 중입니다. 끝난 뒤 다시 시도하세요." });
+		expect(outcome).toMatchObject({ ok: false, error: "백그라운드 최신화가 실행 중입니다. 끝난 뒤 다시 시도하세요." });
 		expect(readActivity(paths.activity)).toBeNull();
 	});
 });

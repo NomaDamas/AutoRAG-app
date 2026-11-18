@@ -6,8 +6,8 @@
  *
  * - a **question** from `ask_user` — one question, or 2–4 shown as a stepper;
  *   options (single or multiple choice) and a "write your own answer" row;
- * - an **approval** from the file-change gate — the categorized change, the
- *   call, and the gate's reason, with allow once / allow for the session / deny.
+ * - an **approval** from the file-change gate — the call, what it changes and
+ *   why, with allow once / allow for the session / skip (deny).
  *
  * The person's answer goes back through the preload bridge; the dock never
  * touches run state. Stop is the panel's own handler, still reachable from the
@@ -17,7 +17,7 @@
 
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageCircleQuestion, Shield } from "lucide-react";
+import { MessageCircleQuestion, ShieldCheck } from "lucide-react";
 import type {
 	ApprovalRequest,
 	InteractionAnswer,
@@ -38,7 +38,6 @@ import {
 	cancelAnswer,
 	categoryKey,
 	denyAnswer,
-	denyWithNoteAnswer,
 	draftAnswer,
 	draftAt,
 	initialQuestionState,
@@ -49,7 +48,8 @@ import {
 	setStep,
 	type QuestionState,
 } from "../state/interaction";
-import { CheckIcon, SendIcon } from "./icons";
+import { CheckIcon } from "./icons";
+import { noticeButtonClass } from "./primitives/NoticeCard";
 
 /** A context longer than this (or more than three lines) starts collapsed with a Show more toggle. */
 const CONTEXT_COLLAPSE_LIMIT = 200;
@@ -75,8 +75,6 @@ const SECONDARY_BUTTON =
 	"inline-flex h-28 flex-none items-center justify-center gap-5 rounded-8 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-hover disabled:cursor-default disabled:text-ink-faint";
 const GHOST_BUTTON =
 	"inline-flex h-28 flex-none items-center justify-center gap-5 rounded-8 border-0 bg-transparent px-10 text-meta font-medium text-ink-muted cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-hover enabled:hover:text-ink disabled:cursor-default disabled:text-ink-faint";
-const DANGER_GHOST_BUTTON =
-	"inline-flex h-28 flex-none items-center justify-center gap-5 rounded-8 border-0 bg-transparent px-10 text-meta font-medium text-ink-muted cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-danger-bg enabled:hover:text-danger-text";
 const OPTION_BUTTON =
 	"flex w-full items-start gap-8 rounded-10 border px-10 py-8 text-left cursor-pointer transition-colors duration-(--dur-color) ease-out";
 const FIELD =
@@ -103,7 +101,7 @@ export function InteractionDock({ request, onStop }: InteractionDockProps): Reac
 	}, [request]);
 
 	return request.kind === "approval" ? (
-		<ApprovalCard request={request} onStop={onStop} />
+		<ApprovalCard request={request} />
 	) : (
 		<QuestionCard request={request} onStop={onStop} />
 	);
@@ -320,84 +318,49 @@ function QuestionCard({ request, onStop }: { readonly request: QuestionRequest; 
 	);
 }
 
-function ApprovalCard({ request, onStop }: { readonly request: ApprovalRequest; readonly onStop: () => void }): ReactElement {
+/**
+ * The file-change approval (Figma 564:1396): a shield and the question, the call in a grey box with what it does
+ * under it, then 한 번만 허용 · 이 세션에서는 모두 허용 on the left and 건너뛰기 (deny) on the right. Escape denies too.
+ */
+function ApprovalCard({ request }: { readonly request: ApprovalRequest }): ReactElement {
 	const { t } = useTranslation();
-	const [noteOpen, setNoteOpen] = useState(false);
-	const [note, setNote] = useState("");
 	const headlineId = useId();
 	const reasonVisible = useMemo(() => approvalReasonVisible(request), [request]);
 	const noteKey = approvalNoteKey(request);
+	// The line under the call: what the gate flagged, then why (the judgement's reason, or the app's own note).
+	const categories = request.categories.map((category) => t(categoryKey(category))).join(" · ");
+	const why = reasonVisible ? request.reason : noteKey === null ? "" : t(noteKey);
+	const detail = [categories, why].filter((part) => part !== "").join(" — ");
 
 	return (
-		<div className={DOCK_CARD} role="alertdialog" aria-labelledby={headlineId}>
-			<div className="flex items-start gap-8">
-				<span className="grid size-icon-sm flex-none place-items-center rounded-6 bg-warn-bg text-warn-text">
-					<Shield size={16} />
-				</span>
-				<strong id={headlineId} className="min-w-0 flex-1 text-body font-semibold text-ink">
+		<div
+			className="flex flex-col gap-12 rounded-14 border border-border bg-window p-16 shadow-[var(--shadow-notice)]"
+			role="alertdialog"
+			aria-labelledby={headlineId}
+		>
+			<div className="flex items-center gap-8">
+				<ShieldCheck size={16} strokeWidth={1.6} className="flex-none text-warn-text" aria-hidden="true" />
+				<strong id={headlineId} className="min-w-0 flex-1 text-[14px] font-bold leading-[20px] text-ink break-keep">
 					{t(approvalHeadlineKey(request))}
 				</strong>
 			</div>
 
-			{request.categories.length === 0 ? null : (
-				<div className="flex flex-wrap gap-4">
-					{request.categories.map((category) => (
-						<span key={category} className="inline-flex h-chip items-center rounded-full bg-warn-bg px-8 text-badge font-medium text-warn-text">
-							{t(categoryKey(category))}
-						</span>
-					))}
-				</div>
-			)}
-
-			<pre className="m-0 max-h-[180px] select-text overflow-auto whitespace-pre rounded-8 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body">
-				{request.call}
-			</pre>
-
-			{reasonVisible ? <p className="m-0 text-meta leading-[1.45] text-ink-muted">{request.reason}</p> : null}
-			{noteKey === null ? null : <p className="m-0 text-meta leading-[1.45] text-ink-muted">{t(noteKey)}</p>}
-
-			{noteOpen ? (
-				<div className="flex items-center gap-6">
-					<input
-						autoFocus
-						value={note}
-						onChange={(event) => setNote(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key !== "Enter" || event.nativeEvent.isComposing) return;
-							event.preventDefault();
-							answerRequest(request.id, denyWithNoteAnswer(event.currentTarget.value));
-						}}
-						placeholder={t("interaction.notePlaceholder")}
-						aria-label={t("interaction.notePlaceholder")}
-						className={`${FIELD} min-w-0 flex-1`}
-					/>
-					<button
-						type="button"
-						className={PRIMARY_BUTTON}
-						aria-label={t("interaction.sendNote")}
-						title={t("interaction.sendNote")}
-						onClick={() => answerRequest(request.id, denyWithNoteAnswer(note))}
-					>
-						<SendIcon size={14} />
-					</button>
-				</div>
-			) : null}
+			<div className="flex flex-col gap-6 rounded-8 bg-code px-12 py-10">
+				<pre className="m-0 max-h-[180px] select-text overflow-auto whitespace-pre-wrap break-all font-mono text-meta text-ink">{request.call}</pre>
+				{detail === "" ? null : <p className="m-0 text-[11px] leading-[1.45] text-ink-muted">{detail}</p>}
+			</div>
 
 			<div className="flex flex-wrap items-center gap-8">
-				<button type="button" className={PRIMARY_BUTTON} onClick={() => answerRequest(request.id, allowOnceAnswer())}>
+				<button type="button" className={noticeButtonClass(true)} onClick={() => answerRequest(request.id, allowOnceAnswer())}>
 					{t("interaction.allowOnce")}
 				</button>
-				<button type="button" className={SECONDARY_BUTTON} onClick={() => answerRequest(request.id, allowSessionAnswer())}>
+				<button type="button" className={noticeButtonClass(false)} onClick={() => answerRequest(request.id, allowSessionAnswer())}>
 					{t(sessionAllowKey(request))}
 				</button>
-				<button type="button" autoFocus className={DANGER_GHOST_BUTTON} onClick={() => answerRequest(request.id, denyAnswer())}>
-					{t("interaction.deny")}
-				</button>
-				<button type="button" className={GHOST_BUTTON} onClick={() => setNoteOpen((open) => !open)}>
-					{t("interaction.denyWithNote")}
-				</button>
 				<span className="flex-1" />
-				<StopButton onStop={onStop} />
+				<button type="button" autoFocus className={noticeButtonClass(false)} onClick={() => answerRequest(request.id, denyAnswer())}>
+					{t("interaction.skip")}
+				</button>
 			</div>
 		</div>
 	);

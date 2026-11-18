@@ -123,10 +123,10 @@ describe("Settings > Indexing and the sidebar read the same snapshot", () => {
 			await Promise.resolve();
 		});
 		const detail = host.querySelector('[data-testid="index-progress-detail"]')?.textContent ?? "";
-		const counts = `키워드 색인 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`;
-		expect(detail).toContain("탐색파싱키워드 색인마무리");
+		const counts = `키워드 인덱싱 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`;
+		expect(detail).toContain("탐색파싱키워드 인덱싱마무리");
 		expect(detail).toContain(counts);
-		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("키워드 색인");
+		expect(host.querySelector('[aria-current="step"]')?.textContent).toBe("키워드 인덱싱");
 		const [entry] = collectSidebarActivities({
 			indexActivity: snapshot,
 			indexProblem: NO_INDEX_PROBLEM,

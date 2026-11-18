@@ -52,7 +52,7 @@ const ACTION_LABELS: Readonly<Record<ReplyLanguage, Readonly<Record<ShortcutId, 
 		openItem: "열기",
 		newFolder: "새 폴더",
 		newFile: "새 텍스트 파일",
-		rename: "이름 변경",
+		rename: "이름 바꾸기",
 		duplicate: "복제",
 		copy: "복사",
 		cut: "잘라내기",
@@ -442,7 +442,8 @@ export function createShortcutCustomizerToolkit(deps: ShortcutCustomizerToolkitD
 			}
 
 			ensureLive();
-			await deps.settings.set({ shortcuts: working });
+			// Keep the remembered 사용자 지정 when the agent applies a preset; bindings of its own replace it.
+			await deps.settings.set({ shortcuts: normalizeShortcutSettings({ ...working, custom: normalizeShortcutSettings(currentSettings.shortcuts).custom }) });
 
 			if (params.preset !== undefined || params.resetAll === true || touchedIds.length > 0 || warnings.length > 0) {
 				const fields =

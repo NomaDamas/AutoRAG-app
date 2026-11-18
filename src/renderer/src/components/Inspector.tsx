@@ -1112,15 +1112,13 @@ function VersionsSection({
 
 function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "near" | "contains" }): ReactElement {
 	const { t } = useTranslation();
-	// The inspector's own tones (Figma 231:2588): the newest copy in the accent, a similar one in amber.
+	// Figma 577:6705: the same tones as the list's tags (576:6699), at the inspector's smaller size.
 	const tone =
 		relation === "latest"
-			? "bg-accent-chip text-accent-text"
+			? "bg-vtag-latest-bg text-vtag-latest-text"
 			: relation === "near"
-				? "bg-vtag-similar-bg text-vtag-similar-text"
-				: relation === "exact"
-					? "bg-vtag-exact-bg text-vtag-exact-text"
-					: "bg-input text-ink-muted";
+				? "bg-vtag-near-bg text-vtag-near-text"
+				: "bg-vtag-exact-bg text-vtag-exact-text";
 	return (
 		<span className={cn("vtag flex-none inline-flex items-center px-6 py-2 rounded-7 text-tile-xs font-bold whitespace-nowrap leading-[12px]", tone)}>
 			{t(VERSION_TAG_KEYS[relation])}

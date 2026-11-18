@@ -12,7 +12,7 @@ import { SparklesIcon } from "./icons";
 import { NoticeBadge } from "./primitives/NoticeCard";
 
 /**
- * "AI로 고치기" (Figma 548:14977–14981, 중요 알림): the self-healing helper's state in one small card — looking for the
+ * "AI로 해결하기" (Figma 548:14977–14981, 중요 알림): the self-healing helper's state in one small card — looking for the
  * cause, fixed, stopped, could not fix, or needs the person. Closing while it runs hides the card and the repair goes on
  * in the background (the sidebar shows its progress); only 중단 cancels it.
  */
@@ -178,7 +178,7 @@ ${t("appError.fix.fixedHint")}`;
 			}}
 		>
 			<div
-				className="flex max-h-[82vh] w-[373px] max-w-[92vw] flex-col gap-12 overflow-y-auto rounded-12 border border-border bg-window px-16 py-14 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex max-h-[82vh] w-[373px] max-w-[92vw] flex-col gap-12 overflow-y-auto rounded-14 border border-border bg-window px-16 py-14 shadow-[var(--shadow-notice)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="dialog"
 				aria-modal="true"
 				aria-label={t("appError.fix.title")}

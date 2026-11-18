@@ -642,9 +642,11 @@ app.whenReady().then(async () => {
 	});
 	// Each chat's model conversation is a pi session file; the index remembers which file is whose.
 	const chatSessionsDirectory = join(app.getPath("userData"), "chat-sessions");
+	// One store for AI 에이전트's history: the search service writes its chats, a magic action's 대화 기록에 저장 adds one.
+	const chatStore = createChatStore({ directory: join(app.getPath("userData"), "chat-history") });
 	const searchService = createSearchService({
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
-		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
+		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		send: sendToMainWindow,
 		analytics,
@@ -1081,7 +1083,7 @@ app.whenReady().then(async () => {
 			scanOptions: { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES },
 		}),
 	);
-	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	// "AI로 해결하기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
 	registerErrorFixIpcHandlers(
 		createErrorFixService({
 			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),
@@ -1134,7 +1136,7 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		settings: settingsService,
 	});
-	registerMagicActionIpcHandlers(magicActionService);
+	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
 	const accountService = createAccountService({
 		env: process.env,

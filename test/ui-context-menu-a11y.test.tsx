@@ -42,4 +42,17 @@ describe("ContextMenu", () => {
 		expect(items.map(accessibleName)).toEqual(["Rename", "Copy Path"]);
 		expect(host.querySelector(".menu__keycap")?.textContent).toBe("⌘R");
 	});
+
+	it("marks a magic action the person made with the blue AI icon, and only that row", () => {
+		const entries: FinderMenuEntry[] = [
+			{ kind: "item", action: "rename", label: "Rename", keycap: null, tone: "default", disabled: false },
+			{ kind: "item", action: "magicAction", label: "Summarize", keycap: null, tone: "default", disabled: false, magicActionId: "m1" },
+		];
+		act(() => root.render(<ContextMenu cursor={{ x: 0, y: 0 }} entries={entries} onSelect={() => {}} onClose={() => {}} />));
+		const [plain, magic] = [...host.querySelectorAll('[role="menuitem"]')];
+		expect(plain?.querySelector(".menu__magic-icon")).toBeNull();
+		const icon = magic?.querySelector(".menu__magic-icon");
+		expect(icon?.getAttribute("class")).toContain("text-accent");
+		expect(accessibleName(magic!)).toBe("Summarize");
+	});
 });

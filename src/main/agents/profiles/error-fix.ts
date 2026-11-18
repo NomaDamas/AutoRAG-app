@@ -12,7 +12,7 @@ import { intentPromptLine, withIntentTools } from "../profile-progress";
 import { createFixTools } from "./error-fix-files";
 
 /**
- * The error-fix helper ("AI로 고치기"): given an error the app showed, it looks at
+ * The error-fix helper ("AI로 해결하기"): given an error the app showed, it looks at
  * the files the error points to, repairs what is wrong, and says in the person's
  * language what it did or what they have to do. It runs on the AI Search model,
  * like the smart-indexing helper.

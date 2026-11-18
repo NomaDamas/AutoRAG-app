@@ -21,7 +21,7 @@ export interface RunErrorNoticeProps {
 	readonly onNewChat: () => void;
 	/** Puts the turn's question back in the composer, to ask it again about less at once. */
 	readonly onRephrase: () => void;
-	/** True on the live turn's error so "AI로 고치기" is offered; false on past turns. */
+	/** True on the live turn's error so "AI로 해결하기" is offered; false on past turns. */
 	readonly fix?: boolean;
 }
 

@@ -120,6 +120,10 @@
   --border: #D9DADD;
   --border-divider: #E7E7EA;
   --border-strong: #C9C9D4;
+  /* The list's index checkbox while its change is being saved: a pale fill when an empty box is being checked,
+     a stronger grey under the check when a checked box is being cleared. */
+  --chk-pending-on: #E4E4EA;
+  --chk-pending-off: #A4A4AE;
 
   /* -------------------------------------------------------------------- §2.4 Text */
   --text-primary: #1D1D1F;
@@ -212,6 +216,10 @@
   --danger-bg: rgba(239,68,68,0.12);
   --danger-bg-soft: rgba(239,68,68,0.10);
   --danger-border: rgba(239,68,68,0.4);
+  /* Text on the soft danger fill (Figma 568:7808), and a background job that ended in a warning (Figma 568:7658). */
+  --danger-text-strong: #B3261E;
+  --activity-warn-text: #B25E00;
+  --activity-warn-fill: #F5A623;
 
   --error-orange-dot: #FF8C00;
   --error-orange-text: #C2410C;
@@ -248,15 +256,13 @@
   /* ------------------------------------------------------- §2.10 Version tags */
   /* v7 `.vtag` rules. `near`/`exact` use the reference's exact values, which
    * differ from the palette plan (plan: #F3E8FD/#7E3FBF and #FDEBD8/#C05F1A). */
-  --vtag-latest-bg: #E3F6E8;
-  --vtag-latest-text: #1F7A3A;
+  /* Figma 576:6699 / 577:6705: 최신본 in the accent blue; 동일본 and 포함본 share the amber, 유사본 the purple. */
+  --vtag-latest-bg: rgba(10,100,216,0.16);
+  --vtag-latest-text: #0A64D8;
   --vtag-near-bg: #EFE7FB;
   --vtag-near-text: #6B3FB5;
   --vtag-exact-bg: #FFF0DF;
   --vtag-exact-text: #B45309;
-  /* The inspector's 유사본 tag (Figma 231:2588). */
-  --vtag-similar-bg: #FDEEC1;
-  --vtag-similar-text: #C47D00;
 
   /* -------------------------------------------------------------- §3 Typography */
   --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont, "SF Pro Text", "Apple SD Gothic Neo", "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
@@ -498,6 +504,8 @@ html[data-appearance="dark"] {
     --border: #48484A;
     --border-divider: #38383A;
     --border-strong: #5A5A5E;
+    --chk-pending-on: #3E3E42;
+    --chk-pending-off: #6E6E74;
 
     /* ---------------------------------------------------------------- Ink */
     --text-primary: #F5F5F7;
@@ -538,6 +546,9 @@ html[data-appearance="dark"] {
     --danger-bg: rgba(255,69,58,0.18);
     --danger-bg-soft: rgba(255,69,58,0.14);
     --danger-border: rgba(255,69,58,0.5);
+    --danger-text-strong: #FF6961;
+    --activity-warn-text: #FF9F0A;
+    --activity-warn-fill: #FF9F0A;
     --error-orange-text: #FF9F0A;
     --error-orange-bg: rgba(255,159,10,0.18);
     --error-orange-bg-strong: rgba(255,159,10,0.22);
@@ -548,14 +559,12 @@ html[data-appearance="dark"] {
     --drop-overlay-bg: rgba(44,44,46,0.92);
     --tile-notion: #F5F5F7;
     --tile-notion-fg: #1C1C1E;
-    --vtag-latest-bg: rgba(48,209,88,0.2);
-    --vtag-latest-text: #30D158;
+    --vtag-latest-bg: rgba(10,132,255,0.24);
+    --vtag-latest-text: #409CFF;
     --vtag-near-bg: rgba(191,90,242,0.2);
     --vtag-near-text: #BF5AF2;
     --vtag-exact-bg: rgba(255,159,10,0.2);
     --vtag-exact-text: #FF9F0A;
-    --vtag-similar-bg: rgba(255,204,0,0.2);
-    --vtag-similar-text: #FFD60A;
 
     /* ------------------------------------------------------------ Scrollbars */
     /* (none — native overlay scrollbars; see base.css §7) */

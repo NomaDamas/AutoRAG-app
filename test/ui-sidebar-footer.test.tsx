@@ -121,10 +121,10 @@ describe("sidebar footer: settings and usage", () => {
 		expect(usageButton().getAttribute("aria-label")).toBe("AI usage");
 	});
 
-	it("orders gear, usage, then the update control on the right", async () => {
+	it("orders gear, usage, the notification bell, then the update control on the right", async () => {
 		await renderSidebar();
 		const order = [...footer().querySelectorAll("button")].filter((b) => b.classList.contains("sidebar__item--settings") || b.dataset.action !== undefined);
-		expect(order.map((b) => b.dataset.action ?? "settings")).toEqual(["settings", "open-usage", "app-update"]);
+		expect(order.map((b) => b.dataset.action ?? "settings")).toEqual(["settings", "open-usage", "open-notifications", "app-update"]);
 	});
 
 	it("names the buttons in Korean too", async () => {

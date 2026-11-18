@@ -130,7 +130,7 @@ describe("quick search launcher page", () => {
 
 	it("lists name matches, then content matches, then the Ask row; Enter opens the first and hands off", async () => {
 		await type("report");
-		expect(names()).toEqual(["report.md", "report-2.md", "q3.pdf", "Ask Dazzi: \u201creport\u201d"]);
+		expect(names()).toEqual(["report.md", "report-2.md", "q3.pdf", "Ask AI: \u201creport\u201d"]);
 		expect(host.textContent).toContain("the quarterly report");
 
 		await press("Enter", { code: "Enter" });
