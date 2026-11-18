@@ -706,6 +706,19 @@
       "finalizing": "마무리하는 중"
     }
   },
+  "indexStatus": {
+    "eta": "예상 소요 시간 {{duration}}",
+    "etaCalculating": "남은 시간 계산 중",
+    "stopped": "인덱싱 중지됨",
+    "waiting": "다음 최신화를 기다리는 중",
+    "justNow": "방금 전",
+    "count": "{{done}}/{{total}}개",
+    "paused": {
+      "battery": "전원을 연결하면 이어서 진행합니다.",
+      "window": "허용된 시간대가 되면 이어서 진행합니다.",
+      "day": "허용된 요일이 되면 이어서 진행합니다."
+    }
+  },
   "indexProgress": {
     "stage": {
       "discover": "탐색",
