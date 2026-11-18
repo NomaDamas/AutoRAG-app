@@ -212,7 +212,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const quickShownRef = useRef(false);
 	const [deepElapsed, setDeepElapsed] = useState<number | null>(null);
 	const [dragActive, setDragActive] = useState(false);
-	const [dragOver, setDragOver] = useState(false);
 	const [dragName, setDragName] = useState<string | null>(null);
 	const lastDragAtRef = useRef(0);
 	const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -511,7 +510,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 			if (event.clientX <= 0 && event.clientY <= 0) {
 				lastDragAtRef.current = 0;
 				setDragActive(false);
-				setDragOver(false);
 				setDragName(null);
 				return;
 			}
@@ -521,7 +519,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		const reset = (): void => {
 			lastDragAtRef.current = 0;
 			setDragActive(false);
-			setDragOver(false);
 			setDragName(null);
 		};
 		window.addEventListener("dragover", onDragOver);
@@ -835,7 +832,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		lastDragAtRef.current = Date.now();
 		event.preventDefault();
 		setDragActive(true);
-		setDragOver(true);
 	}
 
 	function onDockDragOver(event: ReactDragEvent): void {
@@ -844,7 +840,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		event.preventDefault();
 		event.dataTransfer.dropEffect = "copy";
 		setDragActive(true);
-		setDragOver(true);
 		const item = event.dataTransfer.items?.[0];
 		const file = item?.kind === "file" ? item.getAsFile() : null;
 		setDragName(file?.name ?? null);
@@ -853,7 +848,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	function onDockDragLeave(event: ReactDragEvent): void {
 		const next = event.relatedTarget;
 		if (next instanceof Node && event.currentTarget.contains(next)) return;
-		setDragOver(false);
 		setDragName(null);
 	}
 
@@ -862,7 +856,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		event.preventDefault();
 		const dropped = attachmentsFromDrop(event.dataTransfer, autorag.pathForFile);
 		setDragActive(false);
-		setDragOver(false);
 		setDragName(null);
 		if (dropped.length === 0) return;
 		setAttachments((current) => mergeAttachments(current, dropped));
@@ -1332,14 +1325,11 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				)}
 			</form>
 
+			{/* One drop screen, over the panel or over the field alike (Figma 603:6785): the words and the file's name. */}
 			{dragActive ? (
-				<div className="pointer-events-none absolute inset-8 z-20 flex flex-col items-center justify-center gap-10 rounded-14 border-[1.5px] border-dashed border-accent bg-accent-drop-hover backdrop-blur-sm">
-					<span className="relative flex size-64 items-center justify-center rounded-12 bg-accent-soft text-accent">
-						<SparklesIcon size={28} />
-						<span className="absolute -bottom-4 -right-4 flex size-22 items-center justify-center rounded-full bg-accent text-badge font-bold text-on-accent">+</span>
-					</span>
-					<span className="text-body font-medium text-ink">{dragOver ? t("aiSearch.dropAttach") : t("aiSearch.dropPrompt")}</span>
-					{dragName === null ? null : <span className="text-meta text-ink-muted">{dragName}</span>}
+				<div className="pointer-events-none absolute inset-8 z-20 flex flex-col items-center justify-center gap-10 rounded-14 border-[1.5px] border-dashed border-accent bg-accent-drop-hover backdrop-blur-[2px]" data-testid="ai-drop-overlay">
+					<span className="text-[13px] font-medium text-ink">{t("aiSearch.dropHere")}</span>
+					{dragName === null ? null : <span className="text-badge text-ink-muted">{dragName}</span>}
 				</div>
 			) : null}
 			{voice.permission === null ? null : (
