@@ -1,4 +1,4 @@
-import { useEffect, type ChangeEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
+import { useEffect, useState, type ChangeEvent, type CSSProperties, type DragEvent, type KeyboardEvent, type MouseEvent, type PointerEvent, type ReactElement } from "react";
 import { emphasizeTerms } from "../lib/mark-terms";
 import { useTranslation } from "react-i18next";
 import type { FinderEntry } from "../data/entries";
@@ -55,7 +55,10 @@ export interface RowCallbacks {
 	readonly onVisible: (entry: FinderEntry) => void;
 }
 
-const VTAG_BASE = "vtag inline-flex flex-none items-center h-16 px-6 rounded-4 text-tile font-bold whitespace-nowrap";
+/** How long the index checkbox may wait for its saved status before it shows the last known state again. */
+const INDEX_PENDING_TIMEOUT_MS = 15_000;
+
+const VTAG_BASE ="vtag inline-flex flex-none items-center h-16 px-6 rounded-4 text-tile font-bold whitespace-nowrap";
 const VTAG_TONE: Readonly<Record<"latest" | VersionRelation, string>> = {
 	latest: "bg-vtag-latest-bg text-vtag-latest-text",
 	near: "bg-vtag-near-bg text-vtag-near-text",
@@ -159,6 +162,16 @@ export function FileRow({
 	const checked = included || syncing;
 	// No refresh can ever index these; a checkbox would promise something the librarian will not do.
 	const inert = state === "outside" || state === "unsupported" || state === "skipped";
+	// Between a click and the saved status coming back the box shows the change is under way: a pale fill while an
+	// empty box is being checked, a grey fill under the check while a checked one is being cleared.
+	const [indexPending, setIndexPending] = useState<"check" | "uncheck" | null>(null);
+	useEffect(() => setIndexPending(null), [indexStatus]);
+	useEffect(() => {
+		if (indexPending === null) return;
+		// A save that fails leaves the status as it was: give the box back rather than leave it grey.
+		const timer = setTimeout(() => setIndexPending(null), INDEX_PENDING_TIMEOUT_MS);
+		return () => clearTimeout(timer);
+	}, [indexPending]);
 
 	const rowTone = selected ? (zoneFocused ? "text-on-accent" : "text-ink") : "text-ink";
 	const metaTone = selected ? (zoneFocused ? "text-on-accent/80" : "text-ink-muted") : "text-ink-muted";
@@ -310,23 +323,32 @@ export function FileRow({
 								type="button"
 								role="checkbox"
 								aria-checked={checked}
+								aria-busy={indexPending !== null}
+								data-index-pending={indexPending ?? undefined}
 								className={cn(
 									"chk inline-grid flex-none place-items-center size-14 p-0 rounded-4 border cursor-default",
-									checked
-										? selected
-											? "bg-window border-window text-accent"
-											: "bg-accent border-accent text-on-accent"
-										: cn("bg-window text-accent", selected ? "border-on-accent/90" : "border-border-strong"),
-									syncing && "opacity-60",
+									indexPending === "check"
+										? "bg-chk-pending-on border-border-strong text-accent"
+										: indexPending === "uncheck"
+											? "bg-chk-pending-off border-chk-pending-off text-on-accent"
+											: checked
+												? selected
+													? "bg-window border-window text-accent"
+													: "bg-accent border-accent text-on-accent"
+												: cn("bg-window text-accent", selected ? "border-on-accent/90" : "border-border-strong"),
+									syncing && indexPending === null && "opacity-60",
 								)}
 								title={indexStatus?.detail ?? (checked ? t("finderComponents.indexIncluded") : t("finderComponents.indexExcluded"))}
 								aria-label={checked ? t("finderComponents.indexIncluded") : t("finderComponents.indexExcluded")}
 								onClick={(event) => {
 									event.stopPropagation();
+									if (indexPending !== null) return;
+									// Only a known, toggleable status is saved (the controller ignores the rest), so only then is there a wait to show.
+									if (indexStatus?.toggleable === true) setIndexPending(checked ? "uncheck" : "check");
 									callbacks.onToggleIndex(entry);
 								}}
 							>
-								<CheckIcon size={10} className={checked ? undefined : "opacity-0"} />
+								<CheckIcon size={10} className={checked && indexPending !== "check" ? undefined : "opacity-0"} />
 							</button>
 						)}
 					</div>

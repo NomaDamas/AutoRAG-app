@@ -152,6 +152,8 @@
 	--color-border: var(--border);
 	--color-divider: var(--border-divider);
 	--color-border-strong: var(--border-strong);
+	--color-chk-pending-on: var(--chk-pending-on);
+	--color-chk-pending-off: var(--chk-pending-off);
 
 	/* ---------------------------------------------------------------- §2.4 Ink */
 	--color-ink: var(--text-primary);

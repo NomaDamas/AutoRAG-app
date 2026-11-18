@@ -120,6 +120,10 @@
   --border: #D9DADD;
   --border-divider: #E7E7EA;
   --border-strong: #C9C9D4;
+  /* The list's index checkbox while its change is being saved: a pale fill when an empty box is being checked,
+     a stronger grey under the check when a checked box is being cleared. */
+  --chk-pending-on: #E4E4EA;
+  --chk-pending-off: #A4A4AE;
 
   /* -------------------------------------------------------------------- §2.4 Text */
   --text-primary: #1D1D1F;
@@ -500,6 +504,8 @@ html[data-appearance="dark"] {
     --border: #48484A;
     --border-divider: #38383A;
     --border-strong: #5A5A5E;
+    --chk-pending-on: #3E3E42;
+    --chk-pending-off: #6E6E74;
 
     /* ---------------------------------------------------------------- Ink */
     --text-primary: #F5F5F7;
