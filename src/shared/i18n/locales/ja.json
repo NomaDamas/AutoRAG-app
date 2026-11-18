@@ -2342,14 +2342,13 @@
       "editor": {
         "createTitle": "マジックアクションを追加",
         "editTitle": "マジックアクションを編集",
-        "desc": "選択したファイルを入力として実行するスクリプトやAIエージェントの指示を設定します。",
         "labelField": "ボタン名",
-        "labelPlaceholder": "例：PDFを3行で要約、SHA-256ハッシュ計算",
+        "labelPlaceholder": "マジックアクション名",
         "descriptionField": "説明（任意）",
         "descriptionPlaceholder": "設定画面に表示する短いメモ",
-        "executionField": "実行方式",
-        "kindAgent": "AI エージェントループ",
-        "kindScript": "コード / シェルスクリプト",
+        "executionField": "処理方法",
+        "kindAgent": "AIタスク",
+        "kindScript": "スクリプト",
         "agentModeField": "エージェント権限",
         "modeRead": "読み取り・分析のみ（要約・確認・Q&A）",
         "modeOrganize": "ファイル作成・操作を許可（変換・編集・整理・スクリプト）",
@@ -2362,13 +2361,44 @@
         "commandField": "実行するコマンド / スクリプト",
         "commandPlaceholder": "例：shasum -a 256 \"$@\" または python3 ~/scripts/process.py \"$@\"",
         "commandHint": "選択したファイルパスは位置引数 (\"$@\") と環境変数 DAZZI_FILES_JSON、DAZZI_FILE、DAZZI_FILE_COUNT で渡されます。",
-        "selectionField": "選択数の条件",
-        "targetKindField": "対象の種類",
-        "extensionsField": "拡張子フィルタ（任意）",
-        "extensionsPlaceholder": "空欄ですべて対象 · 例: pdf, docx, md",
+        "selectionField": "選択数",
+        "targetKindField": "種類",
+        "extensionsField": "拡張子",
+        "extensionsPlaceholder": "拡張子を入力して Enter",
         "save": "保存",
         "commandPlaceholderWindows": "例：Get-FileHash -Algorithm SHA256 -LiteralPath $args または python ~\\scripts\\process.py @args",
-        "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。"
+        "commandHintWindows": "Windows PowerShell で実行され、選択したファイルパスは $args 配列と環境変数 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT で渡されます。",
+        "labelHint": "右クリックメニューにこの名前で表示されます",
+        "modeReadShort": "読み取りのみ",
+        "modeOrganizeShort": "ファイル変更を許可",
+        "targetRow": "表示する対象",
+        "targetFile": "ファイル",
+        "targetFolder": "フォルダ",
+        "targetBoth": "両方",
+        "selectionAny": "指定なし",
+        "selectionSingle": "1つ",
+        "selectionMultiple": "複数",
+        "removeExtension": "{{ext}} を外す",
+        "advancedRow": "詳細設定",
+        "advancedUses": "{{list}} を使用",
+        "advancedNone": "使用しない",
+        "targetSummary": {
+          "any": {
+            "file": "{{ext}}ファイルを右クリックしたとき",
+            "folder": "フォルダを右クリックしたとき",
+            "any": "ファイルやフォルダを右クリックしたとき"
+          },
+          "single": {
+            "file": "{{ext}}ファイルを1つ右クリックしたとき",
+            "folder": "フォルダを1つ右クリックしたとき",
+            "any": "ファイルかフォルダを1つ右クリックしたとき"
+          },
+          "multiple": {
+            "file": "{{ext}}ファイルを複数右クリックしたとき",
+            "folder": "フォルダを複数右クリックしたとき",
+            "any": "ファイルやフォルダを複数右クリックしたとき"
+          }
+        }
       },
       "assistant": {
         "title": "右クリックメニュー＆マジックアクション AI エージェント",

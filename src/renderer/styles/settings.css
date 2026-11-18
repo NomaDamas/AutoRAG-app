@@ -1539,6 +1539,443 @@
 	cursor: default;
 }
 
+/* --------------------------------------- 매직 액션 만들기 모달 (Figma 598:3131) -- */
+
+.settings-view .settings-modal.magic-editor-modal {
+	width: min(468px, calc(100% - 32px));
+	padding: 22px 20px 18px;
+	border: 0;
+	border-radius: 16px;
+	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* The close icon sits on the name's line, 20px in from the right edge. */
+.settings-view .magic-editor-modal .settings-modal-close {
+	top: 28px;
+	right: 16px;
+}
+
+.settings-view .magic-editor {
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-view .magic-editor-head {
+	display: flex;
+	align-items: flex-start;
+	padding-right: 32px;
+}
+
+.settings-view .magic-editor-tile {
+	display: grid;
+	flex: none;
+	place-items: center;
+	width: 40px;
+	height: 40px;
+	border-radius: 10px;
+	color: var(--accent-text);
+}
+
+/* The name is the title: a borderless 17px field with the hint under it. */
+.settings-view .magic-editor-name {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .settings-modal .magic-editor-name > input {
+	height: 25px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: 17px;
+	font-weight: var(--weight-bold);
+	line-height: 25px;
+}
+
+.settings-view .settings-modal .magic-editor-name > input:focus {
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-name > input::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .magic-editor-name > span,
+.settings-view .magic-editor-caption {
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	color: var(--text-muted);
+}
+
+/* 처리 방식: a full-width segmented control, the picked half a white chip. */
+.settings-view .magic-editor-kind {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: 20px 0 var(--space-12);
+}
+
+.settings-view .magic-editor-seg {
+	display: flex;
+	gap: 2px;
+	padding: 3px;
+	border-radius: 10px;
+	background: var(--bg-input);
+}
+
+.settings-view .magic-editor-seg > button {
+	display: inline-flex;
+	flex: 1;
+	align-items: center;
+	justify-content: center;
+	gap: var(--space-6);
+	min-width: 0;
+	padding: var(--space-6) var(--space-12);
+	border: 0.5px solid transparent;
+	border-radius: var(--radius-8);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: 13px;
+	line-height: 19px;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-seg > button.is-active {
+	border-color: var(--border);
+	background: var(--bg-window);
+	color: var(--text-primary);
+	font-weight: var(--weight-medium);
+}
+
+/* The instruction card: the prompt (or the command) on grey, with its permission chip underneath. */
+.settings-view .magic-editor-card {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-8);
+	padding: var(--space-12) var(--space-12) var(--space-10);
+	border-radius: var(--radius-12);
+	background: var(--bg-chrome);
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea {
+	height: auto;
+	min-height: 84px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	font-size: 14px;
+	line-height: 22px;
+	resize: none;
+	field-sizing: content;
+	max-height: 220px;
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea.is-mono {
+	font-family: var(--font-mono);
+	font-size: var(--font-size-meta);
+	line-height: 18px;
+}
+
+.settings-view .settings-modal .magic-editor-card > textarea:focus {
+	box-shadow: none;
+}
+
+.settings-view .magic-editor-card > textarea::placeholder {
+	color: var(--text-faint);
+}
+
+.settings-view .magic-editor-card-bar {
+	display: flex;
+	align-items: center;
+	gap: var(--space-8);
+}
+
+.settings-view .settings-modal p.magic-editor-card-hint {
+	font-size: var(--font-size-badge);
+	line-height: 16px;
+	overflow-wrap: anywhere;
+}
+
+.settings-view .magic-editor-mode {
+	position: relative;
+}
+
+.settings-view .magic-editor-mode-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-6);
+	padding: 5px var(--space-10);
+	border: 0.5px solid var(--border);
+	border-radius: 13px;
+	background: var(--bg-window);
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 17px;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mode-chip:hover,
+.settings-view .magic-editor-mode-chip[aria-expanded="true"] {
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-mode-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	left: 0;
+	z-index: 2;
+	width: 300px;
+	margin: 0;
+	padding: var(--space-4);
+	list-style: none;
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+	box-shadow: var(--shadow-menu);
+}
+
+.settings-view .magic-editor-mode-menu button {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-8);
+	width: 100%;
+	padding: var(--space-6) var(--space-8);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-primary);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	text-align: left;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mode-menu button > svg {
+	flex: none;
+	margin-top: 1px;
+}
+
+.settings-view .magic-editor-mode-menu button:hover {
+	background: var(--bg-hover);
+}
+
+.settings-view .magic-editor-mode-text {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .magic-editor-mode-text > small {
+	font-size: var(--font-size-badge);
+	color: var(--text-muted);
+}
+
+/* 표시할 대상 and 고급 설정: one bordered group of rows, each opening a tinted panel. */
+.settings-view .magic-editor-group {
+	margin-top: var(--space-16);
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-12);
+	overflow: hidden;
+}
+
+.settings-view .magic-editor-section + .magic-editor-section {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .magic-editor-section > summary {
+	display: flex;
+	align-items: center;
+	gap: var(--space-10);
+	height: 44px;
+	padding: 0 var(--space-14);
+	list-style: none;
+	cursor: pointer;
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-section > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-view .magic-editor-section > summary > svg {
+	flex: none;
+}
+
+.settings-view .magic-editor-section-name {
+	flex: none;
+	font-size: 14px;
+	line-height: 20px;
+}
+
+.settings-view .magic-editor-section-value {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	text-align: right;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-section-chevron {
+	color: var(--text-muted);
+	transition: transform 120ms ease;
+}
+
+.settings-view .magic-editor-section[open] > summary > .magic-editor-section-chevron {
+	transform: rotate(90deg);
+}
+
+.settings-view .magic-editor-sub {
+	padding: var(--space-4) var(--space-14);
+	border-top: 0.5px solid var(--border-divider);
+	background: var(--bg-subtle-alt);
+}
+
+.settings-view .magic-editor-sub > * + * {
+	border-top: 0.5px solid var(--border-divider);
+}
+
+.settings-view .magic-editor-sub-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-10);
+	min-height: 40px;
+	font-size: 13px;
+	line-height: 19px;
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-sub-row > span {
+	flex: none;
+}
+
+.settings-view .magic-editor-sub-row.is-switch {
+	padding: var(--space-8) 0;
+}
+
+.settings-view .magic-editor-switch-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.settings-view .magic-editor-switch-text > small {
+	font-size: var(--font-size-badge);
+	line-height: 1.4;
+	color: var(--text-muted);
+}
+
+.settings-view .magic-editor-mini-seg {
+	display: inline-flex;
+	gap: 2px;
+	padding: 2px;
+	border: 0.5px solid var(--border-divider);
+	border-radius: var(--radius-8);
+	background: var(--bg-window);
+}
+
+.settings-view .magic-editor-mini-seg > button {
+	padding: 3px var(--space-10);
+	border: 0;
+	border-radius: var(--radius-6);
+	background: transparent;
+	color: var(--text-muted);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	line-height: 17px;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.settings-view .magic-editor-mini-seg > button:hover:not(.is-active) {
+	color: var(--text-primary);
+}
+
+.settings-view .magic-editor-mini-seg > button.is-active {
+	background: var(--accent);
+	color: var(--text-on-accent);
+}
+
+/* 확장자: blue chips (a click removes one), then the field that adds the next. */
+.settings-view .magic-editor-exts {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	align-items: center;
+	gap: var(--space-6);
+	min-width: 0;
+	padding: var(--space-6) 0;
+}
+
+.settings-view .magic-editor-ext {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--space-4);
+	height: 28px;
+	padding: 0 var(--space-12);
+	border: 0;
+	border-radius: 14px;
+	background: var(--accent);
+	color: var(--text-on-accent);
+	font: inherit;
+	font-size: var(--font-size-meta);
+	cursor: pointer;
+}
+
+.settings-view .settings-modal .magic-editor-exts > input {
+	width: 150px;
+	height: 27px;
+	margin: 0;
+	padding: 0 var(--space-8);
+	border: 0.5px solid var(--border);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-modal label.magic-editor-field {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	margin: 0;
+	padding: var(--space-10) 0;
+	font-size: 13px;
+}
+
+.settings-view .settings-modal label.magic-editor-field > input {
+	margin: 0;
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .magic-editor .settings-modal-actions {
+	margin-top: 20px;
+}
+
+.settings-view .magic-editor .settings-modal-actions .linear-btn {
+	height: 28px;
+	padding: 0 var(--space-10);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .magic-editor .settings-modal-actions .linear-btn:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
 /* ------------------------------------------------- Indexing · progress map -- */
 
 /* The map needs room the 680px reading column does not give; only this page widens. */

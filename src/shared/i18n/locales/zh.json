@@ -2342,14 +2342,13 @@
       "editor": {
         "createTitle": "添加魔法动作",
         "editTitle": "编辑魔法动作",
-        "desc": "配置以所选文件为输入运行的脚本命令或 AI 智能体提示词。",
         "labelField": "按钮名称",
-        "labelPlaceholder": "例如：PDF 三句话总结、计算 SHA-256 哈希",
+        "labelPlaceholder": "魔法操作名称",
         "descriptionField": "说明（可选）",
         "descriptionPlaceholder": "在设置页面显示的简短备注",
-        "executionField": "执行方式",
-        "kindAgent": "AI 智能体循环",
-        "kindScript": "代码 / Shell 脚本",
+        "executionField": "处理方式",
+        "kindAgent": "AI 任务",
+        "kindScript": "脚本",
         "agentModeField": "智能体权限",
         "modeRead": "仅读取与分析（总结·审阅·问答）",
         "modeOrganize": "允许创建与操作文件（转换·编辑·整理·脚本）",
@@ -2362,13 +2361,44 @@
         "commandField": "执行的命令 / 脚本",
         "commandPlaceholder": "例如：shasum -a 256 \"$@\" 或 python3 ~/scripts/process.py \"$@\"",
         "commandHint": "所选文件路径会通过位置参数 (\"$@\") 以及环境变量 DAZZI_FILES_JSON、DAZZI_FILE、DAZZI_FILE_COUNT 传入。",
-        "selectionField": "选中数量条件",
-        "targetKindField": "目标类型",
-        "extensionsField": "扩展名筛选（可选）",
-        "extensionsPlaceholder": "留空允许全部 · 例如：pdf, docx, md",
+        "selectionField": "选择数量",
+        "targetKindField": "类型",
+        "extensionsField": "扩展名",
+        "extensionsPlaceholder": "输入扩展名后按 Enter",
         "save": "保存",
         "commandPlaceholderWindows": "例如：Get-FileHash -Algorithm SHA256 -LiteralPath $args 或 python ~\\scripts\\process.py @args",
-        "commandHintWindows": "在 Windows PowerShell 中运行，所选文件路径会通过 $args 数组以及环境变量 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT 传入。"
+        "commandHintWindows": "在 Windows PowerShell 中运行，所选文件路径会通过 $args 数组以及环境变量 $env:DAZZI_FILES_JSON、$env:DAZZI_FILE、$env:DAZZI_FILE_COUNT 传入。",
+        "labelHint": "将以此名称显示在右键菜单中",
+        "modeReadShort": "仅读取",
+        "modeOrganizeShort": "允许修改文件",
+        "targetRow": "显示对象",
+        "targetFile": "文件",
+        "targetFolder": "文件夹",
+        "targetBoth": "两者",
+        "selectionAny": "不限",
+        "selectionSingle": "一个",
+        "selectionMultiple": "多个",
+        "removeExtension": "移除 {{ext}}",
+        "advancedRow": "高级设置",
+        "advancedUses": "使用{{list}}",
+        "advancedNone": "不使用",
+        "targetSummary": {
+          "any": {
+            "file": "右键单击{{ext}}文件时",
+            "folder": "右键单击文件夹时",
+            "any": "右键单击文件或文件夹时"
+          },
+          "single": {
+            "file": "右键单击一个{{ext}}文件时",
+            "folder": "右键单击一个文件夹时",
+            "any": "右键单击一个文件或文件夹时"
+          },
+          "multiple": {
+            "file": "右键单击多个{{ext}}文件时",
+            "folder": "右键单击多个文件夹时",
+            "any": "右键单击多个文件或文件夹时"
+          }
+        }
       },
       "assistant": {
         "title": "右键菜单与魔法动作 AI 智能体",
