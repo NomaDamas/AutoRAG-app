@@ -247,6 +247,9 @@
 	min-width: 0;
 	min-height: 0;
 	overflow-y: auto;
+	/* Keep the scrollbar's lane even when a page is short, so the centred column does not jump sideways when a
+	   page grows past the window (원격 접속 turned on) or shrinks again. */
+	scrollbar-gutter: stable;
 	background: var(--bg-window);
 	padding: 48px 56px 64px; /* reference geometry (Figma 403:9482: the head 12px lower than before); the token scale has no 48/56/64. */
 }
@@ -4254,9 +4257,9 @@
 	background: var(--bg-code); /* #F4F4F7 (Figma 386:10087) */
 }
 
-/* Open, the box grows to 12px above and 14px below, and 접기 takes the link blue. */
+/* Open, the box grows only below (14px), so 개발용 폴더는 자동으로 제외합니다 stays where it sits closed. */
 .settings-view .scope-dev.is-open {
-	padding: 12px 14px 14px;
+	padding: 8px 14px 14px;
 }
 
 .settings-view .scope-dev.is-open .scope-dev-body {
