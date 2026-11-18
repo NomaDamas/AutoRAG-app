@@ -2979,6 +2979,12 @@
         "heroDesc": "「Slack は1時間ごとに更新して」のように話すだけで頼めます。",
         "heroButton": "AIに頼む"
       }
+    },
+    "assistantPrompt": {
+      "yes": "許可",
+      "no": "許可しない",
+      "save": "保存",
+      "secretPlaceholder": "ここに貼り付け"
     }
   },
   "settingsLtr": {

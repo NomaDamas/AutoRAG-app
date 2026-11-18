@@ -29,6 +29,7 @@ const bridge = vi.hoisted(() => {
 		send: vi.fn(),
 		cancel: vi.fn(),
 		reset: vi.fn(),
+		answer: vi.fn(),
 		onEvent: (fn: (event: AppCustomizerEvent) => void) => {
 			customizerListeners.add(fn);
 			return () => customizerListeners.delete(fn);
@@ -104,6 +105,7 @@ beforeEach(async () => {
 	bridge.appCustomizer.send.mockReset().mockResolvedValue(undefined);
 	bridge.appCustomizer.cancel.mockReset().mockResolvedValue(undefined);
 	bridge.appCustomizer.reset.mockReset().mockResolvedValue(undefined);
+	bridge.appCustomizer.answer.mockReset().mockResolvedValue(undefined);
 	host = document.createElement("div");
 	document.body.append(host);
 	root = createRoot(host);
@@ -255,5 +257,122 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 		});
 		await settle();
 		expect(bridge.settings.configGet.mock.calls.length).toBe(before);
+	});
+
+	it("never keeps a credential the person pasted in the chat: the bubble shows it removed, and so does what is sent", async () => {
+		await open("ai");
+		const input = host.querySelector<HTMLTextAreaElement>('[data-testid="app-customizer-input"]');
+		await act(async () => {
+			const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+			setter?.call(input, "use this key sk-ant-api03-PastedInChat0123456789abcdef for anthropic");
+			input?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+		});
+		await settle();
+		expect(host.querySelector(".customizer-turn__user-bubble")?.textContent).not.toContain("PastedInChat");
+		expect(host.querySelector(".customizer-turn__user-bubble")?.textContent).toContain("use this key");
+		const [, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
+		expect(request.message).not.toContain("PastedInChat");
+	});
+
+	describe("prompt cards: what the assistant asks outside the chat", () => {
+		async function startRun(): Promise<{ runId: string; sessionId: string }> {
+			await open("ai");
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
+			});
+			await settle();
+			const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
+			return { runId, sessionId: request.sessionId };
+		}
+
+		it("shows a masked field for a secret, sends it once to the main process, and keeps it out of the page afterwards", async () => {
+			const { runId, sessionId } = await startRun();
+			await act(async () => {
+				bridge.emit({ type: "prompt", runId, sessionId, prompt: { kind: "secret", id: "p1", title: "API key for Anthropic", detail: "Stored encrypted on this computer. The AI never sees it.", hint: "ANTHROPIC_API_KEY" } });
+			});
+			await settle();
+			const card = host.querySelector<HTMLElement>('[data-prompt="secret"]');
+			expect(card?.textContent).toContain("API key for Anthropic");
+			expect(card?.textContent).toContain("The AI never sees it.");
+			const field = card?.querySelector<HTMLInputElement>("input");
+			expect(field?.type).toBe("password");
+			expect(field?.autocomplete).toBe("off");
+			const save = card?.querySelector<HTMLButtonElement>('[data-action="prompt-submit"]');
+			expect(save?.disabled).toBe(true);
+			await act(async () => {
+				const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+				setter?.call(field, "sk-ant-api03-RendererSecret0123456789");
+				field?.dispatchEvent(new Event("input", { bubbles: true }));
+			});
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="prompt-submit"]')?.click();
+			});
+			await settle();
+			expect(bridge.appCustomizer.answer).toHaveBeenCalledWith("p1", { kind: "secret", value: "sk-ant-api03-RendererSecret0123456789" });
+			expect(host.textContent).not.toContain("RendererSecret");
+			expect(host.querySelector('[data-prompt="secret"]')).toBeNull();
+		});
+
+		it("cancel answers cancelled and the card goes away", async () => {
+			const { runId, sessionId } = await startRun();
+			await act(async () => {
+				bridge.emit({ type: "prompt", runId, sessionId, prompt: { kind: "secret", id: "p2", title: "t", detail: "d" } });
+			});
+			await settle();
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="prompt-cancel"]')?.click();
+			});
+			await settle();
+			expect(bridge.appCustomizer.answer).toHaveBeenCalledWith("p2", { kind: "cancelled" });
+			expect(host.querySelector('[data-prompt="secret"]')).toBeNull();
+		});
+
+		it("lists exactly what will happen on a confirm card and answers yes or no", async () => {
+			const { runId, sessionId } = await startRun();
+			await act(async () => {
+				bridge.emit({ type: "prompt", runId, sessionId, prompt: { kind: "confirm", id: "p3", title: "Add MCP server docs?", lines: ["Runs: npx -y docs-mcp@1.2.3", "Needs: DOCS_TOKEN"] } });
+			});
+			await settle();
+			const card = host.querySelector<HTMLElement>('[data-prompt="confirm"]');
+			expect(card?.textContent).toContain("npx -y docs-mcp@1.2.3");
+			expect(card?.textContent).toContain("DOCS_TOKEN");
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="prompt-confirm"]')?.click();
+			});
+			await settle();
+			expect(bridge.appCustomizer.answer).toHaveBeenCalledWith("p3", { kind: "confirm", confirmed: true });
+		});
+
+		it("removes a card the main process closed (timeout or stop) without answering", async () => {
+			const { runId, sessionId } = await startRun();
+			await act(async () => {
+				bridge.emit({ type: "prompt", runId, sessionId, prompt: { kind: "confirm", id: "p4", title: "t", lines: [] } });
+			});
+			await settle();
+			expect(host.querySelector('[data-prompt="confirm"]')).not.toBeNull();
+			await act(async () => {
+				bridge.emit({ type: "prompt-closed", runId, sessionId, promptId: "p4" });
+			});
+			await settle();
+			expect(host.querySelector('[data-prompt="confirm"]')).toBeNull();
+			expect(bridge.appCustomizer.answer).not.toHaveBeenCalled();
+		});
+
+		it("stopping the run closes its open card", async () => {
+			const { runId, sessionId } = await startRun();
+			await act(async () => {
+				bridge.emit({ type: "prompt", runId, sessionId, prompt: { kind: "secret", id: "p5", title: "t", detail: "d" } });
+			});
+			await settle();
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>('[data-action="stop-customizer-message"]')?.click();
+			});
+			await settle();
+			expect(bridge.appCustomizer.cancel).toHaveBeenCalledWith(runId);
+			expect(host.querySelector('[data-prompt="secret"]')).toBeNull();
+		});
 	});
 });

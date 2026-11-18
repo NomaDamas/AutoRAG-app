@@ -35,7 +35,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // AutoRAG#2204 (learning to rank: the ranking log, `autorag ltr`, the `ltr` and `rankingLog` config keys, serving after
 // the reranker) as squash-merged into `main`. It is on `main` but not yet in a release tag: move this to the first tag
 // that contains it (after v2.13.16) once it exists.
-const librarianRef = "a50f657f815ec4e7cabf4bfe9f09784ccdc97439";
+// Commit 04cef434 is AutoRAG#2199 on top of v2.14.0 (the release tag, 4d8a9c50): `createWebTools` in
+// `@autorag/librarian/profiles`, the librarian's own `web_search` and `web_fetch` for a helper profile (the Settings
+// assistants for MCP and apps use them). Move back to a release tag once one carries it.
+const librarianRef = "04cef434cb9bbd3cc3623f929946efca82299d05";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

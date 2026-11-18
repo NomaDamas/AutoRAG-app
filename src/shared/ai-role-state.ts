@@ -12,6 +12,16 @@ import { isJsonObject, type AutoRagConfigUpdate, type JsonObject, type JsonValue
 /** The four model roles Settings → AI 모델 edits. */
 export type RoleId = "answer" | "decomposition" | "jev" | "rerank";
 
+/**
+ * Default API-key env-var name for a provider id (`foo-bar` → `FOO_BAR_API_KEY`).
+ * The renderer's `configSupport` keeps the same three lines; this copy is the one
+ * the main process and the AI assistant's key tools use.
+ */
+export function defaultEnvName(provider: string): string {
+	const base = provider.replace(/[^A-Za-z0-9]/gu, "_").toUpperCase();
+	return base.length === 0 ? "" : `${base}_API_KEY`;
+}
+
 /** What a role currently points at, the shape `RolePicker` highlights: a model, a special, or nothing. */
 export type RoleSelection =
 	| { readonly kind: "model"; readonly provider: string; readonly modelId: string }
