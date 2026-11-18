@@ -407,7 +407,7 @@ export function RemoteAccessPage({
 	return (
 		<>
 			{head}
-			<div className="settings-plain">
+			<div className="settings-plain settings-remote-toggle">
 				<PlainRow name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.remote.access")} />
 				</PlainRow>

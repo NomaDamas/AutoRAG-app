@@ -1241,9 +1241,11 @@
 
 .settings-view .settings-modal h2 {
 	margin: 0 0 var(--space-6);
+	padding-right: 32px;
 	color: var(--text-primary);
 	font-size: 15px;
 	font-weight: var(--weight-semibold);
+	line-height: 24px;
 }
 
 .settings-view .settings-modal p {
@@ -1331,19 +1333,24 @@
 	box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+/*
+ * One close button for every settings modal: a 14px X in a 24px square, 16px from the right edge, centred on the
+ * title's 24px line. `top` is the modal's top padding, so a variant with other padding only moves it down.
+ * `right` starts inside the modal's 1px border, so 15px here is 16px from the edge; the borderless variant says 16px.
+ */
 .settings-view .settings-modal-close {
 	position: absolute;
-	top: var(--space-12);
-	right: var(--space-12);
+	top: 22px;
+	right: 15px;
 	display: grid;
 	place-items: center;
 	width: 24px;
 	height: 24px;
 	padding: 0;
 	border: 0;
-	border-radius: var(--radius-full);
+	border-radius: var(--radius-6);
 	background: transparent;
-	color: var(--text-faint);
+	color: var(--text-muted);
 	cursor: pointer;
 }
 
@@ -1395,14 +1402,12 @@
 	line-height: 1.5;
 }
 
-.settings-view .settings-alert .settings-modal-close,
-.settings-view .magic-editor-modal .settings-modal-close {
-	border-radius: var(--radius-6);
-	color: var(--text-muted);
-}
-
 .settings-view .settings-alert .settings-modal-close {
 	top: var(--space-14);
+}
+
+.settings-view .magic-editor-modal .settings-modal-close {
+	top: 22px;
 	right: var(--space-16);
 }
 
@@ -1425,18 +1430,12 @@
 	box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
 }
 
-/* The close icon sits on the name's line, 20px in from the right edge. */
-.settings-view .magic-editor-modal .settings-modal-close {
-	top: 28px;
-	right: 16px;
-}
-
 .settings-view .magic-editor {
 	display: flex;
 	flex-direction: column;
 }
 
-/* The icon starts on the content's left edge, like 처리 방식 below, and sits on the name's line, 10px before it. */
+/* The icon starts on the content's left edge, like 처리 방식 below, and sits on the name's 24px line, 10px before it. */
 .settings-view .magic-editor-head {
 	display: flex;
 	align-items: flex-start;
@@ -1448,7 +1447,7 @@
 	display: flex;
 	flex: none;
 	align-items: center;
-	height: 25px;
+	height: 24px;
 	color: var(--accent-text);
 }
 
@@ -1462,7 +1461,7 @@
 }
 
 .settings-view .settings-modal .magic-editor-name > input {
-	height: 25px;
+	height: 24px;
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -1470,7 +1469,7 @@
 	background: transparent;
 	font-size: 17px;
 	font-weight: var(--weight-bold);
-	line-height: 25px;
+	line-height: 24px;
 }
 
 .settings-view .settings-modal .magic-editor-name > input:focus {
@@ -4449,6 +4448,11 @@
 	align-items: flex-start;
 	gap: var(--space-16);
 	padding: 13.5px 0;
+}
+
+/* 원격 접속 허용: the switch sits in the middle of the title and its hint. */
+.settings-view .settings-remote-toggle > .settings-plain-row {
+	align-items: center;
 }
 
 /* The first row starts right under the head's 40px (Figma 403:8746 / 403:9482: no top padding on it). */
