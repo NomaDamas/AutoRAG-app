@@ -76,9 +76,10 @@ function ActivityCard({
 
 /**
  * Reusable stack renderer: shows 1 primary card in flow (with a `+N` pill badge
- * and a stacked-card lip when `entries.length > 1`) and expands upward on hover
- * or keyboard focus to reveal every queued/running/completed item without
- * shifting the sidebar layout or overwriting earlier tasks.
+ * when `entries.length > 1`) and expands upward on hover or keyboard focus, as a
+ * popover over the sidebar, to reveal every queued/running/completed item without
+ * shifting the primary card or overwriting earlier tasks. No stacked-card lip
+ * above the card: it looked like a stray bar and vanished on hover, moving the card.
  */
 export function SidebarActivityStack({ entries }: { readonly entries: readonly SidebarActivityEntry[] }): ReactElement | null {
 	const { t } = useTranslation();
@@ -141,11 +142,6 @@ export function SidebarActivityStack({ entries }: { readonly entries: readonly S
 						))}
 					</div>
 				</div>
-			) : hasExtra ? (
-				<div
-					aria-hidden="true"
-					className="mx-6 h-3 rounded-t-6 border border-b-0 border-border bg-hover transition-opacity duration-(--dur-color)"
-				/>
 			) : null}
 			{/* Keyed so a new task's bar starts at its own percent instead of draining from the last task's 100%. */}
 			<ActivityCard key={primary.id} entry={primary} extraCount={extra.length} />

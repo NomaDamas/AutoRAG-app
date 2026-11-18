@@ -181,12 +181,16 @@ describe("SidebarActivityQueue (+N collapsed & hover-expandable stack)", () => {
 		// Hovering over the queue container expands the stack upward and reveals all 7 items!
 		const container = host.querySelector<HTMLElement>('[data-testid="sidebar-activity-queue"]');
 		expect(container).not.toBeNull();
+		// No stacked-card lip above the card: the primary card is the queue's only child, collapsed or expanded,
+		// so hovering never moves it.
+		expect([...(container?.children ?? [])].map((el) => el.tagName)).toEqual(["BUTTON"]);
 		act(() => {
 			container?.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
 		});
 
 		const popover = host.querySelector('[data-testid="sidebar-activity-popover"]');
 		expect(popover).not.toBeNull();
+		expect(container?.lastElementChild?.tagName).toBe("BUTTON");
 		const expandedCards = host.querySelectorAll<HTMLButtonElement>(".sidebar__activity");
 		expect(expandedCards).toHaveLength(7);
 
