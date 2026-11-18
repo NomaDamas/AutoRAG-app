@@ -391,6 +391,12 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		expect(favCard?.querySelector('[data-sidebar-switch="app:aiSearch"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
+		// Sections that cannot be reordered keep no empty grip slot before the icon.
+		for (const card of sectionCards.slice(1)) {
+			expect(card.querySelector(".sidebar-card .sidebar-grip-space, .sidebar-card [data-sidebar-grip]")).toBeNull();
+		}
+		const disk = host.querySelector<HTMLElement>('[data-sidebar-section="locations"] .sidebar-row');
+		expect(disk?.firstElementChild?.className).toBe("sidebar-row-label");
 	});
 
 	it("hides with the right sidebar, reopens from the 우클릭 메뉴 hero, and shows only on 우클릭 메뉴", async () => {

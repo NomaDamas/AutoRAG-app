@@ -474,6 +474,7 @@ export function SidebarPage({
 								) : null}
 
 								{sectionVisible && sectionId !== "favorites" ? (
+									// 클라우드, 연결, 위치 and 태그 cannot be reordered, so their rows keep no empty grip slot: the icon starts at the row's padding.
 									<div className="sidebar-card">
 										{sectionId === "tags" ? (
 											tags.length === 0 ? (
@@ -484,7 +485,6 @@ export function SidebarPage({
 													const visible = !hiddenItems.has(id);
 													return (
 														<div key={id} className={cn("sidebar-row", !visible && "is-muted")} data-sidebar-row={id}>
-															<span className="sidebar-grip-space" aria-hidden="true" />
 															<span className="sidebar-row-label">
 																<span className="sidebar-row-icon" aria-hidden="true">
 																	<TagDotMark color={tag.color} size={10} />
@@ -514,7 +514,6 @@ export function SidebarPage({
 													const visible = !hiddenItems.has(id);
 													return (
 														<div key={id} className={cn("sidebar-row", !visible && "is-muted")} data-sidebar-row={id}>
-															<span className="sidebar-grip-space" aria-hidden="true" />
 															<span className="sidebar-row-label">
 																<Icon size={14} strokeWidth={1.5} className="sidebar-row-icon" aria-hidden="true" />
 																<span className="sidebar-row-name">{loc.name}</span>
