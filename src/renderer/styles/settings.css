@@ -1436,19 +1436,19 @@
 	flex-direction: column;
 }
 
+/* The icon starts on the content's left edge, like 처리 방식 below, and sits on the name's line, 10px before it. */
 .settings-view .magic-editor-head {
 	display: flex;
 	align-items: flex-start;
+	gap: var(--space-10);
 	padding-right: 32px;
 }
 
 .settings-view .magic-editor-tile {
-	display: grid;
+	display: flex;
 	flex: none;
-	place-items: center;
-	width: 40px;
-	height: 40px;
-	border-radius: 10px;
+	align-items: center;
+	height: 25px;
 	color: var(--accent-text);
 }
 
