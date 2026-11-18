@@ -2236,9 +2236,6 @@
       "backToApp": "返回应用"
     },
     "sidebar": {
-      "aiHeroTitle": "用 AI 整理边栏",
-      "aiHeroDesc": "只需提出要求，例如“隐藏音乐和影片，把下载移到最上面”。",
-      "aiHeroButton": "请 AI 处理",
       "presetsTitle": "快速预设",
       "presetShowAll": "全部显示",
       "presetMinimal": "仅显示核心项",
@@ -2384,9 +2381,6 @@
       "dragHint": "调整 {{name}} 的顺序：拖动或按 ↑↓ 键"
     },
     "shortcuts": {
-      "aiHeroTitle": "用 AI 更改快捷键",
-      "aiHeroDesc": "可以用说的来更改，例如“把重命名改成 F2”。",
-      "aiHeroButton": "请 AI 处理",
       "presetsTitle": "快速预设",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows 文件资源管理器",

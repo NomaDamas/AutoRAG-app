@@ -137,9 +137,9 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** Settings pages whose AI customization assistant fills the window's right sidebar. */
+/** The one settings page whose AI customization assistant fills the window's right sidebar: 우클릭 메뉴. */
 function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
-	return page === "sidebar" || page === "contextMenu" || page === "shortcuts" ? page : null;
+	return page === "contextMenu" ? page : null;
 }
 
 /**
@@ -265,11 +265,11 @@ export function SettingsPageContent({
 		case "general":
 			return <GeneralPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "sidebar":
-			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
+			return <SidebarPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "contextMenu":
 			return <ContextMenuPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
 		case "shortcuts":
-			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} customizerOpen={customizerOpen} onOpenCustomizer={onOpenCustomizer} />;
+			return <ShortcutsPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "ai":

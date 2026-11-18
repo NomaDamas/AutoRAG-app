@@ -27,7 +27,6 @@ import {
 	Zap,
 	type LucideIcon,
 } from "lucide-react";
-import dazziMark from "../../assets/dazzi-mark.png";
 import { RECENTS_PATH, type FsBridge, type FsLocation, type FsLocationIcon, type FsTag } from "../../../../shared/fs-contract";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
@@ -112,15 +111,10 @@ export function SidebarPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	customizerOpen,
-	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
-	readonly customizerOpen: boolean;
-	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
@@ -327,28 +321,6 @@ export function SidebarPage({
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.sidebar")} />
-
-			{customizerOpen ? null : (
-				<div className="sidebar-ai-hero">
-					<div className="sidebar-ai-hero__body">
-						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-						</span>
-						<div className="sidebar-ai-hero__copy">
-							<div className="sidebar-ai-hero__title">{t("settingsCore.sidebar.aiHeroTitle")}</div>
-							<p className="sidebar-ai-hero__desc">{t("settingsCore.sidebar.aiHeroDesc")}</p>
-						</div>
-					</div>
-					<button
-						type="button"
-						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-						data-action="open-app-customizer"
-						onClick={onOpenCustomizer}
-					>
-						<span>{t("settingsCore.sidebar.aiHeroButton")}</span>
-					</button>
-				</div>
-			)}
 
 			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 and 기본값으로 복원), then each section as a head over a bordered card. */}
 			<div className="sidebar-page" ref={pageRef}>

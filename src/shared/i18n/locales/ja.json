@@ -2236,9 +2236,6 @@
       "backToApp": "アプリに戻る"
     },
     "sidebar": {
-      "aiHeroTitle": "AIでサイドバーを整理",
-      "aiHeroDesc": "「ミュージックとムービーを隠して、ダウンロードを一番上にして」のように話すだけで頼めます。",
-      "aiHeroButton": "AIに依頼",
       "presetsTitle": "クイック構成",
       "presetShowAll": "すべて表示",
       "presetMinimal": "主要項目のみ",
@@ -2384,9 +2381,6 @@
       "dragHint": "{{name}} の並べ替え: ドラッグするか ↑↓ キーを押します"
     },
     "shortcuts": {
-      "aiHeroTitle": "AIでショートカットを変更",
-      "aiHeroDesc": "「名前の変更はF2にして」のように話して変更できます。",
-      "aiHeroButton": "AIに頼む",
       "presetsTitle": "クイック構成",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows エクスプローラー",

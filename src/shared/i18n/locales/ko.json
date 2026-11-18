@@ -2236,9 +2236,6 @@
       "backToApp": "앱으로 돌아가기"
     },
     "sidebar": {
-      "aiHeroTitle": "AI로 사이드바 정리",
-      "aiHeroDesc": "\"음악과 동영상은 숨기고 다운로드를 맨 위로 올려 줘\"처럼 말로 요청할 수 있습니다.",
-      "aiHeroButton": "AI에게 요청",
       "presetsTitle": "빠른 구성",
       "presetShowAll": "전체 표시",
       "presetMinimal": "핵심만 표시",
@@ -2384,9 +2381,6 @@
       "dragHint": "{{name}} 순서 바꾸기: 끌거나 ↑↓ 키를 누르세요"
     },
     "shortcuts": {
-      "aiHeroTitle": "AI로 단축키 바꾸기",
-      "aiHeroDesc": "\"이름 바꾸기를 F2로 바꿔줘\"처럼 말로 바꿀 수 있습니다.",
-      "aiHeroButton": "AI에게 요청",
       "presetsTitle": "빠른 구성",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows 파일 탐색기",

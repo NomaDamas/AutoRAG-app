@@ -2236,9 +2236,6 @@
       "backToApp": "Back to app"
     },
     "sidebar": {
-      "aiHeroTitle": "Tidy the sidebar with AI",
-      "aiHeroDesc": "Just ask, like \"Hide Music and Movies and move Downloads to the top.\"",
-      "aiHeroButton": "Ask AI",
       "presetsTitle": "Quick Presets",
       "presetShowAll": "Show All",
       "presetMinimal": "Essentials Only",
@@ -2384,9 +2381,6 @@
       "dragHint": "Reorder {{name}}: drag, or press ↑ or ↓"
     },
     "shortcuts": {
-      "aiHeroTitle": "Change shortcuts with AI",
-      "aiHeroDesc": "Change them just by saying so, like \"Make rename F2.\"",
-      "aiHeroButton": "Ask AI",
       "presetsTitle": "Quick Presets",
       "presetMacFinder": "Mac Finder",
       "presetWindowsExplorer": "Windows File Explorer",

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowLeftRight, Lock, RotateCcw, Search, X } from "lucide-react";
-import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	activeShortcutPreset,
@@ -69,15 +68,10 @@ export function ShortcutsPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	customizerOpen,
-	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
-	readonly customizerOpen: boolean;
-	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
@@ -293,28 +287,6 @@ export function ShortcutsPage({
 	return (
 		<>
 			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} />
-
-			{customizerOpen ? null : (
-				<div className="sidebar-ai-hero">
-					<div className="sidebar-ai-hero__body">
-						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-						</span>
-						<div className="sidebar-ai-hero__copy">
-							<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
-							<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
-						</div>
-					</div>
-					<button
-						type="button"
-						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-						data-action="open-shortcut-customizer"
-						onClick={onOpenCustomizer}
-					>
-						<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
-					</button>
-				</div>
-			)}
 
 			{/* Figma 445:2249: the search, 빠른 구성 (the platform presets as a segmented control, reset and the changed-only filter), then one bordered card per group. */}
 			<div className="shortcuts-page">
