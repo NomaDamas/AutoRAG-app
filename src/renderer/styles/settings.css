@@ -5587,6 +5587,15 @@
 	background: var(--bg-input);
 }
 
+.settings-view .scope-row-percent {
+	flex: none;
+	width: 36px;
+	color: var(--text-body);
+	font-size: var(--font-size-meta);
+	font-variant-numeric: tabular-nums;
+	text-align: right;
+}
+
 .settings-view .scope-row-bar i {
 	display: block;
 	height: 100%;

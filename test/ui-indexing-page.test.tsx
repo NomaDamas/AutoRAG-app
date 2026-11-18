@@ -104,14 +104,15 @@ describe("Settings → Indexing", () => {
 		expect(host.querySelector(".index-status-count")?.textContent).toBe("1/2 files");
 	});
 
-	it("shows only a bar for each search folder, no counts or percent (the counts are in the banner and the map)", async () => {
+	it("shows a bar and a percent for each search folder, but no file counts (those are in the banner and the map)", async () => {
 		await mount();
 
 		const rows = [...host.querySelectorAll(".scope-row.is-pickable")];
 		expect(rows.length).toBeGreaterThan(0);
 		for (const row of rows) {
 			expect(row.querySelector(".scope-row-bar")).not.toBeNull();
-			expect(row.textContent).not.toMatch(/\d+\s*\/\s*\d+|%/u);
+			expect(row.querySelector(".scope-row-percent")?.textContent).toMatch(/^(\d+%|—)$/u);
+			expect(row.textContent).not.toMatch(/\d+\s*\/\s*\d+/u);
 		}
 	});
 
