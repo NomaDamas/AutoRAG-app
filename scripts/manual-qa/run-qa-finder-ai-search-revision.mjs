@@ -5,8 +5,8 @@
  * stream the way the librarian does (quick, one `revision` per correction, deep), so the real renderer is what is
  * checked. With real keyboard and mouse input in an isolated profile:
  *
- *   1. a replaced claim shows the struck words beside the new ones, with the reason as its tooltip and the line that
- *      says the answer was corrected;
+ *   1. a replaced claim shows the struck words beside the new ones, with the reason as its tooltip, and nothing is
+ *      added above the answer;
  *   2. after the motion the struck words are gone and the new words stay marked;
  *   3. a retracted claim stays struck, and the new citation opens the source the final answer sent;
  *   4. a run that corrects nothing draws as it always did.
@@ -126,7 +126,6 @@ const ask = async (text, expectedStarts) => {
 	await waitFor(async () => (await starts()).length === expectedStarts, `run ${expectedStarts} start`);
 };
 const ev = (number, title, excerpt) => ({ number, title, summary: `${title} summary`, source: `/tmp/${title}`, excerpts: [excerpt], confidence: 0.9 });
-const CORRECTED = /Corrected the answer|답을 고쳤어요|回答を修正しました|已更正回答/u;
 const EVIDENCE_HALF = '.inspector-half[aria-label="Evidence"]';
 
 const FIRST = "- 환불은 팀장 승인이 필요합니다 [1]\n- 한도는 50만 원입니다 [2]\n- 지급은 다음 달 25일입니다 [3]";
@@ -148,7 +147,7 @@ const during = {
 };
 check("the struck words stand beside the new ones", during.del[0] === "환불은 팀장 승인이 필요합니다" && during.ins[0]?.startsWith("환불은 이사 승인이 필요합니다"), JSON.stringify(during));
 check("the reason is the correction's tooltip", during.title === "2026년 개정", during.title);
-check("the answer says it was corrected", CORRECTED.test(during.head), during.head.slice(0, 40));
+check("no line is added above the answer: it starts with the first claim", during.head.trimStart().startsWith("환불은"), during.head.slice(0, 40));
 check("the unchanged claims stay as they were", during.head.includes("한도는 50만 원입니다") && during.head.includes("지급은 다음 달 25일입니다"));
 await page.screenshot({ path: join(EVIDENCE, "02-correction-arrives.png") });
 
@@ -179,7 +178,6 @@ await call("quick", { text: "한도는 50만 원입니다 [1]", evidence: [ev(1,
 await call("finish", { deep: null });
 await waitFor(async () => (await panel.locator(".assistant-prose").count()) === 2, "second answer");
 check("an answer nobody corrected carries no correction marks", (await panel.locator(".assistant-prose").nth(1).locator("[data-revision]").count()) === 0);
-check("and says nothing was corrected", !CORRECTED.test(await panel.locator(".assistant-prose").nth(1).innerText()));
 
 log(`RESULT ${failures.length === 0 ? "ALL PASS" : `${failures.length} FAILURES: ${failures.join(" | ")}`}`);
 await app?.close().catch(() => undefined);

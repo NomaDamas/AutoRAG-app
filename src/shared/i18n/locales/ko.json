@@ -357,7 +357,6 @@
     },
     "thinking": "생각하는 중…",
     "workedFor": "{{time}} 동안 답변 생성",
-    "revised": "답을 고쳤어요",
     "reviewing": "질문 검토 중…",
     "stopped": "답변 생성을 중단했습니다.",
     "dropAttach": "놓으면 대화에 첨부됩니다",

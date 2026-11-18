@@ -30,7 +30,6 @@ import { drawQuickAnswer } from "../state/answer-revisions";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
 import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
-import { RevisionHead } from "./AnswerRevisionMark";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -518,7 +517,6 @@ function PhaseAnswer({
 				if (event.key === "Escape") setHovered(null);
 			}}
 		>
-			{revisions === undefined ? null : <RevisionHead />}
 			<ProseBlocks
 				{...(revisions === undefined ? {} : { revisions })}
 				text={text}

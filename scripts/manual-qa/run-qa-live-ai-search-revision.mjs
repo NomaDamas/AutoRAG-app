@@ -5,7 +5,7 @@
 // to QA_LIVE_ATTEMPTS times in fresh chats and judges the first one that produced a correction; when none did, the
 // contract was never exercised and the lane fails. What it asserts is the app's side of the contract:
 //
-//   - a correction is drawn in the Quick answer, in place, with its reason, under the line that says it was corrected;
+//   - a correction is drawn in the Quick answer, in place, with its reason, with nothing added above the answer;
 //   - the replaced words leave after the motion; a retracted claim stays struck;
 //   - every citation the correction brings opens a source (none is left as a dead chip);
 //   - the answer is not repeated under itself as a second, full answer;
@@ -122,7 +122,6 @@ const env = {
 };
 
 const QUESTION = "신규 거래처를 처음 등록할 때 승인은 누가 하고 결제 조건은 며칠이야?";
-const CORRECTED = /Corrected the answer|답을 고쳤어요|回答を修正しました|已更正回答/u;
 
 const app = await launchFinder({ userDataDir: join(WORK, "user-data"), env });
 try {
@@ -168,7 +167,6 @@ try {
 		const proses = msg.locator(".assistant-prose");
 		const first = proses.first();
 		const text = await first.innerText();
-		check("the corrected answer says it was corrected", CORRECTED.test(text), text.slice(0, 60));
 		const kinds = await msg.locator("[data-revision]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-revision")));
 		console.log(`  correction kinds: ${JSON.stringify(kinds)}`);
 		check("every drawn correction is a replace, retract or add", kinds.every((kind) => ["replace", "retract", "add"].includes(kind ?? "")), JSON.stringify(kinds));
@@ -194,7 +192,7 @@ try {
 		const count = await proses.count();
 		const second = count > 1 ? await proses.nth(1).innerText() : "";
 		console.log(`  answer blocks: ${count}${count > 1 ? `; second: ${second.replace(/\s+/g, " ").slice(0, 200)}` : ""}`);
-		check("the final answer is not a second full copy of the corrected one", count === 1 || !second.includes(text.replace(CORRECTED, "").trim().slice(0, 40)), `${count} block(s)`);
+		check("the final answer is not a second full copy of the corrected one", count === 1 || !second.includes(text.trim().slice(0, 40)), `${count} block(s)`);
 
 		// The chat read back from the store shows the same corrections.
 		const stored = await page.evaluate(async () => {

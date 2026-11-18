@@ -1082,7 +1082,10 @@ When verification finds the Quick answer wrong, the librarian corrects it claim 
   correction: the new words arrive marked in the sun colour with the struck words beside them; after 2.6 s the mark fades to
   an underline and the struck words collapse (design preview "답이 고쳐질 때"). A retracted claim stays struck, with its
   reason as the tooltip. A chat read back from history, and a person who asked for reduced motion, see the settled state at once.
-  The AI Search tab and the inspector chat draw the same thing; each corrected answer carries the line "답을 고쳤어요".
+  The AI Search tab and the inspector chat draw the same thing; no line is added above a corrected answer. An added
+  finding is not drawn like a replacement: no strike and no sun colour, but its own block on an accent rail that rises in and
+  keeps the rail once settled. A replaced claim that fits one line collapses by its measured width, so the lines below it
+  never move; one that wraps only fades before it leaves.
 
 ### What the panel shows while a run works, and an exhausted plan
 

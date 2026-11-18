@@ -357,7 +357,6 @@
     },
     "thinking": "思考中…",
     "workedFor": "思考耗时 {{time}}",
-    "revised": "已更正回答",
     "reviewing": "正在核对提问…",
     "stopped": "已停止生成回答。",
     "dropAttach": "松开即可添加到对话",

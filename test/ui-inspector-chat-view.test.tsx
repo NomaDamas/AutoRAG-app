@@ -179,7 +179,6 @@ describe("the inspector chat view, after the librarian corrected the Quick answe
 		expect(answer?.querySelector("ins button.cite")?.textContent).toBe("3");
 		expect(answer?.querySelector("ins")?.closest("[data-revision]")?.getAttribute("title")).toBe("2026년 개정");
 		expect(answer?.textContent).toContain("한도는 50만 원입니다");
-		expect(answer?.textContent).toContain("답을 고쳤어요");
 	});
 
 	it("shows the same correction settled when the chat is read back from history", () => {
@@ -193,7 +192,6 @@ describe("the inspector chat view, after the librarian corrected the Quick answe
 	it("draws a turn that was not corrected as it always was", () => {
 		renderTab(turnOf({ quick: { answer: first, evidence: [evidence(1), evidence(2)] }, revisions: [] }));
 		expect(host.querySelector("[data-revision]")).toBeNull();
-		expect(host.textContent).not.toContain("답을 고쳤어요");
 	});
 });
 

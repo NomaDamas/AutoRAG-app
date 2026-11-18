@@ -210,8 +210,9 @@ export function markRevisedAnswer(first: string, revisions: readonly AnswerRevis
 	for (const revision of revisions) {
 		const added = revision.replacement ?? "";
 		if (revision.op !== "add" || added === "") continue;
-		const [listMark, body] = splitListMark(added);
-		out += joiner(out, added) + (added.includes("\n") ? added : listMark + slot(revision, "", body));
+		// An added finding is drawn as its own block (`AnswerRevisionMark`), so it takes no bullet of the list it follows.
+		const body = splitListMark(added)[1];
+		out += joiner(out, added) + (added.includes("\n") ? added : slot(revision, "", body));
 	}
 	return { text: out, changes };
 }

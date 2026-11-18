@@ -117,9 +117,9 @@ describe("markRevisedAnswer (the answer to draw: corrections marked in place)", 
 		expect(text).toBe(`앞 문장입니다 [1]. ${mark(0)} 뒤 문장입니다.`);
 	});
 
-	it("appends an addition as a new line that keeps its own bullet", () => {
+	it("appends an addition as a line of its own without the bullet it came with, since it is drawn as a block", () => {
 		const { text, changes } = markRevisedAnswer(first, [add("- 예외는 기록됩니다 [3]")]);
-		expect(text).toBe(`${first}\n- ${mark(0)}`);
+		expect(text).toBe(`${first}\n${mark(0)}`);
 		expect(changes[0]).toMatchObject({ kind: "add", deleted: "", inserted: "예외는 기록됩니다 [3]" });
 	});
 

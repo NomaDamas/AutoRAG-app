@@ -32,7 +32,7 @@ import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
 import { REVISION_MARK, type AnswerChange, type AnswerRevision } from "../../../shared/answer-revision";
 import { drawQuickAnswer, splitRevisionMarks } from "../state/answer-revisions";
-import { AnswerRevisionMark, RevisionHead } from "./AnswerRevisionMark";
+import { AnswerRevisionMark } from "./AnswerRevisionMark";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
@@ -1103,7 +1103,6 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 						<div className="message assistant-msg flex flex-col gap-14">
 							{quickReady ? (
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:quick`}>
-									{quickDraw === null ? null : <RevisionHead />}
 									<ProseBlocks
 										text={quickDraw?.text ?? quickText}
 										selected={
@@ -1496,7 +1495,6 @@ function PastTurnView({
 		const drawn = phaseKind === "quick" ? quickDraw : null;
 		return (
 			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body" data-cite-scope={`${turnIndex}:${phaseKind}`}>
-				{drawn === null ? null : <RevisionHead />}
 				<ProseBlocks
 					text={drawn?.text ?? text}
 					selected={
