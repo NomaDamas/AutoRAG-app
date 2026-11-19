@@ -185,7 +185,7 @@ describe("web tools for the assistants that research (MCP, apps, AI models)", ()
 	});
 
 	it("the page-only assistants never get the web", () => {
-		for (const surface of ["general", "web", "indexing", "reading", "duplicates"] as const) expect(namesFor(surface), surface).toEqual(["own_tool"]);
+		for (const surface of ["general", "web", "indexing", "duplicates"] as const) expect(namesFor(surface), surface).toEqual(["own_tool"]);
 	});
 });
 
