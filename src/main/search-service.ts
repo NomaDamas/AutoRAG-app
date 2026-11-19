@@ -17,6 +17,7 @@ import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
+import { withoutAgentAutoTrain } from "./ltr-service";
 import { syncCalendarMcpConfig } from "./calendar-mcp";
 import type {
 	AnswerPhase,
@@ -119,6 +120,12 @@ export interface SearchServiceDeps {
 	 * A preflight that throws never stops a run.
 	 */
 	readonly preflight?: () => Promise<SearchRefusal | null>;
+	/**
+	 * Called once a search has answered and its `done` event is sent, never before: the answer is already on screen.
+	 * Learning-to-rank training hangs here. Fire and forget: a hook that throws or rejects is dropped and never fails
+	 * the search it follows.
+	 */
+	readonly afterAnsweredSearch?: () => void | Promise<unknown>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
 	/**
@@ -489,6 +496,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		deps.analytics?.track("ai_search_finished", { outcome, deepened: run.deep !== null, duration: durationBucket(now().getTime() - run.startedAt) });
 	}
 
+	/** The post-search hook, detached: whatever it does or throws, the search that triggered it is already over. */
+	function runAfterAnswered(): void {
+		const hook = deps.afterAnsweredSearch;
+		if (hook === undefined) return;
+		try {
+			Promise.resolve(hook()).catch(() => undefined);
+		} catch {
+			// A synchronous throw is dropped for the same reason.
+		}
+	}
+
 	/** Runs one read-modify-write of the run's chat record after every earlier one. */
 	function writeChat(run: SearchRun, update: (existing: ChatRecord) => ChatRecord): Promise<void> {
 		const write = run.writes.then(async () => {
@@ -685,7 +703,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			if (!run.cancelled) {
 				emit({ type: "done", searchId: run.searchId });
 				// A stream that ended with no answer at all did not answer.
-				reportFinished(run, run.failed || (run.quick === null && run.deep === null) ? "failed" : "answered");
+				const answered = !(run.failed || (run.quick === null && run.deep === null));
+				reportFinished(run, answered ? "answered" : "failed");
+				if (answered) runAfterAnswered();
 			}
 			active.delete(run.searchId);
 			run.resolveFinish();
@@ -927,7 +947,8 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 			...(thinking !== undefined ? { thinking } : {}),
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(agentOptions, semantic), createAgentInteraction());
+		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
