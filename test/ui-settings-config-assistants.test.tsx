@@ -277,6 +277,42 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 		expect(request.message).not.toContain("PastedInChat");
 	});
 
+	it("re-reads the connected providers on the AI page after a turn that brought one in, so the model it chose is not shown as broken", async () => {
+		await open("ai");
+		const before = bridge.settings.providersList.mock.calls.length;
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
+		});
+		await settle();
+		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] ?? [];
+		bridge.settings.providersList.mockResolvedValue([
+			{ id: "custom-omp", name: "ompproxy", baseUrl: "http://x/v1", kind: "custom", authKinds: ["api_key"], subscription: false, authConfigured: true, authSource: "stored", apiKeyEnv: "OMP_KEY", models: [{ provider: "custom-omp", id: "model-a", name: "Model A", api: "openai-completions", available: true, baseUrl: null, apiKeyEnv: null }] },
+		]);
+		await act(async () => {
+			bridge.emit({ type: "turn-done", runId, sessionId: request.sessionId, messages: ["Imported."], changes: [{ kind: "ai", summary: "Imported omp's ompproxy provider", fields: ["providers.custom-omp"] }], settings: currentSettings });
+		});
+		await settle();
+		expect(bridge.settings.providersList.mock.calls.length).toBeGreaterThan(before);
+		expect(host.textContent).toContain("ompproxy");
+	});
+
+	it("shows the config as it is when a page is opened, even if something else changed it since Settings was loaded", async () => {
+		await open("web");
+		const switchOf = (): HTMLElement | null => host.querySelector('[role="switch"][aria-label]');
+		expect(switchOf()?.getAttribute("aria-checked")).toBe("true");
+		// Changed outside this window (another window, the CLI, or the file edited on disk): no event reaches the page.
+		bridge.settings.configGet.mockResolvedValue({ ...CONFIG, config: { ...CONFIG.config, webSearch: { enabled: false } } });
+		await act(async () => {
+			[...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((button) => button.textContent?.includes("General") || button.textContent?.includes("일반"))?.click();
+		});
+		await settle();
+		await act(async () => {
+			[...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((button) => button.textContent?.includes("Web Search") || button.textContent?.includes("웹 검색"))?.click();
+		});
+		await settle();
+		expect(switchOf()?.getAttribute("aria-checked")).toBe("false");
+	});
+
 	describe("prompt cards: what the assistant asks outside the chat", () => {
 		async function startRun(): Promise<{ runId: string; sessionId: string }> {
 			await open("ai");
@@ -314,6 +350,24 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 			expect(bridge.appCustomizer.answer).toHaveBeenCalledWith("p1", { kind: "secret", value: "sk-ant-api03-RendererSecret0123456789" });
 			expect(host.textContent).not.toContain("RendererSecret");
 			expect(host.querySelector('[data-prompt="secret"]')).toBeNull();
+		});
+
+		it("brings a newly opened card into view, so its buttons are never left below the fold", async () => {
+			const { runId, sessionId } = await startRun();
+			const scrolled: Element[] = [];
+			const original = Element.prototype.scrollIntoView;
+			Element.prototype.scrollIntoView = function (this: Element) {
+				scrolled.push(this);
+			};
+			try {
+				await act(async () => {
+					bridge.emit({ type: "prompt", runId, sessionId, prompt: { kind: "confirm", id: "p-scroll", title: "Import?", lines: ["a", "b", "c", "d", "e", "f"] } });
+				});
+				await settle();
+			} finally {
+				Element.prototype.scrollIntoView = original;
+			}
+			expect(scrolled.some((element) => element.getAttribute("data-prompt") === "confirm")).toBe(true);
 		});
 
 		it("cancel answers cancelled and the card goes away", async () => {

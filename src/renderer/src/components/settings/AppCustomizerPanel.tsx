@@ -116,9 +116,14 @@ function surfaceCopy(surface: AppCustomizerSurface): SurfaceCopy {
 function PromptCard({ prompt, onAnswer }: { readonly prompt: AppCustomizerPrompt; readonly onAnswer: (answer: AppCustomizerPromptAnswer) => void }): ReactElement {
 	const { t } = useTranslation();
 	const [value, setValue] = useState("");
+	const cardRef = useRef<HTMLDivElement>(null);
+	// The card is the thing the person must act on: bring it, buttons included, into view when it opens.
+	useEffect(() => {
+		cardRef.current?.scrollIntoView({ block: "end" });
+	}, []);
 	if (prompt.kind === "confirm") {
 		return (
-			<div className="customizer-prompt" data-prompt="confirm" role="group" aria-label={prompt.title}>
+			<div ref={cardRef} className="customizer-prompt" data-prompt="confirm" role="group" aria-label={prompt.title}>
 				<div className="customizer-prompt__title">{prompt.title}</div>
 				{prompt.lines.length > 0 ? (
 					<ul className="customizer-prompt__lines">
@@ -145,7 +150,7 @@ function PromptCard({ prompt, onAnswer }: { readonly prompt: AppCustomizerPrompt
 		onAnswer({ kind: "secret", value: typed });
 	};
 	return (
-		<div className="customizer-prompt" data-prompt="secret" role="group" aria-label={prompt.title}>
+		<div ref={cardRef} className="customizer-prompt" data-prompt="secret" role="group" aria-label={prompt.title}>
 			<div className="customizer-prompt__title">{prompt.title}</div>
 			<p className="customizer-prompt__detail">{prompt.detail}</p>
 			{prompt.hint !== undefined ? <p className="customizer-prompt__hint">{prompt.hint}</p> : null}

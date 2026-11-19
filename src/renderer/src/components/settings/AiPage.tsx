@@ -70,7 +70,16 @@ function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string,
 	return out;
 }
 
-export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+export function AiPage({
+	snapshot,
+	onSaved,
+	assistantRevision = 0,
+}: {
+	readonly snapshot: AutoRagConfigSnapshot;
+	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
+	/** Bumped when an assistant turn changed something: the connected providers are read again (it may have brought one in). */
+	readonly assistantRevision?: number;
+}): ReactElement {
 	const { t } = useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
 	const [providers, setProviders] = useState<readonly ProviderSummary[] | null>(null);
@@ -87,7 +96,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}, []);
 	useEffect(() => {
 		void reload();
-	}, [reload]);
+	}, [reload, assistantRevision]);
 	const connect = useProviderConnect({ reload, onNotice: setNotice });
 
 	const connected = useMemo(() => (providers ?? []).filter((provider) => provider.authConfigured), [providers]);

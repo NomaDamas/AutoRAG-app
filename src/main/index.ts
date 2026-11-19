@@ -1135,6 +1135,7 @@ app.whenReady().then(async () => {
 		homeDir: home,
 		language: () => currentLanguage,
 		settings: settingsService,
+		importCustomProvider: (input) => providerAuth.importCustom(input),
 		listLocations: () => customizerPlaces.list().catch(() => []),
 		listTags: () => customizerTags.catalog().then((catalog) => catalog.tags.filter((tag) => tag.sidebar), () => []),
 	});

@@ -7,7 +7,9 @@
  * keys, or change the embedding model: those belong to the page's own buttons.
  */
 
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { defineTool, type AgentToolResult, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import type { AgentProfile } from "@autorag/librarian/profiles";
@@ -26,10 +28,13 @@ import {
 } from "../../../shared/ai-role-state";
 import { readImportableSource, scanCodingAgents, type CodingAgentScanInputs } from "../../coding-agent-credentials";
 import { createGuardedBashTool } from "../guarded-bash";
+import { readOmpProviders, resolveOmpProviderKey, type OmpInputs, type OmpProviderDefinition } from "../../omp-config";
+import { isAllowedAgentApi, ALLOWED_AGENT_APIS } from "../../../shared/model-config";
+import type { CustomProviderImport } from "../../provider-auth-service";
 import type { WriteJudge } from "../write-gate";
 import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../shared/model-config";
 import { THINKING_LEVELS, WEBSEARCH_PROVIDERS } from "../../../shared/settings-options";
-import type { AutoRagConfigUpdate, ModelCatalogEntry } from "../../../shared/settings-contract";
+import type { AutoRagConfigUpdate, ModelCatalogEntry, ProviderSummary } from "../../../shared/settings-contract";
 import { intentPromptLine, withIntentTools } from "../profile-progress";
 import {
 	createCustomizerKit,
@@ -43,6 +48,11 @@ import {
 
 export interface AiCustomizerToolkitDeps extends ConfigCustomizerDeps {
 	readonly platform?: NodeJS.Platform;
+	/**
+	 * Adds a provider definition (protocol, address, models, key reference) taken from another agent. Main-process only, so the service
+	 * injects it; without it `import_omp_provider` is not offered.
+	 */
+	readonly importCustomProvider?: (input: CustomProviderImport) => Promise<{ readonly id: string; readonly providers: readonly ProviderSummary[] }>;
 	/**
 	 * Where the `bash` tool runs and where the coding-agent scan looks. The service passes it from the app's own home folder;
 	 * when absent the `bash` tool is not offered and the scan falls back to this process.
@@ -394,6 +404,46 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 		},
 	});
 
+	function ompInputs(): OmpInputs {
+		const env = deps.shell?.env ?? process.env;
+		return { homeDir: deps.shell?.homeDir ?? env.HOME?.trim() ?? env.USERPROFILE?.trim() ?? homedir(), env, ...(deps.platform === undefined ? {} : { platform: deps.platform }) };
+	}
+
+	/** Why a provider of omp's cannot be brought over as it is, or null when it can. */
+	function ompBlocker(definition: OmpProviderDefinition): string | null {
+		if (!isAllowedAgentApi(definition.api)) return `its protocol '${definition.api}' is not one Dazzi speaks (${ALLOWED_AGENT_APIS.join(", ")})`;
+		if (definition.models.length === 0) return "it lists no models";
+		if (definition.keyKind === "command") return "its key comes from a command omp runs, which Dazzi does not run";
+		return null;
+	}
+
+	/** omp's custom providers as the scan reports them: what they are and whether they can come over, never a key. */
+	function ompReport(): { readonly installed: boolean; readonly providers: readonly Record<string, unknown>[] } {
+		const inputs = ompInputs();
+		const installed = existsSync(join(inputs.homeDir, ".omp", "agent"));
+		if (!installed) return { installed: false, providers: [] };
+		return {
+			installed: true,
+			providers: readOmpProviders(inputs).map((definition) => {
+				const blocker = ompBlocker(definition);
+				const keyAvailable = definition.keyKind === "none" ? true : definition.keyKind === "command" ? false : resolveOmpProviderKey(inputs, definition) !== null;
+				return {
+					name: definition.name,
+					api: definition.api,
+					baseUrl: definition.baseUrl,
+					modelCount: definition.models.length,
+					models: definition.models.slice(0, 8).map((model) => model.id),
+					keyKind: definition.keyKind,
+					...(definition.keyEnvName === null ? {} : { envName: definition.keyEnvName }),
+					keyAvailable,
+					importable: blocker === null,
+					...(blocker === null ? {} : { why: blocker }),
+					source: `omp:${definition.name}`,
+				};
+			}),
+		};
+	}
+
 	const scanCodingAgentsTool = defineTool({
 		name: "scan_coding_agents",
 		label: "Scan Other Coding Agents for Keys",
@@ -403,7 +453,9 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 		execute: async () => {
 			kit.ensureLive();
 			const providers = await deps.settings.providersList();
-			return textResult({ ok: true, ...scanCodingAgents(await scanInputs(), providers) });
+			const scan = scanCodingAgents(await scanInputs(), providers);
+			const omp = ompReport();
+			return textResult({ ok: true, ...scan, agents: [...scan.agents, { id: "omp", name: "omp (oh-my-pi)", installed: omp.installed, credentials: [], providers: omp.providers }] });
 		},
 	});
 
@@ -458,7 +510,77 @@ export function createAiCustomizerToolkit(deps: AiCustomizerToolkitDeps): Custom
 		},
 	});
 
+	const importOmpProvider = defineTool({
+		name: "import_omp_provider",
+		label: "Import a Provider From omp",
+		description:
+			"Bring one of omp's custom providers (its protocol, address and model list, plus the key it uses) into Dazzi as it is, after the person confirms, so its models can be chosen for a role. The app reads the key itself; the AI never sees it. Use the name `scan_coding_agents` lists under omp.",
+		parameters: Type.Object({
+			provider: Type.String({ description: "The provider's name as `scan_coding_agents` lists it under omp (for example `myproxy`)." }),
+		}),
+		execute: async (_callId, params) => {
+			kit.ensureLive();
+			const importCustom = deps.importCustomProvider;
+			const prompter = deps.secrets?.prompter?.();
+			if (importCustom === undefined || prompter === undefined || deps.secrets === undefined) return noSecretField();
+			const inputs = ompInputs();
+			const definitions = readOmpProviders(inputs);
+			const definition = definitions.find((entry) => entry.name === params.provider);
+			if (definition === undefined) {
+				return textResult({ ok: false, error: `omp has no provider '${params.provider}'.`, choices: definitions.map((entry) => entry.name) });
+			}
+			const blocker = ompBlocker(definition);
+			if (blocker !== null) return textResult({ ok: false, error: `'${definition.name}' cannot be brought over: ${blocker}.` });
+			const key = definition.keyKind === "none" ? null : resolveOmpProviderKey(inputs, definition);
+			// A key written into omp's file has no variable name; Dazzi keeps keys in the environment by name, so it gets one from the provider's.
+			const keyEnvName = definition.keyEnvName ?? (key === null ? null : defaultEnvName(definition.name) || null);
+			const lines = [
+				`From: omp, provider '${definition.name}'`,
+				`Address: ${definition.baseUrl}`,
+				`Protocol: ${definition.api}`,
+				`Models: ${definition.models.length} (${definition.models.slice(0, 4).map((model) => model.id).join(", ")}${definition.models.length > 4 ? ", …" : ""})`,
+				key === null
+					? definition.keyEnvName === null
+						? "Key: none"
+						: `Key: ${definition.keyEnvName} was not found in this computer's environment or shell profile, so the provider is added without a key`
+					: `Key: ${definition.keyEnvName === null ? "written in omp's config" : definition.keyEnvName} is read by the app and saved in the encrypted store${keyEnvName === null || keyEnvName === definition.keyEnvName ? "" : ` as ${keyEnvName}`}; the AI never sees it`,
+			];
+			const answer = await prompter.askConfirm({
+				title: { ko: `omp의 '${definition.name}' 제공자를 가져올까요?`, en: `Import omp's '${definition.name}' provider?`, ja: `omp の '${definition.name}' プロバイダーを取り込みますか？`, zh: `要导入 omp 的“${definition.name}”提供商吗？` }[kit.lang()],
+				lines,
+			});
+			if (answer.kind !== "confirm" || !answer.confirmed) return textResult({ ok: false, cancelled: true });
+			if (key !== null) deps.secrets.known.add(key.value);
+			let imported: { readonly id: string };
+			try {
+				imported = await importCustom({
+					label: definition.name,
+					api: definition.api,
+					baseUrl: definition.baseUrl,
+					apiKeyEnvName: keyEnvName,
+					...(key === null ? {} : { apiKeyValue: key.value }),
+					models: definition.models,
+				});
+			} catch (error) {
+				return textResult({ ok: false, error: error instanceof Error ? error.message : String(error) });
+			}
+			kit.record({
+				kind: "ai",
+				summary: localized(`omp의 ${definition.name} 제공자를 가져왔습니다 (모델 ${definition.models.length}개)`, `Imported omp's ${definition.name} provider (${definition.models.length} models)`, `omp の ${definition.name} プロバイダーを取り込みました（モデル ${definition.models.length} 個）`, `已导入 omp 的 ${definition.name} 提供商（${definition.models.length} 个模型）`),
+				fields: [`providers.${imported.id}`],
+			});
+			return textResult({
+				ok: true,
+				provider: imported.id,
+				models: definition.models.length,
+				keyStored: key !== null,
+				...(key === null && definition.keyEnvName !== null ? { note: `${definition.keyEnvName} was not found, so the provider has no key yet: use connect_provider_key for '${imported.id}' or set ${definition.keyEnvName} and import again.` } : {}),
+			});
+		},
+	});
+
 	const tools: ToolDefinition[] = [getAiSettings, setModelRole, setThinkingLevel, updateWebSearch, connectProviderKey, scanCodingAgentsTool, importCodingAgentKey];
+	if (deps.importCustomProvider !== undefined) tools.push(importOmpProvider);
 	if (deps.shell !== undefined) {
 		tools.push(
 			createGuardedBashTool({
@@ -499,6 +621,7 @@ function systemPrompt(language: ConfigCustomizerProfileInput["language"], surfac
 		"## Keys and credentials",
 		"- Open the masked key field with `connect_provider_key` for a provider that takes an API key. The person types the key into the panel, it goes straight into the encrypted store, and you only ever see a masked tail.",
 		"- Look for keys other coding agents already hold with `scan_coding_agents`, and import one with `import_coding_agent_key` after the person confirms. Reading another agent's config file to understand it is fine.",
+		"- omp (oh-my-pi) keeps custom providers, not just keys: a protocol, an address, a model list and the key they use. `scan_coding_agents` lists them under omp. To bring one over as it is, use `import_omp_provider` (the app reads the key itself, after the person confirms); then point a role at one of its models with `set_model_role`. A provider whose protocol Dazzi does not speak, or whose key comes from a command, is reported with the reason and cannot be imported: say so.",
 		"- A key the person pastes into the chat is removed before you see it: never ask for one in the chat, and point them to the masked field.",
 		"- OAuth and subscription logins (a ChatGPT login in Codex, a Claude subscription) belong to that product and cannot be moved: say so, and point to the page's sign-in button.",
 		"- Setting a new environment variable (for example a provider's `*_API_KEY` for a tool the person runs in a terminal) is allowed through `bash`, as above.",
@@ -513,7 +636,7 @@ function systemPrompt(language: ConfigCustomizerProfileInput["language"], surfac
 		"## Workflow",
 		"1. Call `get_ai_settings` first when you are unsure which providers, models or options exist.",
 		"2. Apply with `set_model_role`, `set_thinking_level` or `update_web_search`.",
-		"3. For a key: `connect_provider_key` for a key the person types, or `scan_coding_agents` then `import_coding_agent_key` to move one from another agent.",
+		"3. For a key: `connect_provider_key` for a key the person types, or `scan_coding_agents` then `import_coding_agent_key` to move one from another agent. For omp's setup: `scan_coding_agents`, `import_omp_provider`, then `set_model_role`.",
 		"4. Summarize in one to three short sentences what changed. If something was refused, say why and name the valid choices.",
 		"",
 		intentPromptLine(language),

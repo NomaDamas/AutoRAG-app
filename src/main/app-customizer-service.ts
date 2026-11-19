@@ -14,6 +14,7 @@ import type { SettingsBridge } from "../shared/settings-contract";
 import {
 	aiCustomizerProfile,
 	createAiCustomizerToolkit,
+	type AiCustomizerToolkitDeps,
 } from "./agents/profiles/ai-customizer";
 import {
 	connectionsCustomizerProfile,
@@ -58,6 +59,8 @@ export interface AppCustomizerServiceDeps {
 	 * Defaults to the app's decision backends from the shared AutoRAG config; a test passes its own.
 	 */
 	readonly writeJudge?: WriteJudge;
+	/** Adds a provider definition taken from another agent (main-only; `ProviderAuthService.importCustom`). Without it `import_omp_provider` is not offered. */
+	readonly importCustomProvider?: AiCustomizerToolkitDeps["importCustomProvider"];
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
 	readonly listTags: () => Promise<readonly FsTag[]>;
 }
@@ -242,6 +245,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					language,
 					cancelled,
 					secrets,
+					...(deps.importCustomProvider === undefined ? {} : { importCustomProvider: deps.importCustomProvider }),
 					// Other coding agents keep their config under `$HOME` (`%USERPROFILE%` on Windows), which is what a person or a test
 					// sets; Electron's own home path is only the fallback.
 					...(shellHome === undefined

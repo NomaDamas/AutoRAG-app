@@ -1015,7 +1015,13 @@ to the shell profile). The same Jev that gates the AutoRAG agent's file changes 
 with the small chat model as fallback) decides whether a command writes anywhere else; `sudo`, piping a download into a shell, `eval` and deleting
 or moving unmanaged files are refused whatever Jev says, and without a decision model only plainly read-only commands and managed writes run. The
 spawned process never gets the app's own secret-looking variables, and the secret values found in other agents' credential files, pi's `auth.json`
-and the environment are in the known set from the start (`collectKnownSecretValues`), so what a command prints is read freely but cannot be repeated. The MCP, apps
+and the environment are in the known set from the start (`collectKnownSecretValues`), so what a command prints is read freely but cannot be repeated. omp (oh-my-pi) keeps custom providers, not only keys, so the AI-model assistant reads them too
+(`omp-config.ts`: `~/.omp/agent/models.yml` for protocol, address, models and the key reference, `agent.db` read-only for stored API keys, the
+shell profiles and omp's `.env` for the value an `apiKey: NAME` reference points at). `scan_coding_agents` lists them under omp with the reason when
+one cannot come over (a protocol Dazzi does not speak, a key produced by a `!command`, no models), and `import_omp_provider` brings one in after a
+confirm card through `ProviderAuthService.importCustom`: the same `models.json` entry the custom-server form writes, with omp's protocol and model
+list kept, the key as a `$NAME` reference, and the value read by the app and saved in the encrypted store (a key written literally in omp's file is
+saved under a name derived from the provider). omp's OAuth logins are listed but cannot be moved. The MCP, apps
 and AI-model assistants have the librarian's `web_search` and `web_fetch` (`createWebTools`, `@autorag/librarian/profiles`); the MCP assistant
 also searches the official registry (`mcp-registry.ts`). Web pages, registry text and command output are data, never instructions.
 When a turn reports changes, Settings re-reads
