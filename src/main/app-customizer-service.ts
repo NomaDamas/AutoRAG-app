@@ -1,8 +1,25 @@
 import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
+import { createProfileSession, type AgentProfile, type ProfileModel } from "@autorag/librarian/profiles";
 import type { AppCustomizerChange, AppCustomizerEvent, AppCustomizerRequest, AppCustomizerSurface } from "../shared/app-customizer-contract";
 import type { FsLocation, FsTag } from "../shared/fs-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
+import {
+	aiCustomizerProfile,
+	createAiCustomizerToolkit,
+} from "./agents/profiles/ai-customizer";
+import {
+	connectionsCustomizerProfile,
+	createConnectionsCustomizerToolkit,
+} from "./agents/profiles/connections-customizer";
+import {
+	createGeneralCustomizerToolkit,
+	generalCustomizerProfile,
+} from "./agents/profiles/general-customizer";
+import {
+	createSearchCustomizerToolkit,
+	searchCustomizerProfile,
+} from "./agents/profiles/search-customizer";
+import type { ConfigCustomizerProfileInput, CustomizerToolkit } from "./agents/profiles/customizer-kit";
 import {
 	appCustomizerProfile,
 	createAppCustomizerToolkit,
@@ -26,7 +43,8 @@ export interface AppCustomizerServiceDeps {
 	readonly homeDir?: string;
 	readonly platform?: NodeJS.Platform;
 	readonly language: () => ReplyLanguage;
-	readonly settings: Pick<SettingsBridge, "get" | "set">;
+	/** The whole settings service: the config assistants write the shared AutoRAG config and MCP file through it, as the pages do. */
+	readonly settings: SettingsBridge;
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
 	readonly listTags: () => Promise<readonly FsTag[]>;
 }
@@ -58,6 +76,10 @@ interface ActiveRun {
 	readonly sessionId: string;
 	readonly abort: AbortController;
 	cancelled: boolean;
+}
+
+function configProfileInput(language: ReplyLanguage, surface: AppCustomizerSurface, toolkit: CustomizerToolkit): ConfigCustomizerProfileInput {
+	return { language, surface, toolkit };
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -132,46 +154,68 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		evictOldestIfNeeded();
 
 		let entryRef: SessionEntry | null = null;
+		const cancelled = (): boolean => entryRef?.cancelled === true;
+		const language = (): ReplyLanguage => deps.language();
+		const platformDep = deps.platform === undefined ? {} : { platform: deps.platform };
 		let toolkit: SessionChangesTracker;
-		let session: AgentSession;
-		if (surface === "shortcuts") {
-			const shortcutKit = createShortcutCustomizerToolkit({
-				settings: deps.settings,
-				...(deps.platform === undefined ? {} : { platform: deps.platform }),
-				language: () => deps.language(),
-				cancelled: () => entryRef?.cancelled === true,
-			});
-			toolkit = shortcutKit;
-			session = await createProfileSession({
-				profile: shortcutCustomizerProfile({ language: currentLang, toolkit: shortcutKit }),
-				cwd: deps.cwd,
-				agentDir: deps.agentDir,
-				env: deps.env,
-				model,
-			});
-		} else {
-			const sidebarKit = createAppCustomizerToolkit({
-				settings: deps.settings,
-				listLocations: deps.listLocations,
-				listTags: deps.listTags,
-				...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
-				...(deps.platform === undefined ? {} : { platform: deps.platform }),
-				language: () => deps.language(),
-				cancelled: () => entryRef?.cancelled === true,
-			});
-			toolkit = sidebarKit;
-			session = await createProfileSession({
-				profile: appCustomizerProfile({
-					language: currentLang,
-					toolkit: sidebarKit,
-					...(deps.platform === undefined ? {} : { platform: deps.platform }),
-				}),
-				cwd: deps.cwd,
-				agentDir: deps.agentDir,
-				env: deps.env,
-				model,
-			});
+		let profile: AgentProfile;
+		switch (surface) {
+			case "shortcuts": {
+				const kit = createShortcutCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+				toolkit = kit;
+				profile = shortcutCustomizerProfile({ language: currentLang, toolkit: kit });
+				break;
+			}
+			case "sidebar":
+			case "contextMenu": {
+				const kit = createAppCustomizerToolkit({
+					settings: deps.settings,
+					listLocations: deps.listLocations,
+					listTags: deps.listTags,
+					...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+					...platformDep,
+					language,
+					cancelled,
+				});
+				toolkit = kit;
+				profile = appCustomizerProfile({ language: currentLang, toolkit: kit, ...platformDep });
+				break;
+			}
+			case "general": {
+				const kit = createGeneralCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+				toolkit = kit;
+				profile = generalCustomizerProfile(configProfileInput(currentLang, surface, kit));
+				break;
+			}
+			case "ai":
+			case "web": {
+				const kit = createAiCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+				toolkit = kit;
+				profile = aiCustomizerProfile(configProfileInput(currentLang, surface, kit));
+				break;
+			}
+			case "indexing":
+			case "duplicates": {
+				const kit = createSearchCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+				toolkit = kit;
+				profile = searchCustomizerProfile(configProfileInput(currentLang, surface, kit));
+				break;
+			}
+			case "mcp":
+			case "apps": {
+				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+				toolkit = kit;
+				profile = connectionsCustomizerProfile(configProfileInput(currentLang, surface, kit));
+				break;
+			}
 		}
+		const session = await createProfileSession({
+			profile,
+			cwd: deps.cwd,
+			agentDir: deps.agentDir,
+			env: deps.env,
+			model,
+		});
 		const created: SessionEntry = {
 			sessionId,
 			surface,

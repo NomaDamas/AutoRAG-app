@@ -988,7 +988,19 @@ the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.
 runs user-defined right-click Magic Actions on selected files and folders — either executing an arbitrary shell script
 or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
 (`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
-per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
+per action) with live `i` intent progress and streamed Markdown output. The rest of Settings has its own assistants in the right
+sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`APP_CUSTOMIZER_SURFACES`) in `app-customizer-service.ts` and built on
+`src/main/agents/profiles/customizer-kit.ts` (change log with 4-language summaries, cancel guard): `general-customizer` (Settings → 일반:
+appearance, language, hidden files, launch at login, OS menu, updates, privacy toggles, the quick-search shortcut), `ai-customizer` (AI 모델 and
+웹 검색: the answer / decomposition / Jev / rerank roles from the connected providers' catalogs, thinking depth, web search), `search-customizer`
+(인덱싱, 문서 읽기, 중복 파일 정리: search folders, exclusions, refresh cadence, document languages, duplicate handling) and
+`connections-customizer` (MCP 서버 and 모든 연결: enable, expose, add or remove MCP servers, datasource enable / description / cadence). They write
+through the same `SettingsBridge` calls the pages use (`configPatch`, `mcpUpsert`, `sourcesSetEnabled`, `set`), so the config service validates
+every value, and the closed option lists come from `src/shared/settings-options.ts`, which the pages share. Out of reach by design: remote
+access, the AI approval mode, credentials and sign-in, connecting or disconnecting a provider or datasource, the embedding model, starting an
+index run, and deleting or moving files; an MCP server is removed only with `confirmedByUser`. When a turn reports changes, Settings re-reads
+the config, the datasource scan and the MCP page. A page whose assistant is not showing gets its invitation from `SettingsPageHead`
+(`SettingsAssistantHeroContext`). A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Chat approvals and questions

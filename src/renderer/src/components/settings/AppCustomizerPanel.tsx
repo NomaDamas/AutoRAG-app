@@ -5,7 +5,7 @@ import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
 import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
 import { VoiceButton } from "../InspectorChat";
 import { SeedLoader } from "../SeedLoader";
-import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
+import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import { appendTranscript } from "../../../../shared/voice-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
@@ -41,7 +41,7 @@ interface SurfaceCopy {
 }
 
 /** The context-menu assistant has no copy of its own for the shared states and reuses the sidebar assistant's. */
-const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
+const OWN_SURFACE_COPY: Readonly<Record<"sidebar" | "contextMenu" | "shortcuts", SurfaceCopy>> = {
 	sidebar: {
 		title: "settingsCore.sidebar.assistant.title",
 		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
@@ -87,6 +87,26 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		unavailable: "settingsCore.shortcuts.assistant.unavailable",
 	},
 };
+
+/** The assistants of the config pages share one set of states; only the words that name the page differ. */
+function configSurfaceCopy(surface: ConfigAssistantSurface): SurfaceCopy {
+	const base = `settingsCore.assistants.${surface}` as const;
+	return {
+		title: `${base}.title`,
+		emptyTitle: `${base}.emptyTitle`,
+		emptyDesc: `${base}.emptyDesc`,
+		placeholder: `${base}.placeholder`,
+		suggestions: [`${base}.prompt1`, `${base}.prompt2`, `${base}.prompt3`],
+		thinking: "settingsCore.sidebar.assistant.thinking",
+		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
+		unavailable: "settingsCore.sidebar.assistant.unavailable",
+	};
+}
+
+function surfaceCopy(surface: AppCustomizerSurface): SurfaceCopy {
+	return surface === "sidebar" || surface === "contextMenu" || surface === "shortcuts" ? OWN_SURFACE_COPY[surface] : configSurfaceCopy(surface);
+}
+
 
 function makeId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -161,6 +181,7 @@ export function AppCustomizerPanel({
 	hidden,
 	focusRequest,
 	onSettingsUpdated,
+	onChangesApplied,
 	onOpenAiSettings,
 }: {
 	readonly surface: AppCustomizerSurface;
@@ -168,10 +189,12 @@ export function AppCustomizerPanel({
 	/** Bumped when the user explicitly opens the panel; the composer takes focus then, never on a plain page visit. */
 	readonly focusRequest: number;
 	readonly onSettingsUpdated: (settings: AppSettings) => void;
+	/** A turn ended with settings changed (even one the person stopped or that failed half way): the page beside the sidebar reads them again. */
+	readonly onChangesApplied: () => void;
 	readonly onOpenAiSettings: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
-	const copy = SURFACE_COPY[surface];
+	const copy = surfaceCopy(surface);
 	const [sessionId, setSessionId] = useState(() => makeId(`customizer-${surface}-sess`));
 	const [turns, setTurns] = useState<readonly ChatTurn[]>([]);
 	const [input, setInput] = useState("");
@@ -245,6 +268,7 @@ export function AppCustomizerPanel({
 					}
 				}),
 			);
+			if (event.type !== "progress" && event.type !== "draft" && event.type !== "assistant-message" && event.changes.length > 0) onChangesApplied();
 			if (event.type === "turn-done") {
 				onSettingsUpdated(event.settings);
 				setActiveRunId((current) => (current === event.runId ? null : current));
@@ -252,7 +276,7 @@ export function AppCustomizerPanel({
 				setActiveRunId((current) => (current === event.runId ? null : current));
 			}
 		});
-	}, [sessionId, onSettingsUpdated]);
+	}, [sessionId, onSettingsUpdated, onChangesApplied]);
 
 	const stopRun = useCallback((): void => {
 		const runId = activeRunIdRef.current;

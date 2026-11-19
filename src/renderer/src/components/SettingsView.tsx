@@ -14,7 +14,7 @@ import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
-import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
+import { isAppCustomizerSurface, type AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
@@ -24,6 +24,7 @@ import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
+import { SettingsAssistantHeroContext, type SettingsAssistantHero } from "./settings/SettingsKit";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
@@ -140,10 +141,16 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** The one settings page whose AI customization assistant fills the window's right sidebar: 우클릭 메뉴. */
+/**
+ * Settings pages whose AI assistant fills the window's right sidebar; each page is its own surface. 사이드바 and
+ * 단축키 are surfaces of the main-process profiles but have no assistant in the UI, so their right sidebar stays the Inspector's.
+ */
 function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
-	return page === "contextMenu" ? page : null;
+	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
 }
+
+/** The pages that draw their own invitation to the assistant; every other assistant page gets it from its head. */
+const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["sidebar", "contextMenu", "shortcuts"];
 
 /**
  * What every settings page reads and writes: the app settings, the config
@@ -164,6 +171,10 @@ export interface SettingsData {
 	readonly setSources: (sources: DataSourcesSnapshot) => void;
 	readonly saveSnapshot: (next: AutoRagConfigSnapshot) => void;
 	readonly changeAppSettings: (next: AppSettings) => void;
+	/** Counts the assistant turns that changed something; a page that loads its own data (MCP servers) keys on it to read again. */
+	readonly assistantRevision: number;
+	/** An assistant changed the shared config, the MCP file or a datasource behind the pages' backs: read them again. */
+	readonly reloadAfterAssistant: () => Promise<void>;
 }
 
 export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => void): SettingsData {
@@ -172,6 +183,7 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 	const [sources, setSources] = useState<DataSourcesSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [assistantRevision, setAssistantRevision] = useState(0);
 	/** False until the first datasource scan has answered (or failed): the pages say "checking" instead of "none". */
 	const [sourcesReady, setSourcesReady] = useState(false);
 	const scanSeq = useRef(0);
@@ -237,7 +249,19 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 		changedRef.current?.(next);
 	}, []);
 
-	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings };
+	const reloadAfterAssistant = useCallback(async (): Promise<void> => {
+		setAssistantRevision((revision) => revision + 1);
+		void scan();
+		try {
+			const config = await autorag.settings.configGet();
+			setSnapshot(config);
+			setError(config.error);
+		} catch (cause) {
+			setError(errorMessage(cause));
+		}
+	}, [scan]);
+
+	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings, assistantRevision, reloadAfterAssistant };
 }
 
 /** One settings page's body for `category`; `onNavigate` follows a page's own link to another page. */
@@ -293,7 +317,7 @@ export function SettingsPageContent({
 				/>
 			);
 		case "mcp":
-			return <McpPage />;
+			return <McpPage key={data.assistantRevision} />;
 		default:
 			return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} onOpenSource={(alias) => onNavigate(`source:${alias}`)} />;
 	}
@@ -409,14 +433,20 @@ export function SettingsView({
 		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
+	const hero = useMemo<SettingsAssistantHero | null>(
+		() => (activeSurface === null || customizerShown || SELF_INVITING_SURFACES.includes(activeSurface) ? null : { surface: activeSurface, onOpen: openCustomizer }),
+		[activeSurface, customizerShown, openCustomizer],
+	);
 	const content = (
-		<SettingsPageContent
-			data={data}
-			category={category}
-			onNavigate={setCategory}
-			customizerOpen={customizerShown}
-			onOpenCustomizer={openCustomizer}
-		/>
+		<SettingsAssistantHeroContext value={hero}>
+			<SettingsPageContent
+				data={data}
+				category={category}
+				onNavigate={setCategory}
+				customizerOpen={customizerShown}
+				onOpenCustomizer={openCustomizer}
+			/>
+		</SettingsAssistantHeroContext>
 	);
 
 	const sourceButtons = filteredSources.map((entry) => {
@@ -538,6 +568,7 @@ export function SettingsView({
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
 						onSettingsUpdated={changeAppSettings}
+						onChangesApplied={data.reloadAfterAssistant}
 						onOpenAiSettings={openAiSettings}
 					/>
 				)),

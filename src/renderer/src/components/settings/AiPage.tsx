@@ -28,6 +28,7 @@ import { EmbeddingPicker } from "./EmbeddingPicker";
 import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
+import { THINKING_LEVELS } from "../../../../shared/settings-options";
 
 const settings = window.autorag.settings;
 
@@ -36,14 +37,6 @@ const KIND_LABEL_KEY = {
 	local: "settingsCore.ai.kind.local",
 	custom: "settingsCore.ai.kind.custom",
 } as const satisfies Readonly<Record<ProviderSummary["kind"], string>>;
-
-const THINKING_LEVELS = [
-	{ value: "off", labelKey: "settingsCore.ai.thinking.off" },
-	{ value: "low", labelKey: "settingsCore.ai.thinking.low" },
-	{ value: "medium", labelKey: "settingsCore.ai.thinking.medium" },
-	{ value: "high", labelKey: "settingsCore.ai.thinking.high" },
-	{ value: "max", labelKey: "settingsCore.ai.thinking.max" },
-] as const;
 
 /** Decomposition specials: `false` means "let the answer model do it"; absence uses the documented default. */
 const DECOMPOSITION_SPECIALS = [

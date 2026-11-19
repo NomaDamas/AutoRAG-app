@@ -2893,6 +2893,92 @@
         "readOnlyHint": "에이전트는 검색만 할 수 있고, 인덱스를 최신화하거나 리포트를 저장할 수 없습니다."
       },
       "openFile": "설정 파일 열기"
+    },
+    "assistants": {
+      "general": {
+        "title": "AI 일반 설정 어시스턴트",
+        "emptyTitle": "어떤 설정을 바꿔 드릴까요?",
+        "emptyDesc": "화면 모드, 언어, 시작 설정, 빠른 검색 단축키를 말로 바꿀 수 있습니다.",
+        "placeholder": "바꾸고 싶은 설정을 말해 주세요",
+        "prompt1": "화면을 어두운 모드로 바꿔줘",
+        "prompt2": "앱 언어를 영어로 바꿔줘",
+        "prompt3": "컴퓨터를 켜면 자동으로 실행되게 해줘",
+        "heroTitle": "AI로 일반 설정 바꾸기",
+        "heroDesc": "\"어두운 모드로 바꾸고 숨김 파일도 보이게 해줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      },
+      "ai": {
+        "title": "AI 모델 어시스턴트",
+        "emptyTitle": "어떤 모델을 쓰고 싶으세요?",
+        "emptyDesc": "연결한 서비스의 모델을 답변, 질문 나누기, 판단, 순위 조정 역할에 맞게 고를 수 있습니다.",
+        "placeholder": "어떤 모델로 바꿀지 말해 주세요",
+        "prompt1": "지금 쓸 수 있는 모델을 알려줘",
+        "prompt2": "답변할 때 생각을 더 깊게 하도록 바꿔줘",
+        "prompt3": "순위 조정 기능을 꺼줘",
+        "heroTitle": "AI로 모델 고르기",
+        "heroDesc": "\"답변은 더 깊이 생각하게 해줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      },
+      "web": {
+        "title": "AI 웹 검색 어시스턴트",
+        "emptyTitle": "웹 검색을 어떻게 쓰고 싶으세요?",
+        "emptyDesc": "웹 검색을 켜고 끄거나 쓸 검색 서비스를 고를 수 있습니다.",
+        "placeholder": "웹 검색을 어떻게 바꿀지 말해 주세요",
+        "prompt1": "웹 검색을 꺼줘",
+        "prompt2": "검색 서비스를 DuckDuckGo로 바꿔줘",
+        "prompt3": "웹 페이지 내용 읽기도 켜줘",
+        "heroTitle": "AI로 웹 검색 설정하기",
+        "heroDesc": "\"웹 검색은 DuckDuckGo로 해줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      },
+      "indexing": {
+        "title": "AI 검색 범위 어시스턴트",
+        "emptyTitle": "어떤 폴더를 검색할까요?",
+        "emptyDesc": "검색할 폴더를 더하고 빼거나, 제외할 항목과 최신화 주기를 바꿀 수 있습니다.",
+        "placeholder": "검색 범위를 어떻게 바꿀지 말해 주세요",
+        "prompt1": "내 문서 폴더를 검색할 폴더에 추가해줘",
+        "prompt2": "1시간마다 자동으로 최신화되게 해줘",
+        "prompt3": "백업 폴더는 검색에서 빼줘",
+        "heroTitle": "AI로 검색 범위 정리하기",
+        "heroDesc": "\"문서 폴더를 추가하고 백업 폴더는 빼줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      },
+      "duplicates": {
+        "title": "AI 중복 파일 어시스턴트",
+        "emptyTitle": "중복 파일을 어떻게 다룰까요?",
+        "emptyDesc": "똑같은 파일과 버전이 다른 파일을 찾는 방식과 점검 주기를 바꿀 수 있습니다.",
+        "placeholder": "중복 파일 설정을 어떻게 바꿀지 말해 주세요",
+        "prompt1": "똑같은 파일은 검색에서 빼줘",
+        "prompt2": "버전이 다른 파일 찾기를 꺼줘",
+        "prompt3": "하루에 한 번만 점검하게 해줘",
+        "heroTitle": "AI로 중복 파일 설정하기",
+        "heroDesc": "\"점검은 하루에 한 번만 해줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      },
+      "mcp": {
+        "title": "AI MCP 서버 어시스턴트",
+        "emptyTitle": "어떤 도구 서버를 다룰까요?",
+        "emptyDesc": "연결된 MCP 서버를 켜고 끄거나 보이는 방식을 바꾸고, 새 서버를 추가할 수 있습니다.",
+        "placeholder": "MCP 서버를 어떻게 바꿀지 말해 주세요",
+        "prompt1": "연결된 MCP 서버 목록을 보여줘",
+        "prompt2": "쓰지 않는 서버는 꺼줘",
+        "prompt3": "https://example.com/mcp 서버를 추가해줘",
+        "heroTitle": "AI로 MCP 서버 관리하기",
+        "heroDesc": "\"쓰지 않는 서버는 꺼줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      },
+      "apps": {
+        "title": "AI 연결 앱 어시스턴트",
+        "emptyTitle": "어떤 앱 연결을 바꿀까요?",
+        "emptyDesc": "연결된 앱을 켜고 끄거나 설명과 최신화 주기를 바꿀 수 있습니다.",
+        "placeholder": "앱 연결을 어떻게 바꿀지 말해 주세요",
+        "prompt1": "지금 연결된 앱 상태를 알려줘",
+        "prompt2": "슬랙은 1시간마다 최신화되게 해줘",
+        "prompt3": "쓰지 않는 앱은 꺼줘",
+        "heroTitle": "AI로 연결된 앱 관리하기",
+        "heroDesc": "\"슬랙은 1시간마다 최신화해줘\"처럼 말로 요청할 수 있습니다.",
+        "heroButton": "AI에게 요청하기"
+      }
     }
   },
   "settingsLtr": {

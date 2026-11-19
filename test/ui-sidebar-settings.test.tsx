@@ -450,8 +450,8 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		const nav = (label: string): HTMLButtonElement | undefined =>
 			[...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((btn) => btn.textContent?.trim() === label);
 
-		// Every other section leaves the right sidebar to the Inspector, with no banner offering an assistant
-		for (const label of ["일반", "단축키", "사이드바"]) {
+		// Sections without an assistant leave the right sidebar to the Inspector, with no banner offering one
+		for (const label of ["원격 접속", "단축키", "사이드바"]) {
 			await act(async () => {
 				nav(label)?.click();
 			});
