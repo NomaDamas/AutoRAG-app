@@ -126,6 +126,8 @@ export interface InspectorProps {
 	/** "evidence" while an AI Search tab is focused: the whole panel is the cited sources. */
 	readonly view: "info" | "evidence";
 	readonly evidence: readonly CitationEvidence[];
+	/** The sources a correction of the answer just brought in and the person has not opened: their tabs wear a dot. */
+	readonly freshEvidence?: readonly number[];
 	readonly evidenceSelected: number;
 	readonly onSelectEvidence: (n: number) => void;
 	/** Number of local files gathered across the current AI Search session for the Evidence Folder. */
@@ -210,6 +212,9 @@ const EVIDENCE_ACTION = cn(
 	"rounded-8 border border-divider bg-window text-ink-body cursor-pointer transition-colors duration-(--dur-color) ease-out hover:bg-hover",
 );
 
+/** No source is new: the default of `freshEvidence`, one array so the default never changes identity between renders. */
+const NO_FRESH_EVIDENCE: readonly number[] = [];
+
 export function Inspector({
 	entry,
 	entries,
@@ -225,6 +230,7 @@ export function Inspector({
 	onOpenMember,
 	view,
 	evidence,
+	freshEvidence = NO_FRESH_EVIDENCE,
 	evidenceSelected,
 	onSelectEvidence,
 	onRevealPath,
@@ -263,6 +269,7 @@ export function Inspector({
 					imageActions={imageActions}
 					evidenceFolderCount={evidenceFolderCount}
 					onOpenEvidenceFolder={onOpenEvidenceFolder}
+					freshEvidence={freshEvidence}
 				/>
 			) : chatView !== undefined && chatView !== null ? (
 				chatView
@@ -1112,15 +1119,13 @@ function VersionsSection({
 
 function VersionTag({ relation }: { readonly relation: "latest" | "exact" | "near" | "contains" }): ReactElement {
 	const { t } = useTranslation();
-	// The inspector's own tones (Figma 231:2588): the newest copy in the accent, a similar one in amber.
+	// Figma 577:6705: the same tones as the list's tags (576:6699), at the inspector's smaller size.
 	const tone =
 		relation === "latest"
-			? "bg-accent-chip text-accent-text"
+			? "bg-vtag-latest-bg text-vtag-latest-text"
 			: relation === "near"
-				? "bg-vtag-similar-bg text-vtag-similar-text"
-				: relation === "exact"
-					? "bg-vtag-exact-bg text-vtag-exact-text"
-					: "bg-input text-ink-muted";
+				? "bg-vtag-near-bg text-vtag-near-text"
+				: "bg-vtag-exact-bg text-vtag-exact-text";
 	return (
 		<span className={cn("vtag flex-none inline-flex items-center px-6 py-2 rounded-7 text-tile-xs font-bold whitespace-nowrap leading-[12px]", tone)}>
 			{t(VERSION_TAG_KEYS[relation])}
@@ -1142,6 +1147,7 @@ function EvidencePanel({
 	imageActions,
 	evidenceFolderCount,
 	onOpenEvidenceFolder,
+	freshEvidence,
 }: {
 	readonly evidence: readonly CitationEvidence[];
 	readonly selected: number;
@@ -1151,6 +1157,7 @@ function EvidencePanel({
 	readonly imageActions: ImageActions;
 	readonly evidenceFolderCount: number;
 	readonly onOpenEvidenceFolder?: (() => void) | undefined;
+	readonly freshEvidence: readonly number[];
 }): ReactElement {
 	const { t } = useTranslation();
 	const canOpenFolder = onOpenEvidenceFolder !== undefined && evidenceFolderCount > 0;
@@ -1206,19 +1213,26 @@ function EvidencePanel({
 				<div className="flex flex-col gap-8 px-12 pt-12 pb-14">
 					<div className="evidence-header flex items-start justify-between gap-8">
 						<div className="evidence-tabs flex min-w-0 flex-1 flex-wrap gap-4">
-							{evidence.map((entry) => (
-								<button
-									type="button"
-									key={entry.number}
-									className={cn(
-										"evidence-tab flex-none inline-flex items-center justify-center size-20 rounded-5 border text-badge font-medium cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
-										entry.number === item.number ? "bg-accent border-accent text-on-accent" : "bg-window border-border text-ink-muted hover:text-ink",
-									)}
-									onClick={() => onSelect(entry.number)}
-								>
-									{entry.number}
-								</button>
-							))}
+							{evidence.map((entry) => {
+								const fresh = freshEvidence.includes(entry.number) && entry.number !== item.number;
+								return (
+									<button
+										type="button"
+										key={entry.number}
+										className={cn(
+											"evidence-tab relative flex-none inline-flex items-center justify-center size-20 rounded-5 border text-badge font-medium cursor-pointer transition-[background,color,border-color] duration-(--dur-color) ease-[ease]",
+											entry.number === item.number ? "bg-accent border-accent text-on-accent" : "bg-window border-border text-ink-muted hover:text-ink",
+											fresh && "animate-source-pop",
+										)}
+										data-fresh={fresh ? "true" : undefined}
+										aria-label={fresh ? t("inspector.evidencePanel.newSource", { number: entry.number }) : undefined}
+										onClick={() => onSelect(entry.number)}
+									>
+										{entry.number}
+										{fresh ? <span aria-hidden="true" className="evidence-tab-dot absolute -top-3 -right-3 size-7 rounded-full bg-source-new shadow-[0_0_0_1.5px_var(--bg-window)]" /> : null}
+									</button>
+								);
+							})}
 						</div>
 						{folderButton}
 					</div>

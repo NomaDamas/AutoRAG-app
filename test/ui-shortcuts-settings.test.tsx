@@ -119,7 +119,7 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
-describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, and AI Shortcut Customizer in the right sidebar)", () => {
+describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap, no AI banner)", () => {
 	it("records a shortcut by pressing keys directly, cancels on Escape, and swaps on conflict", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
@@ -245,7 +245,9 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		await settle();
 
 		const presetButtons = Array.from(host.querySelectorAll<HTMLButtonElement>("[data-shortcut-presets] button"));
-		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer"]);
+		expect(presetButtons.map((btn) => btn.getAttribute("data-action"))).toEqual(["shortcuts-preset-mac-finder", "shortcuts-preset-windows-explorer", "shortcuts-preset-custom"]);
+		// Nothing has been set by hand yet, so 사용자 지정 has nothing to bring back.
+		expect(host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-custom"]')?.disabled).toBe(true);
 		expect(presetButtons.some((btn) => btn.classList.contains("is-active"))).toBe(false);
 		expect(host.querySelector<HTMLButtonElement>('[data-action="shortcuts-preset-default"]')?.disabled).toBe(true);
 
@@ -317,41 +319,20 @@ describe("Settings → 단축키 (Key-press recording, UI editing, conflict swap
 		expect(rows.sort()).toEqual(Object.keys(currentSettings.shortcuts.overrides).sort());
 	});
 
-	it("docks the AI Shortcut Customizer panel with surface='shortcuts' and applies agent updates live", async () => {
+	it("offers no AI banner or assistant on 단축키: the right sidebar stays the Inspector's, shown or hidden", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"shortcuts" as never} />);
 		});
 		await settle();
 
-		const panel = host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])');
-		expect(panel?.getAttribute("data-surface")).toBe("shortcuts");
+		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
+		expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')).toBeNull();
+		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 
-		const suggestionChip = panel?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]');
-		expect(suggestionChip).not.toBeNull();
 		await act(async () => {
-			suggestionChip?.click();
+			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
-
-		expect(bridge.appCustomizer.send).toHaveBeenCalledTimes(1);
-		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] as [string, { sessionId: string; surface?: string; message: string }];
-		expect(request.surface).toBe("shortcuts");
-
-		const updatedSettings: AppSettings = {
-			...currentSettings,
-			shortcuts: { overrides: { rename: "F2" } },
-		};
-		await act(async () => {
-			bridge.emitCustomizerEvent({
-				type: "turn-done",
-				runId,
-				sessionId: request.sessionId,
-				messages: ["이름 변경 단축키를 F2로 설정했습니다."],
-				changes: [{ kind: "shortcuts", summary: "단축키 변경 (이름 변경)", fields: ["shortcuts.overrides.rename"] }],
-				settings: updatedSettings,
-			});
-		});
-		await settle();
-
-		expect(host.querySelector('[data-shortcut-record="rename"]')?.textContent).toContain("F2");
+		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
+		expect(host.querySelector('[data-action="open-shortcut-customizer"]')).toBeNull();
 	});
 });

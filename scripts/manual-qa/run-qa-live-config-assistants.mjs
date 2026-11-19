@@ -1,5 +1,5 @@
 /**
- * Live end-to-end QA: the AI assistants of the config Settings pages (일반, AI 모델, 웹 검색, 인덱싱, 문서 읽기,
+ * Live end-to-end QA: the AI assistants of the config Settings pages (일반 (문서 언어 포함), AI 모델, 웹 검색, 인덱싱,
  * 중복 파일 정리, MCP 서버, 모든 연결) with a real 2026+ LLM (`deepseek/deepseek-v4.1-flash`, created=2026-09-10)
  * through the Dazzi account.
  *
@@ -260,7 +260,7 @@ try {
 
 	// 5. 문서 읽기
 	{
-		await ask("문서 읽기", "reading", "한국어와 일본어 문서를 읽게 해줘.");
+		await ask("일반", "general", "한국어와 일본어 문서를 읽게 해줘.");
 		await shot("05-reading-languages");
 		const languages = readConfig().languages;
 		check("문서 읽기: languages = [ko, ja]", Array.isArray(languages) && languages.length === 2 && languages.includes("ko") && languages.includes("ja"), JSON.stringify(languages));

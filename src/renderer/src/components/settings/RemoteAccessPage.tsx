@@ -6,11 +6,12 @@
  * 1. A route, which decides the address it opens: the same Wi-Fi (LAN address), or the internet
  *    through a Cloudflare tunnel (a temporary trycloudflare.com address, or the user's own domain).
  * 2. The pairing code, the same for every route: the QR code is that route's address plus `?pair=CODE`.
- * The browser address (with its token) and the port sit behind "Details".
+ * The browser address (with its token) and the port sit behind "Advanced", below the card.
+ * Layout and copy: Figma 585:9647.
  */
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { Check, Pencil, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, X } from "lucide-react";
 import {
 	normalizeTunnelHostname,
 	type RemoteAccessStatus,
@@ -40,6 +41,11 @@ function formatRelativeSeen(iso: string | null, labels: RelativeSeenLabels): str
 	if (diffMinutes < 60) return labels.minutesAgo(diffMinutes);
 	if (diffMinutes < 48 * 60) return labels.hoursAgo(Math.round(diffMinutes / 60));
 	return new Date(iso).toLocaleDateString();
+}
+
+/** The address as shown: its access token masked, since the page may be on screen while it is shared. Copying gives the real one. */
+export function maskAccessToken(address: string): string {
+	return address.replace(/([?&]token=)[^&#]+/, "$1••••••••");
 }
 
 /** The route a fresh card opens on: the internet tunnel when it is online, otherwise the LAN. */
@@ -401,7 +407,7 @@ export function RemoteAccessPage({
 	return (
 		<>
 			{head}
-			<div className="settings-plain">
+			<div className="settings-plain settings-remote-toggle">
 				<PlainRow name={t("settingsCore.remote.access")} hint={t("settingsCore.remote.accessHint")}>
 					<Switch checked={appSettings.remoteAccess} onChange={() => void setApp({ remoteAccess: !appSettings.remoteAccess })} ariaLabel={t("settingsCore.remote.access")} />
 				</PlainRow>
@@ -468,11 +474,13 @@ export function RemoteAccessPage({
 												<QrCode value={pairLink} label={t("settingsCore.remote.pairQrLabel", { code: activeCode?.code ?? "" })} size={136} />
 											) : null}
 											<div className="settings-remote-pair-meta">
-												<div className="settings-remote-code" data-testid="remote-pairing-code">
-													{spacedCode}
-												</div>
-												<div className="settings-remote-expiry">
-													{countdown ? t("settingsCore.remote.pairExpires", { time: countdown }) : t("settingsCore.remote.pairExpired")}
+												<div className="settings-remote-code-line">
+													<div className="settings-remote-code" data-testid="remote-pairing-code">
+														{spacedCode}
+													</div>
+													<div className="settings-remote-expiry">
+														{countdown ? t("settingsCore.remote.pairExpires", { time: countdown }) : t("settingsCore.remote.pairExpired")}
+													</div>
 												</div>
 												{pairLink === null ? <p className="settings-remote-sub">{t("settingsCore.remote.pairNoAddress")}</p> : null}
 												<div className="settings-remote-actions">
@@ -480,8 +488,7 @@ export function RemoteAccessPage({
 														? copyButton(pairLink, t("settingsCore.remote.pairLinkCopy"), t("settingsCore.remote.pairLinkCopied"))
 														: null}
 													<button type="button" className="linear-btn" onClick={() => void handleStartPairing()}>
-														<RefreshCw size={13} aria-hidden="true" />
-														<span>{t("settingsCore.remote.pairNewCode")}</span>
+														{t("settingsCore.remote.pairNewCode")}
 													</button>
 												</div>
 											</div>
@@ -490,21 +497,20 @@ export function RemoteAccessPage({
 								</div>
 							</>
 						)}
+					</div>
 
-						<details className="settings-remote-details">
-							<summary>{t("settingsCore.remote.details")}</summary>
+					<details className="settings-remote-details">
+						<summary>
+							<ChevronDown size={13} aria-hidden="true" />
+							{t("settingsCore.remote.details")}
+						</summary>
 							<div className="settings-remote-detail">
 								<span className="settings-remote-detail__name">{t("settingsCore.remote.address")}</span>
 								<span className="settings-remote-sub">{t("settingsCore.remote.addressHint")}</span>
 								<div className="settings-remote-field">
-									<input
-										type="text"
-										className="settings-source-desc__input min-w-0"
-										aria-label={t("settingsCore.remote.address")}
-										value={browserAddress ?? t("settingsCore.remote.stopped")}
-										readOnly
-										onClick={(event) => event.currentTarget.select()}
-									/>
+									<code className="settings-remote-url-line" data-testid="remote-browser-address" aria-label={t("settingsCore.remote.address")}>
+										{browserAddress === null ? t("settingsCore.remote.stopped") : maskAccessToken(browserAddress)}
+									</code>
 									{browserAddress !== null ? (
 										copyButton(browserAddress, t("settingsCore.remote.copyAddress"), t("settingsCore.remote.addressCopied"))
 									) : (
@@ -515,12 +521,11 @@ export function RemoteAccessPage({
 								</div>
 							</div>
 							<div className="settings-remote-detail">
-								<span className="settings-remote-detail__name">{t("settingsCore.remote.port")}</span>
-								<span className="settings-remote-sub">{t("settingsCore.remote.portHint")}</span>
-								<div className="settings-remote-field">
+								<div className="settings-remote-port-field">
+									<span className="settings-remote-detail__name">{t("settingsCore.remote.port")}</span>
 									<input
 										type="number"
-										className="settings-source-desc__input settings-remote-port"
+										className="settings-remote-port"
 										aria-label={t("settingsCore.remote.port")}
 										min={0}
 										max={65535}
@@ -544,22 +549,23 @@ export function RemoteAccessPage({
 										}}
 									/>
 								</div>
+								<span className="settings-remote-sub">{t("settingsCore.remote.portHint")}</span>
 							</div>
 						</details>
-					</div>
 				</Section>
 			) : null}
 
 			{enabled ? (
-				<Section title={t("settingsCore.remote.devicesTitle")}>
-					<div className="settings-remote-devices">
+				<section className="settings-section">
+					<div className="settings-remote-devices-head">
+						<div className="linear-section-title">{t("settingsCore.remote.devicesTitle")}</div>
 						{devices.length > 0 ? (
-							<div className="settings-remote-devices__head">
-								<button type="button" className="linear-btn settings-remote-revoke-btn" onClick={() => void handleRevokeAll()}>
-									{confirmRevokeAll ? t("settingsCore.remote.devicesRevokeAllConfirm") : t("settingsCore.remote.devicesRevokeAll")}
-								</button>
-							</div>
+							<button type="button" className={`settings-remote-revoke-all${confirmRevokeAll ? " is-confirm" : ""}`} onClick={() => void handleRevokeAll()}>
+								{confirmRevokeAll ? t("settingsCore.remote.devicesRevokeAllConfirm") : t("settingsCore.remote.devicesRevokeAll")}
+							</button>
 						) : null}
+					</div>
+					<div className="settings-remote-devices">
 						{devices.length === 0 ? (
 							<p className="settings-remote-empty">{t("settingsCore.remote.devicesEmpty")}</p>
 						) : (
@@ -608,20 +614,22 @@ export function RemoteAccessPage({
 														})}
 													</div>
 												</div>
-												<div className="settings-remote-device-actions">
-													<button
-														type="button"
-														className="linear-btn"
-														aria-label={t("settingsCore.remote.deviceRename", { name: device.label })}
-														onClick={() => setRenaming({ id: device.id, label: device.label })}
-													>
-														<Pencil size={12} aria-hidden="true" />
-													</button>
-													<button type="button" className="linear-btn settings-remote-revoke-btn" onClick={() => void handleRevokeDevice(device.id)}>
-														<Trash2 size={12} aria-hidden="true" />
-														<span>{confirmRevokeId === device.id ? t("settingsCore.remote.deviceRevokeConfirm") : t("settingsCore.remote.deviceRevoke")}</span>
-													</button>
-												</div>
+												<button
+													type="button"
+													className="settings-icon-btn"
+													aria-label={t("settingsCore.remote.deviceRename", { name: device.label })}
+													title={t("settingsCore.remote.deviceRename", { name: device.label })}
+													onClick={() => setRenaming({ id: device.id, label: device.label })}
+												>
+													<Pencil size={14} aria-hidden="true" />
+												</button>
+												<button
+													type="button"
+													className={`linear-btn shrink-0${confirmRevokeId === device.id ? " is-confirm" : ""}`}
+													onClick={() => void handleRevokeDevice(device.id)}
+												>
+													{confirmRevokeId === device.id ? t("settingsCore.remote.deviceRevokeConfirm") : t("settingsCore.remote.deviceRevoke")}
+												</button>
 											</>
 										)}
 									</li>
@@ -629,7 +637,7 @@ export function RemoteAccessPage({
 							</ul>
 						)}
 					</div>
-				</Section>
+				</section>
 			) : null}
 		</>
 	);

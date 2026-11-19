@@ -195,7 +195,6 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				break;
 			}
 			case "indexing":
-			case "reading":
 			case "duplicates": {
 				const kit = createSearchCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
 				toolkit = kit;

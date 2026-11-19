@@ -30,6 +30,9 @@ import { composerAction, deliverSteers, restoreChat, settleSteers, type SteerIte
 import { frontRequest } from "../state/interaction";
 import { useInteractionQueue } from "../hooks/useInteractionQueue";
 import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type InlineSegment } from "../state/answer-markdown";
+import { REVISION_MARK, type AnswerChange, type AnswerRevision } from "../../../shared/answer-revision";
+import { drawQuickAnswer, splitRevisionMarks } from "../state/answer-revisions";
+import { AnswerRevisionMark } from "./AnswerRevisionMark";
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
@@ -120,7 +123,7 @@ export interface AiSearchPanelProps {
 	 */
 	readonly evidenceJump?: { readonly number: number; readonly nonce: number } | null;
 	readonly onSelectEvidence: (number: number) => void;
-	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[]) => void;
+	readonly onPublish: (evidence: readonly CitationEvidence[], sessionEvidence?: readonly CitationEvidence[], freshEvidence?: readonly number[]) => void;
 	/** Images in an answer: a local picture opens in Quick Look, a web image's page in the OS browser. */
 	readonly imageActions: ImageActions;
 	/** The Interface language setting: "AI 요약" asks in this language. */
@@ -183,6 +186,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	const [compacting, setCompacting] = useState(false);
 	/** What the current run did to the model's view of the chat, in order. */
 	const [contextNotices, setContextNotices] = useState<readonly ContextNotice[]>([]);
+	/** The corrections the verification made to the Quick answer, in the order they arrived. */
+	const [revisions, setRevisions] = useState<readonly AnswerRevision[]>([]);
+	/** They arrived while this panel watched, so they move; a chat read back from history shows them settled. */
+	const [revisionsMove, setRevisionsMove] = useState(false);
 	const { mode: approvalMode, setMode: changeMode } = useApprovalMode();
 	/** The agent's open requests, oldest first, across every search this panel hosts. */
 	const interactionQueue = useInteractionQueue();
@@ -315,6 +322,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	deepElapsedRef.current = deepElapsed;
 	const contextNoticesRef = useRef(contextNotices);
 	contextNoticesRef.current = contextNotices;
+	const revisionsRef = useRef(revisions);
+	revisionsRef.current = revisions;
 
 	useEffect(() => {
 		if (!active) {
@@ -376,6 +385,10 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				case "context-notice":
 					setContextNotices((current) => [...current, event.notice]);
 					break;
+				case "revision":
+					setRevisions((current) => [...current, event.revision]);
+					setRevisionsMove(true);
+					break;
 				case "error":
 					setError(event.message);
 					setErrorAction(event.action === undefined ? null : { message: event.message, action: event.action });
@@ -427,17 +440,31 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		return collectSessionEvidence(phases);
 	}, [pastTurns, quick, deep]);
 
+	// The sources the corrections just brought in, until the person has opened them: their chips in the answer and their
+	// tabs in the inspector wear the sun colour meanwhile. A chat read back from history shows none of them as new.
+	const [seenFresh, setSeenFresh] = useState<readonly number[]>([]);
+	const quickFresh = useMemo(() => (revisionsMove ? (drawQuickAnswer(quick, deep, revisions)?.fresh ?? []) : []), [revisionsMove, quick, deep, revisions]);
+	const unseenFresh = useMemo(() => quickFresh.filter((number) => !seenFresh.includes(number)), [quickFresh, seenFresh]);
+	useEffect(() => {
+		if (revisions.length === 0) setSeenFresh([]);
+	}, [revisions]);
+	useEffect(() => {
+		if (active && selectedEvidence !== null && quickFresh.includes(selectedEvidence)) {
+			setSeenFresh((current) => (current.includes(selectedEvidence) ? current : [...current, selectedEvidence]));
+		}
+	}, [active, selectedEvidence, quickFresh]);
+
 	// Only the visible tab's chat feeds the inspector; it keeps that evidence
 	// while the user browses folders in other tabs.
 	useEffect(() => {
-		if (active) onPublish(evidence, sessionEvidence);
-	}, [active, evidence, sessionEvidence, onPublish]);
+		if (active) onPublish(evidence, sessionEvidence, unseenFresh);
+	}, [active, evidence, sessionEvidence, unseenFresh, onPublish]);
 
 	function selectPhaseCitation(turnIndex: number, phase: "quick" | "deep", number: number): void {
 		const nextSource: EvidenceSelectionSource = { turnIndex, phase };
 		setEvidenceSource(nextSource);
 		const nextEvidence = accumulateEvidence(allTurnPhases, nextSource);
-		if (active) onPublish(nextEvidence, sessionEvidence);
+		if (active) onPublish(nextEvidence, sessionEvidence, unseenFresh.filter((fresh) => fresh !== number));
 		onSelectEvidence(number);
 		onCitation?.(number);
 	}
@@ -460,7 +487,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	useEffect(() => {
 		const body = bodyRef.current;
 		if (body !== null) body.scrollTop = body.scrollHeight;
-	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices]);
+	}, [quick, deep, quickDraft, deepDraft, submittedQuery, progress, attachments, steers, queued, pastTurns, compacting, contextNotices, revisions]);
 
 	const shortcutSettings = useShortcutSettings();
 	const historyShortcutLabel = useFormattedShortcut("aiToggleHistory");
@@ -558,6 +585,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				errorAction: errorRef.current !== null && errorActionRef.current?.message === errorRef.current ? errorActionRef.current.action : null,
 				deepElapsed: deepElapsedRef.current,
 				contextNotices: contextNoticesRef.current,
+				revisions: revisionsRef.current,
 			};
 			setPastTurns((current) => [...current, finished]);
 		}
@@ -571,6 +599,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setIndexNotice(null);
 		setCompacting(false);
 		setContextNotices([]);
+		setRevisions([]);
+		setRevisionsMove(false);
 		setStopped(false);
 		setSubmittedQuery(text);
 		setSubmittedAttachments(sent);
@@ -699,6 +729,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setIndexNotice(null);
 		setCompacting(false);
 		setContextNotices([]);
+		setRevisions([]);
+		setRevisionsMove(false);
 		setStopped(false);
 		setProgress("");
 		setEvidenceSource(null);
@@ -736,6 +768,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 				errorAction: null,
 				deepElapsed: null,
 				contextNotices: turn.assistant?.context ?? [],
+				revisions: turn.assistant?.revisions ?? [],
 			})),
 		);
 		setQuick(assistant?.quick ?? null);
@@ -752,6 +785,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		setIndexNotice(null);
 		setCompacting(false);
 		setContextNotices(assistant?.context ?? []);
+		setRevisions(assistant?.revisions ?? []);
+		setRevisionsMove(false);
 		setProgress("");
 		setChatId(id);
 		setHistoryOpen(false);
@@ -876,6 +911,8 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 	// phase can cite fast-answer units that never reach its `results`, leaving
 	// some chips with nothing to open.
 	const quickUnresolved = useMemo(() => unresolvedCitationNumbers(quickText, quick?.evidence ?? []), [quickText, quick]);
+	// A Quick answer the librarian corrected is drawn with the corrections in place, not as it first stood.
+	const quickDraw = useMemo(() => drawQuickAnswer(quick, deep, revisions), [quick, deep, revisions]);
 	const deepUnresolved = useMemo(() => unresolvedCitationNumbers(deepText, deep?.evidence ?? []), [deepText, deep]);
 	const quickReady = quickText !== "";
 	const deepReady = deepText !== "";
@@ -1078,19 +1115,20 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 
 					{submittedQuery === null ? null : (
 						<div className="message assistant-msg flex flex-col gap-14">
-															{quickReady ? (
+							{quickReady ? (
 								<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink" data-cite-scope={`${pastTurns.length}:quick`}>
 									<ProseBlocks
-										text={quickText}
+										text={quickDraw?.text ?? quickText}
 										selected={
 											evidenceSource === null ||
 											(evidenceSource.turnIndex === pastTurns.length && evidenceSource.phase === "quick")
 												? selectedEvidence
 												: null
 										}
-										unresolved={quickUnresolved}
+										unresolved={quickDraw?.unresolved ?? quickUnresolved}
 										onCitation={(number) => selectPhaseCitation(pastTurns.length, "quick", number)}
 										imageActions={imageActions}
+										{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: revisionsMove, fresh: quickDraw.fresh.filter((number) => !seenFresh.includes(number)) } })}
 									/>
 								</div>
 							) : null}
@@ -1428,6 +1466,8 @@ interface PastTurn {
 	readonly deepElapsed: number | null;
 	/** What the turn's run did to the model's view of the chat (issue #389). */
 	readonly contextNotices: readonly ContextNotice[];
+	/** The corrections the verification made to the Quick answer. */
+	readonly revisions: readonly AnswerRevision[];
 }
 
 function PastTurnView({
@@ -1464,21 +1504,26 @@ function PastTurnView({
 	const after = turn.steers.filter((steer) => steer.timing === "after-quick");
 	const contextBefore = turn.contextNotices.filter((notice) => notice.timing === "before-quick");
 	const contextAfter = turn.contextNotices.filter((notice) => notice.timing === "after-quick");
-	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => (
-		<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body" data-cite-scope={`${turnIndex}:${phaseKind}`}>
-			<ProseBlocks
-				text={text}
-				selected={
-					activeSource?.turnIndex === turnIndex && activeSource.phase === phaseKind
-						? selectedEvidence
-						: null
-				}
-				unresolved={unresolvedCitationNumbers(text, phase?.evidence ?? [])}
-				onCitation={(number) => onCitation(turnIndex, phaseKind, number)}
-				imageActions={imageActions}
-			/>
-		</div>
-	);
+	const quickDraw = drawQuickAnswer(turn.quick, turn.deep, turn.revisions);
+	const prose = (text: string, phase: AnswerPhase | null, phaseKind: "quick" | "deep"): ReactElement => {
+		const drawn = phaseKind === "quick" ? quickDraw : null;
+		return (
+			<div className="assistant-prose flex flex-col gap-8 text-body leading-[1.55] text-ink-body" data-cite-scope={`${turnIndex}:${phaseKind}`}>
+				<ProseBlocks
+					text={drawn?.text ?? text}
+					selected={
+						activeSource?.turnIndex === turnIndex && activeSource.phase === phaseKind
+							? selectedEvidence
+							: null
+					}
+					unresolved={drawn?.unresolved ?? unresolvedCitationNumbers(text, phase?.evidence ?? [])}
+					onCitation={(number) => onCitation(turnIndex, phaseKind, number)}
+					imageActions={imageActions}
+					{...(drawn === null ? {} : { revisions: { changes: drawn.changes, animate: false, fresh: [] } })}
+				/>
+			</div>
+		);
+	};
 	return (
 		<>
 			<div className="message user-msg flex justify-end">
@@ -1567,6 +1612,7 @@ export function ProseBlocks({
 	unresolved,
 	onCitation,
 	imageActions,
+	revisions,
 }: {
 	readonly text: string;
 	readonly selected: number | null;
@@ -1574,14 +1620,26 @@ export function ProseBlocks({
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 	readonly imageActions: ImageActions;
+	/** The corrections whose marks `text` holds (see `state/answer-revisions.ts`); absent for an answer that was not corrected. */
+	readonly revisions?: RevisionDraw;
 }): ReactElement {
 	return (
 		<>
 			{parseAnswerBlocks(text).map((block, index) => (
-				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} imageActions={imageActions} />
+				<AnswerBlockView key={`${index}`} block={block} selected={selected} unresolved={unresolved} onCitation={onCitation} imageActions={imageActions} revisions={revisions} />
 			))}
 		</>
 	);
+}
+
+/**
+ * The corrections an answer's text holds a mark for, whether they arrived just now (they move) or are read back (they are
+ * settled), and the sources they brought in that the person has not opened yet (their chips wear the sun colour).
+ */
+export interface RevisionDraw {
+	readonly changes: readonly AnswerChange[];
+	readonly animate: boolean;
+	readonly fresh: readonly number[];
 }
 
 /** Inline segments of one answer line: bold, code, image paths as written, citation chips, and web links. */
@@ -1591,12 +1649,14 @@ function AnswerInline({
 	unresolved,
 	onCitation,
 	onOpenUrl,
+	revisions,
 }: {
 	readonly segments: readonly InlineSegment[];
 	readonly selected: number | null;
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 	readonly onOpenUrl: (url: string) => void;
+	readonly revisions?: RevisionDraw | undefined;
 }): ReactElement {
 	return (
 		<>
@@ -1627,7 +1687,7 @@ function AnswerInline({
 								{segment.target}
 							</span>
 						);
-					case "citation":
+					case "citation": {
 						// A citation whose number has no matching evidence entry (a real
 						// library behavior: see Marker-Inc-Korea/AutoRAG#1788) is dropped
 						// from the rendered answer. There is nothing to open, so leaving a
@@ -1636,20 +1696,25 @@ function AnswerInline({
 						if (unresolved.includes(segment.number)) {
 							return null;
 						}
+						// A source the correction brought in wears the sun colour (and pops in) until the person has opened it.
+						const fresh = revisions?.fresh.includes(segment.number) === true && segment.number !== selected;
 						return (
 							<button
 								type="button"
 								key={`${index}`}
 								className={cn(
-									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-color) ease-[ease]",
-									segment.number === selected ? "active bg-accent text-on-accent" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+									"cite mx-2 inline-flex h-18 min-w-18 items-center justify-center rounded-5 border-0 px-5 align-[1.5px] text-badge font-semibold cursor-pointer transition-[background,color] duration-(--dur-revision-mark) ease-[ease]",
+									segment.number === selected ? "active bg-accent text-on-accent" : fresh ? "bg-source-new text-source-new-text hover:brightness-110" : "bg-accent-wash text-accent-text hover:bg-accent-soft",
+									fresh && revisions?.animate === true && "animate-source-pop",
 								)}
 								data-cite={segment.number}
+								data-fresh={fresh ? "true" : undefined}
 								onClick={() => onCitation(segment.number)}
 							>
 								{segment.number}
 							</button>
 						);
+					}
 					case "file":
 						return <FileMention key={`${index}`} path={segment.path} onOpen={onOpenUrl} />;
 					case "link":
@@ -1659,8 +1724,41 @@ function AnswerInline({
 							</AnswerLink>
 						);
 					default:
-						return <span key={`${index}`}>{segment.text}</span>;
+						return <AnswerText key={`${index}`} text={segment.text} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} revisions={revisions} />;
 				}
+			})}
+		</>
+	);
+}
+
+/** Plain words of a line; a correction's mark in them is drawn as the struck and the new words, the new ones with their own citation chips. */
+function AnswerText({
+	text,
+	selected,
+	unresolved,
+	onCitation,
+	onOpenUrl,
+	revisions,
+}: {
+	readonly text: string;
+	readonly selected: number | null;
+	readonly unresolved: readonly number[];
+	readonly onCitation: (number: number) => void;
+	readonly onOpenUrl: (url: string) => void;
+	readonly revisions: RevisionDraw | undefined;
+}): ReactElement {
+	if (revisions === undefined || !text.includes(REVISION_MARK)) return <span>{text}</span>;
+	return (
+		<>
+			{splitRevisionMarks(text).map((piece, index) => {
+				if ("text" in piece) return <span key={`${index}`}>{piece.text}</span>;
+				const change = revisions.changes[piece.change];
+				if (change === undefined) return null;
+				return (
+					<AnswerRevisionMark key={`${index}`} change={change} animate={revisions.animate}>
+						<AnswerInline segments={parseInline(change.inserted)} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={onOpenUrl} revisions={revisions} />
+					</AnswerRevisionMark>
+				);
 			})}
 		</>
 	);
@@ -1672,12 +1770,14 @@ function AnswerBlockView({
 	unresolved,
 	onCitation,
 	imageActions,
+	revisions,
 }: {
 	readonly block: AnswerBlock;
 	readonly selected: number | null;
 	readonly unresolved: readonly number[];
 	readonly onCitation: (number: number) => void;
 	readonly imageActions: ImageActions;
+	readonly revisions: RevisionDraw | undefined;
 }): ReactElement {
 	if (block.kind === "code") {
 		return <CodeBlock text={block.text} language={block.language} className="m-0 overflow-auto whitespace-pre rounded-6 border border-border bg-code px-10 py-8 font-mono text-caption text-ink-body" />;
@@ -1692,7 +1792,7 @@ function AnswerBlockView({
 		);
 	}
 	const parsed = parseInline(block.text);
-	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={imageActions.onOpenUrl} />;
+	const segments = <AnswerInline segments={parsed} selected={selected} unresolved={unresolved} onCitation={onCitation} onOpenUrl={imageActions.onOpenUrl} revisions={revisions} />;
 	const images = lineImages(parsed);
 	let line: ReactElement;
 	switch (block.kind) {

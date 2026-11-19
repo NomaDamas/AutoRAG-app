@@ -65,7 +65,7 @@ const SOURCES: DataSourcesSnapshot = {
 };
 
 /** The Settings pages that gained an assistant, with the one that stays hidden until the assistant has a surface. */
-const CONFIG_PAGES = ["general", "ai", "web", "indexing", "reading", "duplicates", "mcp", "apps"] as const;
+const CONFIG_PAGES = ["general", "ai", "web", "indexing", "duplicates", "mcp", "apps"] as const;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -117,7 +117,7 @@ afterEach(async () => {
 
 describe("Settings pages with an AI assistant in the right sidebar", () => {
 	it("lists every Settings section the assistants cover as a surface", () => {
-		expect([...APP_CUSTOMIZER_SURFACES].sort()).toEqual(["ai", "apps", "contextMenu", "duplicates", "general", "indexing", "mcp", "reading", "shortcuts", "sidebar", "web"]);
+		expect([...APP_CUSTOMIZER_SURFACES].sort()).toEqual(["ai", "apps", "contextMenu", "duplicates", "general", "indexing", "mcp", "shortcuts", "sidebar", "web"]);
 	});
 
 	for (const page of CONFIG_PAGES) {

@@ -112,14 +112,14 @@ function execute(definition: ToolDefinition, callId: string, params: unknown): P
 }
 
 describe("general-customizer pi agent profile & toolkit", () => {
-	it("exposes only get_general_settings/update_general_settings, never a remote-access or approval-mode tool, and states the exclusions in the prompt", () => {
+	it("exposes only get_general_settings/update_general_settings/update_reading, never a remote-access or approval-mode tool, and states the exclusions in the prompt", () => {
 		const settings = createStubSettings();
 		const kit = createGeneralCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
 		const profile = generalCustomizerProfile({ language: "ko", surface: "general", toolkit: kit });
 
 		expect(profile.id).toBe("general-customizer");
 		expect(profile.tools).toEqual([]);
-		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(["get_general_settings", "update_general_settings"]);
+		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(["get_general_settings", "update_general_settings", "update_reading"]);
 
 		const keys = parameterKeys(tool(kit, "update_general_settings"));
 		expect(keys.sort()).toEqual(ALLOWED_UPDATE_KEYS);
@@ -270,6 +270,32 @@ describe("general-customizer pi agent profile & toolkit", () => {
 		expect(changes[0]?.fields).toEqual(["appearance", "language"]);
 		expect(changes[0]?.summary).toBeTypeOf("string");
 		expect(changes[0]?.summary.length).toBeGreaterThan(0);
+	});
+
+	it("sets the document languages from the offered list and removes the key on reset", async () => {
+		const settings = createStubSettings();
+		const kit = createGeneralCustomizerToolkit({ settings, platform: "darwin", language: () => "ko" });
+		const update = tool(kit, "update_reading");
+		const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(env.AUTORAG_CONFIG!, "utf8")) as Record<string, unknown>;
+
+		const parsed = parse(await execute(update, "call-1", { languages: ["ko", "xx", "ja", "ja"] }));
+		expect(parsed.ok).toBe(true);
+		expect(String(parsed.warnings)).toContain("xx");
+		expect((await readConfig()).languages).toEqual(["ko", "ja"]);
+
+		const none = parse(await execute(update, "call-2", { languages: ["xx"] }));
+		expect(none.ok).toBe(true);
+		expect((await readConfig()).languages).toEqual(["ko", "ja"]);
+
+		const reset = parse(await execute(update, "call-3", { reset: true }));
+		expect(reset.ok).toBe(true);
+		expect((await readConfig()).languages).toBeUndefined();
+
+		const snapshot = parse(await execute(tool(kit, "get_general_settings"), "call-4", {}));
+		expect(snapshot.documentLanguages).toMatchObject({ languages: ["ko", "en"], configured: false });
+		const changes = kit.takeChanges();
+		expect(changes.map((change) => change.kind)).toEqual(["general", "general"]);
+		expect(changes[0]?.fields).toEqual(["languages"]);
 	});
 
 	it("reports the current values and platform availability in get_general_settings", async () => {

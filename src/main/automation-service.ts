@@ -102,9 +102,12 @@ const SLOW_COMMANDS: readonly string[] = ["install", "uninstall"];
 const SLOW_TIMEOUT_MS = 60_000;
 const TIMEOUT_MS = 30_000;
 
-/** Runs the librarian CLI without a shell. Never rejects: a command that could not start comes back as a non-zero code. */
-export function runLibrarianCli(command: string, args: readonly string[], env: NodeJS.ProcessEnv): Promise<AutomationCliResult> {
-	const timeout = args.some((arg) => SLOW_COMMANDS.includes(arg)) ? SLOW_TIMEOUT_MS : TIMEOUT_MS;
+/**
+ * Runs the librarian CLI without a shell. Never rejects: a command that could not start comes back as a non-zero code.
+ * `timeoutMs` replaces the default leash for a command that legitimately takes longer (fitting a ranking model).
+ */
+export function runLibrarianCli(command: string, args: readonly string[], env: NodeJS.ProcessEnv, options: { readonly timeoutMs?: number } = {}): Promise<AutomationCliResult> {
+	const timeout = options.timeoutMs ?? (args.some((arg) => SLOW_COMMANDS.includes(arg)) ? SLOW_TIMEOUT_MS : TIMEOUT_MS);
 	const launched = Promise.withResolvers<AutomationCliResult>();
 	execFile(command, [...args], { timeout, maxBuffer: 4 * 1024 * 1024, windowsHide: true, env }, (error, stdout, stderr) => {
 		const code = error === null ? 0 : typeof error.code === "number" ? error.code : 1;

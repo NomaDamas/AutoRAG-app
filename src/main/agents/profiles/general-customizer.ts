@@ -14,7 +14,8 @@ import { Type } from "typebox";
 import type { AgentProfile } from "@autorag/librarian/profiles";
 import { isAppLanguage } from "../../../shared/language-contract";
 import { isGlobalChord, normalizeQuickSearchSettings, type QuickSearchSettings } from "../../../shared/quick-search-contract";
-import type { AppSettings } from "../../../shared/settings-contract";
+import type { AppSettings, AutoRagConfigUpdate } from "../../../shared/settings-contract";
+import { DOC_LANGUAGES, isDocLanguage } from "../../../shared/settings-options";
 import { parseShortcutChord } from "../../../shared/shortcuts-contract";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 import {
@@ -28,6 +29,13 @@ import {
 } from "./customizer-kit";
 
 export type { ReplyLanguage };
+
+const LANGUAGES_SUMMARY: Localized = {
+	ko: "문서 읽기 언어를 변경",
+	en: "Updated the document read languages",
+	ja: "文書の読み込み言語を変更",
+	zh: "已更新文档读取语言",
+};
 
 const APP_LANGUAGE_NAMES = ["ko", "en", "ja", "zh"] as const;
 const APPEARANCES = ["light", "dark"] as const;
@@ -129,7 +137,7 @@ export function createGeneralCustomizerToolkit(deps: GeneralCustomizerToolkitDep
 		parameters: Type.Object({}),
 		execute: async () => {
 			kit.ensureLive();
-			const settings = await deps.settings.get();
+			const [settings, snapshot] = await Promise.all([deps.settings.get(), deps.settings.configGet()]);
 			const quickSearch = normalizeQuickSearchSettings(settings.quickSearch);
 			return textResult({
 				platform,
@@ -149,6 +157,11 @@ export function createGeneralCustomizerToolkit(deps: GeneralCustomizerToolkitDep
 					appearance: APPEARANCES,
 					language: APP_LANGUAGE_NAMES,
 					quickSearchChordExample: "Alt+Space",
+				},
+				documentLanguages: {
+					languages: Array.isArray(snapshot.config.languages) ? snapshot.config.languages.filter((entry): entry is string => typeof entry === "string") : ["ko", "en"],
+					configured: snapshot.config.languages !== undefined,
+					options: DOC_LANGUAGES.map((language) => language.value),
 				},
 				notCovered: ["remoteAccess", "remotePort", "remoteTunnelHostname", "approvalMode", "dupeyScanIntervalMinutes", "sidebar", "contextMenu", "shortcuts"],
 			});
@@ -295,7 +308,55 @@ export function createGeneralCustomizerToolkit(deps: GeneralCustomizerToolkitDep
 		},
 	});
 
-	return kit.toolkit([getGeneralSettings, updateGeneralSettings]);
+	const updateReading = defineTool({
+		name: "update_reading",
+		label: "Update Document Languages",
+		description:
+			"Set the document languages the parsers read (`languages`). Values must be from the offered list; unknown values are dropped. An empty list or `reset: true` removes the key so the default applies.",
+		parameters: Type.Object({
+			languages: Type.Optional(Type.Array(Type.String(), { description: "Offered document language tags (e.g. ko, en, ja, zh-hans)." })),
+			reset: Type.Optional(Type.Boolean({ description: "Remove the stored language list and fall back to the default." })),
+		}),
+		execute: async (_callId, params) => {
+			kit.ensureLive();
+			const warnings: string[] = [];
+			const reset = params.reset === true;
+			const requested = params.languages;
+			let updates: readonly AutoRagConfigUpdate[];
+
+			if (reset || (requested !== undefined && requested.length === 0)) {
+				updates = [{ path: ["languages"], remove: true }];
+			} else if (requested !== undefined) {
+				const valid: string[] = [];
+				for (const raw of requested) {
+					const value = typeof raw === "string" ? raw.trim() : "";
+					if (!isDocLanguage(value)) {
+						warnings.push(`'${String(raw)}' was ignored: it is not one of the offered document languages.`);
+						continue;
+					}
+					if (!valid.includes(value)) valid.push(value);
+				}
+				if (valid.length === 0) {
+					warnings.push("No valid document languages were given, so nothing changed.");
+					return textResult({ ok: true, warnings });
+				}
+				updates = [{ path: ["languages"], value: valid }];
+			} else {
+				return textResult({ ok: true, warnings });
+			}
+
+			kit.ensureLive();
+			try {
+				await deps.settings.configPatch(updates);
+			} catch (error) {
+				return textResult({ ok: false, error: error instanceof Error ? error.message : String(error), warnings });
+			}
+			kit.record({ kind: "general", summary: LANGUAGES_SUMMARY, fields: ["languages"], ...(warnings.length > 0 ? { warnings } : {}) });
+			return textResult({ ok: true, warnings, fields: ["languages"] });
+		},
+	});
+
+	return kit.toolkit([getGeneralSettings, updateGeneralSettings, updateReading]);
 }
 
 function systemPrompt(language: ReplyLanguage): string {
@@ -307,6 +368,7 @@ function systemPrompt(language: ReplyLanguage): string {
 		"## Role & Scope",
 		"- You change only the app preferences the General page owns, stored in `settings-state.json` through the same settings service the page writes.",
 		"- In scope: `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `osMenuIntegration`, `autoInstallUpdates`, `errorReporting`, `usageAnalytics`, and the `quickSearch` launcher (`quickSearchEnabled`, `quickSearchChord`).",
+		"- `update_reading` sets the document languages the parsers read (`languages`, from the offered list; an empty list or `reset: true` restores the default). They live in the shared AutoRAG config and are the 문서 언어 section of this page.",
 		"- `osMenuIntegration` installs the OS right-click menu entries; it exists only on macOS and Windows. Where `get_general_settings` reports it unavailable, refuse the change with a warning and leave it untouched.",
 		"- `quickSearchChord` must be a valid chord held with ⌘/Ctrl or ⌥/Alt (for example `Alt+Space`, `Cmd+Shift+K`). A bare key like `F5` or `Space` would be taken from every other app, so it cannot be a system-wide shortcut: refuse it with a warning and keep the previous chord.",
 		"",

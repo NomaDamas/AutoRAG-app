@@ -24,7 +24,7 @@ export const APP_CUSTOMIZER_CHANNELS = {
 /**
  * Every Settings section with an AI assistant in the window's right sidebar. `sidebar`, `contextMenu` and `shortcuts`
  * edit Dazzi's own look; the rest are one section each of the shared AutoRAG config and the app preferences:
- * `general` (app preferences), `ai` and `web` (models and web search), `indexing`, `reading` and `duplicates` (what
+ * `general` (app preferences and the document languages), `ai` and `web` (models and web search), `indexing` and `duplicates` (what
  * is searched and how), `mcp` and `apps` (connected tools and apps).
  */
 export const APP_CUSTOMIZER_SURFACES = [
@@ -35,7 +35,6 @@ export const APP_CUSTOMIZER_SURFACES = [
 	"ai",
 	"web",
 	"indexing",
-	"reading",
 	"duplicates",
 	"mcp",
 	"apps",

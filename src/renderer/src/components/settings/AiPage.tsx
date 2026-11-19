@@ -189,7 +189,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.ai")} description={t("settingsCore.ai.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.ai")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{notice !== null ? <Note>{notice}</Note> : null}
 			{/* Figma 403:10518: 연결된 서비스 is a bordered list closed by its own "+ 서비스 연결" row; a rule; then the roles on a stage card. */}

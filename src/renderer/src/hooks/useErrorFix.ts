@@ -16,7 +16,7 @@ import {
 type ErrorFixWindow = Window & { readonly autorag?: { readonly errorFix?: ErrorFixBridge } };
 
 /**
- * Window-wide multi-session store for "AI로 고치기": minimizing or starting a
+ * Window-wide multi-session store for "AI로 해결하기": minimizing or starting a
  * second repair keeps every in-flight and unreviewed background repair in the
  * queue instead of cancelling or overwriting earlier sessions.
  */

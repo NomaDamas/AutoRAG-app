@@ -187,7 +187,7 @@ function imageItems(actions: ReturnType<typeof suggestedActions>): ReturnType<ty
 describe("image menus", () => {
 	it("offers 확장자 변환 (every other native format) and 해상도 줄이기 (resize presets), for a PNG", () => {
 		const actions = suggestedActions({ name: "photo.png", kind: "file" }, DARWIN);
-		expect(actions.find((action) => action.id === "imageConvert")).toMatchObject({ kind: "menu", icon: "imageConvert", label: "확장자 변환" });
+		expect(actions.find((action) => action.id === "imageConvert")).toMatchObject({ kind: "menu", icon: "imageConvert", label: "형식 바꾸기" });
 		expect(actions.find((action) => action.id === "imageResize")).toMatchObject({ kind: "menu", icon: "imageResize", label: "해상도 줄이기" });
 		expect(menuItems(actions, "imageConvert").map((item) => item.label)).toEqual([
 			"JPEG로 변환",

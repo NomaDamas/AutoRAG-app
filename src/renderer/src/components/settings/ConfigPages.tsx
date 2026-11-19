@@ -74,22 +74,6 @@ export function WebPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfi
 	);
 }
 
-/* ============================================================= Reading == */
-
-export function ReadingPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
-	const { t } = useTranslation();
-	const { error } = useConfigWriter(onSaved);
-	return (
-		<>
-			<SettingsPageHead title={t("settingsSources.reading.title")} description={t("settingsSources.reading.desc")} />
-			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
-			<div className="settings-plain">
-				<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsSources.fields.docLanguages")} hint={t("settingsSources.reading.langHint")} onSaved={onSaved} fallback={["ko", "en"]} />
-			</div>
-		</>
-	);
-}
-
 /* ========================================================== Duplicates == */
 
 

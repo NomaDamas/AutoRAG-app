@@ -113,16 +113,16 @@ describe("the first-run indexing screen", () => {
 		expect(phases).toEqual([
 			["탐색", true, false],
 			["파싱", true, false],
-			["키워드 색인", false, true],
+			["키워드 인덱싱", false, true],
 			["마무리", false, false],
 		]);
 		const detail = host.querySelector('[data-testid="ix-detail"]')?.textContent ?? "";
-		expect(detail).toContain(`키워드 색인 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`);
+		expect(detail).toContain(`키워드 인덱싱 ${(12_950).toLocaleString()} / ${(29_595).toLocaleString()}개 파일 (44%)`);
 		expect(host.querySelector(".ix-meta")?.textContent).toContain("28%");
-		expect(host.querySelector(".ix-meta")?.textContent).toContain("키워드 색인 남은 시간 계산 중");
+		expect(host.querySelector(".ix-meta")?.textContent).toContain("키워드 인덱싱 남은 시간 계산 중");
 		// The status pill says the same thing: nothing is embedded in this run.
 		const pill = host.querySelector(".ix-status")?.textContent ?? "";
-		expect(pill).toContain("검색 색인 만드는 중");
+		expect(pill).toContain("검색 인덱스 만드는 중");
 		expect(text()).not.toContain("임베딩");
 		expect(host.querySelector(".ix-bar")?.classList.contains("waiting")).toBe(false);
 	});

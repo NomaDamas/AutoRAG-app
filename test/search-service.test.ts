@@ -16,6 +16,7 @@ import {
 	type LiveAgentEvent,
 } from "../src/main/search-service";
 import { setAppLanguage, t } from "../src/shared/i18n/core";
+import type { AnswerRevision } from "../src/shared/answer-revision";
 import { SEARCH_CHANNELS, type ChatRecord, type IndexNotice, type SearchStreamEvent } from "../src/shared/search-contract";
 
 interface TestResponse {
@@ -39,6 +40,7 @@ interface TestResponse {
 type TestStreamEvent =
 	| { readonly type: "progress"; readonly sessionId: string; readonly query: string; readonly text: string }
 	| { readonly type: "preliminary"; readonly response: TestResponse }
+	| { readonly type: "revision"; readonly revision: AnswerRevision }
 	| { readonly type: "complete"; readonly response: TestResponse };
 
 const tempDirs: string[] = [];
@@ -872,6 +874,179 @@ describe("createSearchService", () => {
 		expect(await service.historySearch("approval")).toHaveLength(1);
 		await service.historyClear();
 		expect(await service.historyList()).toEqual([]);
+	});
+});
+
+describe("createSearchService revisions of the first answer", () => {
+	const FIRST = "- 환불은 팀장 승인이 필요합니다 [1]\n- 한도는 50만 원입니다 [1]";
+	const replacement = "- 환불은 이사 승인이 필요합니다 [2]";
+	const fix: AnswerRevision = {
+		op: "replace",
+		claimId: "c1",
+		original: "- 환불은 팀장 승인이 필요합니다 [1]",
+		replacement,
+		reason: "7월 정책 개정",
+	};
+	const corrected = `${replacement}\n- 한도는 50만 원입니다 [1]`;
+
+	function twoSources(sessionId: string, answer: string): TestResponse {
+		const base = createResponse(sessionId, answer, 2);
+		return {
+			...base,
+			results: [
+				...base.results,
+				{
+					number: 2,
+					title: "Director memo",
+					summary: "Directors approve since July.",
+					evidence: [{ excerpt: "Directors approve refund exceptions since July." }],
+					confidence: 0.9,
+					source: "/Users/jeff/Documents/director-memo.md",
+				},
+			],
+		};
+	}
+
+	it("forwards each correction as its own event, between the Quick answer and the end of the run", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		expect(events.map((event) => event.type)).toEqual(["quick", "revision", "deep", "done"]);
+		expect(events.find((event) => event.type === "revision")).toEqual({ type: "revision", searchId: "search-rev", revision: fix });
+	});
+
+	it("keeps the Quick answer as the person read it and stores the corrections beside it", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: collectEvents().send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const assistant = (await store.get("chat-rev"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.quick?.answer).toBe(FIRST);
+		expect(assistant.revisions).toEqual([fix]);
+	});
+
+	it("sends no Deep text when the final answer is only the corrected first answer, but still sends the sources the correction cites", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("");
+		expect(deep.phase.evidence.map((item) => item.number)).toEqual([1, 2]);
+	});
+
+	it("sends what the final answer adds after the corrected first answer as the Deep text", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", `${corrected}\n\n재무팀 서명도 필요합니다 [2].`) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("재무팀 서명도 필요합니다 [2].");
+	});
+
+	it("falls back to the whole final answer when it does not start with the corrected first answer, so nothing is lost", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", "전혀 다르게 쓴 답변입니다 [2].") };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("전혀 다르게 쓴 답변입니다 [2].");
+	});
+
+	it("treats a run that only confirmed claims like one with no corrections: the model's own reply is the Deep text", async () => {
+		const confirm: AnswerRevision = { op: "confirm", claimId: "c1", original: "- 환불은 팀장 승인이 필요합니다 [1]", reason: "맞음" };
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: confirm };
+			yield { type: "complete", response: createResponse("s-rev", "첫 답변이 맞습니다.", 1) };
+		});
+		const { events, send } = collectEvents();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now });
+
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const deep = events.find((event) => event.type === "deep");
+		assert(deep?.type === "deep");
+		expect(deep.phase.answer).toBe("첫 답변이 맞습니다.");
+	});
+
+	it("does not store corrections for a run that made none", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-none", "빠른 답", 1) };
+			yield { type: "complete", response: createResponse("s-none", "확인한 답", 1) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: collectEvents().send, now });
+
+		await service.start("search-none", "chat-none", "refund approval", []);
+
+		const assistant = (await store.get("chat-none"))?.messages.find((message) => message.role === "assistant");
+		assert(assistant?.role === "assistant");
+		expect(assistant.revisions).toBeUndefined();
+	});
+
+	it("seeds a later conversation with the corrected answer, not the one that was struck out", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "preliminary", response: createResponse("s-rev", FIRST, 1) };
+			yield { type: "revision", revision: fix };
+			yield { type: "complete", response: twoSources("s-rev", corrected) };
+		});
+		const store = await createStore();
+		const service = createSearchService({ agentFactory: () => agent, chatStore: store, send: collectEvents().send, now });
+		await service.start("search-rev", "chat-rev", "refund approval", []);
+
+		const seeds: (readonly { readonly question: string; readonly answer: string }[])[] = [];
+		const seedAgent = {
+			...createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("s-2", "다음 답", 1) };
+			}),
+			openSession: vi.fn(async (options: { resumeFile?: string | undefined; seed?: readonly { readonly question: string; readonly answer: string }[] | undefined } = {}) => {
+				seeds.push(options.seed ?? []);
+				return { sessionFile: "/sessions/chat-rev.jsonl", resumed: false, seeded: options.seed?.length ?? 0 };
+			}),
+			closeSession: vi.fn(async () => undefined),
+		};
+		// No conversation file is kept for this chat, so the later question starts one from what the chat holds.
+		const sessions = { fileFor: vi.fn(async () => null), remember: vi.fn(async () => undefined), clear: vi.fn(async () => undefined) };
+		const next = createSearchService({ agentFactory: () => seedAgent, chatStore: store, send: collectEvents().send, now, sessions });
+		await next.start("search-next", "chat-rev", "한도는?", []);
+
+		expect(seeds[0]?.[0]?.answer).toBe(corrected);
 	});
 });
 
@@ -1821,5 +1996,55 @@ describe("createSearchService conversation context (issue #389)", () => {
 			{ type: "error", searchId: "search-thrown", message: "Error: Prompt is too long: 213462 tokens > 200000 maximum", action: "new-chat" },
 			{ type: "error", searchId: "search-other", message: "500 Internal Server Error" },
 		]);
+	});
+});
+
+describe("createSearchService learning-to-rank training", () => {
+	it("asks for automatic training once an answered search has finished", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-train", "Answer", 3) };
+		});
+		const { events, send } = collectEvents();
+		const afterSearch = vi.fn(() => undefined);
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, afterAnsweredSearch: afterSearch });
+
+		await service.start("search-train", "chat-train", "refund approval", []);
+
+		expect(afterSearch).toHaveBeenCalledTimes(1);
+		// The answer reaches the window before anything else runs: the hook comes after `done`.
+		expect(events.at(-1)).toEqual({ type: "done", searchId: "search-train" });
+	});
+
+	it("does not ask after a search that failed or was stopped", async () => {
+		const failing = createFakeAgent(async function*() {
+			throw new Error("500 Internal Server Error");
+		});
+		const { send } = collectEvents();
+		const afterSearch = vi.fn(() => undefined);
+		const service = createSearchService({ agentFactory: () => failing, chatStore: await createStore(), send, now, afterAnsweredSearch: afterSearch });
+
+		await service.start("search-fail", "chat-fail", "q", []);
+
+		expect(afterSearch).not.toHaveBeenCalled();
+	});
+
+	it("never lets a throwing or rejecting hook fail the search it follows", async () => {
+		for (const hook of [
+			() => {
+				throw new Error("boom");
+			},
+			() => Promise.reject(new Error("boom")),
+		]) {
+			const agent = createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("session-hook", "Answer", 1) };
+			});
+			const { events, send } = collectEvents();
+			const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, afterAnsweredSearch: hook });
+
+			await service.start("search-hook", "chat-hook", "q", []);
+
+			expect(events.some((event) => event.type === "error")).toBe(false);
+			expect(events.at(-1)).toEqual({ type: "done", searchId: "search-hook" });
+		}
 	});
 });

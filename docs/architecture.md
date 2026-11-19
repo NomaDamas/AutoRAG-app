@@ -1068,11 +1068,41 @@ and kept for the chat's life:
 - **After a restart.** `chat-sessions.ts` keeps `index.json` beside the session files (`<userData>/chat-sessions`):
   chat id → file name. `search-service` resumes from that file when it exists (`switchSession`). A chat from before
   this change, or one whose file is gone, starts a new conversation seeded with its finished turns
-  (`seedTurnsOf`: Deep answer over Quick, a steer belongs to the turn it corrected, a stopped turn carries
+  (`seedTurnsOf`: the Quick answer with its corrections applied followed by what Deep added, else Deep over Quick; a steer belongs to the turn it corrected, a stopped turn carries
   nothing). A file pi cannot read starts a new conversation instead of failing the chat.
 - **Lifetime.** At most eight conversations are open; past that the oldest chat that is not answering is closed
   (its file stays, asking again resumes it). Quitting waits for every open one (`SearchService.dispose`); "clear
   history" closes them and deletes the folder.
+
+### Corrections of the first answer
+
+When verification finds the Quick answer wrong, the librarian corrects it claim by claim with its `revise_answer` tool
+(AutoRAG#2186) instead of writing a second answer next to it. Each correction is a `revision` stream event
+(`op`: `confirm`, `retract`, `replace`, `add`; `claimId`, `original`, `replacement`, `reason`), sent between `quick` and
+`deep`.
+
+- **Pure core.** `src/shared/answer-revision.ts` applies corrections to text (`revisedAnswer`), finds what the final answer says
+  beyond the corrected first answer (`remainderAfterRevised`) and cuts the first answer into the text to draw with a mark
+  where each correction goes (`markRevisedAnswer`). It has no DOM and no React; main process and renderer load it alike.
+- **Main process.** `search-service` forwards each correction as a `revision` event and stores them on the run's assistant
+  message (`revisions`), so a chat read back from history shows them. The final answer of a corrected run is the first
+  answer with every correction applied, so `deep` carries only what it adds after that (empty when it adds nothing) with the
+  evidence of every source the corrections cite. A correction whose original the Quick text does not hold is skipped, and
+  the Quick answer is never rewritten in the store: the person's record of what they read stays as it was.
+- **Renderer.** `state/answer-revisions.ts` decides whether anything is drawn (confirmations change nothing the person reads)
+  and resolves the new citations against the Quick sources plus the final answer's. `AnswerRevisionMark` draws one
+  correction: the new words arrive marked in the sun colour with the struck words beside them; after 2.6 s the mark fades to
+  an underline and the struck words collapse (design preview "답이 고쳐질 때"). A retracted claim stays struck, with its
+  reason as the tooltip. A chat read back from history, and a person who asked for reduced motion, see the settled state at once.
+  The AI Search tab and the inspector chat draw the same thing; no line is added above a corrected answer. An added
+  finding is not drawn like a replacement: no strike and no sun colour, but its own block on an accent rail that rises in and
+  keeps the rail once settled. A replaced claim that fits one line collapses by its measured width, so the lines below it
+  never move; one that wraps only fades before it leaves.
+  A source a correction brought in (cited by its new words, not by the first answer, with evidence sent by the final
+  answer) is new until the person opens it: its chip in the answer is the sun colour and pops in, and its tab in the
+  inspector's evidence panel carries a sun dot and the name "N번 새 출처" (design preview "답이 고쳐질 때"). The answer
+  panel owns that set (`drawQuickAnswer().fresh` minus the sources opened), publishes it to the inspector with the
+  evidence (`onPublish`), and a chat read back from history marks nothing as new.
 
 ### What the panel shows while a run works, and an exhausted plan
 
@@ -1225,6 +1255,29 @@ and proven live by `scripts/manual-qa/run-qa-finder-automations-live.mjs`.
 
 A `running` daemon whose lock directory outlived a killed process still reads as
 running (`isAutomationDaemonRunning` uses `staleMs: 0` upstream).
+
+## Learning to rank
+
+The librarian logs every search's candidates and outcome (`rankingLog`, on by default, beside `memory.json`), can
+fit a ranking model on that log, and reorders the reranker's results with it when the config's `ltr` block says so.
+The settings are the shared config's `rankingLog` and `ltr.enabled`, `ltr.model`, `ltr.autoTrain` (all written through
+`configPatch`, validated by the librarian's own reader). `window.autorag.ltr` (`src/shared/ltr-contract.ts`) carries
+what the config cannot say: the log size, the models and how each scored, whether the next search would use one, and
+the two actions that are not settings, train now and delete a model.
+
+**Training runs in a child process, never in the main process.** The librarian trains in process (XGBoost compiled to
+WebAssembly, no Python). Measured on a 944-search real log: 1.9 s to train, during which the event loop got to run 7
+of the ~190 ticks it would have had, with a worst single stall of 0.6 s. In the Electron main process that freezes
+every window, so `ltr-service.ts` runs
+`autorag ltr train --json` through the same bundled Node the automations use. The agent's own retrain-after-a-search
+would run inside the main process, so `withoutAgentAutoTrain` removes `ltr.autoTrain` from the options the agent is
+built with, and `afterAnsweredSearch` (after the `done` event of an answered search, detached, never failing the
+search) asks `autoTrainIfDue` instead, which reads the same setting. `test/ltr-service.test.ts` pins where
+`buildAgentOptions` puts that block, so a librarian that moves it fails a test instead of training in process.
+
+A rejected or too-small attempt exits `1` and still prints its verdict; the service reads the verdict, not the exit
+code. A run in flight is shared by every caller, so a second click or an automatic attempt never fits a second model.
+The log only teaches when the reranker ran (a search with no rerank is skipped), so the page says so.
 
 ## AI Chat attachments
 

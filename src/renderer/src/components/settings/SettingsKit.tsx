@@ -47,13 +47,13 @@ function AssistantHero({ surface, onOpen }: SettingsAssistantHero): ReactElement
 	);
 }
 
-export function SettingsPageHead({ title, description, note }: { readonly title: string; readonly description: string; readonly note?: string }): ReactElement {
+export function SettingsPageHead({ title, description, note }: { readonly title: string; readonly description?: string; readonly note?: string }): ReactElement {
 	const hero = useContext(SettingsAssistantHeroContext);
 	return (
 		<>
 			<div className="settings-page-head">
 				<h1 className="linear-title">{title}</h1>
-				<p className="linear-desc">{description}</p>
+				{description !== undefined ? <p className="linear-desc">{description}</p> : null}
 				{note !== undefined ? <p className="linear-desc">{note}</p> : null}
 			</div>
 			{hero === null ? null : <AssistantHero {...hero} />}

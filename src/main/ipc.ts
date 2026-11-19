@@ -12,7 +12,9 @@ import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
 import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
-import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import type { ChatStore } from "./chat-store";
+import { saveMagicActionToHistory } from "./magic-action-history";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
@@ -22,6 +24,7 @@ import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
+import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -34,6 +37,7 @@ import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
 import type { AutomationService } from "./automation-service";
+import type { LtrService } from "./ltr-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
@@ -182,7 +186,11 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	);
 }
 
-export function registerMagicActionIpcHandlers(service: MagicActionService): void {
+export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore): void {
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.saveToHistory, (_event, request: unknown) => {
+		if (!isMagicActionSaveRequest(request)) throw new TypeError("magicAction:saveToHistory expects { actionLabel, paths, output }");
+		return saveMagicActionToHistory(chatStore, request);
+	});
 	ipcMain.handle(MAGIC_ACTION_CHANNELS.start, (_event, runId: unknown, request: unknown) => {
 		if (typeof runId !== "string" || !isMagicActionRunRequest(request)) {
 			throw new TypeError("magicAction:start expects a run id and { actionId, paths }");
@@ -479,6 +487,14 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
 		return service.setDaemon(enabled);
 	});
+}
+
+/** Learning to rank: read the log's state and the models, fit one now, delete one; a training run is pushed by the main process. */
+export function registerLtrIpcHandlers(service: LtrService): void {
+	// The renderer's extra arguments are dropped, never forwarded: nothing the page sends reaches a command line but a validated model id.
+	ipcMain.handle(LTR_CHANNELS.get, () => service.get());
+	ipcMain.handle(LTR_CHANNELS.train, () => service.train());
+	ipcMain.handle(LTR_CHANNELS.deleteModel, (_event, id: unknown) => service.deleteModel(requireNonEmptyString(id, "model id")));
 }
 
 /** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */

@@ -8,7 +8,9 @@ import { openMagicActionDialog, useMagicActionStore } from "../hooks/useMagicAct
 import { cn } from "../lib/cn";
 import { useModelDownload } from "../state/model-download";
 import { collectSidebarActivities, type SidebarActivityEntry } from "../state/sidebar-activity-queue";
+import { Check } from "lucide-react";
 import { SparklesIcon } from "./icons";
+import { NoticeBadge } from "./primitives/NoticeCard";
 import { ProgressBar } from "./primitives/ProgressBar";
 
 function ActivityCard({
@@ -37,12 +39,19 @@ function ActivityCard({
 			}}
 		>
 			<span className="flex items-center gap-6 min-w-0 text-meta text-ink-body">
-				{entry.sparkle === true ? <SparklesIcon className="flex-none text-accent" /> : null}
+				{/* Figma 568:7657 / 568:7658: a finished job leads with a green check, one that failed with the warning badge. */}
+				{entry.tone === "ok" ? (
+					<Check className="activity-mark flex-none text-(--ok-dot)" size={14} strokeWidth={2} aria-hidden="true" />
+				) : entry.tone === "error" ? (
+					<NoticeBadge tone="warning" size={14} />
+				) : entry.sparkle === true ? (
+					<SparklesIcon className="flex-none text-accent" />
+				) : null}
 				<span
 					className={cn(
 						"flex-1 min-w-0 truncate",
 						entry.shimmerHeadline === true && "shimmer",
-						entry.tone === "error" && "text-(--error-orange-text)",
+						entry.tone === "error" && "text-(--activity-warn-text)",
 						entry.tone === "queued" && "text-ink-muted",
 					)}
 				>
@@ -67,9 +76,10 @@ function ActivityCard({
 
 /**
  * Reusable stack renderer: shows 1 primary card in flow (with a `+N` pill badge
- * and a stacked-card lip when `entries.length > 1`) and expands upward on hover
- * or keyboard focus to reveal every queued/running/completed item without
- * shifting the sidebar layout or overwriting earlier tasks.
+ * when `entries.length > 1`) and expands upward on hover or keyboard focus, as a
+ * popover over the sidebar, to reveal every queued/running/completed item without
+ * shifting the primary card or overwriting earlier tasks. No stacked-card lip
+ * above the card: it looked like a stray bar and vanished on hover, moving the card.
  */
 export function SidebarActivityStack({ entries }: { readonly entries: readonly SidebarActivityEntry[] }): ReactElement | null {
 	const { t } = useTranslation();
@@ -132,11 +142,6 @@ export function SidebarActivityStack({ entries }: { readonly entries: readonly S
 						))}
 					</div>
 				</div>
-			) : hasExtra ? (
-				<div
-					aria-hidden="true"
-					className="mx-6 h-3 rounded-t-6 border border-b-0 border-border bg-hover transition-opacity duration-(--dur-color)"
-				/>
 			) : null}
 			{/* Keyed so a new task's bar starts at its own percent instead of draining from the last task's 100%. */}
 			<ActivityCard key={primary.id} entry={primary} extraCount={extra.length} />

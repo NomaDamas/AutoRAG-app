@@ -32,7 +32,7 @@ const SCHEDULE_STATUS: RefreshScheduleStatus = {
 	error: null,
 };
 
-const TOOL_NAMES = ["get_search_settings", "update_duplicates", "update_index_options", "update_index_scope", "update_reading"];
+const TOOL_NAMES = ["get_search_settings", "update_duplicates", "update_index_options", "update_index_scope"];
 
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "search-agent-root-"));
@@ -136,8 +136,6 @@ describe("search-customizer pi agent profile & toolkit", () => {
 		expect(parsed.fileNameWatch).toBe(true);
 		expect(parsed.fsearchFalse).toBe(false);
 		expect(parsed.excludeCodeFolders).toBe(true);
-		expect(parsed.languages).toEqual(["ko", "en"]);
-		expect(parsed.languagesConfigured).toBe(false);
 		expect(parsed.excludeExactDuplicates).toBe(true);
 		expect(parsed.dupeyEnabled).toBe(true);
 		expect(parsed.dupeyScanIntervalMinutes).toBe(60);
@@ -262,21 +260,6 @@ describe("search-customizer pi agent profile & toolkit", () => {
 		expect((await readConfig()).fsearch).toBe(false);
 	});
 
-	it("filters document languages to the offered list and removes the key on reset", async () => {
-		const { settings } = createStubSettings();
-		const kit = createSearchCustomizerToolkit({ settings, language: () => "ko" });
-		const update = tool(kit, "update_reading");
-
-		const parsed = parse(await update.execute("call-1", { languages: ["ko", "xx", "ja", "ja"] }, undefined, undefined, undefined));
-		expect(parsed.ok).toBe(true);
-		expect(warningsOf(parsed).some((w) => w.includes("xx"))).toBe(true);
-		expect((await readConfig()).languages).toEqual(["ko", "ja"]);
-
-		const reset = parse(await update.execute("call-2", { reset: true }, undefined, undefined, undefined));
-		expect(reset.ok).toBe(true);
-		expect((await readConfig()).languages).toBeUndefined();
-	});
-
 	it("writes the duplicate toggles in the page's shapes, including a bare dupey:false flipping to enabled", async () => {
 		const { settings } = createStubSettings();
 		const kit = createSearchCustomizerToolkit({ settings, language: () => "ko" });
@@ -311,26 +294,11 @@ describe("search-customizer pi agent profile & toolkit", () => {
 		expect((await readState()).dupeyScanIntervalMinutes).toBe(180);
 	});
 
-	it("records a search change with kind 'search' and the touched fields", async () => {
-		const { settings } = createStubSettings();
-		const kit = createSearchCustomizerToolkit({ settings, language: () => "ko" });
-		const update = tool(kit, "update_reading");
-
-		await update.execute("call-1", { languages: ["ja"] }, undefined, undefined, undefined);
-
-		const changes = kit.takeChanges();
-		expect(changes).toHaveLength(1);
-		expect(changes[0]?.kind).toBe("search");
-		expect(changes[0]?.fields).toEqual(["languages"]);
-		expect(changes[0]?.summary).toBeTypeOf("string");
-		expect(changes[0]?.summary.length).toBeGreaterThan(0);
-	});
-
 	it("runs the profile on pi's faux provider, accepts the i intent field, and applies the change", async () => {
 		const registration = register();
 		const { settings } = createStubSettings();
 		const kit = createSearchCustomizerToolkit({ settings, language: () => "ko" });
-		const profile = searchCustomizerProfile({ language: "ko", surface: "reading", toolkit: kit });
+		const profile = searchCustomizerProfile({ language: "ko", surface: "indexing", toolkit: kit });
 
 		const session = await createProfileSession({
 			profile,
@@ -342,15 +310,13 @@ describe("search-customizer pi agent profile & toolkit", () => {
 		cleanups.push(() => session.dispose());
 
 		registration.setResponses([
-			fauxAssistantMessage([fauxToolCall("update_reading", { i: "문서 언어를 일본어로 바꾸는 중", languages: ["ja"] })]),
-			fauxAssistantMessage("문서 읽기 언어를 일본어로 바꿨습니다."),
+			fauxAssistantMessage([fauxToolCall("update_index_options", { i: "새로고침 주기를 바꾸는 중", refreshIntervalMs: 900_000 })]),
+			fauxAssistantMessage("새로고침 주기를 15분으로 바꿨습니다."),
 		]);
 
-		await session.prompt("문서 언어를 일본어로 바꿔줘");
+		await session.prompt("새로고침을 15분마다 하게 해줘");
 
-		expect((await readConfig()).languages).toEqual(["ja"]);
-		const changes = kit.takeChanges();
-		expect(changes[0]?.kind).toBe("search");
-		expect(changes[0]?.fields).toEqual(["languages"]);
+		expect((await readConfig()).appIndexing?.refreshIntervalMs).toBe(900_000);
+		expect(kit.takeChanges()[0]?.kind).toBe("search");
 	});
 });

@@ -374,6 +374,15 @@ per request.
 * **macOS differential needs a previous zip.** The first update after a dmg
   install downloads the whole zip (there is nothing cached to diff against);
   every update after that is differential.
+* **Every window must let the app quit for an update.** On macOS,
+  `autoUpdater.quitAndInstall()` closes all windows first, emits only
+  `before-quit-for-update` (not `before-quit`), and starts ShipIt once the last
+  window is gone. A window that hides instead of closing (the quick-search
+  launcher, the Quick Look panels) must stop refusing `close` on either event:
+  register it with `whenQuitting` (`src/main/quit-signal.ts`), never with
+  `app.on("before-quit")` alone. Otherwise "지금 재시작" does nothing, ShipIt
+  waits for a quit that never comes, and the downloaded update is never
+  installed. The live lane asserts the app really exits on the restart click.
 * **Windows** installs per-user with no prompt; the installer copies itself
   into the updater cache at install time, so even the first update is
   differential. Without Azure signing the app installs updates unverified

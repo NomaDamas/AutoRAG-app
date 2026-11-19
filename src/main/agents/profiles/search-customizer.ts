@@ -18,7 +18,7 @@ import {
 	type JsonObject,
 	type JsonValue,
 } from "../../../shared/settings-contract";
-import { DOC_LANGUAGES, DUPEY_SCAN_INTERVALS, isDocLanguage, REFRESH_INTERVALS } from "../../../shared/settings-options";
+import { DUPEY_SCAN_INTERVALS, REFRESH_INTERVALS } from "../../../shared/settings-options";
 import { intentPromptLine, withIntentTools, type ReplyLanguage } from "../profile-progress";
 import {
 	createCustomizerKit,
@@ -72,7 +72,6 @@ function localized(ko: string, en: string, ja: string, zh: string): Localized {
 
 const SCOPE_SUMMARY = localized("검색 범위(폴더·제외 항목)를 변경", "Updated the search scope (folders & exclusions)", "検索範囲(フォルダ・除外項目)を変更", "已更新搜索范围（文件夹与排除项）");
 const OPTIONS_SUMMARY = localized("검색 유지 옵션을 변경", "Updated the indexing options", "インデックス維持オプションを変更", "已更新索引选项");
-const LANGUAGES_SUMMARY = localized("문서 읽기 언어를 변경", "Updated the document read languages", "文書の読み込み言語を変更", "已更新文档读取语言");
 const DUPLICATES_SUMMARY = localized("중복 파일 정리 설정을 변경", "Updated the duplicate-file settings", "重複ファイル設定を変更", "已更新重复文件设置");
 
 const REJECTION_LABEL: Readonly<Record<RejectedRoot["reason"], string>> = {
@@ -83,7 +82,6 @@ const REJECTION_LABEL: Readonly<Record<RejectedRoot["reason"], string>> = {
 
 const SURFACE_FOCUS: Readonly<Record<string, string>> = {
 	indexing: "which folders are indexed and what is left out, the keep-up-to-date cadence, file-name watching, and automatic code-folder exclusion",
-	reading: "the document languages the parsers read",
 	duplicates: "how identical and similar duplicate files are handled and how often the version scan runs",
 };
 
@@ -98,7 +96,7 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 		name: "get_search_settings",
 		label: "Inspect Search & Indexing Settings",
 		description:
-			"Read what Dazzi currently indexes: `searchPaths`, `excludePaths` (with which entries are globs), the local refresh cadence (`appIndexing.refreshIntervalMs`, 0 = manual), file-name watching (`fsearch.watch`), code-folder exclusion (`appIndexing.excludeCodeFolders`), the document languages, and the duplicate-file settings (`excludeExactDuplicates`, `dupey`, and the app's scan interval).",
+			"Read what Dazzi currently indexes: `searchPaths`, `excludePaths` (with which entries are globs), the local refresh cadence (`appIndexing.refreshIntervalMs`, 0 = manual), file-name watching (`fsearch.watch`), code-folder exclusion (`appIndexing.excludeCodeFolders`), and the duplicate-file settings (`excludeExactDuplicates`, `dupey`, and the app's scan interval).",
 		parameters: Type.Object({}),
 		execute: async () => {
 			ensureLive();
@@ -109,7 +107,6 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 			const dupey = cfg.dupey;
 			const dupeyObject = asRecord(dupey) ?? {};
 			const excludePaths = listOf(cfg.excludePaths);
-			const languagesConfigured = cfg.languages !== undefined;
 			return textResult({
 				ok: true,
 				searchPaths: listOf(cfg.searchPaths),
@@ -120,9 +117,6 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 				fileNameWatch: boolOf(asRecord(fsearch)?.watch) ?? true,
 				fsearchFalse: fsearch === false,
 				excludeCodeFolders: boolOf(appIndexing.excludeCodeFolders) ?? true,
-				languages: languagesConfigured ? listOf(cfg.languages) : ["ko", "en"],
-				languagesConfigured,
-				languageOptions: DOC_LANGUAGES.map((language) => language.value),
 				excludeExactDuplicates: boolOf(cfg.excludeExactDuplicates) ?? true,
 				dupeyEnabled: dupey === undefined ? true : dupey !== false && boolOf(dupeyObject.enabled) !== false,
 				dupeyScanIntervalMinutes: app.dupeyScanIntervalMinutes,
@@ -288,54 +282,6 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 		},
 	});
 
-	const updateReading = defineTool({
-		name: "update_reading",
-		label: "Update Document Read Languages",
-		description:
-			"Set the document languages the parsers read (`languages`). Values must be from the offered list; unknown values are dropped. An empty list or `reset: true` removes the key so the default applies.",
-		parameters: Type.Object({
-			languages: Type.Optional(Type.Array(Type.String(), { description: "Offered document language tags (e.g. ko, en, ja, zh-hans)." })),
-			reset: Type.Optional(Type.Boolean({ description: "Remove the stored language list and fall back to the default." })),
-		}),
-		execute: async (_callId, params) => {
-			ensureLive();
-			const warnings: string[] = [];
-			const reset = params.reset === true;
-			const requested = params.languages;
-			let updates: readonly AutoRagConfigUpdate[];
-
-			if (reset || (requested !== undefined && requested.length === 0)) {
-				updates = [{ path: ["languages"], remove: true }];
-			} else if (requested !== undefined) {
-				const valid: string[] = [];
-				for (const raw of requested) {
-					const value = typeof raw === "string" ? raw.trim() : "";
-					if (!isDocLanguage(value)) {
-						warnings.push(`'${String(raw)}' was ignored: it is not one of the offered document languages.`);
-						continue;
-					}
-					if (!valid.includes(value)) valid.push(value);
-				}
-				if (valid.length === 0) {
-					warnings.push("No valid document languages were given, so nothing changed.");
-					return textResult({ ok: true, warnings });
-				}
-				updates = [{ path: ["languages"], value: valid }];
-			} else {
-				return textResult({ ok: true, warnings });
-			}
-
-			ensureLive();
-			try {
-				await deps.settings.configPatch(updates);
-			} catch (error) {
-				return textResult({ ok: false, error: errorText(error), warnings });
-			}
-			record({ kind: "search", summary: LANGUAGES_SUMMARY, fields: ["languages"], ...(warnings.length > 0 ? { warnings } : {}) });
-			return textResult({ ok: true, warnings, fields: ["languages"] });
-		},
-	});
-
 	const updateDuplicates = defineTool({
 		name: "update_duplicates",
 		label: "Update Duplicate-file Settings",
@@ -396,7 +342,7 @@ export function createSearchCustomizerToolkit(deps: SearchCustomizerToolkitDeps)
 		},
 	});
 
-	const tools: readonly ToolDefinition[] = [getSearchSettings, updateIndexScope, updateIndexOptions, updateReading, updateDuplicates];
+	const tools: readonly ToolDefinition[] = [getSearchSettings, updateIndexScope, updateIndexOptions, updateDuplicates];
 	return kit.toolkit(tools);
 }
 
@@ -411,7 +357,6 @@ function systemPrompt(language: ReplyLanguage, surface: AppCustomizerSurface): s
 		`- This session is about: ${focus}.`,
 		"- `update_index_scope`: which folders are indexed (`searchPaths`) and what is left out (`excludePaths`).",
 		"- `update_index_options`: the local refresh cadence (`appIndexing.refreshIntervalMs`), file-name watching (`fsearch.watch`), and automatic code-folder exclusion (`appIndexing.excludeCodeFolders`).",
-		"- `update_reading`: the document languages the parsers read (`languages`).",
 		"- `update_duplicates`: whether identical files are shown once (`excludeExactDuplicates`), the similar-version scan (`dupey`), and how often it runs.",
 		"",
 		"## Non-Negotiable Invariants",

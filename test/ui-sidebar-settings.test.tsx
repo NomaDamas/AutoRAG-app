@@ -134,7 +134,7 @@ afterEach(async () => {
 	await setAppLanguage("ko");
 });
 
-describe("Settings → 사이드바 (Sidebar customization & AI Customizer in the right sidebar)", () => {
+describe("Settings → 사이드바 (Sidebar customization; the AI assistant lives on 우클릭 메뉴)", () => {
 	it("renders the Sidebar tab with AI Chat & Automations locked on, and toggles hideable items & presets", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
@@ -208,91 +208,51 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		await settle();
 		expect(currentSettings.sidebar.hiddenSections).toEqual(["cloud"]);
 
-		// Reset to default restores everything
-		const resetBtn = host.querySelector<HTMLButtonElement>('[data-action="sidebar-reset-default"]');
-		expect(resetBtn?.disabled).toBe(false);
+		// The hand-made layout is 사용자 지정; there is no separate 기본값으로 복원 any more.
+		expect(host.querySelector('[data-action="sidebar-reset-default"]')).toBeNull();
+		const customPreset = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-action="sidebar-preset-custom"]');
+		expect(customPreset()?.classList.contains("is-active")).toBe(true);
+
+		// 전체 표시 is the default layout: it restores everything, and 사용자 지정 still remembers the layout above.
 		await act(async () => {
-			resetBtn?.click();
+			host.querySelector<HTMLButtonElement>('[data-action="sidebar-preset-all"]')?.click();
 		});
 		await settle();
 		expect(currentSettings.sidebar.hiddenItems).toEqual([]);
 		expect(currentSettings.sidebar.hiddenSections).toEqual([]);
 		expect(currentSettings.sidebar.favoritesOrder).toEqual([]);
+		expect(customPreset()?.disabled).toBe(false);
+		expect(customPreset()?.classList.contains("is-active")).toBe(false);
+
+		// 사용자 지정 brings the hand-made layout back.
+		await act(async () => {
+			customPreset()?.click();
+		});
+		await settle();
+		expect(currentSettings.sidebar.hiddenSections).toEqual(["cloud"]);
+		expect(currentSettings.sidebar.hiddenItems).toEqual(["place:applications", "place:music", "place:movies", "place:pictures"]);
 	});
 
-	it("shows the AI App Customizer in the window's right sidebar, sends a message to the pi agent, shows live shimmer progress, and renders applied changes", async () => {
+	it("offers no AI banner or assistant on 사이드바: the right sidebar stays the Inspector's, shown or hidden", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
 		await settle();
 
-		// No modal: the assistant fills the window's right sidebar, outside the Settings page, and is not a dialog.
-		const dialog = host.querySelector<HTMLElement>('[data-testid="settings-assistant-slot"] [data-testid="app-customizer-panel"]:not([hidden])');
-		expect(dialog).not.toBeNull();
-		expect(dialog?.closest(".settings-view")).toBeNull();
-		expect(dialog?.getAttribute("role")).not.toBe("dialog");
-		// The hero that opened the old modal is redundant while the panel is shown
+		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
+		expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')).toBeNull();
+		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
+
+		await act(async () => {
+			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
+		});
+		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 		expect(host.querySelector('[data-action="open-app-customizer"]')).toBeNull();
-
-		const input = dialog?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
-		expect(input).not.toBeNull();
-
-		// Type a customization request and submit
-		await act(async () => {
-			const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-			setter?.call(input, "음악과 동영상을 사이드바에서 숨겨줘");
-			input?.dispatchEvent(new Event("input", { bubbles: true }));
-		});
-		const sendBtn = dialog?.querySelector<HTMLButtonElement>('[data-action="send-customizer-message"]');
-		await act(async () => {
-			sendBtn?.click();
-		});
-
-		expect(bridge.appCustomizer.send).toHaveBeenCalledTimes(1);
-		const [runId, request] = bridge.appCustomizer.send.mock.calls[0] as [string, { sessionId: string; message: string }];
-		expect(request.message).toBe("음악과 동영상을 사이드바에서 숨겨줘");
-
-		// Stream live intent progress
-		await act(async () => {
-			bridge.emitCustomizerEvent({
-				type: "progress",
-				runId,
-				sessionId: request.sessionId,
-				text: "음악 및 동영상 항목을 숨기는 중",
-			});
-		});
-		expect(dialog?.textContent).toContain("음악 및 동영상 항목을 숨기는 중");
-
-		// Agent finishes turn and updates settings
-		const nextSettings: AppSettings = {
-			...currentSettings,
-			sidebar: {
-				...currentSettings.sidebar,
-				hiddenItems: ["place:music", "place:movies"],
-			},
-		};
-		await act(async () => {
-			bridge.emitSettingsChanged(nextSettings);
-			bridge.emitCustomizerEvent({
-				type: "turn-done",
-				runId,
-				sessionId: request.sessionId,
-				messages: ["음악과 동영상 폴더를 사이드바에서 숨겼습니다."],
-				changes: [{ kind: "sidebar", summary: "음악, 동영상 숨김", fields: ["sidebar.hiddenItems"] }],
-				settings: nextSettings,
-			});
-		});
-
-		expect(dialog?.textContent).toContain("음악과 동영상 폴더를 사이드바에서 숨겼습니다.");
-		expect(dialog?.textContent).toContain("음악, 동영상 숨김");
-		// Underlying sidebar page switches reflect the live agent change
-		expect(host.querySelector<HTMLButtonElement>('[data-sidebar-switch="place:music"]')?.getAttribute("aria-checked")).toBe("false");
-		expect(host.querySelector<HTMLButtonElement>('[data-sidebar-switch="place:movies"]')?.getAttribute("aria-checked")).toBe("false");
 	});
 
 	it("keeps each intermediate assistant message visible and unfolds the shimmer below it while the agent keeps thinking", async () => {
 		await act(async () => {
-			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"contextMenu" as never} />);
 		});
 		await settle();
 
@@ -412,7 +372,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(currentSettings.sidebar.customFavorites).toEqual([]);
 	});
 
-	it("renders all 4 sidebar sections inside one unified .sidebar-sections-stack and uses the transparent Dazzi sunflower mark on AI surfaces", async () => {
+	it("renders all 4 sidebar sections inside one unified .sidebar-sections-stack", async () => {
 		await act(async () => {
 			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
 		});
@@ -431,45 +391,32 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(favCard?.querySelector('[data-sidebar-switch="app:aiSearch"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-sidebar-switch="app:automations"]')).not.toBeNull();
 		expect(favCard?.querySelector('[data-action="add-custom-favorite"]')).not.toBeNull();
-
-		// The assistant has no header band: it shows the faded Dazzi mark once (a light and a dark image, one shown per
-		// appearance), centered in its empty state, and no notice
-		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
-		const marks = [...(panel?.querySelectorAll<HTMLImageElement>("img") ?? [])];
-		expect(marks.map((img) => img.className)).toEqual([
-			"customizer-panel__empty-logo customizer-panel__empty-logo--light",
-			"customizer-panel__empty-logo customizer-panel__empty-logo--dark",
-		]);
-		expect(panel?.querySelector("header")).toBeNull();
-		expect(panel?.querySelector("h2")).toBeNull();
-		expect(panel?.textContent).not.toContain("원하는 사이드바 구성이나 화면 설정을");
-		expect(panel?.getAttribute("aria-label")).toBe("AI 앱 커스텀 어시스턴트");
-		expect(panel?.querySelectorAll('[data-action="customizer-suggestion"]').length).toBe(3);
-		expect(panel?.querySelector(".customizer-panel__foot")?.textContent).not.toContain("AI 채팅과 자동화는 필수 기능");
-		// New chat appears only once there is a conversation to discard
-		expect(panel?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
-		// The composer asks in plain words what to change (Figma 367:8865); the suggestions above are the examples
-		const composer = panel?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
-		expect(composer?.getAttribute("placeholder")).toBe("어떤 구성을 원하는지 말해주세요");
-		expect(composer?.getAttribute("aria-label")).toBe("어시스턴트에게 요청");
-
-		// Hiding the right sidebar brings back the banner (Figma 543:10349): the Dazzi mark at its left, a plain text button
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
-		});
-		expect(host.querySelector<HTMLImageElement>("img.sidebar-ai-hero__logo")).not.toBeNull();
-		expect(host.querySelector(".sidebar-ai-hero__btn img")).toBeNull();
-		expect(host.querySelector(".sidebar-ai-hero__btn")?.textContent).toBe("AI에게 요청하기");
+		// Sections that cannot be reordered keep no empty grip slot before the icon.
+		for (const card of sectionCards.slice(1)) {
+			expect(card.querySelector(".sidebar-card .sidebar-grip-space, .sidebar-card [data-sidebar-grip]")).toBeNull();
+		}
+		const disk = host.querySelector<HTMLElement>('[data-sidebar-section="locations"] .sidebar-row');
+		expect(disk?.firstElementChild?.className).toBe("sidebar-row-label");
 	});
 
-	it("hides with the right sidebar, reopens from the hero, and follows the Settings section it belongs to", async () => {
+	it("hides with the right sidebar, reopens from the 우클릭 메뉴 hero, and shows only on 우클릭 메뉴", async () => {
 		await act(async () => {
-			root.render(<SettingsWithRightSidebar initialCategory={"sidebar" as never} />);
+			root.render(<SettingsWithRightSidebar initialCategory={"contextMenu" as never} />);
 		});
 		await settle();
 
 		const panelOf = (): HTMLElement | null => host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
-		expect(panelOf()?.getAttribute("data-surface")).toBe("sidebar");
+		expect(panelOf()?.getAttribute("data-surface")).toBe("contextMenu");
+
+		// The assistant has no header band: it shows the faded Dazzi mark once (a light and a dark image, one shown per
+		// appearance), centered in its empty state
+		const marks = [...(panelOf()?.querySelectorAll<HTMLImageElement>("img") ?? [])];
+		expect(marks.map((img) => img.className)).toEqual([
+			"customizer-panel__empty-logo customizer-panel__empty-logo--light",
+			"customizer-panel__empty-logo customizer-panel__empty-logo--dark",
+		]);
+		expect(panelOf()?.querySelector("header")).toBeNull();
+		expect(panelOf()?.querySelector('[data-action="reset-customizer-chat"]')).toBeNull();
 
 		// Escape inside the composer never collapses the panel (it is not a dialog)
 		const input = panelOf()?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
@@ -483,102 +430,82 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 			panelOf()?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
 		});
 		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
-		expect(panelOf()?.querySelector('.customizer-panel__foot [data-action="reset-customizer-chat"]')).not.toBeNull();
 
 		await act(async () => {
 			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 		});
 		expect(panelOf()).toBeNull();
 		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
-		const reopen = host.querySelector<HTMLButtonElement>('[data-action="open-app-customizer"]');
+		const reopen = host.querySelector<HTMLButtonElement>('[data-action="open-context-menu-customizer"]');
 		expect(reopen).not.toBeNull();
 		await act(async () => {
 			reopen?.click();
 		});
-		expect(panelOf()?.getAttribute("data-surface")).toBe("sidebar");
+		expect(panelOf()?.getAttribute("data-surface")).toBe("contextMenu");
 		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
 		expect(bridge.appCustomizer.cancel).not.toHaveBeenCalled();
 		expect(document.activeElement?.getAttribute("data-testid")).toBe("app-customizer-input");
-		expect(host.querySelector('[data-action="open-app-customizer"]')).toBeNull();
+		expect(host.querySelector('[data-action="open-context-menu-customizer"]')).toBeNull();
 
 		const nav = (label: string): HTMLButtonElement | undefined =>
 			[...host.querySelectorAll<HTMLButtonElement>(".settings-nav-item")].find((btn) => btn.textContent?.trim() === label);
 
-		// Sections without an assistant leave the right sidebar to the Inspector
-		await act(async () => {
-			nav("원격 접속")?.click();
-		});
-		await settle();
-		expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
-
-		// Each customizable section shows its own assistant surface
-		await act(async () => {
-			nav("단축키")?.click();
-		});
-		await settle();
-		expect(panelOf()?.getAttribute("data-surface")).toBe("shortcuts");
-		expect(panelOf()?.getAttribute("aria-label")).toBe("AI 단축키 커스텀 어시스턴트");
-
-		await act(async () => {
-			nav("사이드바")?.click();
-		});
-		await settle();
-		expect(panelOf()?.getAttribute("data-surface")).toBe("sidebar");
-		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
+		// Sections without an assistant leave the right sidebar to the Inspector, with no banner offering one
+		for (const label of ["원격 접속", "단축키", "사이드바"]) {
+			await act(async () => {
+				nav(label)?.click();
+			});
+			await settle();
+			expect(host.querySelector('[data-testid="settings-assistant-slot"]')).toBeNull();
+			expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
+		}
 
 		await act(async () => {
 			nav("우클릭 메뉴")?.click();
 		});
 		await settle();
 		expect(panelOf()?.getAttribute("data-surface")).toBe("contextMenu");
+		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
 	});
 
 	it.each([
 		{
 			lang: "ko" as const,
 			nav: "사이드바",
-			heroBtn: "AI에게 요청하기",
 			favoritesSection: "즐겨찾기",
 			cloudSection: "클라우드",
 			locationsSection: "위치",
 			tagsSection: "태그",
 			lockedBadge: "항상 표시",
-			modalTitle: "AI 앱 커스텀 어시스턴트",
 		},
 		{
 			lang: "en" as const,
 			nav: "Sidebar",
-			heroBtn: "Ask AI",
 			favoritesSection: "Favorites",
 			cloudSection: "Cloud",
 			locationsSection: "Locations",
 			tagsSection: "Tags",
 			lockedBadge: "Always shown",
-			modalTitle: "AI App Customizer",
 		},
 		{
 			lang: "ja" as const,
 			nav: "サイドバー",
-			heroBtn: "AIに頼む",
 			favoritesSection: "お気に入り",
 			cloudSection: "クラウド",
 			locationsSection: "場所",
 			tagsSection: "タグ",
 			lockedBadge: "常時表示",
-			modalTitle: "AI アプリカスタムアシスタント",
 		},
 		{
 			lang: "zh" as const,
 			nav: "侧边栏",
-			heroBtn: "请 AI 处理",
 			favoritesSection: "个人收藏",
 			cloudSection: "云端",
 			locationsSection: "位置",
 			tagsSection: "标签",
 			lockedBadge: "始终显示",
-			modalTitle: "AI 应用定制助手",
 		},
-	])("renders fully localized Sidebar settings and AI Customizer panel in $lang", async (spec) => {
+	])("renders fully localized Sidebar settings in $lang", async (spec) => {
 		await setAppLanguage(spec.lang);
 		currentSettings = { ...currentSettings, language: spec.lang };
 
@@ -594,13 +521,7 @@ describe("Settings → 사이드바 (Sidebar customization & AI Customizer in th
 		expect(host.textContent).toContain(spec.tagsSection);
 		expect(host.textContent).toContain(spec.lockedBadge);
 
-		const panel = host.querySelector<HTMLElement>('[data-testid="app-customizer-panel"]:not([hidden])');
-		expect(panel?.getAttribute("aria-label")).toBe(spec.modalTitle);
-
-		await act(async () => {
-			host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
-		});
-		expect(host.querySelector('[data-action="open-app-customizer"]')?.textContent).toContain(spec.heroBtn);
+		expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 	});
 
 	it("normalizes Windows Copy-as-path quoted strings, ~\\ home prefixes, and trailing slashes when adding custom folders", async () => {
