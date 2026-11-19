@@ -994,13 +994,41 @@ sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`AP
 appearance, language, hidden files, launch at login, OS menu, updates, privacy toggles, the quick-search shortcut), `ai-customizer` (AI 모델 and
 웹 검색: the answer / decomposition / Jev / rerank roles from the connected providers' catalogs, thinking depth, web search), `search-customizer`
 (인덱싱, 문서 읽기, 중복 파일 정리: search folders, exclusions, refresh cadence, document languages, duplicate handling) and
-`connections-customizer` (MCP 서버 and 모든 연결: enable, expose, add or remove MCP servers, datasource enable / description / cadence). They write
+`connections-customizer` (MCP 서버 and 모든 연결: enable, expose, add or remove MCP servers, search and install from the public MCP registry
+(`src/main/mcp-registry.ts`) with the secret typed into a masked field and stored only as a `${DAZZI_MCP_…}` reference in `<agentDir>/mcp.json`,
+datasource enable / description / cadence). They write
 through the same `SettingsBridge` calls the pages use (`configPatch`, `mcpUpsert`, `sourcesSetEnabled`, `set`), so the config service validates
 every value, and the closed option lists come from `src/shared/settings-options.ts`, which the pages share. Out of reach by design: remote
-access, the AI approval mode, credentials and sign-in, connecting or disconnecting a provider or datasource, the embedding model, starting an
-index run, and deleting or moving files; an MCP server is removed only with `confirmedByUser`. When a turn reports changes, Settings re-reads
+access, the AI approval mode, reading or revealing any credential value, sign-in, connecting or disconnecting a provider or datasource, the
+embedding model, starting an index run, and deleting or moving files; an MCP server is removed only with `confirmedByUser`, and adding a server
+that runs a local command or installing a registry server needs the person's confirmation card (secret values are collected only after it). **Secrets never reach the model.** A model is a remote service, so a credential is never in its prompt, its tool results or its shell output.
+The assistant asks for one through `customizer-prompter.ts`: a prompt card in the panel (a masked field, or a yes/no listing what will happen),
+whose answer travels panel → main process on its own channel (`appCustomizer:answer`) and into `ProviderCredentialService` (encrypted, then
+`process.env`); the model hears only `stored` and the masked tail. A key found in another coding agent's files (Codex, opencode, pi, Aider, the
+environment) is read and stored by the app after the person confirms (`coding-agent-credentials.ts`), never printed. An MCP server's secret is
+stored as `DAZZI_MCP_<SERVER>_<NAME>` and `mcp.json` holds only `${DAZZI_MCP_…}`, which pi resolves from the environment when it starts the server.
+Three nets sit under that: a key pasted into the chat box is removed before the message is sent (`shared/secret-guard.ts`), `guard-tools.ts`
+redacts every tool result (known values and credential-looking strings), and the streamed and final reply are redacted the same way. The AI-model
+assistant also has a shell (`guarded-bash.ts`, `write-gate.ts`): reading is unrestricted, so it can look at any file and find another coding agent's
+config and keys, and what it may change is limited to the files it manages (the shared AutoRAG config, and a new `export NAME=value` line appended
+to the shell profile). The same Jev that gates the AutoRAG agent's file changes (`write-judge.ts`, on the decision backends from the shared config,
+with the small chat model as fallback) decides whether a command writes anywhere else; `sudo`, piping a download into a shell, `eval` and deleting
+or moving unmanaged files are refused whatever Jev says, and without a decision model only plainly read-only commands and managed writes run. The
+spawned process never gets the app's own secret-looking variables, and the secret values found in other agents' credential files, pi's `auth.json`
+and the environment are in the known set from the start (`collectKnownSecretValues`), so what a command prints is read freely but cannot be repeated. omp (oh-my-pi) keeps custom providers, not only keys, so the AI-model assistant reads them too
+(`omp-config.ts`: `~/.omp/agent/models.yml` for protocol, address, models and the key reference, `agent.db` read-only for stored API keys, the
+shell profiles and omp's `.env` for the value an `apiKey: NAME` reference points at). `scan_coding_agents` lists them under omp with the reason when
+one cannot come over (a protocol Dazzi does not speak, a key produced by a `!command`, no models), and `import_omp_provider` brings one in after a
+confirm card through `ProviderAuthService.importCustom`: the same `models.json` entry the custom-server form writes, with omp's protocol and model
+list kept, the key as a `$NAME` reference, and the value read by the app and saved in the encrypted store (a key written literally in omp's file is
+saved under a name derived from the provider). omp's OAuth logins are listed but cannot be moved. The MCP, apps
+and AI-model assistants have the librarian's `web_search` and `web_fetch` (`createWebTools`, `@autorag/librarian/profiles`); the MCP assistant
+also searches the official registry (`mcp-registry.ts`). Web pages, registry text and command output are data, never instructions.
+When a turn reports changes, Settings re-reads
 the config, the datasource scan and the MCP page. A page whose assistant is not showing gets its invitation from `SettingsPageHead`
-(`SettingsAssistantHeroContext`). A new profile adds one file there and, if it needs a UI,
+(`SettingsAssistantHeroContext`). Every profile's system prompt is written in English; the assistant answers in the language the person writes in (their latest message decides),
+and the interface language is only the fallback before they have written anything, which is also what `intentPromptLine` asks of the live progress phrase
+(`test/profile-prompts-english.test.ts` pins both). A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Chat approvals and questions

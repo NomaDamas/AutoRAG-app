@@ -61,7 +61,9 @@ describe("shortcut-customizer pi agent profile & toolkit", () => {
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((t) => t.name).sort()).toEqual(["get_shortcuts", "update_shortcuts"]);
 		expect(profile.systemPrompt).toContain("Esc");
-		expect(profile.systemPrompt).toContain("Korean");
+		expect(profile.systemPrompt).toMatch(/language the person writes in/iu);
+		expect(profile.systemPrompt).toContain("if it is unclear, reply in Korean");
+		expect(profile.systemPrompt).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 	});
 
 	it("updates existing catalog shortcuts via natural aliases, refuses arbitrary new actions or locked Esc, and supports swapConflicts & reset", async () => {

@@ -2979,6 +2979,12 @@
         "heroDesc": "只需提出要求，例如“Slack 每小时更新一次”。",
         "heroButton": "请 AI 处理"
       }
+    },
+    "assistantPrompt": {
+      "yes": "允许",
+      "no": "不允许",
+      "save": "保存",
+      "secretPlaceholder": "在此粘贴"
     }
   },
   "settingsLtr": {

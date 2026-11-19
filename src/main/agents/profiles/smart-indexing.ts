@@ -155,7 +155,7 @@ export function smartIndexingPrompt(roots: readonly string[], language: ReplyLan
 		"4. A folder above holds the person's own documents in most cases; propose one as a whole only when the survey shows it is all app data, downloads an app keeps, generated output or code. When in doubt, keep it and propose its parts.",
 		"5. When you have looked at what matters, call propose_exclusions once with every folder, then stop. If nothing should be left out, call it with an empty list.",
 		intentPromptLine(language),
-		`Write each reason as one short sentence in ${LANGUAGE_NAME[language]} that says what the names showed (for example the kind of files, how alike they are, and when they were written). Do not reply with prose; the tool call is your answer.`,
+		`Write each reason as one short sentence in the language the person writes in (their latest message decides); if it is unclear, write it in ${LANGUAGE_NAME[language]}. It should say what the names showed (for example the kind of files, how alike they are, and when they were written). Do not reply with prose; the tool call is your answer.`,
 	].join("\n");
 }
 

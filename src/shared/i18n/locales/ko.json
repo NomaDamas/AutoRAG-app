@@ -2979,6 +2979,12 @@
         "heroDesc": "\"슬랙은 1시간마다 최신화해줘\"처럼 말로 요청할 수 있습니다.",
         "heroButton": "AI에게 요청하기"
       }
+    },
+    "assistantPrompt": {
+      "yes": "허용",
+      "no": "허용 안 함",
+      "save": "저장",
+      "secretPlaceholder": "여기에 붙여넣기"
     }
   },
   "settingsLtr": {

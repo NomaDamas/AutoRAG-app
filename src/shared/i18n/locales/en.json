@@ -2979,6 +2979,12 @@
         "heroDesc": "Just ask, like \"Refresh Slack every hour.\"",
         "heroButton": "Ask AI"
       }
+    },
+    "assistantPrompt": {
+      "yes": "Allow",
+      "no": "Don't allow",
+      "save": "Save",
+      "secretPlaceholder": "Paste it here"
     }
   },
   "settingsLtr": {

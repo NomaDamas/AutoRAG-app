@@ -1,6 +1,7 @@
 import type { ToolDefinition } from "@earendil-works/pi-coding-agent";
 import type { AppCustomizerChange, AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import type { SettingsBridge } from "../../../shared/settings-contract";
+import type { RunPrompter } from "../customizer-prompter";
 import type { ReplyLanguage } from "../profile-progress";
 
 export type { ReplyLanguage };
@@ -22,6 +23,17 @@ export interface CustomizerToolkit {
 	/** The changes made since the last call, which are then forgotten. */
 	takeChanges(): readonly AppCustomizerChange[];
 	peekChanges(): readonly AppCustomizerChange[];
+}
+
+/**
+ * What a config assistant needs to deal with secrets without the model touching them (see `shared/secret-guard.ts`).
+ * Absent in a window that cannot show a prompt (a remote browser session before it is wired): the secret tools then refuse.
+ */
+export interface CustomizerSecretDeps {
+	/** The current run's way to ask the person in the panel; absent when no panel is attached. */
+	readonly prompter?: () => RunPrompter | undefined;
+	/** Every secret value this run has handled, so no later tool result or message can repeat one. */
+	readonly known: Set<string>;
 }
 
 export interface CustomizerKitDeps {
@@ -73,6 +85,7 @@ export function textResult(value: unknown): {
 export interface ConfigCustomizerDeps extends CustomizerKitDeps {
 	/** The same service the Settings pages write through, so every write is validated and persisted exactly as a click would. */
 	readonly settings: SettingsBridge;
+	readonly secrets?: CustomizerSecretDeps;
 }
 
 /** What `xProfile({...})` of a config assistant takes; `surface` picks the section's wording and focus in the prompt. */

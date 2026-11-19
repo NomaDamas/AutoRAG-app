@@ -11,7 +11,7 @@ import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shar
 import type { InteractionHub } from "./interaction-hub";
 import { SMART_INDEXING_CHANNELS } from "../shared/smart-indexing-contract";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
-import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
+import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerPromptAnswer, isAppCustomizerRequest } from "../shared/app-customizer-contract";
 import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
 import type { ChatStore } from "./chat-store";
 import { saveMagicActionToHistory } from "./magic-action-history";
@@ -184,6 +184,12 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.reset, (_event, sessionId: unknown) =>
 		typeof sessionId === "string" ? service.reset(sessionId) : undefined,
 	);
+	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.answer, (_event, promptId: unknown, answer: unknown) => {
+		if (typeof promptId !== "string" || !isAppCustomizerPromptAnswer(answer)) {
+			throw new TypeError("appCustomizer:answer expects a prompt id and an answer");
+		}
+		service.answerPrompt(promptId, answer);
+	});
 }
 
 export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore): void {

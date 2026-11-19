@@ -173,6 +173,8 @@ export interface SettingsData {
 	readonly changeAppSettings: (next: AppSettings) => void;
 	/** Counts the assistant turns that changed something; a page that loads its own data (MCP servers) keys on it to read again. */
 	readonly assistantRevision: number;
+	/** Reads the config and the app preferences again without a loading state: a page opened later shows what is on disk now. */
+	readonly refresh: () => Promise<void>;
 	/** An assistant changed the shared config, the MCP file or a datasource behind the pages' backs: read them again. */
 	readonly reloadAfterAssistant: () => Promise<void>;
 }
@@ -249,6 +251,17 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 		changedRef.current?.(next);
 	}, []);
 
+	const refresh = useCallback(async (): Promise<void> => {
+		try {
+			const [app, config] = await Promise.all([autorag.settings.get(), autorag.settings.configGet()]);
+			setAppSettings(app);
+			setSnapshot(config);
+			setError(config.error);
+		} catch {
+			// A failed quiet re-read keeps what is shown; the page's own writes still report their errors.
+		}
+	}, []);
+
 	const reloadAfterAssistant = useCallback(async (): Promise<void> => {
 		setAssistantRevision((revision) => revision + 1);
 		void scan();
@@ -261,7 +274,7 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 		}
 	}, [scan]);
 
-	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings, assistantRevision, reloadAfterAssistant };
+	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings, assistantRevision, refresh, reloadAfterAssistant };
 }
 
 /** One settings page's body for `category`; `onNavigate` follows a page's own link to another page. */
@@ -300,7 +313,7 @@ export function SettingsPageContent({
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "ai":
-			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} />;
+			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
 		case "ltr":
 			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} />;
 		case "web":
@@ -385,6 +398,17 @@ export function SettingsView({
 		if (initial !== null) setCategory(normalizeCategory(initial));
 		return detach;
 	}, []);
+
+	// Something else may have changed the config or the preferences since Settings was loaded (another window, the CLI, the file
+	// edited by hand, an assistant in another session): opening a page shows what is there now.
+	const firstPage = useRef(true);
+	useEffect(() => {
+		if (firstPage.current) {
+			firstPage.current = false;
+			return;
+		}
+		void data.refresh();
+	}, [category]);
 
 	// Usage analytics: which page is open. A `source:<alias>` page counts as `source`, so a user-chosen alias is never sent.
 	useEffect(() => {

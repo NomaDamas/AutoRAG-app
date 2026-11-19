@@ -5,6 +5,7 @@ import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, type FauxProv
 import { createProfileSession } from "@autorag/librarian/profiles";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAiCustomizerToolkit, aiCustomizerProfile } from "../src/main/agents/profiles/ai-customizer";
+import type { ConfirmPromptInput, RunPrompter, SecretPromptInput } from "../src/main/agents/customizer-prompter";
 import { subscribeProfileProgress } from "../src/main/agents/profile-progress";
 import { createAutoRagConfigService } from "../src/main/autorag-config-service";
 import { createSettingsService } from "../src/main/settings-service";
@@ -69,6 +70,32 @@ const ANTHROPIC: ProviderSummary = {
 	models: [],
 };
 
+const OPENAI: ProviderSummary = {
+	id: "openai",
+	name: "OpenAI",
+	baseUrl: null,
+	kind: "runtime",
+	authKinds: ["api_key"],
+	subscription: false,
+	authConfigured: false,
+	authSource: "none",
+	apiKeyEnv: "OPENAI_API_KEY",
+	models: [],
+};
+
+const GROQ: ProviderSummary = {
+	id: "groq",
+	name: "Groq",
+	baseUrl: null,
+	kind: "runtime",
+	authKinds: ["api_key"],
+	subscription: false,
+	authConfigured: false,
+	authSource: "none",
+	apiKeyEnv: "GROQ_API_KEY",
+	models: [],
+};
+
 beforeEach(async () => {
 	root = await mkdtemp(join(tmpdir(), "ai-customizer-root-"));
 	agentDir = await mkdtemp(join(tmpdir(), "ai-customizer-agent-"));
@@ -91,28 +118,87 @@ afterEach(async () => {
 	for (const cleanup of cleanups.splice(0)) await cleanup();
 });
 
-function makeSettings(providers: readonly ProviderSummary[]) {
+function makeSettings(providers: readonly ProviderSummary[], record: Array<{ envName: string; value: string }> = [], stored: readonly { envName: string; stored: boolean; source: "stored" | "env" | "none" }[] = []) {
 	return createSettingsService({
 		directory: join(root, "settings"),
 		dataSources: { list: () => Promise.resolve({}), setEnabled: () => Promise.resolve({}), setDescription: () => Promise.resolve({}), sync: () => Promise.resolve({}) } as never,
 		models: { resolve: () => Promise.resolve(null), catalog: () => Promise.resolve(null) } as never,
 		config: createAutoRagConfigService({ env, cwd: root }),
 		refreshConfig: (() => Promise.resolve({})) as never,
-		credentials: { list: () => Promise.resolve([]), set: () => Promise.resolve([]), remove: () => Promise.resolve([]) } as never,
+		credentials: {
+			list: () => Promise.resolve(stored),
+			set: (envName: string, secret: string) => {
+				record.push({ envName, value: secret });
+				return Promise.resolve([]);
+			},
+			remove: () => Promise.resolve([]),
+		} as never,
 		providers: { list: () => Promise.resolve(providers) } as never,
 	});
 }
 
-function toolkitFor(providers: readonly ProviderSummary[] = [OPENROUTER, DAZZI, ANTHROPIC]) {
-	const settings = makeSettings(providers);
-	const kit = createAiCustomizerToolkit({ settings, language: () => "ko" });
+interface ToolkitOptions {
+	readonly providers?: readonly ProviderSummary[];
+	/** What the credential store already holds: Dazzi's own saved keys, which the scan must not offer back. */
+	readonly stored?: readonly { envName: string; stored: boolean; source: "stored" | "env" | "none" }[];
+	readonly prompter?: RunPrompter;
+	readonly shell?: { homeDir: string; cwd: string; env: NodeJS.ProcessEnv };
+	/** Pass `false` for a window that cannot show a prompt (secret tools must then refuse). */
+	readonly secrets?: boolean;
+}
+
+function toolkitFor(options: ToolkitOptions = {}) {
+	const providers = options.providers ?? [OPENROUTER, DAZZI, ANTHROPIC];
+	const record: Array<{ envName: string; value: string }> = [];
+	const settings = makeSettings(providers, record, options.stored);
+	const known = new Set<string>();
+	const secrets = options.secrets === false ? undefined : { known, prompter: () => options.prompter };
+	const kit = createAiCustomizerToolkit({
+		settings,
+		language: () => "ko",
+		...(secrets === undefined ? {} : { secrets }),
+		...(options.shell === undefined ? {} : { shell: options.shell }),
+	});
 	const tools = new Map(kit.tools.map((tool) => [tool.name, tool]));
-	return { settings, kit, tools };
+	return { settings, kit, tools, record, known };
+}
+
+function fakePrompter(answers: { secret?: string; confirm?: boolean }): { prompter: RunPrompter; calls: { secrets: SecretPromptInput[]; confirms: ConfirmPromptInput[] } } {
+	const calls = { secrets: [] as SecretPromptInput[], confirms: [] as ConfirmPromptInput[] };
+	return {
+		calls,
+		prompter: {
+			askSecret: async (input) => {
+				calls.secrets.push(input);
+				return answers.secret === undefined ? { kind: "cancelled" } : { kind: "secret", value: answers.secret };
+			},
+			askConfirm: async (input) => {
+				calls.confirms.push(input);
+				return answers.confirm === true ? { kind: "confirm", confirmed: true } : { kind: "cancelled" };
+			},
+		},
+	};
 }
 
 const readConfig = async (): Promise<Record<string, unknown>> => JSON.parse(await readFile(configPath, "utf8")) as Record<string, unknown>;
 
 type ToolLike = { execute: (id: string, params: Record<string, unknown>, ...rest: unknown[]) => Promise<{ content: { type: string; text: string }[] }> };
+
+/** The declared property names of a tool's JSON schema, or an empty list when it declares none. */
+function schemaProperties(schema: unknown): Record<string, unknown> {
+	if (schema === null || typeof schema !== "object" || !("properties" in schema)) return {};
+	const props = schema.properties;
+	return props !== null && typeof props === "object" ? (props as Record<string, unknown>) : {};
+}
+
+interface ScannedAgent {
+	readonly id: string;
+	readonly credentials: ReadonlyArray<Record<string, unknown>>;
+}
+interface ScanResult {
+	readonly ok: boolean;
+	readonly agents: readonly ScannedAgent[];
+}
 
 async function run(tool: ToolLike, params: Record<string, unknown>): Promise<{ ok: boolean; error?: string; choices?: string[]; warnings?: string[] } & Record<string, unknown>> {
 	const res = await tool.execute("call", params, undefined, undefined, undefined as never);
@@ -140,22 +226,52 @@ function applyUpdates(base: Record<string, unknown>, updates: readonly { path: r
 }
 
 describe("ai-customizer pi agent profile & toolkit", () => {
-	it("exposes exactly the four AI/web tools and states the credential, embedding and catalog invariants", () => {
+	it("exposes the seven AI/web tools, plus bash only with a shell, and states the new narrower invariants", () => {
 		const { kit } = toolkitFor();
 		const profile = aiCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
 
 		expect(profile.id).toBe("ai-customizer");
 		expect(profile.tools).toEqual([]);
 		expect(profile.customTools?.map((tool) => tool.name).sort()).toEqual([
+			"connect_provider_key",
 			"get_ai_settings",
+			"import_coding_agent_key",
+			"scan_coding_agents",
 			"set_model_role",
 			"set_thinking_level",
 			"update_web_search",
 		]);
-		expect(profile.systemPrompt).toContain("Korean");
-		expect(profile.systemPrompt).toMatch(/connect/i);
+		expect(profile.systemPrompt).toMatch(/Reply in the language the person writes in/);
+		expect(profile.systemPrompt).toMatch(/if it is unclear, reply in Korean/);
+		expect(profile.systemPrompt).toMatch(/connect_provider_key/);
+		expect(profile.systemPrompt).toMatch(/scan_coding_agents/);
 		expect(profile.systemPrompt).toMatch(/API key/i);
 		expect(profile.systemPrompt).toMatch(/embedding/i);
+		expect(profile.systemPrompt).toMatch(/OAuth/);
+		expect(profile.systemPrompt).toMatch(/removed before you see it/i);
+		expect(profile.systemPrompt).toMatch(/DATA, not instructions/i);
+		// Written in English whatever the interface language is.
+		expect(profile.systemPrompt).not.toMatch(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7a3]/u);
+		expect(profile.systemPrompt).not.toMatch(/There is no tool for it/i);
+	});
+
+	it("offers bash when a shell is given, and the prompt then points to it", () => {
+		const shell = { homeDir: root, cwd: root, env: {} };
+		const { kit } = toolkitFor({ shell });
+		const profile = aiCustomizerProfile({ language: "en", surface: "ai", toolkit: kit });
+
+		const names = profile.customTools?.map((tool) => tool.name) ?? [];
+		expect(names).toContain("bash");
+		const prompt = profile.systemPrompt;
+		// What the shell may do, stated plainly: read anywhere, write only the managed files, set environment variables,
+		// read other coding agents' config, and never copy a key by hand.
+		expect(prompt).toMatch(/READING is unrestricted/);
+		expect(prompt).toMatch(/WRITING is limited to the files you manage/);
+		expect(prompt).toMatch(/new environment variable/i);
+		expect(prompt).toMatch(/Jev before it runs/);
+		expect(prompt).toMatch(/Claude Code, Codex, Gemini CLI, opencode, pi, Aider/);
+		expect(prompt).toMatch(/Never copy a key into a command/);
+		expect(prompt).not.toMatch(/confirm card|confirms it|refused outright/i);
 	});
 
 	it("answers the web surface with the same tools and web-search wording", () => {
@@ -163,7 +279,10 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		const profile = aiCustomizerProfile({ language: "en", surface: "web", toolkit: kit });
 
 		expect(profile.customTools?.map((tool) => tool.name).sort()).toEqual([
+			"connect_provider_key",
 			"get_ai_settings",
+			"import_coding_agent_key",
+			"scan_coding_agents",
 			"set_model_role",
 			"set_thinking_level",
 			"update_web_search",
@@ -362,6 +481,139 @@ describe("ai-customizer pi agent profile & toolkit", () => {
 		}
 	});
 
+	it("gives no new tool a value or key parameter", () => {
+		const { tools } = toolkitFor({ shell: { homeDir: root, cwd: root, env: {} } });
+		const propsOf = (name: string): string[] => {
+			const tool = tools.get(name);
+			if (tool === undefined) throw new Error(`missing tool ${name}`);
+			return Object.keys(schemaProperties(tool.parameters)).sort();
+		};
+		expect(propsOf("connect_provider_key")).toEqual(["provider"]);
+		expect(propsOf("scan_coding_agents")).toEqual([]);
+		expect(propsOf("import_coding_agent_key")).toEqual(["provider", "source"]);
+		expect(propsOf("bash")).toEqual(["command", "timeout"]);
+	});
+
+	it("connect_provider_key stores the typed key, adds it to known, records a change, and returns only a masked tail", async () => {
+		const secret = "sk-ant-api03-TypedSecret0123456789abcd";
+		const { tools, record, known, kit } = toolkitFor({ prompter: fakePrompter({ secret }).prompter });
+		const result = await run(tools.get("connect_provider_key") as ToolLike, { provider: "anthropic" });
+
+		expect(result.ok).toBe(true);
+		expect(result).toMatchObject({ provider: "anthropic", envName: "ANTHROPIC_API_KEY", masked: "••••abcd" });
+		expect(record).toEqual([{ envName: "ANTHROPIC_API_KEY", value: secret }]);
+		expect([...known]).toContain(secret);
+		expect(JSON.stringify(result)).not.toContain(secret);
+		expect(kit.peekChanges()).toMatchObject([{ kind: "ai", fields: ["credentials.ANTHROPIC_API_KEY"] }]);
+		expect(kit.peekChanges()[0]?.summary).toMatch(/Anthropic/);
+	});
+
+	it("connect_provider_key via the page's own key name and the env default", async () => {
+		const { tools, record } = toolkitFor({ providers: [OPENROUTER], prompter: fakePrompter({ secret: "sk-or-v1-abcdefghijklmnopqrst" }).prompter });
+		const result = await run(tools.get("connect_provider_key") as ToolLike, { provider: "openrouter" });
+		expect(result.envName).toBe("OPENROUTER_API_KEY");
+		expect(record[0]?.envName).toBe("OPENROUTER_API_KEY");
+	});
+
+	it("connect_provider_key: a cancelled prompt stores nothing and tells the model so", async () => {
+		const { tools, record, known } = toolkitFor({ prompter: fakePrompter({}).prompter });
+		const result = await run(tools.get("connect_provider_key") as ToolLike, { provider: "anthropic" });
+		expect(result).toEqual({ ok: false, cancelled: true });
+		expect(record).toEqual([]);
+		expect(known.size).toBe(0);
+	});
+
+	it("connect_provider_key refuses OAuth-only providers and subscriptions, pointing at the page", async () => {
+		const { tools, record } = toolkitFor({ prompter: fakePrompter({ secret: "whatever-123456789" }).prompter });
+		const dazzai = await run(tools.get("connect_provider_key") as ToolLike, { provider: AUTORAG_PROVIDER_ID });
+		expect(dazzai.ok).toBe(false);
+		expect(String(dazzai.error)).toMatch(/subscription|sign-in|sign in|connect button/i);
+		expect(record).toEqual([]);
+
+		const unknown = await run(tools.get("connect_provider_key") as ToolLike, { provider: "nope" });
+		expect(unknown.ok).toBe(false);
+		expect(unknown.choices).toContain("anthropic");
+	});
+
+	it("connect_provider_key refuses when no masked field is attached to the window", async () => {
+		const { tools, record } = toolkitFor({ secrets: false });
+		const result = await run(tools.get("connect_provider_key") as ToolLike, { provider: "anthropic" });
+		expect(result.ok).toBe(false);
+		expect(String(result.error)).toMatch(/connect/i);
+		expect(record).toEqual([]);
+	});
+
+	it("scan_coding_agents reports where keys live and never a value", async () => {
+		const home = await mkdtemp(join(tmpdir(), "ai-customizer-home-"));
+		cleanups.push(() => rm(home, { recursive: true, force: true }));
+		await mkdir(join(home, ".codex"), { recursive: true });
+		const CODEX_KEY = "sk-proj-CodexFixtureKey0123456789abc";
+		await writeFile(join(home, ".codex", "auth.json"), JSON.stringify({ OPENAI_API_KEY: CODEX_KEY, tokens: { access: "x" } }));
+		const shell = { homeDir: home, cwd: root, env: { GROQ_API_KEY: "gsk_GroqFixtureKey0123456789" } };
+		const { tools } = toolkitFor({ providers: [OPENAI, GROQ], shell });
+
+		const result = await run(tools.get("scan_coding_agents") as ToolLike, {});
+		expect(result.ok).toBe(true);
+		const text = JSON.stringify(result);
+		expect(text).not.toContain(CODEX_KEY);
+		expect(text).not.toContain("gsk_GroqFixtureKey");
+		const scanned = result as unknown as ScanResult;
+		const agents = scanned.agents;
+		const codex = agents.find((agent) => agent.id === "codex")!;
+		expect(codex.credentials).toEqual([
+			{ provider: "openai", kind: "api_key", envName: "OPENAI_API_KEY", source: "codex-file", from: join(home, ".codex", "auth.json"), importable: true, connected: false },
+			{ provider: "openai", kind: "oauth", source: "codex-oauth", from: join(home, ".codex", "auth.json"), importable: false, connected: false },
+		]);
+		const envAgent = agents.find((agent) => agent.id === "env")!;
+		expect(envAgent.credentials[0]).toMatchObject({ provider: "groq", kind: "api_key", source: "env:GROQ_API_KEY", importable: true });
+	});
+
+	it("scan_coding_agents does not offer Dazzi's own saved keys back as 'found in the environment'", async () => {
+		// Dazzi loads the keys it stored into the process environment; they are not another program's keys.
+		const home = await mkdtemp(join(tmpdir(), "ai-customizer-own-"));
+		cleanups.push(() => rm(home, { recursive: true, force: true }));
+		const shell = { homeDir: home, cwd: root, env: { ANTHROPIC_API_KEY: "sk-ant-api03-OwnStoredKey0123456789abcdef", GROQ_API_KEY: "gsk_AmbientGroqKey0123456789" } };
+		const { tools } = toolkitFor({ providers: [ANTHROPIC, GROQ], shell, stored: [{ envName: "ANTHROPIC_API_KEY", stored: true, source: "stored" }] });
+		const result = (await run(tools.get("scan_coding_agents") as ToolLike, {})) as unknown as ScanResult;
+		const envAgent = result.agents.find((agent) => agent.id === "env")!;
+		expect(envAgent.credentials.map((credential) => credential.source)).toEqual(["env:GROQ_API_KEY"]);
+		const imported = await run(tools.get("import_coding_agent_key") as ToolLike, { source: "env:ANTHROPIC_API_KEY", provider: "anthropic" });
+		expect(imported.ok).toBe(false);
+	});
+
+	it("import_coding_agent_key needs the confirmation, stores the right value under the right env name, and refuses unknown/oauth sources", async () => {
+		const home = await mkdtemp(join(tmpdir(), "ai-customizer-import-"));
+		cleanups.push(() => rm(home, { recursive: true, force: true }));
+		await mkdir(join(home, ".codex"), { recursive: true });
+		const CODEX_KEY = "sk-proj-ImportFixtureKey0123456789";
+		await writeFile(join(home, ".codex", "auth.json"), JSON.stringify({ OPENAI_API_KEY: CODEX_KEY, tokens: { access: "x" } }));
+		const shell = { homeDir: home, cwd: root, env: {} };
+
+		const declined = toolkitFor({ providers: [OPENAI], shell, prompter: fakePrompter({}).prompter });
+		const refused = await run(declined.tools.get("import_coding_agent_key") as ToolLike, { source: "codex-file", provider: "openai" });
+		expect(refused).toEqual({ ok: false, cancelled: true });
+		expect(declined.record).toEqual([]);
+
+		const { prompter, calls } = fakePrompter({ confirm: true });
+		const accepted = toolkitFor({ providers: [OPENAI], shell, prompter });
+		const result = await run(accepted.tools.get("import_coding_agent_key") as ToolLike, { source: "codex-file", provider: "openai" });
+		expect(result).toMatchObject({ ok: true, provider: "openai", envName: "OPENAI_API_KEY", masked: "••••6789" });
+		expect(result.from).toBe(join(home, ".codex", "auth.json"));
+		expect(accepted.record).toEqual([{ envName: "OPENAI_API_KEY", value: CODEX_KEY }]);
+		expect([...accepted.known]).toContain(CODEX_KEY);
+		expect(JSON.stringify(result)).not.toContain(CODEX_KEY);
+		expect(calls.confirms[0]?.lines).toContain(`From: ${join(home, ".codex", "auth.json")}`);
+		expect(calls.confirms[0]?.lines?.join(" ")).toMatch(/not shown to the AI/i);
+
+		const unknown = await run(accepted.tools.get("import_coding_agent_key") as ToolLike, { source: "nope-file", provider: "openai" });
+		expect(unknown.ok).toBe(false);
+		expect(unknown.sources).toEqual(["codex-file"]);
+
+		const oauth = await run(accepted.tools.get("import_coding_agent_key") as ToolLike, { source: "codex-oauth", provider: "openai" });
+		expect(oauth.ok).toBe(false);
+		expect(accepted.record).toHaveLength(1);
+	});
+
 	it("throws instead of writing when the run was cancelled", async () => {
 		const settings = makeSettings([OPENROUTER]);
 		let cancelled = false;
@@ -407,5 +659,48 @@ describe("ai-customizer pi profile on the faux model", () => {
 
 		expect(intents).toContain("사고 깊이를 높음으로 바꾸는 중");
 		expect((await readConfig()).thinking).toEqual({ final: "high" });
+	});
+
+	it("stores a key typed for connect_provider_key and keeps it out of the model's context", async () => {
+		const registration: FauxProviderRegistration = registerFauxProvider({
+			api: `faux-ai-customizer-${Math.random().toString(36).slice(2)}`,
+			provider: "faux-ai-customizer",
+			models: [{ id: "ai-customizer", reasoning: true }],
+		});
+		cleanups.push(() => registration.unregister());
+		const secret = "sk-ant-api03-SessionSecret0123456789abcd";
+		const { kit, record, known } = toolkitFor({ prompter: fakePrompter({ secret }).prompter });
+		const profile = aiCustomizerProfile({ language: "ko", surface: "ai", toolkit: kit });
+
+		const seenByModel: string[] = [];
+		registration.setResponses([
+			(context: unknown) => {
+				seenByModel.push(JSON.stringify(context));
+				return fauxAssistantMessage(fauxToolCall("connect_provider_key", { i: "키를 저장하는 중", provider: "anthropic" }));
+			},
+			(context: unknown) => {
+				seenByModel.push(JSON.stringify(context));
+				// A model that echoes what it thinks it knows must still have seen only the mask.
+				return fauxAssistantMessage(`저장했습니다. 참고로 키는 ${secret} 입니다.`);
+			},
+		] as never);
+
+		const session = await createProfileSession({
+			profile,
+			cwd: root,
+			agentDir,
+			env,
+			model: { model: registration.getModel() },
+		});
+		try {
+			await session.prompt("anthropic API 키를 연결해줘");
+		} finally {
+			session.dispose();
+		}
+
+		expect(record).toEqual([{ envName: "ANTHROPIC_API_KEY", value: secret }]);
+		expect([...known]).toContain(secret);
+		expect(seenByModel.join("\n")).not.toContain("SessionSecret");
+		expect(seenByModel.join("\n")).toContain("abcd");
 	});
 });
