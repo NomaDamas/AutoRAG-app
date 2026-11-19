@@ -281,7 +281,14 @@ try {
 		await shot("07-mcp-added");
 		check("MCP 서버: docs server is in the agent's mcp.json", readMcp().mcpServers?.docs?.url === "https://example.com/mcp", JSON.stringify(readMcp()));
 		check("MCP 서버: the page lists the new server at once", (await page.locator('[data-mcp-server="docs"]').count()) === 1);
-		await ask("MCP 서버", "mcp", "방금 추가한 docs 서버를 지워줘.");
+		// Removing a server asks first (the assistant never deletes on its own): the person allows it on the card, as a click.
+		const answerRemoval = async () => {
+			const allow = page.locator('[data-testid="app-customizer-panel"][data-surface="mcp"]:not([hidden]) [data-action="prompt-confirm"]');
+			await allow.waitFor({ timeout: 120_000 });
+			await shot("07b-mcp-remove-card");
+			await allow.click();
+		};
+		await Promise.all([ask("MCP 서버", "mcp", "방금 추가한 docs 서버를 지워줘."), answerRemoval()]);
 		check("MCP 서버: docs server is removed after the explicit request", readMcp().mcpServers?.docs === undefined, JSON.stringify(readMcp()));
 	}
 
