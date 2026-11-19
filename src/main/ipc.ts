@@ -24,6 +24,7 @@ import { t } from "../shared/i18n/core";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
+import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -36,6 +37,7 @@ import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
 import type { AutomationService } from "./automation-service";
+import type { LtrService } from "./ltr-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
@@ -485,6 +487,14 @@ export function registerAutomationIpcHandlers(service: AutomationService): void 
 		if (typeof enabled !== "boolean") throw new TypeError("automation daemon enabled must be a boolean");
 		return service.setDaemon(enabled);
 	});
+}
+
+/** Learning to rank: read the log's state and the models, fit one now, delete one; a training run is pushed by the main process. */
+export function registerLtrIpcHandlers(service: LtrService): void {
+	// The renderer's extra arguments are dropped, never forwarded: nothing the page sends reaches a command line but a validated model id.
+	ipcMain.handle(LTR_CHANNELS.get, () => service.get());
+	ipcMain.handle(LTR_CHANNELS.train, () => service.train());
+	ipcMain.handle(LTR_CHANNELS.deleteModel, (_event, id: unknown) => service.deleteModel(requireNonEmptyString(id, "model id")));
 }
 
 /** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */

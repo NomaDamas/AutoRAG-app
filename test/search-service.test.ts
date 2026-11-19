@@ -1998,3 +1998,53 @@ describe("createSearchService conversation context (issue #389)", () => {
 		]);
 	});
 });
+
+describe("createSearchService learning-to-rank training", () => {
+	it("asks for automatic training once an answered search has finished", async () => {
+		const agent = createFakeAgent(async function*() {
+			yield { type: "complete", response: createResponse("session-train", "Answer", 3) };
+		});
+		const { events, send } = collectEvents();
+		const afterSearch = vi.fn(() => undefined);
+		const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, afterAnsweredSearch: afterSearch });
+
+		await service.start("search-train", "chat-train", "refund approval", []);
+
+		expect(afterSearch).toHaveBeenCalledTimes(1);
+		// The answer reaches the window before anything else runs: the hook comes after `done`.
+		expect(events.at(-1)).toEqual({ type: "done", searchId: "search-train" });
+	});
+
+	it("does not ask after a search that failed or was stopped", async () => {
+		const failing = createFakeAgent(async function*() {
+			throw new Error("500 Internal Server Error");
+		});
+		const { send } = collectEvents();
+		const afterSearch = vi.fn(() => undefined);
+		const service = createSearchService({ agentFactory: () => failing, chatStore: await createStore(), send, now, afterAnsweredSearch: afterSearch });
+
+		await service.start("search-fail", "chat-fail", "q", []);
+
+		expect(afterSearch).not.toHaveBeenCalled();
+	});
+
+	it("never lets a throwing or rejecting hook fail the search it follows", async () => {
+		for (const hook of [
+			() => {
+				throw new Error("boom");
+			},
+			() => Promise.reject(new Error("boom")),
+		]) {
+			const agent = createFakeAgent(async function*() {
+				yield { type: "complete", response: createResponse("session-hook", "Answer", 1) };
+			});
+			const { events, send } = collectEvents();
+			const service = createSearchService({ agentFactory: () => agent, chatStore: await createStore(), send, now, afterAnsweredSearch: hook });
+
+			await service.start("search-hook", "chat-hook", "q", []);
+
+			expect(events.some((event) => event.type === "error")).toBe(false);
+			expect(events.at(-1)).toEqual({ type: "done", searchId: "search-hook" });
+		}
+	});
+});

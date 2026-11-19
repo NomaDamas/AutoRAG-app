@@ -1244,6 +1244,29 @@ and proven live by `scripts/manual-qa/run-qa-finder-automations-live.mjs`.
 A `running` daemon whose lock directory outlived a killed process still reads as
 running (`isAutomationDaemonRunning` uses `staleMs: 0` upstream).
 
+## Learning to rank
+
+The librarian logs every search's candidates and outcome (`rankingLog`, on by default, beside `memory.json`), can
+fit a ranking model on that log, and reorders the reranker's results with it when the config's `ltr` block says so.
+The settings are the shared config's `rankingLog` and `ltr.enabled`, `ltr.model`, `ltr.autoTrain` (all written through
+`configPatch`, validated by the librarian's own reader). `window.autorag.ltr` (`src/shared/ltr-contract.ts`) carries
+what the config cannot say: the log size, the models and how each scored, whether the next search would use one, and
+the two actions that are not settings, train now and delete a model.
+
+**Training runs in a child process, never in the main process.** The librarian trains in process (XGBoost compiled to
+WebAssembly, no Python). Measured on a 944-search real log: 1.9 s to train, during which the event loop got to run 7
+of the ~190 ticks it would have had, with a worst single stall of 0.6 s. In the Electron main process that freezes
+every window, so `ltr-service.ts` runs
+`autorag ltr train --json` through the same bundled Node the automations use. The agent's own retrain-after-a-search
+would run inside the main process, so `withoutAgentAutoTrain` removes `ltr.autoTrain` from the options the agent is
+built with, and `afterAnsweredSearch` (after the `done` event of an answered search, detached, never failing the
+search) asks `autoTrainIfDue` instead, which reads the same setting. `test/ltr-service.test.ts` pins where
+`buildAgentOptions` puts that block, so a librarian that moves it fails a test instead of training in process.
+
+A rejected or too-small attempt exits `1` and still prints its verdict; the service reads the verdict, not the exit
+code. A run in flight is shared by every caller, so a second click or an automatic attempt never fits a second model.
+The log only teaches when the reranker ran (a search with no rerank is skipped), so the page says so.
+
 ## AI Chat attachments
 
 Drop files, folders, or links on an AI Chat tab's panel, on an AI Chat tab
