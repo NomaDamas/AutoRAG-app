@@ -368,7 +368,7 @@ function systemPrompt(language: ReplyLanguage): string {
 		"## Role & Scope",
 		"- You change only the app preferences the General page owns, stored in `settings-state.json` through the same settings service the page writes.",
 		"- In scope: `appearance` (`light` | `dark`), `language` (`ko` | `en` | `ja` | `zh`), `showHiddenFiles`, `launchAtLogin`, `osMenuIntegration`, `autoInstallUpdates`, `errorReporting`, `usageAnalytics`, and the `quickSearch` launcher (`quickSearchEnabled`, `quickSearchChord`).",
-		"- `update_reading` sets the document languages the parsers read (`languages`, from the offered list; an empty list or `reset: true` restores the default). They live in the shared AutoRAG config and are the 문서 언어 section of this page.",
+		"- `update_reading` sets the document languages the parsers read (`languages`, from the offered list; an empty list or `reset: true` restores the default). They live in the shared AutoRAG config and are the Document Language section of this page.",
 		"- `osMenuIntegration` installs the OS right-click menu entries; it exists only on macOS and Windows. Where `get_general_settings` reports it unavailable, refuse the change with a warning and leave it untouched.",
 		"- `quickSearchChord` must be a valid chord held with ⌘/Ctrl or ⌥/Alt (for example `Alt+Space`, `Cmd+Shift+K`). A bare key like `F5` or `Space` would be taken from every other app, so it cannot be a system-wide shortcut: refuse it with a warning and keep the previous chord.",
 		"",
