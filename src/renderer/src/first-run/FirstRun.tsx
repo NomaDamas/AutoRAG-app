@@ -350,7 +350,8 @@ function SetupScreen({
 	/** Where the progress bar was when the logo was tapped, so it can glide down to its place under the board. */
 	const dockFrom = useRef<number | null>(null);
 	const done = playing && stage === "ready";
-	useEnterToStart(onStart, done);
+	const earlyReady = canStartEarly(status);
+	useEnterToStart(onStart, done || earlyReady);
 	const closeGame = useCallback(() => {
 		setFading(false);
 		onStop();
@@ -442,9 +443,14 @@ function SetupScreen({
 						</div>
 						{canStartEarly(status) ? (
 							<div className="fr-early" data-role="early-start">
-								<p className="fr-early-lead">{t("firstRun.early.lead")}</p>
-								<button type="button" className="fr-btn fr-btn--primary" data-action="start-early" onClick={onStart}>
+								<Logo className="fr-logo--dock" mark />
+								<div className="fr-dock-copy">
+									<h2 className="fr-title fr-title--dock">{t("firstRun.early.title")}</h2>
+									<p className="fr-dock-lead">{t("firstRun.early.lead")}</p>
+								</div>
+								<button type="button" className="fr-btn fr-btn--primary fr-btn--stage" data-action="start-early" autoFocus onClick={onStart}>
 									{t("firstRun.early.start")}
+									<kbd className="fr-kbd">↵</kbd>
 								</button>
 							</div>
 						) : null}

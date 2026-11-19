@@ -60,6 +60,24 @@ describe("i18n configuration and locale keys", () => {
 		}
 	});
 
+	it("never tells the person a question is being made or is ready, before or on the early-start card", () => {
+		// The tour's question is found while files are read; the person is only told they can start, and what is still going on.
+		const mentionsQuestion: Record<"ko" | "en" | "ja" | "zh", RegExp> = {
+			ko: /질문/u,
+			en: /question/iu,
+			ja: /質問/u,
+			zh: /问题/u,
+		};
+		const keys = ["firstRun.early.title", "firstRun.early.lead", "firstRun.early.start", "firstRun.setup.stage.preparing", "firstRun.tour.typingHint", "firstRun.tour.ask.title", "firstRun.tour.ask.body", "main.onboarding.noQuestion"];
+		for (const lang of ["ko", "en", "ja", "zh"] as const) {
+			const text = leaves(resources[lang].translation);
+			for (const key of keys) {
+				expect(text.get(key), `${lang} ${key}`).toBeDefined();
+				expect(mentionsQuestion[lang].test(text.get(key) ?? ""), `${lang} ${key}`).toBe(false);
+			}
+		}
+	});
+
 	it("translates common keys in each language", async () => {
 		await setAppLanguage("ko");
 		expect(t("common.save")).toBe("저장");

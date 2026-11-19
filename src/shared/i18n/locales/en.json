@@ -1130,7 +1130,7 @@
     "onboarding": {
       "indexingFailed": "Indexing failed.",
       "modelDownloadFailed": "Indexing could not start because the on-device embedding model could not be downloaded: {{error}}",
-      "noQuestion": "Couldn't find a first question yet. Trying again skips the files already read and carries on."
+      "noQuestion": "Couldn't finish getting ready. Trying again skips the files already read and carries on."
     },
     "lock": {
       "scheduledBusy": "A background refresh is running. Try again after it finishes.",
@@ -3096,7 +3096,7 @@
         "planning": "Picking the files that matter",
         "duplicates": "Looking for duplicate files",
         "indexing": "Reading your files",
-        "preparing": "Writing your first question",
+        "preparing": "Wrapping up",
         "ready": "Ready",
         "failed": "Stopped"
       },
@@ -3125,7 +3125,8 @@
       "start": "Get started"
     },
     "early": {
-      "lead": "A question is ready. The rest of your files keep being read in the background while you use the app.",
+      "title": "You can start now",
+      "lead": "The rest keeps being read in the background.",
       "start": "Start now"
     },
     "background": {
@@ -3143,11 +3144,11 @@
       "finish": "Done",
       "clickHint": "Click it to try",
       "sendHint": "Send it yourself",
-      "typingHint": "Writing a question…",
+      "typingHint": "Typing…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "Send the question yourself",
-        "body": "We picked a question your files can answer. Click send — or edit it and ask your own."
+        "title": "Here is how to ask",
+        "body": "Let's try it on the files we just read. Click send, or change the text and ask your own."
       },
       "cite": {
         "title": "Got an answer — click the citation number",

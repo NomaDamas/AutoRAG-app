@@ -1130,7 +1130,7 @@
     "onboarding": {
       "indexingFailed": "建立索引失败。",
       "modelDownloadFailed": "由于无法下载本机嵌入模型,无法开始建立索引:{{error}}",
-      "noQuestion": "暂时没能找到第一个问题。重试会跳过已读取的文件并继续。"
+      "noQuestion": "未能完成准备。重试时会跳过已读取的文件,从中断处继续。"
     },
     "lock": {
       "scheduledBusy": "后台刷新正在运行。完成后请重试。",
@@ -3096,7 +3096,7 @@
         "planning": "正在挑选需要的文件",
         "duplicates": "正在查找重复文件",
         "indexing": "正在读取文件",
-        "preparing": "正在生成第一个问题",
+        "preparing": "正在收尾",
         "ready": "已就绪",
         "failed": "已停止"
       },
@@ -3125,8 +3125,9 @@
       "start": "开始使用"
     },
     "early": {
-      "lead": "已经准备好一个问题。其余文件会在你使用应用时继续在后台读取。",
-      "start": "先开始使用"
+      "title": "现在就可以开始",
+      "lead": "其余文件会继续在后台读取。",
+      "start": "立即开始"
     },
     "background": {
       "counts": "正在后台读取文件 · {{processed}} / {{total}} 个",
@@ -3143,11 +3144,11 @@
       "finish": "完成",
       "clickHint": "直接点击试试",
       "sendHint": "直接发送试试",
-      "typingHint": "正在输入问题…",
+      "typingHint": "正在输入…",
       "progress": "{{index}} / {{count}}",
       "ask": {
-        "title": "亲自发送这个问题试试",
-        "body": "这是从你刚读取的文件里挑选的问题。点击发送按钮,或改成你想问的内容试试。"
+        "title": "像这样提问就可以",
+        "body": "先用刚读取的文件试一下。点击发送按钮,或改成你想问的内容再发送。"
       },
       "cite": {
         "title": "答案来了 — 点击依据编号试试",
