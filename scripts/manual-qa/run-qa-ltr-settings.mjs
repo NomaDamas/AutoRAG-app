@@ -1,9 +1,9 @@
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
+import { seedSyntheticLog } from "./ltr-seed.mjs";
 import { homeEnv } from "./platform.mjs";
 
 /**
@@ -65,52 +65,8 @@ const waitFor = async (predicate, timeoutMs = 20_000) => {
 	}
 };
 
-/**
- * Write `count` finished runs into the ranking log. The runs are synthetic, written straight into the librarian's
- * SQLite file in its record shape (schemaVersion 1), because a lane with no model cannot produce real ones; a change to
- * that shape makes the librarian refuse the rows and this lane fail at "the log count". The live lane
- * (`run-qa-live-ltr.mjs`) fills the log from real searches instead.
- */
-function seedLog(count) {
-	const seed = `
-		const { DatabaseSync } = require("node:sqlite");
-		const path = process.argv[1] + ".ranking.db";
-		const db = new DatabaseSync(path);
-		db.exec("PRAGMA journal_mode = WAL; CREATE TABLE IF NOT EXISTS runs (run_id TEXT PRIMARY KEY, started_at INTEGER NOT NULL, record TEXT NOT NULL) WITHOUT ROWID;");
-		const insert = db.prepare("INSERT OR IGNORE INTO runs (run_id, started_at, record) VALUES (?, ?, ?)");
-		let seed = 7;
-		const rand = () => ((seed = (seed * 1664525 + 1013904223) % 4294967296) / 4294967296);
-		const count = Number(process.argv[2]);
-		for (let i = 0; i < count; i += 1) {
-			const startedAt = 1_800_000_000_000 + i * 60_000;
-			const size = 8;
-			// One chunk is the answer. The reranker ranks it first only about half the time; a signal that is only visible
-			// in the logged features (dense rank) says where it really is, so a model can learn to move it up.
-			const gold = Math.floor(rand() * size);
-			const rerankOrder = [...Array(size).keys()].sort((a, b) => (a === gold ? (rand() < 0.5 ? -2 : 0.5) : rand()) - (b === gold ? (rand() < 0.5 ? -2 : 0.5) : rand()));
-			const candidates = rerankOrder.map((chunk, position) => {
-				const isGold = chunk === gold;
-				const denseRank = isGold ? 1 + Math.floor(rand() * 2) : 1 + Math.floor(rand() * size);
-				return {
-					chunkId: "c" + String(i).padStart(4, "0") + String(chunk),
-					source: "/qa/doc" + chunk + ".md",
-					origin: "local files",
-					contentChars: 400,
-					observations: [{ stage: "prefetch", surface: "minsync", method: "minsync-dense", query: "q" + i, rank: denseRank, score: 1 - denseRank / 20 }],
-					rerank: { rank: position + 1, score: 1 - position / 10 },
-					exposures: [{ surface: "baseline", query: "q" + i, position: position + 1 }],
-					text: { bm25: rand(), questionCoverage: rand() },
-					memory: { priorSupport: 0, similarQuestionSupport: null },
-					labels: { citedFinal: isGold, modelCited: isGold },
-				};
-			});
-			const record = { schemaVersion: 1, runId: "qa-" + i, conversationId: "qa", question: "q" + i, startedAt, finishedAt: startedAt + 1000, searchQueries: ["q" + i], datasources: [], web: false, reranker: { provider: "openrouter", model: "qa/rerank" }, judgments: { citationRelevance: "not-run", support: "not-run" }, candidates };
-			insert.run(record.runId, record.startedAt, JSON.stringify(record));
-		}
-		db.close();
-	`;
-	execFileSync(process.execPath, ["-e", seed, memoryPath, String(count)], { stdio: ["ignore", "pipe", "inherit"] });
-}
+/** Synthetic runs with a planted signal (see ltr-seed.mjs); the live lane (`run-qa-live-ltr.mjs`) fills the log from real searches. */
+const seedLog = (count) => seedSyntheticLog({ memoryPath, count });
 
 const env = { AUTORAG_CONFIG: configPath, AUTORAG_HOME: root, ...homeEnv(home), AUTORAG_SKIP_DUPEY_CHECK: "1", PI_CODING_AGENT_DIR: join(root, "pi-agent") };
 mkdirSync(join(root, "pi-agent"), { recursive: true });

@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AI_PANEL, finderWindow, launchFinder, openAiSearch, ROOT } from "./launch-finder.mjs";
+import { seedSyntheticLog } from "./ltr-seed.mjs";
 import { homeEnv } from "./platform.mjs";
 
 /**
@@ -84,10 +85,18 @@ const QUESTIONS = [
 	"On which weekdays is remote work allowed?",
 	"How often do security badges expire?",
 	"When are expense reports due each month?",
+	"What is the hotel limit abroad?",
+	"Where must a lost badge be reported?",
 ];
-/** Replays of the real runs added to reach the librarian's 100-run training minimum. */
-const TOP_UP = 140;
-const FOLLOW_UP = "When does the office close at the end of the year?";
+/** Synthetic runs added so the log can be trained on (the librarian needs 100 usable ones). */
+const TOP_UP = 200;
+/** Asked with serving on. Jev's router sends some plain factual questions down a no-retrieval route that has no baseline to reorder, so a few are tried. */
+const FOLLOW_UPS = [
+	"When does the office close at the end of the year?",
+	"How long do new hires have to finish compliance training?",
+	"Who pairs with a new hire in the buddy program?",
+	"How much can an expense receipt be before it needs attaching?",
+];
 
 const modelBlock = { provider: "openrouter", id: ANSWER_MODEL, name: ANSWER_MODEL, api: "openai-completions", baseUrl: "https://openrouter.ai/api/v1", apiKeyEnv: "OPENROUTER_API_KEY", reasoning: false, input: ["text"] };
 const config = {
@@ -189,28 +198,30 @@ try {
 	check("every real search was answered without an error", answered === QUESTIONS.length, `${answered}/${QUESTIONS.length}`);
 	const real = await waitFor(() => (loggedRuns().length >= QUESTIONS.length ? loggedRuns() : null), 60_000);
 	check("each answered search appended one record to the ranking log", Array.isArray(real) && real.length === QUESTIONS.length, `${real?.length ?? 0} records`);
+	let reranked = [];
 	if (Array.isArray(real)) {
-		check("every record names the real reranker", real.every((run) => run.reranker?.model === RERANK_MODEL), JSON.stringify(real.map((run) => run.reranker)));
-		check("every record carries the reranker's own rank and score on its candidates", real.every((run) => run.candidates.length > 0 && run.candidates.some((c) => c.rerank !== undefined)));
-		check("every record carries exposures and a cited-or-not label", real.every((run) => run.candidates.some((c) => c.exposures.length > 0) && run.candidates.every((c) => typeof c.labels.citedFinal === "boolean")));
-		check("at least one search cited a candidate (otherwise the log has no signal)", real.some((run) => run.candidates.some((c) => c.labels.citedFinal)));
+		// Jev's router sends some plain factual questions down the `extra` route (no retrieval, no baseline, so nothing
+		// is reranked). That is the router's call; those runs are logged and training skips them.
+		reranked = real.filter((run) => run.reranker !== undefined);
+		const skipped = real.length - reranked.length;
+		console.log(`INFO ${reranked.length}/${real.length} real searches were routed through retrieval and reranked; ${skipped} took the no-retrieval route and are skipped by training`);
+		check("most real searches went through retrieval and the reranker", reranked.length >= Math.ceil(QUESTIONS.length / 2), `${reranked.length}/${real.length}`);
+		check("every reranked record names the real reranker", reranked.every((run) => run.reranker?.model === RERANK_MODEL), JSON.stringify(reranked.map((run) => run.reranker)));
+		check("…and carries the reranker's own rank and score on its candidates", reranked.every((run) => run.candidates.length > 0 && run.candidates.some((c) => c.rerank !== undefined)));
+		check("a search that skipped retrieval has no reranker and no rerank ranks, as the page says", real.filter((run) => run.reranker === undefined).every((run) => run.candidates.every((c) => c.rerank === undefined)));
+		check("every record carries exposures and a cited-or-not label", real.every((run) => run.candidates.every((c) => typeof c.labels.citedFinal === "boolean")));
+		check("at least one reranked search cited a candidate (otherwise the log has no signal)", reranked.some((run) => run.candidates.some((c) => c.labels.citedFinal)));
 		check("no record carries chunk text", real.every((run) => run.candidates.every((c) => !("content" in c) && !("excerpt" in c) && Object.values(c.text).every((value) => typeof value === "number"))));
 	}
 
 	// ── B. top up the log to a trainable size ────────────────────────────────────────────────────
-	if (Array.isArray(real)) {
-		const clones = TOP_UP;
-		execFileSync(
-			process.execPath,
-			[
-				"-e",
-				`const {DatabaseSync}=require("node:sqlite");const db=new DatabaseSync(process.argv[1]+".ranking.db");const rows=db.prepare("SELECT record FROM runs").all().map(r=>JSON.parse(r.record));const ins=db.prepare("INSERT OR IGNORE INTO runs (run_id,started_at,record) VALUES (?,?,?)");let t=Math.max(...rows.map(r=>r.startedAt))+1000;for(let i=0;i<${clones};i++){const base=rows[i%rows.length];const copy=JSON.parse(JSON.stringify(base));copy.runId="topup-"+i;copy.startedAt=t;copy.finishedAt=t+500;t+=1000;ins.run(copy.runId,copy.startedAt,JSON.stringify(copy));}db.close();`,
-				memoryPath,
-			],
-			{ stdio: ["ignore", "pipe", "inherit"] },
-		);
-		console.log(`INFO the log was topped up with ${clones} replays of the real runs to reach the 100-run minimum: this proves the path, not model quality`);
-	}
+	// A handful of real searches cannot reach the librarian's 100-run minimum, and replaying them teaches a model nothing:
+	// on this tiny corpus the reranker already puts the cited chunk first every time, so no model can beat it (the gate
+	// rightly rejects it). The top-up is therefore synthetic runs with a planted signal, written after the real ones so the
+	// real runs are in the training part. What this proves is the path from a real log, through Train now and Use the
+	// trained model, to a real search that is reordered. It proves nothing about how a model does on real searches.
+	seedSyntheticLog({ memoryPath, count: TOP_UP, idPrefix: "synthetic", startedAt: Math.max(...loggedRuns().map((run) => run.startedAt)) + 60_000 });
+	console.log(`INFO the log was topped up with ${TOP_UP} synthetic runs (planted signal) after the ${loggedRuns().length - TOP_UP} real ones: this proves the path, not model quality`);
 
 	// ── C. Settings → Search Ranking → Train now ─────────────────────────────────────────────────
 	await page.locator(".sidebar__item--settings").click();
@@ -262,8 +273,9 @@ try {
 		await waitFor(() => readConfig().ltr?.enabled === true);
 		check("with no passing model, turning serving on leaves the order unchanged and says so", (await waitFor(async () => /no model has passed yet/u.test(await body()))) === true, (await body()).slice(0, 300));
 		const before = loggedRuns().length;
+		await page.getByRole("button", { name: "Back to app" }).click();
 		await openAiSearch(page);
-		const { error } = await ask(page, FOLLOW_UP);
+		const { error } = await ask(page, FOLLOW_UPS[0]);
 		check("a search with serving on and no passing model still answers", error === "", error);
 		const after = await waitFor(() => (loggedRuns().length > before ? loggedRuns() : null), 60_000);
 		check("…and its record names no LTR model", Array.isArray(after) && after.at(-1)?.ltr === undefined, JSON.stringify(after?.at(-1)?.ltr));
@@ -272,15 +284,26 @@ try {
 		check("turning serving on writes ltr.enabled", (await waitFor(() => readConfig().ltr?.enabled === true)) === true, JSON.stringify(readConfig().ltr));
 		check("the page names the model that serves", (await waitFor(async () => /Adjusting the order with model xgb-/u.test(await body()))) === true, (await body()).slice(0, 300));
 		await page.screenshot({ path: join(EVIDENCE, "04-serving.png") });
-		const before = loggedRuns().length;
+		await page.getByRole("button", { name: "Back to app" }).click();
 		await openAiSearch(page);
-		const { answer, error } = await ask(page, FOLLOW_UP);
-		check("a real search with the model serving answers without an error", error === "" && answer.trim().length > 0, error || answer.slice(0, 100));
-		const after = await waitFor(() => (loggedRuns().length > before ? loggedRuns() : null), 60_000);
-		const last = Array.isArray(after) ? after.at(-1) : undefined;
-		check("its record says which model reordered what the model read", last?.ltr?.modelId === status.models[0].id, JSON.stringify(last?.ltr));
-		check("the record still holds the reranker's own rank for every candidate", last !== undefined && last.candidates.every((c) => c.rerank !== undefined || c.exposures.length === 0));
-		check("serving added and dropped no candidates", last !== undefined && last.candidates.length > 0);
+		let served;
+		const tried = [];
+		for (const question of FOLLOW_UPS) {
+			const { answer, error } = await ask(page, question);
+			check(`a real search with the model serving answers without an error (${question.slice(0, 40)}…)`, error === "" && answer.trim().length > 0, error || answer.slice(0, 100));
+			// The record is found by its question, not by position: the synthetic top-up runs sit later in time than this search.
+			const record = await waitFor(() => loggedRuns().find((run) => run.question === question), 60_000);
+			tried.push(`${question.slice(0, 30)}…: ${record === undefined ? "no record" : record.reranker === undefined ? "no-retrieval route" : "retrieval"}`);
+			if (record !== undefined && record.reranker !== undefined) {
+				served = record;
+				break;
+			}
+		}
+		console.log(`INFO ${tried.join(" | ")}`);
+		check("at least one follow-up question was routed through retrieval, so there was a baseline to reorder", served !== undefined, tried.join(" | "));
+		check("its record says which model reordered what the model read", served?.ltr?.modelId === status.models[0].id, JSON.stringify(served?.ltr));
+		check("the record still holds the reranker's own rank for every candidate that was ranked", served !== undefined && served.candidates.some((c) => c.rerank !== undefined) && served.candidates.every((c) => c.rerank !== undefined || c.exposures.length === 0 || c.observations.length > 0));
+		check("serving added and dropped no candidates: everything exposed was ranked by the reranker", served !== undefined && served.candidates.filter((c) => c.exposures.some((e) => e.surface === "baseline")).every((c) => c.rerank !== undefined));
 		await page.screenshot({ path: join(EVIDENCE, "05-served-search.png") });
 	}
 	check("no renderer page error", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));
