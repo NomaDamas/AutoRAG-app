@@ -5,12 +5,13 @@ import { join } from "node:path";
 import { t } from "../shared/i18n/core";
 import { DEFAULT_LOCAL_EMBEDDING_MODEL } from "./embedding-daemon";
 import type { ModelDownloadState, ModelDownloadStatus } from "../shared/model-download-contract";
-import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { inlModelCacheRoot } from "./inl-paths";
 
 /**
- * Fetches the on-device embedding model (Qwen/Qwen3-Embedding-0.6B) into the cache MinSync's native embedder
- * reads, in the Hugging Face hub layout (`models--Org--Name/{refs/main,snapshots/<rev>/<file>}`). The installer
- * does not carry these ~1.2 GB; the app downloads them when the user chooses local embedding.
+ * Fetches the on-device embedding model (Qwen/Qwen3-Embedding-0.6B) into the im-not-llm (`inl`) weight cache,
+ * in the Hugging Face hub layout (`models--Org--Name/{refs/main,snapshots/<rev>/<file>}`), the one copy `inl
+ * serve`, MinSync (the inl-server crates) and this app all read. The installer does not carry these ~1.2 GB;
+ * the app downloads them when the user chooses local embedding.
  *
  * Every file is pinned by revision, size and SHA-256. A file is written to `<name>.download`, hashed once
  * complete, and only then renamed into place, so the cache never holds a half or a corrupt file. A stopped
@@ -53,11 +54,11 @@ export function modelTotalBytes(spec: ModelSpec): number {
 }
 
 /**
- * The `modelPresent` check of the embedding daemon: the pinned Qwen3 weights must be in the cache; any other
- * native model is MinSync's own to fetch.
+ * The `modelPresent` check of the embedding daemon: the pinned Qwen3 weights must be in the inl cache; any
+ * other native model is the daemon's own to fetch.
  */
 export function localModelPresent(options: { readonly home: string; readonly env: NodeJS.ProcessEnv }): (model: string) => boolean {
-	return (model) => model.toLowerCase() !== DEFAULT_LOCAL_EMBEDDING_MODEL.toLowerCase() || modelFilesPresent(minSyncModelCacheRoot({ home: options.home, env: options.env }), nativeQwen3Spec());
+	return (model) => model.toLowerCase() !== DEFAULT_LOCAL_EMBEDDING_MODEL.toLowerCase() || modelFilesPresent(inlModelCacheRoot({ home: options.home, env: options.env }), nativeQwen3Spec());
 }
 
 function snapshotDir(cacheRoot: string, spec: ModelSpec): string {

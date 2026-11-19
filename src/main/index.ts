@@ -3,7 +3,7 @@ import { access, open, readdir, readFile, stat } from "node:fs/promises";
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import { applyBundledTools } from "./bundled-tools";
-import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { inlModelCacheRoot } from "./inl-paths";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import {
@@ -518,9 +518,10 @@ app.whenReady().then(async () => {
 			(error: unknown) => console.error("[cli] installing the dazzi command failed:", error),
 		);
 	}
-	// The local embedding model is served by MinSync's own `minsync serve`, which the app runs while it is open
-	// and stops on quit. It never starts before the model is downloaded (`modelDownload`), because `minsync serve`
-	// would fetch the 1.2 GB itself without any way to show progress.
+	// The local embedding model is served by the shared im-not-llm (`inl`) loopback daemon, which the app runs
+	// while it is open and stops on quit (preferring `inl`, else the bundled MinSync, same crates and root). It
+	// never starts before the model is downloaded (`modelDownload`), because the daemon would fetch the 1.2 GB
+	// itself without any way to show progress.
 	configureEmbeddingDaemon({
 		env: process.env,
 		home: homedir(),
@@ -741,7 +742,7 @@ app.whenReady().then(async () => {
 	// The on-device embedding model is downloaded on demand (onboarding, Settings), never bundled. One service for
 	// the whole app, so a download started in one place shows its progress everywhere.
 	const modelDownload = createModelDownloadService({
-		cacheRoot: minSyncModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
+		cacheRoot: inlModelCacheRoot({ platform: process.platform, home: homedir(), env: process.env }),
 		spec: nativeQwen3Spec(),
 		onChange: (status) => {
 			sendToAllWindows(MODEL_DOWNLOAD_CHANNELS.changed, status);

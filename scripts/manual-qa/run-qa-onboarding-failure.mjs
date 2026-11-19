@@ -528,7 +528,7 @@ await scenario("an unknown cause: a second stop moves the button to the embeddin
 // 5. The on-device model cannot be fetched (its cache folder cannot be written): the download is retried by itself.
 await scenario("a model that cannot be downloaded: retried by itself, one way on at hand", async (state) => {
 	Object.assign(state, profile({ embed: "local" }));
-	const page = await start(state, { env: { FASTEMBED_CACHE_DIR: "/System/qa-model-cache" } });
+	const page = await start(state, { env: { INL_CACHE_DIR: "/System/qa-model-cache" } });
 	await paused(page);
 	const run = await status(page);
 	check("a failed model download is its own reason", run.failure?.reason === "model-download", JSON.stringify(run.failure));
@@ -621,7 +621,7 @@ await scenario("a real full disk: told apart from every other download failure, 
 	const ram = ramDisk();
 	try {
 		Object.assign(state, profile({ embed: "local" }));
-		const page = await start(state, { env: { FASTEMBED_CACHE_DIR: join(ram.mount, "models") } });
+		const page = await start(state, { env: { INL_CACHE_DIR: join(ram.mount, "models") } });
 		await paused(page, 240_000);
 		const run = await status(page);
 		check("a volume that is really full is classified as a full disk", run.failure?.reason === "disk-full" && run.failure?.code === "embedding-model-download-failed", JSON.stringify(run.failure));
@@ -650,7 +650,7 @@ await scenario("a real full disk: told apart from every other download failure, 
 // A model whose download was never finished: the pause says so, the user closes the onboarding window, and the
 // banner's "resume" completes the model and runs the real on-device embedding.
 await scenario("recovery: an unfinished model is completed from the banner and the real local index runs", async (state) => {
-	const cached = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homeDir(), ".cache", "minsync", "models");
+	const cached = process.env.INL_CACHE_DIR?.trim() || join(homeDir(), ".cache", "im-not-llm", "models");
 	if (!existsSync(join(cached, "models--Qwen--Qwen3-Embedding-0.6B", "refs", "main"))) throw new Error(`no cached model at ${cached}; the runner copies the host's cache into the guest`);
 	Object.assign(state, profile({ embed: "local" }));
 	const models = join(state.work, "models");
@@ -658,7 +658,7 @@ await scenario("recovery: an unfinished model is completed from the banner and t
 	const refs = join(models, "models--Qwen--Qwen3-Embedding-0.6B", "refs");
 	rmSync(join(refs, "main"));
 	chmodSync(refs, 0o555);
-	let page = await start(state, { env: { FASTEMBED_CACHE_DIR: models } });
+	let page = await start(state, { env: { INL_CACHE_DIR: models } });
 	try {
 		await paused(page, 300_000);
 		const run = await status(page);

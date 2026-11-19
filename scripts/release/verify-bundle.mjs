@@ -150,8 +150,9 @@ check("filee-cli converts an image with its bundled engine", filee, ["convert", 
 // Behaviour, not just version output.
 check("kordoc parses a document", join(bin, `kordoc${exe}`), ["--help"], { expect: /kordoc|Usage|usage/i });
 check("minsync reports its embedder commands", join(bin, `minsync${exe}`), ["--help"], { expect: /sync|query/i });
-// The app starts `minsync serve` itself at launch (the one process that holds the model weights, serving
-// every embedding consumer over loopback). Prove the bundled build carries that subcommand and its server.
+// The app starts the shared inl embedding daemon itself at launch (preferring `inl`, else this bundled
+// `minsync serve`, which links the same crates; the one process that holds the model weights, serving every
+// embedding consumer over loopback). Prove the bundled build carries that subcommand and its server.
 check("minsync serve is the shared embedding daemon", join(bin, `minsync${exe}`), ["serve", "--help"], { expect: /loopback HTTP[\s\S]*\/v1\/embeddings/ });
 if (hasApp) check("autorag runs", join(bin, `autorag${exe}`), ["--help"], { expect: /autorag/i });
 probe("transformers.js loads without onnxruntime-web", `import(${JSON.stringify(pathToFileURL(join(modules, "@huggingface", "transformers", "dist", "transformers.node.mjs")).href)}).then((m)=>console.log(typeof m.pipeline==='function'?'loaded':'broken'))`);
@@ -178,7 +179,7 @@ if (sparseComplete) {
 	mkdirSync(workspace, { recursive: true });
 	const minsync = join(bin, `minsync${exe}`);
 	cpSync(join(toolsDir, "models"), join(home, "models"), { recursive: true });
-	const env = { ...cleanEnv(home), FASTEMBED_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
+	const env = { ...cleanEnv(home), INL_CACHE_DIR: join(home, "models"), HF_HUB_OFFLINE: "1" };
 	const sh = (commandArgs) => spawnSync(minsync, commandArgs, { env, cwd: workspace, encoding: "utf8", timeout: 240_000, windowsHide: true });
 	sh(["init", "--format", "json", "--embedder", "none"]);
 	writeFileSync(join(workspace, "certificate.md"), "인증서를 제출해야 환불이 승인됩니다.\n");

@@ -92,8 +92,8 @@ export function orphanVmNames(vms, holders, runPrefix) {
 }
 
 /**
- * Whether a job indexes for real and so needs the host's MinSync embedding model
- * cache (`~/.cache/minsync/models`) in the guest. A fresh VM has none, so a real
+ * Whether a job indexes for real and so needs the host's shared embedding model
+ * cache (`~/.cache/im-not-llm/models`) in the guest. A fresh VM has none, so a real
  * first index would download ~1.2 GB from Hugging Face inside the VM. Only the
  * onboarding lane performs a real first index; the settings-redesign lane applies
  * the "This computer" embedding profile, whose model gate needs the cached model

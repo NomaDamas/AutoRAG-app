@@ -41,7 +41,7 @@ import { createIndexProgressTracker, type IndexProgressTracker } from "./index-p
 import type { ProviderCredentialService } from "./provider-credentials";
 import { localEmbeddingModel } from "./embedding-daemon";
 import { readLibrarianFile, statLibrarianFile } from "./librarian-file";
-import { minSyncModelCacheRoot } from "./bundled-sparse-model";
+import { inlModelCacheRoot } from "./inl-paths";
 import { modelFilesPresent, modelTotalBytes, nativeQwen3Spec } from "./model-download";
 import { classifyIndexFailure, modelDownloadFailure, skippedFileCount } from "./index-failure";
 import type { RunOutcome } from "./index-problem-service";
@@ -630,7 +630,7 @@ export function createOnboardingService(deps: OnboardingServiceDeps): Onboarding
 			const raw = existsSync(deps.configPath) ? readRawConfigObject(deps.configPath) : {};
 			const minSync = isJsonObject(raw.minSync) ? raw.minSync : {};
 			const embedder = isJsonObject(minSync.embedder) ? minSync.embedder : {};
-			const cacheRoot = minSyncModelCacheRoot({ platform: deps.platform, home: deps.home, env: deps.env });
+			const cacheRoot = inlModelCacheRoot({ platform: deps.platform, home: deps.home, env: deps.env });
 			const spec = nativeQwen3Spec();
 			return {
 				profile: EMBEDDER_ID,

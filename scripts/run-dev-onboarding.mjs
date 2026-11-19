@@ -9,7 +9,7 @@
 //   `~/.autorag/config.json`, index, and memory are never read or written);
 // - provider API keys are blanked and PI_CODING_AGENT_DIR is a tmp sandbox, so
 //   ambient provider credentials never appear as onboarding connections;
-// - the native MinSync embedding model is COPIED into the sandbox so the
+// - the native embedding model is COPIED into the sandbox so the
 //   first index runs offline; the real cache is never written through.
 //
 // Teardown, ordered from graceful to brutal:
@@ -180,22 +180,22 @@ async function main() {
 	const autoragHome = join(sandbox, "autorag-home");
 	const configPath = join(sandbox, "config.json");
 	const userDataDir = join(sandbox, "user-data");
-	const minsyncCache = join(sandbox, "minsync-models");
+	const modelCache = join(sandbox, "model-cache");
 	const piAgentDir = join(sandbox, "pi-agent");
 	mkdirSync(autoragHome, { recursive: true });
 	mkdirSync(userDataDir, { recursive: true });
-	mkdirSync(minsyncCache, { recursive: true });
+	mkdirSync(modelCache, { recursive: true });
 	mkdirSync(piAgentDir, { recursive: true });
-	const realMinsyncCache =
-		process.env.FASTEMBED_CACHE_DIR?.trim() ||
+	const realModelCache =
+		process.env.INL_CACHE_DIR?.trim() ||
 		(process.platform === "win32"
-			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "minsync", "models")
-			: join(homedir(), ".cache", "minsync", "models"));
-	if (existsSync(realMinsyncCache)) {
+			? join(process.env.LOCALAPPDATA?.trim() || join(homedir(), "AppData", "Local"), "im-not-llm", "models")
+			: join(homedir(), ".cache", "im-not-llm", "models"));
+	if (existsSync(realModelCache)) {
 		try {
-			copyDirInto(realMinsyncCache, minsyncCache);
+			copyDirInto(realModelCache, modelCache);
 		} catch (error) {
-			fail(`could not copy the real MinSync model cache into the sandbox: ${error}`);
+			fail(`could not copy the real embedding model cache into the sandbox: ${error}`);
 		}
 	}
 	const marker = { owner: process.pid, watchdog: null, sandbox };
@@ -212,7 +212,7 @@ async function main() {
 		AUTORAG_HOME: autoragHome,
 		AUTORAG_CONFIG: configPath,
 		AUTORAG_WORKSPACE: join(autoragHome, "workspace"),
-		FASTEMBED_CACHE_DIR: minsyncCache,
+		INL_CACHE_DIR: modelCache,
 	};
 
 	// Same dev entry point as `make run`: predev hooks sync the librarian and

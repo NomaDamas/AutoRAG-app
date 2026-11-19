@@ -38,7 +38,7 @@ import type {
  *
  * Nothing is written into a datasource for the embedder: the librarian points
  * mailcrawl, lazykatok, discrawl and the chat sidecars at the one endpoint
- * `minSync.embedder` selects (the `minsync serve` server the app runs, or the
+ * `minSync.embedder` selects (the shared inl embedding daemon the app runs, or the
  * server the user configured) every time they index or search.
  *
  * Honesty rules enforced here:

@@ -6,11 +6,11 @@
  * Without an argument the newest installer in dist/ is used. Steps:
  *   1. install: mount the .dmg and copy the app, or run the NSIS installer silently
  *   2. run scripts/release/verify-bundle.mjs against the INSTALLED tools directory
- *   3. pre-populate the throwaway home's MinSync model cache from the staged
+ *   3. pre-populate the throwaway home's shared inl model cache from the staged
  *      verify-model (the installer no longer carries the model, and the daemon
  *      will not start without it), then launch the installed app on a throwaway
  *      profile and check, from inside its main process, that the bundled tools
- *      lead PATH and that the `minsync serve` daemon answers for the Qwen3 model
+ *      lead PATH and that the inl embedding daemon answers for the Qwen3 model
  *   4. uninstall
  * The profile, HOME and AUTORAG_HOME are temporary; nothing of the real user is read.
  */
@@ -45,10 +45,10 @@ const stagedModelCache = join(ROOT, "build", "stage", hostPlatformId(), "verify-
 const hasStagedModel = existsSync(join(stagedModelCache, "models--Qwen--Qwen3-Embedding-0.6B", "snapshots"));
 
 /**
- * The `minsync serve` daemon's health, read from the state files it publishes under
- * `<home>/.cache/minsync/serve/<instance>/` (`%LOCALAPPDATA%\minsync\serve` on Windows): `host`, `port`,
- * `pid`. Returns the daemon's host/port/model when it answers `GET /health` for the Qwen3 model, else
- * undefined (no state file, a stale one, or nothing listening).
+ * The shared im-not-llm (`inl`) embedding daemon's health, read from the state files it publishes under
+ * `<home>/.cache/im-not-llm/serve/<instance>/` (`%LOCALAPPDATA%\im-not-llm\serve` on Windows): `host`,
+ * `port`, `pid`. Returns the daemon's host/port/model when it answers `GET /health` as the dense Qwen3
+ * model, else undefined (no state file, a stale one, or nothing listening).
  */
 async function serveDaemonHealth(serveRoot) {
 	let instances;
@@ -72,7 +72,8 @@ async function serveDaemonHealth(serveRoot) {
 			const response = await fetch(`http://${host}:${port}/health`, { signal: AbortSignal.timeout(2_000) });
 			if (!response.ok) continue;
 			const health = await response.json();
-			if (health?.status !== "ok" || typeof health.model_id !== "string" || !health.model_id.toLowerCase().includes("qwen3-embedding-0.6b")) continue;
+			const kind = typeof health?.kind === "string" ? health.kind : "dense";
+			if (health?.status !== "ok" || kind !== "dense" || typeof health.model_id !== "string" || !health.model_id.toLowerCase().includes("qwen3-embedding-0.6b")) continue;
 			return { host, port, model: health.model_id };
 		} catch {
 			// nothing listens there any more
@@ -93,15 +94,15 @@ const home = join(work, "home");
 const localAppData = join(home, "AppData", "Local");
 const profile = join(work, "profile");
 // Where the app downloads the model into, and where the daemon reads it from.
-const cacheRoot = win ? join(localAppData, "minsync", "models") : join(home, ".cache", "minsync", "models");
+const cacheRoot = win ? join(localAppData, "im-not-llm", "models") : join(home, ".cache", "im-not-llm", "models");
 
 let installSeconds = 0;
 let appRoot; // directory holding the executable
 let resources; // <resources>
 let executable;
 let uninstall = () => undefined;
-let serveRoot; // the `minsync serve` state directory inside the throwaway home, when one was found
-let serve; // { host, port, model } of a running `minsync serve` daemon, when the app started one
+let serveRoot; // the inl daemon serve state directory inside the throwaway home, when one was found
+let serve; // { host, port, model } of a running embedding daemon, when the app started one
 
 if (!win) {
 	const mount = join(work, "mount");
@@ -185,9 +186,9 @@ try {
 		// instead of letting the app fetch ~1.2 GB from Hugging Face during the smoke run.
 		mkdirSync(cacheRoot, { recursive: true });
 		cpSync(stagedModelCache, cacheRoot, { recursive: true });
-		process.stdout.write(`note: pre-populated the MinSync model cache from ${stagedModelCache}\n`);
+		process.stdout.write(`note: pre-populated the shared inl model cache from ${stagedModelCache}\n`);
 	} else {
-		process.stdout.write(`skip minsync serve daemon (no staged model at ${stagedModelCache}; run \`bun run release:stage\` without --skip-verify-model)\n`);
+		process.stdout.write(`skip embedding daemon (no staged model at ${stagedModelCache}; run \`bun run release:stage\` without --skip-verify-model)\n`);
 	}
 	const app = await _electron.launch({
 		executablePath: executable,
@@ -228,18 +229,19 @@ try {
 		const real = (path) => realpathSync(path).toLowerCase();
 		expect(existsSync(first) && real(first) === real(join(resources, "tools", "bin")), "bundled tools lead PATH", first);
 
-		// The app starts `minsync serve` (the loopback embedding server that holds the model) once the local
-		// model is in use, and stops it at quit. Assert it when the run published a serve state file; a build
-		// or run that never starts the daemon reports a labelled skip instead of passing silently. Without a
-		// staged model the daemon cannot start, so the skip was already printed before launch.
+		// The app starts the shared inl embedding daemon (preferring `inl`, else the bundled `minsync serve`,
+		// which links the same crates) once the local model is in use, and stops it at quit. Assert it when the
+		// run published a serve state file; a build or run that never starts the daemon reports a labelled skip
+		// instead of passing silently. Without a staged model the daemon cannot start, so the skip was already
+		// printed before launch.
 		if (hasStagedModel) {
-			serveRoot = win ? join(localAppData, "minsync", "serve") : join(home, ".cache", "minsync", "serve");
+			serveRoot = win ? join(localAppData, "im-not-llm", "serve") : join(home, ".cache", "im-not-llm", "serve");
 			for (const daemonDeadline = Date.now() + 60_000; serve === undefined && Date.now() < daemonDeadline; ) {
 				serve = await serveDaemonHealth(serveRoot);
 				if (serve === undefined) await new Promise((resolve) => setTimeout(resolve, 1_000));
 			}
-			if (serve === undefined) process.stdout.write("skip (optional) minsync serve daemon: no serve state file was published under the app's cache\n");
-			else expect(true, `minsync serve daemon answers GET /health (${serve.model})`, `port ${serve.port}`);
+			if (serve === undefined) process.stdout.write("skip (optional) embedding daemon: no serve state file was published under the app's cache\n");
+			else expect(true, `inl embedding daemon answers GET /health (${serve.model})`, `port ${serve.port}`);
 		}
 
 		writeFileSync(join(outDir, "installed-app.json"), `${JSON.stringify(inside, null, 2)}\n`);
@@ -255,7 +257,7 @@ try {
 			await new Promise((resolve) => setTimeout(resolve, 500));
 			after = await serveDaemonHealth(serveRoot);
 		}
-		expect(after === undefined || after.port !== serve.port, `minsync serve daemon is gone after the app quit (port ${serve.port})`, after === undefined ? "" : `still listening on ${after.port}`);
+		expect(after === undefined || after.port !== serve.port, `embedding daemon is gone after the app quit (port ${serve.port})`, after === undefined ? "" : `still listening on ${after.port}`);
 	}
 } finally {
 	uninstall();

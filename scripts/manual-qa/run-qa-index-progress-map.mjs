@@ -52,14 +52,14 @@ const DOCS = join(WORK, "docs");
 const USER_DATA = join(WORK, "user-data");
 for (const dir of [DOCS, join(WORK, "workspace"), join(WORK, "pi-agent"), join(WORK, "home")]) mkdirSync(dir, { recursive: true });
 // The VM runner copies the host's model cache, including the SPLADE weights for this real sparse-only index.
-const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const MODELS = process.env.INL_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (!existsSync(MODELS)) {
 	console.log(`SKIP: no on-device sparse model cache at ${MODELS}; real indexing cannot run`);
 	rmSync(WORK, { recursive: true, force: true });
 	process.exit(2);
 }
-mkdirSync(join(WORK, "home", ".cache", "minsync"), { recursive: true });
-if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "minsync", "models"));
+mkdirSync(join(WORK, "home", ".cache", "im-not-llm"), { recursive: true });
+if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "im-not-llm", "models"));
 
 // Every file is different (identical ones would be skipped as duplicates) and a few hundred bytes long.
 const WORDS = ["quarterly", "milestone", "review", "figure", "ledger", "roadmap", "estimate", "archive", "invoice", "summary", "budget", "forecast"];
@@ -98,7 +98,7 @@ const APP_ENV = {
 	OPENROUTER_API_KEY: "",
 	OPENAI_API_KEY: "",
 	ANTHROPIC_API_KEY: "",
-	FASTEMBED_CACHE_DIR: MODELS,
+	INL_CACHE_DIR: MODELS,
 };
 
 let app;
