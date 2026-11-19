@@ -31,7 +31,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.14 lets a query read a MinSync index beside its first sync (#2183, #2200): only a sync that began clean (no cursor, marker or
 // journal of an earlier run) is read beside, one query at a time and decided when the query runs, and a later sync waits for those
 // queries. The app's first run uses it to prove the tour's question against the index while it is still being built.
-const librarianRef = "v2.13.14";
+// v2.13.16 (#2203) extends that to every sync of the first refresh, not only the first: the refresh runs MinSync several times, and
+// the second used to start on an index with a cursor, which was refused until the whole refresh ended. A session of the refresh's
+// own syncs is read beside; a sync from any other caller ends it.
+const librarianRef = "v2.13.16";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

@@ -45,7 +45,7 @@ The app consumes the librarian only through the dependency declared in
 `package.json` (`@autorag/librarian: file:./.upstream/librarian-package`). That path
 is a staging directory that `scripts/sync-librarian.mjs` fills from the ignored
 `.upstream/autorag` clone, which it checks out at the pinned ref and builds. The
-ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.14: a query reads a MinSync index beside its first sync when that sync began clean, one query at a time (#2183, #2200), which lets the first run prove the tour's question while indexing; v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
+ref is a release tag or, while the librarian has no tag that carries what the app needs, a full commit SHA (now the tag v2.13.16: a query reads a MinSync index beside the syncs of a refresh that builds it from nothing, one query at a time and only while no other caller syncs the workspace (#2183, #2200, #2203), which lets the first run prove the tour's question while indexing; v2.13.12: an `excludePaths` entry with `*`, `?` or `[` is a glob over the absolute path, kept verbatim
 by config resolution and applied by the refresh walk (the app reads it the same way, `src/main/path-exclusion.ts`); with a reranker the
 baseline search shows it the union of MinSync's dense and SPLADE candidates; the MCP server adds `autorag.convert`/`.formats` and caps repeated
 diagnostics; `AUTORAG_AUTH_MODE=environment` makes model resolution ignore stored credentials. v2.13.8:

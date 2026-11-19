@@ -677,7 +677,14 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    skipped, and a run in flight or finished is returned as is).
    **Starting before the index is read.** The tour's question is hunted while the
    first index is still running (a round every few seconds over the parsed
-   documents so far), so `demo` can be set during `indexing`. While `stage` is
+   documents so far), so `demo` can be set during `indexing`. The keyword retrieval
+   that proves each question reads the MinSync index while the refresh builds it:
+   since librarian 2.13.16 every sync of that refresh may be read beside (the refresh
+   runs MinSync several times, and the second used to be refused), but only while
+   no other caller syncs the same workspace, and only after MinSync has opened its
+   first transaction; before that, and after a sync from elsewhere, a round finds
+   nothing and the hunt tries again. A run whose question is only proven after the
+   index is read reaches `ready` later but the same way. While `stage` is
    `indexing` and `demo` is set, `canStartEarly` (`first-run/tour.ts`) is true and
    the setup screen shows `[data-role="early-start"]` with
    `[data-action="start-early"]`, which takes the same path as "시작하기" into the
