@@ -2203,6 +2203,7 @@
       "indexing": "索引",
       "reading": "文档语言",
       "duplicates": "重复文件整理",
+      "ltr": "搜索排序学习",
       "apps": "全部连接",
       "group": {
         "account": "账户",
@@ -2223,6 +2224,7 @@
         "web": "网页搜索 互联网 搜索 服务 页面读取",
         "indexing": "更新 同步 增量 索引 建立索引 更新周期 sync 搜索范围 文件夹 排除 路径",
         "duplicates": "重复文件 版本 整理 dupey",
+        "ltr": "排序学习 ltr 排名 模型 训练 重排 xgboost 日志 搜索记录 训练数据 reranker",
         "apps": "连接 应用 数据源 即时通讯 邮件 云盘",
         "mcp": "mcp 服务器 工具 连接 扩展 外部工具 codemode 智能体 claude codex gemini cursor 复制"
       },
@@ -2977,6 +2979,69 @@
         "heroDesc": "只需提出要求，例如“Slack 每小时更新一次”。",
         "heroButton": "请 AI 处理"
       }
+    }
+  },
+  "settingsLtr": {
+    "title": "搜索排序学习",
+    "description": "从你自己的搜索记录中学习哪些文档更常被用于回答，并把它们排到前面。",
+    "rerankNeeded": {
+      "text": "“搜索结果排序”已关闭，因此不会记录可用于训练的搜索。",
+      "open": "打开 AI 模型设置"
+    },
+    "section": {
+      "train": "训练",
+      "use": "使用",
+      "models": "已训练的模型"
+    },
+    "log": {
+      "name": "记录搜索",
+      "hint": "每次搜索后，仅在这台电脑上记录候选文档的排名和被引用情况。不会保存文档正文。"
+    },
+    "train": {
+      "name": "立即训练",
+      "hint": "用已记录的 {{count}} 次搜索训练，并在最新的搜索上检查是否优于当前顺序。",
+      "needMore": "已记录 {{count}} 次搜索 · 训练还需要 {{missing}} 次。",
+      "button": "开始训练",
+      "running": "训练中…",
+      "trained": "训练完成，已通过标准。",
+      "rejected": "训练已完成，但未优于当前顺序，因此不会使用。",
+      "insufficient": "可用于训练的数据不足。",
+      "failed": "训练失败。"
+    },
+    "use": {
+      "name": "使用训练好的模型",
+      "hint": "在排序模型排好的顺序上再做调整。不会增加或删除文档。",
+      "hintOff": "已关闭，搜索顺序保持不变。",
+      "hintNoModel": "还没有通过标准的模型，顺序不会改变。",
+      "hintActive": "正在用训练好的模型调整顺序。",
+      "hintUnusable": "所选模型无法使用，因此保持当前顺序。"
+    },
+    "auto": {
+      "name": "自动重新训练",
+      "hint": "积累足够新的搜索后，在回答结束后于后台重新训练。",
+      "every": "重新训练的搜索数",
+      "everyHint": "自上次训练后新记录这么多次时重新训练。",
+      "unit": "次",
+      "invalid": "请输入不小于 1 的整数。"
+    },
+    "model": {
+      "none": "还没有训练过的模型。",
+      "passed": "通过",
+      "rejected": "未通过",
+      "inUse": "使用中",
+      "pinned": "已选择",
+      "score": "得分：当前 {{from}} → 训练后 {{to}}",
+      "queries": "验证 {{count}} 次",
+      "use": "使用此模型",
+      "useLatest": "使用最新的通过模型",
+      "delete": "删除",
+      "deleteAsk": "删除此模型？",
+      "deleteConfirm": "确认删除",
+      "cancel": "取消",
+      "caveat": "“通过”只表示在已记录的搜索上优于当前顺序，并不保证回答会更好。"
+    },
+    "error": {
+      "read": "无法读取状态：{{reason}}"
     }
   },
   "settingsSources": {
