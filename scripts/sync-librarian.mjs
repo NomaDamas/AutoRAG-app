@@ -32,10 +32,10 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // `searchDocumentsStream` yields a `revision` event between `preliminary` and `complete`. When something was corrected,
 // `complete.answer` is the first answer with every correction applied, not a delta. v2.13.14 reads a MinSync index while
 // its first sync is still running (#2183, #2200).
-// AutoRAG#2204 (learning to rank: the ranking log, `autorag ltr`, the `ltr` and `rankingLog` config keys, serving after
-// the reranker) as squash-merged into `main`. It is on `main` but not yet in a release tag: move this to the first tag
-// that contains it (after v2.13.16) once it exists.
-const librarianRef = "a50f657f815ec4e7cabf4bfe9f09784ccdc97439";
+// v2.14.0 adds learning to rank (AutoRAG#2204): the ranking log (on by default), `autorag ltr` (train, status, delete),
+// the `ltr` and `rankingLog` config keys, and serving a trained model after the reranker (opt-in). The app drives it
+// through `src/main/ltr-service.ts` and shows it on the Search Ranking settings page.
+const librarianRef = "v2.14.0";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });
