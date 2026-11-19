@@ -2203,6 +2203,7 @@
       "indexing": "Indexing",
       "reading": "Document Language",
       "duplicates": "Duplicate Cleanup",
+      "ltr": "Search Ranking",
       "apps": "All Connections",
       "group": {
         "account": "Account",
@@ -2223,6 +2224,7 @@
         "web": "web search internet search service page reading",
         "indexing": "refresh sync incremental index indexing update interval schedule search scope folders exclude paths",
         "duplicates": "duplicate files versions cleanup dupey",
+        "ltr": "learning to rank ltr ranking model train reorder xgboost log search history training data reranker",
         "apps": "connections apps data sources messenger mail cloud",
         "mcp": "mcp server tools connect extension external tools codemode agent claude codex gemini cursor copy"
       },
@@ -2891,6 +2893,78 @@
         "readOnlyHint": "The agent can only search; it can't refresh the index or save reports."
       },
       "openFile": "Open Config File"
+    }
+  },
+  "settingsLtr": {
+    "title": "Search Ranking",
+    "description": "Learns from your own searches which documents tend to be used in the answer, and moves them up.",
+    "intro": "Until you turn it on, the order of search results does not change at all. Recording and training never affect search; only “Use the trained model” below changes the order.",
+    "privacy": "Stored on this computer only. The question, search queries, document paths, each channel's rank and score, and which documents were cited are recorded; document text is not stored.",
+    "log": {
+      "title": "Search log",
+      "switch": "Record searches",
+      "name": "Record searches",
+      "hint": "After each search, the candidate documents and the outcome are recorded. This is the training data.",
+      "count": "{{count}} searches logged · {{needed}} needed to train"
+    },
+    "rerankNeeded": {
+      "title": "Search result ordering is off",
+      "body": "Training only uses searches that the ordering model ranked. Searches logged without it are skipped, so turn on “Search result ordering” in the AI model settings first.",
+      "open": "Open AI model settings"
+    },
+    "train": {
+      "title": "Training",
+      "name": "Train a model",
+      "button": "Train now",
+      "running": "Training…",
+      "needMore": "{{count}} more logged searches are needed before training.",
+      "hint": "Trains on the older searches, then compares with the ordering model's own order on the newest ones to decide whether it passes.",
+      "trained": "Training finished and the model passed.",
+      "rejected": "Training finished but the model did not pass, so it will not be used.",
+      "insufficient": "There is not enough data to train.",
+      "failed": "Training failed."
+    },
+    "serve": {
+      "title": "Use",
+      "switch": "Use the trained model",
+      "name": "Use the trained model",
+      "hint": "After the ordering model ranks the results, the trained model adjusts that order. It never adds or removes documents."
+    },
+    "serving": {
+      "off": "It is off, so search order stays exactly as the ordering model made it.",
+      "noModel": "It is on, but no model has passed yet, so the order is unchanged.",
+      "active": "Adjusting the order with model {{id}}.",
+      "unusable": "Model {{id}} cannot be used, so the ordering model's order is kept."
+    },
+    "auto": {
+      "title": "Automatic training",
+      "switch": "Retrain automatically",
+      "name": "Retrain automatically",
+      "hint": "Trains in the background after an answer is finished. The window never freezes.",
+      "every": "Every new searches",
+      "everyHint": "Retrains once this many searches have been logged since the last training.",
+      "unit": "searches",
+      "invalid": "Enter a whole number of 1 or more."
+    },
+    "model": {
+      "title": "Trained models",
+      "none": "No model has been trained yet.",
+      "passed": "Passed",
+      "rejected": "Not passed",
+      "pinned": "Selected",
+      "queries": "{{count}} held-out searches",
+      "mrr": "Rank of the first right answer (MRR) {{from}} → {{to}}",
+      "trainedOn": "Trained on {{count}} searches",
+      "use": "Use this model",
+      "useLatest": "Use the newest passing model",
+      "delete": "Delete",
+      "deleteConfirm": "Confirm delete",
+      "deleteAsk": "Delete model {{id}}?",
+      "cancel": "Cancel",
+      "caveat": "“Passed” only means it beat the ordering model on your logged searches, not that answers get better. The logged “right answer” is whatever the AI cited."
+    },
+    "error": {
+      "read": "Could not read the status: {{reason}}"
     }
   },
   "settingsSources": {

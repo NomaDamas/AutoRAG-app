@@ -5980,3 +5980,115 @@
 .settings-view .index-map-crumb-sep {
 	margin: 0 2px;
 }
+
+/* ------------------------------------------------------ Search ranking (ltr) -- */
+
+.settings-view .settings-ltr .ltr-count,
+.settings-view .settings-ltr .ltr-privacy,
+.settings-view .settings-ltr .ltr-serving,
+.settings-view .settings-ltr .ltr-caveat,
+.settings-view .settings-ltr .ltr-empty {
+	margin: var(--space-8) 0 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-ltr .ltr-result {
+	margin: var(--space-8) 0 0;
+	padding: var(--space-8) var(--space-12);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-ltr .ltr-result.is-trained {
+	border-color: var(--ok-border);
+	background: var(--ok-bg-soft);
+	color: var(--ok-text);
+}
+
+.settings-view .settings-ltr .ltr-result.is-rejected,
+.settings-view .settings-ltr .ltr-result.is-insufficient {
+	border-color: var(--warn-dot);
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .settings-ltr .ltr-result.is-failed {
+	border-color: var(--danger-border);
+	background: var(--danger-bg-soft);
+	color: var(--danger-text);
+}
+
+.settings-view .settings-ltr .ltr-reason {
+	display: block;
+	margin-top: var(--space-4);
+	color: var(--text-muted);
+	overflow-wrap: anywhere;
+}
+
+.settings-view .settings-ltr .ltr-model {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-6);
+	padding: var(--space-10) var(--space-12);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-8);
+}
+
+.settings-view .settings-ltr .ltr-model + .ltr-model {
+	margin-top: var(--space-8);
+}
+
+.settings-view .settings-ltr .ltr-model-head,
+.settings-view .settings-ltr .ltr-model-numbers,
+.settings-view .settings-ltr .ltr-model-actions {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-6) var(--space-12);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-ltr .ltr-model-numbers {
+	color: var(--text-muted);
+}
+
+.settings-view .settings-ltr .ltr-model-date {
+	margin-left: auto;
+	color: var(--text-faint);
+}
+
+.settings-view .settings-ltr .ltr-verdict {
+	padding: 1px var(--space-8);
+	border-radius: var(--radius-6);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-passed {
+	background: var(--ok-bg);
+	color: var(--ok-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-rejected {
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-pinned {
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .settings-ltr .ltr-ask {
+	color: var(--text-body);
+}
+
+.settings-view .settings-ltr .ltr-unit {
+	margin-left: var(--space-6);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
