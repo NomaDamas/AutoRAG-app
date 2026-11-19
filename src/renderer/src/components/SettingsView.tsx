@@ -12,12 +12,13 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
 import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
+import { LtrPage } from "./settings/LtrPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
@@ -41,7 +42,7 @@ import { Keycap } from "./primitives/Keycap";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "ltr" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
 /** Legacy ids stay accepted so an old deep link still lands on a page. 검색 범위 (`scope`) is part of 인덱싱 now. */
 type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "scope";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
@@ -59,6 +60,7 @@ type NavLabelKey =
 	| "settingsCore.nav.indexing"
 	| "settingsCore.nav.reading"
 	| "settingsCore.nav.duplicates"
+	| "settingsCore.nav.ltr"
 	| "settingsCore.nav.mcp"
 	| "settingsCore.nav.apps";
 
@@ -91,6 +93,7 @@ export const PAGES = [
 	{ id: "remote", labelKey: "settingsCore.nav.remote", icon: MonitorSmartphone, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.remote" },
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
+	{ id: "ltr", labelKey: "settingsCore.nav.ltr", icon: ListOrdered, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ltr" },
 	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
 	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
 	{ id: "mcp", labelKey: "settingsCore.nav.mcp", icon: Server, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.mcp" },
@@ -274,6 +277,8 @@ export function SettingsPageContent({
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "ai":
 			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} />;
+		case "ltr":
+			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} />;
 		case "web":
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":

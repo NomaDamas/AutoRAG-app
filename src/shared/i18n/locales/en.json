@@ -2203,6 +2203,7 @@
       "indexing": "Indexing",
       "reading": "Document Language",
       "duplicates": "Duplicate Cleanup",
+      "ltr": "Search Ranking",
       "apps": "All Connections",
       "group": {
         "account": "Account",
@@ -2223,6 +2224,7 @@
         "web": "web search internet search service page reading",
         "indexing": "refresh sync incremental index indexing update interval schedule search scope folders exclude paths",
         "duplicates": "duplicate files versions cleanup dupey",
+        "ltr": "learning to rank ltr ranking model train reorder xgboost log search history training data reranker",
         "apps": "connections apps data sources messenger mail cloud",
         "mcp": "mcp server tools connect extension external tools codemode agent claude codex gemini cursor copy"
       },
@@ -2891,6 +2893,69 @@
         "readOnlyHint": "The agent can only search; it can't refresh the index or save reports."
       },
       "openFile": "Open Config File"
+    }
+  },
+  "settingsLtr": {
+    "title": "Search Ranking",
+    "description": "Learns from your own searches which documents get used in answers, and moves them up.",
+    "rerankNeeded": {
+      "text": "Search result ordering is off, so no searches are being logged for training.",
+      "open": "Open AI model settings"
+    },
+    "section": {
+      "train": "Training",
+      "use": "Use",
+      "models": "Trained models"
+    },
+    "log": {
+      "name": "Record searches",
+      "hint": "After each search, the candidates' ranks and which were cited are kept on this computer only. Document text is not stored."
+    },
+    "train": {
+      "name": "Train now",
+      "hint": "Trains on {{count}} logged searches, then checks whether it beats the current order on the newest ones.",
+      "needMore": "{{count}} searches logged · {{missing}} more needed to train.",
+      "button": "Train",
+      "running": "Training…",
+      "trained": "Training finished and the model passed.",
+      "rejected": "Training finished, but the model did not beat the current order, so it will not be used.",
+      "insufficient": "There is not enough data to train.",
+      "failed": "Training failed."
+    },
+    "use": {
+      "name": "Use the trained model",
+      "hint": "Adjusts the order the ordering model chose. It never adds or removes documents.",
+      "hintOff": "Off, so search order is unchanged.",
+      "hintNoModel": "No model has passed yet, so the order is unchanged.",
+      "hintActive": "Adjusting the order with the trained model.",
+      "hintUnusable": "The selected model cannot be used, so the current order is kept."
+    },
+    "auto": {
+      "name": "Retrain automatically",
+      "hint": "Retrains in the background after an answer, once enough new searches are logged.",
+      "every": "Searches before retraining",
+      "everyHint": "Retrains once this many are logged since the last training.",
+      "unit": "searches",
+      "invalid": "Enter a whole number of 1 or more."
+    },
+    "model": {
+      "none": "No model has been trained yet.",
+      "passed": "Passed",
+      "rejected": "Not passed",
+      "inUse": "In use",
+      "pinned": "Selected",
+      "score": "Score: current {{from}} → trained {{to}}",
+      "queries": "{{count}} held-out",
+      "use": "Use this model",
+      "useLatest": "Use the newest passing model",
+      "delete": "Delete",
+      "deleteAsk": "Delete this model?",
+      "deleteConfirm": "Confirm delete",
+      "cancel": "Cancel",
+      "caveat": "“Passed” means it beat the current order on your logged searches, not that answers get better."
+    },
+    "error": {
+      "read": "Could not read the status: {{reason}}"
     }
   },
   "settingsSources": {
