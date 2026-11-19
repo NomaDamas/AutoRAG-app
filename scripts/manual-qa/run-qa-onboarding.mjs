@@ -40,10 +40,10 @@ writeFileSync(join(DOCS, "notes.txt"), "Budget summary for the third quarter.\n"
 mkdirSync(AUTORAG_HOME, { recursive: true });
 mkdirSync(join(WORK, "config"), { recursive: true });
 const realMinsyncModels =
-	process.env.FASTEMBED_CACHE_DIR?.trim() ||
+	process.env.INL_CACHE_DIR?.trim() ||
 	(process.platform === "win32"
-		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "minsync", "models")
-		: join(homeDir(), ".cache", "minsync", "models"));
+		? join(process.env.LOCALAPPDATA?.trim() || join(homeDir(), "AppData", "Local"), "im-not-llm", "models")
+		: join(homeDir(), ".cache", "im-not-llm", "models"));
 // The first argument (or QA_ONBOARDING_EMBED) picks the embedding card: none (default, keyword-only) or local. `bun run qa script` forwards arguments into the VM, environment variables do not. Cloud needs an account, so it is not drivable here.
 const EMBED = process.argv[2]?.trim() || process.env.QA_ONBOARDING_EMBED?.trim() || "none";
 const EMBED_CARD = { none: 0, local: 2 }[EMBED];
@@ -107,7 +107,7 @@ const env = {
 	AUTORAG_HOME,
 	AUTORAG_CONFIG: CONFIG,
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
-	...(existsSync(realMinsyncModels) ? { FASTEMBED_CACHE_DIR: realMinsyncModels } : {}),
+	...(existsSync(realMinsyncModels) ? { INL_CACHE_DIR: realMinsyncModels } : {}),
 };
 const userDataDir = join(WORK, "user-data");
 const app = await launchFinder({ userDataDir, env, onboarding: true, language: "ko" });

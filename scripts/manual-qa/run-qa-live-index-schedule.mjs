@@ -37,7 +37,7 @@ const check = (label, ok, detail) => {
 	if (!ok) failures.push(label);
 };
 
-const MODELS = process.env.FASTEMBED_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "minsync", "models");
+const MODELS = process.env.INL_CACHE_DIR ?? join(process.env.HOME ?? "", ".cache", "im-not-llm", "models");
 if (!existsSync(MODELS)) {
 	console.log(`SKIP: no on-device sparse model cache at ${MODELS}; real indexing cannot run`);
 	process.exit(2);
@@ -53,8 +53,8 @@ const WORK = mkdtempSync(join(tmpdir(), "dazzi-qa-schedule-"));
 const CONFIG = join(WORK, "config.json");
 const DOCS = join(WORK, "docs");
 const WORKSPACE = join(WORK, "workspace");
-for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home", ".cache", "minsync")]) mkdirSync(dir, { recursive: true });
-if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "minsync", "models"));
+for (const dir of [DOCS, WORKSPACE, join(WORK, "pi-agent"), join(WORK, "home", ".cache", "im-not-llm")]) mkdirSync(dir, { recursive: true });
+if (process.platform !== "win32") symlinkSync(MODELS, join(WORK, "home", ".cache", "im-not-llm", "models"));
 const FILES = ["kestrel-plan.md", "osprey-notes.md", "heron-budget.md"];
 FILES.forEach((name, i) => writeFileSync(join(DOCS, name), `# ${name}\n\nThe zephyrine audit for site ${i + 1} is owned by team ${i + 1}.\n`));
 
@@ -80,7 +80,7 @@ const env = {
 	AUTORAG_CONFIG: CONFIG,
 	PI_CODING_AGENT_DIR: join(WORK, "pi-agent"),
 	AUTORAG_SKIP_DUPEY_CHECK: "1",
-	FASTEMBED_CACHE_DIR: MODELS,
+	INL_CACHE_DIR: MODELS,
 };
 const STATE = join(WORK, "app-refresh", "state.json");
 const JOB_LOG = join(WORK, "app-refresh", "job.log");

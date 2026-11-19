@@ -177,10 +177,10 @@ the install smoke uses but nothing ships), `verify-bundle.mjs` runs each of them
 a bare `PATH`, `electron-builder.config.mjs` packs them into the app's
 `resources/`, and `smoke-installed.mjs` installs the real artifact and launches
 it. At run time `src/main/bundled-tools.ts` puts `resources/tools/bin` first on
-`PATH` and seeds MinSync's SPLADE model, which the installer carries in `resources/tools/models`, into MinSync's model
-cache (`src/main/bundled-sparse-model.ts`); the dense embedding model is not bundled — the app downloads it on demand
+`PATH` and seeds MinSync's SPLADE model, which the installer carries in `resources/tools/models`, into the shared
+im-not-llm (`inl`) weight cache (`src/main/bundled-sparse-model.ts`); the dense embedding model is not bundled — the app downloads it on demand
 (`src/main/model-download.ts`) into the same cache
-(`~/.cache/minsync/models`). Stage each platform on a matching host; never commit
+(`~/.cache/im-not-llm/models`, or `INL_CACHE_DIR`). Stage each platform on a matching host; never commit
 `build/stage`, `build/.cache`, or `dist`. Signing credentials live only in GitHub
 secrets.
 
@@ -358,12 +358,12 @@ Each setting fixes a failure seen in the lanes, not a preference:
   a VM cannot show (GPU rendering, a physical display, real Finder.app state).
   Run `--host` for those before release.
 - A fresh VM has no embedding model. For the `onboarding` lane, a full sweep, or a
-  `qa script`, the runner copies the host's MinSync model cache into the guest's
-  `~/.cache/minsync/models` (`~/.cache/minsync/models` or `FASTEMBED_CACHE_DIR` on
+  `qa script`, the runner copies the host's shared im-not-llm model cache into the guest's
+  `~/.cache/im-not-llm/models` (`~/.cache/im-not-llm/models` or `INL_CACHE_DIR` on
   the host); without it the first index downloads ~1.2 GB from Hugging Face inside
-  the VM. The host prerequisite is that MinSync has cached
-  `Qwen/Qwen3-Embedding-0.6B` once — run `minsync serve` (or a MinSync sync) on the
-  host once to populate it.
+  the VM. The host prerequisite is that the shared embedding model
+  `Qwen/Qwen3-Embedding-0.6B` has been cached once — run `inl serve` (or a MinSync
+  sync) on the host once to populate it.
 - Never run `qa:vm:setup` while a run is active; setup needs both VM slots.
 - Do not copy `~/.autorag-qa`, the golden image, or `evidence` into a
   repository. They are machine-local.

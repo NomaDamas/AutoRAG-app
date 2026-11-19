@@ -99,19 +99,19 @@ const hostCommand = (job) =>
 		: { command: "bun", args: [join("scripts", "manual-qa", "run-all.mjs"), ...job.lanes] };
 
 /**
- * Copy the host's native MinSync embedding model cache into the guest's
- * `~/.cache/minsync/models`. Without it a real first index downloads ~1.2 GB
+ * Copy the host's native embedding model cache into the guest's
+ * `~/.cache/im-not-llm/models`. Without it a real first index downloads ~1.2 GB
  * from Hugging Face inside the guest.
  */
 async function pushEmbeddingAssets(ip, signal) {
-	const minsyncModels = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
-	if (!existsSync(minsyncModels)) {
-		log(`no native embedding cache at ${minsyncModels}; the guest will download it on first index`);
+	const modelCache = process.env.INL_CACHE_DIR?.trim() || join(homedir(), ".cache", "im-not-llm", "models");
+	if (!existsSync(modelCache)) {
+		log(`no native embedding cache at ${modelCache}; the guest will download it on first index`);
 		return;
 	}
-	log("copying native embedding model cache (.cache/minsync/models) into the guest");
-	await sshOk(ip, "mkdir -p \"$HOME/.cache/minsync/models\"");
-	await pushTree(ip, minsyncModels, ".cache/minsync/models", { signal });
+	log("copying native embedding model cache (.cache/im-not-llm/models) into the guest");
+	await sshOk(ip, "mkdir -p \"$HOME/.cache/im-not-llm/models\"");
+	await pushTree(ip, modelCache, ".cache/im-not-llm/models", { signal });
 }
 
 /**
