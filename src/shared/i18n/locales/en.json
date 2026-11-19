@@ -2897,71 +2897,62 @@
   },
   "settingsLtr": {
     "title": "Search Ranking",
-    "description": "Learns from your own searches which documents tend to be used in the answer, and moves them up.",
-    "intro": "Until you turn it on, the order of search results does not change at all. Recording and training never affect search; only “Use the trained model” below changes the order.",
-    "privacy": "Stored on this computer only. The question, search queries, document paths, each channel's rank and score, and which documents were cited are recorded; document text is not stored.",
-    "log": {
-      "title": "Search log",
-      "switch": "Record searches",
-      "name": "Record searches",
-      "hint": "After each search, the candidate documents and the outcome are recorded. This is the training data.",
-      "count": "{{count}} searches logged · {{needed}} needed to train"
-    },
+    "description": "Learns from your own searches which documents get used in answers, and moves them up.",
     "rerankNeeded": {
-      "title": "Search result ordering is off",
-      "body": "Training only uses searches that the ordering model ranked. Searches logged without it are skipped, so turn on “Search result ordering” in the AI model settings first.",
+      "text": "Search result ordering is off, so no searches are being logged for training.",
       "open": "Open AI model settings"
     },
+    "section": {
+      "train": "Training",
+      "use": "Use",
+      "models": "Trained models"
+    },
+    "log": {
+      "name": "Record searches",
+      "hint": "After each search, the candidates' ranks and which were cited are kept on this computer only. Document text is not stored."
+    },
     "train": {
-      "title": "Training",
-      "name": "Train a model",
-      "button": "Train now",
+      "name": "Train now",
+      "hint": "Trains on {{count}} logged searches, then checks whether it beats the current order on the newest ones.",
+      "needMore": "{{count}} searches logged · {{missing}} more needed to train.",
+      "button": "Train",
       "running": "Training…",
-      "needMore": "{{count}} more logged searches are needed before training.",
-      "hint": "Trains on the older searches, then compares with the ordering model's own order on the newest ones to decide whether it passes.",
       "trained": "Training finished and the model passed.",
-      "rejected": "Training finished but the model did not pass, so it will not be used.",
+      "rejected": "Training finished, but the model did not beat the current order, so it will not be used.",
       "insufficient": "There is not enough data to train.",
       "failed": "Training failed."
     },
-    "serve": {
-      "title": "Use",
-      "switch": "Use the trained model",
+    "use": {
       "name": "Use the trained model",
-      "hint": "After the ordering model ranks the results, the trained model adjusts that order. It never adds or removes documents."
-    },
-    "serving": {
-      "off": "It is off, so search order stays exactly as the ordering model made it.",
-      "noModel": "It is on, but no model has passed yet, so the order is unchanged.",
-      "active": "Adjusting the order with model {{id}}.",
-      "unusable": "Model {{id}} cannot be used, so the ordering model's order is kept."
+      "hint": "Adjusts the order the ordering model chose. It never adds or removes documents.",
+      "hintOff": "Off, so search order is unchanged.",
+      "hintNoModel": "No model has passed yet, so the order is unchanged.",
+      "hintActive": "Adjusting the order with the trained model.",
+      "hintUnusable": "The selected model cannot be used, so the current order is kept."
     },
     "auto": {
-      "title": "Automatic training",
-      "switch": "Retrain automatically",
       "name": "Retrain automatically",
-      "hint": "Trains in the background after an answer is finished. The window never freezes.",
-      "every": "Every new searches",
-      "everyHint": "Retrains once this many searches have been logged since the last training.",
+      "hint": "Retrains in the background after an answer, once enough new searches are logged.",
+      "every": "Searches before retraining",
+      "everyHint": "Retrains once this many are logged since the last training.",
       "unit": "searches",
       "invalid": "Enter a whole number of 1 or more."
     },
     "model": {
-      "title": "Trained models",
       "none": "No model has been trained yet.",
       "passed": "Passed",
       "rejected": "Not passed",
+      "inUse": "In use",
       "pinned": "Selected",
-      "queries": "{{count}} held-out searches",
-      "mrr": "Rank of the first right answer (MRR) {{from}} → {{to}}",
-      "trainedOn": "Trained on {{count}} searches",
+      "score": "Score: current {{from}} → trained {{to}}",
+      "queries": "{{count}} held-out",
       "use": "Use this model",
       "useLatest": "Use the newest passing model",
       "delete": "Delete",
+      "deleteAsk": "Delete this model?",
       "deleteConfirm": "Confirm delete",
-      "deleteAsk": "Delete model {{id}}?",
       "cancel": "Cancel",
-      "caveat": "“Passed” only means it beat the ordering model on your logged searches, not that answers get better. The logged “right answer” is whatever the AI cited."
+      "caveat": "“Passed” means it beat the current order on your logged searches, not that answers get better."
     },
     "error": {
       "read": "Could not read the status: {{reason}}"

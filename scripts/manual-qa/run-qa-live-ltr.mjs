@@ -234,13 +234,13 @@ try {
 	await page.locator(".sidebar__item--settings").click();
 	await page.locator(".settings-nav-item", { hasText: "Search Ranking" }).first().click();
 	await page.locator(".settings-ltr").waitFor();
-	const count = await waitFor(async () => /searches logged/u.test(await body()));
+	const count = await waitFor(async () => /logged searches/u.test(await body()));
 	const expectedCount = QUESTIONS.length + TOP_UP;
-	check("the page counts the real log", count === true && new RegExp(`${expectedCount} searches logged`, "u").test(await body()), (await body()).slice(0, 200));
+	check("the page counts the real log", count === true && new RegExp(`Trains on ${expectedCount} logged searches`, "u").test(await body()), (await body()).slice(0, 200));
 	check("the reranker is on, so there is no warning", !/Search result ordering is off/u.test(await body()));
 	await page.screenshot({ path: join(EVIDENCE, "02-ready.png") });
 
-	await page.getByRole("button", { name: "Train now" }).click();
+	await page.getByRole("button", { name: "Train", exact: true }).click();
 	const lag = await page.evaluate(
 		() =>
 			new Promise((resolve) => {
@@ -258,7 +258,7 @@ try {
 			}),
 	);
 	check("the window is never blocked while the model trains", lag < 250, `worst stall ${Math.round(lag)} ms`);
-	const verdict = await waitFor(async () => /Training finished|did not pass|not enough data|Training failed/u.test(await body()), 240_000);
+	const verdict = await waitFor(async () => /Training finished|did not beat|not enough data|Training failed/u.test(await body()), 240_000);
 	await page.screenshot({ path: join(EVIDENCE, "03-trained.png") });
 	check("training ends with a verdict on the page", verdict === true, (await body()).slice(0, 400));
 	const status = librarian("ltr", "status");
@@ -271,7 +271,7 @@ try {
 		console.log("INFO the model did not pass its gate on this (small, replayed) log, so it must not serve; checking that");
 		await page.locator('.settings-ltr [aria-label="Use the trained model"]').click();
 		await waitFor(() => readConfig().ltr?.enabled === true);
-		check("with no passing model, turning serving on leaves the order unchanged and says so", (await waitFor(async () => /no model has passed yet/u.test(await body()))) === true, (await body()).slice(0, 300));
+		check("with no passing model, turning serving on leaves the order unchanged and says so", (await waitFor(async () => /No model has passed yet/u.test(await body()))) === true, (await body()).slice(0, 300));
 		const before = loggedRuns().length;
 		await page.getByRole("button", { name: "Back to app" }).click();
 		await openAiSearch(page);
@@ -282,7 +282,7 @@ try {
 	} else {
 		await page.locator('.settings-ltr [aria-label="Use the trained model"]').click();
 		check("turning serving on writes ltr.enabled", (await waitFor(() => readConfig().ltr?.enabled === true)) === true, JSON.stringify(readConfig().ltr));
-		check("the page names the model that serves", (await waitFor(async () => /Adjusting the order with model xgb-/u.test(await body()))) === true, (await body()).slice(0, 300));
+		check("the page names the model that serves", (await waitFor(async () => /Adjusting the order with the trained model/u.test(await body()))) === true, (await body()).slice(0, 300));
 		await page.screenshot({ path: join(EVIDENCE, "04-serving.png") });
 		await page.getByRole("button", { name: "Back to app" }).click();
 		await openAiSearch(page);

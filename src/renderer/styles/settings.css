@@ -5983,82 +5983,88 @@
 
 /* ------------------------------------------------------ Search ranking (ltr) -- */
 
-.settings-view .settings-ltr .ltr-count,
-.settings-view .settings-ltr .ltr-privacy,
-.settings-view .settings-ltr .ltr-serving,
+/* The page is plain rows like the others; only the verdict chips, the model list and the result line are its own. */
+
 .settings-view .settings-ltr .ltr-caveat,
 .settings-view .settings-ltr .ltr-empty {
-	margin: var(--space-8) 0 0;
+	margin: 0;
 	color: var(--text-muted);
 	font-size: var(--font-size-meta);
 	line-height: 1.5;
 }
 
 .settings-view .settings-ltr .ltr-result {
-	margin: var(--space-8) 0 0;
+	margin: 0;
 	padding: var(--space-8) var(--space-12);
-	border: 1px solid var(--border);
 	border-radius: var(--radius-8);
 	font-size: var(--font-size-meta);
 	line-height: 1.5;
 }
 
 .settings-view .settings-ltr .ltr-result.is-trained {
-	border-color: var(--ok-border);
 	background: var(--ok-bg-soft);
 	color: var(--ok-text);
 }
 
 .settings-view .settings-ltr .ltr-result.is-rejected,
 .settings-view .settings-ltr .ltr-result.is-insufficient {
-	border-color: var(--warn-dot);
 	background: var(--warn-bg);
 	color: var(--warn-text);
 }
 
 .settings-view .settings-ltr .ltr-result.is-failed {
-	border-color: var(--danger-border);
 	background: var(--danger-bg-soft);
 	color: var(--danger-text);
 }
 
 .settings-view .settings-ltr .ltr-reason {
 	display: block;
-	margin-top: var(--space-4);
+	margin: 0;
 	color: var(--text-muted);
+	font-size: var(--font-size-meta);
 	overflow-wrap: anywhere;
 }
 
+/* A model is a row, not a card: when and how it scored on the left, its actions on the right, a rule between rows. */
 .settings-view .settings-ltr .ltr-model {
 	display: flex;
-	flex-direction: column;
-	gap: var(--space-6);
-	padding: var(--space-10) var(--space-12);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-8);
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-12);
+	padding: var(--space-12) 0;
 }
 
 .settings-view .settings-ltr .ltr-model + .ltr-model {
-	margin-top: var(--space-8);
+	border-top: 1px solid var(--border-divider);
 }
 
-.settings-view .settings-ltr .ltr-model-head,
-.settings-view .settings-ltr .ltr-model-numbers,
-.settings-view .settings-ltr .ltr-model-actions {
+.settings-view .settings-ltr .ltr-model-main {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+.settings-view .settings-ltr .ltr-model-title {
 	display: flex;
 	flex-wrap: wrap;
 	align-items: center;
-	gap: var(--space-6) var(--space-12);
+	gap: var(--space-8);
+	color: var(--text-primary);
+	font-size: var(--font-size-body);
+}
+
+.settings-view .settings-ltr .ltr-model-meta {
+	color: var(--text-muted);
 	font-size: var(--font-size-meta);
 }
 
-.settings-view .settings-ltr .ltr-model-numbers {
-	color: var(--text-muted);
-}
-
-.settings-view .settings-ltr .ltr-model-date {
-	margin-left: auto;
-	color: var(--text-faint);
+.settings-view .settings-ltr .ltr-model-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-8);
+	font-size: var(--font-size-meta);
 }
 
 .settings-view .settings-ltr .ltr-verdict {
@@ -6078,17 +6084,40 @@
 	color: var(--warn-text);
 }
 
-.settings-view .settings-ltr .ltr-verdict.is-pinned {
+.settings-view .settings-ltr .ltr-verdict.is-use {
 	background: var(--accent-soft);
 	color: var(--accent-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-pinned {
+	background: var(--bg-hover);
+	color: var(--text-body);
 }
 
 .settings-view .settings-ltr .ltr-ask {
 	color: var(--text-body);
 }
 
+.settings-view .settings-ltr .ltr-number {
+	width: 64px;
+	text-align: right;
+}
+
 .settings-view .settings-ltr .ltr-unit {
 	margin-left: var(--space-6);
 	color: var(--text-muted);
 	font-size: var(--font-size-meta);
+}
+
+/* A text link in a sentence or under the list (open AI settings, back to the newest model). */
+.settings-view .settings-ltr .ltr-link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent-text);
+	font: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	align-self: flex-start;
 }

@@ -73,7 +73,7 @@ mkdirSync(join(root, "pi-agent"), { recursive: true });
 const shot = async (page, name) => page.screenshot({ path: join(EVIDENCE, name) });
 const body = (page) => page.locator(".settings-ltr").innerText();
 /** The page fills in once the librarian answers (a child process, about a second); assert only after the count shows. */
-const loaded = (page) => waitFor(async () => /searches logged/u.test(await body(page)), 30_000);
+const loaded = (page) => waitFor(async () => /searches logged|logged searches/u.test(await body(page)), 30_000);
 const switchOf = (page, label) => page.locator(`.settings-ltr [aria-label="${label}"]`);
 const open = async (page, label) => {
 	if ((await page.locator(".settings-panel").count()) === 0) {
@@ -99,14 +99,14 @@ try {
 	await shot(page, "01-small-log-no-reranker.png");
 	let text = await body(page);
 	check("the page opens from Settings", /Search Ranking/u.test(text));
-	check("it counts the logged searches against the number training needs", /40 searches logged/u.test(text) && /100 needed/u.test(text), text.slice(0, 300));
+	check("it counts the logged searches against the number training needs", /40 searches logged/u.test(text) && /60 more needed to train/u.test(text), text.slice(0, 300));
 	check("it says the reranker is off and training cannot use the log", /Search result ordering is off/u.test(text));
 	check("the training row is not named like its section", (await page.locator(".settings-ltr .settings-plain-name", { hasText: /^Training$/u }).count()) === 0);
-	check("Train now is disabled and says how many more searches it needs", (await page.getByRole("button", { name: "Train now" }).isDisabled()) && /60 more logged searches/u.test(text));
+	check("Train now is disabled and says how many more searches it needs", (await page.getByRole("button", { name: "Train", exact: true }).isDisabled()) && /60 more needed to train/u.test(text));
 	check("recording is on by default", (await switchOf(page, "Record searches").getAttribute("data-state")) === "checked");
 	check("serving is off by default", (await switchOf(page, "Use the trained model").getAttribute("data-state")) === "unchecked");
-	check("it says search order is the reranker's own while serving is off", /exactly as the ordering model made it/u.test(text));
-	check("it states what is and is not stored", /document text is not stored/u.test(text));
+	check("it says search order is the reranker's own while serving is off", /search order is unchanged/u.test(text));
+	check("it states what is and is not stored", /Document text is not stored/u.test(text));
 
 	// ── the record switch writes the shared config ────────────────────────────────────────────────
 	await switchOf(page, "Record searches").click();
@@ -120,16 +120,16 @@ try {
 	await page.reload();
 	await page.waitForSelector(".sidebar__item");
 	await open(page, "Search Ranking");
-	await waitFor(async () => /400 searches logged/u.test(await body(page)), 30_000);
+	await waitFor(async () => /Trains on 400 logged searches/u.test(await body(page)), 30_000);
 	text = await body(page);
 	await shot(page, "02-ready-to-train.png");
 	check("with the reranker on the warning is gone", !/Search result ordering is off/u.test(text));
-	check("the log count is current", /400 searches logged/u.test(text), text.slice(0, 200));
-	check("Train now is enabled", (await page.getByRole("button", { name: "Train now" }).isEnabled()) === true);
+	check("the log count is current", /Trains on 400 logged searches/u.test(text), text.slice(0, 200));
+	check("Train now is enabled", (await page.getByRole("button", { name: "Train", exact: true }).isEnabled()) === true);
 
 	// ── training: real librarian, child process, window stays responsive ──────────────────────────
 	const started = Date.now();
-	await page.getByRole("button", { name: "Train now" }).click();
+	await page.getByRole("button", { name: "Train", exact: true }).click();
 	const lag = await page.evaluate(
 		() =>
 			new Promise((resolve) => {
@@ -147,13 +147,13 @@ try {
 			}),
 	);
 	check("the renderer's event loop is never blocked while training runs", lag < 250, `worst stall ${Math.round(lag)} ms`);
-	const finished = await waitFor(async () => /Training finished|did not pass|not enough data|Training failed/u.test(await body(page)), 180_000);
+	const finished = await waitFor(async () => /Training finished|did not beat|not enough data|Training failed/u.test(await body(page)), 180_000);
 	const trainMs = Date.now() - started;
 	text = await body(page);
 	await shot(page, "03-trained.png");
 	check("training ends with a verdict the page shows", finished === true, text.slice(0, 400));
 	const passed = /Training finished and the model passed/u.test(text);
-	check("the model is listed with its numbers", (await page.locator("[data-ltr-model]").count()) >= 1 && /MRR\)?\s*0\.\d{3}\s*→\s*0\.\d{3}/u.test(text), text.slice(0, 600));
+	check("the model is listed with its numbers", (await page.locator("[data-ltr-model]").count()) >= 1 && /Score: current 0\.\d{3} → trained 0\.\d{3}/u.test(text), text.slice(0, 600));
 	check("the page does not claim the answers get better", /not that answers get better/u.test(text));
 	console.log(`INFO training took ${trainMs} ms; verdict: ${passed ? "passed" : "not passed"}`);
 	const stateFiles = existsSync(`${memoryPath}.ltr`) ? readdirSync(`${memoryPath}.ltr`) : [];
@@ -163,7 +163,7 @@ try {
 	if (passed) {
 		await switchOf(page, "Use the trained model").click();
 		check("turning serving on writes ltr.enabled", (await waitFor(() => readConfig().ltr?.enabled === true)) === true, JSON.stringify(readConfig().ltr));
-		const serving = await waitFor(async () => /Adjusting the order with model xgb-/u.test(await body(page)));
+		const serving = await waitFor(async () => /Adjusting the order with the trained model/u.test(await body(page)));
 		await shot(page, "04-serving.png");
 		check("the page names the model that now serves", serving === true, (await body(page)).slice(0, 400));
 		const firstModel = await page.locator("[data-ltr-model]").first().getAttribute("data-ltr-model");
@@ -174,14 +174,14 @@ try {
 		console.log("INFO the model did not pass its gate on this log; serving checks skipped (a rejected model must not serve)");
 		await switchOf(page, "Use the trained model").click();
 		await waitFor(() => readConfig().ltr?.enabled === true);
-		const noModel = await waitFor(async () => /no model has passed yet/u.test(await body(page)));
+		const noModel = await waitFor(async () => /No model has passed yet/u.test(await body(page)));
 		check("serving on with no passing model says the order is unchanged", noModel === true, (await body(page)).slice(0, 300));
 	}
 
 	// ── automatic training ────────────────────────────────────────────────────────────────────────
 	await switchOf(page, "Retrain automatically").click();
 	check("automatic training writes ltr.autoTrain.enabled", (await waitFor(() => readConfig().ltr?.autoTrain?.enabled === true)) === true, JSON.stringify(readConfig().ltr));
-	const every = switchOf(page, "Every new searches");
+	const every = switchOf(page, "Searches before retraining");
 	await every.waitFor();
 	await every.fill("150");
 	await every.press("Enter");
@@ -203,7 +203,7 @@ try {
 	// ── a second model, then delete: the pinned one is kept, the other asks first ─────────────────
 	if (passed) {
 		const pinnedId = readConfig().ltr?.model;
-		await page.getByRole("button", { name: "Train now" }).click();
+		await page.getByRole("button", { name: "Train", exact: true }).click();
 		const two = await waitFor(async () => (await page.locator("[data-ltr-model]").count()) === 2, 120_000);
 		check("training again adds a second model", two === true, String(await page.locator("[data-ltr-model]").count()));
 		await shot(page, "06-two-models.png");
@@ -233,7 +233,7 @@ try {
 	await open(page, "검색 순위 학습");
 	text = await body(page);
 	await shot(page, "08-korean.png");
-	check("the page reads in Korean", /검색 기록 쌓기/u.test(text) && /학습된 모델/u.test(text) && /이 컴퓨터에만 저장됩니다/u.test(text), text.slice(0, 300));
+	check("the page reads in Korean", /검색 기록 쌓기/u.test(text) && /학습된 모델/u.test(text) && /이 컴퓨터에만 기록합니다/u.test(text), text.slice(0, 300));
 	check("no English UI string leaks into the Korean page", !/Train now|Record searches|Search log|Trained models/u.test(text), text.slice(0, 300));
 
 	check("no renderer page error", pageErrors.length === 0, pageErrors.slice(0, 2).join(" | "));

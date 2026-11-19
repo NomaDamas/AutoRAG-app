@@ -81,47 +81,46 @@ describe("LtrPage: what the log holds", () => {
 	it("shows how many searches are logged against the number training needs", async () => {
 		await render(snapshotOf({ loggedRuns: 47 }));
 
-		expect(text()).toContain(t("settingsLtr.log.count", { count: 47, needed: 100 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 47, missing: 53 }));
 	});
 
 	it("says training needs the reranker, and offers the way to turn it on, when it is off", async () => {
 		await render(snapshotOf({ loggedRuns: 300 }), {});
 
-		expect(text()).toContain(t("settingsLtr.rerankNeeded.title"));
-		expect(text()).toContain(t("settingsLtr.rerankNeeded.body"));
+		expect(text()).toContain(t("settingsLtr.rerankNeeded.text"));
 	});
 
 	it("does not nag about the reranker once one is configured", async () => {
 		await render(snapshotOf({ loggedRuns: 300 }), RERANK_ON);
 
-		expect(text()).not.toContain(t("settingsLtr.rerankNeeded.title"));
+		expect(text()).not.toContain(t("settingsLtr.rerankNeeded.text"));
 	});
 
 	it("treats rerank: false and a block without a model as off", async () => {
 		await render(snapshotOf(), { rerank: false });
-		expect(text()).toContain(t("settingsLtr.rerankNeeded.title"));
+		expect(text()).toContain(t("settingsLtr.rerankNeeded.text"));
 		await render(snapshotOf(), { rerank: { enabled: true } });
-		expect(text()).toContain(t("settingsLtr.rerankNeeded.title"));
+		expect(text()).toContain(t("settingsLtr.rerankNeeded.text"));
 		await render(snapshotOf(), { rerank: { enabled: false, model: "m" } });
-		expect(text()).toContain(t("settingsLtr.rerankNeeded.title"));
+		expect(text()).toContain(t("settingsLtr.rerankNeeded.text"));
 	});
 });
 
 describe("LtrPage: the log switch", () => {
 	it("is on by default and writes rankingLog false when turned off", async () => {
 		await render(snapshotOf());
-		expect(byLabel(t("settingsLtr.log.switch")).getAttribute("data-state")).toBe("checked");
+		expect(byLabel(t("settingsLtr.log.name")).getAttribute("data-state")).toBe("checked");
 
-		await act(async () => byLabel(t("settingsLtr.log.switch")).click());
+		await act(async () => byLabel(t("settingsLtr.log.name")).click());
 
 		expect(writes()).toEqual([[{ path: ["rankingLog"], value: false }]]);
 	});
 
 	it("shows off when rankingLog is false, and turning it on removes the key so the default applies", async () => {
 		await render(snapshotOf(), { ...RERANK_ON, rankingLog: false });
-		expect(byLabel(t("settingsLtr.log.switch")).getAttribute("data-state")).toBe("unchecked");
+		expect(byLabel(t("settingsLtr.log.name")).getAttribute("data-state")).toBe("unchecked");
 
-		await act(async () => byLabel(t("settingsLtr.log.switch")).click());
+		await act(async () => byLabel(t("settingsLtr.log.name")).click());
 
 		expect(writes()).toEqual([[{ path: ["rankingLog"], remove: true }]]);
 	});
@@ -130,9 +129,9 @@ describe("LtrPage: the log switch", () => {
 describe("LtrPage: serving", () => {
 	it("is off by default, and turning it on writes ltr.enabled", async () => {
 		await render(snapshotOf({ models: [model("xgb-1")] }));
-		expect(byLabel(t("settingsLtr.serve.switch")).getAttribute("data-state")).toBe("unchecked");
+		expect(byLabel(t("settingsLtr.use.name")).getAttribute("data-state")).toBe("unchecked");
 
-		await act(async () => byLabel(t("settingsLtr.serve.switch")).click());
+		await act(async () => byLabel(t("settingsLtr.use.name")).click());
 
 		expect(writes()).toEqual([[{ path: ["ltr", "enabled"], value: true }]]);
 	});
@@ -140,26 +139,26 @@ describe("LtrPage: serving", () => {
 	it("explains that turning it on without a passing model changes nothing yet", async () => {
 		await render(snapshotOf({ enabled: true, serving: { status: "no-model", reason: "no trained model has passed the holdout gate yet" } }));
 
-		expect(text()).toContain(t("settingsLtr.serving.noModel"));
+		expect(text()).toContain(t("settingsLtr.use.hintNoModel"));
 	});
 
 	it("names the model that is serving", async () => {
 		await render(snapshotOf({ enabled: true, models: [model("xgb-1")], serving: { status: "active", modelId: "xgb-1" } }));
 
-		expect(text()).toContain(t("settingsLtr.serving.active", { id: "xgb-1" }));
+		expect(text()).toContain(t("settingsLtr.use.hintActive"));
 	});
 
 	it("shows why a chosen model cannot serve", async () => {
 		await render(snapshotOf({ enabled: true, serving: { status: "unusable", modelId: "xgb-1", reason: "the model was built for different features" } }));
 
-		expect(text()).toContain(t("settingsLtr.serving.unusable", { id: "xgb-1" }));
+		expect(text()).toContain(t("settingsLtr.use.hintUnusable"));
 		expect(text()).toContain("the model was built for different features");
 	});
 
 	it("says plainly that search order is the reranker's own while serving is off", async () => {
 		await render(snapshotOf({ enabled: false }));
 
-		expect(text()).toContain(t("settingsLtr.serving.off"));
+		expect(text()).toContain(t("settingsLtr.use.hintOff"));
 	});
 });
 
@@ -171,9 +170,8 @@ describe("LtrPage: models", () => {
 		expect(rows.map((row) => row.getAttribute("data-ltr-model"))).toEqual(["xgb-pass", "xgb-fail"]);
 		expect(rows[0]?.textContent).toContain(t("settingsLtr.model.passed"));
 		expect(rows[1]?.textContent).toContain(t("settingsLtr.model.rejected"));
-		expect(rows[0]?.textContent).toContain("0.765");
-		expect(rows[0]?.textContent).toContain("0.779");
-		expect(rows[1]?.textContent).toContain("0.660");
+		expect(rows[0]?.textContent).toContain(t("settingsLtr.model.score", { from: "0.765", to: "0.779" }));
+		expect(rows[1]?.textContent).toContain(t("settingsLtr.model.score", { from: "0.700", to: "0.660" }));
 		expect(rows[0]?.textContent).toContain(t("settingsLtr.model.queries", { count: 142 }));
 	});
 
@@ -214,6 +212,23 @@ describe("LtrPage: models", () => {
 		expect(bridge.ltr.deleteModel).toHaveBeenCalledWith("xgb-1");
 	});
 
+	it("marks the model that is serving as in use", async () => {
+		await render(
+			snapshotOf({ enabled: true, selection: "xgb-2", models: [model("xgb-1"), model("xgb-2")], serving: { status: "active", modelId: "xgb-2" } }),
+			{ ...RERANK_ON, ltr: { enabled: true, model: "xgb-2" } },
+		);
+		expect(host.querySelector('[data-ltr-model="xgb-2"]')?.textContent).toContain(t("settingsLtr.model.inUse"));
+		expect(host.querySelector('[data-ltr-model="xgb-1"]')?.textContent).not.toContain(t("settingsLtr.model.inUse"));
+		// It is pinned too, and that is why it has no Delete: both chips show.
+		expect(host.querySelector('[data-ltr-model="xgb-2"]')?.textContent).toContain(t("settingsLtr.model.pinned"));
+	});
+
+	it("marks a pinned model that is not serving as selected, not in use", async () => {
+		await render(snapshotOf({ selection: "xgb-2", models: [model("xgb-2")] }), { ...RERANK_ON, ltr: { model: "xgb-2" } });
+		expect(host.querySelector('[data-ltr-model="xgb-2"]')?.textContent).toContain(t("settingsLtr.model.pinned"));
+		expect(host.querySelector('[data-ltr-model="xgb-2"]')?.textContent).not.toContain(t("settingsLtr.model.inUse"));
+	});
+
 	it("shows an empty state when nothing has been trained", async () => {
 		await render(snapshotOf({ models: [] }));
 
@@ -229,7 +244,7 @@ describe("LtrPage: training", () => {
 
 		const train = button(t("settingsLtr.train.button"));
 		expect(train.disabled).toBe(true);
-		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 88 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 12, missing: 88 }));
 		await act(async () => train.click());
 		expect(bridge.ltr.train).not.toHaveBeenCalled();
 	});
@@ -313,9 +328,9 @@ describe("LtrPage: training", () => {
 describe("LtrPage: automatic training", () => {
 	it("is off by default and writes the setting when turned on", async () => {
 		await render(snapshotOf());
-		expect(byLabel(t("settingsLtr.auto.switch")).getAttribute("data-state")).toBe("unchecked");
+		expect(byLabel(t("settingsLtr.auto.name")).getAttribute("data-state")).toBe("unchecked");
 
-		await act(async () => byLabel(t("settingsLtr.auto.switch")).click());
+		await act(async () => byLabel(t("settingsLtr.auto.name")).click());
 
 		expect(writes()).toEqual([[{ path: ["ltr", "autoTrain", "enabled"], value: true }]]);
 	});
@@ -370,12 +385,12 @@ describe("LtrPage: answers that arrive out of order", () => {
 		});
 
 		// A write made while the first read is still running reads again, and that read answers first.
-		await act(async () => byLabel(t("settingsLtr.log.switch")).click());
-		expect(text()).toContain(t("settingsLtr.log.count", { count: 77, needed: 100 }));
+		await act(async () => byLabel(t("settingsLtr.log.name")).click());
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 77, missing: 23 }));
 		await act(async () => older.resolve(snapshotOf({ loggedRuns: 11 })));
 
-		expect(text()).toContain(t("settingsLtr.log.count", { count: 77, needed: 100 }));
-		expect(text()).not.toContain(t("settingsLtr.log.count", { count: 11, needed: 100 }));
+		expect(text()).toContain(t("settingsLtr.train.needMore", { count: 77, missing: 23 }));
+		expect(text()).not.toContain(t("settingsLtr.train.needMore", { count: 11, missing: 89 }));
 	});
 
 	it("does not let a read that started before a training run overwrite the models it made", async () => {
@@ -391,7 +406,7 @@ describe("LtrPage: answers that arrive out of order", () => {
 		await act(async () => older.resolve(snapshotOf({ loggedRuns: 300 })));
 		const slow = Promise.withResolvers<LtrSnapshot>();
 		bridge.ltr.get.mockImplementationOnce(() => slow.promise);
-		await act(async () => byLabel(t("settingsLtr.log.switch")).click());
+		await act(async () => byLabel(t("settingsLtr.log.name")).click());
 		await act(async () => button(t("settingsLtr.train.button")).click());
 		expect(host.querySelector('[data-ltr-model="xgb-new"]')).not.toBeNull();
 
@@ -440,22 +455,36 @@ describe("LtrPage: the interval field", () => {
 	});
 });
 
-describe("LtrPage: names", () => {
-	it("names the training row differently from its section", async () => {
-		await render(snapshotOf());
-
-		const section = host.querySelector(".plain-section-title");
-		const names = [...host.querySelectorAll(".settings-plain-name")].map((node) => node.textContent);
-		expect(names).toContain(t("settingsLtr.train.name"));
-		expect(names.filter((name) => name === t("settingsLtr.train.title"))).toEqual([]);
-		expect(section).not.toBeNull();
-	});
-
-	it("lays its sections out like every other settings page", async () => {
-		await render(snapshotOf());
+describe("LtrPage: layout", () => {
+	it("is three sections under the page head, like the other settings pages", async () => {
+		await render(snapshotOf({ models: [model("xgb-1")] }));
 
 		expect(host.querySelector(".settings-ltr > .plain-sections")).not.toBeNull();
-		expect(host.querySelectorAll(".settings-ltr .plain-section").length).toBe(5);
+		expect([...host.querySelectorAll(".settings-ltr .plain-section-title")].map((node) => node.textContent)).toEqual([
+			t("settingsLtr.section.train"),
+			t("settingsLtr.section.use"),
+			t("settingsLtr.section.models"),
+		]);
+	});
+
+	it("keeps every explanation in a row's hint instead of loose paragraphs between sections", async () => {
+		await render(snapshotOf({ loggedRuns: 400, models: [model("xgb-1")] }));
+
+		for (const loose of [".ltr-count", ".ltr-privacy", ".ltr-serving"]) expect(host.querySelector(loose), loose).toBeNull();
+		expect(host.querySelectorAll(".settings-ltr .settings-plain-row").length).toBeGreaterThanOrEqual(4);
+	});
+
+	it("shows the count of logged searches in the training row, with no extra line", async () => {
+		await render(snapshotOf({ loggedRuns: 400 }));
+
+		const row = [...host.querySelectorAll(".settings-plain-row")].find((node) => node.textContent?.includes(t("settingsLtr.train.name")));
+		expect(row?.textContent).toContain(t("settingsLtr.train.hint", { count: 400 }));
+	});
+
+	it("never prints a model's internal id", async () => {
+		await render(snapshotOf({ enabled: true, models: [model("xgb-20261119095228-5eff77")], serving: { status: "active", modelId: "xgb-20261119095228-5eff77" } }));
+
+		expect(text()).not.toContain("xgb-20261119095228-5eff77");
 	});
 });
 
@@ -464,7 +493,7 @@ describe("LtrPage: failure and limits", () => {
 		bridge.settings.configPatch.mockRejectedValue(new Error("ltr.enabled must be a boolean"));
 		await render(snapshotOf());
 
-		await act(async () => byLabel(t("settingsLtr.serve.switch")).click());
+		await act(async () => byLabel(t("settingsLtr.use.name")).click());
 
 		expect(host.querySelector('[role="alert"]')?.textContent).toContain("ltr.enabled must be a boolean");
 	});
@@ -476,18 +505,13 @@ describe("LtrPage: failure and limits", () => {
 		});
 
 		expect(host.querySelector('[role="alert"]')?.textContent).toContain("exit 2: Config file not found");
-		expect(text()).not.toContain(t("settingsLtr.log.count", { count: 0, needed: 100 }));
+		expect(text()).not.toContain(t("settingsLtr.train.needMore", { count: 0, missing: 100 }));
 	});
 
-	it("states what is stored and what is not, so the person can decide", async () => {
+	it("says in the record row what is stored and what is not, so the person can decide", async () => {
 		await render(snapshotOf());
 
-		expect(text()).toContain(t("settingsLtr.privacy"));
-	});
-
-	it("states that nothing about the answer changes unless serving is turned on", async () => {
-		await render(snapshotOf());
-
-		expect(text()).toContain(t("settingsLtr.intro"));
+		const hint = [...host.querySelectorAll(".settings-plain-row")].find((node) => node.textContent?.includes(t("settingsLtr.log.name")))?.querySelector("small")?.textContent;
+		expect(hint).toBe(t("settingsLtr.log.hint"));
 	});
 });

@@ -2,8 +2,9 @@
  * Settings → 검색 순위 학습 (learning to rank).
  *
  * The librarian logs every search's candidates and outcome, can fit a ranking model on that log, and reorders the
- * reranker's results with it when asked. This page is the whole of that for a person: whether searches are recorded,
- * how many are, train now, the models and how each scored, and whether the next search uses one.
+ * reranker's results with it when asked. Three sections, like the other pages: 학습 (record, train, retrain on its own),
+ * 적용 (use the trained model), 학습된 모델 (each with its verdict, pin and delete). Every explanation is the hint of the
+ * row it belongs to; nothing floats between sections.
  *
  * The switches are the shared config's `rankingLog`, `ltr.enabled`, `ltr.model` and `ltr.autoTrain`, written through
  * `configPatch` like every other setting. What the config cannot say (the log size, the models, a run in flight) comes
@@ -51,12 +52,16 @@ function trainResultOf(outcome: LtrTrainOutcome): TrainResult {
 
 function ModelRow({
 	model,
+	inUse,
 	pinned,
 	onUse,
 	onDelete,
 	busy,
 }: {
 	readonly model: LtrModel;
+	/** The model a search would use right now. */
+	readonly inUse: boolean;
+	/** The config names this model. */
 	readonly pinned: boolean;
 	readonly onUse: () => void;
 	readonly onDelete: () => void;
@@ -64,23 +69,25 @@ function ModelRow({
 }): ReactElement {
 	const { t, i18n } = useTranslation();
 	const [asking, setAsking] = useState(false);
+	// The id is an internal name: the person tells models apart by when each was made and how it scored.
 	const made = new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short" }).format(model.createdAt);
 	return (
 		<div className="ltr-model" data-ltr-model={model.id} data-passed={model.passedGate ? "true" : "false"}>
-			<div className="ltr-model-head">
-				<span className={model.passedGate ? "ltr-verdict is-passed" : "ltr-verdict is-rejected"}>{model.passedGate ? t("settingsLtr.model.passed") : t("settingsLtr.model.rejected")}</span>
-				{pinned ? <span className="ltr-verdict is-pinned">{t("settingsLtr.model.pinned")}</span> : null}
-				<span className="ltr-model-date">{made}</span>
-			</div>
-			<div className="ltr-model-numbers">
-				<span>{t("settingsLtr.model.mrr", { from: score(model.holdout.baseline.mrr), to: score(model.holdout.model.mrr) })}</span>
-				<span>{t("settingsLtr.model.queries", { count: model.holdout.queries })}</span>
-				<span>{t("settingsLtr.model.trainedOn", { count: model.trainedOnRuns })}</span>
+			<div className="ltr-model-main">
+				<div className="ltr-model-title">
+					<span className="ltr-model-date">{made}</span>
+					<span className={model.passedGate ? "ltr-verdict is-passed" : "ltr-verdict is-rejected"}>{model.passedGate ? t("settingsLtr.model.passed") : t("settingsLtr.model.rejected")}</span>
+					{inUse ? <span className="ltr-verdict is-use">{t("settingsLtr.model.inUse")}</span> : null}
+					{pinned ? <span className="ltr-verdict is-pinned">{t("settingsLtr.model.pinned")}</span> : null}
+				</div>
+				<small className="ltr-model-meta">
+					{t("settingsLtr.model.score", { from: score(model.holdout.baseline.mrr), to: score(model.holdout.model.mrr) })} · {t("settingsLtr.model.queries", { count: model.holdout.queries })}
+				</small>
 			</div>
 			<div className="ltr-model-actions">
 				{asking ? (
 					<>
-						<span className="ltr-ask">{t("settingsLtr.model.deleteAsk", { id: model.id })}</span>
+						<span className="ltr-ask">{t("settingsLtr.model.deleteAsk")}</span>
 						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => { setAsking(false); onDelete(); }}>{t("settingsLtr.model.deleteConfirm")}</button>
 						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => setAsking(false)}>{t("settingsLtr.model.cancel")}</button>
 					</>
@@ -209,18 +216,31 @@ export function LtrPage({
 	const needed = ltr?.minTrainingRuns ?? 100;
 	const missing = Math.max(0, needed - logged);
 	const canTrain = ltr !== null && missing === 0 && !training;
+	const serving = ltr?.serving;
+	const servingId = serving?.status === "active" ? serving.modelId : null;
+	const useOn = ltr?.enabled ?? ltrBlock?.enabled === true;
+	const useHint =
+		serving === undefined || serving.status === "disabled"
+			? useOn
+				? t("settingsLtr.use.hint")
+				: t("settingsLtr.use.hintOff")
+			: serving.status === "no-model"
+				? t("settingsLtr.use.hintNoModel")
+				: serving.status === "active"
+					? t("settingsLtr.use.hintActive")
+					: t("settingsLtr.use.hintUnusable");
 
 	return (
 		<div className="settings-ltr">
-			<SettingsPageHead title={t("settingsLtr.title")} description={t("settingsLtr.description")} note={t("settingsLtr.intro")} />
+			<SettingsPageHead title={t("settingsLtr.title")} description={t("settingsLtr.description")} />
 
 			{!rerankOn ? (
 				<Note>
-					<strong>{t("settingsLtr.rerankNeeded.title")}</strong> {t("settingsLtr.rerankNeeded.body")}
+					{t("settingsLtr.rerankNeeded.text")}
 					{onOpenAi !== undefined ? (
 						<>
 							{" "}
-							<button type="button" className="linear-btn settings-btn-quiet" onClick={onOpenAi}>{t("settingsLtr.rerankNeeded.open")}</button>
+							<button type="button" className="ltr-link" onClick={onOpenAi}>{t("settingsLtr.rerankNeeded.open")}</button>
 						</>
 					) : null}
 				</Note>
@@ -230,69 +250,32 @@ export function LtrPage({
 			{error !== null ? <div className="settings-error" role="alert">{error}</div> : null}
 
 			<div className="plain-sections">
-				<PlainSection title={t("settingsLtr.log.title")}>
+				<PlainSection title={t("settingsLtr.section.train")}>
 					<PlainRow name={t("settingsLtr.log.name")} hint={t("settingsLtr.log.hint")}>
 						<Switch
 							checked={rankingLog}
-							ariaLabel={t("settingsLtr.log.switch")}
+							ariaLabel={t("settingsLtr.log.name")}
 							onChange={() => void write([rankingLog ? { path: ["rankingLog"], value: false } : { path: ["rankingLog"], remove: true }])}
 						/>
 					</PlainRow>
-					{ltr !== null ? <p className="ltr-count">{t("settingsLtr.log.count", { count: logged, needed })}</p> : null}
-					<p className="ltr-privacy">{t("settingsLtr.privacy")}</p>
-				</PlainSection>
-
-				<PlainDivider />
-
-				<PlainSection title={t("settingsLtr.train.title")}>
-					<PlainRow name={t("settingsLtr.train.name")} hint={t("settingsLtr.train.hint")}>
+					<PlainRow name={t("settingsLtr.train.name")} hint={ltr === null ? "" : missing > 0 ? t("settingsLtr.train.needMore", { count: logged, missing }) : t("settingsLtr.train.hint", { count: logged })}>
 						<button type="button" className="linear-btn settings-btn-primary" disabled={!canTrain} onClick={() => void train()}>
 							{training ? t("settingsLtr.train.running") : t("settingsLtr.train.button")}
 						</button>
 					</PlainRow>
-					{ltr !== null && missing > 0 ? <p className="ltr-count">{t("settingsLtr.train.needMore", { count: missing })}</p> : null}
 					{result !== null ? (
-						<p className={`ltr-result is-${result.kind}`}>
+						<p className={`ltr-result is-${result.kind}`} role="status">
 							{result.kind === "trained" ? t("settingsLtr.train.trained") : null}
 							{result.kind === "rejected" ? t("settingsLtr.train.rejected") : null}
 							{result.kind === "insufficient" ? t("settingsLtr.train.insufficient") : null}
 							{result.kind === "failed" ? t("settingsLtr.train.failed") : null}
-							{result.reason !== null ? <span className="ltr-reason"> {result.reason}</span> : null}
+							{result.reason !== null ? <span className="ltr-reason">{result.reason}</span> : null}
 						</p>
 					) : null}
-				</PlainSection>
-
-				<PlainDivider />
-
-				<PlainSection title={t("settingsLtr.serve.title")}>
-					<PlainRow name={t("settingsLtr.serve.name")} hint={t("settingsLtr.serve.hint")}>
-						<Switch
-							checked={ltr?.enabled ?? ltrBlock?.enabled === true}
-							ariaLabel={t("settingsLtr.serve.switch")}
-							onChange={() => void write([{ path: ["ltr", "enabled"], value: !(ltr?.enabled ?? ltrBlock?.enabled === true) }])}
-						/>
-					</PlainRow>
-					{ltr !== null ? (
-						<p className="ltr-serving">
-							{ltr.serving.status === "disabled" ? t("settingsLtr.serving.off") : null}
-							{ltr.serving.status === "no-model" ? t("settingsLtr.serving.noModel") : null}
-							{ltr.serving.status === "active" ? t("settingsLtr.serving.active", { id: ltr.serving.modelId }) : null}
-							{ltr.serving.status === "unusable" ? (
-								<>
-									{t("settingsLtr.serving.unusable", { id: ltr.serving.modelId })} <span className="ltr-reason">{ltr.serving.reason}</span>
-								</>
-							) : null}
-						</p>
-					) : null}
-				</PlainSection>
-
-				<PlainDivider />
-
-				<PlainSection title={t("settingsLtr.auto.title")}>
 					<PlainRow name={t("settingsLtr.auto.name")} hint={t("settingsLtr.auto.hint")}>
 						<Switch
 							checked={ltr?.autoTrain.enabled ?? false}
-							ariaLabel={t("settingsLtr.auto.switch")}
+							ariaLabel={t("settingsLtr.auto.name")}
 							onChange={() => void write([{ path: ["ltr", "autoTrain", "enabled"], value: !(ltr?.autoTrain.enabled ?? false) }])}
 						/>
 					</PlainRow>
@@ -301,7 +284,7 @@ export function LtrPage({
 							<input
 								type="text"
 								inputMode="numeric"
-								className="settings-select-compact"
+								className="settings-select-compact ltr-number"
 								aria-label={t("settingsLtr.auto.every")}
 								value={interval ?? String(ltr.autoTrain.minNewRuns)}
 								onChange={(event) => {
@@ -321,12 +304,26 @@ export function LtrPage({
 
 				<PlainDivider />
 
-				<PlainSection title={t("settingsLtr.model.title")}>
+				<PlainSection title={t("settingsLtr.section.use")}>
+					<PlainRow name={t("settingsLtr.use.name")} hint={useHint}>
+						<Switch
+							checked={useOn}
+							ariaLabel={t("settingsLtr.use.name")}
+							onChange={() => void write([{ path: ["ltr", "enabled"], value: !useOn }])}
+						/>
+					</PlainRow>
+					{serving?.status === "unusable" ? <p className="ltr-reason">{serving.reason}</p> : null}
+				</PlainSection>
+
+				<PlainDivider />
+
+				<PlainSection title={t("settingsLtr.section.models")}>
 					{ltr !== null && ltr.models.length === 0 ? <p className="ltr-empty">{t("settingsLtr.model.none")}</p> : null}
 					{ltr?.models.map((model) => (
 						<ModelRow
 							key={model.id}
 							model={model}
+							inUse={servingId === model.id}
 							pinned={pinnedModel === model.id}
 							busy={training}
 							onUse={() => void write([{ path: ["ltr", "model"], value: model.id }])}
@@ -334,7 +331,7 @@ export function LtrPage({
 						/>
 					))}
 					{pinnedModel.length > 0 && pinnedModel !== "latest" ? (
-						<button type="button" className="linear-btn settings-btn-quiet" onClick={() => void write([{ path: ["ltr", "model"], remove: true }])}>{t("settingsLtr.model.useLatest")}</button>
+						<button type="button" className="ltr-link" onClick={() => void write([{ path: ["ltr", "model"], remove: true }])}>{t("settingsLtr.model.useLatest")}</button>
 					) : null}
 					{ltr !== null && ltr.models.length > 0 ? <p className="ltr-caveat">{t("settingsLtr.model.caveat")}</p> : null}
 				</PlainSection>
