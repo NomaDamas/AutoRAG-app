@@ -153,10 +153,10 @@ try {
 	// 2. A question on the guest key.
 	await openAiSearch(page);
 	const ask = async (text, turns) => {
-		await page.fill('textarea[aria-label="Ask Dazzi"]', text);
+		await page.fill('textarea[aria-label="Ask AI"]', text);
 		await page.keyboard.press("Enter");
 		await page.waitForFunction(
-			(count) => document.querySelectorAll(".user-msg").length >= count && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector('textarea[aria-label="Ask Dazzi"]') !== null,
+			(count) => document.querySelectorAll(".user-msg").length >= count && document.querySelector('button[aria-label="Stop"]') === null && document.querySelector('textarea[aria-label="Ask AI"]') !== null,
 			turns,
 			{ timeout: 240_000 },
 		);
