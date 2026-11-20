@@ -6,12 +6,15 @@
 // AUTORAG_HOME / AUTORAG_CONFIG point inside a temp dir, so the user's own config
 // and index are never touched. The first run scans the OS's own default folders,
 // which Electron resolves from the OS (a launch-env `HOME` does not move them on
-// macOS), so this lane is meant for the throwaway VM home the QA runner boots;
-// fixtures are not needed because the failure does not depend on what is scanned.
+// macOS), so this lane is meant for the throwaway VM home the QA runner boots.
+// The failure itself does not depend on what is scanned, but the retry does: once
+// the cause is put right, `ready` waits for a question proven against a document of
+// at least 200 letters, so the same fixture documents as the onboarding lane are written.
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writeFirstRunFixtures } from "./first-run-fixtures.mjs";
 import { finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
 import { rmRetry } from "./platform.mjs";
 
@@ -33,6 +36,7 @@ const check = (name, ok, detail = "") => {
 const info = (message) => console.log(`INFO ${message}`);
 const screenOf = (page) => page.evaluate(() => document.querySelector(".fr-root")?.getAttribute("data-screen") ?? null);
 
+const removeFixtures = writeFirstRunFixtures();
 const WORK = mkdtempSync(join(tmpdir(), "autorag-onboarding-failure-"));
 const AUTORAG_HOME = join(WORK, "autorag-home");
 const WORKSPACE = join(AUTORAG_HOME, "workspace");
@@ -128,6 +132,7 @@ try {
 		}
 	}
 	killHelpers();
+	removeFixtures();
 	rmRetry(WORK);
 }
 console.log(failures.length === 0 ? "onboarding failure QA passed" : `onboarding failure QA FAILED: ${failures.join("; ")}`);

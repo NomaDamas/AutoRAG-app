@@ -152,6 +152,18 @@ async function pushHostTools(ip, job, signal) {
 	} catch {
 		// optional
 	}
+	// The golden image's dupey (0.2.0) is older than the floor the librarian requires (0.3.1), so every duplicate scan in a
+	// VM logs "dupey ... is older than the 0.3.1 AutoRAG requires". The host's dupey is the one this checkout was built against.
+	try {
+		const dupey = execFileSync("which", ["dupey"], { encoding: "utf8" }).trim();
+		if (dupey) {
+			log("copying host dupey binary into ~/bin/dupey in the guest");
+			await pushFile(ip, dupey, "bin/dupey");
+			await sshOk(ip, 'chmod 755 "$HOME/bin/dupey"');
+		}
+	} catch {
+		// optional
+	}
 	const wantsFilee = job.kind === "script" || job.lanes.length === 0 || job.lanes.includes("convert-rename");
 	if (!wantsFilee) return;
 	try {

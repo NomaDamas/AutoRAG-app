@@ -352,6 +352,7 @@ function SetupScreen({
 	const done = playing && stage === "ready";
 	const earlyReady = canStartEarly(status);
 	useEnterToStart(onStart, done || earlyReady);
+	const readyCount = useReadyCount(status);
 	const closeGame = useCallback(() => {
 		setFading(false);
 		onStop();
@@ -399,7 +400,7 @@ function SetupScreen({
 	const total = status?.totalFiles ?? 0;
 	const processed = Math.min(status?.processedFiles ?? 0, total);
 	const remaining = status?.remainingMinutes ?? null;
-	const readyCount = useReadyCount(status);
+	// Every hook is called above the failed return: a run that fails changes what is rendered, never how many hooks run.
 	return (
 		<section className="fr-panel fr-setup" data-mode={playing ? "game" : "intro"}>
 			{playing ? null : (

@@ -17,12 +17,13 @@
 // existing files are never overwritten and every created file is removed at the
 // end. AUTORAG_HOME / AUTORAG_CONFIG point inside a temp dir either way, so the
 // user's own config and index are never touched.
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { writeFirstRunFixtures } from "./first-run-fixtures.mjs";
 import { AI_PANEL, finderWindow, launchFinder, ROOT } from "./launch-finder.mjs";
-import { homeDir, rmRetry } from "./platform.mjs";
+import { rmRetry } from "./platform.mjs";
 
 const EVIDENCE = process.env.QA_OUT ?? join(ROOT, ".omo/evidence/onboarding");
 mkdirSync(EVIDENCE, { recursive: true });
@@ -37,33 +38,14 @@ const info = (message) => console.log(`INFO ${message}`);
 // ── fixtures ─────────────────────────────────────────────────────────────────
 // Distinctive facts so the generated tour question (`demo`) and the duplicate
 // family have real material; realistic Korean and English documents.
-const HOME = homeDir();
-const DOCS = join(HOME, "Documents");
-const DESK = join(HOME, "Desktop");
+// The fixtures (Desktop and Documents of this home) are in `first-run-fixtures.mjs`.
 // A host run writes the fixtures into the developer's real home and indexes whatever already lives
 // there; the QA runner boots a throwaway VM home by default. Warn so a host run is never a surprise.
 if (process.platform === "darwin") {
 	const inVm = spawnSync("sysctl", ["-n", "kern.hv_vmm_present"], { encoding: "utf8" }).stdout?.trim() === "1";
 	if (!inVm) console.warn("[onboarding] WARNING: not in a VM; the first run will scan and index this machine's real Desktop/Documents/Downloads");
 }
-mkdirSync(DOCS, { recursive: true });
-mkdirSync(DESK, { recursive: true });
-const createdFixtures = [];
-/** Write a fixture, never clobbering a file that was already there, and remember what to remove. */
-const put = (dir, name, text) => {
-	const path = join(dir, name);
-	if (existsSync(path)) return path;
-	writeFileSync(path, text);
-	createdFixtures.push(path);
-	return path;
-};
-put(DOCS, "3분기-회의록.md", "# 3분기 회의록\n\n마케팅 비용은 전분기보다 18% 줄었습니다.\n신규 고객은 412명 늘었습니다.\n");
-put(DOCS, "q3-report.md", "# Q3 report\n\nOperating cost fell because of the vendor change.\nRevenue grew 12% quarter over quarter.\n");
-// A duplicate pair: the same quarterly summary with one number changed, so dupey groups them.
-const summary = "# Quarterly summary\n\nMarketing spend fell 18% against the prior quarter.\nNew customers grew by 412.\n";
-put(DOCS, "report.md", summary);
-put(DOCS, "report (1).md", summary.replace("412", "413"));
-put(DESK, "budget-notes.txt", "Budget summary for the third quarter.\n");
+const removeFixtures = writeFirstRunFixtures();
 
 const WORK = mkdtempSync(join(tmpdir(), "autorag-onboarding-"));
 const AUTORAG_HOME = join(WORK, "autorag-home");
@@ -270,15 +252,8 @@ try {
 		}
 	}
 	killHelpers();
-	// Remove only the fixture files this lane created; never the folders or a
-	// developer's own files.
-	for (const path of createdFixtures) {
-		try {
-			rmSync(path, { force: true });
-		} catch {
-			// Best effort.
-		}
-	}
+	// Remove only the fixture files this lane created; never the folders or a developer's own files.
+	removeFixtures();
 	rmRetry(WORK);
 }
 console.log(failures.length === 0 ? "onboarding QA passed" : `onboarding QA FAILED: ${failures.join("; ")}`);
