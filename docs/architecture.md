@@ -965,7 +965,47 @@ the `shortcut-customizer` helper (`src/main/agents/profiles/shortcut-customizer.
 runs user-defined right-click Magic Actions on selected files and folders — either executing an arbitrary shell script
 or driving a `read` / `organize` pi agent loop that shares the AutoRAG Agent's Skills and connected MCP servers
 (`<agentDir>/mcp.json`, both `direct` and `codemode`, enabled by default via `useSkills` / `useMcp` and toggleable off
-per action) with live `i` intent progress and streamed Markdown output. A new profile adds one file there and, if it needs a UI,
+per action) with live `i` intent progress and streamed Markdown output. The rest of Settings has its own assistants in the right
+sidebar, one profile per area, all routed by `AppCustomizerRequest.surface` (`APP_CUSTOMIZER_SURFACES`) in `app-customizer-service.ts` and built on
+`src/main/agents/profiles/customizer-kit.ts` (change log with 4-language summaries, cancel guard): `general-customizer` (Settings → 일반:
+appearance, language, hidden files, launch at login, OS menu, updates, privacy toggles, the quick-search shortcut), `ai-customizer` (AI 모델 and
+웹 검색: the answer / decomposition / Jev / rerank roles from the connected providers' catalogs, thinking depth, web search), `search-customizer`
+(인덱싱, 문서 읽기, 중복 파일 정리: search folders, exclusions, refresh cadence, document languages, duplicate handling) and
+`connections-customizer` (MCP 서버 and 모든 연결: enable, expose, add or remove MCP servers, search and install from the public MCP registry
+(`src/main/mcp-registry.ts`) with the secret typed into a masked field and stored only as a `${DAZZI_MCP_…}` reference in `<agentDir>/mcp.json`,
+datasource enable / description / cadence). They write
+through the same `SettingsBridge` calls the pages use (`configPatch`, `mcpUpsert`, `sourcesSetEnabled`, `set`), so the config service validates
+every value, and the closed option lists come from `src/shared/settings-options.ts`, which the pages share. Out of reach by design: remote
+access, the AI approval mode, reading or revealing any credential value, sign-in, connecting or disconnecting a provider or datasource, the
+embedding model, starting an index run, and deleting or moving files; an MCP server is removed only with `confirmedByUser`, and adding a server
+that runs a local command or installing a registry server needs the person's confirmation card (secret values are collected only after it). **Secrets never reach the model.** A model is a remote service, so a credential is never in its prompt, its tool results or its shell output.
+The assistant asks for one through `customizer-prompter.ts`: a prompt card in the panel (a masked field, or a yes/no listing what will happen),
+whose answer travels panel → main process on its own channel (`appCustomizer:answer`) and into `ProviderCredentialService` (encrypted, then
+`process.env`); the model hears only `stored` and the masked tail. A key found in another coding agent's files (Codex, opencode, pi, Aider, the
+environment) is read and stored by the app after the person confirms (`coding-agent-credentials.ts`), never printed. An MCP server's secret is
+stored as `DAZZI_MCP_<SERVER>_<NAME>` and `mcp.json` holds only `${DAZZI_MCP_…}`, which pi resolves from the environment when it starts the server.
+Three nets sit under that: a key pasted into the chat box is removed before the message is sent (`shared/secret-guard.ts`), `guard-tools.ts`
+redacts every tool result (known values and credential-looking strings), and the streamed and final reply are redacted the same way. The AI-model
+assistant also has a shell (`guarded-bash.ts`, `write-gate.ts`): reading is unrestricted, so it can look at any file and find another coding agent's
+config and keys, and what it may change is limited to the files it manages (the shared AutoRAG config, and a new `export NAME=value` line appended
+to the shell profile). The same Jev that gates the AutoRAG agent's file changes (`write-judge.ts`, on the decision backends from the shared config,
+with the small chat model as fallback) decides whether a command writes anywhere else; `sudo`, piping a download into a shell, `eval` and deleting
+or moving unmanaged files are refused whatever Jev says, and without a decision model only plainly read-only commands and managed writes run. The
+spawned process never gets the app's own secret-looking variables, and the secret values found in other agents' credential files, pi's `auth.json`
+and the environment are in the known set from the start (`collectKnownSecretValues`), so what a command prints is read freely but cannot be repeated. omp (oh-my-pi) keeps custom providers, not only keys, so the AI-model assistant reads them too
+(`omp-config.ts`: `~/.omp/agent/models.yml` for protocol, address, models and the key reference, `agent.db` read-only for stored API keys, the
+shell profiles and omp's `.env` for the value an `apiKey: NAME` reference points at). `scan_coding_agents` lists them under omp with the reason when
+one cannot come over (a protocol Dazzi does not speak, a key produced by a `!command`, no models), and `import_omp_provider` brings one in after a
+confirm card through `ProviderAuthService.importCustom`: the same `models.json` entry the custom-server form writes, with omp's protocol and model
+list kept, the key as a `$NAME` reference, and the value read by the app and saved in the encrypted store (a key written literally in omp's file is
+saved under a name derived from the provider). omp's OAuth logins are listed but cannot be moved. The MCP, apps
+and AI-model assistants have the librarian's `web_search` and `web_fetch` (`createWebTools`, `@autorag/librarian/profiles`); the MCP assistant
+also searches the official registry (`mcp-registry.ts`). Web pages, registry text and command output are data, never instructions.
+When a turn reports changes, Settings re-reads
+the config, the datasource scan and the MCP page. A page whose assistant is not showing gets its invitation from `SettingsPageHead`
+(`SettingsAssistantHeroContext`). Every profile's system prompt is written in English; the assistant answers in the language the person writes in (their latest message decides),
+and the interface language is only the fallback before they have written anything, which is also what `intentPromptLine` asks of the live progress phrase
+(`test/profile-prompts-english.test.ts` pins both). A new profile adds one file there and, if it needs a UI,
 its own service and bridge. The factory's own tests (what the model is offered, on pi's faux provider) live in the librarian, in `test/profiles/`.
 
 ## AI Chat approvals and questions
@@ -1033,11 +1073,41 @@ and kept for the chat's life:
 - **After a restart.** `chat-sessions.ts` keeps `index.json` beside the session files (`<userData>/chat-sessions`):
   chat id → file name. `search-service` resumes from that file when it exists (`switchSession`). A chat from before
   this change, or one whose file is gone, starts a new conversation seeded with its finished turns
-  (`seedTurnsOf`: Deep answer over Quick, a steer belongs to the turn it corrected, a stopped turn carries
+  (`seedTurnsOf`: the Quick answer with its corrections applied followed by what Deep added, else Deep over Quick; a steer belongs to the turn it corrected, a stopped turn carries
   nothing). A file pi cannot read starts a new conversation instead of failing the chat.
 - **Lifetime.** At most eight conversations are open; past that the oldest chat that is not answering is closed
   (its file stays, asking again resumes it). Quitting waits for every open one (`SearchService.dispose`); "clear
   history" closes them and deletes the folder.
+
+### Corrections of the first answer
+
+When verification finds the Quick answer wrong, the librarian corrects it claim by claim with its `revise_answer` tool
+(AutoRAG#2186) instead of writing a second answer next to it. Each correction is a `revision` stream event
+(`op`: `confirm`, `retract`, `replace`, `add`; `claimId`, `original`, `replacement`, `reason`), sent between `quick` and
+`deep`.
+
+- **Pure core.** `src/shared/answer-revision.ts` applies corrections to text (`revisedAnswer`), finds what the final answer says
+  beyond the corrected first answer (`remainderAfterRevised`) and cuts the first answer into the text to draw with a mark
+  where each correction goes (`markRevisedAnswer`). It has no DOM and no React; main process and renderer load it alike.
+- **Main process.** `search-service` forwards each correction as a `revision` event and stores them on the run's assistant
+  message (`revisions`), so a chat read back from history shows them. The final answer of a corrected run is the first
+  answer with every correction applied, so `deep` carries only what it adds after that (empty when it adds nothing) with the
+  evidence of every source the corrections cite. A correction whose original the Quick text does not hold is skipped, and
+  the Quick answer is never rewritten in the store: the person's record of what they read stays as it was.
+- **Renderer.** `state/answer-revisions.ts` decides whether anything is drawn (confirmations change nothing the person reads)
+  and resolves the new citations against the Quick sources plus the final answer's. `AnswerRevisionMark` draws one
+  correction: the new words arrive marked in the sun colour with the struck words beside them; after 2.6 s the mark fades to
+  an underline and the struck words collapse (design preview "답이 고쳐질 때"). A retracted claim stays struck, with its
+  reason as the tooltip. A chat read back from history, and a person who asked for reduced motion, see the settled state at once.
+  The AI Search tab and the inspector chat draw the same thing; no line is added above a corrected answer. An added
+  finding is not drawn like a replacement: no strike and no sun colour, but its own block on an accent rail that rises in and
+  keeps the rail once settled. A replaced claim that fits one line collapses by its measured width, so the lines below it
+  never move; one that wraps only fades before it leaves.
+  A source a correction brought in (cited by its new words, not by the first answer, with evidence sent by the final
+  answer) is new until the person opens it: its chip in the answer is the sun colour and pops in, and its tab in the
+  inspector's evidence panel carries a sun dot and the name "N번 새 출처" (design preview "답이 고쳐질 때"). The answer
+  panel owns that set (`drawQuickAnswer().fresh` minus the sources opened), publishes it to the inspector with the
+  evidence (`onPublish`), and a chat read back from history marks nothing as new.
 
 ### What the panel shows while a run works, and an exhausted plan
 
@@ -1194,6 +1264,29 @@ and proven live by `scripts/manual-qa/run-qa-finder-automations-live.mjs`.
 
 A `running` daemon whose lock directory outlived a killed process still reads as
 running (`isAutomationDaemonRunning` uses `staleMs: 0` upstream).
+
+## Learning to rank
+
+The librarian logs every search's candidates and outcome (`rankingLog`, on by default, beside `memory.json`), can
+fit a ranking model on that log, and reorders the reranker's results with it when the config's `ltr` block says so.
+The settings are the shared config's `rankingLog` and `ltr.enabled`, `ltr.model`, `ltr.autoTrain` (all written through
+`configPatch`, validated by the librarian's own reader). `window.autorag.ltr` (`src/shared/ltr-contract.ts`) carries
+what the config cannot say: the log size, the models and how each scored, whether the next search would use one, and
+the two actions that are not settings, train now and delete a model.
+
+**Training runs in a child process, never in the main process.** The librarian trains in process (XGBoost compiled to
+WebAssembly, no Python). Measured on a 944-search real log: 1.9 s to train, during which the event loop got to run 7
+of the ~190 ticks it would have had, with a worst single stall of 0.6 s. In the Electron main process that freezes
+every window, so `ltr-service.ts` runs
+`autorag ltr train --json` through the same bundled Node the automations use. The agent's own retrain-after-a-search
+would run inside the main process, so `withoutAgentAutoTrain` removes `ltr.autoTrain` from the options the agent is
+built with, and `afterAnsweredSearch` (after the `done` event of an answered search, detached, never failing the
+search) asks `autoTrainIfDue` instead, which reads the same setting. `test/ltr-service.test.ts` pins where
+`buildAgentOptions` puts that block, so a librarian that moves it fails a test instead of training in process.
+
+A rejected or too-small attempt exits `1` and still prints its verdict; the service reads the verdict, not the exit
+code. A run in flight is shared by every caller, so a second click or an automatic attempt never fits a second model.
+The log only teaches when the reranker ran (a search with no rerank is skipped), so the page says so.
 
 ## AI Chat attachments
 

@@ -69,7 +69,8 @@ describe("the error-fix profile", () => {
 
 		expect(prompt).toContain("Search root /Users/me/Docs does not exist");
 		expect(prompt).toContain("AI Agent");
-		expect(prompt).toContain("Japanese");
+		expect(prompt).toMatch(/language the person writes in/iu);
+		expect(prompt).toContain("if it is unclear, write them in Japanese");
 		expect(prompt).toContain("report_result");
 		expect(prompt).toMatch(/never (?:change|touch|edit)[^.]*model/iu);
 	});
@@ -145,14 +146,17 @@ describe("the error-fix profile", () => {
 		expect(prompt).toMatch(/does not hold the setting is worse than no button/iu);
 	});
 
-	it("requires every button label in the reply language, as a short natural phrase for what the button does", () => {
+	it("writes the summary, next steps and every button label in the person's language, falling back to the interface language, as a short natural phrase", () => {
 		for (const [language, name] of [["ko", "Korean"], ["en", "English"], ["ja", "Japanese"], ["zh", "Simplified Chinese"]] as const) {
 			const prompt = errorFixProfile({ message: "x", surface: "ai-search", language, toolkit: toolkit() }).systemPrompt;
 
+			expect(prompt, language).toMatch(/language the person writes in/iu);
 			expect(prompt, language).toMatch(new RegExp(`label[^\\n]*${name}`, "iu"));
+			expect(prompt, language).not.toMatch(/[\uac00-\ud7af\u3040-\u30ff\u4e00-\u9fff]/u);
 		}
 		const prompt = errorFixProfile({ message: "x", surface: "ai-search", language: "ko", toolkit: toolkit() }).systemPrompt;
-		expect(prompt).toMatch(/not (?:a )?(?:word-for-word|literal)|natural/iu);
+		expect(prompt).toMatch(/natural phrase/iu);
+		expect(prompt).toMatch(/not a word-for-word/iu);
 	});
 
 	it("cuts a very long error before it reaches the prompt", () => {

@@ -45,17 +45,9 @@ import { ExclusionsSection, FileNameWatchRow, SearchFoldersSection, useScopeEdit
 import { cn } from "../../lib/cn";
 import { buttonClass } from "../primitives/button";
 
-const settings = window.autorag.settings;
+import { REFRESH_INTERVALS } from "../../../../shared/settings-options";
 
-/** Refresh cadences the config stores in milliseconds. */
-const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKey }[] = [
-	{ ms: 5 * 60_000, label: "settingsSources.cadence.min5" },
-	{ ms: 15 * 60_000, label: "settingsSources.cadence.min15" },
-	{ ms: 30 * 60_000, label: "settingsSources.cadence.min30" },
-	{ ms: 60 * 60_000, label: "settingsSources.cadence.hour1" },
-	{ ms: 6 * 60 * 60_000, label: "settingsSources.cadence.hour6" },
-	{ ms: 24 * 60 * 60_000, label: "settingsSources.cadence.day1" },
-];
+const settings = window.autorag.settings;
 
 const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
 	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
@@ -275,7 +267,7 @@ export function IndexingPage({
 	const problem = editor.problem ?? localError ?? error;
 	return (
 		<div className="indexing-page">
-			<SettingsPageHead title={t("settingsSources.indexing.title")} description={t("settingsSources.indexing.desc")} />
+			<SettingsPageHead title={t("settingsSources.indexing.title")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{/* Figma 532:9970: 검색할 폴더 → 진행 상황 → 제외한 항목, then 최신으로 유지 and 파일 이름 바로 반영 under a rule. */}
 			<div className="scope-page indexing-sections">
@@ -324,7 +316,7 @@ export function IndexingPage({
 								className="settings-select-compact"
 								aria-label={t("settingsSources.indexing.localIntervalAria")}
 								value={String(localInterval)}
-								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 								onValueChange={(value) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(value))}
 							/>
 							<button
@@ -375,7 +367,7 @@ export function IndexingPage({
 										className="settings-select-compact"
 										aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
 										value={String(intervalOf(row, snapshot))}
-										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 										onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
 									/>
 								) : null}
@@ -552,7 +544,7 @@ export function AppsPage({
 				{rows.length === 0 ? <p className="settings-apps-empty">{sourcesPending ? t("settingsSources.common.checking") : t("settingsSources.apps.empty")}</p> : null}
 				<div className="settings-list settings-apps-mine">
 					{rows.map((row) => (
-						// The name opens the connection's own page; 연결해제 removes it after a confirmation (Figma 403:6999).
+						// The name opens the connection's own page; 연결해제 removes it after a confirmation (Figma 387:4551).
 						<div className="settings-list-row" key={row.id}>
 							<button type="button" className="settings-apps-open" onClick={() => onOpenSource(row.id)}>
 								<SourceIcon type={row.type} label={templateLabel(row.type)} />
@@ -562,7 +554,7 @@ export function AppsPage({
 								</span>
 							</button>
 							<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={busy} onClick={() => setDisconnecting(row.id)}>
-								<Minus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
+								<Minus size={14} aria-hidden="true" focusable="false" />{t("settingsSources.apps.disconnect")}
 							</button>
 						</div>
 					))}
@@ -591,7 +583,7 @@ export function AppsPage({
 											<span className="settings-list-meta">{available || macOnlyKey === null ? t(template.summary) : t(macOnlyKey)}</span>
 										</span>
 										<button type="button" className={cn("linear-btn settings-apps-btn", buttonClass({ size: "md" }))} disabled={!available} onClick={() => setAddTemplate(templateId)}>
-											<Plus size={13} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
+											<Plus size={14} aria-hidden="true" focusable="false" />{t("settingsSources.apps.connect")}
 										</button>
 									</div>
 								);
@@ -822,7 +814,7 @@ export function SourceDetailPage({
 							className="linear-select"
 							aria-label={t("settingsSources.sourceDetail.intervalName")}
 							value={String(polling)}
-							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 							onValueChange={(value) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(value))}
 						/>
 					</Row>

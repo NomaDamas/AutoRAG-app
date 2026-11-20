@@ -20,6 +20,7 @@ import { InspectorColumn } from "./components/InspectorColumn";
 import { InspectorChatDock, InspectorChatView } from "./components/InspectorChat";
 import { ContextMenu } from "./components/primitives/ContextMenu";
 import { Toast, type ToastTone } from "./components/primitives/Toast";
+import { pushNotice, setNotificationCenterOpen } from "./state/notifications";
 import { ConfirmDialog } from "./components/primitives/ConfirmDialog";
 import { FullDiskAccessDialog } from "./components/primitives/FullDiskAccessDialog";
 import { ConvertRenameDialog } from "./components/primitives/ConvertRenameDialog";
@@ -245,7 +246,11 @@ export function App(): ReactElement {
 	/** A plain notice (Figma 554:7353 with the green badge). */
 	const setToast = useCallback((message: string | null) => setToastState(message === null ? null : { message, tone: "ok" }), []);
 	/** Something failed: the same toast with the red badge. */
-	const showErrorToast = useCallback((message: string) => setToastState({ message, tone: "error" }), []);
+	const showErrorToast = useCallback((message: string) => {
+		// Every error toast is also kept in the notification center, so it can be read after the toast has gone.
+		pushNotice({ title: message });
+		setToastState({ message, tone: "error" });
+	}, []);
 	/** The first-run layer is up (the main process passed the pending flag; the layer's `load` is authoritative). */
 	const [firstRun, setFirstRun] = useState(() => autorag.onboarding.pending);
 	/** The layer covers the whole window, so the Finder behind it takes no input. */
@@ -349,11 +354,16 @@ export function App(): ReactElement {
 	const [sessionEvidence, setSessionEvidence] = useState<readonly CitationEvidence[]>([]);
 	const [selectedEvidence, setSelectedEvidence] = useState<number | null>(null);
 
+	const [freshEvidence, setFreshEvidence] = useState<readonly number[]>([]);
 	const publishEvidence = useCallback(
-		(items: readonly CitationEvidence[], sessionItems?: readonly CitationEvidence[]) => {
+		(items: readonly CitationEvidence[], sessionItems?: readonly CitationEvidence[], freshItems?: readonly number[]) => {
 			evidenceRef.current = items;
 			setEvidence(items);
 			setSessionEvidence(sessionItems ?? items);
+			setFreshEvidence((current) => {
+				const next = freshItems ?? [];
+				return current.length === next.length && current.every((number, index) => number === next[index]) ? current : next;
+			});
 			setSelectedEvidence((current) => (current !== null && items.some((item) => item.number === current) ? current : null));
 		},
 		[],
@@ -932,6 +942,10 @@ export function App(): ReactElement {
 							requestSettingsCategory("ai");
 							finder?.openSettings();
 						}}
+						onOpenSettingsPage={(category) => {
+							requestSettingsCategory(category);
+							finder?.openSettings();
+						}}
 						sourceStatus={sourceStatus}
 						searchQuery={finder?.query ?? ""}
 						searchRef={finder?.searchRef ?? NO_INPUT}
@@ -1094,6 +1108,7 @@ export function App(): ReactElement {
 								onOpenMember={openMemberEntry}
 								view={aiTabActive ? "evidence" : "info"}
 								evidence={evidence}
+								freshEvidence={freshEvidence}
 								evidenceSelected={evidenceSelectedNumber}
 								onSelectEvidence={pickEvidenceTab}
 								onRevealPath={(target, excerpts) => {
@@ -1160,7 +1175,19 @@ export function App(): ReactElement {
 					<Toast
 						message={automations.undoToast?.message ?? toast ?? ""}
 						tone={automations.undoToast === null ? (toastState?.tone ?? "ok") : "ok"}
-						action={automations.undoToast === null ? undefined : { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }}
+						action={
+							automations.undoToast !== null
+								? { label: t("automations.toast.undo"), onAction: () => void automations.undoToast?.onUndo() }
+								: toastState?.tone === "error"
+									? {
+											label: t("notifications.viewInCenter"),
+											onAction: () => {
+												setToastState(null);
+												setNotificationCenterOpen(true);
+											},
+										}
+									: undefined
+						}
 						onClose={() => {
 							setToastState(null);
 							if (automations.undoToast !== null) automations.dismissUndoToast();

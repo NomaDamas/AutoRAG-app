@@ -107,4 +107,49 @@ describe("Settings → MCP → servers in Dazzi", () => {
 		expect(host.querySelector('[data-action="add-mcp-server"]')?.textContent).toBe("Add server");
 		expect(host.querySelector('[data-action="open-mcp-config"]')).toBeNull();
 	});
+	const press = async (element: Element | null): Promise<void> => {
+		await act(async () => {
+			element?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+		await settle();
+	};
+
+	it("asks before removing in the small alert card, with 삭제 as the blue answer (Figma 580:15140)", async () => {
+		await render(SNAPSHOT);
+		await press(host.querySelector('[data-action="remove-mcp-filesystem"]'));
+		const alert = host.querySelector<HTMLElement>(".settings-modal.settings-alert");
+		expect(alert?.querySelector("h2")?.textContent).toBe('Remove "filesystem"?');
+		const actions = [...(alert?.querySelectorAll(".settings-modal-actions button") ?? [])];
+		expect(actions.map((button) => button.textContent)).toEqual(["Cancel", "Remove"]);
+		expect(actions[1]?.classList.contains("settings-btn-primary")).toBe(true);
+		expect(actions[1]?.classList.contains("is-danger")).toBe(false);
+	});
+
+	it("adds a server in the 매직 액션 만들기 format: name as title, 연결 방식 tabs, rows closed (Figma 598:3131)", async () => {
+		await render(SNAPSHOT);
+		await press(host.querySelector('[data-action="add-mcp-server"]'));
+		const modal = host.querySelector<HTMLElement>('[data-testid="mcp-server-modal"]');
+		expect(modal?.closest(".settings-modal")?.classList.contains("magic-editor-modal")).toBe(true);
+		expect(modal?.querySelector<HTMLInputElement>(".magic-editor-name > input")?.placeholder).toBe("Server name");
+		expect(modal?.querySelector('[data-testid="mcp-kind-stdio"]')?.getAttribute("aria-checked")).toBe("true");
+		expect(modal?.textContent).toContain("One per line.");
+		const sections = [...(modal?.querySelectorAll<HTMLDetailsElement>("details.magic-editor-section") ?? [])];
+		expect(sections.map((section) => section.querySelector(".magic-editor-section-name")?.textContent)).toEqual(["Environment Variables", "How tools are offered", "Description"]);
+		expect(sections.every((section) => !section.open)).toBe(true);
+		expect(modal?.querySelector('[data-mcp-section="exposure"] .magic-editor-section-value')?.textContent).toBe("Code Mode");
+		expect(modal?.querySelector('[role="radiogroup"][aria-label="How tools are offered"]')).not.toBeNull();
+		// HTTP swaps the card to the URL and the first row to 헤더.
+		await press(modal?.querySelector('[data-testid="mcp-kind-http"]') ?? null);
+		expect(modal?.querySelector('[data-mcp-section="vars"] .magic-editor-section-name')?.textContent).toBe("Headers");
+		expect(modal?.querySelector<HTMLInputElement>(".mcp-editor-line > input")?.placeholder).toBe("https://example.com/mcp");
+	});
+
+	it("opens the rows a server already uses when editing it, and names its variables", async () => {
+		await render({ ...SNAPSHOT, servers: [{ ...SNAPSHOT.servers[0]!, config: { command: "npx", env: { TOKEN: "x" } } }] });
+		await press(host.querySelector('[data-action="edit-mcp-filesystem"]'));
+		const vars = host.querySelector<HTMLDetailsElement>('[data-mcp-section="vars"]');
+		expect(vars?.open).toBe(true);
+		expect(vars?.querySelector(".magic-editor-section-value")?.textContent).toBe("TOKEN");
+		expect(host.querySelector<HTMLDetailsElement>('[data-mcp-section="description"]')?.open).toBe(false);
+	});
 });

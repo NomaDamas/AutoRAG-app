@@ -125,7 +125,21 @@ export interface ContextMenuSettings {
 	 * User-defined custom right-click Magic Actions (script or pi agent loop), in display order.
 	 */
 	readonly magicActions: readonly MagicAction[];
+	/**
+	 * The last menu layout the person arranged by hand, kept while a preset (전체 표시 / 핵심만 표시) is applied so
+	 * 사용자 지정 can bring it back. Absent until the layout first differs from every preset.
+	 */
+	readonly custom?: ContextMenuLayout;
 }
+
+/** What the 빠른 구성 presets set: which items and sections show, and in what order. Magic actions are content, not layout. */
+export interface ContextMenuLayout {
+	readonly hiddenItems: readonly BuiltinContextMenuItemId[];
+	readonly hiddenSections: readonly HideableContextMenuSectionId[];
+	readonly sectionOrder: readonly ContextMenuSectionId[];
+}
+
+export type ContextMenuPresetId = "all" | "minimal";
 
 export const DEFAULT_CONTEXT_MENU_SETTINGS: ContextMenuSettings = {
 	hiddenItems: [],
@@ -196,6 +210,8 @@ const ITEM_ALIAS_MAP: Readonly<Record<string, BuiltinContextMenuItemId>> = {
 	"rename": "builtin:rename",
 	"이름 변경": "builtin:rename",
 	"이름변경": "builtin:rename",
+	"이름 바꾸기": "builtin:rename",
+	"이름바꾸기": "builtin:rename",
 	"名称変更": "builtin:rename",
 	"重命名": "builtin:rename",
 	"builtin:copypath": "builtin:copyPath",
@@ -422,12 +438,50 @@ export function normalizeContextMenuSettings(raw: unknown): ContextMenuSettings 
 		}
 	}
 
+	const layout: ContextMenuLayout = { hiddenItems, hiddenSections, sectionOrder };
+	// A layout that matches no preset is the person's own: it becomes the remembered 사용자 지정. Under a preset the
+	// previously remembered one is kept, so trying 전체 표시 never loses it.
+	const custom = contextMenuPresetOf(layout) === null ? layout : rememberedContextMenuLayout(candidate.custom);
+	return custom === null ? { hiddenItems, hiddenSections, sectionOrder, magicActions } : { hiddenItems, hiddenSections, sectionOrder, magicActions, custom };
+}
+
+/** The layout a preset sets. 전체 표시 is the default layout; 핵심만 표시 hides the rarely used items on top of it. */
+export function contextMenuPresetLayout(preset: ContextMenuPresetId): ContextMenuLayout {
 	return {
-		hiddenItems,
-		hiddenSections,
-		sectionOrder,
-		magicActions,
+		hiddenItems: preset === "minimal" ? [...MINIMAL_HIDDEN_CONTEXT_MENU_IDS] : [],
+		hiddenSections: [],
+		sectionOrder: [...CONTEXT_MENU_SECTION_IDS],
 	};
+}
+
+/** Which preset `layout` is, or `null` when it is the person's own arrangement. */
+export function contextMenuPresetOf(layout: ContextMenuLayout): ContextMenuPresetId | null {
+	for (const preset of ["all", "minimal"] as const) {
+		const target = contextMenuPresetLayout(preset);
+		if (
+			layout.hiddenItems.length === target.hiddenItems.length &&
+			layout.hiddenItems.every((id) => target.hiddenItems.includes(id)) &&
+			layout.hiddenSections.length === target.hiddenSections.length &&
+			layout.hiddenSections.every((id) => target.hiddenSections.includes(id)) &&
+			layout.sectionOrder.length === target.sectionOrder.length &&
+			layout.sectionOrder.every((id, index) => id === target.sectionOrder[index])
+		) {
+			return preset;
+		}
+	}
+	return null;
+}
+
+/** `contextMenu` with a layout applied; its magic actions and its remembered 사용자 지정 stay. */
+export function withContextMenuLayout(contextMenu: ContextMenuSettings, layout: ContextMenuLayout): ContextMenuSettings {
+	return normalizeContextMenuSettings({ ...contextMenu, ...layout });
+}
+
+function rememberedContextMenuLayout(raw: unknown): ContextMenuLayout | null {
+	if (typeof raw !== "object" || raw === null) return null;
+	const { hiddenItems, hiddenSections, sectionOrder } = normalizeContextMenuSettings({ ...raw, custom: undefined });
+	const layout: ContextMenuLayout = { hiddenItems, hiddenSections, sectionOrder };
+	return contextMenuPresetOf(layout) === null ? layout : null;
 }
 
 export function isDefaultContextMenuSettings(contextMenu: ContextMenuSettings | undefined): boolean {

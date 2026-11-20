@@ -24,6 +24,7 @@ import type { QuickSearchSettingsBridge } from "./quick-search-contract";
 import type { AppUpdateBridge } from "./update-contract";
 import type { AutomationBridge } from "./automation-contract";
 import type { DemoBridge } from "./demo-contract";
+import type { LtrBridge } from "./ltr-contract";
 
 declare global {
 	interface Window {
@@ -36,6 +37,7 @@ declare global {
 			readonly account: AccountBridge;
 			readonly automations: AutomationBridge;
 			readonly demo: DemoBridge;
+			readonly ltr: LtrBridge;
 			readonly conversion: ConversionBridge;
 			readonly errorFix: ErrorFixBridge;
 			readonly magicAction: MagicActionBridge;

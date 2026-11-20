@@ -73,7 +73,7 @@ describe("ruleMenuEntries", () => {
 
 	it("offers Quick Look, edit, add, and a danger delete on a rule", () => {
 		const entries = ruleMenuEntries({ rule: rule("a"), canOpenFolder: false });
-		expect(labels(entries)).toEqual(["quickLook:훑어보기", "-", "editRule:AI 에이전트에서 편집", "addRule:AI 에이전트에서 새 규칙 추가…", "-", "deleteRule:삭제"]);
+		expect(labels(entries)).toEqual(["quickLook:훑어보기", "-", "editRule:AI 에이전트에서 수정", "addRule:AI 에이전트에서 새 규칙 추가…", "-", "deleteRule:삭제"]);
 		const remove = entries.find((entry) => entry.kind === "item" && entry.action === "deleteRule");
 		expect(remove).toMatchObject({ tone: "danger" });
 	});

@@ -84,7 +84,7 @@ describe("i18n configuration and locale keys", () => {
 		expect(t("places.aiSearch")).toBe("AI 에이전트");
 		expect(t("places.favorites")).toBe("즐겨찾기");
 		expect(t("places.settings")).toBe("설정");
-		expect(t("contextMenu.rename")).toBe("이름 변경");
+		expect(t("contextMenu.rename")).toBe("이름 바꾸기");
 		await setAppLanguage("en");
 		expect(t("common.save")).toBe("Save");
 		expect(t("contextMenu.rename")).toBe("Rename");

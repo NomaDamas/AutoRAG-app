@@ -272,7 +272,7 @@ function systemPrompt(input: MagicActionProfileInput): string {
 			: [];
 	return [
 		`You are Dazzi's custom file right-click Magic Action agent ("${input.actionLabel}").`,
-		`Always write your final reply in ${replyLang}.`,
+		`Reply in the language the person writes in (their latest message decides); if it is unclear, reply in ${replyLang}. Be concise and warm.`,
 		"",
 		"## Rules",
 		"- You run directly on the file(s) or folder(s) the user right-clicked in Finder.",

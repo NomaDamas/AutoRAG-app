@@ -18,16 +18,17 @@ awake.
      the host has several, choose one from the list.
    - **Internet:** a Cloudflare tunnel (see below). Its address appears once
      the tunnel is online.
-3. Click **Get Pairing Code**. The same 6-digit code works on every route. The
+3. Click **Make Connection Code**. The same 6-digit code works on every route. The
    QR code is the chosen route's address plus `?pair=CODE`: scan it with the
    phone's camera, or open the address and type the code on the Dazzi sign-in
    screen. Switching the route changes the QR code, not the code. Once paired,
    the browser keeps a 1-year `HttpOnly` device credential (`dazzi_device`)
-   that survives Dazzi restarts until you revoke it in **Paired Devices**.
+   that survives Dazzi restarts until you revoke it in **Connected Devices**.
 
-**Details** holds the rest:
+**Advanced**, below the card, holds the rest:
 
-- **Browser Address** (`?token=...`) opens a session with the current server
+- **Open on This Computer** (`?token=...`; the page masks the token, and
+  **Copy Address** copies the real one) opens a session with the current server
   run's 256-bit access token, for the same machine or an SSH tunnel. The token
   can also be pasted into **Have an access token instead?** on the sign-in
   screen. Treat it as a password.
@@ -43,7 +44,7 @@ at all, **Connect a Device** shows the system's reason and **Try Again**.
 
 In a remote browser session, the same settings page shows how that browser got
 in (`Connected as a paired device` or `Connected with the access token`) and the
-**Paired Devices** list. Tunnel controls stay on the host.
+**Connected Devices** list. Tunnel controls stay on the host.
 
 ## Connect from outside your home or office
 
@@ -103,7 +104,7 @@ ssh -N -L 47833:127.0.0.1:47833 user@dazzi-host
 ```
 
 Open `http://localhost:47833` in the client's browser and enter a 6-digit
-pairing code (or open the full `?token=...` Browser Address from **Details**).
+pairing code (or open the full `?token=...` address from **Advanced → Open on This Computer**).
 
 ## Security model
 
@@ -118,7 +119,7 @@ pairing code (or open the full `?token=...` Browser Address from **Details**).
   10-minute window. Scanning a `?pair=CODE` QR link strips `pair` from the URL
   via `history.replaceState` before exchanging it so spent codes do not remain
   in browser history.
-- **Instant revocation:** Renaming a device in **Paired Devices** updates its
+- **Instant revocation:** Renaming a device in **Connected Devices** updates its
   label in place. Clicking **Revoke** (or **Revoke All**) deletes its token hash
   from disk and immediately closes any open SSE event streams belonging to that
   device; its next action returns `403` and reloads back to the sign-in gate.

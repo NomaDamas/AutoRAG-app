@@ -42,11 +42,13 @@ import { DEFAULT_CODE_FOLDER_NAMES, isJsonObject, SETTINGS_CHANNELS } from "../s
 import { LOCAL_REFRESH_METHODS } from "./index-refresh";
 import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { AUTOMATION_CHANNELS } from "../shared/automation-contract";
+import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { autoragHome } from "./autorag-home";
 import { seedFromLaunchFolder, withoutRootWorkspace } from "./workspace-seed";
 import { createAutomationService, librarianCommand, runLibrarianCli } from "./automation-service";
 import { createDemoService } from "./demo-service";
 import { DEMO_CHANNELS } from "../shared/demo-contract";
+import { createLtrService } from "./ltr-service";
 import { readAppIndexing } from "./app-indexing";
 import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
@@ -127,6 +129,7 @@ import {
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
 	registerDemoIpcHandlers,
+	registerLtrIpcHandlers,
 	registerDragOutIpcHandlers,
 	registerIndexActivityIpcHandlers,
 	registerErrorFixIpcHandlers,
@@ -566,9 +569,20 @@ app.whenReady().then(async () => {
 	});
 	// Each chat's model conversation is a pi session file; the index remembers which file is whose.
 	const chatSessionsDirectory = join(app.getPath("userData"), "chat-sessions");
+	// One store for AI 에이전트's history: the search service writes its chats, a magic action's 대화 기록에 저장 adds one.
+	const chatStore = createChatStore({ directory: join(app.getPath("userData"), "chat-history") });
+	// Learning to rank: the librarian's `autorag ltr`, run in a child process so fitting a model never freezes this one.
+	const ltr = createLtrService({
+		run: (args, options) => {
+			const librarian = librarianCommand({ resourcesPath: process.resourcesPath, env: process.env, platform: process.platform });
+			return runLibrarianCli(librarian.command, [...librarian.args, ...args], process.env, options);
+		},
+		onTraining: (running) => sendToMainWindow(LTR_CHANNELS.training, running),
+	});
 	const searchService = createSearchService({
+		afterAnsweredSearch: () => ltr.autoTrainIfDue(),
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
-		chatStore: createChatStore({ directory: join(app.getPath("userData"), "chat-history") }),
+		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
 		send: sendToMainWindow,
 		analytics,
@@ -873,6 +887,7 @@ app.whenReady().then(async () => {
 			settings: settingsService,
 		}),
 	);
+	registerLtrIpcHandlers(ltr);
 	const stopAutomations = automations.start((snapshot) => {
 		sendToMainWindow(AUTOMATION_CHANNELS.changed, snapshot);
 	});
@@ -993,7 +1008,7 @@ app.whenReady().then(async () => {
 		// Nothing streams a scan to the renderer any more: the first run waits for the totals it feeds.
 		emit: () => undefined,
 	});
-	// "AI로 고치기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
+	// "AI로 해결하기": the error-fix helper runs on the AI Search model and repairs the shared config and the index.
 	registerErrorFixIpcHandlers(
 		createErrorFixService({
 			send: (event) => sendToMainWindow(ERROR_FIX_CHANNELS.event, event),
@@ -1032,6 +1047,7 @@ app.whenReady().then(async () => {
 		homeDir: home,
 		language: () => currentLanguage,
 		settings: settingsService,
+		importCustomProvider: (input) => providerAuth.importCustom(input),
 		listLocations: () => customizerPlaces.list().catch(() => []),
 		listTags: () => customizerTags.catalog().then((catalog) => catalog.tags.filter((tag) => tag.sidebar), () => []),
 	});
@@ -1046,7 +1062,7 @@ app.whenReady().then(async () => {
 		language: () => currentLanguage,
 		settings: settingsService,
 	});
-	registerMagicActionIpcHandlers(magicActionService);
+	registerMagicActionIpcHandlers(magicActionService, chatStore);
 	app.once("will-quit", () => magicActionService.dispose());
 	// One cached promise: a device id is stable for the process lifetime, and probes must not re-run per call.
 	let deviceIdPromise: Promise<string> | null = null;

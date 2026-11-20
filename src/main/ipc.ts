@@ -10,8 +10,10 @@ import { SEARCH_CHANNELS, type SearchBridge } from "../shared/search-contract";
 import { INTERACTION_CHANNELS, isApprovalMode, type ApprovalMode } from "../shared/interaction-contract";
 import type { InteractionHub } from "./interaction-hub";
 import { ERROR_FIX_CHANNELS, isErrorFixRequest } from "../shared/error-fix-contract";
-import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerRequest } from "../shared/app-customizer-contract";
-import { isMagicActionRunRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import { APP_CUSTOMIZER_CHANNELS, isAppCustomizerPromptAnswer, isAppCustomizerRequest } from "../shared/app-customizer-contract";
+import { isMagicActionRunRequest, isMagicActionSaveRequest, MAGIC_ACTION_CHANNELS } from "../shared/magic-actions-contract";
+import type { ChatStore } from "./chat-store";
+import { saveMagicActionToHistory } from "./magic-action-history";
 import { OS_REQUEST_CHANNELS } from "../shared/os-request-contract";
 import { SETTINGS_CHANNELS, type EmbeddingChangeRequest, type JsonValue, type McpServerInput, type ProviderAuthKind, type ProviderServerInput, type SettingsBridge } from "../shared/settings-contract";
 import { ACCOUNT_CHANNELS, isAccountSignInOptions, isPaidPlanId } from "../shared/account-contract";
@@ -22,6 +24,7 @@ import { INDEX_ACTIVITY_CHANNELS } from "../shared/index-activity-contract";
 import { INDEX_PROBLEM_CHANNELS } from "../shared/index-problem-contract";
 import { AUTOMATION_CHANNELS, type AutomationRemoval } from "../shared/automation-contract";
 import { DEMO_CHANNELS, type DemoBridge } from "../shared/demo-contract";
+import { LTR_CHANNELS } from "../shared/ltr-contract";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import type { AppUpdaterService } from "./app-updater";
@@ -34,6 +37,7 @@ import type { Analytics } from "./analytics-core";
 import type { IndexActivityService } from "./index-activity";
 import type { IndexProblemService } from "./index-problem-service";
 import type { AutomationService } from "./automation-service";
+import type { LtrService } from "./ltr-service";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import type { ModelDownloadService } from "./model-download";
 import { dragOutPaths } from "./drag-out";
@@ -179,9 +183,19 @@ export function registerAppCustomizerIpcHandlers(service: AppCustomizerService):
 	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.reset, (_event, sessionId: unknown) =>
 		typeof sessionId === "string" ? service.reset(sessionId) : undefined,
 	);
+	ipcMain.handle(APP_CUSTOMIZER_CHANNELS.answer, (_event, promptId: unknown, answer: unknown) => {
+		if (typeof promptId !== "string" || !isAppCustomizerPromptAnswer(answer)) {
+			throw new TypeError("appCustomizer:answer expects a prompt id and an answer");
+		}
+		service.answerPrompt(promptId, answer);
+	});
 }
 
-export function registerMagicActionIpcHandlers(service: MagicActionService): void {
+export function registerMagicActionIpcHandlers(service: MagicActionService, chatStore: ChatStore): void {
+	ipcMain.handle(MAGIC_ACTION_CHANNELS.saveToHistory, (_event, request: unknown) => {
+		if (!isMagicActionSaveRequest(request)) throw new TypeError("magicAction:saveToHistory expects { actionLabel, paths, output }");
+		return saveMagicActionToHistory(chatStore, request);
+	});
 	ipcMain.handle(MAGIC_ACTION_CHANNELS.start, (_event, runId: unknown, request: unknown) => {
 		if (typeof runId !== "string" || !isMagicActionRunRequest(request)) {
 			throw new TypeError("magicAction:start expects a run id and { actionId, paths }");
@@ -466,6 +480,14 @@ export function registerDemoIpcHandlers(service: DemoBridge): void {
 	ipcMain.handle(DEMO_CHANNELS.preparePhoto, () => service.preparePhoto());
 	ipcMain.handle(DEMO_CHANNELS.ensureDaemon, () => service.ensureDaemon());
 	ipcMain.handle(DEMO_CHANNELS.prepareMagicAction, () => service.prepareMagicAction());
+}
+
+/** Learning to rank: read the log's state and the models, fit one now, delete one; a training run is pushed by the main process. */
+export function registerLtrIpcHandlers(service: LtrService): void {
+	// The renderer's extra arguments are dropped, never forwarded: nothing the page sends reaches a command line but a validated model id.
+	ipcMain.handle(LTR_CHANNELS.get, () => service.get());
+	ipcMain.handle(LTR_CHANNELS.train, () => service.train());
+	ipcMain.handle(LTR_CHANNELS.deleteModel, (_event, id: unknown) => service.deleteModel(requireNonEmptyString(id, "model id")));
 }
 
 /** The on-device embedding model's download: a status read, start and cancel; progress is pushed by the main process. */

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowLeftRight, Lock, RotateCcw, Search, X } from "lucide-react";
-import dazziMark from "../../assets/dazzi-mark.png";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	activeShortcutPreset,
@@ -69,15 +68,10 @@ export function ShortcutsPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	customizerOpen,
-	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
-	readonly customizerOpen: boolean;
-	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const platform = hostPlatform();
@@ -101,7 +95,8 @@ export function ShortcutsPage({
 			const writer = getSettingsWriter();
 			if (writer === undefined) return false;
 			try {
-				const normalized = normalizeShortcutSettings(nextShortcuts);
+				// Every write carries the remembered 사용자 지정, so a preset or a reset never drops it.
+				const normalized = normalizeShortcutSettings({ custom: shortcuts.custom, ...nextShortcuts });
 				const updated = await writer.set({ shortcuts: normalized });
 				onAppSettingsChanged(updated);
 				return true;
@@ -110,7 +105,7 @@ export function ShortcutsPage({
 				return false;
 			}
 		},
-		[onAppSettingsChanged, onSettingsError],
+		[onAppSettingsChanged, onSettingsError, shortcuts.custom],
 	);
 
 	const actionLabel = useCallback(
@@ -238,12 +233,13 @@ export function ShortcutsPage({
 		await updateShortcuts({ overrides: nextOverrides });
 	};
 
-	const applyPreset = (preset: "macFinder" | "windowsExplorer" | "default"): void => {
+	const applyPreset = (preset: "macFinder" | "windowsExplorer" | "default" | "custom"): void => {
 		setRecordingId(null);
 		setHeldMods({ mod: false, alt: false, shift: false });
 		setPendingConflict(null);
 		setInvalidNotice(null);
-		void updateShortcuts(shortcutSettingsForPreset(preset));
+		if (preset !== "custom") void updateShortcuts(shortcutSettingsForPreset(preset));
+		else if (shortcuts.custom !== undefined) void updateShortcuts({ overrides: shortcuts.custom });
 	};
 
 	const normalizedQuery = filterQuery.trim().toLowerCase();
@@ -292,32 +288,34 @@ export function ShortcutsPage({
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} description={t("settingsCore.shortcuts.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.shortcuts")} />
 
-			{customizerOpen ? null : (
-				<div className="sidebar-ai-hero">
-					<div className="sidebar-ai-hero__body">
-						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-						</span>
-						<div className="sidebar-ai-hero__copy">
-							<div className="sidebar-ai-hero__title">{t("settingsCore.shortcuts.aiHeroTitle")}</div>
-							<p className="sidebar-ai-hero__desc">{t("settingsCore.shortcuts.aiHeroDesc")}</p>
-						</div>
-					</div>
-					<button
-						type="button"
-						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-						data-action="open-shortcut-customizer"
-						onClick={onOpenCustomizer}
-					>
-						<span>{t("settingsCore.shortcuts.aiHeroButton")}</span>
-					</button>
-				</div>
-			)}
-
-			{/* Figma 445:2249: 빠른 구성 (the platform presets as a segmented control, reset and the changed-only filter), the search, then one bordered card per group. */}
+			{/* Figma 445:2249: the search, 빠른 구성 (the platform presets as a segmented control, reset and the changed-only filter), then one bordered card per group. */}
 			<div className="shortcuts-page">
+				<label className="shortcuts-search">
+					<Search size={14} strokeWidth={1.5} className="shortcuts-search__icon" aria-hidden="true" />
+					<input
+						type="text"
+						data-testid="shortcuts-filter-input"
+						className="shortcuts-search__input"
+						value={filterQuery}
+						placeholder={t("settingsCore.shortcuts.filterPlaceholder")}
+						aria-label={t("settingsCore.shortcuts.filterPlaceholder")}
+						onChange={(event) => setFilterQuery(event.target.value)}
+					/>
+					{filterQuery.length > 0 ? (
+						<button
+							type="button"
+							className="shortcuts-search__clear"
+							data-action="clear-shortcuts-filter"
+							aria-label={t("common.close")}
+							onClick={() => setFilterQuery("")}
+						>
+							<X size={12} />
+						</button>
+					) : null}
+				</label>
+
 				<div className="shortcuts-quick">
 					<span className="shortcuts-quick-label">{t("settingsCore.shortcuts.presetsTitle")}</span>
 					<div className="shortcuts-quick-row">
@@ -340,6 +338,20 @@ export function ShortcutsPage({
 							>
 								{t("settingsCore.shortcuts.presetWindowsExplorer")}
 							</button>
+							{/* The last bindings set by hand; 모두 기본값으로 and the presets keep them here. */}
+							<button
+								type="button"
+								className={cn("shortcuts-segment", activePreset === null && "is-active")}
+								data-action="shortcuts-preset-custom"
+								aria-pressed={activePreset === null}
+								disabled={shortcuts.custom === undefined}
+								title={shortcuts.custom === undefined ? t("settingsCore.shortcuts.presetCustomEmpty") : undefined}
+								onClick={() => {
+									if (activePreset !== null) applyPreset("custom");
+								}}
+							>
+								{t("settingsCore.shortcuts.presetCustom")}
+							</button>
 						</div>
 						<div className="shortcuts-quick-actions">
 							<button
@@ -349,6 +361,7 @@ export function ShortcutsPage({
 								disabled={activePreset === "default"}
 								onClick={() => applyPreset("default")}
 							>
+								<RotateCcw aria-hidden="true" />
 								{t("settingsCore.shortcuts.resetAll")}
 							</button>
 							<button
@@ -363,29 +376,6 @@ export function ShortcutsPage({
 							</button>
 						</div>
 					</div>
-					<label className="shortcuts-search">
-						<Search size={14} strokeWidth={1.5} className="shortcuts-search__icon" aria-hidden="true" />
-						<input
-							type="text"
-							data-testid="shortcuts-filter-input"
-							className="shortcuts-search__input"
-							value={filterQuery}
-							placeholder={t("settingsCore.shortcuts.filterPlaceholder")}
-							aria-label={t("settingsCore.shortcuts.filterPlaceholder")}
-							onChange={(event) => setFilterQuery(event.target.value)}
-						/>
-						{filterQuery.length > 0 ? (
-							<button
-								type="button"
-								className="shortcuts-search__clear"
-								data-action="clear-shortcuts-filter"
-								aria-label={t("common.close")}
-								onClick={() => setFilterQuery("")}
-							>
-								<X size={12} />
-							</button>
-						) : null}
-					</label>
 				</div>
 
 				{totalMatching === 0 ? (

@@ -4,6 +4,7 @@ import { createAnalyticsBridge } from "./analytics-bridge";
 import { createAppUpdateBridge } from "./app-update-bridge";
 import { createAutomationBridge } from "./automation-bridge";
 import { createDemoBridge } from "./demo-bridge";
+import { createLtrBridge } from "./ltr-bridge";
 import { createConversionBridge } from "./conversion-bridge";
 import { contextBridge, ipcRenderer, webUtils, type IpcRenderer, type IpcRendererEvent } from "electron";
 import { createBridge } from "../shared/bridge";
@@ -54,6 +55,7 @@ contextBridge.exposeInMainWorld("autorag", {
 	account: createAccountBridge(ipcRenderer),
 	automations: createAutomationBridge(ipcRenderer),
 	demo: createDemoBridge(ipcRenderer),
+	ltr: createLtrBridge(ipcRenderer),
 	voice: createVoiceBridge(ipcRenderer),
 	conversion: createConversionBridge(ipcRenderer),
 	indexActivity: createIndexActivityBridge(ipcRenderer),

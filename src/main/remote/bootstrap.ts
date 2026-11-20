@@ -4,6 +4,7 @@ import { ACTIONS_CHANNELS, NO_CAPABILITIES } from "../../shared/actions-contract
 import { APP_CUSTOMIZER_CHANNELS } from "../../shared/app-customizer-contract";
 import { APP_UPDATE_CHANNELS } from "../../shared/update-contract";
 import { AUTOMATION_CHANNELS } from "../../shared/automation-contract";
+import { LTR_CHANNELS } from "../../shared/ltr-contract";
 import { ERROR_FIX_CHANNELS } from "../../shared/error-fix-contract";
 import { MAGIC_ACTION_CHANNELS } from "../../shared/magic-actions-contract";
 import { INDEX_ACTIVITY_CHANNELS } from "../../shared/index-activity-contract";
@@ -40,6 +41,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"appCustomizer.onEvent": APP_CUSTOMIZER_CHANNELS.event,
 	"appUpdate.onChange": APP_UPDATE_CHANNELS.changed,
 	"automations.onChange": AUTOMATION_CHANNELS.changed,
+	"ltr.onTraining": LTR_CHANNELS.training,
 	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
 	"magicAction.onEvent": MAGIC_ACTION_CHANNELS.event,
 	"indexActivity.onChange": INDEX_ACTIVITY_CHANNELS.changed,
@@ -76,6 +78,7 @@ const TARGETS = [
 	"account",
 	"automations",
 	"demo",
+	"ltr",
 	"appUpdate",
 	"indexActivity",
 	"indexProblem",
