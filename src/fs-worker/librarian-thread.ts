@@ -9,17 +9,25 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { EverythingClient, scanWithDupey } from "@autorag/librarian";
 import { createDefaultContentSearch } from "../main/content-search";
+import { createDupeyRunner } from "../main/dupey-runner";
 import { createFileNameSearch } from "../main/file-name-search";
 import { createIndexStatusService } from "../main/index-status";
 import { createDefaultSearchRelevanceGate } from "../main/search-relevance-gate";
 import { createDefaultSourceSearch } from "../main/source-search";
 import { launchTiedToParent } from "../main/tied-launch";
 import type { LibrarianThreadData } from "./librarian-contract";
+import { createDuplicateScans } from "./librarian-dupey";
 import { serveLibrarian } from "./librarian-serve";
 import { adaptNodePort } from "./thread-port";
 
 if (parentPort === null) throw new Error("librarian-thread must run as a worker thread");
 const { userDataDir } = workerData as LibrarianThreadData;
+
+// Every dupey the thread starts is one of this runner's, so `shutdown` can end them: the librarian's own spawn is not tracked.
+const dupeyRunner = createDupeyRunner();
+const duplicateScans = createDuplicateScans({ scan: scanWithDupey, runner: dupeyRunner });
+// The backstop for a thread that ends without `shutdown` having finished: the exit handlers `onShutdown` raises, and any exit the thread reaches itself.
+process.once("exit", () => dupeyRunner.killAll());
 
 serveLibrarian(adaptNodePort(parentPort), {
 	services: (host) => {
@@ -33,7 +41,8 @@ serveLibrarian(adaptNodePort(parentPort), {
 			}),
 			contentSearch: createDefaultContentSearch(process.env, process.cwd(), relevanceGate),
 			sourceSearch: createDefaultSourceSearch(process.env, process.cwd(), relevanceGate),
-			scanDuplicates: (dir) => scanWithDupey(dir),
+			scanDuplicates: duplicateScans.scanDuplicates,
+			stopDuplicateScans: duplicateScans.stop,
 			indexStatus: createIndexStatusService({ env: process.env, cwd: process.cwd(), onRefreshed: host.indexRefreshed }),
 		};
 	},

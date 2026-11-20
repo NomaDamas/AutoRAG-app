@@ -87,6 +87,8 @@ export interface VersionFamiliesResult {
 	readonly families: readonly VersionFamilyData[];
 	readonly scannedAt: string | null;
 	readonly error: VersionFamilyError | null;
+	/** Folder-level scan failures do not invalidate families found elsewhere. */
+	readonly scanFailures?: readonly unknown[];
 }
 
 export const EMPTY_VERSION_FAMILIES: VersionFamilies = {
@@ -98,6 +100,7 @@ export const EMPTY_VERSION_FAMILIES_RESULT: VersionFamiliesResult = {
 	families: [],
 	scannedAt: null,
 	error: null,
+	scanFailures: [],
 };
 
 export function buildVersionFamilies(families: readonly VersionFamilyData[]): VersionFamilies {

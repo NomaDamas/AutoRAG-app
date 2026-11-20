@@ -198,6 +198,7 @@ export function createBridgeSource(
 		})),
 		scannedAt: result.scannedAt,
 		error: result.error,
+		scanFailures: result.scanFailures ?? [],
 	});
 	const mapLayerPublication = (publication: LayerPublication): LayerPublication => ({
 		...publication,
