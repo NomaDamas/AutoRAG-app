@@ -123,8 +123,9 @@ async function pushEmbeddingAssets(ip, job, signal) {
  *
  * A VM has no Apple Neural Engine, and MinSync 0.7.4 runs its SPLADE encoder on it by default: the encoder's own
  * self-test then fails there ("ANE self-test failed … cosine 0.47 … minimum 0.995") and every first index stops at
- * 87 %. The real binary is therefore installed as `minsync.real` behind a wrapper that pins `[sparse] device = "cpu"`
+ * 87 %. The real binary is therefore installed as `minsync.real` beside a wrapper that pins `[sparse] device = "cpu"`
  * in the workspace's `.minsync/config.toml` before each call (the only switch MinSync has; it reads no environment variable).
+ * The wrapper finds `minsync.real` next to itself, not under `$HOME`: lanes launch the app with their own `HOME`.
  */
 const GUEST_MINSYNC_WRAPPER = `#!/bin/sh
 # QA VM: no Neural Engine, so the sparse encoder runs on the CPU. MinSync runs with the workspace as its working directory.
@@ -136,7 +137,7 @@ if [ -f "$cfg" ] && grep -q '^\\[sparse\\]' "$cfg"; then
     { print }
   ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
 fi
-exec "$HOME/bin/minsync.real" "$@"
+exec "$(dirname "$0")/minsync.real" "$@"
 `;
 
 async function pushHostTools(ip, job, signal) {
