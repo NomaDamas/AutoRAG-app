@@ -120,15 +120,34 @@ async function pushEmbeddingAssets(ip, job, signal) {
  * Ensure the guest carries the host's arm64 `minsync` and `filee-cli` binaries
  * (`~/bin/*`) so librarian 2.13.2's MinSync 0.5.1 durable stage protocol v2 and
  * offline `convert-rename` work without downloading inside the VM.
+ *
+ * A VM has no Apple Neural Engine, and MinSync 0.7.4 runs its SPLADE encoder on it by default: the encoder's own
+ * self-test then fails there ("ANE self-test failed … cosine 0.47 … minimum 0.995") and every first index stops at
+ * 87 %. The real binary is therefore installed as `minsync.real` behind a wrapper that pins `[sparse] device = "cpu"`
+ * in the workspace's `.minsync/config.toml` before each call (the only switch MinSync has; it reads no environment variable).
  */
+const GUEST_MINSYNC_WRAPPER = `#!/bin/sh
+# QA VM: no Neural Engine, so the sparse encoder runs on the CPU. MinSync runs with the workspace as its working directory.
+cfg=".minsync/config.toml"
+if [ -f "$cfg" ] && grep -q '^\\[sparse\\]' "$cfg"; then
+  awk '
+    /^\\[/ { insparse = ($0 == "[sparse]"); print; if (insparse) print "device = \\"cpu\\""; next }
+    insparse && /^device *=/ { next }
+    { print }
+  ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+fi
+exec "$HOME/bin/minsync.real" "$@"
+`;
+
 async function pushHostTools(ip, job, signal) {
 	await sshOk(ip, 'mkdir -p "$HOME/bin"');
 	try {
 		const minsync = execFileSync("which", ["minsync"], { encoding: "utf8" }).trim();
 		if (minsync) {
-			log("copying host minsync binary into ~/bin/minsync in the guest");
-			await pushFile(ip, minsync, "bin/minsync");
-			await sshOk(ip, 'chmod 755 "$HOME/bin/minsync"');
+			log("copying host minsync binary into ~/bin/minsync.real in the guest (behind a CPU-encoder wrapper)");
+			await pushFile(ip, minsync, "bin/minsync.real");
+			await sshOk(ip, 'chmod 755 "$HOME/bin/minsync.real"');
+			await sshOk(ip, `cat > "$HOME/bin/minsync" <<'WRAPPER_EOF'\n${GUEST_MINSYNC_WRAPPER}WRAPPER_EOF\nchmod 755 "$HOME/bin/minsync"`);
 		}
 	} catch {
 		// optional
