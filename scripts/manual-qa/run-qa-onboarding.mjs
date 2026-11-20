@@ -10,7 +10,7 @@
 // lane takes them as they are, and the run goes on by itself until the tour.
 //
 // The first run scans the OS's own default folders (Desktop, Documents,
-// Downloads, iCloud Drive), and Electron resolves those from the OS — on macOS
+// Downloads; cloud drives such as iCloud Drive are offered but switched off), and Electron resolves those from the OS — on macOS
 // `HOME` in the launch env does not move `app.getPath("documents")` (verified) —
 // so the fixtures go in this process's home. The QA runner boots a throwaway VM
 // home, where that is disposable; a host run writes them into the real home, so
@@ -138,6 +138,11 @@ try {
 	await page.waitForSelector(".fr-folders .fr-folder-chip", { timeout: 30_000 });
 	const chipsOn = await page.locator('.fr-folders .fr-folder-chip[aria-pressed="true"]').count();
 	check("the folder screen offers at least one folder switched on", chipsOn > 0, String(chipsOn));
+	// A cloud drive (iCloud Drive, Google Drive, Dropbox, OneDrive) is never switched on before the person does it.
+	const cloudOn = await page.locator('.fr-folders .fr-folder-chip[aria-pressed="true"]').evaluateAll((chips) =>
+		chips.map((chip) => chip.textContent?.trim() ?? "").filter((label) => /iCloud|Google Drive|Dropbox|OneDrive/i.test(label)),
+	);
+	check("no cloud drive is switched on by default", cloudOn.length === 0, cloudOn.join(", "));
 	await shot(page, "01-folders.png");
 	await page.locator('[data-action="folders-start"]').click();
 

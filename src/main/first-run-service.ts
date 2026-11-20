@@ -654,7 +654,11 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 		return promise.finally(() => clearTimeout(timer));
 	}
 
-	/** Every folder the first run offers: the OS's own folders that exist (on), then other cloud drives (off). */
+	/**
+	 * Every folder the first run offers: the OS's own folders that exist (on), then every cloud drive, iCloud Drive
+	 * included (off). A cloud drive is never read until the person switches it on: its files may live only in the cloud,
+	 * and reading them downloads them.
+	 */
 	function offeredFolders(): readonly FirstRunFolder[] {
 		const own: { readonly path: string; readonly kind: FirstRunFolderKind }[] =
 			deps.platform === "win32"
@@ -668,8 +672,10 @@ export function createFirstRunService(deps: FirstRunServiceDeps): FirstRunServic
 						{ path: join(deps.home, "Documents"), kind: "documents" },
 						{ path: join(deps.home, "Downloads"), kind: "downloads" },
 					];
-		if (deps.iCloudDrivePath !== null) own.push({ path: deps.iCloudDrivePath, kind: "iCloudDrive" });
 		const offered: FirstRunFolder[] = own.filter(({ path }) => existsSync(path)).map((folder) => ({ ...folder, selected: true }));
+		if (deps.iCloudDrivePath !== null && existsSync(deps.iCloudDrivePath)) {
+			offered.push({ path: deps.iCloudDrivePath, kind: "iCloudDrive", selected: false });
+		}
 		for (const cloud of deps.cloudFolders?.() ?? detectCloudFolders(deps.home, deps.platform)) {
 			if (!offered.some((folder) => folder.path === cloud.path)) offered.push({ ...cloud, selected: false });
 		}

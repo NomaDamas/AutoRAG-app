@@ -403,9 +403,9 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   under `firstRun.*`). The main-process side is `src/main/first-run-service.ts`.
 - Screens (`.fr-root[data-screen]`): `folders` (Figma 156:1125: the logo,
   "Dazzi가 이 폴더들을 읽을게요", one chip per folder — Desktop, Documents,
-  Downloads and iCloud Drive switched on, other cloud drives found on the computer
+  Downloads switched on; iCloud Drive and the other cloud drives found on the computer
   (`~/Library/CloudStorage` Google Drive / Dropbox / OneDrive, `~/Dropbox`)
-  switched off and drawn dashed — a click switches a chip, "폴더 N개 읽기" starts
+  switched off and drawn dashed (no cloud drive is read until the person switches it on) — a click switches a chip, "폴더 N개 읽기" starts
   the run over the switched-on ones (Enter presses it; with none on it is
   disabled; a profile with no folder to offer skips it). The folder, reading
   and ready screens draw the bare sunflower (`dazzi-mark.png`), not the icon

@@ -622,7 +622,7 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    waits for the access at most `MODEL_ACCESS_TIMEOUT_MS` (20 s) and otherwise
    plans without a model. The stages then run:
    - `scanning` (0→6) pre-scans the chosen folders one at a time (by default
-     Desktop, Documents, Downloads, and iCloud Drive on macOS), through the same folder-scan coordinator the indexer uses,
+     Desktop, Documents and Downloads; iCloud Drive and the other cloud drives are offered but start switched off), through the same folder-scan coordinator the indexer uses,
      which gives the total file count. On macOS each folder triggers its own
      per-folder TCC consent dialog as it is read; a refused folder fails its
      pre-scan and is left out of `searchPaths` rather than failing the run.
@@ -686,13 +686,12 @@ drives one flow against the contract in `src/shared/onboarding-contract.ts`:
    nothing and the hunt tries again. A run whose question is only proven after the
    index is read reaches `ready` later but the same way. While `stage` is
    `indexing` and `demo` is set, `canStartEarly` (`first-run/tour.ts`) is true and
-   the setup screen shows `[data-role="early-start"]`, drawn like the ready card
-   that replaces the bar when setup finishes mid-game (the sunflower mark, "바로 시작할 수 있어요",
-   one line saying the rest is read in the background, one flat blue button with
-   its Enter key). The card, the `preparing` stage label ("마무리하는 중") and the tour's
-   typing hint never say that a question was written or is ready: the person is only
-   told they can start and that reading goes on. `test/i18n.test.ts` pins that for the
-   four languages. `[data-action="start-early"]` takes the same path as "시작하기" into the
+   the setup screen shows `[data-role="early-start"]`: one centred flat blue button under
+   the progress bar ("지금 시작하기" with its Enter key), the same one the folders and ready
+   screens end on, and nothing else (no mark, title or sentence). The button, the
+   `preparing` stage label ("마무리하는 중") and the tour's typing hint never say that a
+   question was written or is ready: the person is only told they can start. `test/i18n.test.ts`
+   pins that for the four languages. `[data-action="start-early"]` takes the same path as "시작하기" into the
    reveal and the tour. The index is not stopped: the refresh keeps running in the
    main process, the tour and the sign-in sheet show `[data-role="background-reading"]`
    (the file counts, from the same status stream), and the Finder's sidebar block

@@ -107,7 +107,7 @@ describe("readOnboardingPending", () => {
 });
 
 describe("first-run folders", () => {
-	it("offers the OS's own folders switched on and other cloud drives switched off", async () => {
+	it("offers the OS's own folders switched on and every cloud drive, iCloud Drive included, switched off", async () => {
 		const directory = await workDir("autorag-firstrun-");
 		const deps = await makeDeps(directory);
 		await mkdir(join(deps.home, "Documents"), { recursive: true });
@@ -119,7 +119,7 @@ describe("first-run folders", () => {
 		expect(await service.folders()).toEqual([
 			{ path: join(deps.home, "Desktop"), kind: "desktop", selected: true },
 			{ path: join(deps.home, "Documents"), kind: "documents", selected: true },
-			{ path: icloud, kind: "iCloudDrive", selected: true },
+			{ path: icloud, kind: "iCloudDrive", selected: false },
 			{ path: join(deps.home, "Library", "CloudStorage", "GoogleDrive-me@example.com"), kind: "googleDrive", selected: false },
 			{ path: join(deps.home, "Library", "CloudStorage", "Dropbox"), kind: "dropbox", selected: false },
 		]);

@@ -3125,8 +3125,6 @@
       "start": "Get started"
     },
     "early": {
-      "title": "You can start now",
-      "lead": "The rest keeps being read in the background.",
       "start": "Start now"
     },
     "background": {

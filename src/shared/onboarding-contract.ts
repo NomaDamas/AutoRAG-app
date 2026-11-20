@@ -4,7 +4,7 @@
  *
  * The first run asks one thing before it reads anything: the Finder window opens
  * with the pending flag and the layer shows the folders it is about to read
- * (`folders`: Desktop, Documents, Downloads and iCloud Drive switched on, other
+ * (`folders`: Desktop, Documents and Downloads switched on; iCloud Drive and the other
  * cloud drives found on this computer switched off). The person can switch any of
  * them, then `start` takes the chosen ones and one progress bar follows while the
  * main process does the rest on its own (macOS asks for per-folder access as each
@@ -95,7 +95,7 @@ export type FirstRunFolderKind = "desktop" | "documents" | "downloads" | "iCloud
 export interface FirstRunFolder {
 	readonly path: string;
 	readonly kind: FirstRunFolderKind;
-	/** Switched on before the person changes anything: the OS's own folders are, other cloud drives are not. */
+	/** Switched on before the person changes anything: the OS's own folders are, every cloud drive (iCloud Drive too) is not. */
 	readonly selected: boolean;
 }
 

@@ -1674,36 +1674,18 @@ html[data-appearance="dark"] .fr-dock-ready {
 /* ------------------------------------------------------- start before it is read */
 
 /*
- * Under the reading bar once the person can already start: the rest is read behind the app. Same anatomy as the
- * ready card that replaces the bar when setup finishes mid-game (mark, title, one line, one flat blue button),
- * so "you can start" and "all done" read as the same kind of moment.
+ * Under the reading bar once the person can already start: one button, centred, the same one the folders and ready
+ * screens end on. The rest is still being read behind the app; the pill at the top says so once the tour opens.
  */
 .fr-early {
 	display: flex;
-	align-items: center;
-	gap: 12px;
+	justify-content: center;
 	width: min(592px, 100%);
+}
+
+.fr-early .fr-btn--hero {
 	margin-top: 22px;
-	padding: 12px 16px;
-	border-radius: 20px;
-	background: rgba(255, 255, 255, 0.8);
-	box-shadow: 0 2px 4px rgba(20, 22, 40, 0.08), 0 24px 30px rgba(20, 22, 40, 0.18);
-	-webkit-backdrop-filter: blur(22px) saturate(1.6);
-	backdrop-filter: blur(22px) saturate(1.6);
 	animation: fr-fade-up 520ms var(--fr-spring) both;
-}
-
-html[data-appearance="dark"] .fr-early {
-	background: var(--fr-card);
-}
-
-.fr-early .fr-btn {
-	flex: none;
-}
-
-.fr-early .fr-dock-lead,
-.fr-early .fr-title--dock {
-	text-wrap: balance;
 }
 
 /* While the tour and the sign-in sheet are up, the first index is still being read: said once, out of the way, at the top. */
@@ -1741,7 +1723,7 @@ html[data-appearance="dark"] .fr-early {
 }
 
 @media (prefers-reduced-motion: reduce) {
-	.fr-early,
+	.fr-early .fr-btn--hero,
 	.fr-bg {
 		animation: none;
 	}
