@@ -75,7 +75,7 @@ type ChatSession = {
 	dispose(): void;
 };
 
-type SearchAgent = {
+export type SearchAgent = {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
@@ -435,11 +435,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	 * chat again resumes from its file.
 	 */
 	const agents = new Map<string, SearchAgent>();
+	/** Agents that were answering when the config or credentials changed: they finish on what they started with, then are rebuilt. */
+	const staleAgents = new Set<SearchAgent>();
 	/** The mode the person last chose; agents built after that start in it. */
 	let chosenMode: ApprovalMode | undefined;
 	async function agentFor(chatId: string, earlier: readonly ChatMessage[]): Promise<SearchAgent> {
 		const cached = agents.get(chatId);
-		if (cached !== undefined) {
+		if (cached !== undefined && staleAgents.has(cached)) {
+			agents.delete(chatId);
+			staleAgents.delete(cached);
+			await cached.closeSession?.().catch(() => undefined);
+		} else if (cached !== undefined) {
 			// Re-insert so the Map's order is least recently used first.
 			agents.delete(chatId);
 			agents.set(chatId, cached);
@@ -476,6 +482,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function closeAgents(): Promise<void> {
 		const open = [...agents.values()];
 		agents.clear();
+		staleAgents.clear();
 		await Promise.allSettled(open.map((agent) => agent.closeSession?.()));
 	}
 
@@ -483,6 +490,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function resetAgents(): Promise<void> {
 		const answering = new Set([...active.values()].map((run) => run.agent));
 		const idle = [...agents].filter(([, agent]) => !answering.has(agent));
+		for (const [, agent] of agents) if (answering.has(agent)) staleAgents.add(agent);
 		for (const [chatId] of idle) agents.delete(chatId);
 		await Promise.allSettled(idle.map(([, agent]) => agent.closeSession?.()));
 	}
@@ -954,4 +962,25 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
 		return agent as SearchAgent;
 	};
+}
+
+/**
+ * Runs `question` through the same agent the AI Search panel builds, with no chat around it, and returns the sources
+ * the answer cites, in order, or null when it produced no answer. The first-run tour calls this before it offers a
+ * question, so the question it types into AI Search is one this index has already answered with a citation.
+ * A model failure (a run that ends in the degraded "no final answer" text) is no answer, and so is an empty one.
+ */
+export async function answerQuestion(createAgent: () => Promise<SearchAgent>, question: string, signal?: AbortSignal): Promise<readonly string[] | null> {
+	const agent = await createAgent();
+	try {
+		let final: SearchDocumentsResponse | null = null;
+		for await (const event of agent.searchDocumentsStream(question)) {
+			signal?.throwIfAborted();
+			if (event.type === "complete") final = event.response;
+		}
+		if (final === null || modelRequestFailure(final) !== null || final.answer.trim() === "") return null;
+		return final.results.flatMap((result) => (result.source === undefined ? [] : [result.source]));
+	} finally {
+		agent.abort?.();
+	}
 }

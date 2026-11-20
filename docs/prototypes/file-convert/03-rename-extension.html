@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 4 · 이름 변경</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 4: renaming the extension is the conversion gesture. Type, Enter, decide. */
+		.rename-box { display: flex; align-items: center; gap: 6px; }
+		.rename-box input {
+			height: 20px; width: 220px; padding: 0 5px; border: 1px solid var(--accent); border-radius: var(--radius-4);
+			background: var(--bg-window); color: var(--text-primary); font: 12px var(--font-sans); outline: none;
+			box-shadow: 0 0 0 3px var(--accent-soft);
+		}
+		.ext-hint {
+			position: absolute; z-index: 40; width: 330px; padding: 11px 12px;
+			background: var(--bg-window); border: 1px solid var(--border); border-radius: var(--radius-10); box-shadow: var(--shadow-menu);
+		}
+		.ext-hint h4 { margin: 0 0 3px; display: flex; align-items: center; gap: 7px; color: var(--text-primary); font-size: 12.5px; font-weight: 600; }
+		.ext-hint p { margin: 0 0 8px; color: var(--text-muted); font-size: 11.5px; line-height: 1.5; }
+		.ext-hint .pair { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; }
+		.ext-hint .pair .icon { width: 12px; height: 12px; color: var(--text-faint); }
+		.choices { display: flex; flex-direction: column; gap: 5px; }
+		.choice {
+			display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; text-align: left;
+			border: 1px solid var(--border); border-radius: var(--radius-8); background: var(--bg-window); color: var(--text-primary);
+		}
+		.choice:hover { background: var(--bg-hover); }
+		.choice.primary { border-color: var(--accent); background: var(--accent-wash); }
+		.choice b { display: block; font-size: 12.5px; font-weight: 600; }
+		.choice small { display: block; margin-top: 1px; color: var(--text-muted); font-size: 11px; }
+		.choice .icon { width: 16px; height: 16px; color: var(--text-muted); }
+		.choice.primary .icon { color: var(--accent-text); }
+		.choice kbd { margin-left: auto; color: var(--text-faint); font: 11px var(--font-sans); }
+		.ext-hint .foot { display: flex; align-items: center; gap: 7px; margin-top: 9px; padding-top: 8px; border-top: 1px solid var(--border-divider); color: var(--text-muted); font-size: 11px; }
+		.ext-hint .foot label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+		.frow.converting .name b { color: var(--text-muted); }
+		.frow .prog { display: flex; align-items: center; gap: 8px; }
+		.frow .prog .bar { width: 120px; }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		/* Cases the rename gesture has to tell apart. */
+		const CASES = {
+			pdf: { file: FILES[1], typed: "계약서_최종.pdf", from: "docx", to: "pdf", kind: "convert", note: "DOCX → PDF" },
+			hwp: { file: FILES[0], typed: "2026 업무보고.hwp", from: "hwpx", to: "hwp", kind: "convert", note: "HWPX → HWP · rhwp" },
+			jpg: { file: FILES[4], typed: "IMG_4021.jpg", from: "heic", to: "jpg", kind: "convert", note: "HEIC → JPG" },
+			bad: { file: FILES[3], typed: "예산.mp3", from: "xlsx", to: "mp3", kind: "impossible", note: "변환 경로 없음" },
+			lossy: { file: FILES[2], typed: "제품소개서.docx", from: "pdf", to: "docx", kind: "lossy", note: "PDF → DOCX · 서식이 달라질 수 있음" },
+		};
+		let key = "pdf"; let phase = "typing"; // typing → asking → converting → done
+		let remember = false;
+
+		function asking(c) {
+			const baseName = c.typed.replace(/\.[^.]+$/, "");
+			if (c.kind === "impossible") {
+				return `<div class="ext-hint" id="hint"><h4>${icon("circle-alert")}${c.from.toUpperCase()}는 ${c.to.toUpperCase()}로 바꿀 수 없습니다</h4>
+					<p>이름만 바꾸면 파일이 열리지 않게 됩니다. 변환이 가능한 형식은 아래와 같습니다.</p>
+					<div class="choices">
+						${(TARGETS[c.from] || []).map((t) => `<button class="choice">${icon("arrow-right")}<span><b>${t.toUpperCase()} 형식으로 변환</b></span></button>`).join("")}
+						<button class="choice">${icon("pencil")}<span><b>이름만 바꾸기</b><small>내용은 그대로 — 열리지 않을 수 있어요</small></span></button>
+					</div></div>`;
+			}
+			return `<div class="ext-hint" id="hint">
+				<h4>${icon("arrow-right-left")}확장자를 ${c.to.toUpperCase()}로 바꿨습니다</h4>
+				<div class="pair"><span class="fmt">${c.from.toUpperCase()}</span>${icon("arrow-right")}<span class="fmt">${c.to.toUpperCase()}</span><span class="badge ${c.kind === "lossy" ? "warn" : "info"}">${c.note}</span></div>
+				<p>${c.kind === "lossy" ? "PDF에서 편집 가능한 문서로 바꾸면 표·레이아웃이 달라질 수 있어요." : "파일 내용을 실제로 변환할까요?"}</p>
+				<div class="choices">
+					<button class="choice primary" id="do-convert">${icon("arrow-right-left")}<span><b>${baseName}.${c.to} 만들기</b><small>원본 ${c.file.name}은 그대로 둡니다</small></span><kbd>↩</kbd></button>
+					<button class="choice" id="do-replace">${icon("refresh-cw")}<span><b>변환하고 원본 교체</b><small>원본은 휴지통으로 — ⌘Z로 되돌릴 수 있어요</small></span></button>
+					<button class="choice" id="do-rename">${icon("pencil")}<span><b>이름만 바꾸기</b><small>내용은 그대로 (잘못된 확장자 수정용)</small></span><kbd>⎋</kbd></button>
+				</div>
+				<div class="foot"><label><input type="checkbox" id="rem" ${remember ? "checked" : ""}> 앞으로 묻지 않고 바로 변환</label></div>
+			</div>`;
+		}
+
+		function render() {
+			const c = CASES[key];
+			const baseTyped = phase === "typing" || phase === "asking";
+			const rows = FILES.map((f) => {
+				if (f.id !== c.file.id) return rowHtml(f, "");
+				if (phase === "converting") {
+					return `<div class="frow sel converting" data-id="${f.id}"><div class="name"><span class="tile t-${f.tile}">${f.letter}</span><b>${c.typed}</b></div>
+						<span class="meta prog" style="grid-column: span 3"><div class="bar" style="width:120px"><i style="width:62%"></i></div><span>변환 중… 62%</span></span><span class="meta"></span><span class="meta"></span></div>`;
+				}
+				if (baseTyped) {
+					return `<div class="frow sel" data-id="${f.id}"><div class="name"><span class="tile t-${f.tile}">${f.letter}</span><div class="rename-box"><input id="rn" value="${c.typed}" spellcheck="false"></div></div>
+						<span class="meta">${f.date}</span><span class="meta num">${f.size}</span><span class="meta">${f.kind}</span><span class="meta"></span></div>`;
+				}
+				return rowHtml(f, "");
+			}).join("");
+			const done = phase === "done" ? rowHtml({ ...c.file, id: "new", name: c.typed, tile: c.to === "pdf" ? "pdf" : c.file.tile, letter: c.to[0].toUpperCase(), kind: c.to.toUpperCase() + " 문서", size: "—", date: "방금" }, "sel") : "";
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 3", "⌘R로 이름을 바꿀 때 확장자가 바뀌면 변환할지 묻고, 기억하면 바로 변환합니다.", "03-rename-extension.html", "확장자만 잘못 붙은 파일을 고치거나, 이름을 바꾸다가 형식도 바꾸고 싶을 때") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${rows}${done}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(c.file, baseChips())}
+				${phase === "asking" ? asking(c) : ""}
+			</div>
+			<div class="proto-bar">
+				<span>사례</span>
+				${Object.entries(CASES).map(([k, v]) => `<button class="btn${k === key ? " on" : ""}" data-k="${k}">${v.from}→${v.to}</button>`).join("")}
+				<button class="btn" id="replay">다시 재생</button><span class="sp"></span>
+				<span><b style="color:var(--text-primary)">규칙(제안)</b> 변환 경로가 있을 때만 묻기 · 기본은 원본 보존 · ⌘Z로 취소 · “묻지 않고 바로 변환”은 설정에서 끔</span>
+			</div></div></div>`;
+			wireChrome();
+			document.querySelectorAll("[data-k]").forEach((b) => (b.onclick = () => { key = b.dataset.k; phase = "typing"; render(); }));
+			document.getElementById("replay").onclick = () => { phase = "typing"; render(); };
+			const input = document.getElementById("rn");
+			if (input) { input.focus(); input.setSelectionRange(0, c.typed.lastIndexOf(".")); }
+			input?.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.stopPropagation(); phase = "asking"; render(); } else if (e.key === "Escape") { e.stopPropagation(); phase = "done"; render(); } });
+			const hint = document.getElementById("hint");
+			if (hint) { const r = document.querySelector(".frow.sel").getBoundingClientRect(); const w = document.getElementById("win").getBoundingClientRect(); hint.style.left = `${r.left - w.left + 36}px`; hint.style.top = `${r.bottom - w.top + 6}px`; }
+			const go = (mode) => { phase = "converting"; render(); setTimeout(() => { phase = "done"; render(); toast(mode === "replace" ? "변환했습니다 — 원본은 휴지통에 있습니다 (⌘Z)" : `${c.typed} — 변환했습니다`, "arrow-right-left"); }, 900); };
+			document.getElementById("do-convert")?.addEventListener("click", () => go("keep"));
+			document.getElementById("do-replace")?.addEventListener("click", () => go("replace"));
+			document.getElementById("do-rename")?.addEventListener("click", () => { phase = "done"; render(); toast("이름만 바꿨습니다", "pencil"); });
+			document.getElementById("rem")?.addEventListener("change", (e) => (remember = e.target.checked));
+		}
+		render();
+		document.addEventListener("keydown", (e) => {
+			if (phase !== "asking") return;
+			if (e.key === "Enter") document.getElementById("do-convert")?.click();
+			else if (e.key === "Escape") document.getElementById("do-rename")?.click();
+		});
+	</script>
+</body>
+</html>

@@ -38,6 +38,8 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // The pin is one commit past v2.14.0: 04cef434 is AutoRAG#2199, `createWebTools` in `@autorag/librarian/profiles`, the
 // librarian's own `web_search` and `web_fetch` for a helper profile (the Settings assistants for MCP and apps use them).
 // Move back to a release tag once one carries it.
+// v2.13.16 (#2203) lets a query read beside every sync of the refresh that builds a first index, not only the first (the app's first
+// run proves the tour's source against the index while it is still being built); the pin below contains it.
 const librarianRef = "04cef434cb9bbd3cc3623f929946efca82299d05";
 
 function run(command, args, cwd = root) {

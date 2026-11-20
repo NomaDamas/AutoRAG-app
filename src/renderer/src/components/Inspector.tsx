@@ -1089,7 +1089,7 @@ function VersionsSection({
 		...family.members.map((member) => ({ path: member.path, name: member.name, relation: member.relation, where: member.where })),
 	];
 	return (
-		<div className="versions-section flex flex-col gap-8 border-t border-divider pt-8">
+		<div className="versions-section flex flex-col gap-8 border-t border-divider pt-8" data-section="versions">
 			<div className="section-title flex h-22 items-center justify-between">
 				<span className="text-meta font-medium leading-[16px] text-ink">{t("inspector.versions")}</span>
 				<span className="inline-flex items-center rounded-8 border border-divider bg-window px-6 py-1 text-badge font-medium leading-[14px] text-ink">{rows.length}</span>

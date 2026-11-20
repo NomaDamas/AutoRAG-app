@@ -1521,6 +1521,34 @@ describe("createSearchService conversations", () => {
 		]);
 	});
 
+	it("rebuilds an agent that was answering when the credentials changed on the chat's next question, never mid-answer", async () => {
+		const release = Promise.withResolvers<void>();
+		const slow = {
+			...createFakeAgent(async function*() {
+				await release.promise;
+				yield { type: "complete", response: createResponse("session-s", "Slow answer", 1) };
+			}),
+			openSession: vi.fn(async () => ({ sessionFile: "/sessions/chat-1.jsonl", resumed: false, seeded: 0 })),
+			closeSession: vi.fn(async () => undefined),
+		};
+		const { agent: next } = conversationAgent("/sessions/chat-1.jsonl");
+		const factory = vi.fn().mockReturnValueOnce(slow).mockReturnValue(next);
+		const { send } = collectEvents();
+		const service = createSearchService({ agentFactory: factory, chatStore: await createStore(), send, now, sessions: fakeSessions().index });
+
+		const running = service.start("search-1", "chat-1", "first", []);
+		await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
+		await service.resetAgents();
+		// The answer in flight is not cut off.
+		expect(slow.closeSession).not.toHaveBeenCalled();
+		release.resolve();
+		await running;
+
+		await service.start("search-2", "chat-1", "second", []);
+		expect(factory).toHaveBeenCalledTimes(2);
+		expect(slow.closeSession).toHaveBeenCalledTimes(1);
+	});
+
 	it("opens a chat that has history but no conversation with its earlier turns already in it", async () => {
 		const { agent, opened } = conversationAgent();
 		const sessions = fakeSessions();
