@@ -139,18 +139,18 @@ async function flushQueue(): Promise<void> {
 describe("dupey derived layer", () => {
 	it("delegates snapshot, changes, and resync to the service", async () => {
 		const service = {
-			result: vi.fn(async (): Promise<FsVersionFamiliesResult> => ({ families: [], scannedAt: null, error: null })),
+			result: vi.fn(async (): Promise<FsVersionFamiliesResult> => ({ families: [], scannedAt: null, error: null, scanFailures: [] })),
 			applyDirChanges: vi.fn(async () => true),
 			reverify: vi.fn(async () => true),
-			refresh: vi.fn(async () => ({ families: [], scannedAt: null, error: null })),
-			start: vi.fn(async () => ({ families: [], scannedAt: null, error: null })),
+			refresh: vi.fn(async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] })),
+			start: vi.fn(async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] })),
 			stop: vi.fn(),
 			reschedule: vi.fn(),
-			removePaths: vi.fn(async () => ({ families: [], scannedAt: null, error: null })),
+			removePaths: vi.fn(async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] })),
 		};
 		const layer = createDupeyLayer(service satisfies VersionFamilyService);
 		expect(layer.id).toBe("dupey");
-		expect(await layer.snapshot()).toEqual({ families: [], scannedAt: null, error: null });
+		expect(await layer.snapshot()).toEqual({ families: [], scannedAt: null, error: null, scanFailures: [] });
 		expect(await layer.applyChanges(dirChanges([MEMBER, "update"]))).toBe(true);
 		expect(await layer.resync?.()).toBe(true);
 		expect(service.result).toHaveBeenCalledOnce();
@@ -182,12 +182,11 @@ describe("dupey live reconciliation", () => {
 		expect(first.families).toHaveLength(1);
 		const persisted = h.stored();
 		const second = await h.service.refresh();
-		const expectedError = {
-			code: "scan-failed" as const,
-			message: "dupey scan failed for /fixture: second scan failed",
-			installCommand: null,
-		};
-		expect(second.error).toEqual(expectedError);
+		// One folder's failed scan is reported on its own; it is not a failure of the feature.
+		expect(second.error).toBeNull();
+		expect(second.scanFailures).toEqual([
+			{ name: "Fixture", path: "/fixture", excludeDirs: [], reason: "error", message: "second scan failed" },
+		]);
 		expect(second.families).toEqual(first.families);
 		expect(second.scannedAt).toBe(first.scannedAt);
 		expect(await h.service.result()).toEqual(second);

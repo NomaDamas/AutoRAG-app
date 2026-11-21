@@ -26,12 +26,12 @@ const places: Places = {
 
 /** A dupey service that never scans: the worker only wires it into the hub here. */
 const noFamilies: VersionFamilyService = {
-	result: async () => ({ families: [], scannedAt: null, error: null }),
-	refresh: async () => ({ families: [], scannedAt: null, error: null }),
-	start: async () => ({ families: [], scannedAt: null, error: null }),
+	result: async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] }),
+	refresh: async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] }),
+	start: async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] }),
 	stop: () => {},
 	reschedule: () => {},
-	removePaths: async () => ({ families: [], scannedAt: null, error: null }),
+	removePaths: async () => ({ families: [], scannedAt: null, error: null, scanFailures: [] }),
 	reverify: async () => false,
 	applyDirChanges: async () => false,
 };
@@ -302,6 +302,7 @@ describe("fs worker service", () => {
 								return neverSettles;
 							},
 						},
+						stopDuplicateScans: async () => {},
 						scanDuplicates: async (dir) => ({ dir, files: [], families: [], errors: [] }),
 						indexStatus: {
 							indexStatus: async (paths) => {
