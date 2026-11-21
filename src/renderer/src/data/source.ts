@@ -766,6 +766,7 @@ export function createFixtureSource(): FinderSource {
 		versionFamilies: () =>
 			Promise.resolve({
 				scannedAt: null,
+				scanFailures: [],
 				families: FIXTURE_FAMILIES.flatMap((family) => {
 					const headItem = findItem(state, family.head);
 					if (headItem === null) {
