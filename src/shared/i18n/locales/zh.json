@@ -921,8 +921,8 @@
     "emptyTrashTitle": "清倒废纸篓",
     "emptyTrashMessage": "废纸篓中的所有项目将被永久删除。此操作无法撤销。",
     "emptyTrashAction": "清倒",
-    "closeEvidenceFolderTitle": "关闭来源文件夹",
-    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时来源文件夹，原始文件不会受到影响。确定要关闭吗？",
+    "closeEvidenceFolderTitle": "要关闭来源文件夹吗？",
+    "closeEvidenceFolderMessage": "关闭此标签页将删除并清理临时来源文件夹，原始文件不会受到影响。",
     "closeEvidenceFolderAction": "关闭"
   },
   "settings": {

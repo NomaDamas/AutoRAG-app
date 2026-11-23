@@ -921,8 +921,8 @@
     "emptyTrashTitle": "ゴミ箱を空にする",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
-    "closeEvidenceFolderTitle": "出典フォルダを閉じる",
-    "closeEvidenceFolderMessage": "このタブを閉じると一時的な出典フォルダが削除・整理されます。元のファイルはそのまま残ります。本当に閉じますか？",
+    "closeEvidenceFolderTitle": "出典フォルダを閉じますか？",
+    "closeEvidenceFolderMessage": "このタブを閉じると一時的な出典フォルダが削除・整理されます。元のファイルはそのまま残ります。",
     "closeEvidenceFolderAction": "閉じる"
   },
   "settings": {

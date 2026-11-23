@@ -921,8 +921,8 @@
     "emptyTrashTitle": "Empty Trash",
     "emptyTrashMessage": "All items in the Trash will be permanently deleted. This cannot be undone.",
     "emptyTrashAction": "Empty",
-    "closeEvidenceFolderTitle": "Close Sources Folder",
-    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Sources Folder. Your original files will stay untouched. Are you sure you want to close it?",
+    "closeEvidenceFolderTitle": "Close the Sources Folder?",
+    "closeEvidenceFolderMessage": "Closing this tab will delete and clean up the temporary Sources Folder. Your original files will stay untouched.",
     "closeEvidenceFolderAction": "Close"
   },
   "settings": {

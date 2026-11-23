@@ -34,14 +34,14 @@ export function ConfirmDialog({
 			}}
 		>
 			<div
-				className="flex w-360 flex-col gap-16 p-16 border border-border rounded-10 bg-window shadow-menu animate-[rise_var(--dur-menu)_var(--ease-out)]"
+				className="flex w-360 flex-col gap-16 p-16 border border-border rounded-14 bg-window shadow-[0_10px_35px_rgba(0,0,0,0.2)] animate-[rise_var(--dur-menu)_var(--ease-out)]"
 				role="alertdialog"
 				aria-modal="true"
 				aria-label={title}
 			>
 				<div className="flex flex-col gap-6">
-					<strong className="text-[13px] font-[650] text-ink">{title}</strong>
-					<p className="m-0 text-[13px] leading-normal text-ink-body">
+					<strong className="text-[13px] font-bold leading-[17px] text-ink">{title}</strong>
+					<p className="m-0 text-[13px] leading-[21px] text-ink-body">
 						{message}
 					</p>
 				</div>
@@ -56,7 +56,7 @@ export function ConfirmDialog({
 					</button>
 					<button
 						type="button"
-						className={danger ? "linear-btn is-danger" : "linear-btn"}
+						className={danger ? "linear-btn is-danger is-danger-solid" : "linear-btn"}
 						onClick={onConfirm}
 					>
 						{confirmLabel}

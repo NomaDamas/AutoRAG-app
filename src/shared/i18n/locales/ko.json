@@ -612,7 +612,7 @@
     },
     "confirm": {
       "title": "‘{{title}}’ 규칙을 삭제할까요?",
-      "message": "이 규칙만 삭제되고 폴더와 파일은 그대로 남습니다.",
+      "message": "규칙만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
       "action": "삭제"
     },
     "toast": {
@@ -921,8 +921,8 @@
     "emptyTrashTitle": "휴지통 비우기",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
     "emptyTrashAction": "비우기",
-    "closeEvidenceFolderTitle": "출처 폴더 닫기",
-    "closeEvidenceFolderMessage": "이 탭을 닫으면 임시 출처 폴더가 삭제되어 정리됩니다. 원본 파일은 그대로 유지됩니다. 정말 닫으시겠습니까?",
+    "closeEvidenceFolderTitle": "출처 폴더를 닫을까요?",
+    "closeEvidenceFolderMessage": "이 탭을 닫으면 임시 출처 폴더가 삭제되어 정리됩니다. 원본 파일은 그대로 유지됩니다.",
     "closeEvidenceFolderAction": "닫기"
   },
   "settings": {
@@ -3600,7 +3600,7 @@
     "title": "전체 디스크 접근을 허용해 주세요",
     "titleGranted": "전체 디스크 접근이 허용되었어요",
     "leadTagColors": "Finder 태그 색상은 macOS가 보호하는 영역에 있어요. 시스템 설정에서 Dazzi를 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
-    "leadSource": "이 소스는 다른 앱의 데이터를 읽어요. 시스템 설정에서 Dazzi의 전체 디스크 접근을 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
+    "leadSource": "이 소스는 다른 앱의 데이터를 읽습니다. 시스템 설정에서 Dazzi의 전체 디스크 접근을 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
     "granted": "허용이 확인되었어요. 이제 계속할 수 있어요.",
     "open": "시스템 설정 열기",
     "confirm": "확인하고 계속",

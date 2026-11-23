@@ -434,6 +434,18 @@
 	border-color: var(--danger-dot);
 }
 
+.linear-btn.is-danger.is-danger-solid {
+	color: #fff;
+	border-color: transparent;
+	background: var(--danger-dot);
+}
+
+.linear-btn.is-danger.is-danger-solid:hover {
+	opacity: 0.8;
+	background: var(--danger-dot);
+	border-color: transparent;
+}
+
 .linear-textarea {
 	width: 100%;
 	padding: 10px var(--space-12);
