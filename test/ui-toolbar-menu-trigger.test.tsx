@@ -22,7 +22,7 @@ afterEach(() => {
 	host.remove();
 });
 
-function renderToolbar(onApplySort = vi.fn(), shareAvailable = false, inspectorHidden = false): void {
+function renderToolbar(onApplySort = vi.fn(), shareAvailable = false, inspectorHidden = false, fileControls = true): void {
 	act(() =>
 		root.render(
 			<Toolbar
@@ -48,6 +48,7 @@ function renderToolbar(onApplySort = vi.fn(), shareAvailable = false, inspectorH
 				onEmptyTrash={() => {}}
 				sidebarHidden={false}
 				onShowSidebar={() => {}}
+				fileControls={fileControls}
 			/>,
 		),
 	);
@@ -104,6 +105,13 @@ describe("Toolbar right cluster", () => {
 		expect(host.querySelector('[aria-label="Hide inspector"]')).toBeNull();
 		expect(host.querySelector('[aria-label="Show AI Chat"]')).toBeNull();
 		expect(host.querySelector('[title^="AI Chat"]')).toBeNull();
+	});
+
+	it("shows no view, sort or group control on a tab that lists no files", () => {
+		renderToolbar(vi.fn(), false, false, false);
+		expect(host.querySelector(".seg")).toBeNull();
+		expect(host.querySelector(".toolbar__control")).toBeNull();
+		expect(host.querySelector(".toolbar-title")?.textContent).toBe("Docs");
 	});
 
 	it("holds nothing where the OS has no share sheet", () => {

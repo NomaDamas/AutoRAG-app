@@ -1023,6 +1023,7 @@ export function App(): ReactElement {
 						onEmptyTrash={() => finder?.requestEmptyTrash()}
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
+						fileControls={!aiTabActive && !automationsTabActive}
 					/>
 					<div className="flex min-h-0 flex-1" style={{ "--pane-min-width": `calc((100vw - ${sidebarWidth + inspectorWidth}px) / 2)` } as CSSProperties}>
 						<WorkspaceView
