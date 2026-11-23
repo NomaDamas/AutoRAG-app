@@ -50,6 +50,8 @@ export const ONBOARDING_CHANNELS = {
 	progress: "onboarding:progress",
 	/** The native chooser Settings → 검색 범위 uses for paths to leave out of the index. */
 	pickPaths: "onboarding:pickPaths",
+	/** Sets the OS-wide desktop dimmer opacity `[0..1]` during the Ready → Finder reveal (`0` tears it down). */
+	revealBackdrop: "onboarding:revealBackdrop",
 	complete: "onboarding:complete",
 } as const;
 
@@ -159,5 +161,7 @@ export interface OnboardingBridge {
 	 * Empty when cancelled. Absent on a remote browser, which types the path.
 	 */
 	pickPaths?(kind: PickPathKind): Promise<readonly string[]>;
+	/** Controls the OS desktop dimmer backdrop during the Ready → Finder reveal (`0` removes it). Optional on remote browsers. */
+	setRevealBackdrop?(opacity: number): void;
 	complete(): Promise<void>;
 }

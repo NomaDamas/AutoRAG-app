@@ -104,14 +104,18 @@ describe("Arc/Dia Reveal component DOM lifecycle", () => {
 		expect(onTour).not.toHaveBeenCalled();
 		expect(onEnd).not.toHaveBeenCalled();
 	});
-
-	it("drives gather → orb (with staggered glyphs) → melt → settle, fires onTour then onEnd, and releases .desk styles", () => {
+	it("drives gather → orb (with staggered glyphs & desktop backdrop spotlight) → melt → settle, fires onTour then onEnd, and releases .desk styles", () => {
 		const onTour = vi.fn();
 		const onEnd = vi.fn();
 		const onRelease = vi.fn();
+		const backdropCalls: number[] = [];
+		Reflect.set(globalThis, "autorag", {
+			onboarding: {
+				setRevealBackdrop: (opacity: number) => backdropCalls.push(opacity),
+			},
+		});
 		let now = 1000;
 		vi.spyOn(performance, "now").mockImplementation(() => now);
-
 		const callbacks: FrameRequestCallback[] = [];
 		vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
 			callbacks.push(cb);
@@ -151,6 +155,9 @@ describe("Arc/Dia Reveal component DOM lifecycle", () => {
 		expect(onEnd).toHaveBeenCalledTimes(1);
 
 		act(() => root.unmount());
+		expect(backdropCalls.some((v) => v > 0.7)).toBe(true);
+		expect(backdropCalls.at(-1)).toBe(0);
+		Reflect.deleteProperty(globalThis, "autorag");
 		expect(desk.style.opacity).toBe("1");
 		act(() => {
 			vi.advanceTimersByTime(1600);

@@ -40,6 +40,8 @@ export interface ArcShaderUniforms {
 export interface ArcRevealState {
 	readonly phase: RevealPhase;
 	readonly readyBgOpacity: number;
+	/** OS-wide desktop dimmer opacity `[0..0.88]` driven in sync with the reveal spotlight. */
+	readonly desktopBackdrop: number;
 	readonly shader: ArcShaderUniforms;
 	readonly logo: {
 		readonly move: number;
@@ -184,85 +186,108 @@ void main() {
 	);
 	float fluid = fbm(p * 2.15 + warp * 0.62 + vec2(0.0, u_time * 0.12));
 
-	// 1. Deep Apple/Arc obsidian canvas with soft sapphire/indigo ambient depth
-	vec3 obsidian = vec3(0.031, 0.035, 0.058);
-	vec3 deepSapphire = vec3(0.065, 0.115, 0.235);
-	vec3 warmUmber = vec3(0.145, 0.095, 0.055);
+	// 1. Deep cinema obsidian canvas with volumetric sapphire-to-indigo depth
+	vec3 obsidian = vec3(0.022, 0.026, 0.045);
+	vec3 deepSapphire = vec3(0.055, 0.11, 0.25);
+	vec3 royalIndigo = vec3(0.095, 0.068, 0.20);
 	vec3 bg = obsidian
-		+ deepSapphire * smoothstep(1.2, 0.1, length(p - vec2(0.32 * aspect, -0.28))) * 0.55
-		+ deepSapphire * smoothstep(1.1, 0.1, length(p - vec2(-0.34 * aspect, 0.26))) * 0.35
-		+ warmUmber * smoothstep(0.9, 0.0, dist) * 0.38 * u_orbIntensity;
+		+ deepSapphire * smoothstep(1.35, 0.05, length(p - vec2(0.36 * aspect, -0.32))) * 0.62
+		+ royalIndigo * smoothstep(1.25, 0.05, length(p - vec2(-0.36 * aspect, 0.30))) * 0.45;
 
-	// 2. Dazzi Liquid Glass Orb: deep sapphire-glass interior + warm golden ambient halo + crisp Fresnel prism rim
-	float orbWarp = dist + fluid * 0.038 * (0.4 + 0.6 * u_orbRadius);
-	float innerGlow = exp(-pow(orbWarp / max(0.055, u_orbRadius * 0.44), 2.0));
-	float bodyDome = exp(-pow(orbWarp / max(0.11, u_orbRadius * 0.92), 2.2));
-	float haloGlow = exp(-pow(orbWarp / max(0.16, u_orbRadius * 1.65), 2.0));
+	// Subtle volumetric light rays rotating gently behind the glass orb (solar corona beams)
+	float ray1 = pow(0.5 + 0.5 * sin(angle * 6.0 - u_time * 0.55 + warp.x * 1.4), 4.0);
+	float ray2 = pow(0.5 + 0.5 * cos(angle * 4.0 + u_time * 0.38 - warp.y * 1.2), 3.0);
+	float rayFalloff = exp(-dist * 2.1) * smoothstep(0.04, 0.22, dist);
+	vec3 coronaRays = (vec3(1.0, 0.80, 0.36) * ray1 * 0.16 + vec3(0.42, 0.72, 1.0) * ray2 * 0.14) * rayFalloff * u_orbIntensity;
 
-	// Prismatic glass caustic ring around the orb silhouette (mirrors build/icon.png tile bevel)
-	float ringDist = orbWarp - u_orbRadius * 0.78;
-	float glassRimR = exp(-pow((ringDist - 0.011 * u_prismShift) / 0.044, 2.0));
-	float glassRimG = exp(-pow(ringDist / 0.039, 2.0));
-	float glassRimB = exp(-pow((ringDist + 0.013 * u_prismShift) / 0.049, 2.0));
+	// 2. Physical 3D Liquid-Glass Sphere (Arc/Dia Spline orb × Dazzi icon glass tile)
+	float sphereR = max(0.05, u_orbRadius * 0.86);
+	float organicR = sphereR * (1.0 + fluid * 0.045 * (0.4 + 0.6 * u_orbIntensity));
+	float rn = dist / organicR;
+	float insideMask = smoothstep(1.04, 0.94, rn);
 
-	// Flowing iridescent highlights along the orb curve
-	float sheenWave = 0.5 + 0.5 * sin(angle * 2.0 - u_time * 1.25 + warp.x * 2.2);
-	float sheenWave2 = 0.5 + 0.5 * cos(angle * 3.0 + u_time * 0.85 - warp.y * 1.9);
+	// Analytical hemisphere surface normal N = (px, py, pz) perturbed by liquid glass wave
+	float rClamped = min(rn, 0.998);
+	float nz = sqrt(max(0.001, 1.0 - rClamped * rClamped));
+	vec3 normal = normalize(vec3(p / organicR + warp * 0.09, nz));
+	vec3 viewDir = vec3(0.0, 0.0, 1.0);
 
-	vec3 sunCream = vec3(1.00, 0.94, 0.82);
-	vec3 dazziGold = vec3(0.98, 0.74, 0.26);
-	vec3 amberWarm = vec3(0.92, 0.50, 0.16);
-	vec3 iceBlue = vec3(0.38, 0.68, 1.00);
-	vec3 glassLilac = vec3(0.62, 0.56, 0.96);
+	// Schlick Fresnel (R0 = 0.06 for crystal glass) + top-left studio key specular + bottom-right warm rim bounce
+	float ndotv = clamp(dot(normal, viewDir), 0.0, 1.0);
+	float fresnel = pow(1.0 - ndotv, 2.8);
+	vec3 keyLight = normalize(vec3(-0.48, 0.62, 0.62));
+	vec3 bounceLight = normalize(vec3(0.56, -0.52, 0.45));
+	vec3 halfKey = normalize(keyLight + viewDir);
+	vec3 halfBounce = normalize(bounceLight + viewDir);
+	float specKey = pow(max(dot(normal, halfKey), 0.0), 42.0);
+	float specSoft = pow(max(dot(normal, halfKey), 0.0), 8.0);
+	float specBounce = pow(max(dot(normal, halfBounce), 0.0), 16.0);
 
-	vec3 orbColor = vec3(0.0);
-	// Restrained warm core directly behind the sunflower (never washes out typography)
-	orbColor += sunCream * innerGlow * 0.34;
-	orbColor += mix(dazziGold, amberWarm, clamp(sheenWave * 0.6, 0.0, 1.0)) * bodyDome * 0.38;
-	orbColor += mix(iceBlue, glassLilac, sheenWave2) * haloGlow * (0.28 + 0.12 * sheenWave);
+	// Internal liquid silk gradient swirling inside the glass sphere (gold sunlight + ice sapphire + soft violet)
+	float internalSwirl = 0.5 + 0.5 * sin(angle * 2.0 - u_time * 1.15 + warp.x * 2.8);
+	float internalSwirl2 = 0.5 + 0.5 * cos(angle * 3.0 + u_time * 0.82 - warp.y * 2.4);
+	vec3 sunCream = vec3(1.00, 0.96, 0.86);
+	vec3 dazziGold = vec3(1.00, 0.77, 0.25);
+	vec3 amberSilk = vec3(0.96, 0.49, 0.18);
+	vec3 iceBlue = vec3(0.36, 0.69, 1.00);
+	vec3 glassLilac = vec3(0.62, 0.54, 0.98);
 
-	// Chromatic Fresnel glass rim (gold-to-ice dispersion)
-	vec3 prismRing = vec3(
-		glassRimR * 0.96,
-		glassRimG * 0.88,
-		glassRimB * 1.05
-	) * mix(iceBlue, dazziGold, sheenWave) * (0.56 + 0.28 * sheenWave2);
-	orbColor += prismRing;
+	// Deep glass interior: rich translucent sapphire-gold dome, darker toward edges for 3D spherical volume
+	vec3 glassCore = mix(vec3(0.09, 0.14, 0.28), mix(dazziGold, amberSilk, internalSwirl * 0.6), smoothstep(0.95, 0.1, rn) * 0.58);
+	glassCore += mix(iceBlue, glassLilac, internalSwirl2) * (0.28 * smoothstep(0.15, 0.95, rn));
+	// Crisp studio glass highlights
+	glassCore += sunCream * specKey * 0.95;
+	glassCore += mix(iceBlue, sunCream, 0.5) * specSoft * 0.30;
+	glassCore += dazziGold * specBounce * 0.48;
+	// Iridescent Fresnel bevel around the glass sphere
+	glassCore += mix(iceBlue, dazziGold, internalSwirl) * fresnel * 1.15;
 
-	// Soft tone curve so the orb stays rich and jewel-like instead of clipping white
-	vec3 col = bg + orbColor * u_orbIntensity;
-	col = col / (vec3(1.0) + col * 0.32);
+	// Chromatic dispersion ring right outside the glass silhouette (RGB split bezel)
+	float ringDist = dist - organicR * 0.98;
+	float rimR = exp(-pow((ringDist - 0.012 * u_prismShift) / 0.036, 2.0));
+	float rimG = exp(-pow(ringDist / 0.032, 2.0));
+	float rimB = exp(-pow((ringDist + 0.014 * u_prismShift) / 0.040, 2.0));
+	vec3 chromaticBezel = vec3(rimR * 1.02, rimG * 0.92, rimB * 1.10) * mix(iceBlue, dazziGold, internalSwirl) * (0.58 + 0.30 * internalSwirl2);
+
+	// Atmospheric outer halo illuminating the obsidian backdrop
+	float outerHalo = exp(-pow(dist / max(0.18, organicR * 1.95), 2.0));
+	vec3 haloColor = mix(iceBlue, dazziGold, 0.45 + 0.35 * internalSwirl) * outerHalo * 0.34;
+
+	vec3 orbComposite = glassCore * insideMask + chromaticBezel + haloColor + coronaRays;
+
+	// Highlight-only rolloff so the obsidian stage stays velvety dark (#06070d) and matches the OS desktop dimmer seamlessly
+	vec3 orbMapped = orbComposite / (vec3(1.0) + orbComposite * 0.45);
+	vec3 col = bg + orbMapped * u_orbIntensity;
 
 	// 3. Arc organic melting aperture (non-uniform simplex-warped hole opening from the Dazzi mark)
 	float lobe =
-		0.050 * sin(angle * 3.0 + u_time * 0.85) +
-		0.034 * cos(angle * 5.0 - u_time * 0.65) +
-		0.068 * fluid;
+		0.048 * sin(angle * 3.0 + u_time * 0.85) +
+		0.032 * cos(angle * 5.0 - u_time * 0.65) +
+		0.064 * fluid;
 
-	float meltR = pow(u_melt, 1.32) * (maxDiag * 1.34);
-	float feather = mix(0.048, 0.16, u_melt);
+	float meltR = pow(u_melt, 1.32) * (maxDiag * 1.35);
+	float feather = mix(0.046, 0.155, u_melt);
 	float signedMelt = (dist + lobe * (1.0 - 0.55 * u_melt)) - meltR;
 
-	// veilAlpha = 1 outside the opening hole (opaque dark/orb stage), 0 inside (reveals live Finder)
 	float veilAlpha = (u_melt <= 0.0005)
 		? 1.0
 		: smoothstep(-feather, feather, signedMelt);
 
-	// Luminous liquid-glass optical rim right along the melting wave front (kept narrow so the Finder inside is crystal clear)
-	float edgeBand = exp(-pow(signedMelt / max(0.032, feather * 0.58), 2.0));
-	float edgeR = exp(-pow((signedMelt - 0.015) / max(0.036, feather * 0.62), 2.0));
-	float edgeB = exp(-pow((signedMelt + 0.015) / max(0.036, feather * 0.62), 2.0));
+	// Narrow prismatic liquid-glass wave front along the melting aperture edge
+	float edgeBand = exp(-pow(signedMelt / max(0.028, feather * 0.52), 2.0));
+	float edgeR = exp(-pow((signedMelt - 0.014) / max(0.032, feather * 0.56), 2.0));
+	float edgeB = exp(-pow((signedMelt + 0.014) / max(0.032, feather * 0.56), 2.0));
 	vec3 meltRimColor =
-		vec3(1.00, 0.92, 0.74) * edgeBand * 0.58 +
-		vec3(1.00, 0.72, 0.28) * edgeR * 0.36 +
-		vec3(0.42, 0.76, 1.00) * edgeB * 0.48;
+		vec3(1.00, 0.94, 0.80) * edgeBand * 0.58 +
+		vec3(1.00, 0.72, 0.28) * edgeR * 0.38 +
+		vec3(0.38, 0.74, 1.00) * edgeB * 0.52;
 
-	// Micro film grain (eliminates banding on dark smooth gradients)
-	float grain = (hash(gl_FragCoord.xy + fract(u_time) * 19.0) - 0.5) * 0.014;
+	// Micro film grain (eliminates 8-bit banding on smooth obsidian gradients)
+	float grain = (hash(gl_FragCoord.xy + fract(u_time) * 19.0) - 0.5) * 0.013;
 	col = max(vec3(0.0), col + grain);
 
 	// Compose veil + glowing rim over transparent aperture
-	float rimAlpha = edgeBand * u_rimGlow * 0.62;
+	float rimAlpha = edgeBand * u_rimGlow * 0.58;
 	float outAlpha = clamp((veilAlpha * u_darkness + rimAlpha) * u_alpha, 0.0, 1.0);
 	vec3 finalRgb = col * (veilAlpha * u_darkness) + meltRimColor * (u_rimGlow * 0.68);
 	finalRgb *= u_alpha;
@@ -285,7 +310,10 @@ export function computeArcRevealState(rawT: number): ArcRevealState {
 
 	const readyBgOpacity = clamp01((1 - progressIn(t, [0.06, 0.68], easeInOut)) * (1 - meltProgress));
 	const shaderAlpha = clamp01(progressIn(t, [0.0, 0.42], easeOut) * meltOutFade);
-
+	// OS desktop backdrop dims quickly with the obsidian stage, holds through the orb, and lifts softly as Finder arrives
+	const desktopBackdrop = clamp01(
+		progressIn(t, [0.02, 0.78], easeInOut) * 0.86 * (1 - progressIn(t, [T.melt[0] + 0.55, T.dim[0] - 0.05], easeInOut)),
+	);
 	// Luminous orb grows from behind the sunflower, gently breathes, then expands into the melt wave
 	const orbIn = progressIn(t, T.orbIn, easeOut);
 	const breathe = Math.sin(Math.max(0, t - T.orbIn[0]) * 2.2) * 0.018 * orbIn * (1 - meltProgress);
@@ -327,6 +355,7 @@ export function computeArcRevealState(rawT: number): ArcRevealState {
 	return {
 		phase,
 		readyBgOpacity,
+		desktopBackdrop,
 		shader: {
 			alpha: shaderAlpha,
 			darkness: darken,

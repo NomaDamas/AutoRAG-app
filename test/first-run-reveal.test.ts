@@ -78,6 +78,7 @@ describe("Arc/Dia × Dazzi frame choreography & per-letter 3D cascade", () => {
 		const s = computeArcRevealState(0);
 		expect(s.phase).toBe("gather");
 		expect(s.readyBgOpacity).toBe(1);
+		expect(s.desktopBackdrop).toBe(0);
 		expect(s.shader.alpha).toBe(0);
 		expect(s.shader.meltProgress).toBe(0);
 		expect(s.logo.move).toBe(0);
@@ -93,6 +94,7 @@ describe("Arc/Dia × Dazzi frame choreography & per-letter 3D cascade", () => {
 	it("darkens the stage, breathes the luminous glass orb around the centered Dazzi logo, and reveals letters in a 3D blur cascade", () => {
 		const orbMid = computeArcRevealState(REVEAL_T.word[0] + 0.25);
 		expect(orbMid.phase).toBe("orb");
+		expect(orbMid.desktopBackdrop).toBeGreaterThan(0.75);
 		expect(orbMid.shader.alpha).toBeGreaterThan(0.95);
 		expect(orbMid.shader.darkness).toBeGreaterThan(0.85);
 		expect(orbMid.shader.orbRadius).toBeGreaterThan(0.18);
@@ -127,6 +129,7 @@ describe("Arc/Dia × Dazzi frame choreography & per-letter 3D cascade", () => {
 
 		const handoff = computeArcRevealState(REVEAL_T.dim[0]);
 		expect(handoff.tourTriggered).toBe(true);
+		expect(handoff.desktopBackdrop).toBe(0);
 		expect(handoff.shader.alpha).toBe(0);
 		expect(handoff.readyBgOpacity).toBe(0);
 		expect(handoff.logo.opacity).toBe(0);
@@ -142,6 +145,7 @@ describe("Arc/Dia × Dazzi frame choreography & per-letter 3D cascade", () => {
 			const s = computeArcRevealState(t);
 			const vals = [
 				s.readyBgOpacity,
+				s.desktopBackdrop,
 				s.shader.alpha,
 				s.shader.darkness,
 				s.shader.orbRadius,

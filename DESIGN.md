@@ -417,17 +417,21 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   button at the same height as the folder screen's; Enter presses it) → `tour` → `signin`.
   "시작하기" on `ready` plays the Arc/Dia-inspired liquid-glass reveal
   (`first-run/reveal.tsx`, WebGL GLSL shader & Canvas 2D fallback in
-  `first-run/reveal-shader.ts`, 4-act clock in `first-run/reveal-timing.ts`, 4.7 s total
-  with tour hand-off at 4.25 s): the copy dissolves while the sunflower glides to center
-  and the stage darkens to obsidian; a premultiplied-alpha WebGL shader blooms a breathing
-  sunlight-gold and crystal-ice liquid-glass orb behind the sunflower (mirroring Dazzi's
-  prismatic glass icon tile); "Dazzi" cascades in letter-by-letter with a 3D spring tilt
-  and blur settle while a silk light sweeps the sunflower; then a simplex-warped organic
-  aperture melts outward from behind the Dazzi mark with a warm golden-ice Fresnel rim so
-  the live Finder pulls into crisp focus (sidebar, toolbar, and panes arriving in turn)
-  before handing off directly to the tour's first step without the welcome cinema. Reduced
-  motion keeps the plain rise. The Finder is laid out for the tour and its blurred first
-  frame prepared while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
+  `first-run/reveal-shader.ts`, 4-act clock in `first-run/reveal-timing.ts`, 4.7 s total with tour hand-off at 4.25 s; desktop
+  spotlight backdrop in `src/main/reveal-backdrop.ts`): the copy dissolves while the
+  sunflower glides to center, the stage darkens to obsidian, and the main process dims
+  every connected display behind the Dazzi window via borderless click-through backdrop
+  windows (`onboarding:revealBackdrop`, zero OS permissions required, automatically torn
+  down on settle, window close, or safety timeout); a premultiplied-alpha WebGL shader
+  renders a breathing 3D liquid-glass sphere with Fresnel prism dispersion, studio
+  speculars, and soft solar corona rays behind the sunflower; "Dazzi" cascades in
+  letter-by-letter with a 3D spring tilt and blur settle while a silk light sweeps the
+  sunflower; then a simplex-warped organic aperture melts outward from behind the Dazzi
+  mark with a warm golden-ice rim as the desktop dimmer lifts, revealing the live Finder
+  pulling into crisp focus (sidebar, toolbar, and panes arriving in turn) before handing
+  off directly to the tour's first step without the welcome cinema. Reduced motion keeps
+  the plain rise. The Finder is laid out for the tour and its blurred first frame prepared
+  while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
   button: tapping it fades the title and description out, the progress bar glides
   below, and a 16×16 Minesweeper with 40 hidden sunflowers (`dazzi-mark.png`) in
   place of mines fades in (`first-run/MineGame.tsx`, rules in

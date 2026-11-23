@@ -140,6 +140,15 @@ export function Reveal({
 		if (shaderRenderer !== null) {
 			layer.setAttribute("data-backend", shaderRenderer.backend);
 		}
+		const setBackdrop = window.autorag?.onboarding?.setRevealBackdrop;
+		let lastBackdrop = -1;
+		const pushBackdrop = (opacity: number): void => {
+			if (setBackdrop === undefined) return;
+			const rounded = Math.round(opacity * 200) / 200;
+			if (rounded === lastBackdrop) return;
+			lastBackdrop = rounded;
+			setBackdrop(rounded);
+		};
 
 		let items: Styled[][] = [];
 		let toured = false;
@@ -150,7 +159,7 @@ export function Reveal({
 		const render = (t: number): void => {
 			const s = computeArcRevealState(t);
 			layer.setAttribute("data-phase", s.phase);
-
+			pushBackdrop(s.desktopBackdrop);
 			// Ready screen copy dissolves upward with soft focus pull
 			texts.forEach((element, index) => {
 				const p = progressIn(t, [T.textOut[0] + index * 0.07, T.textOut[1] + index * 0.07], easeOut);
@@ -252,6 +261,7 @@ export function Reveal({
 
 		return () => {
 			window.cancelAnimationFrame(frame);
+			pushBackdrop(0);
 			shaderRenderer?.dispose();
 			for (const element of [...texts, badge, logo, sweep, ...glyphEls]) clearStyle(element ?? null);
 			const finder = [desk, ...items.flat()];

@@ -164,6 +164,7 @@ import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
 import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
+import { createElectronRevealBackdrop } from "./reveal-backdrop";
 
 const execFileAsync = promisify(execFile);
 
@@ -1187,7 +1188,9 @@ app.whenReady().then(async () => {
 			analytics.track("onboarding_completed", {});
 		},
 	});
-	registerOnboardingIpcHandlers(firstRun);
+	const revealBackdrop = createElectronRevealBackdrop(() => mainWindow);
+	registerOnboardingIpcHandlers(firstRun, (opacity) => revealBackdrop.setOpacity(opacity));
+	app.on("before-quit", () => revealBackdrop.clear());
 	/** Closing the last window while the first index runs would stop it, so that close asks first. */
 	const confirmLastClose = (window: BrowserWindow, event: Electron.Event): void => {
 		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length });
