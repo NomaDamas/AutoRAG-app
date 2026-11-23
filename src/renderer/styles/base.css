@@ -288,6 +288,29 @@ small {
  * for the motion; only the rows of a closing folder (`ghost`) stop taking the pointer, because they are already
  * gone as far as the user is concerned. Reduced motion never enters this block (the hook starts no motion
  * either), so the list just changes. */
+/* An AI input's aurora (tokens.css §8): a blurred light behind the card that never takes a click, brighter while the
+ * card has focus. The host is the card's positioned wrapper; the card itself sits above it. */
+.ai-glow-host {
+	position: relative;
+	isolation: isolate;
+}
+
+.ai-glow-host > .ai-glow {
+	position: absolute;
+	inset: 6px;
+	z-index: -1;
+	border-radius: 18px;
+	background: var(--ai-glow);
+	filter: blur(var(--ai-glow-blur));
+	opacity: var(--ai-glow-opacity);
+	pointer-events: none;
+	transition: opacity var(--dur-color-slow) ease;
+}
+
+.ai-glow-host:focus-within > .ai-glow {
+	opacity: var(--ai-glow-opacity-focus);
+}
+
 @media (prefers-reduced-motion: no-preference) {
 	[data-slide="block"],
 	[data-slide="ghost"],

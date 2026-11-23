@@ -890,7 +890,9 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 								<>
 									{composerOpen || state.rules.length === 0 || filled !== null ? (
 										<Section title={t("automations.create.title")}>
-											<div className="relative">
+											{/* The aurora behind the card (tokens.css §8): the place where Dazzi is asked to make something. */}
+											<div className="ai-glow-host" data-ai-glow>
+												<div className="ai-glow" aria-hidden="true" />
 												{state.rules.length === 0 ? null : (
 													<button
 														type="button"

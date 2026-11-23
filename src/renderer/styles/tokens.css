@@ -463,6 +463,14 @@
 
   /* --------------------------------------------------------------- §7 Scrollbars */
   /* (none — native overlay scrollbars; see base.css §7) */
+
+  /* ------------------------------------------------------------ §8 AI glow */
+  /* The soft aurora behind an AI input (the 자동화 tab's 새 자동화 card): blue, violet, pink and mint, blurred far
+   * enough to read as light rather than colour, and a little stronger while the card has focus. */
+  --ai-glow: conic-gradient(from 210deg, #7AA7FF, #B08CFF, #FF9AD5, #7FE0D6, #7AA7FF);
+  --ai-glow-blur: 22px;
+  --ai-glow-opacity: 0.28;
+  --ai-glow-opacity-focus: 0.45;
 }
 
 /* The persisted app appearance drives Electron's nativeTheme.themeSource. Both
@@ -470,6 +478,9 @@
  * renderer-only theme flag or a preview-specific setting. */
 html[data-appearance="dark"] {
 	color-scheme: dark;
+	/* On a dark stage the same aurora would glare: it keeps its colours at half the strength. */
+	--ai-glow-opacity: 0.14;
+	--ai-glow-opacity-focus: 0.24;
     /* ----------------------------------------------------------- App surfaces */
     --bg-desk: #1C1C1E;
     --bg-window: #1E1E20;
