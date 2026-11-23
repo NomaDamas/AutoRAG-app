@@ -8,6 +8,7 @@ import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
 import {
 	app,
+	autoUpdater as nativeAutoUpdater,
 	BrowserWindow,
 	clipboard,
 	ClipboardItem,
@@ -54,6 +55,7 @@ import { createIndexActivityService } from "./index-activity";
 import { APP_UPDATE_CHANNELS } from "../shared/update-contract";
 import type { AppUpdaterService } from "./app-updater";
 import { createAppUpdateHost, installCheckForUpdatesMenuItem } from "./app-update-host";
+import { runQuitCleanup, whenQuitting } from "./quit-signal";
 import { LOCAL_ITEM } from "./index-activity-journal";
 import { busyMessage, lockDataSources } from "./locked-datasources";
 import { createRefreshQueue } from "./refresh-queue";
@@ -1188,9 +1190,17 @@ app.whenReady().then(async () => {
 		},
 	});
 	registerOnboardingIpcHandlers(firstRun);
+	let quittingApp = false;
+	let quittingForUpdate = false;
+	whenQuitting(() => {
+		quittingApp = true;
+	});
+	nativeAutoUpdater.once("before-quit-for-update", () => {
+		quittingForUpdate = true;
+	});
 	/** Closing the last window while the first index runs would stop it, so that close asks first. */
 	const confirmLastClose = (window: BrowserWindow, event: Electron.Event): void => {
-		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length });
+		const decision = closeDecision({ indexing: firstRun.isIndexing(), windowsOpen: appWindows().length, updating: quittingForUpdate });
 		if (decision === "allow") return;
 		event.preventDefault();
 		void dialog
@@ -1217,8 +1227,9 @@ app.whenReady().then(async () => {
 		window.on("close", (event) => confirmLastClose(window, event));
 		return window;
 	};
-	/** Open the Finder if it is not on screen. */
+	/** Open the Finder if it is not on screen (never while the app is quitting/updating). */
 	const openWindows = (): void => {
+		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) mainWindow = openFinderWindow();
 	};
 	openWindows();
@@ -1226,10 +1237,11 @@ app.whenReady().then(async () => {
 	firstRun.resumeIndexing();
 	// A Dock click only brings the window back when none is left.
 	app.on("activate", () => {
-		if (appWindows().length === 0) openWindows();
+		if (!quittingApp && appWindows().length === 0) openWindows();
 	});
 	// Menu requests: queue the cold-start request, then serve the ones the running app receives.
 	onOsRequestQueued = () => {
+		if (quittingApp) return;
 		if (mainWindow === null || mainWindow.isDestroyed()) {
 			mainWindow = openFinderWindow();
 		} else {
@@ -1299,9 +1311,11 @@ app.whenReady().then(async () => {
 	app.once("will-quit", (event) => {
 		event.preventDefault();
 		// minsync outlives the app and keeps its lock; stop it so the next launch can resume instead of failing on the lock.
-		void Promise.all([stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()])
-			.catch((error: unknown) => console.error("[fs-worker] dispose on quit failed:", error))
-			.finally(() => app.exit(0));
+		void runQuitCleanup({
+			tasks: [stopEmbeddingDaemon().then(() => terminateMinSyncChildren()), workerHost.dispose(), analytics.shutdown(), searchService.dispose()],
+			onError: (error) => console.error("[fs-worker] dispose on quit failed:", error),
+			onExit: () => app.exit(0),
+		});
 	});
 });
 

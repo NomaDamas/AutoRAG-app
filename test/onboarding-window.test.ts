@@ -10,4 +10,8 @@ describe("closeDecision", () => {
 		expect(closeDecision({ indexing: false, windowsOpen: 1 })).toBe("allow");
 		expect(closeDecision({ indexing: true, windowsOpen: 2 })).toBe("allow");
 	});
+
+	it("never asks when quitting for an update install, so quitAndInstall cannot be blocked by background first indexing", () => {
+		expect(closeDecision({ indexing: true, windowsOpen: 1, updating: true })).toBe("allow");
+	});
 });
