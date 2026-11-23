@@ -499,14 +499,16 @@
     "answeredCount": "{{answered}} / {{total}} 답변함",
     "showMore": "더 보기",
     "showLess": "접기",
-    "writeOwn": "직접 답변 작성",
+    "writeOwn": "직접 입력하기",
     "answerPlaceholder": "답변을 입력하세요",
     "questionAria": "Dazzi의 질문",
     "approval": {
       "headlineChange": "이 파일 변경을 허용할까요?",
       "headlineRun": "Dazzi가 작업을 실행하려고 합니다. 허용할까요?",
       "headlineUnclassified": "Dazzi가 이 명령을 실행하려고 합니다. 허용할까요?",
-      "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했습니다. 내용을 살펴보고 허용할지 정해 주세요."
+      "noteUnclassified": "이 명령이 파일을 바꾸는지 미리 확인하지 못했습니다. 내용을 살펴보고 허용할지 정해 주세요.",
+      "command": "실행할 명령",
+      "copy": "명령 복사"
     },
     "category": {
       "delete": "삭제",
@@ -518,14 +520,16 @@
     },
     "allowOnce": "한 번만 허용",
     "allowSession": {
-      "categories": "이 세션에서는 모두 허용",
+      "categories": "이 세션에서 항상 허용",
       "unclassified": "이 세션에서는 분류되지 않은 호출을 모두 허용",
       "all": "이 세션에서는 이런 호출을 모두 허용"
     },
     "deny": "거부",
     "denyWithNote": "거부하고 모델에게 알려주기…",
     "notePlaceholder": "대신 어떻게 할까요? (예: 복사본에서 작업)",
-    "sendNote": "보내기"
+    "sendNote": "보내기",
+    "prevQuestion": "이전 질문",
+    "nextQuestion": "다음 질문"
   },
   "automations": {
     "list": "자동화 규칙",

@@ -594,6 +594,9 @@ describe("the inspector chat while a run streams", () => {
 			expect(host.querySelector('[role="dialog"]')?.textContent).toContain("어느 보고서를 요약할까요?");
 			const pick = [...host.querySelectorAll<HTMLElement>('[role="radio"]')].find((node) => node.textContent?.includes("4분기"));
 			act(() => pick?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+			expect(answers).toEqual([]);
+			const send = [...host.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((node) => node.textContent?.trim() === "보내기");
+			act(() => send?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 			expect(answers).toEqual([["req-1", { kind: "question", answers: [{ kind: "selection", selections: ["4분기"] }] }]]);
 		} finally {
 			Reflect.deleteProperty(window, "autorag");

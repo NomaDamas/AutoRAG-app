@@ -306,6 +306,8 @@ check("the question replaces the composer", (await inspector.locator("textarea")
 check("it shows its text and options", (await question.innerText()).includes("Which report should I summarize?") && (await question.innerText()).includes("report-q4.txt"), (await question.innerText()).slice(0, 200));
 await shot("05-question-in-sidebar");
 await question.getByRole("radio", { name: /Q4 report/ }).click();
+// Picking marks the option; Send answers (Figma 625:7022).
+await question.getByRole("button", { name: "Send" }).click();
 await idle();
 check("the pick reaches the model as the tool result", toolResults().some((text) => text === "User answered: Q4 report"), JSON.stringify(toolResults()));
 

@@ -76,33 +76,44 @@ function setField(el: HTMLInputElement | HTMLTextAreaElement, value: string): vo
 }
 
 describe("InteractionDock in a narrow sidebar", () => {
-	it("keeps batch navigation on its own row, apart from Stop and Skip, and lets rows wrap", () => {
+	it("pages a batch from the head (‹ n / N ›) and keeps Skip and Stop together in a footer that wraps (Figma 625:7171)", () => {
 		render(
-			questionRequest([
-				question({ question: "One?", options: [{ title: "a" }], allowFreeform: false }),
-				question({ question: "Two?", options: [{ title: "b" }], allowFreeform: false }),
-			]),
+			questionRequest(
+				[
+					question({ question: "One?", options: [{ title: "a" }], allowFreeform: false }),
+					question({ question: "Two?", options: [{ title: "b" }], allowFreeform: false }),
+				],
+				{ heading: "Convert videos" },
+			),
 		);
 
+		const card = host.querySelector('[role="dialog"]') as HTMLElement;
+		expect(card.className).toContain("min-w-0");
+		expect(card.querySelector("strong")?.textContent).toBe("Convert videos");
+		expect(card.textContent).toContain(t("interaction.step", { current: 1, total: 2 }));
+		expect(host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.prevQuestion")}"]`)?.disabled).toBe(true);
 		const row = (label: string): HTMLElement => buttonByText(label).parentElement as HTMLElement;
 		expect(row(t("interaction.stop"))).toBe(row(t("interaction.skip")));
-		expect(row(t("interaction.next"))).toBe(row(t("interaction.back")));
-		expect(row(t("interaction.next"))).not.toBe(row(t("interaction.stop")));
-		expect(row(t("interaction.stop")).className).toContain("flex-wrap");
-		expect(host.querySelector('[role="dialog"]')?.className).toContain("min-w-0");
+		expect(row(t("interaction.stop")).parentElement?.className).toContain("flex-wrap");
 	});
 });
 
 describe("InteractionDock question card", () => {
-	it("submits a single-choice question as soon as an option is picked", () => {
+	it("titles a single question with itself, marks the picked option, and sends it with Send (Figma 625:7022)", () => {
 		render(
 			questionRequest([
 				question({ question: "Which plan?", options: [{ title: "Free" }, { title: "Pro" }], allowFreeform: false }),
 			]),
 		);
 
+		expect(host.querySelector('[role="dialog"] strong')?.textContent).toBe("Which plan?");
+		expect(buttonByText(t("interaction.submit")).disabled).toBe(true);
+		act(() => options("radio")[0]?.click());
 		act(() => options("radio")[1]?.click());
+		expect(answer).not.toHaveBeenCalled();
+		expect(options("radio")[1]?.getAttribute("aria-checked")).toBe("true");
 
+		act(() => buttonByText(t("interaction.submit")).click());
 		expect(answer).toHaveBeenCalledTimes(1);
 		expect(answer).toHaveBeenCalledWith("q1", { kind: "question", answers: [{ kind: "selection", selections: ["Pro"] }] });
 	});
@@ -157,8 +168,8 @@ describe("InteractionDock question card", () => {
 		act(() => options("radio")[0]?.click());
 		act(() => buttonByText(t("interaction.next")).click());
 		expect(host.textContent).toContain(t("interaction.step", { current: 2, total: 3 }));
-		expect(host.textContent).toContain(t("interaction.answeredCount", { answered: 1, total: 3 }));
-		act(() => buttonByText(t("interaction.next")).click());
+		expect(host.textContent).toContain("Two?");
+		act(() => host.querySelector<HTMLButtonElement>(`button[aria-label="${t("interaction.nextQuestion")}"]`)?.click());
 		act(() => options("radio")[0]?.click());
 		act(() => buttonByText(t("interaction.submit")).click());
 
@@ -233,8 +244,18 @@ describe("InteractionDock approval card", () => {
 
 	it("offers only allow once, allow for the session, and skip (Figma 564:1396)", () => {
 		render(approvalRequest({ sessionScope: "categories", categories: ["edit"] }));
-		const labels = [...host.querySelectorAll("button")].map((button) => button.textContent);
+		const labels = [...host.querySelectorAll("button:not([data-action='copy-approval-call'])")].map((button) => button.textContent);
 		expect(labels).toEqual([t("interaction.allowOnce"), t("interaction.allowSession.categories"), t("interaction.skip")]);
+	});
+
+	it("heads the call 실행할 명령 and copies it from the box", () => {
+		const writeText = vi.fn(async () => undefined);
+		Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true });
+		render(approvalRequest({ sessionScope: "categories", categories: ["delete"], call: "rm docs/old-draft.txt" }));
+		expect(host.textContent).toContain(t("interaction.approval.command"));
+		act(() => host.querySelector<HTMLButtonElement>('[data-action="copy-approval-call"]')?.click());
+		expect(writeText).toHaveBeenCalledWith("rm docs/old-draft.txt");
+		expect(answer).not.toHaveBeenCalled();
 	});
 
 	it("denies on Escape", () => {
