@@ -4,6 +4,7 @@ import { ACTIONS_CHANNELS, NO_CAPABILITIES } from "../../shared/actions-contract
 import { APP_CUSTOMIZER_CHANNELS } from "../../shared/app-customizer-contract";
 import { APP_UPDATE_CHANNELS } from "../../shared/update-contract";
 import { AUTOMATION_CHANNELS } from "../../shared/automation-contract";
+import { LTR_CHANNELS } from "../../shared/ltr-contract";
 import { ERROR_FIX_CHANNELS } from "../../shared/error-fix-contract";
 import { MAGIC_ACTION_CHANNELS } from "../../shared/magic-actions-contract";
 import { INDEX_ACTIVITY_CHANNELS } from "../../shared/index-activity-contract";
@@ -14,7 +15,6 @@ import { ONBOARDING_CHANNELS } from "../../shared/onboarding-contract";
 import { OS_REQUEST_CHANNELS } from "../../shared/os-request-contract";
 import { SEARCH_CHANNELS } from "../../shared/search-contract";
 import { SETTINGS_CHANNELS } from "../../shared/settings-contract";
-import { SMART_INDEXING_CHANNELS } from "../../shared/smart-indexing-contract";
 import { FS_WORKER_PUSH } from "../../shared/fs-worker-protocol";
 import {
 	REMOTE_CHANNELS,
@@ -41,6 +41,7 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"appCustomizer.onEvent": APP_CUSTOMIZER_CHANNELS.event,
 	"appUpdate.onChange": APP_UPDATE_CHANNELS.changed,
 	"automations.onChange": AUTOMATION_CHANNELS.changed,
+	"ltr.onTraining": LTR_CHANNELS.training,
 	"errorFix.onEvent": ERROR_FIX_CHANNELS.event,
 	"magicAction.onEvent": MAGIC_ACTION_CHANNELS.event,
 	"indexActivity.onChange": INDEX_ACTIVITY_CHANNELS.changed,
@@ -52,9 +53,8 @@ const PUSH_CHANNELS: Readonly<Record<string, string>> = {
 	"search.onEvent": SEARCH_CHANNELS.event,
 	"settings.onChanged": SETTINGS_CHANNELS.changed,
 	"settings.onProviderLoginEvent": SETTINGS_CHANNELS.providerLoginEvent,
-	"smartIndexing.onEvent": SMART_INDEXING_CHANNELS.event,
 	"osRequests.onAvailable": OS_REQUEST_CHANNELS.available,
-	"onboarding.onScanProgress": ONBOARDING_CHANNELS.scanProgress,
+	"onboarding.onProgress": ONBOARDING_CHANNELS.progress,
 	"fs.onLocationsChanged": FS_WORKER_PUSH.locationsChanged,
 	"fs.onIndexRefreshed": FS_WORKER_PUSH.indexRefreshed,
 	"live.onMessage": FS_WORKER_PUSH.live,
@@ -77,13 +77,14 @@ const TARGETS = [
 	"magicAction",
 	"account",
 	"automations",
+	"demo",
+	"ltr",
 	"appUpdate",
 	"indexActivity",
 	"indexProblem",
 	"modelDownload",
 	"onboarding",
 	"osRequests",
-	"smartIndexing",
 	"analytics",
 	"voice",
 ] as const;

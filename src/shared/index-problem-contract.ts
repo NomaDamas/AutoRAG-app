@@ -1,9 +1,9 @@
 /**
  * What is still wrong with the index after the first run, for the surfaces the
  * Finder keeps on screen (sidebar block, banner above the file list, Settings
- * card). Onboarding's own screen reads `IndexingStatus`; this is the same fact
- * after the user has moved on, so it survives a relaunch and stays until the
- * index works again or the user dismisses it.
+ * card). The first run's own screen reads its live `SetupStatus`; this is the
+ * same fact after the user has moved on, so it survives a relaunch and stays
+ * until the index works again or the user dismisses it.
  */
 
 import type { IndexFailure } from "./index-failure";

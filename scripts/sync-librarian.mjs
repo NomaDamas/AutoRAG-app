@@ -28,7 +28,19 @@ const remote = "https://github.com/Marker-Inc-Korea/AutoRAG.git";
 // v2.13.12 reads an `excludePaths` entry with `*`, `?` or `[` as a glob over the absolute path (kept verbatim by config
 // resolution, applied by the refresh walk), unions MinSync dense and SPLADE candidates for a reranker (#2103), adds the
 // model-free `autorag lite find` (#2126; the app's ⌘F search has its own implementation) and `AUTORAG_AUTH_MODE=environment`.
-const librarianRef = "v2.13.12";
+// v2.13.15 adds the `revise_answer` tool (AutoRAG#2186): verification corrects the first answer claim by claim, and
+// `searchDocumentsStream` yields a `revision` event between `preliminary` and `complete`. When something was corrected,
+// `complete.answer` is the first answer with every correction applied, not a delta. v2.13.14 reads a MinSync index while
+// its first sync is still running (#2183, #2200).
+// v2.14.0 adds learning to rank (AutoRAG#2204): the ranking log (on by default), `autorag ltr` (train, status, delete),
+// the `ltr` and `rankingLog` config keys, and serving a trained model after the reranker (opt-in). The app drives it
+// through `src/main/ltr-service.ts` and shows it on the Search Ranking settings page.
+// The pin is one commit past v2.14.0: 04cef434 is AutoRAG#2199, `createWebTools` in `@autorag/librarian/profiles`, the
+// librarian's own `web_search` and `web_fetch` for a helper profile (the Settings assistants for MCP and apps use them).
+// Move back to a release tag once one carries it.
+// v2.13.16 (#2203) lets a query read beside every sync of the refresh that builds a first index, not only the first (the app's first
+// run proves the tour's source against the index while it is still being built); the pin below contains it.
+const librarianRef = "04cef434cb9bbd3cc3623f929946efca82299d05";
 
 function run(command, args, cwd = root) {
 	const result = spawnSync(command, args, { cwd, stdio: "inherit" });

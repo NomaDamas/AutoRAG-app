@@ -6,6 +6,7 @@ export function createAppCustomizerBridge(ipcRenderer: IpcRenderer): AppCustomiz
 		send: (runId, request) => ipcRenderer.invoke(APP_CUSTOMIZER_CHANNELS.send, runId, request),
 		cancel: (runId) => ipcRenderer.invoke(APP_CUSTOMIZER_CHANNELS.cancel, runId),
 		reset: (sessionId) => ipcRenderer.invoke(APP_CUSTOMIZER_CHANNELS.reset, sessionId),
+		answer: (promptId, answer) => ipcRenderer.invoke(APP_CUSTOMIZER_CHANNELS.answer, promptId, answer),
 		onEvent: (listener) => {
 			const handler = (_event: IpcRendererEvent, event: AppCustomizerEvent): void => listener(event);
 			ipcRenderer.on(APP_CUSTOMIZER_CHANNELS.event, handler);

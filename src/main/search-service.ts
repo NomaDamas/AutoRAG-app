@@ -17,6 +17,7 @@ import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
 import { OPENROUTER_DEFAULT_DECOMPOSITION_MODEL, resolveSllmDecisionModel } from "./decision-model";
 import { agentOptionsForSemantic, applySemanticPolicyToAgent } from "./semantic-policy";
+import { withoutAgentAutoTrain } from "./ltr-service";
 import { syncCalendarMcpConfig } from "./calendar-mcp";
 import type {
 	AnswerPhase,
@@ -33,6 +34,7 @@ import type {
 	SearchStreamEvent,
 } from "../shared/search-contract";
 import { SEARCH_CHANNELS } from "../shared/search-contract";
+import { type AnswerRevision, isAnswerChange, remainderAfterRevised, revisedAnswer } from "../shared/answer-revision";
 import { buildAttachmentContext, buildViewingFolderContext } from "./attachment-context";
 import { InteractiveSearchAgent, type OpenedSession, type OpenSessionOptions, type SeedTurn } from "./interactive-search-agent";
 import type { ContextEvent } from "./context-watch";
@@ -73,7 +75,7 @@ type ChatSession = {
 	dispose(): void;
 };
 
-type SearchAgent = {
+export type SearchAgent = {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
@@ -118,6 +120,12 @@ export interface SearchServiceDeps {
 	 * A preflight that throws never stops a run.
 	 */
 	readonly preflight?: () => Promise<SearchRefusal | null>;
+	/**
+	 * Called once a search has answered and its `done` event is sent, never before: the answer is already on screen.
+	 * Learning-to-rank training hangs here. Fire and forget: a hook that throws or rejects is dropped and never fails
+	 * the search it follows.
+	 */
+	readonly afterAnsweredSearch?: () => void | Promise<unknown>;
 	/** Where each chat's conversation file is remembered; without it a chat's conversation lasts only while the app runs. */
 	readonly sessions?: ChatSessionIndex;
 	/**
@@ -146,7 +154,13 @@ function seedTurnsOf(messages: readonly ChatMessage[]): SeedTurn[] {
 			if (message.steer === undefined) question = message.text;
 			continue;
 		}
-		const answer = (message.deep?.answer ?? message.quick?.answer ?? "").trim();
+		// The answer the person ended up with: the Quick answer with its corrections applied, then whatever Deep added.
+		const changes = (message.revisions ?? []).some(isAnswerChange);
+		const answer = (
+			changes
+				? [revisedAnswer(message.quick?.answer ?? "", message.revisions ?? []), message.deep?.answer ?? ""].filter((part) => part.trim() !== "").join("\n\n")
+				: (message.deep?.answer ?? message.quick?.answer ?? "")
+		).trim();
 		if (question !== undefined && answer !== "") turns.push({ question, answer });
 		question = undefined;
 	}
@@ -165,6 +179,10 @@ interface SearchRun {
 	ended: boolean;
 	quick: AnswerPhase | null;
 	deep: AnswerPhase | null;
+	/** The first answer exactly as the librarian wrote it: the corrections' `original` claims are cut from it, not from the Quick text, which also holds the notes the model wrote on the way. */
+	firstAnswer: string;
+	/** The corrections the verification made to the Quick answer, in order. */
+	revisions: AnswerRevision[];
 	sessionId: string;
 	/** Messages the chat held before this run's question: earlier turns, left untouched by this run's writes. */
 	base: number;
@@ -386,6 +404,7 @@ function assistantMessage(run: SearchRun, stopped: boolean, now: () => Date): Ch
 		stopped,
 		at: now().toISOString(),
 		...(run.context.length === 0 ? {} : { context: [...run.context] }),
+		...(run.revisions.length === 0 ? {} : { revisions: [...run.revisions] }),
 	};
 }
 
@@ -416,11 +435,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	 * chat again resumes from its file.
 	 */
 	const agents = new Map<string, SearchAgent>();
+	/** Agents that were answering when the config or credentials changed: they finish on what they started with, then are rebuilt. */
+	const staleAgents = new Set<SearchAgent>();
 	/** The mode the person last chose; agents built after that start in it. */
 	let chosenMode: ApprovalMode | undefined;
 	async function agentFor(chatId: string, earlier: readonly ChatMessage[]): Promise<SearchAgent> {
 		const cached = agents.get(chatId);
-		if (cached !== undefined) {
+		if (cached !== undefined && staleAgents.has(cached)) {
+			agents.delete(chatId);
+			staleAgents.delete(cached);
+			await cached.closeSession?.().catch(() => undefined);
+		} else if (cached !== undefined) {
 			// Re-insert so the Map's order is least recently used first.
 			agents.delete(chatId);
 			agents.set(chatId, cached);
@@ -457,6 +482,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function closeAgents(): Promise<void> {
 		const open = [...agents.values()];
 		agents.clear();
+		staleAgents.clear();
 		await Promise.allSettled(open.map((agent) => agent.closeSession?.()));
 	}
 
@@ -464,6 +490,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 	async function resetAgents(): Promise<void> {
 		const answering = new Set([...active.values()].map((run) => run.agent));
 		const idle = [...agents].filter(([, agent]) => !answering.has(agent));
+		for (const [, agent] of agents) if (answering.has(agent)) staleAgents.add(agent);
 		for (const [chatId] of idle) agents.delete(chatId);
 		await Promise.allSettled(idle.map(([, agent]) => agent.closeSession?.()));
 	}
@@ -475,6 +502,17 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		if (run.reported) return;
 		run.reported = true;
 		deps.analytics?.track("ai_search_finished", { outcome, deepened: run.deep !== null, duration: durationBucket(now().getTime() - run.startedAt) });
+	}
+
+	/** The post-search hook, detached: whatever it does or throws, the search that triggered it is already over. */
+	function runAfterAnswered(): void {
+		const hook = deps.afterAnsweredSearch;
+		if (hook === undefined) return;
+		try {
+			Promise.resolve(hook()).catch(() => undefined);
+		} catch {
+			// A synchronous throw is dropped for the same reason.
+		}
 	}
 
 	/** Runs one read-modify-write of the run's chat record after every earlier one. */
@@ -609,6 +647,7 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 						break;
 					case "preliminary": {
 						run.sessionId = event.response.sessionId;
+						run.firstAnswer = event.response.answer;
 						run.quick = withNotes(mapPhase(event.response), "quick");
 						emit({
 							type: "quick",
@@ -619,6 +658,11 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 						await saveRunMessage(run, false);
 						break;
 					}
+					case "revision":
+						run.revisions.push(event.revision);
+						emit({ type: "revision", searchId: run.searchId, revision: event.revision });
+						await saveRunMessage(run, false);
+						break;
 					case "complete": {
 						const failure = modelRequestFailure(event.response);
 						if (failure !== null) {
@@ -628,7 +672,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 							break;
 						}
 						run.sessionId = event.response.sessionId;
-						const phase = run.quick === null ? withNotes(mapPhase(event.response), "quick", "deep") : withNotes(mapPhase(event.response), "deep");
+						// A run that corrected the Quick answer ends with that answer corrected; only what follows it is new.
+						const mapped = mapPhase(event.response);
+						const added = run.quick !== null && run.revisions.some(isAnswerChange) ? remainderAfterRevised(run.firstAnswer, run.revisions, mapped.answer) : null;
+						const phase = run.quick === null ? withNotes(mapped, "quick", "deep") : withNotes(added === null ? mapped : { ...mapped, answer: added }, "deep");
 						// Without a preliminary this is the run's only answer: Jev judged the
 						// fast answer final (or routed straight to a direct answer), so no
 						// verification ran. It belongs in the Quick slot, which already shows
@@ -664,7 +711,9 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			if (!run.cancelled) {
 				emit({ type: "done", searchId: run.searchId });
 				// A stream that ended with no answer at all did not answer.
-				reportFinished(run, run.failed || (run.quick === null && run.deep === null) ? "failed" : "answered");
+				const answered = !(run.failed || (run.quick === null && run.deep === null));
+				reportFinished(run, answered ? "answered" : "failed");
+				if (answered) runAfterAnswered();
 			}
 			active.delete(run.searchId);
 			run.resolveFinish();
@@ -707,6 +756,8 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 				failed: false,
 				reported: false,
 				context: [],
+				firstAnswer: "",
+				revisions: [],
 				toolCalls: new Set(),
 				userMessages: new Set(),
 			};
@@ -904,10 +955,32 @@ export function createDefaultAgentFactory(options: { readonly sessionDir: string
 			...(thinking !== undefined ? { thinking } : {}),
 		};
 		const semantic = readAppIndexing(raw).semanticSearch;
-		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(agentOptions, semantic), createAgentInteraction());
+		// The agent would retrain inside this (Electron main) process; the app trains in a child process instead (`ltr-service`).
+		const agent = new InteractiveSearchAgent(agentOptionsForSemantic(withoutAgentAutoTrain(agentOptions), semantic), createAgentInteraction());
 		applySemanticPolicyToAgent(agent, semantic);
 		// `manage_automations` starts programs by asking for "this Node"; in the app that would be the app itself.
 		runAutomationToolOnNode(agent, () => resolveNodeBinary({ resourcesPath: process.resourcesPath ?? "", env: process.env, platform: process.platform }));
 		return agent as SearchAgent;
 	};
+}
+
+/**
+ * Runs `question` through the same agent the AI Search panel builds, with no chat around it, and returns the sources
+ * the answer cites, in order, or null when it produced no answer. The first-run tour calls this before it offers a
+ * question, so the question it types into AI Search is one this index has already answered with a citation.
+ * A model failure (a run that ends in the degraded "no final answer" text) is no answer, and so is an empty one.
+ */
+export async function answerQuestion(createAgent: () => Promise<SearchAgent>, question: string, signal?: AbortSignal): Promise<readonly string[] | null> {
+	const agent = await createAgent();
+	try {
+		let final: SearchDocumentsResponse | null = null;
+		for await (const event of agent.searchDocumentsStream(question)) {
+			signal?.throwIfAborted();
+			if (event.type === "complete") final = event.response;
+		}
+		if (final === null || modelRequestFailure(final) !== null || final.answer.trim() === "") return null;
+		return final.results.flatMap((result) => (result.source === undefined ? [] : [result.source]));
+	} finally {
+		agent.abort?.();
+	}
 }

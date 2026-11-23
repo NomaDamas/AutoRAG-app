@@ -53,6 +53,7 @@ const tab: InspectorChatTab = {
 				error: null,
 				stopped: false,
 				steers: [],
+				revisions: [],
 			},
 		],
 	},
@@ -131,6 +132,7 @@ const withAnswer = (answer: string, excerpts: readonly string[]): InspectorChatT
 				error: null,
 				stopped: false,
 				steers: [],
+				revisions: [],
 			},
 		],
 	},
@@ -155,10 +157,42 @@ const turnOf = (patch: Partial<InspectorChatTab["chat"] extends infer C ? (C ext
 				error: null,
 				stopped: false,
 				steers: [],
+				revisions: [],
 				...patch,
 			},
 		],
 	},
+});
+
+describe("the inspector chat view, after the librarian corrected the Quick answer", () => {
+	const first = "- 환불은 팀장 승인이 필요합니다 [1]\n- 한도는 50만 원입니다 [2]";
+	const evidence = (number: number) => ({ number, title: `${number}.md`, summary: "", source: `/work/${number}.md`, excerpts: [] });
+	const replace = { op: "replace", claimId: "c1", original: "- 환불은 팀장 승인이 필요합니다 [1]", replacement: "- 환불은 이사 승인이 필요합니다 [3]", reason: "2026년 개정" } as const;
+
+	const quick = { answer: first, evidence: [evidence(1), evidence(2)] };
+	const deep = { answer: "", evidence: [evidence(3)] };
+
+	it("shows a correction that just arrived with the struck words beside the new ones, and its new source resolved from the final answer's evidence", () => {
+		renderTab(turnOf({ quick, deep, revisions: [replace], startedAt: 1_000 }));
+		const answer = host.querySelector(".inspector-chat-answer");
+		expect(answer?.querySelector("del")?.textContent).toBe("환불은 팀장 승인이 필요합니다");
+		expect(answer?.querySelector("ins button.cite")?.textContent).toBe("3");
+		expect(answer?.querySelector("ins")?.closest("[data-revision]")?.getAttribute("title")).toBe("2026년 개정");
+		expect(answer?.textContent).toContain("한도는 50만 원입니다");
+	});
+
+	it("shows the same correction settled when the chat is read back from history", () => {
+		renderTab(turnOf({ quick, deep, revisions: [replace], startedAt: 0 }));
+		const answer = host.querySelector(".inspector-chat-answer");
+		expect(answer?.querySelector("del")).toBeNull();
+		expect(answer?.querySelector("ins")?.textContent).toBe("환불은 이사 승인이 필요합니다 3");
+		expect(answer?.querySelector("ins")?.getAttribute("data-settled")).toBe("true");
+	});
+
+	it("draws a turn that was not corrected as it always was", () => {
+		renderTab(turnOf({ quick: { answer: first, evidence: [evidence(1), evidence(2)] }, revisions: [] }));
+		expect(host.querySelector("[data-revision]")).toBeNull();
+	});
 });
 
 describe("the inspector chat view", () => {

@@ -5938,3 +5938,196 @@
 .settings-view .index-map-crumb-sep {
 	margin: 0 2px;
 }
+
+/* ------------------------------------------------------ Search ranking (ltr) -- */
+
+/* The page is plain rows like the others; only the verdict chips, the model list and the result line are its own. */
+
+.settings-view .settings-ltr .ltr-caveat,
+.settings-view .settings-ltr .ltr-empty {
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-ltr .ltr-result {
+	margin: 0;
+	padding: var(--space-8) var(--space-12);
+	border-radius: var(--radius-8);
+	font-size: var(--font-size-meta);
+	line-height: 1.5;
+}
+
+.settings-view .settings-ltr .ltr-result.is-trained {
+	background: var(--ok-bg-soft);
+	color: var(--ok-text);
+}
+
+.settings-view .settings-ltr .ltr-result.is-rejected,
+.settings-view .settings-ltr .ltr-result.is-insufficient {
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .settings-ltr .ltr-result.is-failed {
+	background: var(--danger-bg-soft);
+	color: var(--danger-text);
+}
+
+.settings-view .settings-ltr .ltr-reason {
+	display: block;
+	margin: 0;
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+	overflow-wrap: anywhere;
+}
+
+/* A model is a row, not a card: when and how it scored on the left, its actions on the right, a rule between rows. */
+.settings-view .settings-ltr .ltr-model {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-12);
+	padding: var(--space-12) 0;
+}
+
+.settings-view .settings-ltr .ltr-model + .ltr-model {
+	border-top: 1px solid var(--border-divider);
+}
+
+.settings-view .settings-ltr .ltr-model-main {
+	display: flex;
+	flex-direction: column;
+	gap: var(--space-4);
+	min-width: 0;
+}
+
+.settings-view .settings-ltr .ltr-model-title {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--space-8);
+	color: var(--text-primary);
+	font-size: var(--font-size-body);
+}
+
+.settings-view .settings-ltr .ltr-model-meta {
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-ltr .ltr-model-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--space-8);
+	font-size: var(--font-size-meta);
+}
+
+.settings-view .settings-ltr .ltr-verdict {
+	padding: 1px var(--space-8);
+	border-radius: var(--radius-6);
+	font-size: var(--font-size-badge);
+	font-weight: var(--weight-medium);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-passed {
+	background: var(--ok-bg);
+	color: var(--ok-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-rejected {
+	background: var(--warn-bg);
+	color: var(--warn-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-use {
+	background: var(--accent-soft);
+	color: var(--accent-text);
+}
+
+.settings-view .settings-ltr .ltr-verdict.is-pinned {
+	background: var(--bg-hover);
+	color: var(--text-body);
+}
+
+.settings-view .settings-ltr .ltr-ask {
+	color: var(--text-body);
+}
+
+.settings-view .settings-ltr .ltr-number {
+	width: 64px;
+	text-align: right;
+}
+
+.settings-view .settings-ltr .ltr-unit {
+	margin-left: var(--space-6);
+	color: var(--text-muted);
+	font-size: var(--font-size-meta);
+}
+
+/* A text link in a sentence or under the list (open AI settings, back to the newest model). */
+.settings-view .settings-ltr .ltr-link {
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--accent-text);
+	font: inherit;
+	cursor: pointer;
+	text-decoration: underline;
+	text-underline-offset: 2px;
+	align-self: flex-start;
+}
+
+/* What the assistant asks outside the chat: a masked field for a secret, or a yes/no that lists what will happen. */
+.customizer-prompt {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 8px;
+	padding: 12px;
+	border: 1px solid var(--border-strong);
+	border-radius: 10px;
+	background: var(--surface-raised, var(--window));
+}
+.customizer-prompt__title {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--ink);
+}
+.customizer-prompt__detail,
+.customizer-prompt__hint {
+	margin: 0;
+	font-size: 12px;
+	color: var(--ink-muted);
+}
+.customizer-prompt__hint {
+	font-family: var(--font-mono, ui-monospace, monospace);
+}
+.customizer-prompt__lines {
+	margin: 0;
+	padding-left: 18px;
+	font-size: 12px;
+	color: var(--ink-body, var(--ink));
+	overflow-wrap: anywhere;
+}
+.customizer-prompt__field {
+	height: 32px;
+	padding: 0 10px;
+	border: 1px solid var(--border-strong);
+	border-radius: 8px;
+	background: var(--window);
+	color: var(--ink);
+	font-size: 13px;
+}
+.customizer-prompt__field:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.customizer-prompt__actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}

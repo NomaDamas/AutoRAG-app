@@ -12,17 +12,19 @@ import { useCallback, useContext, useEffect, useMemo, useRef, useState, type Rea
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { LocaleKey } from "../../../shared/i18n/core";
-import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
+import { ChartNoAxesColumn, Copy, FileText, Globe, Keyboard, ListOrdered, MonitorSmartphone, MousePointerClick, PanelLeft, Plug, RefreshCw, Server, Settings, Sparkles, User, type LucideIcon } from "lucide-react";
 import type { AppSettings, AutoRagConfigSnapshot, DataSourcesSnapshot } from "../../../shared/settings-contract";
-import type { AppCustomizerSurface } from "../../../shared/app-customizer-contract";
+import { isAppCustomizerSurface, type AppCustomizerSurface } from "../../../shared/app-customizer-contract";
 import { isJsonObject } from "../../../shared/settings-contract";
 import { AccountPage, PlanPage } from "./settings/AccountPlanPages";
 import { AiPage } from "./settings/AiPage";
+import { LtrPage } from "./settings/LtrPage";
 import { AppsPage, IndexingPage, SourceDetailPage } from "./settings/AppsPages";
 import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
+import { SettingsAssistantHeroContext, type SettingsAssistantHero } from "./settings/SettingsKit";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
@@ -41,7 +43,7 @@ import { Keycap } from "./primitives/Keycap";
 
 const autorag = { settings };
 
-export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
+export type StaticSettingsCategory = "account" | "plan" | "general" | "sidebar" | "contextMenu" | "shortcuts" | "remote" | "ai" | "web" | "ltr" | "mcp" | "indexing" | "reading" | "duplicates" | "apps";
 /** Legacy ids stay accepted so an old deep link still lands on a page. 검색 범위 (`scope`) is part of 인덱싱 now. */
 type LegacyCategory = "llm" | "embedding" | "reranker" | "sources" | "deep" | "light" | "scope";
 export type SettingsCategory = StaticSettingsCategory | LegacyCategory | `source:${string}`;
@@ -59,6 +61,7 @@ type NavLabelKey =
 	| "settingsCore.nav.indexing"
 	| "settingsCore.nav.reading"
 	| "settingsCore.nav.duplicates"
+	| "settingsCore.nav.ltr"
 	| "settingsCore.nav.mcp"
 	| "settingsCore.nav.apps";
 
@@ -91,6 +94,7 @@ export const PAGES = [
 	{ id: "remote", labelKey: "settingsCore.nav.remote", icon: MonitorSmartphone, groupKey: "settingsCore.nav.group.basic", keywordsKey: "settingsCore.nav.keywords.remote" },
 	{ id: "ai", labelKey: "settingsCore.nav.ai", icon: Sparkles, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ai" },
 	{ id: "web", labelKey: "settingsCore.nav.web", icon: Globe, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.web" },
+	{ id: "ltr", labelKey: "settingsCore.nav.ltr", icon: ListOrdered, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.ltr" },
 	{ id: "indexing", labelKey: "settingsCore.nav.indexing", icon: RefreshCw, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.indexing" },
 	{ id: "duplicates", labelKey: "settingsCore.nav.duplicates", icon: Copy, groupKey: "settingsCore.nav.group.search", keywordsKey: "settingsCore.nav.keywords.duplicates" },
 	{ id: "mcp", labelKey: "settingsCore.nav.mcp", icon: Server, groupKey: "settingsCore.nav.group.ai", keywordsKey: "settingsCore.nav.keywords.mcp" },
@@ -137,10 +141,16 @@ function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
 }
 
-/** The one settings page whose AI customization assistant fills the window's right sidebar: 우클릭 메뉴. */
+/**
+ * Settings pages whose AI assistant fills the window's right sidebar; each page is its own surface. 사이드바 and
+ * 단축키 are surfaces of the main-process profiles but have no assistant in the UI, so their right sidebar stays the Inspector's.
+ */
 function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | null {
-	return page === "contextMenu" ? page : null;
+	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
 }
+
+/** The pages that draw their own invitation to the assistant; every other assistant page gets it from its head. */
+const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["sidebar", "contextMenu", "shortcuts"];
 
 /**
  * What every settings page reads and writes: the app settings, the config
@@ -161,6 +171,12 @@ export interface SettingsData {
 	readonly setSources: (sources: DataSourcesSnapshot) => void;
 	readonly saveSnapshot: (next: AutoRagConfigSnapshot) => void;
 	readonly changeAppSettings: (next: AppSettings) => void;
+	/** Counts the assistant turns that changed something; a page that loads its own data (MCP servers) keys on it to read again. */
+	readonly assistantRevision: number;
+	/** Reads the config and the app preferences again without a loading state: a page opened later shows what is on disk now. */
+	readonly refresh: () => Promise<void>;
+	/** An assistant changed the shared config, the MCP file or a datasource behind the pages' backs: read them again. */
+	readonly reloadAfterAssistant: () => Promise<void>;
 }
 
 export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => void): SettingsData {
@@ -169,6 +185,7 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 	const [sources, setSources] = useState<DataSourcesSnapshot | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [assistantRevision, setAssistantRevision] = useState(0);
 	/** False until the first datasource scan has answered (or failed): the pages say "checking" instead of "none". */
 	const [sourcesReady, setSourcesReady] = useState(false);
 	const scanSeq = useRef(0);
@@ -234,7 +251,30 @@ export function useSettingsData(onSettingsChanged?: (settings: AppSettings) => v
 		changedRef.current?.(next);
 	}, []);
 
-	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings };
+	const refresh = useCallback(async (): Promise<void> => {
+		try {
+			const [app, config] = await Promise.all([autorag.settings.get(), autorag.settings.configGet()]);
+			setAppSettings(app);
+			setSnapshot(config);
+			setError(config.error);
+		} catch {
+			// A failed quiet re-read keeps what is shown; the page's own writes still report their errors.
+		}
+	}, []);
+
+	const reloadAfterAssistant = useCallback(async (): Promise<void> => {
+		setAssistantRevision((revision) => revision + 1);
+		void scan();
+		try {
+			const config = await autorag.settings.configGet();
+			setSnapshot(config);
+			setError(config.error);
+		} catch (cause) {
+			setError(errorMessage(cause));
+		}
+	}, [scan]);
+
+	return { appSettings, snapshot, sources, sourcesReady, loading, error, entries, setError, setSources, saveSnapshot, changeAppSettings, assistantRevision, refresh, reloadAfterAssistant };
 }
 
 /** One settings page's body for `category`; `onNavigate` follows a page's own link to another page. */
@@ -273,7 +313,9 @@ export function SettingsPageContent({
 		case "remote":
 			return <RemoteAccessPage appSettings={appSettings} onAppSettingsChanged={changeAppSettings} onSettingsError={setError} />;
 		case "ai":
-			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} />;
+			return <AiPage snapshot={snapshot} onSaved={saveSnapshot} assistantRevision={data.assistantRevision} />;
+		case "ltr":
+			return <LtrPage snapshot={snapshot} onSaved={saveSnapshot} onOpenAi={() => onNavigate("ai")} />;
 		case "web":
 			return <WebPage snapshot={snapshot} onSaved={saveSnapshot} />;
 		case "indexing":
@@ -288,7 +330,7 @@ export function SettingsPageContent({
 				/>
 			);
 		case "mcp":
-			return <McpPage />;
+			return <McpPage key={data.assistantRevision} />;
 		default:
 			return <AppsPage snapshot={snapshot} onSaved={saveSnapshot} sources={sources} sourcesPending={!sourcesReady} onOpenSource={(alias) => onNavigate(`source:${alias}`)} />;
 	}
@@ -357,6 +399,17 @@ export function SettingsView({
 		return detach;
 	}, []);
 
+	// Something else may have changed the config or the preferences since Settings was loaded (another window, the CLI, the file
+	// edited by hand, an assistant in another session): opening a page shows what is there now.
+	const firstPage = useRef(true);
+	useEffect(() => {
+		if (firstPage.current) {
+			firstPage.current = false;
+			return;
+		}
+		void data.refresh();
+	}, [category]);
+
 	// Usage analytics: which page is open. A `source:<alias>` page counts as `source`, so a user-chosen alias is never sent.
 	useEffect(() => {
 		const page = normalizeCategory(category);
@@ -404,14 +457,20 @@ export function SettingsView({
 		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
+	const hero = useMemo<SettingsAssistantHero | null>(
+		() => (activeSurface === null || customizerShown || SELF_INVITING_SURFACES.includes(activeSurface) ? null : { surface: activeSurface, onOpen: openCustomizer }),
+		[activeSurface, customizerShown, openCustomizer],
+	);
 	const content = (
-		<SettingsPageContent
-			data={data}
-			category={category}
-			onNavigate={setCategory}
-			customizerOpen={customizerShown}
-			onOpenCustomizer={openCustomizer}
-		/>
+		<SettingsAssistantHeroContext value={hero}>
+			<SettingsPageContent
+				data={data}
+				category={category}
+				onNavigate={setCategory}
+				customizerOpen={customizerShown}
+				onOpenCustomizer={openCustomizer}
+			/>
+		</SettingsAssistantHeroContext>
 	);
 
 	const sourceButtons = filteredSources.map((entry) => {
@@ -477,7 +536,7 @@ export function SettingsView({
 									const Icon = page.icon;
 									const active = sourceAlias === null && normalizeCategory(category) === page.id;
 									return (
-										<button key={page.id} type="button" className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
+										<button key={page.id} type="button" data-settings-nav={page.id} className={`settings-nav-item${active ? " is-active" : ""}`} aria-current={active ? "true" : undefined} onClick={() => setCategory(page.id)}>
 											<span className="settings-nav-icon" aria-hidden="true">
 												<Icon size={14} strokeWidth={1.8} />
 											</span>
@@ -533,6 +592,7 @@ export function SettingsView({
 						hidden={surface !== activeSurface}
 						focusRequest={surface === activeSurface ? customizerFocus : 0}
 						onSettingsUpdated={changeAppSettings}
+						onChangesApplied={data.reloadAfterAssistant}
 						onOpenAiSettings={openAiSettings}
 					/>
 				)),

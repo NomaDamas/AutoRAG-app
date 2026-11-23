@@ -264,6 +264,18 @@ small {
 	}
 }
 
+/* A source that has just arrived (a correction's new citation, its tab in the inspector) grows in from a small dot. */
+@keyframes popIn {
+	from {
+		transform: scale(0.3);
+		opacity: 0;
+	}
+	to {
+		transform: scale(1);
+		opacity: 1;
+	}
+}
+
 /* Folder disclosure in the list (seungwonme/AutoRAG-app#19) — while a folder opens or closes, `useDisclosureMotion` drives
  * `--slide-q` on the rows container (0 closed .. 1 open) and `FileList` marks the rows that take part:
  * `block` (the folder's rows, opening), `ghost` (the same rows, closing) and `below` (every row and header after
@@ -322,6 +334,15 @@ html:not([data-platform="darwin"]) .inspector-body {
 /* §6 Rules — reduced motion keeps color transitions, drops movement. */
 @media (prefers-reduced-motion: reduce) {
 	@keyframes rise {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	@keyframes popIn {
 		from {
 			opacity: 0;
 		}

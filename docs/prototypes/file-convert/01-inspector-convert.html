@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko" data-appearance="light">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<title>Dazzi · 변환 시안 1 · 인스펙터</title>
+	<link rel="stylesheet" href="../../../src/renderer/styles/tokens.css">
+	<link rel="stylesheet" href="./shell.css">
+	<style>
+		/* Prototype 1: the Inspector's 변환 popover is the whole surface. */
+		.convert-pop { right: 12px; bottom: 62px; width: 276px; padding: 0; overflow: hidden; }
+		.pop-head { padding: 11px 12px 8px; border-bottom: 1px solid var(--border-divider); }
+		.pop-head b { color: var(--text-primary); font-size: 12.5px; }
+		.pop-head p { margin: 1px 0 0; color: var(--text-muted); font-size: 11.5px; }
+		.pop-body { padding: 8px 8px 4px; max-height: 330px; overflow-y: auto; }
+		.pop-cap { padding: 2px 4px 6px; color: var(--text-faint); font-size: 10.5px; font-weight: 600; }
+		.fmt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+		.fmt-btn {
+			position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px;
+			padding: 9px 4px 7px; border: 1px solid var(--border); border-radius: var(--radius-8);
+			background: var(--bg-window); color: var(--text-primary);
+			transition: background var(--dur-color) var(--ease-out), border-color var(--dur-color) var(--ease-out);
+		}
+		.fmt-btn:hover { background: var(--bg-hover); }
+		.fmt-btn.on { border-color: var(--accent); background: var(--accent-wash); }
+		.fmt-btn .fmt { background: transparent; font-size: 13px; }
+		.fmt-btn small { color: var(--text-muted); font-size: 10.5px; }
+		.fmt-btn .dl { position: absolute; top: 4px; right: 5px; color: var(--warn-text); }
+		.fmt-btn .dl .icon { width: 11px; height: 11px; }
+		.pop-opts { padding: 6px 8px 8px; }
+		.opt { display: flex; align-items: center; justify-content: space-between; height: 28px; font-size: 12px; }
+		.opt span { color: var(--text-muted); }
+		.opt select { height: 24px; border: 1px solid var(--border); border-radius: var(--radius-6); background: var(--bg-window); padding: 0 6px; font-size: 12px; }
+		.pop-foot { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-top: 1px solid var(--border-divider); background: var(--bg-subtle-alt); }
+		.pop-foot .where { flex: 1; color: var(--text-muted); font-size: 11.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+		.route { display: flex; align-items: center; gap: 5px; padding: 0 12px 8px; color: var(--text-muted); font-size: 11px; }
+		.route .fmt { height: 17px; min-width: 0; font-size: 9.5px; }
+		.route .icon { width: 11px; height: 11px; color: var(--text-faint); }
+	</style>
+</head>
+<body>
+	<div id="root"></div>
+	<script src="./lucide-icons.js"></script>
+	<script src="./shell.js"></script>
+	<script>
+		const sel = FILES[0];
+		let target = "pdf";
+
+		function pop() {
+			const targets = TARGETS[sel.ext];
+			const need = NEEDS_ENGINE[sel.ext] || {};
+			const grid = targets.map((t) => `<button class="fmt-btn${t === target ? " on" : ""}" data-t="${t}">
+				${need[t] ? `<span class="dl" title="${need[t]} 내려받기 필요">${icon("hard-drive-download")}</span>` : ""}
+				<span class="fmt">${t.toUpperCase()}</span><small>${{ pdf: "문서 보기용", docx: "편집 가능", hwpx: "한글 문서", hwp: "한글 구버전", txt: "텍스트만", md: "마크다운", html: "웹", png: "이미지" }[t] || ""}</small></button>`).join("");
+			const route = sel.ext === "hwpx" && target === "docx"
+				? `<div class="route"><span class="fmt">HWPX</span>${icon("arrow-right")}<span class="fmt">DOCX</span><span class="badge info" style="margin-left:4px">직접 변환</span></div>` : "";
+			return `<div class="menu convert-pop" role="dialog" aria-label="변환">
+				<div class="pop-head"><b>${sel.name}</b><p>${sel.kind} → 어떤 형식으로 바꿀까요?</p></div>
+				<div class="pop-body"><div class="pop-cap">자주 쓰는 형식</div><div class="fmt-grid">${grid}</div></div>
+				${route}
+				<div class="pop-opts">
+					<div class="opt"><span>품질</span><select><option>보통 (권장)</option><option>높음</option><option>작게</option></select></div>
+					<div class="opt"><span>저장 위치</span><select><option>원본 옆</option><option>변환됨 폴더</option></select></div>
+				</div>
+				<div class="pop-foot"><span class="where">${sel.name.replace(/\.[^.]+$/, "")}.${target}</span><button class="btn primary" id="go">변환</button></div>
+			</div>`;
+		}
+
+		function render(open) {
+			document.getElementById("root").innerHTML = reviewBar("변환 시안 1", "인스펙터 액션 바에 “변환” 칩 하나를 추가하고 팝오버로 형식을 고릅니다. 예시 데이터입니다.", "01-inspector-convert.html", "파일을 하나 골랐고, 무엇으로 바꿀 수 있는지부터 알고 싶을 때") + `
+			<div class="stage"><div class="stage-col"><div class="window" id="win">
+				${sidebarHtml()}
+				<div class="center">
+					${toolbarHtml()}
+					<div class="tabstrip">문서</div>
+					<div class="finder">${COLHEAD}<div class="rows">${FILES.map((f) => rowHtml(f, f.id === sel.id ? "sel" : "")).join("")}</div></div>
+					${PATHBAR}
+				</div>
+				${inspectorHtml(sel, baseChips(`<button class="chip hot" id="open-pop" aria-haspopup="dialog">${icon("arrow-right-left")}변환…</button>`))}
+				${open ? pop() : ""}
+			</div></div></div>`;
+			wireChrome();
+			const anchor = document.getElementById("open-pop");
+			anchor.onclick = () => render(!open);
+			const popEl = document.querySelector(".convert-pop");
+			if (popEl) {
+				const win = document.getElementById("win").getBoundingClientRect();
+				const a = anchor.getBoundingClientRect();
+				const h = popEl.getBoundingClientRect().height;
+				popEl.style.right = "12px"; popEl.style.bottom = "auto";
+				popEl.style.top = `${Math.max(8, a.top - win.top - h - 8)}px`;
+			}
+			document.querySelectorAll(".fmt-btn").forEach((b) => (b.onclick = () => { target = b.dataset.t; render(true); }));
+			document.getElementById("go")?.addEventListener("click", () => { render(false); toast(`${sel.name.replace(/\.[^.]+$/, "")}.${target} — 변환했습니다`); });
+		}
+		render(true);
+	</script>
+</body>
+</html>

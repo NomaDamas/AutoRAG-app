@@ -35,6 +35,7 @@ import { ModalShell, ModalActions, Note, PlainRow, PromptModal, Row, Section, Se
 import { SelectField } from "./SelectField";
 import { SourceIcon } from "./SourceIcon";
 import { asRecord, getAt, listOf, listUpdate, stringOf, useConfigWriter } from "./configSupport";
+import { FullDiskAccessDialog } from "../primitives/FullDiskAccessDialog";
 import { Switch } from "../primitives/Switch";
 import { useIndexActivity } from "../../hooks/useIndexActivity";
 import { activityItem } from "../../state/index-activity";
@@ -44,17 +45,9 @@ import { ExclusionsSection, FileNameWatchRow, SearchFoldersSection, useScopeEdit
 import { cn } from "../../lib/cn";
 import { buttonClass } from "../primitives/button";
 
-const settings = window.autorag.settings;
+import { REFRESH_INTERVALS } from "../../../../shared/settings-options";
 
-/** Refresh cadences the config stores in milliseconds. */
-const INTERVAL_OPTIONS: readonly { readonly ms: number; readonly label: LocaleKey }[] = [
-	{ ms: 5 * 60_000, label: "settingsSources.cadence.min5" },
-	{ ms: 15 * 60_000, label: "settingsSources.cadence.min15" },
-	{ ms: 30 * 60_000, label: "settingsSources.cadence.min30" },
-	{ ms: 60 * 60_000, label: "settingsSources.cadence.hour1" },
-	{ ms: 6 * 60 * 60_000, label: "settingsSources.cadence.hour6" },
-	{ ms: 24 * 60 * 60_000, label: "settingsSources.cadence.day1" },
-];
+const settings = window.autorag.settings;
 
 const GALLERY_GROUPS: readonly { readonly title: LocaleKey; readonly ids: readonly string[] }[] = [
 	{ title: "settingsSources.apps.groups.messengers", ids: ["slack", "kakao", "discord", "telegram", "whatsapp", "lark"] },
@@ -328,7 +321,7 @@ export function IndexingPage({
 								className="settings-select-compact"
 								aria-label={t("settingsSources.indexing.localIntervalAria")}
 								value={String(localInterval)}
-								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+								options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 								onValueChange={(value) => void changeInterval(["appIndexing", "refreshIntervalMs"], Number(value))}
 							/>
 							<button
@@ -379,7 +372,7 @@ export function IndexingPage({
 										className="settings-select-compact"
 										aria-label={t("settingsSources.indexing.rowIntervalAria", { id: row.id })}
 										value={String(intervalOf(row, snapshot))}
-										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+										options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 										onValueChange={(value) => void changeInterval(["datasources", row.id, "pollingIntervalMs"], Number(value))}
 									/>
 								) : null}
@@ -660,6 +653,8 @@ export function SourceDetailPage({
 	const [busy, setBusy] = useState(false);
 	const [localError, setLocalError] = useState<string | null>(null);
 	const [confirmDelete, setConfirmDelete] = useState(false);
+	const [fdaNeeded, setFdaNeeded] = useState(false);
+	const [fdaDialogOpen, setFdaDialogOpen] = useState(false);
 	const activity = useIndexActivity();
 	const liveSourceState = activityItem(activity, `source:${alias}`)?.state ?? null;
 	const sourceSyncActive = busy || liveSourceState === "running" || liveSourceState === "queued";
@@ -719,7 +714,32 @@ export function SourceDetailPage({
 
 	const appRequirement = row?.install.app ?? null;
 	const downloadUrl = appRequirement?.required ? appDownloadUrl(type, hostPlatform()) : undefined;
+	const mailPaths = connector !== null ? listOf(connector.paths) : [];
+	const usesProtectedStore =
+		hostPlatform() === "darwin" &&
+		(type === "kakao" || (type === "mailcrawl" && mailPaths.some((item) => item.includes("/Library/Mail"))));
 
+	useEffect(() => {
+		if (!usesProtectedStore) {
+			setFdaNeeded(false);
+			return;
+		}
+		let live = true;
+		const check = (): void => {
+			void window.autorag?.onboarding
+				?.permissions()
+				.then((status) => {
+					if (live) setFdaNeeded(status.fullDiskAccess === false);
+				})
+				.catch(() => undefined);
+		};
+		check();
+		window.addEventListener("focus", check);
+		return () => {
+			live = false;
+			window.removeEventListener("focus", check);
+		};
+	}, [usesProtectedStore]);
 	return (
 		<div className="settings-source is-open" data-source-id={alias}>
 			<SettingsPageHead title={sourceTitle({ id: alias, type })} description={template !== undefined ? t(template.summary) : t("settingsSources.sourceDetail.fallbackSummary")} />
@@ -735,10 +755,21 @@ export function SourceDetailPage({
 						disabled={busy}
 						ariaLabel={t("settingsSources.sourceDetail.enabledName")}
 						onChange={() => {
-							void run([{ path: ["datasources", alias, "enabled"], value: !enabled }]).then(() => refresh());
+							const turningOn = !enabled;
+							void run([{ path: ["datasources", alias, "enabled"], value: turningOn }]).then(() => {
+								void refresh();
+								if (turningOn && fdaNeeded) setFdaDialogOpen(true);
+							});
 						}}
 					/>
 				</Row>
+				{usesProtectedStore && fdaNeeded ? (
+					<Row name={t("fullDiskAccess.rowName")} hint={t("fullDiskAccess.leadSource")}>
+						<button type="button" className="linear-btn" data-action="source-grant-fda" onClick={() => setFdaDialogOpen(true)}>
+							{t("fullDiskAccess.open")}
+						</button>
+					</Row>
+				) : null}
 				{appRequirement !== null && appRequirement.required ? (
 					<Row
 						name={t("settingsSources.sourceDetail.appRow", { name: appRequirement.name })}
@@ -795,7 +826,7 @@ export function SourceDetailPage({
 							className="linear-select"
 							aria-label={t("settingsSources.sourceDetail.intervalName")}
 							value={String(polling)}
-							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...INTERVAL_OPTIONS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
+							options={[{ value: "0", label: t("settingsSources.common.manual") }, ...REFRESH_INTERVALS.map((option) => ({ value: String(option.ms), label: t(option.label) }))]}
 							onValueChange={(value) => void changeInterval(["datasources", alias, "pollingIntervalMs"], Number(value))}
 						/>
 					</Row>
@@ -847,6 +878,17 @@ export function SourceDetailPage({
 						<button type="button" className="linear-btn is-danger" disabled={busy} onClick={() => void removeConnection()}>{t("settingsSources.sourceDetail.removeSection")}</button>
 					</ModalActions>
 				</ModalShell>
+			) : null}
+			{fdaDialogOpen ? (
+				<FullDiskAccessDialog
+					reason="source"
+					onClose={() => setFdaDialogOpen(false)}
+					onConfirmed={() => {
+						setFdaDialogOpen(false);
+						setFdaNeeded(false);
+						void refresh();
+					}}
+				/>
 			) : null}
 		</div>
 	);

@@ -14,7 +14,6 @@ export interface AppWindowSize {
 }
 
 const WINDOW_SIZES: Readonly<Record<WindowPhase, AppWindowSize>> = {
-	onboarding: { width: 1120, height: 720, minWidth: 960, minHeight: 680, center: true },
 	finder: { width: 1440, height: 900, minWidth: 1360, minHeight: 820 },
 };
 
