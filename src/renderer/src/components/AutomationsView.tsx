@@ -163,14 +163,14 @@ function ChipSelect<T extends string>({
 				disabled={disabled}
 				className={cn(
 					"inline-flex items-center gap-4 px-8 py-4 border-[0.5px] border-divider bg-window text-meta leading-[18px] whitespace-nowrap",
-					disabled ? "text-ink-muted cursor-default [&_svg]:opacity-50" : "text-ink cursor-pointer hover:border-border",
+					disabled ? "text-ink cursor-default" : "text-ink cursor-pointer hover:border-border",
 					round ? "rounded-[13px]" : "rounded-[7px]",
 				)}
 				onClick={() => setOpen((was) => !was)}
 			>
 				{current?.icon ?? icon}
 				<span>{current?.label ?? label}</span>
-				<ChevronDownIcon size={12} className={disabled ? "text-ink-faint" : "text-ink-muted"} />
+				<ChevronDownIcon size={12} className="text-ink-muted" />
 			</button>
 			{open ? (
 				<ul role="listbox" aria-label={label} className="absolute left-0 top-[calc(100%+4px)] z-30 m-0 w-max min-w-full list-none rounded-8 border border-border bg-window p-4 shadow-menu">
@@ -442,7 +442,7 @@ function NewAutomationCard({
 					part in chips ? (
 						<Fragment key={index}>{chips[part]}</Fragment>
 					) : part.trim().length === 0 ? null : (
-						<span key={index} className={cn("text-meta leading-[18px]", locked ? "text-ink-faint" : "text-ink-muted")}>{part.trim()}</span>
+						<span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>
 					),
 				)}
 			</div>
@@ -457,7 +457,7 @@ function NewAutomationCard({
 				aria-label={t("automations.create.task")}
 				className={cn(
 					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
-					locked ? "cursor-default select-none text-ink-muted" : "text-ink focus:border-accent",
+					locked ? "cursor-default text-ink" : "text-ink focus:border-accent",
 				)}
 				onChange={(change) => {
 					setTask(change.target.value);
