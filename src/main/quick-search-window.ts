@@ -171,6 +171,7 @@ export function createQuickSearchWindow(deps: QuickSearchWindowDeps): QuickSearc
 
 	return {
 		toggle() {
+			if (destroyed || quitting) return;
 			if (window === null || window.isDestroyed()) window = create();
 			const current = window;
 			if (current.isVisible() && (current.isFocused() || preview?.isFocused() === true)) {
