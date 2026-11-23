@@ -558,7 +558,9 @@ function RuleRow({
 			role="row"
 			aria-selected={selected}
 			data-rule-id={rule.id}
-			className={cn("flex items-center gap-10 py-10 pl-12 pr-10 select-none cursor-pointer", selected ? "bg-accent-soft" : "bg-window hover:bg-hover-row")}
+			// Opening a rule selects it, and the selection outlives the trip back to
+			// the list, so it draws no fill: the row looks as it did before it was opened.
+			className="flex items-center gap-10 py-10 pl-12 pr-10 select-none cursor-pointer bg-window hover:bg-hover-row"
 			onClick={() => {
 				onSelect(rule.id);
 				onOpen(rule.id);
