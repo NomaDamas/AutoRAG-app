@@ -521,8 +521,8 @@
     "allowOnce": "Allow once",
     "allowSession": {
       "categories": "Always allow this session",
-      "unclassified": "Allow all unclassified calls this session",
-      "all": "Allow every such call this session"
+      "unclassified": "Allow unclassified this session",
+      "all": "Allow similar this session"
     },
     "deny": "Deny",
     "denyWithNote": "Deny and tell the model…",

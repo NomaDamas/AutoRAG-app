@@ -521,8 +521,8 @@
     "allowOnce": "한 번만 허용",
     "allowSession": {
       "categories": "이 세션에서 항상 허용",
-      "unclassified": "이 세션에서는 분류되지 않은 호출을 모두 허용",
-      "all": "이 세션에서는 이런 호출을 모두 허용"
+      "unclassified": "이 세션에서 미분류 호출 허용",
+      "all": "이 세션에서 비슷한 명령 허용"
     },
     "deny": "거부",
     "denyWithNote": "거부하고 모델에게 알려주기…",

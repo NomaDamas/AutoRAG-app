@@ -521,8 +521,8 @@
     "allowOnce": "仅允许这一次",
     "allowSession": {
       "categories": "本会话中始终允许",
-      "unclassified": "本会话允许所有无法分类的调用",
-      "all": "本会话允许所有此类调用"
+      "unclassified": "本会话允许未分类调用",
+      "all": "本会话允许同类调用"
     },
     "deny": "拒绝",
     "denyWithNote": "拒绝并告诉模型…",
