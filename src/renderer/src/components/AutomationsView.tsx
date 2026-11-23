@@ -926,15 +926,18 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 											</div>
 										</Section>
 									) : (
-										<button
-											type="button"
-											data-action="automation-composer-open"
-											className="flex w-full items-center gap-8 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-left text-[13px] text-ink-muted cursor-pointer hover:bg-hover-row hover:text-ink"
-											onClick={() => setComposerOpen(true)}
-										>
-											<TabPlusIcon size={16} />
-											{t("automations.create.open")}
-										</button>
+										<div className="ai-glow-host" data-ai-glow>
+											<div className="ai-glow" aria-hidden="true" />
+											<button
+												type="button"
+												data-action="automation-composer-open"
+												className="relative flex w-full items-center gap-8 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-left text-[13px] text-ink-muted cursor-pointer hover:text-ink"
+												onClick={() => setComposerOpen(true)}
+											>
+												<TabPlusIcon size={16} />
+												{t("automations.create.open")}
+											</button>
+										</div>
 									)}
 									{state.rules.length === 0 ? null : (
 										<Section title={t("automations.mine")}>
