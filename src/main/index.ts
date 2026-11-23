@@ -100,7 +100,8 @@ import { ANALYTICS_CHANNELS } from "../shared/analytics-contract";
 import { CONVERSION_CHANNELS } from "../shared/conversion-contract";
 import { SERVICES_CHANNELS } from "../shared/services-contract";
 import { createAutoRagConfigService } from "./autorag-config-service";
-import { createModelStatusService } from "./model-status";
+import { createModelStatusService, modelAcceptsImages } from "./model-status";
+import { createPastedImageStore } from "./pasted-images";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
@@ -586,6 +587,8 @@ app.whenReady().then(async () => {
 		agentFactory: createDefaultAgentFactory({ sessionDir: chatSessionsDirectory }),
 		chatStore,
 		sessions: createChatSessionIndex({ directory: chatSessionsDirectory }),
+		pastedImages: createPastedImageStore({ directory: join(app.getPath("userData"), "pasted-images") }),
+		acceptsImages: () => modelAcceptsImages({ env: process.env, cwd: process.cwd() }),
 		send: sendToMainWindow,
 		analytics,
 		interaction: interactionHub,

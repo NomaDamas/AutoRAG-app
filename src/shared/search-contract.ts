@@ -42,6 +42,7 @@ export const SEARCH_CHANNELS = {
 	historyGet: "search:historyGet",
 	historySearch: "search:historySearch",
 	historyClear: "search:historyClear",
+	pasteImage: "search:pasteImage",
 } as const;
 
 /**
@@ -189,6 +190,11 @@ export interface SearchBridge {
 	 */
 	steer(searchId: string, text: string): Promise<boolean>;
 	cancel(searchId: string): Promise<void>;
+	/**
+	 * Keep an image pasted from the clipboard (`base64` is the file's bytes) and return the file attachment that stands for
+	 * it. null when nothing was kept: the model takes no images, or the image is not a PNG, JPEG, GIF or WebP.
+	 */
+	pasteImage(mimeType: string, base64: string): Promise<ChatAttachment | null>;
 	historyList(): Promise<readonly ChatSummary[]>;
 	historyGet(chatId: string): Promise<ChatRecord | null>;
 	historySearch(query: string): Promise<readonly ChatSummary[]>;
