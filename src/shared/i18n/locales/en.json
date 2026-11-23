@@ -300,7 +300,8 @@
       "evidenceFolder": "Sources Folder",
       "evidenceFolderTooltip": "Open this session's source files in a temporary folder tab",
       "openPreview": "Preview at the cited passage",
-      "newSource": "New source {{number}}"
+      "newSource": "New source {{number}}",
+      "emptyHint": "The sources behind an answer appear here"
     },
     "chat": {
       "title": "AI Agent",

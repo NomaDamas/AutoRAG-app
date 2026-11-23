@@ -300,7 +300,8 @@
       "evidenceFolder": "出典フォルダ",
       "evidenceFolderTooltip": "この会話の出典ファイルを一時フォルダタブで開く",
       "openPreview": "引用箇所をプレビューで表示",
-      "newSource": "新しい出典 {{number}}"
+      "newSource": "新しい出典 {{number}}",
+      "emptyHint": "回答の根拠がここに表示されます"
     },
     "chat": {
       "title": "AI エージェント",

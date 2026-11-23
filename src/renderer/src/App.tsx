@@ -1096,7 +1096,56 @@ export function App(): ReactElement {
 							// Settings pages other than 사이드바, 우클릭 메뉴 and 단축키 have no AI: the sidebar shows only the faded mark (Figma 367:8769).
 							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
-							<AutomationInspector rule={automations.selectedRule} state={automations.props.state} draft={automations.draft} onEdit={automations.edit} onDelete={automations.askDelete} onSelect={automations.props.onSelect} />
+							<AutomationInspector
+								rule={automations.selectedRule}
+								state={automations.props.state}
+								draft={automations.draft}
+								onEdit={automations.edit}
+								onDelete={automations.askDelete}
+								onSelect={automations.props.onSelect}
+								// The 자동화 tab's sidebar asks the AI agent like the file inspector does, about no file: the agent manages automations itself.
+								chatDock={
+									chatTabId === null ? undefined : (
+										<InspectorChatDock
+											tab={chatTab}
+											now={chatNow}
+											targets={[]}
+											running={chatRunning}
+											request={chatRequest}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, [], true)}
+											onSummarize={() => undefined}
+											onStop={inspectorChats.stop}
+											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
+										/>
+									)
+								}
+								chatView={
+									chatTabId === null || chatTab.chat === null || chatTab.mode !== "chat" ? null : (
+										<InspectorChatView
+											tab={chatTab}
+											targetName={t("places.automations")}
+											pending={[]}
+											running={chatLive}
+											request={chatRequest}
+											imageActions={imageActions}
+											onAsk={(text) => inspectorChats.ask(chatTabId, text, [], false)}
+											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
+											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
+											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
+											onStop={inspectorChats.stop}
+											onBack={() => inspectorChats.setMode(chatTabId, "info")}
+											onNewChat={() => inspectorChats.reset(chatTabId)}
+											onExpand={() => {
+												if (chatTab.chat !== null) openChatInAiTab(chatTab.chat.chatId);
+											}}
+											onOpenChat={(chatId) => inspectorChats.open(chatTabId, chatId)}
+											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
+											onReveal={(target) => finder?.revealEvidence(target)}
+											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}
+										/>
+									)
+								}
+							/>
 						) : (
 							<Inspector
 								entry={inspectorEntry}

@@ -300,7 +300,8 @@
       "evidenceFolder": "来源文件夹",
       "evidenceFolderTooltip": "在临时文件夹标签页中打开当前对话的来源文件",
       "openPreview": "在预览中查看引用段落",
-      "newSource": "新来源 {{number}}"
+      "newSource": "新来源 {{number}}",
+      "emptyHint": "回答的依据会显示在这里"
     },
     "chat": {
       "title": "AI 智能体",

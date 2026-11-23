@@ -26,6 +26,10 @@ export interface AutomationInspectorProps {
 	readonly onDelete: (rule: AutomationRule) => void;
 	/** A row of 최근 실행: pick its rule. */
 	readonly onSelect?: (id: string) => void;
+	/** The ask-anything box at the foot, the same one the file inspector has. */
+	readonly chatDock?: ReactNode;
+	/** The conversation that box started, shown in place of the rule while it is open. */
+	readonly chatView?: ReactNode;
 }
 
 /** A rule's action as its glyph: the search index refresh, an AI Search run, or any other program. */
@@ -215,8 +219,15 @@ function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; r
 	);
 }
 
-export function AutomationInspector({ rule, state, draft = null, onEdit, onDelete, onSelect }: AutomationInspectorProps): ReactElement {
+export function AutomationInspector({ rule, state, draft = null, onEdit, onDelete, onSelect, chatDock, chatView }: AutomationInspectorProps): ReactElement {
 	const { t } = useTranslation();
+	if (chatView !== undefined && chatView !== null) {
+		return (
+			<aside className="inspector w-full min-w-0 flex-1 min-h-0 flex flex-col bg-subtle overflow-hidden" aria-label={t("finderComponents.inspectorAside")}>
+				{chatView}
+			</aside>
+		);
+	}
 	return (
 		<aside className="inspector w-full min-w-0 flex-1 min-h-0 flex flex-col bg-subtle overflow-hidden" aria-label={t("finderComponents.inspectorAside")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
@@ -230,6 +241,7 @@ export function AutomationInspector({ rule, state, draft = null, onEdit, onDelet
 					<Activity state={state} onSelect={onSelect} />
 				)}
 			</div>
+			{chatDock === undefined || chatDock === null ? null : <div className="inspector-dock-slot flex-none bg-subtle">{chatDock}</div>}
 		</aside>
 	);
 }
