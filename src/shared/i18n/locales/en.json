@@ -613,7 +613,8 @@
     "confirm": {
       "title": "Delete the rule “{{title}}”?",
       "message": "Only the rule is removed; the folder and its files stay as they are.",
-      "action": "Delete"
+      "action": "Delete",
+      "deleting": "Deleting…"
     },
     "toast": {
       "deleted": "Deleted the rule “{{title}}”.",
@@ -1894,6 +1895,8 @@
       "addMagicAction": "Add Magic Action",
       "editMagicAction": "Edit {{name}}",
       "removeMagicAction": "Remove {{name}}",
+      "removeMagicConfirmTitle": "Delete the magic action “{{name}}”?",
+      "removeMagicConfirmBody": "It disappears from the right-click menu, and the deletion can’t be undone.",
       "condSingle": "Single item",
       "condMultiple": "Multiple items",
       "condAnySelection": "Single or multiple",

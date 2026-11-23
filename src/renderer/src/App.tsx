@@ -1339,6 +1339,7 @@ export function App(): ReactElement {
 					confirmLabel={t("automations.confirm.action")}
 					cancelLabel={t("common.cancel")}
 					danger
+					busyLabel={automations.deleting ? t("automations.confirm.deleting") : null}
 					onConfirm={() => void automations.confirmDelete()}
 					onCancel={automations.cancelDelete}
 				/>

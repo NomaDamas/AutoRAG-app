@@ -613,7 +613,8 @@
     "confirm": {
       "title": "‘{{title}}’ 규칙을 삭제할까요?",
       "message": "규칙만 삭제되고 폴더와 파일은 그대로 유지됩니다.",
-      "action": "삭제"
+      "action": "삭제",
+      "deleting": "삭제 중…"
     },
     "toast": {
       "deleted": "‘{{title}}’ 규칙을 삭제했습니다.",
@@ -1894,6 +1895,8 @@
       "addMagicAction": "매직 액션 만들기",
       "editMagicAction": "{{name}} 수정",
       "removeMagicAction": "{{name}} 삭제",
+      "removeMagicConfirmTitle": "‘{{name}}’ 매직 액션을 삭제할까요?",
+      "removeMagicConfirmBody": "우클릭 메뉴에서 이 액션이 사라지며, 삭제한 뒤에는 되돌릴 수 없습니다.",
       "condSingle": "단일 항목",
       "condMultiple": "여러 항목 묶음",
       "condAnySelection": "단일·복수 모두",

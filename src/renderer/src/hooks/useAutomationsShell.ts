@@ -48,6 +48,8 @@ export interface AutomationsShell {
 	readonly closePreview: () => void;
 	readonly confirmDelete: () => Promise<void>;
 	readonly cancelDelete: () => void;
+	/** The confirmed delete is running: the confirm stays up and reads 삭제 중… until it is done. */
+	readonly deleting: boolean;
 	readonly menuSelect: (action: FinderMenuAction, format: unknown, serviceId: unknown, tagName: unknown) => void;
 	readonly closeMenu: () => void;
 	/** A rule row's right-click menu from a folder inspector: adds "show in list". */
@@ -79,6 +81,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
+	const [deleting, setDeleting] = useState(false);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
 	const [undoMessage, setUndoMessage] = useState<string | null>(null);
 	const undoTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -115,14 +118,17 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 
 	const confirmDelete = useCallback(async () => {
 		const rule = byId(confirmId);
-		setConfirmId(null);
-		if (rule === null) return;
+		if (rule === null || deleting) return;
 		const index = rules.findIndex((candidate) => candidate.id === rule.id);
+		setDeleting(true);
 		try {
 			await store.remove(rule.id);
 		} catch (cause) {
 			latest.current.onError(cause instanceof Error ? cause.message : String(cause));
 			return;
+		} finally {
+			setDeleting(false);
+			setConfirmId(null);
 		}
 		const left = rules.filter((candidate) => candidate.id !== rule.id);
 		// A rule deleted from its own page leaves for the list.
@@ -136,7 +142,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			setUndoMessage(null);
 			store.clearUndo();
 		}, UNDO_MS);
-	}, [byId, confirmId, rules, store, clearUndoTimer]);
+	}, [byId, confirmId, deleting, rules, store, clearUndoTimer]);
 
 	const dismissUndoToast = useCallback(() => {
 		clearUndoTimer();
@@ -237,7 +243,9 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 					if (selectedRule !== null) askDelete(selectedRule);
 					return;
 				case "dismiss":
-					if (confirmId !== null) setConfirmId(null);
+					if (confirmId !== null) {
+						if (!deleting) setConfirmId(null);
+					}
 					else if (menuState !== null) setMenuState(null);
 					else setPreviewId(null);
 					return;
@@ -245,7 +253,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		};
 		window.addEventListener("keydown", onKeyDown);
 		return () => window.removeEventListener("keydown", onKeyDown);
-	}, [active, askDelete, confirmId, edit, menuState, previewId, rules, selectedId, selectedRule]);
+	}, [active, askDelete, confirmId, deleting, edit, menuState, previewId, rules, selectedId, selectedRule]);
 
 	// Quick Look belongs to the list tab. A menu or confirm may have been opened from a folder inspector, so they stay.
 	useEffect(() => {
@@ -335,7 +343,10 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		},
 		closePreview: () => setPreviewId(null),
 		confirmDelete,
-		cancelDelete: () => setConfirmId(null),
+		cancelDelete: () => {
+			if (!deleting) setConfirmId(null);
+		},
+		deleting,
 		menuSelect,
 		closeMenu,
 		openRuleMenu: (rule, cursor) => setMenuState({ ruleId: rule.id, cursor, fromFolder: true }),

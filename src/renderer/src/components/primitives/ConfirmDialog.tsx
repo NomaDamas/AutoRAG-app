@@ -13,6 +13,7 @@ export function ConfirmDialog({
 	confirmLabel,
 	cancelLabel,
 	danger = false,
+	busyLabel = null,
 	onConfirm,
 	onCancel,
 }: {
@@ -22,6 +23,8 @@ export function ConfirmDialog({
 	readonly cancelLabel: string;
 	/** The confirm runs a destructive action, so it carries the danger styling. */
 	readonly danger?: boolean;
+	/** While the action runs: the confirm reads this, and neither button nor the backdrop answers. */
+	readonly busyLabel?: string | null;
 	readonly onConfirm: () => void;
 	readonly onCancel: () => void;
 }): ReactElement {
@@ -30,7 +33,7 @@ export function ConfirmDialog({
 			className="fixed inset-0 z-80 flex items-center justify-center bg-black/30"
 			role="presentation"
 			onMouseDown={(event) => {
-				if (event.target === event.currentTarget) onCancel();
+				if (event.target === event.currentTarget && busyLabel === null) onCancel();
 			}}
 		>
 			<div
@@ -38,6 +41,7 @@ export function ConfirmDialog({
 				role="alertdialog"
 				aria-modal="true"
 				aria-label={title}
+				aria-busy={busyLabel !== null}
 			>
 				<div className="flex flex-col gap-6">
 					<strong className="text-[13px] font-bold leading-[17px] text-ink">{title}</strong>
@@ -50,6 +54,7 @@ export function ConfirmDialog({
 						type="button"
 						className="linear-btn"
 						autoFocus
+						disabled={busyLabel !== null}
 						onClick={onCancel}
 					>
 						{cancelLabel}
@@ -57,9 +62,11 @@ export function ConfirmDialog({
 					<button
 						type="button"
 						className={danger ? "linear-btn is-danger is-danger-solid" : "linear-btn"}
+						disabled={busyLabel !== null}
+						data-busy={busyLabel !== null || undefined}
 						onClick={onConfirm}
 					>
-						{confirmLabel}
+						{busyLabel ?? confirmLabel}
 					</button>
 				</div>
 			</div>

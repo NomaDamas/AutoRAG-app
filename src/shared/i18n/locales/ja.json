@@ -613,7 +613,8 @@
     "confirm": {
       "title": "ルール「{{title}}」を削除しますか?",
       "message": "ルールだけが削除され、フォルダとファイルはそのまま残ります。",
-      "action": "削除"
+      "action": "削除",
+      "deleting": "削除中…"
     },
     "toast": {
       "deleted": "ルール「{{title}}」を削除しました。",
@@ -1894,6 +1895,8 @@
       "addMagicAction": "マジックアクションを追加",
       "editMagicAction": "{{name}} を編集",
       "removeMagicAction": "{{name}} を削除",
+      "removeMagicConfirmTitle": "マジックアクション「{{name}}」を削除しますか？",
+      "removeMagicConfirmBody": "右クリックメニューからこのアクションが消え、削除後は元に戻せません。",
       "condSingle": "単一項目",
       "condMultiple": "複数選択",
       "condAnySelection": "単一・複数すべて",

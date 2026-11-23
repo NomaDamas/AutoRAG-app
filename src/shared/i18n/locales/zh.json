@@ -613,7 +613,8 @@
     "confirm": {
       "title": "要删除规则“{{title}}”吗？",
       "message": "只会删除这条规则，文件夹和文件保持不变。",
-      "action": "删除"
+      "action": "删除",
+      "deleting": "正在删除…"
     },
     "toast": {
       "deleted": "已删除规则“{{title}}”。",
@@ -1894,6 +1895,8 @@
       "addMagicAction": "添加魔法动作",
       "editMagicAction": "编辑 {{name}}",
       "removeMagicAction": "删除 {{name}}",
+      "removeMagicConfirmTitle": "要删除魔法操作“{{name}}”吗？",
+      "removeMagicConfirmBody": "此操作将从右键菜单中消失，删除后无法恢复。",
       "condSingle": "单个项目",
       "condMultiple": "多项批量",
       "condAnySelection": "单选或多选",

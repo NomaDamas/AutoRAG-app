@@ -223,6 +223,36 @@ describe("deleting", () => {
 		expect(h.store.getSnapshot().state.rules).toHaveLength(2);
 	});
 
+	it("keeps the confirm up as 삭제 중… until the delete is done, and Esc cannot close it meanwhile", async () => {
+		const h = await mount([rule("a"), rule("b")]);
+		const remove = h.bridge.remove;
+		let finish: () => void = () => undefined;
+		const gate = new Promise<void>((resolve) => {
+			finish = resolve;
+		});
+		h.bridge.remove = async (id) => {
+			await gate;
+			return remove(id);
+		};
+		act(() => h.shell().props.onSelect("a"));
+		press("Backspace", { metaKey: true });
+		let done: Promise<void> = Promise.resolve();
+		act(() => {
+			done = h.shell().confirmDelete();
+		});
+		expect(h.shell().deleting).toBe(true);
+		expect(h.shell().confirm?.id).toBe("a");
+		act(() => h.shell().cancelDelete());
+		expect(h.shell().confirm?.id).toBe("a");
+		await act(async () => {
+			finish();
+			await done;
+		});
+		expect(h.shell().deleting).toBe(false);
+		expect(h.shell().confirm).toBeNull();
+		expect(h.store.getSnapshot().state.rules.map((item) => item.id)).toEqual(["b"]);
+	});
+
 	it("deletes on confirm, selects the neighbour, and offers undo that expires", async () => {
 		const h = await mount([rule("a"), rule("b"), rule("c")]);
 		act(() => h.shell().props.onSelect("b"));
