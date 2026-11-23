@@ -14,7 +14,6 @@ import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
-import { ZapIcon } from "./components/icons";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
@@ -1001,7 +1000,6 @@ export function App(): ReactElement {
 				<div className="flex min-w-0 min-h-0 flex-col" style={settingsOpen ? HIDDEN_STYLE : undefined}>
 					<Toolbar
 						title={toolbarTitle}
-						titleIcon={automationsTabActive ? <ZapIcon size={14} /> : undefined}
 						canGoBack={finder?.canGoBack ?? false}
 						canGoForward={finder?.canGoForward ?? false}
 						onBack={() => finder?.back()}

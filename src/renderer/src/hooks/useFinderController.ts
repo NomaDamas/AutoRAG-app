@@ -93,29 +93,7 @@ import {
 	type VersionFamilyView,
 	type VersionRelation,
 } from "../state/version-family";
-import {
-	activeTab,
-	AI_SEARCH_PATH,
-	applyColumnChoice,
-	exitVirtualTab,
-	goBack,
-	goForward,
-	isVirtualTabPath,
-	navigateTab,
-	openAiSearchTab,
-	openEvidenceFolderTab,
-	openOrSelectFolderTab,
-	openTab,
-	openTabAt,
-	openTabRevealing,
-	patchActiveTab,
-	selectTab,
-	setActiveTabGrouping,
-	setActiveTabSort,
-	showAiSearchInActiveTab,
-	tabTitle,
-	type TabsState,
-} from "../state/tabs";
+import { activeTab, AI_SEARCH_PATH, applyColumnChoice, exitVirtualTab, goBack, goForward, isVirtualTabPath, navigateTab, openAiSearchTab, openEvidenceFolderTab, openOrSelectFolderTab, openTab, openTabAt, openTabRevealing, patchActiveTab, selectTab, setActiveTabGrouping, setActiveTabSort, showAiSearchInActiveTab, tabTitle, type TabsState, AUTOMATIONS_PATH } from "../state/tabs";
 import {
 	closeWorkspaceTab,
 	evacuateWorkspace,
@@ -2328,6 +2306,7 @@ export function useFinderController(
 					active,
 					flash: current.flash,
 					aiSearch: current.path === AI_SEARCH_PATH,
+					automations: current.path === AUTOMATIONS_PATH,
 				};
 			}),
 		// `t` changes identity with the language, so fixed titles (Settings, AI Search) re-translate.

@@ -2,7 +2,7 @@ import type { DragEvent, MouseEvent, ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/cn";
 import { useFormattedShortcut } from "../hooks/useShortcutSettings";
-import { SparklesIcon, TabCloseIcon, TabPlusIcon } from "./icons";
+import { SparklesIcon, TabCloseIcon, TabPlusIcon, ZapIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface TabView {
@@ -12,6 +12,8 @@ export interface TabView {
 	readonly flash: boolean;
 	/** The tab shows the AI Search chat: a drop on it attaches instead of moving files. */
 	readonly aiSearch: boolean;
+	/** The tab shows the 자동화 list: it leads with the bolt, as the AI Search tab leads with its sparkles. */
+	readonly automations?: boolean;
 }
 
 const TAB_GRADIENT = "bg-[linear-gradient(var(--tab-grad-from),var(--tab-grad-to))]";
@@ -100,7 +102,7 @@ export function TabStrip({
 							onSelect(tab.id);
 						}}
 					>
-						{tab.aiSearch ? <SparklesIcon size={11} className="flex-none text-accent" /> : null}
+						{tab.aiSearch ? <SparklesIcon size={11} className="flex-none text-accent" /> : tab.automations === true ? <ZapIcon size={11} className="flex-none text-accent" /> : null}
 						<span className="min-w-0 truncate">{tab.title}</span>
 					</button>
 					{canClose ? (
