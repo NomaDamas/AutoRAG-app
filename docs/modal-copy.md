@@ -8,7 +8,14 @@ own idiom (see `AGENTS.md` "User-facing text and translations").
 ## Tone
 
 - Korean is written in the **~합니다** style: 삭제됩니다, 입력하세요,
-  필요합니다. Not ~해요, not ~해 주세요.
+  필요합니다. Not ~해요, not ~해 주세요. This holds beyond modals too: toasts,
+  banners, inline errors, hints, and the messages the main process shows.
+- Three kinds of text keep their own voice:
+  - First-run onboarding and the tutorials (`firstRun.*`, `tutorials.*`,
+    `main.onboarding.*`) speak in ~해요.
+  - A chat field's placeholder is a request to the assistant
+    (`원하는 구성을 말해 주세요`).
+  - A line set in a Figma frame is written as designed.
 - Never blame the person: 형식을 확인하세요, not 잘못 입력했습니다.
 - Error codes and raw technical output do not go in the body. Show them
   separately, under a details control or in the error box.
