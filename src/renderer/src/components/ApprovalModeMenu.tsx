@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, ShieldAlert, ShieldCheck, ShieldQuestion, type LucideIcon } from "lucide-react";
+import type { LocaleKey } from "../../../shared/i18n/core";
 import { APPROVAL_MODES, DEFAULT_APPROVAL_MODE, type ApprovalMode } from "../../../shared/interaction-contract";
 import { cn } from "../lib/cn";
 import { menuPlacement } from "../state/context-menu";
@@ -180,7 +181,6 @@ export function ApprovalModeMenu({ mode, onChange, compact = false }: ApprovalMo
 					}}
 				>
 					{APPROVAL_MODES.map((option) => {
-						const Icon = MODE_ICON[option];
 						const selected = option === mode;
 						return (
 							<button
@@ -198,12 +198,13 @@ export function ApprovalModeMenu({ mode, onChange, compact = false }: ApprovalMo
 								<span className="flex size-16 flex-none items-center justify-center pt-1">
 									{selected ? <CheckIcon /> : null}
 								</span>
+								{/* Figma 606:3625: one shield for every row; the menu says what each mode does to you, the pill keeps its short name. */}
 								<span className="min-w-0 flex-1">
-									<span className="flex items-center gap-5 text-sm font-medium">
-										<Icon size={13} />
-										{t(modeLabelKey(option))}
+									<span className="flex items-center gap-5 text-[13px] font-medium leading-[18px]">
+										<ShieldCheck size={13} />
+										{t(`interaction.mode.${option}.option` as LocaleKey)}
 									</span>
-									<span className="mt-2 block text-badge font-normal leading-[1.4] text-ink-muted">{t(modeDescriptionKey(option))}</span>
+									<span className="mt-2 block whitespace-pre-line text-badge font-normal leading-[16px] text-ink-muted">{t(modeDescriptionKey(option))}</span>
 								</span>
 							</button>
 						);

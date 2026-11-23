@@ -25,6 +25,8 @@ export interface AutomationsViewProps {
 	readonly onAdd: () => void;
 	/** 만들기: write the rule; resolves true once it is in the rules file. */
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** The rule the 새 자동화 card would write, once the person has touched it; null when the card is untouched. */
+	readonly onDraftChange?: ((draft: AutomationRule | null) => void) | undefined;
 	readonly onPreview: (id: string) => void;
 	readonly onAskDelete: (id: string) => void;
 	readonly onSetDaemon: (enabled: boolean) => void;
@@ -188,7 +190,32 @@ function standardFolders(locations: readonly FsLocation[]): readonly ChipOption<
 	});
 }
 
-function NewAutomationCard({ onCreate, filled }: { readonly onCreate: AutomationsViewProps["onCreate"]; readonly filled: { readonly template: Template; readonly at: number } | null }): ReactElement {
+/** The card's choices as the rule they would make, so the inspector can say it in the rules' own sentence. */
+function draftRule(folder: string, kind: KindId, event: EventId, task: string, mode: ModeId, run: readonly string[] | null): AutomationRule {
+	return {
+		id: "draft",
+		paths: [folder],
+		events: EVENTS[event],
+		include: KIND_GLOBS[kind],
+		exclude: [],
+		run: run ?? [],
+		...(run === null ? { agent: { profile: PROFILES[mode], task } } : {}),
+		appendFiles: true,
+		debounceMs: 0,
+		timeoutMs: 0,
+		lastRun: null,
+	};
+}
+
+function NewAutomationCard({
+	onCreate,
+	onDraftChange,
+	filled,
+}: {
+	readonly onCreate: AutomationsViewProps["onCreate"];
+	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
+	readonly filled: { readonly template: Template; readonly at: number } | null;
+}): ReactElement {
 	const { t } = useTranslation();
 	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
 	const [folder, setFolder] = useState<string | null>(null);
@@ -198,6 +225,8 @@ function NewAutomationCard({ onCreate, filled }: { readonly onCreate: Automation
 	const [mode, setMode] = useState<ModeId>("read");
 	const [run, setRun] = useState<readonly string[] | null>(null);
 	const [busy, setBusy] = useState(false);
+	// The inspector speaks about the card only once the person has started on it.
+	const [touched, setTouched] = useState(false);
 	const taskRef = useRef<HTMLTextAreaElement>(null);
 
 	useEffect(() => {
@@ -228,11 +257,21 @@ function NewAutomationCard({ onCreate, filled }: { readonly onCreate: Automation
 		setMode(template.mode);
 		setTask(t(`automations.templates.${template.id}.task`));
 		setRun(template.run ?? null);
+		setTouched(true);
 		taskRef.current?.focus();
 		// The locations are read once; the template is what changes.
 	}, [filled]);
 
 	const canCreate = !busy && chosenFolder !== null && task.trim().length > 0;
+
+	useEffect(() => {
+		onDraftChange?.(touched && chosenFolder !== null ? draftRule(chosenFolder, kind, event, task.trim(), mode, run) : null);
+	}, [touched, chosenFolder, kind, event, task, mode, run]);
+	useEffect(() => () => onDraftChange?.(null), []);
+	const touch = <T,>(set: (value: T) => void) => (value: T): void => {
+		set(value);
+		setTouched(true);
+	};
 	const create = async (): Promise<void> => {
 		if (!canCreate || chosenFolder === null) return;
 		setBusy(true);
@@ -247,6 +286,7 @@ function NewAutomationCard({ onCreate, filled }: { readonly onCreate: Automation
 		if (ok) {
 			setTask("");
 			setRun(null);
+			setTouched(false);
 		}
 	};
 
@@ -264,11 +304,11 @@ function NewAutomationCard({ onCreate, filled }: { readonly onCreate: Automation
 				label={chosenFolder === null ? t("automations.create.pickFolder") : folderLabel(chosenFolder)}
 				icon={<FolderGlyph size={13} />}
 				testId="automation-new-folder"
-				onChange={setFolder}
+				onChange={touch(setFolder)}
 			/>
 		),
-		kind: <ChipSelect value={kind} options={kinds} label={t("automations.create.kindLabel")} testId="automation-new-kind" onChange={setKind} />,
-		event: <ChipSelect value={event} options={events} label={t("automations.create.eventLabel")} testId="automation-new-event" onChange={setEvent} />,
+		kind: <ChipSelect value={kind} options={kinds} label={t("automations.create.kindLabel")} testId="automation-new-kind" onChange={touch(setKind)} />,
+		event: <ChipSelect value={event} options={events} label={t("automations.create.eventLabel")} testId="automation-new-event" onChange={touch(setEvent)} />,
 	};
 	// The sentence's word order is the language's: the chips sit where its {{folder}}, {{kind}} and {{event}} are.
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
@@ -295,12 +335,13 @@ function NewAutomationCard({ onCreate, filled }: { readonly onCreate: Automation
 				className="h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] text-ink outline-none placeholder:text-ink-faint focus:border-accent"
 				onChange={(change) => {
 					setTask(change.target.value);
+					setTouched(true);
 					// Typing over a program template's words makes it an instruction for the agent.
 					setRun(null);
 				}}
 			/>
 			<div className="flex items-center gap-6">
-				{run === null ? <ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={setMode} /> : null}
+				{run === null ? <ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode)} /> : null}
 				<span className="flex-1" />
 				<button
 					type="button"
@@ -415,7 +456,7 @@ function BackgroundLine({
 	);
 }
 
-export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onCreate, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onCreate, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
 	const broken = state.configError !== null;
@@ -444,7 +485,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 					) : !state.ready ? null : (
 						<>
 							<Section title={t("automations.create.title")}>
-								<NewAutomationCard onCreate={onCreate} filled={filled} />
+								<NewAutomationCard onCreate={onCreate} onDraftChange={onDraftChange} filled={filled} />
 							</Section>
 							{state.rules.length === 0 ? null : (
 								<Section title={t("automations.mine")}>

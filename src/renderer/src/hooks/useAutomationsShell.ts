@@ -29,6 +29,8 @@ export interface AutomationsShell {
 	/** Everything the list view takes, ready to spread. */
 	readonly props: AutomationsViewProps;
 	readonly selectedRule: AutomationRule | null;
+	/** The rule the 새 자동화 card is making, for the inspector while nothing is picked. */
+	readonly draft: AutomationRule | null;
 	readonly preview: AutomationRule | null;
 	readonly confirm: AutomationRule | null;
 	readonly menu: { readonly cursor: { readonly x: number; readonly y: number }; readonly entries: readonly FinderMenuEntry[] } | null;
@@ -68,6 +70,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	const { store, view, active } = deps;
 	const rules = view.state.rules;
 	const [selectedId, setSelectedId] = useState<string | null>(null);
+	const [draft, setDraft] = useState<AutomationRule | null>(null);
 	const [previewId, setPreviewId] = useState<string | null>(null);
 	const [confirmId, setConfirmId] = useState<string | null>(null);
 	const [menuState, setMenuState] = useState<MenuState | null>(null);
@@ -254,6 +257,11 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 				return false;
 			}
 		},
+		onDraftChange: (next) => {
+			setDraft(next);
+			// Making a rule takes the inspector over from the one picked.
+			if (next !== null) setSelectedId(null);
+		},
 		onPreview: (id) => {
 			setSelectedId(id);
 			setPreviewId(id);
@@ -276,6 +284,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	return {
 		props,
 		selectedRule,
+		draft,
 		preview,
 		confirm,
 		menu,

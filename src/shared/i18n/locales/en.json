@@ -154,20 +154,20 @@
       "levelLabel": "Compression strength",
       "recommended": "Recommended",
       "levels": {
-        "light": "Light (High quality)",
+        "light": "Light",
         "balanced": "Balanced",
-        "max": "Maximum (Smallest size)"
+        "max": "Maximum"
       },
       "specs": {
         "pdf": {
-          "light": "High quality · up to 1600px (~30–65% off)",
-          "balanced": "Standard · up to 1280px (~55–80% off)",
-          "max": "Smallest · up to 960px (~75–90% off)"
+          "light": "High quality (~30–65% off)",
+          "balanced": "Standard (~55–80% off)",
+          "max": "Smallest (~75–90% off)"
         },
         "image": {
-          "light": "High quality · 256-color/2560px (~35–60% off)",
-          "balanced": "Balanced · up to 1920px (~55–75% off)",
-          "max": "Smallest · up to 1280px (~70–85% off)"
+          "light": "High quality (~35–60% off)",
+          "balanced": "Balanced (~55–75% off)",
+          "max": "Smallest (~70–85% off)"
         },
         "video": {
           "light": "Original res · ~35%+ bitrate cut",
@@ -185,7 +185,8 @@
       "copyMode": "Save a copy",
       "replaceHint": "Moves the original to the Trash and replaces “{{name}}” in place.",
       "copyHint": "Keeps the original and saves “{{copyName}}” alongside it.",
-      "workingHint": "The original file stays untouched until compression finishes."
+      "workingHint": "The original file stays untouched until compression finishes.",
+      "working": "Reducing size…"
     }
   },
   "contextMenu": {
@@ -478,15 +479,18 @@
       "triggerAria": "File change approval mode",
       "ask": {
         "label": "Ask",
-        "desc": "Asks before every shell, write, or edit call. Nothing runs without approval; reading and searching never ask."
+        "desc": "Asks every time before changing a file or running a command.\nReading and searching never ask.",
+        "option": "Always ask"
       },
       "auto": {
         "label": "Auto",
-        "desc": "Dazzi's judgment model lets safe changes through and asks only about changes to existing files it is unsure about."
+        "desc": "Goes ahead with work that matches your request and asks only about work it is not sure of.",
+        "option": "Ask when unsure"
       },
       "full": {
         "label": "Full",
-        "desc": "Changes files without asking."
+        "desc": "Changes files and runs commands without asking.",
+        "option": "Don't ask"
       }
     },
     "stop": "Stop",
@@ -589,7 +593,11 @@
       "serviceOff": "off",
       "failedRules": "{{count}} failed — {{name}}",
       "recentRuns": "Recent runs",
-      "noRuns": "Nothing has run yet"
+      "noRuns": "Nothing has run yet",
+      "draftRule": "Automation rule",
+      "agentDoes": "AI: “{{task}}”",
+      "matches": "Files that match: {{count}}",
+      "noMatches": "No files match right now"
     },
     "quickLook": {
       "when": "When",

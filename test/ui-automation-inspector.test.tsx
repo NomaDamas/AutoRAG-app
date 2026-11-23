@@ -197,6 +197,25 @@ describe("AutomationInspector", () => {
 		expect(text()).toContain("아직 실행되지 않았습니다");
 	});
 
+	it("says the rule the 새 자동화 card is making and lists the files it would take, newest first (Figma 611:4016)", async () => {
+		const file = (name: string, ext: string, ago: number) => ({ name, path: `/Users/jeffrey/Downloads/${name}`, kind: "file" as const, ext, size: 1, mtimeMs: Date.now() - ago * MIN, birthtimeMs: 0 });
+		Reflect.set(globalThis, "autorag", {
+			fs: { listDir: async () => ({ path: "/Users/jeffrey/Downloads", entries: [file("old.pdf", "pdf", 600), file("note.txt", "txt", 1), file("new.pdf", "pdf", 5)] }) },
+		});
+		const draft = rule({ id: "draft", run: [], agent: { profile: "file-triage", task: "요약해 줘" }, lastRun: null });
+		await act(async () => {
+			root.render(<AutomationInspector rule={null} draft={draft} onEdit={noop} onDelete={noop} />);
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		expect(text()).toContain("자동화 규칙");
+		expect(text()).toContain(whenText(draft));
+		expect(text()).toContain("AI가 「요약해 줘」");
+		expect(text()).toContain("조건에 맞는 파일 2개");
+		expect([...host.querySelectorAll<HTMLElement>("[data-match]")].map((row) => row.dataset.match)).toEqual(["new.pdf", "old.pdf"]);
+		Reflect.deleteProperty(globalThis, "autorag");
+	});
+
 	it("reads in English", async () => {
 		await act(() => setAppLanguage("en"));
 		const shown = rule();

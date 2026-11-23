@@ -1084,7 +1084,7 @@ export function App(): ReactElement {
 							// Settings pages other than 사이드바, 우클릭 메뉴 and 단축키 have no AI: the sidebar shows only the faded mark (Figma 367:8769).
 							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
-							<AutomationInspector rule={automations.selectedRule} state={automations.props.state} onEdit={automations.edit} onDelete={automations.askDelete} onSelect={automations.props.onSelect} />
+							<AutomationInspector rule={automations.selectedRule} state={automations.props.state} draft={automations.draft} onEdit={automations.edit} onDelete={automations.askDelete} onSelect={automations.props.onSelect} />
 						) : (
 							<Inspector
 								entry={inspectorEntry}

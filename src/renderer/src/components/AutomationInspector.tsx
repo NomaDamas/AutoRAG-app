@@ -7,17 +7,20 @@
  * Every sentence comes from `state/automations`; this file only lays them out.
  */
 
-import type { ReactElement, ReactNode } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { AutomationRule, AutomationsSnapshot } from "../../../shared/automation-contract";
+import type { FsEntry } from "../../../shared/fs-contract";
 import { agentAccessText, failReason, relativeTime, ruleTitle, runTone, whatText, whenText } from "../state/automations";
 import { RunDot } from "./AutomationsView";
-import { CircleXIcon, RefreshIcon, SparklesIcon, ZapIcon } from "./icons";
+import { CircleXIcon, FileIcon, RefreshIcon, SparklesIcon, ZapIcon } from "./icons";
 
 export interface AutomationInspectorProps {
 	readonly rule: AutomationRule | null;
 	/** The tab's rules and service, for the recent activity shown while no rule is picked. */
 	readonly state?: AutomationsSnapshot;
+	/** The rule the 새 자동화 card is making; shown while no rule is picked. */
+	readonly draft?: AutomationRule | null;
 	readonly onEdit: (rule: AutomationRule) => void;
 	readonly onDelete: (rule: AutomationRule) => void;
 	/** A row of 최근 실행: pick its rule. */
@@ -110,6 +113,72 @@ function Activity({ state, onSelect }: { readonly state: AutomationsSnapshot; re
 	);
 }
 
+/** Shown at most in the list of files the rule would take now. */
+const MATCHES_SHOWN = 3;
+
+/** Whether a file is one the rule's `include` takes: every file, or one of its extension patterns. */
+function takes(rule: AutomationRule, entry: FsEntry): boolean {
+	if (entry.kind !== "file") return false;
+	if (rule.include.length === 0) return true;
+	return rule.include.some((pattern) => /\*\.([A-Za-z0-9]+)$/.exec(pattern)?.[1]?.toLowerCase() === entry.ext);
+}
+
+/**
+ * The rule the 새 자동화 card is making (Figma 611:4016): its sentence, and the files already in its folder that it
+ * would take, newest first, so the person sees what the rule is about before making it.
+ */
+function DraftBody({ rule }: { readonly rule: AutomationRule }): ReactElement {
+	const { t } = useTranslation();
+	const folder = rule.paths[0] ?? null;
+	const [matches, setMatches] = useState<readonly FsEntry[] | null>(null);
+	const includeKey = rule.include.join("|");
+	useEffect(() => {
+		let live = true;
+		setMatches(null);
+		if (folder === null) return;
+		void window.autorag?.fs
+			?.listDir(folder)
+			.then((listing) => {
+				if (live) setMatches(listing.entries.filter((entry) => takes(rule, entry)).sort((a, b) => b.mtimeMs - a.mtimeMs));
+			})
+			.catch(() => {
+				if (live) setMatches([]);
+			});
+		return () => {
+			live = false;
+		};
+		// The folder and the kinds decide the files; the instruction does not.
+	}, [folder, includeKey]);
+	const task = rule.agent?.task ?? "";
+	return (
+		<div className="flex flex-col gap-16" data-automation-draft>
+			<div className="flex flex-col gap-6">
+				<Caption>{t("automations.inspector.draftRule")}</Caption>
+				<div className="flex flex-col text-[13px] leading-[21px] text-ink [overflow-wrap:anywhere]">
+					<span>{whenText(rule)}</span>
+					{rule.agent === undefined ? <span>{whatText(rule, { full: true })}</span> : task.length === 0 ? null : <span>{t("automations.inspector.agentDoes", { task })}</span>}
+				</div>
+			</div>
+			{matches === null ? null : (
+				<div className="flex flex-col gap-6" data-automation-matches>
+					<Caption>{matches.length === 0 ? t("automations.inspector.noMatches") : t("automations.inspector.matches", { count: matches.length })}</Caption>
+					<div className="flex flex-col">
+						{matches.slice(0, MATCHES_SHOWN).map((entry) => (
+							<div key={entry.path} className="flex items-center gap-8 py-4" data-match={entry.name}>
+								<span className="flex flex-none text-ink-muted">
+									<FileIcon size={13} />
+								</span>
+								<span className="min-w-0 flex-1 truncate text-meta leading-[18px] text-ink">{entry.name}</span>
+								<span className="flex-none text-badge leading-[17px] text-ink-muted">{relativeTime(entry.mtimeMs)}</span>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}
+
 function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; readonly onEdit: (rule: AutomationRule) => void; readonly onDelete: (rule: AutomationRule) => void }): ReactElement {
 	const { t } = useTranslation();
 	const access = agentAccessText(rule);
@@ -148,13 +217,15 @@ function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; r
 	);
 }
 
-export function AutomationInspector({ rule, state, onEdit, onDelete, onSelect }: AutomationInspectorProps): ReactElement {
+export function AutomationInspector({ rule, state, draft = null, onEdit, onDelete, onSelect }: AutomationInspectorProps): ReactElement {
 	const { t } = useTranslation();
 	return (
 		<aside className="inspector w-full min-w-0 flex-1 min-h-0 flex flex-col bg-subtle overflow-hidden" aria-label={t("finderComponents.inspectorAside")}>
 			<div className="inspector-body flex-1 min-h-0 overflow-auto px-16 pt-18 pb-24">
 				{rule !== null ? (
 					<RuleBody key={rule.id} rule={rule} onEdit={onEdit} onDelete={onDelete} />
+				) : draft !== null ? (
+					<DraftBody rule={draft} />
 				) : state === undefined || !state.ready ? (
 					<div className="flex h-full items-center justify-center px-10 text-center text-sm text-ink-muted leading-body whitespace-pre-line">{t("automations.inspector.empty")}</div>
 				) : (
