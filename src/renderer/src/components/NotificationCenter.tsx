@@ -70,14 +70,25 @@ function NoticeRow({
 }): ReactElement {
 	const { t } = useTranslation();
 	return (
-		<li className="notice-item relative flex gap-10 border-t border-divider p-12" data-tone={tone}>
+		<li className="notice-item flex gap-10 border-t border-divider p-12" data-tone={tone}>
 			<span className="flex h-[19px] w-16 flex-none items-center justify-center">
 				<NoticeBadge tone={tone} />
 			</span>
 			<div className="flex min-w-0 flex-1 flex-col gap-4">
-				<div className={cn("flex items-start gap-6", onDismiss !== undefined && "pr-22")}>
-					<strong className="min-w-0 flex-1 text-[13px] font-bold leading-[19px] text-ink break-keep">{title}</strong>
+				<div className="flex items-start gap-6">
+					<strong className="min-w-0 flex-1 text-[13px] font-medium leading-[19px] text-ink break-keep">{title}</strong>
 					{age === null ? null : <span className="flex-none text-[11px] leading-[19px] text-ink-faint">{age}</span>}
+					{onDismiss === undefined ? null : (
+						<button
+							type="button"
+							className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "-ml-5 h-[19px] w-20 flex-none rounded-5")}
+							aria-label={t("notifications.dismiss")}
+							title={t("notifications.dismiss")}
+							onClick={onDismiss}
+						>
+							<X size={14} strokeWidth={1.28} />
+						</button>
+					)}
 				</div>
 				{body === null || body === "" ? null : <p className="m-0 select-text whitespace-pre-wrap break-words text-meta leading-[1.5] text-ink-muted">{body}</p>}
 				{actions.length === 0 ? null : (
@@ -90,17 +101,6 @@ function NoticeRow({
 					</div>
 				)}
 			</div>
-			{onDismiss === undefined ? null : (
-				<button
-					type="button"
-					className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "absolute top-12 right-12 size-20 rounded-5")}
-					aria-label={t("notifications.dismiss")}
-					title={t("notifications.dismiss")}
-					onClick={onDismiss}
-				>
-					<X size={12} strokeWidth={1.8} />
-				</button>
-			)}
 		</li>
 	);
 }
