@@ -478,17 +478,17 @@
       "menuLabel": "File change approval",
       "triggerAria": "File change approval mode",
       "ask": {
-        "label": "Ask",
+        "label": "Always ask",
         "desc": "Asks every time before changing a file or running a command.\nReading and searching never ask.",
         "option": "Always ask"
       },
       "auto": {
-        "label": "Auto",
+        "label": "When unsure",
         "desc": "Goes ahead with work that matches your request and asks only about work it is not sure of.",
         "option": "Ask when unsure"
       },
       "full": {
-        "label": "Full",
+        "label": "Don't ask",
         "desc": "Changes files and runs commands without asking.",
         "option": "Don't ask"
       }

@@ -83,13 +83,16 @@ export function NoticeCard({
 			role={role}
 			data-tone={tone}
 		>
-			<div className="notice-card__head flex items-center gap-10">
-				<NoticeBadge tone={tone} />
+			{/* Figma 548:14204: the badge and the close button stay on the title's first line when the title wraps. */}
+			<div className="notice-card__head flex items-start gap-12">
+				<span className="mt-2 flex flex-none">
+					<NoticeBadge tone={tone} />
+				</span>
 				<strong className="min-w-0 flex-1 text-[14px] font-bold leading-[20px] text-ink break-keep">{title}</strong>
 				{onClose === undefined ? null : (
 					<button
 						type="button"
-						className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "size-24 -my-4 -mr-4")}
+						className={cn(iconButtonClass({ size: "size-icon-sm", tone: "text-ink-muted" }), "size-24 -mt-2 -mr-4 flex-none")}
 						aria-label={t("common.close")}
 						title={t("common.close")}
 						onClick={onClose}
