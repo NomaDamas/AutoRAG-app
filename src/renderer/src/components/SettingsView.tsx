@@ -24,7 +24,6 @@ import { DuplicatesPage, WebPage } from "./settings/ConfigPages";
 import { GeneralPage } from "./settings/GeneralPage";
 import { AppCustomizerPanel } from "./settings/AppCustomizerPanel";
 import { SettingsAssistantContext, type SettingsAssistantDock } from "./settings/SettingsAssistantDock";
-import { SettingsAssistantHeroContext, type SettingsAssistantHero } from "./settings/SettingsKit";
 import { McpPage } from "./settings/McpPage";
 import { SidebarPage } from "./settings/SidebarPage";
 import { RemoteAccessPage } from "./settings/RemoteAccessPage";
@@ -149,8 +148,6 @@ function customizerSurfaceOf(page: SettingsCategory): AppCustomizerSurface | nul
 	return isAppCustomizerSurface(page) && page !== "sidebar" && page !== "shortcuts" ? page : null;
 }
 
-/** The pages that draw their own invitation to the assistant; every other assistant page gets it from its head. */
-const SELF_INVITING_SURFACES: readonly AppCustomizerSurface[] = ["sidebar", "contextMenu", "shortcuts"];
 
 /**
  * What every settings page reads and writes: the app settings, the config
@@ -457,20 +454,14 @@ export function SettingsView({
 		return order.map((groupKey) => ({ groupKey, pages: map.get(groupKey) ?? [] }));
 	}, [filteredPages]);
 
-	const hero = useMemo<SettingsAssistantHero | null>(
-		() => (activeSurface === null || customizerShown || SELF_INVITING_SURFACES.includes(activeSurface) ? null : { surface: activeSurface, onOpen: openCustomizer }),
-		[activeSurface, customizerShown, openCustomizer],
-	);
 	const content = (
-		<SettingsAssistantHeroContext value={hero}>
-			<SettingsPageContent
-				data={data}
-				category={category}
-				onNavigate={setCategory}
-				customizerOpen={customizerShown}
-				onOpenCustomizer={openCustomizer}
-			/>
-		</SettingsAssistantHeroContext>
+		<SettingsPageContent
+			data={data}
+			category={category}
+			onNavigate={setCategory}
+			customizerOpen={customizerShown}
+			onOpenCustomizer={openCustomizer}
+		/>
 	);
 
 	const sourceButtons = filteredSources.map((entry) => {

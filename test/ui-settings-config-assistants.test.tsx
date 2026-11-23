@@ -157,24 +157,13 @@ describe("Settings pages with an AI assistant in the right sidebar", () => {
 			expect(request).toMatchObject({ surface: page, message: "Turn on dark mode" });
 		});
 
-		it(`invites to the ${page} assistant from the page head once the right sidebar is hidden`, async () => {
+		it(`shows no AI banner on the ${page} page, even with the right sidebar hidden (only 우클릭 메뉴 has one)`, async () => {
 			await open(page);
-			expect(host.querySelector(`[data-assistant-hero="${page}"]`)).toBeNull();
-
 			await act(async () => {
 				host.querySelector<HTMLButtonElement>('[data-testid="toggle-right-sidebar"]')?.click();
 			});
 			await settle();
-			const hero = host.querySelector<HTMLElement>(`[data-assistant-hero="${page}"]`);
-			expect(hero).not.toBeNull();
-			expect(hero?.textContent).not.toContain("settingsCore.");
-
-			await act(async () => {
-				hero?.querySelector<HTMLButtonElement>('[data-action="open-app-customizer"]')?.click();
-			});
-			await settle();
-			expect(host.querySelector('[data-testid="app-customizer-panel"]:not([hidden])')?.getAttribute("data-surface")).toBe(page);
-			expect(host.querySelector(`[data-assistant-hero="${page}"]`)).toBeNull();
+			expect(host.querySelector(".sidebar-ai-hero")).toBeNull();
 		});
 	}
 
