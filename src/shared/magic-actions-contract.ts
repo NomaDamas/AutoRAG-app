@@ -15,6 +15,8 @@
 export const MAGIC_ACTION_CHANNELS = {
 	start: "magicAction:start",
 	cancel: "magicAction:cancel",
+	/** Keeps a finished run in AI 에이전트's 대화 기록 as a chat of its own; resolves to that chat's id. */
+	saveToHistory: "magicAction:saveToHistory",
 	/** main → renderer event carrying one {@link MagicActionEvent}. */
 	event: "magicAction:event",
 } as const;
@@ -84,8 +86,28 @@ export type MagicActionEvent =
 			readonly actionLabel: string;
 	  };
 
+/** What 대화 기록에 저장 keeps of a finished run: the action's name as the question, its files, its output as the answer. */
+export interface MagicActionSaveRequest {
+	readonly actionLabel: string;
+	readonly paths: readonly string[];
+	readonly output: string;
+}
+
+export function isMagicActionSaveRequest(value: unknown): value is MagicActionSaveRequest {
+	if (typeof value !== "object" || value === null) return false;
+	const candidate = value as Record<string, unknown>;
+	return (
+		typeof candidate.actionLabel === "string" &&
+		candidate.actionLabel.trim().length > 0 &&
+		typeof candidate.output === "string" &&
+		Array.isArray(candidate.paths) &&
+		candidate.paths.every((p) => typeof p === "string")
+	);
+}
+
 export interface MagicActionBridge {
 	start(runId: string, request: MagicActionRunRequest): Promise<void>;
 	cancel(runId: string): Promise<void>;
+	saveToHistory(request: MagicActionSaveRequest): Promise<string>;
 	onEvent(listener: (event: MagicActionEvent) => void): () => void;
 }

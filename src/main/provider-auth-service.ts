@@ -18,6 +18,7 @@ import type {
 	ProviderSummary,
 } from "../shared/settings-contract";
 import { isJsonObject } from "../shared/settings-contract";
+import { ALLOWED_AGENT_APIS, isAllowedAgentApi } from "../shared/model-config";
 import type { ProviderCredentialService } from "./provider-credentials";
 import { registerDazziProvider } from "@autorag/librarian";
 import { AUTORAG_PROVIDER_ID, autoragFirst } from "../shared/account-contract";
@@ -41,6 +42,12 @@ export interface ProviderAuthService {
 	discover(input: ProviderServerInput): Promise<ProviderDiscoveryResult>;
 	/** Adds or edits a local/custom provider (discovering its models) and returns the fresh list. */
 	upsert(input: ProviderServerInput): Promise<readonly ProviderSummary[]>;
+	/**
+	 * Imports an externally-defined provider (an omp models.yml entry) verbatim: the
+	 * given wire protocol and model list are written as-is, no server probe. Main-only;
+	 * never exposed through the renderer SettingsBridge.
+	 */
+	importCustom(input: CustomProviderImport): Promise<{ readonly id: string; readonly providers: readonly ProviderSummary[] }>;
 	/** Removes a local/custom provider and its stored key; returns the fresh list. */
 	remove(id: string): Promise<readonly ProviderSummary[]>;
 	/** Re-probes a saved provider's server for a connection check. */
@@ -66,6 +73,32 @@ export interface ProviderAuthServiceDeps {
 	readonly timeoutMs?: number;
 }
 
+/**
+ * A provider definition to import verbatim from another agent's config (omp
+ * models.yml). Unlike {@link ProviderServerInput} nothing is probed: the wire
+ * protocol and model list are written to models.json exactly as given.
+ */
+export interface CustomProviderImport {
+	/** Display name; uniqueness is enforced among custom providers. */
+	readonly label: string;
+	/** Wire protocol as written in the source config; must be an accepted agent API. */
+	readonly api: string;
+	/** http(s) base URL. */
+	readonly baseUrl: string;
+	/** Env var the models.json entry references as `$NAME`, or null for a keyless server. */
+	readonly apiKeyEnvName: string | null;
+	/** Optional key value, stored encrypted and mirrored into {@link apiKeyEnvName}; never written to models.json. */
+	readonly apiKeyValue?: string;
+	readonly models: readonly {
+		readonly id: string;
+		readonly name: string;
+		readonly reasoning?: boolean;
+		readonly input?: readonly ("text" | "image")[];
+		readonly contextWindow?: number;
+		readonly maxTokens?: number;
+	}[];
+}
+
 interface Pending {
 	readonly resolve: (value: string) => void;
 	readonly reject: (error: Error) => void;
@@ -85,6 +118,8 @@ const DEFAULT_CUSTOM_API = "openai-completions";
  * literal (not an env reference) marks it configured; servers that need no key ignore it.
  */
 const KEYLESS_API_KEY = "no-key";
+/** models.json `$NAME` references and the encrypted store share this name shape. */
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const DEFAULT_TIMEOUT_MS = 8000;
 /** Cheapest models tried per connection check, and the budget for all of them together. */
 const CONNECTION_PROBE_ATTEMPTS = 4;
@@ -508,6 +543,62 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		return list();
 	}
 
+	/**
+	 * Add a provider from another agent's setup without probing it: the source's
+	 * wire protocol and model definitions are written as-is. A custom provider
+	 * with the same display name is left untouched (the caller picks a new label);
+	 * the id is uniquified like an upserted one.
+	 */
+	async function importCustom(input: CustomProviderImport): Promise<{ readonly id: string; readonly providers: readonly ProviderSummary[] }> {
+		const label = input.label.trim();
+		if (label.length === 0) throw new Error("Provider name must not be empty");
+		if (!isAllowedAgentApi(input.api)) {
+			throw new Error(`Unsupported API "${input.api}"; expected one of: ${ALLOWED_AGENT_APIS.join(", ")}`);
+		}
+		const normalized = normalizeServerUrl({ kind: "custom", label, baseUrl: input.baseUrl });
+		const envName = input.apiKeyEnvName === null ? null : input.apiKeyEnvName.trim();
+		if (envName !== null && !ENV_NAME_PATTERN.test(envName)) {
+			throw new Error(`Invalid environment variable name: ${input.apiKeyEnvName}`);
+		}
+		if (envName === null && typeof input.apiKeyValue === "string") {
+			throw new Error("An API key value needs an environment variable name to reference it");
+		}
+		if (input.models.length === 0) throw new Error("An imported provider needs at least one model");
+		const models = input.models.map((model) => {
+			const id = model.id.trim();
+			if (id.length === 0) throw new Error("A model id must not be empty");
+			const name = model.name.trim();
+			return {
+				id,
+				name: name.length > 0 ? name : id,
+				...(model.reasoning === undefined ? {} : { reasoning: model.reasoning }),
+				...(model.input === undefined ? {} : { input: [...model.input] }),
+				...(model.contextWindow === undefined ? {} : { contextWindow: model.contextWindow }),
+				...(model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens }),
+			};
+		});
+
+		const raw = await readModelsJson(modelsPath);
+		const providers = modelsJsonProviders(raw);
+		if (Object.values(providers).some((entry) => isJsonObject(entry) && entry.name === label)) {
+			throw new Error(`A provider named "${label}" already exists; pass a different label`);
+		}
+		const id = uniqueProviderId(providers, "custom", label);
+		if (envName !== null && typeof input.apiKeyValue === "string" && input.apiKeyValue.length > 0) {
+			await deps.credentials.set(envName, input.apiKeyValue);
+		}
+		providers[id] = {
+			name: label,
+			baseUrl: normalized.baseUrl,
+			api: input.api,
+			apiKey: envName === null ? KEYLESS_API_KEY : `$${envName}`,
+			models,
+		};
+		await writeModelsJson(modelsPath, { ...raw, providers });
+		await (await runtimePromise).refresh({ allowNetwork: false });
+		return { id, providers: await list() };
+	}
+
 	async function remove(id: string): Promise<readonly ProviderSummary[]> {
 		const raw = await readModelsJson(modelsPath);
 		const providers = modelsJsonProviders(raw);
@@ -583,6 +674,7 @@ export function createProviderAuthService(deps: ProviderAuthServiceDeps): Provid
 		logout,
 		discover,
 		upsert,
+		importCustom,
 		remove,
 		test,
 		warmEnv: async () => {

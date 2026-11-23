@@ -493,4 +493,51 @@ describe("createAutoRagConfigService", () => {
 		const saved = JSON.parse(await readFile(fixture.configPath, "utf8")) as { datasources: Record<string, { connector: unknown }> };
 		expect(saved.datasources.wombat?.connector).toEqual({ agents: ["claude-code", "codex"], includeSubagents: true });
 	});
+
+	it("stores the ltr block and rankingLog the settings page writes, and the librarian's own validation reads them back", async () => {
+		const fixture = await createFixture(null, "autorag-config-ltr-");
+		await writeFile(fixture.configPath, `${JSON.stringify(baseConfig(fixture.root), null, 2)}\n`);
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		const snapshot = await service.patch([
+			{ path: ["rankingLog"], value: true },
+			{ path: ["ltr", "enabled"], value: true },
+			{ path: ["ltr", "model"], value: "latest" },
+			{ path: ["ltr", "autoTrain", "enabled"], value: true },
+			{ path: ["ltr", "autoTrain", "minNewRuns"], value: 150 },
+		]);
+
+		expect(snapshot.error).toBeNull();
+		const saved = JSON.parse(await readFile(fixture.configPath, "utf8"));
+		expect(saved.rankingLog).toBe(true);
+		expect(saved.ltr).toEqual({ enabled: true, model: "latest", autoTrain: { enabled: true, minNewRuns: 150 } });
+		expect(snapshot.config.ltr).toEqual(saved.ltr);
+	});
+
+	it("turns the training log off with rankingLog false, and removing the key goes back to the default of logging", async () => {
+		const fixture = await createFixture(null, "autorag-config-ranking-log-");
+		await writeFile(fixture.configPath, `${JSON.stringify(baseConfig(fixture.root), null, 2)}\n`);
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await service.set(["rankingLog"], false);
+		expect(JSON.parse(await readFile(fixture.configPath, "utf8")).rankingLog).toBe(false);
+
+		await service.remove(["rankingLog"]);
+		expect(JSON.parse(await readFile(fixture.configPath, "utf8")).rankingLog).toBeUndefined();
+	});
+
+	it("rejects an ltr block the librarian would refuse, before it reaches the file", async () => {
+		const fixture = await createFixture(null, "autorag-config-ltr-bad-");
+		await writeFile(fixture.configPath, `${JSON.stringify(baseConfig(fixture.root), null, 2)}\n`);
+		const service = createAutoRagConfigService({ env: fixture.env, cwd: fixture.root });
+
+		await expect(service.set(["ltr", "enabled"], "yes")).rejects.toThrow(/ltr/u);
+		await expect(service.set(["ltr", "model"], "../../etc/passwd")).rejects.toThrow(/model/u);
+		await expect(service.set(["ltr", "autoTrain", "minNewRuns"], 0)).rejects.toThrow(/minNewRuns/u);
+		await expect(service.set(["ltr", "surprise"], true)).rejects.toThrow(/ltr/u);
+		await expect(service.set(["rankingLog"], "off")).rejects.toThrow(/rankingLog/u);
+		const after = JSON.parse(await readFile(fixture.configPath, "utf8"));
+		expect(after.ltr).toBeUndefined();
+		expect(after.rankingLog).toBeUndefined();
+	});
 });

@@ -28,6 +28,7 @@ import { EmbeddingPicker } from "./EmbeddingPicker";
 import { JEV_SLLM_BACKEND, jevBackendFor, shouldAdoptManagedDecomposition } from "../../../../shared/ai-roles";
 import { decompositionConfigUpdates, jevConfigUpdates, jevSllmConfigUpdates, modelConfigUpdates, rerankConfigUpdates } from "../../../../shared/model-config";
 import { providerConnectRoute, withoutAutorag } from "../../../../shared/account-contract";
+import { THINKING_LEVELS } from "../../../../shared/settings-options";
 
 const settings = window.autorag.settings;
 
@@ -36,14 +37,6 @@ const KIND_LABEL_KEY = {
 	local: "settingsCore.ai.kind.local",
 	custom: "settingsCore.ai.kind.custom",
 } as const satisfies Readonly<Record<ProviderSummary["kind"], string>>;
-
-const THINKING_LEVELS = [
-	{ value: "off", labelKey: "settingsCore.ai.thinking.off" },
-	{ value: "low", labelKey: "settingsCore.ai.thinking.low" },
-	{ value: "medium", labelKey: "settingsCore.ai.thinking.medium" },
-	{ value: "high", labelKey: "settingsCore.ai.thinking.high" },
-	{ value: "max", labelKey: "settingsCore.ai.thinking.max" },
-] as const;
 
 /** Decomposition specials: `false` means "let the answer model do it"; absence uses the documented default. */
 const DECOMPOSITION_SPECIALS = [
@@ -77,7 +70,16 @@ function rolesUsingProvider(snapshot: AutoRagConfigSnapshot, providerId: string,
 	return out;
 }
 
-export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfigSnapshot; readonly onSaved: (next: AutoRagConfigSnapshot) => void }): ReactElement {
+export function AiPage({
+	snapshot,
+	onSaved,
+	assistantRevision = 0,
+}: {
+	readonly snapshot: AutoRagConfigSnapshot;
+	readonly onSaved: (next: AutoRagConfigSnapshot) => void;
+	/** Bumped when an assistant turn changed something: the connected providers are read again (it may have brought one in). */
+	readonly assistantRevision?: number;
+}): ReactElement {
 	const { t } = useTranslation();
 	const { run, error } = useConfigWriter(onSaved);
 	const [providers, setProviders] = useState<readonly ProviderSummary[] | null>(null);
@@ -94,7 +96,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 	}, []);
 	useEffect(() => {
 		void reload();
-	}, [reload]);
+	}, [reload, assistantRevision]);
 	const connect = useProviderConnect({ reload, onNotice: setNotice });
 
 	const connected = useMemo(() => (providers ?? []).filter((provider) => provider.authConfigured), [providers]);
@@ -196,7 +198,7 @@ export function AiPage({ snapshot, onSaved }: { readonly snapshot: AutoRagConfig
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.ai")} description={t("settingsCore.ai.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.ai")} />
 			{problem !== null ? <div className="settings-error" role="alert">{problem}</div> : null}
 			{notice !== null ? <Note>{notice}</Note> : null}
 			{/* Figma 403:10518: 연결된 서비스 is a bordered list closed by its own "+ 서비스 연결" row; a rule; then the roles on a stage card. */}

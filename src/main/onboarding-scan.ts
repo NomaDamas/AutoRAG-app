@@ -154,7 +154,11 @@ export interface FolderScanCoordinatorDeps {
 }
 
 export interface FolderScanCoordinator {
-	/** Start (or re-emit) a scan per path; totals stream through `emit`. */
+	/**
+	 * Start (or re-emit) a scan per path; resolves once every requested scan has
+	 * finished, so the first run can wait for the file total it feeds. Totals
+	 * stream through `emit` while it walks.
+	 */
 	start(paths: readonly string[]): Promise<void>;
 	/** Re-emit a cached scan already finished; nothing when it never ran. */
 	cached(path: string): FolderScan | undefined;
@@ -167,10 +171,10 @@ export interface FolderScanCoordinator {
 export function createFolderScanCoordinator(deps: FolderScanCoordinatorDeps): FolderScanCoordinator {
 	const results = new Map<string, FolderScan>();
 	const running = new Map<string, AbortController>();
+	/** One promise per path with a scan in flight, so a second `start` waits for the first rather than racing it. */
+	const pending = new Map<string, Promise<void>>();
 
-	async function run(path: string): Promise<void> {
-		const controller = new AbortController();
-		running.set(path, controller);
+	async function run(path: string, controller: AbortController): Promise<void> {
 		try {
 			const datalessPaths = deps.listDatalessPaths === undefined ? undefined : await deps.listDatalessPaths(path);
 			await scanFolder(
@@ -186,20 +190,31 @@ export function createFolderScanCoordinator(deps: FolderScanCoordinatorDeps): Fo
 			console.error(`[onboarding] folder scan failed for ${path}:`, error);
 		} finally {
 			running.delete(path);
+			pending.delete(path);
 		}
 	}
 
 	return {
 		start: async (paths) => {
+			const waits: Promise<void>[] = [];
 			for (const path of paths) {
 				const cached = results.get(path);
 				if (cached !== undefined) {
 					deps.emit(cached);
 					continue;
 				}
-				if (running.has(path)) continue;
-				void run(path);
+				const inFlight = pending.get(path);
+				if (inFlight !== undefined) {
+					waits.push(inFlight);
+					continue;
+				}
+				const controller = new AbortController();
+				running.set(path, controller);
+				const promise = run(path, controller);
+				pending.set(path, promise);
+				waits.push(promise);
 			}
+			await Promise.all(waits);
 		},
 		cached: (path) => results.get(path),
 		totalFiles: (paths) => {
@@ -210,10 +225,12 @@ export function createFolderScanCoordinator(deps: FolderScanCoordinatorDeps): Fo
 		cancelAll: () => {
 			for (const controller of running.values()) controller.abort();
 			running.clear();
+			pending.clear();
 		},
 		dispose: () => {
 			for (const controller of running.values()) controller.abort();
 			running.clear();
+			pending.clear();
 			results.clear();
 		},
 	};

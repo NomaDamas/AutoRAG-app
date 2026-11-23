@@ -2,8 +2,9 @@
  * Settings → 일반.
  *
  * App-level preferences write through `window.autorag.settings.set` (the same
- * store the Finder reads). The document languages live on 문서 읽기 and remote
- * access on its own page (`RemoteAccessPage`).
+ * store the Finder reads). The document languages (문서 언어) sit between 화면 and
+ * 파일 and write the shared AutoRAG config; remote access has its own page
+ * (`RemoteAccessPage`).
  */
 
 import { useEffect, useState, type ReactElement } from "react";
@@ -11,6 +12,7 @@ import { useTranslation } from "react-i18next";
 import type { AppUpdateSnapshot } from "../../../../shared/update-contract";
 import type { AppSettings, AutoRagConfigSnapshot } from "../../../../shared/settings-contract";
 import { isAppLanguage } from "../../../../shared/language-contract";
+import { LanguageSettings } from "./LanguageSettings";
 import { QuickSearchSettingsSection } from "./QuickSearchSettings";
 import { PlainDivider, PlainRow, PlainSection, SettingsPageHead } from "./SettingsKit";
 import { SelectField } from "./SelectField";
@@ -52,7 +54,7 @@ export function GeneralPage({
 	const osMenu = hostPlatform() === "darwin" || hostPlatform() === "win32";
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.general")} description={t("settingsCore.general.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.general")} />
 			{/* Figma 416:12228: 화면, 파일, 빠른 검색, 시작 및 업데이트, 개인정보; each a titled group of plain rows, ruled apart. */}
 			<div className="plain-sections">
 				<PlainSection title={t("settingsCore.general.screenTitle")} alignTop>
@@ -66,6 +68,11 @@ export function GeneralPage({
 							if (isAppLanguage(language)) void setApp({ language });
 						}} />
 					</PlainRow>
+				</PlainSection>
+				<PlainDivider />
+				{/* 문서 언어, once a page of its own: the languages Dazzi reads and searches documents in. */}
+				<PlainSection title={t("settingsSources.reading.title")}>
+					<LanguageSettings snapshot={snapshot} path={["languages"]} name={t("settingsSources.fields.docLanguages")} hint={t("settingsSources.reading.langHint")} onSaved={onSaved} fallback={["ko", "en"]} />
 				</PlainSection>
 				<PlainDivider />
 				<PlainSection title={t("settingsCore.general.finderTitle")}>

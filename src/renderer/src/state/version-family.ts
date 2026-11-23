@@ -137,6 +137,11 @@ export interface StackOptions {
  *   (itself or any member) or pinned open through the badge.
  * - Open stacks append their member rows, cross-folder ones included, as
  *   indented children right after the head.
+ * - A path is rendered once. A member listed on its own (search results mix
+ *   folders, so a cross-folder member can be a hit beside its head) gives way
+ *   to its child row while the head's stack is open, and no path is emitted
+ *   twice: rows are keyed by path, and a repeated key left stale rows behind,
+ *   so the list seemed to copy itself on every click.
  */
 export function applyVersionStacks(
 	rows: readonly FinderEntry[],
@@ -147,32 +152,42 @@ export function applyVersionStacks(
 
 	const selected = new Set(selectedKeys);
 	const pathsInRows = new Set(rows.map((r) => r.path));
+	const membersOf = (family: VersionFamilyData) => family.members.filter((member) => family.entriesByPath[member.path] !== undefined);
+	const isOpen = (headPath: string, family: VersionFamilyData): boolean => {
+		const members = membersOf(family);
+		return (
+			members.length > 0 &&
+			(manualOpen.has(headPath) || selected.has(headPath) || members.some((member) => selected.has(member.path)))
+		);
+	};
 	const out: StackRow[] = [];
+	const emitted = new Set<string>();
+	const push = (row: StackRow): void => {
+		if (emitted.has(row.entry.path)) return;
+		emitted.add(row.entry.path);
+		out.push(row);
+	};
 	for (const entry of rows) {
 		const membership = families.memberOf.get(entry.path);
-		if (membership !== undefined) {
+		if (membership !== undefined && pathsInRows.has(membership.family.head)) {
 			const headDir = dirname(membership.family.head);
-			if (headDir === locationOf(entry) && pathsInRows.has(membership.family.head)) continue;
+			if (headDir === locationOf(entry)) continue;
+			// Its head is listed with an open stack, which shows this member as its child.
+			if (isOpen(membership.family.head, membership.family)) continue;
 		}
 		const family = families.byHead.get(entry.path);
 		if (family === undefined) {
-			out.push(stackRow(entry));
+			push(stackRow(entry));
 			continue;
 		}
-		const members = family.members.filter(
-			(member) => family.entriesByPath[member.path] !== undefined,
-		);
-		const open =
-			members.length > 0 &&
-			(manualOpen.has(entry.path) ||
-				selected.has(entry.path) ||
-				members.some((member) => selected.has(member.path)));
-		out.push({ entry, stackCount: members.length, stackOpen: open, child: false, relation: null });
+		const members = membersOf(family);
+		const open = isOpen(entry.path, family);
+		push({ entry, stackCount: members.length, stackOpen: open, child: false, relation: null });
 		if (open) {
 			for (const member of members) {
 				const memberEntry = family.entriesByPath[member.path];
 				if (memberEntry === undefined) continue;
-				out.push({
+				push({
 					entry: memberEntry,
 					stackCount: 0,
 					stackOpen: false,

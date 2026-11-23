@@ -69,7 +69,7 @@ export function AccountPage(): ReactElement {
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.account")} description={t("settingsCore.account.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.account")} />
 			{/* Figma 412:11464: 계정 (two 64px rows with outlined buttons), a rule, then the policy links in one line. */}
 			<section className="ai-section">
 				<div className="ai-section-head">
@@ -147,7 +147,7 @@ export function PlanPage(): ReactElement {
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.plan")} description={t("settingsCore.account.planDescription")} />
+			<SettingsPageHead title={t("settingsCore.nav.plan")} />
 			{/* Figma 415:11812: 요금제 관리 (the plan under its name, the dashboard button), a rule, then AI 사용량 on a stage card. */}
 			<section className="ai-section">
 				<div className="account-rows">

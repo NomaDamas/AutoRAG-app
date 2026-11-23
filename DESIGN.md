@@ -174,11 +174,11 @@ Every sidebar row comes from the OS, through `fs:locations` (`src/main/places.ts
 
 The fs worker (`src/fs-worker/`, see `docs/architecture.md` "Filesystem worker") polls a cheap signature every 2s (volume names and device ids, cloud domains, and which Discord attachment folders are shown) and pushes `fs:locationsChanged`, so a volume, cloud account or Discord attachment folder that comes or goes updates the sidebar without a restart. The dupey scan walks only `scanned` places (Desktop, Documents, Downloads, cloud drives, the Discord attachment folders) — never the home folder or a whole disk. Rows are 28px with 12px labels and 14px glyphs. Automated checks: `test/places.test.ts`, `test/discord-attachments.test.ts`, `test/ui-places.test.ts`, `test/ui-source-status.test.ts`; on-device checks: `scripts/manual-qa/run-qa-finder-sidebar-places.mjs` (attaches and ejects a real disk image) and `scripts/manual-qa/run-qa-finder-discord-attachments.mjs` (the Discord row against a throwaway AutoRAG home).
 
-**Sidebar customization.** Settings → 사이드바 (`SidebarPage`, `src/shared/sidebar-contract.ts`) lets the user show or hide individual sidebar places, cloud drives, mounted volumes, and Finder tags, reorder Favorites or sections, pin custom folders to Favorites, apply quick presets, or chat with the `app-customizer` helper agent in the window's right sidebar: on 사이드바, 우클릭 메뉴, and 단축키 the Inspector's column (same width, resize grip, and toolbar toggle) shows that section's assistant (`AppCustomizerPanel`) instead, so the page beside it stays interactive. The panel has no header of its own (the page already names the section; the toolbar toggle hides it); its only Dazzi mark is the centered one in the empty state, and new chat sits beside send once a conversation exists. `SettingsView` renders the panels into one node it publishes through `SettingsAssistantContext` and App moves that node into the column (`components/settings/SettingsAssistantDock.tsx`), so each section keeps its conversation and running turn while the sidebar is hidden or Settings loses focus; hiding the sidebar brings back the page's AI hero, which reopens it. **AI Chat** (`app:aiSearch`) and **Automations** (`app:automations`) are locked at the top of Favorites (`LOCKED_SIDEBAR_ITEM_IDS`) and can never be hidden. Customization state lives in Dazzi's `settings-state.json` (`AppSettings.sidebar`) and updates the live Finder sidebar immediately over `settings:changed`. Automated checks: `test/sidebar-customization.test.ts`, `test/app-customizer-service.test.ts`, `test/ui-sidebar-settings.test.tsx`; on-device checks: `scripts/manual-qa/run-qa-finder-sidebar-customizer.mjs`, `scripts/manual-qa/run-qa-live-sidebar-customizer.mjs`.
+**Sidebar customization.** Settings → 사이드바 (`SidebarPage`, `src/shared/sidebar-contract.ts`) lets the user show or hide individual sidebar places, cloud drives, mounted volumes, and Finder tags, reorder Favorites or sections, pin custom folders to Favorites, or apply quick presets. The AI assistant in the window's right sidebar is offered only on 우클릭 메뉴: there the Inspector's column (same width, resize grip, and toolbar toggle) shows that section's assistant (`AppCustomizerPanel`) instead, so the page beside it stays interactive. The panel has no header of its own (the page already names the section; the toolbar toggle hides it); its only Dazzi mark is the centered one in the empty state, and new chat sits beside send once a conversation exists. `SettingsView` renders the panels into one node it publishes through `SettingsAssistantContext` and App moves that node into the column (`components/settings/SettingsAssistantDock.tsx`), so it keeps its conversation and running turn while the sidebar is hidden or Settings loses focus; hiding the sidebar brings back the page's AI hero, which reopens it. 사이드바 and 단축키 have no hero and leave the column to the Inspector. **AI Chat** (`app:aiSearch`) and **Automations** (`app:automations`) are locked at the top of Favorites (`LOCKED_SIDEBAR_ITEM_IDS`) and can never be hidden. Customization state lives in Dazzi's `settings-state.json` (`AppSettings.sidebar`) and updates the live Finder sidebar immediately over `settings:changed`. Automated checks: `test/sidebar-customization.test.ts`, `test/app-customizer-service.test.ts`, `test/ui-sidebar-settings.test.tsx`.
 
 **Pinning folders from the sidebar.** Settings is not the only way in. Drop a folder between two Favorites rows and it pins there; an insertion line (`data-drop-line`, accent, 2px) marks the gap, which is how a pin reads differently from a drop ON a row (the AI Chat item keeps its accent ring and its attach drop, and wins a Finder drag over it). The folder comes from Finder rows (the in-app drag of `lib/row-drag.ts`) or from another app. A Finder row drag says what it holds before the drop, so a drag of only files gets no line and the no-drop cursor, and a mixed one pins its folders only. A drag from another app is opaque until the drop (before it the browser reveals that files are coming, not which of them are folders), so it always draws the line and shows the copy cursor; on the drop its files are skipped, and a drop that holds no folder changes nothing. The cursor over the gap is `copy` in both cases, because a pin leaves the folder where it is. A folder's right-click menu offers **사이드바에 고정** (after 새 폴더, in the actions section, single folder only, never in the Trash); on a folder the user already pinned it reads **사이드바에서 제거**, and right-clicking a pinned sidebar row offers the same, closing with Esc alone (`useSidebarRowMenu` stops the key before the window keymap's dismiss, which would also close Quick Look or a rename and clear the search). Both labels are one item to the context menu customization, `builtin:pinToSidebar`: Settings → 우클릭 메뉴 lists it in the actions section after 새 폴더, and the `app-customizer` agent resolves the pin and unpin names in all four languages to it, so hiding it takes both off the file menu (hiding the whole actions section does too). The pinned sidebar row's own menu is not the file menu and keeps its one item whatever is hidden. The customizable Favorites rows (OS places and pins, not the two app rows) drag to reorder, with the same line. Every path writes `customFavorites` / `favoritesOrder` through `src/shared/sidebar-favorites.ts`, the helper Settings → 사이드바 calls, so a pin made in either place is the same value. Pinning a folder the sidebar already draws changes nothing; a folder that exists but is hidden (an OS place or a pin hidden in Settings) is shown again at the gap instead of added twice. Logic: `state/sidebar-pins.ts`, `hooks/useSidebarPins.ts`, `hooks/useFavoritesDrop.ts`, `hooks/useSidebarRowMenu.ts`; checks: `test/sidebar-pins.test.ts`, `test/sidebar-favorites.test.ts`, `test/ui-sidebar-pins.test.tsx` (the row drag cursor over Favorites and the row menu's Esc), `test/ui-row-drag.test.ts`, `test/ui-context-menu.test.ts`, `test/context-menu-customization.test.ts`, `test/ui-context-menu-settings.test.tsx`, `test/app-customizer-service.test.ts`.
 
-**Shortcut customization.** Settings → 단축키 (`ShortcutsPage`, `src/shared/shortcuts-contract.ts`) edits Dazzi's closed catalog of 26 default-bound shortcuts (`window`, `view`, `files`, `aiSearch`) via direct key-press recording (capture-phase listener decoding physical key codes across IME/Option layouts), pointer modifier+key UI selection, one-click conflict swapping, presets, or natural-language chat with the `shortcut-customizer` pi helper profile (`AppCustomizerPanel` in the right sidebar, with `surface="shortcuts"`). `Esc` (`dismiss`) and plain arrow navigation stay locked, and arbitrary unbound actions cannot be created. State lives in `settings-state.json` (`AppSettings.shortcuts`) and updates `state/keymap.ts`, `AiSearchPanel`, and live keycap/tooltip hints immediately. Automated checks: `test/shortcuts-customization.test.ts`, `test/shortcut-customizer-service.test.ts`, `test/ui-shortcuts-settings.test.tsx`; on-device checks: `scripts/manual-qa/run-qa-finder-shortcuts-customizer.mjs`, `scripts/manual-qa/run-qa-live-shortcuts-customizer.mjs`.
+**Shortcut customization.** Settings → 단축키 (`ShortcutsPage`, `src/shared/shortcuts-contract.ts`) edits Dazzi's closed catalog of 26 default-bound shortcuts (`window`, `view`, `files`, `aiSearch`) via direct key-press recording (capture-phase listener decoding physical key codes across IME/Option layouts), pointer modifier+key UI selection, one-click conflict swapping, or presets. `Esc` (`dismiss`) and plain arrow navigation stay locked, and arbitrary unbound actions cannot be created. State lives in `settings-state.json` (`AppSettings.shortcuts`) and updates `state/keymap.ts`, `AiSearchPanel`, and live keycap/tooltip hints immediately. Automated checks: `test/shortcuts-customization.test.ts`, `test/shortcut-customizer-service.test.ts`, `test/ui-shortcuts-settings.test.tsx`.
 
 **Background activity queue & indexing progress.** Above the 설정 row sits one unified expandable queue (`SidebarActivityQueue`, `src/renderer/src/components/SidebarActivityQueue.tsx`, aggregated by `state/sidebar-activity-queue.ts`): it combines local folder indexing, queued datasource syncs (`src/main/refresh-queue.ts`), persistent index problems, multi-session AI error repairs (`hooks/useErrorFix.ts`), multi-session Magic Actions (`hooks/useMagicAction.ts`), background file operations (`hooks/useBackgroundTasks.ts` for Reduce Size and format conversion), and on-device model downloads without any producer overwriting another. Each card stays minimal to fit 159px cleanly: one short title (`로컬 폴더`, `slack`, `demo.mp4`), optional `%` and `+N` pill badge (`+1`, `+2`, …), and the 4px `ProgressBar`, while phase/origin/mode details live in the tooltip and in Settings. When two or more tasks are running or queued, the footer renders only the primary active card with a subtle stacked-card top lip and `+N` badge, expanding upward in a compact popover on hover or `:focus-visible` to list the remaining items. Tones follow StatusDot's palette: accent while running, muted track while queued, `--ok-dot` for done, `--error-orange-dot` for failure. Indexing done lingers 4 s, failure 15 s, then unmounts. Clicking an indexing entry opens 설정 > 인덱싱 (`requestSettingsCategory`), where the same snapshot renders as the 진행 상황 card with one row per item. The indexing snapshot is derived in the main process (`src/main/index-activity.ts`) from `refresh-progress.json`, `app-refresh/activity.json` and, through `src/main/index-progress-tracker.ts`, MinSync's `progress.jsonl`, and pushed on change over `indexActivity:changed`; the renderer never polls. Automated checks: `test/index-activity.test.ts`, `test/index-activity-view.test.ts`, `test/index-progress.test.ts`, `test/index-progress-tracker.test.ts`, `test/ui-index-progress.test.tsx`, `test/refresh-queue.test.ts`, `test/background-file-tasks.test.ts`, `test/error-fix-queue.test.ts`, `test/ui-sidebar-activity-queue.test.tsx`.
 
@@ -192,7 +192,7 @@ Instant Search's filename search answers from the platform name index first, thr
 The sidebar gains a **Tags** group, the row menu a colour-dot row plus a **Tags…** submenu, and rows a coloured dot. All three read and write the tags Finder itself uses; there is no app-private tag store. Windows and Linux show none of it (`FsTagCatalog.supported` is false and no `Tags` group renders) — the Windows design is tracked in #19.
 - **Where tags live.** A file's tags are the extended attribute `com.apple.metadata:_kMDItemUserTags`, a binary plist array of `"<name>"` / `"<name>\n<N>"` (N = the label colour when the tag was assigned: 1 gray, 2 green, 3 purple, 4 blue, 5 yellow, 6 red, 7 orange). The colour Finder draws comes from its **registry** (`FinderTagDict` in the iCloud key-value store under `~/Library/Daemon Containers/*/Data/com.apple.kvs`), not from the file: a tag recoloured later keeps the old suffix on files that already carry it. The app draws the registry's colour and falls back to the file's suffix for a tag the registry does not list (`tagDotsOf`, `src/renderer/src/state/tags.ts`).
 - **Sidebar.** The Tags group lists the tags Finder pins in its own sidebar, in Finder's order (the registry's `p` flag; `FavoriteTagNames` when the registry is unreadable; the seven colour tags on a Mac that never customized them). A row is the tag's colour dot and name; it opens `tag://<name>`, a virtual listing like Recents: real entries with their real paths, nothing created, pasted, dropped into, or watched there. The catalog is re-read when the window regains focus, because tags are created and recoloured in Finder and nothing signals it.
-- **Colours need Full Disk Access.** macOS keeps the registry in `~/Library/Daemon Containers`, which it hides from a process that lacks Full Disk Access: `readdir` fails with `EPERM` and `sqlite3` with `authorization denied` (measured on a packaged build started from LaunchServices; a terminal that has the grant reads it fine, which is why a dev run shows colours the installed app does not). The names still come from `FavoriteTagNames` in Finder's preferences, but every custom tag then has colour 0 and draws as a hollow ring. Neither the file suffix nor Spotlight's `kMDItemFSLabel` can stand in: both hold the colour at assignment time, not Finder's current one (a measured sidebar tag drew gray from its files and orange in Finder). So `FsTagCatalog.colorsDenied` is set when the registry was refused (not when it is merely absent), and the sidebar adds a **Show tag colors** row under the Tags group that opens System Settings › Full Disk Access (`onboarding.openFullDiskAccess`); the grant applies after a relaunch. Checks: `test/finder-tags.test.ts`, `test/ui-sidebar-app-rows.test.tsx`.
+- **Colours need Full Disk Access.** macOS keeps the registry in `~/Library/Daemon Containers`, which it hides from a process that lacks Full Disk Access: `readdir` fails with `EPERM` and `sqlite3` with `authorization denied` (measured on a packaged build started from LaunchServices; a terminal that has the grant reads it fine, which is why a dev run shows colours the installed app does not). The names still come from `FavoriteTagNames` in Finder's preferences, but every custom tag then has colour 0 and draws as a hollow ring. Neither the file suffix nor Spotlight's `kMDItemFSLabel` can stand in: both hold the colour at assignment time, not Finder's current one (a measured sidebar tag drew gray from its files and orange in Finder). So `FsTagCatalog.colorsDenied` is set when the registry was refused (not when it is merely absent), and the sidebar adds a **Show tag colors** row under the Tags group that opens the one-button Full Disk Access card (`FullDiskAccessDialog`: opens System Settings › Full Disk Access while ungranted, and flips to "확인하고 계속" once granted; System Settings itself offers Quit & Reopen). Checks: `test/finder-tags.test.ts`, `test/ui-sidebar-app-rows.test.tsx`, `test/full-disk-access-dialog.test.tsx`.
 - **Row menu.** Between Services and the Trash group, as in Finder: one row of the seven colour dots (red, orange, yellow, green, blue, purple, gray) with a caption line under it, then a **Tags…** submenu of every tag Finder knows. Each dot is the tag Finder pins for that colour (a Mac that renamed Red to "Research" shows Research under the red dot; a colour with no pinned tag uses the OS's colour name), so a tag is one click away with no trip into the submenu. The dot under the pointer (or keyboard focus) grows to 125% and shows a white **+** in its centre, or a **−** when every selected row already carries the tag, so it is clear which tag a click will touch; a dot the selection already carries rests as a small check. The caption spells it out — `Add “Research”` or `Remove “Research”` — and reads "Tags" while the pointer is off the dots. A click toggles the tag on the whole selection and closes the menu; choosing a ticked tag removes it, any other state adds it to all (Finder's rule). The submenu stays for tags with no colour. The menu never shows tags in the Trash.
 - **Row dots.** List, icon, and column views draw one dot per tag, overlapped like Finder's, with the tag names on the tooltip and accessible name. A tag with no colour is a hollow ring. Colours are `--tag-*` tokens (the values of `NSWorkspace.fileLabelColors`).
 - **Writes.** `fs.setTags(paths, { add, remove })` reads each file's current array, changes only the named entries (the others keep their text, colour suffix included), and writes a binary plist with `xattr`, the way Finder does. `NSURLTagNamesKey` is not used: it stores `Red\n0` for the standard tags and a different suffix than Finder. Each path reports on its own (`FsBatchResult`); a path that cannot be tagged fails with the verbatim reason. The app does not create, rename, recolour, or delete a tag in Finder's registry — only Finder can.
@@ -390,36 +390,152 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
 
 ---
 
-## 3a. First-run onboarding
+## 3a. First run
 
-- The reference is `docs/design-reference/onboarding/onboarding-prototype.html`.
-  `src/renderer/styles/onboarding.css` ports its stylesheet rule for rule, with
-  every selector scoped under `.onb` (the prototype's `.app-window`) and its
-  keyframes renamed `onb-*`. Palette values the app already defines map onto
-  app tokens (`--bg-window`, `--border`, `--text-*`, `--accent`), so appearance
-  follows the app; the rest stay as `--onb-*` literals from the prototype.
-- The React screens in `src/renderer/src/onboarding/` emit the prototype's DOM
-  and class names, so the port needs no restyling. The prototype's drawn
-  traffic lights are omitted: the real window's native ones sit over the 42px
-  drag bar.
-- On a first run the app opens two windows: the Finder, usable at once and never
-  resized, and this onboarding window at the prototype's 1120×720 canvas (min
-  960×680). The screens have no button that opens Dazzi. A finished first index
-  completes onboarding by itself and leaves the done screen up until the user
-  closes the window.
-- Prototype simulations are replaced by real state: the indexing screen shows
-  real progress (no 30-minute minimum), folder cards show "세는 중…" until their
-  pre-scan finishes, and a stopped index is the same screen held still (see
-  below), never a dead end.
+- **Principle: the less onboarding, the better the product.** The first run asks
+  one question only: which folders to read, already answered (the OS default
+  folders switched on). The defaults are the product: those folders, smart-indexing exclusions taken as proposed, keyword-only
+  indexing (parsed mirror + MinSync's bundled SPLADE encoder; dense embedding is
+  opt-in in Settings), and sign-in at the very end.
+- There is **one window**. The Finder window opens with the pending flag and
+  carries the first-run layer, `src/renderer/src/first-run/FirstRun.tsx`
+  (pure logic in `first-run/tour.ts`, styles in `styles/first-run.css`, copy
+  under `firstRun.*`). The main-process side is `src/main/first-run-service.ts`.
+- Screens (`.fr-root[data-screen]`): `folders` (Figma 156:1125: the logo,
+  "Dazzi가 이 폴더들을 읽을게요", one chip per folder — Desktop, Documents,
+  Downloads switched on; iCloud Drive and the other cloud drives found on the computer
+  (`~/Library/CloudStorage` Google Drive / Dropbox / OneDrive, `~/Dropbox`)
+  switched off and drawn dashed (no cloud drive is read until the person switches it on) — a click switches a chip, "폴더 N개 읽기" starts
+  the run over the switched-on ones (Enter presses it; with none on it is
+  disabled; a profile with no folder to offer skips it). The folder, reading
+  and ready screens draw the bare sunflower (`dazzi-mark.png`), not the icon
+  tile → `setup` (Figma 162:1244: "파일을 읽고 있어요", one 540 × 12 progress
+  bar, the current stage with files read on the left and minutes left on the
+  right; macOS prompts per folder as each chosen folder is read, refused folders
+  are left out, and the run keeps the machine awake) → `ready` (Figma 162:1308:
+  the Dazzi logo with a green check badge, "파일을 다 읽었어요", one "시작하기"
+  button at the same height as the folder screen's; Enter presses it) → `tour` → `signin`.
+  "시작하기" on `ready` plays the Arc/Dia-inspired liquid-glass reveal
+  (`first-run/reveal.tsx`, WebGL GLSL shader & Canvas 2D fallback in
+  `first-run/reveal-shader.ts`, 4-act clock in `first-run/reveal-timing.ts`, 4.7 s total with tour hand-off at 4.25 s; desktop
+  spotlight backdrop in `src/main/reveal-backdrop.ts`): the copy dissolves while the
+  sunflower glides to center, the stage darkens to obsidian, and the main process dims
+  every connected display behind the Dazzi window via borderless click-through backdrop
+  windows (`onboarding:revealBackdrop`, zero OS permissions required, automatically torn
+  down on settle, window close, or safety timeout); a premultiplied-alpha WebGL shader
+  renders a breathing 3D liquid-glass sphere with Fresnel prism dispersion, studio
+  speculars, and soft solar corona rays behind the sunflower; "Dazzi" cascades in
+  letter-by-letter with a 3D spring tilt and blur settle while a silk light sweeps the
+  sunflower; then a simplex-warped organic aperture melts outward from behind the Dazzi
+  mark with a warm golden-ice rim as the desktop dimmer lifts, revealing the live Finder
+  pulling into crisp focus (sidebar, toolbar, and panes arriving in turn) before handing
+  off directly to the tour's first step without the welcome cinema. Reduced motion keeps
+  the plain rise. The Finder is laid out for the tour and its blurred first frame prepared
+  while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
+  button: tapping it fades the title and description out, the progress bar glides
+  below, and a 16×16 Minesweeper with 40 hidden sunflowers (`dazzi-mark.png`) in
+  place of mines fades in (`first-run/MineGame.tsx`, rules in
+  `first-run/minesweeper.ts`; Figma 166:83). Above the board: the sunflowers left
+  and the clock ("47.6 초") as pills, the flag hint in the middle, and ✕, which
+  goes back to the floating logo (or to `ready` if the run finished meanwhile).
+  Left click opens, right click / Shift+click flags, middle click or a click on an
+  open number chords; the first click always opens a patch; the clock runs from
+  the first open cell. A finished board reveals every sunflower and swaps the hint
+  for an underlined "다시하기" (Figma 162:2507; a faster win says "새 기록이에요!"),
+  and the next click on the board also starts over. If setup finishes mid-game the
+  board stays and the progress bar is replaced by a card with the sunflower,
+  "파일을 다 읽었어요" and "시작하기" (Figma 162:2850; Enter presses it). The blue
+  first-run buttons are flat: no shadow or glow. Full Disk Access is never asked here; it is
+  asked by `FullDiskAccessDialog` (one state-dependent button) only when Finder
+  tag colours, KakaoTalk, or Apple Mail under `~/Library/Mail` is used.
+- While the layer covers the window the Finder behind it is mounted, `inert`,
+  and held under the stage by `html[data-first-run="cover"]`. "시작하기"
+  splits the window (the current folder on the left, AI Search on the right,
+  sidebar and inspector shown) and `html[data-first-run="rise"]` springs the
+  Finder up from below. Motion is spring `linear()` curves on transform and
+  opacity only; `prefers-reduced-motion` turns it off.
+- The tour opens with a letterboxed, dimmed title card ("Welcome to Dazzi, the
+  AI Finder" / "the AI File Explorer" on Windows), then coach marks: a
+  spotlight on the real control plus a bubble; everything but the bubble lets
+  clicks through. Interactive steps (`ask`, `cite`, `duplicates`) hide the Next
+  button and place an animated guide cursor (`.fr-cursor`) over the live target
+  control so the person acts on the real UI to move on. The window is already
+  split (folder left, AI Search right) when the tour opens; the tour never asks
+  for a drag. With a verified
+  demo question (`SetupStatus.demo`: written by a model from one of the person's own parsed documents while indexing is still running, returned from that document by keyword retrieval, judged by Jev (0.9 or above that the person would recognise it as theirs, 0.7 or above that only their own document can answer it, not a web search or general knowledge), and finally run through the real AI Search agent: only a question whose real answer cites that document is offered, so what the tour types is already known to answer; with no such question there is no demo and the steps are skipped) the question types itself into the
+  composer without stealing focus mid-typing, the person clicks send (or presses
+  Enter) themselves, then clicks a citation chip to open the evidence panel.
+  With a version family the folder tab opens without pre-selecting the row;
+  clicking the stacked row unfolds the stack and reveals the inspector's
+  Versions section. Steps the data does not support are skipped, never faked.
+- `signin` ends the first run: one compact sheet with the Dazzi logo, Google
+  and GitHub sign-in, the in-app email code (send, then a 6-digit code), the
+  legal links, and "나중에 할게요". No plan is chosen here (plans live in
+  Settings › 구독 및 사용량); signing in shows "로그인을 완료했어요" with one
+  "시작하기" button. Either way finishing calls `onboarding.complete()`, so the
+  next launch opens the Finder straight away.
+- `make onboarding` walks this on a disposable profile; the end-to-end check is
+  `scripts/manual-qa/run-qa-onboarding.mjs` (screenshots in
+  `.omo/evidence/onboarding/`).
+
+## 3b. Contextual tutorials
+
+- Anything the first run does not need to teach waits until the person reaches
+  it. `src/renderer/src/first-run/Tutorials.tsx` (steps and the once-per-profile
+  flags `autorag.tutorial.<id>.seen` in `first-run/tutorial-steps.ts`, copy
+  under `tutorials.*`) watches the Finder and starts one tutorial on the first:
+  - visit to **자동화** (`automations`);
+  - right-click on a file or folder (`contextMenu`);
+  - opening Settings (`remoteAccess`, desktop only).
+- **Explaining is not enough, so the person makes a real example and watches it
+  work.** Offer steps run an effect through `window.autorag.demo`
+  (`shared/demo-contract.ts`, `main/demo-service.ts`) or navigate the Finder
+  (`App.tsx` `runTutorialEffect`); later steps wait for the real UI or the real
+  disk to show the result:
+  - `automations`: the rule is **made by the AI, not by the app**. The offer
+    writes a request into an AI Search draft ("when a photo lands in Downloads,
+    save a black-and-white copy in `Downloads/흑백`, using Filee's grayscale
+    preset, `appendFiles` on, the output folder excluded") and the person
+    presses send; the librarian's `manage_automations` tool builds the rule (the
+    permission prompt is the person's to answer). The rule appearing in the
+    list is the next step. Then the window is split into Downloads (left) and a
+    practice-photo folder (right) holding the bundled sample photo
+    `IMG_0001.jpg` (`src/main/demo-assets/`, a downscaled NASA public-domain
+    image), and the person drags it into Downloads. The tutorial polls the
+    output folder with `fs.listDir` and finishes when a new picture appears
+    there (`grayCopy`), then shows that folder. The background service is
+    started when the request is made, so the first photo is seen.
+  - `contextMenu`: adds the Magic Action `dazzi-demo-glance` ("내용 한눈에
+    보기", a script that prints a text file's size and first lines) and a sample
+    file, opens the sample folder, and waits for the person to right-click the
+    sample and click the new menu item; the result dialog is explained, and the
+    last step offers Settings › 우클릭 메뉴 for making their own.
+  - `remoteAccess` creates nothing: it never turns the switch on for the person.
+- The practice photo is a *copy into a sub-folder*, not a rename in place: the
+  librarian's loop guard forbids an agent rule from renaming a file the rule
+  matches (NomaDamas/AutoRAG-app#475), and a sub-folder excluded from the rule
+  cannot re-trigger it. The "n / m" counter counts the steps still to come, so
+  it never reads "1 / 1".
+- Everything the demo makes is real. It is left in place when the tutorial ends;
+  the copy says it is practice and may be deleted. Nothing the person made is
+  touched. The one new file the tutorial writes outside its practice folder is
+  the AI's own rule and its output folder, in the person's real Downloads.
+- Same coach marks as the tour (`.fr-spot`, `.fr-coach`, `.fr-cursor`); clicks
+  pass through, Escape or 건너뛰기 ends one, and a step whose target stays gone
+  for 4 s (or a wait that lasts 45 s) ends it. One runs at a time, never during
+  the first run, and never when `AUTORAG_SKIP_ONBOARDING=1`
+  (`OnboardingSnapshot.tutorials`), so QA lanes are unaffected. `demo.*` is
+  native-only: a remote browser session cannot write files on the host.
 - **Progress is measured, never timed (seungwonme/AutoRAG-app#5).** The bar, the stage lines, the
   remaining time and the "may be stalled" warning come from `IndexProgressSnapshot`
-  (`src/shared/index-progress.ts`), the one computation that the indexing screen,
-  the sidebar activity entry and Settings > Indexing share. Four stages (탐색,
+  (`src/shared/index-progress.ts`), the one computation that the sidebar activity entry and
+  Settings > Indexing share (the first-run setup bar has its own keyword-only
+  estimate in `src/main/onboarding-progress.ts`). Four stages (탐색,
   파싱, 임베딩, 마무리) each count one unit, files, with skipped and failed files
   apart from the finished ones, so a count can never pass its total. A
   keyword-only run (semantic search off) still runs MinSync, as a sparse keyword
   index, so it has the same four stages and only the third is named 키워드 색인
-  (`keyword` instead of `embed`) on all three screens; it counts files and takes
+  (`keyword` instead of `embed`) on both screens; it counts files and takes
   the same share of the bar. The bar sits on fixed stage shares (parse 10%,
   embedding or keyword index 80%, finalize 10%): reading is quick and MinSync's
   work is nearly all of a run. It is filled only by measured completion, and
@@ -428,10 +544,8 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   measured (discovery, the final tidy-up, a MinSync stage whose files are all
   counted but not yet closed) draws as a working
   bar with the stage name instead of a percent, so a number never sits at 95%
-  while work remains. When the librarian's progress file already reads `success`
-  or `failed` but the app's refresh is still running (the batch-halving retry of a
-  timed-out MinSync step), the first-run screen keeps the last measured stage and
-  bar instead of falling back to 0% and 탐색. The remaining time is the rate of the last 10 minutes of observed
+  while work remains.
+  The remaining time is the rate of the last 10 minutes of observed
   movement (bytes when the staged sizes are known, files otherwise), named for the
   stage it is about, and reads "계산 중" until a minute of movement has been seen.
   Ten minutes without a finished file, with files left, shows a stalled warning
@@ -439,26 +553,6 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   grows on screen every minute, but screen readers hear the warning once (a
   hidden alert holds the words from when it appeared or changed kind, and the
   visible line is `aria-hidden`), not again every minute (`StalledWarning`).
-- **A first index that stops (issue #283)** is not a separate failure screen but
-  the indexing screen paused: the scene stops, one amber light replaces the blue,
-  and the screen carries only an icon, a one-line title, one reason line, one
-  button (Enter presses it) and at most two quiet links. There is no link that
-  skips the index: the Finder is already open, and closing this window on a
-  stopped run ends onboarding. The raw error and its code never appear (they stay in
-  the app log); a stopped run shows no estimate, no phase strip and no locked
-  gate. The reason decides the button: a refused embedder opens the embedding
-  choice, an offline embedder or model download retries by itself (8 s, up to 6
-  times, counted down on the reason line), an unplugged folder is watched every
-  3 s and can be left out, a full disk resumes the download, anything else
-  retries once and then offers the embedding choice. The design reference is
-  `docs/prototypes/onboarding-failure/`; the reasons and their screens are
-  `src/renderer/src/onboarding/pause.ts`.
-- The design reference now includes an experimental **Smart Indexing** step between account and folder selection. It is intentionally synthetic: it shows a bounded discovery pass, broad include roots, nested exclude paths (including `~/Documents/Codex`), hidden-folder exclusion, editable recommendations, and the hand-off to the existing folder scope screen. It does not read the host filesystem, call an LLM, write `searchPaths`/`excludePaths`, or start indexing.
-- The prototype controls can jump directly to each current-main-aligned step, switch light/dark appearance, and reset the synthetic state. The recommendation evidence and file counts are illustrative only; production model/provider, privacy consent, sampling limits, and path policy remain open design decisions.
-- The reference is a standalone HTML demo; its hardcoded copy is not application runtime UI. Production implementation MUST use the existing i18n and onboarding bridge contracts rather than copying the demo state.
-- Changes to these screens are checked against the prototype with
-  `scripts/manual-qa/run-qa-onboarding.mjs`, which also writes per-step
-  screenshots to `.omo/evidence/onboarding/`.
 
 ---
 

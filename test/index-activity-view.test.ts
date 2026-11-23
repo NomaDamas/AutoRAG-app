@@ -20,7 +20,7 @@ describe("describeIndexActivity", () => {
 	it("names the running phase and keeps the bar short of 100 while running", async () => {
 		await setAppLanguage("ko");
 		const view = describeIndexActivity(snapshot({ fraction: 0.999, items: [item({ phase: "minsync" })] }), t);
-		expect(view).toMatchObject({ tone: "run", percent: 99, headline: "인덱싱 중", origin: null, detail: "로컬 폴더 · 검색 색인 만드는 중" });
+		expect(view).toMatchObject({ tone: "run", percent: 99, headline: "인덱싱 중", origin: null, detail: "로컬 폴더 · 검색 인덱스 만드는 중" });
 	});
 
 	it("counts items and lists the datasource that is running, with no percent when unknown", async () => {
@@ -33,7 +33,7 @@ describe("describeIndexActivity", () => {
 			}),
 			t,
 		);
-		expect(view).toMatchObject({ percent: null, headline: "인덱싱 중 1/3", origin: "자동 새로 고침", detail: "slack 가져오는 중" });
+		expect(view).toMatchObject({ percent: null, headline: "인덱싱 중 1/3", origin: "자동 최신화", detail: "slack 가져오는 중" });
 	});
 
 	it("reports done at 100 and failure with the failing item and its error", async () => {

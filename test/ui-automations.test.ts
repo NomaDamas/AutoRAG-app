@@ -96,7 +96,7 @@ describe("file kinds from include globs", () => {
 describe("the sentence a person reads", () => {
 	it("titles a rule by its trigger and its action", () => {
 		expect(ruleTitle(rule())).toBe("새 PDF → Dazzi에게 맡기기");
-		expect(ruleTitle(rule({ events: ["create", "update", "delete"], include: ["**"], run: ["autorag", "refresh"] }))).toBe("파일 변경 → 검색 색인 최신화");
+		expect(ruleTitle(rule({ events: ["create", "update", "delete"], include: ["**"], run: ["autorag", "refresh"] }))).toBe("바뀐 파일 → 검색 인덱스 최신화");
 		expect(ruleTitle(rule({ include: ["**"], run: ["autorag", "search", "x"] }))).toBe("새 파일 → Dazzi에게 맡기기");
 	});
 
@@ -120,7 +120,7 @@ describe("the sentence a person reads", () => {
 		const long = rule({ run: ["autorag", "search", "이 문서를 세 줄로 요약해서 같은 폴더에 요약.md로 저장해줘"] });
 		expect(whatText(long, { full: true })).toBe("“이 문서를 세 줄로 요약해서 같은 폴더에 요약.md로 저장해줘”");
 		expect(whatText(long)).toBe("“이 문서를 세 줄로 요약해서 같은 폴더에…”");
-		expect(whatText(rule({ run: ["autorag", "refresh"] }))).toBe("검색 색인을 최신으로 맞춤");
+		expect(whatText(rule({ run: ["autorag", "refresh"] }))).toBe("검색 인덱스를 최신으로 맞춤");
 	});
 
 	it("reads in every interface language", async () => {

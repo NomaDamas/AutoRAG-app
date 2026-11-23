@@ -374,6 +374,26 @@ per request.
 * **macOS differential needs a previous zip.** The first update after a dmg
   install downloads the whole zip (there is nothing cached to diff against);
   every update after that is differential.
+* **Every window and teardown path must let the app quit for an update.** On
+  macOS, `autoUpdater.quitAndInstall()` closes all windows first, emits only
+  `before-quit-for-update` (not `before-quit`), and starts ShipIt once the last
+  window is gone.
+  * A window that hides instead of closing (the quick-search launcher, the Quick
+    Look panels) must stop refusing `close` on either event via `whenQuitting`
+    (`src/main/quit-signal.ts`), never `app.on("before-quit")` alone, and must
+    ignore late reopen requests once quitting has started.
+  * Close confirmations (such as the background first-index prompt in
+    `closeDecision`) must allow closing once `before-quit-for-update` fires, so
+    an explicit restart-to-update is never vetoed.
+  * `will-quit` teardown runs through `runQuitCleanup` with `Promise.allSettled`
+    and a hard deadline (`QUIT_CLEANUP_TIMEOUT_MS`), so a hung subprocess or MCP
+    session cannot keep the windowless process alive and stall ShipIt.
+  * A user-initiated download keeps `autoInstallOnAppQuit` armed across
+    background settings refreshes so `MacUpdater` always hands the finished zip
+    to Squirrel.Mac even when "업데이트 자동 설치" is off.
+  Otherwise "지금 재시작" stalls, ShipIt waits for a quit that never comes, and
+  the downloaded update is never installed. The live lane asserts the app really
+  exits on the restart click and relaunches as a new process.
 * **Windows** installs per-user with no prompt; the installer copies itself
   into the updater cache at install time, so even the first update is
   differential. Without Azure signing the app installs updates unverified

@@ -20,9 +20,9 @@
 @import "./settings.css" layer(base);
 @import "./settings-controls.css" layer(base);
 
-/* Onboarding - first-run flow, a scoped port of the onboarding reference
- * (DESIGN.md §3a). Every rule sits under `.onb`. */
-@import "./onboarding.css" layer(base);
+/* First run - the layer over the Finder window on a first launch
+ * (DESIGN.md §3a). Every rule sits under `.fr-` classes or `[data-first-run]`. */
+@import "./first-run.css" layer(base);
 
 /* Phone shell — the remote browser session on a phone-sized screen
  * (src/renderer/src/mobile). Every rule sits under `.phone-app`. */

@@ -5,10 +5,11 @@ import dazziMarkMono from "../../assets/dazzi-mark-mono.png";
 import dazziMarkMonoDark from "../../assets/dazzi-mark-mono-dark.png";
 import { VoiceButton } from "../InspectorChat";
 import { SeedLoader } from "../SeedLoader";
-import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerSurface } from "../../../../shared/app-customizer-contract";
+import type { AppCustomizerBridge, AppCustomizerChange, AppCustomizerEvent, AppCustomizerPrompt, AppCustomizerPromptAnswer, AppCustomizerSurface, ConfigAssistantSurface } from "../../../../shared/app-customizer-contract";
 import type { LocaleKey } from "../../../../shared/i18n/core";
 import { appendTranscript } from "../../../../shared/voice-contract";
 import type { AppSettings } from "../../../../shared/settings-contract";
+import { findSecrets, redactSecrets } from "../../../../shared/secret-guard";
 import { parseAnswerBlocks, parseInline, type InlineSegment } from "../../state/answer-markdown";
 
 type CustomizerWindow = Window & { readonly autorag?: { readonly appCustomizer?: AppCustomizerBridge } };
@@ -41,7 +42,7 @@ interface SurfaceCopy {
 }
 
 /** The context-menu assistant has no copy of its own for the shared states and reuses the sidebar assistant's. */
-const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
+const OWN_SURFACE_COPY: Readonly<Record<"sidebar" | "contextMenu" | "shortcuts", SurfaceCopy>> = {
 	sidebar: {
 		title: "settingsCore.sidebar.assistant.title",
 		emptyTitle: "settingsCore.sidebar.assistant.emptyTitle",
@@ -87,6 +88,100 @@ const SURFACE_COPY: Readonly<Record<AppCustomizerSurface, SurfaceCopy>> = {
 		unavailable: "settingsCore.shortcuts.assistant.unavailable",
 	},
 };
+
+/** The assistants of the config pages share one set of states; only the words that name the page differ. */
+function configSurfaceCopy(surface: ConfigAssistantSurface): SurfaceCopy {
+	const base = `settingsCore.assistants.${surface}` as const;
+	return {
+		title: `${base}.title`,
+		emptyTitle: `${base}.emptyTitle`,
+		emptyDesc: `${base}.emptyDesc`,
+		placeholder: `${base}.placeholder`,
+		suggestions: [`${base}.prompt1`, `${base}.prompt2`, `${base}.prompt3`],
+		thinking: "settingsCore.sidebar.assistant.thinking",
+		openAiSettings: "settingsCore.sidebar.assistant.openAiSettings",
+		unavailable: "settingsCore.sidebar.assistant.unavailable",
+	};
+}
+
+function surfaceCopy(surface: AppCustomizerSurface): SurfaceCopy {
+	return surface === "sidebar" || surface === "contextMenu" || surface === "shortcuts" ? OWN_SURFACE_COPY[surface] : configSurfaceCopy(surface);
+}
+
+
+/**
+ * What the assistant asks outside the chat: a masked field for a secret, or a yes/no listing what will happen. The typed value
+ * lives only in this field's state until it is sent to the main process, and is cleared the moment it is sent or the card closes.
+ */
+function PromptCard({ prompt, onAnswer }: { readonly prompt: AppCustomizerPrompt; readonly onAnswer: (answer: AppCustomizerPromptAnswer) => void }): ReactElement {
+	const { t } = useTranslation();
+	const [value, setValue] = useState("");
+	const cardRef = useRef<HTMLDivElement>(null);
+	// The card is the thing the person must act on: bring it, buttons included, into view when it opens.
+	useEffect(() => {
+		cardRef.current?.scrollIntoView({ block: "end" });
+	}, []);
+	if (prompt.kind === "confirm") {
+		return (
+			<div ref={cardRef} className="customizer-prompt" data-prompt="confirm" role="group" aria-label={prompt.title}>
+				<div className="customizer-prompt__title">{prompt.title}</div>
+				{prompt.lines.length > 0 ? (
+					<ul className="customizer-prompt__lines">
+						{prompt.lines.map((line, idx) => (
+							<li key={idx}>{line}</li>
+						))}
+					</ul>
+				) : null}
+				<div className="customizer-prompt__actions">
+					<button type="button" className="linear-btn" data-action="prompt-cancel" onClick={() => onAnswer({ kind: "confirm", confirmed: false })}>
+						{t("settingsCore.assistantPrompt.no")}
+					</button>
+					<button type="button" className="linear-btn settings-btn-primary" data-action="prompt-confirm" onClick={() => onAnswer({ kind: "confirm", confirmed: true })}>
+						{t("settingsCore.assistantPrompt.yes")}
+					</button>
+				</div>
+			</div>
+		);
+	}
+	const submit = (): void => {
+		const typed = value;
+		if (typed.trim().length === 0) return;
+		setValue("");
+		onAnswer({ kind: "secret", value: typed });
+	};
+	return (
+		<div ref={cardRef} className="customizer-prompt" data-prompt="secret" role="group" aria-label={prompt.title}>
+			<div className="customizer-prompt__title">{prompt.title}</div>
+			<p className="customizer-prompt__detail">{prompt.detail}</p>
+			{prompt.hint !== undefined ? <p className="customizer-prompt__hint">{prompt.hint}</p> : null}
+			<input
+				className="customizer-prompt__field"
+				type="password"
+				autoFocus
+				autoComplete="off"
+				spellCheck={false}
+				value={value}
+				placeholder={t("settingsCore.assistantPrompt.secretPlaceholder")}
+				aria-label={prompt.title}
+				onChange={(event) => setValue(event.target.value)}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+						event.preventDefault();
+						submit();
+					}
+				}}
+			/>
+			<div className="customizer-prompt__actions">
+				<button type="button" className="linear-btn" data-action="prompt-cancel" onClick={() => { setValue(""); onAnswer({ kind: "cancelled" }); }}>
+					{t("common.cancel")}
+				</button>
+				<button type="button" className="linear-btn settings-btn-primary" data-action="prompt-submit" disabled={value.trim().length === 0} onClick={submit}>
+					{t("settingsCore.assistantPrompt.save")}
+				</button>
+			</div>
+		</div>
+	);
+}
 
 function makeId(prefix: string): string {
 	return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -161,6 +256,7 @@ export function AppCustomizerPanel({
 	hidden,
 	focusRequest,
 	onSettingsUpdated,
+	onChangesApplied,
 	onOpenAiSettings,
 }: {
 	readonly surface: AppCustomizerSurface;
@@ -168,13 +264,17 @@ export function AppCustomizerPanel({
 	/** Bumped when the user explicitly opens the panel; the composer takes focus then, never on a plain page visit. */
 	readonly focusRequest: number;
 	readonly onSettingsUpdated: (settings: AppSettings) => void;
+	/** A turn ended with settings changed (even one the person stopped or that failed half way): the page beside the sidebar reads them again. */
+	readonly onChangesApplied: () => void;
 	readonly onOpenAiSettings: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
-	const copy = SURFACE_COPY[surface];
+	const copy = surfaceCopy(surface);
 	const [sessionId, setSessionId] = useState(() => makeId(`customizer-${surface}-sess`));
 	const [turns, setTurns] = useState<readonly ChatTurn[]>([]);
 	const [input, setInput] = useState("");
+	/** The cards the assistant has open right now; at most one per run in practice. */
+	const [prompts, setPrompts] = useState<readonly AppCustomizerPrompt[]>([]);
 	const [activeRunId, setActiveRunId] = useState<string | null>(null);
 	const activeRunIdRef = useRef<string | null>(null);
 	activeRunIdRef.current = activeRunId;
@@ -197,6 +297,14 @@ export function AppCustomizerPanel({
 		if (bridge === undefined) return;
 		return bridge.onEvent((event: AppCustomizerEvent) => {
 			if (event.sessionId !== sessionId) return;
+			if (event.type === "prompt") {
+				setPrompts((current) => [...current.filter((entry) => entry.id !== event.prompt.id), event.prompt]);
+				return;
+			}
+			if (event.type === "prompt-closed") {
+				setPrompts((current) => current.filter((entry) => entry.id !== event.promptId));
+				return;
+			}
 			setTurns((prev) =>
 				prev.map((turn) => {
 					if (turn.id !== event.runId) return turn;
@@ -245,6 +353,7 @@ export function AppCustomizerPanel({
 					}
 				}),
 			);
+			if (event.type !== "progress" && event.type !== "draft" && event.type !== "assistant-message" && event.changes.length > 0) onChangesApplied();
 			if (event.type === "turn-done") {
 				onSettingsUpdated(event.settings);
 				setActiveRunId((current) => (current === event.runId ? null : current));
@@ -252,12 +361,18 @@ export function AppCustomizerPanel({
 				setActiveRunId((current) => (current === event.runId ? null : current));
 			}
 		});
-	}, [sessionId, onSettingsUpdated]);
+	}, [sessionId, onSettingsUpdated, onChangesApplied]);
+
+	const answerPrompt = useCallback((promptId: string, answer: AppCustomizerPromptAnswer): void => {
+		setPrompts((current) => current.filter((entry) => entry.id !== promptId));
+		void getCustomizerBridge()?.answer(promptId, answer);
+	}, []);
 
 	const stopRun = useCallback((): void => {
 		const runId = activeRunIdRef.current;
 		if (runId === null) return;
 		setActiveRunId(null);
+		setPrompts([]);
 		setTurns((prev) =>
 			prev.map((turn) =>
 				turn.id === runId && turn.status === "running"
@@ -276,7 +391,8 @@ export function AppCustomizerPanel({
 
 	const sendMessage = useCallback(
 		(rawText: string): void => {
-			const trimmed = rawText.trim();
+			// A credential typed into the chat box is dropped here, before it is shown, kept or sent: the masked key field is the place for it.
+			const trimmed = (findSecrets(rawText) > 0 ? redactSecrets(rawText) : rawText).trim();
 			if (trimmed.length === 0 || activeRunIdRef.current !== null) return;
 			const runId = makeId("customizer-run");
 			setInput("");
@@ -393,7 +509,10 @@ export function AppCustomizerPanel({
 									{turn.status === "running" && turn.draft.length > 0 ? (
 										<CustomizerReplyBody text={turn.draft} />
 									) : null}
-									{turn.status === "running" && turn.draft.length === 0 ? (
+									{turn.status === "running"
+										? prompts.map((prompt) => <PromptCard key={prompt.id} prompt={prompt} onAnswer={(answer) => answerPrompt(prompt.id, answer)} />)
+										: null}
+									{turn.status === "running" && turn.draft.length === 0 && prompts.length === 0 ? (
 										<div className="customizer-turn__progress" role="status">
 											<SeedLoader />
 											<span className="shimmer min-w-0 truncate">{turn.progress.length > 0 ? turn.progress : t(copy.thinking)}</span>

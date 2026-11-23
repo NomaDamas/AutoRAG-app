@@ -26,9 +26,10 @@ import { cn } from "../lib/cn";
 import { buttonClass } from "./primitives/button";
 import { evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
 import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { drawQuickAnswer } from "../state/answer-revisions";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
-import { ProseBlocks, SteerBubble, formatElapsed } from "./AiSearchPanel";
+import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -51,6 +52,9 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { EvidenceExcerpt } from "./EvidenceBlocks";
 import { ComposerField } from "./ComposerField";
+import { AttachmentThumb } from "./AttachmentThumb";
+import { mergeAttachments } from "../state/attachments";
+import { attachPastedImages } from "../state/pasted-images";
 import type { SteerItem } from "../state/steering";
 import { dirname } from "../state/paths";
 
@@ -87,7 +91,7 @@ function AttachmentCard({
 	readonly small?: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
-	return (
+	const card = (
 		<span className="inspector-chat-att relative inline-flex max-w-full min-w-0 items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5" title={att.id}>
 			<FileTile kind={att.kind === "folder" ? "folder" : evidenceKind(att.name)} size={18} />
 			<span className={cn("min-w-0 truncate text-ink", small ? "text-badge leading-[16px]" : "text-meta leading-[1.4]")}>{att.name}</span>
@@ -103,6 +107,15 @@ function AttachmentCard({
 				</button>
 			)}
 		</span>
+	);
+	return (
+		<AttachmentThumb
+			att={att}
+			size={onRemove === undefined ? "message" : "compact"}
+			removeLabel={t("inspector.chat.removeAttachment")}
+			{...(onRemove === undefined ? {} : { onRemove })}
+			fallback={card}
+		/>
 	);
 }
 
@@ -184,7 +197,7 @@ function Composer({
 	readonly placeholder: string;
 	readonly running: boolean;
 	/** False when the question was not sent (another inspector answer is still coming): the draft stays. */
-	readonly onSend: (text: string) => boolean;
+	readonly onSend: (text: string, pasted: readonly ChatAttachment[]) => boolean;
 	/**
 	 * Enter during a run corrects it, as in an AI Search tab. False when the run no longer takes it. Absent for a composer
 	 * that cannot reach the run (the Info view's): there the draft waits for the answer.
@@ -197,6 +210,8 @@ function Composer({
 }): ReactElement {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
+	/** Images pasted into the field: cards of their own, sent with the next question. */
+	const [pasted, setPasted] = useState<readonly ChatAttachment[]>([]);
 	const [busyNotice, setBusyNotice] = useState(false);
 	const [voiceNotice, setVoiceNotice] = useState<string | null>(null);
 	const voice = window.autorag?.voice;
@@ -215,20 +230,29 @@ function Composer({
 			setDraft("");
 			return;
 		}
-		if (!onSend(text)) {
+		if (!onSend(text, pasted)) {
 			setBusyNotice(true);
 			return;
 		}
 		setBusyNotice(false);
 		setDraft("");
+		setPasted([]);
+	};
+	const pasteImages = (files: readonly File[]): void => {
+		void attachPastedImages(files, window.autorag.search.pasteImage).then((kept) => {
+			if (kept.length > 0) setPasted((current) => mergeAttachments(current, kept));
+		});
 	};
 	return (
 		<div className="inspector-chat-composer block">
 			<div className="flex flex-col gap-10 rounded-12 border border-divider bg-window py-8 pl-11 pr-12 shadow-[0_2px_5px_rgba(20,20,41,0.07)]">
-				{pending.length === 0 ? null : (
+				{pending.length === 0 && pasted.length === 0 ? null : (
 					<div className="flex flex-wrap gap-x-10 gap-y-8 pt-2 pr-6">
 						{pending.map((att) => (
 							<AttachmentCard key={att.id} att={att} small onRemove={() => onDismiss(att.id)} />
+						))}
+						{pasted.map((att) => (
+							<AttachmentCard key={att.id} att={att} small onRemove={() => setPasted((current) => current.filter((item) => item.id !== att.id))} />
 						))}
 					</div>
 				)}
@@ -250,6 +274,7 @@ function Composer({
 							setBusyNotice(false);
 						}}
 						onAltEnter={() => send(true)}
+						onPasteImages={pasteImages}
 					/>
 					{running && onSteer !== undefined && draft.trim().length > 0 ? (
 						<button
@@ -321,7 +346,7 @@ export interface InspectorChatDockProps {
 	/** The question or approval the running chat waits on: it replaces the composer, wherever the run was asked. */
 	readonly request: InteractionRequest | null;
 	/** A question typed here: it starts a new chat about the selection. */
-	readonly onAsk: (text: string) => boolean;
+	readonly onAsk: (text: string, pasted: readonly ChatAttachment[]) => boolean;
 	/** "AI 요약" about the selection, in a new chat. */
 	readonly onSummarize: () => void;
 	readonly onStop: () => void;
@@ -463,6 +488,8 @@ function PhaseAnswer({
 	imageActions,
 	onReveal,
 	onPreview,
+	revisions,
+	unresolved,
 }: {
 	readonly text: string;
 	/** The sources this phase cites: a number outside it has nothing to open and is dropped, as in an AI Search tab. */
@@ -470,6 +497,9 @@ function PhaseAnswer({
 	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
+	/** A Quick answer the librarian corrected: `text` holds the marks of these corrections, and `unresolved` is what its citations lack. */
+	readonly revisions?: RevisionDraw;
+	readonly unresolved?: readonly number[];
 }): ReactElement {
 	const answerRef = useRef<HTMLDivElement>(null);
 	const [hovered, setHovered] = useState<HoveredCitation | null>(null);
@@ -512,10 +542,11 @@ function PhaseAnswer({
 			}}
 		>
 			<ProseBlocks
+				{...(revisions === undefined ? {} : { revisions })}
 				text={text}
 				/* Like the AI Search tab: every number sits in the pale wash, the one being hovered fills blue. */
 				selected={hovered?.number ?? null}
-				unresolved={unresolvedCitationNumbers(text, evidence)}
+				unresolved={unresolved ?? unresolvedCitationNumbers(text, evidence)}
 				onCitation={(number) => setHovered((current) => (current?.number === number ? null : current))}
 				imageActions={imageActions}
 			/>
@@ -547,6 +578,7 @@ function TurnView({
 	const { t } = useTranslation();
 	const quickText = quickTextOf(turn);
 	const deepText = deepTextOf(turn);
+	const quickDraw = drawQuickAnswer(turn.quick, turn.deep, turn.revisions);
 	return (
 		<>
 			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
@@ -562,7 +594,14 @@ function TurnView({
 				))}
 			<div className="flex min-w-0 flex-col gap-8">
 				{quickText === "" ? null : (
-					<PhaseAnswer text={quickText} evidence={turn.quick?.evidence ?? []} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
+					<PhaseAnswer
+						text={quickDraw?.text ?? quickText}
+						evidence={quickDraw?.evidence ?? turn.quick?.evidence ?? []}
+						imageActions={imageActions}
+						onReveal={onReveal}
+						onPreview={onPreview}
+						{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: turn.startedAt !== 0, fresh: turn.startedAt !== 0 ? quickDraw.fresh : [] }, unresolved: quickDraw.unresolved })}
+					/>
 				)}
 				{turn.steers
 					.filter((steer) => steer.timing === "after-quick")
@@ -686,7 +725,7 @@ export interface InspectorChatViewProps {
 	/** The question or approval this chat's run waits on: it replaces the composer until the person answers. */
 	readonly request: InteractionRequest | null;
 	readonly imageActions: ImageActions;
-	readonly onAsk: (text: string) => boolean;
+	readonly onAsk: (text: string, pasted: readonly ChatAttachment[]) => boolean;
 	/** Enter during the run: correct it. False when the run no longer takes it. */
 	readonly onSteer: (text: string) => boolean;
 	/** ⌥Enter during the run: ask the text next, once the run ends. */

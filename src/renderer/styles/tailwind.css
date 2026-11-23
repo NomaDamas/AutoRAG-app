@@ -152,6 +152,8 @@
 	--color-border: var(--border);
 	--color-divider: var(--border-divider);
 	--color-border-strong: var(--border-strong);
+	--color-chk-pending-on: var(--chk-pending-on);
+	--color-chk-pending-off: var(--chk-pending-off);
 
 	/* ---------------------------------------------------------------- §2.4 Ink */
 	--color-ink: var(--text-primary);
@@ -206,6 +208,8 @@
 	--color-warn-text: var(--warn-text);
 	--color-warn-bg: var(--warn-bg);
 	--color-warn-bg-strong: var(--warn-bg-strong);
+	--color-source-new: var(--source-new);
+	--color-source-new-text: var(--source-new-text);
 	--color-info-dot: var(--info-dot);
 	--color-info-text: var(--info-text);
 	--color-info-bg: var(--info-bg);
@@ -249,8 +253,6 @@
 	--color-vtag-near-text: var(--vtag-near-text);
 	--color-vtag-exact-bg: var(--vtag-exact-bg);
 	--color-vtag-exact-text: var(--vtag-exact-text);
-	--color-vtag-similar-bg: var(--vtag-similar-bg);
-	--color-vtag-similar-text: var(--vtag-similar-text);
 
 	/* --------------------------------------------------------- §7 Scrollbars */
 	/* (none — native overlay scrollbars; see base.css §7) */
@@ -397,6 +399,7 @@
 	--animate-shimmer: shimmer var(--dur-shimmer) linear infinite;
 	--animate-pane-in: paneIn var(--dur-pane) var(--ease-pane);
 	--animate-drop-in: dropIn var(--dur-menu) var(--ease-out);
+	--animate-source-pop: popIn var(--dur-source-pop) var(--ease-pop);
 }
 
 /* ============================================================================
