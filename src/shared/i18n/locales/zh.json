@@ -499,14 +499,16 @@
     "answeredCount": "已回答 {{answered}} / {{total}}",
     "showMore": "显示更多",
     "showLess": "收起",
-    "writeOwn": "自己输入答案",
+    "writeOwn": "直接输入",
     "answerPlaceholder": "输入你的答案",
     "questionAria": "Dazzi 的提问",
     "approval": {
       "headlineChange": "允许这次文件更改吗？",
       "headlineRun": "Dazzi 想运行一项任务。允许吗？",
       "headlineUnclassified": "Dazzi 想运行这条命令。允许吗？",
-      "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定是否允许。"
+      "noteUnclassified": "无法事先确认这条命令是否会更改你的文件。请查看内容后决定是否允许。",
+      "command": "要执行的命令",
+      "copy": "复制命令"
     },
     "category": {
       "delete": "删除",
@@ -518,14 +520,16 @@
     },
     "allowOnce": "仅允许这一次",
     "allowSession": {
-      "categories": "本会话中全部允许",
-      "unclassified": "本会话允许所有无法分类的调用",
-      "all": "本会话允许所有此类调用"
+      "categories": "本会话中始终允许",
+      "unclassified": "本会话允许未分类调用",
+      "all": "本会话允许同类调用"
     },
     "deny": "拒绝",
     "denyWithNote": "拒绝并告诉模型…",
     "notePlaceholder": "应该改做什么？（例如：在副本上操作）",
-    "sendNote": "发送"
+    "sendNote": "发送",
+    "prevQuestion": "上一个问题",
+    "nextQuestion": "下一个问题"
   },
   "automations": {
     "list": "自动化规则",

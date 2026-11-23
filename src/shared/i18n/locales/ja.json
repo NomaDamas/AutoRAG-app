@@ -499,14 +499,16 @@
     "answeredCount": "{{answered}} / {{total}} 回答済み",
     "showMore": "もっと見る",
     "showLess": "折りたたむ",
-    "writeOwn": "自分で回答を入力",
+    "writeOwn": "直接入力",
     "answerPlaceholder": "回答を入力",
     "questionAria": "Dazzi からの質問",
     "approval": {
       "headlineChange": "このファイルの変更を許可しますか？",
       "headlineRun": "Dazzi が作業を実行しようとしています。許可しますか？",
       "headlineUnclassified": "Dazzi がこのコマンドを実行しようとしています。許可しますか？",
-      "noteUnclassified": "このコマンドがファイルを変更するかどうか事前に確認できませんでした。内容を確認して、許可するかどうか決めてください。"
+      "noteUnclassified": "このコマンドがファイルを変更するかどうか事前に確認できませんでした。内容を確認して、許可するかどうか決めてください。",
+      "command": "実行するコマンド",
+      "copy": "コマンドをコピー"
     },
     "category": {
       "delete": "削除",
@@ -518,14 +520,16 @@
     },
     "allowOnce": "今回だけ許可",
     "allowSession": {
-      "categories": "このセッションではすべて許可",
-      "unclassified": "このセッションでは分類できない呼び出しをすべて許可",
-      "all": "このセッションではこのような呼び出しをすべて許可"
+      "categories": "このセッションでは常に許可",
+      "unclassified": "未分類をセッション中許可",
+      "all": "セッション中は同様に許可"
     },
     "deny": "拒否",
     "denyWithNote": "拒否してモデルに伝える…",
     "notePlaceholder": "代わりにどうしますか？（例：コピーで作業）",
-    "sendNote": "送信"
+    "sendNote": "送信",
+    "prevQuestion": "前の質問",
+    "nextQuestion": "次の質問"
   },
   "automations": {
     "list": "自動化ルール",

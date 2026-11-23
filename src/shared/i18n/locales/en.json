@@ -499,14 +499,16 @@
     "answeredCount": "{{answered}} / {{total}} answered",
     "showMore": "Show more",
     "showLess": "Show less",
-    "writeOwn": "Write your own answer",
+    "writeOwn": "Type your own",
     "answerPlaceholder": "Type your answer",
     "questionAria": "Question from Dazzi",
     "approval": {
       "headlineChange": "Allow this file change?",
       "headlineRun": "Dazzi wants to run a task. Allow it?",
       "headlineUnclassified": "Dazzi wants to run this command. Allow it?",
-      "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide whether to allow it."
+      "noteUnclassified": "Couldn't check beforehand whether this command changes your files. Please look at it and decide whether to allow it.",
+      "command": "Command to run",
+      "copy": "Copy command"
     },
     "category": {
       "delete": "Delete",
@@ -518,14 +520,16 @@
     },
     "allowOnce": "Allow once",
     "allowSession": {
-      "categories": "Allow all this session",
-      "unclassified": "Allow all unclassified calls this session",
-      "all": "Allow every such call this session"
+      "categories": "Always allow this session",
+      "unclassified": "Allow unclassified this session",
+      "all": "Allow similar this session"
     },
     "deny": "Deny",
     "denyWithNote": "Deny and tell the model…",
     "notePlaceholder": "What should it do instead? (e.g. work on a copy)",
-    "sendNote": "Send"
+    "sendNote": "Send",
+    "prevQuestion": "Previous question",
+    "nextQuestion": "Next question"
   },
   "automations": {
     "list": "Automation rules",
