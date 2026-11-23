@@ -244,6 +244,16 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			if (rule !== null) edit(rule);
 		},
 		onAdd: add,
+		onCreate: async (draft) => {
+			try {
+				const id = await store.create(draft);
+				if (id !== null) setSelectedId(id);
+				return id !== null;
+			} catch (cause) {
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+				return false;
+			}
+		},
 		onPreview: (id) => {
 			setSelectedId(id);
 			setPreviewId(id);

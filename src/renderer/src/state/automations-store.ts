@@ -1,6 +1,7 @@
 import {
 	IDLE_AUTOMATIONS,
 	type AutomationBridge,
+	type AutomationDraft,
 	type AutomationRemoval,
 	type AutomationRule,
 	type AutomationsSnapshot,
@@ -70,6 +71,8 @@ export interface AutomationsStore {
 	undo(): Promise<void>;
 	clearUndo(): void;
 	setDaemon(enabled: boolean): Promise<void>;
+	/** Write a new rule; resolves with the id it was given, or null when there is no bridge. */
+	create(draft: AutomationDraft): Promise<string | null>;
 	dispose(): void;
 }
 
@@ -148,6 +151,16 @@ export function createAutomationsStore(bridge: AutomationBridge | undefined): Au
 				publish({ state: await bridge.setDaemon(enabled), daemonBusy: false });
 			} catch (cause) {
 				publish({ daemonBusy: false });
+				throw new Error(ipcMessage(cause));
+			}
+		},
+		async create(draft) {
+			if (bridge === undefined) return null;
+			try {
+				const { snapshot, id } = await bridge.create(draft);
+				publish({ state: snapshot });
+				return id;
+			} catch (cause) {
 				throw new Error(ipcMessage(cause));
 			}
 		},

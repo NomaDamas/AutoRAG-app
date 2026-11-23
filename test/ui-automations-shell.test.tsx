@@ -67,6 +67,7 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 			current = snapshot(current.rules.filter((item) => item.id !== id));
 			return { snapshot: current, removal: { entry: { id }, index: removedIndex } };
 		},
+		create: async () => ({ snapshot: current, id: "new-rule" }),
 		restore: async () => {
 			const next = [...current.rules];
 			if (removed !== undefined) next.splice(removedIndex, 0, removed);

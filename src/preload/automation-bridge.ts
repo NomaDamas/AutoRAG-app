@@ -8,6 +8,7 @@ export function createAutomationBridge(ipcRenderer: IpcRenderer): AutomationBrid
 		remove: (id) => ipcRenderer.invoke(AUTOMATION_CHANNELS.remove, id),
 		restore: (removal) => ipcRenderer.invoke(AUTOMATION_CHANNELS.restore, removal),
 		setDaemon: (enabled) => ipcRenderer.invoke(AUTOMATION_CHANNELS.setDaemon, enabled),
+		create: (draft) => ipcRenderer.invoke(AUTOMATION_CHANNELS.create, draft),
 		onChange: (listener) => {
 			const handler = (_event: IpcRendererEvent, snapshot: AutomationsSnapshot): void => listener(snapshot);
 			ipcRenderer.on(AUTOMATION_CHANNELS.changed, handler);

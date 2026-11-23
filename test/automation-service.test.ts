@@ -552,6 +552,50 @@ describe("createAutomationService remove", () => {
 	});
 });
 
+describe("createAutomationService create", () => {
+	it("adds a rule from the 새 자동화 card after the ones already there, with a fresh id", async () => {
+		const dir = await home();
+		const keep = rule("keep");
+		const file = await writeRules(dir, [keep]);
+
+		const result = await service(dir, fakeCli(dir)).create({ paths: ["/Users/me/Downloads"], events: ["create"], include: ["**/*.pdf"], agent: { profile: "file-triage", task: "요약해 줘" } });
+
+		const written = (JSON.parse(await readFile(file, "utf8")) as { automations: Record<string, unknown>[] }).automations;
+		expect(written[0]).toEqual(keep);
+		expect(written[1]).toEqual({ id: result.id, paths: ["/Users/me/Downloads"], events: ["create"], include: ["**/*.pdf"], agent: { profile: "file-triage", task: "요약해 줘" } });
+		expect(result.id).toMatch(/^rule-[a-z0-9]+$/u);
+		expect(result.snapshot.rules.map((item) => item.id)).toEqual(["keep", result.id]);
+	});
+
+	it("starts the rules file when there is none, and writes a command rule without an include", async () => {
+		const dir = await home();
+		const result = await service(dir, fakeCli(dir)).create({ paths: ["/Users/me/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
+		const written = (JSON.parse(await readFile(rulesPath(dir), "utf8")) as { automations: unknown[] }).automations;
+		expect(written).toEqual([{ id: result.id, paths: ["/Users/me/Documents"], events: ["create", "update"], run: ["autorag", "refresh"] }]);
+	});
+
+	it("takes the rule back out when the librarian refuses the file it leaves", async () => {
+		const dir = await home();
+		const keep = rule("keep");
+		const file = await writeRules(dir, [keep]);
+		const before = await readFile(file, "utf8");
+		const cli = fakeCli(dir);
+		let refuse = true;
+		const automations = service(dir, {
+			...cli,
+			run: async (args) => {
+				if (refuse && readEntries(dir).length === 2) {
+					refuse = false;
+					return ok(statusOf({ dir, automations: [], installed: false, running: false, configError: "bad rule" }));
+				}
+				return cli.run(args);
+			},
+		});
+		await expect(automations.create({ paths: ["/x"], events: ["create"], include: [], agent: { profile: "file-triage", task: "t" } })).rejects.toThrow("bad rule");
+		expect(await readFile(file, "utf8")).toBe(before);
+	});
+});
+
 describe("createAutomationService restore", () => {
 	it("puts the entry back where it was", async () => {
 		const dir = await home();

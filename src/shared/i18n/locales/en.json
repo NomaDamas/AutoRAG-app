@@ -584,7 +584,12 @@
       "agentProfile": "AI profile",
       "more": "More",
       "menuEdit": "Edit",
-      "menuDelete": "Delete"
+      "menuDelete": "Delete",
+      "runDone": "Done",
+      "serviceOff": "off",
+      "failedRules": "{{count}} failed — {{name}}",
+      "recentRuns": "Recent runs",
+      "noRuns": "Nothing has run yet"
     },
     "quickLook": {
       "when": "When",
@@ -663,6 +668,53 @@
     "agent": {
       "reads": "Reads only",
       "writes": "Can change files"
+    },
+    "mine": "My Automations",
+    "create": {
+      "title": "New Automation",
+      "when": "When",
+      "task": "What Dazzi does",
+      "taskPlaceholder": "e.g. Summarize it in three lines and save it as a note",
+      "submit": "Create",
+      "sentence": "When {{kind}} {{event}} in {{folder}}",
+      "kindLabel": "File type",
+      "eventLabel": "Change",
+      "modeLabel": "Permission",
+      "pickFolder": "Choose folder",
+      "kind": {
+        "all": "any files",
+        "pdf": "PDF files",
+        "image": "images",
+        "document": "documents"
+      },
+      "event": {
+        "create": "arrive",
+        "update": "change",
+        "createUpdate": "arrive or change",
+        "delete": "are deleted"
+      },
+      "mode": {
+        "read": "Read only",
+        "write": "Can edit files"
+      }
+    },
+    "templates": {
+      "title": "Suggested Automations",
+      "screenshot": {
+        "title": "Tidy screenshot names",
+        "desc": "When a screenshot lands on the Desktop, give it a name that says what it is",
+        "task": "Give it a name that says what it is"
+      },
+      "pdf": {
+        "title": "Summarize new PDFs",
+        "desc": "When a PDF arrives in Downloads, summarize it in three lines and save it as a note",
+        "task": "Summarize it in three lines and save it as a note"
+      },
+      "refresh": {
+        "title": "Keep search up to date",
+        "desc": "When files in Documents are added or changed, update search right away",
+        "task": "Update search right away"
+      }
     }
   },
   "osMenu": {

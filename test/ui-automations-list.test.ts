@@ -120,6 +120,7 @@ describe("the automations store", () => {
 				current = snapshot(current.rules.filter((item) => item.id !== id));
 				return { snapshot: current, removal };
 			}),
+			create: vi.fn(async () => ({ snapshot: current, id: "new" })),
 			restore: vi.fn(async () => {
 				current = snapshot([rule("a"), rule("b")]);
 				return current;

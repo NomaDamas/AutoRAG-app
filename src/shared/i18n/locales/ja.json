@@ -584,7 +584,12 @@
       "agentProfile": "AI プロファイル",
       "more": "その他",
       "menuEdit": "編集",
-      "menuDelete": "削除"
+      "menuDelete": "削除",
+      "runDone": "完了",
+      "serviceOff": "オフ",
+      "failedRules": "失敗した自動化 {{count}}件 — {{name}}",
+      "recentRuns": "最近の実行",
+      "noRuns": "まだ実行されていません"
     },
     "quickLook": {
       "when": "いつ",
@@ -663,6 +668,53 @@
     "agent": {
       "reads": "読み取りのみ",
       "writes": "ファイルを変更できる"
+    },
+    "mine": "マイ自動化",
+    "create": {
+      "title": "新しい自動化",
+      "when": "いつ",
+      "task": "Dazziがすること",
+      "taskPlaceholder": "例: 要点を3行にまとめてメモに残して",
+      "submit": "作成",
+      "sentence": "{{folder}}に{{kind}}が{{event}}とき",
+      "kindLabel": "ファイルの種類",
+      "eventLabel": "変化",
+      "modeLabel": "権限",
+      "pickFolder": "フォルダを選択",
+      "kind": {
+        "all": "ファイル",
+        "pdf": "PDFファイル",
+        "image": "画像",
+        "document": "文書"
+      },
+      "event": {
+        "create": "追加された",
+        "update": "変更された",
+        "createUpdate": "追加・変更された",
+        "delete": "削除された"
+      },
+      "mode": {
+        "read": "読み取りのみ",
+        "write": "ファイルの変更を許可"
+      }
+    },
+    "templates": {
+      "title": "おすすめの自動化",
+      "screenshot": {
+        "title": "スクリーンショット名の整理",
+        "desc": "デスクトップにスクリーンショットができたら、わかりやすい名前に変えて",
+        "task": "わかりやすい名前に変えて"
+      },
+      "pdf": {
+        "title": "新しいPDFの要約",
+        "desc": "ダウンロードにPDFが届いたら、要点を3行にまとめてメモに残して",
+        "task": "要点を3行にまとめてメモに残して"
+      },
+      "refresh": {
+        "title": "検索をすぐ最新に",
+        "desc": "書類フォルダのファイルが追加・変更されたら、すぐ検索に反映して",
+        "task": "すぐ検索に反映して"
+      }
     }
   },
   "osMenu": {

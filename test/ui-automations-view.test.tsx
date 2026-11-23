@@ -4,9 +4,21 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutomationsView, type AutomationsViewProps } from "../src/renderer/src/components/AutomationsView";
 import type { AutomationRule, AutomationsSnapshot } from "../src/shared/automation-contract";
+import type { FsLocation } from "../src/shared/fs-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
+
+const place = (name: string, path: string, icon: FsLocation["icon"]): FsLocation => ({ name, path, section: "favorites", icon, available: true, scanned: true }) as FsLocation;
+Reflect.set(globalThis, "autorag", {
+	fs: {
+		locations: async (): Promise<readonly FsLocation[]> => [
+			place("Desktop", "/Users/jeffrey/Desktop", "desktop"),
+			place("Documents", "/Users/jeffrey/Documents", "documents"),
+			place("Downloads", "/Users/jeffrey/Downloads", "downloads"),
+		],
+	},
+});
 
 let host: HTMLDivElement;
 let root: Root;
@@ -68,6 +80,7 @@ function props(overrides: Partial<AutomationsViewProps> = {}): AutomationsViewPr
 		onSelect: vi.fn(),
 		onEdit: vi.fn(),
 		onAdd: vi.fn(),
+		onCreate: vi.fn(async () => true),
 		onPreview: vi.fn(),
 		onAskDelete: vi.fn(),
 		onSetDaemon: vi.fn(),
@@ -81,19 +94,34 @@ function render(p: AutomationsViewProps): void {
 	act(() => root.render(<AutomationsView {...p} />));
 }
 
+async function settle(): Promise<void> {
+	await act(async () => {
+		await Promise.resolve();
+		await Promise.resolve();
+	});
+}
+
+function type(element: HTMLTextAreaElement, value: string): void {
+	const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+	setter?.call(element, value);
+	element.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+const click = (element: Element | null | undefined): void => {
+	act(() => element?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+};
+
 const rows = (): HTMLElement[] => [...host.querySelectorAll<HTMLElement>('[role="row"][data-rule-id]')];
 const text = (element: Element | null | undefined): string => element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 
 describe("AutomationsView list", () => {
-	it("lists every rule as a row: what it does, the watched folder, when it last ran", () => {
+	it("lists every rule under 내 자동화 as its name and when it runs (Figma 611:3601)", () => {
 		render(props());
 		expect(rows().map((row) => row.dataset.ruleId)).toEqual(["downloads-pdf-summary", "hwp-to-pdf", "screens"]);
 		const first = rows()[0];
 		expect(text(first)).toContain("새 PDF → Dazzi에게 맡기기");
-		expect(text(first)).toContain("다운로드");
-		expect(text(first)).toContain("3분 전");
+		expect(text(first)).toContain("다운로드에 PDF 파일이 새로 생기면");
 		expect(text(rows()[2])).toContain("데스크탑");
-		expect(text(rows()[2])).toContain("—");
 	});
 
 	it("marks the selected row and tells a failed rule apart from a good one and one that never ran", () => {
@@ -103,11 +131,10 @@ describe("AutomationsView list", () => {
 		expect(tones).toEqual(["ok", "fail", "never"]);
 	});
 
-	it("names its columns in the interface language", async () => {
+	it("names its three sections in the interface language", async () => {
 		await setAppLanguage("en");
 		render(props());
-		const header = host.querySelector('[role="rowgroup"][data-columns]');
-		expect([...(header?.querySelectorAll("span") ?? [])].map((cell) => cell.textContent)).toEqual(["Name", "Watched folder", "Last run", "Status"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["New Automation", "My Automations", "Suggested Automations"]);
 	});
 
 	it("counts its rules in a wording that reads right for one and for many", async () => {
@@ -191,23 +218,20 @@ describe("AutomationsView background service line", () => {
 	it("shows no service line at all for a user with no rules file, where there is nothing to run", () => {
 		render(props({ state: state([], { daemon: null }) }));
 		expect(bar()).toBeNull();
-		expect(text(host)).toContain("아직 자동화가 없습니다");
+		expect(host.querySelector('[data-testid="automation-new"]')).not.toBeNull();
 	});
 });
 
 describe("AutomationsView empty and error states", () => {
-	it("invites adding the first rule through AI Chat when there are none", () => {
-		const p = props({ state: state([]) });
-		render(p);
+	it("offers the 새 자동화 card and 추천 자동화 but no 내 자동화 list when there are no rules", () => {
+		render(props({ state: state([]) }));
 		expect(rows()).toEqual([]);
-		expect(text(host)).toContain("아직 자동화가 없습니다");
-		act(() => [...host.querySelectorAll("button")].find((b) => text(b) === "AI 에이전트에서 규칙 추가")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		expect(p.onAdd).toHaveBeenCalledTimes(1);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["새 자동화", "추천 자동화"]);
 	});
 
 	it("shows nothing but the frame before the first read finishes, instead of a false empty list", () => {
 		render(props({ state: { ...state([]), ready: false } }));
-		expect(text(host)).not.toContain("아직 자동화가 없습니다");
+		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
 	});
 
 	it("says when the rules file cannot be read and shows the reason, not an empty list", () => {
@@ -221,5 +245,68 @@ describe("AutomationsView empty and error states", () => {
 		render(props({ state: state([rule("a")], { error: "자동화 상태를 확인하지 못했습니다: boom" }) }));
 		expect(rows()).toHaveLength(1);
 		expect(text(host)).toContain("자동화 상태를 확인하지 못했습니다: boom");
+	});
+});
+
+describe("AutomationsView 새 자동화 card", () => {
+	const create = (): HTMLButtonElement | null => host.querySelector('[data-action="automation-create"]');
+	const task = (): HTMLTextAreaElement => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')!;
+	const sentence = (): string => [...(host.querySelector('[data-testid="automation-new-when"]')?.children ?? [])].map((part) => text(part)).join(" ");
+
+	it("reads the 언제 sentence with the first standard folder, and creates a read-only agent rule from it", async () => {
+		const p = props();
+		render(p);
+		await settle();
+		expect(sentence()).toBe("다운로드 에 PDF 파일 이 새로 생기면");
+		expect(create()?.disabled).toBe(true);
+		act(() => type(task(), "핵심을 3줄로 요약해 줘"));
+		expect(create()?.disabled).toBe(false);
+		await act(async () => {
+			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(p.onCreate).toHaveBeenCalledWith({
+			paths: ["/Users/jeffrey/Downloads"],
+			events: ["create"],
+			include: ["**/*.pdf"],
+			agent: { profile: "file-triage", task: "핵심을 3줄로 요약해 줘" },
+		});
+		await settle();
+		expect(task().value).toBe("");
+	});
+
+	it("changes the folder, the kind, the change and the permission from their chips", async () => {
+		const p = props();
+		render(p);
+		await settle();
+		click(host.querySelector('[data-testid="automation-new-folder"]'));
+		click(host.querySelector('[data-testid="automation-new-folder-/Users/jeffrey/Desktop"]'));
+		click(host.querySelector('[data-testid="automation-new-kind"]'));
+		click(host.querySelector('[data-testid="automation-new-kind-image"]'));
+		click(host.querySelector('[data-testid="automation-new-event"]'));
+		click(host.querySelector('[data-testid="automation-new-event-createUpdate"]'));
+		click(host.querySelector('[data-testid="automation-new-mode"]'));
+		click(host.querySelector('[data-testid="automation-new-mode-write"]'));
+		expect(sentence()).toBe("데스크탑 에 이미지 파일 이 생기거나 바뀌면");
+		act(() => type(task(), "이름을 정리해 줘"));
+		await act(async () => {
+			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(p.onCreate).toHaveBeenCalledWith(expect.objectContaining({ paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], agent: { profile: "file-organizer", task: "이름을 정리해 줘" } }));
+	});
+
+	it("fills the card from a 추천 자동화 row, and keeps the search refresh a command until its words are changed", async () => {
+		const p = props();
+		render(p);
+		await settle();
+		click(host.querySelector('[data-template="refresh"]'));
+		expect(task().value).toBe("검색에 바로 반영해 줘");
+		expect(host.querySelector('[data-testid="automation-new-mode"]')).toBeNull();
+		await act(async () => {
+			create()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			await Promise.resolve();
+		});
+		expect(p.onCreate).toHaveBeenCalledWith({ paths: ["/Users/jeffrey/Documents"], events: ["create", "update"], include: [], run: ["autorag", "refresh"] });
 	});
 });

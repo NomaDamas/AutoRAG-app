@@ -1,9 +1,9 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
+import { IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationDraft, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { t } from "../shared/i18n/core";
 
@@ -32,6 +32,8 @@ export interface AutomationService {
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Add a rule with a fresh id; the file is put back as it was if the librarian then refuses it. */
+	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
 	/** Watch for changes; `onChange` fires only when something about the automations actually changed. Returns the stop function. */
 	start(onChange: (snapshot: AutomationsSnapshot) => void): () => void;
 }
@@ -294,6 +296,7 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 		const path = rulesPath();
 		const temporary = `${path}.${process.pid}.tmp`;
 		const mode = (await stat(path).catch(() => null))?.mode;
+		await mkdir(dirname(path), { recursive: true });
 		try {
 			await writeFile(temporary, `${JSON.stringify({ automations: entries }, null, 2)}\n`, mode === undefined ? undefined : { mode });
 			await rename(temporary, path);
@@ -323,6 +326,30 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 				const index = Math.max(0, Math.min(removal.index, entries.length));
 				await saveEntries([...entries.slice(0, index), entry, ...entries.slice(index)]);
 				return freshSnapshot();
+			}),
+		create: (draft) =>
+			serialized(async () => {
+				const entries = await loadEntries({ required: false });
+				const taken = new Set(entries.map((entry) => entry.id));
+				const base = `rule-${Date.now().toString(36)}`;
+				let id = base;
+				for (let n = 2; taken.has(id); n += 1) id = `${base}-${n}`;
+				const entry: Record<string, unknown> = {
+					id,
+					paths: [...draft.paths],
+					events: [...draft.events],
+					...(draft.include.length === 0 ? {} : { include: [...draft.include] }),
+					...(draft.agent === undefined ? { run: [...(draft.run ?? [])] } : { agent: { profile: draft.agent.profile, task: draft.agent.task } }),
+				};
+				await saveEntries([...entries, entry]);
+				const snapshot = await freshSnapshot();
+				// The librarian judges the file; one it refuses would stop every rule, so the new entry comes back out.
+				if (snapshot.configError !== null) {
+					await saveEntries(entries);
+					await freshSnapshot();
+					throw new Error(snapshot.configError);
+				}
+				return { snapshot, id };
 			}),
 		setDaemon: async (enabled) => {
 			const result = await deps.run(["automate", enabled ? "install" : "uninstall", "--json"]);

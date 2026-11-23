@@ -584,7 +584,12 @@
       "agentProfile": "AI 配置",
       "more": "更多",
       "menuEdit": "编辑",
-      "menuDelete": "删除"
+      "menuDelete": "删除",
+      "runDone": "完成",
+      "serviceOff": "已关闭",
+      "failedRules": "失败的自动化 {{count}} 个 — {{name}}",
+      "recentRuns": "最近运行",
+      "noRuns": "还没有运行记录"
     },
     "quickLook": {
       "when": "何时",
@@ -663,6 +668,53 @@
     "agent": {
       "reads": "仅读取",
       "writes": "可以修改文件"
+    },
+    "mine": "我的自动化",
+    "create": {
+      "title": "新建自动化",
+      "when": "何时",
+      "task": "Dazzi 要做的事",
+      "taskPlaceholder": "例如：用三行总结要点并保存为备注",
+      "submit": "创建",
+      "sentence": "当{{folder}}中{{event}}{{kind}}时",
+      "kindLabel": "文件类型",
+      "eventLabel": "变化",
+      "modeLabel": "权限",
+      "pickFolder": "选择文件夹",
+      "kind": {
+        "all": "文件",
+        "pdf": "PDF 文件",
+        "image": "图片",
+        "document": "文档"
+      },
+      "event": {
+        "create": "新增",
+        "update": "修改",
+        "createUpdate": "新增或修改",
+        "delete": "删除"
+      },
+      "mode": {
+        "read": "仅读取",
+        "write": "允许修改文件"
+      }
+    },
+    "templates": {
+      "title": "推荐的自动化",
+      "screenshot": {
+        "title": "整理截图名称",
+        "desc": "桌面上出现截图时，改成一看就懂的名称",
+        "task": "改成一看就懂的名称"
+      },
+      "pdf": {
+        "title": "总结新 PDF",
+        "desc": "下载中出现 PDF 时，用三行总结要点并保存为备注",
+        "task": "用三行总结要点并保存为备注"
+      },
+      "refresh": {
+        "title": "搜索即时更新",
+        "desc": "文稿文件夹中的文件新增或修改时，立即反映到搜索中",
+        "task": "立即反映到搜索中"
+      }
     }
   },
   "osMenu": {

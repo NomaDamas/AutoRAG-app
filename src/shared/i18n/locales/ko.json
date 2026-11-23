@@ -584,7 +584,12 @@
       "agentProfile": "AI 프로필",
       "more": "더보기",
       "menuEdit": "수정",
-      "menuDelete": "삭제"
+      "menuDelete": "삭제",
+      "runDone": "완료",
+      "serviceOff": "꺼짐",
+      "failedRules": "실패한 자동화 {{count}}개 — {{name}}",
+      "recentRuns": "최근 실행",
+      "noRuns": "아직 실행 기록이 없습니다"
     },
     "quickLook": {
       "when": "언제",
@@ -663,6 +668,53 @@
     "agent": {
       "reads": "읽기만 함",
       "writes": "파일을 바꿀 수 있음"
+    },
+    "mine": "내 자동화",
+    "create": {
+      "title": "새 자동화",
+      "when": "언제",
+      "task": "Dazzi가 할 일",
+      "taskPlaceholder": "예: 핵심을 3줄로 요약해서 메모로 남겨 줘",
+      "submit": "만들기",
+      "sentence": "{{folder}}에 {{kind}}이 {{event}}",
+      "kindLabel": "파일 종류",
+      "eventLabel": "변화",
+      "modeLabel": "권한",
+      "pickFolder": "폴더 선택",
+      "kind": {
+        "all": "모든 파일",
+        "pdf": "PDF 파일",
+        "image": "이미지 파일",
+        "document": "문서 파일"
+      },
+      "event": {
+        "create": "새로 생기면",
+        "update": "바뀌면",
+        "createUpdate": "생기거나 바뀌면",
+        "delete": "지워지면"
+      },
+      "mode": {
+        "read": "읽기만",
+        "write": "파일 수정 허용"
+      }
+    },
+    "templates": {
+      "title": "추천 자동화",
+      "screenshot": {
+        "title": "스크린샷 이름 정리",
+        "desc": "데스크탑에 스크린샷이 생기면, 알아보기 쉬운 이름으로 바꿔 줘",
+        "task": "알아보기 쉬운 이름으로 바꿔 줘"
+      },
+      "pdf": {
+        "title": "새 PDF 요약",
+        "desc": "다운로드에 PDF가 들어오면, 핵심을 3줄로 요약해서 메모로 남겨 줘",
+        "task": "핵심을 3줄로 요약해서 메모로 남겨 줘"
+      },
+      "refresh": {
+        "title": "검색 바로 최신화",
+        "desc": "문서 폴더의 파일이 생기거나 바뀌면, 검색에 바로 반영해 줘",
+        "task": "검색에 바로 반영해 줘"
+      }
     }
   },
   "osMenu": {

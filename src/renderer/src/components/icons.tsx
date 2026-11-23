@@ -20,6 +20,9 @@ import {
 	ChartNoAxesColumn,
 	Check,
 	ChevronDown,
+	CircleX,
+	FilePen,
+	FileText,
 	FileArchive,
 	Maximize,
 	ChevronLeft,
@@ -235,6 +238,12 @@ export const ListRowsIcon = glyph(Rows3, 16, 1.9);
 export const PanelLeftIcon = glyph(PanelLeft, 16, 1.9);
 
 export const PanelRightIcon = glyph(PanelRight, 16, 1.9);
+
+/** 자동화 (Figma 611:3601): a failed rule's badge, a document, an image, a rule that may change files. */
+export const CircleXIcon = glyph(CircleX, 14, 2);
+export const FileTextIcon = glyph(FileText, 14, 2);
+export const ImageIcon = glyph(ImageGlyph, 14, 2);
+export const FilePenIcon = glyph(FilePen, 13, 2);
 
 /** A notice that something may not work as expected (a search over an index that is not ready). */
 export const WarningIcon = glyph(TriangleAlert, 14, 2);

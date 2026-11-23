@@ -12,6 +12,7 @@ export const AUTOMATION_CHANNELS = {
 	remove: "automations:remove",
 	restore: "automations:restore",
 	setDaemon: "automations:setDaemon",
+	create: "automations:create",
 	changed: "automations:changed",
 } as const;
 
@@ -91,6 +92,20 @@ export const IDLE_AUTOMATIONS: AutomationsSnapshot = {
 	error: null,
 };
 
+/**
+ * A new rule from the 자동화 tab's 새 자동화 card (Figma 611:3601): the folder, which files, which changes, and either
+ * an instruction for an agent profile or a command. The main process gives it an id and writes it to the rules file.
+ */
+export interface AutomationDraft {
+	readonly paths: readonly string[];
+	readonly events: readonly AutomationEventType[];
+	/** Globs relative to the watched folder; empty takes every file. */
+	readonly include: readonly string[];
+	readonly agent?: { readonly profile: string; readonly task: string };
+	/** The command's argv, for a rule that runs a program instead of an agent. */
+	readonly run?: readonly string[];
+}
+
 /** What `remove` took out of the rules file, exactly as written, so `restore` can put it back. */
 export interface AutomationRemoval {
 	readonly entry: Readonly<Record<string, unknown>>;
@@ -106,6 +121,8 @@ export interface AutomationBridge {
 	restore(removal: AutomationRemoval): Promise<AutomationsSnapshot>;
 	/** Register (true) or remove (false) the daemon's login service. */
 	setDaemon(enabled: boolean): Promise<AutomationsSnapshot>;
+	/** Add a rule; `id` is the one it was given. Rejected when the librarian would refuse the file it leaves. */
+	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
 	/** Pushed whenever the rules file, a run log, or the daemon changes, whoever changed it. */
 	onChange(listener: (snapshot: AutomationsSnapshot) => void): () => void;
 }
