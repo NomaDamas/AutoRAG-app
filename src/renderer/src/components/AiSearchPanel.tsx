@@ -33,6 +33,7 @@ import { isImageOnlyLine, parseAnswerBlocks, parseInline, type AnswerBlock, type
 import { CodeBlock } from "./CodeBlock";
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import { attachmentsFromDrop, isAttachmentDrag, mergeAttachments } from "../state/attachments";
+import { attachPastedImages } from "../state/pasted-images";
 import { appendTranscript } from "../../../shared/voice-contract";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
@@ -780,6 +781,13 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 		await autorag.search.cancel(id);
 	}
 
+	/** Images pasted into the field become draft attachments; with a model that takes none the paste does nothing. */
+	function pasteImages(files: readonly File[]): void {
+		void attachPastedImages(files, autorag.search.pasteImage).then((pasted) => {
+			if (pasted.length > 0) setAttachments((current) => mergeAttachments(current, pasted));
+		});
+	}
+
 	function removeAttachment(index: number): void {
 		setAttachments((current) => current.filter((_, position) => position !== index));
 	}
@@ -1267,6 +1275,7 @@ export const AiSearchPanel = forwardRef<AiDockHandle, AiSearchPanelProps>(functi
 									value={query}
 									onChange={setQuery}
 									onAltEnter={() => send(true)}
+									onPasteImages={pasteImages}
 									placeholder={searching ? t("aiSearch.steerPlaceholder") : t("inspector.chat.placeholderAny")}
 									ariaLabel={t("aiSearch.askDazzi")}
 								/>

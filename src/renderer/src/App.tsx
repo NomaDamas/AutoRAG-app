@@ -997,7 +997,7 @@ export function App(): ReactElement {
 											targets={chatTargets}
 											running={chatRunning}
 											request={chatRequest}
-											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatTargets, true, viewingFolder)}
+											onAsk={(text, pasted) => inspectorChats.ask(chatTabId, text, [...chatTargets, ...pasted], true, viewingFolder)}
 											onSummarize={() => {
 												if (chatTargets.length > 0) void inspectorChats.summarize(chatTabId, chatTargets, chatTargets, true);
 											}}
@@ -1017,7 +1017,7 @@ export function App(): ReactElement {
 											running={chatLive}
 											request={chatRequest}
 											imageActions={imageActions}
-											onAsk={(text) => inspectorChats.ask(chatTabId, text, chatPending, false, chatTargets.length === 0 ? viewingFolder : undefined)}
+											onAsk={(text, pasted) => inspectorChats.ask(chatTabId, text, [...chatPending, ...pasted], false, chatTargets.length === 0 ? viewingFolder : undefined)}
 											onSteer={(text) => inspectorChats.steer(chatTabId, text)}
 											onQueue={(text) => inspectorChats.queue(chatTabId, text)}
 											onUnqueue={(index) => inspectorChats.unqueue(chatTabId, index)}
