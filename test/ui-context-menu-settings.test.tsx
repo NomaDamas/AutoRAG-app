@@ -247,9 +247,23 @@ describe("Settings → 우클릭 메뉴 (Context Menu customization & Magic Acti
 			useSkills: true,
 			useMcp: false,
 		});
-		// Remove Magic Action
+		// Remove Magic Action: the X asks first; 취소 keeps it, 삭제 removes it.
+		const askRemove = async (): Promise<void> => {
+			await act(async () => {
+				host.querySelector<HTMLButtonElement>(`[data-action="remove-magic-${actionId}"]`)?.click();
+			});
+		};
+		await askRemove();
+		expect(document.body.textContent).toContain("‘PDF 3줄 요약’ 매직 액션을 삭제할까요?");
+		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
 		await act(async () => {
-			host.querySelector<HTMLButtonElement>(`[data-action="remove-magic-${actionId}"]`)?.click();
+			[...document.querySelectorAll<HTMLButtonElement>(".linear-btn")].find((button) => button.textContent === "취소")?.click();
+		});
+		expect(document.querySelector('[data-action="confirm-remove-magic"]')).toBeNull();
+		expect(currentSettings.contextMenu.magicActions).toHaveLength(1);
+		await askRemove();
+		await act(async () => {
+			document.querySelector<HTMLButtonElement>('[data-action="confirm-remove-magic"]')?.click();
 		});
 		await settle();
 		expect(currentSettings.contextMenu.magicActions).toHaveLength(0);
