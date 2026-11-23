@@ -372,7 +372,7 @@
     "voiceUnavailable": "このデバイスではマイクを使用できません。",
     "voiceFailed": "音声を文字起こしできませんでした: {{message}}",
     "micPermission": {
-      "title": "マイクの権限が必要です。",
+      "title": "マイクの権限が必要です",
       "body": "音声で質問するには、Dazziにマイクの権限が必要です。録音はマイクボタンを押したときだけ行います。",
       "stepsMac": "システム設定 › プライバシーとセキュリティ › マイク で Dazzi をオンにしてください。",
       "stepsWindows": "設定 › プライバシーとセキュリティ › マイク で「マイクへのアクセス」と「デスクトップ アプリがマイクにアクセスできるようにする」をオンにしてください。",
@@ -817,14 +817,14 @@
   },
   "confirm": {
     "compressStopTitle": "圧縮を中止しますか？",
-    "compressStopMessage": "{{name}} の圧縮を中止し、作成途中の圧縮ファイルを削除します。",
+    "compressStopMessage": "作成途中の圧縮ファイルは削除されます。",
     "compressStopAction": "中止",
     "compressKeep": "圧縮を続ける",
-    "emptyTrashTitle": "ゴミ箱を空にする",
+    "emptyTrashTitle": "ゴミ箱を空にしますか？",
     "emptyTrashMessage": "ゴミ箱内のすべての項目が完全に削除されます。この操作は取り消せません。",
     "emptyTrashAction": "空にする",
     "closeEvidenceFolderTitle": "出典フォルダを閉じる",
-    "closeEvidenceFolderMessage": "このタブを閉じると一時的な出典フォルダが削除・整理されます。元のファイルはそのまま残ります。本当に閉じますか？",
+    "closeEvidenceFolderMessage": "一時的な出典フォルダは削除されます。元のファイルはそのまま残ります。",
     "closeEvidenceFolderAction": "閉じる"
   },
   "settings": {
@@ -1752,7 +1752,7 @@
       "removeCustom": "{{name}} を削除",
       "addCustomFolder": "フォルダを追加",
       "addCustomModalTitle": "お気に入りにフォルダを追加",
-      "addCustomModalDesc": "サイドバーのお気に入りに固定するフォルダパスを入力します。",
+      "addCustomModalDesc": "サイドバーのお気に入りに固定するフォルダパスを入力してください。",
       "addCustomPathLabel": "フォルダパス",
       "addCustomPathPlaceholder": "~/Projects または /Users/me/Work",
       "addCustomConfirm": "追加",
@@ -2206,7 +2206,7 @@
       "disconnect": {
         "title": "{{name}} を切断しますか？",
         "body": "保存された認証情報を削除し、一覧から除外します。このサービスを使っていた役割は新しいモデルを選ぶ必要がある場合があります。",
-        "action": "切断"
+        "action": "接続を解除"
       },
       "disconnected": "{{name}} を切断しました。",
       "envKeyCannotRemove": "{{name}} のキーは OS の環境変数から提供されているため、アプリから解除できません。該当の環境変数を自分で削除してください。",
@@ -2354,7 +2354,7 @@
         "save": "保存",
         "advanced": "この項目にはアプリで編集できない設定があり、そのまま保持されます。",
         "badLine": "\"{{line}}\" の行を読み取れません。",
-        "removeTitle": "\"{{name}}\" を削除しますか?",
+        "removeTitle": "「{{name}}」を削除しますか？",
         "removeBody": "設定ファイルからこのサーバーが削除されます。サーバーが保存したデータはそのまま残ります。",
         "argsHint": "1 行に 1 つずつ入力します。",
         "envFormatHint": "1 行に 1 つずつ、名前=値 の形式で入力します。\n値では ${NAME} で別の環境変数を参照できます。",
@@ -2828,7 +2828,7 @@
       "connectApps": "アプリを接続",
       "connect": "接続",
       "promptTitle": "{{name}} を接続",
-      "promptDesc": "接続 ID を決めて追加します。空欄にするとテンプレート名を使います。",
+      "promptDesc": "接続 ID を入力してください。空欄にするとテンプレート名を使います。",
       "promptLabel": "接続 ID",
       "promptConfirm": "接続を追加",
       "macOnlyCalendar": "macOS（EventKit）でのみ利用できます。",
@@ -2864,7 +2864,7 @@
       "removeSection": "接続を解除",
       "removeHint": "Dazzi の検索からのみ削除され、元のアプリのデータは消えません。",
       "confirmTitle": "接続を解除しますか？",
-      "confirmBody": "'{{alias}}' 接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
+      "confirmBody": "「{{alias}}」接続を Dazzi の検索から削除します。元のアプリのデータは消えません。",
       "macOnlyNote": "Apple カレンダーとリマインダーは macOS の EventKit でのみ読み取れるため、このコンピューターでは接続は無効です。",
       "kakaoOnlyNote": "カカオトークは Mac アプリでのみ動作する lazykatok で読み取るため、このコンピューターでは接続は無効です。",
       "whatsappOnlyNote": "WhatsApp は Mac アプリのデータベースだけを読み取れる wacrawl で取得するため、このコンピューターでは接続は無効です。コピーしたデータフォルダがある場合は、ソースパスに指定してください。",
@@ -3025,7 +3025,7 @@
     "completed": "実行完了",
     "failedTitle": "マジックアクションの実行に失敗しました",
     "stoppedTitle": "実行を停止しました",
-    "minimize": "バックグラウンドで続行",
+    "minimize": "バックグラウンドで実行",
     "stop": "停止",
     "close": "閉じる",
     "copyOutput": "結果をコピー",
@@ -3494,7 +3494,7 @@
     "dragHint": "写真をドラッグしてください"
   },
   "fullDiskAccess": {
-    "title": "フルディスクアクセスを許可してください",
+    "title": "フルディスクアクセスの権限が必要です",
     "titleGranted": "フルディスクアクセスが許可されました",
     "leadTagColors": "Finderのタグの色はmacOSが保護する場所にあります。システム設定でDazziをオンにし、案内が出たら「終了して再度開く」を選んでください。",
     "leadSource": "このソースはほかのアプリのデータを読み取ります。システム設定でDazziのフルディスクアクセスをオンにし、案内が出たら「終了して再度開く」を選んでください。",
