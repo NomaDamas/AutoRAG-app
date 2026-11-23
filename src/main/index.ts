@@ -167,6 +167,7 @@ import { readErrorReportingEnabled } from "./error-report-core";
 import { createAnalytics, createInstallIdStore, readUsageAnalyticsEnabled, resolveAnalyticsTarget, settingChangeEvents } from "./analytics-core";
 import { hasInWindowMenuBar, mainWindowChrome, windowControlsOverlay } from "./window-chrome";
 import { createPostHogSink } from "./analytics";
+import { createElectronRevealBackdrop } from "./reveal-backdrop";
 
 const execFileAsync = promisify(execFile);
 
@@ -1192,7 +1193,9 @@ app.whenReady().then(async () => {
 			analytics.track("onboarding_completed", {});
 		},
 	});
-	registerOnboardingIpcHandlers(firstRun);
+	const revealBackdrop = createElectronRevealBackdrop(() => mainWindow);
+	registerOnboardingIpcHandlers(firstRun, (opacity) => revealBackdrop.setOpacity(opacity));
+	app.on("before-quit", () => revealBackdrop.clear());
 	let quittingApp = false;
 	let quittingForUpdate = false;
 	whenQuitting(() => {
