@@ -122,6 +122,13 @@ function sourceDetail(row: DataSourceRow): string | null {
 	return null;
 }
 
+// The bell is cut away 2px around the unread dot, so whatever is behind the
+// button (the sidebar, its hover, the open state) shows as the dot's outline.
+// The dot's centre is 13px right and 2px down from the 16px icon's corner.
+const BELL_DOT_CUTOUT = {
+	maskImage: "radial-gradient(circle at 13px 2px, transparent 5px, #000 5.5px)",
+} as const;
+
 export function NotificationCenter({
 	onOpenAiSettings,
 	onOpenSettingsPage,
@@ -241,8 +248,8 @@ export function NotificationCenter({
 				aria-haspopup="dialog"
 				onClick={() => setNotificationCenterOpen(!open)}
 			>
-				<Bell size={16} strokeWidth={1.6} aria-hidden="true" />
-				{dot ? <span className="absolute top-[5px] right-[6px] size-6 rounded-full bg-danger-dot ring-2 ring-chrome" aria-hidden="true" /> : null}
+				<Bell size={16} strokeWidth={1.6} aria-hidden="true" style={dot ? BELL_DOT_CUTOUT : undefined} />
+				{dot ? <span className="absolute top-[5px] right-[6px] size-6 rounded-full bg-danger-dot" aria-hidden="true" /> : null}
 			</button>
 			{open && anchor !== null
 				? createPortal(
