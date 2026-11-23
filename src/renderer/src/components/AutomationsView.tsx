@@ -16,7 +16,7 @@ import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationRu
 import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
+import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, type RunTone } from "../state/automations";
 import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 import { Switch } from "./primitives/Switch";
@@ -572,9 +572,8 @@ function RuleRow({
 			}}
 		>
 			<RunDot tone={tone} />
-			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-px">
+			<div role="gridcell" className="flex min-w-0 flex-1 flex-col">
 				<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
-				<span className="truncate text-meta leading-[16px] text-ink-muted">{whenText(rule)}</span>
 			</div>
 			<span data-rule-last-run className={cn("flex-none text-meta leading-[16px]", tone === "fail" ? "text-error-orange-text" : "text-ink-muted")}>
 				{run === null ? t("automations.inspector.notRun") : `${relativeTime(run.startedAt)} · ${tone === "ok" ? t("automations.detail.ok") : t("automations.detail.failed")}`}
@@ -1006,7 +1005,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 													key={template.id}
 													type="button"
 													data-template={template.id}
-													className="group flex items-center gap-10 border-0 bg-window px-16 py-10 text-left cursor-pointer hover:bg-hover-row"
+													className="group flex items-center gap-10 border-0 bg-transparent px-16 py-10 text-left cursor-pointer hover:bg-hover-row"
 													onClick={() => {
 														setFilled({ template, at: Date.now() });
 														setComposerOpen(true);

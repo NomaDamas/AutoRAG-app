@@ -117,13 +117,13 @@ const rows = (): HTMLElement[] => [...host.querySelectorAll<HTMLElement>('[role=
 const text = (element: Element | null | undefined): string => element?.textContent?.replace(/\s+/g, " ").trim() ?? "";
 
 describe("AutomationsView list", () => {
-	it("lists every rule under 내 자동화 as its name and when it runs (Figma 611:3601)", () => {
+	it("lists every rule under 내 자동화 by its name alone, with no trigger caption under it", () => {
 		render(props());
 		expect(rows().map((row) => row.dataset.ruleId)).toEqual(["downloads-pdf-summary", "hwp-to-pdf", "screens"]);
 		const first = rows()[0];
 		expect(text(first)).toContain("새 PDF → Dazzi에게 맡기기");
-		expect(text(first)).toContain("다운로드에 PDF 파일이 새로 생기면");
-		expect(text(rows()[2])).toContain("데스크탑");
+		expect(text(first)).not.toContain("다운로드에 PDF 파일이 새로 생기면");
+		expect(text(rows()[2])).not.toContain("데스크탑");
 	});
 
 	it("marks the selected row and tells a failed rule apart from a good one and one that never ran", () => {
@@ -137,7 +137,7 @@ describe("AutomationsView list", () => {
 		await setAppLanguage("en");
 		render(props());
 		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations", "Suggested Automations"]);
-		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation…");
+		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation");
 		expect([...host.querySelectorAll('[data-automation-tabs] [role="tab"]')].map((tab) => tab.textContent)).toEqual(["My Automations", "All runs"]);
 	});
 

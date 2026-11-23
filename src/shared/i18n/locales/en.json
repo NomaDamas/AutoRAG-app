@@ -711,7 +711,7 @@
       },
       "submitEdit": "Save Changes",
       "editTitle": "Edit Automation",
-      "open": "New automation…"
+      "open": "New automation"
     },
     "templates": {
       "title": "Suggested Automations",
