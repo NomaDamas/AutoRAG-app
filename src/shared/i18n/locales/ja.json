@@ -710,7 +710,8 @@
         "write": "ファイルの変更を許可"
       },
       "submitEdit": "変更を保存",
-      "editTitle": "自動化を編集"
+      "editTitle": "自動化を編集",
+      "open": "新しい自動化を作成…"
     },
     "templates": {
       "title": "おすすめの自動化",
@@ -728,12 +729,33 @@
         "title": "検索をすぐ最新に",
         "desc": "書類フォルダのファイルが追加・変更されたら、すぐ検索に反映して",
         "task": "すぐ検索に反映して"
-      }
+      },
+      "add": "追加"
     },
     "row": {
       "rename": "名前を変更",
       "edit": "編集",
       "delete": "削除"
+    },
+    "detail": {
+      "ok": "成功",
+      "failed": "失敗",
+      "settings": "設定",
+      "history": "実行履歴",
+      "runs": "{{count}}回",
+      "fails": "失敗 {{count}}回",
+      "noRuns": "まだ実行されていません。条件に合うファイルができると、ここに記録されます。"
+    },
+    "tabs": {
+      "all": "すべての履歴"
+    },
+    "all": {
+      "count": "{{count}}回実行",
+      "failOnly": "失敗のみ表示",
+      "noFails": "失敗した実行はありません"
+    },
+    "assistant": {
+      "caption": "自動化の作成や変更はAIに聞いてください"
     }
   },
   "osMenu": {

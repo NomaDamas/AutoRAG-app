@@ -710,7 +710,8 @@
         "write": "파일 수정 허용"
       },
       "submitEdit": "수정하기",
-      "editTitle": "자동화 수정"
+      "editTitle": "자동화 수정",
+      "open": "새 자동화 만들기…"
     },
     "templates": {
       "title": "추천 자동화",
@@ -728,12 +729,33 @@
         "title": "검색 바로 최신화",
         "desc": "문서 폴더의 파일이 생기거나 바뀌면, 검색에 바로 반영해 줘",
         "task": "검색에 바로 반영해 줘"
-      }
+      },
+      "add": "추가"
     },
     "row": {
       "rename": "이름 바꾸기",
       "edit": "수정하기",
       "delete": "삭제하기"
+    },
+    "detail": {
+      "ok": "성공",
+      "failed": "실패",
+      "settings": "설정",
+      "history": "실행 기록",
+      "runs": "{{count}}회",
+      "fails": "실패 {{count}}회",
+      "noRuns": "아직 실행된 적이 없습니다. 조건에 맞는 파일이 생기면 여기에 기록됩니다."
+    },
+    "tabs": {
+      "all": "전체 기록"
+    },
+    "all": {
+      "count": "{{count}}회 실행",
+      "failOnly": "실패만 보기",
+      "noFails": "실패한 실행이 없습니다"
+    },
+    "assistant": {
+      "caption": "자동화를 만들거나 고칠 때 AI에게 물어보세요"
     }
   },
   "osMenu": {

@@ -97,7 +97,7 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 	}, []);
 	useEffect(() => clearUndoTimer, [clearUndoTimer]);
 
-	// 수정 opens the rule in the 자동화 tab's card, wherever it was asked from (the list, the inspectors, Quick Look, a menu).
+	// 수정 opens the rule's own page in the 자동화 tab, wherever it was asked from (the list, the inspectors, Quick Look, a menu).
 	const edit = useCallback((rule: AutomationRule) => {
 		setMenuState(null);
 		setPreviewId(null);
@@ -125,6 +125,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			return;
 		}
 		const left = rules.filter((candidate) => candidate.id !== rule.id);
+		// A rule deleted from its own page leaves for the list.
+		setEditingId((current) => (current === rule.id ? null : current));
 		setSelectedId((current) => (current === rule.id ? (left[Math.min(index, left.length - 1)]?.id ?? null) : current));
 		setPreviewId((current) => (current === rule.id ? null : current));
 		setUndoMessage(t("automations.toast.deleted", { title: ruleTitle(rule) }));
@@ -274,10 +276,8 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 		onUpdate: async (id, next) => {
 			try {
 				const ok = await store.update(id, next);
-				if (ok) {
-					setEditingId(null);
-					setSelectedId(id);
-				}
+				// Saving keeps the rule's page open: its 실행 기록 is right under the card.
+				if (ok) setSelectedId(id);
 				return ok;
 			} catch (cause) {
 				latest.current.onError(cause instanceof Error ? cause.message : String(cause));

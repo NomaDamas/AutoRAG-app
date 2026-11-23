@@ -810,3 +810,27 @@ describe("createAutomationService start", () => {
 		expect(seen[1]?.daemon?.running).toBe(false);
 	}, START_TEST_TIMEOUT_MS);
 });
+
+describe("run history", () => {
+	it("reads a rule's runs from its log, newest first, and skips a line it cannot parse", async () => {
+		const dir = await home();
+		await mkdir(join(dir, "automations", "logs"), { recursive: true });
+		const lines = [
+			JSON.stringify(runRecord("pdf", { startedAt: "2026-10-23T10:00:00.000Z" })),
+			"not json",
+			JSON.stringify(runRecord("pdf", { startedAt: "2026-10-23T11:00:00.000Z", exitCode: null, timedOut: true })),
+			"",
+		];
+		await writeFile(logPath(dir, "pdf"), lines.join("\n"));
+		const runs = await service(dir, fakeCli(dir)).history("pdf");
+		expect(runs.map((one) => one.startedAt)).toEqual([Date.parse("2026-10-23T11:00:00.000Z"), Date.parse("2026-10-23T10:00:00.000Z")]);
+		expect(runs[0]?.timedOut).toBe(true);
+	});
+
+	it("answers no runs for a rule that never ran, and for an id that names no file in the logs folder", async () => {
+		const dir = await home();
+		const automations = service(dir, fakeCli(dir));
+		expect(await automations.history("never")).toEqual([]);
+		expect(await automations.history("../automations")).toEqual([]);
+	});
+});

@@ -710,7 +710,8 @@
         "write": "允许修改文件"
       },
       "submitEdit": "保存修改",
-      "editTitle": "编辑自动化"
+      "editTitle": "编辑自动化",
+      "open": "新建自动化…"
     },
     "templates": {
       "title": "推荐的自动化",
@@ -728,12 +729,33 @@
         "title": "搜索即时更新",
         "desc": "文稿文件夹中的文件新增或修改时，立即反映到搜索中",
         "task": "立即反映到搜索中"
-      }
+      },
+      "add": "添加"
     },
     "row": {
       "rename": "重命名",
       "edit": "编辑",
       "delete": "删除"
+    },
+    "detail": {
+      "ok": "成功",
+      "failed": "失败",
+      "settings": "设置",
+      "history": "运行记录",
+      "runs": "{{count}} 次",
+      "fails": "失败 {{count}} 次",
+      "noRuns": "尚未运行。出现符合条件的文件后，会记录在这里。"
+    },
+    "tabs": {
+      "all": "全部记录"
+    },
+    "all": {
+      "count": "运行 {{count}} 次",
+      "failOnly": "仅显示失败",
+      "noFails": "没有失败的运行"
+    },
+    "assistant": {
+      "caption": "创建或修改自动化时，可以询问 AI"
     }
   },
   "osMenu": {

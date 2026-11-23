@@ -122,6 +122,7 @@ describe("the automations store", () => {
 			}),
 			create: vi.fn(async () => ({ snapshot: current, id: "new" })),
 			update: vi.fn(async () => current),
+			history: vi.fn(async () => []),
 			restore: vi.fn(async () => {
 				current = snapshot([rule("a"), rule("b")]);
 				return current;

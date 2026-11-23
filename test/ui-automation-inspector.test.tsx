@@ -135,107 +135,25 @@ function file(path: string): FinderEntry {
 }
 
 describe("AutomationInspector", () => {
-	const snapshot = (rules: readonly AutomationRule[], running = true): AutomationsSnapshot => ({
-		ready: true,
-		rules,
-		daemon: { platform: "darwin", installed: true, running },
-		configPath: "/Users/jeffrey/.autorag/automations.json",
-		configError: null,
-		error: null,
+	it("is the AI chat and nothing else: the faded mark says what to ask, over the ask box", () => {
+		act(() => root.render(<AutomationInspector chatDock={<div data-testid="dock">dock</div>} />));
+		expect(host.querySelector("[data-automation-assistant]")).not.toBeNull();
+		expect(text()).toContain("자동화를 만들거나 고칠 때 AI에게 물어보세요");
+		expect(host.querySelector('[data-testid="dock"]')).not.toBeNull();
+		expect(host.querySelector("[data-automation-activity]")).toBeNull();
 	});
 
-	it("asks for a rule in the aside when it has no rules to report", () => {
-		act(() => root.render(<AutomationInspector rule={null} onEdit={noop} onDelete={noop} />));
-		expect(host.querySelector("aside")?.getAttribute("aria-label")).toBe("정보 창");
-		expect(text()).toContain("규칙을 선택하면\n요약이 여기에 표시됩니다.");
-		expect(host.querySelectorAll("button").length).toBe(0);
-	});
-
-	it("shows recent activity with nothing picked: the count, the service, failures, and every last run newest first (Figma 611:3601)", () => {
-		const ok = rule({ id: "pdf", lastRun: run({ startedAt: Date.now() - 60 * MIN }) });
-		const failed = rule({ id: "hwp", run: ["hwp5"], include: ["**/*.hwp"], lastRun: run({ startedAt: Date.now() - 3 * MIN, timedOut: true }) });
-		const fresh = rule({ id: "new", lastRun: null });
-		const picked: string[] = [];
-		act(() => root.render(<AutomationInspector rule={null} state={snapshot([ok, failed, fresh])} onEdit={noop} onDelete={noop} onSelect={(id) => picked.push(id)} />));
-		expect(text()).toContain("규칙 3개 · 백그라운드에서 실행 중");
-		expect(host.querySelector("[data-automation-failures]")?.textContent).toBe(`실패한 자동화 1개 — ${ruleTitle(failed)}`);
-		const runs = [...host.querySelectorAll<HTMLElement>("[data-run-row]")];
-		expect(runs.map((row) => row.dataset.runRow)).toEqual(["hwp", "pdf"]);
-		expect(runs[0]?.textContent).toContain(ruleTitle(failed));
-		expect(runs[0]?.textContent).toContain("파일 1개 · 시간 초과");
-		expect(runs[1]?.textContent).toContain("파일 1개 · 완료");
-		click(runs[1]);
-		expect(picked).toEqual(["pdf"]);
-	});
-
-	it("says the service is off and that nothing has run yet", () => {
-		act(() => root.render(<AutomationInspector rule={null} state={snapshot([rule({ lastRun: null })], false)} onEdit={noop} onDelete={noop} />));
-		expect(text()).toContain("규칙 1개 · 꺼짐");
-		expect(text()).toContain("아직 실행 기록이 없습니다");
-		expect(host.querySelector("[data-automation-failures]")).toBeNull();
-	});
-
-	it("shows a picked rule: its name, when it runs, what Dazzi does and its last run (Figma 611:4443)", () => {
-		const shown = rule({ run: [], agent: { profile: "file-triage", task: "핵심을 3줄로 요약해 줘" } });
-		const edits: AutomationRule[] = [];
-		const deletes: AutomationRule[] = [];
-		act(() => root.render(<AutomationInspector rule={shown} onEdit={(next) => edits.push(next)} onDelete={(next) => deletes.push(next)} />));
-		expect(host.querySelector("h2")?.textContent).toBe(ruleTitle(shown));
-		expect(text()).toContain(whenText(shown));
-		expect(text()).toContain(whatText(shown, { full: true }));
-		expect(text()).toContain("읽기만 함");
-		expect(host.querySelector("[data-run-row]")?.textContent).toContain("완료");
-		// 수정 / 삭제 live in the ⋯ of the rule's row in 내 자동화, not here.
-		expect(host.querySelector('[data-action="automation-more"]')).toBeNull();
-		expect(edits).toEqual([]);
-		expect(deletes).toEqual([]);
-	});
-
-	it("names what went wrong in the last run, and says a rule has not run yet before its first run", () => {
-		const failed = rule({ run: ["hwp5", "--to", "pdf"], include: ["**/*.hwp"], lastRun: run({ exitCode: null, error: "spawn hwp5 ENOENT" }) });
-		act(() => root.render(<AutomationInspector rule={failed} onEdit={noop} onDelete={noop} />));
-		expect(host.querySelector("[data-run-row]")?.textContent).toContain("‘hwp5’ 프로그램을 찾을 수 없음");
-		act(() => root.render(<AutomationInspector rule={rule({ lastRun: null })} onEdit={noop} onDelete={noop} />));
-		expect(text()).toContain("아직 실행되지 않았습니다");
-	});
-
-	it("says the rule the 새 자동화 card is making and lists the files it would take, newest first (Figma 611:4016)", async () => {
-		const file = (name: string, ext: string, ago: number) => ({ name, path: `/Users/jeffrey/Downloads/${name}`, kind: "file" as const, ext, size: 1, mtimeMs: Date.now() - ago * MIN, birthtimeMs: 0 });
-		Reflect.set(globalThis, "autorag", {
-			fs: { listDir: async () => ({ path: "/Users/jeffrey/Downloads", entries: [file("old.pdf", "pdf", 600), file("note.txt", "txt", 1), file("new.pdf", "pdf", 5)] }) },
-		});
-		const draft = rule({ id: "draft", run: [], agent: { profile: "file-triage", task: "요약해 줘" }, lastRun: null });
-		await act(async () => {
-			root.render(<AutomationInspector rule={null} draft={draft} onEdit={noop} onDelete={noop} />);
-			await Promise.resolve();
-			await Promise.resolve();
-		});
-		expect(text()).toContain("자동화 규칙");
-		expect(text()).toContain(whenText(draft));
-		expect(text()).toContain("AI가 「요약해 줘」");
-		expect(text()).toContain("조건에 맞는 파일 2개");
-		expect([...host.querySelectorAll<HTMLElement>("[data-match]")].map((row) => row.dataset.match)).toEqual(["new.pdf", "old.pdf"]);
-		Reflect.deleteProperty(globalThis, "autorag");
+	it("gives the whole column to a conversation once one is open", () => {
+		act(() => root.render(<AutomationInspector chatDock={<div data-testid="dock" />} chatView={<div data-testid="chat">chat</div>} />));
+		expect(host.querySelector('[data-testid="chat"]')).not.toBeNull();
+		expect(host.querySelector('[data-testid="dock"]')).toBeNull();
+		expect(text()).not.toContain("자동화를 만들거나 고칠 때");
 	});
 
 	it("reads in English", async () => {
-		await act(() => setAppLanguage("en"));
-		const shown = rule();
-		act(() => root.render(<AutomationInspector rule={shown} onEdit={noop} onDelete={noop} />));
-		expect(text()).toContain(whenText(shown));
-		expect(text()).toContain("What Dazzi does");
-		expect(text()).not.toMatch(/[가-힣]/);
-	});
-
-	it("leaves no Korean behind in Japanese or Chinese", async () => {
-		const shown = rule({ run: ["autorag", "refresh"], include: ["**"], exclude: [] });
-		for (const language of ["ja", "zh"] as const) {
-			await act(() => setAppLanguage(language));
-			act(() => root.render(<AutomationInspector rule={null} state={snapshot([shown])} onEdit={noop} onDelete={noop} />));
-			expect(text()).not.toMatch(/[가-힣]/);
-			act(() => root.render(<AutomationInspector rule={shown} onEdit={noop} onDelete={noop} />));
-			expect(text()).not.toMatch(/[가-힣]/);
-		}
+		await setAppLanguage("en");
+		act(() => root.render(<AutomationInspector />));
+		expect(text()).toContain("Ask the AI to create or change an automation");
 	});
 });
 

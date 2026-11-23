@@ -1097,13 +1097,7 @@ export function App(): ReactElement {
 							<FadedDazziMark reserveDock />
 						) : automationsTabActive ? (
 							<AutomationInspector
-								rule={automations.selectedRule}
-								state={automations.props.state}
-								draft={automations.draft}
-								onEdit={automations.edit}
-								onDelete={automations.askDelete}
-								onSelect={automations.props.onSelect}
-								// The 자동화 tab's sidebar asks the AI agent like the file inspector does, about no file: the agent manages automations itself.
+								// The 자동화 tab's sidebar is the AI chat: it asks about no file, and the agent manages automations with its own tools.
 								chatDock={
 									chatTabId === null ? undefined : (
 										<InspectorChatDock

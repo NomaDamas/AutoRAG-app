@@ -3,14 +3,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AutomationsView, type AutomationsViewProps } from "../src/renderer/src/components/AutomationsView";
-import type { AutomationRule, AutomationsSnapshot } from "../src/shared/automation-contract";
+import type { AutomationRule, AutomationRun, AutomationsSnapshot } from "../src/shared/automation-contract";
 import type { FsLocation } from "../src/shared/fs-contract";
 import { setAppLanguage } from "../src/shared/i18n";
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
 const place = (name: string, path: string, icon: FsLocation["icon"]): FsLocation => ({ name, path, section: "favorites", icon, available: true, scanned: true }) as FsLocation;
+const runLogs: Record<string, readonly AutomationRun[]> = {};
 Reflect.set(globalThis, "autorag", {
+	automations: { history: async (id: string): Promise<readonly AutomationRun[]> => runLogs[id] ?? [] },
 	fs: {
 		locations: async (): Promise<readonly FsLocation[]> => [
 			place("Desktop", "/Users/jeffrey/Desktop", "desktop"),
@@ -131,10 +133,17 @@ describe("AutomationsView list", () => {
 		expect(tones).toEqual(["ok", "fail", "never"]);
 	});
 
-	it("names its three sections in the interface language", async () => {
+	it("names its sections in the interface language, with the 새 자동화 card folded into one line while there are rules", async () => {
 		await setAppLanguage("en");
 		render(props());
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["New Automation", "My Automations", "Suggested Automations"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["My Automations", "Suggested Automations"]);
+		expect(text(host.querySelector('[data-action="automation-composer-open"]'))).toBe("New automation…");
+		expect([...host.querySelectorAll('[data-automation-tabs] [role="tab"]')].map((tab) => tab.textContent)).toEqual(["My Automations", "All runs"]);
+	});
+
+	it("says how each rule's last run went, beside its name (Figma 621:4556)", () => {
+		render(props());
+		expect(rows().map((row) => text(row.querySelector("[data-rule-last-run]")))).toEqual(["3분 전 · 성공", "19시간 전 · 실패", "아직 실행되지 않음"]);
 	});
 
 	it("counts its rules in a wording that reads right for one and for many", async () => {
@@ -149,12 +158,11 @@ describe("AutomationsView list", () => {
 });
 
 describe("AutomationsView interaction", () => {
-	it("selects on click, edits on double click, and opens the menu on right click", () => {
+	it("opens a rule's page on click, and opens the menu on right click", () => {
 		const p = props();
 		render(p);
 		act(() => rows()[1]?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 		expect(p.onSelect).toHaveBeenCalledWith("hwp-to-pdf");
-		act(() => rows()[1]?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
 		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
 		act(() => rows()[0]?.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 40, clientY: 50 })));
 		expect(p.onContextMenu).toHaveBeenCalledWith("downloads-pdf-summary", { x: 40, y: 50 });
@@ -248,75 +256,114 @@ describe("AutomationsView empty and error states", () => {
 	});
 });
 
-describe("AutomationsView ⋯ on a 내 자동화 row", () => {
-	const more = (index: number): Element | null | undefined => rows()[index]?.querySelector('[data-action="automation-row-more"]');
+describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
+	const page = (): HTMLElement | null => host.querySelector("[data-automation-detail]");
+	const titleInput = (): HTMLInputElement | null => host.querySelector<HTMLInputElement>('[data-testid="automation-title-input"]');
+	const editing = rule("pdf", { run: [], agent: { profile: "file-organizer", task: "메모로 남겨 줘" }, paths: ["/Users/jeffrey/Desktop"], include: ["**/*.pdf"], events: ["create", "update"] });
 
-	it("offers 이름 바꾸기, 수정하기 and 삭제하기, and does not select or open the row while doing so", () => {
-		const p = props();
-		render(p);
-		click(more(1));
-		expect(p.onSelect).not.toHaveBeenCalled();
-		expect([...(rows()[1]?.querySelectorAll('[role="menuitem"]') ?? [])].map((item) => text(item))).toEqual(["이름 바꾸기", "수정하기", "삭제하기"]);
-		click(rows()[1]?.querySelector('[data-action="automation-edit"]'));
-		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
-		click(more(1));
-		click(rows()[1]?.querySelector('[data-action="automation-delete"]'));
-		expect(p.onAskDelete).toHaveBeenCalledWith("hwp-to-pdf");
+	it("shows the rule in place of the list: back, its name with a pencil, 설정 and 실행 기록", async () => {
+		const onCancelEdit = vi.fn();
+		render(props({ editing, onCancelEdit }));
+		await settle();
+		expect(page()?.dataset.automationDetail).toBe("pdf");
+		expect(rows()).toEqual([]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 · 1회"]);
+		const name = host.querySelector('[data-action="automation-rename"]');
+		expect(name?.getAttribute("title")).toBe("이름 바꾸기");
+		expect(name?.querySelector("svg")).not.toBeNull();
+		click(host.querySelector('[data-action="automation-back"]'));
+		expect(onCancelEdit).toHaveBeenCalledTimes(1);
 	});
 
-	it("renames in place: Enter keeps the new name, Escape keeps the old one", () => {
+	it("renames from the title: a click makes it a field, Enter keeps the new name, Escape keeps the old one", async () => {
 		const onRename = vi.fn(async () => undefined);
-		render(props({ onRename }));
-		click(more(0));
-		click(rows()[0]?.querySelector('[data-action="automation-rename"]'));
-		const input = (): HTMLInputElement | null => host.querySelector<HTMLInputElement>('[data-testid="automation-rename-input"]');
-		expect(input()?.placeholder).toBe("새 PDF → Dazzi에게 맡기기");
+		render(props({ editing, onRename }));
+		await settle();
+		click(host.querySelector('[data-action="automation-rename"]'));
+		expect(titleInput()?.placeholder).toBe("바뀐 PDF → AI가 처리하기");
 		act(() => {
 			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-			setter?.call(input(), "PDF 3줄 요약");
-			input()?.dispatchEvent(new Event("input", { bubbles: true }));
+			setter?.call(titleInput(), "PDF 3줄 요약");
+			titleInput()?.dispatchEvent(new Event("input", { bubbles: true }));
 		});
-		act(() => input()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
-		expect(onRename).toHaveBeenCalledWith("downloads-pdf-summary", "PDF 3줄 요약");
-		expect(input()).toBeNull();
-
-		click(more(0));
-		click(rows()[0]?.querySelector('[data-action="automation-rename"]'));
-		act(() => input()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+		act(() => titleInput()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+		expect(onRename).toHaveBeenCalledWith("pdf", "PDF 3줄 요약");
+		expect(titleInput()).toBeNull();
+		click(host.querySelector('[data-action="automation-rename"]'));
+		act(() => titleInput()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
 		expect(onRename).toHaveBeenCalledTimes(1);
 	});
-});
 
-describe("AutomationsView editing a rule in the card", () => {
-	it("takes the rule into the card, says 자동화 수정 and 수정하기, and saves it with its id", async () => {
-		const editing = rule("pdf", { run: [], agent: { profile: "file-organizer", task: "메모로 남겨 줘" }, paths: ["/Users/jeffrey/Desktop"], include: ["**/*.pdf"], events: ["create", "update"] });
+	it("saves the card with the rule's id, and offers 삭제 in place of 취소", async () => {
 		const onUpdate = vi.fn(async () => true);
-		render(props({ editing, onUpdate }));
+		const p = props({ editing, onUpdate });
+		render(p);
 		await settle();
-		expect(host.querySelector("h2")?.textContent).toBe("자동화 수정");
 		expect(host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')?.value).toBe("메모로 남겨 줘");
 		const save = host.querySelector<HTMLButtonElement>('[data-action="automation-update"]');
-		expect(save?.textContent).toBe("수정하기");
+		expect(save?.textContent).toBe("저장");
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
 		await act(async () => {
 			save?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
 		expect(onUpdate).toHaveBeenCalledWith("pdf", { paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "메모로 남겨 줘" } });
+		click(host.querySelector('[data-action="automation-delete"]'));
+		expect(p.onAskDelete).toHaveBeenCalledWith("pdf");
 	});
 
-	it("keeps files and changes the chips cannot say, and offers 취소", async () => {
-		const editing = rule("odd", { run: [], agent: { profile: "file-triage", task: "t" }, include: ["**/*.hwp"], events: ["create", "update", "delete"] });
+	it("keeps files and changes the chips cannot say", async () => {
+		const odd = rule("odd", { run: [], agent: { profile: "file-triage", task: "t" }, include: ["**/*.hwp"], events: ["create", "update", "delete"] });
 		const onUpdate = vi.fn(async () => true);
-		const onCancelEdit = vi.fn();
-		render(props({ editing, onUpdate, onCancelEdit }));
+		render(props({ editing: odd, onUpdate }));
 		await settle();
 		await act(async () => {
 			host.querySelector('[data-action="automation-update"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
 		expect(onUpdate).toHaveBeenCalledWith("odd", expect.objectContaining({ include: ["**/*.hwp"], events: ["create", "update", "delete"] }));
-		act(() => host.querySelector('[data-action="automation-cancel-edit"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
-		expect(onCancelEdit).toHaveBeenCalledTimes(1);
+	});
+
+	it("lists the rule's runs from its log, newest first, with the error a failed run left", async () => {
+		runLogs.pdf = [
+			{ startedAt: NOW - 60_000, durationMs: 120_000, eventCount: 1, exitCode: null, signal: null, timedOut: true },
+			{ startedAt: NOW - 2 * 3_600_000, durationMs: 900, eventCount: 2, exitCode: null, signal: null, timedOut: false, error: "spawn hwp5 ENOENT" },
+			{ startedAt: NOW - 26 * 3_600_000, durationMs: 900, eventCount: 3, exitCode: 0, signal: null, timedOut: false },
+		];
+		render(props({ editing }));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 · 3회 · 실패 2회"]);
+		const runs = [...host.querySelectorAll("[data-run]")];
+		expect(runs.map((run) => run.querySelector("[data-run-tone]")?.getAttribute("data-run-tone"))).toEqual(["fail", "fail", "ok"]);
+		expect(text(runs[0])).toContain("파일 1개 · 시간 초과");
+		expect(text(runs[1])).toContain("spawn hwp5 ENOENT");
+		expect(text(runs[2])).toContain("파일 3개 · 완료");
+		Reflect.deleteProperty(runLogs, "pdf");
+	});
+});
+
+describe("AutomationsView 전체 기록 (Figma 621:5262)", () => {
+	it("lists every rule's runs newest first, keeps only failures on 실패만 보기, and opens a rule from its run", async () => {
+		runLogs["downloads-pdf-summary"] = [{ startedAt: NOW - 3 * 60_000, durationMs: 1000, eventCount: 1, exitCode: 0, signal: null, timedOut: false }];
+		runLogs["hwp-to-pdf"] = [{ startedAt: NOW - 19 * 3_600_000, durationMs: 800, eventCount: 1, exitCode: null, signal: null, timedOut: false, error: "spawn hwp5 ENOENT" }];
+		const p = props();
+		render(p);
+		await settle();
+		click(host.querySelector('[data-tab="all"]'));
+		await act(async () => {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		const runs = (): Element[] => [...host.querySelectorAll("[data-automation-all-runs] [data-run]")];
+		expect(runs().map((run) => text(run))).toEqual([expect.stringContaining("새 PDF → Dazzi에게 맡기기"), expect.stringContaining("hwp5")]);
+		expect(text(host.querySelector("[data-automation-all-runs]"))).toContain("2회 실행");
+		click(host.querySelector('[data-switch-id="automation-fail-only"]') ?? host.querySelector('[data-automation-all-runs] [role="switch"]'));
+		expect(runs()).toHaveLength(1);
+		click(runs()[0]);
+		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
+		Reflect.deleteProperty(runLogs, "downloads-pdf-summary");
+		Reflect.deleteProperty(runLogs, "hwp-to-pdf");
 	});
 });
 
@@ -324,10 +371,13 @@ describe("AutomationsView 새 자동화 card", () => {
 	const create = (): HTMLButtonElement | null => host.querySelector('[data-action="automation-create"]');
 	const task = (): HTMLTextAreaElement => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')!;
 	const sentence = (): string => [...(host.querySelector('[data-testid="automation-new-when"]')?.children ?? [])].map((part) => text(part)).join(" ");
+	const openCard = (): void => click(host.querySelector('[data-action="automation-composer-open"]'));
 
 	it("reads the 언제 sentence with the first standard folder, and creates a read-only agent rule from it", async () => {
 		const p = props();
 		render(p);
+		await settle();
+		openCard();
 		await settle();
 		expect(sentence()).toBe("다운로드 에 PDF 파일 이 새로 생기면");
 		expect(create()?.disabled).toBe(true);
@@ -344,12 +394,16 @@ describe("AutomationsView 새 자동화 card", () => {
 			agent: { profile: "file-triage", task: "핵심을 3줄로 요약해 줘" },
 		});
 		await settle();
-		expect(task().value).toBe("");
+		// Made: the card folds back into its line, and the new rule is in 내 자동화.
+		expect(host.querySelector('[data-testid="automation-new"]')).toBeNull();
+		expect(host.querySelector('[data-action="automation-composer-open"]')).not.toBeNull();
 	});
 
 	it("changes the folder, the kind, the change and the permission from their chips", async () => {
 		const p = props();
 		render(p);
+		await settle();
+		openCard();
 		await settle();
 		click(host.querySelector('[data-testid="automation-new-folder"]'));
 		click(host.querySelector('[data-testid="automation-new-folder-/Users/jeffrey/Desktop"]'));
@@ -373,6 +427,8 @@ describe("AutomationsView 새 자동화 card", () => {
 		render(p);
 		await settle();
 		click(host.querySelector('[data-template="refresh"]'));
+		// The card opens with the row; its folder waits for the OS's folders to load.
+		await settle();
 		expect(task().value).toBe("검색에 바로 반영해 줘");
 		expect(host.querySelector('[data-testid="automation-new-mode"]')).toBeNull();
 		await act(async () => {

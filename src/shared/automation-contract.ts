@@ -14,12 +14,13 @@ export const AUTOMATION_CHANNELS = {
 	setDaemon: "automations:setDaemon",
 	create: "automations:create",
 	update: "automations:update",
+	history: "automations:history",
 	changed: "automations:changed",
 } as const;
 
 export type AutomationEventType = "create" | "update" | "delete";
 
-/** One run of a rule: the last line of its `automations/logs/<id>.jsonl`. */
+/** One run of a rule: a line of its `automations/logs/<id>.jsonl` (`lastRun` is the last one). */
 export interface AutomationRun {
 	/** Epoch milliseconds. */
 	readonly startedAt: number;
@@ -84,6 +85,9 @@ export interface AutomationsSnapshot {
 	readonly error: string | null;
 }
 
+/** How many of a rule's runs the 자동화 tab shows: its run log keeps every one. */
+export const AUTOMATION_HISTORY_LIMIT = 50;
+
 export const IDLE_AUTOMATIONS: AutomationsSnapshot = {
 	ready: false,
 	rules: [],
@@ -126,6 +130,8 @@ export interface AutomationBridge {
 	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
 	/** Rewrite rule `id` from the card; the fields the card does not manage stay as written. */
 	update(id: string, draft: AutomationDraft): Promise<AutomationsSnapshot>;
+	/** Rule `id`'s runs, newest first, at most {@link AUTOMATION_HISTORY_LIMIT}; empty when it never ran. */
+	history(id: string): Promise<readonly AutomationRun[]>;
 	/** Pushed whenever the rules file, a run log, or the daemon changes, whoever changed it. */
 	onChange(listener: (snapshot: AutomationsSnapshot) => void): () => void;
 }

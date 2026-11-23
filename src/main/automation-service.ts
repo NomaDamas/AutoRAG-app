@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationDraft, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
+import { AUTOMATION_HISTORY_LIMIT, IDLE_AUTOMATIONS, type AutomationDaemon, type AutomationDraft, type AutomationRemoval, type AutomationRule, type AutomationRun, type AutomationsSnapshot } from "../shared/automation-contract";
 import { isJsonObject } from "../shared/settings-contract";
 import { t } from "../shared/i18n/core";
 
@@ -36,6 +36,8 @@ export interface AutomationService {
 	create(draft: AutomationDraft): Promise<{ readonly snapshot: AutomationsSnapshot; readonly id: string }>;
 	/** Rewrite rule `id`'s folders, changes, files and action; everything else in its entry stays as written. */
 	update(id: string, draft: AutomationDraft): Promise<AutomationsSnapshot>;
+	/** Rule `id`'s runs from its log, newest first; a line the log cannot parse is skipped. */
+	history(id: string): Promise<readonly AutomationRun[]>;
 	/** Watch for changes; `onChange` fires only when something about the automations actually changed. Returns the stop function. */
 	start(onChange: (snapshot: AutomationsSnapshot) => void): () => void;
 }
@@ -310,6 +312,24 @@ export function createAutomationService(deps: AutomationServiceDeps): Automation
 
 	return {
 		snapshot,
+		history: async (id) => {
+			// The id names a file in the logs folder: anything that could leave it is refused, not resolved.
+			if (!/^[A-Za-z0-9._-]+$/.test(id) || id.startsWith(".")) return [];
+			const text = await readFile(join(deps.home(), "automations", "logs", `${id}.jsonl`), "utf8").catch(() => "");
+			const runs: AutomationRun[] = [];
+			const lines = text.split("\n");
+			for (let index = lines.length - 1; index >= 0 && runs.length < AUTOMATION_HISTORY_LIMIT; index -= 1) {
+				const line = lines[index]?.trim() ?? "";
+				if (line.length === 0) continue;
+				try {
+					const run = runOf(JSON.parse(line));
+					if (run !== null) runs.push(run);
+				} catch {
+					continue;
+				}
+			}
+			return runs;
+		},
 		remove: (id) =>
 			serialized(async () => {
 				const entries = await loadEntries({ required: true });

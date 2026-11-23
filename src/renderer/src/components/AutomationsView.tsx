@@ -1,19 +1,25 @@
 /**
- * The 자동화 tab (Figma 611:3601): a 새 자동화 card that writes a rule straight to the rules file, 내 자동화 as one
- * rounded list (status dot, the rule's name, when it runs), and 추천 자동화 that fill the card. A footer line keeps
- * the background service's state and its switch. It only draws and reports: the rules come from the shared store,
- * editing opens an AI Search draft, and delete asks before it removes anything.
+ * The 자동화 tab (Figma 621:4556, 621:4882, 621:5262), one centred column in three places:
+ * - 내 자동화: 새 자동화 만들기… opens the card that writes a rule straight to the rules file, 내 자동화 lists every rule
+ *   (status dot, name, when it runs, how its last run went, ›), and 추천 자동화 fill the card.
+ * - a rule's own page (› on its row): its name, which a click renames in place, the card to change and save it, and
+ *   its 실행 기록 read from the rule's run log.
+ * - 전체 기록: every rule's runs, newest first, with 실패만 보기.
+ * A footer line keeps the background service's state and its switch. It only draws and reports: the rules come from
+ * the shared store, and delete asks before it removes anything.
  */
 
 import { Fragment, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationsSnapshot } from "../../../shared/automation-contract";
+import type { TFunction } from "i18next";
+import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationRun, AutomationsSnapshot } from "../../../shared/automation-contract";
 import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { customRuleName, derivedTitle, folderLabel, kindsText, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { CheckIcon, ChevronDownIcon, EyeIcon, FilePenIcon, FolderGlyph, MoreIcon, NewChatIcon, PencilIcon } from "./icons";
+import { customRuleName, derivedTitle, failReason, folderLabel, kindsText, relativeTime, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
+import { CheckIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon, CloseIcon, EyeIcon, FilePenIcon, FolderGlyph, PencilIcon, TabPlusIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
+import { Switch } from "./primitives/Switch";
 
 export interface AutomationsViewProps {
 	readonly state: AutomationsSnapshot;
@@ -231,6 +237,7 @@ function NewAutomationCard({
 	onUpdate,
 	onCancelEdit,
 	onDraftChange,
+	onDelete,
 	editing,
 	filled,
 }: {
@@ -238,6 +245,8 @@ function NewAutomationCard({
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onCancelEdit: AutomationsViewProps["onCancelEdit"];
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
+	/** On a rule's own page: 삭제 in place of 취소, and 저장 in place of 수정하기. */
+	readonly onDelete?: (() => void) | undefined;
 	readonly editing: AutomationRule | null;
 	readonly filled: { readonly template: Template; readonly at: number } | null;
 }): ReactElement {
@@ -258,6 +267,8 @@ function NewAutomationCard({
 	const [touched, setTouched] = useState(false);
 	const cardRef = useRef<HTMLDivElement>(null);
 	const taskRef = useRef<HTMLTextAreaElement>(null);
+	// A 추천 자동화 row can open the card before the OS has said where its folders are: its folder waits for them.
+	const pendingFolder = useRef<(typeof FOLDER_ICONS)[number] | null>(null);
 
 	useEffect(() => {
 		let live = true;
@@ -265,7 +276,11 @@ function NewAutomationCard({
 		void fs
 			?.locations()
 			.then((loaded) => {
-				if (live) setLocations(loaded);
+				if (!live) return;
+				setLocations(loaded);
+				const waiting = pendingFolder.current;
+				pendingFolder.current = null;
+				if (waiting !== null) setFolder(loaded.find((location) => location.icon === waiting && location.available)?.path ?? null);
 			})
 			.catch(() => undefined);
 		return () => {
@@ -292,7 +307,9 @@ function NewAutomationCard({
 	useEffect(() => {
 		if (filled === null) return;
 		const { template } = filled;
-		setFolder(pathOf(template.folder));
+		const path = pathOf(template.folder);
+		pendingFolder.current = path === null && locations.length === 0 ? template.folder : null;
+		setFolder(path);
 		setKind(template.kind);
 		setEvent(template.event);
 		setMode(template.mode);
@@ -306,10 +323,14 @@ function NewAutomationCard({
 		// The locations are read once; the template is what changes.
 	}, [filled]);
 
-	// 수정 on a rule: the card takes the rule in, and 만들기 becomes 수정하기.
+	// 수정 on a rule: the card takes the rule in, and 만들기 becomes 수정하기. Leaving a rule empties the card; a card
+	// that opens with no rule keeps what a 추천 자동화 row just put in it.
+	const editedBefore = useRef<string | null>(null);
 	useEffect(() => {
+		const before = editedBefore.current;
+		editedBefore.current = editing?.id ?? null;
 		if (editing === null) {
-			reset();
+			if (before !== null) reset();
 			return;
 		}
 		const matchedKind = kindOf(editing.include);
@@ -397,7 +418,7 @@ function NewAutomationCard({
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
 
 	return (
-		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] border-[0.5px] bg-window p-14", editing === null ? "border-divider" : "border-accent")} data-testid="automation-new" data-editing={editing?.id}>
+		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] border-[0.5px] bg-window p-14", editing === null || onDelete !== undefined ? "border-divider" : "border-accent")} data-testid="automation-new" data-editing={editing?.id}>
 			<span className="text-badge font-medium leading-[14px] text-ink-body">{t("automations.create.when")}</span>
 			<div className="flex flex-wrap items-center gap-6 rounded-10 bg-chrome px-10 py-8" data-testid="automation-new-when">
 				{sentence.map((part, index) =>
@@ -428,7 +449,16 @@ function NewAutomationCard({
 					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
 				) : null}
 				<span className="flex-1" />
-				{editing === null ? null : (
+				{editing !== null && onDelete !== undefined ? (
+					<button
+						type="button"
+						data-action="automation-delete"
+						className="inline-flex h-32 items-center px-6 border-0 bg-transparent text-meta text-accent-text cursor-pointer hover:opacity-80"
+						onClick={onDelete}
+					>
+						{t("automations.inspector.delete")}
+					</button>
+				) : editing === null ? null : (
 					<button
 						type="button"
 						data-action="automation-cancel-edit"
@@ -445,7 +475,7 @@ function NewAutomationCard({
 					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
 					onClick={() => void submit()}
 				>
-					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : t("automations.create.submitEdit")}
+					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : onDelete !== undefined ? t("common.save") : t("automations.create.submitEdit")}
 				</button>
 			</div>
 		</div>
@@ -454,109 +484,38 @@ function NewAutomationCard({
 
 /* ------------------------------------------------------------------ the list -- */
 
-/** ⋯ on a 내 자동화 row: 이름 바꾸기, 수정하기 and 삭제하기, the same small menu a folder's automation rows have. */
-function RowMenu({ onRename, onEdit, onDelete }: { readonly onRename: () => void; readonly onEdit: () => void; readonly onDelete: () => void }): ReactElement {
-	const { t } = useTranslation();
-	const [open, setOpen] = useState(false);
-	const ref = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		if (!open) return;
-		const onDown = (event: MouseEvent): void => {
-			if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
-			setOpen(false);
-		};
-		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") setOpen(false);
-		};
-		window.addEventListener("mousedown", onDown);
-		window.addEventListener("keydown", onKey);
-		return () => {
-			window.removeEventListener("mousedown", onDown);
-			window.removeEventListener("keydown", onKey);
-		};
-	}, [open]);
-	const choose = (action: () => void): void => {
-		setOpen(false);
-		action();
-	};
-	const item = "flex h-28 w-full items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-[13px] whitespace-nowrap cursor-pointer hover:bg-hover";
-	return (
-		<div ref={ref} className="relative flex-none" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
-			<button
-				type="button"
-				data-action="automation-row-more"
-				className={cn("flex size-24 items-center justify-center rounded-6 border-0 p-0 text-ink-muted cursor-pointer hover:bg-hover hover:text-ink", open ? "bg-hover text-ink" : "bg-transparent")}
-				aria-label={t("automations.inspector.more")}
-				title={t("automations.inspector.more")}
-				aria-haspopup="menu"
-				aria-expanded={open}
-				onClick={() => setOpen((was) => !was)}
-			>
-				<MoreIcon size={16} />
-			</button>
-			{open ? (
-				<div className="menu absolute right-0 top-full z-30 mt-4 flex w-max min-w-120 flex-col rounded-10 border border-border bg-window p-4 shadow-[0_6px_18px_rgba(0,0,0,0.16)]" role="menu">
-					<button type="button" role="menuitem" data-action="automation-rename" className={cn(item, "text-ink")} onClick={() => choose(onRename)}>
-						<PencilIcon size={13} />
-						{t("automations.row.rename")}
-					</button>
-					<button type="button" role="menuitem" data-action="automation-edit" className={cn(item, "text-ink")} onClick={() => choose(onEdit)}>
-						<NewChatIcon size={13} />
-						{t("automations.row.edit")}
-					</button>
-					<button type="button" role="menuitem" data-action="automation-delete" className={cn(item, "text-danger-text")} onClick={() => choose(onDelete)}>
-						<span className="w-13" aria-hidden="true" />
-						{t("automations.row.delete")}
-					</button>
-				</div>
-			) : null}
-		</div>
-	);
-}
-
+/** A 내 자동화 row (Figma 621:4556): the run dot, the name over when it runs, how its last run went, and ›, which opens the rule's page. */
 function RuleRow({
 	rule,
 	selected,
 	onSelect,
-	onEdit,
-	onAskDelete,
-	onRename,
+	onOpen,
 	onContextMenu,
 }: {
 	readonly rule: AutomationRule;
 	readonly selected: boolean;
 	readonly onSelect: (id: string) => void;
-	readonly onEdit: (id: string) => void;
-	readonly onAskDelete: (id: string) => void;
-	readonly onRename: AutomationsViewProps["onRename"];
+	readonly onOpen: (id: string) => void;
 	readonly onContextMenu: AutomationsViewProps["onContextMenu"];
 }): ReactElement {
 	const { t } = useTranslation();
 	const ref = useRef<HTMLDivElement>(null);
-	const [renaming, setRenaming] = useState(false);
-	const [name, setName] = useState("");
 	// The arrow keys move the selection in the parent; the row follows it into view.
 	useEffect(() => {
 		if (selected) ref.current?.scrollIntoView?.({ block: "nearest" });
 	}, [selected]);
-	const startRename = (): void => {
-		setName(customRuleName(rule) ?? "");
-		setRenaming(true);
-	};
-	const finishRename = (save: boolean): void => {
-		setRenaming(false);
-		if (save && name.trim() !== (customRuleName(rule) ?? "")) void onRename?.(rule.id, name);
-	};
+	const run = rule.lastRun;
+	const tone = runTone(run);
 	return (
 		<div
 			ref={ref}
 			role="row"
 			aria-selected={selected}
 			data-rule-id={rule.id}
-			className={cn("flex items-center gap-10 py-10 pl-12 pr-8 select-none cursor-default", selected ? "bg-accent-soft" : "bg-window hover:bg-hover-row")}
-			onClick={() => onSelect(rule.id)}
-			onDoubleClick={() => {
-				if (!renaming) onEdit(rule.id);
+			className={cn("flex items-center gap-10 py-10 pl-12 pr-10 select-none cursor-pointer", selected ? "bg-accent-soft" : "bg-window hover:bg-hover-row")}
+			onClick={() => {
+				onSelect(rule.id);
+				onOpen(rule.id);
 			}}
 			onContextMenu={(event: ReactMouseEvent) => {
 				event.preventDefault();
@@ -564,33 +523,15 @@ function RuleRow({
 				onContextMenu(rule.id, { x: event.clientX, y: event.clientY });
 			}}
 		>
-			<RunDot tone={runTone(rule.lastRun)} />
+			<RunDot tone={tone} />
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-px">
-				{renaming ? (
-					<input
-						autoFocus
-						data-testid="automation-rename-input"
-						value={name}
-						placeholder={derivedTitle(rule)}
-						aria-label={t("automations.row.rename")}
-						className="h-20 min-w-0 rounded-4 border border-accent bg-window px-4 text-[13px] font-medium leading-[18px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
-						onClick={(event) => event.stopPropagation()}
-						onDoubleClick={(event) => event.stopPropagation()}
-						onFocus={(event) => event.currentTarget.select()}
-						onChange={(event) => setName(event.target.value)}
-						onKeyDown={(event) => {
-							event.stopPropagation();
-							if (event.key === "Enter") finishRename(true);
-							if (event.key === "Escape") finishRename(false);
-						}}
-						onBlur={() => finishRename(true)}
-					/>
-				) : (
-					<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
-				)}
+				<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
 				<span className="truncate text-meta leading-[16px] text-ink-muted">{whenText(rule)}</span>
 			</div>
-			<RowMenu onRename={startRename} onEdit={() => onEdit(rule.id)} onDelete={() => onAskDelete(rule.id)} />
+			<span data-rule-last-run className={cn("flex-none text-meta leading-[16px]", tone === "fail" ? "text-error-orange-text" : "text-ink-muted")}>
+				{run === null ? t("automations.inspector.notRun") : `${relativeTime(run.startedAt)} · ${tone === "ok" ? t("automations.detail.ok") : t("automations.detail.failed")}`}
+			</span>
+			<ChevronRightIcon size={14} className="flex-none text-ink-faint" />
 		</div>
 	);
 }
@@ -600,6 +541,234 @@ function Section({ title, children }: { readonly title: string; readonly childre
 		<section className="flex flex-col gap-8">
 			<h2 className="m-0 text-meta font-medium leading-[16px] text-ink-muted">{title}</h2>
 			{children}
+		</section>
+	);
+}
+
+/** 내 자동화 | 전체 기록: the two places the column shows (Figma 621:4556, 621:5262). */
+function Segmented<T extends string>({ value, options, onChange }: { readonly value: T; readonly options: readonly { readonly value: T; readonly label: string }[]; readonly onChange: (value: T) => void }): ReactElement {
+	return (
+		<div role="tablist" className="inline-flex self-start gap-2 rounded-[9px] bg-chrome p-2" data-automation-tabs>
+			{options.map((option) => (
+				<button
+					key={option.value}
+					type="button"
+					role="tab"
+					aria-selected={option.value === value}
+					data-tab={option.value}
+					className={cn(
+						"h-28 rounded-[7px] border-0 px-14 text-[13px] cursor-pointer",
+						option.value === value ? "bg-window font-medium text-ink shadow-[0_0_0_0.5px_var(--border)]" : "bg-transparent text-ink-muted hover:text-ink",
+					)}
+					onClick={() => onChange(option.value)}
+				>
+					{option.label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+/** A rule's runs from its log, newest first, read again whenever any rule's last run changes. */
+function useRunHistory(ids: readonly string[], changed: string): Readonly<Record<string, readonly AutomationRun[]>> {
+	const [history, setHistory] = useState<Readonly<Record<string, readonly AutomationRun[]>>>({});
+	const key = ids.join("\n");
+	useEffect(() => {
+		let live = true;
+		const bridge = window.autorag?.automations;
+		if (bridge === undefined || typeof bridge.history !== "function") return;
+		void Promise.all(ids.map(async (id) => [id, await bridge.history(id).catch(() => [] as readonly AutomationRun[])] as const)).then((entries) => {
+			if (live) setHistory(Object.fromEntries(entries));
+		});
+		return () => {
+			live = false;
+		};
+	}, [key, changed]);
+	return history;
+}
+
+/** What one run did: how many files it took and how it ended, e.g. "파일 2개 · 시간 초과". */
+function runOutcome(run: AutomationRun, t: TFunction): string {
+	const result = runTone(run) === "ok" ? t("automations.inspector.runDone") : failReason(run);
+	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
+	return [files, result].filter((part): part is string => part !== null && part.length > 0).join(" · ");
+}
+
+/** One line of 실행 기록 (Figma 621:4882): the dot, the outcome (and the rule's name in 전체 기록), when, and the error a failed run left. */
+function RunLine({ run, rule, onOpen }: { readonly run: AutomationRun; readonly rule?: AutomationRule; readonly onOpen?: () => void }): ReactElement {
+	const { t } = useTranslation();
+	const tone = runTone(run);
+	const outcome = runOutcome(run, t);
+	const body = (
+		<>
+			<div className="flex w-full items-center gap-10">
+				<RunDot tone={tone} />
+				<div className="flex min-w-0 flex-1 flex-col gap-px">
+					<span className="truncate text-[13px] leading-[20px] text-ink">{rule === undefined ? outcome : ruleTitle(rule)}</span>
+					{rule === undefined ? null : <span className="truncate text-meta leading-[16px] text-ink-muted">{outcome}</span>}
+				</div>
+				<span className="flex-none text-meta leading-[16px] text-ink-muted">{relativeTime(run.startedAt)}</span>
+				{onOpen === undefined ? null : <ChevronRightIcon size={14} className="flex-none text-ink-faint" />}
+			</div>
+			{tone === "fail" && run.error !== undefined && rule === undefined ? (
+				<p className="m-0 ml-18 rounded-8 bg-error-orange-bg px-10 py-7 text-meta leading-[18px] text-error-orange-text [overflow-wrap:anywhere]">{run.error}</p>
+			) : null}
+		</>
+	);
+	const row = "flex w-full flex-col items-start gap-6 border-0 bg-window px-14 py-10 text-left";
+	return onOpen === undefined ? (
+		<div className={row} data-run={run.startedAt}>
+			{body}
+		</div>
+	) : (
+		<button type="button" className={cn(row, "cursor-pointer hover:bg-hover-row")} data-run={run.startedAt} onClick={onOpen}>
+			{body}
+		</button>
+	);
+}
+
+/** A rounded list whose rows are split by hairlines, the box every section of the column uses. */
+function ListBox({ children, label }: { readonly children: ReactNode; readonly label?: string }): ReactElement {
+	return (
+		<div role="list" aria-label={label} className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>*+*]:border-t-[0.5px] [&>*+*]:border-divider">
+			{children}
+		</div>
+	);
+}
+
+/**
+ * The rule's name on its own page. It reads as editable before anyone hovers: the pencil sits beside it, and the
+ * name takes a soft background under the pointer. A click turns it into a field; Enter or leaving it saves, Esc
+ * keeps the old name, and an empty name goes back to the one derived from the rule.
+ */
+function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; readonly onRename: AutomationsViewProps["onRename"] }): ReactElement {
+	const { t } = useTranslation();
+	const [editing, setEditing] = useState(false);
+	const [name, setName] = useState("");
+	const start = (): void => {
+		setName(customRuleName(rule) ?? ruleTitle(rule));
+		setEditing(true);
+	};
+	const finish = (save: boolean): void => {
+		setEditing(false);
+		const next = name.trim() === derivedTitle(rule) ? "" : name.trim();
+		if (save && next !== (customRuleName(rule) ?? "")) void onRename?.(rule.id, next);
+	};
+	if (editing) {
+		return (
+			<input
+				autoFocus
+				data-testid="automation-title-input"
+				value={name}
+				placeholder={derivedTitle(rule)}
+				aria-label={t("automations.row.rename")}
+				className="h-28 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[15px] font-semibold leading-[20px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
+				onFocus={(event) => event.currentTarget.select()}
+				onChange={(event) => setName(event.target.value)}
+				onKeyDown={(event) => {
+					event.stopPropagation();
+					if (event.key === "Enter") finish(true);
+					if (event.key === "Escape") finish(false);
+				}}
+				onBlur={() => finish(true)}
+			/>
+		);
+	}
+	return (
+		<button
+			type="button"
+			data-action="automation-rename"
+			title={t("automations.row.rename")}
+			aria-label={`${ruleTitle(rule)} — ${t("automations.row.rename")}`}
+			className="group inline-flex h-28 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
+			onClick={start}
+		>
+			<span className="truncate text-[15px] font-semibold leading-[20px] text-ink">{ruleTitle(rule)}</span>
+			<PencilIcon size={13} className="flex-none text-ink-faint group-hover:text-ink-muted" />
+		</button>
+	);
+}
+
+/** A rule's own page (Figma 621:4882): back to the list, the name, the card to change it, and its 실행 기록. */
+function AutomationDetail({
+	rule,
+	runs,
+	onBack,
+	onRename,
+	onUpdate,
+	onDelete,
+	onDraftChange,
+}: {
+	readonly rule: AutomationRule;
+	readonly runs: readonly AutomationRun[] | undefined;
+	readonly onBack: () => void;
+	readonly onRename: AutomationsViewProps["onRename"];
+	readonly onUpdate: AutomationsViewProps["onUpdate"];
+	readonly onDelete: () => void;
+	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
+}): ReactElement {
+	const { t } = useTranslation();
+	// The log is the record; until it has been read (or if it is gone) the rule's last run still shows.
+	const list = runs !== undefined && runs.length > 0 ? runs : rule.lastRun === null ? [] : [rule.lastRun];
+	const fails = list.filter((run) => runTone(run) === "fail").length;
+	return (
+		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
+			<div className="flex min-w-0 items-center gap-6">
+				<button
+					type="button"
+					data-action="automation-back"
+					className="inline-flex flex-none items-center gap-2 border-0 bg-transparent p-0 text-[13px] text-ink-muted cursor-pointer hover:text-ink"
+					onClick={onBack}
+				>
+					<ChevronLeftIcon size={14} />
+					{t("places.automations")}
+				</button>
+				<span className="flex-none text-[13px] text-ink-faint" aria-hidden="true">/</span>
+				<EditableTitle key={rule.id} rule={rule} onRename={onRename} />
+			</div>
+			<Section title={t("automations.detail.settings")}>
+				<NewAutomationCard onCreate={async () => false} onUpdate={onUpdate} onCancelEdit={undefined} onDraftChange={onDraftChange} onDelete={onDelete} editing={rule} filled={null} />
+			</Section>
+			<Section title={[t("automations.detail.history"), list.length === 0 ? null : t("automations.detail.runs", { count: list.length }), fails === 0 ? null : t("automations.detail.fails", { count: fails })].filter((part) => part !== null).join(" · ")}>
+				{list.length === 0 ? (
+					<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{t("automations.detail.noRuns")}</p>
+				) : (
+					<ListBox label={t("automations.detail.history")}>
+						{list.map((run) => (
+							<RunLine key={`${run.startedAt}-${run.durationMs}`} run={run} />
+						))}
+					</ListBox>
+				)}
+			</Section>
+		</div>
+	);
+}
+
+/** 전체 기록 (Figma 621:5262): every rule's runs, newest first; 실패만 보기 keeps the failed ones; a row opens its rule. */
+function AllRuns({ rules, history, onOpen }: { readonly rules: readonly AutomationRule[]; readonly history: Readonly<Record<string, readonly AutomationRun[]>>; readonly onOpen: (id: string) => void }): ReactElement {
+	const { t } = useTranslation();
+	const [failOnly, setFailOnly] = useState(false);
+	const all = rules
+		.flatMap((rule) => (history[rule.id] ?? (rule.lastRun === null ? [] : [rule.lastRun])).map((run) => ({ rule, run })))
+		.sort((a, b) => b.run.startedAt - a.run.startedAt);
+	const shown = failOnly ? all.filter(({ run }) => runTone(run) === "fail") : all;
+	return (
+		<section className="flex flex-col gap-8" data-automation-all-runs>
+			<div className="flex items-center gap-8">
+				<span className="text-meta leading-[16px] text-ink-muted">{t("automations.all.count", { count: all.length })}</span>
+				<span className="flex-1" />
+				<span className="text-meta leading-[16px] text-ink-body">{t("automations.all.failOnly")}</span>
+				<Switch checked={failOnly} dataSwitchId="automation-fail-only" ariaLabel={t("automations.all.failOnly")} onChange={() => setFailOnly((was) => !was)} />
+			</div>
+			{shown.length === 0 ? (
+				<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{failOnly ? t("automations.all.noFails") : t("automations.inspector.noRuns")}</p>
+			) : (
+				<ListBox label={t("automations.tabs.all")}>
+					{shown.map(({ rule, run }) => (
+						<RunLine key={`${rule.id}-${run.startedAt}`} run={run} rule={rule} onOpen={() => onOpen(rule.id)} />
+					))}
+				</ListBox>
+			)}
 		</section>
 	);
 }
@@ -653,10 +822,24 @@ function BackgroundLine({
 export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
+	const [tab, setTab] = useState<"mine" | "all">("mine");
+	const [composerOpen, setComposerOpen] = useState(false);
 	const broken = state.configError !== null;
+	const history = useRunHistory(
+		[...new Set([...state.rules.map((rule) => rule.id), ...(editing === null ? [] : [editing.id])])],
+		state.rules.map((rule) => rule.lastRun?.startedAt ?? 0).join(","),
+	);
+	// 수정, from anywhere (the list, a menu, the folder inspector, Quick Look), opens the rule's own page.
+	const detail = editing;
+	const open = (id: string): void => onEdit(id);
+	const scrollRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		scrollRef.current?.scrollTo?.({ top: 0 });
+	}, [detail?.id, tab]);
 	return (
 		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
 			<div
+				ref={scrollRef}
 				data-rules-body
 				className="min-h-0 flex-1 overflow-auto px-40 pb-40 pt-56"
 				onContextMenu={(event) => {
@@ -676,37 +859,110 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							<p className="m-0 text-meta leading-body text-ink-muted [overflow-wrap:anywhere]">{state.configError}</p>
 							<p className="m-0 text-meta leading-body text-ink-muted">{t("automations.errors.configHint")}</p>
 						</div>
-					) : !state.ready ? null : (
+					) : !state.ready ? null : detail !== null ? (
+						<AutomationDetail
+							rule={detail}
+							runs={history[detail.id]}
+							onBack={() => onCancelEdit?.()}
+							onRename={onRename}
+							onUpdate={onUpdate}
+							onDelete={() => onAskDelete(detail.id)}
+							onDraftChange={onDraftChange}
+						/>
+					) : (
 						<>
-							<Section title={editing === null ? t("automations.create.title") : t("automations.create.editTitle")}>
-								<NewAutomationCard onCreate={onCreate} onUpdate={onUpdate} onCancelEdit={onCancelEdit} onDraftChange={onDraftChange} editing={editing} filled={filled} />
-							</Section>
-							{state.rules.length === 0 ? null : (
-								<Section title={t("automations.mine")}>
-									<div role="grid" aria-label={t("automations.list")} className="flex flex-col rounded-12 border-[0.5px] border-divider [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider [&>[role=row]:first-child]:rounded-t-12 [&>[role=row]:last-child]:rounded-b-12">
-										{state.rules.map((rule) => (
-											<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onEdit={onEdit} onAskDelete={onAskDelete} onRename={onRename} onContextMenu={onContextMenu} />
-										))}
-									</div>
-								</Section>
-							)}
-							<Section title={t("automations.templates.title")}>
-								{/* Figma 611:4016: the same rounded list as 내 자동화, a title and its sentence per row. */}
-								<div className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>button+button]:border-t-[0.5px] [&>button+button]:border-divider">
-									{TEMPLATES.map((template) => (
+							<Segmented
+								value={tab}
+								options={[
+									{ value: "mine", label: t("automations.mine") },
+									{ value: "all", label: t("automations.tabs.all") },
+								]}
+								onChange={setTab}
+							/>
+							{tab === "all" ? (
+								<AllRuns rules={state.rules} history={history} onOpen={open} />
+							) : (
+								<>
+									{composerOpen || state.rules.length === 0 || filled !== null ? (
+										<Section title={t("automations.create.title")}>
+											<div className="relative">
+												{state.rules.length === 0 ? null : (
+													<button
+														type="button"
+														data-action="automation-composer-close"
+														aria-label={t("common.close")}
+														title={t("common.close")}
+														className="absolute -top-26 right-0 flex size-20 items-center justify-center rounded-4 border-0 bg-transparent p-0 text-ink-muted cursor-pointer hover:bg-hover hover:text-ink"
+														onClick={() => {
+															setComposerOpen(false);
+															setFilled(null);
+														}}
+													>
+														<CloseIcon size={12} />
+													</button>
+												)}
+												<NewAutomationCard
+													onCreate={async (draft) => {
+														const ok = await onCreate(draft);
+														if (ok) {
+															setComposerOpen(false);
+															setFilled(null);
+														}
+														return ok;
+													}}
+													onUpdate={onUpdate}
+													onCancelEdit={onCancelEdit}
+													onDraftChange={onDraftChange}
+													editing={null}
+													filled={filled}
+												/>
+											</div>
+										</Section>
+									) : (
 										<button
-											key={template.id}
 											type="button"
-											data-template={template.id}
-											className="flex flex-col items-start gap-px border-0 bg-window px-12 py-10 text-left cursor-pointer hover:bg-hover-row"
-											onClick={() => setFilled({ template, at: Date.now() })}
+											data-action="automation-composer-open"
+											className="flex w-full items-center gap-8 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-left text-[13px] text-ink-muted cursor-pointer hover:bg-hover-row hover:text-ink"
+											onClick={() => setComposerOpen(true)}
 										>
-											<span className="text-[13px] font-medium leading-[20px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
-											<span className="text-meta leading-[18px] text-ink-muted">{t(`automations.templates.${template.id}.desc` as LocaleKey)}</span>
+											<TabPlusIcon size={16} />
+											{t("automations.create.open")}
 										</button>
-									))}
-								</div>
-							</Section>
+									)}
+									{state.rules.length === 0 ? null : (
+										<Section title={t("automations.mine")}>
+											<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
+												{state.rules.map((rule) => (
+													<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onOpen={open} onContextMenu={onContextMenu} />
+												))}
+											</div>
+										</Section>
+									)}
+									<Section title={t("automations.templates.title")}>
+										{/* Figma 611:4016: the same rounded list as 내 자동화, a title and its sentence per row. */}
+										<div className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>button+button]:border-t-[0.5px] [&>button+button]:border-divider">
+											{TEMPLATES.map((template) => (
+												<button
+													key={template.id}
+													type="button"
+													data-template={template.id}
+													className="group flex items-center gap-10 border-0 bg-window px-12 py-10 text-left cursor-pointer hover:bg-hover-row"
+													onClick={() => {
+														setFilled({ template, at: Date.now() });
+														setComposerOpen(true);
+													}}
+												>
+													<span className="flex min-w-0 flex-1 flex-col items-start gap-px">
+														<span className="text-[13px] font-medium leading-[20px] text-ink">{t(`automations.templates.${template.id}.title` as LocaleKey)}</span>
+														<span className="text-meta leading-[18px] text-ink-muted">{t(`automations.templates.${template.id}.desc` as LocaleKey)}</span>
+													</span>
+													<span className="flex-none text-meta text-accent-text opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100">{t("automations.templates.add")}</span>
+												</button>
+											))}
+										</div>
+									</Section>
+								</>
+							)}
 						</>
 					)}
 				</div>

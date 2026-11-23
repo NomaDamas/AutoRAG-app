@@ -69,6 +69,7 @@ async function mount(initial: readonly AutomationRule[], options: { active?: boo
 		},
 		create: async () => ({ snapshot: current, id: "new-rule" }),
 		update: async () => current,
+		history: async () => [],
 		restore: async () => {
 			const next = [...current.rules];
 			if (removed !== undefined) next.splice(removedIndex, 0, removed);
@@ -158,7 +159,7 @@ describe("editing and adding open an AI Chat draft, never a sent question", () =
 		expect(h.shell().props.editing?.id).toBe("downloads-pdf-summary");
 	});
 
-	it("수정하기 rewrites the rule and leaves the card", async () => {
+	it("저장 rewrites the rule and keeps its page open", async () => {
 		const h = await mount([rule("a")]);
 		const update = vi.spyOn(h.bridge, "update");
 		act(() => h.shell().props.onEdit("a"));
@@ -167,7 +168,7 @@ describe("editing and adding open an AI Chat draft, never a sent question", () =
 			await h.shell().props.onUpdate?.("a", draft);
 		});
 		expect(update).toHaveBeenCalledWith("a", draft);
-		expect(h.shell().props.editing).toBeNull();
+		expect(h.shell().props.editing?.id).toBe("a");
 	});
 
 	it("adding drafts the creation request", async () => {

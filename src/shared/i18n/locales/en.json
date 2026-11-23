@@ -710,7 +710,8 @@
         "write": "Can edit files"
       },
       "submitEdit": "Save Changes",
-      "editTitle": "Edit Automation"
+      "editTitle": "Edit Automation",
+      "open": "New automation…"
     },
     "templates": {
       "title": "Suggested Automations",
@@ -728,12 +729,33 @@
         "title": "Keep search up to date",
         "desc": "When files in Documents are added or changed, update search right away",
         "task": "Update search right away"
-      }
+      },
+      "add": "Add"
     },
     "row": {
       "rename": "Rename",
       "edit": "Edit",
       "delete": "Delete"
+    },
+    "detail": {
+      "ok": "Succeeded",
+      "failed": "Failed",
+      "settings": "Settings",
+      "history": "Run history",
+      "runs": "Runs: {{count}}",
+      "fails": "Failed: {{count}}",
+      "noRuns": "It hasn't run yet. Runs show up here once a matching file appears."
+    },
+    "tabs": {
+      "all": "All runs"
+    },
+    "all": {
+      "count": "Runs: {{count}}",
+      "failOnly": "Failures only",
+      "noFails": "No failed runs"
+    },
+    "assistant": {
+      "caption": "Ask the AI to create or change an automation"
     }
   },
   "osMenu": {
