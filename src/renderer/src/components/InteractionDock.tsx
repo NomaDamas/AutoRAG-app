@@ -68,7 +68,7 @@ function contextIsLong(context: string): boolean {
 	return context.length > CONTEXT_COLLAPSE_LIMIT || context.split("\n").length > 3;
 }
 
-const DOCK_CARD = "flex flex-col gap-10 rounded-12 border border-border bg-input p-14";
+const DOCK_CARD = "flex min-w-0 max-w-full flex-col gap-10 rounded-12 border border-border bg-input p-12 [overflow-wrap:anywhere]";
 const PRIMARY_BUTTON =
 	"inline-flex h-28 flex-none items-center justify-center gap-5 rounded-8 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer transition-colors duration-(--dur-color) ease-out enabled:hover:bg-accent-hover disabled:cursor-default disabled:bg-border-strong";
 const SECONDARY_BUTTON =
@@ -277,21 +277,10 @@ function QuestionCard({ request, onStop }: { readonly request: QuestionRequest; 
 				</div>
 			)}
 
-			<div className="flex items-center gap-8">
-				<StopButton onStop={onStop} />
-				<button type="button" className={GHOST_BUTTON} onClick={() => answerRequest(request.id, cancelAnswer())}>
-					{t("interaction.skip")}
-				</button>
-				<span className="flex-1" />
-				{total <= 1 ? (
-					question !== undefined && (question.allowMultiple || draft.freeform.trim() !== "") ? (
-						<button type="button" className={PRIMARY_BUTTON} disabled={draftAnswer(question, draft) === null} onClick={() => answer(state)}>
-							{t("interaction.submit")}
-						</button>
-					) : null
-				) : (
-					<>
-						<span className="flex-none text-meta text-ink-muted tabular-nums">
+			<div className="flex flex-col gap-8">
+				{total > 1 ? (
+					<div className="flex flex-wrap items-center gap-8">
+						<span className="min-w-0 flex-1 text-meta text-ink-muted tabular-nums">
 							{t("interaction.answeredCount", { answered: answeredCount(request, state), total })}
 						</span>
 						<button
@@ -311,8 +300,20 @@ function QuestionCard({ request, onStop }: { readonly request: QuestionRequest; 
 								{t("interaction.submit")}
 							</button>
 						)}
-					</>
-				)}
+					</div>
+				) : null}
+				<div className="flex flex-wrap items-center gap-8">
+					<StopButton onStop={onStop} />
+					<button type="button" className={GHOST_BUTTON} onClick={() => answerRequest(request.id, cancelAnswer())}>
+						{t("interaction.skip")}
+					</button>
+					<span className="flex-1" />
+					{total <= 1 && question !== undefined && (question.allowMultiple || draft.freeform.trim() !== "") ? (
+						<button type="button" className={PRIMARY_BUTTON} disabled={draftAnswer(question, draft) === null} onClick={() => answer(state)}>
+							{t("interaction.submit")}
+						</button>
+					) : null}
+				</div>
 			</div>
 		</div>
 	);

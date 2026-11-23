@@ -75,6 +75,24 @@ function setField(el: HTMLInputElement | HTMLTextAreaElement, value: string): vo
 	el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+describe("InteractionDock in a narrow sidebar", () => {
+	it("keeps batch navigation on its own row, apart from Stop and Skip, and lets rows wrap", () => {
+		render(
+			questionRequest([
+				question({ question: "One?", options: [{ title: "a" }], allowFreeform: false }),
+				question({ question: "Two?", options: [{ title: "b" }], allowFreeform: false }),
+			]),
+		);
+
+		const row = (label: string): HTMLElement => buttonByText(label).parentElement as HTMLElement;
+		expect(row(t("interaction.stop"))).toBe(row(t("interaction.skip")));
+		expect(row(t("interaction.next"))).toBe(row(t("interaction.back")));
+		expect(row(t("interaction.next"))).not.toBe(row(t("interaction.stop")));
+		expect(row(t("interaction.stop")).className).toContain("flex-wrap");
+		expect(host.querySelector('[role="dialog"]')?.className).toContain("min-w-0");
+	});
+});
+
 describe("InteractionDock question card", () => {
 	it("submits a single-choice question as soon as an option is picked", () => {
 		render(
