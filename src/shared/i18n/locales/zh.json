@@ -1896,7 +1896,7 @@
       "editMagicAction": "编辑 {{name}}",
       "removeMagicAction": "删除 {{name}}",
       "removeMagicConfirmTitle": "要删除魔法操作“{{name}}”吗？",
-      "removeMagicConfirmBody": "此操作将从右键菜单中消失，删除后无法恢复。",
+      "removeMagicConfirmBody": "此魔法操作将从右键菜单中删除。此操作无法撤销。",
       "condSingle": "单个项目",
       "condMultiple": "多项批量",
       "condAnySelection": "单选或多选",

@@ -1896,7 +1896,7 @@
       "editMagicAction": "{{name}} 수정",
       "removeMagicAction": "{{name}} 삭제",
       "removeMagicConfirmTitle": "‘{{name}}’ 매직 액션을 삭제할까요?",
-      "removeMagicConfirmBody": "우클릭 메뉴에서 이 액션이 사라지며, 삭제한 뒤에는 되돌릴 수 없습니다.",
+      "removeMagicConfirmBody": "우클릭 메뉴에서 이 매직 액션이 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
       "condSingle": "단일 항목",
       "condMultiple": "여러 항목 묶음",
       "condAnySelection": "단일·복수 모두",

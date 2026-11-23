@@ -1896,7 +1896,7 @@
       "editMagicAction": "{{name}} を編集",
       "removeMagicAction": "{{name}} を削除",
       "removeMagicConfirmTitle": "マジックアクション「{{name}}」を削除しますか？",
-      "removeMagicConfirmBody": "右クリックメニューからこのアクションが消え、削除後は元に戻せません。",
+      "removeMagicConfirmBody": "右クリックメニューからこのマジックアクションが削除されます。この操作は取り消せません。",
       "condSingle": "単一項目",
       "condMultiple": "複数選択",
       "condAnySelection": "単一・複数すべて",
