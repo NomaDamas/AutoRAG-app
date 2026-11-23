@@ -247,7 +247,7 @@ function NewAutomationCard({
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onCancelEdit: AutomationsViewProps["onCancelEdit"];
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
-	/** On a rule's own page: the card is read until 수정, which leaves only 저장; 삭제 sits beside 수정. */
+	/** On a rule's own page: the card is read until 수정, which leaves 취소 and 저장; 삭제 sits beside 수정. */
 	readonly onDelete?: (() => void) | undefined;
 	readonly editing: AutomationRule | null;
 	readonly filled: { readonly template: Template; readonly at: number } | null;
@@ -328,6 +328,22 @@ function NewAutomationCard({
 		// The locations are read once; the template is what changes.
 	}, [filled]);
 
+	const load = (rule: AutomationRule): void => {
+		const matchedKind = kindOf(rule.include);
+		const matchedEvent = eventOf(rule.events);
+		const profile = rule.agent?.profile ?? null;
+		setFolder(rule.paths[0] ?? null);
+		setKind(matchedKind ?? "all");
+		setCustomInclude(matchedKind === null ? rule.include : null);
+		setEvent(matchedEvent ?? "create");
+		setCustomEvents(matchedEvent === null ? rule.events : null);
+		setMode(profile === PROFILES.write ? "write" : "read");
+		setCustomProfile(profile !== null && profile !== PROFILES.read && profile !== PROFILES.write ? profile : null);
+		setTask(rule.agent?.task ?? whatText(rule, { full: true }));
+		setRun(rule.agent === undefined ? rule.run : null);
+		setTouched(true);
+	};
+
 	// 수정 on a rule: the card takes the rule in, and 만들기 becomes 수정하기. Leaving a rule empties the card; a card
 	// that opens with no rule keeps what a 추천 자동화 row just put in it.
 	const editedBefore = useRef<string | null>(null);
@@ -339,19 +355,7 @@ function NewAutomationCard({
 			if (before !== null) reset();
 			return;
 		}
-		const matchedKind = kindOf(editing.include);
-		const matchedEvent = eventOf(editing.events);
-		const profile = editing.agent?.profile ?? null;
-		setFolder(editing.paths[0] ?? null);
-		setKind(matchedKind ?? "all");
-		setCustomInclude(matchedKind === null ? editing.include : null);
-		setEvent(matchedEvent ?? "create");
-		setCustomEvents(matchedEvent === null ? editing.events : null);
-		setMode(profile === PROFILES.write ? "write" : "read");
-		setCustomProfile(profile !== null && profile !== PROFILES.read && profile !== PROFILES.write ? profile : null);
-		setTask(editing.agent?.task ?? whatText(editing, { full: true }));
-		setRun(editing.agent === undefined ? editing.run : null);
-		setTouched(true);
+		load(editing);
 		// On a rule's own page the card is read first; only the list's card jumps to the instruction.
 		if (onDelete === undefined) {
 			cardRef.current?.scrollIntoView?.({ block: "nearest" });
@@ -491,12 +495,19 @@ function NewAutomationCard({
 					</>
 				) : (
 					<>
-						{editing === null || onDelete !== undefined ? null : (
+						{editing === null ? null : (
 							<button
 								type="button"
 								data-action="automation-cancel-edit"
 								className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
-								onClick={() => onCancelEdit?.()}
+								onClick={() => {
+									if (onDelete === undefined) {
+										onCancelEdit?.();
+										return;
+									}
+									load(editing);
+									setUnlocked(false);
+								}}
 							>
 								{t("common.cancel")}
 							</button>
@@ -881,13 +892,15 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 			<div
 				ref={scrollRef}
 				data-rules-body
-				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-40 pb-40 pt-56"
+				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
 				onContextMenu={(event) => {
 					event.preventDefault();
 					onContextMenu(null, { x: event.clientX, y: event.clientY });
 				}}
 			>
-				<div className="mx-auto flex w-full min-w-[520px] max-w-[600px] flex-col gap-24">
+				{/* Narrower than a file tab's list, the page is cut on the right as the list is, not squeezed. */}
+				<div className="min-w-(--pane-min-width) px-40 pb-40 pt-56">
+				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
 						<p role="alert" className="m-0 rounded-8 bg-error-orange-bg px-12 py-8 text-meta text-error-orange-text">
 							{state.error}
@@ -1010,6 +1023,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							)}
 						</>
 					)}
+				</div>
 				</div>
 			</div>
 			{state.rules.length === 0 && state.daemon === null ? null : <BackgroundLine state={state} busy={daemonBusy} onSetDaemon={onSetDaemon} />}

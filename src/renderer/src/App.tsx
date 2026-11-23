@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactElement } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import type { QuickLookTarget } from "../../preview/shared/contract";
 import type { Bounds } from "../../preview/shared/fit";
@@ -61,7 +61,7 @@ import { inspectorEntryFor } from "./state/inspector-target";
 import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
 import { ruleNamesNow, ruleTitle, setRuleNames } from "./state/automations";
 import { isFilesystemPath, watchSetFor } from "./state/live";
-import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
+import { listMinWidth, loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
 import { requestSettingsCategory } from "./state/settings-navigation";
 import { aiPanelTabs, AI_SEARCH_PATH, AUTOMATIONS_PATH, SETTINGS_PATH } from "./state/tabs";
@@ -1024,7 +1024,7 @@ export function App(): ReactElement {
 						sidebarHidden={!sidebarVisible}
 						onShowSidebar={() => setSidebarVisible(true)}
 					/>
-					<div className="flex min-h-0 flex-1">
+					<div className="flex min-h-0 flex-1" style={{ "--pane-min-width": `${listMinWidth(listColumns)}px` } as CSSProperties}>
 						<WorkspaceView
 							workspace={workspace}
 							draggingTabId={draggingTabId}
@@ -1055,13 +1055,15 @@ export function App(): ReactElement {
 									return (
 										<div
 											key={id}
-											className={cn("ai-host absolute flex flex-col", motion, box === undefined && "hidden")}
+											className={cn("ai-host absolute flex flex-col overflow-x-hidden", motion, box === undefined && "hidden")}
 											data-ai-tab={id}
 											style={box === undefined ? undefined : percentPlacement(box, TAB_STRIP_PX)}
 											onMouseDownCapture={() => {
 												if (paneId !== undefined) setWorkspace((current) => focusPane(current, paneId));
 											}}
 										>
+											{/* Narrower than a file tab's list, the chat is cut on the right as the list is, not squeezed. */}
+											<div className="flex min-h-0 flex-1 flex-col min-w-(--pane-min-width)">
 											<AiSearchPanel
 												ref={(handle) => {
 													if (handle === null) aiHandlesRef.current.delete(id);
@@ -1084,6 +1086,7 @@ export function App(): ReactElement {
 													finder?.openSettings();
 												}}
 											/>
+											</div>
 										</div>
 									);
 								})
