@@ -194,7 +194,7 @@ await emptyPage.setViewportSize({ width: 1440, height: 900 });
 await emptyPage.waitForSelector('[role="row"]', { timeout: 60_000 });
 await emptyPage.getByLabel("Places").getByRole("button", { name: TRASH_LABEL, exact: true }).click();
 await emptyPage.getByRole("button", { name: "Empty Trash" }).click();
-const dialog = emptyPage.getByRole("alertdialog", { name: "Empty Trash" });
+const dialog = emptyPage.getByRole("alertdialog", { name: "Empty the Trash?" });
 await dialog.waitFor({ timeout: 30_000 });
 await emptyPage.screenshot({ path: join(EVIDENCE, "4-empty-confirm.png") });
 

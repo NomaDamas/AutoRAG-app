@@ -373,10 +373,10 @@
     "voiceUnavailable": "이 기기에서는 마이크를 사용할 수 없습니다.",
     "voiceFailed": "음성을 글자로 옮기지 못했습니다: {{message}}",
     "micPermission": {
-      "title": "마이크 권한이 필요합니다.",
+      "title": "마이크 권한이 필요합니다",
       "body": "음성으로 물어보려면 Dazzi에 마이크 권한이 필요합니다. 녹음은 마이크 버튼을 누를 때만 합니다.",
-      "stepsMac": "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Dazzi를 켜 주세요.",
-      "stepsWindows": "설정 › 개인 정보 및 보안 › 마이크에서 ‘마이크 액세스’와 ‘데스크톱 앱이 마이크에 액세스하도록 허용’을 켜 주세요.",
+      "stepsMac": "시스템 설정 › 개인정보 보호 및 보안 › 마이크에서 Dazzi를 켜세요.",
+      "stepsWindows": "설정 › 개인 정보 및 보안 › 마이크에서 ‘마이크 액세스’와 ‘데스크톱 앱이 마이크에 액세스하도록 허용’을 켜세요.",
       "openMac": "시스템 설정 열기",
       "openWindows": "Windows 설정 열기",
       "notNow": "나중에",
@@ -471,7 +471,7 @@
       "runningHint": "화면을 닫아도 계속 진행됩니다.",
       "stop": "중단",
       "fixedHint": "하던 작업을 다시 시도해 보세요.",
-      "cannotFixHint": "원인을 찾지 못했습니다. 오류 내용을 확인해 주세요."
+      "cannotFixHint": "원인을 찾지 못했습니다. 오류 내용을 확인하세요."
     }
   },
   "interaction": {
@@ -915,10 +915,10 @@
   },
   "confirm": {
     "compressStopTitle": "압축을 중단할까요?",
-    "compressStopMessage": "{{name}} 압축을 중단하고 만들던 압축 파일을 삭제합니다.",
+    "compressStopMessage": "지금까지 만든 압축 파일은 삭제됩니다.",
     "compressStopAction": "중단",
     "compressKeep": "계속 압축",
-    "emptyTrashTitle": "휴지통 비우기",
+    "emptyTrashTitle": "휴지통을 비울까요?",
     "emptyTrashMessage": "휴지통의 모든 항목이 영구 삭제됩니다. 이 작업은 되돌릴 수 없습니다.",
     "emptyTrashAction": "비우기",
     "closeEvidenceFolderTitle": "출처 폴더를 닫을까요?",
@@ -1850,7 +1850,7 @@
       "removeCustom": "{{name}} 제거",
       "addCustomFolder": "폴더 추가",
       "addCustomModalTitle": "즐겨찾기에 폴더 추가",
-      "addCustomModalDesc": "사이드바 즐겨찾기에 고정할 폴더 경로를 입력합니다.",
+      "addCustomModalDesc": "사이드바 즐겨찾기에 고정할 폴더 경로를 입력하세요.",
       "addCustomPathLabel": "폴더 경로",
       "addCustomPathPlaceholder": "~/Projects 또는 /Users/me/Work",
       "addCustomConfirm": "추가",
@@ -2304,7 +2304,7 @@
       "disconnect": {
         "title": "{{name}} 연결을 해제할까요?",
         "body": "저장된 자격 증명을 삭제하고 목록에서 제거합니다. 이 서비스를 사용하던 역할은 새 모델을 선택해야 할 수 있습니다.",
-        "action": "연결 끊기"
+        "action": "연결 해제"
       },
       "disconnected": "{{name}} 연결을 해제했습니다.",
       "envKeyCannotRemove": "{{name}} 키가 운영체제 환경 변수에서 제공되어 앱에서 연결을 끊을 수 없습니다. 해당 환경 변수를 직접 삭제하세요.",
@@ -2452,8 +2452,8 @@
         "save": "저장",
         "advanced": "이 항목에는 앱에서 수정하지 않는 설정이 있어 그대로 유지됩니다.",
         "badLine": "\"{{line}}\" 줄을 읽을 수 없습니다.",
-        "removeTitle": "\"{{name}}\" 서버를 삭제할까요?",
-        "removeBody": "설정 파일에서 이 서버가 삭제됩니다. 서버가 저장한 데이터는 그대로입니다.",
+        "removeTitle": "‘{{name}}’ 서버를 삭제할까요?",
+        "removeBody": "설정 파일에서 이 서버가 삭제됩니다. 서버가 저장한 데이터는 그대로 유지됩니다.",
         "argsHint": "한 줄에 하나씩 입력합니다.",
         "envFormatHint": "한 줄에 하나씩 이름=값 형식으로 입력합니다.\n값에서 ${NAME}으로 다른 환경 변수를 참조할 수 있습니다.",
         "descriptionHint": "AI가 이 서버를 언제 사용할지 판단하는 데 참고합니다.",
@@ -2931,13 +2931,13 @@
       "connectApps": "앱 연결하기",
       "connect": "연결",
       "promptTitle": "{{name}} 연결",
-      "promptDesc": "연결 id를 정하고 추가합니다. 비워두면 템플릿 이름을 사용합니다.",
+      "promptDesc": "연결 id를 입력하세요. 비워 두면 템플릿 이름을 사용합니다.",
       "promptLabel": "연결 id",
       "promptConfirm": "연결 추가",
       "macOnlyCalendar": "macOS에서만 사용할 수 있습니다 (EventKit).",
       "macOnlySpotlight": "macOS에서만 사용할 수 있습니다 (Spotlight).",
       "macOnlyWhatsapp": "macOS에서만 사용할 수 있습니다 (WhatsApp).",
-      "disconnect": "연결 끊기"
+      "disconnect": "연결 해제"
     },
     "sourceDetail": {
       "fallbackSummary": "이 연결의 설정을 관리합니다.",
@@ -2964,10 +2964,10 @@
       "descHint": "이 연결을 언제 참고하면 좋은지 적어주세요.",
       "descAria": "설명",
       "templateSection": "{{label}} 설정",
-      "removeSection": "연결 끊기",
+      "removeSection": "연결 해제",
       "removeHint": "Dazzi 검색에서만 제거되며 원본 앱의 데이터는 삭제되지 않습니다.",
       "confirmTitle": "연결을 해제할까요?",
-      "confirmBody": "'{{alias}}' 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 삭제되지 않습니다.",
+      "confirmBody": "‘{{alias}}’ 연결이 Dazzi 검색에서 제거됩니다. 원본 앱의 데이터는 삭제되지 않습니다.",
       "macOnlyNote": "Apple 캘린더와 미리알림은 macOS의 EventKit으로만 읽을 수 있어, 이 컴퓨터에서는 연결되지 않습니다.",
       "kakaoOnlyNote": "카카오톡은 Mac 앱에서만 읽을 수 있는 lazykatok으로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다.",
       "whatsappOnlyNote": "WhatsApp은 Mac 앱의 데이터베이스를 읽는 wacrawl로 가져오기 때문에, 이 컴퓨터에서는 연결되지 않습니다. 복사해 둔 데이터 폴더가 있다면 ‘소스 경로’에 지정하세요.",
@@ -3126,9 +3126,9 @@
   "magicAction": {
     "running": "매직 액션 실행 중…",
     "completed": "실행 완료",
-    "failedTitle": "매직 액션 실행 실패",
-    "stoppedTitle": "실행이 중단되었습니다",
-    "minimize": "백그라운드에서 계속",
+    "failedTitle": "매직 액션을 실행하지 못했습니다",
+    "stoppedTitle": "실행을 중단했습니다",
+    "minimize": "백그라운드로 전환",
     "stop": "중단",
     "close": "닫기",
     "copyOutput": "결과 복사",
@@ -3597,11 +3597,11 @@
     "dragHint": "사진을 끌어다 놓아 보세요"
   },
   "fullDiskAccess": {
-    "title": "전체 디스크 접근을 허용해 주세요",
-    "titleGranted": "전체 디스크 접근이 허용되었어요",
-    "leadTagColors": "Finder 태그 색상은 macOS가 보호하는 영역에 있어요. 시스템 설정에서 Dazzi를 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
+    "title": "전체 디스크 접근 권한이 필요합니다",
+    "titleGranted": "전체 디스크 접근을 허용했습니다",
+    "leadTagColors": "Finder 태그 색상은 macOS가 보호하는 영역에 있습니다. 시스템 설정에서 Dazzi를 켜고, 안내가 뜨면 종료 후 다시 여세요.",
     "leadSource": "이 소스는 다른 앱의 데이터를 읽습니다. 시스템 설정에서 Dazzi의 전체 디스크 접근을 켜고, 안내가 뜨면 종료 후 다시 열어 주세요.",
-    "granted": "허용이 확인되었어요. 이제 계속할 수 있어요.",
+    "granted": "허용을 확인했습니다. 이제 계속할 수 있습니다.",
     "open": "시스템 설정 열기",
     "confirm": "확인하고 계속",
     "rowName": "전체 디스크 접근"

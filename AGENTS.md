@@ -161,6 +161,9 @@ toasts, dialogs, menus, notifications, or error messages shown to the user.
 - **Not translated.** Product and brand names (`APP_NAME`/`APP_FULL_NAME`, see
   the top of this file), file names, paths, and text that comes from the user,
   a document, or an external service.
+- **Modals and dialogs.** Their copy follows `docs/modal-copy.md`: ~합니다 in
+  Korean, one pattern per kind of modal, and the same name for the same action
+  everywhere.
 
 `test/i18n.test.ts` fails when a key is missing in any language, the
 interpolation variables differ, or Korean is left in `en`, `ja`, or `zh`.
