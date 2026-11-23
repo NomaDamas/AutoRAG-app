@@ -80,6 +80,7 @@ const TARGETS = [
 	"demo",
 	"ltr",
 	"appUpdate",
+	"toolVersions",
 	"indexActivity",
 	"indexProblem",
 	"modelDownload",

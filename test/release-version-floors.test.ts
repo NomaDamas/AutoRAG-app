@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { readLibrarianRequirements } from "../scripts/release/pins.mjs";
 import { assertVersionFloor, compareVersions, VERSION_FLOORS } from "../scripts/release/version-floors.mjs";
 
 describe("compareVersions", () => {
@@ -26,14 +27,14 @@ describe("assertVersionFloor", () => {
 });
 
 describe("VERSION_FLOORS", () => {
-	it("keeps minsync at 0.7.1 or newer: librarian 2.13.7 refuses anything older, so a bundle below it would not run", () => {
-		expect(compareVersions("0.7.0", VERSION_FLOORS.minsync)).toBeLessThan(0);
-		expect(compareVersions("0.7.1", VERSION_FLOORS.minsync)).toBeGreaterThanOrEqual(0);
-	});
+	const librarian = readLibrarianRequirements();
 
-	it("keeps dupey at 0.2.0 or newer: librarian 2.13.7 refuses an older one, whose HWP and fallback hashes disagree with the stored ones", () => {
-		expect(compareVersions("0.1.2", VERSION_FLOORS.dupey)).toBeLessThan(0);
-		expect(compareVersions("0.2.0", VERSION_FLOORS.dupey)).toBeGreaterThanOrEqual(0);
+	it("derives minsync and dupey floors directly from the pinned @autorag/librarian", () => {
+		expect(VERSION_FLOORS.minsync).toBe(librarian.minsync);
+		expect(VERSION_FLOORS.dupey).toBe(librarian.dupey);
+		expect(VERSION_FLOORS.jikji).toBe(librarian.jikji);
+		expect(compareVersions("0.7.0", VERSION_FLOORS.minsync)).toBeLessThan(0);
+		expect(compareVersions("0.2.0", VERSION_FLOORS.dupey)).toBeLessThan(0);
 	});
 
 	it("keeps mailcrawl at 0.3.0+ for local mail archive indexing and lazykatok at 0.3.3+ for the embedding daemon", () => {

@@ -8,7 +8,7 @@ import {
 	type EmbeddingEndpoint,
 } from "../src/main/embedding-endpoint";
 
-const DAEMON = { state: "running", baseUrl: "http://127.0.0.1:50000", dimension: 1024, pid: 1, started: false } as const;
+const DAEMON = { state: "running", baseUrl: "http://127.0.0.1:50000", port: 50000, dimension: 1024, pid: 1, version: "0.3.4", instance: "Qwen-Qwen3-Embedding-0.6B-test", owned: true, started: false } as const;
 const local = async () => DAEMON;
 
 describe("resolveEmbeddingEndpoint", () => {

@@ -7,12 +7,16 @@ import {
 	configureEmbeddingDaemon,
 	createEmbeddingDaemon,
 	DEFAULT_LOCAL_EMBEDDING_MODEL,
+	embeddingDaemonStatus,
+	embeddingServeStateRoots,
 	ensureEmbeddingForConfig,
 	followConfig,
+	inlServeStateRoot,
 	localEmbeddingModel,
 	localEmbeddingServer,
 	localModelMissing,
 	minSyncServeStateRoot,
+	restartEmbeddingDaemon,
 	stopEmbeddingDaemon,
 } from "../src/main/embedding-daemon";
 
@@ -50,16 +54,20 @@ fs.appendFileSync(process.env.FAKE_MINSYNC_LOG, JSON.stringify(args) + "\\n");
 const embedder = flag("--embedder") ?? "native:Qwen/Qwen3-Embedding-0.6B";
 const model = embedder.slice("native:".length);
 const instance = model.replace("/", "-") + "-test";
-const dir = path.join(process.env.HOME, ".cache", "minsync", "serve", instance);
+const stateSubdir = process.env.FAKE_MINSYNC_STATE_SUBDIR ?? "minsync";
+const dir = path.join(process.env.HOME, ".cache", stateSubdir, "serve", instance);
+const version = process.env.FAKE_MINSYNC_VERSION ?? "0.3.4";
+const portFlag = flag("--port");
+const listenPort = portFlag ? Number(portFlag) : 0;
 const server = http.createServer((req, res) => {
   if (req.url === "/health") {
     res.setHeader("content-type", "application/json");
-    res.end(JSON.stringify({ status: "ok", model_id: model, dimension: 1024, instance, pid: process.pid }));
+    res.end(JSON.stringify({ status: "ok", model_id: model, dimension: 1024, instance, pid: process.pid, version }));
   } else { res.statusCode = 404; res.end(); }
 });
 const cleanup = () => { fs.rmSync(dir, { recursive: true, force: true }); process.exit(0); };
 process.on("SIGTERM", cleanup);
-server.listen(0, "127.0.0.1", () => {
+server.listen(listenPort, "127.0.0.1", () => {
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, "host"), "127.0.0.1");
   fs.writeFileSync(path.join(dir, "pid"), String(process.pid));
@@ -330,6 +338,101 @@ describe.skipIf(process.platform === "win32")("localEmbeddingServer", () => {
 		const started = await localEmbeddingServer(DEFAULT_LOCAL_EMBEDDING_MODEL);
 
 		expect(started).toMatchObject({ state: "running", dimension: 1024 });
+		await stopEmbeddingDaemon();
+	});
+});
+
+describe.skipIf(process.platform === "win32")("shared discovery, health version, and safe restart", () => {
+	it("adopts a daemon publishing under ~/.cache/im-not-llm/serve and reports its version and instance", async () => {
+		const fixture = await createFixture();
+		fixture.env.FAKE_MINSYNC_STATE_SUBDIR = "im-not-llm";
+		fixture.env.FAKE_MINSYNC_VERSION = "0.3.1";
+		const first = build(fixture);
+		const started = await first.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(started).toMatchObject({ state: "running", version: "0.3.1", instance: "Qwen-Qwen3-Embedding-0.6B-test", owned: true });
+		if (started.state === "running") spawned.push(started.pid);
+
+		const roots = embeddingServeStateRoots({ home: fixture.home, platform: process.platform, env: fixture.env });
+		expect(roots[0]).toBe(inlServeStateRoot({ home: fixture.home, platform: process.platform, env: fixture.env }));
+		expect(existsSync(join(roots[0]!, "Qwen-Qwen3-Embedding-0.6B-test"))).toBe(true);
+
+		// A second app instance adopts it via the shared discovery dir without spawning another server.
+		const second = build(fixture);
+		const probed = await second.status(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(probed).toMatchObject({ state: "running", version: "0.3.1", owned: true });
+		const adopted = await second.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(adopted).toMatchObject({ state: "running", started: false, version: "0.3.1" });
+		expect(await starts(fixture)).toHaveLength(1);
+		await second.stop();
+	});
+
+	it("restarts an app-owned outdated daemon onto the newer binary on the same port", async () => {
+		const fixture = await createFixture();
+		fixture.env.FAKE_MINSYNC_STATE_SUBDIR = "im-not-llm";
+		fixture.env.FAKE_MINSYNC_VERSION = "0.3.1";
+		const oldLaunch = build(fixture);
+		const oldState = await oldLaunch.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(oldState.state).toBe("running");
+		if (oldState.state !== "running") return;
+		spawned.push(oldState.pid);
+
+		// Simulate app update: new launch with newer binary version sees old daemon via owner file.
+		fixture.env.FAKE_MINSYNC_VERSION = "0.3.4";
+		const updatedLaunch = build(fixture);
+		const before = await updatedLaunch.status(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(before).toMatchObject({ state: "running", version: "0.3.1", owned: true, port: oldState.port });
+
+		const restarted = await updatedLaunch.restart(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(restarted.ok).toBe(true);
+		if (!restarted.ok || restarted.state.state !== "running") return;
+		spawned.push(restarted.state.pid);
+		expect(restarted.state.version).toBe("0.3.4");
+		expect(restarted.state.port).toBe(oldState.port);
+		expect(restarted.state.pid).not.toBe(oldState.pid);
+		await updatedLaunch.stop();
+	});
+
+	it("never kills or restarts a user-started daemon it does not own", async () => {
+		const fixture = await createFixture();
+		fixture.env.FAKE_MINSYNC_STATE_SUBDIR = "im-not-llm";
+		fixture.env.FAKE_MINSYNC_VERSION = "0.3.1";
+		// Started outside Dazzi (no shared ownerFile).
+		const external = build(fixture, { ownerFile: false });
+		const theirs = await external.ensure(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(theirs.state).toBe("running");
+		if (theirs.state !== "running") return;
+		spawned.push(theirs.pid);
+
+		const appDaemon = build(fixture);
+		const status = await appDaemon.status(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(status).toMatchObject({ state: "running", version: "0.3.1", owned: false, pid: theirs.pid });
+
+		const refused = await appDaemon.restart(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(refused).toMatchObject({ ok: false, reason: "not-owned" });
+
+		// The user's daemon is still alive on the exact same pid and port.
+		expect(await appDaemon.status(DEFAULT_LOCAL_EMBEDDING_MODEL)).toMatchObject({ state: "running", pid: theirs.pid, port: theirs.port });
+		await external.stop();
+	});
+
+	it("exposes process-wide status and restart helpers", async () => {
+		const fixture = await createFixture();
+		fixture.env.FAKE_MINSYNC_STATE_SUBDIR = "im-not-llm";
+		fixture.env.FAKE_MINSYNC_VERSION = "0.3.1";
+		configureEmbeddingDaemon({ env: fixture.env, home: fixture.home, ownerFile: fixture.ownerFile, readyTimeoutMs: 15_000 });
+		await stopEmbeddingDaemon();
+		const started = await localEmbeddingServer(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(started.state).toBe("running");
+		if (started.state === "running") spawned.push(started.pid);
+		expect(await embeddingDaemonStatus(DEFAULT_LOCAL_EMBEDDING_MODEL)).toMatchObject({ state: "running", version: "0.3.1", owned: true });
+
+		fixture.env.FAKE_MINSYNC_VERSION = "0.3.4";
+		const res = await restartEmbeddingDaemon(DEFAULT_LOCAL_EMBEDDING_MODEL);
+		expect(res.ok).toBe(true);
+		if (res.ok && res.state.state === "running") {
+			spawned.push(res.state.pid);
+			expect(res.state.version).toBe("0.3.4");
+		}
 		await stopEmbeddingDaemon();
 	});
 });

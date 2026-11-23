@@ -47,7 +47,13 @@ writeFileSync(
 	}, null, 2)}\n`,
 );
 const readConfig = () => JSON.parse(readFileSync(configPath, "utf8"));
-const stateRoot = process.platform === "win32" ? join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "minsync", "serve") : join(home, ".cache", "minsync", "serve");
+const stateRoots =
+	process.platform === "win32"
+		? [
+				join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "im-not-llm", "serve"),
+				join(process.env.LOCALAPPDATA ?? join(home, "AppData", "Local"), "minsync", "serve"),
+			]
+		: [join(home, ".cache", "im-not-llm", "serve"), join(home, ".cache", "minsync", "serve")];
 const env = {
 	...homeEnv(home),
 	AUTORAG_CONFIG: configPath,
@@ -72,13 +78,16 @@ const waitFor = async (predicate, timeoutMs = 60000) => {
 };
 /** The published `host:port:pid` of every server in the throwaway home, or [] when none. */
 const servers = () => {
-	if (!existsSync(stateRoot)) return [];
-	return readdirSync(stateRoot)
-		.map((instance) => {
+	const found = [];
+	for (const stateRoot of stateRoots) {
+		if (!existsSync(stateRoot)) continue;
+		for (const instance of readdirSync(stateRoot)) {
 			const read = (name) => { try { return readFileSync(join(stateRoot, instance, name), "utf8").trim(); } catch { return ""; } };
-			return { instance, host: read("host") || "127.0.0.1", port: Number(read("port")), pid: Number(read("pid")) };
-		})
-		.filter((server) => server.port > 0);
+			const entry = { instance, host: read("host") || "127.0.0.1", port: Number(read("port")), pid: Number(read("pid")) };
+			if (entry.port > 0) found.push(entry);
+		}
+	}
+	return found;
 };
 const health = async (server) => {
 	try {

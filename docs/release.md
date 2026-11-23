@@ -69,20 +69,11 @@ model is present. `stage-tools.mjs` still stages a copy under
 `build/stage/<platform>/verify-model` for `smoke-installed.mjs`'s daemon check only; nothing
 packages it.
 
-"Newest" is resolved at build time, so each release ships current dependencies;
-`filee-cli` is the exception and follows the librarian's own pin, so the staged
-copy is the exact version (`FILEE_CLI_VERSION`) the librarian would otherwise
-download. Four tools carry a hard version floor (`scripts/release/version-floors.mjs`, with
-the reason for each): `minsync` ≥ 0.7.1, `dupey` ≥ 0.2.0, `@nomadamas/mailcrawl` ≥ 0.3.0,
-`lazykatok` ≥ 0.3.3. `minsync`, `mailcrawl` and `lazykatok` reach the shared `minsync serve` embedding route;
-`minsync` 0.7.1 is the oldest librarian 2.13.7 runs (it makes every committed batch searchable during the first sync, which the
-refresh's overlapped sync relies on), on top of 0.6.0's SPLADE sparse retrieval and sparse-only indexes and 0.5.1's
-durable stage protocol v2 and JSONL sync progress streaming; `dupey` 0.2.0 is the first release whose HWP and fallback hashes agree
-with the ones AutoRAG stores; `mailcrawl` 0.3.0 adds `--source files` local archive indexing. The stager fails
-rather than ship an older one.
-`components-<platform>.json` on the release lists exactly what shipped (name,
-version, source, sha256), and the build fails rather than ship a download that
-does not match its published digest.
+All bundled tools, Node 24 LTS, the librarian ref, and the shared embedding daemon identity (`minsync serve`, engine `inl`) are pinned in one file: `src/shared/tool-pins.json` (with publisher sha256 digests, crates.io checksums, and npm integrity hashes). `scripts/sync-librarian.mjs`, `scripts/release/stage-tools.mjs`, `scripts/release/verify-bundle.mjs`, and the packaged app (`src/main/tool-versions.ts`) all read it.
+
+Version floors for tools `@autorag/librarian` validates itself (`minsync`, `dupey`, `jikji`) are derived directly from the pinned librarian (`MINSYNC_MIN_VERSION`, `DUPEY_MIN_VERSION`, `JIKJI_MIN_VERSION` via `scripts/release/pins.mjs`), merged with app-level floors in `src/shared/tool-pins.json` (`@nomadamas/mailcrawl` ≥ 0.3.0, `lazykatok` ≥ 0.3.3). If a pin drops below a floor or disagrees with the librarian, tests and release staging fail immediately. At the end of staging (and in `verify-bundle.mjs`), `tools/manifest.json` is printed next to `src/shared/tool-pins.json` and the build fails on any difference.
+
+`.github/workflows/refresh-tool-pins.yml` runs `scripts/release/refresh-pins.mjs` weekly (or on `workflow_dispatch`) to propose pin bumps from GitHub Releases, crates.io, npm, and nodejs.org, verifying publisher checksums and librarian floors before opening a PR. `components-<platform>.json` on the release lists exactly what shipped (name, version, source, sha256, and daemon choice).
 
 ### How the app uses them
 

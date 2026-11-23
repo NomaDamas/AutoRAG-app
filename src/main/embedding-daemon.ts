@@ -47,29 +47,80 @@ export function localEmbeddingModel(raw: Record<string, unknown>): string | null
 	return id.startsWith("openai:") || id.startsWith("tei:") ? null : DEFAULT_LOCAL_EMBEDDING_MODEL;
 }
 
-/** Where `minsync serve` publishes its `host`/`port`/`pid` per model instance. */
+/** Where `minsync serve` (0.7.4+) and `inl serve` publish `host`/`port`/`pid` per model instance. */
+export function inlServeStateRoot(options: { readonly home: string; readonly platform: NodeJS.Platform; readonly env: NodeJS.ProcessEnv }): string {
+	const override = options.env.INL_CACHE_DIR?.trim();
+	if (override !== undefined && override.length > 0) return join(override, "serve");
+	if (options.platform === "win32") return join(options.env.LOCALAPPDATA ?? join(options.home, "AppData", "Local"), "im-not-llm", "serve");
+	return join(options.home, ".cache", "im-not-llm", "serve");
+}
+
+/** Legacy discovery directory used by older `minsync serve` builds. */
 export function minSyncServeStateRoot(options: { readonly home: string; readonly platform: NodeJS.Platform; readonly env: NodeJS.ProcessEnv }): string {
 	if (options.platform === "win32") return join(options.env.LOCALAPPDATA ?? join(options.home, "AppData", "Local"), "minsync", "serve");
 	return join(options.home, ".cache", "minsync", "serve");
 }
 
+/** All loopback discovery roots in preference order: shared `im-not-llm/serve` first, then legacy `minsync/serve`. */
+export function embeddingServeStateRoots(options: { readonly home: string; readonly platform: NodeJS.Platform; readonly env: NodeJS.ProcessEnv }): readonly string[] {
+	const primary = inlServeStateRoot(options);
+	const legacy = minSyncServeStateRoot(options);
+	return primary === legacy ? [primary] : [primary, legacy];
+}
+
 interface Served {
 	readonly baseUrl: string;
+	readonly port: number;
 	readonly dimension: number;
 	readonly pid: number;
+	readonly version: string | null;
+	readonly instance: string | null;
 }
 
 export type EmbeddingDaemonState =
-	| { readonly state: "running"; readonly baseUrl: string; readonly dimension: number; readonly pid: number; readonly started: boolean }
+	| {
+			readonly state: "running";
+			readonly baseUrl: string;
+			readonly port: number;
+			readonly dimension: number;
+			readonly pid: number;
+			readonly version: string | null;
+			readonly instance: string | null;
+			readonly owned: boolean;
+			readonly started: boolean;
+	  }
 	| { readonly state: "unavailable"; readonly reason: string };
+
+export type EmbeddingDaemonStatus =
+	| {
+			readonly state: "running";
+			readonly baseUrl: string;
+			readonly port: number;
+			readonly dimension: number;
+			readonly pid: number;
+			readonly version: string | null;
+			readonly instance: string | null;
+			readonly owned: boolean;
+	  }
+	| { readonly state: "stopped" };
+
+export type EmbeddingDaemonRestartResult =
+	| { readonly ok: true; readonly state: EmbeddingDaemonState }
+	| { readonly ok: false; readonly reason: "not-owned" | "unavailable"; readonly message: string };
 
 export interface EmbeddingDaemon {
 	/** The server for `model`, started when none answers. Never throws: a failure is a state. */
 	ensure(model: string): Promise<EmbeddingDaemonState>;
+	/** Read-only probe of the running server for `model`, without starting one. */
+	status(model: string): Promise<EmbeddingDaemonStatus>;
+	/**
+	 * Stops an app-owned server for `model` and starts the current bundled binary on the same port.
+	 * Never stops a server started outside this app (`reason: "not-owned"`).
+	 */
+	restart(model: string): Promise<EmbeddingDaemonRestartResult>;
 	/** Stops the server this daemon owns, if any; a server someone else runs is left alone. */
 	stop(): Promise<void>;
 }
-
 export interface EmbeddingDaemonOptions {
 	readonly env: NodeJS.ProcessEnv;
 	readonly home: string;
@@ -88,7 +139,7 @@ export interface EmbeddingDaemonOptions {
 }
 
 export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): EmbeddingDaemon {
-	const stateRoot = minSyncServeStateRoot({ home: options.home, platform: process.platform, env: options.env });
+	const stateRoots = embeddingServeStateRoots({ home: options.home, platform: process.platform, env: options.env });
 	const pending = new Map<string, Promise<EmbeddingDaemonState>>();
 	let owned: { readonly pid: number; readonly model: string } | undefined;
 
@@ -100,33 +151,49 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 		}
 	};
 
-	/** A loopback server of exactly this model that answers `GET /health` now. Leftover files from a crashed server answer nothing. */
+	/** A loopback server of exactly this model that answers `GET /health` now. Scans both shared `im-not-llm/serve` and legacy `minsync/serve`. */
 	const probe = async (model: string): Promise<Served | undefined> => {
-		let instances: string[];
-		try {
-			instances = readdirSync(stateRoot);
-		} catch {
-			return undefined;
-		}
-		for (const instance of instances) {
-			const port = Number(readText(join(stateRoot, instance, "port")));
-			const host = readText(join(stateRoot, instance, "host")) ?? "127.0.0.1";
-			if (!Number.isInteger(port) || port <= 0 || !LOOPBACK_HOSTS.has(host)) continue;
-			const baseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
+		for (const stateRoot of stateRoots) {
+			let instances: string[];
 			try {
-				const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
-				if (!response.ok) continue;
-				const health = (await response.json()) as { status?: string; model_id?: string; dimension?: number; pid?: number };
-				if (health.status !== "ok" || health.model_id?.toLowerCase() !== model.toLowerCase()) continue;
-				if (typeof health.dimension !== "number" || typeof health.pid !== "number") continue;
-				return { baseUrl, dimension: health.dimension, pid: health.pid };
+				instances = readdirSync(stateRoot);
 			} catch {
-				// nothing listens there any more
+				continue;
+			}
+			for (const instance of instances) {
+				const port = Number(readText(join(stateRoot, instance, "port")));
+				const host = readText(join(stateRoot, instance, "host")) ?? "127.0.0.1";
+				if (!Number.isInteger(port) || port <= 0 || !LOOPBACK_HOSTS.has(host)) continue;
+				const baseUrl = `http://${host.includes(":") ? `[${host}]` : host}:${port}`;
+				try {
+					const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS) });
+					if (!response.ok) continue;
+					const health = (await response.json()) as {
+						status?: string;
+						model_id?: string;
+						dimension?: number;
+						pid?: number;
+						version?: string;
+						instance?: string;
+						build?: { version?: string };
+					};
+					if (health.status !== "ok" || health.model_id?.toLowerCase() !== model.toLowerCase()) continue;
+					if (typeof health.dimension !== "number" || typeof health.pid !== "number") continue;
+					const version =
+						typeof health.version === "string" && health.version.length > 0
+							? health.version
+							: typeof health.build?.version === "string" && health.build.version.length > 0
+								? health.build.version
+								: null;
+					const reportedInstance = typeof health.instance === "string" && health.instance.length > 0 ? health.instance : instance;
+					return { baseUrl, port, dimension: health.dimension, pid: health.pid, version, instance: reportedInstance };
+				} catch {
+					// nothing listens there any more
+				}
 			}
 		}
 		return undefined;
 	};
-
 	const recordOwner = (pid: number, model: string): void => {
 		owned = { pid, model };
 		ownedPids[pid] = true;
@@ -176,18 +243,35 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 		forgetOwner();
 	};
 
-	const start = async (model: string): Promise<EmbeddingDaemonState> => {
+	const isOwnedPid = async (pid: number): Promise<boolean> => {
+		if (owned?.pid === pid) return true;
+		return (await recordedOwner())?.pid === pid;
+	};
+
+	const start = async (model: string, preferredPort?: number): Promise<EmbeddingDaemonState> => {
 		if (owned !== undefined && owned.model !== model) await stopOwned();
 		const found = await probe(model);
 		if (found !== undefined) {
-			if (owned?.pid !== found.pid && (await recordedOwner())?.pid === found.pid) recordOwner(found.pid, model);
-			return { state: "running", ...found, started: false };
+			const isOwned = await isOwnedPid(found.pid);
+			if (owned?.pid !== found.pid && isOwned) recordOwner(found.pid, model);
+			return { state: "running", ...found, owned: isOwned, started: false };
 		}
 		// A server of another model from an earlier run is no use now and would hold ~2.8 GB.
 		if (owned === undefined) await stopOwned();
 		if (options.modelPresent?.(model) === false) return { state: "unavailable", reason: `the weights of ${model} are not downloaded yet` };
 
-		const child = spawn("minsync", ["serve", "--format", "json", "--quiet", "--idle-timeout", "0", "--embedder", `native:${model}`], {
+		const spawnArgs = [
+			"serve",
+			"--format",
+			"json",
+			"--quiet",
+			"--idle-timeout",
+			"0",
+			...(preferredPort !== undefined ? ["--port", String(preferredPort)] : []),
+			"--embedder",
+			`native:${model}`,
+		];
+		const child = spawn("minsync", spawnArgs, {
 			env: { ...options.env },
 			cwd: options.home,
 			windowsHide: true,
@@ -217,14 +301,50 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 				child.stderr?.destroy();
 				child.unref();
 				// A second `minsync serve` that found a running server exits 0 and the server it found answers.
-				if (exitCode === undefined) recordOwner(ready.pid, model);
-				return { state: "running", ...ready, started: exitCode === undefined };
+				const started = exitCode === undefined;
+				if (started) recordOwner(ready.pid, model);
+				return { state: "running", ...ready, owned: started || (await isOwnedPid(ready.pid)), started };
 			}
 			if (exitCode !== undefined) return { state: "unavailable", reason: `\`minsync serve\` exited with code ${exitCode} before it was ready${detail()}` };
 			await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
 		}
 		child.kill("SIGTERM");
 		return { state: "unavailable", reason: `\`minsync serve\` was not ready within ${Math.round(timeoutMs / 1000)}s${detail()}` };
+	};
+
+	const status = async (model: string): Promise<EmbeddingDaemonStatus> => {
+		const found = await probe(model);
+		if (found === undefined) return { state: "stopped" };
+		return { state: "running", ...found, owned: await isOwnedPid(found.pid) };
+	};
+
+	const restart = async (model: string): Promise<EmbeddingDaemonRestartResult> => {
+		const current = await probe(model);
+		if (current !== undefined && !(await isOwnedPid(current.pid))) {
+			return {
+				ok: false,
+				reason: "not-owned",
+				message: "The running embedding daemon was started outside Dazzi and will not be stopped.",
+			};
+		}
+		if (options.modelPresent?.(model) === false) {
+			return {
+				ok: false,
+				reason: "unavailable",
+				message: `the weights of ${model} are not downloaded yet`,
+			};
+		}
+		const previousPort = current?.port;
+		await stopOwned();
+		let next = await start(model, previousPort);
+		if (next.state === "unavailable" && previousPort !== undefined) {
+			// Fallback to an ephemeral port only if the old port was reclaimed in the brief gap.
+			next = await start(model);
+		}
+		if (next.state === "unavailable") {
+			return { ok: false, reason: "unavailable", message: next.reason };
+		}
+		return { ok: true, state: next };
 	};
 
 	return {
@@ -235,6 +355,8 @@ export function createEmbeddingDaemon(options: EmbeddingDaemonOptions): Embeddin
 			pending.set(model, run);
 			return run;
 		},
+		status,
+		restart,
 		stop: stopOwned,
 	};
 }
@@ -304,4 +426,19 @@ export async function stopEmbeddingDaemon(): Promise<void> {
 export async function localEmbeddingServer(model: string): Promise<EmbeddingDaemonState> {
 	if (shared === undefined) return { state: "unavailable", reason: "this process does not manage the embedding server" };
 	return shared.ensure(model);
+}
+
+/** Read-only status of the local embedding server for `model`, without starting one. */
+export async function embeddingDaemonStatus(model: string): Promise<EmbeddingDaemonStatus> {
+	if (shared === undefined) return { state: "stopped" };
+	return shared.status(model);
+}
+
+/**
+ * Restart an app-owned local embedding server for `model` on the same port.
+ * Refuses to stop a server started outside Dazzi.
+ */
+export async function restartEmbeddingDaemon(model: string): Promise<EmbeddingDaemonRestartResult> {
+	if (shared === undefined) return { ok: false, reason: "unavailable", message: "this process does not manage the embedding server" };
+	return shared.restart(model);
 }

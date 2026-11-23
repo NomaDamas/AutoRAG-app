@@ -6,6 +6,9 @@ import { applyBundledTools } from "./bundled-tools";
 import { minSyncModelCacheRoot } from "./bundled-sparse-model";
 import { createModelDownloadService, localModelPresent, nativeQwen3Spec } from "./model-download";
 import { MODEL_DOWNLOAD_CHANNELS } from "../shared/model-download-contract";
+import { TOOL_VERSIONS_CHANNELS } from "../shared/tool-versions-contract";
+import toolPins from "../shared/tool-pins.json";
+import { createToolVersionsService } from "./tool-versions";
 import {
 	app,
 	autoUpdater as nativeAutoUpdater,
@@ -105,7 +108,15 @@ import { createPastedImageStore } from "./pasted-images";
 import { createProviderAuthService, type ProviderAuthService } from "./provider-auth-service";
 import { createProviderCredentialService } from "./provider-credentials";
 import { createLocalSpecProbe } from "./hardware-probe";
-import { configureEmbeddingDaemon, ensureEmbeddingForConfig, stopEmbeddingDaemon } from "./embedding-daemon";
+import {
+	configureEmbeddingDaemon,
+	DEFAULT_LOCAL_EMBEDDING_MODEL,
+	embeddingDaemonStatus,
+	ensureEmbeddingForConfig,
+	localEmbeddingModel,
+	restartEmbeddingDaemon,
+	stopEmbeddingDaemon,
+} from "./embedding-daemon";
 import { migrateLegacyEmbedding } from "./embedding-migration";
 import { migrateLegacyJev } from "./jev-migration";
 import { createEmbeddingSettingsService } from "./embedding-settings-service";
@@ -129,6 +140,7 @@ import {
 	registerAppCustomizerIpcHandlers,
 	registerMagicActionIpcHandlers,
 	registerAppUpdateIpcHandlers,
+	registerToolVersionsIpcHandlers,
 	registerConversionIpcHandlers,
 	registerAutomationIpcHandlers,
 	registerDemoIpcHandlers,
@@ -919,6 +931,7 @@ app.whenReady().then(async () => {
 		indexActivity: INDEX_ACTIVITY_CHANNELS,
 		indexProblem: INDEX_PROBLEM_CHANNELS,
 		appUpdate: APP_UPDATE_CHANNELS,
+		toolVersions: TOOL_VERSIONS_CHANNELS,
 		onboarding: ONBOARDING_CHANNELS,
 		osRequests: OS_REQUEST_CHANNELS,
 		services: SERVICES_CHANNELS,
@@ -1005,6 +1018,48 @@ app.whenReady().then(async () => {
 	registerAppUpdateIpcHandlers(appUpdater);
 	installCheckForUpdatesMenuItem(appUpdater);
 	appUpdater.start();
+	const readLibrarianVersion = (): string => {
+		try {
+			const pkg = JSON.parse(readFileSync(join(app.getAppPath(), "node_modules", "@autorag", "librarian", "package.json"), "utf8")) as { version?: string };
+			if (typeof pkg.version === "string" && pkg.version.length > 0) return pkg.version;
+		} catch {
+			// fall back to pin
+		}
+		return toolPins.librarian.version;
+	};
+	const toolVersions = createToolVersionsService({
+		appVersion: APP_VERSION,
+		librarianVersion: readLibrarianVersion(),
+		resourcesPath: process.resourcesPath,
+		env: process.env,
+		getModel: async () => {
+			try {
+				const raw = JSON.parse(readFileSync(autoragConfigPath(), "utf8")) as Record<string, unknown>;
+				return localEmbeddingModel(raw) ?? DEFAULT_LOCAL_EMBEDDING_MODEL;
+			} catch {
+				return DEFAULT_LOCAL_EMBEDDING_MODEL;
+			}
+		},
+		daemonStatus: embeddingDaemonStatus,
+		restartDaemon: restartEmbeddingDaemon,
+	});
+	registerToolVersionsIpcHandlers(toolVersions);
+	// Check tools/manifest.json vs pins and running daemon health on launch; never kills user-started daemons or reindexes.
+	void toolVersions.get().then(
+		(snapshot) => {
+			if (snapshot.manifestDrift.length > 0) {
+				console.warn(
+					`[tools] manifest drift vs pins: ${snapshot.manifestDrift.map((d) => `${d.name} (pinned ${d.pinned}, manifest ${d.manifest ?? "missing"})`).join(", ")}`,
+				);
+			}
+			if (snapshot.daemon.outdated) {
+				console.warn(
+					`[tools] running embedding daemon ${snapshot.daemon.version} is older than pinned ${snapshot.daemon.pinnedVersion} (owned=${snapshot.daemon.owned}, port=${snapshot.daemon.port})`,
+				);
+			}
+		},
+		() => undefined,
+	);
 	const userDataDir = app.getPath("userData");
 	const supportedExtensions = supportedExtensionsFromRegistry(createDefaultParserRegistry());
 	const scanOptions = { supportedExtensions, maxSourceBytes: DEFAULT_MAX_SOURCE_BYTES };
