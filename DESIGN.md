@@ -415,14 +415,20 @@ The Info half's bottom bar is data-driven, not a fixed four buttons.
   are left out, and the run keeps the machine awake) → `ready` (Figma 162:1308:
   the Dazzi logo with a green check badge, "파일을 다 읽었어요", one "시작하기"
   button at the same height as the folder screen's; Enter presses it) → `tour` → `signin`.
-  "시작하기" on `ready` plays the reveal of `design-mockups/finish-reveal/v5v7-hybrid.html`
-  (`first-run/reveal.tsx`, clock in `first-run/reveal-timing.ts`: the mockup's `T` at
-  `SPEED` 1.2, about 4.8 s): the copy blurs out, the sunflower settles in the middle as the
-  stage dims to dusk with a warm glow, "Dazzi" is imprinted under it, a light sweeps the
-  sunflower, both lift away in a bloom, and the Finder pulls into focus with sidebar,
-  toolbar and panes arriving in turn; the tour then starts on its first step without the
-  welcome cinema. Reduced motion keeps the plain rise. The Finder is laid out for the tour
-  and its blurred first frame prepared while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
+  "시작하기" on `ready` plays the cosmic pop-art reveal (`first-run/reveal.tsx`,
+  procedural canvas engine in `first-run/reveal-scene.ts`, 5-act clock in
+  `first-run/reveal-timing.ts`, 5.2 s total with tour hand-off at 4.65 s):
+  gravitational implosion pulls the copy away while the sunflower centers and coils;
+  a 2-beat sakuga impact frame (pure white → inverted neon ink) detonates into a Big Bang
+  supernova with warp star trails, relativistic shockwaves, anime speedlines, Banksy
+  aerosol spray splatters/drips, halftone dots, and thick-inked pop-anime motifs
+  (smiling flowers, 4-point sparkles, hearts, bolts, rings); a high-contrast chromatic
+  stencil `DAZZI` wordmark slams in beneath the sunflower with viewfinder crop marks
+  and a light sweep; a starburst cosmic portal rips open via `destination-out` to reveal
+  the live Finder pulling into focus with sidebar, toolbar and panes arriving in turn,
+  handing straight off to the tour's first step without the welcome cinema. Reduced
+  motion keeps the plain rise. The Finder is laid out for the tour and its blurred first
+  frame prepared while `ready` is up, so the click only starts the clock. While `setup` runs, the floating logo is a
   button: tapping it fades the title and description out, the progress bar glides
   below, and a 16×16 Minesweeper with 40 hidden sunflowers (`dazzi-mark.png`) in
   place of mines fades in (`first-run/MineGame.tsx`, rules in

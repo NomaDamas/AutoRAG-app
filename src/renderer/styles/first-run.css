@@ -756,9 +756,9 @@ html[data-appearance="dark"] .fr-dock-ready {
 /* -------------------------------------------------------------------- ready */
 
 /*
- * Ready → Finder reveal (design-mockups/finish-reveal/v5v7-hybrid.html). The stage hands its own
- * backdrop to `.fr-reveal-back` (below the ready panel) and the word and bloom sit in
- * `.fr-reveal-front` (above it); `reveal.tsx` sets every opacity, transform and filter.
+ * Ready → Finder cosmic pop-art reveal: dual 2D canvases (back cosmos + front art burst)
+ * wrap the ready panel's sunflower mark (`.fr-reveal-back` below, `.fr-reveal-front` above),
+ * synchronized with the chromatic Banksy stencil wordmark and starburst portal cutout.
  */
 .fr-stage--reveal {
 	background: transparent;
@@ -772,11 +772,18 @@ html[data-appearance="dark"] .fr-dock-ready {
 }
 
 .fr-reveal,
+.fr-reveal-camera,
 .fr-reveal-back,
-.fr-reveal-front {
+.fr-reveal-front,
+.fr-reveal-canvas {
 	position: absolute;
 	inset: 0;
 	pointer-events: none;
+}
+
+.fr-reveal-camera {
+	transform-origin: 50% 50%;
+	will-change: transform;
 }
 
 .fr-reveal-back {
@@ -789,24 +796,33 @@ html[data-appearance="dark"] .fr-dock-ready {
 	overflow: hidden;
 }
 
+.fr-reveal-canvas {
+	width: 100%;
+	height: 100%;
+	display: block;
+}
+
 .fr-reveal-base,
-.fr-reveal-bgw,
-.fr-reveal-dark {
+.fr-reveal-bgw {
 	position: absolute;
 	inset: 0;
 }
 
 .fr-reveal-base,
 .fr-reveal-bgw,
-.fr-reveal-dark,
 .fr-reveal-glow,
 .fr-reveal-word,
+.fr-reveal-word-plate,
 .fr-reveal-bloom {
 	will-change: opacity, transform, filter;
 }
 
 .fr-reveal-base {
 	background: #f6f7fa;
+}
+
+html[data-appearance="dark"] .fr-reveal-base {
+	background: #141518;
 }
 
 .fr-reveal-bgw {
@@ -816,49 +832,92 @@ html[data-appearance="dark"] .fr-dock-ready {
 		linear-gradient(180deg, var(--fr-stage-a), var(--fr-stage-b));
 }
 
-.fr-reveal-dark {
-	background:
-		radial-gradient(75% 65% at 82% 108%, rgba(30, 110, 230, 0.55), rgba(30, 110, 230, 0) 70%),
-		radial-gradient(60% 55% at 12% -6%, rgba(60, 90, 200, 0.3), rgba(60, 90, 200, 0) 70%),
-		#0b0d15;
-	opacity: 0;
-}
-
 .fr-reveal-glow {
 	position: absolute;
 	left: 50%;
 	top: 50%;
-	width: 700px;
-	height: 700px;
-	margin: -366px 0 0 -350px;
+	width: 780px;
+	height: 780px;
+	margin: -406px 0 0 -390px;
 	border-radius: 50%;
-	background: radial-gradient(circle, rgba(255, 232, 180, 0.9) 0%, rgba(255, 184, 70, 0.34) 24%, rgba(120, 150, 230, 0.22) 40%, rgba(30, 110, 230, 0.16) 52%, rgba(30, 110, 230, 0) 66%);
+	background: radial-gradient(
+		circle,
+		rgba(255, 246, 200, 0.96) 0%,
+		rgba(255, 214, 10, 0.54) 18%,
+		rgba(255, 46, 147, 0.34) 38%,
+		rgba(0, 240, 255, 0.22) 54%,
+		rgba(139, 92, 246, 0) 70%
+	);
+	mix-blend-mode: screen;
 	opacity: 0;
 }
 
+/* Banksy street-stencil wordmark with chromatic cyan/magenta registration plates. */
 .fr-reveal-word {
 	position: absolute;
 	left: 0;
 	right: 0;
-	padding-left: 0.14em;
-	text-align: center;
-	color: #fff;
-	font-size: 19px;
-	font-weight: 500;
-	letter-spacing: 0.14em;
-	text-shadow: 0 0 22px rgba(255, 190, 90, 0.55);
+	display: grid;
+	place-items: center;
 	opacity: 0;
+	transform-origin: 50% 50%;
+}
+
+.fr-reveal-word-core,
+.fr-reveal-word-plate {
+	grid-area: 1 / 1;
+	padding-left: 0.24em;
+	font-size: 58px;
+	line-height: 1;
+	font-weight: 900;
+	letter-spacing: 0.24em;
+	text-transform: uppercase;
+	user-select: none;
+}
+
+.fr-reveal-word-core {
+	position: relative;
+	z-index: 2;
+	color: #faf8f2;
+	-webkit-text-stroke: 2.5px #09090d;
+	paint-order: stroke fill;
+	text-shadow:
+		0 7px 0 #09090d,
+		0 0 24px rgba(255, 214, 10, 0.8),
+		0 0 54px rgba(255, 46, 147, 0.55);
+}
+
+.fr-reveal-word-plate {
+	position: relative;
+	z-index: 1;
+	mix-blend-mode: screen;
+	opacity: 0;
+}
+
+.fr-reveal-word-plate--cyan {
+	color: #00f0ff;
+}
+
+.fr-reveal-word-plate--pink {
+	color: #ff2e93;
 }
 
 .fr-reveal-bloom {
 	position: absolute;
 	left: 50%;
 	top: 50%;
-	width: 1000px;
-	height: 1000px;
-	margin: -500px 0 0 -500px;
+	width: 760px;
+	height: 760px;
+	margin: -380px 0 0 -380px;
 	border-radius: 50%;
-	background: radial-gradient(circle, rgba(255, 250, 235, 1) 0%, rgba(255, 226, 160, 0.65) 18%, rgba(255, 190, 90, 0.22) 38%, rgba(255, 190, 90, 0) 62%);
+	background: radial-gradient(
+		circle,
+		rgba(255, 255, 255, 0.96) 0%,
+		rgba(255, 224, 102, 0.62) 22%,
+		rgba(0, 240, 255, 0.28) 44%,
+		rgba(255, 46, 147, 0) 68%
+	);
+	mix-blend-mode: screen;
 	opacity: 0;
 }
 
@@ -884,12 +943,11 @@ html[data-appearance="dark"] .fr-dock-ready {
 	top: -20%;
 	bottom: -20%;
 	left: 0;
-	width: 52px;
-	background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.8), rgba(255, 255, 255, 0));
+	width: 58px;
+	background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(0, 240, 255, 0.65), rgba(255, 255, 255, 0.96), rgba(255, 46, 147, 0.55), rgba(255, 255, 255, 0));
 	transform: translateX(-90px) skewX(-18deg);
 	opacity: 0;
 }
-
 /* Figma 162:1308: the logo with a green check badge on its lower right. */
 .fr-done-mark {
 	position: relative;
