@@ -9,9 +9,11 @@ import {
 } from "@autorag/librarian";
 import { readRawConfigObject, resolveAgentModel, resolveConfigPath, type CliConfig } from "@autorag/librarian/core";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { type AssistantMessage, isContextOverflow } from "@earendil-works/pi-ai";
+import { type AssistantMessage, type ImageContent, isContextOverflow } from "@earendil-works/pi-ai";
 import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
+import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-images";
+import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
 import { ensureEmbeddingForConfig } from "./embedding-daemon";
@@ -79,6 +81,8 @@ export type SearchAgent = {
 	readonly searchDocumentsStream: (query: string) => AsyncGenerator<SearchDocumentsStreamEvent, void, void>;
 	/** The attachment block the next run puts in front of the model ("" for none). */
 	readonly setAttachmentContext: (context: string) => void;
+	/** The pictures the next run sends with the question (image files among its attachments). */
+	readonly setAttachmentImages?: (images: readonly ImageContent[]) => void;
 	readonly subscribe?: (listener: (event: LiveAgentEvent) => void) => () => void;
 	readonly abort?: () => void;
 	/** Correct the running search; false when it no longer takes steers. */
@@ -108,6 +112,12 @@ export interface SearchServiceDeps {
 	readonly now?: () => Date;
 	/** Reads a message's attachments into the agent's context block. Defaults to {@link buildAttachmentContext}. */
 	readonly attachmentContext?: (attachments: readonly ChatAttachment[]) => Promise<string>;
+	/** Reads a message's image attachments for the model. Defaults to {@link loadAttachmentImages}. */
+	readonly attachmentImages?: (attachments: readonly ChatAttachment[]) => Promise<readonly ImageContent[]>;
+	/** Where pasted images are kept; without it a paste is refused. */
+	readonly pastedImages?: PastedImageStore;
+	/** Whether the model the chat runs on takes images; absent means it does. A paste is dropped silently when it does not. */
+	readonly acceptsImages?: () => Promise<boolean>;
 	/** Usage analytics; absent (tests, a build with no project key) means nothing is reported. */
 	readonly analytics?: Pick<Analytics, "track">;
 	/** Where the agent's questions and approvals reach the person. Absent: the agent has nobody to ask. */
@@ -634,8 +644,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			const attached = await (deps.attachmentContext ?? buildAttachmentContext)(attachments);
 			// The folder in view is only a hint; the renderer sends it when nothing is selected.
 			const context = [attached, buildViewingFolderContext(viewingFolder)].filter((part) => part !== "").join("\n\n");
+			const images = await (deps.attachmentImages ?? loadAttachmentImages)(attachments);
 			if (run.cancelled) return;
 			agent.setAttachmentContext(context);
+			agent.setAttachmentImages?.(images);
 			const hub = deps.interaction;
 			agent.bindRun?.(hub === undefined ? undefined : { open: (body, signal) => hub.open(run.searchId, body, signal) });
 			for await (const event of agent.searchDocumentsStream(query)) {
@@ -840,10 +852,23 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 		historyList: () => deps.chatStore.list(),
 		historyGet: (chatId) => deps.chatStore.get(chatId),
 		historySearch: (query) => deps.chatStore.search(query),
+		pasteImage: async (mimeType, base64) => {
+			if (typeof mimeType !== "string" || typeof base64 !== "string" || deps.pastedImages === undefined) return null;
+			try {
+				if (deps.acceptsImages !== undefined && !(await deps.acceptsImages())) return null;
+				const saved = await deps.pastedImages.save(mimeType, base64);
+				// Scale it while the person types, so sending does not wait for it.
+				void prepareAttachmentImage(saved);
+				return saved;
+			} catch {
+				return null;
+			}
+		},
 		historyClear: async () => {
 			await closeAgents();
 			await deps.sessions?.clear();
 			await deps.chatStore.clear();
+			await deps.pastedImages?.clear();
 		},
 		onEvent: () => () => undefined,
 		dispose: closeAgents,

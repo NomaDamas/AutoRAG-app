@@ -96,9 +96,18 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 	/** True while a user-initiated check runs: only then does a failure replace the state. */
 	let userCheck = false;
 	let started = false;
+	/** True once the user asked for a download or install, so background settings refreshes never disarm staging. */
+	let userRequestedInstall = false;
+	/** True after `install()` handed off to `quitAndInstall` until an error aborts it. */
+	let installing = false;
 	/** The version electron-updater downloaded, and whether the platform installer has staged it. */
 	let downloaded: string | null = null;
 	let staged = deps.onInstallerStaged === undefined;
+
+	const resetStaged = (): void => {
+		downloaded = null;
+		staged = deps.onInstallerStaged === undefined;
+	};
 
 	const snapshot = (): AppUpdateSnapshot => ({ currentVersion: deps.currentVersion, mode, state });
 	const set = (next: AppUpdateState): void => {
@@ -140,7 +149,10 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 	});
 	updater.on("error", (error: unknown) => {
 		deps.log(`error: ${errorMessage(error)}`);
-		if (state.kind === "downloading") {
+		if (state.kind === "downloading" || installing) {
+			installing = false;
+			userRequestedInstall = false;
+			resetStaged();
 			set({ kind: "error", message: errorMessage(error) });
 			return;
 		}
@@ -155,9 +167,12 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 	const applySettings = async (): Promise<void> => {
 		const auto = await deps.autoInstall();
 		updater.autoDownload = mode === "install" && auto;
-		updater.autoInstallOnAppQuit = mode === "install" && auto;
+		// Keep `autoInstallOnAppQuit` armed while a user-requested download is in flight or ready:
+		// MacUpdater checks this flag when the download finishes to decide whether to hand the zip
+		// to Squirrel.Mac, so a 30s background check firing mid-download must never flip it off.
+		const keepArmed = userRequestedInstall || state.kind === "downloading" || state.kind === "ready";
+		updater.autoInstallOnAppQuit = mode === "install" && (auto || keepArmed);
 	};
-
 	const runCheck = async (fromUser: boolean): Promise<void> => {
 		if (state.kind === "checking" || state.kind === "downloading" || state.kind === "ready") return;
 		userCheck = fromUser;
@@ -189,6 +204,9 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 			if (available === null) return;
 			// The user asked for this update: let the platform installer take the download (electron-updater's MacUpdater
 			// hands the zip to Squirrel.Mac only when this is on, so without it the update would never become ready).
+			userRequestedInstall = true;
+			installing = false;
+			resetStaged();
 			updater.autoInstallOnAppQuit = true;
 			set({ kind: "downloading", version: available.version, percent: 0 });
 			try {
@@ -198,7 +216,8 @@ export function createAppUpdater(deps: AppUpdaterDeps): AppUpdaterService {
 			}
 		},
 		install: () => {
-			if (state.kind !== "ready") return;
+			if (state.kind !== "ready" || installing) return;
+			installing = true;
 			deps.log(`install ${state.version} on user request`);
 			// Silent installer, relaunch afterwards (NSIS); Squirrel.Mac relaunches by itself.
 			updater.quitAndInstall(true, true);
