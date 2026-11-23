@@ -742,8 +742,6 @@
       "failed": "失敗",
       "settings": "設定",
       "history": "実行履歴",
-      "runs": "{{count}}回",
-      "fails": "失敗 {{count}}回",
       "noRuns": "まだ実行されていません。条件に合うファイルができると、ここに記録されます。"
     },
     "tabs": {
@@ -752,7 +750,7 @@
     "all": {
       "count": "{{count}}回実行",
       "failOnly": "失敗のみ表示",
-      "noFails": "失敗した実行はありません"
+      "noFails": "失敗した実行の記録はありません"
     },
     "assistant": {
       "caption": "自動化の作成や変更はAIに聞いてください"

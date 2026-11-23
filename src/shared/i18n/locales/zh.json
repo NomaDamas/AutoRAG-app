@@ -742,8 +742,6 @@
       "failed": "失败",
       "settings": "设置",
       "history": "运行记录",
-      "runs": "{{count}} 次",
-      "fails": "失败 {{count}} 次",
       "noRuns": "尚未运行。出现符合条件的文件后，会记录在这里。"
     },
     "tabs": {
@@ -752,7 +750,7 @@
     "all": {
       "count": "运行 {{count}} 次",
       "failOnly": "仅显示失败",
-      "noFails": "没有失败的运行"
+      "noFails": "没有失败的运行记录"
     },
     "assistant": {
       "caption": "创建或修改自动化时，可以询问 AI"

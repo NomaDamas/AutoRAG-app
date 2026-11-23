@@ -346,8 +346,11 @@ function NewAutomationCard({
 		setTask(editing.agent?.task ?? whatText(editing, { full: true }));
 		setRun(editing.agent === undefined ? editing.run : null);
 		setTouched(true);
-		cardRef.current?.scrollIntoView?.({ block: "nearest" });
-		taskRef.current?.focus();
+		// On a rule's own page the card is read first; only the list's card jumps to the instruction.
+		if (onDelete === undefined) {
+			cardRef.current?.scrollIntoView?.({ block: "nearest" });
+			taskRef.current?.focus();
+		}
 	}, [editing?.id]);
 
 	const draft: AutomationDraft | null =
@@ -418,9 +421,9 @@ function NewAutomationCard({
 	const sentence = t("automations.create.sentence", { folder: "\u0000folder\u0000", kind: "\u0000kind\u0000", event: "\u0000event\u0000" }).split("\u0000");
 
 	return (
-		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] border-[0.5px] bg-window p-14", editing === null || onDelete !== undefined ? "border-divider" : "border-accent")} data-testid="automation-new" data-editing={editing?.id}>
-			<span className="text-badge font-medium leading-[14px] text-ink-body">{t("automations.create.when")}</span>
-			<div className="flex flex-wrap items-center gap-6 rounded-10 bg-chrome px-10 py-8" data-testid="automation-new-when">
+		<div ref={cardRef} className={cn("flex flex-col gap-8 rounded-[14px] bg-window p-14", editing !== null && onDelete === undefined && "border border-accent")} data-testid="automation-new" data-editing={editing?.id}>
+			<span className="text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.when")}</span>
+			<div className="flex flex-wrap items-center gap-8 py-4" data-testid="automation-new-when">
 				{sentence.map((part, index) =>
 					part in chips ? (
 						<Fragment key={index}>{chips[part]}</Fragment>
@@ -429,7 +432,7 @@ function NewAutomationCard({
 					),
 				)}
 			</div>
-			<span className="mt-4 text-badge font-medium leading-[14px] text-ink-body">{t("automations.create.task")}</span>
+			<span className="mt-4 text-meta font-medium leading-[16px] text-ink-muted">{t("automations.create.task")}</span>
 			<textarea
 				ref={taskRef}
 				data-testid="automation-new-task"
@@ -453,7 +456,7 @@ function NewAutomationCard({
 					<button
 						type="button"
 						data-action="automation-delete"
-						className="inline-flex h-32 items-center px-6 border-0 bg-transparent text-meta text-accent-text cursor-pointer hover:opacity-80"
+						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
 						onClick={onDelete}
 					>
 						{t("automations.inspector.delete")}
@@ -594,24 +597,30 @@ function runOutcome(run: AutomationRun, t: TFunction): string {
 	return [files, result].filter((part): part is string => part !== null && part.length > 0).join(" · ");
 }
 
-/** One line of 실행 기록 (Figma 621:4882): the dot, the outcome (and the rule's name in 전체 기록), when, and the error a failed run left. */
+/**
+ * One line of 실행 기록 (Figma 621:4882): the dot, how many files it took over how it ended (the rule's name over its
+ * outcome in 전체 기록), when, and the error a failed run left. The run log counts the files but does not name them.
+ */
 function RunLine({ run, rule, onOpen }: { readonly run: AutomationRun; readonly rule?: AutomationRule; readonly onOpen?: () => void }): ReactElement {
 	const { t } = useTranslation();
 	const tone = runTone(run);
-	const outcome = runOutcome(run, t);
+	const result = tone === "ok" ? t("automations.inspector.runDone") : failReason(run);
+	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
+	const first = rule !== undefined ? ruleTitle(rule) : (files ?? result);
+	const second = rule !== undefined ? runOutcome(run, t) : files === null ? null : result;
 	const body = (
 		<>
 			<div className="flex w-full items-center gap-10">
 				<RunDot tone={tone} />
 				<div className="flex min-w-0 flex-1 flex-col gap-px">
-					<span className="truncate text-[13px] leading-[20px] text-ink">{rule === undefined ? outcome : ruleTitle(rule)}</span>
-					{rule === undefined ? null : <span className="truncate text-meta leading-[16px] text-ink-muted">{outcome}</span>}
+					<span className="truncate text-[13px] leading-[20px] text-ink">{first}</span>
+					{second === null ? null : <span className="truncate text-badge leading-[17px] text-ink-muted">{second}</span>}
 				</div>
-				<span className="flex-none text-meta leading-[16px] text-ink-muted">{relativeTime(run.startedAt)}</span>
+				<span className="flex-none text-meta leading-[18px] text-ink-muted">{relativeTime(run.startedAt)}</span>
 				{onOpen === undefined ? null : <ChevronRightIcon size={14} className="flex-none text-ink-faint" />}
 			</div>
 			{tone === "fail" && run.error !== undefined && rule === undefined ? (
-				<p className="m-0 ml-18 rounded-8 bg-error-orange-bg px-10 py-7 text-meta leading-[18px] text-error-orange-text [overflow-wrap:anywhere]">{run.error}</p>
+				<p className="m-0 w-full rounded-8 bg-subtle-alt px-10 py-7 text-meta leading-[18px] text-ink-body [overflow-wrap:anywhere]">{run.error}</p>
 			) : null}
 		</>
 	);
@@ -662,7 +671,7 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 				value={name}
 				placeholder={derivedTitle(rule)}
 				aria-label={t("automations.row.rename")}
-				className="h-28 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[15px] font-semibold leading-[20px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
+				className="h-26 min-w-0 flex-1 rounded-6 border border-accent bg-window px-6 text-[13px] font-medium leading-[20px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
 				onFocus={(event) => event.currentTarget.select()}
 				onChange={(event) => setName(event.target.value)}
 				onKeyDown={(event) => {
@@ -680,10 +689,10 @@ function EditableTitle({ rule, onRename }: { readonly rule: AutomationRule; read
 			data-action="automation-rename"
 			title={t("automations.row.rename")}
 			aria-label={`${ruleTitle(rule)} — ${t("automations.row.rename")}`}
-			className="group inline-flex h-28 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
+			className="group inline-flex h-26 min-w-0 items-center gap-6 rounded-6 border-0 bg-transparent px-6 -mx-6 text-left cursor-text hover:bg-hover"
 			onClick={start}
 		>
-			<span className="truncate text-[15px] font-semibold leading-[20px] text-ink">{ruleTitle(rule)}</span>
+			<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
 			<PencilIcon size={13} className="flex-none text-ink-faint group-hover:text-ink-muted" />
 		</button>
 	);
@@ -710,7 +719,6 @@ function AutomationDetail({
 	const { t } = useTranslation();
 	// The log is the record; until it has been read (or if it is gone) the rule's last run still shows.
 	const list = runs !== undefined && runs.length > 0 ? runs : rule.lastRun === null ? [] : [rule.lastRun];
-	const fails = list.filter((run) => runTone(run) === "fail").length;
 	return (
 		<div className="flex flex-col gap-24" data-automation-detail={rule.id}>
 			<div className="flex min-w-0 items-center gap-6">
@@ -729,7 +737,7 @@ function AutomationDetail({
 			<Section title={t("automations.detail.settings")}>
 				<NewAutomationCard onCreate={async () => false} onUpdate={onUpdate} onCancelEdit={undefined} onDraftChange={onDraftChange} onDelete={onDelete} editing={rule} filled={null} />
 			</Section>
-			<Section title={[t("automations.detail.history"), list.length === 0 ? null : t("automations.detail.runs", { count: list.length }), fails === 0 ? null : t("automations.detail.fails", { count: fails })].filter((part) => part !== null).join(" · ")}>
+			<Section title={list.length === 0 ? t("automations.detail.history") : `${t("automations.detail.history")} (${list.length})`}>
 				{list.length === 0 ? (
 					<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{t("automations.detail.noRuns")}</p>
 				) : (
@@ -837,7 +845,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 		scrollRef.current?.scrollTo?.({ top: 0 });
 	}, [detail?.id, tab]);
 	return (
-		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-window" aria-label={t("automations.list")}>
+		<section data-automations-view className="flex min-h-0 flex-1 flex-col bg-subtle-alt" aria-label={t("automations.list")}>
 			<div
 				ref={scrollRef}
 				data-rules-body
@@ -946,7 +954,7 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 													key={template.id}
 													type="button"
 													data-template={template.id}
-													className="group flex items-center gap-10 border-0 bg-window px-12 py-10 text-left cursor-pointer hover:bg-hover-row"
+													className="group flex items-center gap-10 border-0 bg-window px-16 py-10 text-left cursor-pointer hover:bg-hover-row"
 													onClick={() => {
 														setFilled({ template, at: Date.now() });
 														setComposerOpen(true);

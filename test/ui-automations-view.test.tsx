@@ -267,7 +267,7 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		await settle();
 		expect(page()?.dataset.automationDetail).toBe("pdf");
 		expect(rows()).toEqual([]);
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 · 1회"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 (1)"]);
 		const name = host.querySelector('[data-action="automation-rename"]');
 		expect(name?.getAttribute("title")).toBe("이름 바꾸기");
 		expect(name?.querySelector("svg")).not.toBeNull();
@@ -334,12 +334,12 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		await act(async () => {
 			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
-		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 · 3회 · 실패 2회"]);
+		expect([...host.querySelectorAll("h2")].map((title) => title.textContent)).toEqual(["설정", "실행 기록 (3)"]);
 		const runs = [...host.querySelectorAll("[data-run]")];
 		expect(runs.map((run) => run.querySelector("[data-run-tone]")?.getAttribute("data-run-tone"))).toEqual(["fail", "fail", "ok"]);
-		expect(text(runs[0])).toContain("파일 1개 · 시간 초과");
+		expect(text(runs[0])).toContain("파일 1개시간 초과");
 		expect(text(runs[1])).toContain("spawn hwp5 ENOENT");
-		expect(text(runs[2])).toContain("파일 3개 · 완료");
+		expect(text(runs[2])).toContain("파일 3개완료");
 		Reflect.deleteProperty(runLogs, "pdf");
 	});
 });

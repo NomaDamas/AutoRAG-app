@@ -742,8 +742,6 @@
       "failed": "Failed",
       "settings": "Settings",
       "history": "Run history",
-      "runs": "Runs: {{count}}",
-      "fails": "Failed: {{count}}",
       "noRuns": "It hasn't run yet. Runs show up here once a matching file appears."
     },
     "tabs": {
@@ -752,7 +750,7 @@
     "all": {
       "count": "Runs: {{count}}",
       "failOnly": "Failures only",
-      "noFails": "No failed runs"
+      "noFails": "No failed runs recorded"
     },
     "assistant": {
       "caption": "Ask the AI to create or change an automation"

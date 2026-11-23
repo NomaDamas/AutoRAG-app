@@ -742,8 +742,6 @@
       "failed": "실패",
       "settings": "설정",
       "history": "실행 기록",
-      "runs": "{{count}}회",
-      "fails": "실패 {{count}}회",
       "noRuns": "아직 실행된 적이 없습니다. 조건에 맞는 파일이 생기면 여기에 기록됩니다."
     },
     "tabs": {
@@ -752,7 +750,7 @@
     "all": {
       "count": "{{count}}회 실행",
       "failOnly": "실패만 보기",
-      "noFails": "실패한 실행이 없습니다"
+      "noFails": "실패한 실행 기록이 없습니다"
     },
     "assistant": {
       "caption": "자동화를 만들거나 고칠 때 AI에게 물어보세요"
