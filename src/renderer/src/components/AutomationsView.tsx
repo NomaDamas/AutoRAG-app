@@ -265,9 +265,9 @@ function NewAutomationCard({
 	const [customEvents, setCustomEvents] = useState<readonly AutomationEventType[] | null>(null);
 	const [customProfile, setCustomProfile] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
-	// On a rule's own page the fields are read until 수정 (the name is renamed from the title, not here).
-	const [unlocked, setUnlocked] = useState(false);
-	const locked = onDelete !== undefined && editing !== null && !unlocked;
+	// On a rule's own page the fields can be changed at once (the name is renamed from the title, not here);
+	// 취소 shows once something differs from the saved rule.
+	const [changed, setChanged] = useState(false);
 	// The inspector speaks about the card only once the person has started on it.
 	const [touched, setTouched] = useState(false);
 	const cardRef = useRef<HTMLDivElement>(null);
@@ -342,6 +342,7 @@ function NewAutomationCard({
 		setTask(rule.agent?.task ?? whatText(rule, { full: true }));
 		setRun(rule.agent === undefined ? rule.run : null);
 		setTouched(true);
+		setChanged(false);
 	};
 
 	// 수정 on a rule: the card takes the rule in, and 만들기 becomes 수정하기. Leaving a rule empties the card; a card
@@ -350,7 +351,7 @@ function NewAutomationCard({
 	useEffect(() => {
 		const before = editedBefore.current;
 		editedBefore.current = editing?.id ?? null;
-		setUnlocked(false);
+		setChanged(false);
 		if (editing === null) {
 			if (before !== null) reset();
 			return;
@@ -382,6 +383,7 @@ function NewAutomationCard({
 		set(value);
 		clear?.();
 		setTouched(true);
+		setChanged(true);
 	};
 	const submit = async (): Promise<void> => {
 		if (!canSubmit || draft === null) return;
@@ -389,7 +391,7 @@ function NewAutomationCard({
 		const ok = editing === null ? await onCreate(draft) : onUpdate === undefined ? false : await onUpdate(editing.id, draft);
 		setBusy(false);
 		if (ok && editing === null) reset();
-		if (ok && onDelete !== undefined) setUnlocked(false);
+		if (ok && onDelete !== undefined) setChanged(false);
 	};
 
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
@@ -405,7 +407,6 @@ function NewAutomationCard({
 				options={folders}
 				label={chosenFolder === null ? t("automations.create.pickFolder") : folderLabel(chosenFolder)}
 				icon={<FolderGlyph size={13} />}
-				disabled={locked}
 				testId="automation-new-folder"
 				onChange={touch(setFolder)}
 			/>
@@ -415,7 +416,6 @@ function NewAutomationCard({
 				value={customInclude === null ? kind : null}
 				options={kinds}
 				label={customInclude === null ? t("automations.create.kindLabel") : t("automations.kinds.noun", { kinds: kindsText(customInclude) })}
-				disabled={locked}
 				testId="automation-new-kind"
 				onChange={touch(setKind, () => setCustomInclude(null))}
 			/>
@@ -425,7 +425,6 @@ function NewAutomationCard({
 				value={customEvents === null ? event : null}
 				options={events}
 				label={customEvents === null ? t("automations.create.eventLabel") : t("automations.create.event.other")}
-				disabled={locked}
 				testId="automation-new-event"
 				onChange={touch(setEvent, () => setCustomEvents(null))}
 			/>
@@ -451,78 +450,60 @@ function NewAutomationCard({
 				ref={taskRef}
 				data-testid="automation-new-task"
 				value={task}
-				readOnly={locked}
-				tabIndex={locked ? -1 : undefined}
 				placeholder={t("automations.create.taskPlaceholder")}
 				aria-label={t("automations.create.task")}
 				className={cn(
 					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
-					locked ? "cursor-default text-ink" : "text-ink focus:border-accent",
+					"text-ink focus:border-accent",
 				)}
 				onChange={(change) => {
 					setTask(change.target.value);
 					setTouched(true);
+					setChanged(true);
 					// Typing over a program's words makes it an instruction for the agent.
 					setRun(null);
 				}}
 			/>
 			<div className="flex items-center gap-6">
 				{run === null ? (
-					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round disabled={locked} testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
+					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
 				) : null}
 				<span className="flex-1" />
-				{locked ? (
-					<>
-						<button
-							type="button"
-							data-action="automation-delete"
-							className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
-							onClick={onDelete}
-						>
-							{t("automations.inspector.delete")}
-						</button>
-						<button
-							type="button"
-							data-action="automation-edit"
-							className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer"
-							onClick={() => {
-								setUnlocked(true);
-								taskRef.current?.focus();
-							}}
-						>
-							{t("automations.menu.edit")}
-						</button>
-					</>
-				) : (
-					<>
-						{editing === null ? null : (
-							<button
-								type="button"
-								data-action="automation-cancel-edit"
-								className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
-								onClick={() => {
-									if (onDelete === undefined) {
-										onCancelEdit?.();
-										return;
-									}
-									load(editing);
-									setUnlocked(false);
-								}}
-							>
-								{t("common.cancel")}
-							</button>
-						)}
-						<button
-							type="button"
-							data-action={editing === null ? "automation-create" : "automation-update"}
-							disabled={!canSubmit}
-							className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
-							onClick={() => void submit()}
-						>
-							{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : onDelete !== undefined ? t("common.save") : t("automations.create.submitEdit")}
-						</button>
-					</>
+				{editing !== null && onDelete !== undefined ? (
+					<button
+						type="button"
+						data-action="automation-delete"
+						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
+						onClick={onDelete}
+					>
+						{t("automations.inspector.delete")}
+					</button>
+				) : null}
+				{editing === null || (onDelete !== undefined && !changed) ? null : (
+					<button
+						type="button"
+						data-action="automation-cancel-edit"
+						className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
+						onClick={() => {
+							if (onDelete === undefined) {
+								onCancelEdit?.();
+								return;
+							}
+							load(editing);
+						}}
+					>
+						{t("common.cancel")}
+					</button>
 				)}
+				<button
+					type="button"
+					data-action={editing === null ? "automation-create" : "automation-update"}
+					disabled={!canSubmit || (onDelete !== undefined && !changed)}
+					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
+					onClick={() => void submit()}
+				>
+					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : onDelete !== undefined ? t("common.save") : t("automations.create.submitEdit")}
+				</button>
 			</div>
 		</div>
 	);

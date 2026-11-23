@@ -294,53 +294,47 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		expect(onRename).toHaveBeenCalledTimes(1);
 	});
 
-	it("reads the card until 수정, which leaves only 저장, and saves with the rule's id", async () => {
+	it("lets the rule's page be changed at once, with 삭제 beside 저장, and saves with the rule's id", async () => {
 		const onUpdate = vi.fn(async () => true);
 		const p = props({ editing, onUpdate });
 		render(p);
 		await settle();
 		const task = (): HTMLTextAreaElement | null => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]');
+		const save = (): HTMLButtonElement | null => host.querySelector<HTMLButtonElement>('[data-action="automation-update"]');
 		expect(task()?.value).toBe("메모로 남겨 줘");
-		// Read first: the fields cannot be changed, and the card offers 삭제 and 수정.
-		expect(task()?.readOnly).toBe(true);
-		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-folder"]')?.disabled).toBe(true);
-		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-mode"]')?.disabled).toBe(true);
-		expect(host.querySelector('[data-action="automation-update"]')).toBeNull();
-		click(host.querySelector('[data-action="automation-delete"]'));
-		expect(p.onAskDelete).toHaveBeenCalledWith("pdf");
-		click(host.querySelector('[data-action="automation-edit"]'));
-		// 수정: the fields open, and 저장 is the only button.
+		// No 수정 step: the fields are open, 저장 waits for a change, and 취소 is not there yet.
 		expect(task()?.readOnly).toBe(false);
 		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-folder"]')?.disabled).toBe(false);
-		expect(host.querySelector('[data-action="automation-delete"]')).toBeNull();
+		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-mode"]')?.disabled).toBe(false);
+		expect(host.querySelector('[data-action="automation-edit"]')).toBeNull();
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
+		expect(save()?.textContent).toBe("저장");
+		expect(save()?.disabled).toBe(true);
+		click(host.querySelector('[data-action="automation-delete"]'));
+		expect(p.onAskDelete).toHaveBeenCalledWith("pdf");
+		act(() => type(task() as HTMLTextAreaElement, "메모로 남겨 줘!"));
 		expect(host.querySelector('[data-action="automation-cancel-edit"]')?.textContent).toBe("취소");
-		const save = host.querySelector<HTMLButtonElement>('[data-action="automation-update"]');
-		expect(save?.textContent).toBe("저장");
+		expect(save()?.disabled).toBe(false);
 		await act(async () => {
-			save?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+			save()?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
-		expect(onUpdate).toHaveBeenCalledWith("pdf", { paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "메모로 남겨 줘" } });
-		// Saved: the card is read again.
-		expect(task()?.readOnly).toBe(true);
-		expect(host.querySelector('[data-action="automation-edit"]')).not.toBeNull();
+		expect(onUpdate).toHaveBeenCalledWith("pdf", { paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "메모로 남겨 줘!" } });
+		// Saved: nothing differs any more.
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
+		expect(save()?.disabled).toBe(true);
 	});
 
-	it("puts the rule back and reads the card again on 취소", async () => {
+	it("puts the rule back on 취소 and stays on its page", async () => {
 		const onCancelEdit = vi.fn();
 		render(props({ editing, onCancelEdit }));
 		await settle();
 		const task = (): HTMLTextAreaElement | null => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]');
-		click(host.querySelector('[data-action="automation-edit"]'));
-		act(() => {
-			const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-			setter?.call(task(), "다른 일");
-			task()?.dispatchEvent(new Event("input", { bubbles: true }));
-		});
+		act(() => type(task() as HTMLTextAreaElement, "다른 일"));
 		expect(task()?.value).toBe("다른 일");
 		click(host.querySelector('[data-action="automation-cancel-edit"]'));
 		expect(task()?.value).toBe("메모로 남겨 줘");
-		expect(task()?.readOnly).toBe(true);
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
 		expect(onCancelEdit).not.toHaveBeenCalled();
 		expect(page()?.dataset.automationDetail).toBe("pdf");
 	});
@@ -350,7 +344,7 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		const onUpdate = vi.fn(async () => true);
 		render(props({ editing: odd, onUpdate }));
 		await settle();
-		click(host.querySelector('[data-action="automation-edit"]'));
+		act(() => type(host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]') as HTMLTextAreaElement, "t2"));
 		await act(async () => {
 			host.querySelector('[data-action="automation-update"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
