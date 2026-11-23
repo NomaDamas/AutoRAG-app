@@ -6,10 +6,11 @@
  * and pasted with the real shortcut.
  *
  *   vision model:
- *   1. AI Agent tab: ⌘V adds an attachment pill, no text lands in the field; Enter sends; the request carries one
- *      image_url part with the pasted pixels; the sent bubble shows the picture's chip;
- *   2. right sidebar chat (Info view dock): ⌘V adds a card; Enter sends; the request carries the image; a follow-up
- *      typed in the chat view with a second paste carries the new picture too;
+ *   1. AI Agent tab: ⌘V shows the pasted picture itself (a thumbnail with a ✕, not a file name) within a time budget,
+ *      no text lands in the field; the ✕ takes it off; pasting again and Enter sends; the request carries one
+ *      image_url part with the pasted pixels; the sent bubble shows the picture;
+ *   2. right sidebar chat (Info view dock): ⌘V shows the thumbnail with a ✕; Enter sends; the request carries the
+ *      image; a follow-up typed in the chat view with a second paste carries the new picture too;
  *   3. a text paste still pastes text.
  *   text-only model:
  *   4. ⌘V in either composer is silently ignored: no pill, no card, no error, nothing sent as an image; the question
@@ -186,16 +187,29 @@ await session("vision", ["text", "image"], async (app, page) => {
 	await copyImage(app, RED);
 	await composer.click();
 	await page.keyboard.press(chord("V"));
-	const pill = panel.locator(".composer-attach-pill");
+	const pill = panel.locator(".composer-attach-thumbs [data-attachment-thumb]");
+	const pastedAt = Date.now();
 	await pill.first().waitFor();
-	check("⌘V adds an attachment pill for the pasted image", (await pill.count()) === 1 && /pasted-image-.*\.png/u.test(await pill.first().innerText()), await pill.first().innerText());
+	const showMs = Date.now() - pastedAt;
+	check("⌘V shows the pasted image as a picture", (await pill.count()) === 1 && (await pill.first().locator("img").count()) === 1);
+	const decoded = await pill.first().locator("img").evaluate((img) => ({ done: img.complete, width: img.naturalWidth, height: img.naturalHeight }));
+	check("the picture is decoded (real pixels, not a broken image)", decoded.done && decoded.width === 320 && decoded.height === 200, JSON.stringify(decoded));
+	check("it carries no file name", !/pasted-image/u.test(await pill.first().innerText()));
+	check("the thumbnail shows within 1.5 s of the paste", showMs < 1500, `${showMs} ms`);
 	check("no text landed in the field", (await composer.inputValue()) === "");
 	await shot(page, "01-tab-pasted");
+	await pill.first().locator('button[aria-label="Remove attachment"]').click();
+	check("the ✕ takes the picture off", (await pill.count()) === 0);
+	await shot(page, "01b-tab-removed");
+	await copyImage(app, RED);
+	await composer.click();
+	await page.keyboard.press(chord("V"));
+	await pill.first().waitFor();
 	await page.keyboard.type("이 스크린샷에 뭐가 있어?");
 	await page.keyboard.press("Enter");
 	await settled(page, AI_PANEL);
-	check("the pill left the composer when sent", (await pill.count()) === 0);
-	check("the sent bubble shows the picture's chip", (await panel.locator(".ref-file-chip").count()) === 1 && /pasted-image-/u.test(await panel.locator(".ref-file-chip").first().innerText()));
+	check("the thumbnail left the composer when sent", (await pill.count()) === 0);
+	check("the sent bubble shows the picture", (await panel.locator(".user-msg [data-attachment-thumb] img").count()) === 1 && (await panel.locator(".user-msg [data-attachment-thumb] img").first().evaluate((img) => img.naturalWidth)) === 320);
 	const tabRequests = seen.filter((request) => request.images.length > 0);
 	check("the model request carries exactly one image", tabRequests.length > 0 && tabRequests.every((request) => request.images.length === 1), JSON.stringify(seen.map((request) => request.images.length)));
 	check("the image is the pasted PNG", tabRequests.length > 0 && Buffer.from(tabRequests[0].images[0].split(",")[1], "base64").subarray(1, 4).toString() === "PNG", tabRequests[0]?.images[0]?.slice(0, 40));
@@ -208,6 +222,7 @@ await session("vision", ["text", "image"], async (app, page) => {
 	await composer.click();
 	await page.keyboard.press(chord("V"));
 	await pill.first().waitFor();
+	check("the first pasted picture is not a stale draft: exactly one thumbnail for the new paste", (await pill.count()) === 1);
 	await page.keyboard.type("그리고 이건?");
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(() => document.querySelectorAll(".user-msg").length === 2, null, { timeout: 30_000 });
@@ -229,9 +244,10 @@ await session("vision", ["text", "image"], async (app, page) => {
 	await copyImage(app, RED);
 	await dock.click();
 	await page.keyboard.press(chord("V"));
-	const card = page.locator(".inspector-chat-composer .inspector-chat-att");
+	const card = page.locator(".inspector-chat-composer [data-attachment-thumb]");
 	await card.first().waitFor();
-	check("the sidebar composer shows a card for the pasted image", (await card.count()) === 1 && /pasted-image-/u.test(await card.first().innerText()));
+	check("the sidebar composer shows the pasted image as a picture", (await card.count()) === 1 && (await card.first().locator("img").evaluate((img) => img.naturalWidth)) === 320);
+	check("the sidebar picture has a ✕ and no file name", (await card.first().locator('button[aria-label="Remove attachment"]').count()) === 1 && !/pasted-image/u.test(await card.first().innerText()));
 	await shot(page, "03-sidebar-pasted");
 	await dock.click();
 	await page.keyboard.type("사이드바에서 물어요");
@@ -239,7 +255,7 @@ await session("vision", ["text", "image"], async (app, page) => {
 	await page.locator(".inspector-chat").waitFor();
 	await page.waitForFunction(() => document.querySelector('.inspector-chat button[aria-label="Stop"]') === null && document.querySelectorAll(".inspector-chat .inspector-chat-question").length >= 1, null, { timeout: 90_000 });
 	check("the sidebar question reached the model with the image", seen.some((request) => request.images.length === 1), JSON.stringify(seen.map((request) => request.images.length)));
-	check("the question shows the picture's card in the sidebar chat", (await page.locator(".inspector-chat .inspector-chat-att").count()) >= 1);
+	check("the question shows the picture in the sidebar chat", (await page.locator(".inspector-chat .inspector-chat-question").first().locator("xpath=..").locator("[data-attachment-thumb] img").count()) >= 1);
 	await shot(page, "04-sidebar-answered");
 
 	seen.length = 0;
@@ -247,7 +263,7 @@ await session("vision", ["text", "image"], async (app, page) => {
 	await copyImage(app, BLUE);
 	await chatInput.click();
 	await page.keyboard.press(chord("V"));
-	await page.locator(".inspector-chat-composer .inspector-chat-att").first().waitFor();
+	await page.locator(".inspector-chat-composer [data-attachment-thumb]").first().waitFor();
 	await page.keyboard.type("이어서: 이 그림은?");
 	await page.keyboard.press("Enter");
 	await page.waitForFunction(() => document.querySelectorAll(".inspector-chat .inspector-chat-question").length === 2, null, { timeout: 30_000 });
@@ -266,7 +282,7 @@ await session("text", ["text"], async (app, page) => {
 	await composer.click();
 	await page.keyboard.press(chord("V"));
 	await page.waitForTimeout(1500);
-	check("a text-only model: the paste adds no pill", (await panel.locator(".composer-attach-pill").count()) === 0);
+	check("a text-only model: the paste adds nothing", (await panel.locator(".composer-attach-pill, [data-attachment-thumb]").count()) === 0);
 	check("a text-only model: no text lands in the field either", (await composer.inputValue()) === "");
 	check("a text-only model: no error shows", (await panel.getByText(/error|Something went wrong/iu).count()) === 0);
 	await shot(page, "05-text-only-ignored");

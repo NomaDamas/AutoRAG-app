@@ -7,14 +7,10 @@ import { attachPastedImages, base64Of, imageFilesFromPaste, type PasteData } fro
 
 Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", true);
 
-interface FakeFile {
-	readonly type: string;
-	readonly bytes: number[];
-	arrayBuffer(): Promise<ArrayBuffer>;
-}
+type FakeFile = File;
 
 function file(type: string, bytes: number[] = [1, 2, 3]): FakeFile {
-	return { type, bytes, arrayBuffer: async () => new Uint8Array(bytes).buffer };
+	return new File([new Uint8Array(bytes)], "shot", { type });
 }
 
 function paste(files: readonly FakeFile[], text = ""): PasteData<FakeFile> {
@@ -52,9 +48,9 @@ describe("attachPastedImages", () => {
 		expect(await attachPastedImages([file("image/png")], async () => Promise.reject(new Error("boom")))).toEqual([]);
 	});
 
-	it("encodes large images without overflowing the call stack", () => {
-		const bytes = new Uint8Array(3_000_000).fill(7);
-		expect(atob(base64Of(bytes.buffer)).length).toBe(3_000_000);
+	it("encodes a multi-megabyte image without blocking or overflowing the stack", async () => {
+		const bytes = new Uint8Array(12_000_000).fill(7);
+		expect(atob(await base64Of(new Blob([bytes]))).length).toBe(12_000_000);
 	});
 });
 

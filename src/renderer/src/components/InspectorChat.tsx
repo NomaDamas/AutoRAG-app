@@ -51,6 +51,7 @@ import { iconButtonClass } from "./primitives/icon-button";
 import { FileTile } from "./primitives/FileTile";
 import { EvidenceExcerpt } from "./EvidenceBlocks";
 import { ComposerField } from "./ComposerField";
+import { AttachmentThumb } from "./AttachmentThumb";
 import { mergeAttachments } from "../state/attachments";
 import { attachPastedImages } from "../state/pasted-images";
 import type { SteerItem } from "../state/steering";
@@ -89,7 +90,7 @@ function AttachmentCard({
 	readonly small?: boolean;
 }): ReactElement {
 	const { t } = useTranslation();
-	return (
+	const card = (
 		<span className="inspector-chat-att relative inline-flex max-w-full min-w-0 items-center gap-6 rounded-8 border border-divider bg-window px-8 py-5" title={att.id}>
 			<FileTile kind={att.kind === "folder" ? "folder" : evidenceKind(att.name)} size={18} />
 			<span className={cn("min-w-0 truncate text-ink", small ? "text-badge leading-[16px]" : "text-meta leading-[1.4]")}>{att.name}</span>
@@ -105,6 +106,15 @@ function AttachmentCard({
 				</button>
 			)}
 		</span>
+	);
+	return (
+		<AttachmentThumb
+			att={att}
+			size={onRemove === undefined ? "message" : "compact"}
+			removeLabel={t("inspector.chat.removeAttachment")}
+			{...(onRemove === undefined ? {} : { onRemove })}
+			fallback={card}
+		/>
 	);
 }
 

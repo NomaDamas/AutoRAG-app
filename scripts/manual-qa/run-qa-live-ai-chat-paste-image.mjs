@@ -148,8 +148,9 @@ try {
 	copyImage();
 	await field.click();
 	await page.keyboard.press(chord("V"));
-	await panel.locator(".composer-attach-pill").first().waitFor();
-	check("the pasted screenshot is an attachment pill", (await panel.locator(".composer-attach-pill").count()) === 1);
+	const tabThumb = panel.locator(".composer-attach-thumbs [data-attachment-thumb]");
+	await tabThumb.first().waitFor();
+	check("the pasted screenshot shows as a thumbnail with ✕", (await tabThumb.count()) === 1 && (await tabThumb.first().locator("img").evaluate((img) => img.naturalWidth)) === 480 && (await tabThumb.first().locator('button[aria-label="Remove attachment"]').count()) === 1);
 	await page.keyboard.insertText("첨부한 이미지는 단색이야. 무슨 색인지 한 단어로만 답해줘. 파일을 검색하지 마.");
 	await page.screenshot({ path: join(EVIDENCE, "live-01-tab-pasted.png") });
 	await page.keyboard.press("Enter");
@@ -171,7 +172,9 @@ try {
 	copyImage();
 	await dock.click();
 	await page.keyboard.press(chord("V"));
-	await page.locator(".inspector-chat-composer .inspector-chat-att").first().waitFor();
+	const sideThumb = page.locator(".inspector-chat-composer [data-attachment-thumb]");
+	await sideThumb.first().waitFor();
+	check("the sidebar pasted screenshot shows as a thumbnail with ✕", (await sideThumb.count()) === 1 && (await sideThumb.first().locator("img").evaluate((img) => img.naturalWidth)) === 480 && (await sideThumb.first().locator('button[aria-label="Remove attachment"]').count()) === 1);
 	await page.keyboard.insertText("첨부한 이미지는 단색이야. 무슨 색인지 한 단어로만 답해줘. 파일을 검색하지 마.");
 	await page.screenshot({ path: join(EVIDENCE, "live-03-sidebar-pasted.png") });
 	await page.keyboard.press("Enter");

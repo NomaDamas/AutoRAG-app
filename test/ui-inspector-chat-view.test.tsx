@@ -341,7 +341,9 @@ describe("the inspector chat view", () => {
 			{ kind: "file", id: "/work/photo.jpg", name: "photo.jpg" },
 		]);
 		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("선택한 항목에 대해 묻기");
-		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(2);
+		// The PDF is a name card; the photo is shown as the picture itself.
+		expect(host.querySelectorAll(".inspector-chat-composer .inspector-chat-att")).toHaveLength(1);
+		expect(host.querySelectorAll(".inspector-chat-composer [data-attachment-thumb]")).toHaveLength(1);
 		render([]);
 		expect(host.querySelector("textarea")?.getAttribute("placeholder")).toBe("이어서 묻기");
 	});

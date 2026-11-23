@@ -12,7 +12,7 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { type AssistantMessage, type ImageContent, isContextOverflow } from "@earendil-works/pi-ai";
 import { isJsonObject } from "../shared/settings-contract";
 import { applyDazziThinkingLevels, resolveSessionModel } from "@autorag/librarian/profiles";
-import { loadAttachmentImages } from "./attachment-images";
+import { loadAttachmentImages, prepareAttachmentImage } from "./attachment-images";
 import type { PastedImageStore } from "./pasted-images";
 import { applyAppIndexing, readAppIndexing } from "./app-indexing";
 import { resolveNodeBinary, runAutomationToolOnNode } from "./automation-runtime";
@@ -805,7 +805,10 @@ export function createSearchService(deps: SearchServiceDeps): SearchService {
 			if (typeof mimeType !== "string" || typeof base64 !== "string" || deps.pastedImages === undefined) return null;
 			try {
 				if (deps.acceptsImages !== undefined && !(await deps.acceptsImages())) return null;
-				return await deps.pastedImages.save(mimeType, base64);
+				const saved = await deps.pastedImages.save(mimeType, base64);
+				// Scale it while the person types, so sending does not wait for it.
+				void prepareAttachmentImage(saved);
+				return saved;
 			} catch {
 				return null;
 			}

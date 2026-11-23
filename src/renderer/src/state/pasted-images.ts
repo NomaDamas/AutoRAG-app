@@ -31,28 +31,25 @@ export function imageFilesFromPaste<F>(data: PasteData<F> | null): readonly F[] 
 	});
 }
 
-/** A file's bytes as base64, for the IPC call. */
-export function base64Of(bytes: ArrayBuffer): string {
-	const view = new Uint8Array(bytes);
-	let binary = "";
-	for (let offset = 0; offset < view.length; offset += 0x8000) binary += String.fromCharCode(...view.subarray(offset, offset + 0x8000));
-	return btoa(binary);
-}
-
-interface PastedFile {
-	readonly type: string;
-	arrayBuffer(): Promise<ArrayBuffer>;
+/** A file's bytes as base64, encoded by the browser (a screenshot is megabytes: a JS loop over it blocks the field). */
+export function base64Of(blob: Blob): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = () => resolve(String(reader.result).slice(String(reader.result).indexOf(",") + 1));
+		reader.onerror = () => reject(reader.error);
+		reader.readAsDataURL(blob);
+	});
 }
 
 /** The attachments for `files`, in order; an image the main process did not keep is left out. Never rejects. */
 export async function attachPastedImages(
-	files: readonly PastedFile[],
+	files: readonly Blob[],
 	keep: (mimeType: string, base64: string) => Promise<ChatAttachment | null>,
 ): Promise<readonly ChatAttachment[]> {
 	const kept = await Promise.all(
 		files.map(async (file) => {
 			try {
-				return await keep(file.type, base64Of(await file.arrayBuffer()));
+				return await keep(file.type, await base64Of(file));
 			} catch {
 				return null;
 			}
