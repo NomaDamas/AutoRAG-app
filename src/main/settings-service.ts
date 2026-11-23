@@ -16,7 +16,7 @@ import type {
 	McpServerInput,
 	SettingsBridge,
 } from "../shared/settings-contract";
-import { DEFAULT_SETTINGS } from "../shared/settings-contract";
+import { DEFAULT_SETTINGS, normalizeAutomationNames } from "../shared/settings-contract";
 import { isApprovalMode } from "../shared/interaction-contract";
 import { normalizeSidebarSettings } from "../shared/sidebar-contract";
 import { normalizeContextMenuSettings } from "../shared/context-menu-contract";
@@ -84,6 +84,7 @@ async function loadState(path: string, defaults: AppSettings): Promise<SettingsS
 				contextMenu: persisted.contextMenu === undefined ? defaults.contextMenu : normalizeContextMenuSettings(persisted.contextMenu),
 				shortcuts: persisted.shortcuts === undefined ? defaults.shortcuts : normalizeShortcutSettings(persisted.shortcuts),
 				quickSearch: persisted.quickSearch === undefined ? defaults.quickSearch : normalizeQuickSearchSettings(persisted.quickSearch),
+				automationNames: normalizeAutomationNames(persisted.automationNames),
 			},
 			permissions: state.permissions ?? {},
 		};
@@ -169,7 +170,8 @@ export function createSettingsService(deps: SettingsServiceDeps): SettingsBridge
 					remoteTunnelHostname = normalized;
 				}
 				const quickSearch = patch.quickSearch === undefined ? current.settings.quickSearch : normalizeQuickSearchSettings(patch.quickSearch);
-				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname };
+				const automationNames = patch.automationNames === undefined ? current.settings.automationNames : normalizeAutomationNames(patch.automationNames);
+				current.settings = { ...current.settings, ...patch, appearance, approvalMode, sidebar, contextMenu, shortcuts, quickSearch, remoteTunnelHostname, automationNames };
 				return current;
 			});
 			deps.onSettingsChanged?.(state.settings);

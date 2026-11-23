@@ -159,8 +159,29 @@ export function actionShort(rule: AutomationRule): string {
 	return t("automations.action.run", { name: commandName(rule) });
 }
 
-/** "새 PDF → Dazzi에게 맡기기": the name a person reads in a list. */
+/** Names people gave their rules (app settings, by rule id); App keeps this in step with the settings. */
+let ruleNames: Readonly<Record<string, string>> = {};
+
+export function setRuleNames(names: Readonly<Record<string, string>>): void {
+	ruleNames = names;
+}
+
+export function ruleNamesNow(): Readonly<Record<string, string>> {
+	return ruleNames;
+}
+
+/** The name a person gave the rule, or null when it goes by the derived title. */
+export function customRuleName(rule: AutomationRule): string | null {
+	return ruleNames[rule.id] ?? null;
+}
+
+/** The rule's name: the one a person gave it, else "새 PDF → Dazzi에게 맡기기" from its trigger and action. */
 export function ruleTitle(rule: AutomationRule): string {
+	return customRuleName(rule) ?? derivedTitle(rule);
+}
+
+/** "새 PDF → Dazzi에게 맡기기": the title a rule goes by until a person names it. */
+export function derivedTitle(rule: AutomationRule): string {
 	const everyFile = isEveryFile(rule);
 	const kinds = kindsText(rule.include);
 	const createdOnly = rule.events.length === 1 && rule.events[0] === "create";

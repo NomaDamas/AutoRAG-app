@@ -175,7 +175,7 @@ describe("AutomationInspector", () => {
 		expect(host.querySelector("[data-automation-failures]")).toBeNull();
 	});
 
-	it("shows a picked rule: its name, when it runs, what Dazzi does, its last run, 수정 and 삭제 (Figma 611:4443)", () => {
+	it("shows a picked rule: its name, when it runs, what Dazzi does and its last run (Figma 611:4443)", () => {
 		const shown = rule({ run: [], agent: { profile: "file-triage", task: "핵심을 3줄로 요약해 줘" } });
 		const edits: AutomationRule[] = [];
 		const deletes: AutomationRule[] = [];
@@ -185,12 +185,10 @@ describe("AutomationInspector", () => {
 		expect(text()).toContain(whatText(shown, { full: true }));
 		expect(text()).toContain("읽기만 함");
 		expect(host.querySelector("[data-run-row]")?.textContent).toContain("완료");
-		click(host.querySelector('[data-action="automation-more"]'));
-		click(button("수정"));
-		click(host.querySelector('[data-action="automation-more"]'));
-		click(button("삭제"));
-		expect(edits).toEqual([shown]);
-		expect(deletes).toEqual([shown]);
+		// 수정 / 삭제 live in the ⋯ of the rule's row in 내 자동화, not here.
+		expect(host.querySelector('[data-action="automation-more"]')).toBeNull();
+		expect(edits).toEqual([]);
+		expect(deletes).toEqual([]);
 	});
 
 	it("names what went wrong in the last run, and says a rule has not run yet before its first run", () => {
@@ -226,9 +224,6 @@ describe("AutomationInspector", () => {
 		act(() => root.render(<AutomationInspector rule={shown} onEdit={noop} onDelete={noop} />));
 		expect(text()).toContain(whenText(shown));
 		expect(text()).toContain("What Dazzi does");
-		click(host.querySelector('[data-action="automation-more"]'));
-		expect(button("Edit")).toBeDefined();
-		expect(button("Delete")).toBeDefined();
 		expect(text()).not.toMatch(/[가-힣]/);
 	});
 

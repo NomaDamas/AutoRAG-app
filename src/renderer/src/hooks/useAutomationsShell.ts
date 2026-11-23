@@ -23,6 +23,10 @@ export interface AutomationsShellDeps {
 	readonly showInList: (id: string) => void;
 	/** Surface an error the way the window shows one: a toast. */
 	readonly onError: (message: string) => void;
+	/** The names people gave their rules; passed so the list redraws when one changes. */
+	readonly names?: Readonly<Record<string, string>>;
+	/** Store a rule's name (an empty one goes back to the derived title). */
+	readonly renameRule?: (id: string, name: string) => Promise<void>;
 }
 
 export interface AutomationsShell {
@@ -281,6 +285,14 @@ export function useAutomationsShell(deps: AutomationsShellDeps): AutomationsShel
 			}
 		},
 		onCancelEdit: () => setEditingId(null),
+		names: deps.names ?? {},
+		onRename: async (id, name) => {
+			try {
+				await latest.current.renameRule?.(id, name);
+			} catch (cause) {
+				latest.current.onError(cause instanceof Error ? cause.message : String(cause));
+			}
+		},
 		onDraftChange: (next) => {
 			setDraft(next);
 			// Making a rule takes the inspector over from the one picked.

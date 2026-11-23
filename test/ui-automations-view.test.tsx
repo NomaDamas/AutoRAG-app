@@ -248,6 +248,45 @@ describe("AutomationsView empty and error states", () => {
 	});
 });
 
+describe("AutomationsView ⋯ on a 내 자동화 row", () => {
+	const more = (index: number): Element | null | undefined => rows()[index]?.querySelector('[data-action="automation-row-more"]');
+
+	it("offers 이름 바꾸기, 수정하기 and 삭제하기, and does not select or open the row while doing so", () => {
+		const p = props();
+		render(p);
+		click(more(1));
+		expect(p.onSelect).not.toHaveBeenCalled();
+		expect([...(rows()[1]?.querySelectorAll('[role="menuitem"]') ?? [])].map((item) => text(item))).toEqual(["이름 바꾸기", "수정하기", "삭제하기"]);
+		click(rows()[1]?.querySelector('[data-action="automation-edit"]'));
+		expect(p.onEdit).toHaveBeenCalledWith("hwp-to-pdf");
+		click(more(1));
+		click(rows()[1]?.querySelector('[data-action="automation-delete"]'));
+		expect(p.onAskDelete).toHaveBeenCalledWith("hwp-to-pdf");
+	});
+
+	it("renames in place: Enter keeps the new name, Escape keeps the old one", () => {
+		const onRename = vi.fn(async () => undefined);
+		render(props({ onRename }));
+		click(more(0));
+		click(rows()[0]?.querySelector('[data-action="automation-rename"]'));
+		const input = (): HTMLInputElement | null => host.querySelector<HTMLInputElement>('[data-testid="automation-rename-input"]');
+		expect(input()?.placeholder).toBe("새 PDF → Dazzi에게 맡기기");
+		act(() => {
+			const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+			setter?.call(input(), "PDF 3줄 요약");
+			input()?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		act(() => input()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+		expect(onRename).toHaveBeenCalledWith("downloads-pdf-summary", "PDF 3줄 요약");
+		expect(input()).toBeNull();
+
+		click(more(0));
+		click(rows()[0]?.querySelector('[data-action="automation-rename"]'));
+		act(() => input()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+		expect(onRename).toHaveBeenCalledTimes(1);
+	});
+});
+
 describe("AutomationsView editing a rule in the card", () => {
 	it("takes the rule into the card, says 자동화 수정 and 수정하기, and saves it with its id", async () => {
 		const editing = rule("pdf", { run: [], agent: { profile: "file-organizer", task: "메모로 남겨 줘" }, paths: ["/Users/jeffrey/Desktop"], include: ["**/*.pdf"], events: ["create", "update"] });

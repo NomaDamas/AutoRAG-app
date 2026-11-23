@@ -728,6 +728,11 @@
         "desc": "When files in Documents are added or changed, update search right away",
         "task": "Update search right away"
       }
+    },
+    "row": {
+      "rename": "Rename",
+      "edit": "Edit",
+      "delete": "Delete"
     }
   },
   "osMenu": {

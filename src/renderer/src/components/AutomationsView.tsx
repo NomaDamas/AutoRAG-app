@@ -11,8 +11,8 @@ import type { AutomationDraft, AutomationEventType, AutomationRule, AutomationsS
 import type { FsLocation } from "../../../shared/fs-contract";
 import type { LocaleKey } from "../../../shared/i18n/core";
 import { cn } from "../lib/cn";
-import { folderLabel, kindsText, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
-import { CheckIcon, ChevronDownIcon, EyeIcon, FilePenIcon, FolderGlyph } from "./icons";
+import { customRuleName, derivedTitle, folderLabel, kindsText, ruleTitle, runTone, whatText, whenText, type RunTone } from "../state/automations";
+import { CheckIcon, ChevronDownIcon, EyeIcon, FilePenIcon, FolderGlyph, MoreIcon, NewChatIcon, PencilIcon } from "./icons";
 import { StatusDot } from "./primitives/StatusDot";
 
 export interface AutomationsViewProps {
@@ -25,6 +25,10 @@ export interface AutomationsViewProps {
 	readonly onAdd: () => void;
 	/** 만들기: write the rule; resolves true once it is in the rules file. */
 	readonly onCreate: (draft: AutomationDraft) => Promise<boolean>;
+	/** The names people gave their rules; the list redraws when one changes. */
+	readonly names?: Readonly<Record<string, string>>;
+	/** ⋯ → 이름 바꾸기: store a rule's name; an empty one goes back to the derived title. */
+	readonly onRename?: ((id: string, name: string) => Promise<void>) | undefined;
 	/** The rule 수정 put in the card, or null while the card makes a new one. */
 	readonly editing?: AutomationRule | null;
 	/** 수정하기: rewrite the rule; resolves true once the rules file has it. */
@@ -450,33 +454,110 @@ function NewAutomationCard({
 
 /* ------------------------------------------------------------------ the list -- */
 
+/** ⋯ on a 내 자동화 row: 이름 바꾸기, 수정하기 and 삭제하기, the same small menu a folder's automation rows have. */
+function RowMenu({ onRename, onEdit, onDelete }: { readonly onRename: () => void; readonly onEdit: () => void; readonly onDelete: () => void }): ReactElement {
+	const { t } = useTranslation();
+	const [open, setOpen] = useState(false);
+	const ref = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const onDown = (event: MouseEvent): void => {
+			if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
+			setOpen(false);
+		};
+		const onKey = (event: KeyboardEvent): void => {
+			if (event.key === "Escape") setOpen(false);
+		};
+		window.addEventListener("mousedown", onDown);
+		window.addEventListener("keydown", onKey);
+		return () => {
+			window.removeEventListener("mousedown", onDown);
+			window.removeEventListener("keydown", onKey);
+		};
+	}, [open]);
+	const choose = (action: () => void): void => {
+		setOpen(false);
+		action();
+	};
+	const item = "flex h-28 w-full items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-[13px] whitespace-nowrap cursor-pointer hover:bg-hover";
+	return (
+		<div ref={ref} className="relative flex-none" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()}>
+			<button
+				type="button"
+				data-action="automation-row-more"
+				className={cn("flex size-24 items-center justify-center rounded-6 border-0 p-0 text-ink-muted cursor-pointer hover:bg-hover hover:text-ink", open ? "bg-hover text-ink" : "bg-transparent")}
+				aria-label={t("automations.inspector.more")}
+				title={t("automations.inspector.more")}
+				aria-haspopup="menu"
+				aria-expanded={open}
+				onClick={() => setOpen((was) => !was)}
+			>
+				<MoreIcon size={16} />
+			</button>
+			{open ? (
+				<div className="menu absolute right-0 top-full z-30 mt-4 flex w-max min-w-120 flex-col rounded-10 border border-border bg-window p-4 shadow-[0_6px_18px_rgba(0,0,0,0.16)]" role="menu">
+					<button type="button" role="menuitem" data-action="automation-rename" className={cn(item, "text-ink")} onClick={() => choose(onRename)}>
+						<PencilIcon size={13} />
+						{t("automations.row.rename")}
+					</button>
+					<button type="button" role="menuitem" data-action="automation-edit" className={cn(item, "text-ink")} onClick={() => choose(onEdit)}>
+						<NewChatIcon size={13} />
+						{t("automations.row.edit")}
+					</button>
+					<button type="button" role="menuitem" data-action="automation-delete" className={cn(item, "text-danger-text")} onClick={() => choose(onDelete)}>
+						<span className="w-13" aria-hidden="true" />
+						{t("automations.row.delete")}
+					</button>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 function RuleRow({
 	rule,
 	selected,
 	onSelect,
 	onEdit,
+	onAskDelete,
+	onRename,
 	onContextMenu,
 }: {
 	readonly rule: AutomationRule;
 	readonly selected: boolean;
 	readonly onSelect: (id: string) => void;
 	readonly onEdit: (id: string) => void;
+	readonly onAskDelete: (id: string) => void;
+	readonly onRename: AutomationsViewProps["onRename"];
 	readonly onContextMenu: AutomationsViewProps["onContextMenu"];
 }): ReactElement {
+	const { t } = useTranslation();
 	const ref = useRef<HTMLDivElement>(null);
+	const [renaming, setRenaming] = useState(false);
+	const [name, setName] = useState("");
 	// The arrow keys move the selection in the parent; the row follows it into view.
 	useEffect(() => {
 		if (selected) ref.current?.scrollIntoView?.({ block: "nearest" });
 	}, [selected]);
+	const startRename = (): void => {
+		setName(customRuleName(rule) ?? "");
+		setRenaming(true);
+	};
+	const finishRename = (save: boolean): void => {
+		setRenaming(false);
+		if (save && name.trim() !== (customRuleName(rule) ?? "")) void onRename?.(rule.id, name);
+	};
 	return (
 		<div
 			ref={ref}
 			role="row"
 			aria-selected={selected}
 			data-rule-id={rule.id}
-			className={cn("flex items-center gap-10 px-12 py-10 select-none cursor-default", selected ? "bg-accent-soft" : "bg-window hover:bg-hover-row")}
+			className={cn("flex items-center gap-10 py-10 pl-12 pr-8 select-none cursor-default", selected ? "bg-accent-soft" : "bg-window hover:bg-hover-row")}
 			onClick={() => onSelect(rule.id)}
-			onDoubleClick={() => onEdit(rule.id)}
+			onDoubleClick={() => {
+				if (!renaming) onEdit(rule.id);
+			}}
 			onContextMenu={(event: ReactMouseEvent) => {
 				event.preventDefault();
 				event.stopPropagation();
@@ -485,9 +566,31 @@ function RuleRow({
 		>
 			<RunDot tone={runTone(rule.lastRun)} />
 			<div role="gridcell" className="flex min-w-0 flex-1 flex-col gap-px">
-				<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
+				{renaming ? (
+					<input
+						autoFocus
+						data-testid="automation-rename-input"
+						value={name}
+						placeholder={derivedTitle(rule)}
+						aria-label={t("automations.row.rename")}
+						className="h-20 min-w-0 rounded-4 border border-accent bg-window px-4 text-[13px] font-medium leading-[18px] text-ink outline-none placeholder:font-normal placeholder:text-ink-faint"
+						onClick={(event) => event.stopPropagation()}
+						onDoubleClick={(event) => event.stopPropagation()}
+						onFocus={(event) => event.currentTarget.select()}
+						onChange={(event) => setName(event.target.value)}
+						onKeyDown={(event) => {
+							event.stopPropagation();
+							if (event.key === "Enter") finishRename(true);
+							if (event.key === "Escape") finishRename(false);
+						}}
+						onBlur={() => finishRename(true)}
+					/>
+				) : (
+					<span className="truncate text-[13px] font-medium leading-[20px] text-ink">{ruleTitle(rule)}</span>
+				)}
 				<span className="truncate text-meta leading-[16px] text-ink-muted">{whenText(rule)}</span>
 			</div>
+			<RowMenu onRename={startRename} onEdit={() => onEdit(rule.id)} onDelete={() => onAskDelete(rule.id)} />
 		</div>
 	);
 }
@@ -547,7 +650,7 @@ function BackgroundLine({
 	);
 }
 
-export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
+export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdit, onAskDelete, onRename, onCreate, onUpdate, onCancelEdit, editing = null, onDraftChange, onContextMenu, onSetDaemon }: AutomationsViewProps): ReactElement {
 	const { t } = useTranslation();
 	const [filled, setFilled] = useState<{ readonly template: Template; readonly at: number } | null>(null);
 	const broken = state.configError !== null;
@@ -580,9 +683,9 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 							</Section>
 							{state.rules.length === 0 ? null : (
 								<Section title={t("automations.mine")}>
-									<div role="grid" aria-label={t("automations.list")} className="flex flex-col overflow-hidden rounded-12 border-[0.5px] border-divider [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider">
+									<div role="grid" aria-label={t("automations.list")} className="flex flex-col rounded-12 border-[0.5px] border-divider [&>[role=row]+[role=row]]:border-t-[0.5px] [&>[role=row]+[role=row]]:border-divider [&>[role=row]:first-child]:rounded-t-12 [&>[role=row]:last-child]:rounded-b-12">
 										{state.rules.map((rule) => (
-											<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onEdit={onEdit} onContextMenu={onContextMenu} />
+											<RuleRow key={rule.id} rule={rule} selected={rule.id === selectedId} onSelect={onSelect} onEdit={onEdit} onAskDelete={onAskDelete} onRename={onRename} onContextMenu={onContextMenu} />
 										))}
 									</div>
 								</Section>

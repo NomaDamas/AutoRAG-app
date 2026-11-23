@@ -59,7 +59,7 @@ import { toolbarShareControl, type FileActionTarget } from "./state/file-actions
 import { sessionEvidencePaths } from "./state/evidence";
 import { inspectorEntryFor } from "./state/inspector-target";
 import { EMPTY_INSPECTOR_CHAT_TAB, pendingAttachments } from "./state/inspector-chat";
-import { ruleTitle } from "./state/automations";
+import { ruleNamesNow, ruleTitle, setRuleNames } from "./state/automations";
 import { isFilesystemPath, watchSetFor } from "./state/live";
 import { loadListColumns, saveListColumns, type ListColumnsState } from "./state/list-columns";
 import { basename, dirname } from "./state/paths";
@@ -203,6 +203,9 @@ export function App(): ReactElement {
 	const [showHiddenFiles, setShowHiddenFiles] = useState(false);
 	/** The Interface language setting; "AI 요약" prompts in this language. */
 	const [language, setLanguage] = useState<AppSettings["language"]>(DEFAULT_SETTINGS.language);
+	const [automationNames, setAutomationNames] = useState<AppSettings["automationNames"]>({});
+	// Every rule title in the window reads the names from here; set before anything below renders.
+	setRuleNames(automationNames);
 	const [sidebarSettings, setSidebarSettings] = useState<SidebarSettings>(DEFAULT_SETTINGS.sidebar);
 	const [contextMenuSettings, setContextMenuSettings] = useState<ContextMenuSettings>(DEFAULT_SETTINGS.contextMenu);
 	const [shortcutSettings, setShortcutSettings] = useState<ShortcutSettings>(DEFAULT_SETTINGS.shortcuts);
@@ -672,6 +675,7 @@ export function App(): ReactElement {
 			setSidebarSettings(settings.sidebar);
 			setContextMenuSettings(settings.contextMenu);
 			setShortcutSettings(settings.shortcuts);
+			setAutomationNames(settings.automationNames ?? {});
 			void setAppLanguage(settings.language);
 		};
 		void autorag.settings.get().then(applySettings);
@@ -867,6 +871,14 @@ export function App(): ReactElement {
 		openFolder: (folder) => finder?.openFolder(folder),
 		showInList: () => finder?.showAutomations(),
 		onError: showErrorToast,
+		names: automationNames,
+		renameRule: async (id, name) => {
+			const next: Record<string, string> = { ...ruleNamesNow() };
+			if (name.trim().length === 0) delete next[id];
+			else next[id] = name.trim();
+			setAutomationNames(next);
+			await autorag.settings.set({ automationNames: next });
+		},
 	});
 	const toolbarTitle =
 		path === SETTINGS_PATH

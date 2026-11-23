@@ -7,14 +7,14 @@
  * Every sentence comes from `state/automations`; this file only lays them out.
  */
 
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
+import { useEffect, useState, type ReactElement, type ReactNode } from "react";
 import { cn } from "../lib/cn";
 import { useTranslation } from "react-i18next";
 import type { AutomationRule, AutomationsSnapshot } from "../../../shared/automation-contract";
 import type { FsEntry } from "../../../shared/fs-contract";
 import { agentAccessText, failReason, relativeTime, ruleTitle, runTone, whatText, whenText } from "../state/automations";
 import { RunDot } from "./AutomationsView";
-import { CircleXIcon, FileIcon, MoreIcon, NewChatIcon, RefreshIcon, SparklesIcon, ZapIcon } from "./icons";
+import { CircleXIcon, FileIcon, RefreshIcon, SparklesIcon, ZapIcon } from "./icons";
 
 export interface AutomationInspectorProps {
 	readonly rule: AutomationRule | null;
@@ -190,70 +190,12 @@ function DraftBody({ rule }: { readonly rule: AutomationRule }): ReactElement {
 	);
 }
 
-/** ⋯ beside the rule's name: 수정 (in the 새 자동화 card) and 삭제, the same menu a folder's automation rows have. */
-function RuleMenu({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; readonly onEdit: (rule: AutomationRule) => void; readonly onDelete: (rule: AutomationRule) => void }): ReactElement {
-	const { t } = useTranslation();
-	const [open, setOpen] = useState(false);
-	const ref = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		if (!open) return;
-		const onDown = (event: MouseEvent): void => {
-			if (event.target instanceof Node && ref.current?.contains(event.target) === true) return;
-			setOpen(false);
-		};
-		const onKey = (event: KeyboardEvent): void => {
-			if (event.key === "Escape") setOpen(false);
-		};
-		window.addEventListener("mousedown", onDown);
-		window.addEventListener("keydown", onKey);
-		return () => {
-			window.removeEventListener("mousedown", onDown);
-			window.removeEventListener("keydown", onKey);
-		};
-	}, [open]);
-	const choose = (action: (rule: AutomationRule) => void): void => {
-		setOpen(false);
-		action(rule);
-	};
-	const item = "flex h-28 w-full items-center gap-8 rounded-6 border-0 bg-transparent px-10 text-left text-[13px] whitespace-nowrap cursor-pointer hover:bg-hover";
-	return (
-		<div ref={ref} className="relative flex-none">
-			<button
-				type="button"
-				data-action="automation-more"
-				className={cn("flex size-20 items-center justify-center rounded-5 border-0 p-0 text-ink-body cursor-pointer hover:bg-hover", open ? "bg-hover" : "bg-transparent")}
-				aria-label={t("automations.inspector.more")}
-				title={t("automations.inspector.more")}
-				aria-haspopup="menu"
-				aria-expanded={open}
-				onClick={() => setOpen((was) => !was)}
-			>
-				<MoreIcon size={16} />
-			</button>
-			{open ? (
-				<div className="menu absolute right-0 top-full z-30 mt-4 flex w-120 flex-col rounded-10 border border-border bg-window p-4 shadow-[0_6px_18px_rgba(0,0,0,0.16)]" role="menu" aria-label={ruleTitle(rule)}>
-					<button type="button" role="menuitem" data-action="automation-edit" className={cn(item, "text-ink")} onClick={() => choose(onEdit)}>
-						<NewChatIcon size={13} />
-						{t("automations.inspector.menuEdit")}
-					</button>
-					<button type="button" role="menuitem" data-action="automation-delete" className={cn(item, "text-danger-text")} onClick={() => choose(onDelete)}>
-						{t("automations.inspector.menuDelete")}
-					</button>
-				</div>
-			) : null}
-		</div>
-	);
-}
-
 function RuleBody({ rule, onEdit, onDelete }: { readonly rule: AutomationRule; readonly onEdit: (rule: AutomationRule) => void; readonly onDelete: (rule: AutomationRule) => void }): ReactElement {
 	const { t } = useTranslation();
 	const access = agentAccessText(rule);
 	return (
 		<div className="flex flex-col gap-16" data-automation-rule={rule.id}>
-			<div className="flex items-start gap-8">
-				<h2 className="m-0 min-w-0 flex-1 text-body font-bold leading-[21px] text-ink [overflow-wrap:anywhere]">{ruleTitle(rule)}</h2>
-				<RuleMenu rule={rule} onEdit={onEdit} onDelete={onDelete} />
-			</div>
+			<h2 className="m-0 text-body font-bold leading-[21px] text-ink [overflow-wrap:anywhere]">{ruleTitle(rule)}</h2>
 			<div className="flex flex-col gap-12">
 				<div className="flex flex-col gap-4">
 					<Caption>{t("automations.inspector.when")}</Caption>
