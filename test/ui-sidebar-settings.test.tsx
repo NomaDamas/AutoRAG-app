@@ -426,8 +426,13 @@ describe("Settings → 사이드바 (Sidebar customization; the AI assistant liv
 		expect(panelOf()).not.toBeNull();
 
 		// A turn started before hiding the right sidebar is still there after reopening it
+		const composer = panelOf()?.querySelector<HTMLTextAreaElement>('textarea[data-testid="app-customizer-input"]');
 		await act(async () => {
-			panelOf()?.querySelector<HTMLButtonElement>('[data-action="customizer-suggestion"]')?.click();
+			Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(composer, "음악 폴더 숨겨줘");
+			composer?.dispatchEvent(new Event("input", { bubbles: true }));
+		});
+		await act(async () => {
+			panelOf()?.querySelector<HTMLButtonElement>('[data-action="send-customizer-message"]')?.click();
 		});
 		expect(panelOf()?.querySelectorAll(".customizer-turn").length).toBe(1);
 

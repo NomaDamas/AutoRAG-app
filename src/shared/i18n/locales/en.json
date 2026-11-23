@@ -2563,6 +2563,11 @@
       "no": "Don't allow",
       "save": "Save",
       "secretPlaceholder": "Paste it here"
+    },
+    "assistantGreeting": {
+      "title": "How can I help?",
+      "desc": "Change this page's settings in your own words, or ask anything about them.",
+      "placeholder": "Ask anything"
     }
   },
   "settingsLtr": {

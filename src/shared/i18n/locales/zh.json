@@ -2563,6 +2563,11 @@
       "no": "不允许",
       "save": "保存",
       "secretPlaceholder": "在此粘贴"
+    },
+    "assistantGreeting": {
+      "title": "需要什么帮助？",
+      "desc": "可以用自然语言更改此页面的设置，或询问任何相关问题。",
+      "placeholder": "有什么都可以问"
     }
   },
   "settingsLtr": {
