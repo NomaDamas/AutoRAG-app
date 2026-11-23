@@ -55,7 +55,7 @@ import {
 	unresolvedCitationNumbers,
 	type EvidenceSelectionSource,
 } from "../state/evidence";
-import { groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
+import { HISTORY_SEARCH_DEBOUNCE_MS, groupChatHistory, HISTORY_BUCKET_KEYS, historyEmptyText } from "../state/history";
 import { cn } from "../lib/cn";
 import { enterKeyLabel, formatShortcut, hostPlatform } from "../lib/shortcuts";
 import { ArrowUpIcon, CheckIcon, CloseIcon, HistoryIcon, LinkIcon, MicIcon, NewChatIcon, SparklesIcon, TabCloseIcon } from "./icons";
@@ -72,7 +72,6 @@ import { RunErrorNotice } from "./RunErrorNotice";
 const autorag = window.autorag;
 
 /** History search fires this long after the last keystroke, so typing stays smooth. */
-const HISTORY_SEARCH_DEBOUNCE_MS = 300;
 const CENTERED = "mx-auto w-full max-w-[820px]";
 
 /**

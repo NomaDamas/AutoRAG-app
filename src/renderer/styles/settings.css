@@ -4153,6 +4153,13 @@
 	background: var(--bg-window);
 }
 
+/* 제외한 항목: five rows (5 × 56px + 4 dividers + the 2px border) show at once, the rest scrolls inside the list. */
+.settings-view .scope-list.is-scroll {
+	max-height: 286px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
 .settings-view .scope-row {
 	display: flex;
 	align-items: center;

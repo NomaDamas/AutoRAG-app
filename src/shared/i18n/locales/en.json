@@ -741,8 +741,7 @@
       "ok": "Succeeded",
       "failed": "Failed",
       "settings": "Settings",
-      "history": "Run history",
-      "noRuns": "It hasn't run yet. Runs show up here once a matching file appears."
+      "history": "Run history"
     },
     "tabs": {
       "all": "All runs"

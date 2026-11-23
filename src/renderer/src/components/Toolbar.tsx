@@ -1,4 +1,4 @@
-import { useState, type MouseEvent, type ReactElement } from "react";
+import { useState, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { ActionAnchor } from "../../../shared/actions-contract";
 import { formatShortcutChord, resolveEffectiveShortcuts, type ShortcutId } from "../../../shared/shortcuts-contract";
@@ -51,6 +51,7 @@ const ACTION_BUTTON =
  */
 export function Toolbar({
 	title,
+	titleIcon,
 	canGoBack,
 	canGoForward,
 	onBack,
@@ -74,6 +75,8 @@ export function Toolbar({
 	onShowSidebar,
 }: {
 	readonly title: string;
+	/** A glyph before the title, for a tab that is not a folder (the 자동화 tab's bolt, as in the sidebar). */
+	readonly titleIcon?: ReactNode;
 	readonly canGoBack: boolean;
 	readonly canGoForward: boolean;
 	readonly onBack: () => void;
@@ -168,8 +171,9 @@ export function Toolbar({
 			>
 				<ChevronRightIcon size={18} />
 			</button>
-			<strong className="toolbar-title ml-7 min-w-150 overflow-hidden whitespace-nowrap text-ellipsis text-[14px] font-medium leading-[19px] text-ink">
-				{title}
+			<strong className="toolbar-title ml-7 flex min-w-150 items-center gap-6 overflow-hidden whitespace-nowrap text-[14px] font-medium leading-[19px] text-ink">
+				{titleIcon === undefined ? null : <span className="flex flex-none text-accent" aria-hidden="true">{titleIcon}</span>}
+				<span className="min-w-0 overflow-hidden text-ellipsis">{title}</span>
 			</strong>
 			<span className="toolbar-spacer flex-1" />
 			<div className="seg flex flex-none items-center p-2 rounded-10 bg-subtle-alt [-webkit-app-region:no-drag]" role="group" aria-label={t("toolbar.view")}>

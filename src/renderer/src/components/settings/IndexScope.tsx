@@ -337,7 +337,7 @@ export function ExclusionsSection({ editor, snapshot }: { readonly editor: Scope
 				<AddExclusionMenu choices={excludeChoices(window.autoragIsRemote === true)} disabled={editor.saving} onChoose={(choice) => void editor.chooseExclusion(choice)} />
 			</SectionHead>
 			{editor.excludePaths.length === 0 ? null : (
-				<div className="scope-list">
+				<div className="scope-list is-scroll">
 					{editor.excludePaths.map((path, index) => (
 						<PathRow key={`${path}:${index}`} path={path} file={looksLikeFile(path)} disabled={editor.saving} onRemove={() => editor.removeExclusion(index)} />
 					))}

@@ -14,6 +14,7 @@ import { AiSearchPanel, type AiDockHandle } from "./components/AiSearchPanel";
 import { AutomationInspector } from "./components/AutomationInspector";
 import { AutomationQuickLook } from "./components/AutomationQuickLook";
 import { AutomationsContext } from "./components/AutomationsTab";
+import { ZapIcon } from "./components/icons";
 import { FinderPane, type PaneShell } from "./components/FinderPane";
 import { FadedDazziMark, Inspector, type InspectorFamily } from "./components/Inspector";
 import { InspectorColumn } from "./components/InspectorColumn";
@@ -742,7 +743,9 @@ export function App(): ReactElement {
 	 */
 	const inspectorChats = useInspectorChats(language);
 	const { refresh: refreshInspectorChat, prune: pruneInspectorChats } = inspectorChats;
-	const chatTabId = focusedTab !== null && focusedTab.path !== AI_SEARCH_PATH ? focusedTab.id : null;
+	// The 자동화 tab has a chat of its own, apart from the one the same tab had while it showed a folder: its key is the
+	// tab's id mirrored below zero (-id - 1), so a folder's conversation never shows beside the automations, or back.
+	const chatTabId = focusedTab === null || focusedTab.path === AI_SEARCH_PATH ? null : focusedTab.path === AUTOMATIONS_PATH ? -focusedTab.id - 1 : focusedTab.id;
 	const chatNow = useNow(chatTabId !== null && inspectorVisible, 30_000);
 	const chatTab = chatTabId === null ? EMPTY_INSPECTOR_CHAT_TAB : inspectorChats.tab(chatTabId);
 	/** One inspector run at a time across the window; this tab's chat is the one streaming. */
@@ -784,7 +787,7 @@ export function App(): ReactElement {
 		if (chatTabId !== null && inspectorVisible) refreshInspectorChat(chatTabId);
 	}, [chatTabId, inspectorVisible, chatMode, refreshInspectorChat]);
 	useEffect(() => {
-		pruneInspectorChats(tabs.map((tab) => tab.id));
+		pruneInspectorChats(tabs.flatMap((tab) => [tab.id, -tab.id - 1]));
 	}, [tabs, pruneInspectorChats]);
 	const openChatInAiTab = useCallback(
 		(chatId: string) => {
@@ -998,6 +1001,7 @@ export function App(): ReactElement {
 				<div className="flex min-w-0 min-h-0 flex-col" style={settingsOpen ? HIDDEN_STYLE : undefined}>
 					<Toolbar
 						title={toolbarTitle}
+						titleIcon={automationsTabActive ? <ZapIcon size={14} /> : undefined}
 						canGoBack={finder?.canGoBack ?? false}
 						canGoForward={finder?.canGoForward ?? false}
 						onBack={() => finder?.back()}
@@ -1110,11 +1114,13 @@ export function App(): ReactElement {
 											onSummarize={() => undefined}
 											onStop={inspectorChats.stop}
 											onResume={() => inspectorChats.setMode(chatTabId, "chat")}
+											standalone
 										/>
 									)
 								}
 								chatView={
-									chatTabId === null || chatTab.chat === null || chatTab.mode !== "chat" ? null : (
+									// The 자동화 tab's chat is the whole column: once it has a conversation it shows it, whatever the file inspector's mode.
+									chatTabId === null || chatTab.chat === null ? null : (
 										<InspectorChatView
 											tab={chatTab}
 											targetName={t("places.automations")}
@@ -1136,6 +1142,7 @@ export function App(): ReactElement {
 											onDismiss={(id) => inspectorChats.dismiss(chatTabId, id)}
 											onReveal={(target) => finder?.revealEvidence(target)}
 											onPreview={(target, excerpts) => openQuickLook({ path: target, name: basename(target), anchor: excerpts })}
+											standalone
 										/>
 									)
 								}

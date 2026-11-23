@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { InspectorChatDock, InspectorChatView } from "../src/renderer/src/components/InspectorChat";
 import type { InspectorChatTab } from "../src/renderer/src/state/inspector-chat";
 import type { ChatAttachment } from "../src/shared/search-contract";
@@ -356,6 +356,59 @@ describe("the inspector chat view", () => {
 			),
 		);
 		expect(host.querySelector(".inspector-chat-title")?.textContent).toBe("3분기 기획안 요약");
+	});
+
+	it("is the 자동화 tab's own chat when standalone: a plain title, only 새 대화, no history, no open-in-tab, no close", () => {
+		act(() =>
+			root.render(
+				<InspectorChatView
+					tab={tab}
+					targetName="자동화"
+					pending={[]}
+					running={false}
+					imageActions={{ onOpenImage: noop, onOpenUrl: noop }}
+					request={null}
+					onAsk={() => true}
+					onSteer={() => false}
+					onQueue={noop}
+					onUnqueue={noop}
+					onStop={noop}
+					onBack={noop}
+					onNewChat={noop}
+					onExpand={noop}
+					onOpenChat={noop}
+					onDismiss={noop}
+					onReveal={noop}
+					onPreview={noop}
+					standalone
+				/>,
+			),
+		);
+		expect(host.querySelector(".inspector-chat-title")?.tagName).toBe("SPAN");
+		const labels = [...host.querySelectorAll(".inspector-chat > div:first-child > button[aria-label]")].map((button) => button.getAttribute("aria-label"));
+		expect(labels).toEqual(["새 대화"]);
+	});
+
+	it("opens the AI tab's history menu from the title: a search field over day captions, each chat with its time", async () => {
+		const now = Date.now();
+		const summaries = [
+			{ id: "chat-1", title: "첨부한 파일을 요약해줘", snippet: "", updatedAt: new Date(now - 60_000).toISOString() },
+			{ id: "chat-2", title: "3분기 기획안 요약", snippet: "", updatedAt: new Date(now - 120_000).toISOString() },
+		];
+		Reflect.set(globalThis, "autorag", { search: { historyList: async () => summaries, historySearch: vi.fn(async () => summaries.slice(1)) } });
+		render([]);
+		act(() => host.querySelector<HTMLButtonElement>(".inspector-chat-title")?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+		await act(async () => {
+			await Promise.resolve();
+			await Promise.resolve();
+		});
+		const menu = host.querySelector(".inspector-chat-history");
+		expect(menu?.querySelector("input")?.getAttribute("placeholder")).toBe("대화 기록 검색");
+		expect([...(menu?.querySelectorAll(".history-group") ?? [])].map((group) => group.textContent)).toEqual(["오늘"]);
+		const items = [...(menu?.querySelectorAll(".history-item") ?? [])];
+		expect(items.map((item) => item.querySelector("b")?.textContent)).toEqual(["첨부한 파일을 요약해줘", "3분기 기획안 요약"]);
+		expect(items.every((item) => (item.querySelector(".hist-time")?.textContent ?? "").length > 0)).toBe(true);
+		Reflect.deleteProperty(globalThis, "autorag");
 	});
 
 	it("puts the approval-mode chip, icon only, left of the input", () => {

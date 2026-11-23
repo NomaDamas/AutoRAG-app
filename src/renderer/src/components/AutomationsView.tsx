@@ -57,11 +57,8 @@ const TONE_DOT: Readonly<Record<RunTone, string>> = {
 	never: "--text-faint",
 };
 
-/** The status dot: green after a clean run, orange after a failure, a hollow ring before any run. */
+/** The status dot: green after a clean run, orange after a failure, a filled grey one before any run. */
 export function RunDot({ tone }: { readonly tone: RunTone }): ReactElement {
-	if (tone === "never") {
-		return <span data-run-tone={tone} className="flex-none size-dot rounded-full shadow-[inset_0_0_0_1.5px_var(--text-faint)]" aria-hidden="true" />;
-	}
 	return (
 		<span data-run-tone={tone} className="flex flex-none">
 			<StatusDot token={TONE_DOT[tone]} />
@@ -739,7 +736,7 @@ function AutomationDetail({
 			</Section>
 			<Section title={list.length === 0 ? t("automations.detail.history") : `${t("automations.detail.history")} (${list.length})`}>
 				{list.length === 0 ? (
-					<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{t("automations.detail.noRuns")}</p>
+					<p className="m-0 rounded-12 border-[0.5px] border-divider bg-window px-14 py-12 text-meta leading-[18px] text-ink-muted">{t("automations.inspector.noRuns")}</p>
 				) : (
 					<ListBox label={t("automations.detail.history")}>
 						{list.map((run) => (
