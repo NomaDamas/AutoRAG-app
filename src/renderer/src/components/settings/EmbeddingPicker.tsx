@@ -14,10 +14,9 @@ import { ChevronDown } from "lucide-react";
 import type { EmbeddingChangeRequest, EmbeddingChangeResult, EmbeddingSettingsSnapshot, EmbeddingSourceStatus } from "../../../../shared/settings-contract";
 import { platformKey } from "../../lib/platform-copy";
 import { localModelNeeded, useModelDownload } from "../../state/model-download";
-import { ModelDownloadPanel } from "../ModelDownloadPanel";
+import { ModelDownloadPanel, type Translate } from "../ModelDownloadPanel";
 import { ModalActions, ModalShell, Note, Row, StatusDot } from "./SettingsKit";
 import { SelectField } from "./SelectField";
-import type { Translate } from "../../onboarding/flow";
 
 const settings = window.autorag.settings;
 

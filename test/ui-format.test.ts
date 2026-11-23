@@ -120,7 +120,7 @@ describe("toasts", () => {
 	});
 
 	it("names the operation ⌘Z undid and ⇧⌘Z redid", () => {
-		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "rename" })).toBe("이름 변경 취소");
+		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "rename" })).toBe("이름 바꾸기 취소");
 		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "copy" })).toBe("복사 취소");
 		expect(historyToast("redo", { ok: true, empty: false, failed: [], operation: "trash" })).toBe("휴지통으로 이동 다시 실행");
 		expect(historyToast("undo", { ok: true, empty: false, failed: [], operation: "extract" })).toBe("압축 해제 취소");
@@ -134,7 +134,7 @@ describe("toasts", () => {
 				failed: [{ path: "/d/b.txt", message: 'A file or folder named "a.txt" already exists' }],
 				operation: "rename",
 			}),
-		).toBe('이름 변경 취소 실패: b.txt — A file or folder named "a.txt" already exists');
+		).toBe('이름 바꾸기 취소 실패: b.txt — A file or folder named "a.txt" already exists');
 		expect(
 			historyToast("redo", {
 				ok: false,

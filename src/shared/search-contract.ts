@@ -16,6 +16,11 @@
  * authoritative full answer and supersedes the draft. `done` closes every run
  * that was not cancelled, after any `deep` or `error` event.
  *
+ * When verification corrects the Quick answer it does so claim by claim (AutoRAG#2186): each correction is a `revision`
+ * event, and `deep` then carries only what the librarian's final answer says beyond the corrected Quick answer, with
+ * the evidence of every source the corrections cite. The corrections are stored with the answer (`revisions`) so a chat
+ * read back from history shows them again.
+ *
  * A message sent while a run streams steers that run instead of starting a
  * new one (`steer`): the librarian delivers it before the run's next model
  * request, cuts in-flight retrieval short, and always verifies, so the Deep
@@ -25,6 +30,8 @@
  * All payloads crossing IPC are plain serializable shapes defined here —
  * never pi/librarian class instances.
  */
+
+import type { AnswerRevision } from "./answer-revision";
 
 export const SEARCH_CHANNELS = {
 	start: "search:start",
@@ -113,6 +120,11 @@ export type SearchStreamEvent =
 	| { readonly type: "deep-draft"; readonly searchId: string; readonly text: string }
 	| { readonly type: "quick"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
 	| { readonly type: "deep"; readonly searchId: string; readonly sessionId: string; readonly phase: AnswerPhase }
+	/**
+	 * The verification corrected the Quick answer the person already read. One event per correction, after `quick` and
+	 * before `deep`. `original` is the claim as the person read it in the Quick answer.
+	 */
+	| { readonly type: "revision"; readonly searchId: string; readonly revision: AnswerRevision }
 	/** `action` accompanies an error the person can act on (the weekly credits are used up, the conversation outgrew the model). */
 	| { readonly type: "error"; readonly searchId: string; readonly message: string; readonly action?: SearchErrorAction }
 	| { readonly type: "cancelled"; readonly searchId: string }
@@ -146,6 +158,8 @@ export interface ChatMessageAssistant {
 	readonly at: string;
 	/** What the run did to the model's view of the chat, in order; absent when nothing. */
 	readonly context?: readonly ContextNotice[];
+	/** The corrections the verification made to `quick`, in order; absent when it made none. */
+	readonly revisions?: readonly AnswerRevision[];
 }
 
 export type ChatMessage = ChatMessageUser | ChatMessageAssistant;

@@ -26,9 +26,10 @@ import { cn } from "../lib/cn";
 import { buttonClass } from "./primitives/button";
 import { evidenceHeading, evidenceKind, evidenceSourceUrl, isLocalEvidenceSource, unresolvedCitationNumbers } from "../state/evidence";
 import { deepTextOf, hasUnreadAnswer, quickTextOf, relativeAge, type InspectorChatTab, type InspectorTurn } from "../state/inspector-chat";
+import { drawQuickAnswer } from "../state/answer-revisions";
 import { useVoiceInput } from "../state/useVoiceInput";
 import { MicrophonePermissionDialog } from "./MicrophonePermissionDialog";
-import { ProseBlocks, SteerBubble, formatElapsed } from "./AiSearchPanel";
+import { ProseBlocks, SteerBubble, formatElapsed, type RevisionDraw } from "./AiSearchPanel";
 import { SeedLoader } from "./SeedLoader";
 import { InteractionDock } from "./InteractionDock";
 import { ApprovalModeMenu, useApprovalMode } from "./ApprovalModeMenu";
@@ -487,6 +488,8 @@ function PhaseAnswer({
 	imageActions,
 	onReveal,
 	onPreview,
+	revisions,
+	unresolved,
 }: {
 	readonly text: string;
 	/** The sources this phase cites: a number outside it has nothing to open and is dropped, as in an AI Search tab. */
@@ -494,6 +497,9 @@ function PhaseAnswer({
 	readonly imageActions: ImageActions;
 	readonly onReveal: (path: string) => void;
 	readonly onPreview: (path: string, excerpts: readonly string[]) => void;
+	/** A Quick answer the librarian corrected: `text` holds the marks of these corrections, and `unresolved` is what its citations lack. */
+	readonly revisions?: RevisionDraw;
+	readonly unresolved?: readonly number[];
 }): ReactElement {
 	const answerRef = useRef<HTMLDivElement>(null);
 	const [hovered, setHovered] = useState<HoveredCitation | null>(null);
@@ -536,10 +542,11 @@ function PhaseAnswer({
 			}}
 		>
 			<ProseBlocks
+				{...(revisions === undefined ? {} : { revisions })}
 				text={text}
 				/* Like the AI Search tab: every number sits in the pale wash, the one being hovered fills blue. */
 				selected={hovered?.number ?? null}
-				unresolved={unresolvedCitationNumbers(text, evidence)}
+				unresolved={unresolved ?? unresolvedCitationNumbers(text, evidence)}
 				onCitation={(number) => setHovered((current) => (current?.number === number ? null : current))}
 				imageActions={imageActions}
 			/>
@@ -571,6 +578,7 @@ function TurnView({
 	const { t } = useTranslation();
 	const quickText = quickTextOf(turn);
 	const deepText = deepTextOf(turn);
+	const quickDraw = drawQuickAnswer(turn.quick, turn.deep, turn.revisions);
 	return (
 		<>
 			<div className="flex max-w-[90%] min-w-0 flex-col items-end gap-4 self-end">
@@ -586,7 +594,14 @@ function TurnView({
 				))}
 			<div className="flex min-w-0 flex-col gap-8">
 				{quickText === "" ? null : (
-					<PhaseAnswer text={quickText} evidence={turn.quick?.evidence ?? []} imageActions={imageActions} onReveal={onReveal} onPreview={onPreview} />
+					<PhaseAnswer
+						text={quickDraw?.text ?? quickText}
+						evidence={quickDraw?.evidence ?? turn.quick?.evidence ?? []}
+						imageActions={imageActions}
+						onReveal={onReveal}
+						onPreview={onPreview}
+						{...(quickDraw === null ? {} : { revisions: { changes: quickDraw.changes, animate: turn.startedAt !== 0, fresh: turn.startedAt !== 0 ? quickDraw.fresh : [] }, unresolved: quickDraw.unresolved })}
+					/>
 				)}
 				{turn.steers
 					.filter((steer) => steer.timing === "after-quick")

@@ -18,7 +18,7 @@ import { homedir } from "node:os";
 import { join, resolve, sep } from "node:path";
 import { GOLDEN, GUEST_REPO, MAX_VMS, RUNS_DIR, RUN_PREFIX, SLOTS_DIR, VM_CPU, VM_DISPLAY, VM_MEMORY_MB } from "./config.mjs";
 import { GUEST_ENV, pullTree, pushFile, pushTree, shellQuote, sshOk, sshRun, waitForReady, waitForSsh } from "./guest.mjs";
-import { guestScriptPath, needsEmbeddingAssets, orphanVmNames, runVmName, vmCapacity, vmExitCode } from "./plan.mjs";
+import { embeddingCacheExcludes, guestScriptPath, needsDenseEmbeddingModel, needsEmbeddingAssets, orphanVmNames, runVmName, vmCapacity, vmExitCode } from "./plan.mjs";
 import { createSlotPool } from "./slots.mjs";
 import { cloneVm, configureVm, destroyVm, listVms, startVm, tartAvailable, vmExists, waitForIp } from "./tart.mjs";
 
@@ -99,34 +99,68 @@ const hostCommand = (job) =>
 		: { command: "bun", args: [join("scripts", "manual-qa", "run-all.mjs"), ...job.lanes] };
 
 /**
- * Copy the host's native MinSync embedding model cache into the guest's
- * `~/.cache/minsync/models`. Without it a real first index downloads ~1.2 GB
- * from Hugging Face inside the guest.
+ * Copy the host's native MinSync model cache into the guest's
+ * `~/.cache/minsync/models`. Without it a real index downloads from Hugging Face
+ * inside the guest. The dense on-device model is left out for jobs that only use
+ * the sparse encoder (the keyword-only first run), so its ~1.2 GB weights are not
+ * copied.
  */
-async function pushEmbeddingAssets(ip, signal) {
+async function pushEmbeddingAssets(ip, job, signal) {
 	const minsyncModels = process.env.FASTEMBED_CACHE_DIR?.trim() || join(homedir(), ".cache", "minsync", "models");
 	if (!existsSync(minsyncModels)) {
 		log(`no native embedding cache at ${minsyncModels}; the guest will download it on first index`);
 		return;
 	}
-	log("copying native embedding model cache (.cache/minsync/models) into the guest");
+	log(`copying native MinSync model cache (.cache/minsync/models) into the guest${needsDenseEmbeddingModel(job) ? "" : " (sparse only)"}`);
 	await sshOk(ip, "mkdir -p \"$HOME/.cache/minsync/models\"");
-	await pushTree(ip, minsyncModels, ".cache/minsync/models", { signal });
+	await pushTree(ip, minsyncModels, ".cache/minsync/models", { excludes: embeddingCacheExcludes(job), signal });
 }
 
 /**
  * Ensure the guest carries the host's arm64 `minsync` and `filee-cli` binaries
  * (`~/bin/*`) so librarian 2.13.2's MinSync 0.5.1 durable stage protocol v2 and
  * offline `convert-rename` work without downloading inside the VM.
+ *
+ * A VM has no Apple Neural Engine, and MinSync 0.7.4 runs its SPLADE encoder on it by default: the encoder's own
+ * self-test then fails there ("ANE self-test failed … cosine 0.47 … minimum 0.995") and every first index stops at
+ * 87 %. The real binary is therefore installed as `minsync.real` beside a wrapper that pins `[sparse] device = "cpu"`
+ * in the workspace's `.minsync/config.toml` before each call (the only switch MinSync has; it reads no environment variable).
+ * The wrapper finds `minsync.real` next to itself, not under `$HOME`: lanes launch the app with their own `HOME`.
  */
+const GUEST_MINSYNC_WRAPPER = `#!/bin/sh
+# QA VM: no Neural Engine, so the sparse encoder runs on the CPU. MinSync runs with the workspace as its working directory.
+cfg=".minsync/config.toml"
+if [ -f "$cfg" ] && grep -q '^\\[sparse\\]' "$cfg"; then
+  awk '
+    /^\\[/ { insparse = ($0 == "[sparse]"); print; if (insparse) print "device = \\"cpu\\""; next }
+    insparse && /^device *=/ { next }
+    { print }
+  ' "$cfg" > "$cfg.tmp" && mv "$cfg.tmp" "$cfg"
+fi
+exec "$(dirname "$0")/minsync.real" "$@"
+`;
+
 async function pushHostTools(ip, job, signal) {
 	await sshOk(ip, 'mkdir -p "$HOME/bin"');
 	try {
 		const minsync = execFileSync("which", ["minsync"], { encoding: "utf8" }).trim();
 		if (minsync) {
-			log("copying host minsync binary into ~/bin/minsync in the guest");
-			await pushFile(ip, minsync, "bin/minsync");
-			await sshOk(ip, 'chmod 755 "$HOME/bin/minsync"');
+			log("copying host minsync binary into ~/bin/minsync.real in the guest (behind a CPU-encoder wrapper)");
+			await pushFile(ip, minsync, "bin/minsync.real");
+			await sshOk(ip, 'chmod 755 "$HOME/bin/minsync.real"');
+			await sshOk(ip, `cat > "$HOME/bin/minsync" <<'WRAPPER_EOF'\n${GUEST_MINSYNC_WRAPPER}WRAPPER_EOF\nchmod 755 "$HOME/bin/minsync"`);
+		}
+	} catch {
+		// optional
+	}
+	// The golden image's dupey (0.2.0) is older than the floor the librarian requires (0.3.1), so every duplicate scan in a
+	// VM logs "dupey ... is older than the 0.3.1 AutoRAG requires". The host's dupey is the one this checkout was built against.
+	try {
+		const dupey = execFileSync("which", ["dupey"], { encoding: "utf8" }).trim();
+		if (dupey) {
+			log("copying host dupey binary into ~/bin/dupey in the guest");
+			await pushFile(ip, dupey, "bin/dupey");
+			await sshOk(ip, 'chmod 755 "$HOME/bin/dupey"');
 		}
 	} catch {
 		// optional
@@ -175,7 +209,7 @@ export async function runInVm({ root, job, slot, vmName, runDir }) {
 		interrupted();
 		await pushHostTools(ip, job, abort.signal);
 		interrupted();
-		if (needsEmbeddingAssets(job)) await pushEmbeddingAssets(ip, abort.signal);
+		if (needsEmbeddingAssets(job)) await pushEmbeddingAssets(ip, job, abort.signal);
 		interrupted();
 
 		log(job.kind === "script" ? `running ${job.file}` : `running lanes${job.lanes.length > 0 ? `: ${job.lanes.join(", ")}` : " (all)"}`);

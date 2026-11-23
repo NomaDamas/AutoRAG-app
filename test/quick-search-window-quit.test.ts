@@ -53,9 +53,9 @@ import { createQuickSearchWindow } from "../src/main/quick-search-window";
 
 type Fake = InstanceType<typeof electron.BrowserWindow>;
 
-function launcher(): Fake {
+function launcher() {
 	electron.BrowserWindow.all.length = 0;
-	createQuickSearchWindow({
+	const controller = createQuickSearchWindow({
 		preload: "preload.js",
 		appearance: "light",
 		language: "en",
@@ -70,7 +70,7 @@ function launcher(): Fake {
 	const window = electron.BrowserWindow.all[0];
 	if (window === undefined) throw new Error("the launcher window was not created");
 	window.visible = true;
-	return window;
+	return { window, controller };
 }
 
 beforeEach(() => {
@@ -80,20 +80,29 @@ beforeEach(() => {
 
 describe("quick-search launcher on quit", () => {
 	it("hides instead of closing while the app keeps running", () => {
-		const window = launcher();
+		const { window } = launcher();
 		expect(window.requestClose()).toBe(false);
 		expect(window.hides).toBe(1);
 	});
 
 	it("closes on a normal quit", () => {
-		const window = launcher();
+		const { window } = launcher();
 		(electron.app as EventEmitter).emit("before-quit");
 		expect(window.requestClose()).toBe(true);
 	});
 
 	it("closes when an update is installed, so quitAndInstall can finish closing every window", () => {
-		const window = launcher();
+		const { window } = launcher();
 		(electron.autoUpdater as EventEmitter).emit("before-quit-for-update");
 		expect(window.requestClose()).toBe(true);
+	});
+
+	it("ignores toggle once the app is quitting so a late shortcut cannot recreate a window during shutdown", () => {
+		const { window, controller } = launcher();
+		(electron.autoUpdater as EventEmitter).emit("before-quit-for-update");
+		expect(window.requestClose()).toBe(true);
+		const countAfterClose = electron.BrowserWindow.all.length;
+		controller.toggle();
+		expect(electron.BrowserWindow.all.length).toBe(countAfterClose);
 	});
 });

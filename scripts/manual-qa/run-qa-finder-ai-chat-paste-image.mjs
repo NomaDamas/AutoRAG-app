@@ -181,7 +181,7 @@ await session("vision", ["text", "image"], async (app, page) => {
 	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 	await openAiSearch(page);
 	const panel = page.locator(AI_PANEL);
-	const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
+	const composer = panel.locator('textarea[aria-label="Ask AI"]');
 
 	// 1. AI Agent tab.
 	await copyImage(app, RED);
@@ -277,7 +277,7 @@ await session("text", ["text"], async (app, page) => {
 	await page.waitForSelector(".sidebar__item", { timeout: 30_000 });
 	await openAiSearch(page);
 	const panel = page.locator(AI_PANEL);
-	const composer = panel.locator('textarea[aria-label="Ask Dazzi"]');
+	const composer = panel.locator('textarea[aria-label="Ask AI"]');
 	await copyImage(app, RED);
 	await composer.click();
 	await page.keyboard.press(chord("V"));

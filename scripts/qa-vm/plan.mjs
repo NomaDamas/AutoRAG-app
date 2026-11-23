@@ -92,15 +92,44 @@ export function orphanVmNames(vms, holders, runPrefix) {
 }
 
 /**
- * Whether a job indexes for real and so needs the host's MinSync embedding model
- * cache (`~/.cache/minsync/models`) in the guest. A fresh VM has none, so a real
- * first index would download ~1.2 GB from Hugging Face inside the VM. Only the
- * onboarding lane performs a real first index; the settings-redesign lane applies
- * the "This computer" embedding profile, whose model gate needs the cached model
- * before Apply unlocks. A sweep that runs every lane covers both; a script may
- * index for real, so it gets the cache too.
+ * The cache directory entry of the dense on-device embedding model MinSync
+ * downloads on demand (`models--Qwen--Qwen3-Embedding-0.6B`); the sparse SPLADE
+ * encoder the app bundles is a sibling entry.
+ */
+export const DENSE_EMBEDDING_CACHE_DIR = "models--Qwen--Qwen3-Embedding-0.6B";
+
+/**
+ * Whether a job indexes for real and so needs the host's MinSync model cache
+ * (`~/.cache/minsync/models`) in the guest. A fresh VM has none, so a real index
+ * would download from Hugging Face inside the VM. Only the onboarding lane
+ * performs a real first index; the settings-redesign lane applies the "This
+ * computer" embedding profile, whose model gate needs the cached model before
+ * Apply unlocks. A sweep that runs every lane covers both; a script may index
+ * for real, so it gets the cache too.
  */
 export function needsEmbeddingAssets(job) {
 	if (job.kind === "script") return true;
 	return job.lanes.length === 0 || job.lanes.includes("onboarding") || job.lanes.includes("settings-redesign");
+}
+
+/**
+ * Whether a job needs the dense on-device model (Qwen3), not just the SPLADE
+ * encoder. The first run is keyword-only — parsed mirror + MinSync's bundled
+ * SPLADE, no dense embedding — so the onboarding lane needs only the sparse
+ * entry. The settings-redesign lane applies the "This computer" embedding
+ * profile, whose model gate needs the dense model cached before Apply unlocks.
+ * A sweep that runs every lane, and a script that may index for real, get both.
+ */
+export function needsDenseEmbeddingModel(job) {
+	if (job.kind === "script") return true;
+	return job.lanes.length === 0 || job.lanes.includes("settings-redesign");
+}
+
+/**
+ * The `rsync` exclude patterns that keep a job's guest cache to what it needs:
+ * the dense model is left out for jobs that only use the sparse encoder, so the
+ * ~1.2 GB dense weights are never copied for a keyword-only first run.
+ */
+export function embeddingCacheExcludes(job) {
+	return needsDenseEmbeddingModel(job) ? [] : [`/${DENSE_EMBEDDING_CACHE_DIR}/`];
 }

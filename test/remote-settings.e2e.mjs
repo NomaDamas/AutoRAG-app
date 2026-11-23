@@ -42,7 +42,8 @@ try {
 	await page.getByRole("button", { name: locales.en.places.settings, exact: true }).click();
 	await page.locator(".settings-sidebar").getByRole("button", { name: navRemote("en"), exact: true }).click();
 	await expect(page.locator("h1.linear-title")).toHaveText(navRemote("en"));
-	const address = () => page.getByRole("textbox", { name: en.address, exact: true });
+	// The address is shown with its token masked (Figma 585:9647); the copy button gives the real one.
+	const address = () => page.getByTestId("remote-browser-address");
 	const port = page.getByRole("spinbutton", { name: en.port, exact: true });
 	const toggle = page.getByRole("switch", { name: en.access, exact: true });
 	const section = () => page.locator(".settings-content-wrap");
@@ -64,7 +65,7 @@ try {
 	});
 	await expect(address()).toBeHidden();
 	await page.locator("details.settings-remote-details > summary").click();
-	await expect(address()).toHaveValue(/^http:\/\/.+:\d+\/\?token=.+/u, { timeout: 10_000 });
+	await expect(address()).toHaveText(/^http:\/\/.+:\d+\/\?token=•+$/u, { timeout: 10_000 });
 
 	// 3. Port validation & commit, then restart the server on the free port it asks for.
 	await port.fill("-1");
@@ -81,12 +82,12 @@ try {
 	await expect(toggle).toHaveAttribute("aria-checked", "true");
 	const details = page.locator("details.settings-remote-details");
 	if (!(await details.evaluate((element) => element.open))) await details.locator("summary").click();
-	await expect(address()).toHaveValue(/^http:\/\/.+:\d+\/\?token=.+/u, { timeout: 10_000 });
+	await expect(address()).toHaveText(/^http:\/\/.+:\d+\/\?token=•+$/u, { timeout: 10_000 });
 	const status = await page.evaluate(() => window.autorag.remote.status());
-	const shownAddress = await address().inputValue();
+	const shownAddress = status.origin;
 	const origin = new URL(shownAddress).origin;
 	assert.equal(status.serving, true);
-	assert.equal(shownAddress, status.origin);
+	assert.equal(((await address().textContent()) ?? "").trim(), shownAddress.replace(/token=[^&#]+/u, "token=••••••••"));
 	assert.equal(new URL(shownAddress).port, String(status.port));
 	assert.notEqual(status.port, 47833, "port 0 asks the OS for a free port");
 	assert.equal(await page.evaluate(async () => (await window.autorag.settings.get()).remoteAccess), true);
@@ -173,8 +174,7 @@ try {
 		await qrPage.locator(".sidebar__item--settings").click();
 		await qrPage.locator(".settings-sidebar").getByRole("button", { name: navRemote("en"), exact: true }).click();
 		await qrPage.locator("details.settings-remote-details > summary").click();
-		const remoteAddress = qrPage.getByRole("textbox", { name: en.address, exact: true });
-		await expect(remoteAddress).toHaveValue(lanAddress);
+		await expect(qrPage.getByTestId("remote-browser-address")).toHaveText(lanAddress);
 		await expect(qrPage.locator(".settings-remote-device-badge")).toHaveText(en.deviceCurrent);
 		await expect(qrPage.getByRole("button", { name: en.tunnelStart, exact: true })).toHaveCount(0);
 		await qrPage.setViewportSize({ width: 1440, height: 1000 });

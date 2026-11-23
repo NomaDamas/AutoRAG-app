@@ -144,7 +144,7 @@ try {
 	// AI Agent tab.
 	await openAiSearch(page);
 	const panel = page.locator(AI_PANEL);
-	const field = panel.locator('textarea[aria-label="Ask Dazzi"]');
+	const field = panel.locator('textarea[aria-label="Ask AI"]');
 	copyImage();
 	await field.click();
 	await page.keyboard.press(chord("V"));

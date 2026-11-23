@@ -1,8 +1,34 @@
-import type { AgentSession } from "@earendil-works/pi-coding-agent";
-import { createProfileSession, type ProfileModel } from "@autorag/librarian/profiles";
-import type { AppCustomizerChange, AppCustomizerEvent, AppCustomizerRequest, AppCustomizerSurface } from "../shared/app-customizer-contract";
+import type { AgentSession, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { createProfileSession, createWebTools, type AgentProfile, type ProfileModel } from "@autorag/librarian/profiles";
+import type { AppCustomizerChange, AppCustomizerEvent, AppCustomizerPromptAnswer, AppCustomizerRequest, AppCustomizerSurface } from "../shared/app-customizer-contract";
+import { findSecrets, redactSecrets } from "../shared/secret-guard";
+import { createCustomizerPrompter } from "./agents/customizer-prompter";
+import { resolveConfigPath, resolveConfigReadOnly } from "@autorag/librarian/core";
+import { guardTools } from "./agents/guard-tools";
+import { createWriteJudge } from "./agents/write-judge";
+import type { WriteJudge } from "./agents/write-gate";
+import { collectKnownSecretValues } from "./coding-agent-credentials";
+import { resolveDecisionBackendsForConfig } from "./decision-model";
 import type { FsLocation, FsTag } from "../shared/fs-contract";
 import type { SettingsBridge } from "../shared/settings-contract";
+import {
+	aiCustomizerProfile,
+	createAiCustomizerToolkit,
+	type AiCustomizerToolkitDeps,
+} from "./agents/profiles/ai-customizer";
+import {
+	connectionsCustomizerProfile,
+	createConnectionsCustomizerToolkit,
+} from "./agents/profiles/connections-customizer";
+import {
+	createGeneralCustomizerToolkit,
+	generalCustomizerProfile,
+} from "./agents/profiles/general-customizer";
+import {
+	createSearchCustomizerToolkit,
+	searchCustomizerProfile,
+} from "./agents/profiles/search-customizer";
+import type { ConfigCustomizerProfileInput, CustomizerToolkit } from "./agents/profiles/customizer-kit";
 import {
 	appCustomizerProfile,
 	createAppCustomizerToolkit,
@@ -26,7 +52,15 @@ export interface AppCustomizerServiceDeps {
 	readonly homeDir?: string;
 	readonly platform?: NodeJS.Platform;
 	readonly language: () => ReplyLanguage;
-	readonly settings: Pick<SettingsBridge, "get" | "set">;
+	/** The whole settings service: the config assistants write the shared AutoRAG config and MCP file through it, as the pages do. */
+	readonly settings: SettingsBridge;
+	/**
+	 * Jev for the AI-model assistant's shell (it decides whether a command changes anything beyond the files the assistant manages).
+	 * Defaults to the app's decision backends from the shared AutoRAG config; a test passes its own.
+	 */
+	readonly writeJudge?: WriteJudge;
+	/** Adds a provider definition taken from another agent (main-only; `ProviderAuthService.importCustom`). Without it `import_omp_provider` is not offered. */
+	readonly importCustomProvider?: AiCustomizerToolkitDeps["importCustomProvider"];
 	readonly listLocations: () => Promise<readonly FsLocation[]>;
 	readonly listTags: () => Promise<readonly FsTag[]>;
 }
@@ -35,6 +69,8 @@ export interface AppCustomizerService {
 	send(runId: string, request: AppCustomizerRequest): Promise<void>;
 	cancel(runId: string): Promise<void>;
 	reset(sessionId: string): Promise<void>;
+	/** The person's answer to a prompt card (a typed secret, a confirmation); false when it matches no open prompt. */
+	answerPrompt(promptId: string, answer: AppCustomizerPromptAnswer): boolean;
 	dispose(): void;
 }
 
@@ -47,6 +83,10 @@ interface SessionEntry {
 	readonly surface: AppCustomizerSurface;
 	readonly session: AgentSession;
 	readonly toolkit: SessionChangesTracker;
+	/** Every secret value this conversation handled; no message or tool result may repeat one. */
+	readonly knownSecrets: Set<string>;
+	/** The run the next prompt belongs to; set when a run starts. */
+	currentRunId: string;
 	readonly language: ReplyLanguage;
 	readonly modelKey: string;
 	busy: boolean;
@@ -58,6 +98,19 @@ interface ActiveRun {
 	readonly sessionId: string;
 	readonly abort: AbortController;
 	cancelled: boolean;
+}
+
+/** The assistants that research something outside the app: a server's docs, a provider's key page. The others never need the web. */
+const WEB_SURFACES: readonly AppCustomizerSurface[] = ["mcp", "apps", "ai"];
+
+export function configProfileInput(
+	language: ReplyLanguage,
+	surface: AppCustomizerSurface,
+	toolkit: CustomizerToolkit,
+	known: ReadonlySet<string>,
+	web: readonly ToolDefinition[],
+): ConfigCustomizerProfileInput {
+	return { language, surface, toolkit: { ...toolkit, tools: guardTools([...toolkit.tools, ...(WEB_SURFACES.includes(surface) ? web : [])], known) } };
 }
 
 function recordOf(value: unknown): Record<string, unknown> | undefined {
@@ -95,6 +148,11 @@ function assistantMessagesSince(session: AgentSession, startIndex: number): read
 export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppCustomizerService {
 	const sessions = new Map<string, SessionEntry>();
 	const runs = new Map<string, ActiveRun>();
+	const prompter = createCustomizerPrompter({ send: (event) => deps.send(event) });
+	/** One judge for the whole service: it resolves the decision backends from the config once and keeps them. */
+	const defaultJudge = createWriteJudge({
+		resolveBackends: () => resolveDecisionBackendsForConfig(resolveConfigReadOnly({ flags: {}, env: deps.env, cwd: deps.cwd }), deps.env, deps.cwd),
+	});
 
 	function evictOldestIfNeeded(): void {
 		if (sessions.size < MAX_OPEN_SESSIONS) return;
@@ -132,51 +190,109 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 		evictOldestIfNeeded();
 
 		let entryRef: SessionEntry | null = null;
-		let toolkit: SessionChangesTracker;
-		let session: AgentSession;
-		if (surface === "shortcuts") {
-			const shortcutKit = createShortcutCustomizerToolkit({
-				settings: deps.settings,
-				...(deps.platform === undefined ? {} : { platform: deps.platform }),
-				language: () => deps.language(),
-				cancelled: () => entryRef?.cancelled === true,
-			});
-			toolkit = shortcutKit;
-			session = await createProfileSession({
-				profile: shortcutCustomizerProfile({ language: currentLang, toolkit: shortcutKit }),
-				cwd: deps.cwd,
-				agentDir: deps.agentDir,
-				env: deps.env,
-				model,
-			});
-		} else {
-			const sidebarKit = createAppCustomizerToolkit({
-				settings: deps.settings,
-				listLocations: deps.listLocations,
-				listTags: deps.listTags,
-				...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
-				...(deps.platform === undefined ? {} : { platform: deps.platform }),
-				language: () => deps.language(),
-				cancelled: () => entryRef?.cancelled === true,
-			});
-			toolkit = sidebarKit;
-			session = await createProfileSession({
-				profile: appCustomizerProfile({
-					language: currentLang,
-					toolkit: sidebarKit,
-					...(deps.platform === undefined ? {} : { platform: deps.platform }),
-				}),
-				cwd: deps.cwd,
-				agentDir: deps.agentDir,
-				env: deps.env,
-				model,
-			});
+		const cancelled = (): boolean => entryRef?.cancelled === true;
+		// The librarian's own web tools, as the AutoRAG agent has them. Fetched pages and search results are data the model reads;
+		// they pass through `guardTools` like every other result, and the prompts say they are never instructions.
+		const web = WEB_SURFACES.includes(surface) ? createWebTools() : [];
+		const shellHome = (process.platform === "win32" ? deps.env.USERPROFILE : deps.env.HOME)?.trim() || deps.homeDir;
+		const knownSecrets = new Set<string>();
+		// Reading another agent's credential file is allowed, so the values in those files are known to the redaction nets from the
+		// start: whatever a command prints, no tool result or reply can repeat one.
+		if (shellHome !== undefined && surface === "ai") {
+			for (const value of collectKnownSecretValues({ homeDir: shellHome, agentDir: deps.agentDir, env: deps.env })) knownSecrets.add(value);
 		}
+		const secrets = {
+			known: knownSecrets,
+			prompter: () => (entryRef === null ? undefined : prompter.forRun({ runId: entryRef.currentRunId, sessionId })),
+		};
+		const language = (): ReplyLanguage => deps.language();
+		const platformDep = deps.platform === undefined ? {} : { platform: deps.platform };
+		let toolkit: SessionChangesTracker;
+		let profile: AgentProfile;
+		switch (surface) {
+			case "shortcuts": {
+				const kit = createShortcutCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled });
+				toolkit = kit;
+				profile = shortcutCustomizerProfile({ language: currentLang, toolkit: kit });
+				break;
+			}
+			case "sidebar":
+			case "contextMenu": {
+				const kit = createAppCustomizerToolkit({
+					settings: deps.settings,
+					listLocations: deps.listLocations,
+					listTags: deps.listTags,
+					...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
+					...platformDep,
+					language,
+					cancelled,
+				});
+				toolkit = kit;
+				profile = appCustomizerProfile({ language: currentLang, toolkit: kit, ...platformDep });
+				break;
+			}
+			case "general": {
+				const kit = createGeneralCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
+				toolkit = kit;
+				profile = generalCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				break;
+			}
+			case "ai":
+			case "web": {
+				const kit = createAiCustomizerToolkit({
+					settings: deps.settings,
+					...platformDep,
+					language,
+					cancelled,
+					secrets,
+					...(deps.importCustomProvider === undefined ? {} : { importCustomProvider: deps.importCustomProvider }),
+					// Other coding agents keep their config under `$HOME` (`%USERPROFILE%` on Windows), which is what a person or a test
+					// sets; Electron's own home path is only the fallback.
+					...(shellHome === undefined
+						? {}
+						: {
+								shell: {
+									homeDir: shellHome,
+									cwd: deps.cwd,
+									env: deps.env,
+									managedPaths: [resolveConfigPath({ flags: {}, env: deps.env, cwd: deps.cwd }).configPath],
+									judge: deps.writeJudge ?? defaultJudge,
+								},
+							}),
+				});
+				toolkit = kit;
+				profile = aiCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				break;
+			}
+			case "indexing":
+			case "duplicates": {
+				const kit = createSearchCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
+				toolkit = kit;
+				profile = searchCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				break;
+			}
+			case "mcp":
+			case "apps": {
+				const kit = createConnectionsCustomizerToolkit({ settings: deps.settings, ...platformDep, language, cancelled, secrets });
+				toolkit = kit;
+				profile = connectionsCustomizerProfile(configProfileInput(currentLang, surface, kit, knownSecrets, web));
+				break;
+			}
+		}
+		const session = await createProfileSession({
+			profile,
+			cwd: deps.cwd,
+			agentDir: deps.agentDir,
+			env: deps.env,
+			model,
+		});
 		const created: SessionEntry = {
 			sessionId,
 			surface,
 			session,
 			toolkit,
+			knownSecrets,
+			currentRunId: "",
 			language: currentLang,
 			modelKey,
 			busy: false,
@@ -209,6 +325,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				entry = await acquireSession(request.sessionId, request.surface ?? "sidebar", model);
 				entry.busy = true;
 				entry.cancelled = false;
+				entry.currentRunId = runId;
 				entry.toolkit.takeChanges();
 
 				const onAbort = (): void => {
@@ -221,7 +338,9 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				const committedMessages: string[] = [];
 				let committedCurrent = false;
 				let lastDraft = "";
-				const commitStepText = (text: string): void => {
+				const clean = (text: string): string => redactSecrets(text, [...(entry?.knownSecrets ?? [])]);
+				const commitStepText = (rawText: string): void => {
+					const text = clean(rawText);
 					committedCurrent = true;
 					if (text.length > 0) {
 						lastDraft = "";
@@ -250,7 +369,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 						}
 						if (!committedCurrent && text !== lastDraft) {
 							lastDraft = text;
-							deps.send({ type: "draft", runId, sessionId: request.sessionId, text });
+							deps.send({ type: "draft", runId, sessionId: request.sessionId, text: clean(text) });
 						}
 						return;
 					}
@@ -271,7 +390,13 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					}
 				});
 
-				await entry.session.prompt(request.message);
+				// A key pasted into the chat box goes to the remote model with the message, so it is taken out first and the
+				// person is pointed at the masked field; the model is told that a secret was removed, never what it was.
+				const pasted = findSecrets(request.message) > 0;
+				const message = pasted
+					? `${redactSecrets(request.message)}\n\n[The message contained a credential. It was removed before reaching you. Never ask the person to paste a secret in the chat: use the tool that opens the masked key field.]`
+					: request.message;
+				await entry.session.prompt(message);
 
 				if (run.cancelled) {
 					deps.send({
@@ -287,7 +412,8 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 				if (failure !== null) throw new Error(failure);
 
 				const changes = entry.toolkit.takeChanges();
-				const spoken = assistantMessagesSince(entry.session, startMessageCount);
+				const known = [...entry.knownSecrets];
+				const spoken = assistantMessagesSince(entry.session, startMessageCount).map((text) => redactSecrets(text, known));
 				const messages =
 					spoken.length > 0
 						? spoken
@@ -324,6 +450,7 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 					entry.busy = false;
 					entry.cancelled = false;
 				}
+				prompter.closeRun(runId);
 				runs.delete(runId);
 			}
 		},
@@ -333,7 +460,10 @@ export function createAppCustomizerService(deps: AppCustomizerServiceDeps): AppC
 			if (run === undefined || run.cancelled) return;
 			run.cancelled = true;
 			run.abort.abort();
+			prompter.closeRun(runId);
 		},
+
+		answerPrompt: (promptId, answer) => prompter.answer(promptId, answer),
 
 		reset: async (sessionId) => {
 			for (const run of runs.values()) {

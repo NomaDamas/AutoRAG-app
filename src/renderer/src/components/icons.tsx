@@ -26,6 +26,7 @@ import {
 	ChevronRight,
 	ChevronUp,
 	ChevronsUp,
+	Cloud,
 	Columns3,
 	Copy,
 	Database,
@@ -33,11 +34,13 @@ import {
 	Ellipsis,
 	Expand,
 	ExternalLink,
+	File,
 	Eye,
 	File as FileGlyph,
-	HardDrive,
 	Film,
+	Flag,
 	FoldVertical,
+	HardDrive,
 	History,
 	Image as ImageGlyph,
 	Layers,
@@ -47,6 +50,7 @@ import {
 	Maximize2,
 	MessagesSquare,
 	Mic,
+	Monitor,
 	PackageOpen,
 	PanelLeft,
 	PanelRight,
@@ -274,6 +278,16 @@ export function FolderGlyph({ size = 18 }: GlyphProps): ReactElement {
 		</svg>
 	);
 }
+
+/** The first-run game: a flag on a cell the player believes hides a logo. */
+export const FlagIcon = glyph(Flag, 14, 2.2);
+
+/** First-run folder chips (Figma 156:1125): Desktop, Documents, Downloads, iCloud Drive, other cloud drives. */
+export const DesktopFolderIcon = glyph(Monitor, 15, 2);
+export const DocumentsFolderIcon = glyph(File, 15, 2);
+export const DownloadsFolderIcon = glyph(Download, 15, 2);
+export const CloudFolderIcon = glyph(Cloud, 15, 2);
+export const DriveFolderIcon = glyph(HardDrive, 15, 2);
 
 /**
  * The potted flower (Figma 491:12956): a filled flower on a stem in a pot. Its centre is cut out (even-odd), not

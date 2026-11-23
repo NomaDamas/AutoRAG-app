@@ -3,6 +3,7 @@ import type { ChatAttachment, SearchStreamEvent } from "../../../shared/search-c
 import { summaryRequest, type SummaryLanguage } from "../state/ai-summary";
 import {
 	addSteer,
+	addTurnRevision,
 	deliverTurnSteers,
 	EMPTY_INSPECTOR_CHAT_TAB,
 	newTurn,
@@ -97,6 +98,9 @@ export function useInspectorChats(language: SummaryLanguage): InspectorChats {
 					break;
 				case "steer-delivered":
 					changeChat(tabId, deliverTurnSteers);
+					break;
+				case "revision":
+					changeChat(tabId, (chat) => addTurnRevision(chat, event.revision));
 					break;
 				case "quick-draft":
 					changeChat(tabId, (chat) => updateLastTurn(chat, (turn) => ({ ...turn, quickDraft: event.text })));

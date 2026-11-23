@@ -19,7 +19,6 @@ import {
 	Music,
 	Package,
 	Plus,
-	RotateCcw,
 	Server,
 	Sparkles,
 	Trash2,
@@ -27,24 +26,23 @@ import {
 	Zap,
 	type LucideIcon,
 } from "lucide-react";
-import dazziMark from "../../assets/dazzi-mark.png";
 import { RECENTS_PATH, type FsBridge, type FsLocation, type FsLocationIcon, type FsTag } from "../../../../shared/fs-contract";
 import type { AppSettings, SettingsBridge } from "../../../../shared/settings-contract";
 import {
 	cloudSidebarItemId,
 	connectionSidebarItemId,
 	customSidebarItemId,
-	DEFAULT_SIDEBAR_SETTINGS,
-	isDefaultSidebarSettings,
 	locationSidebarItemId,
-	MINIMAL_HIDDEN_FAVORITE_IDS,
 	normalizeSidebarSettings,
 	placeSidebarItemId,
+	sidebarPresetLayout,
+	sidebarPresetOf,
 	STANDARD_FAVORITE_KINDS,
 	tagSidebarItemId,
 	type HideableSidebarSectionId,
 	type SidebarSectionId,
 	type SidebarSettings,
+	withSidebarLayout,
 } from "../../../../shared/sidebar-contract";
 import {
 	sortByFavoritesOrder,
@@ -112,15 +110,10 @@ export function SidebarPage({
 	appSettings,
 	onAppSettingsChanged,
 	onSettingsError,
-	customizerOpen,
-	onOpenCustomizer,
 }: {
 	readonly appSettings: AppSettings;
 	readonly onAppSettingsChanged: (settings: AppSettings) => void;
 	readonly onSettingsError: (message: string) => void;
-	/** Whether the AI assistant is in the window's right sidebar; the hero offers to open it only while it is not. */
-	readonly customizerOpen: boolean;
-	readonly onOpenCustomizer: () => void;
 }): ReactElement {
 	const { t } = useTranslation();
 	const [locations, setLocations] = useState<readonly FsLocation[]>([]);
@@ -318,73 +311,51 @@ export function SidebarPage({
 		};
 	};
 
-	const isDefault = isDefaultSidebarSettings(sidebar);
-	const isMinimalActive =
-		MINIMAL_HIDDEN_FAVORITE_IDS.every((id) => hiddenItems.has(id)) &&
-		sidebar.hiddenItems.length === MINIMAL_HIDDEN_FAVORITE_IDS.length;
-	const isShowAllActive = sidebar.hiddenItems.length === 0 && sidebar.hiddenSections.length === 0;
+	// 전체 표시 is the default layout, so it doubles as the reset; 사용자 지정 is the last layout arranged by hand.
+	const activePreset = sidebarPresetOf(sidebar);
+	const customLayout = sidebar.custom;
 
 	return (
 		<>
-			<SettingsPageHead title={t("settingsCore.nav.sidebar")} description={t("settingsCore.sidebar.description")} />
+			<SettingsPageHead title={t("settingsCore.nav.sidebar")} />
 
-			{customizerOpen ? null : (
-				<div className="sidebar-ai-hero">
-					<div className="sidebar-ai-hero__body">
-						<span className="sidebar-ai-hero__logo-wrap" aria-hidden="true">
-							<img src={dazziMark} alt="" className="sidebar-ai-hero__logo" draggable={false} />
-						</span>
-						<div className="sidebar-ai-hero__copy">
-							<div className="sidebar-ai-hero__title">{t("settingsCore.sidebar.aiHeroTitle")}</div>
-							<p className="sidebar-ai-hero__desc">{t("settingsCore.sidebar.aiHeroDesc")}</p>
-						</div>
-					</div>
-					<button
-						type="button"
-						className="linear-btn settings-btn-primary sidebar-ai-hero__btn"
-						data-action="open-app-customizer"
-						onClick={onOpenCustomizer}
-					>
-						<span>{t("settingsCore.sidebar.aiHeroButton")}</span>
-					</button>
-				</div>
-			)}
-
-			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 and 기본값으로 복원), then each section as a head over a bordered card. */}
+			{/* Figma 467:2293: 빠른 구성 (전체 표시 / 핵심만 표시 / 사용자 지정), then each section as a head over a bordered card. */}
 			<div className="sidebar-page" ref={pageRef}>
 				<div className="sidebar-quick" role="group" aria-label={t("settingsCore.sidebar.presetsTitle")}>
 					<span className="sidebar-quick-label">{t("settingsCore.sidebar.presetsTitle")}</span>
 					<div className="shortcuts-segmented">
 						<button
 							type="button"
-							className={cn("shortcuts-segment", isShowAllActive && "is-active")}
+							className={cn("shortcuts-segment", activePreset === "all" && "is-active")}
 							data-action="sidebar-preset-all"
-							aria-pressed={isShowAllActive}
-							onClick={() => void updateSidebar({ ...sidebar, hiddenItems: [], hiddenSections: [] })}
+							aria-pressed={activePreset === "all"}
+							onClick={() => void updateSidebar(withSidebarLayout(sidebar, sidebarPresetLayout("all")))}
 						>
 							{t("settingsCore.sidebar.presetShowAll")}
 						</button>
 						<button
 							type="button"
-							className={cn("shortcuts-segment", isMinimalActive && "is-active")}
+							className={cn("shortcuts-segment", activePreset === "minimal" && "is-active")}
 							data-action="sidebar-preset-minimal"
-							aria-pressed={isMinimalActive}
-							onClick={() => void updateSidebar({ ...sidebar, hiddenItems: [...MINIMAL_HIDDEN_FAVORITE_IDS] })}
+							aria-pressed={activePreset === "minimal"}
+							onClick={() => void updateSidebar(withSidebarLayout(sidebar, sidebarPresetLayout("minimal")))}
 						>
 							{t("settingsCore.sidebar.presetMinimal")}
 						</button>
+						<button
+							type="button"
+							className={cn("shortcuts-segment", activePreset === null && "is-active")}
+							data-action="sidebar-preset-custom"
+							aria-pressed={activePreset === null}
+							disabled={customLayout === undefined}
+							title={customLayout === undefined ? t("settingsCore.sidebar.presetCustomEmpty") : undefined}
+							onClick={() => {
+								if (customLayout !== undefined && activePreset !== null) void updateSidebar(withSidebarLayout(sidebar, customLayout));
+							}}
+						>
+							{t("settingsCore.sidebar.presetCustom")}
+						</button>
 					</div>
-					<span className="sidebar-row-spacer" />
-					<button
-						type="button"
-						className={cn(buttonClass({ size: "sm" }), "shortcuts-outline-btn")}
-						data-action="sidebar-reset-default"
-						disabled={isDefault}
-						onClick={() => void updateSidebar(DEFAULT_SIDEBAR_SETTINGS)}
-					>
-						<RotateCcw aria-hidden="true" />
-						{t("settingsCore.sidebar.resetDefault")}
-					</button>
 				</div>
 
 				<div className="sidebar-sections-stack" {...reorder.zone("section", moveSectionTo)}>
@@ -503,6 +474,7 @@ export function SidebarPage({
 								) : null}
 
 								{sectionVisible && sectionId !== "favorites" ? (
+									// 클라우드, 연결, 위치 and 태그 cannot be reordered, so their rows keep no empty grip slot: the icon starts at the row's padding.
 									<div className="sidebar-card">
 										{sectionId === "tags" ? (
 											tags.length === 0 ? (
@@ -513,7 +485,6 @@ export function SidebarPage({
 													const visible = !hiddenItems.has(id);
 													return (
 														<div key={id} className={cn("sidebar-row", !visible && "is-muted")} data-sidebar-row={id}>
-															<span className="sidebar-grip-space" aria-hidden="true" />
 															<span className="sidebar-row-label">
 																<span className="sidebar-row-icon" aria-hidden="true">
 																	<TagDotMark color={tag.color} size={10} />
@@ -543,7 +514,6 @@ export function SidebarPage({
 													const visible = !hiddenItems.has(id);
 													return (
 														<div key={id} className={cn("sidebar-row", !visible && "is-muted")} data-sidebar-row={id}>
-															<span className="sidebar-grip-space" aria-hidden="true" />
 															<span className="sidebar-row-label">
 																<Icon size={14} strokeWidth={1.5} className="sidebar-row-icon" aria-hidden="true" />
 																<span className="sidebar-row-name">{loc.name}</span>

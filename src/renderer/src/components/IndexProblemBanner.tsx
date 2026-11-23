@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { dismissIndexProblem, retryIndexProblem, useIndexProblem } from "../hooks/useIndexProblem";
-import { describeIndexProblem } from "../state/index-problem";
+import { describeIndexProblem, type IndexProblemActionKind } from "../state/index-problem";
 import { NoticeCard } from "./primitives/NoticeCard";
 
 /**
@@ -21,26 +21,29 @@ export function IndexProblemBanner({ onFixEmbedding }: { readonly onFixEmbedding
 	// The dismissed record, so the banner leaves with the click instead of after the main process
 	// pushes the cleared record back. A later run leaves its own `at`.
 	const [dismissedAt, setDismissedAt] = useState<string | null>(null);
-	if (view === null || view.retrying || view.primary === null || (problem.at !== null && problem.at === dismissedAt)) return null;
-	const primary = view.primary;
+	if (view === null || view.retrying || (problem.at !== null && problem.at === dismissedAt)) return null;
+	const { banner } = view;
+	const { primary, secondary } = banner;
+	if (primary === null) return null;
+	const run = (kind: IndexProblemActionKind): void => (kind === "fixEmbedding" ? onFixEmbedding() : retryIndexProblem());
 	const dismiss = (): void => {
 		setDismissedAt(problem.at);
 		dismissIndexProblem();
 	};
-	// Figma 548:14204: the shared notice card over the list — a skipped file is a warning, a stopped index an error.
+	// Figma 548:14204: the shared notice card over the list — an error when nothing works, a warning when search still does (430:8644).
 	return (
 		<NoticeCard
 			className="mx-8 mt-8 flex-none"
 			floating
-			tone={view.cardTone === "error" ? "error" : "warning"}
+			tone={banner.tone}
 			title={view.title}
 			onClose={dismiss}
 			actions={[
-				{ label: t("common.later"), onClick: dismiss },
-				{ label: primary.label, primary: true, onClick: () => (primary.kind === "fixEmbedding" ? onFixEmbedding() : retryIndexProblem()) },
+				secondary === null ? { label: t("common.later"), onClick: dismiss } : { label: secondary.label, onClick: () => run(secondary.kind) },
+				{ label: primary.label, primary: true, onClick: () => run(primary.kind) },
 			]}
 		>
-			{view.sideDetail}
+			{banner.detail}
 		</NoticeCard>
 	);
 }
