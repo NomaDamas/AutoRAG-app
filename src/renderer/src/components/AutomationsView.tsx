@@ -117,6 +117,7 @@ function ChipSelect<T extends string>({
 	label,
 	icon,
 	round = false,
+	disabled = false,
 	testId,
 	onChange,
 }: {
@@ -125,6 +126,8 @@ function ChipSelect<T extends string>({
 	readonly label: string;
 	readonly icon?: ReactNode;
 	readonly round?: boolean;
+	/** Read, not edited: one tone lighter, and it opens nothing. */
+	readonly disabled?: boolean;
 	readonly testId: string;
 	readonly onChange: (value: T) => void;
 }): ReactElement {
@@ -157,15 +160,17 @@ function ChipSelect<T extends string>({
 				aria-haspopup="listbox"
 				aria-expanded={open}
 				aria-label={label}
+				disabled={disabled}
 				className={cn(
-					"inline-flex items-center gap-4 px-8 py-4 border-[0.5px] border-divider bg-window text-meta leading-[18px] text-ink whitespace-nowrap cursor-pointer hover:border-border",
+					"inline-flex items-center gap-4 px-8 py-4 border-[0.5px] border-divider bg-window text-meta leading-[18px] whitespace-nowrap",
+					disabled ? "text-ink-muted cursor-default [&_svg]:opacity-50" : "text-ink cursor-pointer hover:border-border",
 					round ? "rounded-[13px]" : "rounded-[7px]",
 				)}
 				onClick={() => setOpen((was) => !was)}
 			>
 				{current?.icon ?? icon}
 				<span>{current?.label ?? label}</span>
-				<ChevronDownIcon size={12} className="text-ink-muted" />
+				<ChevronDownIcon size={12} className={disabled ? "text-ink-faint" : "text-ink-muted"} />
 			</button>
 			{open ? (
 				<ul role="listbox" aria-label={label} className="absolute left-0 top-[calc(100%+4px)] z-30 m-0 w-max min-w-full list-none rounded-8 border border-border bg-window p-4 shadow-menu">
@@ -242,7 +247,7 @@ function NewAutomationCard({
 	readonly onUpdate: AutomationsViewProps["onUpdate"];
 	readonly onCancelEdit: AutomationsViewProps["onCancelEdit"];
 	readonly onDraftChange: AutomationsViewProps["onDraftChange"];
-	/** On a rule's own page: 삭제 in place of 취소, and 저장 in place of 수정하기. */
+	/** On a rule's own page: the card is read until 수정, which leaves only 저장; 삭제 sits beside 수정. */
 	readonly onDelete?: (() => void) | undefined;
 	readonly editing: AutomationRule | null;
 	readonly filled: { readonly template: Template; readonly at: number } | null;
@@ -260,6 +265,9 @@ function NewAutomationCard({
 	const [customEvents, setCustomEvents] = useState<readonly AutomationEventType[] | null>(null);
 	const [customProfile, setCustomProfile] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
+	// On a rule's own page the fields are read until 수정 (the name is renamed from the title, not here).
+	const [unlocked, setUnlocked] = useState(false);
+	const locked = onDelete !== undefined && editing !== null && !unlocked;
 	// The inspector speaks about the card only once the person has started on it.
 	const [touched, setTouched] = useState(false);
 	const cardRef = useRef<HTMLDivElement>(null);
@@ -326,6 +334,7 @@ function NewAutomationCard({
 	useEffect(() => {
 		const before = editedBefore.current;
 		editedBefore.current = editing?.id ?? null;
+		setUnlocked(false);
 		if (editing === null) {
 			if (before !== null) reset();
 			return;
@@ -376,6 +385,7 @@ function NewAutomationCard({
 		const ok = editing === null ? await onCreate(draft) : onUpdate === undefined ? false : await onUpdate(editing.id, draft);
 		setBusy(false);
 		if (ok && editing === null) reset();
+		if (ok && onDelete !== undefined) setUnlocked(false);
 	};
 
 	const kinds: readonly ChipOption<KindId>[] = (["all", "pdf", "image", "document"] as const).map((value) => ({ value, label: t(`automations.create.kind.${value}`) }));
@@ -391,6 +401,7 @@ function NewAutomationCard({
 				options={folders}
 				label={chosenFolder === null ? t("automations.create.pickFolder") : folderLabel(chosenFolder)}
 				icon={<FolderGlyph size={13} />}
+				disabled={locked}
 				testId="automation-new-folder"
 				onChange={touch(setFolder)}
 			/>
@@ -400,6 +411,7 @@ function NewAutomationCard({
 				value={customInclude === null ? kind : null}
 				options={kinds}
 				label={customInclude === null ? t("automations.create.kindLabel") : t("automations.kinds.noun", { kinds: kindsText(customInclude) })}
+				disabled={locked}
 				testId="automation-new-kind"
 				onChange={touch(setKind, () => setCustomInclude(null))}
 			/>
@@ -409,6 +421,7 @@ function NewAutomationCard({
 				value={customEvents === null ? event : null}
 				options={events}
 				label={customEvents === null ? t("automations.create.eventLabel") : t("automations.create.event.other")}
+				disabled={locked}
 				testId="automation-new-event"
 				onChange={touch(setEvent, () => setCustomEvents(null))}
 			/>
@@ -425,7 +438,7 @@ function NewAutomationCard({
 					part in chips ? (
 						<Fragment key={index}>{chips[part]}</Fragment>
 					) : part.trim().length === 0 ? null : (
-						<span key={index} className="text-meta leading-[18px] text-ink-muted">{part.trim()}</span>
+						<span key={index} className={cn("text-meta leading-[18px]", locked ? "text-ink-faint" : "text-ink-muted")}>{part.trim()}</span>
 					),
 				)}
 			</div>
@@ -434,9 +447,14 @@ function NewAutomationCard({
 				ref={taskRef}
 				data-testid="automation-new-task"
 				value={task}
+				readOnly={locked}
+				tabIndex={locked ? -1 : undefined}
 				placeholder={t("automations.create.taskPlaceholder")}
 				aria-label={t("automations.create.task")}
-				className="h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] text-ink outline-none placeholder:text-ink-faint focus:border-accent"
+				className={cn(
+					"h-60 resize-none rounded-10 border-[0.5px] border-divider bg-window px-10 py-8 text-[13px] leading-[20px] outline-none placeholder:text-ink-faint",
+					locked ? "cursor-default select-none text-ink-muted" : "text-ink focus:border-accent",
+				)}
 				onChange={(change) => {
 					setTask(change.target.value);
 					setTouched(true);
@@ -446,37 +464,54 @@ function NewAutomationCard({
 			/>
 			<div className="flex items-center gap-6">
 				{run === null ? (
-					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
+					<ChipSelect value={mode} options={modes} label={t("automations.create.modeLabel")} round disabled={locked} testId="automation-new-mode" onChange={touch(setMode, () => setCustomProfile(null))} />
 				) : null}
 				<span className="flex-1" />
-				{editing !== null && onDelete !== undefined ? (
-					<button
-						type="button"
-						data-action="automation-delete"
-						className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
-						onClick={onDelete}
-					>
-						{t("automations.inspector.delete")}
-					</button>
-				) : editing === null ? null : (
-					<button
-						type="button"
-						data-action="automation-cancel-edit"
-						className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
-						onClick={() => onCancelEdit?.()}
-					>
-						{t("common.cancel")}
-					</button>
+				{locked ? (
+					<>
+						<button
+							type="button"
+							data-action="automation-delete"
+							className="mr-6 inline-flex h-32 items-center border-0 bg-transparent p-0 text-meta text-ink-muted cursor-pointer hover:text-ink"
+							onClick={onDelete}
+						>
+							{t("automations.inspector.delete")}
+						</button>
+						<button
+							type="button"
+							data-action="automation-edit"
+							className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer"
+							onClick={() => {
+								setUnlocked(true);
+								taskRef.current?.focus();
+							}}
+						>
+							{t("automations.menu.edit")}
+						</button>
+					</>
+				) : (
+					<>
+						{editing === null || onDelete !== undefined ? null : (
+							<button
+								type="button"
+								data-action="automation-cancel-edit"
+								className="inline-flex h-32 items-center justify-center rounded-6 border border-border bg-window px-12 text-meta font-medium text-ink-body cursor-pointer hover:opacity-80"
+								onClick={() => onCancelEdit?.()}
+							>
+								{t("common.cancel")}
+							</button>
+						)}
+						<button
+							type="button"
+							data-action={editing === null ? "automation-create" : "automation-update"}
+							disabled={!canSubmit}
+							className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
+							onClick={() => void submit()}
+						>
+							{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : onDelete !== undefined ? t("common.save") : t("automations.create.submitEdit")}
+						</button>
+					</>
 				)}
-				<button
-					type="button"
-					data-action={editing === null ? "automation-create" : "automation-update"}
-					disabled={!canSubmit}
-					className="inline-flex h-32 items-center justify-center rounded-6 border-0 bg-accent px-12 text-meta font-medium text-on-accent cursor-pointer disabled:cursor-default disabled:opacity-50"
-					onClick={() => void submit()}
-				>
-					{busy ? t("automations.daemon.busy") : editing === null ? t("automations.create.submit") : onDelete !== undefined ? t("common.save") : t("automations.create.submitEdit")}
-				</button>
 			</div>
 		</div>
 	);
@@ -846,13 +881,13 @@ export function AutomationsView({ state, daemonBusy, selectedId, onSelect, onEdi
 			<div
 				ref={scrollRef}
 				data-rules-body
-				className="min-h-0 flex-1 overflow-auto px-40 pb-40 pt-56"
+				className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-40 pb-40 pt-56"
 				onContextMenu={(event) => {
 					event.preventDefault();
 					onContextMenu(null, { x: event.clientX, y: event.clientY });
 				}}
 			>
-				<div className="mx-auto flex w-full max-w-[600px] flex-col gap-24">
+				<div className="mx-auto flex w-full min-w-[520px] max-w-[600px] flex-col gap-24">
 					{state.error === null ? null : (
 						<p role="alert" className="m-0 rounded-8 bg-error-orange-bg px-12 py-8 text-meta text-error-orange-text">
 							{state.error}

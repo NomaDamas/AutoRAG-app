@@ -294,22 +294,36 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		expect(onRename).toHaveBeenCalledTimes(1);
 	});
 
-	it("saves the card with the rule's id, and offers 삭제 in place of 취소", async () => {
+	it("reads the card until 수정, which leaves only 저장, and saves with the rule's id", async () => {
 		const onUpdate = vi.fn(async () => true);
 		const p = props({ editing, onUpdate });
 		render(p);
 		await settle();
-		expect(host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]')?.value).toBe("메모로 남겨 줘");
+		const task = (): HTMLTextAreaElement | null => host.querySelector<HTMLTextAreaElement>('[data-testid="automation-new-task"]');
+		expect(task()?.value).toBe("메모로 남겨 줘");
+		// Read first: the fields cannot be changed, and the card offers 삭제 and 수정.
+		expect(task()?.readOnly).toBe(true);
+		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-folder"]')?.disabled).toBe(true);
+		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-mode"]')?.disabled).toBe(true);
+		expect(host.querySelector('[data-action="automation-update"]')).toBeNull();
+		click(host.querySelector('[data-action="automation-delete"]'));
+		expect(p.onAskDelete).toHaveBeenCalledWith("pdf");
+		click(host.querySelector('[data-action="automation-edit"]'));
+		// 수정: the fields open, and 저장 is the only button.
+		expect(task()?.readOnly).toBe(false);
+		expect(host.querySelector<HTMLButtonElement>('[data-testid="automation-new-folder"]')?.disabled).toBe(false);
+		expect(host.querySelector('[data-action="automation-delete"]')).toBeNull();
+		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
 		const save = host.querySelector<HTMLButtonElement>('[data-action="automation-update"]');
 		expect(save?.textContent).toBe("저장");
-		expect(host.querySelector('[data-action="automation-cancel-edit"]')).toBeNull();
 		await act(async () => {
 			save?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
 		});
 		expect(onUpdate).toHaveBeenCalledWith("pdf", { paths: ["/Users/jeffrey/Desktop"], events: ["create", "update"], include: ["**/*.pdf"], agent: { profile: "file-organizer", task: "메모로 남겨 줘" } });
-		click(host.querySelector('[data-action="automation-delete"]'));
-		expect(p.onAskDelete).toHaveBeenCalledWith("pdf");
+		// Saved: the card is read again.
+		expect(task()?.readOnly).toBe(true);
+		expect(host.querySelector('[data-action="automation-edit"]')).not.toBeNull();
 	});
 
 	it("keeps files and changes the chips cannot say", async () => {
@@ -317,6 +331,7 @@ describe("AutomationsView a rule's own page (Figma 621:4882)", () => {
 		const onUpdate = vi.fn(async () => true);
 		render(props({ editing: odd, onUpdate }));
 		await settle();
+		click(host.querySelector('[data-action="automation-edit"]'));
 		await act(async () => {
 			host.querySelector('[data-action="automation-update"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
 			await Promise.resolve();
