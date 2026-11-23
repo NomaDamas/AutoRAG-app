@@ -598,7 +598,8 @@
       "agentDoes": "AIが「{{task}}」",
       "matches": "条件に合うファイル {{count}}件",
       "noMatches": "今は条件に合うファイルがありません",
-      "notRun": "まだ実行されていません"
+      "notRun": "まだ実行されていません",
+      "runFiles": "ファイル {{count}}件"
     },
     "quickLook": {
       "when": "いつ",

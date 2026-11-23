@@ -36,31 +36,41 @@ export function AutomationActionGlyph({ rule, size = 20 }: { readonly rule: Auto
 	return <ZapIcon size={size} />;
 }
 
-/** "완료" after a clean run, else why it failed ("시간 초과"). */
-function runResult(rule: AutomationRule): string {
-	const run = rule.lastRun;
-	if (run === null) return "";
-	return runTone(run) === "ok" ? "" : failReason(run);
-}
-
-/** One line of 최근 실행: the dot, what ran and how it ended, and when. */
+/**
+ * One line of 최근 실행: the dot, how many files the run took and how it ended ("파일 2개 · 시간 초과"), and when;
+ * `named` puts the rule's name first. The librarian's run log counts the files but does not name them yet, so the
+ * line says how many rather than which.
+ */
 function RunRow({ rule, named, onClick }: { readonly rule: AutomationRule; readonly named: boolean; readonly onClick?: (() => void) | undefined }): ReactElement | null {
 	const { t } = useTranslation();
 	const run = rule.lastRun;
 	if (run === null) return null;
-	const result = runResult(rule);
-	const text = named ? [ruleTitle(rule), result].filter((part) => part.length > 0).join(" · ") : result.length > 0 ? result : t("automations.inspector.runDone");
-	const body = (
+	const result = runTone(run) === "ok" ? t("automations.inspector.runDone") : failReason(run);
+	const files = run.eventCount > 0 ? t("automations.inspector.runFiles", { count: run.eventCount }) : null;
+	const outcome = [files, result].filter((part): part is string => part !== null && part.length > 0).join(" · ");
+	// Named (the tab's activity): the rule on the first line and how it went under it, so neither is cut off.
+	const body = named ? (
+		<>
+			<span className="flex h-18 flex-none items-center">
+				<RunDot tone={runTone(run)} />
+			</span>
+			<span className="flex min-w-0 flex-1 flex-col">
+				<span className="truncate text-meta leading-[18px] text-ink">{ruleTitle(rule)}</span>
+				<span className="truncate text-badge leading-[16px] text-ink-muted">{outcome}</span>
+			</span>
+			<span className="flex-none text-badge leading-[18px] text-ink-muted">{relativeTime(run.startedAt)}</span>
+		</>
+	) : (
 		<>
 			<RunDot tone={runTone(run)} />
-			<span className="min-w-0 flex-1 truncate text-meta leading-[18px] text-ink">{text}</span>
+			<span className="min-w-0 flex-1 truncate text-meta leading-[18px] text-ink">{outcome}</span>
 			<span className="flex-none text-badge leading-[17px] text-ink-muted">{relativeTime(run.startedAt)}</span>
 		</>
 	);
 	return onClick === undefined ? (
-		<div className="flex items-center gap-8 py-4" data-run-row={rule.id}>{body}</div>
+		<div className={cn("flex gap-8 py-4", named ? "items-start" : "items-center")} data-run-row={rule.id}>{body}</div>
 	) : (
-		<button type="button" className="flex w-full items-center gap-8 border-0 bg-transparent px-0 py-4 text-left cursor-pointer" data-run-row={rule.id} onClick={onClick}>
+		<button type="button" className={cn("flex w-full gap-8 border-0 bg-transparent px-0 py-4 text-left cursor-pointer", named ? "items-start" : "items-center")} data-run-row={rule.id} onClick={onClick}>
 			{body}
 		</button>
 	);

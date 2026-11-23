@@ -598,7 +598,8 @@
       "agentDoes": "AI: “{{task}}”",
       "matches": "Files that match: {{count}}",
       "noMatches": "No files match right now",
-      "notRun": "Not run yet"
+      "notRun": "Not run yet",
+      "runFiles": "Files: {{count}}"
     },
     "quickLook": {
       "when": "When",

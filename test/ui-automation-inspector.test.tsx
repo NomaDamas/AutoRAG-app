@@ -161,7 +161,9 @@ describe("AutomationInspector", () => {
 		expect(host.querySelector("[data-automation-failures]")?.textContent).toBe(`실패한 자동화 1개 — ${ruleTitle(failed)}`);
 		const runs = [...host.querySelectorAll<HTMLElement>("[data-run-row]")];
 		expect(runs.map((row) => row.dataset.runRow)).toEqual(["hwp", "pdf"]);
-		expect(runs[0]?.textContent).toContain("시간 초과");
+		expect(runs[0]?.textContent).toContain(ruleTitle(failed));
+		expect(runs[0]?.textContent).toContain("파일 1개 · 시간 초과");
+		expect(runs[1]?.textContent).toContain("파일 1개 · 완료");
 		click(runs[1]);
 		expect(picked).toEqual(["pdf"]);
 	});

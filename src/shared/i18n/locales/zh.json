@@ -598,7 +598,8 @@
       "agentDoes": "AI：“{{task}}”",
       "matches": "符合条件的文件 {{count}} 个",
       "noMatches": "目前没有符合条件的文件",
-      "notRun": "尚未运行"
+      "notRun": "尚未运行",
+      "runFiles": "文件 {{count}} 个"
     },
     "quickLook": {
       "when": "何时",
